@@ -145,13 +145,13 @@ class PythonCommand(CommandBase.Command):
         else:
             return True
 
-    def dialogue(self, title: str, message: int | str | list, need=list):
+    def dialogue(self, title: str, message: int | str | list, need: type = list) -> list | dict:
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(self.message_dialogue, title, message).ret_value(need)
         self.message_dialogue = None
         return ret
 
-    dialogue6widget(self, title: str, dialogue_list: list, need: type = list) -> list | dict:
+    def dialogue6widget(self, title: str, dialogue_list: list, need: type = list) -> list | dict:
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(self.message_dialogue, title, dialogue_list, mode=1).ret_value(need)
         self.message_dialogue = None
@@ -290,7 +290,7 @@ class PokeConDialogue(object):
         self.main_frame.pack()
         self.message_dialogue.master.wait_window(self.message_dialogue)
 
-    def mode0(self, message):
+    def mode0(self, message: list | str):
         if type(message) is not list:
             message = [message]
         n = len(message)
@@ -374,7 +374,7 @@ class PokeConDialogue(object):
             else:
                 frame[i].grid_columnconfigure(0, weight=1)
 
-    def ret_value(self, need) -> list | dict: 
+    def ret_value(self, need: type) -> list | dict: 
         if self.isOK:
             if need == dict:
                 return {k: v.get() for k, v in self.dialogue_ls.items()}

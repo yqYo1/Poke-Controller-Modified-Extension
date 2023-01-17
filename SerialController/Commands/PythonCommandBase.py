@@ -151,7 +151,7 @@ class PythonCommand(CommandBase.Command):
         self.message_dialogue = None
         return ret
 
-    def dialogue6widget(self, title: str, dialogue_list: list, need=list):
+    dialogue6widget(self, title: str, dialogue_list: list, need: type = list) -> list | dict:
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(self.message_dialogue, title, dialogue_list, mode=1).ret_value(need)
         self.message_dialogue = None
@@ -230,7 +230,7 @@ class PythonCommand(CommandBase.Command):
                 # self.keyPress = None (ここでNoneはNGなはず)
 
 class PokeConDialogue(object):
-    def __init__(self, parent, title: str, message: int | str | list, mode=0):
+    def __init__(self, parent, title: str, message: int | str | list, mode: int = 0):
         """
         pokecon用ダイアログ生成関数(注意:mode=0と1でmessageの取り扱いが大きく異なる。)
         mode | int: 0のときEntryのみ、1のとき6種類のwidgetに対応
@@ -302,7 +302,7 @@ class PokeConDialogue(object):
             label.grid(column=0, row=i, sticky='nsew', padx=3, pady=3)
             entry.grid(column=1, row=i, sticky='nsew', padx=3, pady=3)
 
-    def mode1(self, dialogue_list):
+    def mode1(self, dialogue_list: list):
         n = len(dialogue_list)
         frame = []
 
@@ -374,7 +374,7 @@ class PokeConDialogue(object):
             else:
                 frame[i].grid_columnconfigure(0, weight=1)
 
-    def ret_value(self, need):
+    def ret_value(self, need) -> list | dict: 
         if self.isOK:
             if need == dict:
                 return {k: v.get() for k, v in self.dialogue_ls.items()}

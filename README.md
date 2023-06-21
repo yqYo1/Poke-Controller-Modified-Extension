@@ -2,6 +2,8 @@
 機能拡張版Poke-Controller MODIFIEDです。作者がやりたいことを実現するために拡張しています。
 主に複数並列起動やProconで操作したい、など。
 
+![カイリューかわいい](https://github.com/futo030/Poke-Controller-Modified-Extention/blob/image/pokecon_modified_extention_image.png)
+
 ## MODIFIED版からの変更点
 
 - 機能面

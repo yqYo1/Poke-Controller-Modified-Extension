@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import List, TYPE_CHECKING
+
 import math
 import os
 import time
@@ -8,9 +11,12 @@ import platform
 import serial
 from logging import getLogger, DEBUG, NullHandler
 
+if TYPE_CHECKING:
+    import tkinter as tk
+
 
 class Sender:
-    def __init__(self, is_show_serial, if_print=True):
+    def __init__(self, is_show_serial: tk.BooleanVar, if_print: bool = True):
         self.ser = None
         self.is_show_serial = is_show_serial
 
@@ -82,7 +88,7 @@ class Sender:
         self._logger.debug("Checking if serial communication is open")
         return True if self.ser is not None and self.ser.isOpen() else False
 
-    def writeRow(self, row, is_show=False):
+    def writeRow(self, row: str, is_show: bool = False):
         try:
             self.time_bef = time.perf_counter()
             if self.before is not None and self.before != 'end' and is_show:
@@ -104,7 +110,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
     
-    def writeRow_wo_perf_counter(self, row, is_show=False):
+    def writeRow_wo_perf_counter(self, row: str, is_show: bool = False):
         try:
             self.ser.write((row + '\r\n').encode('utf-8'))
         except serial.serialutil.SerialException as e:
@@ -120,7 +126,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
 
-    def show_input(self, output):
+    def show_input(self, output: List[str]):
         try:
             # print(output)
             btns = [self.Buttons[x] for x in range(0, 16) if int(output[0], 16) >> x & 1]

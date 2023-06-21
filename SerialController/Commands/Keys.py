@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import math
 import time
@@ -7,6 +9,9 @@ from collections import OrderedDict
 from enum import Enum, IntEnum, IntFlag, auto
 import queue
 from logging import getLogger, DEBUG, NullHandler
+
+if TYPE_CHECKING:
+    from Commands.Sender import Sender
 
 
 class Button(IntFlag):
@@ -261,6 +266,11 @@ class Direction:
                 tilting.append(Tilt.R_UP)
         return tilting
 
+NEUTRAL = (128, 127)
+"""
+スティックが中心にあることを表します。
+丸め誤差の関係で"80 80"になるのは`(128, 127)`です。
+"""
 
 # Left stick for ease of use
 Direction.UP = Direction(Stick.LEFT, 90, showName='UP')
@@ -285,7 +295,7 @@ Direction.R_UP_LEFT = Direction(Stick.RIGHT, 135, showName='UP_LEFT')
 
 # handles serial input to Joystick.c
 class KeyPress:
-    def __init__(self, ser):
+    def __init__(self, ser: Sender):
 
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
@@ -310,7 +320,7 @@ class KeyPress:
         self.inputEnd_time_0 = time.perf_counter()
         self.was_neutral = True
 
-    def input(self, btns, ifPrint=True):
+    def input(self, btns: Button | Hat | Stick | Direction, ifPrint=True):
         self._pushing = dict(self.format.format)
         if not isinstance(btns, list):
             btns = [btns]
@@ -328,7 +338,7 @@ class KeyPress:
 
         # self._logger.debug(f": {list(map(str,self.format.format.values()))}")
 
-    def inputEnd(self, btns, ifPrint=True, unset_hat=True):
+    def inputEnd(self, btns: Button | Hat | Stick | Direction, ifPrint=True, unset_hat=True):
         # self._logger.debug(f"input end: {btns}")
         self.pushing2 = dict(self.format.format)
 
@@ -351,7 +361,7 @@ class KeyPress:
         self.format.unsetDirection(tilts)
         self.ser.writeRow(self.format.convert2str())
 
-    def hold(self, btns):
+    def hold(self, btns: Button | Hat | Stick | Direction):
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -364,7 +374,7 @@ class KeyPress:
             self.holdButton.append(btn)
         self.input(btns)
 
-    def holdEnd(self, btns):
+    def holdEnd(self, btns: Button | Hat | Stick | Direction):
         if not isinstance(btns, list):
             btns = [btns]
 

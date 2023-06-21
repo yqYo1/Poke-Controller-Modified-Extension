@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import configparser
 import os
 import tkinter as tk
@@ -8,7 +12,7 @@ from pynput.keyboard import Listener
 
 
 class PokeKeycon:
-    SETTING_PATH = os.path.join(os.path.dirname(__file__), "settings.ini")
+    SETTING_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'settings.ini')
 
     def __init__(self, master=None, **kw):
         self.master = master

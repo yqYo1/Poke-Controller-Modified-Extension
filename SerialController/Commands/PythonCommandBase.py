@@ -1,52 +1,91 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from typing import TYPE_CHECKING
 
-import cv2
-import threading
 from abc import abstractclassmethod
+from typing import List, Tuple, Optional
+import threading
+import time
 from time import sleep
 import random
-import time
 from logging import getLogger, DEBUG, NullHandler
-from os import path
-import tkinter as tk
-import tkinter.ttk as ttk
+import os
+import os.path
+import datetime
+import string
 
-import Settings
+from Settings import GuiSettings
+from ImageProcessing import *
 from LineNotify import Line_Notify
-from . import CommandBase
-from .Keys import Button, Direction, KeyPress
+from Commands import CommandBase
+from Commands.Keys import KeyPress
 
-import numpy as np
+if TYPE_CHECKING:
+    from Window import PokeControllerApp
+    from GuiAssets import CaptureArea
+    from Camera import Camera
+    from Commands.Sender import Sender
+    from Commands.Keys import Button, Hat, Stick, Direction
 
 
 # the class For notifying stop signal is sent from Main window
 class StopThread(Exception):
     pass
 
-
 # Python command
 class PythonCommand(CommandBase.Command):
     def __init__(self):
         super(PythonCommand, self).__init__()
-        self.keys = None
-        self.thread = None
-        self.alive = True
-        self.postProcess = None
-        self.Line = Line_Notify()
-        self.message_dialogue = None
-
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
+        self.keys = None
+        self.thread = None
+        self.alive = True
+        self.postProcess = None
+        self.Line = Line_Notify()
+
+    def pausedecorator(func):
+        '''
+        一時停止を実現するためのデコレータです。
+        戻り値が3つある関数に使用されます。
+        '''
+        def inner(self, *args, **kwargs):
+            func(self, *args, **kwargs)
+            if self.isPause:
+                self.show_var()
+            while self.isPause:
+                sleep(0.5)
+                self.checkIfAlive()
+        return inner
+
+    def show_var(self):
+        '''
+        一時停止時に内部変数の一覧を表示します。
+        表示対象は自動化スクリプト側でselfにて定義した変数のみです。
+        '''
+        var_dict = vars(self) # 重い
+        del_dict = ['isRunning', 'message_dialogue', 'socket0', 'mqtt0', 'keys', 'thread', 'alive', 'postProcess', 'Line', '_logger', 'camera', 'gui', 'ImgProc']
+        print("--------内部変数一覧--------")
+        for k, v in var_dict.items():
+            if k not in del_dict:
+                print(k, "=", v)
+        print("----------------------------")
+
     @abstractclassmethod
     def do(self):
+        '''
+        自動化スクリプト側でオーバーライトされるため、処理の記述はありません。
+        '''
         pass
 
-    def do_safe(self, ser):
+    def do_safe(self, ser: Sender):
+        '''
+        自動化スクリプト実行準備→実行→終了処理を順番に行います。
+        '''
         if self.keys is None:
             self.keys = KeyPress(ser)
 
@@ -67,14 +106,22 @@ class PythonCommand(CommandBase.Command):
             self.keys.end()
             self.alive = False
 
-    def start(self, ser, postProcess=None):
+    def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost):
+        '''
+        自動化スクリプトをスレッドに割り当てて実行します。
+        '''
         self.alive = True
+        self.socket0.alive = True
+        self.mqtt0.alive = True
         self.postProcess = postProcess
+        ImageProcPythonCommand.template_path_name = "./Template/"
         if not self.thread:
             self.thread = threading.Thread(target=self.do_safe, args=(ser,))
             self.thread.start()
 
-    def end(self, ser):
+    def end(self, ser: Sender):
+        self.socket0.alive = False
+        self.mqtt0.alive = False
         self.sendStopRequest()
 
     def sendStopRequest(self):
@@ -82,14 +129,25 @@ class PythonCommand(CommandBase.Command):
             self.alive = False
             print('-- sent a stop request. --')
             self._logger.info("Sending stop request")
+        if self.socket0.flag_socket:
+            self.socket_disconnect()
 
     # NOTE: Use this function if you want to get out from a command loop by yourself
     def finish(self):
+        '''
+        自動化スクリプトを終了します。(自動化スクリプト内で意図的に終了したい場合に使用。)
+        '''
         self.alive = False
+        self.socket0.alive = False
+        self.mqtt0.alive = False
         self.end(self.keys.ser)
 
     # press button at duration times(s)
-    def press(self, buttons, duration=0.1, wait=0.1):
+    @pausedecorator
+    def press(self, buttons: Button | Hat | Stick | Direction, duration: float = 0.1, wait : float = 0.1):
+        '''
+        ボタンを押す。
+        '''
         self.keys.input(buttons)
         self.wait(duration)
         self.keys.inputEnd(buttons)
@@ -97,30 +155,49 @@ class PythonCommand(CommandBase.Command):
         self.checkIfAlive()
 
     # press button at duration times(s) repeatedly
-    def pressRep(self, buttons, repeat, duration=0.1, interval=0.1, wait=0.1):
+    def pressRep(self, buttons: Button | Hat | Stick | Direction, repeat: int, duration: float = 0.1, interval: float = 0.1, wait: float = 0.1):
+        '''
+        ボタンを複数回押す。
+        '''
         for i in range(0, repeat):
             self.press(buttons, duration, 0 if i == repeat - 1 else interval)
         self.wait(wait)
 
     # add hold buttons
-    def hold(self, buttons, wait=0.1):
+    @pausedecorator
+    def hold(self, buttons: Button | Hat | Stick | Direction, wait: float = 0.1):
+        '''
+        ボタンを押したままの状態にする。
+        '''
         self.keys.hold(buttons)
         self.wait(wait)
 
     # release holding buttons
-    def holdEnd(self, buttons):
+    @pausedecorator
+    def holdEnd(self, buttons: Button | Hat | Stick | Direction):
+        '''
+        ボタンを離した状態にする。
+        '''
         self.keys.holdEnd(buttons)
         self.checkIfAlive()
 
     # do nothing at wait time(s)
-    def short_wait(self, wait):
+    @pausedecorator
+    def short_wait(self, wait: float):
+        '''
+        指定時間待機する。
+        '''
         current_time = time.perf_counter()
         while time.perf_counter() < current_time + wait:
             pass
         self.checkIfAlive()
 
     # do nothing at wait time(s)
-    def wait(self, wait):
+    @pausedecorator
+    def wait(self, wait: float):
+        '''
+        指定時間待機する。
+        '''
         if float(wait) > 0.1:
             sleep(wait)
         else:
@@ -128,8 +205,12 @@ class PythonCommand(CommandBase.Command):
             while time.perf_counter() < current_time + wait:
                 pass
         self.checkIfAlive()
-    
+
     def checkIfAlive(self):
+        '''
+        Aliveフラグの状態を確認する。
+        AliveフラグがFalseなら終了処理を行う。
+        '''
         if not self.alive:
             self.keys.end()
             self.keys = None
@@ -144,69 +225,6 @@ class PythonCommand(CommandBase.Command):
             raise StopThread('exit successfully')
         else:
             return True
-
-    def dialogue(self, title: str, message: int | str | list, need: type = list) -> list | dict:
-        self.message_dialogue = tk.Toplevel()
-        ret = PokeConDialogue(self.message_dialogue, title, message).ret_value(need)
-        self.message_dialogue = None
-        return ret
-
-    def dialogue6widget(self, title: str, dialogue_list: list, need: type = list) -> list | dict:
-        self.message_dialogue = tk.Toplevel()
-        ret = PokeConDialogue(self.message_dialogue, title, dialogue_list, mode=1).ret_value(need)
-        self.message_dialogue = None
-        return ret
-
-    # Use time glitch
-
-    # Controls the system time and get every-other-day bonus without any punishments
-    def timeLeap(self, is_go_back=True):
-        self.press(Button.HOME, wait=1)
-        self.press(Direction.DOWN)
-        self.press(Direction.RIGHT)
-        self.press(Direction.RIGHT)
-        self.press(Direction.RIGHT)
-        self.press(Direction.RIGHT)
-        self.press(Direction.RIGHT)
-        self.press(Button.A, wait=1.5)  # System Settings
-        self.press(Direction.DOWN, duration=2, wait=0.5)
-
-        self.press(Button.A, wait=0.3)  # System Settings > System
-        self.press(Direction.DOWN)
-        self.press(Direction.DOWN)
-        self.press(Direction.DOWN)
-        self.press(Direction.DOWN, wait=0.3)
-        self.press(Button.A, wait=0.2)  # Date and Time
-        self.press(Direction.DOWN, duration=0.7, wait=0.2)
-
-        # increment and decrement
-        if is_go_back:
-            self.press(Button.A, wait=0.2)
-            self.press(Direction.UP, wait=0.2)  # Increment a year
-            self.press(Direction.RIGHT, duration=1.5)
-            self.press(Button.A, wait=0.5)
-
-            self.press(Button.A, wait=0.2)
-            self.press(Direction.LEFT, duration=1.5)
-            self.press(Direction.DOWN, wait=0.2)  # Decrement a year
-            self.press(Direction.RIGHT, duration=1.5)
-            self.press(Button.A, wait=0.5)
-
-        # use only increment
-        # for use of faster time leap
-        else:
-            self.press(Button.A, wait=0.2)
-            self.press(Direction.RIGHT)
-            self.press(Direction.RIGHT)
-            self.press(Direction.UP, wait=0.2)  # increment a day
-            self.press(Direction.RIGHT, duration=1)
-            self.press(Button.A, wait=0.5)
-
-        self.press(Button.HOME, wait=1)
-        self.press(Button.HOME, wait=1)
-
-    def LINE_text(self, txt="", token='token'):
-        self.Line.send_text(txt, token)
 
     # direct serial
     def direct_serial(self, serialcommands: list, waittime: list):
@@ -224,200 +242,76 @@ class PythonCommand(CommandBase.Command):
             # self.keyPress = None (ここでNoneはNGなはず)
             self.reload_com_port()
         else:
-            if self.keys.ser.openSerial(Settings.GuiSettings().com_port.get(), Settings.GuiSettings().com_port_name.get(), Settings.GuiSettings().baud_rate.get()):
-                print('COM Port ' + str(Settings.GuiSettings().com_port.get()) + ' connected successfully')
-                self._logger.debug('COM Port ' + str(Settings.GuiSettings().com_port.get()) + ' connected successfully')
+            if self.keys.ser.openSerial(GuiSettings().com_port.get(), GuiSettings().com_port_name.get(), GuiSettings().baud_rate.get()):
+                print('COM Port ' + str(GuiSettings().com_port.get()) + ' connected successfully')
+                self._logger.debug('COM Port ' + str(GuiSettings().com_port.get()) + ' connected successfully')
                 # self.keyPress = None (ここでNoneはNGなはず)
 
-class PokeConDialogue(object):
-    def __init__(self, parent, title: str, message: int | str | list, mode: int = 0):
-        """
-        pokecon用ダイアログ生成関数(注意:mode=0と1でmessageの取り扱いが大きく異なる。)
-        mode | int: 0のときEntryのみ、1のとき6種類のwidgetに対応
-        title | str: タイトル
-        message | mode=0の場合 : int/str/list: Entryのラベル、mode=1の場合 : list[widget, widget, ...]: widgetごとの設定をリスト化したもの
-        widget | list : widgetごとの設定(ウィジェットの種類によってリストの中身は異なる。以下を参照。)
-        checkbox/entryの場合 : [type, subtitle, init] (例) ["check", "Check(例)", True]、["ENTRY", "Entry(例)", "初期値"]
-        combobox/radiobutton/spinboxの場合 : [type, subtitle, selectlist, init] (例) ["Combo", "Combo(例)", ["hello", "world"], "hello"]、["RADIO", "Radio(例)", ["dog", "cat"],"dog"]、["Spin", "Spin(例)", list(map(str, range(10))), "3"]
-        scaleの場合 : [type, subtitle, min, max, init, digit] (例) ["Scale", "scale(例)", 0, 100, 50.1, 2]
-        type | str: widgetの種類(check/combo/entry/radio/spin/scaleのいずれか。大文字小文字は問わない)
-        subtitle | str : widgetのタイトル
-        init | checkboxの場合bool,scaleの場合int/float,その他str : 初期値
-        selectlist | list : 項目のリスト
-        min/max | int/float : scaleの最小値と最大値
-        digit | int : 有効桁数
-        return : なし
-        """
-        self._ls = None
-        self.isOK = None
+    def LINE_text(self, txt: str, token: str = 'token'):
+        # 送信
+        try:
+            self.Line.send_message(txt, token=token)
+        except:
+            pass
 
-        self.message_dialogue = parent
-        self.message_dialogue.title(title)
-        self.message_dialogue.attributes("-topmost", True)
-        self.message_dialogue.protocol("WM_DELETE_WINDOW", self.close_window)
 
-        self.main_frame = tk.Frame(self.message_dialogue)
-        self.inputs = ttk.Frame(self.main_frame)
+def generateRandomCharacter(n: int):
+    '''
+    指定数のランダムな文字列を生成する
+    Contributor: kochan (敬称略)
+    '''
+    c = string.ascii_lowercase + string.ascii_uppercase + string.digits
+    return ''.join([random.choice(c) for _ in range(n)])
 
-        self.title_label = ttk.Label(self.main_frame, text=title, anchor='center')
-        self.title_label.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=0, sticky='nsew')
+def convertCv2Format(crop_fmt: int | str = '', crop: List[int] = []) -> Tuple(List[int], List[int]):
+    '''
+    リストをopencv/pillow形式に対応するよう変換する。
+    ・Pillow形式
+    x軸(横軸),y軸(縦軸),画像の左上が原点
+    crop_fmt=1: [x軸始点, y軸始点, x軸終点, y軸終点] (res_pillowとして出力されるリスト)
+    crop_fmt=2: [x軸始点, y軸始点, トリミング後の画像のサイズ(横), トリミング後の画像のサイズ(縦)]
+    crop_fmt=3: [x軸始点, x軸終点, y軸始点, y軸終点]
+    crop_fmt=4: [x軸始点, トリミング後の画像のサイズ(横), y軸始点, トリミング後の画像のサイズ(縦)]
+    ・opencv形式(y, xの順番)
+    crop_fmt=11: [y軸始点, x軸始点, y軸終点, x軸終点]
+    crop_fmt=12: [y軸始点, x軸始点, トリミング後の画像のサイズ(縦), トリミング後の画像のサイズ(横)]
+    crop_fmt=13: [y軸始点, y軸終点, x軸始点, x軸終点] (res_cv2として出力されるリスト)
+    crop_fmt=14: [y軸始点, トリミング後の画像のサイズ(縦), x軸始点, トリミング後の画像のサイズ(横)]
+    '''
 
-        self.dialogue_ls = {}
-        x = self.message_dialogue.master.winfo_x()
-        w = self.message_dialogue.master.winfo_width()
-        y = self.message_dialogue.master.winfo_y()
-        h = self.message_dialogue.master.winfo_height()
-        w_ = self.message_dialogue.winfo_width()
-        h_ = self.message_dialogue.winfo_height()
-        self.message_dialogue.geometry(f"+{int(x+w/2-w_/2)}+{int(y+h/2-h_/2)}")
-
-        if mode == 0:
-            self.mode0(message)
+    try:
+        # pillow形式
+        if crop_fmt == 1 or crop_fmt == "1":
+            res_cv2 = [crop[1], crop[3], crop[0],  crop[2]]
+        elif crop_fmt == 2 or crop_fmt == "2":
+            res_cv2 = [crop[1], crop[1] + crop[3], crop[0], crop[0] + crop[2]]
+        elif crop_fmt == 3 or crop_fmt == "3":
+            res_cv2 = [crop[2], crop[3], crop[0],  crop[1]]
+        elif crop_fmt == 4 or crop_fmt == "4":
+            res_cv2 = [crop[2], crop[2] + crop[3], crop[0], crop[0] + crop[1]]
+        # opencv形式
+        elif crop_fmt == 11 or crop_fmt == "11":
+            res_cv2 = [crop[0], crop[2], crop[1],  crop[3]]
+        elif crop_fmt == 12 or crop_fmt == "12":
+            res_cv2 = [crop[0], crop[0] + crop[2], crop[1], crop[1] + crop[3]]
+        elif crop_fmt == 13 or crop_fmt == "13":
+            res_cv2 = [crop[0], crop[1], crop[2],  crop[3]]
+        elif crop_fmt == 14 or crop_fmt == "14":
+            res_cv2 = [crop[0], crop[0] + crop[1], crop[2], crop[2] + crop[3]]
         else:
-            self.mode1(message)
+            res_cv2 = [crop[1], crop[3], crop[0],  crop[2]]
+        res_pillow = [res_cv2[2], res_cv2[0], res_cv2[3], res_cv2[1]]
+    except:
+        res_cv2 = []
+        res_pillow = []
 
-        self.inputs.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=1, sticky='nsew')
-        self.inputs.grid_anchor('center')
-        self.result = ttk.Frame(self.main_frame)
-        self.OK = ttk.Button(self.result, command=self.ok_command)
-        self.OK.configure(text='OK')
-        self.OK.grid(column=0, row=1)
-        self.Cancel = ttk.Button(self.result, command=self.cancel_command)
-        self.Cancel.configure(text='Cancel')
-        self.Cancel.grid(column=1, row=1, sticky='ew')
-        self.result.grid(column=0, columnspan=2, pady=5, row=2, sticky='ew')
-        self.result.grid_anchor('center')
-        self.main_frame.pack()
-        self.message_dialogue.master.wait_window(self.message_dialogue)
-
-    def mode0(self, message: list | str):
-        if type(message) is not list:
-            message = [message]
-        n = len(message)
-
-        for i in range(n):
-            self.dialogue_ls[message[i]] = tk.StringVar()
-            label = ttk.Label(self.inputs, text=message[i])
-            entry = ttk.Entry(self.inputs, textvariable=self.dialogue_ls[message[i]])
-            label.grid(column=0, row=i, sticky='nsew', padx=3, pady=3)
-            entry.grid(column=1, row=i, sticky='nsew', padx=3, pady=3)
-
-    def mode1(self, dialogue_list: list):
-        n = len(dialogue_list)
-        frame = []
-
-        scale_label_list = []   # scaleの値を表示するlabelを格納するリスト
-        scale_index_list = []   # scaleが何番目のwidgetなのかを格納するリスト
-        scale_digit_list = []   # scaleの有効桁数を格納するリスト
-
-        def change_scale_value(event=None):   # scaleのバーを動かしたときにlabelの値を変更するための関数
-            for i, (index, fmt) in enumerate(zip(scale_index_list, scale_digit_list)):
-                if fmt != 0:
-                    val = round(self.dialogue_ls[dialogue_list[index][1]].get(), fmt)
-                    scale_label_list[i]["text"] = "%s" % val
-                    self.dialogue_ls[dialogue_list[index][1]].set(val)
-                else:
-                    scale_label_list[i]["text"] = "%s" % self.dialogue_ls[dialogue_list[index][1]].get()
-
-        for i in range(n):
-            # widgetはすべてframeの中に入れる。scaleの場合、値を示すlabelもフレームの中に入れる。
-            frame.append(ttk.LabelFrame(self.inputs, text=dialogue_list[i][1]))
-
-            # Checkbox
-            if dialogue_list[i][0].casefold() == "check".casefold():
-                self.dialogue_ls[dialogue_list[i][1]] = tk.BooleanVar(value=dialogue_list[i][2])
-                widget = ttk.Checkbutton(frame[i], variable=self.dialogue_ls[dialogue_list[i][1]])
-                widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-            # Combobox
-            elif dialogue_list[i][0].casefold() == "combo".casefold():
-                self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][3])
-                widget = ttk.Combobox(frame[i], values=dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]])
-                widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-                # widget.current(0)
-            # Entry
-            elif dialogue_list[i][0].casefold() == "entry".casefold():
-                self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][2])
-                widget = ttk.Entry(frame[i], textvariable=self.dialogue_ls[dialogue_list[i][1]])
-                widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-            # Radiobutton
-            elif dialogue_list[i][0].casefold() == "radio".casefold():
-                self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][3])
-                for j, text0 in enumerate(dialogue_list[i][2]):
-                    widget = ttk.Radiobutton(frame[i], text=text0, variable=self.dialogue_ls[dialogue_list[i][1]], value=text0)
-                    widget.grid(column=j, row=0, sticky='nsew', padx=3, pady=3)
-            # Scale
-            elif dialogue_list[i][0].casefold() == "scale".casefold():
-                scale_index_list.append(i)
-                scale_digit_list.append(dialogue_list[i][5])
-                if dialogue_list[i][5] != 0:    # 浮動小数点数
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.DoubleVar(value=dialogue_list[i][4])
-                    scale_label_list.append(tk.Label(frame[i], width=10, text="%s" % round(self.dialogue_ls[dialogue_list[i][1]].get(), dialogue_list[i][5])))
-                else:   # 整数
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.IntVar(value=dialogue_list[i][4])
-                    scale_label_list.append(tk.Label(frame[i], width=10, text="%s" % self.dialogue_ls[dialogue_list[i][1]].get()))
-                widget = ttk.Scale(frame[i], from_=dialogue_list[i][2], to=dialogue_list[i][3], variable=self.dialogue_ls[dialogue_list[i][1]], command=change_scale_value)
-                scale_label_list[-1].grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-                widget.grid(column=1, row=0, sticky='nsew', padx=3, pady=3)
-            # Spinbox
-            elif dialogue_list[i][0].casefold() == "spin".casefold():
-                self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][3])
-                widget = ttk.Spinbox(frame[i], values = dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]])
-                widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-
-            frame[i].grid(column=0, row=i, sticky='nsew', padx=3, pady=3)
-
-        # widgetのサイズをフレームのサイズに合わせる
-        for i in range(n):
-            if dialogue_list[i][0].casefold() == "scale".casefold():
-                frame[i].grid_columnconfigure(0, weight=1)
-                frame[i].grid_columnconfigure(1, weight=3)
-            else:
-                frame[i].grid_columnconfigure(0, weight=1)
-
-    def ret_value(self, need: type) -> list | dict: 
-        if self.isOK:
-            if need == dict:
-                return {k: v.get() for k, v in self.dialogue_ls.items()}
-            elif need == list:
-                return self._ls
-            else:
-                print(f"Wrong arg. Try Return list.")
-                return self._ls
-        else:
-            return False
-
-    def close_window(self):
-        self.message_dialogue.destroy()
-        self.isOK = False
-
-    def ok_command(self):
-        self._ls = [v.get() for k, v in self.dialogue_ls.items()]
-        self.message_dialogue.destroy()
-        self.isOK = True
-
-    def cancel_command(self):
-        self.message_dialogue.destroy()
-        self.isOK = False
-
-
-TEMPLATE_PATH = "./Template/"
-def _get_template_filespec(template_path: str) -> str:
-    """
-    テンプレート画像ファイルのパスを取得する。
-    入力が絶対パスの場合は、`TEMPLATE_PATH`につなげずに返す。
-    Args:
-        template_path (str): 画像パス
-    Returns:
-        str: _description_
-    """
-    if path.isabs(template_path):
-        return template_path
-    else:
-        return path.join(TEMPLATE_PATH, template_path)
+    return res_cv2, res_pillow
 
 
 class ImageProcPythonCommand(PythonCommand):
-    def __init__(self, cam, gui=None):
+    template_path_name = "./Template/"
+    capture_dir = "Captures"
+    def __init__(self, cam: Camera, gui: CaptureArea = None):
         super(ImageProcPythonCommand, self).__init__()
 
         self._logger = getLogger(__name__)
@@ -426,166 +320,213 @@ class ImageProcPythonCommand(PythonCommand):
         self._logger.propagate = True
 
         self.camera = cam
-        self.Line = Line_Notify(self.camera)
-
         self.gui = gui
+        self.Line = Line_Notify()
 
-        self.gsrc = cv2.cuda_GpuMat()
-        self.gtmpl = cv2.cuda_GpuMat()
-        self.gresult = cv2.cuda_GpuMat()
 
-    # Judge if current screenshot contains an image using template matching
-    # It's recommended that you use gray_scale option unless the template color wouldn't be cared for performace
-    # 現在のスクリーンショットと指定した画像のテンプレートマッチングを行います
-    # 色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します
-    def isContainTemplate(self, template_path, threshold=0.7, use_gray=True,
-                          show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop=[], mask_path=None):
+    def pausedecorator2(func):
+        '''
+        一時停止を実現するためのデコレータです。
+        戻り値が1つある関数に使用されます。
+        '''
+        def inner(self, *args, **kwargs):
+            res = func(self, *args, **kwargs)
+            if self.isPause:
+                self.show_var()
+            while self.isPause:
+                sleep(0.5)
+                self.checkIfAlive()
+            return res
+        return inner
+
+    def pausedecorator3(func):
+        '''
+        一時停止を実現するためのデコレータです。
+        戻り値が3つある関数に使用されます。
+        '''
+        def inner(self, *args, **kwargs):
+            res1, res2, res3 = func(self, *args, **kwargs)
+            if self.isPause:
+                self.show_var()
+            while self.isPause:
+                sleep(0.5)
+                self.checkIfAlive()
+            return res1, res2, res3
+        return inner
+
+    @pausedecorator2
+    def isContainTemplate(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
+                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
+                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+        '''
+        現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
+        色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
+        '''
+
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
         src = self.camera.readFrame()
-        src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY) if use_gray else src
-        
-        if len(crop) == 4:
-            src = src[crop[1]: crop[3], crop[0]: crop[2]]
 
-        template = cv2.imread(_get_template_filespec(template_path), cv2.IMREAD_GRAYSCALE if use_gray else cv2.IMREAD_COLOR)
+        mask_path_temp = self.template_path_name + mask_path if mask_path is not None else None
+        # テンプレートマッチング
+        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.template_path_name + template_path, mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
-        # mask用画像読み込み
-        if mask_path == None:
-            mask = None
-            method = cv2.TM_CCOEFF_NORMED
-        else:
-            mask = cv2.imread(_get_template_filespec(mask_path), 0)
-            method = cv2.TM_CCORR_NORMED
+        # canvasに検出位置を表示
+        if show_position:
+            if crop_pillow != []:
+                max_loc = list(max_loc)
+                max_loc[0] += crop_pillow[0]
+                max_loc[1] += crop_pillow[1]
+            tag = str(time.perf_counter()) + str(random.random())
+            if res:
+                self.displayRectangle(max_loc, width, height, tag, ms, color=[color[0], color[2]], crop=crop_pillow)
+            elif not show_only_true_rect:
+                self.displayRectangle(max_loc, width, height, tag, ms, color=[color[1], color[2]], crop=crop_pillow)
+            else:
+                pass
 
-        w, h = template.shape[1], template.shape[0]
+        return res
 
-        res = cv2.matchTemplate(src, template, method, mask)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+    @pausedecorator3
+    def isContainTemplate_max(self, template_path_list: List[str], threshold: float = 0.7, use_gray: bool = True,
+                              show_value: bool = False, show_position:bool = True, show_only_true_rect:bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path_list: List[str] = [],
+                              BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> Tuple(int, List[float], List[bool]):
+        '''
+        # 現在のスクリーンショットと指定した複数の画像のテンプレートマッチングを行います。
+        # 相関値が最も大きい値となった画像のインデックス、各画像のテンプレートマッチングの閾値、閾値判定結果を返します。
+        # 色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
+        '''
 
-        if show_value:
-            print(template_path + ' ZNCC value: ' + str(max_val))
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        # ファイルのリストにすべて固定のディレクトリ名を連結する。
+        template_path_list_temp = [self.template_path_name + i for i in template_path_list]
+        mask_path_list_temp = [self.template_path_name + i for i in mask_path_list] if mask_path_list is not None else []
+
+        # テンプレートマッチング
+        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_path_list_temp, mask_path_list=mask_path_list_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+
+        # canvasに検出位置を表示
+        if show_position:
+            if crop_pillow != []:
+                max_loc_list[max_idx] = list(max_loc_list[max_idx])
+                max_loc_list[max_idx][0] += crop_pillow[0]
+                max_loc_list[max_idx][1] += crop_pillow[1]
+            tag = str(time.perf_counter()) + str(random.random())
+            if True in judge_list:
+                self.displayRectangle(max_loc_list[max_idx], width_list[max_idx], height_list[max_idx], tag, ms, color=[color[0], color[2]], crop=crop_pillow)
+            elif not show_only_true_rect:
+                self.displayRectangle(max_loc_list[max_idx], width_list[max_idx], height_list[max_idx], tag, ms, color=[color[1], color[2]], crop=crop_pillow)
+            else:
+                pass
+
+        return max_idx, max_val_list, judge_list
+
+    @pausedecorator2
+    def isContainTemplateGPU(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
+                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '',  crop: List[int] = [], mask_path: str = None,
+                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+        '''
+        現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
+        テンプレートマッチングにGPUを使用します。
+        色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
+        '''
+        # テンプレートマッチング
+        res = self.isContainTemplate(self.template_path_name + template_path, threshold=threshold, use_gray=use_gray,
+                        show_value=show_value, show_position=show_position, show_only_true_rect=show_only_true_rect, ms=ms, crop_fmt=crop_fmt, crop=crop, mask_path=self.template_path_name + mask_path, use_gpu=True,
+                        BGR_range=BGR_range, threshold_binary=threshold_binary, color=color)
+
+        return res
+
+    def displayRectangle(self, max_loc: tuple, width: int, height: int, tag: str = None, ms: float = 2000, color: List[str] = ['blue', 'orange'], crop_fmt: int | str = '', crop: List[int] = []):
+        '''
+        GUIの画面に四角形を表示します。
+        互換性維持のため、gui/canvas(元をたどると同じ変数)の両方に対応します。
+        '''
+        # crop_fmtに応じてcropの中身を並び替える
+        _, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
 
         top_left = max_loc
-        bottom_right = (top_left[0] + w + 1, top_left[1] + h + 1)
-        tag = str(time.perf_counter()) + str(random.random())
-        if max_val >= threshold:
-            if self.gui is not None and show_position:
-                # self.gui.delete("ImageRecRect")
-                self.gui.ImgRect(*top_left,
-                                 *bottom_right,
-                                 outline='blue',
-                                 tag=tag,
-                                 ms=ms)
-            return True
+        bottom_right = (top_left[0] + width + 1, top_left[1] + height + 1)
+        if self.gui is not None:
+            canvas = self.gui
         else:
-            if self.gui is not None and show_position and not show_only_true_rect:
-                # self.gui.delete("ImageRecRect")
-                self.gui.ImgRect(*top_left,
-                                 *bottom_right,
-                                 outline='red',
-                                 tag=tag,
-                                 ms=ms)
-            return False
+            canvas = self.canvas
+
+        if tag is None:
+            tag = generateRandomCharacter(10)
+
+        if self.gui is not None or self.isGuide:
+            if crop_pillow != []:
+                canvas.ImgRect(*crop_pillow[0:2], *crop_pillow[2:4], outline=color[1], tag=tag, ms=int(ms), flag=False)
+            canvas.ImgRect(*top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms))
+        else:
+            pass
     
-    # 現在のスクリーンショットと指定した複数の画像のテンプレートマッチングを行います
-    # 相関値が最も大きい値となった画像のインデックス、各画像のテンプレートマッチングの閾値、閾値判定結果を返します。
-    # 色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します
-    def isContainTemplate_max(self, template_path_list, threshold=0.7, use_gray=True,
-                              show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop=[]):
-        src = self.camera.readFrame()
-        src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY) if use_gray else src
-        
-        if len(crop) == 4:
-            src = src[crop[1]: crop[3], crop[0]: crop[2]]
-        
-        max_val_list = []
-        judge_threshold_list = []
-        for template_path in template_path_list:
-            template = cv2.imread(_get_template_filespec(template_path), cv2.IMREAD_GRAYSCALE if use_gray else cv2.IMREAD_COLOR)
-            w, h = template.shape[1], template.shape[0]
+    def displayText(self, position : tuple, txt : str, tag: str = None, ms : int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color : str = 'black'):
 
-            method = cv2.TM_CCOEFF_NORMED
-            res = cv2.matchTemplate(src, template, method)
-            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+        if self.gui is not None:
+            canvas = self.gui
+        else:
+            canvas = self.canvas
+    
+        ft = (font, fontsize)
 
-            if show_value:
-                print(template_path + ' ZNCC value: ' + str(max_val))
+        if tag is None:
+            tag = generateRandomCharacter(10)
 
-            top_left = max_loc
-            bottom_right = (top_left[0] + w + 1, top_left[1] + h + 1)
-            tag = str(time.perf_counter()) + str(random.random())
-            max_val_list.append(max_val)
-            judge_threshold_list.append(max_val >= threshold)
-
-            if max_val >= threshold:
-                if self.gui is not None and show_position:
-                    # self.gui.delete("ImageRecRect")
-                    self.gui.ImgRect(*top_left,
-                                    *bottom_right,
-                                    outline='blue',
-                                    tag=tag,
-                                    ms=ms)
-            else:
-                if self.gui is not None and show_position and not show_only_true_rect:
-                    # self.gui.delete("ImageRecRect")
-                    self.gui.ImgRect(*top_left,
-                                    *bottom_right,
-                                    outline='red',
-                                    tag=tag,
-                                    ms=ms)
-
-        return np.argmax(max_val_list), max_val_list, judge_threshold_list
-
-    try:
-        def isContainTemplateGPU(self, template_path, threshold=0.7, use_gray=True,
-                                 show_value=False, not_show_false=True):
-            src = self.camera.readFrame()
-            src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY) if use_gray else src
-
-            self.gsrc.upload(src)
-
-            template = cv2.imread(_get_template_filespec(template_path), cv2.IMREAD_GRAYSCALE if use_gray else cv2.IMREAD_COLOR)
-            self.gtmpl.upload(template)
-
-            method = cv2.TM_CCOEFF_NORMED
-            matcher = cv2.cuda.createTemplateMatching(cv2.CV_8UC1, method)
-            gresult = matcher.match(self.gsrc, self.gtmpl)
-            resultg = gresult.download()
-            _, max_val, _, max_loc = cv2.minMaxLoc(resultg)
-
-            if show_value:
-                print(template_path + ' ZNCC value: ' + str(max_val))
-
-            if max_val >= threshold:
-                # if use_gray:
-                #     src = cv2.cvtColor(src, cv2.COLOR_GRAY2BGR)
-                #
-                # top_left = max_loc
-                # bottom_right = (top_left[0] + w, top_left[1] + h)
-                # cv2.rectangle(src, top_left, bottom_right, (255, 0, 255), 2)
-                return True
-            else:
-                return False
-    except ModuleNotFoundError:
-        pass
-
-    # Get interframe difference binarized image
-    # フレーム間差分により2値化された画像を取得
-    def getInterframeDiff(self, frame1, frame2, frame3, threshold):
-        diff1 = cv2.absdiff(frame1, frame2)
-        diff2 = cv2.absdiff(frame2, frame3)
-
-        diff = cv2.bitwise_and(diff1, diff2)
-
-        # binarize
-        img_th = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
-
-        # remove noise
-        mask = cv2.medianBlur(img_th, 3)
-        return mask
-
-    def LINE_image(self, txt="", token='token'):
-        try:
-            self.Line.send_text_n_image(txt, token)
-        except:
+        if self.gui is not None or self.isGuide:
+            canvas.ImgText(position[0], position[1], txt=txt, tag=tag, ms=int(ms), ft=ft, color=color)
+        else:
             pass
 
+    def saveCapture(self, filename: str = None, crop_fmt: int | str = '', crop: List[int] = [], mode: bool = True):
+        '''
+        画面をキャプチャします。
+        (camera.saveCaptureと同じ機能。)
+        '''
+
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        # ファイル名を設定する
+        if filename is None or filename == "":
+            dt_now = datetime.datetime.now()
+            filename = dt_now.strftime('%Y-%m-%d_%H-%M-%S') + ".png"
+        else:
+            filename = filename + ".png"
+        if mode is True:
+            save_path = os.path.join(self.capture_dir, filename)
+        else:
+            save_path = filename
+
+        # 画像を保存する
+        ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)
+
+    def LINE_image(self, txt: str, crop_fmt: int | str = '', crop: List[int] = [], token: str = 'token'):
+        '''
+        Lineにテキストと画像を通知します。
+        '''
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        # トリミング
+        cropped_image = crop_image(src, crop=crop_cv2)
+
+        # 送信
+        try:
+            self.Line.send_message(txt, cropped_image, token)
+        except:
+            pass

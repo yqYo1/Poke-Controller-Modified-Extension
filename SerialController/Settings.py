@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
 import configparser
 import os
@@ -8,7 +9,7 @@ from logging import getLogger, DEBUG, NullHandler
 
 
 class GuiSettings:
-    SETTING_PATH = os.path.join(os.path.dirname(__file__), "settings.ini")
+    SETTING_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'settings.ini')
 
     def __init__(self):
 
@@ -35,11 +36,26 @@ class GuiSettings:
         self.fps = tk.StringVar(value=self.setting['General Setting']['fps'])
         self.show_size = tk.StringVar(value=self.setting['General Setting'].get('show_size'))
         self.is_show_realtime = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_show_realtime'))
+        self.is_show_guide = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_show_guide'))
         self.is_show_serial = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_show_serial'))
         self.is_use_keyboard = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_use_keyboard'))
         # Pokemon Home用の設定
         self.season = tk.StringVar(value=self.setting['Pokemon Home'].get('Season'))
         self.is_SingleBattle = tk.StringVar(value=self.setting['Pokemon Home'].get('Single or Double'))
+        # Shortcut用の設定
+        self.command_class_1 = self.setting['Shortcut']['command_class_1']
+        self.command_name_1 = tk.StringVar(value=self.setting['Shortcut']['command_name_1'])
+        self.command_class_2 = self.setting['Shortcut']['command_class_2']
+        self.command_name_2 = tk.StringVar(value=self.setting['Shortcut']['command_name_2'])
+        self.command_class_3 = self.setting['Shortcut']['command_class_3']
+        self.command_name_3 = tk.StringVar(value=self.setting['Shortcut']['command_name_3'])
+        self.command_class_4 = self.setting['Shortcut']['command_class_4']
+        self.command_name_4 = tk.StringVar(value=self.setting['Shortcut']['command_name_4'])
+        self.command_class_5 = self.setting['Shortcut']['command_class_5']
+        self.command_name_5 = tk.StringVar(value=self.setting['Shortcut']['command_name_5'])
+        # Output Area用の設定
+        self.area_size = self.setting['Output']['area_size']
+        self.stdout_destination = self.setting['Output']['stdout_destination']
 
     def load(self):
         if os.path.isfile(self.SETTING_PATH):
@@ -56,6 +72,7 @@ class GuiSettings:
             'fps': 45,
             'show_size': '640x360',
             'is_show_realtime': True,
+            'is_show_guide': False,
             'is_show_serial': False,
             'is_use_keyboard': True,
         }
@@ -101,6 +118,22 @@ class GuiSettings:
             "Hat.TOP_LEFT": '10111',
             "Hat.CENTER": '11000',
         }
+        self.setting['Shortcut'] = {
+            'command_class_1': 'None',
+            'command_name_1': '(empty)',
+            'command_class_2': 'None',
+            'command_name_2': '(empty)',
+            'command_class_3': 'None',
+            'command_name_3': '(empty)',
+            'command_class_4': 'None',
+            'command_name_4': '(empty)',
+            'command_class_5': 'None',
+            'command_name_5': '(empty)',
+        }
+        self.setting['Output'] = {
+            'area_size': '20',
+            'stdout_destination': '1',
+        }
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:
             self.setting.write(file)
         os.chmod(path=self.SETTING_PATH, mode=0o777)
@@ -116,6 +149,7 @@ class GuiSettings:
             'fps': self.fps.get(),
             'show_size': self.show_size.get(),
             'is_show_realtime': self.is_show_realtime.get(),
+            'is_show_guide': self.is_show_guide.get(),
             'is_show_serial': self.is_show_serial.get(),
             'is_use_keyboard': self.is_use_keyboard.get(),
         }
@@ -123,6 +157,25 @@ class GuiSettings:
         self.setting['Pokemon Home'] = {
             'Season': self.season.get(),
             'Single or Double': self.is_SingleBattle.get(),
+        }
+
+        # ショートカット用の設定
+        self.setting['Shortcut'] = {
+            'command_class_1': self.command_class_1,
+            'command_name_1': self.command_name_1.get(),
+            'command_class_2': self.command_class_2,
+            'command_name_2': self.command_name_2.get(),
+            'command_class_3': self.command_class_3,
+            'command_name_3': self.command_name_3.get(),
+            'command_class_4': self.command_class_4,
+            'command_name_4': self.command_name_4.get(),
+            'command_class_5': self.command_class_5,
+            'command_name_5': self.command_name_5.get(),
+        }
+
+        self.setting['Output'] = {
+            'area_size': self.area_size,
+            'stdout_destination': self.stdout_destination,
         }
 
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:

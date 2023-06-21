@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import Tuple
 
 import cv2
 import os
@@ -9,12 +11,13 @@ from tkinter.scrolledtext import ScrolledText
 import numpy as np
 import datetime
 from collections import deque
+from tkinter import filedialog
 
 from PIL import Image, ImageTk
 
 from Commands import UnitCommand
 from Commands import StickCommand
-from Commands.Keys import Direction, Stick, Button, Direction, KeyPress
+from Commands.Keys import Direction, Stick, Button, Direction, NEUTRAL, KeyPress
 
 import logging
 from logging import INFO, StreamHandler, getLogger, DEBUG, NullHandler
@@ -29,8 +32,6 @@ isTakeLog = False
 # logger_stick = getLogger(__name__)
 nowtime = datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d_%H%M%S')
 
-
-# press button at duration times(s)
 
 class MouseStick(PythonCommand):
     NAME = 'MOUSEスティック'
@@ -56,7 +57,7 @@ class MouseStick(PythonCommand):
 
 
 class CaptureArea(tk.Canvas):
-    def __init__(self, camera, fps, is_show, ser, master=None, show_width=640, show_height=360):
+    def __init__(self, camera, fps, is_show, ser: KeyPress, master=None, show_width=640, show_height=360):
         super().__init__(master, borderwidth=0, cursor='tcross', width=show_width, height=show_height)
 
         self._logger = getLogger(__name__)
@@ -120,6 +121,11 @@ class CaptureArea(tk.Canvas):
         self.bind("<Control-Shift-ButtonPress-1>", self.StartRangeSS)
         self.bind("<Control-Shift-Button1-Motion>", self.MotionRangeSS)
         self.bind("<Control-Shift-ButtonRelease-1>", self.ReleaseRangeSS)
+        
+        self.bind("<Control-Alt-ButtonPress-1>", self.StartRangeSS)
+        self.bind("<Control-Alt-Button1-Motion>", self.MotionRangeSS)
+        self.bind("<Control-Alt-ButtonRelease-1>", self.ReleaseRangeSS_asksaveasfilename)
+
 
         # Set disabled image first
         disabled_img = cv2.imread("../Images/disabled.png", cv2.IMREAD_GRAYSCALE)
@@ -154,6 +160,7 @@ class CaptureArea(tk.Canvas):
                               self.min_y,
                               self.min_x + 1,
                               self.min_y + 1,
+                              width = 3.0,
                               outline='red',
                               tag='SelectArea')
 
@@ -202,6 +209,42 @@ class CaptureArea(tk.Canvas):
                                 crop_ax=[
                                     int(self.min_x * ratio_x), int(self.min_y * ratio_x),
                                     int(self.max_x * ratio_x), int(self.max_y * ratio_x)])
+
+        t = 0
+        self.after(250, self.delete('SelectArea'))
+
+        if self.master.is_use_left_stick_mouse.get():
+            self.BindLeftClick()
+        if self.master.is_use_right_stick_mouse.get():
+            self.BindRightClick()
+    
+    def ReleaseRangeSS_asksaveasfilename(self, event):
+        # self.max_x, self.max_y = event.x, event.y
+        ratio_x = float(self.camera.capture_size[0] / self.show_size[0])
+        ratio_y = float(self.camera.capture_size[1] / self.show_size[1])
+        print('Mouse up: Show ({}, {}) / Capture ({}, {})'.format(self.max_x, self.max_y,
+                                                                  int(self.max_x * ratio_x),
+                                                                  int(self.max_y * ratio_y)))
+        self._logger.info('Mouse up: Show ({}, {}) / Capture ({}, {})'.format(self.max_x, self.max_y,
+                                                                              int(self.max_x * ratio_x),
+                                                                              int(self.max_y * ratio_y)))
+        if self.min_x > self.max_x:
+            self.min_x, self.max_x = self.max_x, self.min_x
+        if self.min_y > self.max_y:
+            self.min_y, self.max_y = self.max_y, self.min_y
+
+        filename = filedialog.asksaveasfilename(
+            title = "名前を付けて保存",
+            filetypes = [("PNG", ".png")],
+            initialdir = "./TEMPLATE/",
+            defaultextension = "png"
+        )
+        if filename != "":
+            self.camera.saveCapture(filename= filename[:-4],
+                                    crop=1,
+                                    crop_ax=[
+                                        int(self.min_x * ratio_x), int(self.min_y * ratio_x),
+                                        int(self.max_x * ratio_x), int(self.max_y * ratio_x)])
 
         t = 0
         self.after(250, self.delete('SelectArea'))
@@ -281,29 +324,19 @@ class CaptureArea(tk.Canvas):
         if (self._langle and self._lmag) is not None and isTakeLog:
             _time = time.perf_counter()
             if _time - self.calc_time > 0.05:
-                # thread_1 = threading.Thread(target=self.LStick.LStick,
-                #                             args=(langle,),
-                #                             kwargs={'r': mag, 'duration': _time - self.calc_time})
-                # thread_1.start()
-                self.ser.writeRow(
-                    f'3 8 '
-                    f'{hex(int(128 + mag * 127.5 * np.cos(np.deg2rad(langle))))} '
-                    f'{hex(int(128 - mag * 127.5 * np.sin(np.deg2rad(langle))))} '
-                    f'80 80',
-                    is_show=False
-                )
+                self.ser.input(Direction(Stick.LEFT, (
+                    int(128 + mag * 127.5 * np.cos(np.deg2rad(langle))),
+                    255 - int(128 - mag * 127.5 * np.sin(np.deg2rad(langle)))
+                )))
                 self.dq.append([langle,
                                 mag,
                                 _time - self.calc_time])
                 self.calc_time = _time
         elif not isTakeLog:
-            self.ser.writeRow(
-                f'3 8 '
-                f'{hex(int(128 + mag * 127.5 * np.cos(np.deg2rad(langle))))} '
-                f'{hex(int(128 - mag * 127.5 * np.sin(np.deg2rad(langle))))}'
-                f' 80 80',
-                is_show=False
-            )
+            self.ser.input(Direction(Stick.LEFT, (
+                int(128 + mag * 127.5 * np.cos(np.deg2rad(langle))),
+                255 - int(128 - mag * 127.5 * np.sin(np.deg2rad(langle)))
+            )))
 
         if mag >= 1:
             center_x = (self.radius + self.radius // 11) * np.cos(np.deg2rad(langle))
@@ -324,10 +357,7 @@ class CaptureArea(tk.Canvas):
 
     def mouseLeftRelease(self, ser):
         self.config(cursor='tcross')
-        self.ser.writeRow(
-            f'3 8 80 80',
-            is_show=False
-        )
+        self.ser.input(Direction(Stick.LEFT, NEUTRAL))
         self.delete("lcircle")
         self.delete("lcircle2")
         if self.master.is_use_right_stick_mouse.get():
@@ -378,26 +408,17 @@ class CaptureArea(tk.Canvas):
         if (self._langle and self._lmag) is not None and isTakeLog:
             _time = time.perf_counter()
             if _time - self.calc_time > 0.05:
-                # thread_1 = threading.Thread(target=self.RStick.RStick,
-                #                             args=(rangle,),
-                #                             kwargs={'r': mag, 'duration': _time - self.calc_time})
-                # thread_1.start()
-                # self.RStick.RStick(rangle, r=mag)
-                self.ser.writeRow(
-                    f'3 8 80 80 '
-                    f'{hex(int(128 + mag * 127.5 * np.cos(np.deg2rad(rangle))))} '
-                    f'{hex(int(128 - mag * 127.5 * np.sin(np.deg2rad(rangle))))}',
-                    is_show=False
-                )
+                self.ser.input(Direction(Stick.RIGHT, (
+                    int(128 + mag * 127.5 * np.cos(np.deg2rad(rangle))),
+                    255 - int(128 - mag * 127.5 * np.sin(np.deg2rad(rangle)))
+                )))
                 self.dq.append([rangle, mag, _time - self.calc_time])
                 self.calc_time = _time
         elif not isTakeLog:
-            self.ser.writeRow(
-                f'3 8 80 80 '
-                f'{hex(int(128 + mag * 127.5 * np.cos(np.deg2rad(rangle))))} '
-                f'{hex(int(128 - mag * 127.5 * np.sin(np.deg2rad(rangle))))}',
-                is_show=False
-            )
+            self.ser.input(Direction(Stick.RIGHT, (
+                int(128 + mag * 127.5 * np.cos(np.deg2rad(rangle))),
+                255 - int(128 - mag * 127.5 * np.sin(np.deg2rad(rangle)))
+            )))
         if mag >= 1:
             center_x = (self.radius + self.radius // 11) * np.cos(np.deg2rad(rangle))
             center_y = (self.radius + self.radius // 11) * np.sin(np.deg2rad(rangle))
@@ -417,10 +438,7 @@ class CaptureArea(tk.Canvas):
 
     def mouseRightRelease(self, ser):
         self.config(cursor='tcross')
-        self.ser.writeRow(
-            f'3 8 80 80 80 80',
-            is_show=False
-        )
+        self.ser.input(Direction(Stick.RIGHT, NEUTRAL))
         self.delete("rcircle")
         self.delete("rcircle2")
         if self.master.is_use_left_stick_mouse.get():
@@ -462,7 +480,7 @@ class CaptureArea(tk.Canvas):
     def saveCapture(self):
         self.camera.saveCapture()
 
-    def ImgRect(self, x1, y1, x2, y2, outline, tag, ms):
+    def ImgRect(self, x1, y1, x2, y2, outline, tag, ms, flag = True):
 
         ratio_x = float(self.show_size[0] / self.camera.capture_size[0])
         ratio_y = float(self.show_size[1] / self.camera.capture_size[1])
@@ -471,9 +489,23 @@ class CaptureArea(tk.Canvas):
                               outline="white", tag=tag)
         self.create_rectangle(x1 * ratio_x, y1 * ratio_y, x2 * ratio_x, y2 * ratio_y, width=2.5,
                               outline=outline, tag=tag)
-        self.after(ms, self.deleteImageRect, tag)
+        if flag:
+            self.after(ms, self.deleteImageRect, tag)
 
     def deleteImageRect(self, tag):
+        self.delete(tag)
+
+    def ImgText(self, x1, y1, txt, tag, ms, ft = ("UD デジタル 教科書体 NP-B", 20), color : str = 'black', flag: bool = True):
+
+        ratio_x = float(self.show_size[0] / self.camera.capture_size[0])
+        ratio_y = float(self.show_size[1] / self.camera.capture_size[1])
+        str_len = (0.3528 * ft[1] * len(txt))   # 1[pt] = 0.3528[mm]
+        self.create_text(((x1 - 1.0) * ratio_x) + str_len, (y1 - 1.0) * ratio_y,
+                          text=txt, font=ft, tag=tag, fill=color)
+        if flag:
+            self.after(ms, self.deleteImageText, tag)
+
+    def deleteImageText(self, tag):
         self.delete(tag)
 
     def BindLeftClick(self):

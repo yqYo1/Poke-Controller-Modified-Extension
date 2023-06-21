@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import List, TYPE_CHECKING
 
 import cv2
 import datetime
 import os
-import numpy as np
 from logging import getLogger, DEBUG, NullHandler
 
+if TYPE_CHECKING:
+    import numpy
 
-def imwrite(filename, img, params=None):
+
+def imwrite(filename: str, img: numpy.ndarray, params: int = None):
     _logger = getLogger(__name__)
     _logger.addHandler(NullHandler())
     _logger.setLevel(DEBUG)
@@ -49,7 +53,7 @@ def _get_save_filespec(filename: str) -> str:
 
 
 class Camera:
-    def __init__(self, fps=45):
+    def __init__(self, fps: int = 45):
         self.camera = None
         self.capture_size = (1280, 720)
         # self.capture_size = (1920, 1080)
@@ -61,7 +65,7 @@ class Camera:
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-    def openCamera(self, cameraId):
+    def openCamera(self, cameraId: int):
         if self.camera is not None and self.camera.isOpened():
             self._logger.debug("Camera is already opened")
             self.destroy()
@@ -95,7 +99,7 @@ class Camera:
         _, self.image_bgr = self.camera.read()
         return self.image_bgr
 
-    def saveCapture(self, filename=None, crop=None, crop_ax=None, img=None):
+    def saveCapture(self, filename: str = None, crop: int = None, crop_ax: List[int] = None, img: numpy.ndarray = None):
         if crop_ax is None:
             crop_ax = [0, 0, 1280, 720]
         else:

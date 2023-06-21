@@ -1,8 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 '''
 This code has copied from https://qiita.com/Esfahan/items/275b0f124369ccf8cf18
 '''
 
-# -*- coding:utf-8 -*-
 from logging import Formatter, handlers, StreamHandler, getLogger, DEBUG
 import logging
 import datetime as dt

@@ -9,7 +9,6 @@ from .Keys import Button, Hat, KeyPress, Direction, Stick
 
 from logging import Formatter, handlers, StreamHandler, getLogger, DEBUG
 
-
 # Single button command
 class StickCommand(CommandBase.Command):
     def __init__(self):

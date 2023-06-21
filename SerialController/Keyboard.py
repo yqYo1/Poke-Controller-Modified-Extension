@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
 import configparser
 import os
@@ -8,9 +9,6 @@ from pynput.keyboard import Key, Listener
 from logging import getLogger, DEBUG, NullHandler
 
 from Commands.Keys import Button, Direction, Hat
-
-
-# import logging
 
 
 # This handles keyboard interactions
@@ -45,7 +43,7 @@ class Keyboard:
 
 # This regards a keyboard inputs as Switch controller
 class SwitchKeyboardController(Keyboard):
-    SETTING_PATH = os.path.join(os.path.dirname(__file__), "settings.ini")
+    SETTING_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'settings.ini')
 
     def __init__(self, keyPress):
         super(SwitchKeyboardController, self).__init__()

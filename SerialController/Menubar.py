@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import cv2
 import tkinter as tk
 
@@ -70,7 +74,7 @@ class PokeController_Menubar(tk.Menu):
     def LineTokenSetting(self):
         self._logger.debug("Show line API")
         if self.line is None:
-            self.line = Line_Notify(self.camera)
+            self.line = Line_Notify()
         print(self.line)
         self.line.getRateLimit()
         # LINE.send_text_n_image("CAPTURE")

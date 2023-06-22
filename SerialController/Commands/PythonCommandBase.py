@@ -310,7 +310,7 @@ def convertCv2Format(crop_fmt: int | str = '', crop: List[int] = []) -> Tuple(Li
 
 class ImageProcPythonCommand(PythonCommand):
     template_path_name = "./Template/"
-    capture_dir = "Captures"
+    capture_path_name = "./Captures/"
     def __init__(self, cam: Camera, gui: CaptureArea = None):
         super(ImageProcPythonCommand, self).__init__()
 
@@ -354,6 +354,28 @@ class ImageProcPythonCommand(PythonCommand):
             return res1, res2, res3
         return inner
 
+    def get_filespec(self, filename: str, mode: str = "t") -> str:
+        """
+        画像ファイルの保存パスを取得する。
+
+        入力が絶対パスの場合は、modeに合わせて、`template_path_name/capture_path_name`につなげずに返す。
+
+        Args:
+            filename (str): 保存名／保存パス
+            mode (str): 相対パスの種類
+
+        Returns:
+            str: _description_
+        """
+        if os.path.isabs(filename):
+            return filename
+        elif mode == "c":
+            return os.path.join(self.capture_path_name, filename)
+        elif mode == "t":
+            return os.path.join(self.template_path_name, filename)
+        else:
+            return filename
+
     @pausedecorator2
     def isContainTemplate(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
                         show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
@@ -369,9 +391,9 @@ class ImageProcPythonCommand(PythonCommand):
         # カメラの画像を取得
         src = self.camera.readFrame()
 
-        mask_path_temp = self.template_path_name + mask_path if mask_path is not None else None
+        mask_path_temp = self.get_filespec(mask_path, mode="t") if mask_path is not None else None
         # テンプレートマッチング
-        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.template_path_name + template_path, mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.get_filespec(template_path, mode="t"), mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
         # canvasに検出位置を表示
         if show_position:
@@ -406,8 +428,8 @@ class ImageProcPythonCommand(PythonCommand):
         src = self.camera.readFrame()
 
         # ファイルのリストにすべて固定のディレクトリ名を連結する。
-        template_path_list_temp = [self.template_path_name + i for i in template_path_list]
-        mask_path_list_temp = [self.template_path_name + i for i in mask_path_list] if mask_path_list is not None else []
+        template_path_list_temp = [self.get_filespec(i, mode="t") for i in template_path_list]
+        mask_path_list_temp = [self.get_filespec(i, mode="t") for i in mask_path_list] if mask_path_list is not None else []
 
         # テンプレートマッチング
         max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_path_list_temp, mask_path_list=mask_path_list_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
@@ -438,8 +460,8 @@ class ImageProcPythonCommand(PythonCommand):
         色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
         '''
         # テンプレートマッチング
-        res = self.isContainTemplate(self.template_path_name + template_path, threshold=threshold, use_gray=use_gray,
-                        show_value=show_value, show_position=show_position, show_only_true_rect=show_only_true_rect, ms=ms, crop_fmt=crop_fmt, crop=crop, mask_path=self.template_path_name + mask_path, use_gpu=True,
+        res = self.isContainTemplate(template_path, threshold=threshold, use_gray=use_gray,
+                        show_value=show_value, show_position=show_position, show_only_true_rect=show_only_true_rect, ms=ms, crop_fmt=crop_fmt, crop=crop, mask_path=mask_path, use_gpu=True,
                         BGR_range=BGR_range, threshold_binary=threshold_binary, color=color)
 
         return res
@@ -487,10 +509,10 @@ class ImageProcPythonCommand(PythonCommand):
             filename = dt_now.strftime('%Y-%m-%d_%H-%M-%S') + ".png"
         else:
             filename = filename + ".png"
-        if mode is True:
-            save_path = os.path.join(self.capture_dir, filename)
+        if mode:
+            save_path = self.get_filespec(filename, mode="c")
         else:
-            save_path = filename
+            save_path = self.get_filespec(filename, mode="n")
 
         # 画像を保存する
         ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)

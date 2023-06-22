@@ -468,23 +468,6 @@ class ImageProcPythonCommand(PythonCommand):
             canvas.ImgRect(*top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms))
         else:
             pass
-    
-    def displayText(self, position : tuple, txt : str, tag: str = None, ms : int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color : str = 'black'):
-
-        if self.gui is not None:
-            canvas = self.gui
-        else:
-            canvas = self.canvas
-    
-        ft = (font, fontsize)
-
-        if tag is None:
-            tag = generateRandomCharacter(10)
-
-        if self.gui is not None or self.isGuide:
-            canvas.ImgText(position[0], position[1], txt=txt, tag=tag, ms=int(ms), ft=ft, color=color)
-        else:
-            pass
 
     def saveCapture(self, filename: str = None, crop_fmt: int | str = '', crop: List[int] = [], mode: bool = True):
         '''

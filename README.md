@@ -1,8 +1,8 @@
-# Poke-Controller MODIFIED Extention
+# Poke-Controller MODIFIED Extension
 機能拡張版Poke-Controller MODIFIEDです。作者がやりたいことを実現するために拡張しています。
 主に複数並列起動やProconで操作したい、など。
 
-![カイリューかわいい](https://github.com/futo030/Poke-Controller-Modified-Extention/blob/image/pokecon_modified_extention_image.png)
+![カイリューかわいい](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/image/pokecon_modified_extension_image.png)
 
 ## MODIFIED版からの変更点
 

@@ -1,0 +1,28 @@
+#
+# from original wiki:
+#
+opencv-python
+pynput
+pyserial
+Pillow
+pythonnet
+
+#
+# from modified README:
+# 
+pygubu
+requests
+pandas
+numpy
+scipy
+
+#
+# from README:
+# 
+pygame
+paho-mqtt
+windows-capture-device-list
+
+#
+# requirements not mentioned in the documents above:
+#

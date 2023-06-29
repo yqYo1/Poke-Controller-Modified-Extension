@@ -38,9 +38,8 @@ from Commands.CommandBase import Command
 addpath = dirname(dirname(dirname(abspath(__file__))))	#SerialControllerフォルダのパス
 sys.path.append(addpath)
 
-NAME = "Poke-Controller"
-VERSION = "v0.0.0.0.1 Modified Extension"
-
+NAME = "Poke-Controller Modified Extension"
+VERSION = "ver.0.0.0.0.2"
 
 class PokeControllerApp:
     def __init__(self, master=None, profile='default'):
@@ -54,7 +53,7 @@ class PokeControllerApp:
         self._logger.debug(f'User Profile Name: \'{profile}\'')
 
         self.root = master
-        self.root.title(NAME + ' ' + VERSION)
+        self.root.title(NAME + ' ' + VERSION + f" (profile: {args.profile})")
         # self.root.resizable(0, 0)
         self.controller = None
         self.poke_treeview = None
@@ -65,6 +64,9 @@ class PokeControllerApp:
         self.Line = None
 
         self.procon = None
+
+        self.pokeconname = NAME
+        self.pokeconversion = VERSION[4:]
 
         Command.profilename = profile
 
@@ -132,7 +134,7 @@ class PokeControllerApp:
         self.show_size_label.grid(column='4', padx='5', pady='5', row='0', sticky='ew')
         self.show_size_cb = ttk.Combobox(self.camera_settings_lf)
         self.show_size = tk.StringVar(value='')
-        self.show_size_cb.configure(state='readonly', textvariable=self.show_size, values='640x360 1280x720 1920x1080')
+        self.show_size_cb.configure(state='readonly', textvariable=self.show_size, values='640x360 960x540 1280x720 1920x1080')
         self.show_size_cb.grid(column='5', padx='5', row='0', sticky='ew')
         self.show_size_cb.bind('<<ComboboxSelected>>', self.applyWindowSize, add='')
         self.camera_separator = ttk.Separator(self.camera_settings_lf)
@@ -170,7 +172,10 @@ class PokeControllerApp:
         self.serial_f = ttk.Frame(self.controller_nb)
         self.settings_lf = ttk.Labelframe(self.serial_f)
         self.com_port_label = ttk.Label(self.settings_lf)
-        self.com_port_label.configure(text='COM Port: ')
+        if platform.system() == "Windows" or platform.system() == "Darwin":
+            self.com_port_label.configure(text='COM Port: ')
+        else:
+            self.com_port_label.configure(text='Port: ')
         self.com_port_label.grid(column='0', padx='5', pady='5', row='0', sticky='ew')
         # self.label2.rowconfigure('0', uniform='None', weight='0')   # added
         self.com_port_entry = ttk.Entry(self.settings_lf)
@@ -391,16 +396,15 @@ class PokeControllerApp:
         self.othres_outputs_lf.configure(height='200', text='Outputs', width='200')
         self.othres_outputs_lf.grid(column='0', padx='5', row='0', sticky='ew')
         self.others_help_lf = ttk.Labelframe(self.others_f)
-        self.question_button = ttk.Button(self.others_help_lf)
-        self.question_button.configure(text='Question')
-        self.question_button.grid(column='0', padx='10', pady='5', row='0', sticky='ew')
-        self.question_button.configure(command=self.output_question)
         self.others_help_lf.configure(text='Help')
         self.others_help_lf.grid(column='0', padx='5', row='1', sticky='ew')
         self.others_f.configure(height='200', width='200')
         self.others_f.pack()
         self.controller_nb.add(self.others_f, sticky='nsew', text='Others')
-        self.controller_nb.configure(height='150', width='640')
+        if platform.system() == "Windows" or platform.system() == "Darwin":
+            self.controller_nb.configure(height='150', width='640')
+        else:
+            self.controller_nb.configure(height='180', width='640')
         self.controller_nb.grid(column='0', padx='5', pady='5', row='1', sticky='ew')
         self.output_area_lf = ttk.Labelframe(self.main_frame)
         self.output_area_lf.configure(text='Outputs')
@@ -447,8 +451,9 @@ class PokeControllerApp:
         self.camera_name_cb_tooltip = ToolTip(self.camera_name_cb, "設定するキャプチャデバイス")
         self.show_realtime_checkbox_tooltip = ToolTip(self.show_realtime_checkbox, "画像をリアルタイムで更新する機能を有効化します\n(注意)本機能を有効化しないと画像は静止画のままとなります")
         self.show_guide_checkbox_tooltip = ToolTip(self.show_guide_checkbox, "ガイド表示を有効化します\n自動化スクリプト次第で本チェックボックスは無効化される場合があります")
-        self.com_port_label_tooltip = ToolTip(self.com_port_label, "COMポート番号を設定します(デバイスマネージャーで確認可能です)")
-        self.com_port_entry_tooltip = ToolTip(self.com_port_entry, "設定するCOMポート番号")
+        portheader = "COM" if platform.system() in ["Windows", "Darwin"] else ""
+        self.com_port_label_tooltip = ToolTip(self.com_port_label, f"{portheader}ポート番号を設定します(デバイスマネージャーで確認可能です)")
+        self.com_port_entry_tooltip = ToolTip(self.com_port_entry, f"設定する{portheader}ポート番号")
         self.baud_rate_label_tooltip = ToolTip(self.baud_rate_label, "ボーレートを設定します(switch:9600, GC:4800)")
         self.baud_rate_cb_tooltip = ToolTip(self.baud_rate_cb, "設定するボーレート")
         self.reload_com_port_button_tooltip = ToolTip(self.reload_com_port_button, "設定したCOMポート番号とボーレートの情報に基づいてUSBシリアルとの接続を確立します")
@@ -477,7 +482,6 @@ class PokeControllerApp:
         self.stdout_destination_2_rb_tooltip = ToolTip(self.stdout_destination_2_rb, "標準出力先にoutput(#2)(下側)を設定します")
         self.outputs_text_area_1_clear_button_tooltip = ToolTip(self.outputs_text_area_1_clear_button, "output(#1)(上側)をクリアします")
         self.outputs_text_area_2_clear_button_tooltip = ToolTip(self.outputs_text_area_2_clear_button, "output(#2)(下側)をクリアします")
-        self.question_button_tooltip = ToolTip(self.question_button, "質問用テキスト作成フォームを開きます")
         # self.text_area_1_tooltip = ToolTip(self.text_area_1, "output(#1)")
         # self.text_area_2_tooltip = ToolTip(self.text_area_2, "output(#2)")
 
@@ -572,51 +576,50 @@ class PokeControllerApp:
         # 標準出力をログにリダイレクト
         self.switchStdoutDestination()
 
-        if platform.system() != 'Linux':
+        if platform.system() == 'Windows' or platform.system() == 'Darwin':
             try:
                 self.locateCameraCmbbox()
                 self.camera_id_entry.config(state='disable')
             except Exception as e:
                 # Locate an entry instead whenever dll is not imported successfully
-                self.camera_name_fromDLL.set("An error occurred when displaying the camera name in the Win/Mac "
-                                             "environment.")
+                self.camera_name_fromDLL.set("An error occurred when displaying the camera name in the Win/Mac environment.")
                 self._logger.warning("An error occurred when displaying the camera name in the Win/Mac environment.")
                 self._logger.warning(e)
                 self.camera_name_cb.config(state='disable')
+                self.camera_id_entry.config(state='normal')
             try:
                 self.locateDeviceCmbbox()
                 self.set_init_device_name()
             except Exception as e:
                 self._logger.warning("An error occurred when checking serial device list.")
                 self._logger.warning(e)
-        elif platform.system() != 'Linux':
+        elif platform.system() == 'Linux':
             self.camera_name_fromDLL.set("Linux environment. So that cannot show Camera name.")
             self.camera_name_cb.config(state='disable')
             self.use_keyboard_checkbox.config(state='disable')
-            return
+            self.camera_id_entry.config(state='normal')
         else:
             self.camera_name_fromDLL.set("Unknown environment. Cannot show Camera name.")
             self.camera_name_cb.config(state='disable')
+            self.use_keyboard_checkbox.config(state='disable')
+            self.camera_id_entry.config(state='normal')
         # open up a camera
         self.camera = Camera(self.fps.get())
         self.openCamera()
         # activate serial communication
-        # serial deviceのcombobox対応はwindowsでのみ実施する。
-        if platform.system() == 'Windows':
-            try:
-                self.locateDeviceCmbbox()
-                self.set_init_device_name()
-            except:
-                self.serial_device_name_label.destroy()
-                self.serial_device_name_cb.destroy()
-                self.scan_device_button.destroy()
-                self.com_port_entry["state"] = 'normal'
-        else:
+        try:
+            self.locateDeviceCmbbox()
+            self.set_init_device_name()
+        except:
             self.serial_device_name_label.destroy()
             self.serial_device_name_cb.destroy()
             self.scan_device_button.destroy()
             self.com_port_entry["state"] = 'normal'
-
+        
+        if platform.system() == 'Windows' or platform.system() == "Darwin":
+            pass
+        else:
+            self.com_port_entry["state"] = 'normal'
 
         self.ser = Sender.Sender(self.is_show_serial)
         self.activateSerial()
@@ -1137,11 +1140,6 @@ class PokeControllerApp:
 
         self.cur_command.end(self.ser)
 
-    def output_question(self):
-        self.question_dialogue = tk.Toplevel()
-        _ = PokeConQuestionDialogue(self.question_dialogue, command = self.cur_command).output_text()
-        self.question_dialogue = None
-
     def stopPlayPost(self):
         self.start_button["text"] = "Start"
         self.start_top_button["text"] = "Start"
@@ -1338,143 +1336,6 @@ class StdoutRedirector(object):
     def flush(self):
         pass
 
-class PokeConQuestionDialogue(object):
-    """
-    pokeconに対する問い合わせ用文章を出力するためのプログラム
-    """
-    def __init__(self, parent, command = None):
-        self._ls = None
-        self.isOK = None
-
-        message = ["プログラム名：", "制作者様：", "質問内容(経緯などは簡潔に)", "試したこと(詳しく)"]
-        title = "--------------------------質問をする際の注意事項--------------------------\n"\
-                "・質問の前に自分なりにドキュメントを読むなど各自調査を実施してください。\n"\
-                "・項目すべてを記入してください。(空白がある場合、OKを押しても何も起きません。)\n"\
-                "・個人を誹謗中傷するような記述はしないでください。"      
-
-        # 最終実行コマンドから情報取得
-        try:
-            program_name = command.NAME
-        except:
-            program_name = ""
-        try:
-            program_name = program_name +" ("+ command.FILENAME +")"
-        except:
-            pass
-        try:
-            developer_name = command.DEVELOPER
-        except:
-            developer_name = ""
-        self.message_dialogue = parent
-        self.message_dialogue.title("Poke-Controller Modified Question Template Maker")
-        self.message_dialogue.attributes("-topmost", True)
-        self.message_dialogue.protocol("WM_DELETE_WINDOW", self.close_window)
-
-        self.main_frame = tk.Frame(self.message_dialogue)
-        self.inputs = ttk.Frame(self.main_frame)
-
-        self.title_label = ttk.Label(self.main_frame, text=title, anchor='center')
-        self.title_label.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=0, sticky='nsew')
-
-        self.dialogue_ls = {}
-        if type(message) is not list:
-            message = [message]
-        n = len(message)
-        x = self.message_dialogue.master.winfo_x()
-        w = self.message_dialogue.master.winfo_width()
-        y = self.message_dialogue.master.winfo_y()
-        h = self.message_dialogue.master.winfo_height()
-        w_ = self.message_dialogue.winfo_width()
-        h_ = self.message_dialogue.winfo_height()
-        self.message_dialogue.geometry(f"+{int(x+w/2-w_/2)}+{int(y+h/2-h_/2)}")
-
-        self.box0 = tk.StringVar(value=program_name)
-        self.label0 = ttk.Label(self.inputs, text=message[0])
-        self.entry0 = ttk.Entry(self.inputs, textvariable=self.box0)
-        self.label0.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
-        self.entry0.grid(column=1, row=0, sticky='nsew', padx=3, pady=3)
-
-        self.box1 = tk.StringVar(value=developer_name)
-        self.label1 = ttk.Label(self.inputs, text=message[1])
-        self.entry1 = ttk.Entry(self.inputs, textvariable=self.box1)
-        self.label1.grid(column=0, row=1, sticky='nsew', padx=3, pady=3)
-        self.entry1.grid(column=1, row=1, sticky='nsew', padx=3, pady=3)
-
-        self.label2 = ttk.Label(self.inputs, text=message[2])
-        self.entry2 = st.ScrolledText(self.inputs, width=50,height=10)
-        self.label2.grid(column=0, row=2, sticky='nsew', padx=3, pady=3)
-        self.entry2.grid(column=1, row=2, sticky='nsew', padx=3, pady=3)
-
-        self.label3 = ttk.Label(self.inputs, text=message[3])
-        self.entry3 = st.ScrolledText(self.inputs, width=50,height=10)
-        self.label3.grid(column=0, row=3, sticky='nsew', padx=3, pady=3)
-        self.entry3.grid(column=1, row=3, sticky='nsew', padx=3, pady=3)
-
-        self.inputs.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=1, sticky='nsew')
-        self.inputs.grid_anchor('center')
-        self.result = ttk.Frame(self.main_frame)
-        self.OK = ttk.Button(self.result, command=self.ok_command)
-        self.OK.configure(text='OK')
-        self.OK.grid(column=0, row=1)
-        self.Cancel = ttk.Button(self.result, command=self.cancel_command)
-        self.Cancel.configure(text='Cancel')
-        self.Cancel.grid(column=1, row=1, sticky='ew')
-        self.result.grid(column=0, columnspan=2, pady=5, row=2, sticky='ew')
-        self.result.grid_anchor('center')
-        self.main_frame.pack()
-        self.message_dialogue.master.wait_window(self.message_dialogue)
-
-    def ret_value(self, need):
-        if self.isOK:
-            if need == dict:
-                return {k: v.get() for k, v in self.dialogue_ls.items()}
-            elif need == list:
-                return self._ls
-            else:
-                print(f"Wrong arg. Try Return list.")
-                return self._ls
-        else:
-            return False
-
-    def output_text(self, command=None):
-        if self.isOK:
-            print('---------------------------ここからコピペ---------------------------')
-            print("■プログラム名\n" + self._ls[0])
-            print("■製作者様\n" + self._ls[1])
-            print("■使用ツール\n" + Window.NAME + ' ' + Window.VERSION)
-            if platform.system() == 'Darwin':
-                #MacOS
-                print("■OS\n" + platform.mac_ver() + "(Mac)")
-            else:
-                print("■OS\n" + platform.platform())
-            print("■Python version\n" + sys.version.split(" ")[0])
-            print("■質問内容(詳しくご記述ください。)\n" + self._ls[2])
-            print("■試したこと(詳しくご記述ください。)\n" + self._ls[3])
-            print('---------------------------ここまでコピペ---------------------------')
-            checktext = "添付資料を準備してください。(以下は一例です。)\n"\
-                        "・動作の動画\n"\
-                        "・Poke-Conのログ\n"\
-                        "・コマンドプロンプト(コンソール)の画面\nエラーが十分に出力されていることをご確認ください。"
-            tkmsg.showinfo("注意", checktext)
-
-    def close_window(self):
-        self.message_dialogue.destroy()
-        self.isOK = False
-
-    def ok_command(self):
-        self._ls = [self.box0.get(), self.box1.get(), self.entry2.get("1.0", "end-1c"), self.entry3.get("1.0", "end-1c")]
-        flag = True
-        for text in self._ls:
-            if text == "":
-                flag = False
-        if flag:
-            self.message_dialogue.destroy()
-            self.isOK = True
-
-    def cancel_command(self):
-        self.message_dialogue.destroy()
-        self.isOK = False
-
 if __name__ == '__main__':
     import tkinter as tk
 
@@ -1484,8 +1345,6 @@ if __name__ == '__main__':
 
     logger = PokeConLogger.root_logger()
     # logger.info('The root logger is created.')
-
-    VERSION += f" profile: {args.profile}"
 
     root = tk.Tk()
     app = PokeControllerApp(root, args.profile)

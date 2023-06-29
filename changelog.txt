@@ -1,0 +1,28 @@
+■ver.0.0.0.0.2
+  ・Window.py修正
+    ・メニューバーにヘルプを追加
+      ・Github/Poke-Controller Guideのページを開く機能を追加
+      ・質問テンプレート生成機能を移動
+      ・PokeCon/pythonおよびライブラリのversion機能を追加
+      ・更新履歴表示機能を追加
+      ・アップデート確認機能を追加
+      ・ライセンス表示機能を追加
+    ・画面サイズに960x540を追加
+  ・PokeConShowInfo.py追加
+    ・PokeCon/pythonおよびライブラリのversion機能を実装
+    ・ライセンス表示機能を実装
+    ・更新履歴表示機能を実装
+  ・PokeConUpdateChecker.py
+    ・PokeCon更新機能を実装
+  ・.gitignore追加
+    ・特定のファイル/フォルダをgitの追跡対象から除外
+  ・サンプルスクリプト/テンプレート画像の場所をSamplesディレクトリに移動
+  ・ExecutePokeConModified-Extension.bat更新
+    ・起動前にPokeCon更新プログラムを実行するよう変更
+  ・Linux対応
+    ・レイアウトの崩れに対応
+    ・OSがWindowsでない場合にcamera IDを手動で入力できるよう変更
+  ・LICENSEを更新
+
+■ver.0.0.0.0.1
+  ・初版

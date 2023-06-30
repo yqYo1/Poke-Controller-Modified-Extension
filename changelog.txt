@@ -1,5 +1,11 @@
+■ver.0.0.0.0.3
+  ・機能追加
+    ・GUI側からテンプレートマッチングの類似度の表示をON/OFFできる機能を追加
+  ・Linux対応バグ修正
+    ・Use Keyboardが切り替えられないバグを修正
+
 ■ver.0.0.0.0.2
-  ・Window.py修正
+  ・機能追加
     ・メニューバーにヘルプを追加
       ・Github/Poke-Controller Guideのページを開く機能を追加
       ・質問テンプレート生成機能を移動
@@ -12,7 +18,7 @@
     ・PokeCon/pythonおよびライブラリのversion機能を実装
     ・ライセンス表示機能を実装
     ・更新履歴表示機能を実装
-  ・PokeConUpdateChecker.py
+  ・PokeConUpdateChecker.py追加
     ・PokeCon更新機能を実装
   ・.gitignore追加
     ・特定のファイル/フォルダをgitの追跡対象から除外

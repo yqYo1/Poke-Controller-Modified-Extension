@@ -24,6 +24,7 @@ class Command:
     isPause = False
     canvas = None
     isGuide = False
+    isSimilarity = False
     isImage = False
     profilename = None
 

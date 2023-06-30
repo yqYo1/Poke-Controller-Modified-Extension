@@ -391,9 +391,14 @@ class ImageProcPythonCommand(PythonCommand):
         # カメラの画像を取得
         src = self.camera.readFrame()
 
+        # マスク画像のパスを設定する
         mask_path_temp = self.get_filespec(mask_path, mode="t") if mask_path is not None else None
+
+        # 類似度を表示するかを決定する
+        show_value_temp = True if show_value or self.isSimilarity else False
+
         # テンプレートマッチング
-        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.get_filespec(template_path, mode="t"), mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.get_filespec(template_path, mode="t"), mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value_temp, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
         # canvasに検出位置を表示
         if show_position:
@@ -431,8 +436,11 @@ class ImageProcPythonCommand(PythonCommand):
         template_path_list_temp = [self.get_filespec(i, mode="t") for i in template_path_list]
         mask_path_list_temp = [self.get_filespec(i, mode="t") for i in mask_path_list] if mask_path_list is not None else []
 
+        # 類似度を表示するかを決定する
+        show_value_temp = True if show_value or self.isSimilarity else False
+
         # テンプレートマッチング
-        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_path_list_temp, mask_path_list=mask_path_list_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_path_list_temp, mask_path_list=mask_path_list_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value_temp, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
         # canvasに検出位置を表示
         if show_position:

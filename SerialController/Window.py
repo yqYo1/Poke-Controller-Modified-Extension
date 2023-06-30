@@ -39,7 +39,7 @@ addpath = dirname(dirname(dirname(abspath(__file__))))	#SerialControllerフォ�
 sys.path.append(addpath)
 
 NAME = "Poke-Controller Modified Extension"
-VERSION = "ver.0.0.0.0.2"
+VERSION = "ver.0.0.0.0.3"
 
 class PokeControllerApp:
     def __init__(self, master=None, profile='default'):
@@ -159,10 +159,15 @@ class PokeControllerApp:
         self.is_show_realtime = tk.BooleanVar() # modified
         self.show_realtime_checkbox.configure(text='Show Realtime', variable=self.is_show_realtime)
         self.show_realtime_checkbox.grid(column='0', padx='5', pady='5', row='0', sticky='ew')
+        self.show_value_checkbox = ttk.Checkbutton(self.display_settings_lf)
+        self.is_show_value = tk.BooleanVar() # modified
+        self.show_value_checkbox.configure(text='Show Value', variable=self.is_show_value)
+        self.show_value_checkbox.grid(column='1', padx='5', pady='5', row='0', sticky='ew')
+        self.show_value_checkbox.configure(command=self.mode_change_show_value)
         self.show_guide_checkbox = ttk.Checkbutton(self.display_settings_lf)
         self.is_show_guide = tk.BooleanVar() # modified
         self.show_guide_checkbox.configure(text='Show Guide', variable=self.is_show_guide)
-        self.show_guide_checkbox.grid(column='1', padx='5', pady='5', row='0', sticky='ew')
+        self.show_guide_checkbox.grid(column='2', padx='5', pady='5', row='0', sticky='ew')
         self.show_guide_checkbox.configure(command=self.mode_change_show_guide)
         self.display_settings_lf.configure(height='200', text='Display Settings', width='200')
         self.display_settings_lf.grid(column='0', padx='5', pady='5', row='1', sticky='ew')
@@ -450,6 +455,7 @@ class PokeControllerApp:
         self.camera_name_label_tooltip = ToolTip(self.camera_name_label, "使用するキャプチャデバイスを設定します")
         self.camera_name_cb_tooltip = ToolTip(self.camera_name_cb, "設定するキャプチャデバイス")
         self.show_realtime_checkbox_tooltip = ToolTip(self.show_realtime_checkbox, "画像をリアルタイムで更新する機能を有効化します\n(注意)本機能を有効化しないと画像は静止画のままとなります")
+        self.show_value_checkbox_tooltip = ToolTip(self.show_value_checkbox, "テンプレートマッチングの類似度をshow_valueの値によらず強制的に出力します。")
         self.show_guide_checkbox_tooltip = ToolTip(self.show_guide_checkbox, "ガイド表示を有効化します\n自動化スクリプト次第で本チェックボックスは無効化される場合があります")
         portheader = "COM" if platform.system() in ["Windows", "Darwin"] else ""
         self.com_port_label_tooltip = ToolTip(self.com_port_label, f"{portheader}ポート番号を設定します(デバイスマネージャーで確認可能です)")
@@ -521,6 +527,7 @@ class PokeControllerApp:
         self.loadSettings()
         # 各tk変数に設定値をセット(コピペ簡単のため)
         self.is_show_realtime.set(self.settings.is_show_realtime.get())
+        self.is_show_value.set(self.settings.is_show_value.get())
         self.is_show_guide.set(self.settings.is_show_guide.get())
         self.is_show_serial.set(self.settings.is_show_serial.get())
         self.is_use_keyboard.set(self.settings.is_use_keyboard.get())
@@ -570,6 +577,9 @@ class PokeControllerApp:
         # Output画面の比率を設定値に合わせる
         self.changeAreaSize(self.area_size.get())
         
+        # 類似度の表示機能を反映する
+        self.mode_change_show_value()
+
         # ガイドの表示機能を反映する
         self.mode_change_show_guide()
 
@@ -596,12 +606,10 @@ class PokeControllerApp:
         elif platform.system() == 'Linux':
             self.camera_name_fromDLL.set("Linux environment. So that cannot show Camera name.")
             self.camera_name_cb.config(state='disable')
-            self.use_keyboard_checkbox.config(state='disable')
             self.camera_id_entry.config(state='normal')
         else:
             self.camera_name_fromDLL.set("Unknown environment. Cannot show Camera name.")
             self.camera_name_cb.config(state='disable')
-            self.use_keyboard_checkbox.config(state='disable')
             self.camera_id_entry.config(state='normal')
         # open up a camera
         self.camera = Camera(self.fps.get())
@@ -860,6 +868,9 @@ class PokeControllerApp:
             self.procon = None
         self.procon = ProController()
         self.procon.controller_loop(self.ser, self.flag_record, self.ControllerLogDir)
+
+    def mode_change_show_value(self):
+        Command.isSimilarity = self.is_show_value.get()
 
     def mode_change_show_guide(self):
         Command.isGuide = self.is_show_guide.get()
@@ -1183,6 +1194,7 @@ class PokeControllerApp:
 
             # save settings
             self.settings.is_show_realtime.set(self.is_show_realtime.get())
+            self.settings.is_show_value.set(self.is_show_value.get())
             self.settings.is_show_guide.set(self.is_show_guide.get())
             self.settings.is_show_serial.set(self.is_show_serial.get())
             self.settings.is_use_keyboard.set(self.is_use_keyboard.get())

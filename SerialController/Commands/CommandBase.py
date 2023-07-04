@@ -46,12 +46,6 @@ class Command:
     def checkIfAlive(self):
         pass
 
-    @abstractclassmethod
-    def canvas_test(self):
-        top_left = (100, 100)
-        bottom_right = (top_left[0] + 200 + 1, top_left[1] + 200 + 1)
-        self.canvas.ImgRect(*top_left, *bottom_right, outline="red", tag="neko", ms=2000)
-
     ############### print functions ###############
     def print_s(self, text: str):
         print(text)

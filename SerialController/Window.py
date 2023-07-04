@@ -14,8 +14,6 @@ import threading
 import Window
 import tkinter.ttk as ttk
 import tkinter.messagebox as tkmsg
-import tkinter.scrolledtext as st
-from time import sleep
 from serial.tools import list_ports
 from logging import getLogger, DEBUG, NullHandler
 from pygubu.widgets.scrollbarhelper import ScrollbarHelper
@@ -39,7 +37,7 @@ addpath = dirname(dirname(dirname(abspath(__file__))))	#SerialControllerフォ�
 sys.path.append(addpath)
 
 NAME = "Poke-Controller Modified Extension"
-VERSION = "ver.0.0.0.0.3"
+VERSION = "ver.0.0.4"
 
 class PokeControllerApp:
     def __init__(self, master=None, profile='default'):

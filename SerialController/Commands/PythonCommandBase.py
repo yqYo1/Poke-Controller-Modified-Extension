@@ -376,10 +376,15 @@ class ImageProcPythonCommand(PythonCommand):
         else:
             return filename
 
+    def setTemplateDir(self, path):
+        ImageProcPythonCommand.template_path_name = path
+
     @pausedecorator2
     def isContainTemplate(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
-                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
-                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+                          show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000,
+                          crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
+                          BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [],
+                          show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> bool:
         '''
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
         色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
@@ -387,18 +392,24 @@ class ImageProcPythonCommand(PythonCommand):
 
         # crop_fmtに応じてcropの中身を並び替える
         crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+        crop_template_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop_template)
 
         # カメラの画像を取得
         src = self.camera.readFrame()
 
-        # マスク画像のパスを設定する
-        mask_path_temp = self.get_filespec(mask_path, mode="t") if mask_path is not None else None
-
-        # 類似度を表示するかを決定する
-        show_value_temp = True if show_value or self.isSimilarity else False
+        # テンプレート画像を取得
+        template_image = getImage(self.get_filespec(template_path, mode="t"), mode="color")
+        
+        # マスク画像を取得
+        mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
 
         # テンプレートマッチング
-        res, max_loc, width, height = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, self.get_filespec(template_path, mode="t"), mask_path=mask_path_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value_temp, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        res, max_loc, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+
+        # テンプレートマッチングの結果(類似度)を表示する
+        if show_value or self.isSimilarity:
+            tm_mode = "NCC" if mask_path is not None else "ZNCC"
+            print(f'{template_path} {tm_mode} value: {max_val}')
 
         # canvasに検出位置を表示
         if show_position:
@@ -418,8 +429,10 @@ class ImageProcPythonCommand(PythonCommand):
 
     @pausedecorator3
     def isContainTemplate_max(self, template_path_list: List[str], threshold: float = 0.7, use_gray: bool = True,
-                              show_value: bool = False, show_position:bool = True, show_only_true_rect:bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path_list: List[str] = [],
-                              BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> Tuple(int, List[float], List[bool]):
+                              show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000,
+                              crop_fmt: int | str = '', crop: List[int] = [], mask_path_list: List[str] = [],
+                              BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [],
+                              show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> Tuple(int, List[float], List[bool]):
         '''
         # 現在のスクリーンショットと指定した複数の画像のテンプレートマッチングを行います。
         # 相関値が最も大きい値となった画像のインデックス、各画像のテンプレートマッチングの閾値、閾値判定結果を返します。
@@ -428,19 +441,25 @@ class ImageProcPythonCommand(PythonCommand):
 
         # crop_fmtに応じてcropの中身を並び替える
         crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+        crop_template_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop_template)
 
         # カメラの画像を取得
         src = self.camera.readFrame()
 
-        # ファイルのリストにすべて固定のディレクトリ名を連結する。
-        template_path_list_temp = [self.get_filespec(i, mode="t") for i in template_path_list]
-        mask_path_list_temp = [self.get_filespec(i, mode="t") for i in mask_path_list] if mask_path_list is not None else []
+        # テンプレート画像を取得
+        template_image_list = [getImage(self.get_filespec(i, mode="t"), mode="color") for i in template_path_list]
 
-        # 類似度を表示するかを決定する
-        show_value_temp = True if show_value or self.isSimilarity else False
+        # マスク画像を取得
+        mask_image_list = [getImage(self.get_filespec(i, mode="t"), mode="binary") for i in mask_path_list] if mask_path_list is not None else []
 
         # テンプレートマッチング
-        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_path_list_temp, mask_path_list=mask_path_list_temp, threshold=threshold, use_gray=use_gray, crop=crop_cv2, show_value=show_value_temp, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_image_list, mask_image_list=mask_image_list, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+
+        # テンプレートマッチングの結果(類似度)を表示する
+        if show_value or self.isSimilarity:
+            tm_mode = "ZNCC" if (mask_path_list == [] or mask_path_list == None) else "NCC"
+            for template_path, max_val in zip(template_path_list, max_val_list):
+                print(f'{template_path} {tm_mode} value: {max_val}')
 
         # canvasに検出位置を表示
         if show_position:
@@ -460,8 +479,10 @@ class ImageProcPythonCommand(PythonCommand):
 
     @pausedecorator2
     def isContainTemplateGPU(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
-                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '',  crop: List[int] = [], mask_path: str = None,
-                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+                             show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000,
+                             crop_fmt: int | str = '',  crop: List[int] = [], mask_path: str = None,
+                             BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [],
+                             show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> bool:
         '''
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
         テンプレートマッチングにGPUを使用します。
@@ -469,8 +490,52 @@ class ImageProcPythonCommand(PythonCommand):
         '''
         # テンプレートマッチング
         res = self.isContainTemplate(template_path, threshold=threshold, use_gray=use_gray,
-                        show_value=show_value, show_position=show_position, show_only_true_rect=show_only_true_rect, ms=ms, crop_fmt=crop_fmt, crop=crop, mask_path=mask_path, use_gpu=True,
-                        BGR_range=BGR_range, threshold_binary=threshold_binary, color=color)
+                                     show_value=show_value, show_position=show_position, show_only_true_rect=show_only_true_rect, ms=ms,
+                                     crop_fmt=crop_fmt, crop=crop, mask_path=mask_path, use_gpu=True,
+                                     BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template,
+                                     show_image=show_image, color=color)
+
+        return res
+
+    @pausedecorator2
+    def isContainedImage(self, image_path: str, threshold: float = 0.7, use_gray: bool = True,
+                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
+                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [], show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+        '''
+        指定した画像に対して現在のスクリーンショットから生成したテンプレート画像を用いてテンプレートマッチングを行います。
+        色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
+        '''
+
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+        crop_template_cv2, crop_template_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop_template)
+
+        # カメラの画像を取得
+        template_image = self.camera.readFrame()
+
+        # テンプレートマッチング対象画像を取得
+        image = getImage(self.get_filespec(image_path, mode="t"), mode="color")
+        
+        # マスク画像を取得
+        mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
+
+        # テンプレートマッチング
+        res, _, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(image, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+
+        # テンプレートマッチングの結果(類似度)を表示する
+        if show_value or self.isSimilarity:
+            tm_mode = "NCC" if mask_path is not None else "ZNCC"
+            print(f'capture_image {tm_mode} value: {max_val}')
+
+        # canvasに検出位置を表示
+        if show_position:            
+            tag = str(time.perf_counter()) + str(random.random())
+            if res:
+                self.displayRectangle(crop_template_pillow[0:2], width, height, tag, ms, color=[color[0], color[2]], crop=[])
+            elif not show_only_true_rect:
+                self.displayRectangle(crop_template_pillow[0:2], width, height, tag, ms, color=[color[1], color[2]], crop=[])
+            else:
+                pass
 
         return res
 
@@ -496,6 +561,23 @@ class ImageProcPythonCommand(PythonCommand):
             if crop_pillow != []:
                 canvas.ImgRect(*crop_pillow[0:2], *crop_pillow[2:4], outline=color[1], tag=tag, ms=int(ms), flag=False)
             canvas.ImgRect(*top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms))
+        else:
+            pass
+    
+    def displayText(self, position : tuple, txt : str, tag: str = None, ms : int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color : str = 'black'):
+
+        if self.gui is not None:
+            canvas = self.gui
+        else:
+            canvas = self.canvas
+    
+        ft = (font, fontsize)
+
+        if tag is None:
+            tag = generateRandomCharacter(10)
+
+        if self.gui is not None or self.isGuide:
+            canvas.ImgText(position[0], position[1], txt=txt, tag=tag, ms=int(ms), ft=ft, color=color)
         else:
             pass
 
@@ -524,6 +606,18 @@ class ImageProcPythonCommand(PythonCommand):
 
         # 画像を保存する
         ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)
+
+    def popupImage(self, crop_fmt: int | str = '', crop: List[int] = [], title: str = 'image'):
+        '''
+        popupで画像を表示する
+        '''
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        opneImage(src, crop=crop_cv2, title=title)
 
     def LINE_image(self, txt: str, crop_fmt: int | str = '', crop: List[int] = [], token: str = 'token'):
         '''

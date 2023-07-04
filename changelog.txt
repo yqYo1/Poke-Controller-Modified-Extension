@@ -1,3 +1,28 @@
+■ver.0.0.4
+  ・Version番号を3桁に変更
+  ・機能追加
+    ・テンプレートマッチング関数に2値化機能追加(ベース提供：mikan様、kochan様、空太様)
+    ・画像のポップアップ関数を追加(ベース提供：kochan様)
+    ・事前に準備しておいた画像に対して、カメラから取得したテンプレート画像を用いてテンプレートマッチングを行う関数(isContainedImage)を追加
+    ・widget関数の複数列化に対応
+  ・ImageProcessing.py更新
+    ・doPreprocessImage関数に2値化の処理を追加
+　　・isContainedImageの実装に伴い、isContainTemplate、isContainTemplate_maxの入力をパスから画像データ(numpy.ndarray)に変更
+    ・テンプレートマッチング対象画像とテンプレート画像に対する処理をdoPreprocessImage関数に統合
+    ・openImage関数、getImage関数を追加
+  ・PythonCommandBase.py更新
+    ・isContainedImage関数を追加
+    ・ImageProcessing.isContainTemplate、ImageProcessing.isContainTemplate_maxへの入力をパスから画像データ(numpy.ndarray)に変更
+    ・isContainTemplate、isContainTemplate_max、isContainTemplateGPUの入力にcrop_template(テンプレート画像のトリミング範囲)、show_image(テンプレートマッチング対象画像の表示機能(debug用))を追加
+    ・類似度の表示機能をImageProcessing.pyから移植
+  ・PokeconDialogue.py更新
+    ・dialogue6widget関数の複数列化に対応(詳細はwidget-sample.pyを参照すること)
+  ・サンプルの追加
+    ・画像認識関数紹介(1)/(2)を追加
+    ・Widget-sample.pyに複数列化の例を追加
+  ・その他
+    ・modified版へのprに伴う修正/追記を実施
+
 ■ver.0.0.0.0.3
   ・機能追加
     ・GUI側からテンプレートマッチングの類似度の表示をON/OFFできる機能を追加

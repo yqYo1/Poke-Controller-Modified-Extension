@@ -80,16 +80,47 @@ def getInterframeDiff(frame1: numpy.ndarray, frame2: numpy.ndarray, frame3: nump
     mask = cv2.medianBlur(img_th, 3)
     return mask
 
-def doPreprocessImage(image: numpy.ndarray, use_gray: bool = True, crop: List[int] = None, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> numpy.ndarray:
+def getImage(path: str, mode: str = "color"):
     '''
-    画像をトリミングしてグレースケール化
+    画像の読み込みを行う。
+    '''
+    if path == None or path == "":
+        return None
+    elif mode == "binary":
+        return cv2.imread(path, 0)
+    elif mode == "gray":
+        return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    else:
+        return cv2.imread(path, cv2.IMREAD_COLOR)
+
+def doPreprocessImage(image: numpy.ndarray, use_gray: bool = True, crop: List[int] = None, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[numpy.ndarray, int, int]:
+    '''
+    画像をトリミングしてグレースケール化/2値化する
+    2値化関連のContributor: mikan kochan 空太 (敬称略)
     '''
     src = crop_image(image, crop=crop)     # トリミング
     
     if use_gray:
         src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)         # グレースケール化
+    elif BGR_range is not None:                             # 2値化
+        src = cv2.inRange(src, numpy.array(BGR_range['lower']), numpy.array(BGR_range['upper']))    # inRangeで元画像を２値化(指定した色の範囲を抽出できる)
     
-    return src
+    if threshold_binary is not None:
+        _, src = cv2.threshold(src, threshold_binary, 255, cv2.THRESH_BINARY)
+
+    width, height = src.shape[1], src.shape[0] # テンプレート画像のサイズ
+    
+    return src, width, height
+
+def opneImage(image: numpy.ndarray, crop: List[int] = None, title="image"):
+    '''
+    キー入力があるまで画像を表示する
+    Contributor: kochan (敬称略)
+    '''
+    src = crop_image(image, crop=crop)     # トリミング
+    cv2.imshow(f'{title}', src)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 class ImageProcessing:
     '''
@@ -148,64 +179,60 @@ class ImageProcessing:
             self.__logger.error(f"Image Write Error: {e}")
             return False
 
-    def doTemplateMatch(self, image: numpy.ndarray, template_path: str, mask_path: str = None, use_gray: bool = True, show_value: bool = False, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[float, tuple, int, int]:
+    def doTemplateMatch(self, image: numpy.ndarray, template_image: numpy.ndarray, mask_image: numpy.ndarray = None) -> Tuple[float, tuple]:
         '''
         テンプレートマッチングをする
-        対象とする画像は必要に応じて事前にグレースケール化やトリミングをしておく必要がある
+        画像は必要に応じて事前にグレースケール化やトリミングをしておく必要がある
         '''
-        # テンプレート画像を取得し加工する(本当はディレクトリとパス名の記述をos.path.joinで生成したいが、他のプログラムに影響が大きそうなので従来のままとする)
-        template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE if use_gray else cv2.IMREAD_COLOR)   # 読み込み時にグレースケール化
-        width, height = template.shape[1], template.shape[0] # テンプレート画像のサイズ
-
-        # マスク用画像を取得する(本当はディレクトリとパス名の記述をos.path.joinで生成したいが、他のプログラムに影響が大きそうなので従来のままとする)
-        if mask_path != None:
-            mask = cv2.imread(mask_path, 0)
-        else:
-            mask = None
-
         # 比較方式を設定する
-        method = cv2.TM_CCORR_NORMED if mask_path != None else cv2.TM_CCOEFF_NORMED
+        method = cv2.TM_CCORR_NORMED if mask_image != None else cv2.TM_CCOEFF_NORMED
 
         # テンプレートマッチングをする
         if self.__use_gpu:    # GPUを使用する場合(マスク非対応)
             print("template matching mode:GPU")
             self.__gsrc.upload(image)
-            self.__gtmpl.upload(template)
+            self.__gtmpl.upload(template_image)
             matcher = cv2.cuda.createTemplateMatching(cv2.CV_8UC1, method)
             self.__gresult = matcher.match(self.__gsrc, self.__gtmpl)
             res = self.gresult.download()
         else:
-            res = cv2.matchTemplate(image, template, method, mask)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res) # 結果から一致度と一致度が最大となる場所を抽出
+            res = cv2.matchTemplate(image, template_image, method, mask_image)
+        _, max_val, _, max_loc = cv2.minMaxLoc(res) # 結果から類似度と類似度が最大となる場所を抽出
 
-        # テンプレートマッチングの結果を表示する
-        if show_value:
-            print(template_path + ' ZNCC value: ' + str(max_val))
+        return max_val, max_loc
 
-        return max_val, max_loc, width, height
-
-    def isContainTemplate(self, image: numpy.ndarray, template_path: List[str], mask_path: List[str] = None, threshold: float = 0.7, use_gray: bool = True, crop: List[int] = [], show_value: bool = False, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[bool, tuple, int, int]:
+    def isContainTemplate(self, image: numpy.ndarray, template_image: numpy.ndarray, mask_image: numpy.ndarray = None, threshold: float = 0.7, use_gray: bool = True, 
+                          crop: List[int] = [], BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: list[int] = [], show_image: bool = False) -> Tuple[bool, tuple, int, int, float]:
         '''
-        テンプレートマッチングを行い一致度が閾値を超えているかを確認する
+        テンプレートマッチングを行い類似度が閾値を超えているかを確認する
         '''
-        # テンプレートマッチング対象画像を加工する
-        src = doPreprocessImage(image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        # テンプレートマッチング対象画像を加工する        
+        src, _, _ = doPreprocessImage(image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary)
+
+        # [DEBUG] テンプレートマッチング対象画像を表示する
+        if show_image:
+            cv2.imshow("image",src)
+            cv2.waitKey()
+
+        # テンプレート画像を加工する
+        template, width, height = doPreprocessImage(template_image, use_gray=use_gray, crop=crop_template, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
         # テンプレートマッチングを行う
-        max_val, max_loc, width, height = self.doTemplateMatch(src, template_path, mask_path=mask_path, use_gray=use_gray, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        max_val, max_loc = self.doTemplateMatch(src, template, mask_image=mask_image)
 
-        # 一致度が閾値を超えたかを戻り値として返す(合わせて位置とテンプレート画像のサイズも返す)
-        return max_val > threshold , max_loc, width, height
+        # 類似度が閾値を超えたかを戻り値として返す(合わせて位置とテンプレート画像のサイズも返す)
+        return max_val > threshold , max_loc, width, height, max_val
 
-    def isContainTemplate_max(self, image: numpy.ndarray, template_path_list: List[str], mask_path_list: List[str] = [], threshold: float =0.7, use_gray: bool =True, crop:List[int] = [], show_value: bool = False, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[int, List[float], List[tuple], List[int], List[int], List[bool]]:
+    def isContainTemplate_max(self, image: numpy.ndarray, template_image_list: List[numpy.ndarray], mask_image_list: List[numpy.ndarray] = [], threshold: float =0.7, use_gray: bool =True, 
+                              crop: List[int] = [], BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: list[int] = [], show_image: bool = False) -> Tuple[int, List[float], List[tuple], List[int], List[int], List[bool]]:
         '''
-        複数のテンプレート画像を用いてそれぞれテンプレートマッチングを行い一致度が最も大きい画像のindexを返す
+        複数のテンプレート画像を用いてそれぞれテンプレートマッチングを行い類似度が最も大きい画像のindexを返す
         '''
         # パラメータチェックを行う
-        if len(template_path_list) == len(mask_path_list):
-            mask_path_list_temp = mask_path_list
-        if len(mask_path_list) == 0:
-            mask_path_list_temp = [None for i in range(len(template_path_list))]
+        if len(template_image_list) == len(mask_image_list):
+            mask_image_list_temp = mask_image_list
+        if len(mask_image_list) == 0:
+            mask_image_list_temp = [None for i in range(len(template_image_list))]
         else:
             print("The number of template images and mask images don't match. ")
             return -1, [], [], [], [], []
@@ -216,10 +243,19 @@ class ImageProcessing:
         width_list = []
         height_list = []
         judge_threshold_list = []
+
         # テンプレートマッチング対象画像を加工する
-        src = doPreprocessImage(image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary)
-        for template_path , mask_path in zip(template_path_list, mask_path_list_temp):
-            max_val, max_loc, width, height = self.doTemplateMatch(src, template_path, mask_path=mask_path, use_gray=use_gray, show_value=show_value, BGR_range=BGR_range, threshold_binary=threshold_binary)
+        src, _, _ = doPreprocessImage(image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary)
+
+        # [DEBUG] テンプレートマッチング対象画像を表示する
+        if show_image:
+            cv2.imshow("image",src)
+            cv2.waitKey()
+
+        for template_image , mask_image in zip(template_image_list, mask_image_list_temp):
+            # テンプレート画像を加工する
+            template, width, height = doPreprocessImage(template_image, use_gray=use_gray, crop=crop_template, BGR_range=BGR_range, threshold_binary=threshold_binary)
+            max_val, max_loc = self.doTemplateMatch(src, template, mask_image=mask_image)
             max_val_list.append(max_val)
             max_loc_list.append(max_loc)
             width_list.append(width)

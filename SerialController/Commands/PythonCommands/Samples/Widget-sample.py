@@ -34,6 +34,9 @@ class Widget_sample(PythonCommand):
         ret = self.dialogue6widget("dialogue6widget(Mixed,list)", [["Combo", "Combo#3", ["Aa", "Bb", "Cc"], "Aa"], ["Radio", "Radio#3", ["1000", "2000", "3000"], "1000"]])
         print(ret)
 
+        ret = self.dialogue6widget("dialogue6widget(multi-columns,list)", [["Combo", "Combo#3", ["Aa", "Bb", "Cc"], "Aa"], ["Next"], ["Radio", "Radio#3", ["1000", "2000", "3000"], "1000"]])
+        print(ret)
+
         ret = self.dialogue("dialogue(dict)", ["Entry#1", "Entry#2"], need=dict)
         print(ret)
 
@@ -56,6 +59,9 @@ class Widget_sample(PythonCommand):
         print(ret)
 
         ret = self.dialogue6widget("dialogue6widget(Mixed,dict)", [["Combo", "Combo#3", ["Aa", "Bb", "Cc"], "Aa"], ["Radio", "Radio#3", ["1000", "2000", "3000"], "1000"]], need=dict)
+        print(ret)
+
+        ret = self.dialogue6widget("dialogue6widget(multi-columns,dict)", [["Combo", "Combo#3", ["Aa", "Bb", "Cc"], "Aa"], ["Next"], ["Radio", "Radio#3", ["1000", "2000", "3000"], "1000"]], need=dict)
         print(ret)
 
         self.finish()

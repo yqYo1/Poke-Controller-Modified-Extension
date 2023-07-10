@@ -132,6 +132,7 @@ class ImageProcessing:
     __gtmpl = None
     __gresult = None
     __use_gpu = False
+    image_type = numpy.ndarray
 
     def __init__(self, use_gpu: bool = False):
         # ロガーを起動する(1回だけ)
@@ -185,7 +186,7 @@ class ImageProcessing:
         画像は必要に応じて事前にグレースケール化やトリミングをしておく必要がある
         '''
         # 比較方式を設定する
-        method = cv2.TM_CCORR_NORMED if mask_image != None else cv2.TM_CCOEFF_NORMED
+        method = cv2.TM_CCORR_NORMED if type(mask_image) == numpy.ndarray else cv2.TM_CCOEFF_NORMED
 
         # テンプレートマッチングをする
         if self.__use_gpu:    # GPUを使用する場合(マスク非対応)

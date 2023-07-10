@@ -1,3 +1,12 @@
+■ver.0.0.5
+  ・機能追加
+    ・テンプレートマッチング関数のテンプレート画像とマスク画像を画像データ(numpy.ndarray)でも指定できるよう修正
+  ・PythonCommandBase.py更新
+    ・template_path,mask_pathに画像データ(numpy.ndarray)を指定しても処理できるよう変更(互換性維持のため引数名はtempalte_path,mask_pathから変更なし)
+    ・getCameraImage関数,openImage関数を追加
+  ・ImageProcessing.py更新
+    ・マスク画像を指定した場合にテンプレートマッチングのmethodが正しく設定されないバグを修正
+
 ■ver.0.0.4
   ・Version番号を3桁に変更
   ・機能追加
@@ -7,7 +16,7 @@
     ・widget関数の複数列化に対応
   ・ImageProcessing.py更新
     ・doPreprocessImage関数に2値化の処理を追加
-　　・isContainedImageの実装に伴い、isContainTemplate、isContainTemplate_maxの入力をパスから画像データ(numpy.ndarray)に変更
+    ・isContainedImageの実装に伴い、isContainTemplate、isContainTemplate_maxの入力をパスから画像データ(numpy.ndarray)に変更
     ・テンプレートマッチング対象画像とテンプレート画像に対する処理をdoPreprocessImage関数に統合
     ・openImage関数、getImage関数を追加
   ・PythonCommandBase.py更新

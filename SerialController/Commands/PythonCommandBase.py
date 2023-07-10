@@ -379,6 +379,28 @@ class ImageProcPythonCommand(PythonCommand):
     def setTemplateDir(self, path):
         ImageProcPythonCommand.template_path_name = path
 
+    def getCameraImage(self, crop_fmt: int | str = '', crop: List[int] = []) -> ImageProcessing.image_type:
+        '''
+        カメラから画像データを取得する
+        '''
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        # トリミング
+        cropped_image = crop_image(src, crop=crop_cv2)
+
+        return cropped_image
+
+    def openImage(self, filename: str, mode: str = "t") -> ImageProcessing.image_type:
+        '''
+        指定されたパスの画像データを取得する
+        '''
+        image = getImage(self.get_filespec(filename, mode=mode), mode="color")
+        return image
+
     @pausedecorator2
     def isContainTemplate(self, template_path: str, threshold: float = 0.7, use_gray: bool = True,
                           show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000,
@@ -398,10 +420,16 @@ class ImageProcPythonCommand(PythonCommand):
         src = self.camera.readFrame()
 
         # テンプレート画像を取得
-        template_image = getImage(self.get_filespec(template_path, mode="t"), mode="color")
+        if type(template_path) == ImageProcessing().image_type:
+            template_image = template_path
+        else:
+            template_image = getImage(self.get_filespec(template_path, mode="t"), mode="color")
         
         # マスク画像を取得
-        mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
+        if type(mask_path) == ImageProcessing().image_type:
+            mask_image = mask_path
+        else:
+            mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
 
         # テンプレートマッチング
         res, max_loc, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
@@ -447,10 +475,21 @@ class ImageProcPythonCommand(PythonCommand):
         src = self.camera.readFrame()
 
         # テンプレート画像を取得
-        template_image_list = [getImage(self.get_filespec(i, mode="t"), mode="color") for i in template_path_list]
-
+        template_image_list = []
+        for i in template_path_list:
+            if type(i) == ImageProcessing().image_type:
+                template_image_list.append(i)
+            else:
+                template_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="color"))
+        
         # マスク画像を取得
-        mask_image_list = [getImage(self.get_filespec(i, mode="t"), mode="binary") for i in mask_path_list] if mask_path_list is not None else []
+        mask_image_list = []
+        if mask_path_list is not None:
+            for i in mask_path_list:
+                if type(i) == ImageProcessing().image_type:
+                    mask_image_list.append(i)
+                else:
+                    mask_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="binary"))
 
         # テンプレートマッチング
         max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_image_list, mask_image_list=mask_image_list, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
@@ -514,10 +553,16 @@ class ImageProcPythonCommand(PythonCommand):
         template_image = self.camera.readFrame()
 
         # テンプレートマッチング対象画像を取得
-        image = getImage(self.get_filespec(image_path, mode="t"), mode="color")
-        
+        if type(image_path) == ImageProcessing().image_type:
+            image = image_path
+        else:
+            image = getImage(self.get_filespec(image_path, mode="t"), mode="color")
+
         # マスク画像を取得
-        mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
+        if type(mask_path) == ImageProcessing().image_type:
+            mask_image = mask_path
+        else:
+            mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
 
         # テンプレートマッチング
         res, _, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(image, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)

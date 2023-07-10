@@ -37,7 +37,7 @@ addpath = dirname(dirname(dirname(abspath(__file__))))	#SerialControllerフォ�
 sys.path.append(addpath)
 
 NAME = "Poke-Controller Modified Extension"
-VERSION = "ver.0.0.4"
+VERSION = "ver.0.0.5"
 
 class PokeControllerApp:
     def __init__(self, master=None, profile='default'):

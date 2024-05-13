@@ -17,11 +17,13 @@ QUESTION_TITLE = '''--------------------------質問をする際の注意事項-
 ・項目すべてを記入してください。(空白がある場合、OKを押しても何も起きません。)
 ・個人を誹謗中傷するような記述はしないでください。'''
 
+
 class PokeConQuestionDialogue(object):
     """
     pokeconに対する問い合わせ用文章を出力する
     """
-    def __init__(self, parent, command = None):
+
+    def __init__(self, parent, command=None):
         self._ls = None
         self.isOK = None
 
@@ -34,7 +36,7 @@ class PokeConQuestionDialogue(object):
         except:
             program_name = ""
         try:
-            program_name = program_name +" ("+ command.FILENAME +")"
+            program_name = program_name + " (" + command.FILENAME + ")"
         except:
             pass
         try:
@@ -77,12 +79,12 @@ class PokeConQuestionDialogue(object):
         self.entry1.grid(column=1, row=1, sticky='nsew', padx=3, pady=3)
 
         self.label2 = ttk.Label(self.inputs, text=message[2])
-        self.entry2 = st.ScrolledText(self.inputs, width=50,height=10)
+        self.entry2 = st.ScrolledText(self.inputs, width=50, height=10)
         self.label2.grid(column=0, row=2, sticky='nsew', padx=3, pady=3)
         self.entry2.grid(column=1, row=2, sticky='nsew', padx=3, pady=3)
 
         self.label3 = ttk.Label(self.inputs, text=message[3])
-        self.entry3 = st.ScrolledText(self.inputs, width=50,height=10)
+        self.entry3 = st.ScrolledText(self.inputs, width=50, height=10)
         self.label3.grid(column=0, row=3, sticky='nsew', padx=3, pady=3)
         self.entry3.grid(column=1, row=3, sticky='nsew', padx=3, pady=3)
 
@@ -107,9 +109,8 @@ class PokeConQuestionDialogue(object):
             txt += f'■製作者様\n{self._ls[1]}\n'
             txt += f'■使用ツール\n{Window.NAME} {Window.VERSION}\n'
 
-            
             if platform.system() == 'Darwin':
-                #MacOS
+                # MacOS
                 txt += f'■OS\n{platform.mac_ver()}(Mac)\n'
             else:
                 txt += f'■OS\n{platform.platform()}\n'
@@ -142,14 +143,16 @@ class PokeConQuestionDialogue(object):
         self.message_dialogue.destroy()
         self.isOK = False
 
+
 class PokeConVersionCheck(object):
     """
     PokeCon/pythonおよびライブラリのversionを確認する
     """
+
     def __init__(self, parent, pokeconname: str, pokeconversion: str):
         txt = f'■{pokeconname}\n{pokeconversion}\n\n'
         if platform.system() == 'Darwin':
-            #MacOS
+            # MacOS
             txt += f'■OS\n{platform.mac_ver()}(Mac)\n\n'
         else:
             txt += f'■OS\n{platform.platform()}\n\n'
@@ -185,10 +188,12 @@ class PokeConVersionCheck(object):
     def close_window(self):
         self.window.destroy()
 
+
 class PokeConChangeLog(object):
     '''
     更新履歴を表示する
     '''
+
     def __init__(self, parent):
         try:
             with open('../changelog.txt', 'r', encoding='utf-8') as f:
@@ -202,7 +207,7 @@ class PokeConChangeLog(object):
         self.window.protocol("WM_DELETE_WINDOW", self.close_window)
 
         self.main_frame = tk.Frame(self.window)
-        
+
         scrollbar = ttk.Scrollbar(self.main_frame)
         scrollbar.pack(side="right", fill="y")
 
@@ -227,10 +232,12 @@ class PokeConChangeLog(object):
     def close_window(self):
         self.window.destroy()
 
+
 class PokeConCopyright(object):
     """
     pokeconでLicenseを表示する
     """
+
     def __init__(self, parent):
         try:
             with open('../LICENSE', 'r') as f:

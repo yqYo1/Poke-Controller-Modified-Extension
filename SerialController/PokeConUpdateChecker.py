@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import messagebox
 import webbrowser
 
+
 class PokeConUpdateCheck(object):
     def __init__(self, mode="0"):
         self.pokecon_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,7 +43,7 @@ class PokeConUpdateCheck(object):
         except:
             print("リポジトリにアクセスできませんでした。")
             return "-1"
-    
+
     def get_conflicting_files(self):
         repo = Repo(self.pokecon_path)
         conflicting_files = []
@@ -60,7 +61,7 @@ class PokeConUpdateCheck(object):
                 conflicting_files = [file.strip() for file in conflicting_files_text]
 
         return conflicting_files
-    
+
     def git_pull(self):
         repo = Repo(self.pokecon_path)
         try:
@@ -68,6 +69,7 @@ class PokeConUpdateCheck(object):
             print("更新完了")
         except:
             pass
+
 
 if __name__ == "__main__":
 
@@ -88,14 +90,14 @@ if __name__ == "__main__":
                 res = tk.messagebox.showinfo(title="更新確認", message="更新はありませんでした。")
         elif res_check == "1":
             txt = '【注意1】\n'\
-            '以下のディレクトリ内のファイルは更新されません。\n'\
-            '・PythonCommands (Samplesディレクトリを除く)\n'\
-            '・Template (Samplesディレクトリを除く)\n'\
-            '・Captures\n'\
-            '・Controller_Log\n'\
-            '・profiles\n'\
-            '【注意2】\n'\
-            '更新対象のファイルのうちユーザーが手動で更新したファイルはoldディレクトリに移動されます。'
+                '以下のディレクトリ内のファイルは更新されません。\n'\
+                '・PythonCommands (Samplesディレクトリを除く)\n'\
+                '・Template (Samplesディレクトリを除く)\n'\
+                '・Captures\n'\
+                '・Controller_Log\n'\
+                '・profiles\n'\
+                '【注意2】\n'\
+                '更新対象のファイルのうちユーザーが手動で更新したファイルはoldディレクトリに移動されます。'
             res_update = messagebox.askyesno(title="更新確認", message="最新版が公開されています。更新しますか?", detail=txt)
             if res_update:
                 try:
@@ -107,7 +109,7 @@ if __name__ == "__main__":
                             filename = os.path.join(pathname, os.path.basename(i))
                             shutil.copy2(i, filename)
                             if os.path.exists(filename):
-                                os.remove(i)    
+                                os.remove(i)
                         PokeConUpdateCheck().git_pull()
                     tk.messagebox.showinfo(title="更新確認", message="更新が完了しました。")
                 except:

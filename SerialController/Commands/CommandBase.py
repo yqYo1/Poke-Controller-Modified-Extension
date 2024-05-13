@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連
 
+
 class Command:
     __metaclass__ = ABCMeta
     text_area_1 = None
@@ -26,11 +27,17 @@ class Command:
     isGuide = False
     isSimilarity = False
     isImage = False
+    isWinNotStart = False
+    isWinNotEnd = False
+    isLineNotStart = False
+    isLineNotEnd = False
+    app_name = ""
+    cur_command_name = ""
     profilename = None
 
     def __init__(self):
         self.isRunning = False
-        
+
         self.message_dialogue = None
         self.socket0 = SocketCommunications()
         self.mqtt0 = MQTTCommunications("")
@@ -159,10 +166,10 @@ class Command:
         ret = PokeConDialogue(self.message_dialogue, title, dialogue_list, mode=1).ret_value(need)
         self.message_dialogue = None
         return ret
-    
+
     ############### Socket functions ###############
-    def socket_change_alive(self, flug: bool):
-        self.socket0.alive = flug
+    def socket_change_alive(self, flag: bool):
+        self.socket0.alive = flag
 
     def socket_change_ipaddr(self, addr: str):
         """
@@ -179,14 +186,14 @@ class Command:
         port|int:ポート番号
         """
         self.socket0.change_port(port)
-    
+
     def socket_connect(self):
         """
         socket通信用のserverと接続する
         return:なし
         """
         self.socket0.sock_connect()
-    
+
     def socket_disconnect(self):
         """
         socket通信用のserverから切断する
@@ -221,10 +228,10 @@ class Command:
         socketを用いてメッセージを送信する
         return:なし
         message|str:送信するメッセージ
-        """ 
+        """
         self.socket0.transmit_message(message)
         self.checkIfAlive()
-    
+
     ############### MQTT functions ###############
     def mqtt_change_broker_address(self, broker_address: str):
         """
@@ -296,9 +303,10 @@ class Command:
         return:なし
         roomid|str:ROOM ID(topic)
         message|str:送信するメッセージ
-        """   
+        """
         self.mqtt0.transmit_message(roomid, message)
         self.checkIfAlive()
+
 
 if __name__ == "__main__":
     pass

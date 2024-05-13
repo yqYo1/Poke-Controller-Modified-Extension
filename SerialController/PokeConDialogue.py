@@ -146,7 +146,7 @@ class PokeConDialogue(object):
                 # Spinbox
                 elif dialogue_list[i][0].casefold() == "spin".casefold():
                     self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][3])
-                    widget = ttk.Spinbox(frame[i], values = dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]])
+                    widget = ttk.Spinbox(frame[i], values=dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]])
                     widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
 
                 frame[i].grid(column=column0, row=row0, sticky='nsew', padx=3, pady=3)

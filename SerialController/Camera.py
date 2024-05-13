@@ -34,6 +34,8 @@ def imwrite(filename: str, img: numpy.ndarray, params: int = None):
 
 
 CAPTURE_DIR = "./Captures/"
+
+
 def _get_save_filespec(filename: str) -> str:
     """
     画像ファイルの保存パスを取得する。
@@ -114,16 +116,16 @@ class Camera:
 
         if crop is None:
             image = self.image_bgr
-        elif crop is 1 or crop is "1":
+        elif crop == 1 or crop == "1":
             image = self.image_bgr[
-                    crop_ax[1]:crop_ax[3],
-                    crop_ax[0]:crop_ax[2]
-                    ]
-        elif crop is 2 or crop is "2":
+                crop_ax[1]:crop_ax[3],
+                crop_ax[0]:crop_ax[2]
+            ]
+        elif crop == 2 or crop == "2":
             image = self.image_bgr[
-                    crop_ax[1]:crop_ax[1] + crop_ax[3],
-                    crop_ax[0]:crop_ax[0] + crop_ax[2]
-                    ]
+                crop_ax[1]:crop_ax[1] + crop_ax[3],
+                crop_ax[0]:crop_ax[0] + crop_ax[2]
+            ]
         elif img is not None:
             image = img
         else:

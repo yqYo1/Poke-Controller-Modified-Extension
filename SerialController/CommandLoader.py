@@ -7,6 +7,13 @@ import sys
 
 import Utility as util
 
+from logging import getLogger, DEBUG, NullHandler
+
+logger = getLogger(__name__)
+logger.addHandler(NullHandler())
+logger.setLevel(DEBUG)
+logger.propagate = True
+
 
 class CommandLoader:
     def __init__(self, base_path, base_class):
@@ -45,7 +52,31 @@ class CommandLoader:
     def getCommandClasses(self):
         classes = []
         for mod in self.modules:
-            classes.extend([c for c in util.getClassesInModule(mod) \
-                            if issubclass(c, self.base_type) and hasattr(c, 'NAME') and c.NAME])
+            # extract module of having "NAME"
+            class_list = [c for c in util.getClassesInModule(mod)
+                          if issubclass(c, self.base_type) and hasattr(c, 'NAME') and c.NAME]
+
+            # make tags of directory name
+            for c in class_list:
+                dir_name = '/'.join(mod.__name__.split(".")[2:])
+                dir_tags = ['@'+t for t in mod.__name__.split(".")[2:-1]]
+
+                # add tags of directory name
+                if hasattr(c, 'TAGS'):
+                    if type(c.TAGS) == list:
+                        logger.debug(f"TAGS name add: {dir_tags}")
+                        c.TAGS = c.TAGS + dir_tags
+                    elif type(c.TAGS) == str:
+                        logger.debug(f"TAGS name add: {dir_tags}")
+                        c.TAGS = [c.TAGS] + dir_tags
+                    else:
+                        logger.debug(f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}")
+                else:
+                    logger.debug(f"TAGS do not exist: {mod.__name__} {c.NAME}")
+                    c.TAGS = dir_tags
+
+                # rename NAME
+                c.NAME = f'{c.NAME} ({dir_name})'
+                classes.append(c)
 
         return classes

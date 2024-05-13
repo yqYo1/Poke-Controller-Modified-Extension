@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class ProController:
     flag_procon = False
+
     def __init__(self):
         self.axis_dict = {
             0: "L-X",
@@ -23,7 +24,7 @@ class ProController:
             4: "ZL",
             5: "ZR",
         }
-        
+
         self.button_dict = {
             0: "A",
             1: "B",
@@ -63,22 +64,22 @@ class ProController:
         }
 
         self.hat_dict = {
-            0:8, #center
-            1:0, #up
-            2:2, #right
-            3:1, #up-right
-            4:4, #down
-            5:8, #ありえないのでcenterにする
-            6:3, #down-right
-            7:8, #ありえないのでcenterにする
-            8:6, #left
-            9:7, #up-left
-            10:8,#ありえないのでcenterにする
-            11:8,#ありえないのでcenterにする
-            12:5,#down-left
-            13:8,#ありえないのでcenterにする
-            14:8,#ありえないのでcenterにする
-            15:8 #ありえないのでcenterにする
+            0: 8,  # center
+            1: 0,  # up
+            2: 2,  # right
+            3: 1,  # up-right
+            4: 4,  # down
+            5: 8,  # ありえないのでcenterにする
+            6: 3,  # down-right
+            7: 8,  # ありえないのでcenterにする
+            8: 6,  # left
+            9: 7,  # up-left
+            10: 8,  # ありえないのでcenterにする
+            11: 8,  # ありえないのでcenterにする
+            12: 5,  # down-left
+            13: 8,  # ありえないのでcenterにする
+            14: 8,  # ありえないのでcenterにする
+            15: 8  # ありえないのでcenterにする
         }
 
         self.bits_16 = 0
@@ -92,7 +93,7 @@ class ProController:
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
-    
+
     # stickの出力を0-255の範囲に補正する。
     def map_axis(self, val: float):
         val = round(val, 3)
@@ -101,10 +102,10 @@ class ProController:
         out_min = 0
         out_max = 255
         return int((val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
-    
+
     def joystick_move_detection(self, joystick: pygame.Joystick):
         # Lstickの位置を確認する。
-        if np.sqrt((joystick.get_axis(0)) ** 2 + (joystick.get_axis(1)) ** 2)< 0.35:
+        if np.sqrt((joystick.get_axis(0)) ** 2 + (joystick.get_axis(1)) ** 2) < 0.35:
             self.stick_status_new[0] = 128
             self.stick_status_new[1] = 128
         else:
@@ -116,9 +117,9 @@ class ProController:
         else:
             self.flag_print = True
             self.bits_16 = (self.bits_16 | 2)
-        
+
         # Rstickの位置を確認する。
-        if np.sqrt((joystick.get_axis(2)) ** 2 + (joystick.get_axis(3)) ** 2)< 0.35:
+        if np.sqrt((joystick.get_axis(2)) ** 2 + (joystick.get_axis(3)) ** 2) < 0.35:
             self.stick_status_new[2] = 128
             self.stick_status_new[3] = 128
         else:
@@ -130,8 +131,8 @@ class ProController:
         else:
             self.flag_print = True
             self.bits_16 = (self.bits_16 | 1)
-        
-        if self.bits_16 & 3 == 1:            
+
+        if self.bits_16 & 3 == 1:
             self.stick_bits = " %02x %02x" % (self.stick_status_new[2], self.stick_status_new[3])
         elif self.bits_16 & 3 == 2:
             self.stick_bits = " %02x %02x" % (self.stick_status_new[0], self.stick_status_new[1])
@@ -145,7 +146,7 @@ class ProController:
         self.stick_status_old[1] = self.stick_status_new[1]
         self.stick_status_old[2] = self.stick_status_new[2]
         self.stick_status_old[3] = self.stick_status_new[3]
-    
+
     def event_check(self, events: List[pygame.Event]):
         cnt = 0
         for i, event in enumerate(events):
@@ -161,7 +162,7 @@ class ProController:
                         if self.map_axis(event.dict["value"]) >= 128:
                             self.bits_16 = (self.bits_16 | (1 << (event.dict["axis"] + 4)))
                         else:
-                            self.bits_16 = (self.bits_16 & ~(1 << (event.dict["axis"] + 4)))                   
+                            self.bits_16 = (self.bits_16 & ~(1 << (event.dict["axis"] + 4)))
                     cnt += 1
             elif event.type == 1539:
                 self.flag_print = True
@@ -175,28 +176,28 @@ class ProController:
                     self.bits_16 = (self.bits_16 & ~(1 << self.button_dict_shift[event.dict["button"]]))
                 else:
                     self.hat_status = (self.hat_status & ~(1 << self.button_dict_shift[event.dict["button"]]))
-    
+
     def send_message(self, ser: Sender, flag_record: bool):
         # 送信するバイナリデータ生成
-        self.message = "0x%04x %01d" %(self.bits_16, self.hat_dict[self.hat_status]) + self.stick_bits
-        
+        self.message = "0x%04x %01d" % (self.bits_16, self.hat_dict[self.hat_status]) + self.stick_bits
+
         # コマンドが異なる場合のみ送る
         if self.flag_print and self.old_message != self.message:
             self.time0 = datetime.datetime.today()
             ser.writeRow_wo_perf_counter(self.message, is_show=False)
-            
+
             # 記録モードになっている場合のみ
             if flag_record:
                 self.record_message(False)
-        
+
         # コマンドが異なることの検知のために保存
         self.old_message = self.message
-    
+
     def record_message(self, flag_force_write: bool):
         # バイナリデータを追加する。
         message_log = str(self.time0) + "," + self.message + '\n'
         self.controller_log.append(message_log)
-        
+
         # バイナリデータが100個たまった or 強制書き込み時
         if len(self.controller_log) == 100 or flag_force_write:
             self.f.writelines(self.controller_log)
@@ -226,7 +227,7 @@ class ProController:
             self._logger.info(f"{self.filename} is opened.")
             print(f"{self.filename} is opened.")
             self.controller_log = []
-        
+
         self.old_message = ""
         try:
             while self.flag_procon:

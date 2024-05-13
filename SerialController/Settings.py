@@ -40,23 +40,67 @@ class GuiSettings:
         self.is_show_guide = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_show_guide'))
         self.is_show_serial = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_show_serial'))
         self.is_use_keyboard = tk.BooleanVar(value=self.setting['General Setting'].getboolean('is_use_keyboard'))
+        try:
+            self.serial_data_format_name = tk.StringVar(value=self.setting['General Setting']['serial_data_format_name'])
+        except:
+            self.serial_data_format_name = tk.StringVar(value='Default')
+        try:
+            self.touchscreen_start_x = int(self.setting['General Setting']['touchscreen_start_x'])
+        except:
+            self.touchscreen_start_x = 1
+        try:
+            self.touchscreen_start_y = int(self.setting['General Setting']['touchscreen_start_y'])
+        except:
+            self.touchscreen_start_y = 1
+        try:
+            self.touchscreen_end_x = int(self.setting['General Setting']['touchscreen_end_x'])
+        except:
+            self.touchscreen_end_x = 320
+        try:
+            self.touchscreen_end_y = int(self.setting['General Setting']['touchscreen_end_y'])
+        except:
+            self.touchscreen_end_y = 240
         # Pokemon Home用の設定
         self.season = tk.StringVar(value=self.setting['Pokemon Home'].get('Season'))
         self.is_SingleBattle = tk.StringVar(value=self.setting['Pokemon Home'].get('Single or Double'))
         # Shortcut用の設定
-        self.command_class_1 = self.setting['Shortcut']['command_class_1']
-        self.command_name_1 = tk.StringVar(value=self.setting['Shortcut']['command_name_1'])
-        self.command_class_2 = self.setting['Shortcut']['command_class_2']
-        self.command_name_2 = tk.StringVar(value=self.setting['Shortcut']['command_name_2'])
-        self.command_class_3 = self.setting['Shortcut']['command_class_3']
-        self.command_name_3 = tk.StringVar(value=self.setting['Shortcut']['command_name_3'])
-        self.command_class_4 = self.setting['Shortcut']['command_class_4']
-        self.command_name_4 = tk.StringVar(value=self.setting['Shortcut']['command_name_4'])
-        self.command_class_5 = self.setting['Shortcut']['command_class_5']
-        self.command_name_5 = tk.StringVar(value=self.setting['Shortcut']['command_name_5'])
+        self.command_class_dict = {}
+        self.command_name_dict = {}
+        for i in range(1, 11):  # Update直後のError回避策
+            try:
+                self.command_class_dict[str(i)] = self.setting['Shortcut'][f'command_class_{i}']
+                self.command_name_dict[str(i)] = tk.StringVar(value=self.setting['Shortcut'][f'command_name_{i}'])
+            except:
+                self.command_class_dict[str(i)] = "None"
+                self.command_name_dict[str(i)] = tk.StringVar(value="(empty)")
+        # Notification用の設定
+        try:
+            self.is_win_notification_start = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_win_notification_start'))
+        except:
+            self.is_win_notification_start = tk.BooleanVar(value=False)
+        try:
+            self.is_win_notification_end = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_win_notification_end'))
+        except:
+            self.is_win_notification_end = tk.BooleanVar(value=False)
+        try:
+            self.is_line_notification_start = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_line_notification_start'))
+        except:
+            self.is_line_notification_start = tk.BooleanVar(value=False)
+        try:
+            self.is_line_notification_end = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_line_notification_end'))
+        except:
+            self.is_line_notification_end = tk.BooleanVar(value=False)
         # Output Area用の設定
         self.area_size = self.setting['Output']['area_size']
         self.stdout_destination = self.setting['Output']['stdout_destination']
+        try:
+            self.right_frame_widget_mode = self.setting['Output']['widget_mode']
+        except:
+            self.right_frame_widget_mode = 'ALL (default)'
+        try:
+            self.pos_software_controller = self.setting['Output']['software_controller_position']
+        except:
+            self.pos_software_controller = '2'
 
     def load(self):
         if os.path.isfile(self.SETTING_PATH):
@@ -77,6 +121,11 @@ class GuiSettings:
             'is_show_guide': False,
             'is_show_serial': False,
             'is_use_keyboard': True,
+            'serial_data_format_name': 'Default',
+            'touchscreen_start_x': 1,
+            'touchscreen_start_y': 1,
+            'touchscreen_end_x': 320,
+            'touchscreen_end_y': 240,
         }
         # pokemon home用の設定
         self.setting['Pokemon Home'] = {
@@ -131,10 +180,28 @@ class GuiSettings:
             'command_name_4': '(empty)',
             'command_class_5': 'None',
             'command_name_5': '(empty)',
+            'command_class_6': 'None',
+            'command_name_6': '(empty)',
+            'command_class_7': 'None',
+            'command_name_7': '(empty)',
+            'command_class_8': 'None',
+            'command_name_8': '(empty)',
+            'command_class_9': 'None',
+            'command_name_9': '(empty)',
+            'command_class_10': 'None',
+            'command_name_10': '(empty)',
+        }
+        self.setting['Notification'] = {
+            'is_win_notification_start': False,
+            'is_win_notification_end': False,
+            'is_line_notification_start': False,
+            'is_line_notification_end': False,
         }
         self.setting['Output'] = {
             'area_size': '20',
             'stdout_destination': '1',
+            'widget_mode': 'ALL (default)',
+            'software_controller_position': '2',
         }
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:
             self.setting.write(file)
@@ -155,6 +222,11 @@ class GuiSettings:
             'is_show_guide': self.is_show_guide.get(),
             'is_show_serial': self.is_show_serial.get(),
             'is_use_keyboard': self.is_use_keyboard.get(),
+            'serial_data_format_name': self.serial_data_format_name.get(),
+            'touchscreen_start_x': self.touchscreen_start_x,
+            'touchscreen_start_y': self.touchscreen_start_y,
+            'touchscreen_end_x': self.touchscreen_end_x,
+            'touchscreen_end_y': self.touchscreen_end_y,
         }
         # pokemon home用の設定
         self.setting['Pokemon Home'] = {
@@ -164,21 +236,40 @@ class GuiSettings:
 
         # ショートカット用の設定
         self.setting['Shortcut'] = {
-            'command_class_1': self.command_class_1,
-            'command_name_1': self.command_name_1.get(),
-            'command_class_2': self.command_class_2,
-            'command_name_2': self.command_name_2.get(),
-            'command_class_3': self.command_class_3,
-            'command_name_3': self.command_name_3.get(),
-            'command_class_4': self.command_class_4,
-            'command_name_4': self.command_name_4.get(),
-            'command_class_5': self.command_class_5,
-            'command_name_5': self.command_name_5.get(),
+            'command_class_1': self.command_class_dict["1"],
+            'command_name_1': self.command_name_dict["1"].get(),
+            'command_class_2': self.command_class_dict["2"],
+            'command_name_2': self.command_name_dict["2"].get(),
+            'command_class_3': self.command_class_dict["3"],
+            'command_name_3': self.command_name_dict["3"].get(),
+            'command_class_4': self.command_class_dict["4"],
+            'command_name_4': self.command_name_dict["4"].get(),
+            'command_class_5': self.command_class_dict["5"],
+            'command_name_5': self.command_name_dict["5"].get(),
+            'command_class_6': self.command_class_dict["6"],
+            'command_name_6': self.command_name_dict["6"].get(),
+            'command_class_7': self.command_class_dict["7"],
+            'command_name_7': self.command_name_dict["7"].get(),
+            'command_class_8': self.command_class_dict["8"],
+            'command_name_8': self.command_name_dict["8"].get(),
+            'command_class_9': self.command_class_dict["9"],
+            'command_name_9': self.command_name_dict["9"].get(),
+            'command_class_10': self.command_class_dict["10"],
+            'command_name_10': self.command_name_dict["10"].get(),
+        }
+
+        self.setting['Notification'] = {
+            'is_win_notification_start': self.is_win_notification_start.get(),
+            'is_win_notification_end': self.is_win_notification_end.get(),
+            'is_line_notification_start': self.is_line_notification_start.get(),
+            'is_line_notification_end': self.is_line_notification_end.get(),
         }
 
         self.setting['Output'] = {
             'area_size': self.area_size,
             'stdout_destination': self.stdout_destination,
+            'widget_mode': self.right_frame_widget_mode,
+            'software_controller_position': self.pos_software_controller,
         }
 
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:

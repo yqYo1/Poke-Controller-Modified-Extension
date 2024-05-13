@@ -24,6 +24,7 @@ def convert_bgr_to_bytes(image_bgr):
 
 
 class Line_Notify:
+    LINE_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'line_token.ini')
 
     def __init__(self, token_name='token'):
         self._logger = getLogger(__name__)
@@ -45,14 +46,27 @@ class Line_Notify:
     def open_file_with_utf8(self):
         """
         utf-8 のファイルを BOM ありかどうかを自動判定して読み込む
+        (ファイルがない場合は空のファイルを作成する)
         """
-        line_token_path = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'line_token.ini')
-        is_with_bom = self.is_utf8_file_with_bom(line_token_path)
+        if os.path.isfile(self.LINE_TOKEN_PATH):
+            is_with_bom = self.is_utf8_file_with_bom(self.LINE_TOKEN_PATH)
 
-        encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
+            encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
 
-        self._logger.debug("Load token file")
-        self.token_file.read(line_token_path, encoding)
+            self._logger.debug("Load token file")
+            self.token_file.read(self.LINE_TOKEN_PATH, encoding)
+        else:
+            dirname = os.path.dirname(self.LINE_TOKEN_PATH)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+                self._logger.debug(f'mkdir: \'{dirname}\'')
+            self.token_file['LINE'] = {
+                'token': ''
+            }
+            with open(self.LINE_TOKEN_PATH, 'w', encoding='utf-8') as file:
+                self.token_file.write(file)
+            os.chmod(path=self.LINE_TOKEN_PATH, mode=0o777)
+            self._logger.debug("Generate token file")
 
     def is_utf8_file_with_bom(self, filename):
         """
@@ -85,7 +99,7 @@ class Line_Notify:
             if image is not None:
                 b_frame = convert_bgr_to_bytes(image)
                 files = {'imageFile': b_frame}
-            
+
             # 何故か画像のみの送信はできなかった。
             if files is not None:  # テキストと画像
                 self.res = requests.post(line_notify_api, headers=headers, params=data, files=files)
@@ -95,7 +109,7 @@ class Line_Notify:
                 self.res = requests.post(line_notify_api, headers=headers, params=data)
                 send_data_type = "テキスト"
                 send_data_type_eng = "text"
-            
+
             if self.res.status_code == 200:
                 print(f"[LINE]{send_data_type}を送信しました。")
                 self._logger.info(f"Send {send_data_type_eng}")

@@ -17,8 +17,32 @@ except:
     isMQTT = False
 
 
+def generate_token_file(filename):
+    dirname = os.path.dirname(filename)
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+        print(f'mkdir: \'{dirname}\'')
+    token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+    token_file['SOCKET'] = {
+        'addr': '127.0.0.1',
+        'port': '49152'
+    }
+    token_file['MQTT'] = {
+        'broker_address': '',
+        'id': '',
+        'fullaccess_token': '',
+        'readonly_token': ''
+    }
+    with open(filename, 'w', encoding='utf-8') as file:
+        token_file.write(file)
+    os.chmod(path=filename, mode=0o777)
+    print("Generate external token file")
+
+
 # socket通信用class
 class SocketCommunications:
+    SOCKET_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
+
     def __init__(self):
         """
         初期設定
@@ -42,11 +66,13 @@ class SocketCommunications:
         utf-8 のファイルを BOM ありかどうかを自動判定して読み込む
         return:なし
         """
-        socket_token_path = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
-        is_with_bom = self.is_utf8_file_with_bom(socket_token_path)
+        if not os.path.isfile(self.SOCKET_TOKEN_PATH):
+            generate_token_file(self.SOCKET_TOKEN_PATH)
+
+        is_with_bom = self.is_utf8_file_with_bom(self.SOCKET_TOKEN_PATH)
 
         encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
-        self.token_file.read(socket_token_path, encoding)
+        self.token_file.read(self.SOCKET_TOKEN_PATH, encoding)
 
     def is_utf8_file_with_bom(self, filename):  # line_notify.pyからの流用
         """
@@ -112,7 +138,7 @@ class SocketCommunications:
         """
         # 待機文字列print出力
         print(f"[socket:wait]:{header}")
-        
+
         # 出力初期値設定
         output = None
 
@@ -159,7 +185,7 @@ class SocketCommunications:
         show_msg|bool:受信した文字列を出力する
         """
         # 待機文字列print出力
-        header0=""
+        header0 = ""
         for i in headerlist:
             header0 += i + ","
         print(f"[socket:wait]:{header0}")
@@ -195,7 +221,7 @@ class SocketCommunications:
                 print("[error]serverが起動されていません")
                 break
             except OSError:
-                break                
+                break
 
         # stopを押した場合にsocketを切断する
         if not self.alive:
@@ -204,7 +230,7 @@ class SocketCommunications:
 
         return output
 
-    def transmit_message(self, message):    
+    def transmit_message(self, message):
         """
         socketを用いてメッセージを送信する
         return:なし
@@ -214,12 +240,15 @@ class SocketCommunications:
         self.sock.send(message.encode("utf-8"))
         print(f"[socket:send]:{message}")
 
+
 # global変数(MQTT受信用)
 receive_msg = None
 
 
 # MQTT通信用class
 class MQTTCommunications:
+    MQTT_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
+
     def __init__(self, clientId):
         """
         初期設定
@@ -271,13 +300,15 @@ class MQTTCommunications:
         utf-8 のファイルを BOM ありかどうかを自動判定して読み込む
         return:なし
         """
-        mqtt_token_path = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
-        is_with_bom = self.is_utf8_file_with_bom(mqtt_token_path)
+        if not os.path.isfile(self.MQTT_TOKEN_PATH):
+            generate_token_file(self.MQTT_TOKEN_PATH)
+
+        is_with_bom = self.is_utf8_file_with_bom(self.MQTT_TOKEN_PATH)
 
         encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
-        self.token_file.read(mqtt_token_path, encoding)
+        self.token_file.read(self.MQTT_TOKEN_PATH, encoding)
 
-    def is_utf8_file_with_bom(self, filename): # line_notify.pyからの流用
+    def is_utf8_file_with_bom(self, filename):  # line_notify.pyからの流用
         """
         utf-8 ファイルが BOM ありかどうかを判定する
         return:なし
@@ -336,7 +367,7 @@ class MQTTCommunications:
         # print(f"ROOM ID: {msg.topic} message: {msg.payload.decode('utf-8')}")
         receive_msg = msg.payload.decode("utf-8")
 
-    @exceptiondecorator
+    @ exceptiondecorator
     def receive_message(self, roomid, header, show_msg=False):
         """
         MQTTを用いて先頭が特定の文字列であるメッセージを受信する
@@ -354,7 +385,7 @@ class MQTTCommunications:
         message = -1
 
         # brokerと接続する
-        self.client = mqtt.Client(self.clientId) 
+        self.client = mqtt.Client(self.clientId)
         self.client.username_pw_set(self.id, self.sub_token)
         self.client.connect(self.broker_address, 1883)
         self.client.subscribe(roomid)
@@ -388,7 +419,7 @@ class MQTTCommunications:
 
         return output
 
-    @exceptiondecorator
+    @ exceptiondecorator
     def receive_message2(self, roomid, headerlist, show_msg=False):
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
@@ -398,7 +429,7 @@ class MQTTCommunications:
         show_msg|bool:受信した文字列を出力する
         """
         # 待機文字列print出力
-        header0=""
+        header0 = ""
         for i in headerlist:
             header0 += i + ","
         print(f"[socket:wait]:{header0}")
@@ -409,7 +440,7 @@ class MQTTCommunications:
         message = -1
 
         # brokerと接続する
-        self.client = mqtt.Client(self.clientId) 
+        self.client = mqtt.Client(self.clientId)
         self.client.username_pw_set(self.id, self.sub_token)
         self.client.connect(self.broker_address, 1883)
         self.client.subscribe(roomid)
@@ -445,7 +476,7 @@ class MQTTCommunications:
 
         return output
 
-    @exceptiondecorator
+    @ exceptiondecorator
     def transmit_message(self, roomid, message):
         """
         MQTTを用いてメッセージを送信する
@@ -456,7 +487,7 @@ class MQTTCommunications:
         # メッセージ更新判定に日時情報を使用する
         header_date = datetime.datetime.today().strftime('[%Y%m%d%H%M%S%f]')
         if self.pub_token != None:
-            self.client = mqtt.Client(self.clientId) 
+            self.client = mqtt.Client(self.clientId)
             self.client.username_pw_set(self.id, self.pub_token)
             self.client.connect(self.broker_address, 1883)
             message0 = header_date + message

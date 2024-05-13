@@ -29,6 +29,10 @@ class Button(IntFlag):
     RCLICK = auto()
     HOME = auto()
     CAPTURE = auto()
+    SELECT = MINUS  # for 3DS
+    START = PLUS  # for 3DS
+    POWER = LCLICK  # for 3DS
+    WIRELESS = RCLICK  # for 3DS
 
 
 class Hat(IntEnum):
@@ -82,6 +86,8 @@ class SendFormat:
             ('ly', center),
             ('rx', center),
             ('ry', center),
+            ('sx', 0),
+            ('sy', 0),
         ])
 
         self.L_stick_changed = False
@@ -161,6 +167,17 @@ class SendFormat:
         self.R_stick_changed = True
         self.Hat_pos = Hat.CENTER
 
+    def setTouchscreen(self, dirs):
+        if not dirs:
+            pass
+        else:
+            self.format['sx'] = dirs[0].x   # takes only first element
+            self.format['sy'] = dirs[0].y   # takes only first element
+
+    def unsetTouchscreen(self):
+        self.format['sx'] = 0
+        self.format['sy'] = 0
+
     def convert2str(self):
         str_format = ''
         str_L = ''
@@ -182,15 +199,43 @@ class SendFormat:
         # format(send_btn, 'x') + \
         # print(hex(send_btn))
         str_format = format(send_btn, '#06x') + \
-                     (space + str_Hat) + \
-                     (space + str_L if self.L_stick_changed else '') + \
-                     (space + str_R if self.R_stick_changed else '')
+            (space + str_Hat) + \
+            (space + str_L if self.L_stick_changed else '') + \
+            (space + str_R if self.R_stick_changed else '')
 
         self.L_stick_changed = False
         self.R_stick_changed = False
 
         # print(str_format)
         return str_format  # the last space is not needed
+
+    def convert2list(self):
+        """
+        For Qingpi 
+        """
+        header = 0xAB   # fixed value
+        send_btn = int(self.format['btn'])
+        send_hat = int(self.format['hat'])
+        send_lstick_x = self.format['lx']
+        send_lstick_y = self.format['ly']
+        send_touch_x = int(self.format['sx'])
+        send_touch_y = int(self.format['sy'])
+
+        state = [
+            header,
+            send_btn & 0xFF,
+            (send_btn >> 8) & 0xFF,
+            send_hat,
+            send_lstick_x,
+            send_lstick_y,
+            center,
+            center,
+            send_touch_x & 0xFF,
+            (send_touch_x >> 8) & 0xFF,
+            send_touch_y
+        ]
+
+        return state
 
 
 # This class handle L stick and R stick at any angles
@@ -266,6 +311,7 @@ class Direction:
                 tilting.append(Tilt.R_UP)
         return tilting
 
+
 NEUTRAL = (128, 127)
 """
 スティックが中心にあることを表します。
@@ -280,7 +326,6 @@ Direction.LEFT = Direction(Stick.LEFT, -180, showName='LEFT')
 Direction.UP_RIGHT = Direction(Stick.LEFT, 45, showName='UP_RIGHT')
 Direction.DOWN_RIGHT = Direction(Stick.LEFT, -45, showName='DOWN_RIGHT')
 Direction.DOWN_LEFT = Direction(Stick.LEFT, -135, showName='DOWN_LEFT')
-Direction.DOWN_LEFT = Direction(Stick.LEFT, -135, showName='DOWN_LEFT')
 Direction.UP_LEFT = Direction(Stick.LEFT, 135, showName='UP_LEFT')
 # Right stick for ease of use
 Direction.R_UP = Direction(Stick.RIGHT, 90, showName='UP')
@@ -293,8 +338,23 @@ Direction.R_DOWN_LEFT = Direction(Stick.RIGHT, -135, showName='DOWN_LEFT')
 Direction.R_UP_LEFT = Direction(Stick.RIGHT, 135, showName='UP_LEFT')
 
 
+class Touchscreen:
+    def __init__(self, x, y):
+
+        self._logger = getLogger(__name__)
+        self._logger.addHandler(NullHandler())
+        self._logger.setLevel(DEBUG)
+        self._logger.propagate = True
+
+        self.x = x
+        self.y = y
+
 # handles serial input to Joystick.c
+
+
 class KeyPress:
+    flag_qingpi = False
+
     def __init__(self, ser: Sender):
 
         self._logger = getLogger(__name__)
@@ -332,13 +392,16 @@ class KeyPress:
         self.format.setButton([btn for btn in btns if type(btn) is Button])
         self.format.setHat([btn for btn in btns if type(btn) is Hat])
         self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
-
-        self.ser.writeRow(self.format.convert2str())
+        if self.flag_qingpi:
+            self.format.setTouchscreen([btn for btn in btns if type(btn) is Touchscreen])
+            self.ser.writeList(self.format.convert2list())
+        else:
+            self.ser.writeRow(self.format.convert2str())
         self.input_time_0 = time.perf_counter()
 
         # self._logger.debug(f": {list(map(str,self.format.format.values()))}")
 
-    def inputEnd(self, btns: Button | Hat | Stick | Direction, ifPrint=True, unset_hat=True):
+    def inputEnd(self, btns: Button | Hat | Stick | Direction, ifPrint=True, unset_hat=True, unset_Touchscreen=True):
         # self._logger.debug(f"input end: {btns}")
         self.pushing2 = dict(self.format.format)
 
@@ -359,32 +422,59 @@ class KeyPress:
         if unset_hat:
             self.format.unsetHat()
         self.format.unsetDirection(tilts)
-        self.ser.writeRow(self.format.convert2str())
+        if self.flag_qingpi:
+            if unset_Touchscreen or (True in [btn for btn in btns if type(btn) is Touchscreen]):
+                self.format.unsetTouchscreen()
+            self.ser.writeList(self.format.convert2list())
+        else:
+            self.ser.writeRow(self.format.convert2str())
 
     def hold(self, btns: Button | Hat | Stick | Direction):
         if not isinstance(btns, list):
             btns = [btns]
 
+        flag_isTouchscreen = False
         for btn in btns:
             if btn in self.holdButton:
                 print('Warning: ' + btn.name + ' is already in holding state')
                 self._logger.warning(f"Warning: {btn.name} is already in holding state")
                 return
-
-            self.holdButton.append(btn)
+            if type(btn) is Touchscreen:
+                flag_isTouchscreen = True
+        if flag_isTouchscreen:
+            for btn in self.holdButton:
+                if type(btn) is Touchscreen:
+                    self.holdButton.remove(btn)
+        self.holdButton.append(btn)
         self.input(btns)
 
     def holdEnd(self, btns: Button | Hat | Stick | Direction):
         if not isinstance(btns, list):
             btns = [btns]
 
+        flag_isTouchscreen = False
         for btn in btns:
-            self.holdButton.remove(btn)
+            if type(btn) is not Touchscreen:
+                self.holdButton.remove(btn)
+            else:
+                flag_isTouchscreen = True
+        if flag_isTouchscreen:
+            for btn in self.holdButton:
+                if type(btn) is Touchscreen:
+                    self.holdButton.remove(btn)
 
         self.inputEnd(btns)
 
+    def neutral(self):
+        btns = self.holdButton
+        self.holdButton = []
+        self.inputEnd(btns, unset_hat=True, unset_Touchscreen=True)
+
     def end(self):
-        self.ser.writeRow('end')
+        if self.flag_qingpi:
+            pass
+        else:
+            self.ser.writeRow('end')
 
     def serialcommand_direct_send(self, serialcommands: list, waittime: list):
         for wtime, row in zip(waittime, serialcommands):

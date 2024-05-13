@@ -1,3 +1,35 @@
+■ver.0.0.6
+  ・機能追加
+    ・タグによるコマンドフィルタリング機能を追加
+    ・Shortcutボタン数を10に拡張
+    ・Line Tokenの設定をメニューから設定できる機能を追加
+    ・新しいProfileをメニューから生成できる機能を追加
+    ・Line tokenをメニューから設定する機能を追加
+    ・開始/終了時の通知機能を追加
+    ・埋め込み型のhold機能付きSoftware-Controllerを追加
+    ・Qingpi対応フォーマットでのシリアルデータ送信機能追加
+    ・右クリックでタッチスクリーンを操作できる機能を追加(右クリック+Ctrlで事前にタッチスクリーンエリアを指定する必要あり)
+  ・Profile機能バグ修正
+    ・Line/Socket/MQTTの設定ファイルが各profileフォルダ内のファイルを参照するように修正
+  ・Camera.py
+    ・Warning対策を実施
+  ・Sender.py更新
+    ・Warning対策を実施
+    ・Qingpi対応フォーマットのシリアルデータ送信機能を追加
+  ・Keys.py更新
+    ・Qingpi対応フォーマットのシリアルデータ生成機能を追加
+  ・GuiAssets.py更新
+    ・シリアルデータがQingpiフォーマットの際に右クリックでタッチスクリーンを操作できる機能を追加
+  ・Settings.py更新
+    ・Shortcut関連/通知関連/Qingpi関連の修正を実施
+  ・Line_Notify.py/ExternalTools.py更新
+    ・profileの一部ファイルが存在しない場合に自動生成するよう修正
+  ・Menubar.py更新
+    ・新しいprofileを生成する機能を追加
+    ・Line tokenを設定する機能を追加
+  ・その他
+    ・Autopep8によるコード整形を実施
+
 ■ver.0.0.5
   ・機能追加
     ・テンプレートマッチング関数のテンプレート画像とマスク画像を画像データ(numpy.ndarray)でも指定できるよう修正

@@ -6,10 +6,12 @@
 
 ## MODIFIED版からの変更点
 
-- 機能面
+- 機能面(最新の更新はchangelog.txtを参照)
+  - [Github - 更新履歴](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/changelog.txt)
   - profileの導入
     - 複数並列起動すると、camera IDやSerial deviceの設定をやり直す必要があることから導入。\
-      起動時に、Window.py --profile [profile名]とすると、profiles/[profile名]の中の.iniファイルが読み込まれるようになる。
+      起動時に、Window.py --profile [profile名]とすると、profiles/[profile名]の中の.iniファイルが読み込まれるようになる。\
+      メニューバーから新しいprofileを生成可能。
   - シリアルデバイス選択(Windowsのみ)
     - 使用したいシリアルデバイスをコンボボックスで選択した状態にて[Reload Port]をクリックすると、設定したシリアルデバイスを使用できる。\
       [Scan Device]のボタンをクリックすると、シリアルデバイスのリストを更新できる。
@@ -17,6 +19,9 @@
     - PCにProconを接続した状態で、[Use Pro Controller]のチェックボックスにチェックを入れると、proconで操作できるようになる。\
       キャプチャデバイスの処理遅延があるともっさりした挙動になる。\
       このとき、[Record Pro Controller]のチェックボックスにチェックが入っていると、proconの操作ログを[Controller_Log]のディレクトリに保存する。
+  - 自動化スクリプトのタグ管理
+    - 自動化スクリプトにタグを設定できる。\
+      タグまたは自動化スクリプトが保存してあるフォルダ名で自動化スクリプトをフィルタリングできる。
   - 自動化スクリプトショートカット設定
     - ShortCutのタブにあるボタンに自動化スクリプトを割り当てることができる。\
       Python CommandまたはMcu Commandのタブにて、ショートカットに割り当てたい自動化スクリプトを選択、Set Shortcutにて割り当てたいボタンの番号を選択し、[Set]ボタンを押すと割り当てられる。
@@ -80,6 +85,7 @@ pygame
 paho-mqtt (MQTTを使用する場合のみ)
 windows-capture-device-list (Python 3.10以上で使用する場合のみ)
 gitpython
+plyer
 ```
 
 ## 推奨環境

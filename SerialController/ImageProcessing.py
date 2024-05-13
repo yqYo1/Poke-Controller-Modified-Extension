@@ -21,6 +21,7 @@ def crop_image(image: numpy.ndarray, crop: List[int] = None) -> numpy.ndarray:
 
     return cropped_image
 
+
 def crop_image_extend(image: numpy.ndarray, crop_fmt: int | str = None, crop: List[int] = None) -> numpy.ndarray:
     '''
     画像をトリミングする
@@ -63,6 +64,7 @@ def crop_image_extend(image: numpy.ndarray, crop_fmt: int | str = None, crop: Li
 
     return cropped_image
 
+
 def getInterframeDiff(frame1: numpy.ndarray, frame2: numpy.ndarray, frame3: numpy.ndarray, threshold: float) -> numpy.ndarray:
     '''
     Get interframe difference binarized image
@@ -80,6 +82,7 @@ def getInterframeDiff(frame1: numpy.ndarray, frame2: numpy.ndarray, frame3: nump
     mask = cv2.medianBlur(img_th, 3)
     return mask
 
+
 def getImage(path: str, mode: str = "color"):
     '''
     画像の読み込みを行う。
@@ -93,24 +96,26 @@ def getImage(path: str, mode: str = "color"):
     else:
         return cv2.imread(path, cv2.IMREAD_COLOR)
 
+
 def doPreprocessImage(image: numpy.ndarray, use_gray: bool = True, crop: List[int] = None, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[numpy.ndarray, int, int]:
     '''
     画像をトリミングしてグレースケール化/2値化する
     2値化関連のContributor: mikan kochan 空太 (敬称略)
     '''
     src = crop_image(image, crop=crop)     # トリミング
-    
+
     if use_gray:
         src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)         # グレースケール化
     elif BGR_range is not None:                             # 2値化
         src = cv2.inRange(src, numpy.array(BGR_range['lower']), numpy.array(BGR_range['upper']))    # inRangeで元画像を２値化(指定した色の範囲を抽出できる)
-    
+
     if threshold_binary is not None:
         _, src = cv2.threshold(src, threshold_binary, 255, cv2.THRESH_BINARY)
 
-    width, height = src.shape[1], src.shape[0] # テンプレート画像のサイズ
-    
+    width, height = src.shape[1], src.shape[0]  # テンプレート画像のサイズ
+
     return src, width, height
+
 
 def opneImage(image: numpy.ndarray, crop: List[int] = None, title="image"):
     '''
@@ -121,6 +126,7 @@ def opneImage(image: numpy.ndarray, crop: List[int] = None, title="image"):
     cv2.imshow(f'{title}', src)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
 
 class ImageProcessing:
     '''
@@ -198,21 +204,21 @@ class ImageProcessing:
             res = self.gresult.download()
         else:
             res = cv2.matchTemplate(image, template_image, method, mask_image)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res) # 結果から類似度と類似度が最大となる場所を抽出
+        _, max_val, _, max_loc = cv2.minMaxLoc(res)  # 結果から類似度と類似度が最大となる場所を抽出
 
         return max_val, max_loc
 
-    def isContainTemplate(self, image: numpy.ndarray, template_image: numpy.ndarray, mask_image: numpy.ndarray = None, threshold: float = 0.7, use_gray: bool = True, 
+    def isContainTemplate(self, image: numpy.ndarray, template_image: numpy.ndarray, mask_image: numpy.ndarray = None, threshold: float = 0.7, use_gray: bool = True,
                           crop: List[int] = [], BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: list[int] = [], show_image: bool = False) -> Tuple[bool, tuple, int, int, float]:
         '''
         テンプレートマッチングを行い類似度が閾値を超えているかを確認する
         '''
-        # テンプレートマッチング対象画像を加工する        
+        # テンプレートマッチング対象画像を加工する
         src, _, _ = doPreprocessImage(image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary)
 
         # [DEBUG] テンプレートマッチング対象画像を表示する
         if show_image:
-            cv2.imshow("image",src)
+            cv2.imshow("image", src)
             cv2.waitKey()
 
         # テンプレート画像を加工する
@@ -222,9 +228,9 @@ class ImageProcessing:
         max_val, max_loc = self.doTemplateMatch(src, template, mask_image=mask_image)
 
         # 類似度が閾値を超えたかを戻り値として返す(合わせて位置とテンプレート画像のサイズも返す)
-        return max_val > threshold , max_loc, width, height, max_val
+        return max_val > threshold, max_loc, width, height, max_val
 
-    def isContainTemplate_max(self, image: numpy.ndarray, template_image_list: List[numpy.ndarray], mask_image_list: List[numpy.ndarray] = [], threshold: float =0.7, use_gray: bool =True, 
+    def isContainTemplate_max(self, image: numpy.ndarray, template_image_list: List[numpy.ndarray], mask_image_list: List[numpy.ndarray] = [], threshold: float = 0.7, use_gray: bool = True,
                               crop: List[int] = [], BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: list[int] = [], show_image: bool = False) -> Tuple[int, List[float], List[tuple], List[int], List[int], List[bool]]:
         '''
         複数のテンプレート画像を用いてそれぞれテンプレートマッチングを行い類似度が最も大きい画像のindexを返す
@@ -250,10 +256,10 @@ class ImageProcessing:
 
         # [DEBUG] テンプレートマッチング対象画像を表示する
         if show_image:
-            cv2.imshow("image",src)
+            cv2.imshow("image", src)
             cv2.waitKey()
 
-        for template_image , mask_image in zip(template_image_list, mask_image_list_temp):
+        for template_image, mask_image in zip(template_image_list, mask_image_list_temp):
             # テンプレート画像を加工する
             template, width, height = doPreprocessImage(template_image, use_gray=use_gray, crop=crop_template, BGR_range=BGR_range, threshold_binary=threshold_binary)
             max_val, max_loc = self.doTemplateMatch(src, template, mask_image=mask_image)
@@ -263,14 +269,14 @@ class ImageProcessing:
             height_list.append(height)
             judge_threshold_list.append(max_val > threshold)
 
-        return numpy.argmax(max_val_list), max_val_list, max_loc_list, width_list, height_list, judge_threshold_list 
+        return numpy.argmax(max_val_list), max_val_list, max_loc_list, width_list, height_list, judge_threshold_list
 
     def saveImage(self, image: numpy.ndarray, filename: str = None, crop: List[int] = None):
         '''
         画像を保存する。
-        '''        
+        '''
         # トリミングを行う
-        cropped_image = crop_image(image, crop=crop)        
+        cropped_image = crop_image(image, crop=crop)
 
         # ファイル名からパスを抽出する
         capture_dir = os.path.dirname(filename)
@@ -288,6 +294,7 @@ class ImageProcessing:
         except cv2.error as e:
             print("Capture Failed")
             self.__logger.error(f"Capture Failed :{e}")
+
 
 if __name__ == "__main__":
     ImgProc = ImageProcessing()

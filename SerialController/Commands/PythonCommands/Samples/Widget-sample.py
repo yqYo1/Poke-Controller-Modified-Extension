@@ -3,6 +3,7 @@
 
 from Commands.PythonCommandBase import PythonCommand
 
+
 class Widget_sample(PythonCommand):
     NAME = 'Widget-sample'
 

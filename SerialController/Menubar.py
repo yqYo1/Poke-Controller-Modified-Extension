@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import cv2
 import tkinter as tk
+import tkinter.ttk as ttk
 from tkinter import messagebox
+import os
+import configparser
+import shutil
 
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify
 from get_pokestatistics import GetFromHomeGUI
 from PokeConShowInfo import PokeConQuestionDialogue, PokeConVersionCheck, PokeConChangeLog, PokeConCopyright
 from PokeConUpdateChecker import PokeConUpdateCheck
+from PokeConDialogue import PokeConDialogue
 from logging import getLogger, DEBUG, NullHandler
 import webbrowser
+
 
 class PokeController_Menubar(tk.Menu):
     def __init__(self, master, **kw):
@@ -31,18 +37,18 @@ class PokeController_Menubar(tk.Menu):
         self.keyboard = self.master.keyboard
         self.settings = self.master.settings
         self.camera = self.master.camera
+        self.profile = self.master.profile
         self.cur_command = self.master.cur_command
 
         self.poke_treeview = None
         self.key_config = None
         self.line = None
 
-
         tk.Menu.__init__(self, self.root, **kw)
         self.menu = tk.Menu(self, tearoff='false')
         self.menu_command = tk.Menu(self, tearoff='false')
         self.add(tk.CASCADE, menu=self.menu, label='メニュー')
-        
+
         self.help = tk.Menu(self, tearoff='false')
         self.add(tk.CASCADE, menu=self.help, label='ヘルプ')
         self.help.add('command', label='Github', command=self.OpenGithub)
@@ -67,7 +73,9 @@ class PokeController_Menubar(tk.Menu):
 
     def AssignMenuCommand(self):
         self._logger.debug("Assigning menu command")
+        self.menu_command.add('command', command=self.LineTokenAssignment, label='LINE Token Assignment')
         self.menu_command.add('command', command=self.LineTokenSetting, label='LINE Token Check')
+        self.menu_command.add('command', command=self.GenerateNewBat, label='Generate Bat File & Profile Directory')
         # TODO: setup command_id_arg 'false' for menuitem.
         self.menu_command.add('command', command=self.OpenPokeHomeCoop, label='Pokemon Home 連携')
         self.menu_command.add('command', command=self.OpenKeyConfig, label='キーコンフィグ')
@@ -90,13 +98,56 @@ class PokeController_Menubar(tk.Menu):
         self.poke_treeview.destroy()
         self.poke_treeview = None
 
+    def LineTokenAssignment(self):
+        self.message_dialogue = tk.Toplevel()
+        ret = PokeConDialogue(self.message_dialogue, "Line Token Assignment", "Token").ret_value(list)
+        self.message_dialogue = None
+        if ret != []:
+            token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile, 'line_token.ini')
+            token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+            token_file['LINE'] = {
+                'token': ret[0]
+            }
+            with open(token_path, 'w', encoding='utf-8') as file:
+                token_file.write(file)
+            os.chmod(path=token_path, mode=0o777)
+            self._logger.debug("Assign Line Token")
+            self.LineTokenSetting()
+        else:
+            pass
+
     def LineTokenSetting(self):
         self._logger.debug("Show line API")
         if self.line is None:
             self.line = Line_Notify()
         print(self.line)
         self.line.getRateLimit()
+        self.line = None
         # LINE.send_text_n_image("CAPTURE")
+
+    def GenerateNewBat(self):
+        self.message_dialogue = tk.Toplevel()
+        ret = PokeConDialogue(self.message_dialogue, "Generate Bat File & Profile Directory", [["Entry", "Profile Name", ""], ["Check", "Copy Profile", True]], mode=1).ret_value(list)
+        self.message_dialogue = None
+        if ret != []:
+            exe_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)), f'ExecutePokeConModified-Extension_{ret[0]}.bat')
+            if not os.path.exists(exe_path):
+                txt = f'python SerialController/PokeConUpdateChecker.py\ncd SerialController\npython Window.py --profile {ret[0]}\npause\n'
+                with open(exe_path, 'w', encoding='utf-8') as file:
+                    file.write(txt)
+            else:
+                pass
+            new_profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', ret[0])
+            if not os.path.exists(new_profile_path):
+                if ret[1]:
+                    current_profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile)
+                    shutil.copytree(current_profile_path, new_profile_path)
+                else:
+                    pass
+            else:
+                pass
+        else:
+            pass
 
     def OpenKeyConfig(self):
         self._logger.debug("Open KeyConfig window")
@@ -130,7 +181,7 @@ class PokeController_Menubar(tk.Menu):
     def OpenChangeLog(self):
         PokeConChangeLog(tk.Toplevel())
 
-    def CheckUpdate(self):        
+    def CheckUpdate(self):
         window = tk.Toplevel()
         window.withdraw()  # メインウィンドウを非表示にする
         res = messagebox.askyesno(title="更新確認", message="Poke-Controller Modified Extension の更新を確認しますか?")
@@ -148,7 +199,7 @@ class PokeController_Menubar(tk.Menu):
         PokeConCopyright(tk.Toplevel())
 
     def output_question(self):
-        PokeConQuestionDialogue(tk.Toplevel(), command = self.cur_command).output_text()
+        PokeConQuestionDialogue(tk.Toplevel(), command=self.cur_command).output_text()
 
     def exit(self):
         self._logger.debug("Close Menubar")

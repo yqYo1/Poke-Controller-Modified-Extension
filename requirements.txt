@@ -23,6 +23,7 @@ pygame
 paho-mqtt
 windows-capture-device-list
 gitpython
+plyer
 
 #
 # requirements not mentioned in the documents above:

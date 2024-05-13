@@ -109,7 +109,28 @@ class Sender:
         # Show sending serial datas
         if self.is_show_serial.get():
             print(row)
-    
+
+    def writeList(self, values: list, is_show: bool = False):
+        try:
+            self.time_bef = time.perf_counter()
+            if self.before is not None and self.before != 'end' and is_show:
+                pass
+
+            self.ser.write(values)
+            self.time_aft = time.perf_counter()
+            self.before = values
+        except serial.serialutil.SerialException as e:
+            # print(e)
+            self._logger.error(f"Error : {e}")
+        except AttributeError as e:
+            print('Using a port that is not open.')
+            self._logger.error('Maybe Using a port that is not open.')
+            self._logger.error(e)
+        # self._logger.debug(f"{values}")
+        # Show sending serial datas
+        if self.is_show_serial.get():
+            print(values)
+
     def writeRow_wo_perf_counter(self, row: str, is_show: bool = False):
         try:
             self.ser.write((row + '\r\n').encode('utf-8'))
@@ -133,7 +154,7 @@ class Sender:
             useRStick = int(output[0], 16) >> 0 & 1
             useLStick = int(output[0], 16) >> 1 & 1
             Hat = self.Hat[int(output[1])]
-            if Hat is not "CENTER":
+            if Hat != "CENTER":
                 btns = btns + ['Hat.' + str(Hat)]
             LStick = list(map(lambda x: int(x, 16), output[2:4]))
             RStick = list(map(lambda x: int(x, 16), output[4:]))

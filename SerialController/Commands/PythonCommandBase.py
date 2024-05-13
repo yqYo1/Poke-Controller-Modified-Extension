@@ -14,7 +14,11 @@ import os
 import os.path
 import datetime
 import string
-
+try:
+    from plyer import notification
+    flag_import_plyer = True
+except:
+    flag_import_plyer = False
 from Settings import GuiSettings
 from ImageProcessing import *
 from LineNotify import Line_Notify
@@ -34,6 +38,8 @@ class StopThread(Exception):
     pass
 
 # Python command
+
+
 class PythonCommand(CommandBase.Command):
     def __init__(self):
         super(PythonCommand, self).__init__()
@@ -53,6 +59,7 @@ class PythonCommand(CommandBase.Command):
         一時停止を実現するためのデコレータです。
         戻り値が3つある関数に使用されます。
         '''
+
         def inner(self, *args, **kwargs):
             func(self, *args, **kwargs)
             if self.isPause:
@@ -67,7 +74,7 @@ class PythonCommand(CommandBase.Command):
         一時停止時に内部変数の一覧を表示します。
         表示対象は自動化スクリプト側でselfにて定義した変数のみです。
         '''
-        var_dict = vars(self) # 重い
+        var_dict = vars(self)  # 重い
         del_dict = ['isRunning', 'message_dialogue', 'socket0', 'mqtt0', 'keys', 'thread', 'alive', 'postProcess', 'Line', '_logger', 'camera', 'gui', 'ImgProc']
         print("--------内部変数一覧--------")
         for k, v in var_dict.items():
@@ -96,6 +103,14 @@ class PythonCommand(CommandBase.Command):
         except StopThread:
             print('-- finished successfully. --')
             self._logger.info("Command finished successfully")
+            if self.isWinNotEnd:
+                global flag_import_plyer
+                if flag_import_plyer:
+                    notification.notify(title=f'{self.app_name} (profile:{self.profilename})', message=f'{self.cur_command_name} finished.', timeout=5)
+                else:
+                    print('"plyer" is not installed.')
+            if self.isLineNotEnd:
+                self.LINE_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.')
         except:
             if self.keys is None:
                 self.keys = KeyPress(ser)
@@ -110,6 +125,15 @@ class PythonCommand(CommandBase.Command):
         '''
         自動化スクリプトをスレッドに割り当てて実行します。
         '''
+        if self.isWinNotStart:
+            global flag_import_plyer
+            if flag_import_plyer:
+                notification.notify(title=f'{self.app_name} (profile:{self.profilename})', message=f'{self.cur_command_name} started.', timeout=5)
+            else:
+                print('"plyer" is not installed.')
+
+        if self.isLineNotStart:
+            self.LINE_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.')
         self.alive = True
         self.socket0.alive = True
         self.mqtt0.alive = True
@@ -144,7 +168,7 @@ class PythonCommand(CommandBase.Command):
 
     # press button at duration times(s)
     @pausedecorator
-    def press(self, buttons: Button | Hat | Stick | Direction, duration: float = 0.1, wait : float = 0.1):
+    def press(self, buttons: Button | Hat | Stick | Direction, duration: float = 0.1, wait: float = 0.1):
         '''
         ボタンを押す。
         '''
@@ -263,6 +287,7 @@ def generateRandomCharacter(n: int):
     c = string.ascii_lowercase + string.ascii_uppercase + string.digits
     return ''.join([random.choice(c) for _ in range(n)])
 
+
 def convertCv2Format(crop_fmt: int | str = '', crop: List[int] = []) -> Tuple(List[int], List[int]):
     '''
     リストをopencv/pillow形式に対応するよう変換する。
@@ -311,6 +336,7 @@ def convertCv2Format(crop_fmt: int | str = '', crop: List[int] = []) -> Tuple(Li
 class ImageProcPythonCommand(PythonCommand):
     template_path_name = "./Template/"
     capture_path_name = "./Captures/"
+
     def __init__(self, cam: Camera, gui: CaptureArea = None):
         super(ImageProcPythonCommand, self).__init__()
 
@@ -323,12 +349,12 @@ class ImageProcPythonCommand(PythonCommand):
         self.gui = gui
         self.Line = Line_Notify()
 
-
     def pausedecorator2(func):
         '''
         一時停止を実現するためのデコレータです。
         戻り値が1つある関数に使用されます。
         '''
+
         def inner(self, *args, **kwargs):
             res = func(self, *args, **kwargs)
             if self.isPause:
@@ -344,6 +370,7 @@ class ImageProcPythonCommand(PythonCommand):
         一時停止を実現するためのデコレータです。
         戻り値が3つある関数に使用されます。
         '''
+
         def inner(self, *args, **kwargs):
             res1, res2, res3 = func(self, *args, **kwargs)
             if self.isPause:
@@ -424,7 +451,7 @@ class ImageProcPythonCommand(PythonCommand):
             template_image = template_path
         else:
             template_image = getImage(self.get_filespec(template_path, mode="t"), mode="color")
-        
+
         # マスク画像を取得
         if type(mask_path) == ImageProcessing().image_type:
             mask_image = mask_path
@@ -432,7 +459,8 @@ class ImageProcPythonCommand(PythonCommand):
             mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
 
         # テンプレートマッチング
-        res, max_loc, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+        res, max_loc, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(src, template_image, mask_image=mask_image, threshold=threshold,
+                                                                                                  use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
 
         # テンプレートマッチングの結果(類似度)を表示する
         if show_value or self.isSimilarity:
@@ -481,7 +509,7 @@ class ImageProcPythonCommand(PythonCommand):
                 template_image_list.append(i)
             else:
                 template_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="color"))
-        
+
         # マスク画像を取得
         mask_image_list = []
         if mask_path_list is not None:
@@ -492,7 +520,8 @@ class ImageProcPythonCommand(PythonCommand):
                     mask_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="binary"))
 
         # テンプレートマッチング
-        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(src, template_image_list, mask_image_list=mask_image_list, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(use_gpu=False).isContainTemplate_max(
+            src, template_image_list, mask_image_list=mask_image_list, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
 
         # テンプレートマッチングの結果(類似度)を表示する
         if show_value or self.isSimilarity:
@@ -538,8 +567,8 @@ class ImageProcPythonCommand(PythonCommand):
 
     @pausedecorator2
     def isContainedImage(self, image_path: str, threshold: float = 0.7, use_gray: bool = True,
-                        show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
-                        BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [], show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> bool:
+                         show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: int | str = '', crop: List[int] = [], mask_path: str = None, use_gpu: bool = False,
+                         BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None, crop_template: List[int] = [], show_image: bool = False, color: List[str] = ['blue', 'red', 'orange']) -> bool:
         '''
         指定した画像に対して現在のスクリーンショットから生成したテンプレート画像を用いてテンプレートマッチングを行います。
         色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにしてグレースケール画像を使うことを推奨します。
@@ -565,7 +594,8 @@ class ImageProcPythonCommand(PythonCommand):
             mask_image = getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
 
         # テンプレートマッチング
-        res, _, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(image, template_image, mask_image=mask_image, threshold=threshold, use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
+        res, _, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(image, template_image, mask_image=mask_image, threshold=threshold,
+                                                                                            use_gray=use_gray, crop=crop_cv2, BGR_range=BGR_range, threshold_binary=threshold_binary, crop_template=crop_template_cv2, show_image=show_image)
 
         # テンプレートマッチングの結果(類似度)を表示する
         if show_value or self.isSimilarity:
@@ -573,7 +603,7 @@ class ImageProcPythonCommand(PythonCommand):
             print(f'capture_image {tm_mode} value: {max_val}')
 
         # canvasに検出位置を表示
-        if show_position:            
+        if show_position:
             tag = str(time.perf_counter()) + str(random.random())
             if res:
                 self.displayRectangle(crop_template_pillow[0:2], width, height, tag, ms, color=[color[0], color[2]], crop=[])
@@ -608,14 +638,14 @@ class ImageProcPythonCommand(PythonCommand):
             canvas.ImgRect(*top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms))
         else:
             pass
-    
-    def displayText(self, position : tuple, txt : str, tag: str = None, ms : int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color : str = 'black'):
+
+    def displayText(self, position: tuple, txt: str, tag: str = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = 'black'):
 
         if self.gui is not None:
             canvas = self.gui
         else:
             canvas = self.canvas
-    
+
         ft = (font, fontsize)
 
         if tag is None:

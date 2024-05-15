@@ -435,17 +435,19 @@ class KeyPress:
 
         flag_isTouchscreen = False
         for btn in btns:
-            if btn in self.holdButton:
-                print('Warning: ' + btn.name + ' is already in holding state')
-                self._logger.warning(f"Warning: {btn.name} is already in holding state")
-                return
             if type(btn) is Touchscreen:
                 flag_isTouchscreen = True
         if flag_isTouchscreen:
             for btn in self.holdButton:
                 if type(btn) is Touchscreen:
                     self.holdButton.remove(btn)
-        self.holdButton.append(btn)
+        for btn in btns:
+            if btn in self.holdButton:
+                print('Warning: ' + btn.name + ' is already in holding state')
+                self._logger.warning(f"Warning: {btn.name} is already in holding state")
+                return
+
+            self.holdButton.append(btn)
         self.input(btns)
 
     def holdEnd(self, btns: Button | Hat | Stick | Direction):

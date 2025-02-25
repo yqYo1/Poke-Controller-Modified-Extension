@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import tkinter as tk
 import tkinter.ttk as ttk
+import json
+import os
+import glob
 from logging import getLogger, DEBUG, NullHandler
 
 
 class PokeConDialogue(object):
-    def __init__(self, parent, title: str, message: int | str | list, mode: int = 0):
+    def __init__(self, parent, title: str, message: int | str | list, desc: str = None, mode: int = 0, pos: int = 2):
         """
         pokecon用ダイアログ生成関数(注意:mode=0と1でmessageの取り扱いが大きく異なる。)
         mode | int: 0のときEntryのみ、1のとき6種類のwidgetに対応
+        pos | int: OK/Cancelの位置(1のときTOP、2のときBOTTOM、3のときBOTH)
         title | str: タイトル
         message | mode=0の場合 : int/str/list: Entryのラベル、mode=1の場合 : list[widget, widget, ...]: widgetごとの設定をリスト化したもの
         widget | list : widgetごとの設定(ウィジェットの種類によってリストの中身は異なる。以下を参照。)
@@ -35,10 +39,25 @@ class PokeConDialogue(object):
         self.message_dialogue.protocol("WM_DELETE_WINDOW", self.close_window)
 
         self.main_frame = tk.Frame(self.message_dialogue)
-        self.inputs = ttk.Frame(self.main_frame)
 
-        self.title_label = ttk.Label(self.main_frame, text=title, anchor='center')
-        self.title_label.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=0, sticky='nsew')
+        description = desc if desc != None else title
+        self.description_label = ttk.Label(self.main_frame, text=description, anchor='center')
+        self.description_label.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=0, sticky='nsew')
+
+        cnt = 1
+        if pos in [1, 3]:
+            self.result = ttk.Frame(self.main_frame)
+            self.OK = ttk.Button(self.result, command=self.ok_command)
+            self.OK.configure(text='OK')
+            self.OK.grid(column=0, row=1, padx=5, pady=5)
+            self.Cancel = ttk.Button(self.result, command=self.cancel_command)
+            self.Cancel.configure(text='Cancel')
+            self.Cancel.grid(column=1, row=1, sticky='ew', padx=5, pady=5)
+            self.result.grid(column=0, columnspan=2, pady=5, row=cnt, sticky='ew')
+            self.result.grid_anchor('center')
+            cnt += 1
+
+        self.inputs = ttk.Frame(self.main_frame)
 
         self.dialogue_ls = {}
         x = self.message_dialogue.master.winfo_x()
@@ -54,17 +73,21 @@ class PokeConDialogue(object):
         else:
             self.mode1(message)
 
-        self.inputs.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=1, sticky='nsew')
+        self.inputs.grid(column=0, columnspan=2, ipadx='10', ipady='10', row=cnt, sticky='nsew')
         self.inputs.grid_anchor('center')
-        self.result = ttk.Frame(self.main_frame)
-        self.OK = ttk.Button(self.result, command=self.ok_command)
-        self.OK.configure(text='OK')
-        self.OK.grid(column=0, row=1)
-        self.Cancel = ttk.Button(self.result, command=self.cancel_command)
-        self.Cancel.configure(text='Cancel')
-        self.Cancel.grid(column=1, row=1, sticky='ew')
-        self.result.grid(column=0, columnspan=2, pady=5, row=2, sticky='ew')
-        self.result.grid_anchor('center')
+        cnt += 1
+
+        if pos in [2, 3]:
+            self.result2 = ttk.Frame(self.main_frame)
+            self.OK2 = ttk.Button(self.result2, command=self.ok_command)
+            self.OK2.configure(text='OK')
+            self.OK2.grid(column=0, row=1, padx=5, pady=5)
+            self.Cancel2 = ttk.Button(self.result2, command=self.cancel_command)
+            self.Cancel2.configure(text='Cancel')
+            self.Cancel2.grid(column=1, row=1, sticky='ew', padx=5, pady=5)
+            self.result2.grid(column=0, columnspan=2, pady=5, row=cnt, sticky='ew')
+            self.result2.grid_anchor('center')
+
         self.main_frame.pack()
         self.message_dialogue.master.wait_window(self.message_dialogue)
 
@@ -115,8 +138,12 @@ class PokeConDialogue(object):
                     widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
                 # Combobox
                 elif dialogue_list[i][0].casefold() == "combo".casefold():
+                    text_length = 10
+                    for name in dialogue_list[i][2]:
+                        if text_length < len(name) + 5:
+                            text_length = len(name) + 5
                     self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(value=dialogue_list[i][3])
-                    widget = ttk.Combobox(frame[i], values=dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]])
+                    widget = ttk.Combobox(frame[i], values=dialogue_list[i][2], textvariable=self.dialogue_ls[dialogue_list[i][1]], width=text_length, state="readonly")
                     widget.grid(column=0, row=0, sticky='nsew', padx=3, pady=3)
                     # widget.current(0)
                 # Entry
@@ -189,3 +216,84 @@ class PokeConDialogue(object):
     def cancel_command(self):
         self.message_dialogue.destroy()
         self.isOK = False
+
+
+def check_widget_name(dialogue_list: list, except_name: list = []) -> bool:
+    '''
+    ウィジェットに同一名称がないかを確認
+    '''
+    input_name = [setting[1] for setting in dialogue_list if len(setting) > 1] + except_name
+    checked_name = []
+    output_name = [name for name in input_name if name not in checked_name and not checked_name.append(name)]
+
+    return len(input_name) == len(output_name)
+
+
+def get_setting(filename: str) -> dict:
+    '''
+    保存した設定値を読み込む
+    '''
+    try:
+        with open(filename, encoding='utf-8') as f:
+            file = json.load(f)
+            return file
+    except:
+        return None
+
+
+def save_setting(filename: str, settings: dict):
+    '''
+    設定値を保存する
+    '''
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, indent=4, ensure_ascii=False)
+
+
+def generate_new_dialogue_list(dialogue_list: list, filename: str) -> list:
+    settings = get_setting(filename)
+    if settings == None:
+        return dialogue_list
+    else:
+        new_dialogue_list = []
+        for setting in dialogue_list:
+            if len(setting) < 2:
+                pass
+            else:
+                try:
+                    setting[-1] = settings[setting[1]]
+                except:
+                    pass
+            new_dialogue_list.append(setting)
+    return new_dialogue_list
+
+
+def save_dialogue_settings(new_dialogue_list: list, ret: list | dict, filename: str):
+    try:
+        settings = {}
+        if type(ret) == list:
+            cnt = 0
+            for setting in new_dialogue_list:
+                if len(setting) < 2:
+                    pass
+                else:
+                    settings[setting[1]] = ret[cnt]
+                    cnt += 1
+            save_setting(filename, settings)
+        else:
+            save_setting(filename, ret)
+    except:
+        print("Error: Configuration dump failed.")
+
+
+def get_settings_list(dirname: str) -> list:
+    if os.path.isdir(dirname):
+        pass
+    else:
+        os.makedirs(dirname)
+    filename = os.path.join(dirname, "**", "*.json")
+    settings_list = glob.glob(filename, recursive=True)
+
+    len_pass = len(dirname) + 1
+    settings_name_list = [file[len_pass:-5] for file in settings_list if file[len_pass] != "_"]
+
+    return settings_name_list

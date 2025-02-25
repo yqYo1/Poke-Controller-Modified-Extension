@@ -22,6 +22,7 @@ except:
 from Settings import GuiSettings
 from ImageProcessing import *
 from LineNotify import Line_Notify
+from DiscordNotify import Discord_Notify
 from Commands import CommandBase
 from Commands.Keys import KeyPress
 
@@ -53,6 +54,7 @@ class PythonCommand(CommandBase.Command):
         self.alive = True
         self.postProcess = None
         self.Line = Line_Notify()
+        self.Discord = Discord_Notify()
 
     def pausedecorator(func):
         '''
@@ -75,7 +77,7 @@ class PythonCommand(CommandBase.Command):
         表示対象は自動化スクリプト側でselfにて定義した変数のみです。
         '''
         var_dict = vars(self)  # 重い
-        del_dict = ['isRunning', 'message_dialogue', 'socket0', 'mqtt0', 'keys', 'thread', 'alive', 'postProcess', 'Line', '_logger', 'camera', 'gui', 'ImgProc']
+        del_dict = ['isRunning', 'message_dialogue', 'socket0', 'mqtt0', 'keys', 'thread', 'alive', 'postProcess', 'Line', 'Discord', '_logger', 'camera', 'gui', 'ImgProc']
         print("--------内部変数一覧--------")
         for k, v in var_dict.items():
             if k not in del_dict:
@@ -111,6 +113,8 @@ class PythonCommand(CommandBase.Command):
                     print('"plyer" is not installed.')
             if self.isLineNotEnd:
                 self.LINE_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.')
+            if self.isDiscordNotEnd:
+                self.Discord_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.')
         except:
             if self.keys is None:
                 self.keys = KeyPress(ser)
@@ -134,6 +138,8 @@ class PythonCommand(CommandBase.Command):
 
         if self.isLineNotStart:
             self.LINE_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.')
+        if self.isDiscordNotStart:
+            self.Discord_text(f'{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.')
         self.alive = True
         self.socket0.alive = True
         self.mqtt0.alive = True
@@ -278,6 +284,13 @@ class PythonCommand(CommandBase.Command):
         except:
             pass
 
+    def Discord_text(self, txt: str, keys: str = 'DISCORD_WEBHOOK'):
+        # 送信
+        try:
+            self.Discord.send_message(notification_message=txt, keys=keys)
+        except:
+            pass
+
 
 def generateRandomCharacter(n: int):
     '''
@@ -347,7 +360,6 @@ class ImageProcPythonCommand(PythonCommand):
 
         self.camera = cam
         self.gui = gui
-        self.Line = Line_Notify()
 
     def pausedecorator2(func):
         '''
@@ -710,5 +722,24 @@ class ImageProcPythonCommand(PythonCommand):
         # 送信
         try:
             self.Line.send_message(txt, cropped_image, token)
+        except:
+            pass
+
+    def Discord_image(self, txt: str = None, crop_fmt: int | str = '', crop: List[int] = [], keys: str | list = 'DISCORD_WEBHOOK'):
+        '''
+        Discordにテキストと画像を通知します。
+        '''
+        # crop_fmtに応じてcropの中身を並び替える
+        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+
+        # カメラの画像を取得
+        src = self.camera.readFrame()
+
+        # トリミング
+        cropped_image = crop_image(src, crop=crop_cv2)
+
+        # 送信
+        try:
+            self.Discord.send_message(notification_message=txt, image=cropped_image, keys=keys)
         except:
             pass

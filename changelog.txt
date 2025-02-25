@@ -1,3 +1,31 @@
+■ver.0.1.0
+  ・機能追加/変更
+    ・Discordへの通知機能を追加(Discord Webhook)
+    ・Discord関連の設定をメニューから行う機能を追加
+    ・GUI上部のボタンをLineからDiscordに変更
+    ・保存機能付きダイアログ関数(2種)を追加
+    ・ダイアログ表示時のOK/Cancelボタンの配置を設定する機能を追加
+  ・Filter機能バグ修正
+    ・Filter機能利用時にShortcut機能が正常に動作しない問題を修正
+  ・マスク機能バグ修正
+    ・マスク機能が正常に動作しない問題を修正
+  ・Window循環インポート問題修正
+    ・Window.pyにてWindowが循環インポートになっている問題を修正
+  ・PokeConShowInfo.py更新
+    ・Window循環import問題解消のための修正を実施
+    ・Discord通知機能追加に伴う修正を実施
+  ・ImageProcessing.py更新
+    ・マスク機能バグ解消のための修正を実施
+  ・Constant.py追加
+    ・Window循環import問題解消のために追加
+  ・CommandBase.py/Settings.py更新
+    ・Discord通知機能追加に伴う修正を実施
+  ・PokeConDialogue.py更新
+    ・ダイアログ関連機能追加に伴う修正を実施
+  ・Window.py更新
+    ・Discord通知関連およびダイアログ関連機能追加に伴う修正を実施
+    ・循環インポートおよびFilter機能バグ解消のための修正を実施
+
 ■ver.0.0.6
   ・機能追加
     ・タグによるコマンドフィルタリング機能を追加

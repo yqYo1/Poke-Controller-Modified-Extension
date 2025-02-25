@@ -90,6 +90,14 @@ class GuiSettings:
             self.is_line_notification_end = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_line_notification_end'))
         except:
             self.is_line_notification_end = tk.BooleanVar(value=False)
+        try:
+            self.is_discord_notification_start = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_discord_notification_start'))
+        except:
+            self.is_discord_notification_start = tk.BooleanVar(value=False)
+        try:
+            self.is_discord_notification_end = tk.BooleanVar(value=self.setting['Notification'].getboolean('is_discord_notification_end'))
+        except:
+            self.is_discord_notification_end = tk.BooleanVar(value=False)
         # Output Area用の設定
         self.area_size = self.setting['Output']['area_size']
         self.stdout_destination = self.setting['Output']['stdout_destination']
@@ -101,6 +109,10 @@ class GuiSettings:
             self.pos_software_controller = self.setting['Output']['software_controller_position']
         except:
             self.pos_software_controller = '2'
+        try:
+            self.pos_dialogue_buttons = self.setting['Output']['dialogue_buttons_position']
+        except:
+            self.pos_dialogue_buttons = '2'
 
     def load(self):
         if os.path.isfile(self.SETTING_PATH):
@@ -196,12 +208,15 @@ class GuiSettings:
             'is_win_notification_end': False,
             'is_line_notification_start': False,
             'is_line_notification_end': False,
+            'is_discord_notification_start': False,
+            'is_discord_notification_end': False,
         }
         self.setting['Output'] = {
             'area_size': '20',
             'stdout_destination': '1',
             'widget_mode': 'ALL (default)',
             'software_controller_position': '2',
+            'dialogue_buttons_position': '2',
         }
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:
             self.setting.write(file)
@@ -263,6 +278,8 @@ class GuiSettings:
             'is_win_notification_end': self.is_win_notification_end.get(),
             'is_line_notification_start': self.is_line_notification_start.get(),
             'is_line_notification_end': self.is_line_notification_end.get(),
+            'is_discord_notification_start': self.is_discord_notification_start.get(),
+            'is_discord_notification_end': self.is_discord_notification_end.get(),
         }
 
         self.setting['Output'] = {
@@ -270,6 +287,7 @@ class GuiSettings:
             'stdout_destination': self.stdout_destination,
             'widget_mode': self.right_frame_widget_mode,
             'software_controller_position': self.pos_software_controller,
+            'dialogue_buttons_position': self.pos_dialogue_buttons,
         }
 
         with open(self.SETTING_PATH, 'w', encoding='utf-8') as file:

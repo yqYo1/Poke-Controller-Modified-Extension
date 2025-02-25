@@ -12,6 +12,7 @@ import shutil
 
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify
+from DiscordNotify import Discord_Notify
 from get_pokestatistics import GetFromHomeGUI
 from PokeConShowInfo import PokeConQuestionDialogue, PokeConVersionCheck, PokeConChangeLog, PokeConCopyright
 from PokeConUpdateChecker import PokeConUpdateCheck
@@ -43,6 +44,7 @@ class PokeController_Menubar(tk.Menu):
         self.poke_treeview = None
         self.key_config = None
         self.line = None
+        self.discord = None
 
         tk.Menu.__init__(self, self.root, **kw)
         self.menu = tk.Menu(self, tearoff='false')
@@ -68,6 +70,7 @@ class PokeController_Menubar(tk.Menu):
 
         self.AssignMenuCommand()
         self.LineTokenSetting()
+        self.DiscordSetting()
 
     # TODO: setup command_id_arg 'false' for menuitem.
 
@@ -75,6 +78,8 @@ class PokeController_Menubar(tk.Menu):
         self._logger.debug("Assigning menu command")
         self.menu_command.add('command', command=self.LineTokenAssignment, label='LINE Token Assignment')
         self.menu_command.add('command', command=self.LineTokenSetting, label='LINE Token Check')
+        self.menu_command.add('command', command=self.DiscordSettingAssignment, label='Discord Setting Assignment')
+        self.menu_command.add('command', command=self.DiscordSetting, label='Discord Check')
         self.menu_command.add('command', command=self.GenerateNewBat, label='Generate Bat File & Profile Directory')
         # TODO: setup command_id_arg 'false' for menuitem.
         self.menu_command.add('command', command=self.OpenPokeHomeCoop, label='Pokemon Home 連携')
@@ -98,6 +103,13 @@ class PokeController_Menubar(tk.Menu):
         self.poke_treeview.destroy()
         self.poke_treeview = None
 
+    def is_utf8_file_with_bom(self, filename):
+        """
+        utf-8 ファイルが BOM ありかどうかを判定する
+        """
+        line_first = open(filename, encoding='utf-8').readline()
+        return line_first[0] == '\ufeff'
+
     def LineTokenAssignment(self):
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(self.message_dialogue, "Line Token Assignment", "Token").ret_value(list)
@@ -116,6 +128,33 @@ class PokeController_Menubar(tk.Menu):
         else:
             pass
 
+    def DiscordSettingAssignment(self):
+        self.message_dialogue = tk.Toplevel()
+        ret = PokeConDialogue(self.message_dialogue, "Discord Setting Assignment", ["Webhook URL", "Username", "Avatar URL"]).ret_value(list)
+        self.message_dialogue = None
+        if not all([i == "" for i in ret]):
+            setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile, 'discord_token.ini')
+
+            is_with_bom = self.is_utf8_file_with_bom(setting_path)
+            encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
+
+            setting_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+            setting_file.read(setting_path, encoding)
+
+            setting_file.read(setting_path, encoding)
+            setting_file['DISCORD_WEBHOOK'] = {
+                'webhook_url': ret[0],
+                'username': ret[1],
+                'avatar_url': ret[2],
+            }
+            with open(setting_path, 'w', encoding='utf-8') as file:
+                setting_file.write(file)
+            os.chmod(path=setting_path, mode=0o777)
+            self._logger.debug("Assign Discord Webhook Setting")
+            self.DiscordSetting()
+        else:
+            pass
+
     def LineTokenSetting(self):
         self._logger.debug("Show line API")
         if self.line is None:
@@ -124,6 +163,17 @@ class PokeController_Menubar(tk.Menu):
         self.line.getRateLimit()
         self.line = None
         # LINE.send_text_n_image("CAPTURE")
+
+    def DiscordSetting(self):
+        self._logger.debug("Show Discord Webhook API")
+        if self.discord is None:
+            self.discord = Discord_Notify()
+        try:
+            print(self.discord)
+            self.discord.getRateLimit()
+        except:
+            print("DISCORD API Check: N/A")
+        self.discord = None
 
     def GenerateNewBat(self):
         self.message_dialogue = tk.Toplevel()

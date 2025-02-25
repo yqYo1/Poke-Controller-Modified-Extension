@@ -89,12 +89,17 @@ def getImage(path: str, mode: str = "color"):
     '''
     if path == None or path == "":
         return None
-    elif mode == "binary":
-        return cv2.imread(path, 0)
-    elif mode == "gray":
-        return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     else:
-        return cv2.imread(path, cv2.IMREAD_COLOR)
+        try:
+            if mode == "binary":
+                return cv2.imread(path, 0)
+            elif mode == "gray":
+                return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            else:
+                return cv2.imread(path, cv2.IMREAD_COLOR)
+        except:
+            print(f"{path}が開けませんでした。ファイル名およびファイルの格納場所を確認してください。")
+            return None
 
 
 def doPreprocessImage(image: numpy.ndarray, use_gray: bool = True, crop: List[int] = None, BGR_range: Optional[dict] = None, threshold_binary: Optional[int] = None) -> Tuple[numpy.ndarray, int, int]:
@@ -203,7 +208,7 @@ class ImageProcessing:
             self.__gresult = matcher.match(self.__gsrc, self.__gtmpl)
             res = self.gresult.download()
         else:
-            res = cv2.matchTemplate(image, template_image, method, mask_image)
+            res = cv2.matchTemplate(image, template_image, method, mask=mask_image)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)  # 結果から類似度と類似度が最大となる場所を抽出
 
         return max_val, max_loc

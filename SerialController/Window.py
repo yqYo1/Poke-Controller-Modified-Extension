@@ -11,9 +11,9 @@ import cv2
 import platform
 import subprocess
 import threading
-import Window
 import tkinter.ttk as ttk
 import tkinter.messagebox as tkmsg
+import Constant
 from serial.tools import list_ports
 from logging import getLogger, DEBUG, NullHandler
 try:
@@ -28,6 +28,7 @@ from GuiAssets import CaptureArea, ControllerGUI
 from KeyConfig import PokeKeycon
 from Keyboard import SwitchKeyboardController
 from LineNotify import Line_Notify
+from DiscordNotify import Discord_Notify
 from ExternalTools import SocketCommunications, MQTTCommunications
 from Menubar import PokeController_Menubar
 import PokeConLogger
@@ -39,9 +40,6 @@ from Commands.CommandBase import Command
 
 addpath = dirname(dirname(dirname(abspath(__file__))))  # SerialControllerフォルダのパス
 sys.path.append(addpath)
-
-NAME = "Poke-Controller Modified Extension"
-VERSION = "ver.0.0.6"
 
 
 class PokeControllerApp:
@@ -56,7 +54,7 @@ class PokeControllerApp:
         self._logger.debug(f'User Profile Name: \'{profile}\'')
 
         self.root = master
-        self.root.title(NAME + ' ' + VERSION + f" (profile: {args.profile})")
+        self.root.title(f"{Constant.NAME} ver.{Constant.VERSION} (profile: {args.profile})")
         # self.root.resizable(0, 0)
         self.controller = None
         self.poke_treeview = None
@@ -65,14 +63,15 @@ class PokeControllerApp:
 
         self.camera_dic = None
         self.Line = None
+        self.Discord = None
 
         self.procon = None
 
-        self.pokeconname = NAME
-        self.pokeconversion = VERSION[4:]
+        self.pokeconname = Constant.NAME
+        self.pokeconversion = Constant.VERSION
 
         self.profile = profile
-        Command.app_name = f'{NAME} {VERSION}'
+        Command.app_name = f'{Constant.NAME} ver.{Constant.VERSION}'
         Command.profilename = profile
 
         '''
@@ -103,10 +102,14 @@ class PokeControllerApp:
         self.open_capture_button.configure(image=self.open_folder_img)              # modified
         self.open_capture_button.grid(column='4', pady='5', row='0')
         self.open_capture_button.configure(command=self.OpenCaptureDir)
-        self.line_button = ttk.Button(self.top_command_f)
-        self.line_button.configure(text='Line')
-        self.line_button.grid(column='5', padx='5', pady='5', row='0', sticky='ew')
-        self.line_button.configure(command=self.sendLineImage)
+        # self.line_button = ttk.Button(self.top_command_f)
+        # self.line_button.configure(text='Line')
+        # self.line_button.grid(column='5', padx='5', pady='5', row='0', sticky='ew')
+        # self.line_button.configure(command=self.sendLineImage)
+        self.discord_button = ttk.Button(self.top_command_f)
+        self.discord_button.configure(text='Discord')
+        self.discord_button.grid(column='5', padx='5', pady='5', row='0', sticky='ew')
+        self.discord_button.configure(command=self.sendDiscordImage)
         self.top_command_f.grid(column='0', row='0', sticky='w')
         self.top_command_f.grid_anchor('center')
         self.canvas_frame = ttk.Frame(self.camera_lf)
@@ -477,6 +480,23 @@ class PokeControllerApp:
         self.send_line_button.configure(command=self.sendLineImage)
         self.line_notification_lf.configure(text='Line Notification')
         self.line_notification_lf.grid(column='1', padx='5', pady='0', row='0', sticky='ew')
+        self.discord_notification_lf = ttk.Labelframe(self.notification_f)
+        self.discord_notification_start_checkbox = ttk.Checkbutton(self.discord_notification_lf)
+        self.is_discord_notification_start = tk.BooleanVar()
+        self.discord_notification_start_checkbox.configure(text='Start', variable=self.is_discord_notification_start)
+        self.discord_notification_start_checkbox.grid(column='0', padx='5', pady='5', row='0', sticky='ew')
+        self.discord_notification_start_checkbox.configure(command=self.mode_change_notification)
+        self.discord_notification_end_checkbox = ttk.Checkbutton(self.discord_notification_lf)
+        self.is_discord_notification_end = tk.BooleanVar()
+        self.discord_notification_end_checkbox.configure(text='End', variable=self.is_discord_notification_end)
+        self.discord_notification_end_checkbox.grid(column='1', padx='5', pady='0', row='0', sticky='ew')
+        self.discord_notification_end_checkbox.configure(command=self.mode_change_notification)
+        self.send_discord_button = ttk.Button(self.discord_notification_lf)
+        self.send_discord_button.configure(text='Test')
+        self.send_discord_button.grid(column='2', padx='5', pady='5', row='0', sticky='ew')
+        self.send_discord_button.configure(command=self.sendDiscordImage)
+        self.discord_notification_lf.configure(text='Discord Notification')
+        self.discord_notification_lf.grid(column='0', padx='5', pady='0', row='1', sticky='ew')
         self.notification_f.pack()
         self.controller_nb.add(self.notification_f, sticky='nsew', text='Notification')
         self.others_f = ttk.Frame(self.controller_nb)
@@ -513,7 +533,7 @@ class PokeControllerApp:
         self.outputs_text_area_2_clear_button.configure(command=self.clearTextArea2)
         self.outputs_clear_lf.configure(text='Clear Outputs')
         self.outputs_clear_lf.grid(column='2', padx='5', pady='5', row='0', sticky='ew')
-        self.othres_outputs_lf.configure(height='200', text='Outputs', width='200')
+        self.othres_outputs_lf.configure(height='200', text='Outputs/Dialogue Settings', width='200')
         self.othres_outputs_lf.grid(column='0', padx='5', row='0', sticky='ew')
         # self.othres_right_frame_lf = ttk.Labelframe(self.others_f)
         self.select_right_frame_widget = ttk.Labelframe(self.othres_outputs_lf)
@@ -539,6 +559,22 @@ class PokeControllerApp:
         self.pos_bottom_rb.configure(command=self.replace_right_frame_widget)
         self.pos_software_controller_lf.configure(text='Software-Controller Position')
         self.pos_software_controller_lf.grid(column='1', padx='5', pady='5', row='1', sticky='ew')
+        self.pos_dialogue_buttons_lf = ttk.Labelframe(self.othres_outputs_lf)
+        self.pos_dialogue_buttons = tk.StringVar(value='2')
+        self.pos_dialogue_top_rb = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
+        self.pos_dialogue_top_rb.configure(text='TOP', value='1', variable=self.pos_dialogue_buttons)
+        self.pos_dialogue_top_rb.grid(column='0', padx='5', pady='5', row='0', sticky='ew')
+        self.pos_dialogue_top_rb.configure(command=self.change_buttons_position)
+        self.pos_dialogue_bottom_rb = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
+        self.pos_dialogue_bottom_rb.configure(text='BOTTOM', value='2', variable=self.pos_dialogue_buttons)
+        self.pos_dialogue_bottom_rb.grid(column='1', padx='5', pady='5', row='0', sticky='ew')
+        self.pos_dialogue_bottom_rb.configure(command=self.change_buttons_position)
+        self.pos_dialogue_both_rb = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
+        self.pos_dialogue_both_rb.configure(text='BOTH', value='3', variable=self.pos_dialogue_buttons)
+        self.pos_dialogue_both_rb.grid(column='2', padx='5', pady='5', row='0', sticky='ew')
+        self.pos_dialogue_both_rb.configure(command=self.change_buttons_position)
+        self.pos_dialogue_buttons_lf.configure(text='Dialogue OK/Cancel Position')
+        self.pos_dialogue_buttons_lf.grid(column='2', padx='5', pady='5', row='1', sticky='ew')
         # self.othres_right_frame_lf.grid(column='1', padx='5', row='1', sticky='ew')
         # self.others_help_lf = ttk.Labelframe(self.others_f)
         # self.others_help_lf.configure(text='Help')
@@ -652,7 +688,8 @@ class PokeControllerApp:
         self.clear_top_button_tooltip = ToolTip(self.clear_top_button, "ログ画面(output(#1)/output(#2))をクリアします")
         self.capture_button_tooltip = ToolTip(self.capture_button, "ゲーム画面のスクリーンショットを取得します")
         self.open_capture_button_tooltip = ToolTip(self.open_capture_button, "スクリーンショット画像を保存するディレクトリを開きます")
-        self.line_button_tooltip = ToolTip(self.line_button, "現在のゲーム画像をLineに通知します")
+        # self.line_button_tooltip = ToolTip(self.line_button, "現在のゲーム画像をLineに通知します")
+        self.discord_button_tooltip = ToolTip(self.discord_button, "現在のゲーム画像をDiscordに通知します")
         self.camera_id_label_tooltip = ToolTip(self.camera_id_label, "使用するキャプチャデバイスのIDを設定します")
         self.camera_id_entry_tooltip = ToolTip(self.camera_id_entry, "使用するキャプチャデバイスのID")
         self.reload_button_tooltip = ToolTip(self.reload_button, "設定したキャプチャデバイスとの接続を確立し、画像読み込みを開始します")
@@ -703,6 +740,9 @@ class PokeControllerApp:
         self.line_notification_start_checkbox_tooltip = ToolTip(self.line_notification_start_checkbox, "自動化スクリプト実行開始時にLineで通知をします")
         self.line_notification_end_checkbox_tooltip = ToolTip(self.line_notification_end_checkbox, "自動化スクリプト実行終了時にLineで通知をします")
         self.send_line_button_tooltip = ToolTip(self.send_line_button, "Lineでテストメッセージを送信します")
+        self.discord_notification_start_checkbox_tooltip = ToolTip(self.discord_notification_start_checkbox, "自動化スクリプト実行開始時にDiscordで通知をします")
+        self.discord_notification_end_checkbox_tooltip = ToolTip(self.discord_notification_end_checkbox, "自動化スクリプト実行終了時にDiscordで通知をします")
+        self.send_discord_button_tooltip = ToolTip(self.send_discord_button, "Discordでテストメッセージを送信します")
         self.area_size_scale_tooltip = ToolTip(self.area_size_scale, "output(#1)(上側)とoutput(#2)(下側)の比率を調整します")
         self.stdout_destination_1_rb_tooltip = ToolTip(self.stdout_destination_1_rb, "標準出力先にoutput(#1)(上側)を設定します")
         self.stdout_destination_2_rb_tooltip = ToolTip(self.stdout_destination_2_rb, "標準出力先にoutput(#2)(下側)を設定します")
@@ -710,7 +750,10 @@ class PokeControllerApp:
         self.outputs_text_area_2_clear_button_tooltip = ToolTip(self.outputs_text_area_2_clear_button, "output(#2)(下側)をクリアします")
         self.select_right_frame_widget_cb_tooltip = ToolTip(self.select_right_frame_widget_cb, "右側に表示するウィジェットの種類を設定します")
         self.pos_top_rb_tooltip = ToolTip(self.pos_top_rb, "Software-Controllerを上側に表示します")
-        self.pos_bottom_rb_tooltip = ToolTip(self.pos_bottom_rb, "Software-Controllerを上側に表示します")
+        self.pos_bottom_rb_tooltip = ToolTip(self.pos_bottom_rb, "Software-Controllerを下側に表示します")
+        self.pos_dialogue_top_rb_tooltip = ToolTip(self.pos_dialogue_top_rb, "ダイアログ起動時におけるOK/Cancelボタンを上側に表示します")
+        self.pos_dialogue_bottom_rb_tooltip = ToolTip(self.pos_dialogue_bottom_rb, "ダイアログ起動時におけるOK/Cancelボタンを下側に表示します")
+        self.pos_dialogue_both_rb_tooltip = ToolTip(self.pos_dialogue_both_rb, "ダイアログ起動時におけるOK/Cancelボタンを上下両方に表示します")
         # self.text_area_1_tooltip = ToolTip(self.text_area_1, "output(#1)")
         # self.text_area_2_tooltip = ToolTip(self.text_area_2, "output(#2)")
 
@@ -744,6 +787,8 @@ class PokeControllerApp:
             Settings.GuiSettings.SETTING_PATH = setting_path
             line_token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', profile, 'line_token.ini')
             Line_Notify.LINE_TOKEN_PATH = line_token_path
+            discord_setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', profile, 'discord_token.ini')
+            Discord_Notify.DISCORD_SETTING_PATH = discord_setting_path
             token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', profile, 'external_token.ini')
             SocketCommunications.SOCKET_TOKEN_PATH = token_path
             MQTTCommunications.MQTT_TOKEN_PATH = token_path
@@ -799,10 +844,13 @@ class PokeControllerApp:
         self.is_win_notification_end.set(self.settings.is_win_notification_end.get())
         self.is_line_notification_start.set(self.settings.is_line_notification_start.get())
         self.is_line_notification_end.set(self.settings.is_line_notification_end.get())
+        self.is_discord_notification_start.set(self.settings.is_discord_notification_start.get())
+        self.is_discord_notification_end.set(self.settings.is_discord_notification_end.get())
         self.area_size.set(self.settings.area_size)
         self.stdout_destination.set(self.settings.stdout_destination)
         self.right_frame_widget_mode.set(self.settings.right_frame_widget_mode)
         self.pos_software_controller.set(self.settings.pos_software_controller)
+        self.pos_dialogue_buttons.set(self.settings.pos_dialogue_buttons)
 
         # Shortcutボタンに名称とtooltipを設定する
         self.shortcut_1.set(self.shortcut_command_name[1][:8])
@@ -844,6 +892,9 @@ class PokeControllerApp:
 
         # Notificationの設定を反映する
         self.mode_change_notification()
+
+        # ダイアログのOK/NGのボタンの位置を設定する
+        self.change_buttons_position()
 
         if platform.system() == 'Windows' or platform.system() == 'Darwin':
             try:
@@ -1064,14 +1115,19 @@ class PokeControllerApp:
     def sendWinNotfication(self):
         global flag_import_plyer
         if flag_import_plyer:
-            notification.notify(title=f'{NAME} {VERSION} (profile:{self.profile})', message="Notification Test", timeout=5)
+            notification.notify(title=f'{Constant.NAME} ver.{Constant.VERSION} (profile:{self.profile})', message="Notification Test", timeout=5)
         else:
             print('"plyer" is not installed.')
 
     def sendLineImage(self):
         self.Line = Line_Notify()
         src = self.camera.readFrame()
-        self.Line.send_message("***Manual****", src, 'token')
+        self.Line.send_message("---Manual---", src, 'token')
+
+    def sendDiscordImage(self):
+        self.Discord = Discord_Notify()
+        src = self.camera.readFrame()
+        self.Discord.send_message(notification_message="---Manual---", image=src)
 
     def OpenCommandDir(self):
         if self.command_nb.index("current") == 1:
@@ -1226,6 +1282,11 @@ class PokeControllerApp:
         Command.isWinNotEnd = self.is_win_notification_end.get()
         Command.isLineNotStart = self.is_line_notification_start.get()
         Command.isLineNotEnd = self.is_line_notification_end.get()
+        Command.isDiscordNotStart = self.is_discord_notification_start.get()
+        Command.isDiscordNotEnd = self.is_discord_notification_end.get()
+
+    def change_buttons_position(self, *event):
+        Command.pos_dialogue_buttons = self.pos_dialogue_buttons.get()
 
     def mode_change_Pro_Controller(self):
         if self.is_use_Pro_Controller.get():    # Proconでの操作を有効化する。
@@ -1440,8 +1501,12 @@ class PokeControllerApp:
             pass
         if note.tab(note.select(), "text") == "Shortcut":
             self.shortcut_set_button["state"] = 'disabled'
+            self.py_cb['values'] = self.py_cb_all
+            self.mcu_cb['values'] = self.mcu_cb_all
         else:
             self.shortcut_set_button["state"] = 'normal'
+            self.applyFilterPy()
+            self.applyFilterMcu()
 
     def reloadCommands(self):
         # 表示しているタブを読み取って、どのコマンドを表示しているか取得、リロード後もそれが選択されるようにする
@@ -1667,10 +1732,13 @@ class PokeControllerApp:
             self.settings.is_win_notification_end.set(self.is_win_notification_end.get())
             self.settings.is_line_notification_start.set(self.is_line_notification_start.get())
             self.settings.is_line_notification_end.set(self.is_line_notification_end.get())
+            self.settings.is_discord_notification_start.set(self.is_discord_notification_start.get())
+            self.settings.is_discord_notification_end.set(self.is_discord_notification_end.get())
             self.settings.area_size = self.area_size.get()
             self.settings.stdout_destination = self.stdout_destination.get()
             self.settings.right_frame_widget_mode = self.right_frame_widget_mode.get()
             self.settings.pos_software_controller = self.pos_software_controller.get()
+            self.settings.pos_dialogue_buttons = self.pos_dialogue_buttons.get()
 
             self.settings.save()
 

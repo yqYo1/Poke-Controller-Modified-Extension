@@ -5,9 +5,9 @@ from time import sleep
 
 from . import CommandBase
 import numpy as np
-from .Keys import Button, Hat, KeyPress, Direction, Stick
+from .Keys import KeyPress, Direction, Stick
 
-from logging import Formatter, handlers, StreamHandler, getLogger, DEBUG
+from logging import getLogger  # , Formatter, handlers, StreamHandler, DEBUG
 
 # Single button command
 
@@ -63,8 +63,8 @@ class StickLeft(StickCommand):
 
     def LStick(self, angle, r=1.0, duration=0.015):
         self.ser.writeRow(
-            f'3 8 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))} 80 80',
-            is_show=False
+            f"3 8 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))} 80 80",
+            is_show=False,
         )
         # self.stick(Direction(Stick.LEFT, angle, r, showName=f'Angle={angle},r={r}'), duration=duration, wait=0)
 
@@ -86,8 +86,8 @@ class StickRight(StickCommand):
 
     def RStick(self, angle, r=1.0, duration=0.015):
         self.key.ser.writeRow(
-            f'3 8 80 80 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))}',
-            is_show=False
+            f"3 8 80 80 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))}",
+            is_show=False,
         )
 
     def end(self, ser):

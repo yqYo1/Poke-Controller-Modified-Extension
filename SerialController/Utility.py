@@ -16,13 +16,13 @@ logger.propagate = True
 
 
 def ospath(path):
-    return path.replace('/', os.sep)
+    return path.replace("/", os.sep)
 
 
 # Show all file names under the directory
-def browseFileNames(path='.', ext='', recursive=True, name_only=True):
-    search_path = join(path, '**') if recursive else path
-    search_path = join(search_path, '*' + ext)
+def browseFileNames(path=".", ext="", recursive=True, name_only=True):
+    search_path = join(path, "**") if recursive else path
+    search_path = join(search_path, "*" + ext)
 
     if name_only:
         return [relpath(f, path) for f in glob(search_path, recursive=recursive)]
@@ -38,8 +38,8 @@ def getClassesInModule(module):
 
 
 def getModuleNames(base_path):
-    filenames = browseFileNames(path=base_path, ext='.py', name_only=False)
-    return [name[:-3].replace(os.sep, '.') for name in filenames]
+    filenames = browseFileNames(path=base_path, ext=".py", name_only=False)
+    return [name[:-3].replace(os.sep, ".") for name in filenames]
 
 
 def importAllModules(base_path, mod_names=None):

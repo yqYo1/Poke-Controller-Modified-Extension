@@ -6,7 +6,7 @@ import argparse
 import os
 import shutil
 from git import Repo, GitCommandError
-import datetime
+from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox
 import webbrowser
@@ -40,7 +40,7 @@ class PokeConUpdateCheck(object):
             else:
                 print("リポジトリに更新があります。")
                 return "1"
-        except:
+        except Exception:
             print("リポジトリにアクセスできませんでした。")
             return "-1"
 
@@ -55,7 +55,9 @@ class PokeConUpdateCheck(object):
             error_output = e.stderr
             print(e)
             if "Your local changes to the following files would be overwritten by merge" in error_output:
-                start_index = error_output.index("Your local changes to the following files would be overwritten by merge")
+                start_index = error_output.index(
+                    "Your local changes to the following files would be overwritten by merge"
+                )
                 end_index = error_output.index("Please commit your changes or stash them before you merge.")
                 conflicting_files_text = error_output[start_index:end_index].splitlines()[1:]
                 conflicting_files = [file.strip() for file in conflicting_files_text]
@@ -67,14 +69,13 @@ class PokeConUpdateCheck(object):
         try:
             repo.git.pull()
             print("更新完了")
-        except:
+        except Exception:
             pass
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='Switch/GC automation support software using Python')
-    parser.add_argument('--msgbox', '-m', help='show_msgbox', action="store_true")
+    parser = argparse.ArgumentParser(description="Switch/GC automation support software using Python")
+    parser.add_argument("--msgbox", "-m", help="show_msgbox", action="store_true")
     args = parser.parse_args()
 
     root = tk.Tk()
@@ -87,23 +88,24 @@ if __name__ == "__main__":
         res_check = PokeConUpdateCheck().check_repository_updates()
         if res_check == "0":
             if args.msgbox:
-                res = tk.messagebox.showinfo(title="更新確認", message="更新はありませんでした。")
+                res = messagebox.showinfo(title="更新確認", message="更新はありませんでした。")
         elif res_check == "1":
-            txt = '【注意1】\n'\
-                '以下のディレクトリ内のファイルは更新されません。\n'\
-                '・PythonCommands (Samplesディレクトリを除く)\n'\
-                '・Template (Samplesディレクトリを除く)\n'\
-                '・Captures\n'\
-                '・Controller_Log\n'\
-                '・profiles\n'\
-                '【注意2】\n'\
-                '更新対象のファイルのうちユーザーが手動で更新したファイルはoldディレクトリに移動されます。'
-            res_update = messagebox.askyesno(title="更新確認", message="最新版が公開されています。更新しますか?", detail=txt)
-            if res_update:
+            txt = (
+                "【注意1】\n"
+                "以下のディレクトリ内のファイルは更新されません。\n"
+                "・PythonCommands (Samplesディレクトリを除く)\n"
+                "・Template (Samplesディレクトリを除く)\n"
+                "・Captures\n"
+                "・Controller_Log\n"
+                "・profiles\n"
+                "【注意2】\n"
+                "更新対象のファイルのうちユーザーが手動で更新したファイルはoldディレクトリに移動されます。"
+            )
+            if messagebox.askyesno(title="更新確認", message="最新版が公開されています。更新しますか?", detail=txt):
                 try:
                     conflicting_files = PokeConUpdateCheck().get_conflicting_files()
                     if len(conflicting_files) > 0:
-                        pathname = os.path.join("old", datetime.datetime.today().strftime("%Y%m%d%H%M%S"))
+                        pathname = os.path.join("old", datetime.today().strftime("%Y%m%d%H%M%S"))
                         os.makedirs(pathname)
                         for i in conflicting_files:
                             filename = os.path.join(pathname, os.path.basename(i))
@@ -111,10 +113,13 @@ if __name__ == "__main__":
                             if os.path.exists(filename):
                                 os.remove(i)
                         PokeConUpdateCheck().git_pull()
-                    tk.messagebox.showinfo(title="更新確認", message="更新が完了しました。")
-                except:
-                    tk.messagebox.showerror(title="更新確認", message="更新に失敗しました。\手動でgithubから必要なファイルをダウンロードしてください。")
+                    messagebox.showinfo(title="更新確認", message="更新が完了しました。")
+                except Exception:
+                    messagebox.showerror(
+                        title="更新確認",
+                        message="更新に失敗しました。\手動でgithubから必要なファイルをダウンロードしてください。",
+                    )
                     webbrowser.open("https://github.com/futo030/Poke-Controller-Modified-Extension", 2)
         else:
             if args.msgbox:
-                res = tk.messagebox.showwarning(title="更新確認", message="確認できませんでした。")
+                res = messagebox.showwarning(title="更新確認", message="確認できませんでした。")

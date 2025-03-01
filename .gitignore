@@ -21,6 +21,8 @@ SerialController/Controller_Log/
 SerialController/log/
 SerialController/settings.poke
 SerialController/Commands/PythonCommands/*
+!SerialController/Commands/PythonCommands/bridge_functions/
+!SerialController/Commands/PythonCommands/bridge_functions/*
 !SerialController/Commands/PythonCommands/Samples/
 !SerialController/Commands/PythonCommands/ImageProcessingOnly/
 SerialController/Commands/PythonCommands/ImageProcessingOnly/*

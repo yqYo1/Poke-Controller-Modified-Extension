@@ -1,3 +1,7 @@
+■ver.0.1.2
+  ・橋渡し関数(bridge_functions)追加
+    ・Poke-Controller ModifiedとPoke-Controller Modified Extensionの橋渡し関数を追加
+
 ■ver.0.1.1
   ・print機能拡張
     ・print関数の入力をobjectに変更し、sepおよびendを設定する機能を追加

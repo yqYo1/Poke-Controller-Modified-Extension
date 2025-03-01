@@ -1,3 +1,7 @@
+■ver.0.1.3
+  ・UnitCommand.py更新
+    ・開発中の機能を削除
+
 ■ver.0.1.2
   ・橋渡し関数(bridge_functions)追加
     ・Poke-Controller ModifiedとPoke-Controller Modified Extensionの橋渡し関数を追加

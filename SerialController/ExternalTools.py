@@ -7,12 +7,14 @@ import os
 import time
 import socket
 import datetime
+
 try:
     import paho.mqtt
     import paho.mqtt.client as mqtt
+
     print(f"paho-mqtt {paho.mqtt.__version__} is installed. You can use MQTTCommunications class.")
     isMQTT = True
-except:
+except Exception:
     print("paho-mqtt is not installed. You can't use MQTTCommunications class.")
     isMQTT = False
 
@@ -21,19 +23,11 @@ def generate_token_file(filename):
     dirname = os.path.dirname(filename)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
-        print(f'mkdir: \'{dirname}\'')
-    token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
-    token_file['SOCKET'] = {
-        'addr': '127.0.0.1',
-        'port': '49152'
-    }
-    token_file['MQTT'] = {
-        'broker_address': '',
-        'id': '',
-        'fullaccess_token': '',
-        'readonly_token': ''
-    }
-    with open(filename, 'w', encoding='utf-8') as file:
+        print(f"mkdir: '{dirname}'")
+    token_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
+    token_file["SOCKET"] = {"addr": "127.0.0.1", "port": "49152"}
+    token_file["MQTT"] = {"broker_address": "", "id": "", "fullaccess_token": "", "readonly_token": ""}
+    with open(filename, "w", encoding="utf-8") as file:
         token_file.write(file)
     os.chmod(path=filename, mode=0o777)
     print("Generate external token file")
@@ -41,7 +35,7 @@ def generate_token_file(filename):
 
 # socket通信用class
 class SocketCommunications:
-    SOCKET_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
+    SOCKET_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "external_token.ini")
 
     def __init__(self):
         """
@@ -53,13 +47,13 @@ class SocketCommunications:
         self.flag_socket = False
 
         # SOCKET設定
-        self.token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+        self.token_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
         self.open_file_with_utf8()
-        token_list = {key: self.token_file['SOCKET'][key] for key in self.token_file['SOCKET']}
+        token_list = {key: self.token_file["SOCKET"][key] for key in self.token_file["SOCKET"]}
         # token_num = len(token_list)
 
-        self.IPADDR = token_list['addr']
-        self.PORT = int(token_list['port'])
+        self.IPADDR = token_list["addr"]
+        self.PORT = int(token_list["port"])
 
     def open_file_with_utf8(self):  # line_notify.pyからの流用
         """
@@ -71,7 +65,7 @@ class SocketCommunications:
 
         is_with_bom = self.is_utf8_file_with_bom(self.SOCKET_TOKEN_PATH)
 
-        encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
+        encoding = "utf-8-sig" if is_with_bom else "utf-8"
         self.token_file.read(self.SOCKET_TOKEN_PATH, encoding)
 
     def is_utf8_file_with_bom(self, filename):  # line_notify.pyからの流用
@@ -80,8 +74,8 @@ class SocketCommunications:
         return:なし
         filename|str:ファイル名
         """
-        socket_first = open(filename, encoding='utf-8').readline()
-        return socket_first[0] == '\ufeff'
+        socket_first = open(filename, encoding="utf-8").readline()
+        return socket_first[0] == "\ufeff"
 
     def change_ipaddr(self, addr):
         """
@@ -107,7 +101,7 @@ class SocketCommunications:
         try:
             self.sock = socket.socket(socket.AF_INET)
             self.sock.connect((self.IPADDR, self.PORT))
-            self.sock.settimeout(3.0)   # タイムアウト時間
+            self.sock.settimeout(3.0)  # タイムアウト時間
             self.flag_socket = True
         except ConnectionRefusedError:
             print("[error]serverが起動されていません")
@@ -151,11 +145,11 @@ class SocketCommunications:
                 message = data.decode("utf-8")
 
                 # 先頭の文字列がheaderと一致するかを確認する
-                if message[0:len(header)] == header:
+                if message[0 : len(header)] == header:
                     print(f"[socket:recv]:{message}")
                     output = message
                     break
-                elif show_msg == True:  # ログ出力
+                elif show_msg:  # ログ出力
                     print(f"[socket:recv]:{message}")
                 if not self.alive:
                     break
@@ -203,12 +197,12 @@ class SocketCommunications:
 
                 # messageとheaderlist内の先頭の文字列が一致するかを確認する
                 for header in headerlist:
-                    if message[0:len(header)] == header:
+                    if message[0 : len(header)] == header:
                         print(f"[socket:recv]:{message}")
                         output = message
-                if output != None:
+                if output:
                     break
-                if show_msg == True:  # ログ出力
+                if show_msg:  # ログ出力
                     print(f"[socket:recv]:{message}")
                 if not self.alive:
                     break
@@ -247,7 +241,7 @@ receive_msg = None
 
 # MQTT通信用class
 class MQTTCommunications:
-    MQTT_TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'profiles', 'default', 'external_token.ini')
+    MQTT_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "external_token.ini")
 
     def __init__(self, clientId):
         """
@@ -259,15 +253,15 @@ class MQTTCommunications:
         self.alive = False
 
         # MQTT設定
-        self.token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+        self.token_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
         self.open_file_with_utf8()
-        token_list = {key: self.token_file['MQTT'][key] for key in self.token_file['MQTT']}
+        token_list = {key: self.token_file["MQTT"][key] for key in self.token_file["MQTT"]}
         # token_num = len(token_list)
 
-        self.broker_address = token_list['broker_address']
-        self.id = token_list['id']
-        fullaccess_token = token_list['fullaccess_token']
-        readonly_token = token_list['readonly_token']
+        self.broker_address = token_list["broker_address"]
+        self.id = token_list["id"]
+        fullaccess_token = token_list["fullaccess_token"]
+        readonly_token = token_list["readonly_token"]
 
         if fullaccess_token != "":
             self.pub_token = fullaccess_token
@@ -283,16 +277,18 @@ class MQTTCommunications:
         self.receive_msg = -1
 
     def exceptiondecorator(func):
-        '''
+        """
         MQTTのライブラリがインストールされていない場合を想定したデコレータです。
         実行した場合にログを出力します。
-        '''
+        """
+
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception as e:
+            except Exception:
                 print("paho-mqtt may not be installed. Please make sure paho-mqtt is installed.")
                 return ""
+
         return wrapper
 
     def open_file_with_utf8(self):  # line_notify.pyからの流用
@@ -305,7 +301,7 @@ class MQTTCommunications:
 
         is_with_bom = self.is_utf8_file_with_bom(self.MQTT_TOKEN_PATH)
 
-        encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
+        encoding = "utf-8-sig" if is_with_bom else "utf-8"
         self.token_file.read(self.MQTT_TOKEN_PATH, encoding)
 
     def is_utf8_file_with_bom(self, filename):  # line_notify.pyからの流用
@@ -314,8 +310,8 @@ class MQTTCommunications:
         return:なし
         filename|str:ファイル名
         """
-        mqtt_first = open(filename, encoding='utf-8').readline()
-        return mqtt_first[0] == '\ufeff'
+        mqtt_first = open(filename, encoding="utf-8").readline()
+        return mqtt_first[0] == "\ufeff"
 
     def change_broker_address(self, broker_address):
         """
@@ -367,7 +363,7 @@ class MQTTCommunications:
         # print(f"ROOM ID: {msg.topic} message: {msg.payload.decode('utf-8')}")
         receive_msg = msg.payload.decode("utf-8")
 
-    @ exceptiondecorator
+    @exceptiondecorator
     def receive_message(self, roomid, header, show_msg=False):
         """
         MQTTを用いて先頭が特定の文字列であるメッセージを受信する
@@ -381,7 +377,7 @@ class MQTTCommunications:
 
         global receive_msg
         output = None
-        header_date = int(datetime.datetime.today().strftime('%Y%m%d%H%M%S%f'))
+        header_date = int(datetime.datetime.today().strftime("%Y%m%d%H%M%S%f"))
         message = -1
 
         # brokerと接続する
@@ -397,29 +393,29 @@ class MQTTCommunications:
                 self.client.loop_start()
                 time.sleep(1.0)
                 self.client.loop_stop()
-                if receive_msg != None:
+                if receive_msg:
                     if header_date < int(receive_msg[1:21]):
                         header_date = int(receive_msg[1:21])
                         message = receive_msg[22:]
                         # 先頭の文字列がheaderと一致するかを確認する
-                        if message[0:len(header)] == header:
+                        if message[0 : len(header)] == header:
                             output = message
                             print(f"[mqtt:recv]:{message}")
                             break
-                        elif show_msg == True:  # ログ出力
+                        elif show_msg:  # ログ出力
                             print(f"[mqtt:recv]:{message}")
 
                 # stop押下時にwhileから抜ける
                 if not self.alive:
                     break
-            except:
+            except Exception:
                 break
 
         self.client.disconnect()
 
         return output
 
-    @ exceptiondecorator
+    @exceptiondecorator
     def receive_message2(self, roomid, headerlist, show_msg=False):
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
@@ -436,7 +432,7 @@ class MQTTCommunications:
 
         global receive_msg
         output = None
-        header_date = int(datetime.datetime.today().strftime('%Y%m%d%H%M%S%f'))
+        header_date = int(datetime.datetime.today().strftime("%Y%m%d%H%M%S%f"))
         message = -1
 
         # brokerと接続する
@@ -452,31 +448,31 @@ class MQTTCommunications:
                 self.client.loop_start()
                 time.sleep(1.0)
                 self.client.loop_stop()
-                if receive_msg != None:
+                if receive_msg:
                     if header_date < int(receive_msg[1:21]):
                         header_date = int(receive_msg[1:21])
                         message = receive_msg[22:]
                         # messageとheaderlist内の先頭の文字列が一致するかを確認する
                         for header in headerlist:
-                            if message[0:len(header)] == header:
+                            if message[0 : len(header)] == header:
                                 output = message
                                 print(f"[mqtt:recv]:{message}")
-                        if output != None:
+                        if output:
                             break
-                        elif show_msg == True:  # ログ出力
+                        elif show_msg:  # ログ出力
                             print(f"[mqtt:recv]:{message}")
 
                 # stop押下時にwhileから抜ける
                 if not self.alive:
                     break
-            except:
+            except Exception:
                 break
 
         self.client.disconnect()
 
         return output
 
-    @ exceptiondecorator
+    @exceptiondecorator
     def transmit_message(self, roomid, message):
         """
         MQTTを用いてメッセージを送信する
@@ -485,8 +481,8 @@ class MQTTCommunications:
         message|str:送信するメッセージ
         """
         # メッセージ更新判定に日時情報を使用する
-        header_date = datetime.datetime.today().strftime('[%Y%m%d%H%M%S%f]')
-        if self.pub_token != None:
+        header_date = datetime.datetime.today().strftime("[%Y%m%d%H%M%S%f]")
+        if self.pub_token:
             self.client = mqtt.Client(self.clientId)
             self.client.username_pw_set(self.id, self.pub_token)
             self.client.connect(self.broker_address, 1883)

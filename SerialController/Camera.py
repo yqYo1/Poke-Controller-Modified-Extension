@@ -22,7 +22,7 @@ def imwrite(filename: str, img: numpy.ndarray, params: int = None):
         result, n = cv2.imencode(ext, img, params)
 
         if result:
-            with open(filename, mode='w+b') as f:
+            with open(filename, mode="w+b") as f:
                 n.tofile(f)
             return True
         else:
@@ -72,7 +72,7 @@ class Camera:
             self._logger.debug("Camera is already opened")
             self.destroy()
 
-        if os.name == 'nt':
+        if os.name == "nt":
             self._logger.debug("NT OS")
             self.camera = cv2.VideoCapture(cameraId, cv2.CAP_DSHOW)
         # self.camera = cv2.VideoCapture(cameraId)
@@ -110,22 +110,16 @@ class Camera:
 
         dt_now = datetime.datetime.now()
         if filename is None or filename == "":
-            filename = dt_now.strftime('%Y-%m-%d_%H-%M-%S') + ".png"
+            filename = dt_now.strftime("%Y-%m-%d_%H-%M-%S") + ".png"
         else:
             filename = filename + ".png"
 
         if crop is None:
             image = self.image_bgr
         elif crop == 1 or crop == "1":
-            image = self.image_bgr[
-                crop_ax[1]:crop_ax[3],
-                crop_ax[0]:crop_ax[2]
-            ]
+            image = self.image_bgr[crop_ax[1] : crop_ax[3], crop_ax[0] : crop_ax[2]]
         elif crop == 2 or crop == "2":
-            image = self.image_bgr[
-                crop_ax[1]:crop_ax[1] + crop_ax[3],
-                crop_ax[0]:crop_ax[0] + crop_ax[2]
-            ]
+            image = self.image_bgr[crop_ax[1] : crop_ax[1] + crop_ax[3], crop_ax[0] : crop_ax[0] + crop_ax[2]]
         elif img is not None:
             image = img
         else:
@@ -141,7 +135,7 @@ class Camera:
         try:
             imwrite(save_path, image)
             self._logger.debug(f"Capture succeeded: {save_path}")
-            print('capture succeeded: ' + save_path)
+            print("capture succeeded: " + save_path)
         except cv2.error as e:
             print("Capture Failed")
             self._logger.error(f"Capture Failed :{e}")

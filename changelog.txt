@@ -1,3 +1,18 @@
+■ver.0.1.1
+  ・print機能拡張
+    ・print関数の入力をobjectに変更し、sepおよびendを設定する機能を追加
+  ・ダイアログ機能バグ修正
+    ・Combo利用時リストの中身が文字列でない場合にエラーが発生する問題を修正
+　・Window.py更新
+    ・マニュアルでのLine/Discord通知を別スレッドで実行するよう修正
+    ・Linux使用時にuseKeyboardが無効化できない問題を修正
+  ・CommandBase.py更新
+    ・print関数の機能追加に伴う修正を実施。保存機能付きダイアログ実行時にフォルダを生成するように修正
+  ・PythonCommandBase.py更新
+    ・プログラム実行開始時のLine/Discord通知を別スレッドで実行するよう修正
+  ・その他
+    ・LinterおよびfomatterとしてRuffを導入し静的解析を実施、修正
+
 ■ver.0.1.0
   ・機能追加/変更
     ・Discordへの通知機能を追加(Discord Webhook)

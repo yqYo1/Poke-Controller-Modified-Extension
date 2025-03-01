@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import cv2
 import tkinter as tk
-import tkinter.ttk as ttk
 from tkinter import messagebox
 import os
 import configparser
@@ -47,26 +46,26 @@ class PokeController_Menubar(tk.Menu):
         self.discord = None
 
         tk.Menu.__init__(self, self.root, **kw)
-        self.menu = tk.Menu(self, tearoff='false')
-        self.menu_command = tk.Menu(self, tearoff='false')
-        self.add(tk.CASCADE, menu=self.menu, label='メニュー')
+        self.menu = tk.Menu(self, tearoff="false")
+        self.menu_command = tk.Menu(self, tearoff="false")
+        self.add(tk.CASCADE, menu=self.menu, label="メニュー")
 
-        self.help = tk.Menu(self, tearoff='false')
-        self.add(tk.CASCADE, menu=self.help, label='ヘルプ')
-        self.help.add('command', label='Github', command=self.OpenGithub)
-        self.help.add('command', label='Poke-Controller Guide', command=self.OpenGuide)
-        self.help.add('command', label='質問テンプレート', command=self.output_question)
-        self.help.add('command', label='Version確認', command=self.CheckVersion)
-        self.help.add('command', label='更新履歴表示', command=self.OpenChangeLog)
-        self.help.add('command', label='アップデート確認', command=self.CheckUpdate)
-        self.help.add('command', label='LICENSE', command=self.OpenLicense)
+        self.help = tk.Menu(self, tearoff="false")
+        self.add(tk.CASCADE, menu=self.help, label="ヘルプ")
+        self.help.add("command", label="Github", command=self.OpenGithub)
+        self.help.add("command", label="Poke-Controller Guide", command=self.OpenGuide)
+        self.help.add("command", label="質問テンプレート", command=self.output_question)
+        self.help.add("command", label="Version確認", command=self.CheckVersion)
+        self.help.add("command", label="更新履歴表示", command=self.OpenChangeLog)
+        self.help.add("command", label="アップデート確認", command=self.CheckUpdate)
+        self.help.add("command", label="LICENSE", command=self.OpenLicense)
 
-        self.menu.add(tk.CASCADE, menu=self.menu_command, label='コマンド')
+        self.menu.add(tk.CASCADE, menu=self.menu_command, label="コマンド")
 
-        self.menu.add('separator')
-        self.menu.add('command', label='設定(dummy)')
+        self.menu.add("separator")
+        self.menu.add("command", label="設定(dummy)")
         # TODO: setup command_id_arg 'false' for menuitem.
-        self.menu.add('command', command=self.exit, label='終了')
+        self.menu.add("command", command=self.exit, label="終了")
 
         self.AssignMenuCommand()
         self.LineTokenSetting()
@@ -76,15 +75,15 @@ class PokeController_Menubar(tk.Menu):
 
     def AssignMenuCommand(self):
         self._logger.debug("Assigning menu command")
-        self.menu_command.add('command', command=self.LineTokenAssignment, label='LINE Token Assignment')
-        self.menu_command.add('command', command=self.LineTokenSetting, label='LINE Token Check')
-        self.menu_command.add('command', command=self.DiscordSettingAssignment, label='Discord Setting Assignment')
-        self.menu_command.add('command', command=self.DiscordSetting, label='Discord Check')
-        self.menu_command.add('command', command=self.GenerateNewBat, label='Generate Bat File & Profile Directory')
+        self.menu_command.add("command", command=self.LineTokenAssignment, label="LINE Token Assignment")
+        self.menu_command.add("command", command=self.LineTokenSetting, label="LINE Token Check")
+        self.menu_command.add("command", command=self.DiscordSettingAssignment, label="Discord Setting Assignment")
+        self.menu_command.add("command", command=self.DiscordSetting, label="Discord Check")
+        self.menu_command.add("command", command=self.GenerateNewBat, label="Generate Bat File & Profile Directory")
         # TODO: setup command_id_arg 'false' for menuitem.
-        self.menu_command.add('command', command=self.OpenPokeHomeCoop, label='Pokemon Home 連携')
-        self.menu_command.add('command', command=self.OpenKeyConfig, label='キーコンフィグ')
-        self.menu_command.add('command', command=self.ResetWindowSize, label='画面サイズのリセット')
+        self.menu_command.add("command", command=self.OpenPokeHomeCoop, label="Pokemon Home 連携")
+        self.menu_command.add("command", command=self.OpenKeyConfig, label="キーコンフィグ")
+        self.menu_command.add("command", command=self.ResetWindowSize, label="画面サイズのリセット")
 
     # TODO: setup command_id_arg 'false' for menuitem.
 
@@ -107,20 +106,20 @@ class PokeController_Menubar(tk.Menu):
         """
         utf-8 ファイルが BOM ありかどうかを判定する
         """
-        line_first = open(filename, encoding='utf-8').readline()
-        return line_first[0] == '\ufeff'
+        line_first = open(filename, encoding="utf-8").readline()
+        return line_first[0] == "\ufeff"
 
     def LineTokenAssignment(self):
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(self.message_dialogue, "Line Token Assignment", "Token").ret_value(list)
         self.message_dialogue = None
         if ret != []:
-            token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile, 'line_token.ini')
-            token_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
-            token_file['LINE'] = {
-                'token': ret[0]
-            }
-            with open(token_path, 'w', encoding='utf-8') as file:
+            token_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "profiles", self.profile, "line_token.ini"
+            )
+            token_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
+            token_file["LINE"] = {"token": ret[0]}
+            with open(token_path, "w", encoding="utf-8") as file:
                 token_file.write(file)
             os.chmod(path=token_path, mode=0o777)
             self._logger.debug("Assign Line Token")
@@ -130,24 +129,28 @@ class PokeController_Menubar(tk.Menu):
 
     def DiscordSettingAssignment(self):
         self.message_dialogue = tk.Toplevel()
-        ret = PokeConDialogue(self.message_dialogue, "Discord Setting Assignment", ["Webhook URL", "Username", "Avatar URL"]).ret_value(list)
+        ret = PokeConDialogue(
+            self.message_dialogue, "Discord Setting Assignment", ["Webhook URL", "Username", "Avatar URL"]
+        ).ret_value(list)
         self.message_dialogue = None
         if not all([i == "" for i in ret]):
-            setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile, 'discord_token.ini')
+            setting_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "profiles", self.profile, "discord_token.ini"
+            )
 
             is_with_bom = self.is_utf8_file_with_bom(setting_path)
-            encoding = 'utf-8-sig' if is_with_bom else 'utf-8'
+            encoding = "utf-8-sig" if is_with_bom else "utf-8"
 
-            setting_file = configparser.ConfigParser(comment_prefixes='#', allow_no_value=True)
+            setting_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
             setting_file.read(setting_path, encoding)
 
             setting_file.read(setting_path, encoding)
-            setting_file['DISCORD_WEBHOOK'] = {
-                'webhook_url': ret[0],
-                'username': ret[1],
-                'avatar_url': ret[2],
+            setting_file["DISCORD_WEBHOOK"] = {
+                "webhook_url": ret[0],
+                "username": ret[1],
+                "avatar_url": ret[2],
             }
-            with open(setting_path, 'w', encoding='utf-8') as file:
+            with open(setting_path, "w", encoding="utf-8") as file:
                 setting_file.write(file)
             os.chmod(path=setting_path, mode=0o777)
             self._logger.debug("Assign Discord Webhook Setting")
@@ -171,26 +174,36 @@ class PokeController_Menubar(tk.Menu):
         try:
             print(self.discord)
             self.discord.getRateLimit()
-        except:
+        except Exception:
             print("DISCORD API Check: N/A")
         self.discord = None
 
     def GenerateNewBat(self):
         self.message_dialogue = tk.Toplevel()
-        ret = PokeConDialogue(self.message_dialogue, "Generate Bat File & Profile Directory", [["Entry", "Profile Name", ""], ["Check", "Copy Profile", True]], mode=1).ret_value(list)
+        ret = PokeConDialogue(
+            self.message_dialogue,
+            "Generate Bat File & Profile Directory",
+            [["Entry", "Profile Name", ""], ["Check", "Copy Profile", True]],
+            mode=1,
+        ).ret_value(list)
         self.message_dialogue = None
         if ret != []:
-            exe_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)), f'ExecutePokeConModified-Extension_{ret[0]}.bat')
+            exe_path = os.path.join(
+                os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)),
+                f"ExecutePokeConModified-Extension_{ret[0]}.bat",
+            )
             if not os.path.exists(exe_path):
-                txt = f'python SerialController/PokeConUpdateChecker.py\ncd SerialController\npython Window.py --profile {ret[0]}\npause\n'
-                with open(exe_path, 'w', encoding='utf-8') as file:
+                txt = f"python SerialController/PokeConUpdateChecker.py\ncd SerialController\npython Window.py --profile {ret[0]}\npause\n"
+                with open(exe_path, "w", encoding="utf-8") as file:
                     file.write(txt)
             else:
                 pass
-            new_profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', ret[0])
+            new_profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles", ret[0])
             if not os.path.exists(new_profile_path):
                 if ret[1]:
-                    current_profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'profiles', self.profile)
+                    current_profile_path = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)), "profiles", self.profile
+                    )
                     shutil.copytree(current_profile_path, new_profile_path)
                 else:
                     pass
@@ -240,7 +253,9 @@ class PokeController_Menubar(tk.Menu):
             if res_check == "0":
                 res = tk.messagebox.showinfo(title="更新確認", message="更新はありませんでした。")
             elif res_check == "1":
-                res = tk.messagebox.showinfo(title="更新確認", message="最新版が公開されています。Githubのページを開きます。")
+                res = tk.messagebox.showinfo(
+                    title="更新確認", message="最新版が公開されています。Githubのページを開きます。"
+                )
                 self.OpenGithub()
             else:
                 res = tk.messagebox.showwarning(title="更新確認", message="確認できませんでした。")
@@ -270,8 +285,8 @@ class PokeController_Menubar(tk.Menu):
         self.master.destroy()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     root = tk.Tk()
     widget = PokeController_Menubar(root)
-    widget.pack(expand=True, fill='both')
+    widget.pack(expand=True, fill="both")
     root.mainloop()

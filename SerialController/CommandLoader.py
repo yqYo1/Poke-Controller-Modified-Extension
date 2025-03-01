@@ -53,20 +53,23 @@ class CommandLoader:
         classes = []
         for mod in self.modules:
             # extract module of having "NAME"
-            class_list = [c for c in util.getClassesInModule(mod)
-                          if issubclass(c, self.base_type) and hasattr(c, 'NAME') and c.NAME]
+            class_list = [
+                c
+                for c in util.getClassesInModule(mod)
+                if issubclass(c, self.base_type) and hasattr(c, "NAME") and c.NAME
+            ]
 
             # make tags of directory name
             for c in class_list:
-                dir_name = '/'.join(mod.__name__.split(".")[2:])
-                dir_tags = ['@'+t for t in mod.__name__.split(".")[2:-1]]
+                dir_name = "/".join(mod.__name__.split(".")[2:])
+                dir_tags = ["@" + t for t in mod.__name__.split(".")[2:-1]]
 
                 # add tags of directory name
-                if hasattr(c, 'TAGS'):
-                    if type(c.TAGS) == list:
+                if hasattr(c, "TAGS"):
+                    if isinstance(c.TAGS, list):
                         logger.debug(f"TAGS name add: {dir_tags}")
                         c.TAGS = c.TAGS + dir_tags
-                    elif type(c.TAGS) == str:
+                    elif isinstance(c.TAGS, str):
                         logger.debug(f"TAGS name add: {dir_tags}")
                         c.TAGS = [c.TAGS] + dir_tags
                     else:
@@ -76,7 +79,7 @@ class CommandLoader:
                     c.TAGS = dir_tags
 
                 # rename NAME
-                c.NAME = f'{c.NAME} ({dir_name})'
+                c.NAME = f"{c.NAME} ({dir_name})"
                 classes.append(c)
 
         return classes

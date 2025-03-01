@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
-'''
+"""
 This code has copied from https://qiita.com/Esfahan/items/275b0f124369ccf8cf18
-'''
+"""
 
-from logging import Formatter, handlers, StreamHandler, getLogger, DEBUG
 import logging
 import datetime as dt
+from logging import Formatter, StreamHandler, getLogger, DEBUG
 
 now = dt.datetime.now()
-time = now.strftime('%Y%m%d-%H%M%S')
+time = now.strftime("%Y%m%d-%H%M%S")
 
 mapping = {
     "TRACE": " trace ]",
@@ -38,7 +36,7 @@ def root_logger():
     logger = getLogger()
 
     # formatterを作成
-    formatter = Formatter('%(asctime)s %(name)s %(funcName)s [%(levelname)s]: %(message)s')
+    formatter = Formatter("%(asctime)s %(name)s %(funcName)s [%(levelname)s]: %(message)s")
 
     # handlerを作成しフォーマッターを設定
     # handler = ColorfulHandler()
@@ -47,8 +45,8 @@ def root_logger():
 
     # ファイルハンドラを作成
     rh = logging.FileHandler(
-        r'./log/log_' + time + '.log',
-        encoding='utf-8',
+        r"./log/log_" + time + ".log",
+        encoding="utf-8",
     )
 
     rh.setFormatter(formatter)

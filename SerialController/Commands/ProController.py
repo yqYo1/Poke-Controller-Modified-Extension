@@ -41,7 +41,7 @@ class ProController:
             12: "DOWN",
             13: "LEFT",
             14: "RIGHT",
-            15: "CAPTURE"
+            15: "CAPTURE",
         }
 
         self.button_dict_shift = {
@@ -60,7 +60,7 @@ class ProController:
             12: 2,
             13: 3,
             14: 1,
-            15: 15
+            15: 15,
         }
 
         self.hat_dict = {
@@ -79,7 +79,7 @@ class ProController:
             12: 5,  # down-left
             13: 8,  # ありえないのでcenterにする
             14: 8,  # ありえないのでcenterにする
-            15: 8  # ありえないのでcenterにする
+            15: 8,  # ありえないのでcenterにする
         }
 
         self.bits_16 = 0
@@ -112,11 +112,14 @@ class ProController:
             self.stick_status_new[0] = self.map_axis(joystick.get_axis(0))
             self.stick_status_new[1] = self.map_axis(joystick.get_axis(1))
         # 古い位置と比較して異なるならビットを立てる
-        if self.stick_status_new[0] == self.stick_status_old[0] and self.stick_status_new[1] == self.stick_status_old[1]:
-            self.bits_16 = (self.bits_16 & ~(2))
+        if (
+            self.stick_status_new[0] == self.stick_status_old[0]
+            and self.stick_status_new[1] == self.stick_status_old[1]
+        ):
+            self.bits_16 = self.bits_16 & ~(2)
         else:
             self.flag_print = True
-            self.bits_16 = (self.bits_16 | 2)
+            self.bits_16 = self.bits_16 | 2
 
         # Rstickの位置を確認する。
         if np.sqrt((joystick.get_axis(2)) ** 2 + (joystick.get_axis(3)) ** 2) < 0.35:
@@ -126,18 +129,26 @@ class ProController:
             self.stick_status_new[2] = self.map_axis(joystick.get_axis(2))
             self.stick_status_new[3] = self.map_axis(joystick.get_axis(3))
         # 古い位置と比較して異なるならビットを立てる
-        if self.stick_status_new[2] == self.stick_status_old[3] and self.stick_status_new[2] == self.stick_status_old[3]:
-            self.bits_16 = (self.bits_16 & ~(1))
+        if (
+            self.stick_status_new[2] == self.stick_status_old[3]
+            and self.stick_status_new[2] == self.stick_status_old[3]
+        ):
+            self.bits_16 = self.bits_16 & ~(1)
         else:
             self.flag_print = True
-            self.bits_16 = (self.bits_16 | 1)
+            self.bits_16 = self.bits_16 | 1
 
         if self.bits_16 & 3 == 1:
             self.stick_bits = " %02x %02x" % (self.stick_status_new[2], self.stick_status_new[3])
         elif self.bits_16 & 3 == 2:
             self.stick_bits = " %02x %02x" % (self.stick_status_new[0], self.stick_status_new[1])
         elif self.bits_16 & 3 == 3:
-            self.stick_bits = " %02x %02x %02x %02x" % (self.stick_status_new[0], self.stick_status_new[1], self.stick_status_new[2], self.stick_status_new[3])
+            self.stick_bits = " %02x %02x %02x %02x" % (
+                self.stick_status_new[0],
+                self.stick_status_new[1],
+                self.stick_status_new[2],
+                self.stick_status_new[3],
+            )
         else:
             self.stick_bits = ""
 
@@ -160,22 +171,22 @@ class ProController:
                     if cnt & 0x1 == 0:
                         self.flag_print = True
                         if self.map_axis(event.dict["value"]) >= 128:
-                            self.bits_16 = (self.bits_16 | (1 << (event.dict["axis"] + 4)))
+                            self.bits_16 = self.bits_16 | (1 << (event.dict["axis"] + 4))
                         else:
-                            self.bits_16 = (self.bits_16 & ~(1 << (event.dict["axis"] + 4)))
+                            self.bits_16 = self.bits_16 & ~(1 << (event.dict["axis"] + 4))
                     cnt += 1
             elif event.type == 1539:
                 self.flag_print = True
                 if event.dict["button"] <= 10 or event.dict["button"] == 15:
-                    self.bits_16 = (self.bits_16 | (1 << self.button_dict_shift[event.dict["button"]]))
+                    self.bits_16 = self.bits_16 | (1 << self.button_dict_shift[event.dict["button"]])
                 else:
-                    self.hat_status = (self.hat_status | (1 << self.button_dict_shift[event.dict["button"]]))
+                    self.hat_status = self.hat_status | (1 << self.button_dict_shift[event.dict["button"]])
             elif event.type == 1540:
                 self.flag_print = True
                 if event.dict["button"] <= 10 or event.dict["button"] == 15:
-                    self.bits_16 = (self.bits_16 & ~(1 << self.button_dict_shift[event.dict["button"]]))
+                    self.bits_16 = self.bits_16 & ~(1 << self.button_dict_shift[event.dict["button"]])
                 else:
-                    self.hat_status = (self.hat_status & ~(1 << self.button_dict_shift[event.dict["button"]]))
+                    self.hat_status = self.hat_status & ~(1 << self.button_dict_shift[event.dict["button"]])
 
     def send_message(self, ser: Sender, flag_record: bool):
         # 送信するバイナリデータ生成
@@ -195,7 +206,7 @@ class ProController:
 
     def record_message(self, flag_force_write: bool):
         # バイナリデータを追加する。
-        message_log = str(self.time0) + "," + self.message + '\n'
+        message_log = str(self.time0) + "," + self.message + "\n"
         self.controller_log.append(message_log)
 
         # バイナリデータが100個たまった or 強制書き込み時
@@ -221,9 +232,9 @@ class ProController:
         joystick.init()
 
         if flag_record:
-            start_time = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
+            start_time = datetime.datetime.today().strftime("%Y%m%d%H%M%S")
             self.filename = ControllerLogDir + "/controller_log_" + start_time + ".txt"
-            self.f = open(self.filename, "w", encoding='UTF-8')
+            self.f = open(self.filename, "w", encoding="UTF-8")
             self._logger.info(f"{self.filename} is opened.")
             print(f"{self.filename} is opened.")
             self.controller_log = []
@@ -243,7 +254,7 @@ class ProController:
                 # シリアルデータの送信
                 self.send_message(ser, flag_record)
                 # print("4")
-        except:
+        except Exception:
             pass
         finally:
             # 終了処理

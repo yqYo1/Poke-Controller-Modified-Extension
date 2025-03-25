@@ -213,7 +213,9 @@ class PokeControllerApp:
         self.baud_rate_label.grid(column="3", padx="5", pady="5", row="0", sticky="ew")
         self.baud_rate_cb = ttk.Combobox(self.settings_lf)
         self.baud_rate = tk.StringVar(value="")
-        self.baud_rate_cb.configure(justify="right", state="readonly", textvariable=self.baud_rate, values="9600 4800")
+        self.baud_rate_cb.configure(
+            justify="right", state="readonly", textvariable=self.baud_rate, values="9600 4800 115200"
+        )
         self.baud_rate_cb.configure(width="6")
         self.baud_rate_cb.grid(column="4", padx="10", pady="5", row="0", sticky="ew")
         self.baud_rate_cb.bind("<<ComboboxSelected>>", self.applyBaudRate, add="")
@@ -248,7 +250,7 @@ class PokeControllerApp:
         self.serial_data_format_name_label = ttk.Label(self.serial_data_lf)
         self.serial_data_format_name_label.configure(anchor="center", text="Data Format: ")
         self.serial_data_format_name_label.grid(column="0", padx="5", pady="5", row="0", sticky="ew")
-        serial_data_format_list = ["Default", "Qingpi"]
+        serial_data_format_list = ["Default", "Qingpi", "3DS Controller"]
         self.serial_data_format_name_cb = ttk.Combobox(self.serial_data_lf)
         self.serial_data_format_name = tk.StringVar(value="Default")
         self.serial_data_format_name_cb.configure(
@@ -1311,11 +1313,17 @@ class PokeControllerApp:
         self.com_port.set(int(re.search(r"COM(\d+)", self.serial_device_name.get()).groups()[0]))
 
     def set_serial_data_format(self, event=None):
-        if self.serial_data_format_name.get() == "Qingpi":
-            KeyPress.flag_qingpi = True
-        else:
-            KeyPress.flag_qingpi = False
+        KeyPress.serial_data_format_name = self.serial_data_format_name.get()
+        self.keys_software_controller.init_hat()
         self.preview.changeRightMouseMode(self.serial_data_format_name.get())
+
+        if self.serial_data_format_name.get() == "3DS Controller":
+            print("ボーレートを強制的に115200に変更します。")
+            self.baud_rate.set("115200")
+        else:
+            print("ボーレートを強制的に9600に変更します。")
+            self.baud_rate.set("9600")
+        self.activateSerial()
 
     def applyFps(self, event=None):
         print("changed FPS to: " + self.fps.get() + " [fps]")

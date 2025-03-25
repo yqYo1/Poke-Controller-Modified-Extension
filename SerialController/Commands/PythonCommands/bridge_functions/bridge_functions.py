@@ -58,6 +58,13 @@ class BridgeFunctions(object):
         if self.is_extension and os.path.isdir(os.path.join(name1, name2)):
             self.commands.setTemplateDir(name1 + "/")
 
+    # Template画像のディレクトリを取得する。
+    def get_template_directory(self) -> str:
+        """
+        テンプレートファイルのディレクトリ指定
+        """
+        return ImageProcPythonCommand.template_path_name if self.is_extension else "./Template/"
+
     # print関数。extension版の場合は関数によって上書きしたり、追記したりすることが可能。
     def bf_print(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
@@ -259,11 +266,11 @@ class BridgeFunctions(object):
 
         text += f"Name: {name}\nDeveloper: {developers}\n"
 
-        if not contributor:
+        if contributor:
             contributors = ", ".join(contributor) if isinstance(contributor, list) else contributor
             text += f"Contributor: {contributors}\n"
 
-        if not description:
+        if description:
             text += f"Description: {description}\n"
 
         text += "---------------------------------------------"

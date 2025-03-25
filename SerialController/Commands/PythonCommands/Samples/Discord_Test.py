@@ -5,7 +5,7 @@ from Commands.PythonCommandBase import ImageProcPythonCommand
 
 
 class DiscordTest(ImageProcPythonCommand):
-    NAME = 'Discord通知テスト'
+    NAME = "Discord通知テスト"
 
     def __init__(self, cam):
         super().__init__(cam)

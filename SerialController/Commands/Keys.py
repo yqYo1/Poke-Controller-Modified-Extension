@@ -15,36 +15,84 @@ if TYPE_CHECKING:
 
 
 class Button(IntFlag):
-    Y = auto()
-    B = auto()
-    A = auto()
-    X = auto()
-    L = auto()
-    R = auto()
-    ZL = auto()
-    ZR = auto()
-    MINUS = auto()
-    PLUS = auto()
-    LCLICK = auto()
-    RCLICK = auto()
-    HOME = auto()
-    CAPTURE = auto()
-    SELECT = MINUS  # for 3DS
-    START = PLUS  # for 3DS
-    POWER = LCLICK  # for 3DS
-    WIRELESS = RCLICK  # for 3DS
+    Y = auto()  # 1
+    B = auto()  # 2
+    A = auto()  # 3
+    X = auto()  # 4
+    L = auto()  # 5
+    R = auto()  # 6
+    ZL = auto()  # 7
+    ZR = auto()  # 8
+    MINUS = auto()  # 9
+    PLUS = auto()  # 10
+    LCLICK = auto()  # 11
+    RCLICK = auto()  # 12
+    HOME = auto()  # 13
+    CAPTURE = auto()  # 14
+    SELECT = MINUS  # for 3DS, 9
+    START = PLUS  # for 3DS, 10
+    POWER = LCLICK  # for 3DS, 11
+    WIRELESS = RCLICK  # for 3DS, 12
+
+
+# 3DS Controller用にビット位置を並び替えるためのdict
+conversion_default_button = {
+    Button.Y: Button.Y,
+    Button.B: Button.B,
+    Button.A: Button.A,
+    Button.X: Button.X,
+    Button.L: Button.L,
+    Button.R: Button.R,
+    Button.ZL: Button.ZL,
+    Button.ZR: Button.ZR,
+    Button.MINUS: Button.MINUS,
+    Button.PLUS: Button.PLUS,
+    Button.LCLICK: Button.LCLICK,
+    Button.RCLICK: Button.RCLICK,
+    Button.HOME: Button.HOME,
+    Button.CAPTURE: Button.CAPTURE,
+    Button.SELECT: Button.SELECT,
+    Button.START: Button.START,
+    Button.POWER: Button.POWER,
+    Button.WIRELESS: Button.WIRELESS,
+}
+
+conversion_3ds_controller_button = {
+    Button.A: 1,
+    Button.B: 2,
+    Button.X: 4,
+    Button.Y: 8,
+    Button.L: 16,
+    Button.R: 32,
+    Button.HOME: 64,
+    Button.START: 128,
+    Button.SELECT: 256,
+    Button.POWER: 512,
+    Button.MINUS: 256,
+    Button.PLUS: 128,
+    Button.LCLICK: 512,
+    Button.RCLICK: 0,
+    Button.ZL: 0,
+    Button.ZR: 0,
+    Button.CAPTURE: 0,
+    Button.WIRELESS: 0,
+}
 
 
 class Hat(IntEnum):
-    TOP = 0
+    TOP = 0  # 8
     TOP_RIGHT = 1
-    RIGHT = 2
+    RIGHT = 2  # 4
     BTM_RIGHT = 3
-    BTM = 4
+    BTM = 4  # 2
     BTM_LEFT = 5
-    LEFT = 6
+    LEFT = 6  # 1
     TOP_LEFT = 7
-    CENTER = 8
+    CENTER = 8  # 0
+
+
+convert_hat_default = range(0, 9)
+convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
 
 
 class Stick(Enum):
@@ -95,44 +143,44 @@ class SendFormat:
         self.R_stick_changed = False
         self.Hat_pos = Hat.CENTER
 
-    def setButton(self, btns):
+    def setButton(self, btns, convert=conversion_default_button):
         for btn in btns:
-            self.format["btn"] |= btn
+            self.format["btn"] |= convert[btn]
 
-    def unsetButton(self, btns):
+    def unsetButton(self, btns, convert=conversion_default_button):
         for btn in btns:
-            self.format["btn"] &= ~btn
+            self.format["btn"] &= ~convert[btn]
 
     def resetAllButtons(self):
         self.format["btn"] = 0
 
-    def setHat(self, btns):
+    def setHat(self, btns, convert=convert_hat_default):
         # self._logger.debug(btns)
         if not btns:
             self.format["hat"] = self.Hat_pos
         else:
-            self.Hat_pos = btns[0]
-            self.format["hat"] = btns[0]  # takes only first element
+            self.Hat_pos = convert[btns[0]]
+            self.format["hat"] = convert[btns[0]]  # takes only first element
 
-    def unsetHat(self):
+    def unsetHat(self, convert=convert_hat_default):
         # if self.Hat_pos is not Hat.CENTER:
-        self.Hat_pos = Hat.CENTER
+        self.Hat_pos = convert[Hat.CENTER]
         self.format["hat"] = self.Hat_pos
 
-    def setAnyDirection(self, dirs):
+    def setAnyDirection(self, dirs, x_reverse=False, y_reverse=False):
         for dir in dirs:
             if dir.stick == Stick.LEFT:
                 if self.format["lx"] != dir.x or self.format["ly"] != 255 - dir.y:
                     self.L_stick_changed = True
 
-                self.format["lx"] = dir.x
-                self.format["ly"] = 255 - dir.y  # NOTE: y axis directs under
+                self.format["lx"] = dir.x if not x_reverse else 255 - dir.x
+                self.format["ly"] = 255 - dir.y if not y_reverse else dir.y  # NOTE: y axis directs under
             elif dir.stick == Stick.RIGHT:
                 if self.format["rx"] != dir.x or self.format["ry"] != 255 - dir.y:
                     self.R_stick_changed = True
 
-                self.format["rx"] = dir.x
-                self.format["ry"] = 255 - dir.y
+                self.format["rx"] = dir.x if not x_reverse else 255 - dir.x
+                self.format["ry"] = 255 - dir.y if not y_reverse else dir.y
 
     def unsetDirection(self, dirs):
         if Tilt.UP in dirs or Tilt.DOWN in dirs:
@@ -236,6 +284,29 @@ class SendFormat:
             send_touch_x & 0xFF,
             (send_touch_x >> 8) & 0xFF,
             send_touch_y,
+        ]
+
+        return state
+
+    def convert2list2(self):
+        """
+        For 3DS Controller
+        """
+        header = 0xA1  # fixed value
+        send_btn = int(self.format["btn"])
+        send_hat = convert_hat_3ds_controller[int(self.format["hat"])]
+
+        header2 = 0xA2  # fixed value
+        send_lx = self.format["lx"] if self.format["lx"] >= 128 else 127 - self.format["lx"]
+        send_ly = self.format["ly"] if self.format["ly"] >= 128 else 127 - self.format["ly"]
+
+        state = [
+            header,
+            ((send_btn & 0xF) << 4) | send_hat,
+            (send_btn >> 4) & 0x3F,
+            header2,
+            send_lx,
+            send_ly,
         ]
 
         return state
@@ -355,7 +426,7 @@ class Touchscreen:
 
 
 class KeyPress:
-    flag_qingpi = False
+    serial_data_format_name = "Default"
 
     def __init__(self, ser: Sender):
         self._logger = getLogger(__name__)
@@ -381,6 +452,9 @@ class KeyPress:
         self.inputEnd_time_0 = time.perf_counter()
         self.was_neutral = True
 
+    def init_hat(self):
+        pass
+
     def input(self, btns: Button | Hat | Stick | Direction, ifPrint=True):
         self._pushing = dict(self.format.format)
         if not isinstance(btns, list):
@@ -389,15 +463,22 @@ class KeyPress:
         for btn in self.holdButton:
             if btn not in btns:
                 btns.append(btn)
-
-        self.format.setButton([btn for btn in btns if type(btn) is Button])
-        self.format.setHat([btn for btn in btns if type(btn) is Hat])
-        self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
-        if self.flag_qingpi:
-            self.format.setTouchscreen([btn for btn in btns if type(btn) is Touchscreen])
-            self.ser.writeList(self.format.convert2list())
+        if self.serial_data_format_name == "3DS Controller":
+            self.format.setButton(
+                [btn for btn in btns if type(btn) is Button], convert=conversion_3ds_controller_button
+            )
+            self.format.setHat([btn for btn in btns if type(btn) is Hat])
+            self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
+            self.ser.writeList(self.format.convert2list2())
         else:
-            self.ser.writeRow(self.format.convert2str())
+            self.format.setButton([btn for btn in btns if type(btn) is Button])
+            self.format.setHat([btn for btn in btns if type(btn) is Hat])
+            self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
+            if self.serial_data_format_name == "Qingpi":
+                self.format.setTouchscreen([btn for btn in btns if type(btn) is Touchscreen])
+                self.ser.writeList(self.format.convert2list())
+            else:
+                self.ser.writeRow(self.format.convert2str())
         self.input_time_0 = time.perf_counter()
 
         # self._logger.debug(f": {list(map(str,self.format.format.values()))}")
@@ -419,16 +500,25 @@ class KeyPress:
                 tilts.append(tilting)
         # self._logger.debug(tilts)
 
-        self.format.unsetButton([btn for btn in btns if type(btn) is Button])
-        if unset_hat:
-            self.format.unsetHat()
-        self.format.unsetDirection(tilts)
-        if self.flag_qingpi:
-            if unset_Touchscreen or (True in [btn for btn in btns if type(btn) is Touchscreen]):
-                self.format.unsetTouchscreen()
-            self.ser.writeList(self.format.convert2list())
+        if self.serial_data_format_name == "3DS Controller":
+            self.format.unsetButton(
+                [btn for btn in btns if type(btn) is Button], convert=conversion_3ds_controller_button
+            )
+            if unset_hat:
+                self.format.unsetHat()
+            self.format.unsetDirection(tilts)
+            self.ser.writeList(self.format.convert2list2())
         else:
-            self.ser.writeRow(self.format.convert2str())
+            self.format.unsetButton([btn for btn in btns if type(btn) is Button])
+            if unset_hat:
+                self.format.unsetHat()
+            self.format.unsetDirection(tilts)
+            if self.serial_data_format_name == "Qingpi":
+                if unset_Touchscreen or (True in [btn for btn in btns if type(btn) is Touchscreen]):
+                    self.format.unsetTouchscreen()
+                self.ser.writeList(self.format.convert2list())
+            else:
+                self.ser.writeRow(self.format.convert2str())
 
     def hold(self, btns: Button | Hat | Stick | Direction):
         if not isinstance(btns, list):
@@ -474,7 +564,7 @@ class KeyPress:
         self.inputEnd(btns, unset_hat=True, unset_Touchscreen=True)
 
     def end(self):
-        if self.flag_qingpi:
+        if self.serial_data_format_name in ["Qingpi", "3DS Controller"]:
             pass
         else:
             self.ser.writeRow("end")

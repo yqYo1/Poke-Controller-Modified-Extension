@@ -117,6 +117,7 @@ class PythonCommand(CommandBase.Command):
         """
         if self.keys is None:
             self.keys = KeyPress(ser)
+            self.keys.init_hat()
 
         global flag_import_plyer
         try:
@@ -155,6 +156,7 @@ class PythonCommand(CommandBase.Command):
         except Exception as e:
             if self.keys is None:
                 self.keys = KeyPress(ser)
+                self.keys.init_hat()
             print("Interrupt:cmd(黒い画面)を確認してください。")
             print(e)
             self._logger.warning("Command stopped unexpectedly")

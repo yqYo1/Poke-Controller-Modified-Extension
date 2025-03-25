@@ -1,3 +1,12 @@
+■ver.0.1.4
+  ・機能追加
+    ・3DS Controller対応フォーマットでのシリアルデータ送信機能追加
+    ・橋渡し関数(bridge_functions)をver.0.0.2に差し替え
+  ・Window.py/Keys.py/PythonCommnadBase.py更新
+    ・3DS Controller対応のための修正を実施
+　・Sender.py更新
+    ・LinterおよびfomatterとしてRuffを導入し静的解析を実施、修正
+
 ■ver.0.1.3
   ・UnitCommand.py更新
     ・開発中の機能を削除

@@ -1,3 +1,9 @@
+■ver.0.1.5
+  ・互換性保持を目的とする修正
+    ・Discord通知機能におけるModified版との互換性保持のための修正を実施
+　・PythonCommandBase.py更新
+    ・Discord通知機能の関数名および引数名を修正
+
 ■ver.0.1.4
   ・機能追加
     ・3DS Controller対応フォーマットでのシリアルデータ送信機能追加

@@ -57,7 +57,7 @@
   - Qingpiに対応(ver.0.0.6)
     - Qingpi(3DS自動化基板)に対応。(※タッチスクリーン対応。)
   - Discordへの通知機能(ver.0.1.0)
-    - Discord Webhookを利用したDiscordへの通知機能を追加
+    - Discord Webhookを利用したDiscordへの通知機能を追加(Modified版でも後日追加)
   - 保存機能付きダイアログ機能(ver.0.1.0)
     - 前回起動時/保存した値を呼び出すダイアログ機能を追加
   - 3DS Controllerに対応(ver.0.1.4)

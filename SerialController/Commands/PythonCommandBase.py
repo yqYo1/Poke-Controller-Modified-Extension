@@ -134,7 +134,7 @@ class PythonCommand(CommandBase.Command):
                 if self.isLineNotStart:
                     self.LINE_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.")
                 if self.isDiscordNotStart:
-                    self.Discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.")
+                    self.discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.")
                 self.do()
                 self.finish()
         except StopThread:
@@ -152,7 +152,7 @@ class PythonCommand(CommandBase.Command):
             if self.isLineNotEnd:
                 self.LINE_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.")
             if self.isDiscordNotEnd:
-                self.Discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.")
+                self.discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.")
         except Exception as e:
             if self.keys is None:
                 self.keys = KeyPress(ser)
@@ -323,10 +323,20 @@ class PythonCommand(CommandBase.Command):
         except Exception:
             pass
 
-    def Discord_text(self, txt: str, keys: str = "DISCORD_WEBHOOK"):
+    def discord_text(self, content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK"):
+        # webhook_urlのindex指定とkey設定
+        if index != 0 and keys == "DISCORD_WEBHOOK":
+            keys = f"DISCORD_WEBHOOK{index}"
+        elif index == 0 and keys != "DISCORD_WEBHOOK":
+            pass
+        elif index != 0 and keys != "DISCORD_WEBHOOK":
+            keys = f"DISCORD_WEBHOOK{index}"
+        else:
+            pass
+
         # 送信
         try:
-            self.Discord.send_message(notification_message=txt, keys=keys)
+            self.Discord.send_message(notification_message=content, keys=keys)
         except Exception:
             pass
 
@@ -909,8 +919,13 @@ class ImageProcPythonCommand(PythonCommand):
         except Exception:
             pass
 
-    def Discord_image(
-        self, txt: str = None, crop_fmt: int | str = "", crop: List[int] = [], keys: str | list = "DISCORD_WEBHOOK"
+    def discord_image(
+        self,
+        content: str = "",
+        index: int = 0,
+        crop_fmt: int | str = "",
+        crop: List[int] = [],
+        keys: str | list = "DISCORD_WEBHOOK",
     ):
         """
         Discordにテキストと画像を通知します。
@@ -924,8 +939,18 @@ class ImageProcPythonCommand(PythonCommand):
         # トリミング
         cropped_image = crop_image(src, crop=crop_cv2)
 
+        # webhook_urlのindex指定とkey設定
+        if index != 0 and keys == "DISCORD_WEBHOOK":
+            keys = f"DISCORD_WEBHOOK{index}"
+        elif index == 0 and keys != "DISCORD_WEBHOOK":
+            pass
+        elif index != 0 and keys != "DISCORD_WEBHOOK":
+            keys = f"DISCORD_WEBHOOK{index}"
+        else:
+            pass
+
         # 送信
         try:
-            self.Discord.send_message(notification_message=txt, image=cropped_image, keys=keys)
+            self.Discord.send_message(notification_message=content, image=cropped_image, keys=keys)
         except Exception:
             pass

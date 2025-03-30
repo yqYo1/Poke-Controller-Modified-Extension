@@ -13,12 +13,12 @@ class DiscordTest(ImageProcPythonCommand):
     def do(self):
         # テキストのみ
         print("テキストのみ")
-        self.Discord_text("テキストのみ")
+        self.discord_text("テキストのみ")
 
         # 画像のみ
         print("画像のみ")
-        self.Discord_image()
+        self.discord_image()
 
         # テキスト+画像
         print("テキスト+画像")
-        self.Discord_image("テキスト+画像")
+        self.discord_image("テキスト+画像")

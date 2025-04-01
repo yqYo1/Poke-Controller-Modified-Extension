@@ -162,7 +162,10 @@ class PokeController_Menubar(tk.Menu):
         self._logger.debug("Show line API")
         if self.line is None:
             self.line = Line_Notify()
-        print(self.line)
+        try:
+            print(self.line)
+        except Exception:
+            pass
         self.line.getRateLimit()
         self.line = None
         # LINE.send_text_n_image("CAPTURE")

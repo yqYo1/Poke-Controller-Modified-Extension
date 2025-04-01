@@ -1,3 +1,8 @@
+■ver.0.1.7
+  ・README更新
+    ・Modified版のFork networkからのデタッチに伴い記載内容を整理
+    ・Pythonの推奨versionを3.7から3.12に変更
+
 ■ver.0.1.6
   ・LINE Notifyサービス終了に伴う修正を実施
     ・LINE Notifyサービス終了に伴う起動できない問題を修正

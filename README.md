@@ -1,10 +1,49 @@
 # Poke-Controller MODIFIED Extension
-機能拡張版Poke-Controller MODIFIEDです。作者がやりたいことを実現するために拡張しています。
-主に複数並列起動やProconで操作したい、など。
+[moi_poke](https://github.com/Moi-poke)氏が開発した[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)(以降、Modified版と記載します)をベースに機能を追加したゲーム機自動化支援ソフトウェアです。
+
+Modified版からUIを一新、並列起動や対応ゲーム機の種類を増やしています。また、Modified版に対する後方互換性保持をMUSTとして開発をしています。2025/3/31時点では、Modified版で動作する自動化のスクリプト(後述)はすべて動作する認識です。
 
 ![カイリューかわいい](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/image/pokecon_modified_extension_image.png)
 
-## MODIFIED版からの変更点
+## Revision History
+[Github - 更新履歴](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/changelog.txt)
+
+## Overview
+Poke-Controllerの概要は[KawaSwitch](https://github.com/KawaSwitch)氏が開発した[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)(以降、本家版と記載します)および[Modified版](https://github.com/Moi-poke/Poke-Controller-Modified)を参照してください。以下にModified版との差分を記載します。
+
+### UI面
+- 設定画面のタブ化およびログ画面の2画面化を実施。
+
+### 機能面
+- 設定関連の追加
+  - Cameraタブ
+    - 同一名称のキャプチャデバイスが接続されても識別可能
+    - 画像認識時の類似度を自動化スクリプトの記載によらず出力できる機能(デバッグの負荷軽減目的でON/OFF可能)
+    - 画像認識時の探索範囲および認識結果をGUI上に表示する機能(デバッグの負荷軽減目的でON/OFF可能)
+  - Serialタブ
+    - シリアルデバイスをコンボボックスで設定する機能
+    - 送信するシリアルデータのフォーマットを3種(Poke-Controller向け/Qingpi向け/3DS Controller向け)から選択する機能
+  - Manual Controllerタブ
+    - ゲームパッドによる操作機能(ver.0.1.5時点ではProConのみ対応。)
+    - ゲームパッドによる操作を記録する機能
+  - Commandsタブ
+    - スクリプトのFilter機能
+    - スクリプトのショートカット割り当て機能
+    - スクリプトの一時停止機能
+  - Notificationタブ
+    - WindowsのNotificationによる通知機能
+    - ~~Discord Webhookを用いた通知機能~~(Modified版に実装されたため)
+    - プログラムの開始および終了時に通知する機能
+  - Othersタブ
+    - ログ画面の2画面化に伴う機能(サイズや標準出力先など)
+    - 画面クリア機能
+    - レイアウトカスタマイズ機能
+
+- 関数関連
+  - 画像認識関数の機能拡張(2値)
+  入力結果保持ダイアログ関数
+  - 
+
 
 - 機能面(最新の更新はchangelog.txtを参照)
   - [Github - 更新履歴](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/changelog.txt)

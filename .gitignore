@@ -12,6 +12,7 @@
 *.json
 *.bat
 !ExecutePokeConModified-Extension.bat
+!UpdatePokeConModified-Extension.bat
 .idea/
 SerialController/Captures/
 SerialController/Template/*

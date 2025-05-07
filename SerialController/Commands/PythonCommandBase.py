@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -132,9 +131,13 @@ class PythonCommand(CommandBase.Command):
                     else:
                         print('"plyer" is not installed.')
                 if self.isLineNotStart:
-                    self.LINE_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.")
+                    self.LINE_text(
+                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started."
+                    )
                 if self.isDiscordNotStart:
-                    self.discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.")
+                    self.discord_text(
+                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started."
+                    )
                 self.do()
                 self.finish()
         except StopThread:
@@ -150,9 +153,13 @@ class PythonCommand(CommandBase.Command):
                 else:
                     print('"plyer" is not installed.')
             if self.isLineNotEnd:
-                self.LINE_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.")
+                self.LINE_text(
+                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished."
+                )
             if self.isDiscordNotEnd:
-                self.discord_text(f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.")
+                self.discord_text(
+                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished."
+                )
         except Exception as e:
             if self.keys is None:
                 self.keys = KeyPress(ser)
@@ -204,7 +211,12 @@ class PythonCommand(CommandBase.Command):
 
     # press button at duration times(s)
     @pausedecorator
-    def press(self, buttons: Button | Hat | Stick | Direction, duration: float = 0.1, wait: float = 0.1):
+    def press(
+        self,
+        buttons: Button | Hat | Stick | Direction,
+        duration: float = 0.1,
+        wait: float = 0.1,
+    ):
         """
         ボタンを押す。
         """
@@ -310,10 +322,20 @@ class PythonCommand(CommandBase.Command):
             self.reload_com_port()
         else:
             if self.keys.ser.openSerial(
-                GuiSettings().com_port.get(), GuiSettings().com_port_name.get(), GuiSettings().baud_rate.get()
+                GuiSettings().com_port.get(),
+                GuiSettings().com_port_name.get(),
+                GuiSettings().baud_rate.get(),
             ):
-                print("COM Port " + str(GuiSettings().com_port.get()) + " connected successfully")
-                self._logger.debug("COM Port " + str(GuiSettings().com_port.get()) + " connected successfully")
+                print(
+                    "COM Port "
+                    + str(GuiSettings().com_port.get())
+                    + " connected successfully"
+                )
+                self._logger.debug(
+                    "COM Port "
+                    + str(GuiSettings().com_port.get())
+                    + " connected successfully"
+                )
                 # self.keyPress = None (ここでNoneはNGなはず)
 
     def LINE_text(self, txt: str, token: str = "token"):
@@ -323,7 +345,9 @@ class PythonCommand(CommandBase.Command):
         except Exception:
             pass
 
-    def discord_text(self, content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK"):
+    def discord_text(
+        self, content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK"
+    ):
         # webhook_urlのindex指定とkey設定
         if index != 0 and keys == "DISCORD_WEBHOOK":
             keys = f"DISCORD_WEBHOOK{index}"
@@ -350,7 +374,9 @@ def generateRandomCharacter(n: int):
     return "".join([random.choice(c) for _ in range(n)])
 
 
-def convertCv2Format(crop_fmt: int | str = "", crop: List[int] = []) -> Tuple(List[int], List[int]):  # type: ignore
+def convertCv2Format(crop_fmt: int | str = "", crop: List[int] = []) -> Tuple(
+    List[int], List[int]
+):  # type: ignore
     """
     リストをopencv/pillow形式に対応するよう変換する。
     ・Pillow形式
@@ -469,7 +495,9 @@ class ImageProcPythonCommand(PythonCommand):
     def setTemplateDir(self, path):
         ImageProcPythonCommand.template_path_name = path
 
-    def getCameraImage(self, crop_fmt: int | str = "", crop: List[int] = []) -> ImageProcessing.image_type:
+    def getCameraImage(
+        self, crop_fmt: int | str = "", crop: List[int] = []
+    ) -> ImageProcessing.image_type:
         """
         カメラから画像データを取得する
         """
@@ -527,18 +555,24 @@ class ImageProcPythonCommand(PythonCommand):
         if isinstance(template_path, ImageProcessing.image_type):
             template_image = template_path
         else:
-            template_image = getImage(self.get_filespec(template_path, mode="t"), mode="color")
+            template_image = getImage(
+                self.get_filespec(template_path, mode="t"), mode="color"
+            )
 
         # マスク画像を取得
         if isinstance(mask_path, ImageProcessing.image_type):
             mask_image = mask_path
         else:
             mask_image = (
-                getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
+                getImage(self.get_filespec(mask_path, mode="t"), mode="binary")
+                if mask_path is not None
+                else None
             )
 
         # テンプレートマッチング
-        res, max_loc, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(
+        res, max_loc, width, height, max_val = ImageProcessing(
+            use_gpu=use_gpu
+        ).isContainTemplate(
             src,
             template_image,
             mask_image=mask_image,
@@ -564,9 +598,25 @@ class ImageProcPythonCommand(PythonCommand):
                 max_loc[1] += crop_pillow[1]
             tag = str(time.perf_counter()) + str(random.random())
             if res:
-                self.displayRectangle(max_loc, width, height, tag, ms, color=[color[0], color[2]], crop=crop_pillow)
+                self.displayRectangle(
+                    max_loc,
+                    width,
+                    height,
+                    tag,
+                    ms,
+                    color=[color[0], color[2]],
+                    crop=crop_pillow,
+                )
             elif not show_only_true_rect:
-                self.displayRectangle(max_loc, width, height, tag, ms, color=[color[1], color[2]], crop=crop_pillow)
+                self.displayRectangle(
+                    max_loc,
+                    width,
+                    height,
+                    tag,
+                    ms,
+                    color=[color[1], color[2]],
+                    crop=crop_pillow,
+                )
             else:
                 pass
 
@@ -610,7 +660,9 @@ class ImageProcPythonCommand(PythonCommand):
             if isinstance(i, ImageProcessing.image_type):
                 template_image_list.append(i)
             else:
-                template_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="color"))
+                template_image_list.append(
+                    getImage(self.get_filespec(i, mode="t"), mode="color")
+                )
 
         # マスク画像を取得
         mask_image_list = []
@@ -619,27 +671,31 @@ class ImageProcPythonCommand(PythonCommand):
                 if isinstance(i, ImageProcessing.image_type):
                     mask_image_list.append(i)
                 else:
-                    mask_image_list.append(getImage(self.get_filespec(i, mode="t"), mode="binary"))
+                    mask_image_list.append(
+                        getImage(self.get_filespec(i, mode="t"), mode="binary")
+                    )
 
         # テンプレートマッチング
-        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = ImageProcessing(
-            use_gpu=False
-        ).isContainTemplate_max(
-            src,
-            template_image_list,
-            mask_image_list=mask_image_list,
-            threshold=threshold,
-            use_gray=use_gray,
-            crop=crop_cv2,
-            BGR_range=BGR_range,
-            threshold_binary=threshold_binary,
-            crop_template=crop_template_cv2,
-            show_image=show_image,
+        max_idx, max_val_list, max_loc_list, width_list, height_list, judge_list = (
+            ImageProcessing(use_gpu=False).isContainTemplate_max(
+                src,
+                template_image_list,
+                mask_image_list=mask_image_list,
+                threshold=threshold,
+                use_gray=use_gray,
+                crop=crop_cv2,
+                BGR_range=BGR_range,
+                threshold_binary=threshold_binary,
+                crop_template=crop_template_cv2,
+                show_image=show_image,
+            )
         )
 
         # テンプレートマッチングの結果(類似度)を表示する
         if show_value or self.isSimilarity:
-            tm_mode = "ZNCC" if (mask_path_list == [] or mask_path_list is None) else "NCC"
+            tm_mode = (
+                "ZNCC" if (mask_path_list == [] or mask_path_list is None) else "NCC"
+            )
             for template_path, max_val in zip(template_path_list, max_val_list):
                 print(f"{template_path} {tm_mode} value: {max_val}")
 
@@ -748,7 +804,9 @@ class ImageProcPythonCommand(PythonCommand):
 
         # crop_fmtに応じてcropの中身を並び替える
         crop_cv2, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
-        crop_template_cv2, crop_template_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop_template)
+        crop_template_cv2, crop_template_pillow = convertCv2Format(
+            crop_fmt=crop_fmt, crop=crop_template
+        )
 
         # カメラの画像を取得
         template_image = self.camera.readFrame()
@@ -764,11 +822,15 @@ class ImageProcPythonCommand(PythonCommand):
             mask_image = mask_path
         else:
             mask_image = (
-                getImage(self.get_filespec(mask_path, mode="t"), mode="binary") if mask_path is not None else None
+                getImage(self.get_filespec(mask_path, mode="t"), mode="binary")
+                if mask_path is not None
+                else None
             )
 
         # テンプレートマッチング
-        res, _, width, height, max_val = ImageProcessing(use_gpu=use_gpu).isContainTemplate(
+        res, _, width, height, max_val = ImageProcessing(
+            use_gpu=use_gpu
+        ).isContainTemplate(
             image,
             template_image,
             mask_image=mask_image,
@@ -791,11 +853,23 @@ class ImageProcPythonCommand(PythonCommand):
             tag = str(time.perf_counter()) + str(random.random())
             if res:
                 self.displayRectangle(
-                    crop_template_pillow[0:2], width, height, tag, ms, color=[color[0], color[2]], crop=[]
+                    crop_template_pillow[0:2],
+                    width,
+                    height,
+                    tag,
+                    ms,
+                    color=[color[0], color[2]],
+                    crop=[],
                 )
             elif not show_only_true_rect:
                 self.displayRectangle(
-                    crop_template_pillow[0:2], width, height, tag, ms, color=[color[1], color[2]], crop=[]
+                    crop_template_pillow[0:2],
+                    width,
+                    height,
+                    tag,
+                    ms,
+                    color=[color[1], color[2]],
+                    crop=[],
                 )
             else:
                 pass
@@ -832,8 +906,17 @@ class ImageProcPythonCommand(PythonCommand):
 
         if self.gui is not None or self.isGuide:
             if crop_pillow != []:
-                canvas.ImgRect(*crop_pillow[0:2], *crop_pillow[2:4], outline=color[1], tag=tag, ms=int(ms), flag=False)
-            canvas.ImgRect(*top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms))
+                canvas.ImgRect(
+                    *crop_pillow[0:2],
+                    *crop_pillow[2:4],
+                    outline=color[1],
+                    tag=tag,
+                    ms=int(ms),
+                    flag=False,
+                )
+            canvas.ImgRect(
+                *top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms)
+            )
         else:
             pass
 
@@ -858,11 +941,25 @@ class ImageProcPythonCommand(PythonCommand):
             tag = generateRandomCharacter(10)
 
         if self.gui is not None or self.isGuide:
-            canvas.ImgText(position[0], position[1], txt=txt, tag=tag, ms=int(ms), ft=ft, color=color)
+            canvas.ImgText(
+                position[0],
+                position[1],
+                txt=txt,
+                tag=tag,
+                ms=int(ms),
+                ft=ft,
+                color=color,
+            )
         else:
             pass
 
-    def saveCapture(self, filename: str = None, crop_fmt: int | str = "", crop: List[int] = [], mode: bool = True):
+    def saveCapture(
+        self,
+        filename: str = None,
+        crop_fmt: int | str = "",
+        crop: List[int] = [],
+        mode: bool = True,
+    ):
         """
         画面をキャプチャします。
         (camera.saveCaptureと同じ機能。)
@@ -888,7 +985,9 @@ class ImageProcPythonCommand(PythonCommand):
         # 画像を保存する
         ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)
 
-    def popupImage(self, crop_fmt: int | str = "", crop: List[int] = [], title: str = "image"):
+    def popupImage(
+        self, crop_fmt: int | str = "", crop: List[int] = [], title: str = "image"
+    ):
         """
         popupで画像を表示する
         """
@@ -900,7 +999,13 @@ class ImageProcPythonCommand(PythonCommand):
 
         opneImage(src, crop=crop_cv2, title=title)
 
-    def LINE_image(self, txt: str, crop_fmt: int | str = "", crop: List[int] = [], token: str = "token"):
+    def LINE_image(
+        self,
+        txt: str,
+        crop_fmt: int | str = "",
+        crop: List[int] = [],
+        token: str = "token",
+    ):
         """
         Lineにテキストと画像を通知します。
         """
@@ -951,6 +1056,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         # 送信
         try:
-            self.Discord.send_message(notification_message=content, image=cropped_image, keys=keys)
+            self.Discord.send_message(
+                notification_message=content, image=cropped_image, keys=keys
+            )
         except Exception:
             pass

@@ -13,6 +13,7 @@
 *.bat
 !ExecutePokeConModified-Extension.bat
 !UpdatePokeConModified-Extension.bat
+!ExecutePokeConModified-Extension.sh
 .idea/
 SerialController/Captures/
 SerialController/Template/*

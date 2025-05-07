@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Literal
 import cv2
 import datetime
+import threading
 import os
+# from time import sleep
+
 from logging import getLogger, DEBUG, NullHandler
 
 if TYPE_CHECKING:
-    import numpy
+    from cv2.typing import MatLike
+    from logging import Logger
+    # import numpy
 
 
-def imwrite(filename: str, img: numpy.ndarray, params: int = None):
+def imwrite(filename: str, img: MatLike, params: list[int] | None = None):
     _logger = getLogger(__name__)
     _logger.addHandler(NullHandler())
     _logger.setLevel(DEBUG)
     _logger.propagate = True
     try:
         ext = os.path.splitext(filename)[1]
-        result, n = cv2.imencode(ext, img, params)
+        if params is None:
+            result, n = cv2.imencode(ext, img)
+        else:
+            result, n = cv2.imencode(ext, img, params)
 
         if result:
             with open(filename, mode="w+b") as f:
@@ -54,15 +61,22 @@ def _get_save_filespec(filename: str) -> str:
         return os.path.join(CAPTURE_DIR, filename)
 
 
+class CamereaImege:
+    def __init__(self, image: MatLike):
+        self._imege: MatLike = image
+
+
 class Camera:
     def __init__(self, fps: int = 45):
-        self.camera = None
-        self.capture_size = (1280, 720)
-        # self.capture_size = (1920, 1080)
-        self.capture_dir = "Captures"
-        self.fps = int(fps)
-
-        self._logger = getLogger(__name__)
+        self.camera: cv2.VideoCapture | None = None
+        self.fps: int = int(fps)
+        self.capture_size: tuple[int, int] = (1280, 720)
+        self.capture_dir: str = "Captures"
+        self.image_bgr: MatLike = cv2.imread("../Images/disabled.png", cv2.IMREAD_COLOR)
+        self.thread: threading.Thread = threading.Thread(
+            target=self.camera_update, name="CameraThread"
+        )
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
@@ -90,18 +104,26 @@ class Camera:
         # self.camera.set(cv2.CAP_PROP_FPS, 60)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
-
-    # self.camera.set(cv2.CAP_PROP_SETTINGS, 0)
+        self.camera_thread_start()
 
     def isOpened(self):
-        self._logger.debug("Camera is opened")
-        return self.camera.isOpened()
+        # self._logger.debug("Camera is opened")
+        if self.camera is not None:
+            return self.camera.isOpened()
+        else:
+            return False
 
     def readFrame(self):
-        _, self.image_bgr = self.camera.read()
+        # _, self.image_bgr = self.camera.read()
         return self.image_bgr
 
-    def saveCapture(self, filename: str = None, crop: int = None, crop_ax: List[int] = None, img: numpy.ndarray = None):
+    def saveCapture(
+        self,
+        filename: str | None = None,
+        crop: int | Literal["1"] | Literal["2"] | None = None,
+        crop_ax: list[int] | None = None,
+        img: MatLike | None = None,
+    ):
         if crop_ax is None:
             crop_ax = [0, 0, 1280, 720]
         else:
@@ -119,7 +141,10 @@ class Camera:
         elif crop == 1 or crop == "1":
             image = self.image_bgr[crop_ax[1] : crop_ax[3], crop_ax[0] : crop_ax[2]]
         elif crop == 2 or crop == "2":
-            image = self.image_bgr[crop_ax[1] : crop_ax[1] + crop_ax[3], crop_ax[0] : crop_ax[0] + crop_ax[2]]
+            image = self.image_bgr[
+                crop_ax[1] : crop_ax[1] + crop_ax[3],
+                crop_ax[0] : crop_ax[0] + crop_ax[2],
+            ]
         elif img is not None:
             image = img
         else:
@@ -127,7 +152,9 @@ class Camera:
 
         save_path = _get_save_filespec(filename)
 
-        if not os.path.exists(os.path.dirname(save_path)) or not os.path.isdir(os.path.dirname(save_path)):
+        if not os.path.exists(os.path.dirname(save_path)) or not os.path.isdir(
+            os.path.dirname(save_path)
+        ):
             # 保存先ディレクトリが存在しないか、同名のファイルが存在する場合（existsはファイルとフォルダを区別しない）
             os.makedirs(os.path.dirname(save_path))
             self._logger.debug("Created Capture folder")
@@ -144,4 +171,36 @@ class Camera:
         if self.camera is not None and self.camera.isOpened():
             self.camera.release()
             self.camera = None
+            self.camera_thread_stop()
             self._logger.debug("Camera destroyed")
+
+    def camera_thread_start(self) -> None:
+        if self.camera is None:
+            self._logger.error("Camera is not opened")
+            return
+        self._logger.debug("Camera thread starting")
+        self.thread.start()
+
+    def camera_thread_stop(self) -> None:
+        if self.camera is None:
+            self._logger.error("Camera is not opened")
+            return
+        self._logger.debug("Camera thread stopping")
+        self.thread.join()
+        self.camera.release()
+        self.camera = None
+        self._logger.debug("Camera thread stopped")
+
+    def camera_update(self) -> None:
+        if self.camera is None:
+            self._logger.error("Camera is not opened")
+            return
+        else:
+            self._logger.debug("Camera update thread started")
+            while self.isOpened():
+                _, frame = self.camera.read()
+                # self.frame_queue.put(frame)
+                self.image_bgr = frame
+                # sleep(1 / self.fps)
+                # if self.camera is None:
+                #     return

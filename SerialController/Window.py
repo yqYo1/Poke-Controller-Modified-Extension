@@ -45,7 +45,7 @@ sys.path.append(addpath)
 
 
 class PokeControllerApp:
-    def __init__(self, master=None, profile="default"):
+    def __init__(self, master: tk.Tk | None = None, profile="default"):
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
 

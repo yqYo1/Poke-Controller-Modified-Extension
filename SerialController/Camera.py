@@ -1,22 +1,22 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 from __future__ import annotations
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 import cv2
 import datetime
 import threading
 import os
-# from time import sleep
 
 from logging import getLogger, DEBUG, NullHandler
 
 if TYPE_CHECKING:
     from cv2.typing import MatLike
     from logging import Logger
-    # import numpy
+    from typing import Literal
+    from collections.abc import Sequence
 
 
-def imwrite(filename: str, img: MatLike, params: list[int] | None = None):
+def imwrite(filename: str, img: MatLike, params: Sequence[int] | None = None) -> bool:
     _logger = getLogger(__name__)
     _logger.addHandler(NullHandler())
     _logger.setLevel(DEBUG)
@@ -61,13 +61,13 @@ def _get_save_filespec(filename: str) -> str:
         return os.path.join(CAPTURE_DIR, filename)
 
 
-class CamereaImege:
-    def __init__(self, image: MatLike):
-        self._imege: MatLike = image
+# class CamereaImege:
+#     def __init__(self, image: MatLike):
+#         self._imege: MatLike = image
 
 
 class Camera:
-    def __init__(self, fps: int = 45):
+    def __init__(self, fps: int = 45) -> None:
         self.camera: cv2.VideoCapture | None = None
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
@@ -81,7 +81,7 @@ class Camera:
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-    def openCamera(self, cameraId: int):
+    def openCamera(self, cameraId: int) -> None:
         if self.camera is not None and self.camera.isOpened():
             self._logger.debug("Camera is already opened")
             self.destroy()
@@ -106,14 +106,14 @@ class Camera:
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
         self.camera_thread_start()
 
-    def isOpened(self):
+    def isOpened(self) -> bool:
         # self._logger.debug("Camera is opened")
         if self.camera is not None:
             return self.camera.isOpened()
         else:
             return False
 
-    def readFrame(self):
+    def readFrame(self) -> MatLike:
         # _, self.image_bgr = self.camera.read()
         return self.image_bgr
 
@@ -123,7 +123,7 @@ class Camera:
         crop: int | Literal["1"] | Literal["2"] | None = None,
         crop_ax: list[int] | None = None,
         img: MatLike | None = None,
-    ):
+    ) -> None:
         if crop_ax is None:
             crop_ax = [0, 0, 1280, 720]
         else:
@@ -167,7 +167,7 @@ class Camera:
             print("Capture Failed")
             self._logger.error(f"Capture Failed :{e}")
 
-    def destroy(self):
+    def destroy(self) -> None:
         if self.camera is not None and self.camera.isOpened():
             self.camera.release()
             self.camera = None
@@ -199,7 +199,6 @@ class Camera:
             self._logger.debug("Camera update thread started")
             while self.isOpened():
                 _, frame = self.camera.read()
-                # self.frame_queue.put(frame)
                 self.image_bgr = frame
                 # sleep(1 / self.fps)
                 # if self.camera is None:

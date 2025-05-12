@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-from abc import abstractclassmethod
-from typing import List, Tuple, Optional
-import threading
-import time
-from time import sleep
-import random
-from logging import getLogger, DEBUG, NullHandler
+import datetime
 import os
 import os.path
-import datetime
+import random
 import string
+import threading
+import time
+from logging import DEBUG, NullHandler, getLogger
+from time import sleep
+from typing import TYPE_CHECKING, Callable
 
 try:
     from plyer import notification
@@ -20,20 +18,22 @@ try:
     flag_import_plyer = True
 except Exception:
     flag_import_plyer = False
-from Settings import GuiSettings
-from ImageProcessing import ImageProcessing, crop_image, getImage, opneImage
-
-from LineNotify import Line_Notify
-from DiscordNotify import Discord_Notify
 from Commands import CommandBase
 from Commands.Keys import KeyPress
+from DiscordNotify import Discord_Notify
+from ImageProcessing import ImageProcessing, crop_image, getImage, opneImage
+from abc import abstractclassmethod, abstractmethod
+from LineNotify import Line_Notify
+from Settings import GuiSettings
 
 if TYPE_CHECKING:
-    from Window import PokeControllerApp
-    from GuiAssets import CaptureArea
+    from typing import Final, List, Optional, Tuple
+
     from Camera import Camera
+    from Commands.Keys import Button, Direction, Hat, Stick
     from Commands.Sender import Sender
-    from Commands.Keys import Button, Hat, Stick, Direction
+    from GuiAssets import CaptureArea
+    # from Window import PokeControllerApp
 
 
 # the class For notifying stop signal is sent from Main window
@@ -103,7 +103,8 @@ class PythonCommand(CommandBase.Command):
                 print(k, "=", v)
         print("----------------------------")
 
-    @abstractclassmethod
+    @abstractmethod
+    # @abstractclassmethod
     def do(self):
         """
         自動化スクリプト側でオーバーライトされるため、処理の記述はありません。
@@ -173,7 +174,7 @@ class PythonCommand(CommandBase.Command):
             self.keys.end()
             self.alive = False
 
-    def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost):
+    def start(self, ser: Sender, postProcess: Callable[[], None]):
         """
         自動化スクリプトをスレッドに割り当てて実行します。
         """
@@ -422,10 +423,10 @@ def convertCv2Format(crop_fmt: int | str = "", crop: List[int] = []) -> Tuple(
 
 
 class ImageProcPythonCommand(PythonCommand):
-    template_path_name = "./Template/"
-    capture_path_name = "./Captures/"
+    template_path_name: Final[str] = "./Template/"
+    capture_path_name: Final[str] = "./Captures/"
 
-    def __init__(self, cam: Camera, gui: CaptureArea = None):
+    def __init__(self, cam: Camera, gui: CaptureArea | None = None):
         super(ImageProcPythonCommand, self).__init__()
 
         self._logger = getLogger(__name__)

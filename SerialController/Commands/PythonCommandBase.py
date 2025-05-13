@@ -64,10 +64,10 @@ class PythonCommand(CommandBase.Command):
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        # self.keys: KeyPress | None = None
-        self.keys: KeyPress
-        # self.thread: threading.Thread | None = None
-        self.thread: threading.Thread
+        self.keys: KeyPress | None = None
+        # self.keys: KeyPress
+        self.thread: threading.Thread | None = None
+        # self.thread: threading.Thread
         self.alive: bool = True
         # self.postProcess: Callable[[], None] | None = None
         self.postProcess: Callable[[], None]
@@ -201,7 +201,7 @@ class PythonCommand(CommandBase.Command):
             self.thread.start()
 
     @override
-    def end(self, ser: Sender):
+    def end(self, ser: Sender) -> None:
         self.socket0.alive = False
         self.mqtt0.alive = False
         self.sendStopRequest()

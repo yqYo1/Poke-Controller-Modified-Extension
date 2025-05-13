@@ -8,9 +8,19 @@ import random
 import string
 import threading
 import time
-from logging import DEBUG, NullHandler, getLogger
+from logging import DEBUG, Logger, NullHandler, getLogger
 from time import sleep
-from typing import TYPE_CHECKING, Callable
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Final,
+    List,
+    Optional,
+    Tuple,
+    override,
+    ParamSpec,
+    TypeVar,
+)
 
 try:
     from plyer import notification
@@ -18,22 +28,24 @@ try:
     flag_import_plyer = True
 except Exception:
     flag_import_plyer = False
+from abc import abstractmethod
+
 from Commands import CommandBase
 from Commands.Keys import KeyPress
 from DiscordNotify import Discord_Notify
 from ImageProcessing import ImageProcessing, crop_image, getImage, opneImage
-from abc import abstractclassmethod, abstractmethod
 from LineNotify import Line_Notify
 from Settings import GuiSettings
 
 if TYPE_CHECKING:
-    from typing import Final, List, Optional, Tuple
-
     from Camera import Camera
     from Commands.Keys import Button, Direction, Hat, Stick
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
     # from Window import PokeControllerApp
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 # the class For notifying stop signal is sent from Main window
@@ -47,17 +59,20 @@ class StopThread(Exception):
 class PythonCommand(CommandBase.Command):
     def __init__(self):
         super(PythonCommand, self).__init__()
-        self._logger = getLogger(__name__)
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.keys = None
-        self.thread = None
-        self.alive = True
-        self.postProcess = None
-        self.Line = Line_Notify()
-        self.Discord = Discord_Notify()
+        # self.keys: KeyPress | None = None
+        self.keys: KeyPress
+        # self.thread: threading.Thread | None = None
+        self.thread: threading.Thread
+        self.alive: bool = True
+        # self.postProcess: Callable[[], None] | None = None
+        self.postProcess: Callable[[], None]
+        self.Line: Final = Line_Notify()
+        self.Discord: Final = Discord_Notify()
 
     def pausedecorator(func):
         """
@@ -104,7 +119,6 @@ class PythonCommand(CommandBase.Command):
         print("----------------------------")
 
     @abstractmethod
-    # @abstractclassmethod
     def do(self):
         """
         自動化スクリプト側でオーバーライトされるため、処理の記述はありません。
@@ -162,9 +176,8 @@ class PythonCommand(CommandBase.Command):
                     f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished."
                 )
         except Exception as e:
-            if self.keys is None:
-                self.keys = KeyPress(ser)
-                self.keys.init_hat()
+            self.keys = KeyPress(ser)
+            self.keys.init_hat()
             print("Interrupt:cmd(黒い画面)を確認してください。")
             print(e)
             self._logger.warning("Command stopped unexpectedly")
@@ -187,6 +200,7 @@ class PythonCommand(CommandBase.Command):
             self.thread = threading.Thread(target=self.do_safe, args=(ser,))
             self.thread.start()
 
+    @override
     def end(self, ser: Sender):
         self.socket0.alive = False
         self.mqtt0.alive = False
@@ -286,6 +300,7 @@ class PythonCommand(CommandBase.Command):
                 pass
         self.checkIfAlive()
 
+    @override
     def checkIfAlive(self):
         """
         Aliveフラグの状態を確認する。
@@ -375,9 +390,9 @@ def generateRandomCharacter(n: int):
     return "".join([random.choice(c) for _ in range(n)])
 
 
-def convertCv2Format(crop_fmt: int | str = "", crop: List[int] = []) -> Tuple(
-    List[int], List[int]
-):  # type: ignore
+def convertCv2Format(
+    crop_fmt: int | str = "", crop: list[int] = []
+) -> tuple[list[int], list[int]]:  # type: ignore
     """
     リストをopencv/pillow形式に対応するよう変換する。
     ・Pillow形式
@@ -423,19 +438,19 @@ def convertCv2Format(crop_fmt: int | str = "", crop: List[int] = []) -> Tuple(
 
 
 class ImageProcPythonCommand(PythonCommand):
-    template_path_name: Final[str] = "./Template/"
-    capture_path_name: Final[str] = "./Captures/"
+    template_path_name: str = "./Template/"
+    capture_path_name: str = "./Captures/"
 
     def __init__(self, cam: Camera, gui: CaptureArea | None = None):
         super(ImageProcPythonCommand, self).__init__()
 
-        self._logger = getLogger(__name__)
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.camera = cam
-        self.gui = gui
+        self.camera: Camera = cam
+        self.gui: CaptureArea | None = gui
 
     def pausedecorator2(func):
         """
@@ -1004,7 +1019,7 @@ class ImageProcPythonCommand(PythonCommand):
         self,
         txt: str,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
         token: str = "token",
     ):
         """

@@ -65,11 +65,8 @@ class PythonCommand(CommandBase.Command):
         self._logger.propagate = True
 
         self.keys: KeyPress | None = None
-        # self.keys: KeyPress
         self.thread: threading.Thread | None = None
-        # self.thread: threading.Thread
         self.alive: bool = True
-        # self.postProcess: Callable[[], None] | None = None
         self.postProcess: Callable[[], None]
         self.Line: Final = Line_Notify()
         self.Discord: Final = Discord_Notify()

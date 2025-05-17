@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
-import cv2
-import datetime
-import threading
-import os
 
-from logging import getLogger, DEBUG, NullHandler
+import datetime
+import os
+import threading
+import time
+from logging import DEBUG, NullHandler, getLogger
+from typing import TYPE_CHECKING
+
+import cv2
 
 if TYPE_CHECKING:
-    from cv2.typing import MatLike
+    from collections.abc import Sequence
     from logging import Logger
     from typing import Literal
-    from collections.abc import Sequence
+
+    from cv2.typing import MatLike
 
 
 def imwrite(filename: str, img: MatLike, params: Sequence[int] | None = None) -> bool:
@@ -73,9 +76,7 @@ class Camera:
         self.capture_size: tuple[int, int] = (1280, 720)
         self.capture_dir: str = "Captures"
         self.image_bgr: MatLike = cv2.imread("../Images/disabled.png", cv2.IMREAD_COLOR)
-        self.thread: threading.Thread = threading.Thread(
-            target=self.camera_update, name="CameraThread"
-        )
+        self.thread: threading.Thread
         self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -170,8 +171,8 @@ class Camera:
     def destroy(self) -> None:
         if self.camera is not None and self.camera.isOpened():
             self.camera.release()
-            self.camera = None
             self.camera_thread_stop()
+            time.sleep(0.1)  # sleepしないと同じカメラを開けない
             self._logger.debug("Camera destroyed")
 
     def camera_thread_start(self) -> None:
@@ -179,6 +180,7 @@ class Camera:
             self._logger.error("Camera is not opened")
             return
         self._logger.debug("Camera thread starting")
+        self.thread = threading.Thread(target=self.camera_update, name="CameraThread")
         self.thread.start()
 
     def camera_thread_stop(self) -> None:
@@ -188,7 +190,6 @@ class Camera:
         self._logger.debug("Camera thread stopping")
         self.thread.join()
         self.camera.release()
-        self.camera = None
         self._logger.debug("Camera thread stopped")
 
     def camera_update(self) -> None:

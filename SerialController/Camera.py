@@ -64,11 +64,6 @@ def _get_save_filespec(filename: str) -> str:
         return os.path.join(CAPTURE_DIR, filename)
 
 
-# class CamereaImege:
-#     def __init__(self, image: MatLike):
-#         self._imege: MatLike = image
-
-
 class Camera:
     def __init__(self, fps: int = 45) -> None:
         self.camera: cv2.VideoCapture | None = None
@@ -90,7 +85,6 @@ class Camera:
         if os.name == "nt":
             self._logger.debug("NT OS")
             self.camera = cv2.VideoCapture(cameraId, cv2.CAP_DSHOW)
-        # self.camera = cv2.VideoCapture(cameraId)
         else:
             self._logger.debug("Not NT OS")
             self.camera = cv2.VideoCapture(cameraId)
@@ -101,21 +95,17 @@ class Camera:
             return
         print("Camera ID " + str(cameraId) + " opened successfully")
         self._logger.debug(f"Camera ID {cameraId} opened successfully.")
-        # print(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-        # self.camera.set(cv2.CAP_PROP_FPS, 60)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
         self.camera_thread_start()
 
     def isOpened(self) -> bool:
-        # self._logger.debug("Camera is opened")
         if self.camera is not None:
             return self.camera.isOpened()
         else:
             return False
 
     def readFrame(self) -> MatLike:
-        # _, self.image_bgr = self.camera.read()
         return self.image_bgr
 
     def saveCapture(
@@ -127,9 +117,6 @@ class Camera:
     ) -> None:
         if crop_ax is None:
             crop_ax = [0, 0, 1280, 720]
-        else:
-            pass
-            # print(crop_ax)
 
         dt_now = datetime.datetime.now()
         if filename is None or filename == "":
@@ -201,6 +188,3 @@ class Camera:
             while self.isOpened():
                 _, frame = self.camera.read()
                 self.image_bgr = frame
-                # sleep(1 / self.fps)
-                # if self.camera is None:
-                #     return

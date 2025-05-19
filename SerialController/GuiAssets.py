@@ -22,7 +22,7 @@ from Commands.Keys import Direction, Stick, Touchscreen, NEUTRAL, KeyPress
 
 import logging
 from logging import StreamHandler, getLogger, DEBUG, NullHandler
-from Commands.PythonCommandBase import PythonCommand
+# from Commands.PythonCommandBase import PythonCommand
 
 try:
     os.makedirs("log")

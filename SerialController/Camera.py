@@ -186,5 +186,6 @@ class Camera:
         else:
             self._logger.debug("Camera update thread started")
             while self.isOpened():
-                _, frame = self.camera.read()
-                self.image_bgr = frame
+                ret, frame = self.camera.read()
+                if ret:
+                    self.image_bgr = frame

@@ -8,19 +8,10 @@ import random
 import string
 import threading
 import time
+from functools import wraps
 from logging import DEBUG, Logger, NullHandler, getLogger
 from time import sleep
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Final,
-    List,
-    Optional,
-    Tuple,
-    override,
-    ParamSpec,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Concatenate, ParamSpec, TypeVar, override
 
 try:
     from plyer import notification
@@ -38,14 +29,20 @@ from LineNotify import Line_Notify
 from Settings import GuiSettings
 
 if TYPE_CHECKING:
+    from typing import Callable, Final
+
     from Camera import Camera
     from Commands.Keys import Button, Direction, Hat, Stick
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
-    # from Window import PokeControllerApp
 
-P = ParamSpec("P")
-R = TypeVar("R")
+    PythonCommandLike = TypeVar("PythonCommandLike", bound="PythonCommand")
+    P = ParamSpec("P")
+    R = TypeVar("R")
+
+# PythonCommandLike = TypeVar("PythonCommandLike", bound="PythonCommand")
+# P = ParamSpec("P")
+# R = TypeVar("R")
 
 
 # the class For notifying stop signal is sent from Main window
@@ -64,26 +61,44 @@ class PythonCommand(CommandBase.Command):
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.keys: KeyPress | None = None
-        self.thread: threading.Thread | None = None
         self.alive: bool = True
+        self.keys: KeyPress | None = None
         self.postProcess: Callable[[], None]
+        self.thread: threading.Thread | None = None
         self.Line: Final = Line_Notify()
         self.Discord: Final = Discord_Notify()
 
-    def pausedecorator(func):
+    # TODO https://www.perplexity.ai/search/callable-p-r-woshi-yong-sitate-usRYCHtqShWDX.yi2DiYXQ
+    # def pausedecorator(func):
+    # def pausedecorator(self, func: Callable[P, R]) -> Callable[P, R]:
+    @staticmethod
+    def pausedecorator(
+        func: Callable[Concatenate[PythonCommandLike, P], R],
+    ) -> Callable[Concatenate[PythonCommandLike, P], R]:
         """
         一時停止を実現するためのデコレータです。
         戻り値が3つある関数に使用されます。
         """
 
-        def inner(self, *args, **kwargs):
-            func(self, *args, **kwargs)
+        # def inner(self, *args, **kwargs):
+        #     func(self, *args, **kwargs)
+        @wraps(func)
+        def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs):
+            result = func(self, *args, **kwargs)
+            # if isinstance(args[0], PythonCommand):
+            #     if args[0].isPause:
+            #         args[0].show_var()
+            #     while args[0].isPause:
+            #         sleep(0.5)
+            #         args[0].checkIfAlive()
+            # else:
+            #     pass
             if self.isPause:
                 self.show_var()
             while self.isPause:
                 sleep(0.5)
                 self.checkIfAlive()
+            return result
 
         return inner
 
@@ -184,6 +199,7 @@ class PythonCommand(CommandBase.Command):
             self.keys.end()
             self.alive = False
 
+    @override
     def start(self, ser: Sender, postProcess: Callable[[], None]):
         """
         自動化スクリプトをスレッドに割り当てて実行します。
@@ -219,7 +235,8 @@ class PythonCommand(CommandBase.Command):
         self.alive = False
         self.socket0.alive = False
         self.mqtt0.alive = False
-        self.end(self.keys.ser)
+        if self.keys is not None:
+            self.end(self.keys.ser)
 
     # press button at duration times(s)
     @pausedecorator
@@ -509,7 +526,7 @@ class ImageProcPythonCommand(PythonCommand):
         ImageProcPythonCommand.template_path_name = path
 
     def getCameraImage(
-        self, crop_fmt: int | str = "", crop: List[int] = []
+        self, crop_fmt: int | str = "", crop: list[int] = []
     ) -> ImageProcessing.image_type:
         """
         カメラから画像データを取得する
@@ -543,14 +560,14 @@ class ImageProcPythonCommand(PythonCommand):
         show_only_true_rect: bool = True,
         ms: float = 2000,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
         mask_path: str = None,
         use_gpu: bool = False,
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: List[int] = [],
+        BGR_range: dict | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] = [],
         show_image: bool = False,
-        color: List[str] = ["blue", "red", "orange"],
+        color: list[str] = ["blue", "red", "orange"],
     ) -> bool:
         """
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
@@ -638,7 +655,7 @@ class ImageProcPythonCommand(PythonCommand):
     @pausedecorator3
     def isContainTemplate_max(
         self,
-        template_path_list: List[str],
+        template_path_list: list[str],
         threshold: float = 0.7,
         use_gray: bool = True,
         show_value: bool = False,
@@ -646,14 +663,14 @@ class ImageProcPythonCommand(PythonCommand):
         show_only_true_rect: bool = True,
         ms: float = 2000,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
-        mask_path_list: List[str] = [],
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: List[int] = [],
+        crop: list[int] = [],
+        mask_path_list: list[str] = [],
+        BGR_range: dict | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] = [],
         show_image: bool = False,
-        color: List[str] = ["blue", "red", "orange"],
-    ) -> Tuple(int, List[float], List[bool]):  # type: ignore
+        color: list[str] = ["blue", "red", "orange"],
+    ) -> tuple(int, list[float], list[bool]):  # type: ignore
         """
         # 現在のスクリーンショットと指定した複数の画像のテンプレートマッチングを行います。
         # 相関値が最も大きい値となった画像のインデックス、各画像のテンプレートマッチングの閾値、閾値判定結果を返します。
@@ -755,13 +772,13 @@ class ImageProcPythonCommand(PythonCommand):
         show_only_true_rect: bool = True,
         ms: float = 2000,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
-        mask_path: str = None,
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: List[int] = [],
+        crop: list[int] = [],
+        mask_path: str | None = None,
+        BGR_range: dict | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] = [],
         show_image: bool = False,
-        color: List[str] = ["blue", "red", "orange"],
+        color: list[str] = ["blue", "red", "orange"],
     ) -> bool:
         """
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
@@ -801,14 +818,14 @@ class ImageProcPythonCommand(PythonCommand):
         show_only_true_rect: bool = True,
         ms: float = 2000,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
         mask_path: str = None,
         use_gpu: bool = False,
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: List[int] = [],
+        BGR_range: dict | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] = [],
         show_image: bool = False,
-        color: List[str] = ["blue", "red", "orange"],
+        color: list[str] = ["blue", "red", "orange"],
     ) -> bool:
         """
         指定した画像に対して現在のスクリーンショットから生成したテンプレート画像を用いてテンプレートマッチングを行います。
@@ -896,9 +913,9 @@ class ImageProcPythonCommand(PythonCommand):
         height: int,
         tag: str = None,
         ms: float = 2000,
-        color: List[str] = ["blue", "orange"],
+        color: list[str] = ["blue", "orange"],
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
     ):
         """
         GUIの画面に四角形を表示します。
@@ -970,7 +987,7 @@ class ImageProcPythonCommand(PythonCommand):
         self,
         filename: str = None,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
         mode: bool = True,
     ):
         """
@@ -999,7 +1016,7 @@ class ImageProcPythonCommand(PythonCommand):
         ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)
 
     def popupImage(
-        self, crop_fmt: int | str = "", crop: List[int] = [], title: str = "image"
+        self, crop_fmt: int | str = "", crop: list[int] = [], title: str = "image"
     ):
         """
         popupで画像を表示する
@@ -1042,7 +1059,7 @@ class ImageProcPythonCommand(PythonCommand):
         content: str = "",
         index: int = 0,
         crop_fmt: int | str = "",
-        crop: List[int] = [],
+        crop: list[int] = [],
         keys: str | list = "DISCORD_WEBHOOK",
     ):
         """

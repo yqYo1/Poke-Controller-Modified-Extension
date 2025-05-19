@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import tkinter as tk
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
@@ -53,15 +53,16 @@ class Command:
         self.mqtt0 = MQTTCommunications("")
 
     @abstractmethod
-    def start(self, ser: Sender, postProcess: Callable[[], None]):
+    def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
         # def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost = None):
         pass
 
     @abstractmethod
-    def end(self, ser: Sender):
+    def end(self, ser: Sender) -> None:
         pass
 
-    def checkIfAlive(self):
+    @abstractmethod
+    def checkIfAlive(self) -> Literal[True]:
         pass
 
     ############### print functions ###############

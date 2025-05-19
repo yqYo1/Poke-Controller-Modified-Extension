@@ -1,23 +1,23 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
 
-from abc import ABCMeta, abstractclassmethod
-import tkinter as tk
 import os
+import tkinter as tk
+from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
 
+from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
     PokeConDialogue,
-    generate_new_dialogue_list,
-    save_dialogue_settings,
-    get_settings_list,
     check_widget_name,
+    generate_new_dialogue_list,
+    get_settings_list,
+    save_dialogue_settings,
 )
-from ExternalTools import SocketCommunications, MQTTCommunications
 
 if TYPE_CHECKING:
-    from Window import PokeControllerApp
+    from typing import Callable
+
     from Commands.Sender import Sender
 
 # CommandBaseにGUIに関連する関数を集約する。
@@ -30,33 +30,34 @@ class Command:
     text_area_2 = None
     stdout_destination = "1"
     pos_dialogue_buttons = "2"
-    isPause = False
+    isPause: bool = False
     canvas = None
-    isGuide = False
-    isSimilarity = False
+    isGuide: bool = False
+    isSimilarity: bool = False
     isImage = False
-    isWinNotStart = False
-    isWinNotEnd = False
-    isLineNotStart = False
-    isLineNotEnd = False
-    isDiscordNotStart = False
-    isDiscordNotEnd = False
-    app_name = ""
-    cur_command_name = ""
+    isWinNotStart: bool = False
+    isWinNotEnd: bool = False
+    isLineNotStart: bool = False
+    isLineNotEnd: bool = False
+    isDiscordNotStart: bool = False
+    isDiscordNotEnd: bool = False
+    app_name: str = ""
+    cur_command_name: str = ""
     profilename = None
 
     def __init__(self):
-        self.isRunning = False
+        self.isRunning: bool = False
 
         self.message_dialogue = None
         self.socket0 = SocketCommunications()
         self.mqtt0 = MQTTCommunications("")
 
-    @abstractclassmethod
-    def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost = None):
+    @abstractmethod
+    def start(self, ser: Sender, postProcess: Callable[[], None]):
+        # def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost = None):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def end(self, ser: Sender):
         pass
 
@@ -169,7 +170,9 @@ class Command:
         elif self.stdout_destination == "2":
             self.print_t2b(mode, *objects, sep=sep, end=end)
 
-    def dialogue(self, title: str, message: int | str | list, desc: str = None, need: type = list) -> list | dict:
+    def dialogue(
+        self, title: str, message: int | str | list, desc: str = None, need: type = list
+    ) -> list | dict:
         """
         保存機能なしのダイアログ(Entryのみ)
         title: ダイアログのウインドウ名
@@ -180,7 +183,11 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, message, desc=desc, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            message,
+            desc=desc,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
         if not ret:
@@ -188,7 +195,9 @@ class Command:
         else:
             return ret
 
-    def dialogue6widget(self, title: str, dialogue_list: list, desc: str = None, need: type = list) -> list | dict:
+    def dialogue6widget(
+        self, title: str, dialogue_list: list, desc: str = None, need: type = list
+    ) -> list | dict:
         """
         保存機能なしのダイアログ
         title: ダイアログのウインドウ名
@@ -206,7 +215,12 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
@@ -216,7 +230,12 @@ class Command:
             return ret
 
     def dialogue6widget_save_settings(
-        self, title: str, dialogue_list: list, filename: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        filename: str,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         前の設定を呼び出すタイプのダイアログ
@@ -255,7 +274,12 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, new_dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            new_dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
@@ -267,7 +291,12 @@ class Command:
             return ret
 
     def dialogue6widget_select_settings(
-        self, title: str, dialogue_list: list, dirname: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        dirname: str,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         保存した設定を選択して呼び出すタイプのダイアログ
@@ -293,7 +322,8 @@ class Command:
 
         # GUI画面表示
         ret = self.dialogue6widget(
-            "Select Preset", [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]]
+            "Select Preset",
+            [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]],
         )
 
         # ディレクトリがない場合は作成
@@ -318,7 +348,12 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, new_dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            new_dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
@@ -389,7 +424,7 @@ class Command:
         self.checkIfAlive()
         return output
 
-    def socket_receive_message2(self, headerlist: List[str], show_msg: bool = False):
+    def socket_receive_message2(self, headerlist: list[str], show_msg: bool = False):
         """
         socketを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -462,7 +497,9 @@ class Command:
         self.checkIfAlive()
         return output
 
-    def mqtt_receive_message2(self, roomid: str, headerlist: str, show_msg: bool = False):
+    def mqtt_receive_message2(
+        self, roomid: str, headerlist: str, show_msg: bool = False
+    ):
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -483,7 +520,3 @@ class Command:
         """
         self.mqtt0.transmit_message(roomid, message)
         self.checkIfAlive()
-
-
-if __name__ == "__main__":
-    pass

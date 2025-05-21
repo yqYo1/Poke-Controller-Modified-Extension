@@ -174,7 +174,9 @@ class SendFormat:
                     self.L_stick_changed = True
 
                 self.format["lx"] = dir.x if not x_reverse else 255 - dir.x
-                self.format["ly"] = 255 - dir.y if not y_reverse else dir.y  # NOTE: y axis directs under
+                self.format["ly"] = (
+                    255 - dir.y if not y_reverse else dir.y
+                )  # NOTE: y axis directs under
             elif dir.stick == Stick.RIGHT:
                 if self.format["rx"] != dir.x or self.format["ry"] != 255 - dir.y:
                     self.R_stick_changed = True
@@ -239,10 +241,14 @@ class SendFormat:
         # send_btn |= 0x3
         if self.L_stick_changed:
             send_btn |= 0x2
-            str_L = format(self.format["lx"], "x") + space + format(self.format["ly"], "x")
+            str_L = (
+                format(self.format["lx"], "x") + space + format(self.format["ly"], "x")
+            )
         if self.R_stick_changed:
             send_btn |= 0x1
-            str_R = format(self.format["rx"], "x") + space + format(self.format["ry"], "x")
+            str_R = (
+                format(self.format["rx"], "x") + space + format(self.format["ry"], "x")
+            )
         # if self.Hat_changed:
         str_Hat = str(int(self.format["hat"]))
         # format(send_btn, 'x') + \
@@ -297,8 +303,12 @@ class SendFormat:
         send_hat = convert_hat_3ds_controller[int(self.format["hat"])]
 
         header2 = 0xA2  # fixed value
-        send_lx = self.format["lx"] if self.format["lx"] >= 128 else 127 - self.format["lx"]
-        send_ly = self.format["ly"] if self.format["ly"] >= 128 else 127 - self.format["ly"]
+        send_lx = (
+            self.format["lx"] if self.format["lx"] >= 128 else 127 - self.format["lx"]
+        )
+        send_ly = (
+            self.format["ly"] if self.format["ly"] >= 128 else 127 - self.format["ly"]
+        )
 
         state = [
             header,
@@ -438,7 +448,16 @@ class KeyPress:
         self.ser = ser
         self.format = SendFormat()
         self.holdButton = []
-        self.btn_name2 = ["LEFT", "RIGHT", "UP", "DOWN", "UP_LEFT", "UP_RIGHT", "DOWN_LEFT", "DOWN_RIGHT"]
+        self.btn_name2 = [
+            "LEFT",
+            "RIGHT",
+            "UP",
+            "DOWN",
+            "UP_LEFT",
+            "UP_RIGHT",
+            "DOWN_LEFT",
+            "DOWN_RIGHT",
+        ]
 
         self.pushing_to_show = None
         self.pushing = None
@@ -465,7 +484,8 @@ class KeyPress:
                 btns.append(btn)
         if self.serial_data_format_name == "3DS Controller":
             self.format.setButton(
-                [btn for btn in btns if type(btn) is Button], convert=conversion_3ds_controller_button
+                [btn for btn in btns if type(btn) is Button],
+                convert=conversion_3ds_controller_button,
             )
             self.format.setHat([btn for btn in btns if type(btn) is Hat])
             self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
@@ -475,7 +495,9 @@ class KeyPress:
             self.format.setHat([btn for btn in btns if type(btn) is Hat])
             self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
             if self.serial_data_format_name == "Qingpi":
-                self.format.setTouchscreen([btn for btn in btns if type(btn) is Touchscreen])
+                self.format.setTouchscreen(
+                    [btn for btn in btns if type(btn) is Touchscreen]
+                )
                 self.ser.writeList(self.format.convert2list())
             else:
                 self.ser.writeRow(self.format.convert2str())
@@ -483,7 +505,13 @@ class KeyPress:
 
         # self._logger.debug(f": {list(map(str,self.format.format.values()))}")
 
-    def inputEnd(self, btns: Button | Hat | Stick | Direction, ifPrint=True, unset_hat=True, unset_Touchscreen=True):
+    def inputEnd(
+        self,
+        btns: Button | Hat | Stick | Direction,
+        ifPrint=True,
+        unset_hat=True,
+        unset_Touchscreen=True,
+    ):
         # self._logger.debug(f"input end: {btns}")
         self.pushing2 = dict(self.format.format)
 
@@ -502,7 +530,8 @@ class KeyPress:
 
         if self.serial_data_format_name == "3DS Controller":
             self.format.unsetButton(
-                [btn for btn in btns if type(btn) is Button], convert=conversion_3ds_controller_button
+                [btn for btn in btns if type(btn) is Button],
+                convert=conversion_3ds_controller_button,
             )
             if unset_hat:
                 self.format.unsetHat()
@@ -514,7 +543,9 @@ class KeyPress:
                 self.format.unsetHat()
             self.format.unsetDirection(tilts)
             if self.serial_data_format_name == "Qingpi":
-                if unset_Touchscreen or (True in [btn for btn in btns if type(btn) is Touchscreen]):
+                if unset_Touchscreen or (
+                    True in [btn for btn in btns if type(btn) is Touchscreen]
+                ):
                     self.format.unsetTouchscreen()
                 self.ser.writeList(self.format.convert2list())
             else:
@@ -569,7 +600,9 @@ class KeyPress:
         else:
             self.ser.writeRow("end")
 
-    def serialcommand_direct_send(self, serialcommands: list, waittime: list):
+    def serialcommand_direct_send(
+        self, serialcommands: list[str], waittime: list[float]
+    ):
         for wtime, row in zip(waittime, serialcommands):
             time.sleep(wtime)
             self.ser.writeRow_wo_perf_counter(row, is_show=False)

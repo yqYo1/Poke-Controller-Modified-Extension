@@ -1,28 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-# from typing import Tuple
 
-import cv2
+import datetime
+import logging
 import os
 import time
 import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
-import numpy as np
-import datetime
 from collections import deque
+from logging import DEBUG, NullHandler, StreamHandler, getLogger
 from tkinter import filedialog
+from tkinter.scrolledtext import ScrolledText
 
-from PIL import Image, ImageTk
-
+import cv2
+import numpy as np
 from Commands import UnitCommand
-
-# from Commands import StickCommand
-from Commands.Keys import Direction, Stick, Touchscreen, NEUTRAL, KeyPress
-
-import logging
-from logging import StreamHandler, getLogger, DEBUG, NullHandler
-# from Commands.PythonCommandBase import PythonCommand
+from Commands.Keys import NEUTRAL, Direction, KeyPress, Stick, Touchscreen
+from PIL import Image, ImageTk
 
 try:
     os.makedirs("log")

@@ -11,7 +11,7 @@ import time
 from functools import wraps
 from logging import DEBUG, Logger, NullHandler, getLogger
 from time import sleep
-from typing import TYPE_CHECKING, Concatenate, ParamSpec, TypeVar, override
+from typing import TYPE_CHECKING, Concatenate, Literal, ParamSpec, TypeVar, override
 
 try:
     from plyer import notification
@@ -40,10 +40,6 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
     R = TypeVar("R")
 
-# PythonCommandLike = TypeVar("PythonCommandLike", bound="PythonCommand")
-# P = ParamSpec("P")
-# R = TypeVar("R")
-
 
 # the class For notifying stop signal is sent from Main window
 class StopThread(Exception):
@@ -63,36 +59,24 @@ class PythonCommand(CommandBase.Command):
 
         self.alive: bool = True
         self.keys: KeyPress | None = None
-        self.postProcess: Callable[[], None]
+        self.postProcess: Callable[[], None] | None = None
         self.thread: threading.Thread | None = None
         self.Line: Final = Line_Notify()
         self.Discord: Final = Discord_Notify()
 
-    # TODO https://www.perplexity.ai/search/callable-p-r-woshi-yong-sitate-usRYCHtqShWDX.yi2DiYXQ
-    # def pausedecorator(func):
-    # def pausedecorator(self, func: Callable[P, R]) -> Callable[P, R]:
     @staticmethod
     def pausedecorator(
         func: Callable[Concatenate[PythonCommandLike, P], R],
     ) -> Callable[Concatenate[PythonCommandLike, P], R]:
         """
         一時停止を実現するためのデコレータです。
-        戻り値が3つある関数に使用されます。
+        # 戻り値が3つある関数に使用されます。
+        ↑戻り値で分ける必要がなさそう
         """
 
-        # def inner(self, *args, **kwargs):
-        #     func(self, *args, **kwargs)
         @wraps(func)
         def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs):
             result = func(self, *args, **kwargs)
-            # if isinstance(args[0], PythonCommand):
-            #     if args[0].isPause:
-            #         args[0].show_var()
-            #     while args[0].isPause:
-            #         sleep(0.5)
-            #         args[0].checkIfAlive()
-            # else:
-            #     pass
             if self.isPause:
                 self.show_var()
             while self.isPause:
@@ -125,9 +109,9 @@ class PythonCommand(CommandBase.Command):
             "ImgProc",
         ]
         print("--------内部変数一覧--------")
-        for k, v in var_dict.items():
+        for k, v in var_dict.items():  # pyright: ignore[reportAny]
             if k not in del_dict:
-                print(k, "=", v)
+                print(k, "=", v)  # pyright: ignore[reportAny]
         print("----------------------------")
 
     @abstractmethod
@@ -249,10 +233,11 @@ class PythonCommand(CommandBase.Command):
         """
         ボタンを押す。
         """
-        self.keys.input(buttons)
-        self.wait(duration)
-        self.keys.inputEnd(buttons)
-        self.wait(wait)
+        if self.keys is not None:
+            self.keys.input(buttons)
+            self.wait(duration)
+            self.keys.inputEnd(buttons)
+            self.wait(wait)
         self.checkIfAlive()
 
     # press button at duration times(s) repeatedly
@@ -277,21 +262,23 @@ class PythonCommand(CommandBase.Command):
         """
         ボタンを押したままの状態にする。
         """
-        self.keys.hold(buttons)
+        if self.keys is not None:
+            self.keys.hold(buttons)
         self.wait(wait)
 
     # release holding buttons
     @pausedecorator
-    def holdEnd(self, buttons: Button | Hat | Stick | Direction):
+    def holdEnd(self, buttons: Button | Hat | Stick | Direction) -> None:
         """
         ボタンを離した状態にする。
         """
-        self.keys.holdEnd(buttons)
+        if self.keys is not None:
+            self.keys.holdEnd(buttons)
         self.checkIfAlive()
 
     # do nothing at wait time(s)
     @pausedecorator
-    def short_wait(self, wait: float):
+    def short_wait(self, wait: float) -> None:
         """
         指定時間待機する。
         """
@@ -302,7 +289,7 @@ class PythonCommand(CommandBase.Command):
 
     # do nothing at wait time(s)
     @pausedecorator
-    def wait(self, wait: float):
+    def wait(self, wait: float) -> None:
         """
         指定時間待機する。
         """
@@ -315,13 +302,14 @@ class PythonCommand(CommandBase.Command):
         self.checkIfAlive()
 
     @override
-    def checkIfAlive(self):
+    def checkIfAlive(self) -> Literal[True]:
         """
         Aliveフラグの状態を確認する。
         AliveフラグがFalseなら終了処理を行う。
         """
         if not self.alive:
-            self.keys.end()
+            if self.keys is not None:
+                self.keys.end()
             self.keys = None
             self.thread = None
 
@@ -336,37 +324,38 @@ class PythonCommand(CommandBase.Command):
             return True
 
     # direct serial
-    def direct_serial(self, serialcommands: list, waittime: list):
-        # 余計なものが付いている可能性があるので確認して削除する
-        checkedcommands = []
-        for row in serialcommands:
-            checkedcommands.append(row.replace("\r", "").replace("\n", ""))
-        self.keys.serialcommand_direct_send(checkedcommands, waittime)
+    def direct_serial(self, serialcommands: list[str], waittime: list) -> None:
+        if self.keys is not None:
+            # 余計なものが付いている可能性があるので確認して削除する
+            checkedcommands = []
+            for row in serialcommands:
+                checkedcommands.append(row.replace("\r", "").replace("\n", ""))
+            self.keys.serialcommand_direct_send(checkedcommands, waittime)
 
     # Reload COM port (temporary function)
     def reload_com_port(self):
-        if self.keys.ser.isOpened():
-            print("Port is already opened and being closed.")
-            self.keys.ser.closeSerial()
-            # self.keyPress = None (ここでNoneはNGなはず)
-            self.reload_com_port()
-        else:
-            if self.keys.ser.openSerial(
-                GuiSettings().com_port.get(),
-                GuiSettings().com_port_name.get(),
-                GuiSettings().baud_rate.get(),
-            ):
-                print(
-                    "COM Port "
-                    + str(GuiSettings().com_port.get())
-                    + " connected successfully"
-                )
-                self._logger.debug(
-                    "COM Port "
-                    + str(GuiSettings().com_port.get())
-                    + " connected successfully"
-                )
+        if self.keys is not None:
+            if self.keys.ser.isOpened():
+                print("Port is already opened and being closed.")
+                self.keys.ser.closeSerial()
                 # self.keyPress = None (ここでNoneはNGなはず)
+                self.reload_com_port()
+            else:
+                if self.keys.ser.openSerial(
+                    GuiSettings().com_port.get(),
+                    GuiSettings().com_port_name.get(),
+                    GuiSettings().baud_rate.get(),
+                ):
+                    print(
+                        "COM Port "
+                        + str(GuiSettings().com_port.get())
+                        + " connected successfully"
+                    )
+                    self._logger.debug(
+                        "COM Port "
+                        + str(GuiSettings().com_port.get())
+                        + " connected successfully"
+                    )
 
     def LINE_text(self, txt: str, token: str = "token"):
         # 送信
@@ -395,7 +384,7 @@ class PythonCommand(CommandBase.Command):
             pass
 
 
-def generateRandomCharacter(n: int):
+def generateRandomCharacter(n: int) -> str:
     """
     指定数のランダムな文字列を生成する
     Contributor: kochan (敬称略)
@@ -405,8 +394,9 @@ def generateRandomCharacter(n: int):
 
 
 def convertCv2Format(
-    crop_fmt: int | str = "", crop: list[int] = []
-) -> tuple[list[int], list[int]]:  # type: ignore
+    crop_fmt: int | Literal["", "1", "2", "3", "4", "11", "12", "13", "14"] = "",
+    crop: list[int] | None = None,
+) -> tuple[list[int], list[int]]:
     """
     リストをopencv/pillow形式に対応するよう変換する。
     ・Pillow形式
@@ -421,6 +411,8 @@ def convertCv2Format(
     crop_fmt=13: [y軸始点, y軸終点, x軸始点, x軸終点] (res_cv2として出力されるリスト)
     crop_fmt=14: [y軸始点, トリミング後の画像のサイズ(縦), x軸始点, トリミング後の画像のサイズ(横)]
     """
+    if crop is None:
+        crop = []
 
     try:
         # pillow形式
@@ -466,39 +458,39 @@ class ImageProcPythonCommand(PythonCommand):
         self.camera: Camera = cam
         self.gui: CaptureArea | None = gui
 
-    def pausedecorator2(func):
-        """
-        一時停止を実現するためのデコレータです。
-        戻り値が1つある関数に使用されます。
-        """
-
-        def inner(self, *args, **kwargs):
-            res = func(self, *args, **kwargs)
-            if self.isPause:
-                self.show_var()
-            while self.isPause:
-                sleep(0.5)
-                self.checkIfAlive()
-            return res
-
-        return inner
-
-    def pausedecorator3(func):
-        """
-        一時停止を実現するためのデコレータです。
-        戻り値が3つある関数に使用されます。
-        """
-
-        def inner(self, *args, **kwargs):
-            res1, res2, res3 = func(self, *args, **kwargs)
-            if self.isPause:
-                self.show_var()
-            while self.isPause:
-                sleep(0.5)
-                self.checkIfAlive()
-            return res1, res2, res3
-
-        return inner
+    # def pausedecorator2(func):
+    #     """
+    #     一時停止を実現するためのデコレータです。
+    #     戻り値が1つある関数に使用されます。
+    #     """
+    #
+    #     def inner(self, *args, **kwargs):
+    #         res = func(self, *args, **kwargs)
+    #         if self.isPause:
+    #             self.show_var()
+    #         while self.isPause:
+    #             sleep(0.5)
+    #             self.checkIfAlive()
+    #         return res
+    #
+    #     return inner
+    #
+    # def pausedecorator3(func):
+    #     """
+    #     一時停止を実現するためのデコレータです。
+    #     戻り値が3つある関数に使用されます。
+    #     """
+    #
+    #     def inner(self, *args, **kwargs):
+    #         res1, res2, res3 = func(self, *args, **kwargs)
+    #         if self.isPause:
+    #             self.show_var()
+    #         while self.isPause:
+    #             sleep(0.5)
+    #             self.checkIfAlive()
+    #         return res1, res2, res3
+    #
+    #     return inner
 
     def get_filespec(self, filename: str, mode: str = "t") -> str:
         """
@@ -522,7 +514,7 @@ class ImageProcPythonCommand(PythonCommand):
         else:
             return filename
 
-    def setTemplateDir(self, path):
+    def setTemplateDir(self, path: str):
         ImageProcPythonCommand.template_path_name = path
 
     def getCameraImage(
@@ -549,7 +541,8 @@ class ImageProcPythonCommand(PythonCommand):
         image = getImage(self.get_filespec(filename, mode=mode), mode="color")
         return image
 
-    @pausedecorator2
+    # @pausedecorator2
+    @PythonCommand.pausedecorator
     def isContainTemplate(
         self,
         template_path: str,
@@ -652,7 +645,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         return res
 
-    @pausedecorator3
+    # @pausedecorator3
+    @PythonCommand.pausedecorator
     def isContainTemplate_max(
         self,
         template_path_list: list[str],
@@ -761,7 +755,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         return max_idx, max_val_list, judge_list
 
-    @pausedecorator2
+    # @pausedecorator2
+    @PythonCommand.pausedecorator
     def isContainTemplateGPU(
         self,
         template_path: str,
@@ -807,7 +802,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         return res
 
-    @pausedecorator2
+    # @pausedecorator2
+    @PythonCommand.pausedecorator
     def isContainedImage(
         self,
         image_path: str,

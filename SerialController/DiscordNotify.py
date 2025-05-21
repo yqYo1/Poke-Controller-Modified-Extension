@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import configparser
-import requests
-import json
-import cv2
 import io
+import json
 import os
+from logging import DEBUG, NullHandler, getLogger
+from typing import TYPE_CHECKING
+
+import cv2
 import numpy as np
+import requests
 from PIL import Image
-from logging import getLogger, DEBUG, NullHandler
+
+if TYPE_CHECKING:
+    from cv2.typing import MatLike
 
 
 def convert_bgr_to_bytes(image_bgr):
@@ -20,15 +25,25 @@ def convert_bgr_to_bytes(image_bgr):
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     image = Image.fromarray(image_rgb)
     png = io.BytesIO()  # 空のio.BytesIOオブジェクトを用意
-    image.save(png, format="png")  # 空のio.BytesIOオブジェクトにpngファイルとして書き込み
+    image.save(
+        png, format="png"
+    )  # 空のio.BytesIOオブジェクトにpngファイルとして書き込み
     b_frame = png.getvalue()  # io.BytesIOオブジェクトをbytes形式で読みとり
     return b_frame
 
 
 class Discord_Notify:
-    DISCORD_SETTING_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "discord_token.ini")
+    DISCORD_SETTING_PATH = os.path.join(
+        os.path.dirname(__file__), "profiles", "default", "discord_token.ini"
+    )
 
-    def __init__(self, webhook_url="webhook_url", username="username", avatar_url="", token_name="token"):
+    def __init__(
+        self,
+        webhook_url="webhook_url",
+        username="username",
+        avatar_url="",
+        token_name="token",
+    ):
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -37,23 +52,35 @@ class Discord_Notify:
         self.default_username = f"Poke-Controller Modified Extension (profile: {os.path.basename(os.path.dirname(self.DISCORD_SETTING_PATH))})"
 
         self.res = None
-        self.setting_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
+        self.setting_file = configparser.ConfigParser(
+            comment_prefixes="#", allow_no_value=True
+        )
         self.open_file_with_utf8()
 
         self.section_list = list(self.setting_file.keys())
         self.webhook_url_dict = {
-            key: self.setting_file[key]["webhook_url"] for key in self.section_list if "DISCORD_WEBHOOK" in key
+            key: self.setting_file[key]["webhook_url"]
+            for key in self.section_list
+            if "DISCORD_WEBHOOK" in key
         }
         self.username_dict = {
-            key: self.setting_file[key]["username"] for key in self.section_list if "DISCORD_WEBHOOK" in key
+            key: self.setting_file[key]["username"]
+            for key in self.section_list
+            if "DISCORD_WEBHOOK" in key
         }
         self.avatar_url_dict = {
-            key: self.setting_file[key]["avatar_url"] for key in self.section_list if "DISCORD_WEBHOOK" in key
+            key: self.setting_file[key]["avatar_url"]
+            for key in self.section_list
+            if "DISCORD_WEBHOOK" in key
         }
-        self.webhook_keys = [key for key in self.section_list if "DISCORD_WEBHOOK" in key]
+        self.webhook_keys = [
+            key for key in self.section_list if "DISCORD_WEBHOOK" in key
+        ]
 
         try:
-            self.res = [requests.get(self.webhook_url_dict[key]) for key in self.webhook_keys]
+            self.res = [
+                requests.get(self.webhook_url_dict[key]) for key in self.webhook_keys
+            ]
             self.status = [responses.status_code for responses in self.res]
             self.chk_webhook_json = [responses.json() for responses in self.res]
         except Exception:
@@ -106,7 +133,12 @@ class Discord_Notify:
                 self._logger.info("Valid url")
                 return "DISCORD API Check OK!"
 
-    def send_message(self, notification_message=None, image=None, keys="DISCORD_WEBHOOK"):
+    def send_message(
+        self,
+        notification_message: str | None = None,
+        image: MatLike | None = None,
+        keys: str | list[str] = "DISCORD_WEBHOOK",
+    ):
         """
         DISCORDにテキスト/画像を通知する
         imageが設定されていなければテキストのみ、設定されていればテキストと画像を通知する
@@ -169,7 +201,9 @@ class Discord_Notify:
                     print(f"[{key}]{send_data_type}を送信しました。")
                     self._logger.info(f"Send {send_data_type_eng}")
                 else:
-                    print(f"[{key}]{send_data_type}の送信に失敗しました。({self.res.status_code})")
+                    print(
+                        f"[{key}]{send_data_type}の送信に失敗しました。({self.res.status_code})"
+                    )
                     self._logger.error(f"Failed to send {send_data_type_eng}")
             except Exception:
                 print(f"[{key}]webhook urlを確認してください。")
@@ -180,16 +214,24 @@ class Discord_Notify:
             for i, name in enumerate(self.webhook_keys):
                 print(f"For: {name}")
                 print("X-RateLimit-Limit: " + self.res[i].headers["X-RateLimit-Limit"])
-                print("X-RateLimit-Remaining: " + self.res[i].headers["X-RateLimit-Remaining"])
+                print(
+                    "X-RateLimit-Remaining: "
+                    + self.res[i].headers["X-RateLimit-Remaining"]
+                )
                 import datetime
 
                 dt = datetime.datetime.fromtimestamp(
-                    int(self.res[i].headers["X-RateLimit-Reset"]), datetime.timezone(datetime.timedelta(hours=9))
+                    int(self.res[i].headers["X-RateLimit-Reset"]),
+                    datetime.timezone(datetime.timedelta(hours=9)),
                 )
                 print("Reset time:", dt, "\n")
 
-                self._logger.info(f"DISCORD API - Limit: {self.res[i].headers['X-RateLimit-Limit']}")
-                self._logger.info(f"DISCORD API - Remaining: {self.res[i].headers['X-RateLimit-Remaining']}")
+                self._logger.info(
+                    f"DISCORD API - Limit: {self.res[i].headers['X-RateLimit-Limit']}"
+                )
+                self._logger.info(
+                    f"DISCORD API - Remaining: {self.res[i].headers['X-RateLimit-Remaining']}"
+                )
                 self._logger.info(f"Reset time: {dt}")
         except AttributeError as e:
             self._logger.error(e)

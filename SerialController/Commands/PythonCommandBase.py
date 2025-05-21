@@ -8,10 +8,12 @@ import random
 import string
 import threading
 import time
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from functools import wraps
 from logging import DEBUG, Logger, NullHandler, getLogger
 from time import sleep
-from typing import TYPE_CHECKING, Concatenate, Literal, ParamSpec, TypeVar, override
+from typing import TYPE_CHECKING, override
 
 try:
     from plyer import notification
@@ -19,7 +21,6 @@ try:
     flag_import_plyer = True
 except Exception:
     flag_import_plyer = False
-from abc import abstractmethod
 
 from Commands import CommandBase
 from Commands.Keys import KeyPress
@@ -29,12 +30,14 @@ from LineNotify import Line_Notify
 from Settings import GuiSettings
 
 if TYPE_CHECKING:
-    from typing import Callable, Final
+    from typing import Callable, Concatenate, Final, Literal, ParamSpec, TypeVar
 
     from Camera import Camera
     from Commands.Keys import Button, Direction, Hat, Stick
     from Commands.Sender import Sender
+    from cv2.typing import MatLike
     from GuiAssets import CaptureArea
+    from ImageProcessing import CropFmt
 
     PythonCommandLike = TypeVar("PythonCommandLike", bound="PythonCommand")
     P = ParamSpec("P")
@@ -49,7 +52,27 @@ class StopThread(Exception):
 # Python command
 
 
-class PythonCommand(CommandBase.Command):
+def pausedecorator(
+    func: Callable[Concatenate[PythonCommandLike, P], R],
+) -> Callable[Concatenate[PythonCommandLike, P], R]:
+    """
+    一時停止を実現するためのデコレータです。
+    """
+
+    @wraps(func)
+    def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs):
+        result = func(self, *args, **kwargs)
+        if self.isPause:
+            self.show_var()
+        while self.isPause:
+            sleep(0.5)
+            self.checkIfAlive()
+        return result
+
+    return inner
+
+
+class PythonCommand(CommandBase.Command, ABC):
     def __init__(self):
         super(PythonCommand, self).__init__()
         self._logger: Logger = getLogger(__name__)
@@ -63,28 +86,6 @@ class PythonCommand(CommandBase.Command):
         self.thread: threading.Thread | None = None
         self.Line: Final = Line_Notify()
         self.Discord: Final = Discord_Notify()
-
-    @staticmethod
-    def pausedecorator(
-        func: Callable[Concatenate[PythonCommandLike, P], R],
-    ) -> Callable[Concatenate[PythonCommandLike, P], R]:
-        """
-        一時停止を実現するためのデコレータです。
-        # 戻り値が3つある関数に使用されます。
-        ↑戻り値で分ける必要がなさそう
-        """
-
-        @wraps(func)
-        def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs):
-            result = func(self, *args, **kwargs)
-            if self.isPause:
-                self.show_var()
-            while self.isPause:
-                sleep(0.5)
-                self.checkIfAlive()
-            return result
-
-        return inner
 
     def show_var(self):
         """
@@ -133,7 +134,9 @@ class PythonCommand(CommandBase.Command):
         try:
             if self.alive:
                 if self.isWinNotStart:
-                    if flag_import_plyer:
+                    # TODO
+                    # if flag_import_plyer:
+                    if notification is not None:
                         notification.notify(
                             title=f"{self.app_name} (profile:{self.profilename})",
                             message=f"{self.cur_command_name} started.",
@@ -324,10 +327,10 @@ class PythonCommand(CommandBase.Command):
             return True
 
     # direct serial
-    def direct_serial(self, serialcommands: list[str], waittime: list) -> None:
+    def direct_serial(self, serialcommands: list[str], waittime: list[float]) -> None:
         if self.keys is not None:
             # 余計なものが付いている可能性があるので確認して削除する
-            checkedcommands = []
+            checkedcommands: list[str] = []
             for row in serialcommands:
                 checkedcommands.append(row.replace("\r", "").replace("\n", ""))
             self.keys.serialcommand_direct_send(checkedcommands, waittime)
@@ -357,7 +360,7 @@ class PythonCommand(CommandBase.Command):
                         + " connected successfully"
                     )
 
-    def LINE_text(self, txt: str, token: str = "token"):
+    def LINE_text(self, txt: str, token: str = "token") -> None:
         # 送信
         try:
             self.Line.send_message(txt, token=token)
@@ -366,7 +369,7 @@ class PythonCommand(CommandBase.Command):
 
     def discord_text(
         self, content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK"
-    ):
+    ) -> None:
         # webhook_urlのindex指定とkey設定
         if index != 0 and keys == "DISCORD_WEBHOOK":
             keys = f"DISCORD_WEBHOOK{index}"
@@ -394,7 +397,7 @@ def generateRandomCharacter(n: int) -> str:
 
 
 def convertCv2Format(
-    crop_fmt: int | Literal["", "1", "2", "3", "4", "11", "12", "13", "14"] = "",
+    crop_fmt: CropFmt = "",
     crop: list[int] | None = None,
 ) -> tuple[list[int], list[int]]:
     """
@@ -443,11 +446,11 @@ def convertCv2Format(
     return res_cv2, res_pillow
 
 
-class ImageProcPythonCommand(PythonCommand):
+class ImageProcPythonCommand(PythonCommand, ABC):
     template_path_name: str = "./Template/"
     capture_path_name: str = "./Captures/"
 
-    def __init__(self, cam: Camera, gui: CaptureArea | None = None):
+    def __init__(self, cam: Camera, gui: CaptureArea | None = None) -> None:
         super(ImageProcPythonCommand, self).__init__()
 
         self._logger: Logger = getLogger(__name__)
@@ -514,12 +517,14 @@ class ImageProcPythonCommand(PythonCommand):
         else:
             return filename
 
-    def setTemplateDir(self, path: str):
+    def setTemplateDir(self, path: str) -> None:
         ImageProcPythonCommand.template_path_name = path
 
     def getCameraImage(
-        self, crop_fmt: int | str = "", crop: list[int] = []
-    ) -> ImageProcessing.image_type:
+        self,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+    ) -> MatLike:
         """
         カメラから画像データを取得する
         """
@@ -534,7 +539,7 @@ class ImageProcPythonCommand(PythonCommand):
 
         return cropped_image
 
-    def openImage(self, filename: str, mode: str = "t") -> ImageProcessing.image_type:
+    def openImage(self, filename: str, mode: str = "t") -> MatLike | None:
         """
         指定されたパスの画像データを取得する
         """
@@ -542,7 +547,7 @@ class ImageProcPythonCommand(PythonCommand):
         return image
 
     # @pausedecorator2
-    @PythonCommand.pausedecorator
+    @pausedecorator
     def isContainTemplate(
         self,
         template_path: str,
@@ -552,15 +557,16 @@ class ImageProcPythonCommand(PythonCommand):
         show_position: bool = True,
         show_only_true_rect: bool = True,
         ms: float = 2000,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
-        mask_path: str = None,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+        mask_path: str | None = None,
         use_gpu: bool = False,
-        BGR_range: dict | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
         threshold_binary: int | None = None,
-        crop_template: list[int] = [],
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-        color: list[str] = ["blue", "red", "orange"],
+        color: list[str] | None = None,
     ) -> bool:
         """
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
@@ -592,6 +598,11 @@ class ImageProcPythonCommand(PythonCommand):
                 else None
             )
 
+        if template_image is None:
+            raise ValueError(
+                f"template_path:{template_path}から画像を取得できませんでした。"
+            )
+
         # テンプレートマッチング
         res, max_loc, width, height, max_val = ImageProcessing(
             use_gpu=use_gpu
@@ -615,6 +626,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         # canvasに検出位置を表示
         if show_position:
+            if color is None:
+                color = ["blue", "red", "orange"]
             if crop_pillow != []:
                 max_loc = list(max_loc)
                 max_loc[0] += crop_pillow[0]
@@ -646,7 +659,7 @@ class ImageProcPythonCommand(PythonCommand):
         return res
 
     # @pausedecorator3
-    @PythonCommand.pausedecorator
+    @pausedecorator
     def isContainTemplate_max(
         self,
         template_path_list: list[str],
@@ -656,15 +669,16 @@ class ImageProcPythonCommand(PythonCommand):
         show_position: bool = True,
         show_only_true_rect: bool = True,
         ms: float = 2000,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
-        mask_path_list: list[str] = [],
-        BGR_range: dict | None = None,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+        mask_path_list: list[str | None] | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
         threshold_binary: int | None = None,
-        crop_template: list[int] = [],
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-        color: list[str] = ["blue", "red", "orange"],
-    ) -> tuple(int, list[float], list[bool]):  # type: ignore
+        color: list[str] | None = None,
+    ) -> tuple[int, list[float], list[bool]]:
         """
         # 現在のスクリーンショットと指定した複数の画像のテンプレートマッチングを行います。
         # 相関値が最も大きい値となった画像のインデックス、各画像のテンプレートマッチングの閾値、閾値判定結果を返します。
@@ -679,21 +693,27 @@ class ImageProcPythonCommand(PythonCommand):
         src = self.camera.readFrame()
 
         # テンプレート画像を取得
-        template_image_list = []
+        template_image_list: list[MatLike] = []
         for i in template_path_list:
             if isinstance(i, ImageProcessing.image_type):
                 template_image_list.append(i)
             else:
-                template_image_list.append(
-                    getImage(self.get_filespec(i, mode="t"), mode="color")
-                )
+                image = getImage(self.get_filespec(i, mode="t"), mode="color")
+                if image is not None:
+                    template_image_list.append(image)
+                else:
+                    raise ValueError(
+                        f"template_path:{i}から画像を取得できませんでした。"
+                    )
 
         # マスク画像を取得
-        mask_image_list = []
+        mask_image_list: list[MatLike | None] = []
         if mask_path_list is not None:
             for i in mask_path_list:
                 if isinstance(i, ImageProcessing.image_type):
                     mask_image_list.append(i)
+                elif i is None:
+                    mask_image_list.append(None)
                 else:
                     mask_image_list.append(
                         getImage(self.get_filespec(i, mode="t"), mode="binary")
@@ -725,14 +745,20 @@ class ImageProcPythonCommand(PythonCommand):
 
         # canvasに検出位置を表示
         if show_position:
+            if color is None:
+                color = ["blue", "red", "orange"]
             if crop_pillow != []:
-                max_loc_list[max_idx] = list(max_loc_list[max_idx])
-                max_loc_list[max_idx][0] += crop_pillow[0]
-                max_loc_list[max_idx][1] += crop_pillow[1]
+                max_loc = (
+                    max_loc_list[max_idx][0] + crop_pillow[0],
+                    max_loc_list[max_idx][1] + crop_pillow[1],
+                )
+            else:
+                max_loc = max_loc_list[max_idx]
             tag = str(time.perf_counter()) + str(random.random())
             if True in judge_list:
                 self.displayRectangle(
-                    max_loc_list[max_idx],
+                    # max_loc_list[max_idx],
+                    max_loc,
                     width_list[max_idx],
                     height_list[max_idx],
                     tag,
@@ -756,7 +782,7 @@ class ImageProcPythonCommand(PythonCommand):
         return max_idx, max_val_list, judge_list
 
     # @pausedecorator2
-    @PythonCommand.pausedecorator
+    @pausedecorator
     def isContainTemplateGPU(
         self,
         template_path: str,
@@ -766,14 +792,15 @@ class ImageProcPythonCommand(PythonCommand):
         show_position: bool = True,
         show_only_true_rect: bool = True,
         ms: float = 2000,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
         mask_path: str | None = None,
-        BGR_range: dict | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
         threshold_binary: int | None = None,
-        crop_template: list[int] = [],
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-        color: list[str] = ["blue", "red", "orange"],
+        color: list[str] | None = None,
     ) -> bool:
         """
         現在のスクリーンショットと指定した画像のテンプレートマッチングを行います。
@@ -803,7 +830,7 @@ class ImageProcPythonCommand(PythonCommand):
         return res
 
     # @pausedecorator2
-    @PythonCommand.pausedecorator
+    @pausedecorator
     def isContainedImage(
         self,
         image_path: str,
@@ -813,15 +840,16 @@ class ImageProcPythonCommand(PythonCommand):
         show_position: bool = True,
         show_only_true_rect: bool = True,
         ms: float = 2000,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
-        mask_path: str = None,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+        mask_path: str | None = None,
         use_gpu: bool = False,
-        BGR_range: dict | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
         threshold_binary: int | None = None,
-        crop_template: list[int] = [],
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-        color: list[str] = ["blue", "red", "orange"],
+        color: list[str] | None = None,
     ) -> bool:
         """
         指定した画像に対して現在のスクリーンショットから生成したテンプレート画像を用いてテンプレートマッチングを行います。
@@ -852,6 +880,8 @@ class ImageProcPythonCommand(PythonCommand):
                 if mask_path is not None
                 else None
             )
+        if image is None:
+            raise ValueError(f"image_path:{image_path}から画像を取得できませんでした。")
 
         # テンプレートマッチング
         res, _, width, height, max_val = ImageProcessing(
@@ -876,6 +906,8 @@ class ImageProcPythonCommand(PythonCommand):
 
         # canvasに検出位置を表示
         if show_position:
+            if color is None:
+                color = ["blue", "red", "orange"]
             tag = str(time.perf_counter()) + str(random.random())
             if res:
                 self.displayRectangle(
@@ -904,28 +936,36 @@ class ImageProcPythonCommand(PythonCommand):
 
     def displayRectangle(
         self,
-        max_loc: tuple,
+        max_loc: list[int] | Sequence[int],
         width: int,
         height: int,
-        tag: str = None,
+        tag: str | None = None,
         ms: float = 2000,
-        color: list[str] = ["blue", "orange"],
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
+        color: list[str] | None = None,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
     ):
         """
         GUIの画面に四角形を表示します。
         互換性維持のため、gui/canvas(元をたどると同じ変数)の両方に対応します。
         """
+        # デフォルト引数
+        if color is None:
+            color = ["blue", "orange"]
+
         # crop_fmtに応じてcropの中身を並び替える
         _, crop_pillow = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
 
         top_left = max_loc
+        if len(top_left) != 2:
+            raise ValueError(f"max_loc:{max_loc}の要素数が不正です。")
         bottom_right = (top_left[0] + width + 1, top_left[1] + height + 1)
         if self.gui is not None:
             canvas = self.gui
-        else:
+        elif self.canvas is not None:
             canvas = self.canvas
+        else:
+            raise ValueError("self.guiとself.canvasがどちらもNoneです。")
 
         if tag is None:
             tag = generateRandomCharacter(10)
@@ -941,16 +981,22 @@ class ImageProcPythonCommand(PythonCommand):
                     flag=False,
                 )
             canvas.ImgRect(
-                *top_left, *bottom_right, outline=color[0], tag=tag, ms=int(ms)
+                top_left[0],
+                top_left[1],
+                bottom_right[0],
+                bottom_right[1],
+                outline=color[0],
+                tag=tag,
+                ms=int(ms),
             )
         else:
             pass
 
     def displayText(
         self,
-        position: tuple,
+        position: Sequence[int],
         txt: str,
-        tag: str = None,
+        tag: str | None = None,
         ms: int = 2000,
         font: str = "UD デジタル 教科書体 NP-B",
         fontsize: int = 20,
@@ -958,8 +1004,10 @@ class ImageProcPythonCommand(PythonCommand):
     ):
         if self.gui is not None:
             canvas = self.gui
-        else:
+        elif self.canvas is not None:
             canvas = self.canvas
+        else:
+            raise ValueError("self.guiとself.canvasがどちらもNoneです。")
 
         ft = (font, fontsize)
 
@@ -981,9 +1029,9 @@ class ImageProcPythonCommand(PythonCommand):
 
     def saveCapture(
         self,
-        filename: str = None,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
+        filename: str | None = None,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
         mode: bool = True,
     ):
         """
@@ -1012,7 +1060,10 @@ class ImageProcPythonCommand(PythonCommand):
         ImageProcessing().saveImage(src, filename=save_path, crop=crop_cv2)
 
     def popupImage(
-        self, crop_fmt: int | str = "", crop: list[int] = [], title: str = "image"
+        self,
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+        title: str = "image",
     ):
         """
         popupで画像を表示する
@@ -1028,8 +1079,8 @@ class ImageProcPythonCommand(PythonCommand):
     def LINE_image(
         self,
         txt: str,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
         token: str = "token",
     ):
         """
@@ -1054,9 +1105,9 @@ class ImageProcPythonCommand(PythonCommand):
         self,
         content: str = "",
         index: int = 0,
-        crop_fmt: int | str = "",
-        crop: list[int] = [],
-        keys: str | list = "DISCORD_WEBHOOK",
+        crop_fmt: CropFmt = "",
+        crop: list[int] | None = None,
+        keys: str | list[str] = "DISCORD_WEBHOOK",
     ):
         """
         Discordにテキストと画像を通知します。

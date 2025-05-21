@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal
 
 from ExternalTools import MQTTCommunications, SocketCommunications
@@ -16,25 +16,27 @@ from PokeConDialogue import (
 )
 
 if TYPE_CHECKING:
+    from tkinter import Text
     from typing import Callable
 
     from Commands.Sender import Sender
+    from GuiAssets import CaptureArea
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連
 
 
-class Command:
-    __metaclass__ = ABCMeta
-    text_area_1 = None
-    text_area_2 = None
-    stdout_destination = "1"
-    pos_dialogue_buttons = "2"
+class Command(ABC):
+    # __metaclass__ = ABCMeta
+    text_area_1: Text | None = None
+    text_area_2: Text | None = None
+    stdout_destination: str = "1"
+    pos_dialogue_buttons: str = "2"
     isPause: bool = False
-    canvas = None
+    canvas: CaptureArea | None = None
     isGuide: bool = False
     isSimilarity: bool = False
-    isImage = False
+    isImage: bool = False
     isWinNotStart: bool = False
     isWinNotEnd: bool = False
     isLineNotStart: bool = False
@@ -43,7 +45,7 @@ class Command:
     isDiscordNotEnd: bool = False
     app_name: str = ""
     cur_command_name: str = ""
-    profilename = None
+    profilename: str = ""
 
     def __init__(self):
         self.isRunning: bool = False
@@ -54,7 +56,6 @@ class Command:
 
     @abstractmethod
     def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
-        # def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost = None):
         pass
 
     @abstractmethod

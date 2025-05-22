@@ -2,6 +2,13 @@
 /*
 /**
 
+# github actions
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/ruff.yml
+
 # not ignore
 !/.gitignore
 !/ExecutePokeConModified-Extension.bat
@@ -11,7 +18,9 @@
 !/UpdatePokeConModified-Extension.bat
 !/changelog.txt
 !/pyrightconfig.json
+!/ruff.toml
 !/requirements.txt
+
 
 !/DirectShowLib/
 /DirectShowLib/*

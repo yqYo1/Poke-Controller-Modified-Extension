@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import tkinter as tk
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
@@ -18,6 +18,7 @@ from PokeConDialogue import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from tkinter import Text
+    from typing import Literal
 
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
@@ -75,6 +76,8 @@ class Command(ABC):
         """
         上側のログ画面に文字列を出力する
         """
+        if self.text_area_1 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_1.config(state="normal")
@@ -88,6 +91,8 @@ class Command(ABC):
         """
         下側のログ画面に文字列を出力する
         """
+        if self.text_area_2 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")
@@ -126,16 +131,18 @@ class Command(ABC):
         上側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
+        if self.text_area_1 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
-            self.text_area_1.config(state="normal")
+            _ = self.text_area_1.config(state="normal")
             if mode in ["w", "d"]:
                 self.text_area_1.delete("1.0", "end")
             if mode == "w":
                 self.text_area_1.insert("1.0", txt)
             elif mode == "a":
                 self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disable")
+            _ = self.text_area_1.config(state="disable")
             self.text_area_1.see("end")
         except Exception:
             pass
@@ -151,6 +158,8 @@ class Command(ABC):
         下側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
+        if self.text_area_2 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")
@@ -320,7 +329,6 @@ class Command(ABC):
 
         if not ret:
             self.finish()
-            return None
         # [ok]選択時に入力履歴を保存
         save_dialogue_settings(new_dialogue_list, ret, filename)
         return ret

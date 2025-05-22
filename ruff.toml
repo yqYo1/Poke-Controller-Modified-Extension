@@ -40,7 +40,6 @@ select = [
     "RUF",  # Ruff-specific rules
 ]
 ignore = [
-  "S110",
   "UP009",
   "G004",
   "E501",  # formatはline-lengthを越える事がある

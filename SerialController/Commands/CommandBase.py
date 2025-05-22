@@ -68,10 +68,10 @@ class Command(ABC):
     #     pass
 
     ############### print functions ###############
-    def print_s(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_s(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         print(*objects, sep=sep, end=end)
 
-    def print_t1(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t1(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         上側のログ画面に文字列を出力する
         """
@@ -84,7 +84,7 @@ class Command(ABC):
         except Exception:
             print(*objects, sep=sep, end=end)
 
-    def print_t2(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t2(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         下側のログ画面に文字列を出力する
         """
@@ -97,7 +97,7 @@ class Command(ABC):
         except Exception:
             print(*objects, sep=sep, end=end)
 
-    def print_t(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         標準出力先として割り当てられていない方のログ画面に文字列を出力する
         """
@@ -106,7 +106,7 @@ class Command(ABC):
         elif self.stdout_destination == "2":
             self.print_t1(*objects, sep=sep, end=end)
 
-    def print_ts(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_ts(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         標準出力先として割り当てられている方のログ画面に文字列を出力する
         """
@@ -115,7 +115,13 @@ class Command(ABC):
         elif self.stdout_destination == "2":
             self.print_t2(*objects, sep=sep, end=end)
 
-    def print_t1b(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t1b(
+        self,
+        mode,
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         上側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -134,7 +140,13 @@ class Command(ABC):
         except Exception:
             pass
 
-    def print_t2b(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t2b(
+        self,
+        mode,
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         下側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -150,10 +162,10 @@ class Command(ABC):
                 self.text_area_2.insert("end", txt)
             self.text_area_2.config(state="disable")
             self.text_area_2.see("end")
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
-    def print_tb(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_tb(self, mode, *objects: object, sep: str = " ", end: str = "\n") -> None:  # noqa: ANN001
         """
         標準出力先として割り当てられていない方のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -163,7 +175,13 @@ class Command(ABC):
         elif self.stdout_destination == "2":
             self.print_t1b(mode, *objects, sep=sep, end=end)
 
-    def print_tbs(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_tbs(
+        self,
+        mode,
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         標準出力先として割り当てられている方のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -177,7 +195,7 @@ class Command(ABC):
         self,
         title: str,
         message: int | str | list,
-        desc: str = None,
+        desc: str | None = None,
         need: type = list,
     ) -> list | dict:
         """
@@ -199,14 +217,14 @@ class Command(ABC):
         self.message_dialogue = None
         if not ret:
             self.finish()
-        else:
-            return ret
+            return None
+        return ret
 
     def dialogue6widget(
         self,
         title: str,
         dialogue_list: list,
-        desc: str = None,
+        desc: str | None = None,
         need: type = list,
     ) -> list | dict:
         """
@@ -237,15 +255,15 @@ class Command(ABC):
 
         if not ret:
             self.finish()
-        else:
-            return ret
+            return None
+        return ret
 
     def dialogue6widget_save_settings(
         self,
         title: str,
         dialogue_list: list,
         filename: str,
-        desc: str = None,
+        desc: str | None = None,
         need: type = list,
     ) -> list | dict:
         """
@@ -296,17 +314,17 @@ class Command(ABC):
 
         if not ret:
             self.finish()
-        else:
-            # [ok]選択時に入力履歴を保存
-            save_dialogue_settings(new_dialogue_list, ret, filename)
-            return ret
+            return None
+        # [ok]選択時に入力履歴を保存
+        save_dialogue_settings(new_dialogue_list, ret, filename)
+        return ret
 
     def dialogue6widget_select_settings(
         self,
         title: str,
         dialogue_list: list,
         dirname: str,
-        desc: str = None,
+        desc: str | None = None,
         need: type = list,
     ) -> list | dict:
         """
@@ -370,31 +388,31 @@ class Command(ABC):
 
         if not ret:
             self.finish()
+            return None
+        # 設定保存用のウィジェット関連の要素を削除
+        if need is list:
+            preset_name = ret[-2]
+            save_preset = ret[-1]
+            ret = ret[:-2]
         else:
-            # 設定保存用のウィジェット関連の要素を削除
-            if need is list:
-                preset_name = ret[-2]
-                save_preset = ret[-1]
-                ret = ret[:-2]
-            else:
-                preset_name = ret["[PokeCon]設定ファイル名"]
-                save_preset = ret["[PokeCon]設定を保存"]
-                ret.pop("[PokeCon]設定ファイル名")
-                ret.pop("[PokeCon]設定を保存")
+            preset_name = ret["[PokeCon]設定ファイル名"]
+            save_preset = ret["[PokeCon]設定を保存"]
+            ret.pop("[PokeCon]設定ファイル名")
+            ret.pop("[PokeCon]設定を保存")
 
-            # [ok]選択時に入力履歴を保存
-            if save_preset and preset_name != "":
-                filename = os.path.join(dirname, f"{preset_name}.json")
-                save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
-            filename = os.path.join(dirname, "前回の設定.json")
+        # [ok]選択時に入力履歴を保存
+        if save_preset and preset_name != "":
+            filename = os.path.join(dirname, f"{preset_name}.json")
             save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
-            return ret
+        filename = os.path.join(dirname, "前回の設定.json")
+        save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
+        return ret
 
     ############### Socket functions ###############
-    def socket_change_alive(self, flag: bool):
+    def socket_change_alive(self, flag: bool) -> None:
         self.socket0.alive = flag
 
-    def socket_change_ipaddr(self, addr: str):
+    def socket_change_ipaddr(self, addr: str) -> None:
         """
         IPアドレスを変更する
         return:なし
@@ -402,7 +420,7 @@ class Command(ABC):
         """
         self.socket0.change_ipaddr(addr)
 
-    def socket_change_port(self, port: int):
+    def socket_change_port(self, port: int) -> None:
         """
         ポート番号を変更する
         return:なし
@@ -410,14 +428,14 @@ class Command(ABC):
         """
         self.socket0.change_port(port)
 
-    def socket_connect(self):
+    def socket_connect(self) -> None:
         """
         socket通信用のserverと接続する
         return:なし
         """
         self.socket0.sock_connect()
 
-    def socket_disconnect(self):
+    def socket_disconnect(self) -> None:
         """
         socket通信用のserverから切断する
         return:なし
@@ -446,7 +464,7 @@ class Command(ABC):
         self.checkIfAlive()
         return output
 
-    def socket_transmit_message(self, message: str):
+    def socket_transmit_message(self, message: str) -> None:
         """
         socketを用いてメッセージを送信する
         return:なし
@@ -456,7 +474,7 @@ class Command(ABC):
         self.checkIfAlive()
 
     ############### MQTT functions ###############
-    def mqtt_change_broker_address(self, broker_address: str):
+    def mqtt_change_broker_address(self, broker_address: str) -> None:
         """
         brokerアドレスを変更する
         return:なし
@@ -464,7 +482,7 @@ class Command(ABC):
         """
         self.mqtt0.broker_address = broker_address
 
-    def mqtt_change_id(self, id: str):
+    def mqtt_change_id(self, id: str) -> None:
         """
         IDを変更する
         return:なし
@@ -472,7 +490,7 @@ class Command(ABC):
         """
         self.mqtt0.id = id
 
-    def mqtt_change_pub_token(self, pub_token: str):
+    def mqtt_change_pub_token(self, pub_token: str) -> None:
         """
         pub用tokenを変更する
         return:なし
@@ -480,7 +498,7 @@ class Command(ABC):
         """
         self.mqtt0.pub_token = pub_token
 
-    def mqtt_change_sub_token(self, sub_token: str):
+    def mqtt_change_sub_token(self, sub_token: str) -> None:
         """
         sub用tokenを変更する
         return:なし
@@ -488,7 +506,7 @@ class Command(ABC):
         """
         self.mqtt0.sub_token = sub_token
 
-    def mqtt_change_clientId(self, clientId: str):
+    def mqtt_change_clientId(self, clientId: str) -> None:
         """
         接続者名を変更する
         return:なし
@@ -525,7 +543,7 @@ class Command(ABC):
         self.checkIfAlive()
         return output
 
-    def mqtt_transmit_message(self, roomid: str, message: str):
+    def mqtt_transmit_message(self, roomid: str, message: str) -> None:
         """
         MQTTを用いてメッセージを送信する
         return:なし

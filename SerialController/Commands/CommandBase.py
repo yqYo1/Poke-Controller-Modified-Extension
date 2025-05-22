@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import tkinter as tk
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
@@ -16,8 +16,8 @@ from PokeConDialogue import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from tkinter import Text
-    from typing import Callable
 
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
@@ -47,7 +47,7 @@ class Command(ABC):
     cur_command_name: str = ""
     profilename: str = ""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.isRunning: bool = False
 
         self.message_dialogue = None
@@ -174,7 +174,11 @@ class Command(ABC):
             self.print_t2b(mode, *objects, sep=sep, end=end)
 
     def dialogue(
-        self, title: str, message: int | str | list, desc: str = None, need: type = list
+        self,
+        title: str,
+        message: int | str | list,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         保存機能なしのダイアログ(Entryのみ)
@@ -199,7 +203,11 @@ class Command(ABC):
             return ret
 
     def dialogue6widget(
-        self, title: str, dialogue_list: list, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         保存機能なしのダイアログ
@@ -256,7 +264,7 @@ class Command(ABC):
         else:
             print(
                 "ウィジェット名に重複があります。重複しない名称を設定してください。"
-                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。"
+                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。",
             )
             self.finish()
 
@@ -316,7 +324,7 @@ class Command(ABC):
         else:
             print(
                 "ウィジェット名に重複があります。重複しない名称を設定してください。"
-                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。"
+                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。",
             )
             self.finish()
 
@@ -501,7 +509,10 @@ class Command(ABC):
         return output
 
     def mqtt_receive_message2(
-        self, roomid: str, headerlist: str, show_msg: bool = False
+        self,
+        roomid: str,
+        headerlist: str,
+        show_msg: bool = False,
     ):
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する

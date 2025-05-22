@@ -93,8 +93,8 @@ class Camera:
             return
         print("Camera ID " + str(cameraId) + " opened successfully")
         self._logger.debug(f"Camera ID {cameraId} opened successfully.")
-        _ = self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
-        _ = self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
         self.camera_thread_start()
 
     def isOpened(self) -> bool:
@@ -147,7 +147,7 @@ class Camera:
             self._logger.debug("Created Capture folder")
 
         try:
-            _ = imwrite(save_path, image)
+            imwrite(save_path, image)
             self._logger.debug(f"Capture succeeded: {save_path}")
             print("capture succeeded: " + save_path)
         except cv2.error as e:

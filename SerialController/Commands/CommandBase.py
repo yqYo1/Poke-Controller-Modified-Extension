@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import tkinter as tk
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
@@ -117,7 +117,7 @@ class Command(ABC):
 
     def print_t1b(
         self,
-        mode,
+        mode: Literal["w", "a", "d"],
         *objects: object,
         sep: str = " ",
         end: str = "\n",
@@ -142,7 +142,7 @@ class Command(ABC):
 
     def print_t2b(
         self,
-        mode,
+        mode: Literal["w", "a", "d"],
         *objects: object,
         sep: str = " ",
         end: str = "\n",
@@ -162,10 +162,16 @@ class Command(ABC):
                 self.text_area_2.insert("end", txt)
             self.text_area_2.config(state="disable")
             self.text_area_2.see("end")
-        except Exception:  # noqa: S110
+        except Exception:
             pass
 
-    def print_tb(self, mode, *objects: object, sep: str = " ", end: str = "\n") -> None:  # noqa: ANN001
+    def print_tb(
+        self,
+        mode: Literal["w", "a", "d"],
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         標準出力先として割り当てられていない方のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -177,7 +183,7 @@ class Command(ABC):
 
     def print_tbs(
         self,
-        mode,
+        mode: Literal["w", "a", "d"],
         *objects: object,
         sep: str = " ",
         end: str = "\n",

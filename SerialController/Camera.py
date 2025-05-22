@@ -95,8 +95,8 @@ class Camera:
             return
         print("Camera ID " + str(cameraId) + " opened successfully")
         self._logger.debug(f"Camera ID {cameraId} opened successfully.")
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
+        _ = self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.capture_size[0])
+        _ = self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.capture_size[1])
         self.camera_thread_start()
 
     def isOpened(self) -> bool:
@@ -143,12 +143,14 @@ class Camera:
         if not os.path.exists(os.path.dirname(save_path)) or not os.path.isdir(
             os.path.dirname(save_path)
         ):
-            # 保存先ディレクトリが存在しないか、同名のファイルが存在する場合（existsはファイルとフォルダを区別しない）
+            # 保存先ディレクトリが存在しないか、同名のファイルが存在する場合
+            # （existsはファイルとフォルダを区別しない）
+
             os.makedirs(os.path.dirname(save_path))
             self._logger.debug("Created Capture folder")
 
         try:
-            imwrite(save_path, image)
+            _ = imwrite(save_path, image)
             self._logger.debug(f"Capture succeeded: {save_path}")
             print("capture succeeded: " + save_path)
         except cv2.error as e:

@@ -20,7 +20,7 @@ select = [
     # isort
     "I",
 ]
-ignore = []
+ignore = ["UP009"]
 
 fixable = ["ALL"]
 unfixable = []

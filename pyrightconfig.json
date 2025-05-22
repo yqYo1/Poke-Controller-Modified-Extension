@@ -1,0 +1,21 @@
+{
+  "include": [
+    "SerialController"
+  ],
+
+  "exclude": [
+    "**/__pycache__"
+  ],
+
+  "defineConstant": {
+    "DEBUG": true
+  },
+
+
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": false,
+  "reportImplicitOverride": false,
+
+  "pythonVersion": "3.12",
+  "pythonPlatform": "ALL",
+}

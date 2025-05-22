@@ -9,11 +9,10 @@ import string
 import threading
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 from functools import wraps
 from logging import DEBUG, Logger, NullHandler, getLogger
 from time import sleep
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 try:
     from plyer import notification
@@ -30,7 +29,8 @@ from LineNotify import Line_Notify
 from Settings import GuiSettings
 
 if TYPE_CHECKING:
-    from typing import Callable, Concatenate, Final, Literal, ParamSpec, TypeVar
+    from collections.abc import Callable, Sequence
+    from typing import Concatenate, Final, Literal, ParamSpec, TypeVar
 
     from Camera import Camera
     from Commands.Keys import Button, Direction, Hat, Stick
@@ -60,7 +60,7 @@ def pausedecorator(
     """
 
     @wraps(func)
-    def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs):
+    def inner(self: PythonCommandLike, *args: P.args, **kwargs: P.kwargs) -> R:
         result = func(self, *args, **kwargs)
         if self.isPause:
             self.show_var()
@@ -73,8 +73,8 @@ def pausedecorator(
 
 
 class PythonCommand(CommandBase.Command, ABC):
-    def __init__(self):
-        super(PythonCommand, self).__init__()
+    def __init__(self) -> None:
+        super().__init__()
         self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -87,7 +87,7 @@ class PythonCommand(CommandBase.Command, ABC):
         self.Line: Final = Line_Notify()
         self.Discord: Final = Discord_Notify()
 
-    def show_var(self):
+    def show_var(self) -> None:
         """
         一時停止時に内部変数の一覧を表示します。
         表示対象は自動化スクリプト側でselfにて定義した変数のみです。
@@ -110,19 +110,19 @@ class PythonCommand(CommandBase.Command, ABC):
             "ImgProc",
         ]
         print("--------内部変数一覧--------")
-        for k, v in var_dict.items():  # pyright: ignore[reportAny]
+        for k, v in var_dict.items():
             if k not in del_dict:
-                print(k, "=", v)  # pyright: ignore[reportAny]
+                print(k, "=", v)
+
         print("----------------------------")
 
     @abstractmethod
-    def do(self):
+    def do(self) -> None:
         """
         自動化スクリプト側でオーバーライトされるため、処理の記述はありません。
         """
-        pass
 
-    def do_safe(self, ser: Sender):
+    def do_safe(self, ser: Sender) -> None:
         """
         自動化スクリプト実行準備→実行→終了処理を順番に行います。
         """
@@ -146,11 +146,11 @@ class PythonCommand(CommandBase.Command, ABC):
                         print('"plyer" is not installed.')
                 if self.isLineNotStart:
                     self.LINE_text(
-                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started."
+                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.",
                     )
                 if self.isDiscordNotStart:
                     self.discord_text(
-                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started."
+                        f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} started.",
                     )
                 self.do()
                 self.finish()
@@ -168,11 +168,11 @@ class PythonCommand(CommandBase.Command, ABC):
                     print('"plyer" is not installed.')
             if self.isLineNotEnd:
                 self.LINE_text(
-                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished."
+                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.",
                 )
             if self.isDiscordNotEnd:
                 self.discord_text(
-                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished."
+                    f"{self.app_name} (profile:{self.profilename})\n{self.cur_command_name} finished.",
                 )
         except Exception as e:
             self.keys = KeyPress(ser)
@@ -186,8 +186,7 @@ class PythonCommand(CommandBase.Command, ABC):
             self.keys.end()
             self.alive = False
 
-    @override
-    def start(self, ser: Sender, postProcess: Callable[[], None]):
+    def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
         """
         自動化スクリプトをスレッドに割り当てて実行します。
         """
@@ -200,13 +199,12 @@ class PythonCommand(CommandBase.Command, ABC):
             self.thread = threading.Thread(target=self.do_safe, args=(ser,))
             self.thread.start()
 
-    @override
     def end(self, ser: Sender) -> None:
         self.socket0.alive = False
         self.mqtt0.alive = False
         self.sendStopRequest()
 
-    def sendStopRequest(self):
+    def sendStopRequest(self) -> None:
         if self.checkIfAlive():  # try if we can stop now
             self.alive = False
             print("-- sent a stop request. --")
@@ -215,7 +213,7 @@ class PythonCommand(CommandBase.Command, ABC):
             self.socket_disconnect()
 
     # NOTE: Use this function if you want to get out from a command loop by yourself
-    def finish(self):
+    def finish(self) -> None:
         """
         自動化スクリプトを終了します。(自動化スクリプト内で意図的に終了したい場合に使用。)
         """
@@ -232,7 +230,7 @@ class PythonCommand(CommandBase.Command, ABC):
         buttons: Button | Hat | Stick | Direction,
         duration: float = 0.1,
         wait: float = 0.1,
-    ):
+    ) -> None:
         """
         ボタンを押す。
         """
@@ -251,17 +249,21 @@ class PythonCommand(CommandBase.Command, ABC):
         duration: float = 0.1,
         interval: float = 0.1,
         wait: float = 0.1,
-    ):
+    ) -> None:
         """
         ボタンを複数回押す。
         """
-        for i in range(0, repeat):
+        for i in range(repeat):
             self.press(buttons, duration, 0 if i == repeat - 1 else interval)
         self.wait(wait)
 
     # add hold buttons
     @pausedecorator
-    def hold(self, buttons: Button | Hat | Stick | Direction, wait: float = 0.1):
+    def hold(
+        self,
+        buttons: Button | Hat | Stick | Direction,
+        wait: float = 0.1,
+    ) -> None:
         """
         ボタンを押したままの状態にする。
         """
@@ -321,9 +323,9 @@ class PythonCommand(CommandBase.Command, ABC):
 
             # raise exception for exit working thread
             self._logger.info("Exit from command successfully")
-            raise StopThread("exit successfully")
-        else:
-            return True
+            msg = "exit successfully"
+            raise StopThread(msg)
+        return True
 
     # direct serial
     def direct_serial(self, serialcommands: list[str], waittime: list[float]) -> None:
@@ -335,29 +337,28 @@ class PythonCommand(CommandBase.Command, ABC):
             self.keys.serialcommand_direct_send(checkedcommands, waittime)
 
     # Reload COM port (temporary function)
-    def reload_com_port(self):
+    def reload_com_port(self) -> None:
         if self.keys is not None:
             if self.keys.ser.isOpened():
                 print("Port is already opened and being closed.")
                 self.keys.ser.closeSerial()
                 # self.keyPress = None (ここでNoneはNGなはず)
                 self.reload_com_port()
-            else:
-                if self.keys.ser.openSerial(
-                    GuiSettings().com_port.get(),
-                    GuiSettings().com_port_name.get(),
-                    GuiSettings().baud_rate.get(),
-                ):
-                    print(
-                        "COM Port "
-                        + str(GuiSettings().com_port.get())
-                        + " connected successfully"
-                    )
-                    self._logger.debug(
-                        "COM Port "
-                        + str(GuiSettings().com_port.get())
-                        + " connected successfully"
-                    )
+            elif self.keys.ser.openSerial(
+                GuiSettings().com_port.get(),
+                GuiSettings().com_port_name.get(),
+                GuiSettings().baud_rate.get(),
+            ):
+                print(
+                    "COM Port "
+                    + str(GuiSettings().com_port.get())
+                    + " connected successfully",
+                )
+                self._logger.debug(
+                    "COM Port "
+                    + str(GuiSettings().com_port.get())
+                    + " connected successfully",
+                )
 
     def LINE_text(self, txt: str, token: str = "token") -> None:
         # 送信
@@ -367,7 +368,10 @@ class PythonCommand(CommandBase.Command, ABC):
             pass
 
     def discord_text(
-        self, content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK"
+        self,
+        content: str = "",
+        index: int = 0,
+        keys: str = "DISCORD_WEBHOOK",
     ) -> None:
         # webhook_urlのindex指定とkey設定
         if index != 0 and keys == "DISCORD_WEBHOOK":
@@ -382,7 +386,7 @@ class PythonCommand(CommandBase.Command, ABC):
         # 送信
         try:
             self.Discord.send_message(notification_message=content, keys=keys)
-        except Exception:
+        except BaseException:
             pass
 
 

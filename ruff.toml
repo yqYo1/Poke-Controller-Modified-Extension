@@ -7,20 +7,42 @@ target-version = "py312"
 
 [lint]
 select = [
-    # pycodestyle
-    "E",
-    # Pyflakes
-    "F",
-    # pyupgrade
-    "UP",
-    # flake8-bugbear
-    "B",
-    # flake8-simplify
-    "SIM",
-    # isort
-    "I",
+    "ANN",  # flake8-annotations
+    "S",    # flake8-bandit
+    "B",    # flake8-bugbear
+    "A".    # flake8-builtins
+    "COM",  # flake8-commas
+    "EM",   # flake8-errmsg
+    "EXE",  # flake8-executable
+    "FA",   # flake8-future-annotations
+    "ISC",  # flake8-implicit-str-concat
+    "LOG",  # flake8-logging
+    "G",    # flake8-logging-format
+    "PIE",  # flake8-pie
+    "Q",    # flake8-quotes
+    "RSE",  # flake8-raise
+    "RET",  # flake8-return
+    "SLF",  # flake8-self
+    "SIM",  # flake8-simplify
+    "TC",   # flake8-type-checking
+    "ARG",  # flake8-unused-arguments
+    "FLY",  # flynt
+    "I",    # isort
+    "C90",  # mccabe
+    "NPY",  # NumPy-specific rules
+    "PERF", # Perflint
+    "E",    # pycodestyle Error
+    "W",    # pycodestyle Warning
+    "F",    # Pyflakes
+    "PGH",  # pygrep-hooks
+    "PL",   # Pylint
+    "UP",   # pyupgrade
+    "RUF",  # Ruff-specific rules
 ]
-ignore = ["UP009"]
+ignore = [
+  "UP009",
+  "E501",  # formatはline-lengthを越える事がある
+]
 
 fixable = ["ALL"]
 unfixable = []
@@ -37,5 +59,4 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 docstring-code-format = true
-
 docstring-code-line-length = "dynamic"

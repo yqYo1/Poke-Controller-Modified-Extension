@@ -13,6 +13,7 @@
 
 
   "reportMissingImports": "error",
+  "reportMissingParameterType": false,
   "reportMissingTypeStubs": false,
   "reportImplicitOverride": false,
 

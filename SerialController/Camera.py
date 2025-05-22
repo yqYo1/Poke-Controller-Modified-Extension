@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8a-*-
 
 from __future__ import annotations
 
@@ -35,8 +35,7 @@ def imwrite(filename: str, img: MatLike, params: Sequence[int] | None = None) ->
             with open(filename, mode="w+b") as f:
                 n.tofile(f)
             return True
-        else:
-            return False
+        return False
     except Exception as e:
         print(e)
         _logger.error(f"Image Write Error: {e}")
@@ -53,15 +52,14 @@ def _get_save_filespec(filename: str) -> str:
     入力が絶対パスの場合は、`CAPTURE_DIR`につなげずに返す。
 
     Args:
-        filename (str): 保存名／保存パス
+        filename (str): 保存名or保存パス
 
     Returns:
         str: _description_
     """
     if os.path.isabs(filename):
         return filename
-    else:
-        return os.path.join(CAPTURE_DIR, filename)
+    return os.path.join(CAPTURE_DIR, filename)
 
 
 class Camera:
@@ -102,8 +100,7 @@ class Camera:
     def isOpened(self) -> bool:
         if self.camera is not None:
             return self.camera.isOpened()
-        else:
-            return False
+        return False
 
     def readFrame(self) -> MatLike:
         return self.image_bgr
@@ -126,9 +123,9 @@ class Camera:
 
         if crop is None:
             image = self.image_bgr
-        elif crop == 1 or crop == "1":
+        elif crop in {1, "1"}:
             image = self.image_bgr[crop_ax[1] : crop_ax[3], crop_ax[0] : crop_ax[2]]
-        elif crop == 2 or crop == "2":
+        elif crop in {2, "2"}:
             image = self.image_bgr[
                 crop_ax[1] : crop_ax[1] + crop_ax[3],
                 crop_ax[0] : crop_ax[0] + crop_ax[2],
@@ -141,10 +138,10 @@ class Camera:
         save_path = _get_save_filespec(filename)
 
         if not os.path.exists(os.path.dirname(save_path)) or not os.path.isdir(
-            os.path.dirname(save_path)
+            os.path.dirname(save_path),
         ):
             # 保存先ディレクトリが存在しないか、同名のファイルが存在する場合
-            # （existsはファイルとフォルダを区別しない）
+            # (existsはファイルとフォルダを区別しない)
 
             os.makedirs(os.path.dirname(save_path))
             self._logger.debug("Created Capture folder")
@@ -185,9 +182,8 @@ class Camera:
         if self.camera is None:
             self._logger.error("Camera is not opened")
             return
-        else:
-            self._logger.debug("Camera update thread started")
-            while self.isOpened():
-                ret, frame = self.camera.read()
-                if ret:
-                    self.image_bgr = frame
+        self._logger.debug("Camera update thread started")
+        while self.isOpened():
+            ret, frame = self.camera.read()
+            if ret:
+                self.image_bgr = frame

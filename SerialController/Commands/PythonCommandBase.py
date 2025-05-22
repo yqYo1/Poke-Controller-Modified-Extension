@@ -304,7 +304,6 @@ class PythonCommand(CommandBase.Command, ABC):
                 pass
         self.checkIfAlive()
 
-    @override
     def checkIfAlive(self) -> Literal[True]:
         """
         Aliveフラグの状態を確認する。

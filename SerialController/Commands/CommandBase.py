@@ -62,9 +62,10 @@ class Command(ABC):
     def end(self, ser: Sender) -> None:
         pass
 
-    @abstractmethod
-    def checkIfAlive(self) -> Literal[True]:
-        pass
+    # MCUコマンドでは使用しない為ここではなくPythonCommandBaseに定義するのが適当
+    # @abstractmethod
+    # def checkIfAlive(self) -> Literal[True]:
+    #     pass
 
     ############### print functions ###############
     def print_s(self, *objects: object, sep: str = " ", end: str = "\n"):

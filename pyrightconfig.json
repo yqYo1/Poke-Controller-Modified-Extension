@@ -30,11 +30,11 @@
   "reportAny": "none",
   "reportIgnoreCommentWithoutRule": "none",
   "reportImplicitOverride": "none",
-  "reportImplictRelativeImport": "none",
+  "reportImplicitRelativeImport": "none",
   "reportMissingImports": "none",
   "reportMissingParameterType": "none",
   "reportMissingTypeStubs": "none",
   "reportUnusedCallResult": "none",
   "reportUnusedImport": "none",
-  "reportUnusedVariable": "none",
+  "reportUnusedVariable": "none"
 }

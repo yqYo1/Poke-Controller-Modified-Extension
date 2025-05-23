@@ -8,6 +8,7 @@
 !/.github/workflows/
 /.github/workflows/*
 !/.github/workflows/ruff.yml
+!/.github/workflows/basedpyright.yml
 
 # not ignore
 !/.gitignore

@@ -28,7 +28,6 @@ select = [
     "ARG",  # flake8-unused-arguments
     "FLY",  # flynt
     "I",    # isort
-    "C90",  # mccabe
     "NPY",  # NumPy-specific rules
     "PERF", # Perflint
     "E",    # pycodestyle Error
@@ -43,6 +42,10 @@ ignore = [
   "UP009",
   "G004",
   "E501",  # formatはline-lengthを越える事がある
+  "PLR0912",
+  "PLR0913",
+  "PLR2004",
+  "S311",
 ]
 
 fixable = ["ALL"]

@@ -84,7 +84,7 @@ class Command(ABC):
             self.text_area_1.insert("end", txt)
             self.text_area_1.config(state="disable")
             self.text_area_1.see("end")
-        except BaseException:
+        except Exception:
             print(*objects, sep=sep, end=end)
 
     def print_t2(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
@@ -99,7 +99,7 @@ class Command(ABC):
             self.text_area_2.insert("end", txt)
             self.text_area_2.config(state="disable")
             self.text_area_2.see("end")
-        except BaseException:
+        except Exception:
             print(*objects, sep=sep, end=end)
 
     def print_t(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
@@ -144,7 +144,7 @@ class Command(ABC):
                 self.text_area_1.insert("end", txt)
             self.text_area_1.config(state="disable")
             self.text_area_1.see("end")
-        except BaseException:
+        except Exception:
             print(*objects, sep=sep, end=end)
 
     def print_t2b(
@@ -171,7 +171,7 @@ class Command(ABC):
                 self.text_area_2.insert("end", txt)
             self.text_area_2.config(state="disable")
             self.text_area_2.see("end")
-        except BaseException:
+        except Exception:
             print(*objects, sep=sep, end=end)
 
     def print_tb(

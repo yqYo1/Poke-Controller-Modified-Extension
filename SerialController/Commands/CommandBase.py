@@ -63,7 +63,7 @@ class Command(ABC):
     def end(self, ser: Sender) -> None:
         pass
 
-    # MCUコマンドでは使用しない為ここではなくPythonCommandBaseに定義するのが適当
+    # MCUコマンドでは使用しない為ここではなくPythonCommandBaseに定義するのが適当?
     # @abstractmethod
     # def checkIfAlive(self) -> Literal[True]:
     #     pass
@@ -82,7 +82,7 @@ class Command(ABC):
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_1.config(state="normal")
             self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disable")
+            self.text_area_1.config(state="disabled")
             self.text_area_1.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)
@@ -97,7 +97,7 @@ class Command(ABC):
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")
             self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disable")
+            self.text_area_2.config(state="disabled")
             self.text_area_2.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)
@@ -169,7 +169,7 @@ class Command(ABC):
                 self.text_area_2.insert("1.0", txt)
             elif mode == "a":
                 self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disable")
+            self.text_area_2.config(state="disabled")
             self.text_area_2.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)
@@ -496,13 +496,13 @@ class Command(ABC):
         """
         self.mqtt0.broker_address = broker_address
 
-    def mqtt_change_id(self, id: str) -> None:
+    def mqtt_change_id(self, mqtt_id: str) -> None:  # idは組み込み関数なので変更
         """
         IDを変更する
         return:なし
         id|str:ID
         """
-        self.mqtt0.id = id
+        self.mqtt0.id_ = mqtt_id
 
     def mqtt_change_pub_token(self, pub_token: str) -> None:
         """

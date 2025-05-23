@@ -28,6 +28,7 @@
   "typeCheckingMode": "all",
 
   "reportAny": "none",
+  "reportConstantRedefinition": "none",
   "reportIgnoreCommentWithoutRule": "none",
   "reportImplicitOverride": "none",
   "reportImplicitRelativeImport": "none",

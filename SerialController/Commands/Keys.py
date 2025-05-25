@@ -333,6 +333,23 @@ class SendFormat:
 
 # This class handle L stick and R stick at any angles
 class Direction:
+    UP: Direction | None = None
+    RIGHT: Direction | None = None
+    DOWN: Direction | None = None
+    LEFT: Direction | None = None
+    UP_RIGHT: Direction | None = None
+    DOWN_RIGHT: Direction | None = None
+    DOWN_LEFT: Direction | None = None
+    UP_LEFT: Direction | None = None
+    R_UP: Direction | None = None
+    R_RIGHT: Direction | None = None
+    R_DOWN: Direction | None = None
+    R_LEFT: Direction | None = None
+    R_UP_RIGHT: Direction | None = None
+    R_DOWN_RIGHT: Direction | None = None
+    R_DOWN_LEFT: Direction | None = None
+    R_UP_LEFT: Direction | None = None
+
     def __init__(
         self,
         stick: Stick,
@@ -384,8 +401,8 @@ class Direction:
             self.stick == other.stick and self.angle_for_show == other.angle_for_show,
         )
 
-    def getTilting(self):
-        tilting = []
+    def getTilting(self) -> list[Tilt]:
+        tilting: list[Tilt] = []
         if self.stick == Stick.LEFT:
             if self.x < direction_center:
                 tilting.append(Tilt.LEFT)

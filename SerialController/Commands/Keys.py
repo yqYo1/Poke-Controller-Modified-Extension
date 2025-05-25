@@ -1,14 +1,13 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
 import math
+import queue
 import time
 from collections import OrderedDict
 from enum import Enum, IntEnum, IntFlag, auto
-import queue
-from logging import getLogger, DEBUG, NullHandler
+from logging import DEBUG, NullHandler, getLogger
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from Commands.Sender import Sender
@@ -91,7 +90,7 @@ class Hat(IntEnum):
     CENTER = 8  # 0
 
 
-convert_hat_default = range(0, 9)
+convert_hat_default = range(9)
 convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
 
 
@@ -136,7 +135,7 @@ class SendFormat:
                 ("ry", center),
                 ("sx", 0),
                 ("sy", 0),
-            ]
+            ],
         )
 
         self.L_stick_changed = False
@@ -206,8 +205,7 @@ class SendFormat:
     def fixOtherAxis(self, fix_target):
         if fix_target == center:
             return center
-        else:
-            return 0 if fix_target < center else 255
+        return 0 if fix_target < center else 255
 
     def resetAllDirections(self):
         self.format["lx"] = center
@@ -357,9 +355,8 @@ class Direction:
 
     def __repr__(self):
         if self.showName:
-            return "<{}, {}>".format(self.stick, self.showName)
-        else:
-            return "<{}, {}[deg]>".format(self.stick, self.angle_for_show)
+            return f"<{self.stick}, {self.showName}>"
+        return f"<{self.stick}, {self.angle_for_show}[deg]>"
 
     def __eq__(self, other):
         if not isinstance(other, Direction):
@@ -367,8 +364,7 @@ class Direction:
 
         if self.stick == other.stick and self.angle_for_show == other.angle_for_show:
             return True
-        else:
-            return False
+        return False
 
     def getTilting(self):
         tilting = []
@@ -496,7 +492,7 @@ class KeyPress:
             self.format.setAnyDirection([btn for btn in btns if type(btn) is Direction])
             if self.serial_data_format_name == "Qingpi":
                 self.format.setTouchscreen(
-                    [btn for btn in btns if type(btn) is Touchscreen]
+                    [btn for btn in btns if type(btn) is Touchscreen],
                 )
                 self.ser.writeList(self.format.convert2list())
             else:
@@ -601,8 +597,10 @@ class KeyPress:
             self.ser.writeRow("end")
 
     def serialcommand_direct_send(
-        self, serialcommands: list[str], waittime: list[float]
+        self,
+        serialcommands: list[str],
+        waittime: list[float],
     ):
-        for wtime, row in zip(waittime, serialcommands):
+        for wtime, row in zip(waittime, serialcommands, strict=False):
             time.sleep(wtime)
             self.ser.writeRow_wo_perf_counter(row, is_show=False)

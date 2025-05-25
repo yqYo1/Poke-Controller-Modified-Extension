@@ -142,7 +142,7 @@ class Command(ABC):
                 self.text_area_1.insert("1.0", txt)
             elif mode == "a":
                 self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disable")
+            self.text_area_1.config(state="disabled")
             self.text_area_1.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)

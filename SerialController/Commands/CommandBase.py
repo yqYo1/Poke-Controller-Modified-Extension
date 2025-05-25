@@ -468,7 +468,9 @@ class Command(ABC):
         return output
 
     def socket_receive_message2(
-        self, headerlist: list[str], show_msg: bool = False
+        self,
+        headerlist: list[str],
+        show_msg: bool = False,
     ) -> str | None:
         """
         socketを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
@@ -530,7 +532,12 @@ class Command(ABC):
         """
         self.mqtt0.clientId = clientId
 
-    def mqtt_receive_message(self, roomid: str, header: str, show_msg: bool = False):
+    def mqtt_receive_message(
+        self,
+        roomid: str,
+        header: str,
+        show_msg: bool = False,
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列であるメッセージを受信する
         return output|str:受信した文字列
@@ -547,7 +554,7 @@ class Command(ABC):
         roomid: str,
         headerlist: str,
         show_msg: bool = False,
-    ):
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列

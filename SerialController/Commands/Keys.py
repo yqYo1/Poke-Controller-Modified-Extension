@@ -111,14 +111,14 @@ class Tilt(Enum):
 
 
 # direction value definitions
-min = 0
-center = 128
-max = 255
+direction_min = 0
+direction_center = 128
+direction_max = 255
 
 
 # serial format
 class SendFormat:
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -129,10 +129,10 @@ class SendFormat:
             [
                 ("btn", 0),  # send bit array for buttons
                 ("hat", Hat.CENTER),
-                ("lx", center),
-                ("ly", center),
-                ("rx", center),
-                ("ry", center),
+                ("lx", direction_center),
+                ("ly", direction_center),
+                ("rx", direction_center),
+                ("ry", direction_center),
                 ("sx", 0),
                 ("sy", 0),
             ],
@@ -142,18 +142,18 @@ class SendFormat:
         self.R_stick_changed = False
         self.Hat_pos = Hat.CENTER
 
-    def setButton(self, btns, convert=conversion_default_button):
+    def setButton(self, btns, convert=conversion_default_button) -> None:
         for btn in btns:
             self.format["btn"] |= convert[btn]
 
-    def unsetButton(self, btns, convert=conversion_default_button):
+    def unsetButton(self, btns, convert=conversion_default_button) -> None:
         for btn in btns:
             self.format["btn"] &= ~convert[btn]
 
-    def resetAllButtons(self):
+    def resetAllButtons(self) -> None:
         self.format["btn"] = 0
 
-    def setHat(self, btns, convert=convert_hat_default):
+    def setHat(self, btns, convert=convert_hat_default) -> None:
         # self._logger.debug(btns)
         if not btns:
             self.format["hat"] = self.Hat_pos
@@ -161,12 +161,12 @@ class SendFormat:
             self.Hat_pos = convert[btns[0]]
             self.format["hat"] = convert[btns[0]]  # takes only first element
 
-    def unsetHat(self, convert=convert_hat_default):
+    def unsetHat(self, convert=convert_hat_default) -> None:
         # if self.Hat_pos is not Hat.CENTER:
         self.Hat_pos = convert[Hat.CENTER]
         self.format["hat"] = self.Hat_pos
 
-    def setAnyDirection(self, dirs, x_reverse=False, y_reverse=False):
+    def setAnyDirection(self, dirs, x_reverse=False, y_reverse=False) -> None:
         for dir in dirs:
             if dir.stick == Stick.LEFT:
                 if self.format["lx"] != dir.x or self.format["ly"] != 255 - dir.y:
@@ -183,47 +183,47 @@ class SendFormat:
                 self.format["rx"] = dir.x if not x_reverse else 255 - dir.x
                 self.format["ry"] = 255 - dir.y if not y_reverse else dir.y
 
-    def unsetDirection(self, dirs):
+    def unsetDirection(self, dirs) -> None:
         if Tilt.UP in dirs or Tilt.DOWN in dirs:
-            self.format["ly"] = center
+            self.format["ly"] = direction_center
             self.format["lx"] = self.fixOtherAxis(self.format["lx"])
             self.L_stick_changed = True
         if Tilt.RIGHT in dirs or Tilt.LEFT in dirs:
-            self.format["lx"] = center
+            self.format["lx"] = direction_center
             self.format["ly"] = self.fixOtherAxis(self.format["ly"])
             self.L_stick_changed = True
         if Tilt.R_UP in dirs or Tilt.R_DOWN in dirs:
-            self.format["ry"] = center
+            self.format["ry"] = direction_center
             self.format["rx"] = self.fixOtherAxis(self.format["rx"])
             self.R_stick_changed = True
         if Tilt.R_RIGHT in dirs or Tilt.R_LEFT in dirs:
-            self.format["rx"] = center
+            self.format["rx"] = direction_center
             self.format["ry"] = self.fixOtherAxis(self.format["ry"])
             self.R_stick_changed = True
 
     # Use this to fix an either tilt to max when the other axis sets to 0
     def fixOtherAxis(self, fix_target):
-        if fix_target == center:
-            return center
-        return 0 if fix_target < center else 255
+        if fix_target == direction_center:
+            return direction_center
+        return 0 if fix_target < direction_center else 255
 
-    def resetAllDirections(self):
-        self.format["lx"] = center
-        self.format["ly"] = center
-        self.format["rx"] = center
-        self.format["ry"] = center
+    def resetAllDirections(self) -> None:
+        self.format["lx"] = direction_center
+        self.format["ly"] = direction_center
+        self.format["rx"] = direction_center
+        self.format["ry"] = direction_center
         self.L_stick_changed = True
         self.R_stick_changed = True
         self.Hat_pos = Hat.CENTER
 
-    def setTouchscreen(self, dirs):
+    def setTouchscreen(self, dirs) -> None:
         if not dirs:
             pass
         else:
             self.format["sx"] = dirs[0].x  # takes only first element
             self.format["sy"] = dirs[0].y  # takes only first element
 
-    def unsetTouchscreen(self):
+    def unsetTouchscreen(self) -> None:
         self.format["sx"] = 0
         self.format["sy"] = 0
 
@@ -276,21 +276,19 @@ class SendFormat:
         send_touch_x = int(self.format["sx"])
         send_touch_y = int(self.format["sy"])
 
-        state = [
+        return [
             header,
             send_btn & 0xFF,
             (send_btn >> 8) & 0xFF,
             send_hat,
             send_lstick_x,
             send_lstick_y,
-            center,
-            center,
+            direction_center,
+            direction_center,
             send_touch_x & 0xFF,
             (send_touch_x >> 8) & 0xFF,
             send_touch_y,
         ]
-
-        return state
 
     def convert2list2(self):
         """
@@ -308,7 +306,7 @@ class SendFormat:
             self.format["ly"] if self.format["ly"] >= 128 else 127 - self.format["ly"]
         )
 
-        state = [
+        return [
             header,
             ((send_btn & 0xF) << 4) | send_hat,
             (send_btn >> 4) & 0x3F,
@@ -317,12 +315,12 @@ class SendFormat:
             send_ly,
         ]
 
-        return state
-
 
 # This class handle L stick and R stick at any angles
 class Direction:
-    def __init__(self, stick, angle, magnification=1.0, isDegree=True, showName=None):
+    def __init__(
+        self, stick, angle, magnification=1.0, isDegree=True, showName=None
+    ) -> None:
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -353,7 +351,7 @@ class Direction:
             self.x = math.ceil(127.5 * math.cos(angle) * self.mag + 127.5)
             self.y = math.floor(127.5 * math.sin(angle) * self.mag + 127.5)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.showName:
             return f"<{self.stick}, {self.showName}>"
         return f"<{self.stick}, {self.angle_for_show}[deg]>"
@@ -362,31 +360,31 @@ class Direction:
         if not isinstance(other, Direction):
             return False
 
-        if self.stick == other.stick and self.angle_for_show == other.angle_for_show:
-            return True
-        return False
+        return bool(
+            self.stick == other.stick and self.angle_for_show == other.angle_for_show
+        )
 
     def getTilting(self):
         tilting = []
         if self.stick == Stick.LEFT:
-            if self.x < center:
+            if self.x < direction_center:
                 tilting.append(Tilt.LEFT)
-            elif self.x > center:
+            elif self.x > direction_center:
                 tilting.append(Tilt.RIGHT)
 
-            if self.y < center - 1:
+            if self.y < direction_center - 1:
                 tilting.append(Tilt.DOWN)
-            elif self.y > center - 1:
+            elif self.y > direction_center - 1:
                 tilting.append(Tilt.UP)
         elif self.stick == Stick.RIGHT:
-            if self.x < center:
+            if self.x < direction_center:
                 tilting.append(Tilt.R_LEFT)
-            elif self.x > center:
+            elif self.x > direction_center:
                 tilting.append(Tilt.R_RIGHT)
 
-            if self.y < center - 1:
+            if self.y < direction_center - 1:
                 tilting.append(Tilt.R_DOWN)
-            elif self.y > center - 1:
+            elif self.y > direction_center - 1:
                 tilting.append(Tilt.R_UP)
         return tilting
 
@@ -418,7 +416,7 @@ Direction.R_UP_LEFT = Direction(Stick.RIGHT, 135, showName="UP_LEFT")
 
 
 class Touchscreen:
-    def __init__(self, x, y):
+    def __init__(self, x, y) -> None:
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -434,7 +432,7 @@ class Touchscreen:
 class KeyPress:
     serial_data_format_name = "Default"
 
-    def __init__(self, ser: Sender):
+    def __init__(self, ser: Sender) -> None:
         self._logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -467,10 +465,10 @@ class KeyPress:
         self.inputEnd_time_0 = time.perf_counter()
         self.was_neutral = True
 
-    def init_hat(self):
+    def init_hat(self) -> None:
         pass
 
-    def input(self, btns: Button | Hat | Stick | Direction, ifPrint=True):
+    def input(self, btns: Button | Hat | Stick | Direction, ifPrint=True) -> None:
         self._pushing = dict(self.format.format)
         if not isinstance(btns, list):
             btns = [btns]
@@ -507,7 +505,7 @@ class KeyPress:
         ifPrint=True,
         unset_hat=True,
         unset_Touchscreen=True,
-    ):
+    ) -> None:
         # self._logger.debug(f"input end: {btns}")
         self.pushing2 = dict(self.format.format)
 
@@ -547,7 +545,7 @@ class KeyPress:
             else:
                 self.ser.writeRow(self.format.convert2str())
 
-    def hold(self, btns: Button | Hat | Stick | Direction):
+    def hold(self, btns: Button | Hat | Stick | Direction) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -568,7 +566,7 @@ class KeyPress:
             self.holdButton.append(btn)
         self.input(btns)
 
-    def holdEnd(self, btns: Button | Hat | Stick | Direction):
+    def holdEnd(self, btns: Button | Hat | Stick | Direction) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -585,12 +583,12 @@ class KeyPress:
 
         self.inputEnd(btns)
 
-    def neutral(self):
+    def neutral(self) -> None:
         btns = self.holdButton
         self.holdButton = []
         self.inputEnd(btns, unset_hat=True, unset_Touchscreen=True)
 
-    def end(self):
+    def end(self) -> None:
         if self.serial_data_format_name in ["Qingpi", "3DS Controller"]:
             pass
         else:
@@ -600,7 +598,7 @@ class KeyPress:
         self,
         serialcommands: list[str],
         waittime: list[float],
-    ):
+    ) -> None:
         for wtime, row in zip(waittime, serialcommands, strict=False):
             time.sleep(wtime)
             self.ser.writeRow_wo_perf_counter(row, is_show=False)

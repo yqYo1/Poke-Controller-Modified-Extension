@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Final
 from Commands import CommandBase
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from Commands.Sender import Sender
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 # MCU command
 class McuCommand(CommandBase.Command):
     def __init__(self, sync_name: str) -> None:
-        super(McuCommand, self).__init__()
+        super().__init__()
         self.sync_name: Final = sync_name
         self.postProcess: Callable[[], None] | None = None
 

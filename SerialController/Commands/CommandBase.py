@@ -51,9 +51,9 @@ class Command(ABC):
     def __init__(self) -> None:
         self.isRunning: bool = False
 
-        self.message_dialogue = None
-        self.socket0 = SocketCommunications()
-        self.mqtt0 = MQTTCommunications("")
+        self.message_dialogue: tk.Toplevel | None = None
+        self.socket0: SocketCommunications = SocketCommunications()
+        self.mqtt0: MQTTCommunications = MQTTCommunications("")
 
     @abstractmethod
     def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
@@ -254,7 +254,7 @@ class Command(ABC):
             pass
         else:
             print("ウィジェット名に重複があります。重複しない名称を設定してください。")
-            self.finish()
+            self.finish()  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
@@ -456,7 +456,7 @@ class Command(ABC):
         """
         self.socket0.sock_disconnect()
 
-    def socket_receive_message(self, header: str, show_msg: bool = False):
+    def socket_receive_message(self, header: str, show_msg: bool = False) -> str | None:
         """
         socketを用いて先頭が特定の文字列であるメッセージを受信する
         return output|str:受信した文字列
@@ -467,7 +467,9 @@ class Command(ABC):
         self.checkIfAlive()
         return output
 
-    def socket_receive_message2(self, headerlist: list[str], show_msg: bool = False):
+    def socket_receive_message2(
+        self, headerlist: list[str], show_msg: bool = False
+    ) -> str | None:
         """
         socketを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列

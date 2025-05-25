@@ -7,7 +7,7 @@ import os
 import socket
 import time
 from functools import wraps
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 try:
     import paho.mqtt
@@ -23,7 +23,7 @@ except Exception:
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import Final, ParamSpec, TypeVar
+    from typing import Any, Final, Literal, ParamSpec, TypeVar
 
     P = ParamSpec("P")
     R = TypeVar("R")
@@ -198,7 +198,11 @@ class SocketCommunications:
 
         return output
 
-    def receive_message2(self, headerlist: list[str], show_msg: bool = False):
+    def receive_message2(
+        self,
+        headerlist: list[str],
+        show_msg: bool = False,
+    ) -> str | None:
         """
         socketを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -263,7 +267,7 @@ class SocketCommunications:
 
 
 # global変数(MQTT受信用)
-receive_msg = None
+receive_msg: str | None = None
 
 
 # MQTT通信用class
@@ -297,7 +301,7 @@ class MQTTCommunications:
         }
         # token_num = len(token_list)
 
-        self.broker_address = token_list["broker_address"]
+        self.broker_address: str = token_list["broker_address"]
         self.id_: str = token_list["id"]
         fullaccess_token = token_list["fullaccess_token"]
         readonly_token = token_list["readonly_token"]
@@ -373,7 +377,7 @@ class MQTTCommunications:
         """
         self.id_ = mqtt_id
 
-    def change_pub_token(self, pub_token) -> None:
+    def change_pub_token(self, pub_token: str) -> None:
         """
         pub用tokenを変更する
         return:なし
@@ -381,7 +385,7 @@ class MQTTCommunications:
         """
         self.pub_token = pub_token
 
-    def change_sub_token(self, sub_token) -> None:
+    def change_sub_token(self, sub_token: str) -> None:
         """
         sub用tokenを変更する
         return:なし
@@ -389,7 +393,7 @@ class MQTTCommunications:
         """
         self.sub_token = sub_token
 
-    def change_clientId(self, clientId) -> None:
+    def change_clientId(self, clientId: str) -> None:
         """
         接続者名を変更する
         return:なし
@@ -397,18 +401,28 @@ class MQTTCommunications:
         """
         self.clientId = clientId
 
-    def on_message(self, client, userdata, msg) -> None:
+    def on_message(
+        self,
+        client: mqtt.Client,  # noqa: ARG002
+        userdata: Any,  # noqa: ANN401, ARG002
+        msg: mqtt.MQTTMessage,
+    ) -> None:
         """
         メッセージを受信する
         return:なし
         client,userdata,msgはいいように設定してくれる
         """
-        global receive_msg
-        # print(f"ROOM ID: {msg.topic} message: {msg.payload.decode('utf-8')}")
+        global receive_msg  # noqa: PLW0603
+
         receive_msg = msg.payload.decode("utf-8")
 
     @exceptiondecorator
-    def receive_message(self, roomid, header, show_msg=False):
+    def receive_message(
+        self,
+        roomid: str,
+        header: str,
+        show_msg: bool = False,
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列であるメッセージを受信する
         return output|str:受信した文字列
@@ -419,24 +433,24 @@ class MQTTCommunications:
         # 待機文字列print出力
         print(f"[mqtt:wait]:{header}")
 
-        global receive_msg
+        global receive_msg  # noqa: PLW0602
         output = None
         header_date = int(datetime.datetime.today().strftime("%Y%m%d%H%M%S%f"))
         message = -1
 
         # brokerと接続する
-        self.client = mqtt.Client(self.clientId)
-        self.client.username_pw_set(self.id_, self.sub_token)
-        self.client.connect(self.broker_address, 1883)
-        self.client.subscribe(roomid)
-        self.client.on_message = self.on_message
+        client = mqtt.Client(client_id=self.clientId)  # pyright:ignore[reportPossiblyUnboundVariable]
+        client.username_pw_set(self.id_, self.sub_token)
+        client.connect(self.broker_address, 1883)
+        client.subscribe(roomid)
+        client.on_message = self.on_message
 
         while True:
             try:
                 # brokerからメッセージを引き抜く
-                self.client.loop_start()
+                client.loop_start()
                 time.sleep(1.0)
-                self.client.loop_stop()
+                client.loop_stop()
                 if receive_msg and header_date < int(receive_msg[1:21]):
                     header_date = int(receive_msg[1:21])
                     message = receive_msg[22:]
@@ -454,12 +468,17 @@ class MQTTCommunications:
             except Exception:
                 break
 
-        self.client.disconnect()
+        client.disconnect()
 
         return output
 
     @exceptiondecorator
-    def receive_message2(self, roomid, headerlist, show_msg=False):
+    def receive_message2(
+        self,
+        roomid: str,
+        headerlist: list[str],
+        show_msg: bool = False,
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -473,24 +492,24 @@ class MQTTCommunications:
             header0 += i + ","
         print(f"[socket:wait]:{header0}")
 
-        global receive_msg
+        global receive_msg  # noqa: PLW0602
         output = None
         header_date = int(datetime.datetime.today().strftime("%Y%m%d%H%M%S%f"))
         message = -1
 
         # brokerと接続する
-        self.client = mqtt.Client(self.clientId)
-        self.client.username_pw_set(self.id_, self.sub_token)
-        self.client.connect(self.broker_address, 1883)
-        self.client.subscribe(roomid)
-        self.client.on_message = self.on_message
+        client = mqtt.Client(client_id=self.clientId)  # pyright:ignore[reportPossiblyUnboundVariable]
+        client.username_pw_set(self.id_, self.sub_token)
+        client.connect(self.broker_address, 1883)
+        client.subscribe(roomid)
+        client.on_message = self.on_message
 
         while True:
             try:
                 # brokerからメッセージを引き抜く
-                self.client.loop_start()
+                client.loop_start()
                 time.sleep(1.0)
-                self.client.loop_stop()
+                client.loop_stop()
                 if receive_msg and header_date < int(receive_msg[1:21]):
                     header_date = int(receive_msg[1:21])
                     message = receive_msg[22:]
@@ -510,12 +529,12 @@ class MQTTCommunications:
             except Exception:
                 break
 
-        self.client.disconnect()
+        client.disconnect()
 
         return output
 
     @exceptiondecorator
-    def transmit_message(self, roomid, message) -> None:
+    def transmit_message(self, roomid: str, message: str) -> None:
         """
         MQTTを用いてメッセージを送信する
         return:なし
@@ -525,13 +544,12 @@ class MQTTCommunications:
         # メッセージ更新判定に日時情報を使用する
         header_date = datetime.datetime.today().strftime("[%Y%m%d%H%M%S%f]")
         if self.pub_token:
-            self.client = mqtt.Client(self.clientId)
-            self.client.username_pw_set(self.id_, self.pub_token)
-            self.client.connect(self.broker_address, 1883)
+            client = mqtt.Client(client_id=self.clientId)  # pyright: ignore[reportPossiblyUnboundVariable]
+            client.username_pw_set(self.id_, self.pub_token)
+            client.connect(self.broker_address, 1883)
             message0 = header_date + message
-            self.client.publish(roomid, message0)
+            client.publish(roomid, message0)
             print(f"[mqtt:send]:{message}")
+            client.disconnect()
         else:
             print("token error(readonly)")
-
-        self.client.disconnect()

@@ -28,14 +28,17 @@
   "typeCheckingMode": "all",
 
   "reportAny": "none",
+  "reportExplicitAny": "none",
   "reportConstantRedefinition": "none",
   "reportIgnoreCommentWithoutRule": "none",
   "reportImplicitOverride": "none",
+  "reportImplicitStringConcatenation": "none",
   "reportImplicitRelativeImport": "none",
   "reportMissingImports": "none",
   "reportMissingParameterType": "none",
   "reportMissingTypeStubs": "none",
   "reportUnusedCallResult": "none",
+  "reportUnusedParameter": "none",
   "reportUnusedImport": "none",
   "reportUnusedVariable": "none"
 }

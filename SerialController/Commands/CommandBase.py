@@ -464,7 +464,7 @@ class Command(ABC):
         show_msg|bool:受信した文字列を出力する
         """
         output = self.socket0.receive_message(header, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
     def socket_receive_message2(
@@ -479,7 +479,7 @@ class Command(ABC):
         show_msg|bool:受信した文字列を出力する
         """
         output = self.socket0.receive_message2(headerlist, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
     def socket_transmit_message(self, message: str) -> None:
@@ -489,7 +489,7 @@ class Command(ABC):
         message|str:送信するメッセージ
         """
         self.socket0.transmit_message(message)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
     ############### MQTT functions ###############
     def mqtt_change_broker_address(self, broker_address: str) -> None:
@@ -498,7 +498,7 @@ class Command(ABC):
         return:なし
         broker_address|str:brokerアドレス
         """
-        self.mqtt0.broker_address = broker_address
+        self.mqtt0.change_broker_address(broker_address)
 
     def mqtt_change_id(self, mqtt_id: str) -> None:  # idは組み込み関数なので変更
         """
@@ -506,7 +506,7 @@ class Command(ABC):
         return:なし
         id|str:ID
         """
-        self.mqtt0.id_ = mqtt_id
+        self.mqtt0.change_id(mqtt_id)
 
     def mqtt_change_pub_token(self, pub_token: str) -> None:
         """
@@ -514,7 +514,7 @@ class Command(ABC):
         return:なし
         pub_token|str:pub用token
         """
-        self.mqtt0.pub_token = pub_token
+        self.mqtt0.change_pub_token(pub_token)
 
     def mqtt_change_sub_token(self, sub_token: str) -> None:
         """
@@ -522,7 +522,7 @@ class Command(ABC):
         return:なし
         sub_token|str:sub用token
         """
-        self.mqtt0.sub_token = sub_token
+        self.mqtt0.change_sub_token(sub_token)
 
     def mqtt_change_clientId(self, clientId: str) -> None:
         """
@@ -530,7 +530,7 @@ class Command(ABC):
         return:なし
         clientId|str:接続者名
         """
-        self.mqtt0.clientId = clientId
+        self.mqtt0.change_clientId(clientId)
 
     def mqtt_receive_message(
         self,
@@ -546,13 +546,13 @@ class Command(ABC):
         show_msg|bool:受信した文字列を出力する
         """
         output = self.mqtt0.receive_message(roomid, header, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
     def mqtt_receive_message2(
         self,
         roomid: str,
-        headerlist: str,
+        headerlist: list[str],
         show_msg: bool = False,
     ) -> str | None:
         """
@@ -563,7 +563,7 @@ class Command(ABC):
         show_msg|bool:受信した文字列を出力する
         """
         output = self.mqtt0.receive_message2(roomid, headerlist, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
     def mqtt_transmit_message(self, roomid: str, message: str) -> None:
@@ -574,4 +574,4 @@ class Command(ABC):
         message|str:送信するメッセージ
         """
         self.mqtt0.transmit_message(roomid, message)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]

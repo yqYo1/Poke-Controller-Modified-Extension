@@ -40,5 +40,6 @@
   "reportUnusedCallResult": "none",
   "reportUnusedParameter": "none",
   "reportUnusedImport": "none",
-  "reportUnusedVariable": "none"
+  "reportUnusedVariable": "none",
+  "reportUnknownParameterType": "none"
 }

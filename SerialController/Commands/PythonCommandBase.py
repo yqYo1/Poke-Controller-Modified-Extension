@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from typing import Concatenate, Final, Literal, ParamSpec, TypeVar
 
     from Camera import Camera
-    from Commands.Keys import Button, Direction, Hat, Stick
+    from Commands.Keys import GamepadInput
     from Commands.Sender import Sender
     from cv2.typing import MatLike
     from GuiAssets import CaptureArea
@@ -228,7 +228,7 @@ class PythonCommand(CommandBase.Command, ABC):
     @pausedecorator
     def press(
         self,
-        buttons: Button | Hat | Stick | Direction,
+        buttons: GamepadInput,
         duration: float = 0.1,
         wait: float = 0.1,
     ) -> None:
@@ -245,7 +245,7 @@ class PythonCommand(CommandBase.Command, ABC):
     # press button at duration times(s) repeatedly
     def pressRep(
         self,
-        buttons: Button | Hat | Stick | Direction,
+        buttons: GamepadInput,
         repeat: int,
         duration: float = 0.1,
         interval: float = 0.1,
@@ -262,7 +262,7 @@ class PythonCommand(CommandBase.Command, ABC):
     @pausedecorator
     def hold(
         self,
-        buttons: Button | Hat | Stick | Direction,
+        buttons: GamepadInput,
         wait: float = 0.1,
     ) -> None:
         """
@@ -274,7 +274,10 @@ class PythonCommand(CommandBase.Command, ABC):
 
     # release holding buttons
     @pausedecorator
-    def holdEnd(self, buttons: Button | Hat | Stick | Direction) -> None:
+    def holdEnd(
+        self,
+        buttons: GamepadInput,
+    ) -> None:
         """
         ボタンを離した状態にする。
         """

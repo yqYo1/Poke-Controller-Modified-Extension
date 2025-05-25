@@ -10,7 +10,14 @@ from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from logging import Logger
+    from typing import Final
+
     from Commands.Sender import Sender
+
+    type Buttons = Button | Hat | Stick | Direction | Touchscreen
+    type ButtonsList = list[Buttons]
+    type GamepadInput = ButtonsList | Buttons
 
 
 class Button(IntFlag):
@@ -35,7 +42,7 @@ class Button(IntFlag):
 
 
 # 3DS Controller用にビット位置を並び替えるためのdict
-conversion_default_button = {
+conversion_default_button: dict[Button, Button] = {
     Button.Y: Button.Y,
     Button.B: Button.B,
     Button.A: Button.A,
@@ -56,7 +63,7 @@ conversion_default_button = {
     Button.WIRELESS: Button.WIRELESS,
 }
 
-conversion_3ds_controller_button = {
+conversion_3ds_controller_button: dict[Button, int] = {
     Button.A: 1,
     Button.B: 2,
     Button.X: 4,
@@ -90,7 +97,7 @@ class Hat(IntEnum):
     CENTER = 8  # 0
 
 
-convert_hat_default = range(9)
+convert_hat_default = list(range(9))
 convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
 
 
@@ -119,13 +126,13 @@ direction_max = 255
 # serial format
 class SendFormat:
     def __init__(self) -> None:
-        self._logger = getLogger(__name__)
+        self._logger: Final[Logger] = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
         # This format structure needs to be the same as the one written in Joystick.c
-        self.format = OrderedDict(
+        self.format: OrderedDict[str, int] = OrderedDict(
             [
                 ("btn", 0),  # send bit array for buttons
                 ("hat", Hat.CENTER),
@@ -138,22 +145,30 @@ class SendFormat:
             ],
         )
 
-        self.L_stick_changed = False
-        self.R_stick_changed = False
-        self.Hat_pos = Hat.CENTER
+        self.L_stick_changed: bool = False
+        self.R_stick_changed: bool = False
+        self.Hat_pos: Hat = Hat.CENTER
 
-    def setButton(self, btns, convert=conversion_default_button) -> None:
+    def setButton(
+        self,
+        btns: list[Button],
+        convert: dict[Button, Button] | dict[Button, int] = conversion_default_button,
+    ) -> None:
         for btn in btns:
             self.format["btn"] |= convert[btn]
 
-    def unsetButton(self, btns, convert=conversion_default_button) -> None:
+    def unsetButton(
+        self,
+        btns: list[Button],
+        convert: dict[Button, Button] | dict[Button, int] = conversion_default_button,
+    ) -> None:
         for btn in btns:
             self.format["btn"] &= ~convert[btn]
 
     def resetAllButtons(self) -> None:
         self.format["btn"] = 0
 
-    def setHat(self, btns, convert=convert_hat_default) -> None:
+    def setHat(self, btns, convert: list[int] = convert_hat_default) -> None:
         # self._logger.debug(btns)
         if not btns:
             self.format["hat"] = self.Hat_pos
@@ -227,7 +242,7 @@ class SendFormat:
         self.format["sx"] = 0
         self.format["sy"] = 0
 
-    def convert2str(self):
+    def convert2str(self) -> str:
         str_format = ""
         str_L = ""
         str_R = ""
@@ -264,7 +279,7 @@ class SendFormat:
         # print(str_format)
         return str_format  # the last space is not needed
 
-    def convert2list(self):
+    def convert2list(self) -> list[int]:
         """
         For Qingpi
         """
@@ -290,7 +305,7 @@ class SendFormat:
             send_touch_y,
         ]
 
-    def convert2list2(self):
+    def convert2list2(self) -> list[int]:
         """
         For 3DS Controller
         """
@@ -319,18 +334,23 @@ class SendFormat:
 # This class handle L stick and R stick at any angles
 class Direction:
     def __init__(
-        self, stick, angle, magnification=1.0, isDegree=True, showName=None
+        self,
+        stick: Stick,
+        angle: tuple[int, int] | float,
+        magnification: float = 1.0,
+        isDegree: bool = True,
+        showName: str | None = None,
     ) -> None:
-        self._logger = getLogger(__name__)
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.stick = stick
-        self.angle_for_show = angle
-        self.showName = showName
+        self.stick: Final = stick
+        self.angle_for_show: Final = angle
+        self.showName: str | None = showName
         if magnification > 1.0:
-            self.mag = 1.0
+            self.mag: float = 1.0
         elif magnification < 0:
             self.mag = 0.0
         else:
@@ -338,8 +358,8 @@ class Direction:
 
         if isinstance(angle, tuple):
             # assuming (X, Y)
-            self.x = angle[0]
-            self.y = angle[1]
+            self.x: int = angle[0]
+            self.y: int = angle[1]
             self.showName = "(" + str(self.x) + ", " + str(self.y) + ")"
             print("押し込み量", self.showName)
         else:
@@ -356,12 +376,12 @@ class Direction:
             return f"<{self.stick}, {self.showName}>"
         return f"<{self.stick}, {self.angle_for_show}[deg]>"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, Direction):
             return False
 
         return bool(
-            self.stick == other.stick and self.angle_for_show == other.angle_for_show
+            self.stick == other.stick and self.angle_for_show == other.angle_for_show,
         )
 
     def getTilting(self):
@@ -468,7 +488,7 @@ class KeyPress:
     def init_hat(self) -> None:
         pass
 
-    def input(self, btns: Button | Hat | Stick | Direction, ifPrint=True) -> None:
+    def input(self, btns: GamepadInput, ifPrint: bool = True) -> None:
         self._pushing = dict(self.format.format)
         if not isinstance(btns, list):
             btns = [btns]
@@ -501,10 +521,10 @@ class KeyPress:
 
     def inputEnd(
         self,
-        btns: Button | Hat | Stick | Direction,
-        ifPrint=True,
-        unset_hat=True,
-        unset_Touchscreen=True,
+        btns: GamepadInput,
+        ifPrint: bool = True,
+        unset_hat: bool = True,
+        unset_Touchscreen: bool = True,
     ) -> None:
         # self._logger.debug(f"input end: {btns}")
         self.pushing2 = dict(self.format.format)
@@ -545,7 +565,7 @@ class KeyPress:
             else:
                 self.ser.writeRow(self.format.convert2str())
 
-    def hold(self, btns: Button | Hat | Stick | Direction) -> None:
+    def hold(self, btns: GamepadInput) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -566,7 +586,7 @@ class KeyPress:
             self.holdButton.append(btn)
         self.input(btns)
 
-    def holdEnd(self, btns: Button | Hat | Stick | Direction) -> None:
+    def holdEnd(self, btns: GamepadInput) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 

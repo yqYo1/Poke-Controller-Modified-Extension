@@ -476,7 +476,7 @@ class KeyPress:
         self._logger.propagate = True
 
         self.q = queue.Queue()
-        self.ser = ser
+        self.ser: Sender = ser
         self.format = SendFormat()
         self.holdButton = []
         self.btn_name2 = [

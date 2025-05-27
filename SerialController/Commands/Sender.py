@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 class Sender:
     def __init__(self, is_show_serial: tk.BooleanVar, if_print: bool = True) -> None:
-        self.ser = None
+        self.ser: serial.Serial | None = None
         self.is_show_serial: tk.BooleanVar = is_show_serial
 
         self._logger: Logger = getLogger(__name__)
@@ -64,7 +64,12 @@ class Sender:
             "CENTER",
         ]
 
-    def openSerial(self, portNum: int, portName: str = "", baudrate: int = 9600):
+    def openSerial(
+        self,
+        portNum: int,
+        portName: str | None = "",
+        baudrate: int = 9600,
+    ) -> bool | None:
         try:
             if portName is None or portName == "":
                 if os.name == "nt":
@@ -140,15 +145,15 @@ class Sender:
             # print(e)
             return False
 
-    def closeSerial(self):
+    def closeSerial(self) -> None:
         self._logger.debug("Closing the serial communication")
         self.ser.close()
 
-    def isOpened(self):
+    def isOpened(self) -> bool:
         self._logger.debug("Checking if serial communication is open")
-        return True if self.ser is not None and self.ser.isOpen() else False
+        return bool(self.ser is not None and self.ser.isOpen())
 
-    def writeRow(self, row: str, is_show: bool = False):
+    def writeRow(self, row: str, is_show: bool = False) -> None:
         try:
             self.time_bef = time.perf_counter()
             if self.before is not None and self.before != "end" and is_show:
@@ -170,7 +175,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
 
-    def writeList(self, values: list, is_show: bool = False):
+    def writeList(self, values: list, is_show: bool = False) -> None:
         try:
             self.time_bef = time.perf_counter()
             if self.before is not None and self.before != "end" and is_show:
@@ -191,7 +196,7 @@ class Sender:
         if self.is_show_serial.get():
             print(values)
 
-    def writeRow_wo_perf_counter(self, row: str, is_show: bool = False):
+    def writeRow_wo_perf_counter(self, row: str, is_show: bool = False) -> None:
         try:
             self.ser.write((row + "\r\n").encode("utf-8"))
         except serial.serialutil.SerialException as e:
@@ -207,7 +212,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
 
-    def show_input(self, output: List[str]):
+    def show_input(self, output: List[str]) -> None:
         try:
             # print(output)
             btns = [self.Buttons[x] for x in range(16) if int(output[0], 16) >> x & 1]
@@ -215,7 +220,7 @@ class Sender:
             useLStick = int(output[0], 16) >> 1 & 1
             Hat = self.Hat[int(output[1])]
             if Hat != "CENTER":
-                btns = btns + ["Hat." + str(Hat)]
+                btns = [*btns, "Hat." + str(Hat)]
             LStick = list(map(lambda x: int(x, 16), output[2:4]))
             RStick = list(map(lambda x: int(x, 16), output[4:]))
             LStick_deg = math.degrees(math.atan2(128 - LStick[1], LStick[0] - 128))

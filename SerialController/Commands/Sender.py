@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 class Sender:
     def __init__(self, is_show_serial: tk.BooleanVar, if_print: bool = True) -> None:
-        self.ser: serial.Serial | None = None
+        self.ser: serial.Serial = serial.Serial()
         self.is_show_serial: tk.BooleanVar = is_show_serial
 
         self._logger: Logger = getLogger(__name__)
@@ -73,76 +73,37 @@ class Sender:
         try:
             if portName is None or portName == "":
                 if os.name == "nt":
-                    print(
-                        "connecting to "
-                        + "COM"
-                        + str(portNum)
-                        + "("
-                        + str(baudrate)
-                        + ")",
-                    )
-                    self._logger.info(
-                        "connecting to "
-                        + "COM"
-                        + str(portNum)
-                        + "("
-                        + str(baudrate)
-                        + ")",
-                    )
+                    msg = f"connecting to COM{portName}({baudrate})"
+                    print(msg)
+                    self._logger.info(msg)
                     self.ser = serial.Serial("COM" + str(portNum), baudrate)
                     return True
                 if os.name == "posix":
                     if platform.system() == "Darwin":
-                        print(
-                            "connecting to "
-                            + "/dev/tty.usbserial-"
-                            + str(portNum)
-                            + "("
-                            + str(baudrate)
-                            + ")",
-                        )
-                        self._logger.info(
-                            "connecting to "
-                            + "/dev/tty.usbserial-"
-                            + str(portNum)
-                            + "("
-                            + str(baudrate)
-                            + ")",
-                        )
+                        msg = f"connecting to /dev/tty.usbserial-{portNum}({baudrate})"
+                        print(msg)
+                        self._logger.info(msg)
                         self.ser = serial.Serial(
                             "/dev/tty.usbserial-" + str(portNum),
                             baudrate,
                         )
                         return True
-                    print(
-                        "connecting to "
-                        + "/dev/ttyUSB"
-                        + str(portNum)
-                        + "("
-                        + str(baudrate)
-                        + ")",
-                    )
-                    self._logger.info(
-                        "connecting to "
-                        + "/dev/ttyUSB"
-                        + str(portNum)
-                        + "("
-                        + str(baudrate)
-                        + ")",
-                    )
+                    msg = f"connecting to /dev/ttyUSB{portNum}({baudrate})"
+                    print(msg)
+                    self._logger(msg)
                     self.ser = serial.Serial("/dev/ttyUSB" + str(portNum), baudrate)
                     return True
                 print("Not supported OS")
                 self._logger.warning("Not supported OS")
                 return False
-            print("connecting to " + portName)
-            self._logger.info("connecting to " + portName)
-            self.ser = serial.Serial(portName, 9600)
+            msg = f"connecting to {portNum}({baudrate})"
+            print(msg)
+            self._logger.info(msg)
+            self.ser = serial.Serial(portName, baudrate)
             return True
         except OSError as e:
             print("COM Port: can't be established")
-            self._logger.error("COM Port: can't be established", e)
-            # print(e)
+            self._logger.error(f"COM Port: can't be established {e}")
             return False
 
     def closeSerial(self) -> None:
@@ -151,7 +112,7 @@ class Sender:
 
     def isOpened(self) -> bool:
         self._logger.debug("Checking if serial communication is open")
-        return bool(self.ser is not None and self.ser.isOpen())
+        return self.ser.is_open
 
     def writeRow(self, row: str, is_show: bool = False) -> None:
         try:
@@ -163,7 +124,7 @@ class Sender:
             self.ser.write((row + "\r\n").encode("utf-8"))
             self.time_aft = time.perf_counter()
             self.before = row
-        except serial.serialutil.SerialException as e:
+        except serial.SerialException as e:
             # print(e)
             self._logger.error(f"Error : {e}")
         except AttributeError as e:
@@ -175,7 +136,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
 
-    def writeList(self, values: list, is_show: bool = False) -> None:
+    def writeList(self, values: list[int], is_show: bool = False) -> None:
         try:
             self.time_bef = time.perf_counter()
             if self.before is not None and self.before != "end" and is_show:
@@ -184,7 +145,7 @@ class Sender:
             self.ser.write(values)
             self.time_aft = time.perf_counter()
             self.before = values
-        except serial.serialutil.SerialException as e:
+        except serial.SerialException as e:
             # print(e)
             self._logger.error(f"Error : {e}")
         except AttributeError as e:
@@ -199,7 +160,7 @@ class Sender:
     def writeRow_wo_perf_counter(self, row: str, is_show: bool = False) -> None:
         try:
             self.ser.write((row + "\r\n").encode("utf-8"))
-        except serial.serialutil.SerialException as e:
+        except serial.SerialException as e:
             # エラーはあえてprintでも出す。
             print(e)
             self._logger.error(f"Error : {e}")
@@ -212,7 +173,7 @@ class Sender:
         if self.is_show_serial.get():
             print(row)
 
-    def show_input(self, output: List[str]) -> None:
+    def show_input(self, output: list[str]) -> None:
         try:
             # print(output)
             btns = [self.Buttons[x] for x in range(16) if int(output[0], 16) >> x & 1]

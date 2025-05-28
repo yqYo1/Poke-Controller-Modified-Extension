@@ -1,34 +1,40 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-from time import sleep
-
-from . import CommandBase
-import numpy as np
-from .Keys import KeyPress, Direction, Stick
+from __future__ import annotations
 
 from logging import getLogger  # , Formatter, handlers, StreamHandler, DEBUG
+from time import sleep
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from . import CommandBase
+from .Keys import Direction, KeyPress, Stick
+
+if TYPE_CHECKING:
+    from logging import Logger
+
+    from Sender import Sender
 
 # Single button command
 
 
 class StickCommand(CommandBase.Command):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.key = None
-        self._logger = getLogger(__name__)
+        self.key: KeyPress | None = None
+        self.isRunning: bool
+        self._logger: Logger = getLogger(__name__)
 
-    def start(self, ser, postProcess=None):
+    def start(self, ser: Sender, postProcess=None) -> None:
         self.isRunning = True
         self.key = KeyPress(ser)
 
-    def end(self, ser):
-        self.isRunning = True
+    def end(self, ser: Sender) -> None:
+        self.isRunning = False
         self.key = KeyPress(ser)
-        pass
 
     # do nothing at wait time(s)
-    def wait(self, wait):
+    def wait(self, wait: float) -> None:
         sleep(wait)
 
     def press(self, btn):

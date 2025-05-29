@@ -1,22 +1,25 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
 
-import pygame
-import numpy as np
 import datetime
-from logging import getLogger, DEBUG, NullHandler
+from logging import DEBUG, NullHandler, getLogger
+from typing import TYPE_CHECKING, TextIO
+
+import numpy as np
+import pygame
 
 if TYPE_CHECKING:
+    from logging import Logger
+    from typing import Final, TextIO
+
     from Commands.Sender import Sender
 
 
 class ProController:
-    flag_procon = False
+    flag_procon: bool = False
 
-    def __init__(self):
-        self.axis_dict = {
+    def __init__(self) -> None:
+        self.axis_dict: dict[int, str] = {
             0: "L-X",
             1: "L-Y",
             2: "R-X",
@@ -25,7 +28,7 @@ class ProController:
             5: "ZR",
         }
 
-        self.button_dict = {
+        self.button_dict: dict[int, str] = {
             0: "A",
             1: "B",
             2: "X",
@@ -44,7 +47,7 @@ class ProController:
             15: "CAPTURE",
         }
 
-        self.button_dict_shift = {
+        self.button_dict_shift: dict[int, int] = {
             0: 4,
             1: 3,
             2: 5,
@@ -63,7 +66,7 @@ class ProController:
             15: 15,
         }
 
-        self.hat_dict = {
+        self.hat_dict: dict[int, int] = {
             0: 8,  # center
             1: 0,  # up
             2: 2,  # right
@@ -82,20 +85,22 @@ class ProController:
             15: 8,  # ありえないのでcenterにする
         }
 
-        self.bits_16 = 0
-        self.hat_status = 0
-        self.stick_status_old = [128, 128, 128, 128]
-        self.stick_status_new = [128, 128, 128, 128]
-        self.flag_print = False
-        self.filename = ""
+        self.bits_16: int = 0
+        self.hat_status: int = 0
+        self.stick_status_old: list[int] = [128, 128, 128, 128]
+        self.stick_status_new: list[int] = [128, 128, 128, 128]
+        self.flag_print: bool = False
+        self.filename: str = ""
 
-        self._logger = getLogger(__name__)
+        self._logger: Final[Logger] = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
+        self.f: TextIO
+
     # stickの出力を0-255の範囲に補正する。
-    def map_axis(self, val: float):
+    def map_axis(self, val: float) -> int:
         val = round(val, 3)
         in_min = -1
         in_max = 1
@@ -103,7 +108,7 @@ class ProController:
         out_max = 255
         return int((val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
 
-    def joystick_move_detection(self, joystick: pygame.Joystick):
+    def joystick_move_detection(self, joystick: pygame.joystick.JoystickType) -> None:
         # Lstickの位置を確認する。
         if np.sqrt((joystick.get_axis(0)) ** 2 + (joystick.get_axis(1)) ** 2) < 0.35:
             self.stick_status_new[0] = 128
@@ -139,16 +144,15 @@ class ProController:
             self.bits_16 = self.bits_16 | 1
 
         if self.bits_16 & 3 == 1:
-            self.stick_bits = " %02x %02x" % (self.stick_status_new[2], self.stick_status_new[3])
-        elif self.bits_16 & 3 == 2:
-            self.stick_bits = " %02x %02x" % (self.stick_status_new[0], self.stick_status_new[1])
-        elif self.bits_16 & 3 == 3:
-            self.stick_bits = " %02x %02x %02x %02x" % (
-                self.stick_status_new[0],
-                self.stick_status_new[1],
-                self.stick_status_new[2],
-                self.stick_status_new[3],
+            self.stick_bits = (
+                f" {self.stick_status_new[2]:02x} {self.stick_status_new[3]:02x}"
             )
+        elif self.bits_16 & 3 == 2:
+            self.stick_bits = (
+                f" {self.stick_status_new[0]:02x} {self.stick_status_new[1]:02x}"
+            )
+        elif self.bits_16 & 3 == 3:
+            self.stick_bits = f" {self.stick_status_new[0]:02x} {self.stick_status_new[1]:02x} {self.stick_status_new[2]:02x} {self.stick_status_new[3]:02x}"
         else:
             self.stick_bits = ""
 
@@ -158,9 +162,9 @@ class ProController:
         self.stick_status_old[2] = self.stick_status_new[2]
         self.stick_status_old[3] = self.stick_status_new[3]
 
-    def event_check(self, events: List[pygame.Event]):
+    def event_check(self, events: List[pygame.Event]) -> None:
         cnt = 0
-        for i, event in enumerate(events):
+        for _i, event in enumerate(events):
             if event.type == 1536:
                 if event.dict["axis"] < 4:
                     if abs(event.dict["value"]) < 0.3:
@@ -171,26 +175,42 @@ class ProController:
                     if cnt & 0x1 == 0:
                         self.flag_print = True
                         if self.map_axis(event.dict["value"]) >= 128:
-                            self.bits_16 = self.bits_16 | (1 << (event.dict["axis"] + 4))
+                            self.bits_16 = self.bits_16 | (
+                                1 << (event.dict["axis"] + 4)
+                            )
                         else:
-                            self.bits_16 = self.bits_16 & ~(1 << (event.dict["axis"] + 4))
+                            self.bits_16 = self.bits_16 & ~(
+                                1 << (event.dict["axis"] + 4)
+                            )
                     cnt += 1
             elif event.type == 1539:
                 self.flag_print = True
                 if event.dict["button"] <= 10 or event.dict["button"] == 15:
-                    self.bits_16 = self.bits_16 | (1 << self.button_dict_shift[event.dict["button"]])
+                    self.bits_16 = self.bits_16 | (
+                        1 << self.button_dict_shift[event.dict["button"]]
+                    )
                 else:
-                    self.hat_status = self.hat_status | (1 << self.button_dict_shift[event.dict["button"]])
+                    self.hat_status = self.hat_status | (
+                        1 << self.button_dict_shift[event.dict["button"]]
+                    )
             elif event.type == 1540:
                 self.flag_print = True
                 if event.dict["button"] <= 10 or event.dict["button"] == 15:
-                    self.bits_16 = self.bits_16 & ~(1 << self.button_dict_shift[event.dict["button"]])
+                    self.bits_16 = self.bits_16 & ~(
+                        1 << self.button_dict_shift[event.dict["button"]]
+                    )
                 else:
-                    self.hat_status = self.hat_status & ~(1 << self.button_dict_shift[event.dict["button"]])
+                    self.hat_status = self.hat_status & ~(
+                        1 << self.button_dict_shift[event.dict["button"]]
+                    )
 
-    def send_message(self, ser: Sender, flag_record: bool):
+    def send_message(self, ser: Sender, flag_record: bool) -> None:
         # 送信するバイナリデータ生成
-        self.message = "0x%04x %01d" % (self.bits_16, self.hat_dict[self.hat_status]) + self.stick_bits
+        # "0x%04x %01d" % (self.bits_16, self.hat_dict[self.hat_status])
+        self.message = (
+            f"0x{self.bits_16:04x} {self.hat_dict[self.hat_status]:01d}"
+            + self.stick_bits
+        )
 
         # コマンドが異なる場合のみ送る
         if self.flag_print and self.old_message != self.message:
@@ -204,7 +224,7 @@ class ProController:
         # コマンドが異なることの検知のために保存
         self.old_message = self.message
 
-    def record_message(self, flag_force_write: bool):
+    def record_message(self, flag_force_write: bool) -> None:
         # バイナリデータを追加する。
         message_log = str(self.time0) + "," + self.message + "\n"
         self.controller_log.append(message_log)
@@ -214,7 +234,7 @@ class ProController:
             self.f.writelines(self.controller_log)
             self.controller_log = []
 
-    def end_sequence(self, ser: Sender, flag_record: bool):
+    def end_sequence(self, ser: Sender, flag_record: bool) -> None:
         self.message = "0x0003 8 80 80 80 80"
         ser.writeRow_wo_perf_counter(self.message, is_show=False)
         if flag_record:
@@ -223,7 +243,12 @@ class ProController:
             self._logger.info(f"{self.filename} is closed.")
             print(f"{self.filename} is closed.")
 
-    def controller_loop(self, ser: Sender, flag_record: bool, ControllerLogDir: str):
+    def controller_loop(
+        self,
+        ser: Sender,
+        flag_record: bool,
+        ControllerLogDir: str,
+    ) -> None:
         self._logger.info("Activate Pro Controller")
         print("*****Activate Pro Controller*****")
         # pygame初期化
@@ -234,7 +259,7 @@ class ProController:
         if flag_record:
             start_time = datetime.datetime.today().strftime("%Y%m%d%H%M%S")
             self.filename = ControllerLogDir + "/controller_log_" + start_time + ".txt"
-            self.f = open(self.filename, "w", encoding="UTF-8")
+            self.f = open(self.filename, "w", encoding="UTF-8")  # noqa: SIM115
             self._logger.info(f"{self.filename} is opened.")
             print(f"{self.filename} is opened.")
             self.controller_log = []
@@ -254,8 +279,8 @@ class ProController:
                 # シリアルデータの送信
                 self.send_message(ser, flag_record)
                 # print("4")
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"Error occurred: {e}")
         finally:
             # 終了処理
             self.end_sequence(ser, flag_record)

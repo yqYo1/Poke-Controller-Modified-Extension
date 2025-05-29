@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-import queue
 import time
 from collections import OrderedDict
 from enum import Enum, IntEnum, IntFlag, auto
@@ -494,7 +493,6 @@ class KeyPress:
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.q: queue.Queue = queue.Queue()
         self.ser: Sender = ser
         self.format: SendFormat = SendFormat()
         self.holdButton: ButtonsList = []
@@ -509,11 +507,11 @@ class KeyPress:
             "DOWN_RIGHT",
         ]
 
-        self.pushing_to_show = None
-        self.pushing = None
-        self.pushing2 = None
-        self._pushing = None
-        self._chk_neutral = None
+        # self.pushing_to_show = None
+        # self.pushing = None
+        # self._chk_neutral = None
+        self.pushing2: dict[str, int] | None = None
+        self._pushing: dict[str, int] | None = None
         self.NEUTRAL: dict[str, int] = dict(self.format.format)
 
         self.input_time_0: float = time.perf_counter()

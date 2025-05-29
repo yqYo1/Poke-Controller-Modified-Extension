@@ -162,7 +162,7 @@ class ProController:
         self.stick_status_old[2] = self.stick_status_new[2]
         self.stick_status_old[3] = self.stick_status_new[3]
 
-    def event_check(self, events: List[pygame.Event]) -> None:
+    def event_check(self, events: list[pygame.Event]) -> None:
         cnt = 0
         for _i, event in enumerate(events):
             if event.type == 1536:

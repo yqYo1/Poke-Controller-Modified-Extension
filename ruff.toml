@@ -44,6 +44,7 @@ ignore = [
   "E501",  # formatはline-lengthを越える事がある
   "PLR0912",
   "PLR0913",
+  "PLR0915",
   "PLR2004",
   "S311",
 ]

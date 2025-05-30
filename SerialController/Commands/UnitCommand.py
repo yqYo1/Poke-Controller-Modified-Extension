@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from time import sleep
+from typing import TYPE_CHECKING
 
 from . import CommandBase
 from .Keys import Button, Hat, KeyPress
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable

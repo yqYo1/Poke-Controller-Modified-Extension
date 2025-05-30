@@ -20,10 +20,12 @@ from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
 from PIL import Image, ImageTk
 
 if TYPE_CHECKING:
+    from tkinter.ttk import Labelframe
     from logging import Logger
     from typing import Final
 
-    # from Commands.Keys import KeyPress
+    from Commands.Keys import KeyPress
+    from Camera import Camera
     from SerialController.Commands.Sender import Sender
 
 try:
@@ -62,12 +64,12 @@ nowtime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d_%H%M%S")
 class CaptureArea(tk.Canvas):
     def __init__(
         self,
-        camera,
-        fps: int,
-        right_mouse_mode,
-        is_show: bool,
-        ser: Sender,
-        master=None,
+        camera: Camera,
+        fps: str | int,
+        right_mouse_mode: str,
+        is_show: tk.BooleanVar,
+        ser: KeyPress,
+        master: Labelframe | None = None,
         show_width: int = 640,
         show_height: int = 360,
     ) -> None:
@@ -412,7 +414,7 @@ class CaptureArea(tk.Canvas):
         if self.master.is_use_right_stick_mouse.get():
             self.BindRightClick()
 
-    def setFps(self, fps):
+    def setFps(self, fps: str) -> None:
         # self.next_frames = int(16 * (60 / int(fps)))
         self.next_frames = int(1000 / int(fps))
         self._logger.info(f"FPS set to {fps}")

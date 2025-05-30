@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
@@ -20,8 +19,8 @@ from PIL import Image, ImageTk
 
 try:
     os.makedirs("log")
-except FileExistsError:
-    pass
+except FileExistsError as e:
+    print(e)
 
 isTakeLog = False
 # logger_stick = getLogger(__name__)

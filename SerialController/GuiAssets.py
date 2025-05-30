@@ -14,17 +14,16 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-from Commands import UnitCommand
+
+# from Commands import UnitCommand
 from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
 from PIL import Image, ImageTk
-
 
 if TYPE_CHECKING:
     from logging import Logger
     from typing import Final
 
-    from Commands.Keys import KeyPress
-
+    # from Commands.Keys import KeyPress
     from SerialController.Commands.Sender import Sender
 
 try:

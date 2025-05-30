@@ -10,12 +10,22 @@ from collections import deque
 from logging import DEBUG, NullHandler, StreamHandler, getLogger
 from tkinter import filedialog
 from tkinter.scrolledtext import ScrolledText
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
 from Commands import UnitCommand
-from Commands.Keys import NEUTRAL, Direction, KeyPress, Stick, Touchscreen
+from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
 from PIL import Image, ImageTk
+
+
+if TYPE_CHECKING:
+    from logging import Logger
+    from typing import Final
+
+    from Commands.Keys import KeyPress
+
+    from SerialController.Commands.Sender import Sender
 
 try:
     os.makedirs("log")
@@ -54,35 +64,43 @@ class CaptureArea(tk.Canvas):
     def __init__(
         self,
         camera,
-        fps,
+        fps: int,
         right_mouse_mode,
-        is_show,
-        ser: KeyPress,
+        is_show: bool,
+        ser: Sender,
         master=None,
-        show_width=640,
-        show_height=360,
-    ):
+        show_width: int = 640,
+        show_height: int = 360,
+    ) -> None:
         super().__init__(
-            master, borderwidth=0, cursor="tcross", width=show_width, height=show_height
+            master,
+            borderwidth=0,
+            cursor="tcross",
+            width=show_width,
+            height=show_height,
         )
 
-        self._logger = getLogger(__name__)
+        self._logger: Final[Logger] = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
         self.master = master
-        self.radius = 60  # 描画する円の半径
+        self.radius: int = 60  # 描画する円の半径
         self.camera = camera
         # self.show_size = (640, 360)
-        self.show_width = int(show_width)
-        self.show_height = int(show_height)
-        self.show_size = (self.show_width, self.show_height)
-        self.is_show_var = is_show
-        self.lx_init, self.ly_init = 0, 0
-        self.rx_init, self.ry_init = 0, 0
-        self.min_x, self.min_y = 0, 0
-        self.max_x, self.max_y = 0, 0
+        self.show_width: int = int(show_width)
+        self.show_height: int = int(show_height)
+        self.show_size: tuple[int, int] = (self.show_width, self.show_height)
+        self.is_show_var: bool = is_show
+        self.lx_init: int = 0
+        self.ly_init: int = 0
+        self.rx_init: int = 0
+        self.ry_init: int = 0
+        self.min_x: int = 0
+        self.min_y: int = 0
+        self.max_x: int = 0
+        self.max_y: int = 0
         self.keys = None
         self.ser = ser
         self.lcircle = None
@@ -113,18 +131,20 @@ class CaptureArea(tk.Canvas):
         if isTakeLog:
             filename_base = os.path.join("log", f"{nowtime}")
             self.LS = logging.FileHandler(
-                filename=f"{filename_base}_LStick.log", encoding="utf-8"
+                filename=f"{filename_base}_LStick.log",
+                encoding="utf-8",
             )
             self.LS.setLevel(logging.DEBUG)
-            self.LSTICK_logger = logging.getLogger("L_STICK")
+            self.LSTICK_logger: Final[Logger] = logging.getLogger("L_STICK")
             self.LSTICK_logger.setLevel(logging.DEBUG)
             self.LSTICK_logger.addHandler(self.LS)
 
             self.RS = logging.FileHandler(
-                filename=f"{filename_base}_RStick.log", encoding="utf-8"
+                filename=f"{filename_base}_RStick.log",
+                encoding="utf-8",
             )
             self.RS.setLevel(logging.DEBUG)
-            self.RSTICK_logger = logging.getLogger("R_STICK")
+            self.RSTICK_logger: Final[Logger] = logging.getLogger("R_STICK")
             self.RSTICK_logger.setLevel(logging.DEBUG)
             self.RSTICK_logger.addHandler(self.RS)
         # self.circle =

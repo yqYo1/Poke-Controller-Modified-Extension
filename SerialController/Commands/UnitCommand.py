@@ -1,22 +1,29 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
 from time import sleep
 
 from . import CommandBase
 from .Keys import Button, Hat, KeyPress
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Final
+
+    from Sender import Sender
 
 
 # Sigle button command
 class UnitCommand(CommandBase.Command):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-    def start(self, ser, postProcess=None):
-        self.isRunning = True
-        self.key = KeyPress(ser)
+    def start(self, ser: Sender, postProcess: Callable[[], None] | None = None) -> None:
+        self.isRunning: bool = True
+        self.key: KeyPress = KeyPress(ser)
 
-    def end(self, ser):
+    def end(self, ser: Sender) -> None:
         pass
 
     # do nothing at wait time(s)

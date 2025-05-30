@@ -32,11 +32,11 @@ class CommandLoader:
 
         # Load only not loaded modules
         not_loaded_module_names = list(
-            set(cur_module_names) - set(loaded_module_dic.keys())
+            set(cur_module_names) - set(loaded_module_dic.keys()),
         )
         if len(not_loaded_module_names) > 0:
             self.modules.extend(
-                util.importAllModules(self.path, not_loaded_module_names)
+                util.importAllModules(self.path, not_loaded_module_names),
             )
 
         # Reload commands except deleted ones
@@ -47,7 +47,7 @@ class CommandLoader:
         for mod_name in list(set(loaded_module_dic.keys()) - set(cur_module_names)):
             self.modules.remove(loaded_module_dic[mod_name])
             sys.modules.pop(
-                loaded_module_dic[mod_name].__name__
+                loaded_module_dic[mod_name].__name__,
             )  # Un-import module forcefully
 
         # return command class types
@@ -75,10 +75,10 @@ class CommandLoader:
                         c.TAGS = c.TAGS + dir_tags
                     elif isinstance(c.TAGS, str):
                         logger.debug(f"TAGS name add: {dir_tags}")
-                        c.TAGS = [c.TAGS] + dir_tags
+                        c.TAGS = [c.TAGS, *dir_tags]
                     else:
                         logger.debug(
-                            f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}"
+                            f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}",
                         )
                 else:
                     logger.debug(f"TAGS do not exist: {mod.__name__} {c.NAME}")

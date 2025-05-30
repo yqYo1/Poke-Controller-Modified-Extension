@@ -13,6 +13,7 @@ import tkinter.messagebox as tkmsg
 from logging import DEBUG, NullHandler, getLogger
 from os.path import abspath, dirname
 from tkinter import ttk
+from typing import TYPE_CHECKING
 
 import Constant
 import cv2
@@ -40,6 +41,9 @@ from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify
 from Menubar import PokeController_Menubar
+
+if TYPE_CHECKING:
+    from typing import Final
 
 addpath = dirname(dirname(dirname(abspath(__file__))))  # SerialControllerフォルダのパス
 sys.path.append(addpath)
@@ -83,7 +87,7 @@ class PokeControllerApp:
         """
         # build ui
         self.main_frame = ttk.Frame(master)
-        self.camera_lf = ttk.Labelframe(self.main_frame)
+        self.camera_lf: Final = ttk.Labelframe(self.main_frame)
         self.top_command_f = ttk.Frame(self.camera_lf)
         self.start_top_button = ttk.Button(self.top_command_f)
         self.start_top_button.configure(text="Start")
@@ -1831,7 +1835,7 @@ class PokeControllerApp:
             self.camera_name_cb.config(state="disable")
             self.camera_id_entry.config(state="normal")
         # open up a camera
-        self.camera = Camera(self.fps.get())
+        self.camera: Camera = Camera(int(self.fps.get()))
         self.openCamera()
         # activate serial communication
         try:
@@ -1848,10 +1852,10 @@ class PokeControllerApp:
         else:
             self.com_port_entry["state"] = "normal"
 
-        self.ser = Sender.Sender(self.is_show_serial)
+        self.ser: Sender.Sender = Sender.Sender(self.is_show_serial)
         self.activateSerial()
         self.activateKeyboard()
-        self.preview = CaptureArea(
+        self.preview: CaptureArea = CaptureArea(
             self.camera,
             self.fps.get(),
             self.serial_data_format_name.get(),

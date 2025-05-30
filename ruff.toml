@@ -40,6 +40,7 @@ select = [
 ]
 ignore = [
   "UP009",
+  "S107",
   "G004",
   "E501",  # formatはline-lengthを越える事がある
   "PLR0912",

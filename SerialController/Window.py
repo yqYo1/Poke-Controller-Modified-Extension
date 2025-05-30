@@ -2457,7 +2457,7 @@ class PokeControllerApp:
             self.start_top_button["state"] = "normal"
             self.simplecon_top_button["state"] = "normal"
 
-    def record_Pro_Controller(self):
+    def record_Pro_Controller(self) -> None:
         self.flag_record = self.is_record_Pro_Controller.get()
 
     # def createGetFromHomeWindow(self):
@@ -2469,7 +2469,7 @@ class PokeControllerApp:
     #     window2.protocol("WM_DELETE_WINDOW", self.closingGetFromHome)
     #     self.poke_treeview = window2
 
-    def loadCommands(self):
+    def loadCommands(self) -> None:
         # PythonCommands
         self.py_loader = CommandLoader(
             util.ospath("Commands/PythonCommands"),

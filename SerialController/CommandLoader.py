@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import importlib
 import sys
+from logging import DEBUG, NullHandler, getLogger
 
 import Utility as util
-
-from logging import getLogger, DEBUG, NullHandler
 
 logger = getLogger(__name__)
 logger.addHandler(NullHandler())
@@ -16,10 +14,10 @@ logger.propagate = True
 
 
 class CommandLoader:
-    def __init__(self, base_path, base_class):
-        self.path = base_path
-        self.base_type = base_class
-        self.modules = []
+    def __init__(self, base_path: str, base_class: str) -> None:
+        self.path: str = base_path
+        self.base_type: str = base_class
+        self.modules: list = []
 
     def load(self):
         if not self.modules:  # load if empty
@@ -33,9 +31,13 @@ class CommandLoader:
         cur_module_names = util.getModuleNames(self.path)
 
         # Load only not loaded modules
-        not_loaded_module_names = list(set(cur_module_names) - set(loaded_module_dic.keys()))
+        not_loaded_module_names = list(
+            set(cur_module_names) - set(loaded_module_dic.keys())
+        )
         if len(not_loaded_module_names) > 0:
-            self.modules.extend(util.importAllModules(self.path, not_loaded_module_names))
+            self.modules.extend(
+                util.importAllModules(self.path, not_loaded_module_names)
+            )
 
         # Reload commands except deleted ones
         for mod_name in list(set(cur_module_names) & set(loaded_module_dic.keys())):
@@ -44,7 +46,9 @@ class CommandLoader:
         # Unload deleted commands
         for mod_name in list(set(loaded_module_dic.keys()) - set(cur_module_names)):
             self.modules.remove(loaded_module_dic[mod_name])
-            sys.modules.pop(loaded_module_dic[mod_name].__name__)  # Un-import module forcefully
+            sys.modules.pop(
+                loaded_module_dic[mod_name].__name__
+            )  # Un-import module forcefully
 
         # return command class types
         return self.getCommandClasses()
@@ -73,7 +77,9 @@ class CommandLoader:
                         logger.debug(f"TAGS name add: {dir_tags}")
                         c.TAGS = [c.TAGS] + dir_tags
                     else:
-                        logger.debug(f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}")
+                        logger.debug(
+                            f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}"
+                        )
                 else:
                     logger.debug(f"TAGS do not exist: {mod.__name__} {c.NAME}")
                     c.TAGS = dir_tags

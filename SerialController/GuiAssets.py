@@ -14,11 +14,8 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-
 from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
 from PIL import Image, ImageTk
-
-from SerialController.Commands.Sender import Sender
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -27,7 +24,7 @@ if TYPE_CHECKING:
 
     from Camera import Camera
     from Commands.Keys import KeyPress
-    # from SerialController.Commands.Sender import Sender
+    from Commands.Sender import Sender
 
 try:
     os.makedirs("log")

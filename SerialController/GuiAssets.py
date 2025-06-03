@@ -8,7 +8,6 @@ import time
 import tkinter as tk
 from collections import deque
 from logging import DEBUG, NullHandler, StreamHandler, getLogger
-from tkinter import filedialog
 from tkinter.scrolledtext import ScrolledText
 from typing import TYPE_CHECKING
 
@@ -18,6 +17,7 @@ from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
 from PIL import Image, ImageTk
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from logging import Logger
     from tkinter import BooleanVar, Canvas, Event, Misc, Toplevel
     from typing import Final
@@ -34,29 +34,6 @@ except FileExistsError as e:
 isTakeLog = False
 # logger_stick = getLogger(__name__)
 nowtime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y%m%d_%H%M%S")
-
-
-# class MouseStick(PythonCommand):
-#     NAME = "MOUSEスティック"
-#
-#     def __init__(self):
-#         super().__init__()
-#         self._logger = getLogger(__name__)
-#         self._logger.addHandler(NullHandler())
-#         self._logger.setLevel(DEBUG)
-#         self._logger.propagate = True
-#
-#     def do(self):
-#         pass
-#
-#     def stick(self, buttons, duration=0.1, wait=0.1):
-#         self.keys.input(buttons, ifPrint=False)
-#         self.wait(duration)
-#         self.wait(wait)
-#
-#     # press button at duration times(s)
-#     def stickEnd(self, buttons):
-#         self.keys.inputEnd(buttons)
 
 
 class CaptureArea(tk.Canvas):
@@ -101,8 +78,8 @@ class CaptureArea(tk.Canvas):
         self.min_y: int = 0
         self.max_x: int = 0
         self.max_y: int = 0
-        self.keys = None
-        self.ser = ser
+        # self.keys = None
+        self.keys_: KeyPress = ser
         self.lcircle = None
         self.lcircle2 = None
         self.rcircle = None
@@ -116,7 +93,7 @@ class CaptureArea(tk.Canvas):
         self._lmag = None
         self._rangle = None
         self._rmag = None
-        self.RightMouseMode = "Default"
+        self.RightMouseMode: str = "Default"
         self.touchscreen_start_x: int = 1
         self.touchscreen_start_y: int = 1
         self.touchscreen_end_x: int = 320
@@ -243,7 +220,7 @@ class CaptureArea(tk.Canvas):
             self.max_y + 1,
         )
 
-    def ReleaseRangeSS(self, event: Event[Canvas]) -> None:
+    def ReleaseRangeSS(self, event: Event[Canvas]) -> None:  # noqa: ARG002
         # self.max_x, self.max_y = event.x, event.y
         ratio_x = float(self.camera.capture_size[0] / self.show_size[0])
         ratio_y = float(self.camera.capture_size[1] / self.show_size[1])
@@ -276,7 +253,7 @@ class CaptureArea(tk.Canvas):
         if self.master.is_use_right_stick_mouse.get():
             self.BindRightClick()
 
-    def ReleaseRangeSS_asksaveasfilename(self, event: Event[Canvas]) -> None:
+    def ReleaseRangeSS_asksaveasfilename(self, event: Event[Canvas]) -> None:  # noqa: ARG002
         # self.max_x, self.max_y = event.x, event.y
         ratio_x = float(self.camera.capture_size[0] / self.show_size[0])
         ratio_y = float(self.camera.capture_size[1] / self.show_size[1])
@@ -365,7 +342,7 @@ class CaptureArea(tk.Canvas):
             self.touchscreen_end_y + 1,
         )
 
-    def ReleaseRangeTouchscreen(self, event: Event[Canvas]) -> None:
+    def ReleaseRangeTouchscreen(self, event: Event[Canvas]) -> None:  # noqa: ARG002
         if self.touchscreen_start_x > self.touchscreen_end_x:
             self.touchscreen_start_x, self.touchscreen_end_x = (
                 self.touchscreen_end_x,
@@ -394,7 +371,7 @@ class CaptureArea(tk.Canvas):
         self.next_frames = int(1000 / int(fps))
         self._logger.info(f"FPS set to {fps}")
 
-    def setShowsize(self, show_height, show_width) -> None:
+    def setShowsize(self, show_height: int, show_width: int) -> None:
         self.show_width = int(show_width)
         self.show_height = int(show_height)
         self.show_size = (self.show_width, self.show_height)
@@ -404,15 +381,15 @@ class CaptureArea(tk.Canvas):
             f"Show size set to {self.show_width} x {self.show_height}",
         )
 
-    def changeRightMouseMode(self, mode) -> None:
+    def changeRightMouseMode(self, mode: str) -> None:
         self.RightMouseMode = mode
 
     def setTouchscreenArea(
         self,
-        touchscreen_start_x,
-        touchscreen_start_y,
-        touchscreen_end_x,
-        touchscreen_end_y,
+        touchscreen_start_x: int,
+        touchscreen_start_y: int,
+        touchscreen_end_x: int,
+        touchscreen_end_y: int,
     ) -> None:
         self.touchscreen_start_x = touchscreen_start_x
         self.touchscreen_start_y = touchscreen_start_y
@@ -438,11 +415,11 @@ class CaptureArea(tk.Canvas):
             f"Mouse down: Show ({x}, {y}) / Capture ({int(x * ratio_x)}, {int(y * ratio_y)})",
         )
 
-    def mouseCtrlLeftRelease(self, event) -> None:
+    def mouseCtrlLeftRelease(self, event: Event[Canvas]) -> None:  # noqa: ARG002
         if self.master.is_use_left_stick_mouse.get():
             self.BindLeftClick()
 
-    def mouseLeftPress(self, event, ser) -> None:
+    def mouseLeftPress(self, event: Event[Canvas], keys_: KeyPress) -> None:  # noqa: ARG002
         if self.master.is_use_right_stick_mouse.get():
             self.UnbindRightClick()
         self.config(cursor="dot")
@@ -479,7 +456,12 @@ class CaptureArea(tk.Canvas):
             self._langle = None
             self._lmag = None
 
-    def mouseLeftPressing(self, event: Event[Canvas], ser, angle=0) -> None:
+    def mouseLeftPressing(
+        self,
+        event: Event[Canvas],
+        keys_: KeyPress,  # noqa: ARG002
+        angle: int = 0,  # noqa: ARG002
+    ) -> None:
         # _time = self.calc_time
         langle = np.rad2deg(np.arctan2(self.ly_init - event.y, event.x - self.lx_init))
         mag = (
@@ -494,7 +476,7 @@ class CaptureArea(tk.Canvas):
         if (self._langle and self._lmag) is not None and isTakeLog:
             _time = time.perf_counter()
             if _time - self.calc_time > 0.05:
-                self.ser.input(
+                self.keys_.input(
                     Direction(
                         Stick.LEFT,
                         (
@@ -506,7 +488,7 @@ class CaptureArea(tk.Canvas):
                 self.dq.append([langle, mag, _time - self.calc_time])
                 self.calc_time = _time
         elif not isTakeLog:
-            self.ser.input(
+            self.keys_.input(
                 Direction(
                     Stick.LEFT,
                     (
@@ -539,9 +521,9 @@ class CaptureArea(tk.Canvas):
         self._langle = langle
         self._lmag = mag
 
-    def mouseLeftRelease(self, ser) -> None:
+    def mouseLeftRelease(self, keys_: KeyPress) -> None:  # noqa: ARG002
         self.config(cursor="tcross")
-        self.ser.input(Direction(Stick.LEFT, NEUTRAL))
+        self.keys_.input(Direction(Stick.LEFT, NEUTRAL))
         self.delete("lcircle")
         self.delete("lcircle2")
         if self.master.is_use_right_stick_mouse.get():
@@ -554,7 +536,7 @@ class CaptureArea(tk.Canvas):
             for _ in self.dq:
                 self.LSTICK_logger.debug(",".join(list(map(str, _))))
 
-    def mouseRightPress(self, event: Event[Canvas], ser) -> None:
+    def mouseRightPress(self, event: Event[Canvas], keys_: KeyPress) -> None:
         if self.master.is_use_left_stick_mouse.get():
             self.UnbindLeftClick()
 
@@ -569,7 +551,7 @@ class CaptureArea(tk.Canvas):
                 height = self.touchscreen_end_y - self.touchscreen_start_y
                 pos_x = int(320.0 * (event.x - self.touchscreen_start_x) / width)
                 pos_y = int(240.0 * (event.y - self.touchscreen_start_y) / height)
-                ser.input(Touchscreen(pos_x, pos_y))
+                keys_.input(Touchscreen(pos_x, pos_y))
         else:
             self.config(cursor="dot")
             self.rx_init, self.ry_init = event.x, event.y
@@ -606,7 +588,12 @@ class CaptureArea(tk.Canvas):
             self._rangle = None
             self._rmag = None
 
-    def mouseRightPressing(self, event: Event[Canvas], ser, angle=0) -> None:
+    def mouseRightPressing(
+        self,
+        event: Event[Canvas],
+        keys_: KeyPress,
+        angle: int = 0,  # noqa: ARG002
+    ) -> None:
         if self.RightMouseMode == "Qingpi":
             if (
                 self.touchscreen_start_x < event.x
@@ -618,7 +605,7 @@ class CaptureArea(tk.Canvas):
                 height = self.touchscreen_end_y - self.touchscreen_start_y
                 pos_x = int(320.0 * (event.x - self.touchscreen_start_x) / width)
                 pos_y = int(240.0 * (event.y - self.touchscreen_start_y) / height)
-                ser.input(Touchscreen(pos_x, pos_y))
+                keys_.input(Touchscreen(pos_x, pos_y))
         else:
             rangle = np.rad2deg(
                 np.arctan2(self.ry_init - event.y, event.x - self.rx_init),
@@ -634,7 +621,7 @@ class CaptureArea(tk.Canvas):
             if (self._langle and self._lmag) is not None and isTakeLog:
                 _time = time.perf_counter()
                 if _time - self.calc_time > 0.05:
-                    self.ser.input(
+                    self.keys_.input(
                         Direction(
                             Stick.RIGHT,
                             (
@@ -647,7 +634,7 @@ class CaptureArea(tk.Canvas):
                     self.dq.append([rangle, mag, _time - self.calc_time])
                     self.calc_time = _time
             elif not isTakeLog:
-                self.ser.input(
+                self.keys_.input(
                     Direction(
                         Stick.RIGHT,
                         (
@@ -683,12 +670,12 @@ class CaptureArea(tk.Canvas):
             self._rangle = rangle
             self._rmag = mag
 
-    def mouseRightRelease(self, ser) -> None:
+    def mouseRightRelease(self, keys_: KeyPress) -> None:
         if self.RightMouseMode == "Qingpi":
-            ser.inputEnd(Touchscreen(0, 0))
+            keys_.inputEnd(Touchscreen(0, 0))
         else:
             self.config(cursor="tcross")
-            self.ser.input(Direction(Stick.RIGHT, NEUTRAL))
+            self.keys_.input(Direction(Stick.RIGHT, NEUTRAL))
             self.delete("rcircle")
             self.delete("rcircle2")
             if self.master.is_use_left_stick_mouse.get():
@@ -712,7 +699,7 @@ class CaptureArea(tk.Canvas):
             self.after(self.next_frames, self.capture)
             return
 
-        if image_bgr is not None:
+        if image_bgr is not None:  # pyright:ignore[reportUnnecessaryComparison]
             image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
             image_pil = Image.fromarray(image_rgb).resize(self.show_size)
             image_tk = ImageTk.PhotoImage(image_pil)
@@ -730,7 +717,17 @@ class CaptureArea(tk.Canvas):
     def saveCapture(self) -> None:
         self.camera.saveCapture()
 
-    def ImgRect(self, x1, y1, x2, y2, outline, tag, ms, flag=True) -> None:
+    def ImgRect(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        outline: str,
+        tag: str | int,
+        ms: int,
+        flag: bool = True,
+    ) -> None:
         ratio_x = float(self.show_size[0] / self.camera.capture_size[0])
         ratio_y = float(self.show_size[1] / self.camera.capture_size[1])
         self.create_rectangle(
@@ -754,17 +751,17 @@ class CaptureArea(tk.Canvas):
         if flag:
             self.after(ms, self.deleteImageRect, tag)
 
-    def deleteImageRect(self, tag) -> None:
+    def deleteImageRect(self, tag: int | str) -> None:
         self.delete(tag)
 
     def ImgText(
         self,
-        x1,
-        y1,
-        txt,
-        tag,
-        ms,
-        ft=("UD デジタル 教科書体 NP-B", 20),
+        x1: int,
+        y1: int,
+        txt: str,
+        tag: int | str,
+        ms: int,
+        ft: tuple[str, int] = ("UD デジタル 教科書体 NP-B", 20),
         color: str = "black",
         flag: bool = True,
     ) -> None:
@@ -782,21 +779,24 @@ class CaptureArea(tk.Canvas):
         if flag:
             self.after(ms, self.deleteImageText, tag)
 
-    def deleteImageText(self, tag) -> None:
+    def deleteImageText(self, tag: int | str) -> None:
         self.delete(tag)
 
     def BindLeftClick(self) -> None:
-        self.bind("<ButtonPress-1>", lambda ev: self.mouseLeftPress(ev, self.ser))
-        self.bind("<Button1-Motion>", lambda ev: self.mouseLeftPressing(ev, self.ser))
-        self.bind("<ButtonRelease-1>", lambda ev: self.mouseLeftRelease(self.ser))
+        self.bind("<ButtonPress-1>", lambda ev: self.mouseLeftPress(ev, self.keys_))
+        self.bind("<Button1-Motion>", lambda ev: self.mouseLeftPressing(ev, self.keys_))
+        self.bind("<ButtonRelease-1>", lambda ev: self.mouseLeftRelease(self.keys_))  # noqa: ARG005
         self._logger.debug("Bind <ButtonPress-1>")
         self._logger.debug("Bind <Button1-Motion>")
         self._logger.debug("Bind <ButtonRelease-1>")
 
     def BindRightClick(self) -> None:
-        self.bind("<ButtonPress-3>", lambda ev: self.mouseRightPress(ev, self.ser))
-        self.bind("<Button3-Motion>", lambda ev: self.mouseRightPressing(ev, self.ser))
-        self.bind("<ButtonRelease-3>", lambda ev: self.mouseRightRelease(self.ser))
+        self.bind("<ButtonPress-3>", lambda ev: self.mouseRightPress(ev, self.keys_))
+        self.bind(
+            "<Button3-Motion>",
+            lambda ev: self.mouseRightPressing(ev, self.keys_),
+        )
+        self.bind("<ButtonRelease-3>", lambda ev: self.mouseRightRelease(self.keys_))  # noqa: ARG005
         self._logger.debug("Bind <ButtonPress-3>")
         self._logger.debug("Bind <Button3-Motion>")
         self._logger.debug("Bind <ButtonRelease-3>")
@@ -834,7 +834,7 @@ class ControllerGUI:
         root_geometry = root.geometry().split("+")
         root_x = int(root_geometry[1])
         root_y = int(root_geometry[2])
-        self.window.geometry("%dx%d%+d%+d" % (600, 300, 250 + root_x, 125 + root_y))
+        self.window.geometry(f"{600}x{300}{250 + root_x:+d}{125 + root_y:+d}")
         self.window.resizable(False, False)
 
         joycon_L_color = "#95f1ff"
@@ -1006,18 +1006,18 @@ class ControllerGUI:
 
         self._logger.debug("Create GUI controller")
 
-    def applyButtonSetting(self, button) -> None:
+    def applyButtonSetting(self, button: Misc) -> None:
         button["width"] = 7
         self.applyButtonColor(button)
 
-    def applyButtonColor(self, button) -> None:
+    def applyButtonColor(self, button: Misc) -> None:
         button["bg"] = "#343434"
         button["fg"] = "#fff"
 
-    def bind(self, event: Event[Toplevel], func) -> None:
+    def bind(self, event: str, func: Callable[[Event[Misc]], None]) -> None:
         self.window.bind(event, func)
 
-    def protocol(self, event: Event[Toplevel], func) -> None:
+    def protocol(self, event: str, func: Callable[..., None]) -> None:
         self.window.protocol(event, func)
 
     def focus_force(self) -> None:

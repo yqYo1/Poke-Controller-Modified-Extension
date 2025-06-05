@@ -18,12 +18,13 @@ from PokeConDialogue import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from tkinter import Text
-    from typing import Literal, TypeVar
+    from typing import Literal
 
+    # from typing import TypeVar
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
 
-    _LD = TypeVar("_LD", list, dict)
+    # _LD = TypeVar("_LD", list[int | str], dict)
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連
@@ -211,10 +212,10 @@ class Command(ABC):
     def dialogue(
         self,
         title: str,
-        message: int | str | list,
+        message: int | str | list[int | str],
         desc: str | None = None,
         need: type = list,
-    ) -> list | dict:
+    ) -> list[str] | dict[int | str, str]:
         """
         保存機能なしのダイアログ(Entryのみ)
         title: ダイアログのウインドウ名
@@ -233,8 +234,8 @@ class Command(ABC):
         ).ret_value(need)
         self.message_dialogue = None
         if not ret:
-            self.finish()
-            return None
+            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+            return None  # pyright:ignore[reportReturnType]
         return ret
 
     def dialogue6widget(
@@ -271,8 +272,8 @@ class Command(ABC):
         self.message_dialogue = None
 
         if not ret:
-            self.finish()
-            return None
+            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+            return None  # pyright:ignore[reportReturnType]
         return ret
 
     def dialogue6widget_save_settings(

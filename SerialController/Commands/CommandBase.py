@@ -18,10 +18,12 @@ from PokeConDialogue import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from tkinter import Text
-    from typing import Literal
+    from typing import Literal, TypeVar
 
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
+
+    _LD = TypeVar("_LD", list, dict)
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連

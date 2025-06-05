@@ -7,18 +7,44 @@ import json
 import os
 import tkinter as tk
 from tkinter import ttk
+from typing import TYPE_CHECKING, overload
+
+if TYPE_CHECKING:
+    from typing import Any, Literal
 
 # from logging import getLogger, DEBUG, NullHandlerxx
 
 
 class PokeConDialogue:
+    @overload
     def __init__(
         self,
         parent: tk.Toplevel,
         title: str,
-        message: int | str | list,
+        message: int | str | list[int | str],
         desc: str | None = None,
-        mode: int = 0,
+        mode: Literal[0] = 0,
+        pos: int = 2,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        parent: tk.Toplevel,
+        title: str,
+        message: list[list[Any]],
+        desc: str | None = None,
+        mode: Literal[1] = 1,
+        pos: int = 2,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        parent: tk.Toplevel,
+        title: str,
+        message: int | str | list[int | str] | list[list[Any]],
+        desc: str | None = None,
+        mode: Literal[0, 1] = 0,
         pos: int = 2,
     ) -> None:
         """
@@ -39,18 +65,18 @@ class PokeConDialogue:
         digit | int : 有効桁数
         return : なし
         """
-        self._ls = None
-        self.isOK = None
+        self._ls: list[str] = list()
+        self.isOK: bool = False
 
-        self.message_dialogue = parent
+        self.message_dialogue: tk.Toplevel = parent
         self.message_dialogue.title(title)
-        self.message_dialogue.attributes("-topmost", True)
+        self.message_dialogue.attributes("-topmost", True)  # pyright:ignore[reportUnknownMemberType]
         self.message_dialogue.protocol("WM_DELETE_WINDOW", self.close_window)
 
-        self.main_frame = tk.Frame(self.message_dialogue)
+        self.main_frame: tk.Frame = tk.Frame(self.message_dialogue)
 
         description = desc if desc is not None else title
-        self.description_label = ttk.Label(
+        self.description_label: ttk.Label = ttk.Label(
             self.main_frame,
             text=description,
             anchor="center",
@@ -66,20 +92,23 @@ class PokeConDialogue:
 
         cnt = 1
         if pos in [1, 3]:
-            self.result = ttk.Frame(self.main_frame)
-            self.OK = ttk.Button(self.result, command=self.ok_command)
+            self.result: ttk.Frame = ttk.Frame(self.main_frame)
+            self.OK: ttk.Button = ttk.Button(self.result, command=self.ok_command)
             self.OK.configure(text="OK")
             self.OK.grid(column=0, row=1, padx=5, pady=5)
-            self.Cancel = ttk.Button(self.result, command=self.cancel_command)
+            self.Cancel: ttk.Button = ttk.Button(
+                self.result,
+                command=self.cancel_command,
+            )
             self.Cancel.configure(text="Cancel")
             self.Cancel.grid(column=1, row=1, sticky="ew", padx=5, pady=5)
             self.result.grid(column=0, columnspan=2, pady=5, row=cnt, sticky="ew")
             self.result.grid_anchor("center")
             cnt += 1
 
-        self.inputs = ttk.Frame(self.main_frame)
+        self.inputs: ttk.Frame = ttk.Frame(self.main_frame)
 
-        self.dialogue_ls = {}
+        self.dialogue_ls: dict[str | int, tk.StringVar] = {}
         x = self.message_dialogue.master.winfo_x()
         w = self.message_dialogue.master.winfo_width()
         y = self.message_dialogue.master.winfo_y()
@@ -91,9 +120,9 @@ class PokeConDialogue:
         )
 
         if mode == 0:
-            self.mode0(message)
+            self.mode0(message)  # pyright: ignore[reportArgumentType]
         else:
-            self.mode1(message)
+            self.mode1(message)  # pyright: ignore[reportArgumentType]
 
         self.inputs.grid(
             column=0,
@@ -107,11 +136,14 @@ class PokeConDialogue:
         cnt += 1
 
         if pos in [2, 3]:
-            self.result2 = ttk.Frame(self.main_frame)
-            self.OK2 = ttk.Button(self.result2, command=self.ok_command)
+            self.result2: ttk.Frame = ttk.Frame(self.main_frame)
+            self.OK2: ttk.Button = ttk.Button(self.result2, command=self.ok_command)
             self.OK2.configure(text="OK")
             self.OK2.grid(column=0, row=1, padx=5, pady=5)
-            self.Cancel2 = ttk.Button(self.result2, command=self.cancel_command)
+            self.Cancel2: ttk.Button = ttk.Button(
+                self.result2,
+                command=self.cancel_command,
+            )
             self.Cancel2.configure(text="Cancel")
             self.Cancel2.grid(column=1, row=1, sticky="ew", padx=5, pady=5)
             self.result2.grid(column=0, columnspan=2, pady=5, row=cnt, sticky="ew")
@@ -120,25 +152,26 @@ class PokeConDialogue:
         self.main_frame.pack()
         self.message_dialogue.master.wait_window(self.message_dialogue)
 
-    def mode0(self, message: list | str) -> None:
-        if type(message) is not list:
+    def mode0(self, message: str | int | list[str | int]) -> None:
+        if not isinstance(message, list):
             message = [message]
-        n = len(message)
 
-        for i in range(n):
-            self.dialogue_ls[message[i]] = tk.StringVar()
-            label = ttk.Label(self.inputs, text=message[i])
-            entry = ttk.Entry(self.inputs, textvariable=self.dialogue_ls[message[i]])
+        for i, m in enumerate(message):
+            self.dialogue_ls[m] = tk.StringVar()
+            label = ttk.Label(self.inputs, text=m)
+            entry = ttk.Entry(self.inputs, textvariable=self.dialogue_ls[m])
             label.grid(column=0, row=i, sticky="nsew", padx=3, pady=3)
             entry.grid(column=1, row=i, sticky="nsew", padx=3, pady=3)
 
-    def mode1(self, dialogue_list: list) -> None:
+    def mode1(self, dialogue_list: list[list[Any]]) -> None:
         n = len(dialogue_list)
         frame = []
 
-        scale_label_list = []  # scaleの値を表示するlabelを格納するリスト
-        scale_index_list = []  # scaleが何番目のwidgetなのかを格納するリスト
-        scale_digit_list = []  # scaleの有効桁数を格納するリスト
+        scale_label_list: list[
+            tk.Label
+        ] = []  # scaleの値を表示するlabelを格納するリスト
+        scale_index_list: list[int] = []  # scaleが何番目のwidgetなのかを格納するリスト
+        scale_digit_list: list[int] = []  # scaleの有効桁数を格納するリスト
 
         def change_scale_value(
             event=None,
@@ -289,7 +322,10 @@ class PokeConDialogue:
             else:
                 pass
 
-    def ret_value(self, need: type) -> list | dict | bool:
+    def ret_value(
+        self,
+        need: type,
+    ) -> list[str] | dict[int | str, str] | Literal[False]:
         if self.isOK:
             if need is dict:  # needは型なのでisinstanceは使えない
                 return {k: v.get() for k, v in self.dialogue_ls.items()}
@@ -332,7 +368,7 @@ def check_widget_name(dialogue_list: list, except_name: list | None = None) -> b
     return len(input_name) == len(output_name)
 
 
-def get_setting(filename: str) -> dict:
+def get_setting(filename: str) -> dict[str, Any] | None:
     """
     保存した設定値を読み込む
     """
@@ -343,7 +379,7 @@ def get_setting(filename: str) -> dict:
         return None
 
 
-def save_setting(filename: str, settings: dict) -> None:
+def save_setting(filename: str, settings: dict[str, Any]) -> None:
     """
     設定値を保存する
     """

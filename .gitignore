@@ -22,6 +22,7 @@
 !/pyproject.toml
 !/ruff.toml
 !/requirements.txt
+!/requirements-nuitka.txt
 
 
 !/DirectShowLib/

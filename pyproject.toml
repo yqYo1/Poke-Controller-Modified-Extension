@@ -1,0 +1,24 @@
+[project]
+name = "poke-controller-modified-extension"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gitpython>=3.1.44",
+    "numpy>=2.3.1",
+    "opencv-python>=4.11.0.86",
+    "paho-mqtt>=2.1.0",
+    "pandas>=2.3.1",
+    "pillow>=11.3.0",
+    "plyer>=2.1.0",
+    "pygame>=2.6.1",
+    "pygubu>=0.38.1",
+    "pynput>=1.8.1",
+    "pyserial>=3.5",
+    "pythonnet>=3.0.5",
+    "requests>=2.32.4",
+    "scipy>=1.16.0",
+    "setuptools>=80.9.0",
+    "windows-capture-device-list>=1.1.0",
+]

@@ -19,6 +19,7 @@
 !/UpdatePokeConModified-Extension.bat
 !/changelog.txt
 !/pyrightconfig.json
+!/pyproject.toml
 !/ruff.toml
 !/requirements.txt
 

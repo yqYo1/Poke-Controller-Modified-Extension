@@ -1,0 +1,40 @@
+name: Build Nuitka
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check-out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements-nuitka.txt
+
+      - name: Build executable with Nuitka
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          script-name: SerialController/Window.py
+          mode: onefile
+          nuitka-version: main
+          output-filename: PokeConEx.exe
+          enable-plugins: tk-inter
+          # disable-console: true
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Executable
+          path: build/*.exe # Nuitka-Actionのデフォルト出力は 'build' ディレクトリ

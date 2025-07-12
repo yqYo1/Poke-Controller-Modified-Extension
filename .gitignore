@@ -9,6 +9,7 @@
 /.github/workflows/*
 !/.github/workflows/ruff.yml
 !/.github/workflows/basedpyright.yml
+!/.github/workflows/build-nuitka-test.yml
 
 # not ignore
 !/.gitignore

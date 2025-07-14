@@ -68,7 +68,7 @@ class Camera:
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
         self.capture_dir: str = "Captures"
-        self.image_bgr: MatLike = cv2.imread("../Images/disabled.png", cv2.IMREAD_COLOR)
+        self.image_bgr: MatLike = cv2.imread("./assets/disabled.png", cv2.IMREAD_COLOR)
         self.thread: threading.Thread
         self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())

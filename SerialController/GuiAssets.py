@@ -147,7 +147,7 @@ class CaptureArea(tk.Canvas):
         self.bind("<Control-ButtonRelease-3>", self.ReleaseRangeTouchscreen)
 
         # Set disabled image first
-        disabled_img = cv2.imread("../Images/disabled.png", cv2.IMREAD_GRAYSCALE)
+        disabled_img = cv2.imread("./assets/disabled.png", cv2.IMREAD_GRAYSCALE)
         disabled_pil = Image.fromarray(disabled_img)
         self.disabled_tk = ImageTk.PhotoImage(disabled_pil)
         self.im = self.disabled_tk

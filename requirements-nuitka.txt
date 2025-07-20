@@ -1,4 +1,4 @@
-certifi==2025.7.9
+certifi==2025.7.14
 cffi==1.17.1
 charset-normalizer==3.4.2
 clr_loader==0.2.7.post0

@@ -1,5 +1,26 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "gitpython",
+#     "numpy",
+#     "opencv-python",
+#     "paho-mqtt",
+#     "pandas",
+#     "pillow",
+#     "plyer",
+#     "pygame",
+#     "pygubu",
+#     "pynput",
+#     "pyserial",
+#     "pythonnet",
+#     "requests",
+#     "scipy",
+#     "setuptools",
+#     "windows-capture-device-list",
+# ]
+# ///
+
 from __future__ import annotations
 
 import argparse
@@ -3211,10 +3232,6 @@ class StdoutRedirector:
 
 if __name__ == "__main__":
     import tkinter as tk
-
-    # Change current working directory to SerrialController
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
 
     parser = argparse.ArgumentParser(
         description="Switch/GC automation support software using Python",

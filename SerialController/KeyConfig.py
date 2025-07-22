@@ -1,28 +1,40 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import configparser
 import os
 import tkinter as tk
-import tkinter.ttk as ttk
-from logging import getLogger, DEBUG, NullHandler
+from logging import DEBUG, NullHandler, getLogger
+from tkinter import ttk
+from typing import TYPE_CHECKING
 
 from pynput.keyboard import Listener
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from logging import Logger
+    from typing import Any
+
+    from pynput.keyboard import Key, KeyCode
+
 
 class PokeKeycon:
-    SETTING_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "settings.ini")
+    SETTING_PATH: str = os.path.join(
+        os.path.dirname(__file__),
+        "profiles",
+        "default",
+        "settings.ini",
+    )
 
-    def __init__(self, master=None, **kw):
-        self.master = master
-        self.kc = tk.Toplevel(master)
+    def __init__(self, master: tk.Tk | None = None, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
+        self.master: tk.Tk | None = master
+        self.kc: tk.Toplevel = tk.Toplevel(master)
         self.kc.title("Key Config")
         self.listener = None
         self.setting = configparser.ConfigParser()
         self.setting.optionxform = str
 
-        self._logger = getLogger(__name__)
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
@@ -42,7 +54,12 @@ class PokeKeycon:
         self.frame_2 = ttk.Frame(self.key_config_frame, style="Frame1.TFrame")
 
         self.label_ZL = ttk.Label(self.frame_2)
-        self.label_ZL.configure(padding="5", text="ZL", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_ZL.configure(
+            padding="5",
+            text="ZL",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_ZL.grid(sticky="e")
         self.entry_ZL = ttk.Entry(self.frame_2)
         self.ZL = tk.StringVar()
@@ -50,7 +67,12 @@ class PokeKeycon:
         self.entry_ZL.grid(column="1", padx="5", pady="5", row="0")
 
         self.label_L = ttk.Label(self.frame_2)
-        self.label_L.configure(padding="5", text="L", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_L.configure(
+            padding="5",
+            text="L",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_L.grid(row="1", sticky="e")
         self.entry_L = ttk.Entry(self.frame_2)
         self.L = tk.StringVar()
@@ -58,7 +80,12 @@ class PokeKeycon:
         self.entry_L.grid(column="1", padx="5", pady="5", row="1")
 
         self.label_MINUS = ttk.Label(self.frame_2)
-        self.label_MINUS.configure(padding="5", text="MINUS", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_MINUS.configure(
+            padding="5",
+            text="MINUS",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_MINUS.grid(row="2", sticky="e")
         self.entry_MINUS = ttk.Entry(self.frame_2)
         self.MINUS = tk.StringVar()
@@ -66,7 +93,12 @@ class PokeKeycon:
         self.entry_MINUS.grid(column="1", padx="5", pady="5", row="2")
 
         self.label_HAT_UP = ttk.Label(self.frame_2)
-        self.label_HAT_UP.configure(padding="5", text="HAT UP", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_HAT_UP.configure(
+            padding="5",
+            text="HAT UP",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_HAT_UP.grid(row="3", sticky="e")
         self.entry_HAT_UP = ttk.Entry(self.frame_2)
         self.HAT_UP = tk.StringVar()
@@ -75,7 +107,10 @@ class PokeKeycon:
 
         self.label__HAT_LEFT = ttk.Label(self.frame_2)
         self.label__HAT_LEFT.configure(
-            padding="5", text="HAT LEFT", background="#00c3e3", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="HAT LEFT",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label__HAT_LEFT.grid(row="4", sticky="e")
         self.entry_HAT_LEFT = ttk.Entry(self.frame_2)
@@ -85,7 +120,10 @@ class PokeKeycon:
 
         self.label_HAT_RIGHT = ttk.Label(self.frame_2)
         self.label_HAT_RIGHT.configure(
-            padding="5", text="HAT RIGHT", background="#00c3e3", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="HAT RIGHT",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_HAT_RIGHT.grid(row="5", sticky="e")
         self.entry_HAT_RIGHT = ttk.Entry(self.frame_2)
@@ -94,7 +132,12 @@ class PokeKeycon:
         self.entry_HAT_RIGHT.grid(column="1", padx="5", pady="5", row="5")
 
         self.label_HAT_DOWN = ttk.Label(self.frame_2)
-        self.label_HAT_DOWN.configure(padding="5", text="HAT DOWN", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_HAT_DOWN.configure(
+            padding="5",
+            text="HAT DOWN",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_HAT_DOWN.grid(row="6", sticky="e")
         self.entry_HAT_DOWN = ttk.Entry(self.frame_2)
         self.HAT_DOWN = tk.StringVar()
@@ -102,7 +145,12 @@ class PokeKeycon:
         self.entry_HAT_DOWN.grid(column="1", padx="5", pady="5", row="6")
 
         self.label_CAPTURE = ttk.Label(self.frame_2)
-        self.label_CAPTURE.configure(padding="5", text="CAPTURE", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_CAPTURE.configure(
+            padding="5",
+            text="CAPTURE",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_CAPTURE.grid(row="7", sticky="e")
         self.entry_CAPTURE = ttk.Entry(self.frame_2)
         self.CAPTURE = tk.StringVar()
@@ -110,7 +158,12 @@ class PokeKeycon:
         self.entry_CAPTURE.grid(column="1", padx="5", pady="5", row="7")
 
         self.label_LCLICK = ttk.Label(self.frame_2)
-        self.label_LCLICK.configure(padding="5", text="L CLICK", background="#00c3e3", font="{游ゴシック} 12 {bold}")
+        self.label_LCLICK.configure(
+            padding="5",
+            text="L CLICK",
+            background="#00c3e3",
+            font="{游ゴシック} 12 {bold}",
+        )
         self.label_LCLICK.grid(row="8", sticky="e")
         self.entry_LCLICK = ttk.Entry(self.frame_2)
         self.LCLICK = tk.StringVar()
@@ -126,7 +179,11 @@ class PokeKeycon:
 
         self.label_ZR = ttk.Label(self.frame_2_3)
         self.label_ZR.configure(
-            padding="5", text="ZR", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="ZR",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_ZR.grid(row="0", sticky="e")
         self.entry_ZR = ttk.Entry(self.frame_2_3)
@@ -136,7 +193,11 @@ class PokeKeycon:
 
         self.label_R = ttk.Label(self.frame_2_3)
         self.label_R.configure(
-            padding="5", text="R", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="R",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_R.grid(row="1", sticky="e")
         self.entry_R = ttk.Entry(self.frame_2_3)
@@ -146,7 +207,11 @@ class PokeKeycon:
 
         self.label_PLUS = ttk.Label(self.frame_2_3)
         self.label_PLUS.configure(
-            padding="5", text="PLUS", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="PLUS",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_PLUS.grid(row="2", sticky="e")
         self.entry_PLUS = ttk.Entry(self.frame_2_3)
@@ -156,7 +221,11 @@ class PokeKeycon:
 
         self.label_A = ttk.Label(self.frame_2_3)
         self.label_A.configure(
-            padding="5", text="A", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="A",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_A.grid(row="3", sticky="e")
         self.entry_A = ttk.Entry(self.frame_2_3)
@@ -166,7 +235,11 @@ class PokeKeycon:
 
         self.label__B = ttk.Label(self.frame_2_3)
         self.label__B.configure(
-            padding="5", text="B", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="B",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label__B.grid(row="4", sticky="e")
         self.entry_B = ttk.Entry(self.frame_2_3)
@@ -176,7 +249,11 @@ class PokeKeycon:
 
         self.label_X = ttk.Label(self.frame_2_3)
         self.label_X.configure(
-            padding="5", text="X", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="X",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_X.grid(row="5", sticky="e")
         self.entry_X = ttk.Entry(self.frame_2_3)
@@ -186,7 +263,11 @@ class PokeKeycon:
 
         self.label_Y = ttk.Label(self.frame_2_3)
         self.label_Y.configure(
-            padding="5", text="Y", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="Y",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_Y.grid(row="6", sticky="e")
         self.entry_Y = ttk.Entry(self.frame_2_3)
@@ -196,7 +277,11 @@ class PokeKeycon:
 
         self.label_HOME = ttk.Label(self.frame_2_3)
         self.label_HOME.configure(
-            padding="5", text="HOME", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="HOME",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_HOME.grid(row="7", sticky="e")
         self.entry_HOME = ttk.Entry(self.frame_2_3)
@@ -206,7 +291,11 @@ class PokeKeycon:
 
         self.label_RCLICK = ttk.Label(self.frame_2_3)
         self.label_RCLICK.configure(
-            padding="5", text="R CLICK", background="#ff4554", foreground="#ffffff", font="{游ゴシック} 12 {bold}"
+            padding="5",
+            text="R CLICK",
+            background="#ff4554",
+            foreground="#ffffff",
+            font="{游ゴシック} 12 {bold}",
         )
         self.label_RCLICK.grid(row="8", sticky="e")
         self.entry_RCLICK = ttk.Entry(self.frame_2_3)
@@ -214,7 +303,12 @@ class PokeKeycon:
         self.entry_RCLICK.configure(state="readonly", textvariable=self.RCLICK)
         self.entry_RCLICK.grid(column="1", padx="5", pady="5", row="8")
 
-        self.frame_2_3.configure(height="200", padding="10", relief="groove", width="200")
+        self.frame_2_3.configure(
+            height="200",
+            padding="10",
+            relief="groove",
+            width="200",
+        )
         self.frame_2_3.grid(column="1", row="1", sticky="nsew")
         self.frame_2_3.rowconfigure("1", pad="5")
         self.frame_2_3.columnconfigure("1", pad="5")
@@ -235,48 +329,102 @@ class PokeKeycon:
 
         self.load_config()
 
-        self.entry_ZL.bind("<FocusIn>", lambda x: self.onFocusInController(self.ZL, "Button.ZL"))
-        self.entry_ZL.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_L.bind("<FocusIn>", lambda x: self.onFocusInController(self.L, "Button.L"))
-        self.entry_L.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_LCLICK.bind("<FocusIn>", lambda x: self.onFocusInController(self.LCLICK, "Button.LCLICK"))
-        self.entry_LCLICK.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_ZR.bind("<FocusIn>", lambda x: self.onFocusInController(self.ZR, "Button.ZR"))
-        self.entry_ZR.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_R.bind("<FocusIn>", lambda x: self.onFocusInController(self.R, "Button.R"))
-        self.entry_R.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_RCLICK.bind("<FocusIn>", lambda x: self.onFocusInController(self.RCLICK, "Button.RCLICK"))
-        self.entry_RCLICK.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_MINUS.bind("<FocusIn>", lambda x: self.onFocusInController(self.MINUS, "Button.MINUS"))
-        self.entry_MINUS.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_CAPTURE.bind("<FocusIn>", lambda x: self.onFocusInController(self.CAPTURE, "Button.CAPTURE"))
-        self.entry_CAPTURE.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_A.bind("<FocusIn>", lambda x: self.onFocusInController(self.A, "Button.A"))
-        self.entry_A.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_B.bind("<FocusIn>", lambda x: self.onFocusInController(self.B, "Button.B"))
-        self.entry_B.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_X.bind("<FocusIn>", lambda x: self.onFocusInController(self.X, "Button.X"))
-        self.entry_X.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_Y.bind("<FocusIn>", lambda x: self.onFocusInController(self.Y, "Button.Y"))
-        self.entry_Y.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_PLUS.bind("<FocusIn>", lambda x: self.onFocusInController(self.PLUS, "Button.PLUS"))
-        self.entry_PLUS.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_HOME.bind("<FocusIn>", lambda x: self.onFocusInController(self.HOME, "Button.HOME"))
-        self.entry_HOME.bind("<FocusOut>", self.onFocusOutController)
+        self.entry_ZL.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.ZL, "Button.ZL"),
+        )
+        self.entry_ZL.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_L.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.L, "Button.L"),
+        )
+        self.entry_L.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_LCLICK.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.LCLICK, "Button.LCLICK"),
+        )
+        self.entry_LCLICK.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_ZR.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.ZR, "Button.ZR"),
+        )
+        self.entry_ZR.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_R.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.R, "Button.R"),
+        )
+        self.entry_R.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_RCLICK.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.RCLICK, "Button.RCLICK"),
+        )
+        self.entry_RCLICK.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_MINUS.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.MINUS, "Button.MINUS"),
+        )
+        self.entry_MINUS.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_CAPTURE.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.CAPTURE, "Button.CAPTURE"),
+        )
+        self.entry_CAPTURE.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_A.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.A, "Button.A"),
+        )
+        self.entry_A.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_B.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.B, "Button.B"),
+        )
+        self.entry_B.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_X.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.X, "Button.X"),
+        )
+        self.entry_X.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_Y.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.Y, "Button.Y"),
+        )
+        self.entry_Y.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_PLUS.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.PLUS, "Button.PLUS"),
+        )
+        self.entry_PLUS.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_HOME.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.HOME, "Button.HOME"),
+        )
+        self.entry_HOME.bind("<FocusOut>", lambda _: self.onFocusOutController())
 
-        self.entry_HAT_UP.bind("<FocusIn>", lambda x: self.onFocusInController(self.HAT_UP, "Hat.TOP"))
-        self.entry_HAT_UP.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_HAT_RIGHT.bind("<FocusIn>", lambda x: self.onFocusInController(self.HAT_RIGHT, "Hat.RIGHT"))
-        self.entry_HAT_RIGHT.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_HAT_DOWN.bind("<FocusIn>", lambda x: self.onFocusInController(self.HAT_DOWN, "Hat.BTM"))
-        self.entry_HAT_DOWN.bind("<FocusOut>", self.onFocusOutController)
-        self.entry_HAT_LEFT.bind("<FocusIn>", lambda x: self.onFocusInController(self.HAT_LEFT, "Hat.LEFT"))
-        self.entry_HAT_LEFT.bind("<FocusOut>", self.onFocusOutController)
+        self.entry_HAT_UP.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.HAT_UP, "Hat.TOP"),
+        )
+        self.entry_HAT_UP.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_HAT_RIGHT.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.HAT_RIGHT, "Hat.RIGHT"),
+        )
+        self.entry_HAT_RIGHT.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_HAT_DOWN.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.HAT_DOWN, "Hat.BTM"),
+        )
+        self.entry_HAT_DOWN.bind("<FocusOut>", lambda _: self.onFocusOutController())
+        self.entry_HAT_LEFT.bind(
+            "<FocusIn>",
+            lambda _: self.onFocusInController(self.HAT_LEFT, "Hat.LEFT"),
+        )
+        self.entry_HAT_LEFT.bind("<FocusOut>", lambda _: self.onFocusOutController())
 
-    def run(self):
+    def run(self) -> None:
         self.mainwindow.mainloop()
 
-    def onFocusInController(self, var, button_name):
+    def onFocusInController(self, var: tk.StringVar, button_name: str) -> None:
         # enable Keyboard as controller
         # print(event, var)
         self.listener = Listener(
@@ -286,11 +434,12 @@ class PokeKeycon:
         self.listener.start()
         self._logger.debug("Activate key config window")
 
-    def onFocusOutController(self, event):
-        self.listener.stop()
+    def onFocusOutController(self) -> None:
+        if self.listener is not None:
+            self.listener.stop()
         self.listener = None
 
-    def on_press(self, key, var):
+    def on_press(self, key: Key | KeyCode | None, var: tk.StringVar) -> None:
         try:
             # print('alphanumeric key {0} pressed'.format(key.char))
             var.set(key.char)
@@ -299,16 +448,21 @@ class PokeKeycon:
             # print(var)
             # print('special key {0} pressed'.format(key))
 
-    def on_release(self, key, var, button_name):
+    def on_release(
+        self,
+        key: Key | KeyCode | None,  # noqa: ARG002
+        var: tk.StringVar,
+        button_name: str,
+    ) -> None:
         try:
             spc = button_name.split(".")[0]
             self._logger.debug(f"Released key :{var.get()}")
             self.setting[f"KeyMap-{spc}"][button_name] = var.get()
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.debug(f"{e}")
         # print(f'{key} released')
 
-    def load_config(self):
+    def load_config(self) -> None:
         if os.path.isfile(self.SETTING_PATH):
             self.setting.read(self.SETTING_PATH, encoding="utf-8")
 
@@ -331,7 +485,7 @@ class PokeKeycon:
         self.HAT_LEFT.set(self.setting["KeyMap-Hat"]["Hat.LEFT"])
         self.HAT_RIGHT.set(self.setting["KeyMap-Hat"]["Hat.RIGHT"])
 
-    def save_config(self):
+    def save_config(self) -> None:
         self.setting["KeyMap-Button"]["Button.ZL"] = self.ZL.get()
         self.setting["KeyMap-Button"]["Button.L"] = self.L.get()
         self.setting["KeyMap-Button"]["Button.LCLICK"] = self.LCLICK.get()
@@ -355,29 +509,29 @@ class PokeKeycon:
         with open(self.SETTING_PATH, "w", encoding="utf-8") as file:
             self.setting.write(file)
 
-    def apply_setting(self):
+    def apply_setting(self) -> None:
         with open(self.SETTING_PATH, "w", encoding="utf-8") as file:
             self._logger.debug("Apply key setting")
             self.setting.write(file)
         if self.listener is not None:
             self.listener.stop()
 
-    def close(self):
+    def close(self) -> None:
         self.kc.withdraw()
         if self.listener is not None:
             self.listener.stop()
 
-    def bind(self, event, func):
+    def bind(self, event: str, func: Callable[[tk.Event[tk.Misc]], None]) -> None:
         self.kc.bind(event, func)
 
-    def protocol(self, event, func):
+    def protocol(self, event: str, func: Callable[[], None]) -> None:
         self.kc.protocol(event, func)
 
-    def focus_force(self):
+    def focus_force(self) -> None:
         self.kc.focus_force()
         self.kc.deiconify()
 
-    def destroy(self):
+    def destroy(self) -> None:
         if self.listener is not None:
             self.listener.stop()
         self.kc.destroy()

@@ -1,19 +1,29 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import cv2
-from numpy import ndarray, array, argmax
 import os
-from typing import List, Tuple, Optional
-from logging import getLogger, DEBUG, NullHandler
+from logging import DEBUG, Logger, NullHandler, getLogger
+from typing import TYPE_CHECKING
+
+import cv2
+from numpy import argmax, array, ndarray
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Final, Literal
+
+    from cv2.typing import MatLike
+
+    type CropFmt = int | Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 
 
-def crop_image(image: ndarray, crop: List[int] = None) -> ndarray:
+def crop_image(image: MatLike, crop: list[int] | None = None) -> MatLike:
     """
     画像をトリミングする
     [y軸始点, y軸終点, x軸始点, x軸終点]
     """
+    if crop is None:
+        crop = []
     try:
         cropped_image = image[crop[0] : crop[1], crop[2] : crop[3]]
     except Exception:
@@ -22,7 +32,11 @@ def crop_image(image: ndarray, crop: List[int] = None) -> ndarray:
     return cropped_image
 
 
-def crop_image_extend(image: ndarray, crop_fmt: int | str = None, crop: List[int] = None) -> ndarray:
+def crop_image_extend(
+    image: MatLike,
+    crop_fmt: CropFmt = "",
+    crop: list[int] | None = None,
+) -> MatLike:
     """
     画像をトリミングする
     ・Pillow形式
@@ -37,26 +51,40 @@ def crop_image_extend(image: ndarray, crop_fmt: int | str = None, crop: List[int
     crop_fmt=13: [y軸始点, y軸終点, x軸始点, x軸終点]
     crop_fmt=14: [y軸始点, トリミング後の画像のサイズ(縦), x軸始点, トリミング後の画像のサイズ(横)]
     """
+    if crop is None:
+        crop = []
 
     try:
         # pillow形式
-        if crop_fmt == 1 or crop_fmt == "1":
+        if crop_fmt in {1, "1"}:
             cropped_image = image[crop[1] : crop[3], crop[0] : crop[2]]
-        elif crop_fmt == 2 or crop_fmt == "2":
-            cropped_image = image[crop[1] : crop[1] + crop[3], crop[0] : crop[0] + crop[2]]
-        elif crop_fmt == 3 or crop_fmt == "3":
+        elif crop_fmt in {2, "2"}:
+            cropped_image = image[
+                crop[1] : crop[1] + crop[3],
+                crop[0] : crop[0] + crop[2],
+            ]
+        elif crop_fmt in {3, "3"}:
             cropped_image = image[crop[2] : crop[3], crop[0] : crop[1]]
-        elif crop_fmt == 4 or crop_fmt == "4":
-            cropped_image = image[crop[2] : crop[2] + crop[3], crop[0] : crop[0] + crop[1]]
+        elif crop_fmt in {4, "4"}:
+            cropped_image = image[
+                crop[2] : crop[2] + crop[3],
+                crop[0] : crop[0] + crop[1],
+            ]
         # opencv形式
-        elif crop_fmt == 11 or crop_fmt == "11":
+        elif crop_fmt in {11, "11"}:
             cropped_image = image[crop[0] : crop[2], crop[1] : crop[3]]
-        elif crop_fmt == 12 or crop_fmt == "12":
-            cropped_image = image[crop[0] : crop[0] + crop[2], crop[1] : crop[1] + crop[3]]
-        elif crop_fmt == 13 or crop_fmt == "13":
+        elif crop_fmt in {12, "12"}:
+            cropped_image = image[
+                crop[0] : crop[0] + crop[2],
+                crop[1] : crop[1] + crop[3],
+            ]
+        elif crop_fmt in {13, "13"}:
             cropped_image = image[crop[0] : crop[1], crop[2] : crop[3]]
-        elif crop_fmt == 14 or crop_fmt == "14":
-            cropped_image = image[crop[0] : crop[0] + crop[1], crop[2] : crop[2] + crop[3]]
+        elif crop_fmt in {14, "14"}:
+            cropped_image = image[
+                crop[0] : crop[0] + crop[1],
+                crop[2] : crop[2] + crop[3],
+            ]
         else:
             cropped_image = image
     except Exception:
@@ -65,7 +93,12 @@ def crop_image_extend(image: ndarray, crop_fmt: int | str = None, crop: List[int
     return cropped_image
 
 
-def getInterframeDiff(frame1: ndarray, frame2: ndarray, frame3: ndarray, threshold: float) -> ndarray:
+def getInterframeDiff(
+    frame1: MatLike,
+    frame2: MatLike,
+    frame3: MatLike,
+    threshold: float,
+) -> MatLike:
     """
     Get interframe difference binarized image
     フレーム間差分により2値化された画像を取得する
@@ -79,36 +112,43 @@ def getInterframeDiff(frame1: ndarray, frame2: ndarray, frame3: ndarray, thresho
     img_th = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
 
     # remove noise
-    mask = cv2.medianBlur(img_th, 3)
-    return mask
+    return cv2.medianBlur(img_th, 3)
 
 
-def getImage(path: str, mode: str = "color"):
+def getImage(
+    path: str,
+    mode: Literal["color", "binary", "gray"] = "color",
+) -> MatLike | None:
     """
     画像の読み込みを行う。
     """
     if path:
         try:
+            if mode == "color":
+                return cv2.imread(path, cv2.IMREAD_COLOR)
+            if mode == "gray":
+                return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             if mode == "binary":
                 return cv2.imread(path, 0)
-            elif mode == "gray":
-                return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            else:
-                return cv2.imread(path, cv2.IMREAD_COLOR)
+            print(f'mode={mode}が不正です。mode="color"として読み込みます。')  # pyright:ignore[reportUnreachable]
+            return cv2.imread(path, cv2.IMREAD_COLOR)
         except Exception:
-            print(f"{path}が開けませんでした。ファイル名およびファイルの格納場所を確認してください。")
+            print(
+                f"{path}が開けませんでした。ファイル名およびファイルの格納場所を確認してください。",
+            )
             return None
     else:
         return None
 
 
 def doPreprocessImage(
-    image: ndarray,
+    image: MatLike,
     use_gray: bool = True,
-    crop: List[int] = None,
-    BGR_range: Optional[dict] = None,
-    threshold_binary: Optional[int] = None,
-) -> Tuple[ndarray, int, int]:
+    crop: list[int] | None = None,
+    BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+    | None = None,
+    threshold_binary: int | None = None,
+) -> tuple[MatLike, int, int]:
     """
     画像をトリミングしてグレースケール化/2値化する
     2値化関連のContributor: mikan kochan 空太 (敬称略)
@@ -119,18 +159,25 @@ def doPreprocessImage(
         src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)  # グレースケール化
     elif BGR_range is not None:  # 2値化
         src = cv2.inRange(
-            src, array(BGR_range["lower"]), array(BGR_range["upper"])
-        )  # inRangeで元画像を２値化(指定した色の範囲を抽出できる)
+            src,
+            array(BGR_range["lower"]),
+            array(BGR_range["upper"]),
+        )  # inRangeで元画像を2値化(指定した色の範囲を抽出できる)
 
     if threshold_binary is not None:
         _, src = cv2.threshold(src, threshold_binary, 255, cv2.THRESH_BINARY)
 
-    width, height = src.shape[1], src.shape[0]  # テンプレート画像のサイズ
+    # テンプレート画像のサイズ
+    width, height = src.shape[1], src.shape[0]
 
     return src, width, height
 
 
-def opneImage(image: ndarray, crop: List[int] = None, title="image"):
+def opneImage(
+    image: MatLike,
+    crop: list[int] | None = None,
+    title: str = "image",
+) -> None:
     """
     キー入力があるまで画像を表示する
     Contributor: kochan (敬称略)
@@ -146,15 +193,15 @@ class ImageProcessing:
     画像に関する処理を行う。
     """
 
-    __logger = None
+    __logger: Logger
     __activate_logger = False
     __gsrc = None
     __gtmpl = None
     __gresult = None
     __use_gpu = False
-    image_type = ndarray
+    image_type: Final = ndarray
 
-    def __init__(self, use_gpu: bool = False):
+    def __init__(self, use_gpu: bool = False) -> None:
         # ロガーを起動する(1回だけ)
         if not self.__activate_logger:
             self.__logger = getLogger(__name__)
@@ -169,11 +216,11 @@ class ImageProcessing:
             """
             try:
                 if self.__gsrc is None:
-                    self.__gsrc = cv2.cuda_GpuMat()
+                    self.__gsrc = cv2.cuda_GpuMat()  # pyright: ignore[reportAttributeAccessIssue]
                 if self.__gtmpl is None:
-                    self.__gtmpl = cv2.cuda_GpuMat()
+                    self.__gtmpl = cv2.cuda_GpuMat()  # pyright: ignore[reportAttributeAccessIssue]
                 if self.__gresult is None:
-                    self.__gresult = cv2.cuda_GpuMat()
+                    self.__gresult = cv2.cuda_GpuMat()  # pyright: ignore[reportAttributeAccessIssue]
                 self.__use_gpu = True
                 print("template matching:mask is ignored.")
             except Exception:
@@ -181,10 +228,17 @@ class ImageProcessing:
         else:
             self.__use_gpu = False
 
-    def imwrite(self, filename: str, image: ndarray, params: int = None) -> bool:
+    def imwrite(
+        self,
+        filename: str,
+        image: MatLike,
+        params: Sequence[int] | None = None,
+    ) -> bool:
         """
         画像を書き込む
         """
+        if params is None:
+            params = []
         try:
             ext = os.path.splitext(filename)[1]
             result, n = cv2.imencode(ext, image, params)
@@ -193,56 +247,69 @@ class ImageProcessing:
                 with open(filename, mode="w+b") as f:
                     n.tofile(f)
                 return True
-            else:
-                return False
+            return False
         except Exception as e:
             print(e)
             self.__logger.error(f"Image Write Error: {e}")
             return False
 
     def doTemplateMatch(
-        self, image: ndarray, template_image: ndarray, mask_image: ndarray = None
-    ) -> Tuple[float, tuple]:
+        self,
+        image: MatLike,
+        template_image: MatLike,
+        mask_image: MatLike | None = None,
+    ) -> tuple[float, Sequence[int]]:
         """
         テンプレートマッチングをする
         画像は必要に応じて事前にグレースケール化やトリミングをしておく必要がある
         """
         # 比較方式を設定する
-        method = cv2.TM_CCORR_NORMED if isinstance(mask_image, ndarray) else cv2.TM_CCOEFF_NORMED
+        method = (
+            cv2.TM_CCORR_NORMED
+            if isinstance(mask_image, ndarray)
+            else cv2.TM_CCOEFF_NORMED
+        )
 
         # テンプレートマッチングをする
         if self.__use_gpu:  # GPUを使用する場合(マスク非対応)
             print("template matching mode:GPU")
-            self.__gsrc.upload(image)
-            self.__gtmpl.upload(template_image)
-            matcher = cv2.cuda.createTemplateMatching(cv2.CV_8UC1, method)
+            self.__gsrc.upload(image)  # pyright: ignore[reportOptionalMemberAccess]
+            self.__gtmpl.upload(template_image)  # pyright: ignore[reportOptionalMemberAccess]
+            matcher = cv2.cuda.createTemplateMatching(cv2.CV_8UC1, method)  # pyright: ignore[reportAttributeAccessIssue,reportUnknownVariableType]
             self.__gresult = matcher.match(self.__gsrc, self.__gtmpl)
-            res = self.gresult.download()
+            res = self.__gresult.download()  # pyright: ignore[reportUnknownVariableType]
         else:
             res = cv2.matchTemplate(image, template_image, method, mask=mask_image)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)  # 結果から類似度と類似度が最大となる場所を抽出
+        _, max_val, _, max_loc = cv2.minMaxLoc(
+            res,  # pyright: ignore[reportUnknownArgumentType]
+        )  # 結果から類似度と類似度が最大となる場所を抽出
 
         return max_val, max_loc
 
     def isContainTemplate(
         self,
-        image: ndarray,
-        template_image: ndarray,
-        mask_image: ndarray = None,
+        image: MatLike,
+        template_image: MatLike,
+        mask_image: MatLike | None = None,
         threshold: float = 0.7,
         use_gray: bool = True,
-        crop: List[int] = [],
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: list[int] = [],
+        crop: list[int] | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-    ) -> Tuple[bool, tuple, int, int, float]:
+    ) -> tuple[bool, Sequence[int], int, int, float]:
         """
         テンプレートマッチングを行い類似度が閾値を超えているかを確認する
         """
         # テンプレートマッチング対象画像を加工する
         src, _, _ = doPreprocessImage(
-            image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary
+            image,
+            use_gray=use_gray,
+            crop=crop,
+            BGR_range=BGR_range,
+            threshold_binary=threshold_binary,
         )
 
         # [DEBUG] テンプレートマッチング対象画像を表示する
@@ -267,39 +334,44 @@ class ImageProcessing:
 
     def isContainTemplate_max(
         self,
-        image: ndarray,
-        template_image_list: List[ndarray],
-        mask_image_list: List[ndarray] = [],
+        image: MatLike,
+        template_image_list: list[MatLike],
+        mask_image_list: list[MatLike | None] | None = None,
         threshold: float = 0.7,
         use_gray: bool = True,
-        crop: List[int] = [],
-        BGR_range: Optional[dict] = None,
-        threshold_binary: Optional[int] = None,
-        crop_template: list[int] = [],
+        crop: list[int] | None = None,
+        BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]]
+        | None = None,
+        threshold_binary: int | None = None,
+        crop_template: list[int] | None = None,
         show_image: bool = False,
-    ) -> Tuple[int, List[float], List[tuple], List[int], List[int], List[bool]]:
+    ) -> tuple[int, list[float], list[Sequence[int]], list[int], list[int], list[bool]]:
         """
         複数のテンプレート画像を用いてそれぞれテンプレートマッチングを行い類似度が最も大きい画像のindexを返す
         """
         # パラメータチェックを行う
-        if len(template_image_list) == len(mask_image_list):
-            mask_image_list_temp = mask_image_list
-        if len(mask_image_list) == 0:
+        if mask_image_list is None or len(mask_image_list) == 0:
             mask_image_list_temp = [None for i in range(len(template_image_list))]
+        elif len(template_image_list) == len(mask_image_list):
+            mask_image_list_temp = mask_image_list
         else:
             print("The number of template images and mask images don't match. ")
             return -1, [], [], [], [], []
 
         # ループをまわしてテンプレート画像数分テンプレートマッチングを行う
-        max_val_list = []
-        max_loc_list = []
-        width_list = []
-        height_list = []
-        judge_threshold_list = []
+        max_val_list: list[float] = []
+        max_loc_list: list[Sequence[int]] = []
+        width_list: list[int] = []
+        height_list: list[int] = []
+        judge_threshold_list: list[bool] = []
 
         # テンプレートマッチング対象画像を加工する
         src, _, _ = doPreprocessImage(
-            image, use_gray=use_gray, crop=crop, BGR_range=BGR_range, threshold_binary=threshold_binary
+            image,
+            use_gray=use_gray,
+            crop=crop,
+            BGR_range=BGR_range,
+            threshold_binary=threshold_binary,
         )
 
         # [DEBUG] テンプレートマッチング対象画像を表示する
@@ -307,7 +379,11 @@ class ImageProcessing:
             cv2.imshow("image", src)
             cv2.waitKey()
 
-        for template_image, mask_image in zip(template_image_list, mask_image_list_temp):
+        for template_image, mask_image in zip(
+            template_image_list,
+            mask_image_list_temp,
+            strict=False,
+        ):
             # テンプレート画像を加工する
             template, width, height = doPreprocessImage(
                 template_image,
@@ -316,16 +392,32 @@ class ImageProcessing:
                 BGR_range=BGR_range,
                 threshold_binary=threshold_binary,
             )
-            max_val, max_loc = self.doTemplateMatch(src, template, mask_image=mask_image)
+            max_val, max_loc = self.doTemplateMatch(
+                src,
+                template,
+                mask_image=mask_image,
+            )
             max_val_list.append(max_val)
             max_loc_list.append(max_loc)
             width_list.append(width)
             height_list.append(height)
             judge_threshold_list.append(max_val > threshold)
 
-        return argmax(max_val_list), max_val_list, max_loc_list, width_list, height_list, judge_threshold_list
+        return (
+            int(argmax(max_val_list)),
+            max_val_list,
+            max_loc_list,
+            width_list,
+            height_list,
+            judge_threshold_list,
+        )
 
-    def saveImage(self, image: ndarray, filename: str = None, crop: List[int] = None):
+    def saveImage(
+        self,
+        image: MatLike,
+        filename: str,
+        crop: list[int] | None = None,
+    ) -> None:
         """
         画像を保存する。
         """
@@ -348,16 +440,3 @@ class ImageProcessing:
         except cv2.error as e:
             print("Capture Failed")
             self.__logger.error(f"Capture Failed :{e}")
-
-
-if __name__ == "__main__":
-    ImgProc = ImageProcessing()
-    ImgProc.set_template_path("./")
-    camera = cv2.VideoCapture(0)
-    if camera.isOpened():
-        _, image = camera.read()
-        ret, _, _, _ = ImgProc.isContainTemplate(image, "test.png")
-        print(ret)
-        camera.release()
-    else:
-        pass

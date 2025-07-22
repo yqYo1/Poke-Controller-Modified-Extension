@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import requests
 from PIL import Image
+from file_handler import FileHandler
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -35,12 +36,13 @@ def convert_bgr_to_bytes(image_bgr: MatLike) -> bytes:
 
 
 class Discord_Notify:
-    DISCORD_SETTING_PATH: str = os.path.join(
-        os.path.dirname(__file__),
-        "profiles",
-        "default",
-        "discord_token.ini",
-    )
+    # DISCORD_SETTING_PATH: str = os.path.join(
+    #     os.path.dirname(__file__),
+    #     "profiles",
+    #     "default",
+    #     "discord_token.ini",
+    # )
+    DISCORD_SETTING_PATH: str = FileHandler.get_configs_path("discord_token.ini")
 
     def __init__(
         self,

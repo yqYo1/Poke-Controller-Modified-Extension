@@ -24,6 +24,7 @@
 !/ruff.toml
 !/requirements.txt
 !/requirements-nuitka.txt
+!/renovate.json
 
 
 !/DirectShowLib/

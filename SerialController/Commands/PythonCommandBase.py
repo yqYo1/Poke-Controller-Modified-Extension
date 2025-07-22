@@ -57,7 +57,10 @@ class PythonCommand(CommandBase.Command):
         self.thread = None
         self.alive = True
         self.postProcess = None
-        self.Line = Line_Notify()
+        try:
+            self.Line = Line_Notify()
+        except Exception:
+            self.Line = None
         self.Discord = Discord_Notify()
 
     def pausedecorator(func):

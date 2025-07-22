@@ -10,6 +10,7 @@ from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
 
 import cv2
+from file_handler import FileHandler
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -68,7 +69,10 @@ class Camera:
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
         self.capture_dir: str = "Captures"
-        self.image_bgr: MatLike = cv2.imread("./assets/disabled.png", cv2.IMREAD_COLOR)
+        self.image_bgr: MatLike = cv2.imread(
+            FileHandler.get_asset_path("disabled.png"),
+            cv2.IMREAD_COLOR,
+        )
         self.thread: threading.Thread
         self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())

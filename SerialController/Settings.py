@@ -6,18 +6,25 @@ import configparser
 import os
 import tkinter as tk
 from logging import getLogger  # , DEBUG, NullHandler
+from typing import TYPE_CHECKING
+
+from file_handler import FileHandler
+
+if TYPE_CHECKING:
+    from typing import Final
 
 
 class GuiSettings:
-    SETTING_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "settings.ini")
+    # setting_path: str = FileHandler.get_settings_path()
 
-    def __init__(self):
-        self._logger = getLogger(__name__)
-        self.setting = configparser.ConfigParser()
+    def __init__(self, profile: str = "default") -> None:
+        self._logger: Final = getLogger(__name__)
+        self.setting: Final = configparser.ConfigParser()
+        self.profile_path: Final = FileHandler.get_profile_path(profile)
+        self.setting_path: str = FileHandler.get_settings_path(profile)
         self.setting.optionxform = str
-        # print("isExistConfig =", os.path.exists(self.SETTING_PATH))
 
-        if not os.path.exists(self.SETTING_PATH):
+        if not os.path.exists(self.setting_path):
             self._logger.debug("Setting file does not exists.")
             self.generate()
             self.load()
@@ -28,86 +35,132 @@ class GuiSettings:
             self._logger.debug("Settings file has been loaded.")
 
         # default
-        self.camera_id = tk.IntVar(value=self.setting["General Setting"].getint("camera_id"))
-        self.com_port = tk.IntVar(value=self.setting["General Setting"].getint("com_port"))
-        self.com_port_name = tk.StringVar(value=self.setting["General Setting"].get("com_port_name"))
-        self.baud_rate = tk.IntVar(value=self.setting["General Setting"].getint("baud_rate"))
+        self.camera_id = tk.IntVar(
+            value=self.setting["General Setting"].getint("camera_id"),
+        )
+        self.com_port = tk.IntVar(
+            value=self.setting["General Setting"].getint("com_port"),
+        )
+        self.com_port_name = tk.StringVar(
+            value=self.setting["General Setting"].get("com_port_name"),
+        )
+        self.baud_rate = tk.IntVar(
+            value=self.setting["General Setting"].getint("baud_rate"),
+        )
         self.fps = tk.StringVar(value=self.setting["General Setting"]["fps"])
-        self.show_size = tk.StringVar(value=self.setting["General Setting"].get("show_size"))
-        self.is_show_realtime = tk.BooleanVar(value=self.setting["General Setting"].getboolean("is_show_realtime"))
-        self.is_show_value = tk.BooleanVar(value=self.setting["General Setting"].getboolean("is_show_value"))
-        self.is_show_guide = tk.BooleanVar(value=self.setting["General Setting"].getboolean("is_show_guide"))
-        self.is_show_serial = tk.BooleanVar(value=self.setting["General Setting"].getboolean("is_show_serial"))
-        self.is_use_keyboard = tk.BooleanVar(value=self.setting["General Setting"].getboolean("is_use_keyboard"))
+        self.show_size = tk.StringVar(
+            value=self.setting["General Setting"].get("show_size"),
+        )
+        self.is_show_realtime = tk.BooleanVar(
+            value=self.setting["General Setting"].getboolean("is_show_realtime"),
+        )
+        self.is_show_value = tk.BooleanVar(
+            value=self.setting["General Setting"].getboolean("is_show_value"),
+        )
+        self.is_show_guide = tk.BooleanVar(
+            value=self.setting["General Setting"].getboolean("is_show_guide"),
+        )
+        self.is_show_serial = tk.BooleanVar(
+            value=self.setting["General Setting"].getboolean("is_show_serial"),
+        )
+        self.is_use_keyboard = tk.BooleanVar(
+            value=self.setting["General Setting"].getboolean("is_use_keyboard"),
+        )
         try:
             self.serial_data_format_name = tk.StringVar(
-                value=self.setting["General Setting"]["serial_data_format_name"]
+                value=self.setting["General Setting"]["serial_data_format_name"],
             )
         except Exception:
             self.serial_data_format_name = tk.StringVar(value="Default")
         try:
-            self.touchscreen_start_x = int(self.setting["General Setting"]["touchscreen_start_x"])
+            self.touchscreen_start_x = int(
+                self.setting["General Setting"]["touchscreen_start_x"],
+            )
         except Exception:
             self.touchscreen_start_x = 1
         try:
-            self.touchscreen_start_y = int(self.setting["General Setting"]["touchscreen_start_y"])
+            self.touchscreen_start_y = int(
+                self.setting["General Setting"]["touchscreen_start_y"],
+            )
         except Exception:
             self.touchscreen_start_y = 1
         try:
-            self.touchscreen_end_x = int(self.setting["General Setting"]["touchscreen_end_x"])
+            self.touchscreen_end_x = int(
+                self.setting["General Setting"]["touchscreen_end_x"],
+            )
         except Exception:
             self.touchscreen_end_x = 320
         try:
-            self.touchscreen_end_y = int(self.setting["General Setting"]["touchscreen_end_y"])
+            self.touchscreen_end_y = int(
+                self.setting["General Setting"]["touchscreen_end_y"],
+            )
         except Exception:
             self.touchscreen_end_y = 240
         # Pokemon Home用の設定
         self.season = tk.StringVar(value=self.setting["Pokemon Home"].get("Season"))
-        self.is_SingleBattle = tk.StringVar(value=self.setting["Pokemon Home"].get("Single or Double"))
+        self.is_SingleBattle = tk.StringVar(
+            value=self.setting["Pokemon Home"].get("Single or Double"),
+        )
         # Shortcut用の設定
         self.command_class_dict = {}
         self.command_name_dict = {}
         for i in range(1, 11):  # Update直後のError回避策
             try:
-                self.command_class_dict[str(i)] = self.setting["Shortcut"][f"command_class_{i}"]
-                self.command_name_dict[str(i)] = tk.StringVar(value=self.setting["Shortcut"][f"command_name_{i}"])
+                self.command_class_dict[str(i)] = self.setting["Shortcut"][
+                    f"command_class_{i}"
+                ]
+                self.command_name_dict[str(i)] = tk.StringVar(
+                    value=self.setting["Shortcut"][f"command_name_{i}"],
+                )
             except Exception:
                 self.command_class_dict[str(i)] = "None"
                 self.command_name_dict[str(i)] = tk.StringVar(value="(empty)")
         # Notification用の設定
         try:
             self.is_win_notification_start = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_win_notification_start")
+                value=self.setting["Notification"].getboolean(
+                    "is_win_notification_start",
+                ),
             )
         except Exception:
             self.is_win_notification_start = tk.BooleanVar(value=False)
         try:
             self.is_win_notification_end = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_win_notification_end")
+                value=self.setting["Notification"].getboolean(
+                    "is_win_notification_end",
+                ),
             )
         except Exception:
             self.is_win_notification_end = tk.BooleanVar(value=False)
         try:
             self.is_line_notification_start = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_line_notification_start")
+                value=self.setting["Notification"].getboolean(
+                    "is_line_notification_start",
+                ),
             )
         except Exception:
             self.is_line_notification_start = tk.BooleanVar(value=False)
         try:
             self.is_line_notification_end = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_line_notification_end")
+                value=self.setting["Notification"].getboolean(
+                    "is_line_notification_end",
+                ),
             )
         except Exception:
             self.is_line_notification_end = tk.BooleanVar(value=False)
         try:
             self.is_discord_notification_start = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_discord_notification_start")
+                value=self.setting["Notification"].getboolean(
+                    "is_discord_notification_start",
+                ),
             )
         except Exception:
             self.is_discord_notification_start = tk.BooleanVar(value=False)
         try:
             self.is_discord_notification_end = tk.BooleanVar(
-                value=self.setting["Notification"].getboolean("is_discord_notification_end")
+                value=self.setting["Notification"].getboolean(
+                    "is_discord_notification_end",
+                ),
             )
         except Exception:
             self.is_discord_notification_end = tk.BooleanVar(value=False)
@@ -119,17 +172,21 @@ class GuiSettings:
         except Exception:
             self.right_frame_widget_mode = "ALL (default)"
         try:
-            self.pos_software_controller = self.setting["Output"]["software_controller_position"]
+            self.pos_software_controller = self.setting["Output"][
+                "software_controller_position"
+            ]
         except Exception:
             self.pos_software_controller = "2"
         try:
-            self.pos_dialogue_buttons = self.setting["Output"]["dialogue_buttons_position"]
+            self.pos_dialogue_buttons = self.setting["Output"][
+                "dialogue_buttons_position"
+            ]
         except Exception:
             self.pos_dialogue_buttons = "2"
 
     def load(self):
-        if os.path.isfile(self.SETTING_PATH):
-            self.setting.read(self.SETTING_PATH, encoding="utf-8")
+        if os.path.isfile(self.setting_path):
+            self.setting.read(self.setting_path, encoding="utf-8")
 
     def generate(self):
         # logger.info('Create Default setting file.')
@@ -232,9 +289,9 @@ class GuiSettings:
             "software_controller_position": "2",
             "dialogue_buttons_position": "2",
         }
-        with open(self.SETTING_PATH, "w", encoding="utf-8") as file:
+        with open(self.setting_path, "w", encoding="utf-8") as file:
             self.setting.write(file)
-        os.chmod(path=self.SETTING_PATH, mode=0o777)
+        os.chmod(path=self.setting_path, mode=0o660)
 
     def save(self, path=None):
         # Some preparations are needed because tkinter related objects are not serializable.
@@ -304,7 +361,7 @@ class GuiSettings:
             "dialogue_buttons_position": self.pos_dialogue_buttons,
         }
 
-        with open(self.SETTING_PATH, "w", encoding="utf-8") as file:
+        with open(self.setting_path, "w", encoding="utf-8") as file:
             self.setting.write(file)
-        os.chmod(path=self.SETTING_PATH, mode=0o777)
+        os.chmod(path=self.setting_path, mode=0o660)
         self._logger.debug("Settings file has been saved.")

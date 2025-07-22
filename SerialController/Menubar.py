@@ -161,12 +161,12 @@ class PokeController_Menubar(tk.Menu):
     def LineTokenSetting(self):
         self._logger.debug("Show line API")
         if self.line is None:
-            self.line = Line_Notify()
-        try:
-            print(self.line)
-        except Exception:
-            pass
-        self.line.getRateLimit()
+            try:
+                self.line = Line_Notify()
+                print(self.line)
+                self.line.getRateLimit()
+            except Exception:
+                pass
         self.line = None
         # LINE.send_text_n_image("CAPTURE")
 

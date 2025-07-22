@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 class GuiSettings:
     # setting_path: str = FileHandler.get_settings_path()
 
-    def __init__(self, profile: str = "default") -> None:
+    def __init__(self) -> None:
         self._logger: Final = getLogger(__name__)
         self.setting: Final = configparser.ConfigParser()
-        self.profile_path: Final = FileHandler.get_profile_path(profile)
-        self.setting_path: str = FileHandler.get_settings_path(profile)
+        # self.profile_path: Final = FileHandler.get_profile_path()
+        self.setting_path: Final = FileHandler.get_configs_path()
         self.setting.optionxform = str
 
         if not os.path.exists(self.setting_path):

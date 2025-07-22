@@ -12,9 +12,12 @@ IS_COMPILED: Final[bool] = "__compiled__" in globals()
 
 
 def _get_base_path() -> str:
-    if not IS_COMPILED:
-        return os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(os.path.abspath(__file__))
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(base_path)
+    return base_path
+    # if not IS_COMPILED:
+    #     return os.path.dirname(os.path.abspath(__file__))
+    # return os.path.dirname(os.path.abspath(__file__))
 
 
 class FileHandler:
@@ -22,6 +25,7 @@ class FileHandler:
     _lock: threading.Lock = threading.Lock()
     # _initialized: bool = False
     BASE_PATH: Final[str] = _get_base_path()
+    PROFILE: str = "default"
 
     def __new__(cls) -> Self:
         if cls._instance is None:
@@ -30,12 +34,6 @@ class FileHandler:
                     cls._instance = super().__new__(cls)
 
         return cls._instance
-
-    # def __init__(self) -> None:
-    #     if not self._initialized:
-    #         with self._lock:
-    #             if not self._initialized:
-    #                 self._initialized = True
 
     @staticmethod
     @cache
@@ -48,25 +46,36 @@ class FileHandler:
         return os.path.join(FileHandler.BASE_PATH, "assets", file_name)
 
     @staticmethod
-    @cache
-    def get_settings_path(profile: str = "default") -> str:
+    def get_configs_path(filename: str = "settings.ini") -> str:
         """
         Returns the absolute path to the settings file.
         """
-        return os.path.join(FileHandler.get_profile_path(profile), "settings.ini")
+        return os.path.join(FileHandler.get_profile_path(), filename)
 
-    # フォルダ作成は初回のみでいいので副作用があるがメモ化してる
     @staticmethod
-    @cache
-    def get_profile_path(profile: str = "default") -> str:
+    def get_profile_path() -> str:
         """
         Returns the absolute path to the profile directory.
-        Create the folder if it is the first time and does not exist
         """
-        profile_path = os.path.join(FileHandler.BASE_PATH, "profiles", profile)
+        profile_path = os.path.join(
+            FileHandler.BASE_PATH,
+            "profiles",
+            FileHandler.PROFILE,
+        )
         if not os.path.exists(profile_path):
             os.makedirs(profile_path, mode=0o755, exist_ok=False)
+            print(f"mkdir: '{profile_path}")
         elif os.path.isfile(profile_path):
             msg = f"{profile_path} is a file, not a directory.\n"
             raise FileExistsError(msg)
         return profile_path
+
+    # @staticmethod
+    # @cache
+    # def get_commands_path() -> str:
+    #     """
+    #     Returns the absolute path to the commands directory.
+    #     """
+    #     return os.path.realpath(
+    #         os.path.join(FileHandler.BASE_PATH, "Commands/PythonCommands"),
+    #     )

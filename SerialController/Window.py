@@ -57,6 +57,7 @@ from Commands.Keys import Button, Direction, Hat, KeyPress, Stick
 from Commands.ProController import ProController
 from DiscordNotify import Discord_Notify
 from ExternalTools import MQTTCommunications, SocketCommunications
+from file_handler import FileHandler
 from GuiAssets import CaptureArea, ControllerGUI
 from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
@@ -96,12 +97,14 @@ class PokeControllerApp:
 
         self.procon = None
 
-        self.pokeconname = Constant.NAME
-        self.pokeconversion = Constant.VERSION
+        self.pokeconname: Final = Constant.NAME
+        self.pokeconversion: Final = Constant.VERSION
 
-        self.profile = profile
+        self.profile: Final = profile
+        self.settings: Final = Settings.GuiSettings()
         Command.app_name = f"{Constant.NAME} ver.{Constant.VERSION}"
         Command.profilename = profile
+        FileHandler.PROFILE = profile
 
         """
         ここから
@@ -134,7 +137,7 @@ class PokeControllerApp:
         self.capture_button.configure(command=self.saveCapture)
         self.open_capture_button = ttk.Button(self.top_command_f)
         self.open_folder_img = tk.PhotoImage(
-            file="./assets/icons8-OpenDir-16.png",
+            file=FileHandler.get_asset_path("icons8-OpenDir-16.png"),
         )  # modified
         self.open_capture_button.configure(image=self.open_folder_img)  # modified
         self.open_capture_button.grid(column="4", pady="5", row="0")
@@ -1643,44 +1646,47 @@ class PokeControllerApp:
         # self.text_area_2.config(state='disable')
 
         # 引数設定時、使用するsetting.iniを変更
-        print("User Profile Name:", Settings.GuiSettings.SETTING_PATH)
-        profile_dirname = os.path.join("profiles", profile)
-        if not os.path.isdir(profile_dirname):
-            os.makedirs(profile_dirname)
-            self._logger.debug(f"mkdir: '{profile_dirname}'")
+        self._logger.debug(f"User Profile Name: {profile}")
+        self._logger.debug(f"Profile Path: {self.settings.setting_path}")
         if profile != "default":
-            setting_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "profiles",
-                profile,
-                "settings.ini",
-            )
-            Settings.GuiSettings.SETTING_PATH = setting_path
-            line_token_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "profiles",
-                profile,
-                "line_token.ini",
-            )
-            Line_Notify.LINE_TOKEN_PATH = line_token_path
-            discord_setting_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "profiles",
-                profile,
+            # setting_path = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)),
+            #     "profiles",
+            #     profile,
+            #     "settings.ini",
+            # )
+            # self.settings.setting_path = setting_path
+
+            # line_token_path = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)),
+            #     "profiles",
+            #     profile,
+            #     "line_token.ini",
+            # )
+            # Line_Notify.LINE_TOKEN_PATH = line_token_path
+            # discord_setting_path = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)),
+            #     "profiles",
+            #     profile,
+            #     "discord_token.ini",
+            # )
+            Discord_Notify.DISCORD_SETTING_PATH = FileHandler.get_configs_path(
                 "discord_token.ini",
             )
-            Discord_Notify.DISCORD_SETTING_PATH = discord_setting_path
-            token_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "profiles",
-                profile,
+            # token_path = os.path.join(
+            #     os.path.dirname(os.path.abspath(__file__)),
+            #     "profiles",
+            #     profile,
+            #     "external_token.ini",
+            # )
+            token_path = FileHandler.get_configs_path(
                 "external_token.ini",
             )
+
             SocketCommunications.SOCKET_TOKEN_PATH = token_path
             MQTTCommunications.MQTT_TOKEN_PATH = token_path
-            SwitchKeyboardController.SETTING_PATH = setting_path
-            PokeKeycon.SETTING_PATH = setting_path
-            self._logger.debug(f"Use Profile: '{setting_path}'")
+            SwitchKeyboardController.SETTING_PATH = self.settings.setting_path
+            PokeKeycon.SETTING_PATH = self.settings.setting_path
 
         # load settings file
         self.loadSettings()
@@ -2967,7 +2973,7 @@ class PokeControllerApp:
             self._logger.debug("Stop Poke Controller")
             self.root.destroy()
 
-    def closingController(self):
+    def closingController(self) -> None:
         self.controller.destroy()
         self.controller = None
 
@@ -2975,14 +2981,13 @@ class PokeControllerApp:
     #     self.poke_treeview.destroy()
     #     self.poke_treeview = None
 
-    def loadSettings(self):
-        self.settings = Settings.GuiSettings()
+    def loadSettings(self) -> None:
         self.settings.load()
 
-    def ReloadCommandWithF5(self, *event):
+    def ReloadCommandWithF5(self, *event) -> None:
         self.reloadCommands()
 
-    def StartCommandWithF6(self, *event):
+    def StartCommandWithF6(self, *event) -> None:
         if self.start_button["text"] == "Stop":
             print("Command is now working!")
             self._logger.debug("Command is now working!")
@@ -3206,7 +3211,7 @@ class ToolTip:
         )
         label.pack(ipadx=10)
 
-    def destroyTooltip(self):
+    def destroyTooltip(self) -> None:
         tw = self.tw
         self.tw = None
         if tw:
@@ -3219,7 +3224,7 @@ class StdoutRedirector:
     重いので止めました →# update_idletasks()で出力のたびに随時更新(従来はfor loopのときなどにまとめて出力されることがあった)
     """
 
-    def __init__(self, text_widget):
+    def __init__(self, text_widget) -> None:
         self.text_space = text_widget
 
     def write(self, string):
@@ -3229,7 +3234,7 @@ class StdoutRedirector:
         # self.text_space.update_idletasks()
         self.text_space.configure(state="disabled")
 
-    def flush(self):
+    def flush(self) -> None:
         pass
 
 

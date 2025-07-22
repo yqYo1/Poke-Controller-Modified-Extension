@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 from Commands.Keys import NEUTRAL, Direction, Stick, Touchscreen
+from file_handler import FileHandler
 from PIL import Image, ImageTk
 
 if TYPE_CHECKING:
@@ -147,7 +148,10 @@ class CaptureArea(tk.Canvas):
         self.bind("<Control-ButtonRelease-3>", self.ReleaseRangeTouchscreen)
 
         # Set disabled image first
-        disabled_img = cv2.imread("./assets/disabled.png", cv2.IMREAD_GRAYSCALE)
+        disabled_img = cv2.imread(
+            FileHandler.get_asset_path("disabled.png"),
+            cv2.IMREAD_GRAYSCALE,
+        )
         disabled_pil = Image.fromarray(disabled_img)
         self.disabled_tk = ImageTk.PhotoImage(disabled_pil)
         self.im = self.disabled_tk
@@ -821,7 +825,7 @@ class CaptureArea(tk.Canvas):
 # GUI of switch controller simulator
 class ControllerGUI:
     def __init__(self, root: Misc, ser: Sender) -> None:
-        from Commands import UnitCommand
+        from Commands import UnitCommand  # noqa: PLC0415
 
         self.UnitCommand: Final = UnitCommand
         self._logger: Final[Logger] = getLogger(__name__)

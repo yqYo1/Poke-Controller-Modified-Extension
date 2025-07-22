@@ -1,0 +1,45 @@
+{
+  "include": [
+    "SerialController"
+  ],
+
+  "exclude": [
+    "**/__pycache__"
+  ],
+
+  "defineConstant": {
+    "DEBUG": true
+  },
+
+  "pythonVersion": "3.12",
+  "pythonPlatform": "ALL",
+
+  "strictListInference": true,
+  "strictDictionaryInference": true,
+  "strictSetInference": true,
+  "analyzeUnannotatedFunctions": true,
+  "strictParameterNoneValue": true,
+  "deprecateTypingAliases": true,
+  "enableExperimentalFeatures": false,
+  "disableBytesTypePromotions": false,
+
+  "strictGenericNarrowing": true,
+
+  "typeCheckingMode": "all",
+
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportConstantRedefinition": "none",
+  "reportIgnoreCommentWithoutRule": "none",
+  "reportImplicitOverride": "none",
+  "reportImplicitStringConcatenation": "none",
+  "reportImplicitRelativeImport": "none",
+  "reportMissingImports": "none",
+  "reportMissingParameterType": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnusedCallResult": "none",
+  "reportUnusedParameter": "none",
+  "reportUnusedImport": "none",
+  "reportUnusedVariable": "none",
+  "reportUnknownParameterType": "none"
+}

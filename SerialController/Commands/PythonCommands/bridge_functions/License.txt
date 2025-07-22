@@ -42,5 +42,6 @@ requests                             https://github.com/psf/requests
 scipy                                https://github.com/scipy/scipy
 pygame                               https://github.com/pygame/pygame
 paho-mqtt                            https://github.com/eclipse/paho.mqtt.python
+numba                                https://github.com/numba/numba
 
 6.本プログラム利用者は、自らの責任において本プログラムを利用することに同意し、本プログラムの利用によって生じる一切の損害、損失について、著作権者は損害賠償義務及びその他一切の責任を負いません。

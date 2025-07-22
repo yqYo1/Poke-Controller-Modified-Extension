@@ -1,99 +1,111 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
 
-from abc import ABCMeta, abstractclassmethod
-import tkinter as tk
 import os
+import tkinter as tk
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
+from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
     PokeConDialogue,
-    generate_new_dialogue_list,
-    save_dialogue_settings,
-    get_settings_list,
     check_widget_name,
+    generate_new_dialogue_list,
+    get_settings_list,
+    save_dialogue_settings,
 )
-from ExternalTools import SocketCommunications, MQTTCommunications
 
 if TYPE_CHECKING:
-    from Window import PokeControllerApp
+    from collections.abc import Callable
+    from tkinter import Text
+    from typing import Literal
+
+    # from typing import TypeVar
     from Commands.Sender import Sender
+    from GuiAssets import CaptureArea
+
+    # _LD = TypeVar("_LD", list[int | str], dict)
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連
 
 
-class Command:
-    __metaclass__ = ABCMeta
-    text_area_1 = None
-    text_area_2 = None
-    stdout_destination = "1"
-    pos_dialogue_buttons = "2"
-    isPause = False
-    canvas = None
-    isGuide = False
-    isSimilarity = False
-    isImage = False
-    isWinNotStart = False
-    isWinNotEnd = False
-    isLineNotStart = False
-    isLineNotEnd = False
-    isDiscordNotStart = False
-    isDiscordNotEnd = False
-    app_name = ""
-    cur_command_name = ""
-    profilename = None
+class Command(ABC):
+    # __metaclass__ = ABCMeta
+    text_area_1: Text | None = None
+    text_area_2: Text | None = None
+    stdout_destination: str = "1"
+    pos_dialogue_buttons: str = "2"
+    isPause: bool = False
+    canvas: CaptureArea | None = None
+    isGuide: bool = False
+    isSimilarity: bool = False
+    isImage: bool = False
+    isWinNotStart: bool = False
+    isWinNotEnd: bool = False
+    isLineNotStart: bool = False
+    isLineNotEnd: bool = False
+    isDiscordNotStart: bool = False
+    isDiscordNotEnd: bool = False
+    app_name: str = ""
+    cur_command_name: str = ""
+    profilename: str = ""
 
-    def __init__(self):
-        self.isRunning = False
+    def __init__(self) -> None:
+        self.isRunning: bool = False
 
-        self.message_dialogue = None
-        self.socket0 = SocketCommunications()
-        self.mqtt0 = MQTTCommunications("")
+        self.message_dialogue: tk.Toplevel | None = None
+        self.socket0: SocketCommunications = SocketCommunications()
+        self.mqtt0: MQTTCommunications = MQTTCommunications("")
 
-    @abstractclassmethod
-    def start(self, ser: Sender, postProcess: PokeControllerApp.stopPlayPost = None):
+    @abstractmethod
+    def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
         pass
 
-    @abstractclassmethod
-    def end(self, ser: Sender):
+    @abstractmethod
+    def end(self, ser: Sender) -> None:
         pass
 
-    def checkIfAlive(self):
-        pass
+    # MCUコマンドでは使用しない為ここではなくPythonCommandBaseに定義するのが適当?
+    # @abstractmethod
+    # def checkIfAlive(self) -> Literal[True]:
+    #     pass
 
     ############### print functions ###############
-    def print_s(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_s(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         print(*objects, sep=sep, end=end)
 
-    def print_t1(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t1(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         上側のログ画面に文字列を出力する
         """
+        if self.text_area_1 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_1.config(state="normal")
             self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disable")
+            self.text_area_1.config(state="disabled")
             self.text_area_1.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)
 
-    def print_t2(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t2(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         下側のログ画面に文字列を出力する
         """
+        if self.text_area_2 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")
             self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disable")
+            self.text_area_2.config(state="disabled")
             self.text_area_2.see("end")
         except Exception:
             print(*objects, sep=sep, end=end)
 
-    def print_t(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         標準出力先として割り当てられていない方のログ画面に文字列を出力する
         """
@@ -102,7 +114,7 @@ class Command:
         elif self.stdout_destination == "2":
             self.print_t1(*objects, sep=sep, end=end)
 
-    def print_ts(self, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_ts(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         標準出力先として割り当てられている方のログ画面に文字列を出力する
         """
@@ -111,11 +123,19 @@ class Command:
         elif self.stdout_destination == "2":
             self.print_t2(*objects, sep=sep, end=end)
 
-    def print_t1b(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t1b(
+        self,
+        mode: Literal["w", "a", "d"],
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         上側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
+        if self.text_area_1 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_1.config(state="normal")
@@ -125,16 +145,24 @@ class Command:
                 self.text_area_1.insert("1.0", txt)
             elif mode == "a":
                 self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disable")
+            self.text_area_1.config(state="disabled")
             self.text_area_1.see("end")
         except Exception:
-            pass
+            print(*objects, sep=sep, end=end)
 
-    def print_t2b(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_t2b(
+        self,
+        mode: Literal["w", "a", "d"],
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         下側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
+        if self.text_area_2 is None:
+            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")
@@ -144,12 +172,18 @@ class Command:
                 self.text_area_2.insert("1.0", txt)
             elif mode == "a":
                 self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disable")
+            self.text_area_2.config(state="disabled")
             self.text_area_2.see("end")
         except Exception:
-            pass
+            print(*objects, sep=sep, end=end)
 
-    def print_tb(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_tb(
+        self,
+        mode: Literal["w", "a", "d"],
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         標準出力先として割り当てられていない方のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -159,7 +193,13 @@ class Command:
         elif self.stdout_destination == "2":
             self.print_t1b(mode, *objects, sep=sep, end=end)
 
-    def print_tbs(self, mode, *objects: object, sep: str = " ", end: str = "\n"):
+    def print_tbs(
+        self,
+        mode: Literal["w", "a", "d"],
+        *objects: object,
+        sep: str = " ",
+        end: str = "\n",
+    ) -> None:
         """
         標準出力先として割り当てられている方のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
@@ -169,7 +209,13 @@ class Command:
         elif self.stdout_destination == "2":
             self.print_t2b(mode, *objects, sep=sep, end=end)
 
-    def dialogue(self, title: str, message: int | str | list, desc: str = None, need: type = list) -> list | dict:
+    def dialogue(
+        self,
+        title: str,
+        message: int | str | list[int | str],
+        desc: str | None = None,
+        need: type = list,
+    ) -> list[str] | dict[int | str, str]:
         """
         保存機能なしのダイアログ(Entryのみ)
         title: ダイアログのウインドウ名
@@ -180,15 +226,25 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, message, desc=desc, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            message,
+            desc=desc,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
         if not ret:
-            self.finish()
-        else:
-            return ret
+            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+            return None  # pyright:ignore[reportReturnType]
+        return ret
 
-    def dialogue6widget(self, title: str, dialogue_list: list, desc: str = None, need: type = list) -> list | dict:
+    def dialogue6widget(
+        self,
+        title: str,
+        dialogue_list: list,
+        desc: str | None = None,
+        need: type = list,
+    ) -> list | dict:
         """
         保存機能なしのダイアログ
         title: ダイアログのウインドウ名
@@ -201,22 +257,32 @@ class Command:
             pass
         else:
             print("ウィジェット名に重複があります。重複しない名称を設定してください。")
-            self.finish()
+            self.finish()  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
         if not ret:
-            self.finish()
-        else:
-            return ret
+            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+            return None  # pyright:ignore[reportReturnType]
+        return ret
 
     def dialogue6widget_save_settings(
-        self, title: str, dialogue_list: list, filename: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        filename: str,
+        desc: str | None = None,
+        need: type = list,
     ) -> list | dict:
         """
         前の設定を呼び出すタイプのダイアログ
@@ -234,7 +300,7 @@ class Command:
         else:
             print(
                 "ウィジェット名に重複があります。重複しない名称を設定してください。"
-                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。"
+                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。",
             )
             self.finish()
 
@@ -255,19 +321,28 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, new_dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            new_dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
         if not ret:
             self.finish()
-        else:
-            # [ok]選択時に入力履歴を保存
-            save_dialogue_settings(new_dialogue_list, ret, filename)
-            return ret
+        # [ok]選択時に入力履歴を保存
+        save_dialogue_settings(new_dialogue_list, ret, filename)
+        return ret
 
     def dialogue6widget_select_settings(
-        self, title: str, dialogue_list: list, dirname: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        dirname: str,
+        desc: str | None = None,
+        need: type = list,
     ) -> list | dict:
         """
         保存した設定を選択して呼び出すタイプのダイアログ
@@ -284,7 +359,7 @@ class Command:
         else:
             print(
                 "ウィジェット名に重複があります。重複しない名称を設定してください。"
-                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。"
+                f"また、「{reserved_name[0]}」および「{reserved_name[1]}」のウィジェット名は使用できません。",
             )
             self.finish()
 
@@ -293,7 +368,8 @@ class Command:
 
         # GUI画面表示
         ret = self.dialogue6widget(
-            "Select Preset", [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]]
+            "Select Preset",
+            [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]],
         )
 
         # ディレクトリがない場合は作成
@@ -318,37 +394,42 @@ class Command:
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
         ret = PokeConDialogue(
-            self.message_dialogue, title, new_dialogue_list, desc=desc, mode=1, pos=int(self.pos_dialogue_buttons)
+            self.message_dialogue,
+            title,
+            new_dialogue_list,
+            desc=desc,
+            mode=1,
+            pos=int(self.pos_dialogue_buttons),
         ).ret_value(need)
         self.message_dialogue = None
 
         if not ret:
             self.finish()
+            return None
+        # 設定保存用のウィジェット関連の要素を削除
+        if need is list:
+            preset_name = ret[-2]
+            save_preset = ret[-1]
+            ret = ret[:-2]
         else:
-            # 設定保存用のウィジェット関連の要素を削除
-            if need is list:
-                preset_name = ret[-2]
-                save_preset = ret[-1]
-                ret = ret[:-2]
-            else:
-                preset_name = ret["[PokeCon]設定ファイル名"]
-                save_preset = ret["[PokeCon]設定を保存"]
-                ret.pop("[PokeCon]設定ファイル名")
-                ret.pop("[PokeCon]設定を保存")
+            preset_name = ret["[PokeCon]設定ファイル名"]
+            save_preset = ret["[PokeCon]設定を保存"]
+            ret.pop("[PokeCon]設定ファイル名")
+            ret.pop("[PokeCon]設定を保存")
 
-            # [ok]選択時に入力履歴を保存
-            if save_preset and preset_name != "":
-                filename = os.path.join(dirname, f"{preset_name}.json")
-                save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
-            filename = os.path.join(dirname, "前回の設定.json")
+        # [ok]選択時に入力履歴を保存
+        if save_preset and preset_name != "":
+            filename = os.path.join(dirname, f"{preset_name}.json")
             save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
-            return ret
+        filename = os.path.join(dirname, "前回の設定.json")
+        save_dialogue_settings(new_dialogue_list[:-2], ret, filename)
+        return ret
 
     ############### Socket functions ###############
-    def socket_change_alive(self, flag: bool):
+    def socket_change_alive(self, flag: bool) -> None:
         self.socket0.alive = flag
 
-    def socket_change_ipaddr(self, addr: str):
+    def socket_change_ipaddr(self, addr: str) -> None:
         """
         IPアドレスを変更する
         return:なし
@@ -356,7 +437,7 @@ class Command:
         """
         self.socket0.change_ipaddr(addr)
 
-    def socket_change_port(self, port: int):
+    def socket_change_port(self, port: int) -> None:
         """
         ポート番号を変更する
         return:なし
@@ -364,21 +445,21 @@ class Command:
         """
         self.socket0.change_port(port)
 
-    def socket_connect(self):
+    def socket_connect(self) -> None:
         """
         socket通信用のserverと接続する
         return:なし
         """
         self.socket0.sock_connect()
 
-    def socket_disconnect(self):
+    def socket_disconnect(self) -> None:
         """
         socket通信用のserverから切断する
         return:なし
         """
         self.socket0.sock_disconnect()
 
-    def socket_receive_message(self, header: str, show_msg: bool = False):
+    def socket_receive_message(self, header: str, show_msg: bool = False) -> str | None:
         """
         socketを用いて先頭が特定の文字列であるメッセージを受信する
         return output|str:受信した文字列
@@ -386,10 +467,14 @@ class Command:
         show_msg|bool:受信した文字列を出力する
         """
         output = self.socket0.receive_message(header, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
-    def socket_receive_message2(self, headerlist: List[str], show_msg: bool = False):
+    def socket_receive_message2(
+        self,
+        headerlist: list[str],
+        show_msg: bool = False,
+    ) -> str | None:
         """
         socketを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -397,60 +482,65 @@ class Command:
         show_msg|bool:受信した文字列を出力する
         """
         output = self.socket0.receive_message2(headerlist, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
-    def socket_transmit_message(self, message: str):
+    def socket_transmit_message(self, message: str) -> None:
         """
         socketを用いてメッセージを送信する
         return:なし
         message|str:送信するメッセージ
         """
         self.socket0.transmit_message(message)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
     ############### MQTT functions ###############
-    def mqtt_change_broker_address(self, broker_address: str):
+    def mqtt_change_broker_address(self, broker_address: str) -> None:
         """
         brokerアドレスを変更する
         return:なし
         broker_address|str:brokerアドレス
         """
-        self.mqtt0.broker_address = broker_address
+        self.mqtt0.change_broker_address(broker_address)
 
-    def mqtt_change_id(self, id: str):
+    def mqtt_change_id(self, mqtt_id: str) -> None:  # idは組み込み関数なので変更
         """
         IDを変更する
         return:なし
         id|str:ID
         """
-        self.mqtt0.id = id
+        self.mqtt0.change_id(mqtt_id)
 
-    def mqtt_change_pub_token(self, pub_token: str):
+    def mqtt_change_pub_token(self, pub_token: str) -> None:
         """
         pub用tokenを変更する
         return:なし
         pub_token|str:pub用token
         """
-        self.mqtt0.pub_token = pub_token
+        self.mqtt0.change_pub_token(pub_token)
 
-    def mqtt_change_sub_token(self, sub_token: str):
+    def mqtt_change_sub_token(self, sub_token: str) -> None:
         """
         sub用tokenを変更する
         return:なし
         sub_token|str:sub用token
         """
-        self.mqtt0.sub_token = sub_token
+        self.mqtt0.change_sub_token(sub_token)
 
-    def mqtt_change_clientId(self, clientId: str):
+    def mqtt_change_clientId(self, clientId: str) -> None:
         """
         接続者名を変更する
         return:なし
         clientId|str:接続者名
         """
-        self.mqtt0.clientId = clientId
+        self.mqtt0.change_clientId(clientId)
 
-    def mqtt_receive_message(self, roomid: str, header: str, show_msg: bool = False):
+    def mqtt_receive_message(
+        self,
+        roomid: str,
+        header: str,
+        show_msg: bool = False,
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列であるメッセージを受信する
         return output|str:受信した文字列
@@ -459,10 +549,15 @@ class Command:
         show_msg|bool:受信した文字列を出力する
         """
         output = self.mqtt0.receive_message(roomid, header, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
-    def mqtt_receive_message2(self, roomid: str, headerlist: str, show_msg: bool = False):
+    def mqtt_receive_message2(
+        self,
+        roomid: str,
+        headerlist: list[str],
+        show_msg: bool = False,
+    ) -> str | None:
         """
         MQTTを用いて先頭が特定の文字列(複数設定可能)であるメッセージを受信する
         return output|str:受信した文字列
@@ -471,10 +566,10 @@ class Command:
         show_msg|bool:受信した文字列を出力する
         """
         output = self.mqtt0.receive_message2(roomid, headerlist, show_msg=show_msg)
-        self.checkIfAlive()
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         return output
 
-    def mqtt_transmit_message(self, roomid: str, message: str):
+    def mqtt_transmit_message(self, roomid: str, message: str) -> None:
         """
         MQTTを用いてメッセージを送信する
         return:なし
@@ -482,8 +577,4 @@ class Command:
         message|str:送信するメッセージ
         """
         self.mqtt0.transmit_message(roomid, message)
-        self.checkIfAlive()
-
-
-if __name__ == "__main__":
-    pass
+        self.checkIfAlive()  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]

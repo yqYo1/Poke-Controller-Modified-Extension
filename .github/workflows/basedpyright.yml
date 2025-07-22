@@ -1,0 +1,32 @@
+name: Basedpyright
+
+on:
+  push: # masterブランチやmainブランチへのプッシュ時に実行
+    branches: [ main, master ]
+  pull_request: # プルリクエスト作成時にも実行
+    branches: [ main, master ]
+
+jobs:
+  type-check:
+    runs-on: ubuntu-latest # 最新のUbuntu環境で実行
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4 # コードをチェックアウト
+
+    - name: Set up Python
+      uses: actions/setup-python@v5 # Python環境をセットアップ
+      with:
+        python-version: '3.12' # プロジェクトで使用しているPythonバージョンを指定
+
+    - name: Install dependencies (if needed)
+      run: |
+        python -m pip install --upgrade pip
+        # プロジェクトの依存関係をインストール (例: requirements.txt)
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Install Basedpyright
+      run: python -m pip install basedpyright # Basedpyrightをインストール
+
+    - name: Run Basedpyright
+      run: basedpyright --project pyrightconfig.json

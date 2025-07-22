@@ -2255,8 +2255,11 @@ class PokeControllerApp:
 
     def sendLineImage(self):
         def sendMessage(src):
-            Line = Line_Notify()
-            Line.send_message("---Manual---", src, "token")
+            try:
+                Line = Line_Notify()
+                Line.send_message("---Manual---", src, "token")
+            except Exception:
+                pass
 
         src = self.camera.readFrame()
         thread = threading.Thread(target=sendMessage, args=(src,))

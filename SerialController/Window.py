@@ -1,25 +1,4 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.13"
-# dependencies = [
-#     "gitpython",
-#     "numpy",
-#     "opencv-python",
-#     "paho-mqtt",
-#     "pandas",
-#     "pillow",
-#     "plyer",
-#     "pygame",
-#     "pygubu",
-#     "pynput",
-#     "pyserial",
-#     "pythonnet",
-#     "requests",
-#     "scipy",
-#     "setuptools",
-#     "windows-capture-device-list",
-# ]
-# ///
+#!/usr/bin/env -S uv run python
 
 from __future__ import annotations
 

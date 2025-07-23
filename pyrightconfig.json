@@ -38,6 +38,7 @@
   "reportMissingParameterType": "none",
   "reportMissingTypeStubs": "none",
   "reportUnusedCallResult": "none",
+  "reportUnnecessaryIsInstance": "none",
   "reportUnusedParameter": "none",
   "reportUnusedImport": "none",
   "reportUnusedVariable": "none",

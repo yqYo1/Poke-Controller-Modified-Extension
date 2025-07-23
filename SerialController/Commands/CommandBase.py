@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
 
 class Command(ABC):
+    NAME: str | None = None
+    TAGS: list[str] | str | None = None
+
     # __metaclass__ = ABCMeta
     text_area_1: Text | None = None
     text_area_2: Text | None = None

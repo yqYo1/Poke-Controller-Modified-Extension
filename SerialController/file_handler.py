@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 from functools import cache
+from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,6 +27,10 @@ class FileHandler:
     # _initialized: bool = False
     BASE_PATH: Final[str] = _get_base_path()
     PROFILE: str = "default"
+    _logger: Final = getLogger(__name__)
+    _logger.addHandler(NullHandler())
+    _logger.setLevel(DEBUG)
+    _logger.propagate = True
 
     def __new__(cls) -> Self:
         if cls._instance is None:
@@ -64,7 +69,7 @@ class FileHandler:
         )
         if not os.path.exists(profile_path):
             os.makedirs(profile_path, mode=0o755, exist_ok=False)
-            print(f"mkdir: '{profile_path}")
+            FileHandler._logger.debug(f"make directory: '{profile_path}'")
         elif os.path.isfile(profile_path):
             msg = f"{profile_path} is a file, not a directory.\n"
             raise FileExistsError(msg)

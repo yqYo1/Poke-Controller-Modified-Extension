@@ -75,6 +75,8 @@ class PokeControllerApp:
         self.Discord = None
 
         self.procon = None
+        self.py_loader: CommandLoader
+        self.mcu_loader: CommandLoader
 
         self.pokeconname: Final = Constant.NAME
         self.pokeconversion: Final = Constant.VERSION

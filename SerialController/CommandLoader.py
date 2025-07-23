@@ -1,32 +1,41 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import importlib
 import sys
 from logging import DEBUG, NullHandler, getLogger
+from typing import TYPE_CHECKING
 
 import Utility as util
 
-logger = getLogger(__name__)
+if TYPE_CHECKING:
+    from logging import Logger
+    from types import ModuleType
+    from typing import Final, TypeVar
+
+    from Commands.CommandBase import Command
+
+    CommandLike = TypeVar("CommandLike", bound=Command)
+
+logger: Final[Logger] = getLogger(__name__)
 logger.addHandler(NullHandler())
 logger.setLevel(DEBUG)
 logger.propagate = True
 
 
-class CommandLoader:
-    def __init__(self, base_path: str, base_class: str) -> None:
+class CommandLoader[CommandLike]:
+    def __init__(self, base_path: str, base_class: type[CommandLike]) -> None:
         self.path: str = base_path
-        self.base_type: str = base_class
-        self.modules: list = []
+        self.base_type: Final[type[CommandLike]] = base_class
+        self.modules: list[ModuleType] = []
 
-    def load(self):
+    def load(self) -> list[type[CommandLike]]:
         if not self.modules:  # load if empty
             self.modules = util.importAllModules(self.path)
 
         # return command class types
         return self.getCommandClasses()
 
-    def reload(self):
+    def reload(self) -> list[type[CommandLike]]:
         loaded_module_dic = {mod.__name__: mod for mod in self.modules}
         cur_module_names = util.getModuleNames(self.path)
 
@@ -53,14 +62,15 @@ class CommandLoader:
         # return command class types
         return self.getCommandClasses()
 
-    def getCommandClasses(self):
-        classes = []
+    def getCommandClasses(self) -> list[type[CommandLike]]:
+        classes: list[type[CommandLike]] = []
         for mod in self.modules:
             # extract module of having "NAME"
-            class_list = [
+            class_list: list[type[CommandLike]] = [
                 c
                 for c in util.getClassesInModule(mod)
-                if issubclass(c, self.base_type) and hasattr(c, "NAME") and c.NAME
+                if issubclass(c, self.base_type)
+                and isinstance(getattr(c, "NAME", False), str)
             ]
 
             # make tags of directory name
@@ -69,23 +79,24 @@ class CommandLoader:
                 dir_tags = ["@" + t for t in mod.__name__.split(".")[2:-1]]
 
                 # add tags of directory name
-                if hasattr(c, "TAGS"):
-                    if isinstance(c.TAGS, list):
+                tags = getattr(c, "TAGS", False)
+                processed_tags: list[str]
+                if tags:
+                    if isinstance(tags, list):
                         logger.debug(f"TAGS name add: {dir_tags}")
-                        c.TAGS = c.TAGS + dir_tags
-                    elif isinstance(c.TAGS, str):
-                        logger.debug(f"TAGS name add: {dir_tags}")
-                        c.TAGS = [c.TAGS, *dir_tags]
+                        processed_tags = [tag for tag in tags if isinstance(tag, str)]  # pyright: ignore[ reportUnknownVariableType ]
+                    elif isinstance(tags, str):
+                        processed_tags = [tags]
                     else:
-                        logger.debug(
-                            f"TAGS Type error: {mod.__name__} {c.NAME} {type(c.TAGS)}",
-                        )
+                        processed_tags = []
                 else:
-                    logger.debug(f"TAGS do not exist: {mod.__name__} {c.NAME}")
-                    c.TAGS = dir_tags
+                    processed_tags = []
+                processed_tags.extend(dir_tags)
+                logger.debug(f"TAGS name add: {dir_tags}")
+                setattr(c, "TAGS", processed_tags)  # noqa: B010
 
                 # rename NAME
-                c.NAME = f"{c.NAME} ({dir_name})"
+                c.NAME = f"{c.NAME} ({dir_name})"  # pyright: ignore[ reportAttributeAccessIssue, reportUnknownMemberType ] ]
                 classes.append(c)
 
         return classes

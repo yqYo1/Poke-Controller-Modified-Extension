@@ -39,7 +39,7 @@ def browseFileNames(
     return glob(search_path, recursive=recursive)
 
 
-def getClassesInModule(module: object) -> list[type]:
+def getClassesInModule(module: ModuleType) -> list[type]:
     return [members[1] for members in inspect.getmembers(module, inspect.isclass)]
 
 

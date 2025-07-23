@@ -13,6 +13,7 @@
 
 # not ignore
 !/.gitignore
+!/build-nuitka.ps1
 !/ExecutePokeConModified-Extension.bat
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE

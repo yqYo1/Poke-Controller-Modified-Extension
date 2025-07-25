@@ -37,7 +37,8 @@ from Commands.ProController import ProController
 from DiscordNotify import Discord_Notify
 from ExternalTools import MQTTCommunications, SocketCommunications
 from file_handler import FileHandler
-from GuiAssets import CaptureArea, ControllerGUI
+from gui.assets import CaptureArea
+from gui.controller import ControllerGUI
 from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify

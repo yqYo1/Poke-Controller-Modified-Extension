@@ -56,6 +56,9 @@
 /SerialController/Commands/PythonCommands/ImageProcessingOnly/*
 !/SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/
 !/SerialController/Commands/PythonCommands/bridge_functions/
+!/SerialController/gui/
+/SerialController/gui/*
+!/SerialController/gui/*.py
 # !/SerialController/Commands/PythonCommands/bridge_functions/*
 !/SerialController/Template/
 /SerialController/Template/*

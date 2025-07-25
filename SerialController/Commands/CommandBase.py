@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from Commands.Sender import Sender
     from GuiAssets import CaptureArea
 
-    # _LD = TypeVar("_LD", list[int | str], dict)
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連

@@ -69,10 +69,15 @@ class Camera:
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
         self.capture_dir: str = "Captures"
-        self.image_bgr: MatLike = cv2.imread(
+        image = cv2.imread(
             FileHandler.get_asset_path("disabled.png"),
             cv2.IMREAD_COLOR,
         )
+        if image is not None:
+            self.image_bgr: MatLike = image
+        else:
+            msg = "asset: disabled.pngが読み込めませんでした。"
+            raise ValueError(msg)
         self.thread: threading.Thread
         self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())

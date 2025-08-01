@@ -24,7 +24,7 @@ class PokeConDialogue:
         message: int | str | list[int | str],
         desc: str | None = None,
         mode: Literal[0] = 0,
-        pos: int = 2,
+        pos: Literal[1, 2, 3] = 2,
     ) -> None: ...
 
     @overload
@@ -35,7 +35,7 @@ class PokeConDialogue:
         message: list[list[Any]],
         desc: str | None = None,
         mode: Literal[1] = 1,
-        pos: int = 2,
+        pos: Literal[1, 2, 3] = 2,
     ) -> None: ...
 
     def __init__(
@@ -45,7 +45,7 @@ class PokeConDialogue:
         message: int | str | list[int | str] | list[list[Any]],
         desc: str | None = None,
         mode: Literal[0, 1] = 0,
-        pos: int = 2,
+        pos: Literal[1, 2, 3] = 2,
     ) -> None:
         """
         pokecon用ダイアログ生成関数(注意:mode=0と1でmessageの取り扱いが大きく異なる。)

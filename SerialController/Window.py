@@ -43,6 +43,7 @@ from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify
 from Menubar import PokeController_Menubar
+import contextlib
 
 if TYPE_CHECKING:
     from typing import Final
@@ -1084,19 +1085,19 @@ class PokeControllerApp:
             row="1",
             sticky="ew",
         )
-        self.pos_dialogue_buttons_lf = ttk.Labelframe(self.othres_outputs_lf)
-        self.pos_dialogue_buttons = tk.StringVar(value="2")
-        self.pos_dialogue_top_rb = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
+        self.pos_dialogue_buttons_lf: Final = ttk.Labelframe(self.othres_outputs_lf)
+        self.pos_dialogue_buttons: Final = tk.IntVar(value=2)
+        self.pos_dialogue_top_rb: Final = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
         self.pos_dialogue_top_rb.configure(
             text="TOP",
             value="1",
             variable=self.pos_dialogue_buttons,
         )
         self.pos_dialogue_top_rb.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.pos_dialogue_top_rb.configure(command=self.change_buttons_position)
@@ -1107,10 +1108,10 @@ class PokeControllerApp:
             variable=self.pos_dialogue_buttons,
         )
         self.pos_dialogue_bottom_rb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.pos_dialogue_bottom_rb.configure(command=self.change_buttons_position)
@@ -1121,10 +1122,10 @@ class PokeControllerApp:
             variable=self.pos_dialogue_buttons,
         )
         self.pos_dialogue_both_rb.grid(
-            column="2",
+            column=2,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.pos_dialogue_both_rb.configure(command=self.change_buttons_position)
@@ -2254,7 +2255,7 @@ class PokeControllerApp:
         thread.start()
 
     def sendDiscordImage(self):
-        def sendMessage(src):
+        def sendMessage(src) -> None:
             Discord = Discord_Notify()
             Discord.send_message(notification_message="---Manual---", image=src)
 
@@ -2262,7 +2263,7 @@ class PokeControllerApp:
         thread = threading.Thread(target=sendMessage, args=(src,))
         thread.start()
 
-    def OpenCommandDir(self):
+    def OpenCommandDir(self) -> None:
         if self.command_nb.index("current") == 1:
             directory = os.path.join("Commands", "McuCommands")
         else:
@@ -2274,30 +2275,27 @@ class PokeControllerApp:
             command = f'open "{directory}"'
             subprocess.run(command, shell=True, check=False)
 
-    def set_init_device_name(self):
+    def set_init_device_name(self) -> None:
         for d in self.serial_devices:
             if int(self.com_port.get()) == int(re.search(r"COM(\d+)", d).groups()[0]):
                 self.serial_device_name.set(d)
                 break
 
-    def set_cameraid(self, event=None):
+    def set_cameraid(self, event=None) -> None:
         keys = [
             k
             for k, v in self.camera_dic.items()
             if "No." + str(k) + ": " + v == self.camera_name_cb.get()
         ]
-        if keys:
-            ret = keys[0]
-        else:
-            ret = None
+        ret = keys[0] if keys else None
         self.camera_id.set(ret)
 
-    def set_device(self, event=None):
+    def set_device(self, event=None) -> None:
         self.com_port.set(
             int(re.search(r"COM(\d+)", self.serial_device_name.get()).groups()[0]),
         )
 
-    def set_serial_data_format(self, event=None):
+    def set_serial_data_format(self, event=None) -> None:
         KeyPress.serial_data_format_name = self.serial_data_format_name.get()
         self.keys_software_controller.init_hat()
         self.preview.changeRightMouseMode(self.serial_data_format_name.get())
@@ -2310,14 +2308,14 @@ class PokeControllerApp:
             self.baud_rate.set("9600")
         self.activateSerial()
 
-    def applyFps(self, event=None):
+    def applyFps(self, event=None) -> None:
         print("changed FPS to: " + self.fps.get() + " [fps]")
         self.preview.setFps(self.fps.get())
 
-    def applyBaudRate(self, event=None):
+    def applyBaudRate(self, event=None) -> None:
         pass
 
-    def applyWindowSize(self, event=None):
+    def applyWindowSize(self, event=None) -> None:
         width, height = map(int, self.show_size.get().split("x"))
         self.preview.setShowsize(height, width)
         self.changeAreaSize()
@@ -2341,7 +2339,7 @@ class PokeControllerApp:
 
         self.changeAreaSize()
 
-    def activateSerial(self):
+    def activateSerial(self) -> None:
         if self.ser.isOpened():
             print("Port is already opened and being closed.")
             self.ser.closeSerial()
@@ -2363,13 +2361,13 @@ class PokeControllerApp:
             self.settings.baud_rate.set(self.baud_rate.get())
             self.settings.save()
 
-    def inactivateSerial(self):
+    def inactivateSerial(self) -> None:
         if self.ser.isOpened():
             print("Port is already opened and being closed.")
             self.ser.closeSerial()
             self.keyPress = None
 
-    def activateKeyboard(self):
+    def activateKeyboard(self) -> None:
         if self.is_use_keyboard.get():
             # enable Keyboard as controller
             if self.keyboard is None:
@@ -2391,19 +2389,19 @@ class PokeControllerApp:
                 self.root.bind("<FocusIn>", lambda _: None)
                 self.root.bind("<FocusOut>", lambda _: None)
 
-    def onFocusInController(self, event):
+    def onFocusInController(self, event) -> None:
         # enable Keyboard as controller
         if event.widget == self.root and self.keyboard is None:
             self.keyboard = SwitchKeyboardController(self.keyPress)
             self.keyboard.listen()
 
-    def onFocusOutController(self, event):
+    def onFocusOutController(self, event) -> None:
         # stop listening to keyboard events
         if event.widget == self.root and self.keyboard is not None:
             self.keyboard.stop()
             self.keyboard = None
 
-    def createControllerWindow(self):
+    def createControllerWindow(self) -> None:
         if self.controller is not None:
             self.controller.focus_force()
             return
@@ -2412,28 +2410,28 @@ class PokeControllerApp:
         window.protocol("WM_DELETE_WINDOW", self.closingController)
         self.controller = window
 
-    def activate_Left_stick_mouse(self):
+    def activate_Left_stick_mouse(self) -> None:
         self.preview.ApplyLStickMouse()
 
-    def activate_Right_stick_mouse(self):
+    def activate_Right_stick_mouse(self) -> None:
         self.preview.ApplyRStickMouse()
 
-    def run_ProController(self):
+    def run_ProController(self) -> None:
         if self.procon is not None:
             self.procon = None
         self.procon = ProController()
         self.procon.controller_loop(self.ser, self.flag_record, self.ControllerLogDir)
 
-    def mode_change_show_value(self):
+    def mode_change_show_value(self) -> None:
         Command.isSimilarity = self.is_show_value.get()
 
-    def mode_change_show_guide(self):
+    def mode_change_show_guide(self) -> None:
         Command.isGuide = self.is_show_guide.get()
 
-    def mode_change_show_image(self):
+    def mode_change_show_image(self) -> None:
         Command.isImage = self.is_show_image.get()
 
-    def mode_change_notification(self, *event):
+    def mode_change_notification(self, *event) -> None:
         Command.isWinNotStart = self.is_win_notification_start.get()
         Command.isWinNotEnd = self.is_win_notification_end.get()
         Command.isLineNotStart = self.is_line_notification_start.get()
@@ -2441,15 +2439,19 @@ class PokeControllerApp:
         Command.isDiscordNotStart = self.is_discord_notification_start.get()
         Command.isDiscordNotEnd = self.is_discord_notification_end.get()
 
-    def change_buttons_position(self, *event):
-        Command.pos_dialogue_buttons = self.pos_dialogue_buttons.get()
+    def change_buttons_position(self) -> None:
+        pos = int(self.pos_dialogue_buttons.get())
+        if pos < 1:
+            Command.pos_dialogue_buttons = 1
+        elif pos > 3:
+            Command.pos_dialogue_buttons = 3
+        else:
+            Command.pos_dialogue_buttons = 2
 
-    def mode_change_Pro_Controller(self):
+    def mode_change_Pro_Controller(self) -> None:
         if self.is_use_Pro_Controller.get():  # Proconでの操作を有効化する。
-            try:
+            with contextlib.suppress(Exception):
                 self.closingController()
-            except Exception:
-                pass
             ProController.flag_procon = True
             self.flag_record = self.is_record_Pro_Controller.get()
             self.ControllerLogDir = "Controller_Log"
@@ -2499,7 +2501,7 @@ class PokeControllerApp:
         self.py_tags_values = sorted([s for s in self.py_tags if s[0] != "@"]) + sorted(
             [s for s in self.py_tags if s[0] == "@"],
         )  # ディレクトリのタグは後半にまとめる
-        self.command_filter_py_cb["values"] = ["-"] + self.py_tags_values
+        self.command_filter_py_cb["values"] = ["-", *self.py_tags_values]
 
         # McuCommands
         self.mcu_loader = CommandLoader(
@@ -2516,12 +2518,12 @@ class PokeControllerApp:
         ) + sorted(
             [s for s in self.mcu_tags if s[0] == "@"],
         )  # ディレクトリのタグは後半にまとめる
-        self.command_filter_mcu_cb["values"] = ["-"] + self.mcu_tags_values
+        self.command_filter_mcu_cb["values"] = ["-", *self.mcu_tags_values]
 
         self.setCommandItems()
         self.assignCommand()
 
-    def setCommandItems(self):
+    def setCommandItems(self) -> None:
         # PythonCommands
         self.py_cb_all = [c.NAME for c in self.py_classes]
         if self.command_filter_py_cb.get() == "-":
@@ -2546,7 +2548,7 @@ class PokeControllerApp:
             ]
         self.mcu_cb.current(0)
 
-    def assignShortcutButton(self):
+    def assignShortcutButton(self) -> None:
         self.assignCommand()
         if self.set_shortcut_num.get() == "(select)":
             print("not select num.")
@@ -2590,7 +2592,7 @@ class PokeControllerApp:
                 self.shortcut_10.set(self.shortcut_command_name[num][:8])
                 self.shortcut_button_10_tooltip.text = self.shortcut_command_name[num]
 
-    def assignCommand(self):
+    def assignCommand(self) -> None:
         # 選択されているコマンド名を取得する
         mcu_i = [
             i
@@ -2622,7 +2624,7 @@ class PokeControllerApp:
         else:
             self.cur_command = self.mcu_cur_command
 
-    def assignShortcutCommand(self, num):
+    def assignShortcutCommand(self, num) -> bool:
         commandtype = self.shortcut_command_class[num]
         commandname = self.shortcut_command_name[num]
         commandindex = -1

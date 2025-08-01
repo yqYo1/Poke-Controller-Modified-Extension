@@ -230,7 +230,7 @@ class Command(ABC):
             title,
             message,
             desc=desc,
-            pos=int(self.pos_dialogue_buttons),
+            pos=self.pos_dialogue_buttons,
         ).ret_value(need)
         self.message_dialogue = None
         if not ret:
@@ -267,7 +267,7 @@ class Command(ABC):
             dialogue_list,
             desc=desc,
             mode=1,
-            pos=int(self.pos_dialogue_buttons),
+            pos=self.pos_dialogue_buttons,
         ).ret_value(need)
         self.message_dialogue = None
 

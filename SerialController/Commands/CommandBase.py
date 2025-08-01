@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import os
@@ -18,11 +17,10 @@ from PokeConDialogue import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from tkinter import Text
-    from typing import Literal
+    from typing import ClassVar, Literal
 
-    # from typing import TypeVar
     from Commands.Sender import Sender
-    from GuiAssets import CaptureArea
+    from gui.assets import CaptureArea
 
 
 # CommandBaseにGUIに関連する関数を集約する。
@@ -30,14 +28,14 @@ if TYPE_CHECKING:
 
 
 class Command(ABC):
-    NAME: str | None = None
-    TAGS: list[str] | str | None = None
+    NAME: ClassVar[str | None] = None
+    TAGS: ClassVar[list[str] | str | None] = None
 
     # __metaclass__ = ABCMeta
     text_area_1: Text | None = None
     text_area_2: Text | None = None
     stdout_destination: str = "1"
-    pos_dialogue_buttons: str = "2"
+    pos_dialogue_buttons: Literal[1, 2, 3] = 2
     isPause: bool = False
     canvas: CaptureArea | None = None
     isGuide: bool = False

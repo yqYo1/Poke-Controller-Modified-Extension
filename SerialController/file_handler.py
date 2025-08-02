@@ -16,15 +16,11 @@ def _get_base_path() -> str:
     base_path = os.path.dirname(os.path.abspath(__file__))
     os.chdir(base_path)
     return base_path
-    # if not IS_COMPILED:
-    #     return os.path.dirname(os.path.abspath(__file__))
-    # return os.path.dirname(os.path.abspath(__file__))
 
 
 class FileHandler:
     _instance: Self | None = None
     _lock: threading.Lock = threading.Lock()
-    # _initialized: bool = False
     BASE_PATH: Final[str] = _get_base_path()
     PROFILE: str = "default"
     _logger: Final = getLogger(__name__)

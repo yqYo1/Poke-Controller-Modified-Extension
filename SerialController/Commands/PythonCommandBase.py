@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from Commands.Keys import GamepadInput
     from Commands.Sender import Sender
     from cv2.typing import MatLike
-    from GuiAssets import CaptureArea
+    from gui.assets import CaptureArea
     from ImageProcessing import CropFmt
 
     PythonCommandLike = TypeVar("PythonCommandLike", bound="PythonCommand")

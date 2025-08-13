@@ -8,6 +8,7 @@ import random
 import string
 import threading
 import time
+import traceback
 from abc import ABC, abstractmethod
 from functools import wraps
 from logging import DEBUG, Logger, NullHandler, getLogger
@@ -53,7 +54,7 @@ class StopThread(Exception):
 # Python command
 
 
-def pausedecorator(
+def pausedecorator[PythonCommandLike: "PythonCommand", **P, R](
     func: Callable[Concatenate[PythonCommandLike, P], R],
 ) -> Callable[Concatenate[PythonCommandLike, P], R]:
     """
@@ -183,7 +184,6 @@ class PythonCommand(CommandBase.Command, ABC):
             print("Interrupt:cmd(黒い画面)を確認してください。")
             print(e)
             self._logger.warning("Command stopped unexpectedly")
-            import traceback
 
             traceback.print_exc()
             self.keys.end()
@@ -364,10 +364,12 @@ class PythonCommand(CommandBase.Command, ABC):
                 print(msg)
                 self._logger.debug(msg)
 
-    def LINE_text(self, txt: str, token: str = "") -> None:
+    def LINE_text(self, txt: str, token: str = "") -> None:  # noqa: ARG002
         # 送信
-        with contextlib.suppress(Exception):
-            self.Line.send_message(txt, token=token)
+        print("LINE通知は使用出来ません。")
+        print("Discord通知への切り替えを検討してください。")
+        # with contextlib.suppress(Exception):
+        #     self.Line.send_message(txt, token=token)
 
     def discord_text(
         self,
@@ -1049,26 +1051,28 @@ class ImageProcPythonCommand(PythonCommand, ABC):
 
     def LINE_image(
         self,
-        txt: str,
-        crop_fmt: CropFmt = "",
-        crop: list[int] | None = None,
-        token: str = "",
+        txt: str,  # noqa: ARG002
+        crop_fmt: CropFmt = "",  # noqa: ARG002
+        crop: list[int] | None = None,  # noqa: ARG002
+        token: str = "",  # noqa: ARG002
     ) -> None:
         """
         Lineにテキストと画像を通知します。
         """
+        print("LINE通知は使用出来ません。")
+        print("Discord通知への切り替えを検討してください。")
         # crop_fmtに応じてcropの中身を並び替える
-        crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
+        # crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
 
         # カメラの画像を取得
-        src = self.camera.readFrame()
+        # src = self.camera.readFrame()
 
         # トリミング
-        cropped_image = crop_image(src, crop=crop_cv2)
+        # cropped_image = crop_image(src, crop=crop_cv2)
 
         # 送信
-        with contextlib.suppress(Exception):
-            self.Line.send_message(txt, cropped_image, token)
+        # with contextlib.suppress(Exception):
+        #     self.Line.send_message(txt, cropped_image, token)
 
     def discord_image(
         self,

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import configparser
@@ -6,12 +5,14 @@ import os
 from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
 
-from Commands.Keys import Button, Direction, Hat
+from Commands.Keys import Button, Direction, Hat, KeyPress
 from pynput.keyboard import Key, Listener
 
 if TYPE_CHECKING:
-    from pynput.keyboard import KeyCode
     from logging import Logger
+    from typing import Final
+
+    from pynput.keyboard import KeyCode
 
 
 # This handles keyboard interactions
@@ -22,7 +23,10 @@ class Keyboard:
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.listener = Listener(on_press=self.on_press, on_release=self.on_release)
+        self.listener: Final = Listener(
+            on_press=self.on_press,
+            on_release=self.on_release,
+        )
 
     def listen(self) -> None:
         self.listener.start()
@@ -35,7 +39,7 @@ class Keyboard:
     def on_press(self, key: Key | KeyCode | None) -> None:
         try:
             if key is not None:
-                print(f"alphanumeric key {key.char} pressed")
+                print(f"alphanumeric key {key.char} pressed")  # pyright:ignore[reportAttributeAccessIssue,reportUnknownMemberType]
         except AttributeError:
             print(f"special key {key} pressed")
 
@@ -52,7 +56,7 @@ class SwitchKeyboardController(Keyboard):
         "settings.ini",
     )
 
-    def __init__(self, keyPress) -> None:
+    def __init__(self, keyPress: KeyPress) -> None:
         super().__init__()
 
         self._logger: Logger = getLogger(__name__)
@@ -60,35 +64,39 @@ class SwitchKeyboardController(Keyboard):
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
 
-        self.to_use = Button.A
-        self.setting = configparser.ConfigParser()
-        self.setting.optionxform = str
+        self.to_use: Button = Button.A
+        self.setting: Final = configparser.ConfigParser()
+        self.setting.optionxform = lambda optionstr: optionstr
 
         self._logger.debug("Loading Keyboard control key-map setting")
         if os.path.isfile(self.SETTING_PATH):
             self.setting.read(self.SETTING_PATH, encoding="utf-8")
-        self.key = keyPress
-        self.holding = []
-        self.holdingDir = []
-        self.holdingHatDir = []
-        self.key_map_B = {
+        self.key: Final = keyPress
+        self.holding: list[Button | Hat] = []
+        self.holdingDir: list[Direction] = []
+        # self.holdingHatDir = []
+        self.key_map_B: dict[str, Button] = {
             (i[1] if len(i[1]) == 1 else eval(str(i[1]))): eval(i[0])
             for i in self.setting.items("KeyMap-Button")
         }
-        self.key_map_D = {
+        self.key_map_D: dict[str, Direction] = {
             (i[1] if len(i[1]) == 1 else eval(str(i[1]))): eval(i[0])
             for i in self.setting.items("KeyMap-Direction")
         }
-        self.key_map_H = {
+        self.key_map_H: dict[str, Hat] = {
             (i[1] if len(i[1]) == 1 else eval(str(i[1]))): eval(i[0])
             for i in self.setting.items("KeyMap-Hat")
         }
-        self.key_map = {**self.key_map_B, **self.key_map_D, **self.key_map_H}
+        self.key_map: dict[str, Button | Direction | Hat] = {
+            **self.key_map_B,
+            **self.key_map_D,
+            **self.key_map_H,
+        }
         # self._logger.debug(self.key_map)
 
         self._logger.debug("Initialization finished")
 
-    def on_press(self, key) -> None:
+    def on_press(self, key: Key | KeyCode | None) -> None:
         # for debug (show row key data)
         # super().on_press(key)
 
@@ -164,7 +172,7 @@ class SwitchKeyboardController(Keyboard):
                     self.inputDir(self.holdingDir)
                     # self._logger.debug(f"stick: {key}")
 
-    def on_release(self, key) -> None:
+    def on_release(self, key: Key | KeyCode | None) -> None:
         # self._logger.debug(f"key  is '{key}'")
 
         if key is None:

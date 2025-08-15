@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4 # コードをチェックアウト
+      uses: actions/checkout@v5 # コードをチェックアウト
 
     - name: Set up Python
       uses: actions/setup-python@v5 # Python環境をセットアップ

@@ -239,7 +239,7 @@ class SwitchKeyboardController(Keyboard):
             #         # self._logger.debug(f"holding {self.holdingDir}")
             #     self.inputDir(self.holdingDir)
 
-    def inputDir(self, dirs) -> None:
+    def inputDir(self, dirs: list[str]) -> None:
         self._logger.debug(dirs)
         if len(dirs) == 0:
             return
@@ -247,7 +247,7 @@ class SwitchKeyboardController(Keyboard):
             self.key.input(self.key_map[dirs[0]])
         elif len(dirs) > 1:
             valid_dirs = dirs[-2:]  # set only last 2 directions
-            to_input = []
+            to_input: list[Direction] = []
             if Key.up in valid_dirs:
                 if Key.right in valid_dirs:
                     to_input.append(Direction.UP_RIGHT)

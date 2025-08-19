@@ -68,6 +68,8 @@ class Camera:
         self.camera: cv2.VideoCapture | None = None
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
+        self.flip: bool = False
+        self.flip_mode: int = 0  # 0:上下反転, 1:左右反転, -1:上下左右反転
         self.capture_dir: str = "Captures"
         image = cv2.imread(
             FileHandler.get_asset_path("disabled.png"),
@@ -94,7 +96,7 @@ class Camera:
             self.camera = cv2.VideoCapture(cameraId, cv2.CAP_DSHOW)
         else:
             self._logger.debug("Not NT OS")
-            self.camera = cv2.VideoCapture(cameraId)
+            self.camera = cv2.VideoCapture(cameraId, cv2.CAP_V4L2)
 
         if not self.camera.isOpened():
             print("Camera ID " + str(cameraId) + " can't open.")
@@ -193,6 +195,12 @@ class Camera:
             return
         self._logger.debug("Camera update thread started")
         while self.isOpened():
-            ret, frame = self.camera.read()
-            if ret:
-                self.image_bgr = frame
+            try:
+                ret, frame = self.camera.read()
+                if ret:
+                    if self.flip:
+                        self.image_bgr = cv2.flip(frame, self.flip_mode)
+                    else:
+                        self.image_bgr = frame
+            except cv2.error as e:
+                self._logger.info(f"Suppress camera read error: {e}")

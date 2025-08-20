@@ -68,8 +68,8 @@ class Camera:
         self.camera: cv2.VideoCapture | None = None
         self.fps: int = int(fps)
         self.capture_size: tuple[int, int] = (1280, 720)
-        self.flip: bool = False
-        self.flip_mode: int = 0  # 0:上下反転, 1:左右反転, -1:上下左右反転
+        self.__flip: bool = False
+        self.__flip_mode: int = 0  # 0:上下反転, 1:左右反転, -1:上下左右反転
         self.capture_dir: str = "Captures"
         image = cv2.imread(
             FileHandler.get_asset_path("disabled.png"),
@@ -85,6 +85,31 @@ class Camera:
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
+
+    @property
+    def flip(self) -> bool:
+        return self.__flip
+
+    @property
+    def flip_mode(self) -> int:
+        return self.__flip_mode
+
+    def set_flip(
+        self,
+        value: Literal["None", "Vertical", "Horizontal", "Both"] | str,
+    ) -> None:
+        value = value.lower()
+        if value == "none":
+            self.__flip = False
+        elif value == "vertical":
+            self.__flip = True
+            self.__flip_mode = 0
+        elif value == "horizontal":
+            self.__flip = True
+            self.__flip_mode = 1
+        elif value == "both":
+            self.__flip = True
+            self.__flip_mode = -1
 
     def openCamera(self, cameraId: int) -> None:
         if self.camera is not None and self.camera.isOpened():

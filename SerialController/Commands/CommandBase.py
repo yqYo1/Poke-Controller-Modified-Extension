@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 class Command(ABC):
-    NAME: ClassVar[str | None] = None
+    NAME: ClassVar[str]
     TAGS: ClassVar[list[str] | str | None] = None
 
     # __metaclass__ = ABCMeta

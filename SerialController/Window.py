@@ -78,8 +78,8 @@ class PokeControllerApp:
         self.Discord = None
 
         self.procon = None
-        self.py_loader: CommandLoader
-        self.mcu_loader: CommandLoader
+        self.py_loader: CommandLoader[PythonCommandBase.PythonCommand]
+        self.mcu_loader: CommandLoader[McuCommandBase.McuCommand]
 
         self.pokeconname: Final = Constant.NAME
         self.pokeconversion: Final = Constant.VERSION
@@ -94,51 +94,51 @@ class PokeControllerApp:
         ここから
         """
         # build ui
-        self.main_frame = ttk.Frame(master)
+        self.main_frame: Final = ttk.Frame(master)
         self.camera_lf: Final = ttk.Labelframe(self.main_frame)
-        self.top_command_f = ttk.Frame(self.camera_lf)
-        self.start_top_button = ttk.Button(self.top_command_f)
+        self.top_command_f: Final = ttk.Frame(self.camera_lf)
+        self.start_top_button: Final = ttk.Button(self.top_command_f)
         self.start_top_button.configure(text="Start")
-        self.start_top_button.grid(column="0", padx="5", pady="5", row="0", sticky="ew")
+        self.start_top_button.grid(column=0, padx="5", pady="5", row=0, sticky="ew")
         self.start_top_button.configure(command=self.startPlay)
-        self.simplecon_top_button = ttk.Button(self.top_command_f)
+        self.simplecon_top_button: Final = ttk.Button(self.top_command_f)
         self.simplecon_top_button.configure(text="Controller")
         self.simplecon_top_button.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.simplecon_top_button.configure(command=self.createControllerWindow)
-        self.clear_top_button = ttk.Button(self.top_command_f)
+        self.clear_top_button: Final = ttk.Button(self.top_command_f)
         self.clear_top_button.configure(text="Clear Outputs")
-        self.clear_top_button.grid(column="2", padx="5", pady="5", row="0")
+        self.clear_top_button.grid(column=2, padx="5", pady="5", row=0)
         self.clear_top_button.configure(command=self.clearOutputs)
-        self.capture_button = ttk.Button(self.top_command_f)
+        self.capture_button: Final = ttk.Button(self.top_command_f)
         self.capture_button.configure(text="Capture")
-        self.capture_button.grid(column="3", padx="5", pady="5", row="0", sticky="ew")
+        self.capture_button.grid(column=3, padx="5", pady="5", row=0, sticky="ew")
         self.capture_button.configure(command=self.saveCapture)
-        self.open_capture_button = ttk.Button(self.top_command_f)
-        self.open_folder_img = tk.PhotoImage(
+        self.open_capture_button: Final = ttk.Button(self.top_command_f)
+        self.open_folder_img: Final = tk.PhotoImage(
             file=FileHandler.get_asset_path("icons8-OpenDir-16.png"),
         )  # modified
         self.open_capture_button.configure(image=self.open_folder_img)  # modified
-        self.open_capture_button.grid(column="4", pady="5", row="0")
+        self.open_capture_button.grid(column=4, pady="5", row=0)
         self.open_capture_button.configure(command=self.OpenCaptureDir)
         # self.line_button = ttk.Button(self.top_command_f)
         # self.line_button.configure(text='Line')
         # self.line_button.grid(column='5', padx='5', pady='5', row='0', sticky='ew')
         # self.line_button.configure(command=self.sendLineImage)
-        self.discord_button = ttk.Button(self.top_command_f)
+        self.discord_button: Final = ttk.Button(self.top_command_f)
         self.discord_button.configure(text="Discord")
-        self.discord_button.grid(column="5", padx="5", pady="5", row="0", sticky="ew")
+        self.discord_button.grid(column=5, padx="5", pady="5", row=0, sticky="ew")
         self.discord_button.configure(command=self.sendDiscordImage)
-        self.top_command_f.grid(column="0", row="0", sticky="w")
+        self.top_command_f.grid(column=0, row=0, sticky="w")
         self.top_command_f.grid_anchor("center")
-        self.canvas_frame = ttk.Frame(self.camera_lf)
+        self.canvas_frame: Final = ttk.Frame(self.camera_lf)
         self.canvas_frame.configure(height="360", relief="groove", width="640")
-        self.canvas_frame.grid(column="0", columnspan="7", row="1")
+        self.canvas_frame.grid(column=0, columnspan=7, row=1)
         self.camera_lf.configure(text="Main Panel")  # modfied
         self.camera_lf.grid(
             column="0",
@@ -2674,7 +2674,7 @@ class PokeControllerApp:
         print("shortcut command type error.")
         return False
 
-    def controllButtons(self, event):
+    def controllButtons(self, event) -> None:
         note = event.widget
         if self.start_button["text"] == "Start":
             if note.tab(note.select(), "text") == "Shortcut":
@@ -2694,7 +2694,7 @@ class PokeControllerApp:
             self.applyFilterPy()
             self.applyFilterMcu()
 
-    def reloadCommands(self):
+    def reloadCommands(self) -> None:
         # 表示しているタブを読み取って、どのコマンドを表示しているか取得、リロード後もそれが選択されるようにする
         oldval_mcu = self.mcu_cb.get()
         oldval_py = self.py_cb.get()
@@ -2718,8 +2718,8 @@ class PokeControllerApp:
             [s for s in self.mcu_tags if s[0] != "@"],
         ) + sorted([s for s in self.mcu_tags if s[0] == "@"])
 
-        self.command_filter_py_cb["values"] = ["-"] + self.py_tags_values
-        self.command_filter_mcu_cb["values"] = ["-"] + self.mcu_tags_values
+        self.command_filter_py_cb["values"] = ["-", *self.py_tags_values]
+        self.command_filter_mcu_cb["values"] = ["-", *self.mcu_tags_values]
 
         # Restore the command selecting state if possible
         self.setCommandItems()
@@ -2731,7 +2731,7 @@ class PokeControllerApp:
         print("Finished reloading command modules.")
         self._logger.info("Reloaded commands.")
 
-    def applyFilterPy(self, event=None):
+    def applyFilterPy(self, event=None) -> None:
         if self.command_filter_py_cb.get() == "-":
             self.py_cb["values"] = self.py_cb_all
         else:
@@ -2742,7 +2742,7 @@ class PokeControllerApp:
             ]
             self.py_cb.current(0)
 
-    def applyFilterMcu(self, event=None):
+    def applyFilterMcu(self, event=None) -> None:
         if self.command_filter_mcu_cb.get() == "-":
             self.mcu_cb["values"] = self.mcu_cb_all
         else:
@@ -2753,17 +2753,18 @@ class PokeControllerApp:
             ]
             self.mcu_cb.current(0)
 
-    def pausePlay(self, *event):
+    def pausePlay(self, event: tk.Event) -> None:  # noqa: ARG002
         Command.isPause = True
         self.pause_button["text"] = "Restart"
         self.pause_button["command"] = self.restartPlay
 
-    def restartPlay(self, *event):
+    def restartPlay(self, event: tk.Event) -> None:  # noqa: ARG002
         Command.isPause = False
         self.pause_button["text"] = "Pause"
         self.pause_button["command"] = self.pausePlay
 
-    def startPlay(self, *event):
+    # def startPlay(self, event: tk.Event) -> None:
+    def startPlay(self) -> None:
         if self.cur_command is None:
             print("No commands have been assigned yet.")
             self._logger.info("No commands have been assigned yet.")
@@ -2795,7 +2796,7 @@ class PokeControllerApp:
         self.shortcut_button_10["state"] = "disabled"
         self.pause_button["state"] = "normal"
 
-    def startShortcutPlay(self, *event, num=0):
+    def startShortcutPlay(self, event: tk.Event, num: int = 0) -> None:
         if self.cur_command is None:
             print("No commands have been assigned yet.")
             self._logger.info("No commands have been assigned yet.")
@@ -2831,7 +2832,7 @@ class PokeControllerApp:
         else:
             pass
 
-    def stopPlay(self):
+    def stopPlay(self) -> None:
         print(self.start_button["text"] + " " + self.cur_command.NAME)
         self._logger.info(self.start_button["text"] + " " + self.cur_command.NAME)
         self.start_button["state"] = "disabled"
@@ -2844,7 +2845,7 @@ class PokeControllerApp:
 
         self.cur_command.end(self.ser)
 
-    def stopPlayPost(self):
+    def stopPlayPost(self) -> None:
         self.start_button["text"] = "Start"
         self.start_top_button["text"] = "Start"
         self.start_button["command"] = self.startPlay
@@ -2867,11 +2868,11 @@ class PokeControllerApp:
         self.shortcut_button_9["state"] = "normal"
         self.shortcut_button_10["state"] = "normal"
 
-    def run(self):
+    def run(self) -> None:
         self._logger.debug("Start Poke-Controller")
         self.mainwindow.mainloop()
 
-    def exit(self):
+    def exit(self) -> None:
         # 一度proconのスレッドを落とす
         self.flag_procon = False
         self.record_pro_controller_checkbox["state"] = "normal"
@@ -2979,25 +2980,25 @@ class PokeControllerApp:
         elif self.start_button["text"] == "Start":
             self.startPlay()
 
-    def StopCommandWithEsc(self, *event):
+    def StopCommandWithEsc(self, *event) -> None:
         if self.start_button["text"] == "Stop":
             self.stopPlay()
 
-    def clearTextArea1(self):
+    def clearTextArea1(self) -> None:
         self.text_area_1.config(state="normal")
         self.text_area_1.delete("1.0", "end")
         self.text_area_1.config(state="disable")
 
-    def clearTextArea2(self):
+    def clearTextArea2(self) -> None:
         self.text_area_2.config(state="normal")
         self.text_area_2.delete("1.0", "end")
         self.text_area_2.config(state="disable")
 
-    def clearOutputs(self):
+    def clearOutputs(self) -> None:
         self.clearTextArea1()
         self.clearTextArea2()
 
-    def changeAreaSize(self, *event):
+    def changeAreaSize(self, *event) -> None:
         _, height = map(int, self.show_size.get().split("x"))
         max_size = 0.075 * height
         mode = self.right_frame_widget_mode.get()
@@ -3023,7 +3024,7 @@ class PokeControllerApp:
         self.text_area_1.config(height=text_area_1_size)
         self.text_area_2.config(height=text_area_2_size)
 
-    def switchStdoutDestination(self):
+    def switchStdoutDestination(self) -> None:
         val = self.stdout_destination.get()
         if val == "1":
             sys.stdout = StdoutRedirector(self.text_area_1)
@@ -3038,19 +3039,13 @@ class PokeControllerApp:
             self.text_scroll_1.configure(text="Output#1")
             self.text_scroll_2.configure(text="Output#2 (Stdout)")
 
-    def replace_right_frame_widget(self, *event):
-        try:
+    def replace_right_frame_widget(self, *event) -> None:
+        with contextlib.suppress(Exception):
             self.text_scroll_1.pack_forget()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             self.text_scroll_2.pack_forget()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             self.softcon_frame.pack_forget()
-        except Exception:
-            pass
 
         mode = self.right_frame_widget_mode.get()
 
@@ -3097,14 +3092,14 @@ class PokeControllerApp:
 
         self.changeAreaSize()
 
-    def hold(self, event, buttons: Button | Hat | Stick | Direction):
+    def hold(self, event, buttons: Button | Hat | Stick | Direction) -> None:
         """
         ボタンを押す。
         """
         if event.widget["bg"] != "#FFD800":
             self.keys_software_controller.hold(buttons)
 
-    def holdEnd(self, event, buttons: Button | Hat | Stick | Direction):
+    def holdEnd(self, event, buttons: Button | Hat | Stick | Direction) -> None:
         """
         ボタンを押しっぱなしにする/解除する
         """
@@ -3112,14 +3107,14 @@ class PokeControllerApp:
         event.widget["fg"] = "#FFFFFF"
         self.keys_software_controller.holdEnd(buttons)
 
-    def holdEndSkip(self, event, buttons: Button | Hat | Stick | Direction):
+    def holdEndSkip(self, event, buttons: Button | Hat | Stick | Direction) -> None:
         """
         なにもしない
         """
         event.widget["bg"] = "#FFD800"
         event.widget["fg"] = "#343434"
 
-    def holdForceEnd(self):
+    def holdForceEnd(self) -> None:
         """
         hold状態を強制的に解除する
         (holdを示す色も変える)

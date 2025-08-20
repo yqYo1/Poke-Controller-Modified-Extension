@@ -25,6 +25,8 @@ try:
     flag_import_plyer = True
 except Exception:
     flag_import_plyer = False
+import contextlib
+
 import PokeConLogger
 import Settings
 import Utility as util
@@ -43,18 +45,17 @@ from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
 from LineNotify import Line_Notify
 from Menubar import PokeController_Menubar
-import contextlib
 
 if TYPE_CHECKING:
     from typing import Final
 
-addpath = dirname(dirname(dirname(abspath(__file__))))  # SerialControllerフォルダのパス
+addpath = dirname(abspath(__file__))  # SerialControllerフォルダのパス
 sys.path.append(addpath)
 
 
 class PokeControllerApp:
-    def __init__(self, master: tk.Tk | None = None, profile: str = "default") -> None:
-        self._logger = getLogger(__name__)
+    def __init__(self, master: tk.Tk, profile: str = "default") -> None:
+        self._logger: Final = getLogger(__name__)
         self._logger.addHandler(NullHandler())
 
         self._logger.setLevel(DEBUG)
@@ -62,12 +63,12 @@ class PokeControllerApp:
 
         self._logger.debug(f"User Profile Name: '{profile}'")
 
-        self.root = master
+        self.root: Final = master
         self.root.title(
             f"{Constant.NAME} ver.{Constant.VERSION} (profile: {args.profile})",
         )
         # self.root.resizable(0, 0)
-        self.controller = None
+        self.controller: ControllerGUI | None = None
         self.poke_treeview = None
         self.keyPress = None
         self.keyboard = None

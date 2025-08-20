@@ -1704,10 +1704,11 @@ class PokeControllerApp:
         self.is_show_serial.set(self.settings.is_show_serial.get())
         self.is_use_keyboard.set(self.settings.is_use_keyboard.get())
         self.fps.set(self.settings.fps.get())
+        self.camera_flip.set(self.settings.camera_flip.get())
         self.show_size.set(self.settings.show_size.get())
         self.com_port.set(self.settings.com_port.get())
         self.com_port_name.set(self.settings.com_port_name.get())
-        self.baud_rate.set(self.settings.baud_rate.get())
+        self.baud_rate.set(str(self.settings.baud_rate.get()))
         self.camera_id.set(self.settings.camera_id.get())
         self.serial_data_format_name.set(self.settings.serial_data_format_name.get())
         self.touchscreen_start_x = self.settings.touchscreen_start_x
@@ -1871,6 +1872,8 @@ class PokeControllerApp:
         # open up a camera
         self.camera: Camera = Camera(int(self.fps.get()))
         self.openCamera()
+        # CameraのFlipを反映する
+        self.applyFlip()
         # activate serial communication
         try:
             self.locateDeviceCmbbox()
@@ -2336,7 +2339,7 @@ class PokeControllerApp:
         print(f"changed FPS to: {self.fps.get()} [fps]")
         self.preview.setFps(self.fps.get())
 
-    def applyFlip(self, event: tk.Event) -> None:
+    def applyFlip(self, event: tk.Event | None = None) -> None:
         selected = self.camera_flip.get()
         print(f"changed Flip to: {selected}")
         self.camera.set_flip(selected)
@@ -2460,7 +2463,7 @@ class PokeControllerApp:
     def mode_change_show_image(self) -> None:
         Command.isImage = self.is_show_image.get()
 
-    def mode_change_notification(self, *event) -> None:
+    def mode_change_notification(self, event: tk.Event | None = None) -> None:
         Command.isWinNotStart = self.is_win_notification_start.get()
         Command.isWinNotEnd = self.is_win_notification_end.get()
         Command.isLineNotStart = self.is_line_notification_start.get()
@@ -2906,7 +2909,7 @@ class PokeControllerApp:
         self.record_pro_controller_checkbox["state"] = "normal"
         self.is_use_Pro_Controller.set(False)
 
-        ret = tkmsg.askyesno("確認", "Poke Controllerを終了しますか？")
+        ret = tkmsg.askyesno("確認", "Poke Controllerを終了しますか?")
         if ret:
             if self.ser.isOpened():
                 self.ser.closeSerial()
@@ -2925,9 +2928,10 @@ class PokeControllerApp:
             self.settings.is_show_serial.set(self.is_show_serial.get())
             self.settings.is_use_keyboard.set(self.is_use_keyboard.get())
             self.settings.fps.set(self.fps.get())
+            self.settings.camera_flip.set(self.camera_flip.get())
             self.settings.show_size.set(self.show_size.get())
             self.settings.com_port.set(self.com_port.get())
-            self.settings.baud_rate.set(self.baud_rate.get())
+            self.settings.baud_rate.set(int(self.baud_rate.get()))
             self.settings.camera_id.set(self.camera_id.get())
             self.settings.serial_data_format_name.set(
                 self.serial_data_format_name.get(),

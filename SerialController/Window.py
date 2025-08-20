@@ -69,15 +69,15 @@ class PokeControllerApp:
         )
         # self.root.resizable(0, 0)
         self.controller: ControllerGUI | None = None
-        self.poke_treeview = None
-        self.keyPress = None
-        self.keyboard = None
+        self.poke_treeview: None = None
+        self.keyPress: KeyPress | None = None
+        self.keyboard: SwitchKeyboardController | None = None
 
-        self.camera_dic = None
-        self.Line = None
-        self.Discord = None
+        self.camera_dic: dict | None = None
+        self.Line: None = None
+        self.Discord: None = None
 
-        self.procon = None
+        self.procon: ProController | None = None
         self.py_loader: CommandLoader[PythonCommandBase.PythonCommand]
         self.mcu_loader: CommandLoader[McuCommandBase.McuCommand]
 
@@ -141,65 +141,169 @@ class PokeControllerApp:
         self.canvas_frame.grid(column=0, columnspan=7, row=1)
         self.camera_lf.configure(text="Main Panel")  # modfied
         self.camera_lf.grid(
-            column="0",
-            columnspan="3",
+            column=0,
+            columnspan=3,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.camera_lf.rowconfigure("0", uniform="0")
-        self.controller_nb = ttk.Notebook(self.main_frame)
-        self.camera_f = ttk.Frame(self.controller_nb)
-        self.camera_settings_lf = ttk.Labelframe(self.camera_f)
-        self.camera_id_label = ttk.Label(self.camera_settings_lf)
+        self.controller_nb: Final = ttk.Notebook(self.main_frame)
+        self.camera_f: Final = ttk.Frame(self.controller_nb)
+        self.camera_settings_lf: Final = ttk.Labelframe(self.camera_f)
+        self.camera_id_label: Final = ttk.Label(self.camera_settings_lf)
         self.camera_id_label.configure(anchor="center", text="Camera ID: ")
-        self.camera_id_label.grid(column="0", padx="5", pady="5", row="1", sticky="ew")
-        self.camera_id_entry = ttk.Entry(self.camera_settings_lf)
-        self.camera_id = tk.IntVar(value="")
+        self.camera_id_label.grid(column=0, padx="5", pady="5", row=1, sticky="ew")
+        self.camera_id_entry: Final = ttk.Entry(self.camera_settings_lf)
+        self.camera_id: Final = tk.IntVar(value=None)
         self.camera_id_entry.configure(
             state="readonly",
             textvariable=self.camera_id,
-            width="3",
+            width=3,
         )
-        self.camera_id_entry.grid(column="1", padx="5", pady="5", row="1", sticky="ew")
-        self.camera_separator_1 = ttk.Separator(self.camera_settings_lf)
+        self.camera_id_entry.grid(column=1, padx="5", pady="5", row=1, sticky="ew")
+        self.camera_separator_1: Final = ttk.Separator(self.camera_settings_lf)
         self.camera_separator_1.configure(orient="vertical")
         self.camera_separator_1.grid(
-            column="2",
+            column=2,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ns",
         )
-        self.fps_label = ttk.Label(self.camera_settings_lf)
+        self.fps_label: Final = ttk.Label(self.camera_settings_lf)
         self.fps_label.configure(text="FPS: ")
-        self.fps_label.grid(column="3", padx="5", pady="5", row="1", sticky="ew")
-        self.fps_cb = ttk.Combobox(self.camera_settings_lf)
-        self.fps = tk.StringVar(value="")
+        self.fps_label.grid(column=3, padx="5", pady="5", row=1, sticky="ew")
+        self.fps_cb: Final = ttk.Combobox(self.camera_settings_lf)
+        self.fps: Final = tk.StringVar(value="")
         self.fps_cb.configure(
             justify="left",
             state="readonly",
             textvariable=self.fps,
-            values="60 45 30 15 5",
+            values=["60", "45", "30", "15", "5"],
+            width=3,
         )
-        self.fps_cb.configure(width="3")
-        self.fps_cb.grid(column="4", padx="10", pady="5", row="1", sticky="ew")
+        self.fps_cb.grid(column=4, padx="10", pady="5", row=1, sticky="ew")
         self.fps_cb.bind("<<ComboboxSelected>>", self.applyFps, add="")
-        self.camera_separator_2 = ttk.Separator(self.camera_settings_lf)
+        self.camera_separator_2: Final = ttk.Separator(self.camera_settings_lf)
         self.camera_separator_2.configure(orient="vertical")
         self.camera_separator_2.grid(
-            column="5",
+            column=5,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ns",
         )
-        self.show_size_label = ttk.Label(self.camera_settings_lf)
+        self.camera_flip_label: Final = ttk.Label(self.camera_settings_lf)
+        self.camera_flip_label.configure(text="Flip: ")
+        self.camera_flip_label.grid(column=6, padx="5", pady="5", row=1, sticky="ew")
+        self.camera_flip: Final = tk.StringVar(value="")
+        self.camera_flip_cb: Final = ttk.Combobox(self.camera_settings_lf)
+        self.camera_flip_cb.configure(
+            justify="left",
+            state="readonly",
+            textvariable=self.camera_flip,
+            values=["None", "Vertical", "Horizontal", "Both"],
+            width=10,
+        )
+        self.camera_flip_cb.grid(column=7, padx="5", pady="5", row=1, sticky="ew")
+        self.camera_flip_cb.bind("<<ComboboxSelected>>", self.applyFlip, add="")
+        self.camera_separator_3: Final = ttk.Separator(self.camera_settings_lf)
+        self.camera_separator_3.configure(orient="vertical")
+        self.camera_separator_3.grid(
+            column=8,
+            padx="5",
+            pady="5",
+            row=1,
+            sticky="ns",
+        )
+        self.reload_button: Final = ttk.Button(self.camera_settings_lf)
+        self.reload_button.configure(text="Reload Camera")
+        self.reload_button.grid(column=9, padx="5", pady="5", row=1, sticky="ew")
+        self.reload_button.configure(command=self.openCamera)
+        self.camera_name_label: Final = ttk.Label(self.camera_settings_lf)
+        self.camera_name_label.configure(anchor="center", text="Camera Name: ")
+        self.camera_name_label.grid(
+            column=0,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.camera_name_cb: Final = ttk.Combobox(self.camera_settings_lf)
+        self.camera_name_fromDLL: Final = tk.StringVar(value="")
+        self.camera_name_cb.configure(
+            state="normal",
+            textvariable=self.camera_name_fromDLL,
+        )
+        self.camera_name_cb.grid(
+            column=1,
+            columnspan=9,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.camera_name_cb.bind("<<ComboboxSelected>>", self.set_cameraid, add="")
+        self.camera_settings_lf.configure(text="Settings", width="420")
+        self.camera_settings_lf.grid(column=0, padx="5", row=0, sticky="ew")
+        self.display_settings_lf: Final = ttk.Labelframe(self.camera_f)
+        self.show_realtime_checkbox: Final = ttk.Checkbutton(self.display_settings_lf)
+        self.is_show_realtime: Final = tk.BooleanVar()  # modified
+        self.show_realtime_checkbox.configure(
+            text="Show Realtime",
+            variable=self.is_show_realtime,
+        )
+        self.show_realtime_checkbox.grid(
+            column=0,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.show_value_checkbox: Final = ttk.Checkbutton(self.display_settings_lf)
+        self.is_show_value: Final = tk.BooleanVar()  # modified
+        self.show_value_checkbox.configure(
+            text="Show Value",
+            variable=self.is_show_value,
+        )
+        self.show_value_checkbox.grid(
+            column=1,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.show_value_checkbox.configure(command=self.mode_change_show_value)
+        self.show_guide_checkbox: Final = ttk.Checkbutton(self.display_settings_lf)
+        self.is_show_guide: Final = tk.BooleanVar()  # modified
+        self.show_guide_checkbox.configure(
+            text="Show Guide",
+            variable=self.is_show_guide,
+        )
+        self.show_guide_checkbox.grid(
+            column=2,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.show_guide_checkbox.configure(command=self.mode_change_show_guide)
+        self.camera_separator_4: Final = ttk.Separator(self.display_settings_lf)
+        self.camera_separator_4.configure(orient="vertical")
+        self.camera_separator_4.grid(
+            column=3,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ns",
+        )
+        self.show_size_label: Final = ttk.Label(self.display_settings_lf)
         self.show_size_label.configure(text="Show Size: ")
-        self.show_size_label.grid(column="6", padx="5", pady="5", row="1", sticky="ew")
-        self.show_size_cb = ttk.Combobox(self.camera_settings_lf)
-        self.show_size = tk.StringVar(value="")
+        self.show_size_label.grid(column=4, padx="5", pady="5", row=0, sticky="ew")
+        self.show_size_cb: Final = ttk.Combobox(self.display_settings_lf)
+        self.show_size: Final = tk.StringVar(value="")
         show_size_list = [
             "320x180",
             "640x360",
@@ -213,139 +317,58 @@ class PokeControllerApp:
             textvariable=self.show_size,
             values=show_size_list,
         )
-        self.show_size_cb.grid(column="7", padx="5", row="1", sticky="ew")
+        self.show_size_cb.grid(column=5, padx="5", row=0, sticky="ew")
         self.show_size_cb.bind("<<ComboboxSelected>>", self.applyWindowSize, add="")
-        self.camera_separator_3 = ttk.Separator(self.camera_settings_lf)
-        self.camera_separator_3.configure(orient="vertical")
-        self.camera_separator_3.grid(
-            column="8",
-            padx="5",
-            pady="5",
-            row="1",
-            sticky="ns",
-        )
-        self.reload_button = ttk.Button(self.camera_settings_lf)
-        self.reload_button.configure(text="Reload Camera")
-        self.reload_button.grid(column="9", padx="5", pady="5", row="1", sticky="ew")
-        self.reload_button.configure(command=self.openCamera)
-        self.camera_name_label = ttk.Label(self.camera_settings_lf)
-        self.camera_name_label.configure(anchor="center", text="Camera Name: ")
-        self.camera_name_label.grid(
-            column="0",
-            padx="5",
-            pady="5",
-            row="0",
-            sticky="ew",
-        )
-        self.camera_name_cb = ttk.Combobox(self.camera_settings_lf)
-        self.camera_name_fromDLL = tk.StringVar(value="")
-        self.camera_name_cb.configure(
-            state="normal",
-            textvariable=self.camera_name_fromDLL,
-        )
-        self.camera_name_cb.grid(
-            column="1",
-            columnspan="9",
-            padx="5",
-            pady="5",
-            row="0",
-            sticky="ew",
-        )
-        self.camera_name_cb.bind("<<ComboboxSelected>>", self.set_cameraid, add="")
-        self.camera_settings_lf.configure(text="Settings", width="420")
-        self.camera_settings_lf.grid(column="0", padx="5", row="0", sticky="ew")
-        self.display_settings_lf = ttk.Labelframe(self.camera_f)
-        self.show_realtime_checkbox = ttk.Checkbutton(self.display_settings_lf)
-        self.is_show_realtime = tk.BooleanVar()  # modified
-        self.show_realtime_checkbox.configure(
-            text="Show Realtime",
-            variable=self.is_show_realtime,
-        )
-        self.show_realtime_checkbox.grid(
-            column="0",
-            padx="5",
-            pady="5",
-            row="0",
-            sticky="ew",
-        )
-        self.show_value_checkbox = ttk.Checkbutton(self.display_settings_lf)
-        self.is_show_value = tk.BooleanVar()  # modified
-        self.show_value_checkbox.configure(
-            text="Show Value",
-            variable=self.is_show_value,
-        )
-        self.show_value_checkbox.grid(
-            column="1",
-            padx="5",
-            pady="5",
-            row="0",
-            sticky="ew",
-        )
-        self.show_value_checkbox.configure(command=self.mode_change_show_value)
-        self.show_guide_checkbox = ttk.Checkbutton(self.display_settings_lf)
-        self.is_show_guide = tk.BooleanVar()  # modified
-        self.show_guide_checkbox.configure(
-            text="Show Guide",
-            variable=self.is_show_guide,
-        )
-        self.show_guide_checkbox.grid(
-            column="2",
-            padx="5",
-            pady="5",
-            row="0",
-            sticky="ew",
-        )
-        self.show_guide_checkbox.configure(command=self.mode_change_show_guide)
         self.display_settings_lf.configure(
             height="200",
             text="Display Settings",
             width="200",
         )
         self.display_settings_lf.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="0",
-            row="1",
+            row=1,
             sticky="ew",
         )
         # self.camera_f.configure(height='200', width='200')    # removed
         self.camera_f.pack(side="top")
         self.controller_nb.add(self.camera_f, padding="5", sticky="nsew", text="Camera")
-        self.serial_f = ttk.Frame(self.controller_nb)
-        self.settings_lf = ttk.Labelframe(self.serial_f)
-        self.com_port_label = ttk.Label(self.settings_lf)
+        self.serial_f: Final = ttk.Frame(self.controller_nb)
+        self.settings_lf: Final = ttk.Labelframe(self.serial_f)
+        self.com_port_label: Final = ttk.Label(self.settings_lf)
         if platform.system() == "Windows" or platform.system() == "Darwin":
             self.com_port_label.configure(text="COM Port: ")
         else:
             self.com_port_label.configure(text="Port: ")
-        self.com_port_label.grid(column="0", padx="5", pady="5", row="0", sticky="ew")
+        self.com_port_label.grid(column=0, padx="5", pady="5", row=0, sticky="ew")
         # self.label2.rowconfigure('0', uniform='None', weight='0')   # added
-        self.com_port_entry = ttk.Entry(self.settings_lf)
-        self.com_port = tk.IntVar(value="")
-        self.com_port_name = tk.StringVar()  # added
+        self.com_port_entry: Final = ttk.Entry(self.settings_lf)
+        self.com_port: Final = tk.IntVar(value=None)
+        self.com_port_name: Final = tk.StringVar()  # added
         self.com_port_entry.configure(
             state="readonly",
             textvariable=self.com_port,
-            width="5",
+            width=5,
         )
-        self.com_port_entry.grid(column="1", padx="10", pady="5", row="0", sticky="ew")
+        self.com_port_entry.grid(column=1, padx="10", pady="5", row=0, sticky="ew")
         # self.ecom_port_entryntry2.rowconfigure('0', uniform='None', weight='0')   # added
-        self.settings_separator_1 = ttk.Separator(self.settings_lf)
+        self.settings_separator_1: Final = ttk.Separator(self.settings_lf)
         self.settings_separator_1.configure(orient="vertical")
-        self.settings_separator_1.grid(column="2", pady="5", row="0", sticky="ns")
-        self.baud_rate_label = ttk.Label(self.settings_lf)
+        self.settings_separator_1.grid(column=2, pady="5", row=0, sticky="ns")
+        self.baud_rate_label: Final = ttk.Label(self.settings_lf)
         self.baud_rate_label.configure(text="Baud Rate: ")
-        self.baud_rate_label.grid(column="3", padx="5", pady="5", row="0", sticky="ew")
-        self.baud_rate_cb = ttk.Combobox(self.settings_lf)
-        self.baud_rate = tk.StringVar(value="")
+        self.baud_rate_label.grid(column=3, padx="5", pady="5", row=0, sticky="ew")
+        self.baud_rate_cb: Final = ttk.Combobox(self.settings_lf)
+        self.baud_rate: Final = tk.StringVar(value="")
         self.baud_rate_cb.configure(
             justify="right",
             state="readonly",
             textvariable=self.baud_rate,
-            values="9600 4800 115200",
+            values=["9600", "4800", "115200"],
         )
-        self.baud_rate_cb.configure(width="6")
-        self.baud_rate_cb.grid(column="4", padx="10", pady="5", row="0", sticky="ew")
+        self.baud_rate_cb.configure(width=6)
+        self.baud_rate_cb.grid(column=4, padx="10", pady="5", row=0, sticky="ew")
         self.baud_rate_cb.bind("<<ComboboxSelected>>", self.applyBaudRate, add="")
         self.settings_separator_2 = ttk.Separator(self.settings_lf)
         self.settings_separator_2.configure(orient="vertical")
@@ -2223,7 +2246,7 @@ class PokeControllerApp:
     def saveCapture(self) -> None:
         self.camera.saveCapture()
 
-    def OpenCaptureDir(self):
+    def OpenCaptureDir(self) -> None:
         directory = "Captures"
         self._logger.debug(f"Open folder: '{directory}'")
         if platform.system() == "Windows":
@@ -2232,7 +2255,7 @@ class PokeControllerApp:
             command = f'open "{directory}"'
             subprocess.run(command, shell=True, check=False)
 
-    def sendWinNotfication(self):
+    def sendWinNotfication(self) -> None:
         global flag_import_plyer
         if flag_import_plyer:
             notification.notify(
@@ -2243,8 +2266,8 @@ class PokeControllerApp:
         else:
             print('"plyer" is not installed.')
 
-    def sendLineImage(self):
-        def sendMessage(src):
+    def sendLineImage(self) -> None:
+        def sendMessage(src) -> None:
             try:
                 Line = Line_Notify()
                 Line.send_message("---Manual---", src, "token")
@@ -2255,7 +2278,7 @@ class PokeControllerApp:
         thread = threading.Thread(target=sendMessage, args=(src,))
         thread.start()
 
-    def sendDiscordImage(self):
+    def sendDiscordImage(self) -> None:
         def sendMessage(src) -> None:
             Discord = Discord_Notify()
             Discord.send_message(notification_message="---Manual---", image=src)
@@ -2282,7 +2305,7 @@ class PokeControllerApp:
                 self.serial_device_name.set(d)
                 break
 
-    def set_cameraid(self, event=None) -> None:
+    def set_cameraid(self, event: tk.Event) -> None:
         keys = [
             k
             for k, v in self.camera_dic.items()
@@ -2291,12 +2314,12 @@ class PokeControllerApp:
         ret = keys[0] if keys else None
         self.camera_id.set(ret)
 
-    def set_device(self, event=None) -> None:
+    def set_device(self, event: tk.Event) -> None:
         self.com_port.set(
             int(re.search(r"COM(\d+)", self.serial_device_name.get()).groups()[0]),
         )
 
-    def set_serial_data_format(self, event=None) -> None:
+    def set_serial_data_format(self, event: tk.Event | None = None) -> None:
         KeyPress.serial_data_format_name = self.serial_data_format_name.get()
         self.keys_software_controller.init_hat()
         self.preview.changeRightMouseMode(self.serial_data_format_name.get())
@@ -2309,14 +2332,19 @@ class PokeControllerApp:
             self.baud_rate.set("9600")
         self.activateSerial()
 
-    def applyFps(self, event=None) -> None:
-        print("changed FPS to: " + self.fps.get() + " [fps]")
+    def applyFps(self, event: tk.Event) -> None:
+        print(f"changed FPS to: {self.fps.get()} [fps]")
         self.preview.setFps(self.fps.get())
 
-    def applyBaudRate(self, event=None) -> None:
+    def applyFlip(self, event: tk.Event) -> None:
+        selected = self.camera_flip.get()
+        print(f"changed Flip to: {selected}")
+        self.camera.set_flip(selected)
+
+    def applyBaudRate(self, event: tk.Event) -> None:
         pass
 
-    def applyWindowSize(self, event=None) -> None:
+    def applyWindowSize(self, event: tk.Event) -> None:
         width, height = map(int, self.show_size.get().split("x"))
         self.preview.setShowsize(height, width)
         self.changeAreaSize()
@@ -2324,7 +2352,7 @@ class PokeControllerApp:
         if self.show_size_tmp != self.show_size_cb["values"].index(
             self.show_size_cb.get(),
         ):
-            ret = tkmsg.askokcancel("確認", "この画面サイズに変更しますか？")
+            ret = tkmsg.askokcancel("確認", "この画面サイズに変更しますか?")
         else:
             return
 
@@ -3145,7 +3173,7 @@ class PokeControllerApp:
 
 
 class ToolTip:
-    def __init__(self, widget, text="default tooltip"):
+    def __init__(self, widget, text="default tooltip") -> None:
         self.widget = widget
         self.text = text
         self.widget.bind("<Motion>", self.moveCursor)
@@ -3153,7 +3181,7 @@ class ToolTip:
         self.id = None
         self.tw = None
 
-    def moveCursor(self, event):
+    def moveCursor(self, event) -> None:
         id = self.id
         self.id = None
         if id:
@@ -3165,14 +3193,14 @@ class ToolTip:
                 self.widget.after_cancel(id)
             self.id = self.widget.after(300, self.createTooltip)
 
-    def leaveCursor(self, event):
+    def leaveCursor(self, event) -> None:
         id = self.id
         self.id = None
         if id:
             self.widget.after_cancel(id)
         self.id = self.widget.after(300, self.destroyTooltip)
 
-    def createTooltip(self):
+    def createTooltip(self) -> None:
         id = self.id
         self.id = None
         if id:
@@ -3207,7 +3235,7 @@ class StdoutRedirector:
     def __init__(self, text_widget) -> None:
         self.text_space = text_widget
 
-    def write(self, string):
+    def write(self, string) -> None:
         self.text_space.configure(state="normal")
         self.text_space.insert("end", string)
         self.text_space.see("end")

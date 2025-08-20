@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import configparser
@@ -22,7 +20,7 @@ class GuiSettings:
         self.setting: Final = configparser.ConfigParser()
         # self.profile_path: Final = FileHandler.get_profile_path()
         self.setting_path: Final = FileHandler.get_configs_path()
-        self.setting.optionxform = str
+        self.setting.optionxform = lambda optionstr: optionstr
 
         if not os.path.exists(self.setting_path):
             self._logger.debug("Setting file does not exists.")
@@ -35,70 +33,75 @@ class GuiSettings:
             self._logger.debug("Settings file has been loaded.")
 
         # default
-        self.camera_id = tk.IntVar(
+        self.camera_id: Final = tk.IntVar(
             value=self.setting["General Setting"].getint("camera_id"),
         )
-        self.com_port = tk.IntVar(
+        self.camera_flip: Final = tk.StringVar(
+            value=self.setting["General Setting"].get("camera_flip"),
+        )
+        self.com_port: Final = tk.IntVar(
             value=self.setting["General Setting"].getint("com_port"),
         )
-        self.com_port_name = tk.StringVar(
+        self.com_port_name: Final = tk.StringVar(
             value=self.setting["General Setting"].get("com_port_name"),
         )
-        self.baud_rate = tk.IntVar(
+        self.baud_rate: Final = tk.IntVar(
             value=self.setting["General Setting"].getint("baud_rate"),
         )
-        self.fps = tk.StringVar(value=self.setting["General Setting"]["fps"])
-        self.show_size = tk.StringVar(
+        self.fps: Final = tk.StringVar(value=self.setting["General Setting"]["fps"])
+        self.show_size: Final = tk.StringVar(
             value=self.setting["General Setting"].get("show_size"),
         )
-        self.is_show_realtime = tk.BooleanVar(
+        self.is_show_realtime: Final = tk.BooleanVar(
             value=self.setting["General Setting"].getboolean("is_show_realtime"),
         )
-        self.is_show_value = tk.BooleanVar(
+        self.is_show_value: Final = tk.BooleanVar(
             value=self.setting["General Setting"].getboolean("is_show_value"),
         )
-        self.is_show_guide = tk.BooleanVar(
+        self.is_show_guide: Final = tk.BooleanVar(
             value=self.setting["General Setting"].getboolean("is_show_guide"),
         )
-        self.is_show_serial = tk.BooleanVar(
+        self.is_show_serial: Final = tk.BooleanVar(
             value=self.setting["General Setting"].getboolean("is_show_serial"),
         )
-        self.is_use_keyboard = tk.BooleanVar(
+        self.is_use_keyboard: Final = tk.BooleanVar(
             value=self.setting["General Setting"].getboolean("is_use_keyboard"),
         )
         try:
-            self.serial_data_format_name = tk.StringVar(
+            self.serial_data_format_name: tk.StringVar = tk.StringVar(
                 value=self.setting["General Setting"]["serial_data_format_name"],
             )
         except Exception:
             self.serial_data_format_name = tk.StringVar(value="Default")
         try:
-            self.touchscreen_start_x = int(
+            self.touchscreen_start_x: int = int(
                 self.setting["General Setting"]["touchscreen_start_x"],
             )
         except Exception:
             self.touchscreen_start_x = 1
         try:
-            self.touchscreen_start_y = int(
+            self.touchscreen_start_y: int = int(
                 self.setting["General Setting"]["touchscreen_start_y"],
             )
         except Exception:
             self.touchscreen_start_y = 1
         try:
-            self.touchscreen_end_x = int(
+            self.touchscreen_end_x: int = int(
                 self.setting["General Setting"]["touchscreen_end_x"],
             )
         except Exception:
             self.touchscreen_end_x = 320
         try:
-            self.touchscreen_end_y = int(
+            self.touchscreen_end_y: int = int(
                 self.setting["General Setting"]["touchscreen_end_y"],
             )
         except Exception:
             self.touchscreen_end_y = 240
         # Pokemon Home用の設定
-        self.season = tk.StringVar(value=self.setting["Pokemon Home"].get("Season"))
-        self.is_SingleBattle = tk.StringVar(
+        self.season: Final = tk.StringVar(
+            value=self.setting["Pokemon Home"].get("Season"),
+        )
+        self.is_SingleBattle: Final = tk.StringVar(
             value=self.setting["Pokemon Home"].get("Single or Double"),
         )
         # Shortcut用の設定
@@ -193,6 +196,7 @@ class GuiSettings:
         # default
         self.setting["General Setting"] = {
             "camera_id": 0,
+            "camera_flip": "None",
             "com_port": 0,
             "com_port_name": "",
             "baud_rate": 9600,
@@ -293,11 +297,12 @@ class GuiSettings:
             self.setting.write(file)
         os.chmod(path=self.setting_path, mode=0o660)
 
-    def save(self, path=None):
+    def save(self, path=None) -> None:
         # Some preparations are needed because tkinter related objects are not serializable.
 
         self.setting["General Setting"] = {
             "camera_id": self.camera_id.get(),
+            "camera_flip": self.camera_flip.get(),
             "com_port": self.com_port.get(),
             "com_port_name": self.com_port_name.get(),
             "baud_rate": self.baud_rate.get(),

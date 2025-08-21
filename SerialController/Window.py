@@ -85,10 +85,10 @@ class PokeControllerApp:
         self.pokeconversion: Final = Constant.VERSION
 
         self.profile: Final = profile
-        self.settings: Final = Settings.GuiSettings()
         Command.app_name = f"{Constant.NAME} ver.{Constant.VERSION}"
         Command.profilename = profile
-        FileHandler.PROFILE = profile
+
+        self.settings: Final = Settings.GuiSettings()
 
         """
         ここから

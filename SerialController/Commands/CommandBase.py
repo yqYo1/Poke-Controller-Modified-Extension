@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from Commands.Sender import Sender
     from gui.assets import CaptureArea
 
+    type TagLike = str | list[str] | None
+
 
 # CommandBaseにGUIに関連する関数を集約する。
 # print/widget/socket/mqtt関連
@@ -29,7 +31,7 @@ if TYPE_CHECKING:
 
 class Command(ABC):
     NAME: ClassVar[str]
-    TAGS: ClassVar[list[str] | str | None] = None
+    TAGS: ClassVar[TagLike] = None
 
     # __metaclass__ = ABCMeta
     text_area_1: Text | None = None

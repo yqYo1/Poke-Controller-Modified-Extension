@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import math
@@ -663,11 +662,12 @@ class KeyPress:
                         btns.remove(btn)
                     else:
                         self.holdLeftStick = btn
-                elif btn == self.holdRightStick:
-                    print(f"Warning: {btn.name} is already in holding state")
-                    btns.remove(btn)
-                else:
-                    self.holdRightStick = btn
+                elif btn.stick == Stick.RIGHT:
+                    if btn == self.holdRightStick:
+                        print(f"Warning: {btn.name} is already in holding state")
+                        btns.remove(btn)
+                    else:
+                        self.holdRightStick = btn
             elif isinstance(btn, Touchscreen):
                 if btn == self.holdTouchscreen:
                     print(f"Warning: {btn.name} is already in holding state")
@@ -701,11 +701,12 @@ class KeyPress:
                     else:
                         print(f"Warning: {btn.name} is not holding state")
                         btns.remove(btn)
-                elif btn == self.holdRightStick:
-                    self.holdLeftStick = False
-                else:
-                    print(f"Warning: {btn.name} is not holding state")
-                    btns.remove(btn)
+                elif btn.stick == Stick.RIGHT:
+                    if btn == self.holdRightStick:
+                        self.holdRightStick = False
+                    else:
+                        print(f"Warning: {btn.name} is not holding state")
+                        btns.remove(btn)
             elif isinstance(btn, Touchscreen):
                 if btn == self.holdTouchscreen:
                     self.holdTouchscreen = False

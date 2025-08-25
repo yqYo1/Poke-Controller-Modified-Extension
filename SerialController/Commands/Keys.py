@@ -620,11 +620,12 @@ class KeyPress:
                     else:
                         print(f"Warning: {btn.name} is not holding state")
                         btns.remove(btn)
-                elif btn == self.holdRightStick:
-                    self.holdLeftStick = False
-                else:
-                    print(f"Warning: {btn.name} is not holding state")
-                    btns.remove(btn)
+                elif btn.stick == Stick.RIGHT:
+                    if btn == self.holdRightStick:
+                        self.holdRightStick = False
+                    else:
+                        print(f"Warning: {btn.name} is not holding state")
+                        btns.remove(btn)
             elif isinstance(btn, Touchscreen):
                 if btn == self.holdTouchscreen:
                     self.holdTouchscreen = False

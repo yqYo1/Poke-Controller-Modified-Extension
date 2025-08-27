@@ -1,4 +1,4 @@
-#!/usr/bin/egv -S uv run python
+#!/usr/bin/env -S uv run python
 
 from __future__ import annotations
 

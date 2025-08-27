@@ -387,10 +387,10 @@ class PokeControllerApp:
         self.disconnect_com_port_button: Final = ttk.Button(self.settings_lf)
         self.disconnect_com_port_button.configure(text="Disconnect Port")
         self.disconnect_com_port_button.grid(
-            column="7",
+            column=7,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.disconnect_com_port_button.configure(command=self.inactivateSerial)
@@ -398,10 +398,10 @@ class PokeControllerApp:
         self.serial_device_name_label: Final = ttk.Label(self.settings_lf)
         self.serial_device_name_label.configure(anchor="center", text="Device Name: ")
         self.serial_device_name_label.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.serial_device_name_cb: Final = ttk.Combobox(self.settings_lf)
@@ -411,26 +411,26 @@ class PokeControllerApp:
             textvariable=self.serial_device_name,
         )
         self.serial_device_name_cb.grid(
-            column="1",
-            columnspan="6",
+            column=1,
+            columnspan=6,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.serial_device_name_cb.bind("<<ComboboxSelected>>", self.set_device, add="")
         self.scan_device_button: Final = ttk.Button(self.settings_lf)
         self.scan_device_button.configure(text="Scan Device")
         self.scan_device_button.grid(
-            column="7",
+            column=7,
             padx="10",
             pady="3",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.scan_device_button.configure(command=self.locateDeviceCmbbox)
         self.settings_lf.configure(text="Settings")
-        self.settings_lf.grid(column="0", padx="5", row="0", sticky="ew")
+        self.settings_lf.grid(column=0, padx="5", row=0, sticky="ew")
         self.serial_data_lf: Final = ttk.Labelframe(self.serial_f)
         self.serial_data_format_name_label: Final = ttk.Label(self.serial_data_lf)
         self.serial_data_format_name_label.configure(
@@ -438,10 +438,10 @@ class PokeControllerApp:
             text="Data Format: ",
         )
         self.serial_data_format_name_label.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         serial_data_format_list = ["Default", "Qingpi", "3DS Controller"]
@@ -453,10 +453,10 @@ class PokeControllerApp:
             values=serial_data_format_list,
         )
         self.serial_data_format_name_cb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.serial_data_format_name_cb.bind(
@@ -470,26 +470,26 @@ class PokeControllerApp:
             variable=self.is_show_serial,
         )
         self.show_serial_checkbox.grid(
-            column="2",
+            column=2,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.serial_data_lf.configure(height="200", text="Data", width="200")
-        self.serial_data_lf.grid(column="0", padx="5", row="1", sticky="ew")
+        self.serial_data_lf.grid(column=0, padx="5", row=1, sticky="ew")
         # self.serial_f.configure(height='200', width='200')    # removed
         self.serial_f.pack()
         self.controller_nb.add(self.serial_f, padding="5", sticky="nsew", text="Serial")
         self.manual_control_f: Final = ttk.Frame(self.controller_nb)
         self.software_lf: Final = ttk.Labelframe(self.manual_control_f)
         self.simplecon_button: Final = ttk.Button(self.software_lf)
-        self.simplecon_button.configure(text="Controller", width="15")
+        self.simplecon_button.configure(text="Controller", width=15)
         self.simplecon_button.grid(
-            column="0",
+            column=0,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.simplecon_button.configure(command=self.createControllerWindow)
@@ -500,10 +500,10 @@ class PokeControllerApp:
             variable=self.is_use_keyboard,
         )
         self.use_keyboard_checkbox.grid(
-            column="0",
+            column=0,
             padx="10",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.use_keyboard_checkbox.configure(command=self.activateKeyboard)
@@ -516,10 +516,10 @@ class PokeControllerApp:
             variable=self.camera_lf.is_use_left_stick_mouse,
         )  # modified
         self.left_stick_mouse_checkbox.grid(
-            column="1",
+            column=1,
             padx="10",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.left_stick_mouse_checkbox.configure(command=self.activate_Left_stick_mouse)
@@ -532,10 +532,10 @@ class PokeControllerApp:
             variable=self.camera_lf.is_use_right_stick_mouse,
         )  # modified
         self.right_stick_mouse_checkbox.grid(
-            column="2",
+            column=2,
             padx="10",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.right_stick_mouse_checkbox.configure(
@@ -551,10 +551,10 @@ class PokeControllerApp:
             variable=self.is_use_Pro_Controller,
         )
         self.use_pro_controller_checkbox.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.use_pro_controller_checkbox.configure(
@@ -567,17 +567,17 @@ class PokeControllerApp:
             variable=self.is_record_Pro_Controller,
         )
         self.record_pro_controller_checkbox.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.record_pro_controller_checkbox.configure(
             command=self.record_Pro_Controller,
         )
         self.hardware_lf.configure(height="200", text="Hardware", width="200")
-        self.hardware_lf.grid(column="0", padx="5", row="1", sticky="ew")
+        self.hardware_lf.grid(column=0, padx="5", row=1, sticky="ew")
         self.manual_control_f.configure(height="200", width="200")
         self.manual_control_f.pack()
         self.controller_nb.add(
@@ -585,30 +585,30 @@ class PokeControllerApp:
             padding="5",
             text="Manual Control",
         )
-        self.commands_f = ttk.Frame(self.controller_nb)
-        self.select_commands_f = ttk.Frame(self.commands_f)
-        self.command_nb = ttk.Notebook(self.select_commands_f)
-        self.py_f = ttk.Frame(self.command_nb)
-        self.command_filter_py_label = ttk.Label(self.py_f)
+        self.commands_f: Final = ttk.Frame(self.controller_nb)
+        self.select_commands_f: Final = ttk.Frame(self.commands_f)
+        self.command_nb: Final = ttk.Notebook(self.select_commands_f)
+        self.py_f: Final = ttk.Frame(self.command_nb)
+        self.command_filter_py_label: Final = ttk.Label(self.py_f)
         self.command_filter_py_label.configure(text="Filter: ")
         self.command_filter_py_label.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="4",
-            row="0",
+            row=0,
             sticky="ew",
         )
-        self.command_filter_py_cb = ttk.Combobox(self.py_f)
-        self.command_filter_py_name = tk.StringVar(value="-")
+        self.command_filter_py_cb: Final = ttk.Combobox(self.py_f)
+        self.command_filter_py_name: Final = tk.StringVar(value="-")
         self.command_filter_py_cb.configure(
             state="readonly",
             textvariable=self.command_filter_py_name,
         )
         self.command_filter_py_cb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="4",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.command_filter_py_cb.bind(
@@ -616,37 +616,37 @@ class PokeControllerApp:
             self.applyFilterPy,
             add="",
         )
-        self.py_label = ttk.Label(self.py_f)
+        self.py_label: Final = ttk.Label(self.py_f)
         self.py_label.configure(text="Command: ")
-        self.py_label.grid(column="0", padx="5", pady="4", row="1", sticky="ew")
-        self.py_cb = ttk.Combobox(self.py_f)
-        self.py_name = tk.StringVar(value="")
+        self.py_label.grid(column=0, padx="5", pady="4", row=1, sticky="ew")
+        self.py_cb: Final = ttk.Combobox(self.py_f)
+        self.py_name: Final = tk.StringVar(value="")
         self.py_cb.configure(state="readonly", textvariable=self.py_name)
-        self.py_cb.grid(column="1", padx="5", pady="4", row="1", sticky="ew")
+        self.py_cb.grid(column=1, padx="5", pady="4", row=1, sticky="ew")
         self.py_f.pack(fill="x", side="top")
         self.py_f.columnconfigure(1, weight=1)
         self.command_nb.add(self.py_f, padding="5", text="Python Command")
-        self.mcu_f = ttk.Frame(self.command_nb)
-        self.command_filter_mcu_label = ttk.Label(self.mcu_f)
+        self.mcu_f: Final = ttk.Frame(self.command_nb)
+        self.command_filter_mcu_label: Final = ttk.Label(self.mcu_f)
         self.command_filter_mcu_label.configure(text="Filter: ")
         self.command_filter_mcu_label.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="4",
-            row="0",
+            row=0,
             sticky="ew",
         )
-        self.command_filter_mcu_cb = ttk.Combobox(self.mcu_f)
-        self.command_filter_mcu_name = tk.StringVar(value="-")
+        self.command_filter_mcu_cb: Final = ttk.Combobox(self.mcu_f)
+        self.command_filter_mcu_name: Final = tk.StringVar(value="-")
         self.command_filter_mcu_cb.configure(
             state="readonly",
             textvariable=self.command_filter_mcu_name,
         )
         self.command_filter_mcu_cb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="4",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.command_filter_mcu_cb.bind(
@@ -654,17 +654,17 @@ class PokeControllerApp:
             self.applyFilterMcu,
             add="",
         )
-        self.mcu_label = ttk.Label(self.mcu_f)
+        self.mcu_label: Final = ttk.Label(self.mcu_f)
         self.mcu_label.configure(text="Command: ")
-        self.mcu_label.grid(column="0", padx="5", pady="4", row="1", sticky="ew")
-        self.mcu_cb = ttk.Combobox(self.mcu_f)
+        self.mcu_label.grid(column=0, padx="5", pady="4", row=1, sticky="ew")
+        self.mcu_cb: Final = ttk.Combobox(self.mcu_f)
         self.mcu_name = tk.StringVar(value="")
         self.mcu_cb.configure(
             state="readonly",
             textvariable=self.mcu_name,
             validate="focusin",
         )
-        self.mcu_cb.grid(column="1", padx="5", pady="4", row="1", sticky="ew")
+        self.mcu_cb.grid(column=1, padx="5", pady="4", row=1, sticky="ew")
         self.mcu_f.pack(fill="x", side="top")
         self.mcu_f.columnconfigure(1, weight=1)
         self.command_nb.add(self.mcu_f, padding="5", text="Mcu Command")
@@ -742,15 +742,15 @@ class PokeControllerApp:
         )
         self.open_command_dir_button.configure(command=self.OpenCommandDir)
         # self.select_commands_f.configure(height='200', width='200')
-        self.select_commands_f.grid(column="0", row="0", sticky="ew")
+        self.select_commands_f.grid(column=0, row=0, sticky="ew")
         self.action_commands_f = ttk.Frame(self.commands_f)
         self.set_shortcut_label = ttk.Label(self.action_commands_f)
         self.set_shortcut_label.configure(text="Set Shortcut: ")
         self.set_shortcut_label.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.set_shortcut_num_sb = ttk.Spinbox(self.action_commands_f)
@@ -764,40 +764,40 @@ class PokeControllerApp:
         self.set_shortcut_num_sb.configure(to="10", width="7")
         self.set_shortcut_num_sb.delete("0", "end")
         self.set_shortcut_num_sb.insert("0", """(select)""")
-        self.set_shortcut_num_sb.grid(column="1", row="0", sticky="ew")
+        self.set_shortcut_num_sb.grid(column=1, row=0, sticky="ew")
         self.shortcut_set_button = ttk.Button(self.action_commands_f)
         self.shortcut_set_button.configure(takefocus=False, text="Set")
         self.shortcut_set_button.grid(
-            column="2",
+            column=2,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.shortcut_set_button.configure(command=self.assignShortcutButton)
         self.commands_separator_1 = ttk.Separator(self.action_commands_f)
         self.commands_separator_1.configure(orient="vertical")
-        self.commands_separator_1.grid(column="3", pady="5", row="0", sticky="ns")
+        self.commands_separator_1.grid(column=3, pady="5", row=0, sticky="ns")
         self.reload_command_button = ttk.Button(self.action_commands_f)
         self.reload_command_button.configure(text="Reload")
         self.reload_command_button.grid(
-            column="4",
+            column=4,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.reload_command_button.configure(command=self.reloadCommands)
         self.start_button = ttk.Button(self.action_commands_f)
         self.start_button.configure(text="Start")
-        self.start_button.grid(column="5", padx="10", pady="5", row="0", sticky="ew")
+        self.start_button.grid(column=5, padx="10", pady="5", row=0, sticky="ew")
         self.start_button.configure(command=self.startPlay)
         self.pause_button = ttk.Button(self.action_commands_f)
         self.pause_button.configure(text="Pause")
-        self.pause_button.grid(column="6", padx="10", pady="5", row="0", sticky="ew")
+        self.pause_button.grid(column=6, padx="10", pady="5", row=0, sticky="ew")
         self.pause_button.configure(command=self.pausePlay)
         self.action_commands_f.configure(height="200", width="200")
-        self.action_commands_f.grid(column="0", row="1", sticky="e")
+        self.action_commands_f.grid(column=0, row=1, sticky="e")
         self.commands_f.configure(height="200", width="500")
         self.commands_f.pack(side="top")
         self.controller_nb.add(self.commands_f, padding="5", text="Commands")
@@ -812,10 +812,10 @@ class PokeControllerApp:
             variable=self.is_win_notification_start,
         )
         self.win_notification_start_checkbox.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.win_notification_start_checkbox.configure(
@@ -830,10 +830,10 @@ class PokeControllerApp:
             variable=self.is_win_notification_end,
         )
         self.win_notification_end_checkbox.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.win_notification_end_checkbox.configure(
@@ -841,14 +841,14 @@ class PokeControllerApp:
         )
         self.send_win_button = ttk.Button(self.windows_notification_lf)
         self.send_win_button.configure(text="Test")
-        self.send_win_button.grid(column="2", padx="5", pady="5", row="0", sticky="ew")
+        self.send_win_button.grid(column=2, padx="5", pady="5", row=0, sticky="ew")
         self.send_win_button.configure(command=self.sendWinNotfication)
         self.windows_notification_lf.configure(text="Windows Notification")
         self.windows_notification_lf.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.line_notification_lf = ttk.Labelframe(self.notification_f)
@@ -861,10 +861,10 @@ class PokeControllerApp:
             variable=self.is_line_notification_start,
         )
         self.line_notification_start_checkbox.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.line_notification_start_checkbox.configure(
@@ -877,10 +877,10 @@ class PokeControllerApp:
             variable=self.is_line_notification_end,
         )
         self.line_notification_end_checkbox.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="0",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.line_notification_end_checkbox.configure(
@@ -888,14 +888,14 @@ class PokeControllerApp:
         )
         self.send_line_button = ttk.Button(self.line_notification_lf)
         self.send_line_button.configure(text="Test")
-        self.send_line_button.grid(column="2", padx="5", pady="5", row="0", sticky="ew")
+        self.send_line_button.grid(column=2, padx="5", pady="5", row=0, sticky="ew")
         self.send_line_button.configure(command=self.sendLineImage)
         self.line_notification_lf.configure(text="Line Notification")
         self.line_notification_lf.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="0",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.discord_notification_lf = ttk.Labelframe(self.notification_f)
@@ -908,10 +908,10 @@ class PokeControllerApp:
             variable=self.is_discord_notification_start,
         )
         self.discord_notification_start_checkbox.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.discord_notification_start_checkbox.configure(
@@ -926,10 +926,10 @@ class PokeControllerApp:
             variable=self.is_discord_notification_end,
         )
         self.discord_notification_end_checkbox.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="0",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.discord_notification_end_checkbox.configure(
@@ -938,19 +938,19 @@ class PokeControllerApp:
         self.send_discord_button = ttk.Button(self.discord_notification_lf)
         self.send_discord_button.configure(text="Test")
         self.send_discord_button.grid(
-            column="2",
+            column=2,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.send_discord_button.configure(command=self.sendDiscordImage)
         self.discord_notification_lf.configure(text="Discord Notification")
         self.discord_notification_lf.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="0",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.notification_f.pack()
@@ -967,14 +967,14 @@ class PokeControllerApp:
             to="100",
         )
         self.area_size_scale.configure(value="50", variable=self.area_size)
-        self.area_size_scale.grid(column="0", padx="5", pady="5", row="0", sticky="ew")
+        self.area_size_scale.grid(column=0, padx="5", pady="5", row=0, sticky="ew")
         self.area_size_scale.configure(command=self.changeAreaSize)
         self.outputs_size_adjuster_lf.configure(text="Size Adjuster")
         self.outputs_size_adjuster_lf.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.outputs_stdout_dest_lf = ttk.Labelframe(self.othres_outputs_lf)
@@ -986,10 +986,10 @@ class PokeControllerApp:
             variable=self.stdout_destination,
         )
         self.stdout_destination_1_rb.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.stdout_destination_1_rb.configure(command=self.switchStdoutDestination)
@@ -1000,50 +1000,50 @@ class PokeControllerApp:
             variable=self.stdout_destination,
         )
         self.stdout_destination_2_rb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.stdout_destination_2_rb.configure(command=self.switchStdoutDestination)
         self.outputs_stdout_dest_lf.configure(text="Standard Output Destination")
         self.outputs_stdout_dest_lf.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.outputs_clear_lf = ttk.Labelframe(self.othres_outputs_lf)
         self.outputs_text_area_1_clear_button = ttk.Button(self.outputs_clear_lf)
         self.outputs_text_area_1_clear_button.configure(text="Clear(#1)")
         self.outputs_text_area_1_clear_button.grid(
-            column="0",
+            column=0,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.outputs_text_area_1_clear_button.configure(command=self.clearTextArea1)
         self.outputs_text_area_2_clear_button = ttk.Button(self.outputs_clear_lf)
         self.outputs_text_area_2_clear_button.configure(text="Clear(#2)")
         self.outputs_text_area_2_clear_button.grid(
-            column="1",
+            column=1,
             padx="10",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.outputs_text_area_2_clear_button.configure(command=self.clearTextArea2)
         self.outputs_clear_lf.configure(text="Clear Outputs")
-        self.outputs_clear_lf.grid(column="2", padx="5", pady="5", row="0", sticky="ew")
+        self.outputs_clear_lf.grid(column=2, padx="5", pady="5", row=0, sticky="ew")
         self.othres_outputs_lf.configure(
             height="200",
             text="Outputs/Dialogue Settings",
             width="200",
         )
-        self.othres_outputs_lf.grid(column="0", padx="5", row="0", sticky="ew")
+        self.othres_outputs_lf.grid(column=0, padx="5", row=0, sticky="ew")
         # self.othres_right_frame_lf = ttk.Labelframe(self.others_f)
         self.select_right_frame_widget = ttk.Labelframe(self.othres_outputs_lf)
         self.select_right_frame_widget_cb = ttk.Combobox(self.select_right_frame_widget)
@@ -1065,10 +1065,10 @@ class PokeControllerApp:
         )
         self.select_right_frame_widget_cb.configure(width="30")
         self.select_right_frame_widget_cb.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             sticky="ew",
         )
         self.select_right_frame_widget_cb.bind(
@@ -1077,10 +1077,10 @@ class PokeControllerApp:
         )
         self.select_right_frame_widget.configure(text="Widget Mode")
         self.select_right_frame_widget.grid(
-            column="0",
+            column=0,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.pos_software_controller_lf = ttk.Labelframe(self.othres_outputs_lf)
@@ -1091,7 +1091,7 @@ class PokeControllerApp:
             value="1",
             variable=self.pos_software_controller,
         )
-        self.pos_top_rb.grid(column="0", padx="5", pady="5", row="0", sticky="ew")
+        self.pos_top_rb.grid(column=0, padx="5", pady="5", row=0, sticky="ew")
         self.pos_top_rb.configure(command=self.replace_right_frame_widget)
         self.pos_bottom_rb = ttk.Radiobutton(self.pos_software_controller_lf)
         self.pos_bottom_rb.configure(
@@ -1099,14 +1099,14 @@ class PokeControllerApp:
             value="2",
             variable=self.pos_software_controller,
         )
-        self.pos_bottom_rb.grid(column="1", padx="5", pady="5", row="0", sticky="ew")
+        self.pos_bottom_rb.grid(column=1, padx="5", pady="5", row=0, sticky="ew")
         self.pos_bottom_rb.configure(command=self.replace_right_frame_widget)
         self.pos_software_controller_lf.configure(text="Software-Controller Position")
         self.pos_software_controller_lf.grid(
-            column="1",
+            column=1,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         self.pos_dialogue_buttons_lf: Final = ttk.Labelframe(self.othres_outputs_lf)
@@ -1155,10 +1155,10 @@ class PokeControllerApp:
         self.pos_dialogue_both_rb.configure(command=self.change_buttons_position)
         self.pos_dialogue_buttons_lf.configure(text="Dialogue OK/Cancel Position")
         self.pos_dialogue_buttons_lf.grid(
-            column="2",
+            column=2,
             padx="5",
             pady="5",
-            row="1",
+            row=1,
             sticky="ew",
         )
         # self.othres_right_frame_lf.grid(column='1', padx='5', row='1', sticky='ew')
@@ -1172,7 +1172,7 @@ class PokeControllerApp:
             self.controller_nb.configure(height="150")
         else:
             self.controller_nb.configure(height="180")
-        self.controller_nb.grid(column="0", padx="5", pady="5", row="1", sticky="ew")
+        self.controller_nb.grid(column=0, padx="5", pady="5", row=1, sticky="ew")
         self.output_area_f = ttk.Frame(self.main_frame)
         self.text_scroll_1 = ttk.LabelFrame(self.output_area_f, relief=tk.GROOVE)
         self.text_scroll_1.configure(text="Output#1")
@@ -1235,10 +1235,10 @@ class PokeControllerApp:
             side="top",
         )
         self.output_area_f.grid(
-            column="3",
+            column=3,
             padx="5",
             pady="5",
-            row="0",
+            row=0,
             rowspan="2",
             sticky="nsew",
         )
@@ -1877,9 +1877,9 @@ class PokeControllerApp:
         )
         self.preview.config(cursor="crosshair")
         self.preview.grid(
-            column="0",
-            columnspan="7",
-            row="2",
+            column=0,
+            columnspan=7,
+            row=2,
             padx="5",
             pady="5",
             sticky=tk.NSEW,

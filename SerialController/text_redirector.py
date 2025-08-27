@@ -21,8 +21,8 @@ class TextRedirector:
         self.text_widget.after(self.interval, self._drain)
         self.always_atutoscroll: bool = always_atutoscroll
 
-    def write(self, text: str) -> None:
-        self.q.put(text)
+    def write(self, string: str) -> None:
+        self.q.put(string)
 
     def flush(self) -> None:
         pass

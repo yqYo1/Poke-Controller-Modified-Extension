@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from Commands.Sender import Sender
     from gui.assets import CaptureArea
+    from text_redirector import TextRedirector
 
     type TagLike = str | list[str] | None
 
@@ -34,8 +35,10 @@ class Command(ABC):
     TAGS: ClassVar[TagLike] = None
 
     # __metaclass__ = ABCMeta
-    text_area_1: Text | None = None
-    text_area_2: Text | None = None
+    text_area_1: ClassVar[Text]
+    text_area_2: ClassVar[Text]
+    text_redirector1: ClassVar[TextRedirector]
+    text_redirector2: ClassVar[TextRedirector]
     stdout_destination: str = "1"
     pos_dialogue_buttons: Literal[1, 2, 3] = 2
     isPause: bool = False
@@ -74,21 +77,17 @@ class Command(ABC):
     #     pass
 
     ############### print functions ###############
-    def print_s(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
-        print(*objects, sep=sep, end=end)
-
     def print_t1(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         上側のログ画面に文字列を出力する
         """
-        if self.text_area_1 is None:
-            return
         try:
-            txt = sep.join([str(obj) for obj in objects]) + end
-            self.text_area_1.config(state="normal")
-            self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disabled")
-            self.text_area_1.see("end")
+            # txt = sep.join([str(obj) for obj in objects]) + end
+            # self.text_area_1.config(state="normal")
+            # self.text_area_1.insert("end", txt)
+            # self.text_area_1.config(state="disabled")
+            # self.text_area_1.see("end")
+            print(*objects, sep=sep, end=end, file=self.text_redirector1)
         except Exception:
             print(*objects, sep=sep, end=end)
 
@@ -96,14 +95,13 @@ class Command(ABC):
         """
         下側のログ画面に文字列を出力する
         """
-        if self.text_area_2 is None:
-            return
         try:
-            txt = sep.join([str(obj) for obj in objects]) + end
-            self.text_area_2.config(state="normal")
-            self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disabled")
-            self.text_area_2.see("end")
+            # txt = sep.join([str(obj) for obj in objects]) + end
+            # self.text_area_2.config(state="normal")
+            # self.text_area_2.insert("end", txt)
+            # self.text_area_2.config(state="disabled")
+            # self.text_area_2.see("end")
+            print(*objects, sep=sep, end=end, file=self.text_redirector2)
         except Exception:
             print(*objects, sep=sep, end=end)
 
@@ -116,14 +114,17 @@ class Command(ABC):
         elif self.stdout_destination == "2":
             self.print_t1(*objects, sep=sep, end=end)
 
+    def print_s(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
+        """
+        標準出力先として割り当てられている方のログ画面に文字列を出力する
+        """
+        print(*objects, sep=sep, end=end)
+
     def print_ts(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
         """
         標準出力先として割り当てられている方のログ画面に文字列を出力する
         """
-        if self.stdout_destination == "1":
-            self.print_t1(*objects, sep=sep, end=end)
-        elif self.stdout_destination == "2":
-            self.print_t2(*objects, sep=sep, end=end)
+        print(*objects, sep=sep, end=end)
 
     def print_t1b(
         self,
@@ -136,8 +137,6 @@ class Command(ABC):
         上側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
-        if self.text_area_1 is None:
-            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_1.config(state="normal")
@@ -163,8 +162,6 @@ class Command(ABC):
         下側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
-        if self.text_area_2 is None:
-            return
         try:
             txt = sep.join([str(obj) for obj in objects]) + end
             self.text_area_2.config(state="normal")

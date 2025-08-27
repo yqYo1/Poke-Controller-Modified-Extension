@@ -1643,9 +1643,13 @@ class PokeControllerApp:
         # sys.stdout = StdoutRedirector(self.text_area_1)
         # sys.stdout = StdoutRedirector(self.text_area_2)
 
+        self.text_redirector1: Final = TextRedirector(self.text_area_1)
+        self.text_redirector2: Final = TextRedirector(self.text_area_2)
         # ログ画面に自動化スクリプトからアクセスできるようにする。
         Command.text_area_1 = self.text_area_1
         Command.text_area_2 = self.text_area_2
+        Command.text_redirector1 = self.text_redirector1
+        Command.text_redirector2 = self.text_redirector2
 
         # 初期表示を出力
         # self.text_area_1.config(state='normal')
@@ -3040,13 +3044,13 @@ class PokeControllerApp:
     def switchStdoutDestination(self) -> None:
         val = self.stdout_destination.get()
         if val == "1":
-            sys.stdout = TextRedirector(self.text_area_1)
+            sys.stdout = self.text_redirector1
             print("standard output destination is switched.")
             Command.stdout_destination = val
             self.text_scroll_1.configure(text="Output#1 (Stdout)")
             self.text_scroll_2.configure(text="Output#2")
         elif val == "2":
-            sys.stdout = TextRedirector(self.text_area_2)
+            sys.stdout = self.text_redirector2
             print("standard output destination is switched.")
             Command.stdout_destination = val
             self.text_scroll_1.configure(text="Output#1")

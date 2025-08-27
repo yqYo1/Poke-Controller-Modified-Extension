@@ -1,11 +1,10 @@
-#!/usr/bin/env -S uv run python
+#!/usr/bin/egv -S uv run python
 
 from __future__ import annotations
 
 import argparse
 import os
 import platform
-import queue
 import re
 import subprocess
 import sys
@@ -44,11 +43,13 @@ from gui.assets import CaptureArea
 from gui.controller import ControllerGUI
 from Keyboard import SwitchKeyboardController
 from KeyConfig import PokeKeycon
-from LineNotify import Line_Notify
 from Menubar import PokeController_Menubar
+from text_redirector import TextRedirector
 
 if TYPE_CHECKING:
     from typing import Final
+
+    from cv2.typing import MatLike
 
 addpath = dirname(abspath(__file__))  # SerialControllerフォルダのパス
 sys.path.append(addpath)
@@ -88,6 +89,7 @@ class PokeControllerApp:
         self.profile: Final = profile
         Command.app_name = f"{Constant.NAME} ver.{Constant.VERSION}"
         Command.profilename = profile
+        FileHandler.PROFILE = profile
 
         self.settings: Final = Settings.GuiSettings()
 
@@ -674,60 +676,60 @@ class PokeControllerApp:
         self.shortcut_button_1 = ttk.Button(self.shortcut1_f)
         self.shortcut_1 = tk.StringVar(value="Shortcut(1)")
         self.shortcut_button_1.configure(textvariable=self.shortcut_1, width="7")
-        self.shortcut_button_1.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_1.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_1.configure(command=lambda: self.startShortcutPlay(num=1))
         self.shortcut_button_2 = ttk.Button(self.shortcut1_f)
         self.shortcut_2 = tk.StringVar(value="Shortcut(2)")
         self.shortcut_button_2.configure(textvariable=self.shortcut_2, width="7")
-        self.shortcut_button_2.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_2.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_2.configure(command=lambda: self.startShortcutPlay(num=2))
         self.shortcut_button_3 = ttk.Button(self.shortcut1_f)
         self.shortcut_3 = tk.StringVar(value="Shortcut(3)")
         self.shortcut_button_3.configure(textvariable=self.shortcut_3, width="7")
-        self.shortcut_button_3.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_3.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_3.configure(command=lambda: self.startShortcutPlay(num=3))
         self.shortcut_button_4 = ttk.Button(self.shortcut1_f)
         self.shortcut_4 = tk.StringVar(value="Shortcut(4)")
         self.shortcut_button_4.configure(textvariable=self.shortcut_4, width="7")
-        self.shortcut_button_4.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_4.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_4.configure(command=lambda: self.startShortcutPlay(num=4))
         self.shortcut_button_5 = ttk.Button(self.shortcut1_f)
         self.shortcut_5 = tk.StringVar(value="Shortcut(5)")
         self.shortcut_button_5.configure(textvariable=self.shortcut_5, width="7")
-        self.shortcut_button_5.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_5.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_5.configure(command=lambda: self.startShortcutPlay(num=5))
         self.shortcut1_f.configure(padding="2")
-        self.shortcut1_f.pack(side="top", expand="true", fill="both")
+        self.shortcut1_f.pack(side="top", expand=True, fill="both")
         self.shortcut2_f = ttk.Frame(self.shortcut_f)
         self.shortcut_button_6 = ttk.Button(self.shortcut2_f)
         self.shortcut_6 = tk.StringVar(value="Shortcut(6)")
         self.shortcut_button_6.configure(textvariable=self.shortcut_6, width="7")
-        self.shortcut_button_6.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_6.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_6.configure(command=lambda: self.startShortcutPlay(num=6))
         self.shortcut_button_7 = ttk.Button(self.shortcut2_f)
         self.shortcut_7 = tk.StringVar(value="Shortcut(7)")
         self.shortcut_button_7.configure(textvariable=self.shortcut_7, width="7")
-        self.shortcut_button_7.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_7.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_7.configure(command=lambda: self.startShortcutPlay(num=7))
         self.shortcut_button_8 = ttk.Button(self.shortcut2_f)
         self.shortcut_8 = tk.StringVar(value="Shortcut(8)")
         self.shortcut_button_8.configure(textvariable=self.shortcut_8, width="7")
-        self.shortcut_button_8.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_8.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_8.configure(command=lambda: self.startShortcutPlay(num=8))
         self.shortcut_button_9 = ttk.Button(self.shortcut2_f)
         self.shortcut_9 = tk.StringVar(value="Shortcut(9)")
         self.shortcut_button_9.configure(textvariable=self.shortcut_9, width="7")
-        self.shortcut_button_9.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_9.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_9.configure(command=lambda: self.startShortcutPlay(num=9))
         self.shortcut_button_10 = ttk.Button(self.shortcut2_f)
         self.shortcut_10 = tk.StringVar(value="Shortcut(10)")
         self.shortcut_button_10.configure(textvariable=self.shortcut_10, width="7")
-        self.shortcut_button_10.pack(expand="true", fill="both", padx="5", side="left")
+        self.shortcut_button_10.pack(expand=True, fill="both", padx="5", side="left")
         self.shortcut_button_10.configure(
             command=lambda: self.startShortcutPlay(num=10),
         )
         self.shortcut2_f.configure(padding="2")
-        self.shortcut2_f.pack(side="top", expand="true", fill="both")
+        self.shortcut2_f.pack(side="top", expand=True, fill="both")
         self.command_nb.add(self.shortcut_f, padding="5", text="Shortcut")
         self.command_nb.configure(padding="0", width="580")
         self.command_nb.pack(padx="5", pady="5", side="left")
@@ -1197,9 +1199,9 @@ class PokeControllerApp:
         )
         self.yscroll_1.pack(side="right", fill="y", padx=(0, 5), pady="5")
         self.text_area_1["yscrollcommand"] = self.yscroll_1.set
-        self.text_area_1.pack(expand="true", fill="both", padx=(5, 0), pady="5")
+        self.text_area_1.pack(expand=True, fill="both", padx=(5, 0), pady="5")
         self.text_scroll_1.pack(
-            expand="true",
+            expand=True,
             fill="both",
             padx="0",
             pady="0",
@@ -1227,9 +1229,9 @@ class PokeControllerApp:
         )
         self.yscroll_2.pack(side="right", fill="y", padx=(0, 5), pady="5")
         self.text_area_2["yscrollcommand"] = self.yscroll_2.set
-        self.text_area_2.pack(expand="true", fill="both", padx=(5, 0), pady="5")
+        self.text_area_2.pack(expand=True, fill="both", padx=(5, 0), pady="5")
         self.text_scroll_2.pack(
-            expand="true",
+            expand=True,
             fill="both",
             padx="0",
             pady="0",
@@ -1361,7 +1363,7 @@ class PokeControllerApp:
         )
         self.softcon_frame.grid_anchor("center")
         self.main_frame.config(height="720", padding="5", relief="flat", width="1280")
-        self.main_frame.pack(expand="true", fill="both", side="top")
+        self.main_frame.pack(expand=True, fill="both", side="top")
         self.main_frame.columnconfigure("3", weight="1")
         """
         ここまで
@@ -2127,7 +2129,7 @@ class PokeControllerApp:
         )
 
         # Main widget
-        self.mainwindow = self.main_frame
+        self.mainwindow: Final = self.main_frame
 
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
         self.preview.startCapture()
@@ -2144,7 +2146,7 @@ class PokeControllerApp:
     def openCamera(self) -> None:
         self.camera.openCamera(self.camera_id.get())
 
-    def assignCamera(self, event) -> None:
+    def assignCamera(self, event: tk.Event) -> None:  # noqa: ARG002
         if platform.system() != "Linux":
             self.camera_name_fromDLL.set(self.camera_dic[self.camera_id.get()])
 
@@ -2244,19 +2246,20 @@ class PokeControllerApp:
             print('"plyer" is not installed.')
 
     def sendLineImage(self) -> None:
-        def sendMessage(src) -> None:
-            try:
-                Line = Line_Notify()
-                Line.send_message("---Manual---", src, "token")
-            except Exception:
-                pass
-
-        src = self.camera.readFrame()
-        thread = threading.Thread(target=sendMessage, args=(src,))
-        thread.start()
+        self._logger.info("Line Notify is EOL")
+        # def sendMessage(src:) -> None:
+        #     try:
+        #         Line = Line_Notify()
+        #         Line.send_message("---Manual---", src, "token")
+        #     except Exception:
+        #         pass
+        #
+        # src = self.camera.readFrame()
+        # thread = threading.Thread(target=sendMessage, args=(src,))
+        # thread.start()
 
     def sendDiscordImage(self) -> None:
-        def sendMessage(src) -> None:
+        def sendMessage(src: MatLike) -> None:
             Discord = Discord_Notify()
             Discord.send_message(notification_message="---Manual---", image=src)
 
@@ -2309,11 +2312,11 @@ class PokeControllerApp:
             self.baud_rate.set("9600")
         self.activateSerial()
 
-    def applyFps(self, event: tk.Event) -> None:
+    def applyFps(self, event: tk.Event) -> None:  # noqa : ARG002
         print(f"changed FPS to: {self.fps.get()} [fps]")
         self.preview.setFps(self.fps.get())
 
-    def applyFlip(self, event: tk.Event | None = None) -> None:
+    def applyFlip(self, event: tk.Event | None = None) -> None:  # noqa : ARG002
         selected = self.camera_flip.get()
         print(f"changed Flip to: {selected}")
         self.camera.set_flip(selected)
@@ -2321,7 +2324,7 @@ class PokeControllerApp:
     def applyBaudRate(self, event: tk.Event) -> None:
         pass
 
-    def applyWindowSize(self, event: tk.Event) -> None:
+    def applyWindowSize(self, event: tk.Event) -> None:  # noqa : ARG002
         width, height = map(int, self.show_size.get().split("x"))
         self.preview.setShowsize(height, width)
         self.changeAreaSize()
@@ -2801,7 +2804,7 @@ class PokeControllerApp:
         self.shortcut_button_10["state"] = "disabled"
         self.pause_button["state"] = "normal"
 
-    def startShortcutPlay(self, event: tk.Event, num: int = 0) -> None:
+    def startShortcutPlay(self, event: tk.Event, num: int = 0) -> None:  # noqa: ARG002
         if self.cur_command is None:
             print("No commands have been assigned yet.")
             self._logger.info("No commands have been assigned yet.")
@@ -2980,17 +2983,17 @@ class PokeControllerApp:
     def loadSettings(self) -> None:
         self.settings.load()
 
-    def ReloadCommandWithF5(self, *event) -> None:
+    def ReloadCommandWithF5(self, *event) -> None:  # noqa:  ARG002
         self.reloadCommands()
 
-    def StartCommandWithF6(self, *event) -> None:
+    def StartCommandWithF6(self, *event) -> None:  # noqa:  ARG002
         if self.start_button["text"] == "Stop":
             print("Command is now working!")
             self._logger.debug("Command is now working!")
         elif self.start_button["text"] == "Start":
             self.startPlay()
 
-    def StopCommandWithEsc(self, *event) -> None:
+    def StopCommandWithEsc(self, *event) -> None:  # noqa:  ARG002
         if self.start_button["text"] == "Stop":
             self.stopPlay()
 
@@ -3008,7 +3011,7 @@ class PokeControllerApp:
         self.clearTextArea1()
         self.clearTextArea2()
 
-    def changeAreaSize(self, *event) -> None:
+    def changeAreaSize(self, event: tk.Event | None = None) -> None:  # noqa:  ARG002
         _, height = map(int, self.show_size.get().split("x"))
         max_size = 0.075 * height
         mode = self.right_frame_widget_mode.get()
@@ -3037,19 +3040,19 @@ class PokeControllerApp:
     def switchStdoutDestination(self) -> None:
         val = self.stdout_destination.get()
         if val == "1":
-            sys.stdout = StdoutRedirector(self.text_area_1)
+            sys.stdout = TextRedirector(self.text_area_1)
             print("standard output destination is switched.")
             Command.stdout_destination = val
             self.text_scroll_1.configure(text="Output#1 (Stdout)")
             self.text_scroll_2.configure(text="Output#2")
         elif val == "2":
-            sys.stdout = StdoutRedirector(self.text_area_2)
+            sys.stdout = TextRedirector(self.text_area_2)
             print("standard output destination is switched.")
             Command.stdout_destination = val
             self.text_scroll_1.configure(text="Output#1")
             self.text_scroll_2.configure(text="Output#2 (Stdout)")
 
-    def replace_right_frame_widget(self, *event) -> None:
+    def replace_right_frame_widget(self, *event) -> None:  # noqa:  ARG002
         with contextlib.suppress(Exception):
             self.text_scroll_1.pack_forget()
         with contextlib.suppress(Exception):
@@ -3063,7 +3066,7 @@ class PokeControllerApp:
             mode == "ALL (default)" or "Controller" in mode
         ):
             self.softcon_frame.pack(
-                expand="true",
+                expand=True,
                 fill="both",
                 padx="0",
                 pady="0",
@@ -3073,7 +3076,7 @@ class PokeControllerApp:
 
         if mode == "ALL (default)" or "#1" in mode:
             self.text_scroll_1.pack(
-                expand="true",
+                expand=True,
                 fill="both",
                 padx="0",
                 pady="0",
@@ -3081,7 +3084,7 @@ class PokeControllerApp:
             )
         if mode == "ALL (default)" or "#2" in mode:
             self.text_scroll_2.pack(
-                expand="true",
+                expand=True,
                 fill="both",
                 padx="0",
                 pady="0",
@@ -3092,7 +3095,7 @@ class PokeControllerApp:
             mode == "ALL (default)" or "Controller" in mode
         ):
             self.softcon_frame.pack(
-                expand="true",
+                expand=True,
                 fill="both",
                 padx="0",
                 pady="0",
@@ -3171,30 +3174,30 @@ class ToolTip:
         self.id = None
         self.tw = None
 
-    def moveCursor(self, event) -> None:
-        id = self.id
+    def moveCursor(self, event: tk.Event) -> None:  # noqa: ARG002
+        id_ = self.id
         self.id = None
-        if id:
-            self.widget.after_cancel(id)
+        if id_:
+            self.widget.after_cancel(id_)
         if not self.tw:
-            id = self.id
+            id_ = self.id
             self.id = None
-            if id:
-                self.widget.after_cancel(id)
+            if id_:
+                self.widget.after_cancel(id_)
             self.id = self.widget.after(300, self.createTooltip)
 
-    def leaveCursor(self, event) -> None:
-        id = self.id
+    def leaveCursor(self, event: tk.Event) -> None:  # noqa:  ARG002
+        id_ = self.id
         self.id = None
-        if id:
-            self.widget.after_cancel(id)
+        if id_:
+            self.widget.after_cancel(id_)
         self.id = self.widget.after(300, self.destroyTooltip)
 
     def createTooltip(self) -> None:
-        id = self.id
+        id_ = self.id
         self.id = None
-        if id:
-            self.widget.after_cancel(id)
+        if id_:
+            self.widget.after_cancel(id_)
         x, y = self.widget.winfo_pointerxy()
         self.tw = tk.Toplevel(self.widget)
         self.tw.wm_overrideredirect(True)
@@ -3214,51 +3217,6 @@ class ToolTip:
         self.tw = None
         if tw:
             tw.destroy()
-
-
-class StdoutRedirector:
-    def __init__(
-        self,
-        text_widget: tk.Text,
-        interval_ms: int = 50,
-        always_atutoscroll: bool = False,
-    ) -> None:
-        self.q: queue.Queue[str] = queue.Queue()
-        self.interval: Final = interval_ms
-        self.text_widget: Final = text_widget
-        self.text_widget.after(self.interval, self._drain)
-        self.always_atutoscroll: bool = always_atutoscroll
-
-    def write(self, text: str) -> None:
-        self.q.put(text)
-
-    def flush(self) -> None:
-        pass
-
-    def _should_scroll(self) -> bool:
-        if self.always_atutoscroll:
-            return True
-        return self._is_at_bottom()
-
-    def _is_at_bottom(self) -> bool:
-        _, last = self.text_widget.yview()  # pyright:ignore[reportUnknownMemberType]
-        return abs(last - 1.0) < 1e-3
-
-    def _drain(self) -> None:
-        buf: list[str] = []
-        try:
-            while True:
-                buf.append(self.q.get_nowait())
-        except queue.Empty:
-            pass
-        if buf:
-            do_scroll = self._should_scroll()
-            self.text_widget.configure(state="normal")
-            self.text_widget.insert("end", "".join(buf))
-            self.text_widget.configure(state="disabled")
-            if do_scroll:
-                self.text_widget.yview("end")  # pyright:ignore[reportUnknownMemberType]
-        self.text_widget.after(self.interval, self._drain)
 
 
 if __name__ == "__main__":

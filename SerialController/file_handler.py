@@ -5,10 +5,9 @@ import threading
 from functools import cache
 from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
-from Commands.CommandBase import Command
 
 if TYPE_CHECKING:
-    from typing import Final, Self
+    from typing import ClassVar, Final, Self
 
 IS_COMPILED: Final[bool] = "__compiled__" in globals()
 
@@ -23,6 +22,7 @@ class FileHandler:
     _instance: Self | None = None
     _lock: threading.Lock = threading.Lock()
     BASE_PATH: Final[str] = _get_base_path()
+    PROFILE: ClassVar[str] = "default"
     _logger: Final = getLogger(__name__)
     _logger.addHandler(NullHandler())
     _logger.setLevel(DEBUG)
@@ -61,7 +61,7 @@ class FileHandler:
         profile_path = os.path.join(
             FileHandler.BASE_PATH,
             "profiles",
-            Command.profilename,
+            FileHandler.PROFILE,
         )
         if not os.path.exists(profile_path):
             os.makedirs(profile_path, mode=0o755, exist_ok=False)
@@ -70,13 +70,3 @@ class FileHandler:
             msg = f"{profile_path} is a file, not a directory.\n"
             raise FileExistsError(msg)
         return profile_path
-
-    # @staticmethod
-    # @cache
-    # def get_commands_path() -> str:
-    #     """
-    #     Returns the absolute path to the commands directory.
-    #     """
-    #     return os.path.realpath(
-    #         os.path.join(FileHandler.BASE_PATH, "Commands/PythonCommands"),
-    #     )

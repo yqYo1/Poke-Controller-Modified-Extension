@@ -1,14 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import configparser
-import requests
-import cv2
 import io
 import os
+from logging import DEBUG, NullHandler, getLogger
+
+import cv2
+import requests
 from PIL import Image
-from logging import getLogger, DEBUG, NullHandler
 
 
 def convert_bgr_to_bytes(image_bgr):
@@ -18,13 +17,17 @@ def convert_bgr_to_bytes(image_bgr):
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     image = Image.fromarray(image_rgb)
     png = io.BytesIO()  # 空のio.BytesIOオブジェクトを用意
-    image.save(png, format="png")  # 空のio.BytesIOオブジェクトにpngファイルとして書き込み
+    image.save(
+        png, format="png"
+    )  # 空のio.BytesIOオブジェクトにpngファイルとして書き込み
     b_frame = png.getvalue()  # io.BytesIOオブジェクトをbytes形式で読みとり
     return b_frame
 
 
 class Line_Notify:
-    LINE_TOKEN_PATH = os.path.join(os.path.dirname(__file__), "profiles", "default", "line_token.ini")
+    LINE_TOKEN_PATH = os.path.join(
+        os.path.dirname(__file__), "profiles", "default", "line_token.ini"
+    )
 
     def __init__(self, token_name="token"):
         self._logger = getLogger(__name__)
@@ -33,13 +36,23 @@ class Line_Notify:
         self._logger.propagate = True
 
         self.res = None
-        self.token_file = configparser.ConfigParser(comment_prefixes="#", allow_no_value=True)
+        self.token_file = configparser.ConfigParser(
+            comment_prefixes="#", allow_no_value=True
+        )
         self.open_file_with_utf8()
-        self.token_list = {key: self.token_file["LINE"][key] for key in self.token_file["LINE"]}
+        self.token_list = {
+            key: self.token_file["LINE"][key] for key in self.token_file["LINE"]
+        }
         self.token_num = len(self.token_list)
         # self.line_notify_token = self.token_file['LINE'][token_name]
-        self.headers = [{"Authorization": f"Bearer {token}"} for key, token in self.token_list.items()]
-        self.res = [requests.get("https://notify-api.line.me/api/status", headers=head) for head in self.headers]
+        self.headers = [
+            {"Authorization": f"Bearer {token}"}
+            for key, token in self.token_list.items()
+        ]
+        self.res = [
+            requests.get("https://notify-api.line.me/api/status", headers=head)
+            for head in self.headers
+        ]
         self.status = [responses.status_code for responses in self.res]
         self.chk_token_json = [responses.json() for responses in self.res]
 
@@ -100,7 +113,9 @@ class Line_Notify:
 
             # 何故か画像のみの送信はできなかった。
             if files is not None:  # テキストと画像
-                self.res = requests.post(line_notify_api, headers=headers, params=data, files=files)
+                self.res = requests.post(
+                    line_notify_api, headers=headers, params=data, files=files
+                )
                 send_data_type = "テキスト・画像"
                 send_data_type_eng = "image with text"
             else:  # テキスト
@@ -123,20 +138,38 @@ class Line_Notify:
             for i in range(self.token_num):
                 print(f"For: {list(self.token_list.keys())[i]}")
                 print("X-RateLimit-Limit: " + self.res[i].headers["X-RateLimit-Limit"])
-                print("X-RateLimit-ImageLimit: " + self.res[i].headers["X-RateLimit-ImageLimit"])
-                print("X-RateLimit-Remaining: " + self.res[i].headers["X-RateLimit-Remaining"])
-                print("X-RateLimit-ImageRemaining: " + self.res[i].headers["X-RateLimit-ImageRemaining"])
+                print(
+                    "X-RateLimit-ImageLimit: "
+                    + self.res[i].headers["X-RateLimit-ImageLimit"]
+                )
+                print(
+                    "X-RateLimit-Remaining: "
+                    + self.res[i].headers["X-RateLimit-Remaining"]
+                )
+                print(
+                    "X-RateLimit-ImageRemaining: "
+                    + self.res[i].headers["X-RateLimit-ImageRemaining"]
+                )
                 import datetime
 
                 dt = datetime.datetime.fromtimestamp(
-                    int(self.res[i].headers["X-RateLimit-Reset"]), datetime.timezone(datetime.timedelta(hours=9))
+                    int(self.res[i].headers["X-RateLimit-Reset"]),
+                    datetime.timezone(datetime.timedelta(hours=9)),
                 )
                 print("Reset time:", dt, "\n")
 
-                self._logger.info(f"LINE API - Limit: {self.res[i].headers['X-RateLimit-Limit']}")
-                self._logger.info(f"LINE API - Remaining: {self.res[i].headers['X-RateLimit-Remaining']}")
-                self._logger.info(f"LINE API - ImageLimit: {self.res[i].headers['X-RateLimit-Limit']}")
-                self._logger.info(f"LINE API - ImageRemaining: {self.res[i].headers['X-RateLimit-ImageRemaining']}")
+                self._logger.info(
+                    f"LINE API - Limit: {self.res[i].headers['X-RateLimit-Limit']}"
+                )
+                self._logger.info(
+                    f"LINE API - Remaining: {self.res[i].headers['X-RateLimit-Remaining']}"
+                )
+                self._logger.info(
+                    f"LINE API - ImageLimit: {self.res[i].headers['X-RateLimit-Limit']}"
+                )
+                self._logger.info(
+                    f"LINE API - ImageRemaining: {self.res[i].headers['X-RateLimit-ImageRemaining']}"
+                )
                 self._logger.info(f"Reset time: {dt}")
         except AttributeError as e:
             self._logger.error(e)

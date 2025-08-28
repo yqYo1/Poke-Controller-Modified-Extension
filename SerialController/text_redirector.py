@@ -58,5 +58,5 @@ class TextRedirector:
             self.text_widget.configure(state="disabled")
             if do_scroll:
                 self.text_widget.yview("end")  # pyright:ignore[reportUnknownMemberType]
-        self.text_widget.update()
+            self.text_widget.update_idletasks()
         self.text_widget.after(self.interval, self._drain)

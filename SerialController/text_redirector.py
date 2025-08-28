@@ -27,14 +27,14 @@ class TextRedirector:
     def flush(self) -> None:
         pass
 
+    def _is_at_bottom(self) -> bool:
+        _, last = self.text_widget.yview()  # pyright:ignore[reportUnknownMemberType]
+        return abs(last - 1.0) < 1e-3
+
     def _should_scroll(self) -> bool:
         if self.always_atutoscroll:
             return True
         return self._is_at_bottom()
-
-    def _is_at_bottom(self) -> bool:
-        _, last = self.text_widget.yview()  # pyright:ignore[reportUnknownMemberType]
-        return abs(last - 1.0) < 1e-3
 
     def _drain(self) -> None:
         buf: list[str] = []
@@ -46,8 +46,17 @@ class TextRedirector:
         if buf:
             do_scroll = self._should_scroll()
             self.text_widget.configure(state="normal")
-            self.text_widget.insert("end", "".join(buf))
+
+            s = "".join(buf).replace("\r\n", "\n")
+            parts = s.split("\r")
+            if parts[0]:
+                self.text_widget.insert("end", parts[0])
+            for seg in parts[1:]:
+                self.text_widget.delete("end-1c linestart", "end-1c")
+                self.text_widget.insert("end", seg)
+
             self.text_widget.configure(state="disabled")
             if do_scroll:
                 self.text_widget.yview("end")  # pyright:ignore[reportUnknownMemberType]
+        self.text_widget.update()
         self.text_widget.after(self.interval, self._drain)

@@ -15,14 +15,17 @@ class TextRedirector:
         interval_ms: int = 50,
         always_atutoscroll: bool = False,
     ) -> None:
-        self.q: queue.Queue[str] = queue.Queue()
+        self.q: queue.Queue[tuple[bool, str]] = queue.Queue()
         self.interval: Final = interval_ms
         self.text_widget: Final = text_widget
         self.text_widget.after(self.interval, self._drain)
         self.always_atutoscroll: bool = always_atutoscroll
 
-    def write(self, string: str) -> None:
-        self.q.put(string)
+    def write(self, string: str, clear: bool = False) -> None:
+        if clear:
+            self.q = queue.Queue()
+
+        self.q.put((clear, string))
 
     def flush(self) -> None:
         pass
@@ -37,17 +40,21 @@ class TextRedirector:
         return self._is_at_bottom()
 
     def _drain(self) -> None:
-        buf: list[str] = []
+        buf: list[tuple[bool, str]] = []
         try:
             while True:
                 buf.append(self.q.get_nowait())
         except queue.Empty:
             pass
-        if buf:
+        buf_s = [i[1] for i in buf]
+        if buf_s:
             do_scroll = self._should_scroll()
             self.text_widget.configure(state="normal")
 
-            s = "".join(buf).replace("\r\n", "\n")
+            if buf[0][0]:
+                self.text_widget.delete("1.0", "end")
+
+            s = "".join(buf_s).replace("\r\n", "\n")
             parts = s.split("\r")
             if parts[0]:
                 self.text_widget.insert("end", parts[0])

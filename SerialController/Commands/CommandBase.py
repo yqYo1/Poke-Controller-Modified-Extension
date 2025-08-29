@@ -82,11 +82,6 @@ class Command(ABC):
         上側のログ画面に文字列を出力する
         """
         try:
-            # txt = sep.join([str(obj) for obj in objects]) + end
-            # self.text_area_1.config(state="normal")
-            # self.text_area_1.insert("end", txt)
-            # self.text_area_1.config(state="disabled")
-            # self.text_area_1.see("end")
             print(*objects, sep=sep, end=end, file=self.text_redirector1)
         except Exception:
             print(*objects, sep=sep, end=end)
@@ -96,11 +91,6 @@ class Command(ABC):
         下側のログ画面に文字列を出力する
         """
         try:
-            # txt = sep.join([str(obj) for obj in objects]) + end
-            # self.text_area_2.config(state="normal")
-            # self.text_area_2.insert("end", txt)
-            # self.text_area_2.config(state="disabled")
-            # self.text_area_2.see("end")
             print(*objects, sep=sep, end=end, file=self.text_redirector2)
         except Exception:
             print(*objects, sep=sep, end=end)
@@ -137,19 +127,10 @@ class Command(ABC):
         上側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
-        try:
-            txt = sep.join([str(obj) for obj in objects]) + end
-            self.text_area_1.config(state="normal")
-            if mode in ["w", "d"]:
-                self.text_area_1.delete("1.0", "end")
-            if mode == "w":
-                self.text_area_1.insert("1.0", txt)
-            elif mode == "a":
-                self.text_area_1.insert("end", txt)
-            self.text_area_1.config(state="disabled")
-            self.text_area_1.see("end")
-        except Exception:
-            print(*objects, sep=sep, end=end)
+        text = "" if mode == "d" else sep.join([str(obj) for obj in objects]) + end
+        clear = mode != "a"
+
+        self.text_redirector1.write(text, clear)
 
     def print_t2b(
         self,
@@ -162,19 +143,10 @@ class Command(ABC):
         下側のログ画面に文字列を出力する
         mode: ['w'/'a'/'d'] 'w'上書き, 'a'追記, 'd'削除
         """
-        try:
-            txt = sep.join([str(obj) for obj in objects]) + end
-            self.text_area_2.config(state="normal")
-            if mode in ["w", "d"]:
-                self.text_area_2.delete("1.0", "end")
-            if mode == "w":
-                self.text_area_2.insert("1.0", txt)
-            elif mode == "a":
-                self.text_area_2.insert("end", txt)
-            self.text_area_2.config(state="disabled")
-            self.text_area_2.see("end")
-        except Exception:
-            print(*objects, sep=sep, end=end)
+        text = "" if mode == "d" else sep.join([str(obj) for obj in objects]) + end
+        clear = mode != "a"
+
+        self.text_redirector2.write(text, clear)
 
     def print_tb(
         self,

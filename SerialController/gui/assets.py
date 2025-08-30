@@ -62,6 +62,7 @@ class CaptureArea(tk.Canvas):
             self.master: tk.Misc = master
         self.radius: int = 60  # 描画する円の半径
         self.camera: Camera = camera
+        self.next_frames: int = 1000 // int(fps)
         # self.show_size = (640, 360)
         self.show_width: int = int(show_width)
         self.show_height: int = int(show_height)
@@ -148,9 +149,14 @@ class CaptureArea(tk.Canvas):
             FileHandler.get_asset_path("disabled.png"),
             cv2.IMREAD_GRAYSCALE,
         )
+        if disabled_img is not None:
+            disabled_pil = Image.fromarray(disabled_img)
+        else:
+            msg = "asset: disabled.pngが読み込めませんでした。"
+            raise ValueError(msg)
+
         disabled_pil = Image.fromarray(disabled_img)
-        self.disabled_tk = ImageTk.PhotoImage(disabled_pil)
-        self.im = self.disabled_tk
+        self.disabled_tk: Final = ImageTk.PhotoImage(disabled_pil)
         # self.configure(image=self.disabled_tk)  # labelからキャンバスに変更したので微修正
         self.im_ = self.create_image(0, 0, image=self.disabled_tk, anchor=tk.NW)
 
@@ -366,9 +372,9 @@ class CaptureArea(tk.Canvas):
         if self.master.is_use_right_stick_mouse.get():
             self.BindRightClick()
 
-    def setFps(self, fps: str) -> None:
+    def setFps(self, fps: str | int) -> None:
         # self.next_frames = int(16 * (60 / int(fps)))
-        self.next_frames = int(1000 / int(fps))
+        self.next_frames = 1000 // int(fps)
         self._logger.info(f"FPS set to {fps}")
 
     def setShowsize(self, show_height: int, show_width: int) -> None:
@@ -689,14 +695,14 @@ class CaptureArea(tk.Canvas):
                 for _ in self.dq:
                     self.RSTICK_logger.debug(",".join(list(map(str, _))))
 
-    def startCapture(self) -> None:
-        self.capture()
+    # def startCapture(self) -> None:
+    #     self.capture()
 
-    def capture(self) -> None:
+    def update(self) -> None:
         if self.is_show_var.get():
             image_bgr = self.camera.readFrame()
         else:
-            self.after(self.next_frames, self.capture)
+            # self.after(self.next_frames, self.update)
             return
 
         if image_bgr is not None:  # pyright:ignore[reportUnnecessaryComparison]
@@ -712,7 +718,7 @@ class CaptureArea(tk.Canvas):
             # self.configure(image=self.disabled_tk)
             self.itemconfig(self.im_, image=self.disabled_tk)
 
-        self.after(self.next_frames, self.capture)
+        # self.after(self.next_frames, self.update)
 
     def saveCapture(self) -> None:
         self.camera.saveCapture()

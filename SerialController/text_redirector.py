@@ -18,8 +18,8 @@ class TextRedirector:
         self.q: queue.Queue[tuple[bool, str]] = queue.Queue()
         self.interval: Final = interval_ms
         self.text_widget: Final = text_widget
-        self.text_widget.after(self.interval, self._drain)
         self.always_atutoscroll: bool = always_atutoscroll
+        # self.text_widget.after(self.interval, self.update)
 
     def write(self, string: str, clear: bool = False) -> None:
         if clear:
@@ -39,7 +39,7 @@ class TextRedirector:
             return True
         return self._is_at_bottom()
 
-    def _drain(self) -> None:
+    def update(self) -> None:
         buf: list[tuple[bool, str]] = []
         try:
             while True:
@@ -65,5 +65,5 @@ class TextRedirector:
             self.text_widget.configure(state="disabled")
             if do_scroll:
                 self.text_widget.yview("end")  # pyright:ignore[reportUnknownMemberType]
-            self.text_widget.update_idletasks()
-        self.text_widget.after(self.interval, self._drain)
+        #     self.text_widget.update_idletasks()
+        # self.text_widget.after(self.interval, self.update)

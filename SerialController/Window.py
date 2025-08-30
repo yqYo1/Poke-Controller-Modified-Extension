@@ -2136,7 +2136,7 @@ class PokeControllerApp:
         self.mainwindow: Final = self.main_frame
 
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
-        self.preview.startCapture()
+        # self.preview.startCapture()
         self.set_serial_data_format()
 
         # Output画面/Software-Controllerを再配置する
@@ -2144,6 +2144,8 @@ class PokeControllerApp:
 
         self.menu = PokeController_Menubar(self)
         self.root.config(menu=self.menu)
+
+        self.root.after(self.preview.next_frames, self.update)
 
         # logging.debug(f'python version: {sys.version}')
 
@@ -3056,7 +3058,7 @@ class PokeControllerApp:
             self.text_scroll_1.configure(text="Output#1")
             self.text_scroll_2.configure(text="Output#2 (Stdout)")
 
-    def replace_right_frame_widget(self, *event) -> None:  # noqa:  ARG002
+    def replace_right_frame_widget(self, event: tk.Event | None = None) -> None:  # noqa:  ARG002
         with contextlib.suppress(Exception):
             self.text_scroll_1.pack_forget()
         with contextlib.suppress(Exception):
@@ -3163,6 +3165,13 @@ class PokeControllerApp:
         self.softcon_a_button.configure(bg="#343434", fg="#FFFFFF")
         self.softcon_b_button.configure(bg="#343434", fg="#FFFFFF")
         self.softcon_home_button.configure(bg="#343434", fg="#FFFFFF")
+
+    def update(self) -> None:
+        self.text_redirector1.update()
+        self.text_redirector2.update()
+        self.preview.update()
+        self.root.update_idletasks()
+        self.root.after(self.preview.next_frames, self.update)
 
 
 # ToolTipのクラスは以下のサイトを参考に作成

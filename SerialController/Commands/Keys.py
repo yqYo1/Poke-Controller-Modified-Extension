@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from logging import Logger
-    from typing import Final, Literal
+    from typing import ClassVar, Final, Literal
 
     from Commands.Sender import Sender
 
@@ -342,22 +342,22 @@ class SendFormat:
 
 # This class handle L stick and R stick at any angles
 class Direction:
-    UP: Direction | None = None
-    RIGHT: Direction | None = None
-    DOWN: Direction | None = None
-    LEFT: Direction | None = None
-    UP_RIGHT: Direction | None = None
-    DOWN_RIGHT: Direction | None = None
-    DOWN_LEFT: Direction | None = None
-    UP_LEFT: Direction | None = None
-    R_UP: Direction | None = None
-    R_RIGHT: Direction | None = None
-    R_DOWN: Direction | None = None
-    R_LEFT: Direction | None = None
-    R_UP_RIGHT: Direction | None = None
-    R_DOWN_RIGHT: Direction | None = None
-    R_DOWN_LEFT: Direction | None = None
-    R_UP_LEFT: Direction | None = None
+    UP: ClassVar[Direction]
+    RIGHT: ClassVar[Direction]
+    DOWN: ClassVar[Direction]
+    LEFT: ClassVar[Direction]
+    UP_RIGHT: ClassVar[Direction]
+    DOWN_RIGHT: ClassVar[Direction]
+    DOWN_LEFT: ClassVar[Direction]
+    UP_LEFT: ClassVar[Direction]
+    R_UP: ClassVar[Direction]
+    R_RIGHT: ClassVar[Direction]
+    R_DOWN: ClassVar[Direction]
+    R_LEFT: ClassVar[Direction]
+    R_UP_RIGHT: ClassVar[Direction]
+    R_DOWN_RIGHT: ClassVar[Direction]
+    R_DOWN_LEFT: ClassVar[Direction]
+    R_UP_LEFT: ClassVar[Direction]
 
     def __init__(
         self,

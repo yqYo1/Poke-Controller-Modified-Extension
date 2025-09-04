@@ -15,7 +15,7 @@ jobs:
       uses: actions/checkout@v5 # コードをチェックアウト
 
     - name: Set up Python
-      uses: actions/setup-python@v5 # Python環境をセットアップ
+      uses: actions/setup-python@v6 # Python環境をセットアップ
       with:
         python-version: '3.12' # プロジェクトで使用しているPythonバージョンを指定
 

@@ -224,8 +224,7 @@ class Camera:
                 ret, frame = self.camera.read()
                 if ret:
                     if self.flip:
-                        self.image_bgr = cv2.flip(frame, self.flip_mode)
-                    else:
-                        self.image_bgr = frame
+                        frame = cv2.flip(frame, self.flip_mode)
+                    self.image_bgr = frame
             except cv2.error as e:
                 self._logger.info(f"Suppress camera read error: {e}")

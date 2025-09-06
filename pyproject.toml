@@ -24,9 +24,13 @@ dependencies = [
   "requests>=2.32.4",
   "scipy>=1.16.1",
   "setuptools>=80.9.0",
-  "torch>=2.8.0",
-  "torchvision>=0.23.0",
   "windows-capture-device-list>=1.1.0",
+]
+
+[project.optional-dependencies]
+torch = [
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
 ]
 
 [dependency-groups]

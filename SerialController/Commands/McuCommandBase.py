@@ -17,8 +17,10 @@ class McuCommand(CommandBase.Command):
         super().__init__()
         self.sync_name: Final = sync_name
         self.postProcess: Callable[[], None] | None = None
+        self.ser: Sender | None = None
 
     def start(self, ser: Sender, postProcess: Callable[[], None]) -> None:
+        self.ser = ser
         ser.writeRow(self.sync_name)
         self.isRunning: bool = True
         self.postProcess = postProcess
@@ -28,3 +30,7 @@ class McuCommand(CommandBase.Command):
         self.isRunning = False
         if self.postProcess is not None:
             self.postProcess()
+
+    def finish(self) -> None:
+        if self.ser is not None:
+            self.end(self.ser)

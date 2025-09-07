@@ -7,10 +7,28 @@ import json
 import os
 import tkinter as tk
 from tkinter import ttk
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, cast, overload
 
 if TYPE_CHECKING:
     from typing import Any, Literal
+
+    type _CheckWidget = tuple[Literal["check"], str, bool]
+    type _EntryWidget = tuple[Literal["entry"], str, str]
+    type _ComboWidget = tuple[Literal["combo"], str, list[str], str]
+    type _RadioWidget = tuple[Literal["radio"], str, list[str], str]
+    type _SpinWidget = tuple[Literal["spin"], str, list[str], str]
+    type _ScaleWidget = tuple[Literal["scale"], str, int | float, int | float, int | float, int]
+    type _NextWidget = tuple[Literal["next"]]
+    type WidgetSetting = (
+        _CheckWidget
+        | _EntryWidget
+        | _ComboWidget
+        | _RadioWidget
+        | _SpinWidget
+        | _ScaleWidget
+        | _NextWidget
+    )
+    type DialogueList = list[WidgetSetting]
 
 # from logging import getLogger, DEBUG, NullHandlerxx
 
@@ -32,7 +50,7 @@ class PokeConDialogue:
         self,
         parent: tk.Toplevel,
         title: str,
-        message: list[list[Any]],
+        message: DialogueList,
         desc: str | None = None,
         mode: Literal[1] = 1,
         pos: Literal[1, 2, 3] = 2,
@@ -42,7 +60,7 @@ class PokeConDialogue:
         self,
         parent: tk.Toplevel,
         title: str,
-        message: int | str | list[int | str] | list[list[Any]],
+        message: int | str | list[int | str] | DialogueList,
         desc: str | None = None,
         mode: Literal[0, 1] = 0,
         pos: Literal[1, 2, 3] = 2,
@@ -108,7 +126,7 @@ class PokeConDialogue:
 
         self.inputs: ttk.Frame = ttk.Frame(self.main_frame)
 
-        self.dialogue_ls: dict[str | int, tk.StringVar] = {}
+        self.dialogue_ls: dict[str | int, tk.Variable] = {}
         x = self.message_dialogue.master.winfo_x()
         w = self.message_dialogue.master.winfo_width()
         y = self.message_dialogue.master.winfo_y()
@@ -163,173 +181,140 @@ class PokeConDialogue:
             label.grid(column=0, row=i, sticky="nsew", padx=3, pady=3)
             entry.grid(column=1, row=i, sticky="nsew", padx=3, pady=3)
 
-    def mode1(self, dialogue_list: list[list[Any]]) -> None:
-        n = len(dialogue_list)
-        frame = []
+    def mode1(self, dialogue_list: DialogueList) -> None:
+        frame: list[ttk.LabelFrame | None] = []
 
-        scale_label_list: list[
-            tk.Label
-        ] = []  # scaleの値を表示するlabelを格納するリスト
-        scale_index_list: list[int] = []  # scaleが何番目のwidgetなのかを格納するリスト
-        scale_digit_list: list[int] = []  # scaleの有効桁数を格納するリスト
+        scale_label_list: list[tk.Label] = []
+        scale_index_list: list[int] = []
+        scale_digit_list: list[int] = []
 
         def change_scale_value(
             _: tk.Event | None = None,
-        ) -> None:  # scaleのバーを動かしたときにlabelの値を変更するための関数
+        ) -> None:
             for i, (index, fmt) in enumerate(
                 zip(scale_index_list, scale_digit_list, strict=False),
             ):
+                setting = dialogue_list[index]
+                if setting[0].casefold() != "scale":
+                    continue
+                setting = cast("_ScaleWidget", setting)
                 if fmt != 0:
-                    val = round(self.dialogue_ls[dialogue_list[index][1]].get(), fmt)
+                    val = round(float(self.dialogue_ls[setting[1]].get()), fmt)
                     scale_label_list[i]["text"] = f"{val}"
-                    self.dialogue_ls[dialogue_list[index][1]].set(val)
+                    self.dialogue_ls[setting[1]].set(val)
                 else:
-                    scale_label_list[i]["text"] = (
-                        f"{self.dialogue_ls[dialogue_list[index][1]].get()}"
-                    )
+                    scale_label_list[i]["text"] = f"{self.dialogue_ls[setting[1]].get()}"
 
         column0 = 0
         row0 = 0
-        for i in range(n):
-            if dialogue_list[i][0].casefold() == "next".casefold():
+        for i, setting in enumerate(dialogue_list):
+            widget_type = setting[0].casefold()
+            if widget_type == "next":
                 column0 += 1
                 row0 = 0
                 frame.append(None)
             else:
-                # widgetはすべてframeの中に入れる。scaleの場合、値を示すlabelもフレームの中に入れる。
-                frame.append(ttk.LabelFrame(self.inputs, text=dialogue_list[i][1]))
+                frame.append(ttk.LabelFrame(self.inputs, text=setting[1]))
 
-                # Checkbox
-                if dialogue_list[i][0].casefold() == "check".casefold():
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.BooleanVar(
-                        value=dialogue_list[i][2],
-                    )
-                    widget = ttk.Checkbutton(
-                        frame[i],
-                        variable=self.dialogue_ls[dialogue_list[i][1]],
-                    )
+                if widget_type == "check":
+                    setting = cast("_CheckWidget", setting)
+                    self.dialogue_ls[setting[1]] = tk.BooleanVar(value=setting[2])
+                    widget = ttk.Checkbutton(frame[i], variable=self.dialogue_ls[setting[1]])
                     widget.grid(column=0, row=0, sticky="nsew", padx=3, pady=3)
-                # Combobox
-                elif dialogue_list[i][0].casefold() == "combo".casefold():
+                elif widget_type == "combo":
+                    setting = cast("_ComboWidget", setting)
                     text_length = 10
-                    for name in dialogue_list[i][2]:
+                    for name in setting[2]:
                         text_length = max(text_length, len(str(name)) + 5)
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(
-                        value=dialogue_list[i][3],
-                    )
+                    self.dialogue_ls[setting[1]] = tk.StringVar(value=setting[3])
                     widget = ttk.Combobox(
                         frame[i],
-                        values=dialogue_list[i][2],
-                        textvariable=self.dialogue_ls[dialogue_list[i][1]],
+                        values=setting[2],
+                        textvariable=self.dialogue_ls[setting[1]],
                         width=text_length,
                         state="readonly",
                     )
                     widget.grid(column=0, row=0, sticky="nsew", padx=3, pady=3)
-                    # widget.current(0)
-                # Entry
-                elif dialogue_list[i][0].casefold() == "entry".casefold():
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(
-                        value=dialogue_list[i][2],
-                    )
-                    widget = ttk.Entry(
-                        frame[i],
-                        textvariable=self.dialogue_ls[dialogue_list[i][1]],
-                    )
+                elif widget_type == "entry":
+                    setting = cast("_EntryWidget", setting)
+                    self.dialogue_ls[setting[1]] = tk.StringVar(value=setting[2])
+                    widget = ttk.Entry(frame[i], textvariable=self.dialogue_ls[setting[1]])
                     widget.grid(column=0, row=0, sticky="nsew", padx=3, pady=3)
-                # Radiobutton
-                elif dialogue_list[i][0].casefold() == "radio".casefold():
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(
-                        value=dialogue_list[i][3],
-                    )
-                    for j, text0 in enumerate(dialogue_list[i][2]):
+                elif widget_type == "radio":
+                    setting = cast("_RadioWidget", setting)
+                    self.dialogue_ls[setting[1]] = tk.StringVar(value=setting[3])
+                    for j, text0 in enumerate(setting[2]):
                         widget = ttk.Radiobutton(
                             frame[i],
                             text=text0,
-                            variable=self.dialogue_ls[dialogue_list[i][1]],
+                            variable=self.dialogue_ls[setting[1]],
                             value=text0,
                         )
                         widget.grid(column=j, row=0, sticky="nsew", padx=3, pady=3)
-                # Scale
-                elif dialogue_list[i][0].casefold() == "scale".casefold():
+                elif widget_type == "scale":
+                    setting = cast("_ScaleWidget", setting)
                     scale_index_list.append(i)
-                    scale_digit_list.append(dialogue_list[i][5])
-                    if dialogue_list[i][5] != 0:  # 浮動小数点数
-                        self.dialogue_ls[dialogue_list[i][1]] = tk.DoubleVar(
-                            value=dialogue_list[i][4],
-                        )
+                    scale_digit_list.append(setting[5])
+                    if setting[5] != 0:
+                        self.dialogue_ls[setting[1]] = tk.DoubleVar(value=setting[4])
                         scale_label_list.append(
                             tk.Label(
                                 frame[i],
                                 width=10,
-                                text="{}".format(
-                                    round(
-                                        self.dialogue_ls[dialogue_list[i][1]].get(),
-                                        dialogue_list[i][5],
-                                    ),
-                                ),
+                                text=f"{round(self.dialogue_ls[setting[1]].get(), setting[5])}",
                             ),
                         )
-                    else:  # 整数
-                        self.dialogue_ls[dialogue_list[i][1]] = tk.IntVar(
-                            value=dialogue_list[i][4],
-                        )
+                    else:
+                        self.dialogue_ls[setting[1]] = tk.IntVar(value=setting[4])
                         scale_label_list.append(
                             tk.Label(
                                 frame[i],
                                 width=10,
-                                text=f"{self.dialogue_ls[dialogue_list[i][1]].get()}",
+                                text=f"{self.dialogue_ls[setting[1]].get()}",
                             ),
                         )
                     widget = ttk.Scale(
                         frame[i],
-                        from_=dialogue_list[i][2],
-                        to=dialogue_list[i][3],
-                        variable=self.dialogue_ls[dialogue_list[i][1]],
+                        from_=setting[2],
+                        to=setting[3],
+                        variable=cast("tk.DoubleVar | tk.IntVar", self.dialogue_ls[setting[1]]),
                         command=change_scale_value,
                     )
-                    scale_label_list[-1].grid(
-                        column=0,
-                        row=0,
-                        sticky="nsew",
-                        padx=3,
-                        pady=3,
-                    )
+                    scale_label_list[-1].grid(column=0, row=0, sticky="nsew", padx=3, pady=3)
                     widget.grid(column=1, row=0, sticky="nsew", padx=3, pady=3)
-                # Spinbox
-                elif dialogue_list[i][0].casefold() == "spin".casefold():
-                    self.dialogue_ls[dialogue_list[i][1]] = tk.StringVar(
-                        value=dialogue_list[i][3],
-                    )
+                elif widget_type == "spin":
+                    setting = cast("_SpinWidget", setting)
+                    self.dialogue_ls[setting[1]] = tk.StringVar(value=setting[3])
                     widget = ttk.Spinbox(
                         frame[i],
-                        values=dialogue_list[i][2],
-                        textvariable=self.dialogue_ls[dialogue_list[i][1]],
+                        values=setting[2],
+                        textvariable=self.dialogue_ls[setting[1]],
                     )
                     widget.grid(column=0, row=0, sticky="nsew", padx=3, pady=3)
 
-                frame[i].grid(column=column0, row=row0, sticky="nsew", padx=3, pady=3)
+                if f := frame[i]:
+                    f.grid(column=column0, row=row0, sticky="nsew", padx=3, pady=3)
                 row0 += 1
 
-        # widgetのサイズをフレームのサイズに合わせる
-        for i in range(n):
-            if dialogue_list[i][0].casefold() == "next".casefold():
+        for i, setting in enumerate(dialogue_list):
+            widget_type = setting[0].casefold()
+            if widget_type == "next":
                 pass
-            elif dialogue_list[i][0].casefold() == "scale".casefold():
-                frame[i].grid_columnconfigure(0, weight=1)
-                frame[i].grid_columnconfigure(1, weight=3)
-            elif dialogue_list[i][0].casefold() != "radio".casefold():
-                frame[i].grid_columnconfigure(0, weight=1)
-            else:
-                pass
+            elif f := frame[i]:
+                if widget_type == "scale":
+                    f.grid_columnconfigure(0, weight=1)
+                    f.grid_columnconfigure(1, weight=3)
+                elif widget_type != "radio":
+                    f.grid_columnconfigure(0, weight=1)
 
     def ret_value(
         self,
         need: type,
-    ) -> list[str] | dict[int | str, str] | Literal[False]:
+    ) -> list[Any] | dict[str | int, Any] | Literal[False]:
         if self.isOK:
-            if need is dict:  # needは型なのでisinstanceは使えない
+            if need is dict:
                 return {k: v.get() for k, v in self.dialogue_ls.items()}
-            if need is list:  # needは型なのでisinstanceは使えない
+            if need is list:
                 return self._ls
             print("Wrong arg. Try Return list.")
             return self._ls
@@ -340,7 +325,7 @@ class PokeConDialogue:
         self.isOK = False
 
     def ok_command(self) -> None:
-        self._ls = [v.get() for k, v in self.dialogue_ls.items()]
+        self._ls: list[Any] = [v.get() for k, v in self.dialogue_ls.items()]
         self.message_dialogue.destroy()
         self.isOK = True
 

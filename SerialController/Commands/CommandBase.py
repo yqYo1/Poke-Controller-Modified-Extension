@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from ExternalTools import MQTTCommunications, SocketCommunications
 from PokeConDialogue import (
+    DialogueList,
     PokeConDialogue,
     check_widget_name,
     generate_new_dialogue_list,
@@ -216,10 +217,10 @@ class Command(ABC):
     def dialogue6widget(
         self,
         title:str,
-        dialogue_list: list[Any],
+        dialogue_list: DialogueList,
         desc: str | None = None,
         need: type = list,
-    ) -> list[Any] | dict[Any, Any] | None:
+    ) -> list[Any] | dict[str | int, Any] | None | Literal[False]:
         """
         保存機能なしのダイアログ
         title: ダイアログのウインドウ名
@@ -254,11 +255,11 @@ class Command(ABC):
     def dialogue6widget_save_settings(
         self,
         title: str,
-        dialogue_list: list[Any],
+        dialogue_list: DialogueList,
         filename: str,
         desc: str | None = None,
         need: type = list,
-    ) -> list[Any] | dict[Any, Any] | None:
+    ) -> list[Any] | dict[str | int, Any] | None | Literal[False]:
         """
         前の設定を呼び出すタイプのダイアログ
         title: ダイアログのウインドウ名
@@ -316,11 +317,11 @@ class Command(ABC):
     def dialogue6widget_select_settings(
         self,
         title: str,
-        dialogue_list: list[Any],
+        dialogue_list: DialogueList,
         dirname: str,
         desc: str | None = None,
         need: type = list,
-    ) -> list[Any] | dict[Any, Any] | None:
+    ) -> list[Any] | dict[str | int, Any] | None | Literal[False]:
         """
         保存した設定を選択して呼び出すタイプのダイアログ
         title: ダイアログのウインドウ名
@@ -346,7 +347,7 @@ class Command(ABC):
         # GUI画面表示
         ret = self.dialogue6widget(
             "Select Preset",
-            [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]],
+            [("combo", "---設定ファイル選択---", settings_list, "(選択して下さい)")],
         )
 
         if not ret or not isinstance(ret, list):

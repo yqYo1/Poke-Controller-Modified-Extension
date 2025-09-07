@@ -17,7 +17,7 @@ from PokeConDialogue import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from tkinter import Text
-    from typing import ClassVar, Literal
+    from typing import Any, ClassVar, Literal
 
     from Commands.Sender import Sender
     from gui.assets import CaptureArea
@@ -69,6 +69,10 @@ class Command(ABC):
 
     @abstractmethod
     def end(self, ser: Sender) -> None:
+        pass
+
+    @abstractmethod
+    def finish(self) -> None:
         pass
 
     # MCUコマンドでは使用しない為ここではなくPythonCommandBaseに定義するのが適当?
@@ -186,7 +190,7 @@ class Command(ABC):
         message: int | str | list[int | str],
         desc: str | None = None,
         need: type = list,
-    ) -> list[str] | dict[int | str, str]:
+    ) -> list[str] | dict[int | str, str] | None:
         """
         保存機能なしのダイアログ(Entryのみ)
         title: ダイアログのウインドウ名
@@ -205,17 +209,17 @@ class Command(ABC):
         ).ret_value(need)
         self.message_dialogue = None
         if not ret:
-            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
-            return None  # pyright:ignore[reportReturnType]
+            self.finish()
+            return None
         return ret
 
     def dialogue6widget(
         self,
-        title: str,
-        dialogue_list: list,
+        title:str,
+        dialogue_list: list[Any],
         desc: str | None = None,
         need: type = list,
-    ) -> list | dict:
+    ) -> list[Any] | dict[Any, Any] | None:
         """
         保存機能なしのダイアログ
         title: ダイアログのウインドウ名
@@ -228,7 +232,7 @@ class Command(ABC):
             pass
         else:
             print("ウィジェット名に重複があります。重複しない名称を設定してください。")
-            self.finish()  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
+            self.finish()
 
         # ダイアログ呼び出し
         self.message_dialogue = tk.Toplevel()
@@ -243,18 +247,18 @@ class Command(ABC):
         self.message_dialogue = None
 
         if not ret:
-            self.finish()  # pyright:ignore[reportUnknownMemberType,reportAttributeAccessIssue]
-            return None  # pyright:ignore[reportReturnType]
+            self.finish()
+            return None
         return ret
 
     def dialogue6widget_save_settings(
         self,
         title: str,
-        dialogue_list: list,
+        dialogue_list: list[Any],
         filename: str,
         desc: str | None = None,
         need: type = list,
-    ) -> list | dict:
+    ) -> list[Any] | dict[Any, Any] | None:
         """
         前の設定を呼び出すタイプのダイアログ
         title: ダイアログのウインドウ名
@@ -297,24 +301,26 @@ class Command(ABC):
             new_dialogue_list,
             desc=desc,
             mode=1,
-            pos=int(self.pos_dialogue_buttons),
+            pos=self.pos_dialogue_buttons,
         ).ret_value(need)
         self.message_dialogue = None
 
         if not ret:
             self.finish()
+            return None
         # [ok]選択時に入力履歴を保存
-        save_dialogue_settings(new_dialogue_list, ret, filename)
+        if ret:
+            save_dialogue_settings(new_dialogue_list, ret, filename)
         return ret
 
     def dialogue6widget_select_settings(
         self,
         title: str,
-        dialogue_list: list,
+        dialogue_list: list[Any],
         dirname: str,
         desc: str | None = None,
         need: type = list,
-    ) -> list | dict:
+    ) -> list[Any] | dict[Any, Any] | None:
         """
         保存した設定を選択して呼び出すタイプのダイアログ
         title: ダイアログのウインドウ名
@@ -343,6 +349,10 @@ class Command(ABC):
             [["Combo", "---設定ファイル選択---", settings_list, "(選択して下さい)"]],
         )
 
+        if not ret or not isinstance(ret, list):
+            self.finish()
+            return None
+
         # ディレクトリがない場合は作成
         if not os.path.exists(dirname):
             os.makedirs(dirname)
@@ -370,7 +380,7 @@ class Command(ABC):
             new_dialogue_list,
             desc=desc,
             mode=1,
-            pos=int(self.pos_dialogue_buttons),
+            pos=self.pos_dialogue_buttons,
         ).ret_value(need)
         self.message_dialogue = None
 
@@ -378,15 +388,18 @@ class Command(ABC):
             self.finish()
             return None
         # 設定保存用のウィジェット関連の要素を削除
-        if need is list:
+        if isinstance(ret, list):
             preset_name = ret[-2]
             save_preset = ret[-1]
             ret = ret[:-2]
-        else:
+        elif isinstance(ret, dict):
             preset_name = ret["[PokeCon]設定ファイル名"]
             save_preset = ret["[PokeCon]設定を保存"]
             ret.pop("[PokeCon]設定ファイル名")
             ret.pop("[PokeCon]設定を保存")
+        else:
+            self.finish()
+            return None
 
         # [ok]選択時に入力履歴を保存
         if save_preset and preset_name != "":

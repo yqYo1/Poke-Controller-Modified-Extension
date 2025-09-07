@@ -174,7 +174,7 @@ class PokeConDialogue:
         scale_digit_list: list[int] = []  # scaleの有効桁数を格納するリスト
 
         def change_scale_value(
-            event=None,
+            _: tk.Event | None = None,
         ) -> None:  # scaleのバーを動かしたときにlabelの値を変更するための関数
             for i, (index, fmt) in enumerate(
                 zip(scale_index_list, scale_digit_list, strict=False),
@@ -349,7 +349,7 @@ class PokeConDialogue:
         self.isOK = False
 
 
-def check_widget_name(dialogue_list: list, except_name: list | None = None) -> bool:
+def check_widget_name(dialogue_list: list[Any], except_name: list[Any] | None = None) -> bool:
     """
     ウィジェットに同一名称がないかを確認
     """
@@ -387,7 +387,9 @@ def save_setting(filename: str, settings: dict[str, Any]) -> None:
         json.dump(settings, f, indent=4, ensure_ascii=False)
 
 
-def generate_new_dialogue_list(dialogue_list: list, filename: str) -> list:
+def generate_new_dialogue_list(dialogue_list: list[Any], filename: str | None) -> list[Any]:
+    if filename is None:
+        return dialogue_list
     settings = get_setting(filename)
     if not settings:
         return dialogue_list
@@ -403,8 +405,8 @@ def generate_new_dialogue_list(dialogue_list: list, filename: str) -> list:
 
 
 def save_dialogue_settings(
-    new_dialogue_list: list,
-    ret: list | dict,
+    new_dialogue_list: list[Any],
+    ret: list[Any] | dict[Any, Any],
     filename: str,
 ) -> None:
     try:
@@ -424,7 +426,7 @@ def save_dialogue_settings(
         print("Error: Configuration dump failed.")
 
 
-def get_settings_list(dirname: str) -> list:
+def get_settings_list(dirname: str) -> list[str]:
     if os.path.isdir(dirname):
         pass
     else:

@@ -84,7 +84,7 @@ class CommandLoader[CommandLike]:
                 if tags:
                     if isinstance(tags, list):
                         logger.debug(f"TAGS name add: {dir_tags}")
-                        processed_tags = [tag for tag in tags if isinstance(tag, str)]  # pyright: ignore[ reportUnknownVariableType ]
+                        processed_tags = [tag for tag in tags if isinstance(tag, str)]  # pyright: ignore[reportUnknownVariableType]
                     elif isinstance(tags, str):
                         processed_tags = [tags]
                     else:
@@ -96,7 +96,7 @@ class CommandLoader[CommandLike]:
                 setattr(c, "TAGS", processed_tags)  # noqa: B010
 
                 # rename NAME
-                c.NAME = f"{c.NAME} ({dir_name})"  # pyright: ignore[ reportAttributeAccessIssue, reportUnknownMemberType ] ]
+                c.NAME = f"{c.NAME} ({dir_name})"  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
                 classes.append(c)
 
         return classes

@@ -16,7 +16,6 @@ dependencies = [
   "plyer>=2.1.0",
   "pygame>=2.6.1",
   "pygubu>=0.38.2",
-  "pykakasi>=2.3.0",
   "pynput>=1.8.1",
   "pyocr>=0.8.5",
   "pyserial>=3.5",
@@ -29,12 +28,15 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = [
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
+  "torch>=2.8.0",
+  "torchvision>=0.23.0",
+]
+keyboard = [
+    "pykakasi>=2.3.0",
 ]
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.31.4",
-    "ruff>=0.12.12",
+  "basedpyright>=1.31.4",
+  "ruff>=0.12.12",
 ]

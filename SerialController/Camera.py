@@ -137,7 +137,7 @@ class Camera:
         return False
 
     def readFrame(self) -> MatLike:
-        return self.image_bgr
+        return self.image_bgr.copy()
 
     def saveCapture(
         self,
@@ -156,18 +156,18 @@ class Camera:
             filename = filename + ".png"
 
         if crop is None:
-            image = self.image_bgr
+            image = self.readFrame()
         elif crop in {1, "1"}:
-            image = self.image_bgr[crop_ax[1] : crop_ax[3], crop_ax[0] : crop_ax[2]]
+            image = self.readFrame()[crop_ax[1] : crop_ax[3], crop_ax[0] : crop_ax[2]]
         elif crop in {2, "2"}:
-            image = self.image_bgr[
+            image = self.readFrame()[
                 crop_ax[1] : crop_ax[1] + crop_ax[3],
                 crop_ax[0] : crop_ax[0] + crop_ax[2],
             ]
         elif img is not None:
             image = img
         else:
-            image = self.image_bgr
+            image = self.readFrame()
 
         save_path = _get_save_filespec(filename)
 

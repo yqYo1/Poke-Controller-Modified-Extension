@@ -74,7 +74,7 @@ class Camera:
             cv2.IMREAD_COLOR,
         )
         if image is not None:
-            self.image_bgr: MatLike = image
+            self.__image_bgr: MatLike = image
         else:
             msg = "asset: disabled.pngが読み込めませんでした。"
             raise ValueError(msg)
@@ -83,6 +83,10 @@ class Camera:
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
+
+    @property
+    def image_bgr(self) -> MatLike:
+        return self.__image_bgr.copy()
 
     @property
     def flip(self) -> bool:
@@ -137,7 +141,7 @@ class Camera:
         return False
 
     def readFrame(self) -> MatLike:
-        return self.image_bgr.copy()
+        return self.__image_bgr.copy()
 
     def saveCapture(
         self,
@@ -223,6 +227,6 @@ class Camera:
                 if ret:
                     if self.flip:
                         frame = cv2.flip(frame, self.flip_mode)
-                    self.image_bgr = frame
+                    self.__image_bgr = frame
             except cv2.error as e:
                 self._logger.info(f"Suppress camera read error: {e}")

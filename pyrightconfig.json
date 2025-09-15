@@ -2,31 +2,24 @@
   "include": [
     "SerialController"
   ],
-
   "exclude": [
     "**/__pycache__"
   ],
-
   "defineConstant": {
     "DEBUG": true
   },
-
   "pythonVersion": "3.12",
-  "pythonPlatform": "ALL",
-
-  "strictListInference": true,
-  "strictDictionaryInference": true,
-  "strictSetInference": true,
+  "pythonPlatform": "All",
   "analyzeUnannotatedFunctions": true,
-  "strictParameterNoneValue": true,
   "deprecateTypingAliases": true,
-  "enableExperimentalFeatures": false,
   "disableBytesTypePromotions": false,
-
+  "enableExperimentalFeatures": false,
+  "strictDictionaryInference": true,
   "strictGenericNarrowing": true,
-
+  "strictListInference": true,
+  "strictParameterNoneValue": true,
+  "strictSetInference": true,
   "typeCheckingMode": "all",
-
   "reportAny": "none",
   "reportConstantRedefinition": "none",
   "reportExplicitAny": "none",
@@ -45,4 +38,5 @@
   "reportUnusedImport": "none",
   "reportUnusedParameter": "none",
   "reportUnusedVariable": "none",
+  "reportPrivateUsage": "none",
 }

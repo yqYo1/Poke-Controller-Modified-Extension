@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 import os
 import threading
-import time
 from logging import DEBUG, NullHandler, getLogger
 from typing import TYPE_CHECKING
 
@@ -68,6 +67,7 @@ class Camera:
         self.capture_size: tuple[int, int] = (1280, 720)
         self.__flip: bool = False
         self.__flip_mode: int = 0  # 0:上下反転, 1:左右反転, -1:上下左右反転
+        self.__started: bool = False
         self.capture_dir: str = "Captures"
         image = cv2.imread(
             FileHandler.get_asset_path("disabled.png"),
@@ -194,15 +194,19 @@ class Camera:
 
     def destroy(self) -> None:
         if self.camera is not None and self.camera.isOpened():
-            self.camera.release()
             self.camera_thread_stop()
-            time.sleep(0.1)  # sleepしないと同じカメラを開けない
+            self.camera.release()
+            # time.sleep(0.1)  # sleepしないと同じカメラを開けない
             self._logger.debug("Camera destroyed")
 
     def camera_thread_start(self) -> None:
         if self.camera is None:
             self._logger.error("Camera is not opened")
             return
+        if self.__started:
+            self._logger.debug("Camera thread already started")
+            return
+        self.__started = True
         self._logger.debug("Camera thread starting")
         self.thread = threading.Thread(target=self.camera_update, name="CameraThread")
         self.thread.start()
@@ -212,8 +216,8 @@ class Camera:
             self._logger.error("Camera is not opened")
             return
         self._logger.debug("Camera thread stopping")
+        self.__started = False
         self.thread.join()
-        self.camera.release()
         self._logger.debug("Camera thread stopped")
 
     def camera_update(self) -> None:
@@ -221,12 +225,19 @@ class Camera:
             self._logger.error("Camera is not opened")
             return
         self._logger.debug("Camera update thread started")
-        while self.isOpened():
+        fail_count = 0
+        while self.__started:
             try:
                 ret, frame = self.camera.read()
                 if ret:
                     if self.flip:
                         frame = cv2.flip(frame, self.flip_mode)
                     self.__image_bgr = frame
+                    fail_count = 0
+                else:
+                    fail_count += 1
+                    if fail_count >= 120:
+                        self.__started = False
+                        break
             except cv2.error as e:
                 self._logger.info(f"Suppress camera read error: {e}")

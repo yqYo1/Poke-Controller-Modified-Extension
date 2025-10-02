@@ -196,7 +196,6 @@ class Camera:
         if self.camera is not None and self.camera.isOpened():
             self.camera_thread_stop()
             self.camera.release()
-            # time.sleep(0.1)  # sleepしないと同じカメラを開けない
             self._logger.debug("Camera destroyed")
 
     def camera_thread_start(self) -> None:

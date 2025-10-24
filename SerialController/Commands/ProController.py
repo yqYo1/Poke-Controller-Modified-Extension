@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import datetime
@@ -98,6 +97,11 @@ class ProController:
         self._logger.propagate = True
 
         self.f: TextIO
+        self.stick_bits: str
+        self.message: str
+        self.old_message: str
+        self.time0: datetime.datetime
+        self.controller_log: list[str] = []
 
     # stickの出力を0-255の範囲に補正する。
     def map_axis(self, val: float) -> int:
@@ -162,7 +166,7 @@ class ProController:
         self.stick_status_old[2] = self.stick_status_new[2]
         self.stick_status_old[3] = self.stick_status_new[3]
 
-    def event_check(self, events: list[pygame.Event]) -> None:
+    def event_check(self, events: list[pygame.event.EventType]) -> None:
         cnt = 0
         for _i, event in enumerate(events):
             if event.type == 1536:
@@ -255,6 +259,7 @@ class ProController:
         pygame.init()
         joystick = pygame.joystick.Joystick(0)
         joystick.init()
+        clock = pygame.time.Clock()
 
         if flag_record:
             start_time = datetime.datetime.today().strftime("%Y%m%d%H%M%S")
@@ -267,18 +272,16 @@ class ProController:
         self.old_message = ""
         try:
             while self.flag_procon:
+                #  スロットリング
+                clock.tick(60)
                 # イベント取得
                 events = pygame.event.get()
-                # print("1")
                 # L/R-Stickの変化を検知
                 self.joystick_move_detection(joystick)
-                # print("2")
                 # Button/Hatの処理
                 self.event_check(events)
-                # print("3")
                 # シリアルデータの送信
                 self.send_message(ser, flag_record)
-                # print("4")
         except Exception as e:
             self._logger.debug(f"Error occurred: {e}")
         finally:

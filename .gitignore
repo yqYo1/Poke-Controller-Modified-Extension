@@ -43,6 +43,9 @@
 !/SerialController/Commands/
 /SerialController/Commands/*
 !/SerialController/Commands/*.py
+!/SerialController/Controller/
+/SerialController/Controller/*
+!/SerialController/Controller/*.py
 !/SerialController/Commands/McuCommands/
 /SerialController/Commands/McuCommands/*
 !/SerialController/Commands/McuCommands/AutoLeague.py

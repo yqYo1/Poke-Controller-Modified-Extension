@@ -35,7 +35,8 @@ from CommandLoader import CommandLoader
 from Commands import McuCommandBase, PythonCommandBase, Sender
 from Commands.CommandBase import Command
 from Commands.Keys import Button, Direction, Hat, KeyPress
-from Commands.ProController import ProController
+from Controller.ProController import ProController
+from Controller.XinputController import XinputController
 from DiscordNotify import Discord_Notify
 from ExternalTools import MQTTCommunications, SocketCommunications
 from file_handler import FileHandler
@@ -49,6 +50,7 @@ from text_redirector import TextRedirector
 if TYPE_CHECKING:
     from typing import Final
 
+    from Controller.ControllerBase import ControllerBase
     from cv2.typing import MatLike
 
 addpath = dirname(abspath(__file__))  # SerialControllerフォルダのパス
@@ -70,7 +72,7 @@ class PokeControllerApp:
             f"{Constant.NAME} ver.{Constant.VERSION} (profile: {args.profile})",
         )
         # self.root.resizable(0, 0)
-        self.controller: ControllerGUI | None = None
+        self.controller_gui: ControllerGUI | None = None
         self.poke_treeview: None = None
         self.keyPress: KeyPress | None = None
         self.keyboard: SwitchKeyboardController | None = None
@@ -79,7 +81,9 @@ class PokeControllerApp:
         self.Line: None = None
         self.Discord: None = None
 
-        self.procon: ProController | None = None
+        self.gamepad: ControllerBase | None = None
+        self.flag_record: bool
+
         self.py_loader: CommandLoader[PythonCommandBase.PythonCommand]
         self.mcu_loader: CommandLoader[McuCommandBase.McuCommand]
 
@@ -451,7 +455,7 @@ class PokeControllerApp:
         self.serial_data_format_name_cb: Final = ttk.Combobox(self.serial_data_lf)
         self.serial_data_format_name: Final = tk.StringVar(value="Default")
         self.serial_data_format_name_cb.configure(
-            state="normal",
+            state="readonly",
             textvariable=self.serial_data_format_name,
             values=serial_data_format_list,
         )
@@ -526,7 +530,7 @@ class PokeControllerApp:
             sticky="ew",
         )
         self.left_stick_mouse_checkbox.configure(command=self.activate_Left_stick_mouse)
-        self.right_stick_mouse_checkbox = ttk.Checkbutton(self.software_lf)
+        self.right_stick_mouse_checkbox: Final = ttk.Checkbutton(self.software_lf)
         self.camera_lf.is_use_right_stick_mouse = (
             tk.BooleanVar()
         )  # modified(継承いじるの面倒なので暫定的にこのまま)
@@ -546,38 +550,70 @@ class PokeControllerApp:
         )
         self.software_lf.configure(height="200", text="Software")
         self.software_lf.grid(padx="5", sticky="ew")
-        self.hardware_lf = ttk.Labelframe(self.manual_control_f)
-        self.use_pro_controller_checkbox = ttk.Checkbutton(self.hardware_lf)
-        self.is_use_Pro_Controller = tk.BooleanVar()  # modified
-        self.use_pro_controller_checkbox.configure(
-            text="Use Pro Controller",
-            variable=self.is_use_Pro_Controller,
+        self.hardware_lf: Final = ttk.Labelframe(self.manual_control_f)
+        self.gamepad_type_label: Final = ttk.Label(self.hardware_lf)
+        self.gamepad_type_label.configure(
+            anchor="center",
+            text="Controller type: ",
         )
-        self.use_pro_controller_checkbox.grid(
+        self.gamepad_type_label.grid(
             column=0,
             padx="5",
             pady="5",
             row=0,
             sticky="ew",
         )
-        self.use_pro_controller_checkbox.configure(
-            command=self.mode_change_Pro_Controller,
+        gamepad_type_list = ["Pro Controller", "Xinput"]
+        self.gamepad_type_cb: Final = ttk.Combobox(self.hardware_lf)
+        self.gamepad_type_name: Final = tk.StringVar(value="Pro Controller")
+        self.gamepad_type_cb.configure(
+            state="readonly",
+            textvariable=self.gamepad_type_name,
+            values=gamepad_type_list,
         )
-        self.record_pro_controller_checkbox = ttk.Checkbutton(self.hardware_lf)
-        self.is_record_Pro_Controller = tk.BooleanVar()  # modified
-        self.record_pro_controller_checkbox.configure(
-            text="Record Pro Controller",
-            variable=self.is_record_Pro_Controller,
-        )
-        self.record_pro_controller_checkbox.grid(
+        self.gamepad_type_cb.grid(
             column=1,
             padx="5",
             pady="5",
             row=0,
             sticky="ew",
         )
-        self.record_pro_controller_checkbox.configure(
-            command=self.record_Pro_Controller,
+        self.gamepad_type_cb.bind(
+            "<<ComboboxSelected>>",
+            self.set_gamepad_type,
+        )
+
+        self.use_gamepad_checkbox: Final = ttk.Checkbutton(self.hardware_lf)
+        self.is_use_gamepad: Final = tk.BooleanVar()  # modified
+        self.use_gamepad_checkbox.configure(
+            text="Use Controller",
+            variable=self.is_use_gamepad,
+        )
+        self.use_gamepad_checkbox.grid(
+            column=2,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.use_gamepad_checkbox.configure(
+            command=self.mode_change_gamepad,
+        )
+        self.record_gamepad_checkbox: Final = ttk.Checkbutton(self.hardware_lf)
+        self.is_record_gamepad: Final = tk.BooleanVar()  # modified
+        self.record_gamepad_checkbox.configure(
+            text="Record Controller",
+            variable=self.is_record_gamepad,
+        )
+        self.record_gamepad_checkbox.grid(
+            column=3,
+            padx="5",
+            pady="5",
+            row=0,
+            sticky="ew",
+        )
+        self.record_gamepad_checkbox.configure(
+            command=self.record_gamepad,
         )
         self.hardware_lf.configure(height="200", text="Hardware", width="200")
         self.hardware_lf.grid(column=0, padx="5", row=1, sticky="ew")
@@ -1491,13 +1527,13 @@ class PokeControllerApp:
             self.right_stick_mouse_checkbox,
             "ゲーム画面上で右クリックを押下した後、その状態でマウスを動かすことで右stickを動かす機能を有効化します",
         )
-        self.use_pro_controller_checkbox_tooltip = ToolTip(
-            self.use_pro_controller_checkbox,
-            "pcに接続したproconでswitchを操作する機能を有効化します",
+        self.use_controller_checkbox_tooltip = ToolTip(
+            self.use_gamepad_checkbox,
+            "pcに接続したコントローラーでswitchを操作する機能を有効化します",
         )
-        self.record_pro_controller_checkbox_tooltip = ToolTip(
-            self.record_pro_controller_checkbox,
-            "proconで操作している際のログを記録する機能を有効化します",
+        self.record_controller_checkbox_tooltip = ToolTip(
+            self.record_gamepad_checkbox,
+            "コントローラーで操作している際のログを記録する機能を有効化します",
         )
         self.command_filter_py_label_tooltip = ToolTip(
             self.command_filter_py_label,
@@ -2136,7 +2172,6 @@ class PokeControllerApp:
         self.mainwindow: Final = self.main_frame
 
         self.root.protocol("WM_DELETE_WINDOW", self.exit)
-        # self.preview.startCapture()
         self.set_serial_data_format()
 
         # Output画面/Software-Controllerを再配置する
@@ -2318,6 +2353,8 @@ class PokeControllerApp:
             self.baud_rate.set("9600")
         self.activateSerial()
 
+    def set_gamepad_type(self, event: tk.Event | None = None) -> None: ...
+
     def applyFps(self, event: tk.Event) -> None:  # noqa : ARG002
         print(f"changed FPS to: {self.fps.get()} [fps]")
         self.preview.setFps(self.fps.get())
@@ -2417,25 +2454,19 @@ class PokeControllerApp:
             self.keyboard = None
 
     def createControllerWindow(self) -> None:
-        if self.controller is not None:
-            self.controller.focus_force()
+        if self.controller_gui is not None:
+            self.controller_gui.focus_force()
             return
 
         window = ControllerGUI(self.root, self.ser)
         window.protocol("WM_DELETE_WINDOW", self.closingController)
-        self.controller = window
+        self.controller_gui = window
 
     def activate_Left_stick_mouse(self) -> None:
         self.preview.ApplyLStickMouse()
 
     def activate_Right_stick_mouse(self) -> None:
         self.preview.ApplyRStickMouse()
-
-    def run_ProController(self) -> None:
-        if self.procon is not None:
-            self.procon = None
-        self.procon = ProController()
-        self.procon.controller_loop(self.ser, self.flag_record, self.ControllerLogDir)
 
     def mode_change_show_value(self) -> None:
         Command.isSimilarity = self.is_show_value.get()
@@ -2463,16 +2494,24 @@ class PokeControllerApp:
         else:
             Command.pos_dialogue_buttons = 2
 
-    def mode_change_Pro_Controller(self) -> None:
-        if self.is_use_Pro_Controller.get():  # Proconでの操作を有効化する。
+    def mode_change_gamepad(self) -> None:
+        if self.is_use_gamepad.get():  # コントローラーでの操作を有効化する。
             with contextlib.suppress(Exception):
                 self.closingController()
-            ProController.flag_procon = True
-            self.flag_record = self.is_record_Pro_Controller.get()
+            self.flag_record = self.is_record_gamepad.get()
             self.ControllerLogDir = "Controller_Log"
-            self.record_pro_controller_checkbox["state"] = "disabled"
-            thread1 = threading.Thread(target=self.run_ProController)
-            thread1.start()
+            if self.gamepad is not None:
+                self.gamepad.loop_stop()
+                self.gamepad = None
+            if (gamepad_type := self.gamepad_type_name.get()) == "Pro Controller":
+                self.gamepad = ProController()
+            elif gamepad_type == "Xinput":
+                self.gamepad = XinputController()
+            else:
+                return
+            self.gamepad_type_cb.configure(state="disabled")
+            self.record_gamepad_checkbox["state"] = "disabled"
+
             self.controller_nb.tab(tab_id=0, state="disabled")
             self.controller_nb.tab(tab_id=1, state="disabled")
             self.controller_nb.tab(tab_id=3, state="disabled")
@@ -2480,9 +2519,14 @@ class PokeControllerApp:
             self.start_top_button["state"] = "disabled"
             self.simplecon_top_button["state"] = "disabled"
 
-        else:  # Proconでの操作を無効化する。
-            ProController.flag_procon = False
-            self.record_pro_controller_checkbox["state"] = "normal"
+            self.gamepad.loop_start(self.ser, self.flag_record, self.ControllerLogDir)
+
+        else:  # コントローラーでの操作を無効化する。
+            if self.gamepad is not None:
+                self.gamepad.loop_stop()
+                self.gamepad = None
+            self.gamepad_type_cb.configure(state="readonly")
+            self.record_gamepad_checkbox["state"] = "normal"
             self.controller_nb.tab(tab_id=0, state="normal")
             self.controller_nb.tab(tab_id=1, state="normal")
             self.controller_nb.tab(tab_id=3, state="normal")
@@ -2490,8 +2534,8 @@ class PokeControllerApp:
             self.start_top_button["state"] = "normal"
             self.simplecon_top_button["state"] = "normal"
 
-    def record_Pro_Controller(self) -> None:
-        self.flag_record = self.is_record_Pro_Controller.get()
+    def record_gamepad(self) -> None:
+        self.flag_record = self.is_record_gamepad.get()
 
     # def createGetFromHomeWindow(self):
     #     if self.poke_treeview is not None:
@@ -2783,8 +2827,8 @@ class PokeControllerApp:
             print("No commands have been assigned yet.")
             self._logger.info("No commands have been assigned yet.")
 
-        self.is_use_Pro_Controller.set(False)
-        self.mode_change_Pro_Controller()
+        self.is_use_gamepad.set(False)
+        self.mode_change_gamepad()
         # set and init selected command
         self.assignCommand()
 
@@ -2815,8 +2859,8 @@ class PokeControllerApp:
             print("No commands have been assigned yet.")
             self._logger.info("No commands have been assigned yet.")
 
-        self.is_use_Pro_Controller.set(False)
-        self.mode_change_Pro_Controller()
+        self.is_use_gamepad.set(False)
+        self.mode_change_gamepad()
         # set and init selected command
         flag = self.assignShortcutCommand(num)
         if flag:
@@ -2887,10 +2931,8 @@ class PokeControllerApp:
         self.mainwindow.mainloop()
 
     def exit(self) -> None:
-        # 一度proconのスレッドを落とす
-        self.flag_procon = False
-        self.record_pro_controller_checkbox["state"] = "normal"
-        self.is_use_Pro_Controller.set(False)
+        self.record_gamepad_checkbox["state"] = "normal"
+        self.is_use_gamepad.set(False)
 
         ret = tkmsg.askyesno("確認", "Poke Controllerを終了しますか?")
         if ret:
@@ -2978,9 +3020,9 @@ class PokeControllerApp:
             self.root.destroy()
 
     def closingController(self) -> None:
-        if self.controller is not None:
-            self.controller.destroy()
-            self.controller = None
+        if self.controller_gui is not None:
+            self.controller_gui.destroy()
+            self.controller_gui = None
 
     # def closingGetFromHome(self):
     #     self.poke_treeview.destroy()

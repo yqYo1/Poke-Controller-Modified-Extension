@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 import datetime
+import threading
 from logging import DEBUG, NullHandler, getLogger
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pygame
 
 if TYPE_CHECKING:
     from logging import Logger
-    from typing import Final, TextIO
+    from typing import ClassVar, TextIO
 
     from Commands.Sender import Sender
 
 
-class ProController:
-    flag_procon: bool = False
+class ControllerBase:
+    NAME: ClassVar[str]
 
     def __init__(self) -> None:
         self.axis_dict: dict[int, str] = {
@@ -91,10 +92,13 @@ class ProController:
         self.flag_print: bool = False
         self.filename: str = ""
 
-        self._logger: Final[Logger] = getLogger(__name__)
+        self._logger: Logger = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
         self._logger.propagate = True
+
+        self._thread: threading.Thread
+        self._listening: bool = False
 
         self.f: TextIO
         self.stick_bits: str
@@ -166,9 +170,12 @@ class ProController:
         self.stick_status_old[2] = self.stick_status_new[2]
         self.stick_status_old[3] = self.stick_status_new[3]
 
-    def event_check(self, events: list[pygame.event.EventType]) -> None:
+    def event_check(
+        self,
+        events: list[pygame.event.EventType],
+    ) -> None:
         cnt = 0
-        for _i, event in enumerate(events):
+        for _, event in enumerate(events):
             if event.type == 1536:
                 if event.dict["axis"] < 4:
                     if abs(event.dict["value"]) < 0.3:
@@ -247,14 +254,47 @@ class ProController:
             self._logger.info(f"{self.filename} is closed.")
             print(f"{self.filename} is closed.")
 
+    def loop_start(
+        self,
+        ser: Sender,
+        flag_record: bool,
+        ControllerLogDir: str,
+    ) -> None:
+        if self._listening:
+            self._logger.debug("Controller thread already started")
+            return
+        self._listening = True
+        self._logger.debug("Controller thread starting")
+        self._thread = threading.Thread(
+            target=self.controller_loop,
+            args=(ser, flag_record, ControllerLogDir),
+            name="ControllerThread",
+        )
+        self._thread.start()
+        print(f"*****Activate {self.NAME}*****")
+
+    def loop_stop(self) -> None:
+        if self._listening:
+            self._listening = False
+            self._logger.debug("Controller thread stopping")
+            # Print immediately so the user sees the inactive message even
+            # if the controller thread takes a while to exit or is blocked.
+            print(f"*****Inactivate {self.NAME}*****")
+            # Try to join the thread but don't block indefinitely.
+            try:
+                if hasattr(self, "_thread") and self._thread.is_alive():
+                    self._thread.join(timeout=1.0)
+            except RuntimeError:
+                # Joining may fail if thread state is invalid; log and continue.
+                self._logger.debug("Failed to join controller thread")
+            self._logger.debug("Controller thread stopped")
+
     def controller_loop(
         self,
         ser: Sender,
         flag_record: bool,
         ControllerLogDir: str,
     ) -> None:
-        self._logger.info("Activate Pro Controller")
-        print("*****Activate Pro Controller*****")
         # pygame初期化
         pygame.init()
         joystick = pygame.joystick.Joystick(0)
@@ -271,7 +311,7 @@ class ProController:
 
         self.old_message = ""
         try:
-            while self.flag_procon:
+            while self._listening:
                 #  スロットリング
                 clock.tick(60)
                 # イベント取得
@@ -288,5 +328,5 @@ class ProController:
             # 終了処理
             self.end_sequence(ser, flag_record)
         pygame.quit()
-        self._logger.info("Inactivate Pro Controller")
-        print("*****Inactivate Pro Controller*****")
+        self._logger.info(f"Inactivate {self.NAME}")
+        self._listening = False

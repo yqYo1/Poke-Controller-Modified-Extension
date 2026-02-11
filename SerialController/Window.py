@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import platform
 import re
@@ -12,6 +13,7 @@ import threading
 import tkinter.messagebox as tkmsg
 from logging import DEBUG, NullHandler, getLogger
 from os.path import abspath, dirname
+from pathlib import Path
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
@@ -77,7 +79,7 @@ class PokeControllerApp:
         self.keyPress: KeyPress | None = None
         self.keyboard: SwitchKeyboardController | None = None
 
-        self.camera_dic: dict | None = None
+        self.camera_dic: dict[int, str] | None = None
         self.Line: None = None
         self.Discord: None = None
 
@@ -1850,18 +1852,20 @@ class PokeControllerApp:
         # ダイアログのOK/NGのボタンの位置を設定する
         self.change_buttons_position()
 
-        if platform.system() == "Windows" or platform.system() == "Darwin":
+        if platform.system() in ("Windows", "Darwin", "Linux"):
+            # if (
+            #     platform.system() == "Windows"
+            #     or platform.system() == "Darwin"
+            #     or platform.system() == "Linux"
+            # ):
             try:
                 self.locateCameraCmbbox()
                 self.camera_id_entry.config(state="disable")
             except Exception as e:
                 # Locate an entry instead whenever dll is not imported successfully
-                self.camera_name_fromDLL.set(
-                    "An error occurred when displaying the camera name in the Win/Mac environment.",
-                )
-                self._logger.warning(
-                    "An error occurred when displaying the camera name in the Win/Mac environment.",
-                )
+                error_msg = "An error occurred when displaying the camera name in the Win/Mac/Linux environment."
+                self.camera_name_fromDLL.set(error_msg)
+                self._logger.warning(error_msg)
                 self._logger.warning(e)
                 self.camera_name_cb.config(state="disable")
                 self.camera_id_entry.config(state="normal")
@@ -1873,12 +1877,6 @@ class PokeControllerApp:
                     "An error occurred when checking serial device list.",
                 )
                 self._logger.warning(e)
-        elif platform.system() == "Linux":
-            self.camera_name_fromDLL.set(
-                "Linux environment. So that cannot show Camera name.",
-            )
-            self.camera_name_cb.config(state="disable")
-            self.camera_id_entry.config(state="normal")
         else:
             self.camera_name_fromDLL.set(
                 "Unknown environment. Cannot show Camera name.",
@@ -2237,6 +2235,29 @@ class PokeControllerApp:
             self.camera_name_cb["values"] = [
                 "No." + str(k) + ": " + v for k, v in self.camera_dic.items()
             ]
+        elif platform.system() == "Linux":
+            v4l_by_id_path = "/dev/v4l/by-id/"
+            cam_device_file_suffix = "-video-index0"
+            cam_device_file_list = glob.glob(
+                f"{v4l_by_id_path}*{cam_device_file_suffix}",
+            )
+            self.camera_dic = {
+                int(
+                    str(
+                        Path(p).resolve(strict=False),
+                    ).removeprefix("/dev/video"),
+                ): Path(p).name.removesuffix(cam_device_file_suffix)
+                for p in cam_device_file_list
+                if Path(p).is_symlink()
+            }
+            self.camera_dic[max(list(self.camera_dic.keys())) + 2] = "Disable"
+            self.camera_name_cb["values"] = [
+                "No." + str(k) + ": " + v for k, v in self.camera_dic.items()
+            ]
+            self._logger.debug(
+                f"Camera list: {[device for device in self.camera_dic.values()]}",
+            )
+            dev_num = len(self.camera_dic)
         else:
             return False
         if self.camera_id.get() > dev_num - 1:
@@ -2288,16 +2309,6 @@ class PokeControllerApp:
 
     def sendLineImage(self) -> None:
         self._logger.info("Line Notify is EOL")
-        # def sendMessage(src:) -> None:
-        #     try:
-        #         Line = Line_Notify()
-        #         Line.send_message("---Manual---", src, "token")
-        #     except Exception:
-        #         pass
-        #
-        # src = self.camera.readFrame()
-        # thread = threading.Thread(target=sendMessage, args=(src,))
-        # thread.start()
 
     def sendDiscordImage(self) -> None:
         def sendMessage(src: MatLike) -> None:

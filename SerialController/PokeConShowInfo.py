@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import platform
+from importlib.metadata import distribution, PackageNotFoundError
 import sys
 import tkinter as tk
-import tkinter.ttk as ttk
 import tkinter.messagebox as tkmsg
 import tkinter.scrolledtext as st
-import platform
+from tkinter import ttk
+
 import Constant
-import pkg_resources
 
 # ソースコードの見た目がよくないので、こっちで定義する。
 QUESTION_TITLE = """--------------------------質問をする際の注意事項--------------------------
@@ -27,7 +26,12 @@ class PokeConQuestionDialogue(object):
         self._ls = None
         self.isOK = None
 
-        message = ["プログラム名：", "制作者様：", "質問内容(経緯などは簡潔に)", "試したこと(詳しく)"]
+        message = [
+            "プログラム名：",
+            "制作者様：",
+            "質問内容(経緯などは簡潔に)",
+            "試したこと(詳しく)",
+        ]
         title = QUESTION_TITLE
 
         # 最終実行コマンドから情報取得
@@ -52,7 +56,9 @@ class PokeConQuestionDialogue(object):
         self.inputs = ttk.Frame(self.main_frame)
 
         self.title_label = ttk.Label(self.main_frame, text=title, anchor="center")
-        self.title_label.grid(column=0, columnspan=2, ipadx="10", ipady="10", row=0, sticky="nsew")
+        self.title_label.grid(
+            column=0, columnspan=2, ipadx="10", ipady="10", row=0, sticky="nsew"
+        )
 
         self.dialogue_ls = {}
         if type(message) is not list:
@@ -64,7 +70,9 @@ class PokeConQuestionDialogue(object):
         h = self.message_dialogue.master.winfo_height()
         w_ = self.message_dialogue.winfo_width()
         h_ = self.message_dialogue.winfo_height()
-        self.message_dialogue.geometry(f"+{int(x + w / 2 - w_ / 2)}+{int(y + h / 2 - h_ / 2)}")
+        self.message_dialogue.geometry(
+            f"+{int(x + w / 2 - w_ / 2)}+{int(y + h / 2 - h_ / 2)}"
+        )
 
         self.box0 = tk.StringVar(value=program_name)
         self.label0 = ttk.Label(self.inputs, text=message[0])
@@ -88,7 +96,9 @@ class PokeConQuestionDialogue(object):
         self.label3.grid(column=0, row=3, sticky="nsew", padx=3, pady=3)
         self.entry3.grid(column=1, row=3, sticky="nsew", padx=3, pady=3)
 
-        self.inputs.grid(column=0, columnspan=2, ipadx="10", ipady="10", row=1, sticky="nsew")
+        self.inputs.grid(
+            column=0, columnspan=2, ipadx="10", ipady="10", row=1, sticky="nsew"
+        )
         self.inputs.grid_anchor("center")
         self.result = ttk.Frame(self.main_frame)
         self.OK = ttk.Button(self.result, command=self.ok_command)
@@ -104,7 +114,9 @@ class PokeConQuestionDialogue(object):
 
     def output_text(self):
         if self.isOK:
-            txt = "---------------------------ここからコピペ---------------------------\n"
+            txt = (
+                "---------------------------ここからコピペ---------------------------\n"
+            )
             txt += f'■プログラム名\n"{self._ls[0]}\n'
             txt += f"■製作者様\n{self._ls[1]}\n"
             txt += f"■使用ツール\n{Constant.NAME} {Constant.VERSION}\n"
@@ -117,7 +129,9 @@ class PokeConQuestionDialogue(object):
             txt += f"■Python version\n{sys.version.split(' ')[0]}\n"
             txt += f"■質問内容(詳しくご記述ください。)\n{self._ls[2]}\n"
             txt += f"■試したこと(詳しくご記述ください。)\n{self._ls[3]}\n"
-            txt += "---------------------------ここまでコピペ---------------------------"
+            txt += (
+                "---------------------------ここまでコピペ---------------------------"
+            )
             print(txt)
             checktext = (
                 "添付資料を準備してください。(以下は一例です。)\n"
@@ -169,9 +183,9 @@ class PokeConVersionCheck(object):
             for line in file:
                 library_name = line.strip()
                 try:
-                    version = pkg_resources.get_distribution(library_name).version
+                    version = distribution(library_name).version
                     txt += f"{library_name}: {version}\n"
-                except pkg_resources.DistributionNotFound:
+                except PackageNotFoundError:
                     txt += f"{library_name}: Not installed\n"
                 except Exception:
                     pass

@@ -1853,11 +1853,6 @@ class PokeControllerApp:
         self.change_buttons_position()
 
         if platform.system() in ("Windows", "Darwin", "Linux"):
-            # if (
-            #     platform.system() == "Windows"
-            #     or platform.system() == "Darwin"
-            #     or platform.system() == "Linux"
-            # ):
             try:
                 self.locateCameraCmbbox()
                 self.camera_id_entry.config(state="disable")

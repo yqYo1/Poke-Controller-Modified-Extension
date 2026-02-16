@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-from operator import itemgetter
 import os
 import platform
 import re
@@ -13,6 +12,7 @@ import sys
 import threading
 import tkinter.messagebox as tkmsg
 from logging import DEBUG, NullHandler, getLogger
+from operator import itemgetter
 from os.path import abspath, dirname
 from pathlib import Path
 from tkinter import ttk

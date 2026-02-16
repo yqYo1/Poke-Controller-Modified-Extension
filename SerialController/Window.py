@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+from operator import itemgetter
 import os
 import platform
 import re
@@ -2181,8 +2182,7 @@ class PokeControllerApp:
         self.camera.openCamera(self.camera_id.get())
 
     def assignCamera(self, event: tk.Event) -> None:  # noqa: ARG002
-        if platform.system() != "Linux":
-            self.camera_name_fromDLL.set(self.camera_dic[self.camera_id.get()])
+        self.camera_name_fromDLL.set(self.camera_dic[self.camera_id.get()])
 
     def locateCameraCmbbox(self) -> bool | None:
         if platform.system() == "Windows":
@@ -2246,13 +2246,19 @@ class PokeControllerApp:
                 if Path(p).is_symlink()
             }
             self.camera_dic[max(list(self.camera_dic.keys())) + 2] = "Disable"
-            self.camera_name_cb["values"] = [
-                "No." + str(k) + ": " + v for k, v in self.camera_dic.items()
+            camera_name_list = [
+                f"No.{k}: {v}"
+                for k, v in sorted(self.camera_dic.items(), key=itemgetter(0))
             ]
+            camera_index_dict = {k: i for i, k in enumerate(sorted(self.camera_dic))}
+            self.camera_name_cb["values"] = camera_name_list
             self._logger.debug(
                 f"Camera list: {[device for device in self.camera_dic.values()]}",
             )
-            dev_num = len(self.camera_dic)
+            # v4lデバイスは基本的に一つのデバイスにつき2つのIDを持つため、
+            # デバイスIDはカメラ数の2倍まで存在しうる。
+            # 1引くのは、"Disable"を追加しているため。
+            dev_num = len(self.camera_dic) * 2 - 1
         else:
             return False
         if self.camera_id.get() > dev_num - 1:
@@ -2264,7 +2270,10 @@ class PokeControllerApp:
                 self._logger.debug("No camera devices can be found.")
 
         self.camera_id_entry.bind("<KeyRelease>", self.assignCamera)
-        self.camera_name_cb.current(self.camera_id.get())
+        if platform.system() != "Linux":
+            self.camera_name_cb.current(self.camera_id.get())
+        else:
+            self.camera_name_cb.current(camera_index_dict[self.camera_id.get()])  # pyright:ignore[reportPossiblyUnboundVariable,reportUnknownArgumentType]
         return None
 
     def locateDeviceCmbbox(self) -> None:

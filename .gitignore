@@ -37,6 +37,10 @@
 /Images/*
 !/Images/disabled.png
 
+!/Docs/
+/Docs/*
+!/Docs/*.md
+
 !/SerialController/
 /SerialController/*
 !/SerialController/*.py

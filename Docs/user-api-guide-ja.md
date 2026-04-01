@@ -39,7 +39,6 @@ class MyCommand(PythonCommand):
 - `wait(sec)` / `short_wait(sec)`
 - `finish()`
 - `direct_serial(serialcommands, waittime)`（上級者向け）
-  - doの最後に必須ではなく、条件分岐で中断したいときにも使用可能
 
 `buttons` は単体またはリストで指定可能:
 
@@ -67,6 +66,7 @@ class MyCommand(PythonCommand):
 - `short_wait`
   - 常にビジーウェイトで待機（短時間精度重視）
 - `finish`
+  - `do`関数の最後には書かなくて良い(書いても問題はない)
   - コマンドを意図的に終了し、停止処理へ移行
   - ループ脱出や入力条件不一致時の早期終了に使用
 - `direct_serial`

@@ -124,9 +124,45 @@ UI 設定:
 
 ---
 
-## 6. カメラ・マウス・キーボード外部入力
+## 6. MCUコマンド通信（McuCommands）
 
-### 6.1 カメラ
+MCUコマンドは `SerialController/Commands/McuCommands/` 配下のクラスで、  
+すべて `McuCommand`（`Commands/McuCommandBase.py`）を継承します。
+
+### 6.1 通信シーケンス（実装準拠）
+
+- 開始（Start）時:
+  - `McuCommand.start()` が `Sender.writeRow(sync_name)` を実行
+  - 実送信は `"<sync_name>\\r\\n"`（UTF-8文字列）
+- 停止（Stop）時:
+  - `McuCommand.end()` が `Sender.writeRow("end")` を実行
+  - 実送信は `"end\\r\\n"`
+
+補足:
+
+- ACK/レスポンス待ちや再送制御はこの層にはありません。
+- 1回の開始コマンド送信後は、停止まで追加のMCU制御文字列を送らない設計です。
+- `McuCommand` は `Sender.writeRow(...)` を直接使用するため、Data Format 設定のバイナリ変換経路（`KeyPress.convert2list*`）は通りません。
+
+### 6.2 既定 sync_name 一覧
+
+| UI表示名 (`NAME`) | クラス | `sync_name` | 開始時送信文字列 |
+|---|---|---|---|
+| A連打 | `Mash_A` | `mash_a` | `mash_a\r\n` |
+| 自動リーグ周回 | `AutoLeague` | `auto_league` | `auto_league\r\n` |
+| 無限ワット | `InfinityWatt` | `inf_watt` | `inf_watt\r\n` |
+| きのみ回収 | `PickUpBerry` | `pickupberry` | `pickupberry\r\n` |
+
+### 6.3 ローダーとの関係
+
+- `Window.loadCommands()` で `Commands/McuCommands` を `CommandLoader` が読み込みます。
+- `NAME` は UI 表示時に `"{元NAME} ({ディレクトリ})"` 形式へ変換されます（実装上の表示名）。
+
+---
+
+## 7. カメラ・マウス・キーボード外部入力
+
+### 7.1 カメラ
 
 - OpenCV キャプチャ
   - Windows: `cv2.CAP_DSHOW`
@@ -134,7 +170,7 @@ UI 設定:
 - 基本サイズ: `1280x720`
 - Flip: `None/Vertical/Horizontal/Both`
 
-### 6.2 マウス（Preview Canvas）
+### 7.2 マウス（Preview Canvas）
 
 - `Ctrl+Shift+左ドラッグ`: 範囲キャプチャ保存
 - `Ctrl+Alt+左ドラッグ`: 名前付き保存
@@ -144,18 +180,18 @@ UI 設定:
   - Default/3DS: 右ドラッグ→右スティック
   - Qingpi: 右クリック/ドラッグ→タッチ
 
-### 6.3 キーボード
+### 7.3 キーボード
 
 - `SwitchKeyboardController` が `settings.ini` `KeyMap-*` を参照して入力変換
 
-### 6.4 ゲームパッド
+### 7.4 ゲームパッド
 
 - Pro Controller / Xinput に対応
 - 内部でシリアル形式へ変換して送信
 
 ---
 
-## 7. 外部通信（Socket/MQTT）
+## 8. 外部通信（Socket/MQTT）
 
 `external_token.ini` から接続先を読み込み、未存在時は自動生成。
 
@@ -167,7 +203,7 @@ UI 設定:
 
 ---
 
-## 8. バグらしき挙動（記録のみ）
+## 9. バグらしき挙動（記録のみ）
 
 | 現在の挙動 | バグだと推察される内容 | 正しいと思われる挙動 |
 |---|---|---|
@@ -176,4 +212,3 @@ UI 設定:
 | LINE トークンが default プロファイル固定 | non-default profile でも切替されない | profile ごとの token 参照 |
 | 右スティック変化判定比較式が重複 | インデックス比較の意図不一致の可能性 | X/Y を正しく比較 |
 | Linux シリアル一覧で COM 前提 regex | Linux デバイス名で失敗可能性 | OS別に列挙/ソート実装 |
-

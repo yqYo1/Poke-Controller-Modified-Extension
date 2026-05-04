@@ -48,6 +48,24 @@
             inherit program;
           };
 
+          # ── Poke-Controller application package ────────────────────────
+          pokeconApp = pkgs.writeShellApplication {
+            name = "pokecon";
+            runtimeInputs = [ rustEnv pythonEnv pkgs.uv ];
+            text = ''
+              cd "${self}"
+              # Ensure Python bindings are built
+              if [ ! -f "python/pokecon/pokecon*.so" ] && [ ! -f "python/pokecon/pokecon*.pyd" ]; then
+                echo "Building Python bindings..."
+                uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
+              fi
+              # Launch the application
+              PYTHONPATH="${self}/python:$PYTHONPATH"
+              export PYTHONPATH
+              exec python -m pokecon "$@"
+            '';
+          };
+
           rustEnv = rustToolchain;  # includes cargo, rustc, clippy-driver, rustfmt
           pythonEnv = pkgs.python314.withPackages (
             ps: with ps; [
@@ -87,7 +105,8 @@
           };
 
           apps = {
-            # nix run .#fmt  — format all files (delegates to treefmt)
+            # nix run .  — launch Poke-Controller application
+            default = mkApp "${pokeconApp}/bin/pokecon";
             fmt = mkApp "${config.treefmt.build.wrapper}/bin/treefmt";
 
             # nix run .#clippy  — run Rust linter

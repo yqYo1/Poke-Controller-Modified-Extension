@@ -1,32 +1,24 @@
 name: Basedpyright
 
 on:
-  push: # masterブランチやmainブランチへのプッシュ時に実行
-    branches: [ main, master ]
-  pull_request: # プルリクエスト作成時にも実行
-    branches: [ main, master ]
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
 
 jobs:
   type-check:
-    runs-on: ubuntu-latest # 最新のUbuntu環境で実行
-
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6 # コードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v6 # Python環境をセットアップ
-      with:
-        python-version: '3.14' # プロジェクトで使用しているPythonバージョンを指定
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install dependencies (if needed)
-      run: |
-        python -m pip install --upgrade pip
-        # プロジェクトの依存関係をインストール (例: requirements.txt)
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Sync dependencies
+        run: nix develop --command uv sync --group dev
 
-    - name: Install Basedpyright
-      run: python -m pip install basedpyright # Basedpyrightをインストール
-
-    - name: Run Basedpyright
-      run: basedpyright --project pyrightconfig.json
+      - name: Run Basedpyright
+        run: nix develop --command basedpyright --project pyrightconfig.json

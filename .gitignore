@@ -9,9 +9,12 @@
 /.github/workflows/*
 !/.github/workflows/ruff.yml
 !/.github/workflows/basedpyright.yml
+!/.github/workflows/lint.yml
+!/.github/workflows/pytest.yml
 
 # not ignore
 !/.gitignore
+!/flake.lock
 !/ExecutePokeConModified-Extension.bat
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE

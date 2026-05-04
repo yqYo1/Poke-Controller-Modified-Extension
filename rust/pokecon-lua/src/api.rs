@@ -57,18 +57,14 @@ impl ApiHandle {
     /// Store a Lua function reference in the Lua registry and return its
     /// integer key.  The caller must own the Lua lock.
     pub fn store_callback(lua: &Lua, func: &LuaFunction) -> usize {
-        let registry = lua.named_registry_value::<Table>("pokecon_callbacks").ok();
-        let key = if let Some(reg) = registry {
-            // Simple counter-based key
+        if let Some(reg) = lua.named_registry_value::<Table>("pokecon_callbacks").ok() {
             let next_key: usize = reg.get("__next_key").unwrap_or(1usize);
             reg.set("__next_key", next_key + 1).ok();
             reg.set(next_key, func.clone()).ok();
             next_key
         } else {
-            // Create registry if missing — this shouldn't happen if init was called
             0
-        };
-        key
+        }
     }
 }
 
@@ -220,7 +216,7 @@ impl PokeConApi {
             "on",
             lua.create_function(move |lua, (event_name, callback): (String, LuaFunction)| {
                 // Store the callback reference in the Lua registry
-                let key = ApiHandle::store_callback(&lua, &callback);
+                let key = ApiHandle::store_callback(lua, &callback);
 
                 // Log the registration
                 if let Some(ref h) = handle_clone {

@@ -16,6 +16,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 pyo3 = { workspace = true }
 numpy = "0.25"
+ndarray = "0.16"
+
 
 pokecon-serial = { path = "../pokecon-serial" }
 pokecon-cv = { path = "../pokecon-cv" }

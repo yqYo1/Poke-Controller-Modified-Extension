@@ -170,11 +170,26 @@ def _apply_import_patches() -> None:
     _mock_keys.Direction = MagicMock()
     _mock_keys.Direction.LEFT = MagicMock()
     _mock_keys.Direction.RIGHT = MagicMock()
+    _mock_keys.Direction.UP = MagicMock()
+    _mock_keys.Direction.DOWN = MagicMock()
+    _mock_keys.Direction.R_UP = MagicMock()
+    _mock_keys.Direction.R_DOWN = MagicMock()
+    _mock_keys.Direction.R_LEFT = MagicMock()
+    _mock_keys.Direction.R_RIGHT = MagicMock()
     _mock_keys.Stick = MagicMock()
     _mock_keys.Hat = MagicMock()
-    _mock_keys.Touchscreen = MagicMock()
-    _mock_keys.Touchscreen.x = 0
-    _mock_keys.Touchscreen.y = 0
+    _mock_keys.Hat.CENTER = MagicMock()
+    _mock_keys.Hat.RIGHT = MagicMock()
+    _mock_keys.Hat.BTM = MagicMock()
+    _mock_keys.Hat.LEFT = MagicMock()
+    
+    # Touchscreen needs to be callable and return an object with x/y attributes
+    def _make_touchscreen(x, y):
+        ts = MagicMock()
+        ts.x = x
+        ts.y = y
+        return ts
+    _mock_keys.Touchscreen = _make_touchscreen
     _mock_keys.KeyPress = MagicMock()
     _mock_keys.SendFormat = MagicMock()
     _mock_keys.Tilt = MagicMock()
@@ -183,7 +198,9 @@ def _apply_import_patches() -> None:
     # Mock Commands.PythonCommandBase for direct imports
     _mock_pybase = types.ModuleType("Commands.PythonCommandBase")
     _mock_pybase.PythonCommand = MagicMock()
+    _mock_pybase.PythonCommand.NAME = "TestCommand"
     _mock_pybase.ImageProcPythonCommand = MagicMock()
+    _mock_pybase.ImageProcPythonCommand.NAME = "TestImageProcCommand"
     _mock_pybase.StopThread = Exception
     sys.modules["Commands.PythonCommandBase"] = _mock_pybase
 

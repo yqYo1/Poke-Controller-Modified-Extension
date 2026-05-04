@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 from abc import ABCMeta
-from typing import ClassVar
 
 
 class CommandMeta(ABCMeta):
@@ -83,9 +82,11 @@ class CommandMeta(ABCMeta):
         """Return the implementation class for *base_name* @ *version*."""
         versions = mcs._interface_registry.get(base_name, {})
         if version not in versions:
-            available = ", ".join(
-                f"'{v}'" for v in versions
-            ) if versions else "(none registered)"
+            available = (
+                ", ".join(f"'{v}'" for v in versions)
+                if versions
+                else "(none registered)"
+            )
             raise ValueError(
                 f"Unknown API version '{version}' for {base_name}. "
                 f"Available: {available}"

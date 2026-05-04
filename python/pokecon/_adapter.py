@@ -25,9 +25,7 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 
-_RUST_CORE_AVAILABLE: bool = (
-    _importlib_util.find_spec("pokecon_core") is not None
-)
+_RUST_CORE_AVAILABLE: bool = _importlib_util.find_spec("pokecon_core") is not None
 
 
 class _RustCoreAdapter:

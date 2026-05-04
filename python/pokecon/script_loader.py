@@ -28,7 +28,6 @@ from pokecon.scripts_dir import get_scripts_dir_with_fallbacks
 if TYPE_CHECKING:
     from logging import Logger
 
-    from Commands.CommandBase import Command
 
 logger: Final[Logger] = getLogger(__name__)
 logger.addHandler(NullHandler())

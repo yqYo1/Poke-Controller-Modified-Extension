@@ -25,7 +25,6 @@ import os
 from pathlib import Path
 from typing import Final
 
-
 # ── Constants ────────────────────────────────────────────────────────────────
 
 DEFAULT_APP_NAME: Final[str] = "pokecon"
@@ -131,7 +130,9 @@ def get_sample_scripts_dir() -> Path:
 
     # Development fallback: look in the project tree
     project_root = pkg_dir.parent.parent  # python/pokecon -> python -> project_root
-    dev_samples = project_root / "SerialController" / "Commands" / "PythonCommands" / "Samples"
+    dev_samples = (
+        project_root / "SerialController" / "Commands" / "PythonCommands" / "Samples"
+    )
     if dev_samples.exists():
         return dev_samples
 

@@ -72,8 +72,11 @@ impl Sender {
         Ok(true)
     }
 
-    pub fn close(&mut self) {
+    pub async fn close(&mut self) {
         debug!("Closing the serial communication");
+        if let Some(ref mut port) = self.port {
+            let _ = port.flush().await;
+        }
         self.port = None;
     }
 
@@ -128,7 +131,6 @@ impl Sender {
 
         let data = format!("{}\r\n", row);
         port.write_all(data.as_bytes()).await.map_err(|e| {
-            println!("{}", e);
             error!("Error: {}", e);
             SerialError::WriteError(e)
         })?;

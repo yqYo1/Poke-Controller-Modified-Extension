@@ -145,7 +145,7 @@ impl SendFormat {
             send_btn |= 0x1;
         }
 
-        let mut result = format!("{:#06x}", send_btn);
+        let mut result = format!("{:#08x}", send_btn);
 
         result.push(' ');
         result.push_str(&self.hat.to_string());

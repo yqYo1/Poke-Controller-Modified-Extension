@@ -17,6 +17,9 @@ edition = "2021"
 license = "MIT"
 authors = ["yqYo1"]
 repository = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
+homepage = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
+keywords = ["pokemon", "automation", "switch", "3ds", "controller", "serial"]
+categories = ["games", "hardware-support", "embedded"]
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }

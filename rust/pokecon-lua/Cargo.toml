@@ -3,6 +3,8 @@ name = "pokecon-lua"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "LuaJIT runtime integration for Poke-Controller dynamic configuration"
 
 [dependencies]

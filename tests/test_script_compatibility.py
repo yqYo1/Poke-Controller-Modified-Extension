@@ -458,7 +458,8 @@ class TestPublicApiWithMocks:
         cmd.gui = MagicMock()
         cmd.canvas = MagicMock()
 
-        with patch("ImageProcessing.ImageProcessing") as mock_img_proc:
+        with patch("ImageProcessing.ImageProcessing") as mock_img_proc, \
+             patch("ImageProcessing.getImage") as mock_getImage:
             mock_instance = MagicMock()
             mock_instance.isContainTemplate.return_value = (
                 True,
@@ -471,6 +472,8 @@ class TestPublicApiWithMocks:
             # Preserve image_type for isinstance() checks in commands.py
             import numpy as np
             mock_img_proc.image_type = np.ndarray
+            # Mock getImage to return a dummy image array
+            mock_getImage.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
 
             result = cmd.isContainTemplate(
                 "dummy.png", threshold=0.7, use_gray=True, show_position=False
@@ -492,7 +495,8 @@ class TestPublicApiWithMocks:
         cmd.gui = MagicMock()
         cmd.canvas = MagicMock()
 
-        with patch("ImageProcessing.ImageProcessing") as mock_img_proc:
+        with patch("ImageProcessing.ImageProcessing") as mock_img_proc, \
+             patch("ImageProcessing.getImage") as mock_getImage:
             mock_instance = MagicMock()
             mock_instance.isContainTemplate.return_value = (
                 True,
@@ -505,6 +509,8 @@ class TestPublicApiWithMocks:
             # Preserve image_type for isinstance() checks in commands.py
             import numpy as np
             mock_img_proc.image_type = np.ndarray
+            # Mock getImage to return a dummy image array
+            mock_getImage.return_value = np.zeros((100, 100, 3), dtype=np.uint8)
 
             result = cmd.isContainedImage(
                 "dummy.png", threshold=0.7, show_position=False

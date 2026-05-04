@@ -26,23 +26,6 @@ bitflags! {
     }
 }
 
-pub const CONVERSION_DEFAULT_BUTTON: [(Button, Button); 14] = [
-    (Button::Y, Button::Y),
-    (Button::B, Button::B),
-    (Button::A, Button::A),
-    (Button::X, Button::X),
-    (Button::L, Button::L),
-    (Button::R, Button::R),
-    (Button::ZL, Button::ZL),
-    (Button::ZR, Button::ZR),
-    (Button::MINUS, Button::MINUS),
-    (Button::PLUS, Button::PLUS),
-    (Button::LCLICK, Button::LCLICK),
-    (Button::RCLICK, Button::RCLICK),
-    (Button::HOME, Button::HOME),
-    (Button::CAPTURE, Button::CAPTURE),
-];
-
 pub const CONVERSION_3DS_CONTROLLER_BUTTON: [(Button, u16); 14] = [
     (Button::A, 1),
     (Button::B, 2),
@@ -65,12 +48,13 @@ pub fn convert_button_default(btn: Button) -> Button {
 }
 
 pub fn convert_button_3ds(btn: Button) -> u16 {
+    let mut result = 0;
     for &(b, v) in CONVERSION_3DS_CONTROLLER_BUTTON.iter() {
         if btn.contains(b) {
-            return v;
+            result |= v;
         }
     }
-    0
+    result
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -127,8 +111,8 @@ impl Direction {
         let mag = magnification.clamp(0.0, 1.0);
         let angle_rad = angle_deg * PI / 180.0;
 
-        let x = (127.5 * angle_rad.cos() * mag + 127.5).ceil() as u8;
-        let y = (127.5 * angle_rad.sin() * mag + 127.5).floor() as u8;
+        let x = (127.5 * angle_rad.cos() * mag + 127.5).round() as u8;
+        let y = (127.5 * angle_rad.sin() * mag + 127.5).round() as u8;
 
         Self {
             stick,
@@ -158,9 +142,9 @@ impl Direction {
                 } else if self.x > DIRECTION_CENTER {
                     tilting.push(Tilt::Right);
                 }
-                if self.y < DIRECTION_CENTER - 1 {
+                if self.y < DIRECTION_CENTER {
                     tilting.push(Tilt::Down);
-                } else if self.y > DIRECTION_CENTER - 1 {
+                } else if self.y > DIRECTION_CENTER {
                     tilting.push(Tilt::Up);
                 }
             }
@@ -170,9 +154,9 @@ impl Direction {
                 } else if self.x > DIRECTION_CENTER {
                     tilting.push(Tilt::RRight);
                 }
-                if self.y < DIRECTION_CENTER - 1 {
+                if self.y < DIRECTION_CENTER {
                     tilting.push(Tilt::RDown);
-                } else if self.y > DIRECTION_CENTER - 1 {
+                } else if self.y > DIRECTION_CENTER {
                     tilting.push(Tilt::RUp);
                 }
             }

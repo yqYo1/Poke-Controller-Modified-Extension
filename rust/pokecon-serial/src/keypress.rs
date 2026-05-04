@@ -1,5 +1,5 @@
 use crate::format::SendFormat;
-use crate::keys::{Button, Direction, GamepadInput, Hat, Stick, Tilt, Touchscreen, DIRECTION_CENTER};
+use crate::keys::{Button, Direction, GamepadInput, Hat, Stick, Tilt, Touchscreen};
 use crate::sender::Sender;
 use tracing::warn;
 
@@ -213,64 +213,68 @@ impl KeyPress {
         Ok(())
     }
 
+    fn push_hold_input(&mut self, btn: &GamepadInput, to_input: &mut Vec<GamepadInput>) {
+        match btn {
+            GamepadInput::SingleButton(b) => {
+                if self.hold_buttons.contains(b) {
+                    warn!("{:?} is already in holding state", b);
+                } else {
+                    self.hold_buttons.push(*b);
+                    to_input.push(btn.clone());
+                }
+            }
+            GamepadInput::SingleHat(h) => {
+                if *h == Hat::CENTER {
+                    return;
+                }
+                if self.hold_hat == *h {
+                    warn!("{:?} is already in holding state", h);
+                } else {
+                    self.hold_hat = *h;
+                    to_input.push(btn.clone());
+                }
+            }
+            GamepadInput::SingleDirection(d) => {
+                match d.stick {
+                    Stick::Left => {
+                        if self.hold_left_stick.as_ref() == Some(d) {
+                            warn!("{:?} is already in holding state", d);
+                        } else {
+                            self.hold_left_stick = Some(d.clone());
+                            to_input.push(btn.clone());
+                        }
+                    }
+                    Stick::Right => {
+                        if self.hold_right_stick.as_ref() == Some(d) {
+                            warn!("{:?} is already in holding state", d);
+                        } else {
+                            self.hold_right_stick = Some(d.clone());
+                            to_input.push(btn.clone());
+                        }
+                    }
+                }
+            }
+            GamepadInput::SingleTouchscreen(t) => {
+                if self.hold_touchscreen.as_ref() == Some(t) {
+                    warn!("{:?} is already in holding state", t);
+                } else {
+                    self.hold_touchscreen = Some(*t);
+                    to_input.push(btn.clone());
+                }
+            }
+            GamepadInput::Multiple(inputs) => {
+                for input in inputs {
+                    self.push_hold_input(input, to_input);
+                }
+            }
+        }
+    }
+
     pub async fn hold(&mut self, btns: &[GamepadInput]) -> Result<(), crate::sender::SerialError> {
         let mut to_input = Vec::new();
 
         for btn in btns {
-            match btn {
-                GamepadInput::SingleButton(b) => {
-                    if self.hold_buttons.contains(b) {
-                        warn!("{:?} is already in holding state", b);
-                    } else {
-                        self.hold_buttons.push(*b);
-                        to_input.push(btn.clone());
-                    }
-                }
-                GamepadInput::SingleHat(h) => {
-                    if *h == Hat::CENTER {
-                        continue;
-                    }
-                    if self.hold_hat == *h {
-                        warn!("{:?} is already in holding state", h);
-                    } else {
-                        self.hold_hat = *h;
-                        to_input.push(btn.clone());
-                    }
-                }
-                GamepadInput::SingleDirection(d) => {
-                    match d.stick {
-                        Stick::Left => {
-                            if self.hold_left_stick.as_ref() == Some(d) {
-                                warn!("{:?} is already in holding state", d);
-                            } else {
-                                self.hold_left_stick = Some(d.clone());
-                                to_input.push(btn.clone());
-                            }
-                        }
-                        Stick::Right => {
-                            if self.hold_right_stick.as_ref() == Some(d) {
-                                warn!("{:?} is already in holding state", d);
-                            } else {
-                                self.hold_right_stick = Some(d.clone());
-                                to_input.push(btn.clone());
-                            }
-                        }
-                    }
-                }
-                GamepadInput::SingleTouchscreen(t) => {
-                    if self.hold_touchscreen.as_ref() == Some(t) {
-                        warn!("{:?} is already in holding state", t);
-                    } else {
-                        self.hold_touchscreen = Some(*t);
-                        to_input.push(btn.clone());
-                    }
-                }
-                GamepadInput::Multiple(inputs) => {
-                    for input in inputs {
-                        to_input.push(input.clone());
-                    }
-                }
-            }
+            self.push_hold_input(btn, &mut to_input);
         }
 
         if !to_input.is_empty() {
@@ -280,6 +284,60 @@ impl KeyPress {
         Ok(())
     }
 
+    fn push_hold_end_input(&mut self, btn: &GamepadInput, to_input_end: &mut Vec<GamepadInput>) {
+        match btn {
+            GamepadInput::SingleButton(b) => {
+                if let Some(pos) = self.hold_buttons.iter().position(|x| x == b) {
+                    self.hold_buttons.remove(pos);
+                    to_input_end.push(btn.clone());
+                } else {
+                    warn!("{:?} is not in holding state", b);
+                }
+            }
+            GamepadInput::SingleHat(h) => {
+                if self.hold_hat == *h {
+                    self.hold_hat = Hat::CENTER;
+                    to_input_end.push(btn.clone());
+                } else {
+                    warn!("{:?} is not in holding state", h);
+                }
+            }
+            GamepadInput::SingleDirection(d) => {
+                match d.stick {
+                    Stick::Left => {
+                        if self.hold_left_stick.as_ref() == Some(d) {
+                            self.hold_left_stick = None;
+                            to_input_end.push(btn.clone());
+                        } else {
+                            warn!("{:?} is not in holding state", d);
+                        }
+                    }
+                    Stick::Right => {
+                        if self.hold_right_stick.as_ref() == Some(d) {
+                            self.hold_right_stick = None;
+                            to_input_end.push(btn.clone());
+                        } else {
+                            warn!("{:?} is not in holding state", d);
+                        }
+                    }
+                }
+            }
+            GamepadInput::SingleTouchscreen(t) => {
+                if self.hold_touchscreen.as_ref() == Some(t) {
+                    self.hold_touchscreen = None;
+                    to_input_end.push(btn.clone());
+                } else {
+                    warn!("{:?} is not in holding state", t);
+                }
+            }
+            GamepadInput::Multiple(inputs) => {
+                for input in inputs {
+                    self.push_hold_end_input(input, to_input_end);
+                }
+            }
+        }
+    }
+
     pub async fn hold_end(
         &mut self,
         btns: &[GamepadInput],
@@ -287,57 +345,7 @@ impl KeyPress {
         let mut to_input_end = Vec::new();
 
         for btn in btns {
-            match btn {
-                GamepadInput::SingleButton(b) => {
-                    if let Some(pos) = self.hold_buttons.iter().position(|x| x == b) {
-                        self.hold_buttons.remove(pos);
-                        to_input_end.push(btn.clone());
-                    } else {
-                        warn!("{:?} is not in holding state", b);
-                    }
-                }
-                GamepadInput::SingleHat(h) => {
-                    if self.hold_hat == *h {
-                        self.hold_hat = Hat::CENTER;
-                        to_input_end.push(btn.clone());
-                    } else {
-                        warn!("{:?} is not in holding state", h);
-                    }
-                }
-                GamepadInput::SingleDirection(d) => {
-                    match d.stick {
-                        Stick::Left => {
-                            if self.hold_left_stick.as_ref() == Some(d) {
-                                self.hold_left_stick = None;
-                                to_input_end.push(btn.clone());
-                            } else {
-                                warn!("{:?} is not in holding state", d);
-                            }
-                        }
-                        Stick::Right => {
-                            if self.hold_right_stick.as_ref() == Some(d) {
-                                self.hold_right_stick = None;
-                                to_input_end.push(btn.clone());
-                            } else {
-                                warn!("{:?} is not in holding state", d);
-                            }
-                        }
-                    }
-                }
-                GamepadInput::SingleTouchscreen(t) => {
-                    if self.hold_touchscreen.as_ref() == Some(t) {
-                        self.hold_touchscreen = None;
-                        to_input_end.push(btn.clone());
-                    } else {
-                        warn!("{:?} is not in holding state", t);
-                    }
-                }
-                GamepadInput::Multiple(inputs) => {
-                    for input in inputs {
-                        to_input_end.push(input.clone());
-                    }
-                }
-            }
+            self.push_hold_end_input(btn, &mut to_input_end);
         }
 
         if !to_input_end.is_empty() {
@@ -374,6 +382,13 @@ impl KeyPress {
         serial_commands: &[String],
         wait_times: &[f64],
     ) -> Result<(), crate::sender::SerialError> {
+        if serial_commands.len() != wait_times.len() {
+            warn!(
+                "Mismatched lengths: serial_commands={}, wait_times={}",
+                serial_commands.len(),
+                wait_times.len()
+            );
+        }
         for (wtime, row) in wait_times.iter().zip(serial_commands.iter()) {
             tokio::time::sleep(tokio::time::Duration::from_millis(
                 (wtime * 1000.0) as u64,
@@ -394,14 +409,12 @@ impl KeyPress {
         for d in directions {
             match d.stick {
                 Stick::Left => {
-                    if self.format.lx != d.x || self.format.ly != 255 - d.y {
-                        self.l_stick_changed = true;
-                    }
+                    self.l_stick_changed =
+                        self.format.lx != d.x || self.format.ly != 255 - d.y;
                 }
                 Stick::Right => {
-                    if self.format.rx != d.x || self.format.ry != 255 - d.y {
-                        self.r_stick_changed = true;
-                    }
+                    self.r_stick_changed =
+                        self.format.rx != d.x || self.format.ry != 255 - d.y;
                 }
             }
         }

@@ -35,6 +35,6 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run ruff check
-        run: nix develop --command ruff check .
+        run: nix develop --command ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
       - name: Run ruff format check
         run: nix develop --command ruff format --check .

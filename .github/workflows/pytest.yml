@@ -16,7 +16,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Sync dependencies
         run: |
-          nix develop --command uv pip install pytest
+          nix develop --command bash -c "uv venv && uv pip install pytest"
       - name: Run pytest
         run: |
           nix develop --command uv run pytest tests/ -v --tb=short

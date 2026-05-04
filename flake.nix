@@ -121,7 +121,10 @@
                 name = "clippy";
                 runtimeInputs = [ rustEnv ];
                 text = ''
-                  cd "${self}"
+                  workdir="$(mktemp -d)"
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
                   cargo clippy --all-targets --all-features -- -D warnings
                 '';
               }
@@ -246,7 +249,11 @@
                   pythonEnv
                 ];
                 text = ''
-                  cd "${self}"
+                  workdir="$(mktemp -d)"
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
+
                   echo "═══════════════════════════════════════════"
                   echo "  clippy"
                   echo "═══════════════════════════════════════════"
@@ -255,13 +262,13 @@
                   echo "═══════════════════════════════════════════"
                   echo "  ruff check"
                   echo "═══════════════════════════════════════════"
-                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
                   ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
                   echo ""
                   echo "═══════════════════════════════════════════"
                   echo "  pytest"
                   echo "═══════════════════════════════════════════"
-                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
                   pytest -p no:cacheprovider tests/ -v --tb=short
                   echo ""
                   echo "═══════════════════════════════════════════"

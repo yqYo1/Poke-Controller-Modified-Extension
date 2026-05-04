@@ -1,4 +1,4 @@
-//! LuaJIT runtime wrapper using mlua.
+#![allow(clippy::arc_with_non_send_sync)]
 //!
 //! Provides a thread-safe, async-aware wrapper around the `mlua::Lua` runtime
 //! with integration into the PokeCon event system.

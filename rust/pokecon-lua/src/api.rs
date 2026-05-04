@@ -365,12 +365,10 @@ fn lua_value_to_json(val: &Option<Value>) -> serde_json::Value {
     match val {
         Some(Value::Table(t)) => {
             let mut map = serde_json::Map::new();
-            for pair in t.pairs::<Value, Value>() {
-                if let Ok((key, val)) = pair {
-                    let k = format!("{:?}", key);
-                    let v = format!("{:?}", val);
-                    map.insert(k, serde_json::Value::String(v));
-                }
+            for (key, val) in t.pairs::<Value, Value>().flatten() {
+                let k = format!("{:?}", key);
+                let v = format!("{:?}", val);
+                map.insert(k, serde_json::Value::String(v));
             }
             serde_json::Value::Object(map)
         }

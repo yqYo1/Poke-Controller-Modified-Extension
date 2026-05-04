@@ -3,6 +3,8 @@ name = "pokecon-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Core logic: settings, command management, profiles for Poke-Controller"
 
 [dependencies]

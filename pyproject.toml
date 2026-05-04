@@ -5,9 +5,20 @@ build-backend = "maturin"
 [project]
 name = "poke-controller-modified-extension"
 version = "0.1.0"
-description = "Add your description here"
+description = "Poke-Controller Modified Extension - Game console automation software with Rust core, Python scripting, camera capture, and MQTT notifications"
 readme = "README.md"
 requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [{ name = "yqYo1" }]
+keywords = ["pokemon", "automation", "switch", "3ds", "controller"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Rust",
+    "Topic :: Games/Entertainment",
+]
 dependencies = [
   "gitpython>=3.1.45",
   "imagehash>=4.3.2",
@@ -38,6 +49,11 @@ torch = [
 keyboard = [
     "pykakasi>=2.3.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
+Repository = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
+Documentation = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
 
 [dependency-groups]
 dev = [

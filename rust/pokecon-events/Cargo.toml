@@ -3,6 +3,8 @@ name = "pokecon-events"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Event bus and autocmd system for Poke-Controller"
 
 [dependencies]

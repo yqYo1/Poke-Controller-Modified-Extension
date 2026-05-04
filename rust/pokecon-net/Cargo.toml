@@ -3,6 +3,8 @@ name = "pokecon-net"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Socket and MQTT communication for Poke-Controller"
 
 [dependencies]

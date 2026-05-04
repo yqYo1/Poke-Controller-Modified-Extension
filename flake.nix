@@ -127,8 +127,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${self}"
-                PYTHONPATH="${self}/python:$PYTHONPATH"
-                export PYTHONPATH
+                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                 ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
               '';
             }}/bin/ruff-check";
@@ -159,8 +158,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${self}"
-                PYTHONPATH="${self}/python:$PYTHONPATH"
-                export PYTHONPATH
+                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                 exec pytest tests/ -v --tb=short
               '';
             }}/bin/test";
@@ -223,15 +221,13 @@
                 echo "═══════════════════════════════════════════"
                 echo "  ruff check"
                 echo "═══════════════════════════════════════════"
-                PYTHONPATH="${self}/python:$PYTHONPATH"
-                export PYTHONPATH
+                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                 ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
                 echo ""
                 echo "═══════════════════════════════════════════"
                 echo "  pytest"
                 echo "═══════════════════════════════════════════"
-                PYTHONPATH="${self}/python:$PYTHONPATH"
-                export PYTHONPATH
+                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                 pytest tests/ -v --tb=short
                 echo ""
                 echo "═══════════════════════════════════════════"

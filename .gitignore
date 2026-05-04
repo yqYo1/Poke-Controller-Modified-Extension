@@ -113,6 +113,9 @@ result-*
 !/rust/pokecon-*/src/
 /rust/pokecon-*/src/*
 !/rust/pokecon-*/src/*.rs
+!/rust/pokecon-*/benches/
+/rust/pokecon-*/benches/*
+!/rust/pokecon-*/benches/*.rs
 
 !/python/
 /python/*

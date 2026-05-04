@@ -122,6 +122,7 @@
                 runtimeInputs = [ rustEnv ];
                 text = ''
                   workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
                   cp -r "${self}/." "$workdir/"
                   chmod -R +w "$workdir"
                   cd "$workdir"
@@ -190,7 +191,11 @@
                   pkgs.uv
                 ];
                 text = ''
-                  cd "${self}"
+                  workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
                   echo "=== Building Rust workspace ==="
                   cargo build --workspace --all-features
                   echo ""
@@ -206,7 +211,11 @@
                 name = "build-rust";
                 runtimeInputs = [ rustEnv ];
                 text = ''
-                  cd "${self}"
+                  workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
                   cargo build --workspace --all-features
                 '';
               }
@@ -218,7 +227,11 @@
                 name = "cargo-test";
                 runtimeInputs = [ rustEnv ];
                 text = ''
-                  cd "${self}"
+                  workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
                   cargo test --workspace --all-features
                 '';
               }
@@ -250,6 +263,7 @@
                 ];
                 text = ''
                   workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
                   cp -r "${self}/." "$workdir/"
                   chmod -R +w "$workdir"
                   cd "$workdir"

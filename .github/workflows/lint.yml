@@ -1,0 +1,42 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  nix-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check formatting with treefmt
+        run: nix fmt -- --ci
+
+  rust-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run cargo fmt check
+        run: nix develop --command cargo fmt --all -- --check
+      - name: Run cargo clippy
+        run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run ruff check
+        run: nix develop --command ruff check .
+      - name: Run ruff format check
+        run: nix develop --command ruff format --check .

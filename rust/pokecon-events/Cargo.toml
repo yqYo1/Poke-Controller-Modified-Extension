@@ -1,0 +1,16 @@
+[package]
+name = "pokecon-events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Event bus and autocmd system for Poke-Controller"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+glob = "0.3"
+regex = "1"

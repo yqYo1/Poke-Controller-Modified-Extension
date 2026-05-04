@@ -1,0 +1,17 @@
+[package]
+name = "pokecon-serial"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Serial communication and controller input abstraction for Poke-Controller"
+
+[dependencies]
+tokio = { workspace = true }
+tokio-serial = "5.4"
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+bitflags = "2"
+
+[dev-dependencies]
+tokio = { workspace = true }

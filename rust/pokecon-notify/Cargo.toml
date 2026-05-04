@@ -1,0 +1,15 @@
+[package]
+name = "pokecon-notify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Discord/LINE notification system for Poke-Controller"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+
+pokecon-events = { path = "../pokecon-events" }

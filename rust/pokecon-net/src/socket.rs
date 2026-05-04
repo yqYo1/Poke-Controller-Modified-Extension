@@ -2,8 +2,8 @@ use std::io;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
 use tracing::{debug, info};
 
 /// Socket communication error types
@@ -190,26 +190,21 @@ mod tests {
         let addr = listener.local_addr().unwrap().to_string();
 
         tokio::spawn(async move {
-            loop {
-                match listener.accept().await {
-                    Ok((stream, _)) => {
-                        let (r, w) = stream.into_split();
-                        let mut reader = BufReader::new(r);
-                        let mut writer = BufWriter::new(w);
-                        let mut buf = vec![0u8; 1024];
+            while let Ok((stream, _)) = listener.accept().await {
+                let (r, w) = stream.into_split();
+                let mut reader = BufReader::new(r);
+                let mut writer = BufWriter::new(w);
+                let mut buf = vec![0u8; 1024];
 
-                        loop {
-                            match reader.read(&mut buf).await {
-                                Ok(0) => break,
-                                Ok(n) => {
-                                    writer.write_all(&buf[..n]).await.unwrap();
-                                    writer.flush().await.unwrap();
-                                }
-                                Err(_) => break,
-                            }
+                loop {
+                    match reader.read(&mut buf).await {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            writer.write_all(&buf[..n]).await.unwrap();
+                            writer.flush().await.unwrap();
                         }
+                        Err(_) => break,
                     }
-                    Err(_) => break,
                 }
             }
         });

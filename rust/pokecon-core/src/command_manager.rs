@@ -164,7 +164,7 @@ impl CommandManager {
                 line.trim_start().starts_with("# Description:")
                     || line.trim_start().starts_with("-- Description:")
             })
-            .map(|line| line.splitn(2, ':').nth(1).unwrap_or("").trim().to_string())
+            .and_then(|line| line.split_once(':').map(|(_, v)| v.trim().to_string()))
     }
 }
 

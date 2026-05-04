@@ -46,7 +46,7 @@ impl PokeConApi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mlua::Lua;
+    use mlua::{Lua, Table};
 
     #[test]
     fn test_api_registration() {

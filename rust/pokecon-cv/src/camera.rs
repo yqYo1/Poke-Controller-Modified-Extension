@@ -92,6 +92,7 @@ impl Camera {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct MockCameraBackend {
     open_state: bool,
     mock_frame: Option<Frame>,
@@ -99,10 +100,7 @@ pub struct MockCameraBackend {
 
 impl MockCameraBackend {
     pub fn new() -> Self {
-        Self {
-            open_state: false,
-            mock_frame: None,
-        }
+        Self::default()
     }
 
     pub fn with_frame(mut self, frame: Frame) -> Self {

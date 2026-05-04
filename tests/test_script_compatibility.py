@@ -504,19 +504,6 @@ class TestPublicApiWithMocks:
             assert result is True
 
 
-class AutoLeagueForTest:
-    from Commands.Keys import Button, Direction, Stick
-    from Commands.PythonCommandBase import PythonCommand
-
-
-class ImageProcTest:
-    from Commands.PythonCommandBase import ImageProcPythonCommand
-
-    def __init__(self, camera) -> None:
-        self.camera = camera
-        self.gui = None
-
-
 from Commands.PythonCommandBase import ImageProcPythonCommand, PythonCommand
 
 

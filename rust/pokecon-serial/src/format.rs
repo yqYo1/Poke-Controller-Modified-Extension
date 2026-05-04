@@ -1,6 +1,6 @@
 use crate::keys::{
-    Button, CONVERT_HAT_3DS_CONTROLLER, CONVERT_HAT_DEFAULT, DIRECTION_CENTER, Direction, Hat,
-    Stick, Tilt, Touchscreen,
+    Button, Direction, Hat, Stick, Tilt, Touchscreen, CONVERT_HAT_3DS_CONTROLLER,
+    CONVERT_HAT_DEFAULT, DIRECTION_CENTER,
 };
 
 /// Serial data format state (button, hat, sticks, touchscreen).

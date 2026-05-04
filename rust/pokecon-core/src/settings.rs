@@ -52,20 +52,11 @@ impl Default for CameraSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct NotifySettings {
     pub discord_webhook_url: Option<String>,
     pub line_access_token: Option<String>,
-}
-
-impl Default for NotifySettings {
-    fn default() -> Self {
-        Self {
-            discord_webhook_url: None,
-            line_access_token: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

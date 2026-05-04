@@ -57,6 +57,7 @@ pub fn convert_button_3ds(btn: Button) -> u16 {
     result
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Hat {
     #[default]

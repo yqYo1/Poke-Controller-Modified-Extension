@@ -65,7 +65,7 @@ impl ImageProcessor {
             width: region.width,
             height: region.height,
             data,
-            format: frame.format.clone(),
+            format: frame.format,
         })
     }
 
@@ -103,7 +103,7 @@ impl ImageProcessor {
         threshold: f64,
     ) -> Result<Vec<MatchResult>, ImageError> {
         if frame.format != PixelFormat::Gray || template.format != PixelFormat::Gray {
-            return Err(ImageError::UnsupportedFormat(frame.format.clone()));
+            return Err(ImageError::UnsupportedFormat(frame.format));
         }
 
         if template.width > frame.width || template.height > frame.height {
@@ -143,8 +143,8 @@ impl ImageProcessor {
             for tx in 0..tw {
                 let frame_idx = (y + ty) * fw + (x + tx);
                 let template_idx = ty * tw + tx;
-                let diff = (frame.data[frame_idx] as i16 - template.data[template_idx] as i16).abs()
-                    as u64;
+                let diff = (frame.data[frame_idx] as i16 - template.data[template_idx] as i16)
+                    .unsigned_abs() as u64;
                 diff_sum += diff;
                 total_pixels += 1;
             }

@@ -81,7 +81,7 @@ impl EventBus {
         let mut handlers = self.handlers.write();
         handlers
             .entry(event_type.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(Arc::new(handler));
         debug!("Registered handler for event type: {}", event_type);
     }
@@ -112,7 +112,7 @@ impl EventBus {
     /// Check if any handlers are registered for an event type
     pub fn has_handlers(&self, event_type: &str) -> bool {
         let handlers = self.handlers.read();
-        handlers.get(event_type).map_or(false, |h| !h.is_empty())
+        handlers.get(event_type).is_some_and(|h| !h.is_empty())
     }
 
     /// Get the number of registered event types

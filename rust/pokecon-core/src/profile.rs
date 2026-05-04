@@ -169,7 +169,7 @@ mod tests {
         manager.create(profile.clone()).unwrap();
         assert_eq!(manager.names(), vec!["test"]);
 
-        let mut manager2 = ProfileManager::new(dir.path()).unwrap();
+        let manager2 = ProfileManager::new(dir.path()).unwrap();
         assert_eq!(manager2.names(), vec!["test"]);
         assert_eq!(manager2.get("test"), Some(&profile));
     }

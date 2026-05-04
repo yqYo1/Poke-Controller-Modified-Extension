@@ -15,11 +15,13 @@ pub enum LuaRuntimeError {
     Timeout,
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 pub struct LuaRuntime {
     lua: Arc<Mutex<Lua>>,
     loaded_script: Option<String>,
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 impl LuaRuntime {
     pub fn new() -> Result<Self, LuaRuntimeError> {
         let lua = Lua::new();

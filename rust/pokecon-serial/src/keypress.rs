@@ -420,6 +420,7 @@ impl KeyPress {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn reset_internal_state(&mut self) {
         self.format.reset();
         self.hold_buttons.clear();

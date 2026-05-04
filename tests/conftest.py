@@ -161,7 +161,20 @@ def _apply_import_patches() -> None:
     # Mock Commands module package (imported by original PythonCommandBase)
     if "Commands" not in sys.modules:
         _mock_cmds = types.ModuleType("Commands")
+        _mock_cmds.__path__ = []  # Make it a package
         sys.modules["Commands"] = _mock_cmds
+    
+    # Mock Commands.Keys for direct imports
+    _mock_keys = types.ModuleType("Commands.Keys")
+    _mock_keys.Button = MagicMock
+    _mock_keys.Direction = MagicMock
+    _mock_keys.Stick = MagicMock
+    _mock_keys.Hat = MagicMock
+    _mock_keys.Touchscreen = MagicMock
+    _mock_keys.KeyPress = MagicMock
+    _mock_keys.SendFormat = MagicMock
+    _mock_keys.Tilt = MagicMock
+    sys.modules["Commands.Keys"] = _mock_keys
     
     # Mock Commands.PythonCommandBase for direct imports
     _mock_pybase = types.ModuleType("Commands.PythonCommandBase")

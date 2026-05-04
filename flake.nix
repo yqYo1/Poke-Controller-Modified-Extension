@@ -51,7 +51,11 @@
           # ── Poke-Controller application package ────────────────────────
           pokeconApp = pkgs.writeShellApplication {
             name = "pokecon";
-            runtimeInputs = [ rustEnv pythonEnv pkgs.uv ];
+            runtimeInputs = [
+              rustEnv
+              pythonEnv
+              pkgs.uv
+            ];
             text = ''
               cd "${self}"
               # Ensure Python bindings are built
@@ -66,13 +70,14 @@
             '';
           };
 
-          rustEnv = rustToolchain;  # includes cargo, rustc, clippy-driver, rustfmt
+          rustEnv = rustToolchain; # includes cargo, rustc, clippy-driver, rustfmt
           pythonEnv = pkgs.python314.withPackages (
             ps: with ps; [
               pytest
               numpy
               scipy
               ruff
+              basedpyright
               pillow
             ]
           );
@@ -112,173 +117,208 @@
             fmt = mkApp "${config.treefmt.build.wrapper}/bin/treefmt";
 
             # nix run .#clippy  — run Rust linter
-            clippy = mkApp "${pkgs.writeShellApplication {
-              name = "clippy";
-              runtimeInputs = [ rustEnv ];
-              text = ''
-                cd "${self}"
-                cargo clippy --all-targets --all-features -- -D warnings
-              '';
-            }}/bin/clippy";
+            clippy = mkApp "${
+              pkgs.writeShellApplication {
+                name = "clippy";
+                runtimeInputs = [ rustEnv ];
+                text = ''
+                  cd "${self}"
+                  cargo clippy --all-targets --all-features -- -D warnings
+                '';
+              }
+            }/bin/clippy";
 
             # nix run .#ruff-check  — run Python linter
-            ruff-check = mkApp "${pkgs.writeShellApplication {
-              name = "ruff-check";
-              runtimeInputs = [ pythonEnv ];
-              text = ''
-                cd "${self}"
-                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
-              '';
-            }}/bin/ruff-check";
+            ruff-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "ruff-check";
+                runtimeInputs = [ pythonEnv ];
+                text = ''
+                  cd "${self}"
+                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
+                '';
+              }
+            }/bin/ruff-check";
 
             # nix run .#ruff-format  — format Python files
-            ruff-format = mkApp "${pkgs.writeShellApplication {
-              name = "ruff-format";
-              runtimeInputs = [ pythonEnv ];
-              text = ''
-                cd "${self}"
-                ruff format .
-              '';
-            }}/bin/ruff-format";
+            ruff-format = mkApp "${
+              pkgs.writeShellApplication {
+                name = "ruff-format";
+                runtimeInputs = [ pythonEnv ];
+                text = ''
+                  cd "${self}"
+                  ruff format .
+                '';
+              }
+            }/bin/ruff-format";
 
             # nix run .#ruff-format-check  — check Python formatting (CI)
-            ruff-format-check = mkApp "${pkgs.writeShellApplication {
-              name = "ruff-format-check";
-              runtimeInputs = [ pythonEnv ];
-              text = ''
-                cd "${self}"
-                ruff format --check .
-              '';
-            }}/bin/ruff-format-check";
+            ruff-format-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "ruff-format-check";
+                runtimeInputs = [ pythonEnv ];
+                text = ''
+                  cd "${self}"
+                  ruff format --no-cache --check .
+                '';
+              }
+            }/bin/ruff-format-check";
 
             # nix run .#test  — run pytest
-            test = mkApp "${pkgs.writeShellApplication {
-              name = "test";
-              runtimeInputs = [ pythonEnv ];
-              text = ''
-                cd "${self}"
-                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                exec pytest tests/ -v --tb=short
-              '';
-            }}/bin/test";
+            test = mkApp "${
+              pkgs.writeShellApplication {
+                name = "test";
+                runtimeInputs = [ pythonEnv ];
+                text = ''
+                  cd "${self}"
+                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  exec pytest tests/ -v --tb=short
+                '';
+              }
+            }/bin/test";
 
             # nix run .#build  — build Rust workspace + Python maturin package
-            build = mkApp "${pkgs.writeShellApplication {
-              name = "build";
-              runtimeInputs = [ rustEnv pythonEnv pkgs.uv ];
-              text = ''
-                cd "${self}"
-                echo "=== Building Rust workspace ==="
-                cargo build --workspace --all-features
-                echo ""
-                echo "=== Building Python maturin package ==="
-                uv run maturin build --manifest-path rust/pokecon-pybindings/Cargo.toml
-              '';
-            }}/bin/build";
+            build = mkApp "${
+              pkgs.writeShellApplication {
+                name = "build";
+                runtimeInputs = [
+                  rustEnv
+                  pythonEnv
+                  pkgs.uv
+                ];
+                text = ''
+                  cd "${self}"
+                  echo "=== Building Rust workspace ==="
+                  cargo build --workspace --all-features
+                  echo ""
+                  echo "=== Building Python maturin package ==="
+                  uv run maturin build --manifest-path rust/pokecon-pybindings/Cargo.toml
+                '';
+              }
+            }/bin/build";
 
             # nix run .#build-rust  — build Rust workspace only
-            build-rust = mkApp "${pkgs.writeShellApplication {
-              name = "build-rust";
-              runtimeInputs = [ rustEnv ];
-              text = ''
-                cd "${self}"
-                cargo build --workspace --all-features
-              '';
-            }}/bin/build-rust";
+            build-rust = mkApp "${
+              pkgs.writeShellApplication {
+                name = "build-rust";
+                runtimeInputs = [ rustEnv ];
+                text = ''
+                  cd "${self}"
+                  cargo build --workspace --all-features
+                '';
+              }
+            }/bin/build-rust";
 
             # nix run .#cargo-test  — run Rust tests
-            cargo-test = mkApp "${pkgs.writeShellApplication {
-              name = "cargo-test";
-              runtimeInputs = [ rustEnv ];
-              text = ''
-                cd "${self}"
-                cargo test --workspace --all-features
-              '';
-            }}/bin/cargo-test";
+            cargo-test = mkApp "${
+              pkgs.writeShellApplication {
+                name = "cargo-test";
+                runtimeInputs = [ rustEnv ];
+                text = ''
+                  cd "${self}"
+                  cargo test --workspace --all-features
+                '';
+              }
+            }/bin/cargo-test";
 
             # nix run .#maturin-develop  — build + install Python package in dev mode
-            maturin-develop = mkApp "${pkgs.writeShellApplication {
-              name = "maturin-develop";
-              runtimeInputs = [ rustEnv pythonEnv pkgs.uv ];
-              text = ''
-                cd "${self}"
-                uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
-              '';
-            }}/bin/maturin-develop";
+            maturin-develop = mkApp "${
+              pkgs.writeShellApplication {
+                name = "maturin-develop";
+                runtimeInputs = [
+                  rustEnv
+                  pythonEnv
+                  pkgs.uv
+                ];
+                text = ''
+                  cd "${self}"
+                  uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
+                '';
+              }
+            }/bin/maturin-develop";
 
             # nix run .#check  — run ALL checks (CI gate)
-            check = mkApp "${pkgs.writeShellApplication {
-              name = "check";
-              runtimeInputs = [ rustEnv pythonEnv ];
-              text = ''
-                cd "${self}"
-                echo "═══════════════════════════════════════════"
-                echo "  clippy"
-                echo "═══════════════════════════════════════════"
-                cargo clippy --all-targets --all-features -- -D warnings
-                echo ""
-                echo "═══════════════════════════════════════════"
-                echo "  ruff check"
-                echo "═══════════════════════════════════════════"
-                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
-                echo ""
-                echo "═══════════════════════════════════════════"
-                echo "  pytest"
-                echo "═══════════════════════════════════════════"
-                export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                pytest tests/ -v --tb=short
-                echo ""
-                echo "═══════════════════════════════════════════"
-                echo "  formatting (check mode)"
-                echo "═══════════════════════════════════════════"
-                ${config.treefmt.build.wrapper}/bin/treefmt --ci
-                echo ""
-                echo "✓ All checks passed"
-              '';
-            }}/bin/check";
+            check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "check";
+                runtimeInputs = [
+                  rustEnv
+                  pythonEnv
+                ];
+                text = ''
+                  cd "${self}"
+                  echo "═══════════════════════════════════════════"
+                  echo "  clippy"
+                  echo "═══════════════════════════════════════════"
+                  cargo clippy --all-targets --all-features -- -D warnings
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  ruff check"
+                  echo "═══════════════════════════════════════════"
+                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  pytest"
+                  echo "═══════════════════════════════════════════"
+                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  pytest tests/ -v --tb=short
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  formatting (check mode)"
+                  echo "═══════════════════════════════════════════"
+                  ${config.treefmt.build.wrapper}/bin/treefmt --ci
+                  echo ""
+                  echo "✓ All checks passed"
+                '';
+              }
+            }/bin/check";
           };
 
           devShells.default = pkgs.mkShell {
             name = "pokecon-devshell";
 
-            packages = with pkgs; [
-              rustToolchain
-              cargo-expand
-              cargo-flamegraph
-              rust-analyzer
-              clippy
-              rustfmt
+            packages =
+              with pkgs;
+              [
+                rustToolchain
+                cargo-expand
+                cargo-flamegraph
+                rust-analyzer
+                clippy
+                rustfmt
 
-              pkgs.python314
-            ] ++ pythonPkgs ++ [
+                pkgs.python314
+              ]
+              ++ pythonPkgs
+              ++ [
 
-              uv
+                uv
 
-              nodejs_20
-              pnpm
-              yarn
+                nodejs_20
+                pnpm
+                yarn
 
-              pkg-config
-              openssl
-              sqlite
-              curl
-              wget
-              git
-              just
+                pkg-config
+                openssl
+                sqlite
+                curl
+                wget
+                git
+                just
 
-              webkitgtk_4_1
-              gtk3
-              gst_all_1.gstreamer
-              gst_all_1.gst-plugins-base
-              gst_all_1.gst-plugins-good
-              gst_all_1.gst-plugins-bad
-              gst_all_1.gst-plugins-ugly
-              gst_all_1.gst-libav
+                webkitgtk_4_1
+                gtk3
+                gst_all_1.gstreamer
+                gst_all_1.gst-plugins-base
+                gst_all_1.gst-plugins-good
+                gst_all_1.gst-plugins-bad
+                gst_all_1.gst-plugins-ugly
+                gst_all_1.gst-libav
 
-              nix-tree
-            ];
+                nix-tree
+              ];
 
             shellHook = ''
               export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"

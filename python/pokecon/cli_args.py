@@ -10,8 +10,6 @@ Supports:
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-from typing import Final
 
 from pokecon.scripts_dir import add_scripts_dir_argument, get_scripts_dir_from_args
 
@@ -44,13 +42,15 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Logging
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="count",
         default=0,
         help="Increase verbosity (use multiple times for more detail)",
     )
     parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="Suppress non-error output",
     )

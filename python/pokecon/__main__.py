@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sys
 
-from pokecon.cli_args import parse_args, get_config_from_args
+from pokecon.cli_args import parse_args
 from pokecon.scripts_dir import ensure_scripts_structure
 
 
@@ -25,7 +25,7 @@ def main() -> int:
     scripts_dir = ensure_scripts_structure()
 
     if args.verbose > 0:
-        print(f"Poke-Controller Modified Extension")
+        print("Poke-Controller Modified Extension")
         print(f"Scripts directory: {scripts_dir}")
         print(f"UI mode: {args.ui}")
         print(f"Profile: {args.profile}")
@@ -57,6 +57,7 @@ def main() -> int:
         print("Running in headless mode...")
         # TODO: Load scripts and run without UI
         from pokecon.script_loader import ScriptLoader
+
         loader = ScriptLoader()
         commands = loader.load_all()
         print(f"Loaded {len(commands)} commands")

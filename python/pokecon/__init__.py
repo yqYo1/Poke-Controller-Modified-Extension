@@ -17,6 +17,12 @@ from __future__ import annotations
 import sys
 import types
 
+from pokecon.cli_args import (
+    create_parser,
+    get_config_from_args,
+    parse_args,
+)
+
 # ---------------------------------------------------------------------------
 # Import our wrapper implementations
 # ---------------------------------------------------------------------------
@@ -39,6 +45,7 @@ from pokecon.keys import (
     direction_max,
     direction_min,
 )
+from pokecon.script_loader import ScriptLoader
 from pokecon.scripts_dir import (
     ensure_scripts_structure,
     get_legacy_scripts_dir,
@@ -46,12 +53,6 @@ from pokecon.scripts_dir import (
     get_scripts_dir,
     get_scripts_dir_from_args,
     get_scripts_dir_with_fallbacks,
-)
-from pokecon.script_loader import ScriptLoader
-from pokecon.cli_args import (
-    create_parser,
-    get_config_from_args,
-    parse_args,
 )
 
 

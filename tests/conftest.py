@@ -88,7 +88,6 @@ if PYTHONCOMMANDS_DIR not in sys.path:
 PYTHON_DIR = os.path.join(PROJECT_ROOT, "python")
 if PYTHON_DIR not in sys.path:
     sys.path.insert(0, PYTHON_DIR)
-import pokecon  # noqa: E402
 
 # Mock plyer notification
 _mock_plyer = types.ModuleType("plyer")
@@ -135,15 +134,19 @@ def _apply_import_patches() -> None:
     # Mock ImageProcessing — the real file uses Python 3.12+ syntax (type CropFmt = ...)
     _mock_imgproc = types.ModuleType("ImageProcessing")
     import numpy as _np
+
     # Create a callable class mock that works with isinstance() AND attribute access
     # image_type must be accessible both as: ImageProcessing.image_type AND instance.image_type
     class _MockImgProcMeta(type):
         def __getattr__(cls, name):
             return MagicMock()
+
         def __call__(cls, *args, **kwargs):
             return MagicMock()
+
     class _MockImgProc(metaclass=_MockImgProcMeta):
         image_type = _np.ndarray
+
     _mock_imgproc.ImageProcessing = _MockImgProc
     _mock_imgproc.getImage = MagicMock(return_value=None)
     _mock_imgproc.crop_image = MagicMock(return_value=None)
@@ -272,9 +275,15 @@ class MockCamera:
         raw = b""
         for _ in range(32):
             raw += b"\x00" + b"\x00\x00\x00" * 32
+
         def _chunk(ctype, data):
             c = ctype + data
-            return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+            return (
+                struct.pack(">I", len(data))
+                + c
+                + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+            )
+
         ihdr = struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0)
         with open(path, "wb") as f:
             f.write(b"\x89PNG\r\n\x1a\n")

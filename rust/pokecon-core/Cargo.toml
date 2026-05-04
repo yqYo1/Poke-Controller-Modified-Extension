@@ -1,0 +1,17 @@
+[package]
+name = "pokecon-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core logic: settings, command management, profiles for Poke-Controller"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+config = "0.15"
+
+pokecon-events = { path = "../pokecon-events" }
+pokecon-serial = { path = "../pokecon-serial" }

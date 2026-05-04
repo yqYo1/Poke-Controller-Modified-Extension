@@ -1,0 +1,27 @@
+class Button:
+    A = "A"
+    B = "B"
+    X = "X"
+    Y = "Y"
+    L = "L"
+    R = "R"
+    ZL = "ZL"
+    ZR = "ZR"
+    MINUS = "MINUS"
+    PLUS = "PLUS"
+    HOME = "HOME"
+    CAPTURE = "CAPTURE"
+    LCLICK = "LCLICK"
+    RCLICK = "RCLICK"
+
+
+class Hat:
+    TOP = "TOP"
+    TOP_RIGHT = "TOP_RIGHT"
+    RIGHT = "RIGHT"
+    BTM_RIGHT = "BTM_RIGHT"
+    BTM = "BTM"
+    BTM_LEFT = "BTM_LEFT"
+    LEFT = "LEFT"
+    TOP_LEFT = "TOP_LEFT"
+    CENTER = "CENTER"

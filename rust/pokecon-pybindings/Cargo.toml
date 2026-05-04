@@ -1,0 +1,26 @@
+[package]
+name = "pokecon-pybindings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PyO3 Python bindings for Poke-Controller Rust core"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+pyo3 = { workspace = true }
+numpy = "0.25"
+
+pokecon-serial = { path = "../pokecon-serial" }
+pokecon-cv = { path = "../pokecon-cv" }
+pokecon-core = { path = "../pokecon-core" }
+pokecon-notify = { path = "../pokecon-notify" }
+pokecon-net = { path = "../pokecon-net" }
+pokecon-events = { path = "../pokecon-events" }
+pokecon-lua = { path = "../pokecon-lua" }

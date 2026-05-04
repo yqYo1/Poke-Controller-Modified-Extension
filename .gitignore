@@ -81,3 +81,46 @@
 
 
 __pycache__/
+
+# Nix
+result
+result-*
+
+# Python virtual environments
+.venv/
+
+# =============================================================================
+# Refactoring: Rust core + Python bindings
+# =============================================================================
+
+!/Cargo.toml
+!/rust-toolchain.toml
+!/flake.nix
+!/.envrc
+
+!/nix/
+/nix/*
+!/nix/*.nix
+
+!/rust/
+/rust/*
+!/rust/pokecon-*/
+/rust/pokecon-*/*
+!/rust/pokecon-*/Cargo.toml
+!/rust/pokecon-*/src/
+/rust/pokecon-*/src/*
+!/rust/pokecon-*/src/*.rs
+
+!/python/
+/python/*
+!/python/pokecon/
+/python/pokecon/*
+!/python/pokecon/*.py
+!/python/pokecon/py.typed
+!/python/pokecon/interfaces/
+/python/pokecon/interfaces/*
+!/python/pokecon/interfaces/*.py
+
+!/tests/
+/tests/*
+!/tests/*.py

@@ -99,14 +99,39 @@
               ruff-check.enable = true;
               ruff-format.enable = true;
             };
-            settings.formatter = {
-              ruff-format.options = [ "--config=pyproject.toml" ];
-              ruff-check.options = [
-                "--select"
-                "E,W,F,I"
-                "--ignore"
-                "E402,E501,E722,E741,F821,F841"
+            settings = {
+              global.excludes = [
+                "*.lock"
+                ".git/**"
+                "target/**"
+                "result*"
+                ".venv/**"
+                "__pycache__/**"
+                ".mypy_cache/**"
+                ".ruff_cache/**"
+                "node_modules/**"
               ];
+              formatter = {
+                nixfmt = {
+                  includes = [ "*.nix" ];
+                };
+                rustfmt = {
+                  includes = [ "*.rs" ];
+                };
+                ruff-format = {
+                  includes = [ "*.py" ];
+                  options = [ "--config=pyproject.toml" ];
+                };
+                ruff-check = {
+                  includes = [ "*.py" ];
+                  options = [
+                    "--select"
+                    "E,W,F,I"
+                    "--ignore"
+                    "E402,E501,E722,E741,F821,F841"
+                  ];
+                };
+              };
             };
           };
 

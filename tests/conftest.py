@@ -164,43 +164,23 @@ def _apply_import_patches() -> None:
         _mock_cmds.__path__ = []  # Make it a package
         sys.modules["Commands"] = _mock_cmds
     
-    # Mock Commands.Keys for direct imports
+    # Mock Commands.Keys for direct imports - use actual pokecon classes
+    import pokecon as _pokecon
     _mock_keys = types.ModuleType("Commands.Keys")
-    _mock_keys.Button = MagicMock()
-    _mock_keys.Direction = MagicMock()
-    _mock_keys.Direction.LEFT = MagicMock()
-    _mock_keys.Direction.RIGHT = MagicMock()
-    _mock_keys.Direction.UP = MagicMock()
-    _mock_keys.Direction.DOWN = MagicMock()
-    _mock_keys.Direction.R_UP = MagicMock()
-    _mock_keys.Direction.R_DOWN = MagicMock()
-    _mock_keys.Direction.R_LEFT = MagicMock()
-    _mock_keys.Direction.R_RIGHT = MagicMock()
-    _mock_keys.Stick = MagicMock()
-    _mock_keys.Hat = MagicMock()
-    _mock_keys.Hat.CENTER = MagicMock()
-    _mock_keys.Hat.RIGHT = MagicMock()
-    _mock_keys.Hat.BTM = MagicMock()
-    _mock_keys.Hat.LEFT = MagicMock()
-    
-    # Touchscreen needs to be callable and return an object with x/y attributes
-    def _make_touchscreen(x, y):
-        ts = MagicMock()
-        ts.x = x
-        ts.y = y
-        return ts
-    _mock_keys.Touchscreen = _make_touchscreen
-    _mock_keys.KeyPress = MagicMock()
-    _mock_keys.SendFormat = MagicMock()
-    _mock_keys.Tilt = MagicMock()
+    _mock_keys.Button = _pokecon.Button
+    _mock_keys.Direction = _pokecon.Direction
+    _mock_keys.Stick = _pokecon.Stick
+    _mock_keys.Hat = _pokecon.Hat
+    _mock_keys.Touchscreen = _pokecon.Touchscreen
+    _mock_keys.KeyPress = _pokecon.KeyPress
+    _mock_keys.SendFormat = _pokecon.SendFormat
+    _mock_keys.Tilt = _pokecon.Tilt
     sys.modules["Commands.Keys"] = _mock_keys
     
-    # Mock Commands.PythonCommandBase for direct imports
+    # Mock Commands.PythonCommandBase for direct imports - use actual pokecon classes
     _mock_pybase = types.ModuleType("Commands.PythonCommandBase")
-    _mock_pybase.PythonCommand = MagicMock()
-    _mock_pybase.PythonCommand.NAME = "TestCommand"
-    _mock_pybase.ImageProcPythonCommand = MagicMock()
-    _mock_pybase.ImageProcPythonCommand.NAME = "TestImageProcCommand"
+    _mock_pybase.PythonCommand = _pokecon.PythonCommand
+    _mock_pybase.ImageProcPythonCommand = _pokecon.ImageProcPythonCommand
     _mock_pybase.StopThread = Exception
     sys.modules["Commands.PythonCommandBase"] = _mock_pybase
 

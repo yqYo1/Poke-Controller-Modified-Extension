@@ -1,5 +1,4 @@
 use crate::camera::{Frame, PixelFormat};
-use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

@@ -60,9 +60,7 @@ impl ApiHandle {
         let registry = lua.named_registry_value::<Table>("pokecon_callbacks").ok();
         let key = if let Some(reg) = registry {
             // Simple counter-based key
-            let next_key: usize = reg
-                .get("__next_key")
-                .unwrap_or(1usize);
+            let next_key: usize = reg.get("__next_key").unwrap_or(1usize);
             reg.set("__next_key", next_key + 1).ok();
             reg.set(next_key, func.clone()).ok();
             next_key
@@ -118,25 +116,23 @@ impl PokeConApi {
 
         api.set(
             "press",
-            lua.create_function(
-                |_, (buttons, opts): (Vec<String>, Option<Table>)| {
-                    let duration: u64 = opts
-                        .as_ref()
-                        .and_then(|t| t.get("duration").ok())
-                        .unwrap_or(100);
-                    let wait: u64 = opts
-                        .as_ref()
-                        .and_then(|t| t.get("wait").ok())
-                        .unwrap_or(100);
-                    for btn in &buttons {
-                        println!(
-                            "[PokeCon] Press {} for {}ms (wait {}ms)",
-                            btn, duration, wait
-                        );
-                    }
-                    Ok(())
-                },
-            )?,
+            lua.create_function(|_, (buttons, opts): (Vec<String>, Option<Table>)| {
+                let duration: u64 = opts
+                    .as_ref()
+                    .and_then(|t| t.get("duration").ok())
+                    .unwrap_or(100);
+                let wait: u64 = opts
+                    .as_ref()
+                    .and_then(|t| t.get("wait").ok())
+                    .unwrap_or(100);
+                for btn in &buttons {
+                    println!(
+                        "[PokeCon] Press {} for {}ms (wait {}ms)",
+                        btn, duration, wait
+                    );
+                }
+                Ok(())
+            })?,
         )?;
 
         api.set(
@@ -222,25 +218,21 @@ impl PokeConApi {
         let handle_clone = handle.clone();
         api.set(
             "on",
-            lua.create_function(
-                move |lua, (event_name, callback): (String, LuaFunction)| {
-                    // Store the callback reference in the Lua registry
-                    let key = ApiHandle::store_callback(&lua, &callback);
+            lua.create_function(move |lua, (event_name, callback): (String, LuaFunction)| {
+                // Store the callback reference in the Lua registry
+                let key = ApiHandle::store_callback(&lua, &callback);
 
-                    // Log the registration
-                    if let Some(ref h) = handle_clone {
-                        let mut cbs = h.lua_callbacks.lock();
-                        cbs.entry(event_name.clone())
-                            .or_default()
-                            .push(key);
-                        println!(
-                            "[PokeCon Lua] Registered handler #{} for '{}'",
-                            key, event_name
-                        );
-                    }
-                    Ok(())
-                },
-            )?,
+                // Log the registration
+                if let Some(ref h) = handle_clone {
+                    let mut cbs = h.lua_callbacks.lock();
+                    cbs.entry(event_name.clone()).or_default().push(key);
+                    println!(
+                        "[PokeCon Lua] Registered handler #{} for '{}'",
+                        key, event_name
+                    );
+                }
+                Ok(())
+            })?,
         )?;
 
         let handle_clone = handle.clone();
@@ -261,66 +253,60 @@ impl PokeConApi {
 
         api.set(
             "emit",
-            lua.create_function(
-                move |_, (event_name, data): (String, Option<Value>)| {
-                    // Build JSON data from the Lua value
-                    let json_data = lua_value_to_json(&data);
-                    let event = Event::new(&event_name, json_data);
+            lua.create_function(move |_, (event_name, data): (String, Option<Value>)| {
+                // Build JSON data from the Lua value
+                let json_data = lua_value_to_json(&data);
+                let event = Event::new(&event_name, json_data);
 
-                    // Emit to global EventBus if available
-                    if let Some(ref h) = handle {
-                        if let Some(ref bus) = h.event_bus {
-                            bus.emit(&event);
-                        }
+                // Emit to global EventBus if available
+                if let Some(ref h) = handle {
+                    if let Some(ref bus) = h.event_bus {
+                        bus.emit(&event);
                     }
+                }
 
-                    println!(
-                        "[PokeCon Lua] Emitted event '{}' (propagation: {})",
-                        event_name,
-                        if event.propagation_stopped {
-                            "stopped"
-                        } else {
-                            "continued"
-                        }
-                    );
-                    Ok(())
-                },
-            )?,
+                println!(
+                    "[PokeCon Lua] Emitted event '{}' (propagation: {})",
+                    event_name,
+                    if event.propagation_stopped {
+                        "stopped"
+                    } else {
+                        "continued"
+                    }
+                );
+                Ok(())
+            })?,
         )?;
 
         api.set(
             "define_event",
-            lua.create_function(
-                |_, (name, schema): (String, Option<Table>)| {
-                    println!(
-                        "[PokeCon Lua] Defined user event '{}' with schema {:?}",
-                        name,
-                        schema.is_some()
-                    );
-                    Ok(())
-                },
-            )?,
+            lua.create_function(|_, (name, schema): (String, Option<Table>)| {
+                println!(
+                    "[PokeCon Lua] Defined user event '{}' with schema {:?}",
+                    name,
+                    schema.is_some()
+                );
+                Ok(())
+            })?,
         )?;
 
         api.set(
             "autocmd",
-            lua.create_function(
-                |_, (event_name, opts): (String, Option<Table>)| {
-                    let callback_str = opts
-                        .as_ref()
-                        .and_then(|t| t.get::<String>("callback").ok())
-                        .unwrap_or_default();
-                    let group = opts
-                        .as_ref()
-                        .and_then(|t| t.get::<String>("group").ok())
-                        .unwrap_or_default();
-                    println!(
-                        "[PokeCon Lua] Registered autocmd '{}' (group={}, callback={})",
-                        event_name, group, callback_str
-                    );
-                    Ok(())
-                },
-            )?,
+            lua.create_function(|_, (event_name, opts): (String, Option<Table>)| {
+                let callback_str = opts
+                    .as_ref()
+                    .and_then(|t| t.get::<String>("callback").ok())
+                    .unwrap_or_default();
+                let group = opts
+                    .as_ref()
+                    .and_then(|t| t.get::<String>("group").ok())
+                    .unwrap_or_default();
+                println!(
+                    "[PokeCon Lua] Registered autocmd '{}' (group={}, callback={})",
+                    event_name, group, callback_str
+                );
+                Ok(())
+            })?,
         )?;
 
         // ── Notification stubs ────────────────────────────────────
@@ -388,9 +374,7 @@ fn lua_value_to_json(val: &Option<Value>) -> serde_json::Value {
             }
             serde_json::Value::Object(map)
         }
-        Some(Value::String(s)) => {
-            serde_json::Value::String(s.to_string_lossy().to_string())
-        }
+        Some(Value::String(s)) => serde_json::Value::String(s.to_string_lossy().to_string()),
         Some(Value::Integer(i)) => serde_json::Value::Number((*i).into()),
         Some(Value::Number(n)) => {
             // mlua::Number is f64
@@ -663,9 +647,7 @@ mod tests {
         let handle = Arc::new(ApiHandle::with_event_bus(bus_clone));
         PokeConApi::register_with(&lua, handle).unwrap();
 
-        lua.load(r#"pokecon.emit("emit.test", {})"#)
-            .exec()
-            .unwrap();
+        lua.load(r#"pokecon.emit("emit.test", {})"#).exec().unwrap();
 
         assert_eq!(hit_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }

@@ -56,7 +56,12 @@ impl CropFormat {
             }
             CropFormat::PillowSize(x, y, w, h) => {
                 if w > 0 && h > 0 {
-                    Some(Region { x, y, width: w, height: h })
+                    Some(Region {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    })
                 } else {
                     None
                 }
@@ -75,7 +80,12 @@ impl CropFormat {
             }
             CropFormat::PillowSwapSize(x, w, y, h) => {
                 if w > 0 && h > 0 {
-                    Some(Region { x, y, width: w, height: h })
+                    Some(Region {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    })
                 } else {
                     None
                 }
@@ -94,7 +104,12 @@ impl CropFormat {
             }
             CropFormat::OpenCVSize(y, x, h, w) => {
                 if h > 0 && w > 0 {
-                    Some(Region { x, y, width: w, height: h })
+                    Some(Region {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    })
                 } else {
                     None
                 }
@@ -113,7 +128,12 @@ impl CropFormat {
             }
             CropFormat::OpenCVSwapSize(y, h, x, w) => {
                 if h > 0 && w > 0 {
-                    Some(Region { x, y, width: w, height: h })
+                    Some(Region {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    })
                 } else {
                     None
                 }
@@ -350,9 +370,12 @@ impl ImageProcessor {
             let b = chunk[0];
             let g = chunk[1];
             let r = chunk[2];
-            if b >= lower[0] && b <= upper[0]
-                && g >= lower[1] && g <= upper[1]
-                && r >= lower[2] && r <= upper[2]
+            if b >= lower[0]
+                && b <= upper[0]
+                && g >= lower[1]
+                && g <= upper[1]
+                && r >= lower[2]
+                && r <= upper[2]
             {
                 *out_pixel = 255;
             }
@@ -441,7 +464,12 @@ impl ImageProcessor {
 
         // Simple box blur (median-like) with ksize
         if blur_ksize > 0 {
-            Self::box_blur_in_place(&mut diff, frame1.width as usize, frame1.height as usize, blur_ksize);
+            Self::box_blur_in_place(
+                &mut diff,
+                frame1.width as usize,
+                frame1.height as usize,
+                blur_ksize,
+            );
         }
 
         Ok(Frame {
@@ -500,7 +528,11 @@ impl ImageProcessor {
         let results = Self::template_match(frame, template, threshold)?;
         results
             .into_iter()
-            .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.confidence
+                    .partial_cmp(&b.confidence)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .ok_or(ImageError::TemplateNotFound)
     }
 
@@ -668,11 +700,8 @@ mod tests {
     #[test]
     fn test_crop_extended_pillow() {
         let frame = create_test_frame(10, 10, PixelFormat::Gray, 100);
-        let cropped = ImageProcessor::crop_extended(
-            &frame,
-            &CropFormat::Pillow(2, 2, 6, 6),
-        )
-        .unwrap();
+        let cropped =
+            ImageProcessor::crop_extended(&frame, &CropFormat::Pillow(2, 2, 6, 6)).unwrap();
         assert_eq!(cropped.width, 4);
         assert_eq!(cropped.height, 4);
     }
@@ -685,8 +714,7 @@ mod tests {
             data: vec![10, 20, 30, 200, 210, 220],
             format: PixelFormat::Bgr,
         };
-        let result =
-            ImageProcessor::in_range(&frame, [0, 0, 0], [100, 100, 100]).unwrap();
+        let result = ImageProcessor::in_range(&frame, [0, 0, 0], [100, 100, 100]).unwrap();
         // First pixel (10,20,30) is in range -> 255
         assert_eq!(result.data[0], 255);
         // Second pixel (200,210,220) is out of range -> 0
@@ -732,8 +760,7 @@ mod tests {
         let mut f2 = create_test_frame(4, 4, PixelFormat::Gray, 100);
         f2.data[5] = 200; // change one pixel
         let f3 = create_test_frame(4, 4, PixelFormat::Gray, 100);
-        let result =
-            ImageProcessor::interframe_diff(&f1, &f2, &f3, 50, 0).unwrap();
+        let result = ImageProcessor::interframe_diff(&f1, &f2, &f3, 50, 0).unwrap();
         assert_eq!(result.width, 4);
         assert_eq!(result.height, 4);
         assert_eq!(result.format, PixelFormat::Gray);
@@ -756,8 +783,7 @@ mod tests {
             format: PixelFormat::Gray,
         };
         let template = create_test_frame(5, 5, PixelFormat::Gray, 200);
-        let result =
-            ImageProcessor::template_match_best(&frame, &template, 0.8).unwrap();
+        let result = ImageProcessor::template_match_best(&frame, &template, 0.8).unwrap();
         assert!(result.confidence > 0.8);
         assert_eq!(result.point, Point { x: 0, y: 0 });
     }
@@ -766,8 +792,7 @@ mod tests {
     fn test_template_match_best_not_found() {
         let frame = create_test_frame(10, 10, PixelFormat::Gray, 100);
         let template = create_test_frame(3, 3, PixelFormat::Gray, 200);
-        let result =
-            ImageProcessor::template_match_best(&frame, &template, 0.99);
+        let result = ImageProcessor::template_match_best(&frame, &template, 0.99);
         assert!(result.is_err());
     }
 
@@ -778,13 +803,7 @@ mod tests {
         let t2 = create_test_frame(5, 5, PixelFormat::Gray, 200);
         let tpls = [&t1, &t2];
         let masks = [None, None];
-        let result = ImageProcessor::template_match_multi(
-            &frame,
-            &tpls,
-            &masks,
-            0.9,
-        )
-        .unwrap();
+        let result = ImageProcessor::template_match_multi(&frame, &tpls, &masks, 0.9).unwrap();
         // t1 (all 100) should match better than t2 (all 200) on a 100-valued frame
         assert_eq!(result.best_index, 0);
         assert!(result.confidences[0] > result.confidences[1]);
@@ -795,11 +814,8 @@ mod tests {
     #[test]
     fn test_box_blur() {
         let mut data = vec![
-            0u8, 0, 0, 0, 0,
-            0, 255, 255, 255, 0,
-            0, 255, 255, 255, 0,
-            0, 255, 255, 255, 0,
-            0, 0, 0, 0, 0,
+            0u8, 0, 0, 0, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 0,
+            0, 0, 0,
         ];
         ImageProcessor::box_blur_in_place(&mut data, 5, 5, 3);
         // Center (index 12) stays 255 since all neighbors are also 255;

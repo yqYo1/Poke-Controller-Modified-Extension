@@ -1,8 +1,8 @@
-use pyo3::prelude::*;
 use pokecon_serial::keys::{
     Button as RustButton, Direction as RustDirection, Hat as RustHat, Stick as RustStick,
     Touchscreen as RustTouchscreen,
 };
+use pyo3::prelude::*;
 
 // ============================================================
 // Button

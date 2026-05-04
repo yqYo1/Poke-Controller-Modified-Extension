@@ -76,9 +76,7 @@ impl Sender {
                 error!("COM Port: can't be established: {}", io_err);
                 return Err(match io_err.kind() {
                     io::ErrorKind::NotFound => SerialError::PortNotFound(path.clone()),
-                    io::ErrorKind::PermissionDenied => {
-                        SerialError::PermissionDenied(path.clone())
-                    }
+                    io::ErrorKind::PermissionDenied => SerialError::PermissionDenied(path.clone()),
                     _ => SerialError::OpenError(io_err),
                 });
             }

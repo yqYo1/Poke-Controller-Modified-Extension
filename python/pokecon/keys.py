@@ -215,9 +215,7 @@ class SendFormat:
                 ):
                     self.L_stick_changed = True
                 self.format["lx"] = direction.x if not x_reverse else 255 - direction.x
-                self.format["ly"] = (
-                    255 - direction.y if not y_reverse else direction.y
-                )
+                self.format["ly"] = 255 - direction.y if not y_reverse else direction.y
             elif direction.stick == Stick.RIGHT:
                 if (
                     self.format["rx"] != direction.x
@@ -505,8 +503,14 @@ class KeyPress:
         self.holdRightStick: bool | Direction = False
         self.holdTouchscreen: bool | Touchscreen = False
         self.btn_name2: list[str] = [
-            "LEFT", "RIGHT", "UP", "DOWN",
-            "UP_LEFT", "UP_RIGHT", "DOWN_LEFT", "DOWN_RIGHT",
+            "LEFT",
+            "RIGHT",
+            "UP",
+            "DOWN",
+            "UP_LEFT",
+            "UP_RIGHT",
+            "DOWN_LEFT",
+            "DOWN_RIGHT",
         ]
         self.pushing2: dict[str, int] | None = None
         self._pushing: dict[str, int] | None = None

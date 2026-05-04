@@ -17,8 +17,5 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync dependencies
-        run: nix develop --command uv sync --group dev
-
       - name: Run Basedpyright
-        run: nix develop --command basedpyright --project pyrightconfig.json
+        run: nix run .#basedpyright

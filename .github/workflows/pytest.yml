@@ -1,42 +1,39 @@
-# Pytest CI temporarily disabled due to pygame/numpy Python 3.14 build issues
-# TODO: Re-enable after upstream packages support Python 3.14
+name: Pytest
 
-# name: Pytest
+# Pytest runs under Nix with Python 3.14 + nixpkgs packages.
+# pygame is NOT installed — the test suite uses thorough mocking
+# (conftest.py mocks all GUI, camera, serial, etc. dependencies)
+# and no test file imports pygame directly.
 #
-# on:
-#   push:
-#     branches: [main, master, refactor/rust-core]
-#   pull_request:
-#     branches: [main, master]
+# Analysis of pygame/Python 3.14 resolution:
+#   Option A (build pygame from source with SDL2): HIGH cost —
+#     adds SDL2 + SDL_image + SDL_mixer + SDL_ttf as nix build deps,
+#     adds ~3-5 min to CI, and pygame isn't imported by any test.
+#   Option B (skip pygame-dependent tests): RECOMMENDED —
+#     tests are pure mock-based, don't touch pygame code at all.
+#     Zero overhead, same coverage where it matters.
+#   Option C (use older Python): REJECTED —
+#     pyproject.toml requires >=3.14, would drift from prod target.
 #
-# jobs:
-#   test-linux:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: cachix/install-nix-action@v31
-#         with:
-#           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-#       - name: Sync dependencies
-#         run: |
-#           nix develop --command bash -c "uv venv && uv pip install pytest"
-#       - name: Run pytest
-#         run: |
-#           nix develop --command pytest tests/ -v --tb=short
-#
-#   test-windows:
-#     runs-on: windows-latest
-#     strategy:
-#       matrix:
-#         python-version: ['3.14']
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-python@v5
-#         with:
-#           python-version: ${{ matrix.python-version }}
-#       - name: Install uv
-#         uses: astral-sh/setup-uv@v5
-#       - name: Sync dependencies
-#         run: uv sync --group dev
-#       - name: Run pytest
-#         run: uv run pytest tests/ -v --tb=short
+# If pygame-dependent tests are added later, add to flake.nix:
+#   pythonEnv = pkgs.python314.withPackages (ps: with ps; [
+#     pytest numpy ruff
+#     (ps.pygame.override { inherit (pkgs) SDL2 SDL2_image SDL2_mixer SDL2_ttf; })
+#   ]);
+
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run pytest
+        run: nix run .#test

@@ -1,5 +1,4 @@
-use mlua::{Lua, Result as LuaResult, Table, Value};
-use std::collections::HashMap;
+use mlua::{Lua, Result as LuaResult};
 
 pub struct PokeConApi;
 

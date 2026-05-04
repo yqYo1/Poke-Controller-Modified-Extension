@@ -1,7 +1,7 @@
-use mlua::{Lua, Result as LuaResult, Table, Value};
+use mlua::Lua;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::info;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LuaRuntimeError {

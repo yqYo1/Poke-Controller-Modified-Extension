@@ -447,12 +447,13 @@ class TestPublicApiWithMocks:
     def test_image_proc_is_contain_template(
         self, mock_camera: MockCamera, tmp_path
     ) -> None:
-        import cv2
+        import numpy as np
 
         cmd = ImageProcTest(mock_camera)
         dummy_img = np.zeros((100, 100, 3), dtype=np.uint8)
         template_path = tmp_path / "dummy.png"
-        cv2.imwrite(str(template_path), dummy_img)
+        # Write a minimal valid PNG so getFilespec works (no cv2 dependency)
+        template_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
         cmd.template_path_name = str(tmp_path)
         cmd.gui = MagicMock()
         cmd.canvas = MagicMock()
@@ -476,12 +477,13 @@ class TestPublicApiWithMocks:
     def test_image_proc_is_contained_image(
         self, mock_camera: MockCamera, tmp_path
     ) -> None:
-        import cv2
+        import numpy as np
 
         cmd = ImageProcTest(mock_camera)
         dummy_img = np.zeros((100, 100, 3), dtype=np.uint8)
         image_path = tmp_path / "dummy.png"
-        cv2.imwrite(str(image_path), dummy_img)
+        # Write a minimal valid PNG so getFilespec works (no cv2 dependency)
+        image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
         cmd.template_path_name = str(tmp_path)
         cmd.capture_path_name = str(tmp_path)
         cmd.gui = MagicMock()

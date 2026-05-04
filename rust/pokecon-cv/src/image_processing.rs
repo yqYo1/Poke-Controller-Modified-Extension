@@ -455,11 +455,11 @@ impl ImageProcessor {
         let mut diff = vec![0u8; n];
 
         // diff = absdiff(f1,f2) AND absdiff(f2,f3)
-        for i in 0..n {
+        for (i, d) in diff.iter_mut().enumerate().take(n) {
             let d1 = (frame1.data[i] as i16 - frame2.data[i] as i16).unsigned_abs() as u8;
             let d2 = (frame2.data[i] as i16 - frame3.data[i] as i16).unsigned_abs() as u8;
-            let d = d1.min(d2);
-            diff[i] = if d >= threshold { 255 } else { 0 };
+            let val = d1.min(d2);
+            *d = if val >= threshold { 255 } else { 0 };
         }
 
         // Simple box blur (median-like) with ksize
@@ -492,7 +492,7 @@ impl ImageProcessor {
             for col in 0..w {
                 let mut sum = 0u32;
                 let mut count = 0u32;
-                let start = if col >= half { col - half } else { 0 };
+                let start = col.saturating_sub(half);
                 let end = (col + half + 1).min(w);
                 for kx in start..end {
                     sum += data[offset + kx] as u32;
@@ -507,7 +507,7 @@ impl ImageProcessor {
             for row in 0..h {
                 let mut sum = 0u32;
                 let mut count = 0u32;
-                let start = if row >= half { row - half } else { 0 };
+                let start = row.saturating_sub(half);
                 let end = (row + half + 1).min(h);
                 for ky in start..end {
                     sum += tmp[ky * w + col] as u32;

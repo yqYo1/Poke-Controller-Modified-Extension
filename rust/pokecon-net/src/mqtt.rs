@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use rumqttc::{
-    AsyncClient, Event, MqttOptions, Packet, Publish, QoS,
-};
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, Publish, QoS};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -15,16 +13,10 @@ pub enum MqttError {
     ConnectionError(String),
 
     #[error("Failed to publish to topic '{topic}': {detail}")]
-    PublishError {
-        topic: String,
-        detail: String,
-    },
+    PublishError { topic: String, detail: String },
 
     #[error("Failed to subscribe to topic '{topic}': {detail}")]
-    SubscribeError {
-        topic: String,
-        detail: String,
-    },
+    SubscribeError { topic: String, detail: String },
 
     #[error("Serialization error: {0}")]
     SerializationError(String),
@@ -141,11 +133,8 @@ impl MqttClient {
             self.config.host, self.config.port
         );
 
-        let mut mqtt_options = MqttOptions::new(
-            &self.config.client_id,
-            &self.config.host,
-            self.config.port,
-        );
+        let mut mqtt_options =
+            MqttOptions::new(&self.config.client_id, &self.config.host, self.config.port);
         mqtt_options.set_keep_alive(Duration::from_secs(self.config.keep_alive_secs));
         mqtt_options.set_clean_session(self.config.clean_session);
 
@@ -190,7 +179,10 @@ impl MqttClient {
         self.event_loop_handle = Some(handle);
         self.connected = true;
 
-        info!("Connected to MQTT broker at {}:{}", self.config.host, self.config.port);
+        info!(
+            "Connected to MQTT broker at {}:{}",
+            self.config.host, self.config.port
+        );
         Ok(())
     }
 
@@ -204,7 +196,11 @@ impl MqttClient {
         let client = self.client.as_ref().ok_or(MqttError::NotConnected)?;
 
         let payload_bytes: Vec<u8> = payload.into();
-        debug!("Publishing {} bytes to topic: {}", payload_bytes.len(), topic);
+        debug!(
+            "Publishing {} bytes to topic: {}",
+            payload_bytes.len(),
+            topic
+        );
 
         client
             .publish(topic, qos, false, payload_bytes)
@@ -268,10 +264,7 @@ impl MqttClient {
     }
 
     /// Subscribe to multiple topics with the same QoS
-    pub async fn subscribe_many(
-        &mut self,
-        topics: &[(&str, QoS)],
-    ) -> Result<(), MqttError> {
+    pub async fn subscribe_many(&mut self, topics: &[(&str, QoS)]) -> Result<(), MqttError> {
         for (topic, qos) in topics {
             self.subscribe(topic, *qos).await?;
         }

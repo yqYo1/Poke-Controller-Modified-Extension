@@ -143,7 +143,8 @@ impl ImageProcessor {
             for tx in 0..tw {
                 let frame_idx = (y + ty) * fw + (x + tx);
                 let template_idx = ty * tw + tx;
-                let diff = (frame.data[frame_idx] as i16 - template.data[template_idx] as i16).abs() as u64;
+                let diff = (frame.data[frame_idx] as i16 - template.data[template_idx] as i16).abs()
+                    as u64;
                 diff_sum += diff;
                 total_pixels += 1;
             }

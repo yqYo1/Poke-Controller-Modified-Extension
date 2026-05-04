@@ -55,7 +55,9 @@ impl PythonCommand {
             Some(cb) => {
                 let args = pyo3::types::PyTuple::empty(py);
                 match kwargs {
-                    Some(kwargs) => cb.call(py, args, Some(&kwargs)).map(|o| Some(o.into_bound(py))),
+                    Some(kwargs) => cb
+                        .call(py, args, Some(&kwargs))
+                        .map(|o| Some(o.into_bound(py))),
                     None => cb.call(py, args, None).map(|o| Some(o.into_bound(py))),
                 }
             }

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
 
@@ -89,9 +89,9 @@ impl EventBus {
     /// Remove all handlers for a specific event type
     pub fn off(&self, event_type: &str) -> Result<(), EventBusError> {
         let mut handlers = self.handlers.write();
-        handlers.remove(event_type).ok_or_else(|| {
-            EventBusError::HandlerNotFound(event_type.to_string())
-        })?;
+        handlers
+            .remove(event_type)
+            .ok_or_else(|| EventBusError::HandlerNotFound(event_type.to_string()))?;
         debug!("Removed handlers for event type: {}", event_type);
         Ok(())
     }
@@ -135,10 +135,7 @@ mod tests {
 
     #[test]
     fn test_event_creation() {
-        let event = Event::new(
-            "test.event",
-            serde_json::json!({"key": "value"}),
-        );
+        let event = Event::new("test.event", serde_json::json!({"key": "value"}));
         assert_eq!(event.event_type, "test.event");
         assert_eq!(event.data["key"], "value");
         assert_eq!(event.phase, EventPhase::AtTarget);

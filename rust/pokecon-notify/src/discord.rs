@@ -121,8 +121,7 @@ mod tests {
 
     #[test]
     fn test_build_payload_with_embed() {
-        let n = Notification::new("description here")
-            .with_title("My Title");
+        let n = Notification::new("description here").with_title("My Title");
         let payload = build_payload(&n);
         assert!(payload.get("content").is_none());
         let embed = &payload["embeds"][0];

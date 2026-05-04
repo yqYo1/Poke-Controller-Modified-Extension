@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from Commands.Keys import Button
-from Commands.PythonCommandBase import PythonCommand
+from logging import DEBUG, NullHandler, getLogger
+
 from Commands.PythonCommandBase import ImageProcPythonCommand
-from logging import getLogger, DEBUG, NullHandler
 
 
 # ログ出力のサンプル
 class LoggingSample(ImageProcPythonCommand):
-    NAME = 'ログ出力のサンプル'
+    NAME = "ログ出力のサンプル"
 
     def __init__(self, cam):
         super().__init__(cam)

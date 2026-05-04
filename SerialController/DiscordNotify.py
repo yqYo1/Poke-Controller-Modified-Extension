@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 import requests
-from PIL import Image
 from file_handler import FileHandler
+from PIL import Image
 
 if TYPE_CHECKING:
     from logging import Logger

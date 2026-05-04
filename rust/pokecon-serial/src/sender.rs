@@ -4,7 +4,6 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tracing::{debug, error, info};
 
-
 #[derive(Error, Debug)]
 pub enum SerialError {
     #[error("Failed to open serial port: {0}")]
@@ -148,10 +147,11 @@ impl Sender {
             return;
         }
 
-        let btn_hex = match u16::from_str_radix(output[0].strip_prefix("0x").unwrap_or(output[0]), 16) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
+        let btn_hex =
+            match u16::from_str_radix(output[0].strip_prefix("0x").unwrap_or(output[0]), 16) {
+                Ok(v) => v,
+                Err(_) => return,
+            };
 
         let buttons: Vec<String> = (0..16)
             .filter(|x| (btn_hex >> x) & 1 == 1)
@@ -160,7 +160,14 @@ impl Sender {
 
         let hat_idx = output[1].parse::<usize>().unwrap_or(8);
         let hat_names = [
-            "TOP", "TOP_RIGHT", "RIGHT", "BTM_RIGHT", "BTM", "BTM_LEFT", "LEFT", "TOP_LEFT",
+            "TOP",
+            "TOP_RIGHT",
+            "RIGHT",
+            "BTM_RIGHT",
+            "BTM",
+            "BTM_LEFT",
+            "LEFT",
+            "TOP_LEFT",
             "CENTER",
         ];
         let hat_name = hat_names.get(hat_idx).unwrap_or(&"CENTER");

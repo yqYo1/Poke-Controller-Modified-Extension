@@ -5,6 +5,7 @@ from __future__ import annotations  # 3.7向け。廃止したい。
 
 import os
 from typing import List, Optional
+
 from Commands.PythonCommandBase import ImageProcPythonCommand
 
 """
@@ -29,10 +30,13 @@ class BridgeFunctions(object):
     def __init__(self, commands):
         self.commands = commands
         self.is_extension = os.path.exists("Constant.py")
-        if not self.is_extension and not hasattr(
-            self.commands.__class__, "dialogue6widget"
+        if (
+            not self.is_extension
+            and not hasattr(self.commands.__class__, "dialogue6widget")
         ):  # 継承している関数にdialogue6widget関数が含まれるか? dialogue6widget関数はmodified版/extension版のみ。
-            print("本家PokeConでは実行できません。\nまたは古いVersionのPokeConを使用しており更新が必要です。")
+            print(
+                "本家PokeConでは実行できません。\nまたは古いVersionのPokeConを使用しており更新が必要です。"
+            )
 
     def check_pokecon_extension(self) -> bool:
         """
@@ -63,7 +67,11 @@ class BridgeFunctions(object):
         """
         テンプレートファイルのディレクトリ指定
         """
-        return ImageProcPythonCommand.template_path_name if self.is_extension else "./Template/"
+        return (
+            ImageProcPythonCommand.template_path_name
+            if self.is_extension
+            else "./Template/"
+        )
 
     # print関数。extension版の場合は関数によって上書きしたり、追記したりすることが可能。
     def bf_print(self, *objects: object, sep: str = " ", end: str = "\n") -> None:
@@ -194,7 +202,9 @@ class BridgeFunctions(object):
 
         return max_idx, max_val_list, judge_list
 
-    def bf_dialogue(self, title: str, message: list | str, desc: str = None, need: type = list) -> list | dict:
+    def bf_dialogue(
+        self, title: str, message: list | str, desc: str = None, need: type = list
+    ) -> list | dict:
         """
         ダイアログ関数(Entryのみ)
         ※Modified版の場合はdescなし
@@ -205,20 +215,29 @@ class BridgeFunctions(object):
             ret = self.commands.dialogue(title, message, need=need)
         return ret
 
-    def bf_dialogue6widget(self, title: str, dialogue_list: list, desc: str = None, need: type = list) -> list | dict:
+    def bf_dialogue6widget(
+        self, title: str, dialogue_list: list, desc: str = None, need: type = list
+    ) -> list | dict:
         """
         ダイアログ関数(6widget)
         ※Modified版の場合は["Next"]を削除する。
         """
         if self.is_extension:
-            ret = self.commands.dialogue6widget(title, dialogue_list, desc=desc, need=need)
+            ret = self.commands.dialogue6widget(
+                title, dialogue_list, desc=desc, need=need
+            )
         else:
             dialogue_list = remove_next_item(dialogue_list)
             ret = self.commands.dialogue6widget(title, dialogue_list, need=need)
         return ret
 
     def bf_dialogue6widget_save_settings(
-        self, title: str, dialogue_list: list, filename: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        filename: str,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         設定保存機能付きダイアログ関数
@@ -226,14 +245,21 @@ class BridgeFunctions(object):
         filename: 設定ファイル名。絶対パス。
         """
         if self.is_extension:
-            ret = self.commands.dialogue6widget_save_settings(title, dialogue_list, filename, desc=desc, need=need)
+            ret = self.commands.dialogue6widget_save_settings(
+                title, dialogue_list, filename, desc=desc, need=need
+            )
         else:
             dialogue_list = remove_next_item(dialogue_list)
             ret = self.commands.dialogue6widget(title, dialogue_list, need=need)
         return ret
 
     def bf_dialogue6widget_select_settings(
-        self, title: str, dialogue_list: list, dirname: str, desc: str = None, need: type = list
+        self,
+        title: str,
+        dialogue_list: list,
+        dirname: str,
+        desc: str = None,
+        need: type = list,
     ) -> list | dict:
         """
         設定選択機能付きダイアログ関数
@@ -241,14 +267,20 @@ class BridgeFunctions(object):
         dirname: 設定ファイルを保存するディレクトリ名。絶対パス。
         """
         if self.is_extension:
-            ret = self.commands.dialogue6widget_select_settings(title, dialogue_list, dirname, desc=desc, need=need)
+            ret = self.commands.dialogue6widget_select_settings(
+                title, dialogue_list, dirname, desc=desc, need=need
+            )
         else:
             dialogue_list = remove_next_item(dialogue_list)
             ret = self.commands.dialogue6widget(title, dialogue_list, need=need)
         return ret
 
     def bf_show_informations(
-        self, name: str, developer: str | list, contributor: str | list = None, description: str = None
+        self,
+        name: str,
+        developer: str | list,
+        contributor: str | list = None,
+        description: str = None,
     ):
         """
         プログラムの詳細情報を表示する
@@ -267,7 +299,9 @@ class BridgeFunctions(object):
         text += f"Name: {name}\nDeveloper: {developers}\n"
 
         if contributor:
-            contributors = ", ".join(contributor) if isinstance(contributor, list) else contributor
+            contributors = (
+                ", ".join(contributor) if isinstance(contributor, list) else contributor
+            )
             text += f"Contributor: {contributors}\n"
 
         if description:

@@ -65,8 +65,6 @@ mod tests {
         let lua = Lua::new();
         PokeConApi::register(&lua).unwrap();
 
-        lua.load("pokecon.log('test message')")
-            .exec()
-            .unwrap();
+        lua.load("pokecon.log('test message')").exec().unwrap();
     }
 }

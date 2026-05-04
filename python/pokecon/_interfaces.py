@@ -1,5 +1,3 @@
-from typing import ClassVar
-
 class _PythonCommandV1Interface:
     __is_interface__ = True
 

@@ -57,11 +57,7 @@ impl LuaRuntime {
         Ok(result)
     }
 
-    pub async fn set_global(
-        &self,
-        name: &str,
-        value: mlua::Value,
-    ) -> Result<(), LuaRuntimeError> {
+    pub async fn set_global(&self, name: &str, value: mlua::Value) -> Result<(), LuaRuntimeError> {
         let lua = self.lua.lock().await;
         lua.globals().set(name, value)?;
         Ok(())
@@ -100,10 +96,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = runtime
-            .call_function("add", (2i64, 3i64))
-            .await
-            .unwrap();
+        let result = runtime.call_function("add", (2i64, 3i64)).await.unwrap();
 
         assert_eq!(result, mlua::Value::Integer(5));
     }

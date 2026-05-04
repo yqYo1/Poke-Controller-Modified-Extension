@@ -81,9 +81,7 @@ mod tests {
     async fn test_line_notifier_dummy() {
         let notifier = LineNotifier::new("test-token");
         // Should not fail – the dummy impl always returns Ok.
-        let result = notifier
-            .send(&Notification::new("test"))
-            .await;
+        let result = notifier.send(&Notification::new("test")).await;
         assert!(result.is_ok());
     }
 }

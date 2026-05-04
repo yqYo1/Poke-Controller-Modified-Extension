@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
+
 from Commands.PythonCommandBase import ImageProcPythonCommand
 from Commands.PythonCommands.bridge_functions.bridge_functions import BridgeFunctions
-import os
 
 
 class BridgeFunctionsSample(ImageProcPythonCommand):
@@ -22,10 +23,14 @@ class BridgeFunctionsSample(ImageProcPythonCommand):
         self.bf.bf_show_informations(self.NAME, developer)
 
         # テンプレートファイルディレクトリの設定
-        self.bf.set_template_directory(os.path.join(os.path.dirname(__file__)), "sample_image_path")
+        self.bf.set_template_directory(
+            os.path.join(os.path.dirname(__file__)), "sample_image_path"
+        )
 
         # 履歴保存用ファイル
-        settings_file = os.path.join(os.path.dirname(__file__), "sample_setting_path1/setting.json")
+        settings_file = os.path.join(
+            os.path.dirname(__file__), "sample_setting_path1/setting.json"
+        )
 
         # ダイアログ呼び出し(前回の値を初期値とする)
         ret = self.bf.bf_dialogue6widget_save_settings(

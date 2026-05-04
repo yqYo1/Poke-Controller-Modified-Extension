@@ -1,7 +1,7 @@
 //! Event handler trait and types
 
-use std::sync::Arc;
 use crate::bus::Event;
+use std::sync::Arc;
 
 /// A handler function for events
 pub type HandlerFn = Arc<dyn Fn(&Event) + Send + Sync>;

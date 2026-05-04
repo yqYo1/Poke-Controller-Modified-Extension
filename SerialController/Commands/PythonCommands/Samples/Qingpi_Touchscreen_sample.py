@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from Commands.PythonCommandBase import PythonCommand
-
-from Commands.Keys import Touchscreen
 import numpy as np
+from Commands.Keys import Touchscreen
+from Commands.PythonCommandBase import PythonCommand
 
 
 class Qingpi_Touchscreen_sample(PythonCommand):
-    NAME = 'Qingpi_Touchscreen_sample'
+    NAME = "Qingpi_Touchscreen_sample"
 
     def __init__(self):
         super().__init__()

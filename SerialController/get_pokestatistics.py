@@ -29,7 +29,11 @@ def get_rank_match_result():
         hours = days * 24 + seconds // 3600
         minutes = (seconds % 3600) // 60
         seconds = seconds % 60
-        print("最後にランクマッチデータをDLしたのは{0}時間{1}分{2}秒前".format(hours, minutes, seconds))
+        print(
+            "最後にランクマッチデータをDLしたのは{0}時間{1}分{2}秒前".format(
+                hours, minutes, seconds
+            )
+        )
 
     # ファイルが存在しないまたは最後のDLから24時間経っているときは新しくダウンロードする
     if not os.path.exists(path) or hours >= 24:
@@ -66,9 +70,15 @@ class GetFromHomeGUI:
         # self.poke_window.geometry("%dx%d%+d%+d" % (600, 300, 250, 125))
         self.poke_window.resizable(False, False)
 
-        self.select_RaB = tk.ttk.LabelFrame(self.poke_window, text="ランクシーズン/バトル種選択")
-        self.poke_select_frame = tk.ttk.LabelFrame(self.poke_window, width=1080, height=300, text="ポケモン選択")
-        self.poke_stats_frame = tk.ttk.LabelFrame(self.poke_window, width=1080, height=300, text="統計値")
+        self.select_RaB = tk.ttk.LabelFrame(
+            self.poke_window, text="ランクシーズン/バトル種選択"
+        )
+        self.poke_select_frame = tk.ttk.LabelFrame(
+            self.poke_window, width=1080, height=300, text="ポケモン選択"
+        )
+        self.poke_stats_frame = tk.ttk.LabelFrame(
+            self.poke_window, width=1080, height=300, text="統計値"
+        )
 
         self.select_RaB.grid(row=0, column=0, sticky="news")
 
@@ -88,7 +98,14 @@ class GetFromHomeGUI:
         self.season_list = list(self.rank_match_result_dic["list"].keys())[::-1]
         self.rule_list = ["シングル", "ダブル"]
 
-        self.columns = ("図鑑番号", "種類", "フォルム名", "タイプ1", "タイプ2", "フォルム(番号)")
+        self.columns = (
+            "図鑑番号",
+            "種類",
+            "フォルム名",
+            "タイプ1",
+            "タイプ2",
+            "フォルム(番号)",
+        )
 
         self.columns_d = (
             "技",
@@ -108,16 +125,34 @@ class GetFromHomeGUI:
             "このポケモンが倒したポケモン",
         )
 
-        self.treeview = ttk.Treeview(self.poke_select_frame, columns=self.columns, show="headings", selectmode="browse")
+        self.treeview = ttk.Treeview(
+            self.poke_select_frame,
+            columns=self.columns,
+            show="headings",
+            selectmode="browse",
+        )
         self.treeview_detail = ttk.Treeview(
-            self.poke_stats_frame, columns=self.columns_d, show="headings", selectmode="browse"
+            self.poke_stats_frame,
+            columns=self.columns_d,
+            show="headings",
+            selectmode="browse",
         )
 
         self.treeview.bind("<<TreeviewSelect>>", self.getPokeDetail)
-        self.vsb = ttk.Scrollbar(self.poke_select_frame, orient="vertical", command=self.treeview.yview)
-        self.hsb = ttk.Scrollbar(self.poke_select_frame, orient="horizontal", command=self.treeview.xview)
-        self.vsb_d = ttk.Scrollbar(self.poke_stats_frame, orient="vertical", command=self.treeview_detail.yview)
-        self.hsb_d = ttk.Scrollbar(self.poke_stats_frame, orient="horizontal", command=self.treeview_detail.xview)
+        self.vsb = ttk.Scrollbar(
+            self.poke_select_frame, orient="vertical", command=self.treeview.yview
+        )
+        self.hsb = ttk.Scrollbar(
+            self.poke_select_frame, orient="horizontal", command=self.treeview.xview
+        )
+        self.vsb_d = ttk.Scrollbar(
+            self.poke_stats_frame, orient="vertical", command=self.treeview_detail.yview
+        )
+        self.hsb_d = ttk.Scrollbar(
+            self.poke_stats_frame,
+            orient="horizontal",
+            command=self.treeview_detail.xview,
+        )
         self.season_l = ttk.Label(self.select_RaB, text="ランクシーズン")
         self.isSingle_l = ttk.Label(self.select_RaB, text="バトルの種類")
         self.season = season
@@ -126,11 +161,19 @@ class GetFromHomeGUI:
         # self.getPokeDetail_Button = ttk.Button(self.poke_view_frame, text="詳細取得", command=self.getPokeDetail)
 
         self.season_cb = ttk.Combobox(
-            self.select_RaB, textvariable=self.season, values=self.season_list, width=30, state="readonly"
+            self.select_RaB,
+            textvariable=self.season,
+            values=self.season_list,
+            width=30,
+            state="readonly",
         )
         self.season_cb.current(self.season_cb["values"].index(self.season.get()))
         self.isSingle_cb = ttk.Combobox(
-            self.select_RaB, textvariable=self.isSingle, values=self.rule_list, width=80, state="readonly"
+            self.select_RaB,
+            textvariable=self.isSingle,
+            values=self.rule_list,
+            width=80,
+            state="readonly",
         )
         self.season_cb.bind("<<ComboboxSelected>>", self.bindGetRankDataPokeData)
         self.isSingle_cb.bind("<<ComboboxSelected>>", self.bindGetRankDataPokeData)
@@ -144,7 +187,11 @@ class GetFromHomeGUI:
         for col in self.columns:
             self.treeview.column(col, minwidth=0, width=100, stretch=tk.NO)
             self.treeview.heading(
-                col, text=col, command=lambda _col=col: self.treeview_sort_column(self.treeview, _col, False)
+                col,
+                text=col,
+                command=lambda _col=col: self.treeview_sort_column(
+                    self.treeview, _col, False
+                ),
             )
         _ = 0
         for col in self.columns_d:
@@ -156,7 +203,11 @@ class GetFromHomeGUI:
                 self.treeview_detail.column(col, minwidth=0, width=150, stretch=tk.NO)
 
             self.treeview_detail.heading(
-                col, text=col, command=lambda _col=col: self.treeview_sort_column(self.treeview_detail, _col, False)
+                col,
+                text=col,
+                command=lambda _col=col: self.treeview_sort_column(
+                    self.treeview_detail, _col, False
+                ),
             )
             _ += 1
 
@@ -211,35 +262,53 @@ class GetFromHomeGUI:
                 try:
                     waza[i] = [
                         self.poke_data[values[0]][values[5]]["temoti"]["waza"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["temoti"]["waza"][i]["val"],
+                        self.poke_data[values[0]][values[5]]["temoti"]["waza"][i][
+                            "val"
+                        ],
                     ]
                 except Exception:
                     pass
                 try:
                     tokusei[i] = [
-                        self.poke_data[values[0]][values[5]]["temoti"]["tokusei"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["temoti"]["tokusei"][i]["val"],
+                        self.poke_data[values[0]][values[5]]["temoti"]["tokusei"][i][
+                            "id"
+                        ],
+                        self.poke_data[values[0]][values[5]]["temoti"]["tokusei"][i][
+                            "val"
+                        ],
                     ]
                 except Exception:
                     pass
                 try:
                     seikaku[i] = [
-                        self.poke_data[values[0]][values[5]]["temoti"]["seikaku"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["temoti"]["seikaku"][i]["val"],
+                        self.poke_data[values[0]][values[5]]["temoti"]["seikaku"][i][
+                            "id"
+                        ],
+                        self.poke_data[values[0]][values[5]]["temoti"]["seikaku"][i][
+                            "val"
+                        ],
                     ]
                 except Exception:
                     pass
                 try:
                     motimono[i] = [
-                        self.poke_data[values[0]][values[5]]["temoti"]["motimono"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["temoti"]["motimono"][i]["val"],
+                        self.poke_data[values[0]][values[5]]["temoti"]["motimono"][i][
+                            "id"
+                        ],
+                        self.poke_data[values[0]][values[5]]["temoti"]["motimono"][i][
+                            "val"
+                        ],
                     ]
                 except Exception:
                     pass
                 try:
                     withPokemon[i] = [
-                        self.poke_data[values[0]][values[5]]["temoti"]["pokemon"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["temoti"]["pokemon"][i]["form"],
+                        self.poke_data[values[0]][values[5]]["temoti"]["pokemon"][i][
+                            "id"
+                        ],
+                        self.poke_data[values[0]][values[5]]["temoti"]["pokemon"][i][
+                            "form"
+                        ],
                     ]
                 except Exception:
                     pass
@@ -252,8 +321,12 @@ class GetFromHomeGUI:
                     pass
                 try:
                     beatedPoke[i] = [
-                        self.poke_data[values[0]][values[5]]["lose"]["pokemon"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["lose"]["pokemon"][i]["form"],
+                        self.poke_data[values[0]][values[5]]["lose"]["pokemon"][i][
+                            "id"
+                        ],
+                        self.poke_data[values[0]][values[5]]["lose"]["pokemon"][i][
+                            "form"
+                        ],
                     ]
                 except Exception:
                     pass
@@ -267,7 +340,9 @@ class GetFromHomeGUI:
                 try:
                     beatPokemon[i] = [
                         self.poke_data[values[0]][values[5]]["win"]["pokemon"][i]["id"],
-                        self.poke_data[values[0]][values[5]]["win"]["pokemon"][i]["form"],
+                        self.poke_data[values[0]][values[5]]["win"]["pokemon"][i][
+                            "form"
+                        ],
                     ]
                 except Exception:
                     pass
@@ -280,19 +355,35 @@ class GetFromHomeGUI:
                 values=(
                     self.ja_pokes["waza"][waza[i][0]] if waza[i][0] != "" else "",
                     waza[i][1],
-                    self.ja_pokes["tokusei"][tokusei[i][0]] if tokusei[i][0] != "" else "",
+                    self.ja_pokes["tokusei"][tokusei[i][0]]
+                    if tokusei[i][0] != ""
+                    else "",
                     tokusei[i][1],
-                    self.ja_pokes["seikaku"][seikaku[i][0]] if seikaku[i][0] != "" else "",
+                    self.ja_pokes["seikaku"][seikaku[i][0]]
+                    if seikaku[i][0] != ""
+                    else "",
                     seikaku[i][1],
-                    self.ja_pokes["item"][motimono[i][0]] if motimono[i][0] != "" else "",
+                    self.ja_pokes["item"][motimono[i][0]]
+                    if motimono[i][0] != ""
+                    else "",
                     motimono[i][1],
-                    self.ja_pokes["poke"][int(withPokemon[i][0]) - 1] if withPokemon[i][0] != "" else "",
-                    self.ja_pokes["waza"][beatedWaza[i][0]] if beatedWaza[i][0] != "" else "",
+                    self.ja_pokes["poke"][int(withPokemon[i][0]) - 1]
+                    if withPokemon[i][0] != ""
+                    else "",
+                    self.ja_pokes["waza"][beatedWaza[i][0]]
+                    if beatedWaza[i][0] != ""
+                    else "",
                     beatedWaza[i][1],
-                    self.ja_pokes["poke"][int(beatedPoke[i][0]) - 1] if beatedPoke[i][0] != "" else "",
-                    self.ja_pokes["waza"][beatWaza[i][0]] if beatWaza[i][0] != "" else "",
+                    self.ja_pokes["poke"][int(beatedPoke[i][0]) - 1]
+                    if beatedPoke[i][0] != ""
+                    else "",
+                    self.ja_pokes["waza"][beatWaza[i][0]]
+                    if beatWaza[i][0] != ""
+                    else "",
                     beatWaza[i][1],
-                    self.ja_pokes["poke"][int(beatPokemon[i][0]) - 1] if beatPokemon[i][0] != "" else "",
+                    self.ja_pokes["poke"][int(beatPokemon[i][0]) - 1]
+                    if beatPokemon[i][0] != ""
+                    else "",
                 ),
             )
 
@@ -306,13 +397,15 @@ class GetFromHomeGUI:
         else:
             isSingle = 0
         poke_w = self.dl_rank_poke_data(
-            list(self.rank_match_result_dic["list"][self.season.get()].keys())[1 - isSingle],
-            self.rank_match_result_dic["list"][self.season.get()][str(10001 + 10 * int(self.season.get()) + isSingle)][
-                "rst"
+            list(self.rank_match_result_dic["list"][self.season.get()].keys())[
+                1 - isSingle
             ],
-            self.rank_match_result_dic["list"][self.season.get()][str(10001 + 10 * int(self.season.get()) + isSingle)][
-                "ts2"
-            ],
+            self.rank_match_result_dic["list"][self.season.get()][
+                str(10001 + 10 * int(self.season.get()) + isSingle)
+            ]["rst"],
+            self.rank_match_result_dic["list"][self.season.get()][
+                str(10001 + 10 * int(self.season.get()) + isSingle)
+            ]["ts2"],
         )
         self.poke_data = poke_w
 
@@ -337,7 +430,9 @@ class GetFromHomeGUI:
                 else:
                     poke_form_name = " "
 
-                poke_type1, poke_type2 = self.pokemonType(poke_types, *poke_type[dex_num][poke_form])
+                poke_type1, poke_type2 = self.pokemonType(
+                    poke_types, *poke_type[dex_num][poke_form]
+                )
                 self.treeview.insert(
                     "",
                     "end",
@@ -393,7 +488,11 @@ class GetFromHomeGUI:
             tv.move(k, "", index)
 
         # reverse sort next time
-        tv.heading(col, text=col, command=lambda _col=col: self.treeview_sort_column(tv, _col, not reverse))
+        tv.heading(
+            col,
+            text=col,
+            command=lambda _col=col: self.treeview_sort_column(tv, _col, not reverse),
+        )
 
     def dl_rank_poke_data(self, isSingle, rst, ts2):
         _l = "Single" if self.isSingle.get() == "シングル" else "Double"
@@ -418,7 +517,11 @@ class GetFromHomeGUI:
                     self.season.get(), self.isSingle.get(), hours, minutes, seconds
                 )
             )
-        if not os.path.exists(path) or hours >= 24 or (rst == 2 and not os.path.exists(path)):
+        if (
+            not os.path.exists(path)
+            or hours >= 24
+            or (rst == 2 and not os.path.exists(path))
+        ):
             try:
                 print(
                     "シーズン{}/{}バトルのポケモンデータをダウンロード中…".format(

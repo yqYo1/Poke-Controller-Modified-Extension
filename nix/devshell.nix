@@ -1,11 +1,9 @@
 {pkgs, ...}: let
   rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
 
-  pythonEnv = pkgs.python312.withPackages (ps:
+  pythonEnv = pkgs.python314.withPackages (ps:
     with ps; [
       pip
-      venv
-      maturin
       pygame
       pyserial
       pynput
@@ -41,8 +39,8 @@ in
       pythonEnv
 
       nodejs_20
-      nodePackages.pnpm
-      nodePackages.yarn
+      pnpm
+      yarn
 
       pkg-config
       openssl
@@ -60,7 +58,6 @@ in
       gst_all_1.gst-plugins-ugly
       gst_all_1.gst-libav
 
-      appmenu-gtk-module
       nix-tree
     ];
 

@@ -15,12 +15,11 @@
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
-      finalSystem: let
+      system: let
         pkgs = import nixpkgs {
-          inherit finalSystem;
+          inherit system;
           overlays = [
             (import rust-overlay)
-            (import ./nix/rust-overlay.nix)
             (import ./nix/tauri.nix)
           ];
         };

@@ -12,5 +12,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 mlua = { workspace = true }
+parking_lot = { workspace = true }
 
 pokecon-events = { path = "../pokecon-events" }

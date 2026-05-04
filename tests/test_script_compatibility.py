@@ -468,6 +468,9 @@ class TestPublicApiWithMocks:
                 0.9,
             )
             mock_img_proc.return_value = mock_instance
+            # Preserve image_type for isinstance() checks in commands.py
+            import numpy as np
+            mock_img_proc.image_type = np.ndarray
 
             result = cmd.isContainTemplate(
                 "dummy.png", threshold=0.7, use_gray=True, show_position=False
@@ -499,6 +502,9 @@ class TestPublicApiWithMocks:
                 0.9,
             )
             mock_img_proc.return_value = mock_instance
+            # Preserve image_type for isinstance() checks in commands.py
+            import numpy as np
+            mock_img_proc.image_type = np.ndarray
 
             result = cmd.isContainedImage(
                 "dummy.png", threshold=0.7, show_position=False

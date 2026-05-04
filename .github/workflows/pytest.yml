@@ -19,7 +19,7 @@ jobs:
           nix develop --command bash -c "uv venv && uv pip install pytest"
       - name: Run pytest
         run: |
-          nix develop --command uv run pytest tests/ -v --tb=short
+          nix develop --command pytest tests/ -v --tb=short
 
   # test-windows:
   #   runs-on: windows-latest

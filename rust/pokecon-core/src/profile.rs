@@ -136,7 +136,9 @@ impl ProfileManager {
     }
 
     pub fn active(&self) -> Option<&Profile> {
-        self.active.as_ref().and_then(|name| self.profiles.get(name))
+        self.active
+            .as_ref()
+            .and_then(|name| self.profiles.get(name))
     }
 
     pub fn active_name(&self) -> Option<&str> {

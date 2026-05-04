@@ -122,9 +122,9 @@ impl CameraBackend for MockCameraBackend {
         if !self.open_state {
             return Err(CameraError::NotInitialized);
         }
-        self.mock_frame.clone().ok_or_else(|| {
-            CameraError::CaptureError("No mock frame set".to_string())
-        })
+        self.mock_frame
+            .clone()
+            .ok_or_else(|| CameraError::CaptureError("No mock frame set".to_string()))
     }
 
     async fn close(&mut self) {

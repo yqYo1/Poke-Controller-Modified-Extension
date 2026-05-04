@@ -2,18 +2,15 @@ use std::io;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tracing::{debug, info};
 
 /// Socket communication error types
 #[derive(Error, Debug)]
 pub enum SocketError {
     #[error("Failed to connect to {addr}: {source}")]
-    ConnectError {
-        addr: String,
-        source: io::Error,
-    },
+    ConnectError { addr: String, source: io::Error },
 
     #[error("Failed to send data: {0}")]
     SendError(io::Error),
@@ -71,16 +68,13 @@ impl SocketClient {
     pub async fn connect(&mut self, addr: &str) -> Result<(), SocketError> {
         info!("Connecting to TCP socket: {}", addr);
 
-        let stream = tokio::time::timeout(
-            Duration::from_secs(10),
-            TcpStream::connect(addr),
-        )
-        .await
-        .map_err(|_| SocketError::Timeout(format!("Connection timeout to {}", addr)))?
-        .map_err(|e| SocketError::ConnectError {
-            addr: addr.to_string(),
-            source: e,
-        })?;
+        let stream = tokio::time::timeout(Duration::from_secs(10), TcpStream::connect(addr))
+            .await
+            .map_err(|_| SocketError::Timeout(format!("Connection timeout to {}", addr)))?
+            .map_err(|e| SocketError::ConnectError {
+                addr: addr.to_string(),
+                source: e,
+            })?;
 
         let (r, w) = stream.into_split();
         self.writer = Some(BufWriter::new(w));
@@ -154,7 +148,10 @@ impl SocketClient {
             return Err(SocketError::ConnectionClosed);
         }
 
-        Ok(result.trim_end_matches('\n').trim_end_matches('\r').to_string())
+        Ok(result
+            .trim_end_matches('\n')
+            .trim_end_matches('\r')
+            .to_string())
     }
 
     /// Close the socket connection

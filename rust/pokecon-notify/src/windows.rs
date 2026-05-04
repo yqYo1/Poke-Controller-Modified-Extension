@@ -110,10 +110,7 @@ mod tests {
         // In a CI/headless environment this may fail, but the code path
         // should not panic.
         let result = notifier
-            .send(
-                &Notification::new("test body")
-                    .with_title("test"),
-            )
+            .send(&Notification::new("test body").with_title("test"))
             .await;
         // May be Ok (desktop) or Err (headless) – either is acceptable.
         if let Err(e) = &result {

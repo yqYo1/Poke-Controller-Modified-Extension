@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from Commands.Keys import Direction, Stick
-from Commands.Keys import Button
-from Commands.PythonCommandBase import PythonCommand
-from tkinter import filedialog
 import time
+from tkinter import filedialog
+
 import numpy as np
+from Commands.Keys import Direction, Stick
+from Commands.PythonCommandBase import PythonCommand
 
 
 # Mash a button A
 # A連打
 class PlayRec(PythonCommand):
-    NAME = '記録したログを再生'
+    NAME = "記録したログを再生"
 
     def __init__(self):
         super().__init__()
@@ -30,12 +30,12 @@ class PlayRec(PythonCommand):
 
     def LStick(self, angle, r=1.0, duration=0.015):
         self.keys.ser.writeRow(
-            f'2 8 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))}'
+            f"2 8 {hex(int(128 + r * 127.5 * np.cos(np.deg2rad(angle))))} {hex(int(128 - r * 127.5 * np.sin(np.deg2rad(angle))))}"
         )
         time.sleep(duration)
 
     def do(self):
-        file = filedialog.askopenfile(initialdir='~/')
+        file = filedialog.askopenfile(initialdir="~/")
         self.log = file.name
         print(self.log)
         with open(self.log) as f:
@@ -45,4 +45,8 @@ class PlayRec(PythonCommand):
             self.LStick(i[0], i[1], duration=i[2] * 1.0)
             # self.wait(i[2]*0.90)
 
-        self.stickEnd(Direction(Stick.LEFT, 0, 0, showName=f'Angle={l_strip[0][0]},r={l_strip[0][1]}'))
+        self.stickEnd(
+            Direction(
+                Stick.LEFT, 0, 0, showName=f"Angle={l_strip[0][0]},r={l_strip[0][1]}"
+            )
+        )

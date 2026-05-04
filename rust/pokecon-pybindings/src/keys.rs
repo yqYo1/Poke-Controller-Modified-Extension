@@ -12,7 +12,15 @@ fn convert_button(button: u16) -> PyResult<Vec<String>> {
 #[pyfunction]
 fn get_direction(hat_idx: u8) -> PyResult<String> {
     let names = [
-        "TOP", "TOP_RIGHT", "RIGHT", "BTM_RIGHT", "BTM", "BTM_LEFT", "LEFT", "TOP_LEFT", "CENTER",
+        "TOP",
+        "TOP_RIGHT",
+        "RIGHT",
+        "BTM_RIGHT",
+        "BTM",
+        "BTM_LEFT",
+        "LEFT",
+        "TOP_LEFT",
+        "CENTER",
     ];
     let name = names.get(hat_idx as usize).unwrap_or(&"CENTER");
     Ok(name.to_string())

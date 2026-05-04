@@ -1,5 +1,5 @@
-pub mod socket;
 pub mod mqtt;
+pub mod socket;
 
+pub use mqtt::{MqttClient, MqttConfig, MqttError, MqttMessage};
 pub use socket::{SocketClient, SocketError};
-pub use mqtt::{MqttClient, MqttError, MqttConfig, MqttMessage};

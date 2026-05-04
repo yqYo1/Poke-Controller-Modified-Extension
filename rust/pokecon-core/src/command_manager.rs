@@ -147,7 +147,9 @@ impl CommandManager {
     }
 
     pub fn active(&self) -> Option<&CommandInfo> {
-        self.active.as_ref().and_then(|name| self.commands.get(name))
+        self.active
+            .as_ref()
+            .and_then(|name| self.commands.get(name))
     }
 
     pub fn active_name(&self) -> Option<&str> {
@@ -158,14 +160,11 @@ impl CommandManager {
         let content = std::fs::read_to_string(path).ok()?;
         content
             .lines()
-            .find(|line| line.trim_start().starts_with("# Description:") || line.trim_start().starts_with("-- Description:"))
-            .map(|line| {
-                line.splitn(2, ':')
-                    .nth(1)
-                    .unwrap_or("")
-                    .trim()
-                    .to_string()
+            .find(|line| {
+                line.trim_start().starts_with("# Description:")
+                    || line.trim_start().starts_with("-- Description:")
             })
+            .map(|line| line.splitn(2, ':').nth(1).unwrap_or("").trim().to_string())
     }
 }
 
@@ -188,7 +187,10 @@ mod tests {
         let mut manager = CommandManager::new(&script_dir).unwrap();
         let names = manager.scan().unwrap();
         assert_eq!(names, vec!["test"]);
-        assert_eq!(manager.get("test").unwrap().description, Some("Test script".to_string()));
+        assert_eq!(
+            manager.get("test").unwrap().description,
+            Some("Test script".to_string())
+        );
     }
 
     #[test]
@@ -223,7 +225,10 @@ mod tests {
         manager.set_active("active").unwrap();
 
         assert_eq!(manager.active_name(), Some("active"));
-        assert_eq!(manager.active().unwrap().description, Some("Active script".to_string()));
+        assert_eq!(
+            manager.active().unwrap().description,
+            Some("Active script".to_string())
+        );
     }
 
     #[test]
@@ -241,6 +246,9 @@ mod tests {
         std::fs::write(&path, "# Description: New\n").unwrap();
         manager.reload("reload").unwrap();
 
-        assert_eq!(manager.get("reload").unwrap().description, Some("New".to_string()));
+        assert_eq!(
+            manager.get("reload").unwrap().description,
+            Some("New".to_string())
+        );
     }
 }

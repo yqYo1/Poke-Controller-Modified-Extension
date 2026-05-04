@@ -1,7 +1,7 @@
 import sys
 import types
 
-from pokecon.commands import PythonCommand, ImageProcPythonCommand
+from pokecon.commands import ImageProcPythonCommand, PythonCommand
 
 # --- Import Hack ---
 

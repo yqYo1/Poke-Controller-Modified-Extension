@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import platform
-from importlib.metadata import distribution, PackageNotFoundError
 import sys
 import tkinter as tk
 import tkinter.messagebox as tkmsg
 import tkinter.scrolledtext as st
+from importlib.metadata import PackageNotFoundError, distribution
 from tkinter import ttk
 
 import Constant

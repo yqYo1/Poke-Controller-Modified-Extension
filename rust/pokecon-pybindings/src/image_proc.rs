@@ -1,5 +1,5 @@
-use pyo3::prelude::*;
 use numpy::{PyArray3, PyArrayMethods, PyUntypedArrayMethods};
+use pyo3::prelude::*;
 
 #[pyfunction]
 fn crop<'py>(

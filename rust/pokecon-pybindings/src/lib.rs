@@ -1,7 +1,7 @@
-mod python_cmd;
+mod events;
 mod image_proc;
 mod keys;
-mod events;
+mod python_cmd;
 
 use pyo3::prelude::*;
 

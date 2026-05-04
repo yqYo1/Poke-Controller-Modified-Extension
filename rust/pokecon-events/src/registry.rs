@@ -1,9 +1,9 @@
 //! Event type registry
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Metadata for a registered event type
 #[derive(Debug, Clone, Serialize, Deserialize)]

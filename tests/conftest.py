@@ -10,11 +10,41 @@ _mock_tk = types.ModuleType("tkinter")
 _mock_tk.BooleanVar = MagicMock
 _mock_tk.Toplevel = MagicMock
 _mock_tk.Text = MagicMock
-for name in ["Label", "Button", "Entry", "Frame", "StringVar", "IntVar", "Checkbutton",
-             "OptionMenu", "Radiobutton", "Spinbox", "Scale", "Combobox", "Scrollbar",
-             "Canvas", "PhotoImage", "Tk", "Menu", "Menubutton", "Message",
-             "PanedWindow", "Toplevel", "simpledialog", "colorchooser", "filedialog",
-             "font", "N", "S", "E", "W", "NW", "NE", "SW", "SE"]:
+for name in [
+    "Label",
+    "Button",
+    "Entry",
+    "Frame",
+    "StringVar",
+    "IntVar",
+    "Checkbutton",
+    "OptionMenu",
+    "Radiobutton",
+    "Spinbox",
+    "Scale",
+    "Combobox",
+    "Scrollbar",
+    "Canvas",
+    "PhotoImage",
+    "Tk",
+    "Menu",
+    "Menubutton",
+    "Message",
+    "PanedWindow",
+    "Toplevel",
+    "simpledialog",
+    "colorchooser",
+    "filedialog",
+    "font",
+    "N",
+    "S",
+    "E",
+    "W",
+    "NW",
+    "NE",
+    "SW",
+    "SE",
+]:
     setattr(_mock_tk, name, MagicMock)
 
 _mock_tkf = types.ModuleType("tkinter.filedialog")
@@ -57,6 +87,7 @@ _mock_plyer = types.ModuleType("plyer")
 _mock_plyer.notification = MagicMock()
 sys.modules["plyer"] = _mock_plyer
 
+
 # Apply remaining patches to prevent import errors
 def _apply_import_patches() -> None:
     _mock_discord = types.ModuleType("DiscordNotify")
@@ -93,10 +124,12 @@ def _apply_import_patches() -> None:
     _mock_redirector.TextRedirector = MagicMock
     sys.modules["text_redirector"] = _mock_redirector
 
+
 _apply_import_patches()
 
-import pytest
 from typing import TYPE_CHECKING
+
+import pytest
 
 if TYPE_CHECKING:
     from cv2.typing import MatLike
@@ -110,7 +143,9 @@ class MockSender:
         self.written_rows: list[str] = []
         self.written_lists: list[list[int]] = []
 
-    def openSerial(self, portNum: int, portName: str | None = "", baudrate: int = 9600) -> bool:
+    def openSerial(
+        self, portNum: int, portName: str | None = "", baudrate: int = 9600
+    ) -> bool:
         self.is_open = True
         return True
 
@@ -145,6 +180,7 @@ class MockCamera:
     @property
     def image_bgr(self) -> MatLike:
         import numpy as np
+
         return np.zeros((720, 1280, 3), dtype=np.uint8)
 
     @property
@@ -174,6 +210,7 @@ class MockCamera:
 
     def readFrame(self) -> MatLike:
         import numpy as np
+
         return np.zeros((720, 1280, 3), dtype=np.uint8)
 
     def saveCapture(
@@ -192,8 +229,9 @@ class MockCamera:
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        import numpy as np
         import cv2
+        import numpy as np
+
         cv2.imwrite(path, np.zeros((720, 1280, 3), dtype=np.uint8))
 
     def destroy(self) -> None:

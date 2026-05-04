@@ -1,5 +1,3 @@
-from typing import ClassVar
-
 class CommandMeta(type):
     _registry: dict[str, type] = {}
     _interface_registry: dict[str, dict[str, type]] = {
@@ -8,9 +6,13 @@ class CommandMeta(type):
     }
 
     @classmethod
-    def register_interface(mcs, base_name: str, version: str, interface_cls: type, override: bool = False) -> None:
+    def register_interface(
+        mcs, base_name: str, version: str, interface_cls: type, override: bool = False
+    ) -> None:
         if not getattr(interface_cls, "__is_interface__", False):
-            raise ValueError(f"{interface_cls.__name__} must have __is_interface__ = True")
+            raise ValueError(
+                f"{interface_cls.__name__} must have __is_interface__ = True"
+            )
         if base_name not in mcs._interface_registry:
             mcs._interface_registry[base_name] = {}
         if version in mcs._interface_registry[base_name] and not override:
@@ -22,7 +24,9 @@ class CommandMeta(type):
         versions = mcs._interface_registry.get(base_name, {})
         if version not in versions:
             available = ", ".join(versions.keys())
-            raise ValueError(f"Unknown API version '{version}' for {base_name}. Available: {available}")
+            raise ValueError(
+                f"Unknown API version '{version}' for {base_name}. Available: {available}"
+            )
         return versions[version]
 
     @classmethod

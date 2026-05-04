@@ -4,9 +4,9 @@
 This code has copied from https://qiita.com/Esfahan/items/275b0f124369ccf8cf18
 """
 
-import logging
 import datetime as dt
-from logging import Formatter, StreamHandler, getLogger, DEBUG
+import logging
+from logging import DEBUG, Formatter, StreamHandler, getLogger
 
 now = dt.datetime.now()
 time = now.strftime("%Y%m%d-%H%M%S")
@@ -36,7 +36,9 @@ def root_logger():
     logger = getLogger()
 
     # formatterを作成
-    formatter = Formatter("%(asctime)s %(name)s %(funcName)s [%(levelname)s]: %(message)s")
+    formatter = Formatter(
+        "%(asctime)s %(name)s %(funcName)s [%(levelname)s]: %(message)s"
+    )
 
     # handlerを作成しフォーマッターを設定
     # handler = ColorfulHandler()

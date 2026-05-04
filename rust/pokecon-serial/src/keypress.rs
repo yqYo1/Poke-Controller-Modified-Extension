@@ -96,16 +96,14 @@ impl KeyPress {
         &mut self.format
     }
 
-    pub async fn input(
-        &mut self,
-        btns: &[GamepadInput],
-    ) -> Result<(), crate::sender::SerialError> {
+    pub async fn input(&mut self, btns: &[GamepadInput]) -> Result<(), crate::sender::SerialError> {
         let all_btns = self.collect_inputs(btns);
 
         let buttons: Vec<Button> = all_btns.iter().flat_map(|g| g.buttons()).collect();
         let hats: Vec<Hat> = all_btns.iter().flat_map(|g| g.hats()).collect();
         let directions: Vec<Direction> = all_btns.iter().flat_map(|g| g.directions()).collect();
-        let touchscreens: Vec<Touchscreen> = all_btns.iter().flat_map(|g| g.touchscreens()).collect();
+        let touchscreens: Vec<Touchscreen> =
+            all_btns.iter().flat_map(|g| g.touchscreens()).collect();
 
         self.update_stick_changed(&directions);
 
@@ -133,10 +131,9 @@ impl KeyPress {
                 self.format.set_button(&buttons);
                 self.format.set_hat(&hats);
                 self.format.set_any_direction(&directions);
-                let row = self.format.convert_to_default(
-                    self.l_stick_changed,
-                    self.r_stick_changed,
-                );
+                let row = self
+                    .format
+                    .convert_to_default(self.l_stick_changed, self.r_stick_changed);
                 self.sender.write_row(&row, true).await?;
             }
         }
@@ -199,10 +196,9 @@ impl KeyPress {
                     self.format.unset_hat();
                 }
                 self.format.unset_direction(&tilts);
-                let row = self.format.convert_to_default(
-                    self.l_stick_changed,
-                    self.r_stick_changed,
-                );
+                let row = self
+                    .format
+                    .convert_to_default(self.l_stick_changed, self.r_stick_changed);
                 self.sender.write_row(&row, true).await?;
             }
         }
@@ -234,26 +230,24 @@ impl KeyPress {
                     to_input.push(btn.clone());
                 }
             }
-            GamepadInput::SingleDirection(d) => {
-                match d.stick {
-                    Stick::Left => {
-                        if self.hold_left_stick.as_ref() == Some(d) {
-                            warn!("{:?} is already in holding state", d);
-                        } else {
-                            self.hold_left_stick = Some(d.clone());
-                            to_input.push(btn.clone());
-                        }
-                    }
-                    Stick::Right => {
-                        if self.hold_right_stick.as_ref() == Some(d) {
-                            warn!("{:?} is already in holding state", d);
-                        } else {
-                            self.hold_right_stick = Some(d.clone());
-                            to_input.push(btn.clone());
-                        }
+            GamepadInput::SingleDirection(d) => match d.stick {
+                Stick::Left => {
+                    if self.hold_left_stick.as_ref() == Some(d) {
+                        warn!("{:?} is already in holding state", d);
+                    } else {
+                        self.hold_left_stick = Some(d.clone());
+                        to_input.push(btn.clone());
                     }
                 }
-            }
+                Stick::Right => {
+                    if self.hold_right_stick.as_ref() == Some(d) {
+                        warn!("{:?} is already in holding state", d);
+                    } else {
+                        self.hold_right_stick = Some(d.clone());
+                        to_input.push(btn.clone());
+                    }
+                }
+            },
             GamepadInput::SingleTouchscreen(t) => {
                 if self.hold_touchscreen.as_ref() == Some(t) {
                     warn!("{:?} is already in holding state", t);
@@ -302,26 +296,24 @@ impl KeyPress {
                     warn!("{:?} is not in holding state", h);
                 }
             }
-            GamepadInput::SingleDirection(d) => {
-                match d.stick {
-                    Stick::Left => {
-                        if self.hold_left_stick.as_ref() == Some(d) {
-                            self.hold_left_stick = None;
-                            to_input_end.push(btn.clone());
-                        } else {
-                            warn!("{:?} is not in holding state", d);
-                        }
-                    }
-                    Stick::Right => {
-                        if self.hold_right_stick.as_ref() == Some(d) {
-                            self.hold_right_stick = None;
-                            to_input_end.push(btn.clone());
-                        } else {
-                            warn!("{:?} is not in holding state", d);
-                        }
+            GamepadInput::SingleDirection(d) => match d.stick {
+                Stick::Left => {
+                    if self.hold_left_stick.as_ref() == Some(d) {
+                        self.hold_left_stick = None;
+                        to_input_end.push(btn.clone());
+                    } else {
+                        warn!("{:?} is not in holding state", d);
                     }
                 }
-            }
+                Stick::Right => {
+                    if self.hold_right_stick.as_ref() == Some(d) {
+                        self.hold_right_stick = None;
+                        to_input_end.push(btn.clone());
+                    } else {
+                        warn!("{:?} is not in holding state", d);
+                    }
+                }
+            },
             GamepadInput::SingleTouchscreen(t) => {
                 if self.hold_touchscreen.as_ref() == Some(t) {
                     self.hold_touchscreen = None;
@@ -390,10 +382,7 @@ impl KeyPress {
             );
         }
         for (wtime, row) in wait_times.iter().zip(serial_commands.iter()) {
-            tokio::time::sleep(tokio::time::Duration::from_millis(
-                (wtime * 1000.0) as u64,
-            ))
-            .await;
+            tokio::time::sleep(tokio::time::Duration::from_millis((wtime * 1000.0) as u64)).await;
             self.sender.write_row_wo_counter(row).await?;
         }
         Ok(())
@@ -409,12 +398,10 @@ impl KeyPress {
         for d in directions {
             match d.stick {
                 Stick::Left => {
-                    self.l_stick_changed =
-                        self.format.lx != d.x || self.format.ly != 255 - d.y;
+                    self.l_stick_changed = self.format.lx != d.x || self.format.ly != 255 - d.y;
                 }
                 Stick::Right => {
-                    self.r_stick_changed =
-                        self.format.rx != d.x || self.format.ry != 255 - d.y;
+                    self.r_stick_changed = self.format.rx != d.x || self.format.ry != 255 - d.y;
                 }
             }
         }

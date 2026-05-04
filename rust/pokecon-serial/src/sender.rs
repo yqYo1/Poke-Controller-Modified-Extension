@@ -9,8 +9,17 @@ pub enum SerialError {
     #[error("Failed to open serial port: {0}")]
     OpenError(io::Error),
 
+    #[error("Serial port not found: {0}")]
+    PortNotFound(String),
+
+    #[error("Permission denied opening serial port: {0}")]
+    PermissionDenied(String),
+
     #[error("Failed to write to serial port: {0}")]
     WriteError(io::Error),
+
+    #[error("Serial port operation timed out")]
+    Timeout,
 
     #[error("Serial port is not open")]
     NotOpen,
@@ -63,8 +72,15 @@ impl Sender {
         let port = match tokio_serial::new(&path, baudrate).open_native_async() {
             Ok(p) => p,
             Err(e) => {
-                error!("COM Port: can't be established: {}", e);
-                return Err(SerialError::OpenError(e.into()));
+                let io_err: io::Error = e.into();
+                error!("COM Port: can't be established: {}", io_err);
+                return Err(match io_err.kind() {
+                    io::ErrorKind::NotFound => SerialError::PortNotFound(path.clone()),
+                    io::ErrorKind::PermissionDenied => {
+                        SerialError::PermissionDenied(path.clone())
+                    }
+                    _ => SerialError::OpenError(io_err),
+                });
             }
         };
 

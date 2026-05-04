@@ -1,13 +1,28 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
+/// A Python command that holds named callbacks.
+///
+/// This is the Python-facing representation of a command.  User scripts register
+/// callback functions (e.g. ``"do"``) that the Rust runtime can invoke
+/// synchronously.
+///
+/// Python usage::
+///
+///     from pokecon.command import PythonCommand
+///
+///     def on_do(**kwargs):
+///         print("do called with", kwargs)
+///
+///     cmd = PythonCommand("my_command")
+///     cmd.register_callback("do", on_do)
+///     result = cmd.trigger("do", {"arg": 42})
 #[pyclass]
 pub struct PythonCommand {
     name: String,
-    callbacks: Arc<Mutex<HashMap<String, PyObject>>>,
+    callbacks: Mutex<HashMap<String, PyObject>>,
 }
 
 #[pymethods]
@@ -16,49 +31,49 @@ impl PythonCommand {
     fn new(name: String) -> Self {
         Self {
             name,
-            callbacks: Arc::new(Mutex::new(HashMap::new())),
+            callbacks: Mutex::new(HashMap::new()),
         }
     }
 
+    /// The name of this command.
     #[getter]
     fn name(&self) -> PyResult<String> {
         Ok(self.name.clone())
     }
 
+    /// Register a Python callback for a named event (e.g. ``"do"``).
     fn register_callback(&self, event: String, callback: PyObject) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {}", e))
+        let mut callbacks = self.callbacks.lock().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
         })?;
-        rt.block_on(async {
-            let mut callbacks = self.callbacks.lock().await;
-            callbacks.insert(event, callback);
-        });
+        callbacks.insert(event, callback);
         Ok(())
     }
 
+    /// Trigger the callback registered for *event*, passing *kwargs* as keyword
+    /// arguments.  Returns the callback's return value, or ``None`` if no
+    /// callback is registered.
     fn trigger<'py>(
         &self,
         py: Python<'py>,
         event: String,
         kwargs: Option<Bound<'py, PyDict>>,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
-        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {}", e))
-        })?;
+        // Clone the callback while holding the lock so we can release it
+        // before calling into Python (avoids potential deadlocks).
+        let cb = {
+            let callbacks = self.callbacks.lock().map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
+            })?;
+            callbacks.get(&event).cloned()
+        };
 
-        let callback: Option<PyObject> = rt.block_on(async {
-            let callbacks = self.callbacks.lock().await;
-            callbacks.get(&event).map(|cb| cb.clone_ref(py))
-        });
-
-        match callback {
+        match cb {
             Some(cb) => {
                 let args = pyo3::types::PyTuple::empty(py);
                 match kwargs {
-                    Some(kwargs) => cb
-                        .call(py, args, Some(&kwargs))
-                        .map(|o| Some(o.into_bound(py))),
-                    None => cb.call(py, args, None).map(|o| Some(o.into_bound(py))),
+                    Some(ref kwargs) => cb.bind(py).call(args, Some(kwargs)).map(Some),
+                    None => cb.bind(py).call(args, None).map(Some),
                 }
             }
             None => Ok(None),

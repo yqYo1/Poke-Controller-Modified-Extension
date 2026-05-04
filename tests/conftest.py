@@ -95,26 +95,6 @@ _mock_plyer = types.ModuleType("plyer")
 _mock_plyer.notification = MagicMock()
 sys.modules["plyer"] = _mock_plyer
 
-# Mock pygame (preemptively — not imported by any test, but present as a
-# dependency in ControllerBase.py and requirements.txt). Python 3.14 has
-# no pygame wheel, so we mock it to prevent spurious ImportError crashes
-# if any future test path touches controller code.
-_mock_pygame = types.ModuleType("pygame")
-_mock_pygame.init = MagicMock()
-_mock_pygame.quit = MagicMock()
-_mock_pygame.joystick = types.ModuleType("pygame.joystick")
-_mock_pygame.joystick.Joystick = MagicMock
-_mock_pygame.joystick.JoystickType = MagicMock
-_mock_pygame.time = types.ModuleType("pygame.time")
-_mock_pygame.time.Clock = MagicMock
-_mock_pygame.event = types.ModuleType("pygame.event")
-_mock_pygame.event.EventType = MagicMock
-_mock_pygame.event.get = MagicMock(return_value=[])
-sys.modules["pygame"] = _mock_pygame
-sys.modules["pygame.joystick"] = _mock_pygame.joystick
-sys.modules["pygame.time"] = _mock_pygame.time
-sys.modules["pygame.event"] = _mock_pygame.event
-
 
 # Apply remaining patches to prevent import errors
 def _apply_import_patches() -> None:

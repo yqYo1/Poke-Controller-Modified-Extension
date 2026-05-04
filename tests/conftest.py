@@ -162,6 +162,12 @@ def _apply_import_patches() -> None:
     if "Commands" not in sys.modules:
         _mock_cmds = types.ModuleType("Commands")
         sys.modules["Commands"] = _mock_cmds
+    
+    # Mock Commands.PythonCommandBase for direct imports
+    _mock_pybase = types.ModuleType("Commands.PythonCommandBase")
+    _mock_pybase.PythonCommand = MagicMock
+    _mock_pybase.ImageProcPythonCommand = MagicMock
+    sys.modules["Commands.PythonCommandBase"] = _mock_pybase
 
 
 _apply_import_patches()

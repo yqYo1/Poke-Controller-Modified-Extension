@@ -172,7 +172,7 @@
                 text = ''
                   cd "${self}"
                   export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                  exec pytest tests/ -v --tb=short
+                  exec pytest -p no:cacheprovider tests/ -v --tb=short
                 '';
               }
             }/bin/test";
@@ -262,7 +262,7 @@
                   echo "  pytest"
                   echo "═══════════════════════════════════════════"
                   export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                  pytest tests/ -v --tb=short
+                  pytest -p no:cacheprovider tests/ -v --tb=short
                   echo ""
                   echo "═══════════════════════════════════════════"
                   echo "  formatting (check mode)"

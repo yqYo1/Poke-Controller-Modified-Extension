@@ -77,7 +77,6 @@
               numpy
               scipy
               ruff
-              basedpyright
               pillow
             ]
           );

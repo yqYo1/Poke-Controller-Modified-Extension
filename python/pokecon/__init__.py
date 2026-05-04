@@ -5,6 +5,11 @@ This package provides backward-compatible wrappers so that existing user scripts
 to work while the architecture migrates to a Rust core.
 
 Import hacks are applied at package load time via ``_patch_modules()``.
+
+New features:
+- XDG-compliant script directory discovery
+- CLI argument parsing with ``--scripts-dir``
+- Multi-directory script loading
 """
 
 from __future__ import annotations
@@ -33,6 +38,20 @@ from pokecon.keys import (
     direction_center,
     direction_max,
     direction_min,
+)
+from pokecon.scripts_dir import (
+    ensure_scripts_structure,
+    get_legacy_scripts_dir,
+    get_sample_scripts_dir,
+    get_scripts_dir,
+    get_scripts_dir_from_args,
+    get_scripts_dir_with_fallbacks,
+)
+from pokecon.script_loader import ScriptLoader
+from pokecon.cli_args import (
+    create_parser,
+    get_config_from_args,
+    parse_args,
 )
 
 
@@ -98,10 +117,31 @@ __all__ = [
     "ImageProcPythonCommand",
     "Button",
     "Hat",
-    "Stick",
-    "Tilt",
     "Direction",
-    "Touchscreen",
+    "Stick",
     "KeyPress",
     "SendFormat",
+    "Tilt",
+    "Touchscreen",
+    "NEUTRAL",
+    "conversion_default_button",
+    "conversion_3ds_controller_button",
+    "convert_hat_default",
+    "convert_hat_3ds_controller",
+    "direction_min",
+    "direction_max",
+    "direction_center",
+    # Script directory utilities
+    "get_scripts_dir",
+    "get_scripts_dir_with_fallbacks",
+    "get_legacy_scripts_dir",
+    "get_sample_scripts_dir",
+    "ensure_scripts_structure",
+    "get_scripts_dir_from_args",
+    # Script loader
+    "ScriptLoader",
+    # CLI
+    "create_parser",
+    "parse_args",
+    "get_config_from_args",
 ]

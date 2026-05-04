@@ -166,20 +166,25 @@ def _apply_import_patches() -> None:
     
     # Mock Commands.Keys for direct imports
     _mock_keys = types.ModuleType("Commands.Keys")
-    _mock_keys.Button = MagicMock
-    _mock_keys.Direction = MagicMock
-    _mock_keys.Stick = MagicMock
-    _mock_keys.Hat = MagicMock
-    _mock_keys.Touchscreen = MagicMock
-    _mock_keys.KeyPress = MagicMock
-    _mock_keys.SendFormat = MagicMock
-    _mock_keys.Tilt = MagicMock
+    _mock_keys.Button = MagicMock()
+    _mock_keys.Direction = MagicMock()
+    _mock_keys.Direction.LEFT = MagicMock()
+    _mock_keys.Direction.RIGHT = MagicMock()
+    _mock_keys.Stick = MagicMock()
+    _mock_keys.Hat = MagicMock()
+    _mock_keys.Touchscreen = MagicMock()
+    _mock_keys.Touchscreen.x = 0
+    _mock_keys.Touchscreen.y = 0
+    _mock_keys.KeyPress = MagicMock()
+    _mock_keys.SendFormat = MagicMock()
+    _mock_keys.Tilt = MagicMock()
     sys.modules["Commands.Keys"] = _mock_keys
     
     # Mock Commands.PythonCommandBase for direct imports
     _mock_pybase = types.ModuleType("Commands.PythonCommandBase")
-    _mock_pybase.PythonCommand = MagicMock
-    _mock_pybase.ImageProcPythonCommand = MagicMock
+    _mock_pybase.PythonCommand = MagicMock()
+    _mock_pybase.ImageProcPythonCommand = MagicMock()
+    _mock_pybase.StopThread = Exception
     sys.modules["Commands.PythonCommandBase"] = _mock_pybase
 
 

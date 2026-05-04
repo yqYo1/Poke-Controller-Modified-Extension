@@ -29,3 +29,5 @@ anyhow = "1"
 parking_lot = "0.12"
 pyo3 = { version = "0.25", features = ["extension-module"] }
 mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
+toml = "0.8"
+

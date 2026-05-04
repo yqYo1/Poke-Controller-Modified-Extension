@@ -65,7 +65,9 @@ impl EventBus {
             let inner = self.callbacks.lock().map_err(|e| {
                 pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
             })?;
-            inner.get(&event_type).map_or_else(Vec::new, |cbs| cbs.clone())
+            inner
+                .get(&event_type)
+                .map_or_else(Vec::new, |cbs| cbs.clone())
         };
 
         for cb in &callbacks {
@@ -86,10 +88,7 @@ impl EventBus {
 
     /// Return the number of registered event types.
     fn num_event_types(&self) -> usize {
-        self.callbacks
-            .lock()
-            .map(|inner| inner.len())
-            .unwrap_or(0)
+        self.callbacks.lock().map(|inner| inner.len()).unwrap_or(0)
     }
 }
 

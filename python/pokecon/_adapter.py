@@ -62,15 +62,9 @@ Phase 3  (FUTURE)  – Complete migration: all heavy lifting via Rust.
 
 from __future__ import annotations
 
-import sys
-from typing import TYPE_CHECKING
+import importlib.util as _importlib_util
 
-try:
-    import pokecon  # type: ignore[import-untyped] # noqa: F811
-
-    _RUST_CORE_AVAILABLE = True
-except ImportError:
-    _RUST_CORE_AVAILABLE = False
+_RUST_CORE_AVAILABLE = _importlib_util.find_spec("pokecon") is not None
 
 
 class _RustCoreAdapter:

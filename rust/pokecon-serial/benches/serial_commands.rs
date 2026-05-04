@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use pokecon_serial::format::SendFormat;
 use pokecon_serial::keypress::KeyPress;
 use pokecon_serial::keys::{Button, Direction, Hat, Stick};
@@ -7,9 +7,7 @@ use pokecon_serial::sender::Sender;
 // ── SendFormat benchmarks (no serial I/O) ───────────────────────────────────
 
 fn bench_send_format_new(c: &mut Criterion) {
-    c.bench_function("send_format_new", |b| {
-        b.iter(SendFormat::new)
-    });
+    c.bench_function("send_format_new", |b| b.iter(SendFormat::new));
 }
 
 fn bench_send_format_set_button(c: &mut Criterion) {

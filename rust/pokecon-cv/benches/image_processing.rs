@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use pokecon_cv::camera::{Frame, PixelFormat};
 use pokecon_cv::image_processing::{ImageProcessor, Region};
 use rand::SeedableRng;
@@ -7,7 +7,7 @@ use rand::SeedableRng;
 fn create_test_frame(width: u32, height: u32, seed: u64) -> Frame {
     use rand::Rng;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let data: Vec<u8> = (0..(width * height)).map(|_| rng.gen()).collect();
+    let data: Vec<u8> = (0..(width * height)).map(|_| rng.r#gen()).collect();
     Frame {
         width,
         height,
@@ -20,7 +20,7 @@ fn create_test_frame(width: u32, height: u32, seed: u64) -> Frame {
 fn create_test_frame_rgb(width: u32, height: u32, seed: u64) -> Frame {
     use rand::Rng;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-    let data: Vec<u8> = (0..(width * height * 3)).map(|_| rng.gen()).collect();
+    let data: Vec<u8> = (0..(width * height * 3)).map(|_| rng.r#gen()).collect();
     Frame {
         width,
         height,
@@ -116,7 +116,11 @@ fn bench_in_range(c: &mut Criterion) {
 
     c.bench_function("in_range_640x480_rgb", |b| {
         b.iter(|| {
-            ImageProcessor::in_range(black_box(&frame), black_box([30, 30, 30]), black_box([220, 220, 220]))
+            ImageProcessor::in_range(
+                black_box(&frame),
+                black_box([30, 30, 30]),
+                black_box([220, 220, 220]),
+            )
         })
     });
 }

@@ -82,6 +82,14 @@ PYTHONCOMMANDS_DIR = os.path.join(SERIALCONTROLLER_DIR, "Commands", "PythonComma
 if PYTHONCOMMANDS_DIR not in sys.path:
     sys.path.insert(0, PYTHONCOMMANDS_DIR)
 
+# Import pokecon to trigger patching of Commands.Keys and Commands.PythonCommandBase
+# This must happen BEFORE any test file's module-level imports of these names,
+# because the real PythonCommandBase.py uses Python 3.12+ syntax (PEP 695 generics).
+PYTHON_DIR = os.path.join(PROJECT_ROOT, "python")
+if PYTHON_DIR not in sys.path:
+    sys.path.insert(0, PYTHON_DIR)
+import pokecon  # noqa: E402
+
 # Mock plyer notification
 _mock_plyer = types.ModuleType("plyer")
 _mock_plyer.notification = MagicMock()
@@ -123,6 +131,25 @@ def _apply_import_patches() -> None:
     _mock_redirector = types.ModuleType("text_redirector")
     _mock_redirector.TextRedirector = MagicMock
     sys.modules["text_redirector"] = _mock_redirector
+
+    # Mock ImageProcessing — the real file uses Python 3.12+ syntax (type CropFmt = ...)
+    _mock_imgproc = types.ModuleType("ImageProcessing")
+    _mock_imgproc.ImageProcessing = MagicMock
+    _mock_imgproc.getImage = MagicMock(return_value=None)
+    _mock_imgproc.crop_image = MagicMock(return_value=None)
+    _mock_imgproc.opneImage = MagicMock()
+    _mock_imgproc.image_type = MagicMock
+    sys.modules["ImageProcessing"] = _mock_imgproc
+
+    # Mock Camera — the real file may have version-dependent imports
+    _mock_camera = types.ModuleType("Camera")
+    _mock_camera.Camera = MagicMock
+    sys.modules["Camera"] = _mock_camera
+
+    # Mock Commands module package (imported by original PythonCommandBase)
+    if "Commands" not in sys.modules:
+        _mock_cmds = types.ModuleType("Commands")
+        sys.modules["Commands"] = _mock_cmds
 
 
 _apply_import_patches()
@@ -229,10 +256,22 @@ class MockCamera:
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        import cv2
-        import numpy as np
+        # Write a minimal placeholder PNG (no OpenCV dependency needed)
+        import struct
+        import zlib
 
-        cv2.imwrite(path, np.zeros((720, 1280, 3), dtype=np.uint8))
+        raw = b""
+        for _ in range(32):
+            raw += b"\x00" + b"\x00\x00\x00" * 32
+        def _chunk(ctype, data):
+            c = ctype + data
+            return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+        ihdr = struct.pack(">IIBBBBB", 32, 32, 8, 2, 0, 0, 0)
+        with open(path, "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\n")
+            f.write(_chunk(b"IHDR", ihdr))
+            f.write(_chunk(b"IDAT", zlib.compress(raw)))
+            f.write(_chunk(b"IEND", b""))
 
     def destroy(self) -> None:
         self._is_opened = False

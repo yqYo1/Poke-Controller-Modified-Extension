@@ -1,101 +1,73 @@
 """Rust-core adapter — bridge between Python wrappers and Rust-backed implementations.
 
-This module is the central dispatch point for routing calls from backward-compatible
-Python wrappers to the Rust ``pokecon-*`` crates (via PyO3 bindings).
+This module provides ``_RustCoreAdapter``, a mixin class that **CommandMeta**
+injects into the MRO of every user-script subclass of ``PythonCommand`` /
+``ImageProcPythonCommand``.
+
+The adapter sits between the user's class and the registered implementation
+(e.g. ``_PythonCommandV1Interface`` or ``PythonCommand`` itself when registered
+as ``v1``).  When Rust PyO3 bindings (``pokecon-pybindings``) become available,
+the adapter can override methods to dispatch to Rust while falling back to the
+Python implementation via ``super()``.
 
 Architecture
-────────────
-                       ┌──────────────────┐
-                       │  User script      │  (e.g. AutoLeague.py)
-                       │  from Commands…   │
-                       └──────┬───────────┘
-                              │ imports
-                              ▼
-                ┌─────────────────────────────┐
-                │ python/pokecon/ (wrappers)   │
-                │  keys.py  commands.py        │  ← Backward-compatible API
-                └──────┬──────────────────────┘
-                       │ delegates to
-                       ▼
-              ┌────────────────────┐
-              │ _RustCoreAdapter   │  ← This module
-              │ (dispatch logic)   │
-              └──────┬─────────────┘
-                     │ calls PyO3 bindings
-                     ▼
-          ┌──────────────────────────┐
-          │ rust/pokecon-pybindings  │  ← PyO3 extension module
-          │  ├─ keys.rs             │
-          │  ├─ python_cmd.rs       │
-          │  ├─ image_proc.rs       │
-          │  └─ events.rs           │
-          └──────┬──────────────────┘
-                 │ FFI → Rust
-                 ▼
-          ┌──────────────────────────┐
-          │ Rust workspace crates    │
-          │  ├─ pokecon-serial       │
-          │  ├─ pokecon-cv           │
-          │  ├─ pokecon-core         │
-          │  ├─ pokecon-notify       │
-          │  ├─ pokecon-net          │
-          │  └─ pokecon-events       │
-          └──────────────────────────┘
+~~~~~~~~~~~~
+::
 
-Migration Plan
-──────────────
-Phase 1  (NOW)     – Pure-Python wrappers in python/pokecon/ mirror the old API.
-                      Tests and user scripts import from old paths; wrappers
-                      delegate to existing Python modules (ImageProcessing, etc.).
-
-Phase 2  (NEXT)    – Extend Rust PyO3 bindings to expose:
-                       - ``pokecon.keys.KeyPress`` (async → sync wrapper)
-                       - ``pokecon.keys.Button / Hat / Stick / Direction / Touchscreen``
-                       - ``pokecon.image_proc.TemplateMatcher``
-                       - ``pokecon.serial.Sender``
-                      Wrappers in python/pokecon/ get a ``_use_rust`` flag.
-
-Phase 3  (FUTURE)  – Complete migration: all heavy lifting via Rust.
-                      Python wrappers become thin delegates.
-                      ``ImageProcessing`` (OpenCV) replaced by Rust ``pokecon-cv``.
+    UserClass.do()
+        └── self.press()   →   _RustCoreAdapter.press()
+                                    ├── [Rust available] → Rust serial
+                                    └── [Rust missing]  → super().press()
+                                                               └── ImplClass.press()
 """
 
 from __future__ import annotations
 
 import importlib.util as _importlib_util
 
-_RUST_CORE_AVAILABLE = _importlib_util.find_spec("pokecon") is not None
+_RUST_CORE_AVAILABLE: bool = (
+    _importlib_util.find_spec("pokecon_core") is not None
+)
 
 
 class _RustCoreAdapter:
-    """Conditional dispatch to Rust-backed implementations.
+    """Transparent mixin injected into the MRO by ``CommandMeta``.
+
+    When a user script calls ``self.press(...)`` the MRO lookup reaches this
+    class first (after the user's own class).  Currently the adapter passes
+    all calls through to the registered implementation via ``super()``.
+    Future phases will add Rust-dispatch logic.
 
     Usage
     -----
-    Subclasses of PythonCommand/ImageProcPythonCommand can call
-    ``self._adapter.press(…)`` instead of the pure-Python path when
-    the Rust extension is available.
+    This class is **never** referenced by user code directly.  It is injected
+    automatically by ``CommandMeta.__new__``.
     """
 
-    __slots__ = ("_use_rust",)
+    # NOTE: No __slots__ — this class participates in cooperative MRO and
+    # may be combined with classes that have arbitrary instance dicts.
 
-    def __init__(self, use_rust: bool = False) -> None:
-        self._use_rust = use_rust and _RUST_CORE_AVAILABLE
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self._use_rust: bool = _RUST_CORE_AVAILABLE
+        super().__init__(*args, **kwargs)
 
     @property
     def available(self) -> bool:
+        """``True`` when the Rust ``pokecon_core`` extension is importable."""
         return self._use_rust
 
-    # ── Serial / KeyPress bridge ────────────────────────────────────────
+    # ── Serial / KeyPress bridge stubs (for future Rust integration) ───────
 
     def press_button(self, button_name: str, duration_ms: int) -> None:
         """Send a button-press via Rust serial (when bindings exist)."""
         if self._use_rust:
-            # TODO: call pokecon.serial.press(button_name, duration_ms)
-            pass
-        raise NotImplementedError("Rust serial bindings not yet wired")
+            # TODO: dispatch to pokecon_core.serial.press(…)
+            msg = "Rust serial bindings not yet wired"
+            raise NotImplementedError(msg)
+        msg = "Rust serial bindings not available"
+        raise NotImplementedError(msg)
 
-    # ── Image processing bridge ─────────────────────────────────────────
+    # ── Image processing bridge stubs ───────────────────────────────────────
 
     def template_match(
         self,
@@ -104,9 +76,11 @@ class _RustCoreAdapter:
     ) -> tuple[bool, tuple[int, int], float]:
         """Run template matching via Rust CV (when bindings exist)."""
         if self._use_rust:
-            # TODO: call pokecon.image_proc.match_template(template_path, threshold)
-            pass
-        raise NotImplementedError("Rust CV bindings not yet wired")
+            # TODO: dispatch to pokecon_core.cv.template_match(…)
+            msg = "Rust CV bindings not yet wired"
+            raise NotImplementedError(msg)
+        msg = "Rust CV bindings not available"
+        raise NotImplementedError(msg)
 
 
 __all__ = ["_RustCoreAdapter", "_RUST_CORE_AVAILABLE"]

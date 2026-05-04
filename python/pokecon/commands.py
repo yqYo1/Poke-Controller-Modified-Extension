@@ -33,6 +33,8 @@ from typing import (
     TypeVar,
 )
 
+from pokecon._meta import CommandMeta
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -160,7 +162,7 @@ class _CommandBaseStub(ABC):
             self.mqtt0 = MQTTCommunications("")
         except ImportError:
             self.socket0 = _SocketStub()
-            self.mqtt0 = _MQTTStub()
+            self.mqtt0 = _MQTTStub("")
 
     @abstractmethod
     def start(self, ser, postProcess: Callable[[], None]) -> None: ...
@@ -368,7 +370,8 @@ class _MQTTStub:
 # ---------------------------------------------------------------------------
 # PythonCommand — matches original's public interface exactly
 # ---------------------------------------------------------------------------
-class PythonCommand(_CommandBaseStub, ABC):
+class PythonCommand(_CommandBaseStub, ABC, metaclass=CommandMeta):
+    __is_interface__ = True
     """Base class for user automation scripts.
 
     Supports the original API: press(), hold(), holdEnd(), wait(),
@@ -749,6 +752,7 @@ def convertCv2Format(
 # ImageProcPythonCommand — matches original public interface exactly
 # ---------------------------------------------------------------------------
 class ImageProcPythonCommand(PythonCommand, ABC):
+    __is_interface__ = True
     """PythonCommand with camera access and image processing capabilities."""
 
     template_path_name: ClassVar[str] = "./Template/"
@@ -1322,3 +1326,21 @@ class ImageProcPythonCommand(PythonCommand, ABC):
                     image=cropped_image,
                     keys=keys,
                 )
+
+
+# ---------------------------------------------------------------------------
+# Register default v1 interface implementations
+# ---------------------------------------------------------------------------
+# The PythonCommand and ImageProcPythonCommand classes themselves act as
+# the v1 implementation.  When a user writes::
+#
+#     class MyCommand(PythonCommand):
+#         def do(self): ...
+#
+# CommandMeta intercepts and sets the MRO to:
+#     [MyCommand, _RustCoreAdapter, PythonCommand, …]
+#
+# Future API versions (v2, custom) will use different impl classes, but
+# the existing PythonCommand class will remain available as the v1 impl.
+CommandMeta.register_interface("PythonCommand", "v1", PythonCommand)
+CommandMeta.register_interface("ImageProcPythonCommand", "v1", ImageProcPythonCommand)

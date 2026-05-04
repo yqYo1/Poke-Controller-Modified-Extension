@@ -76,7 +76,7 @@
             ]
           );
 
-          # ── Python test deps (no pygame — tests use mocks) ────────────
+          # ── Python test deps ─────────────────────────────────────────────
           pythonPkgs = with pkgs.python314Packages; [
             pytest
             numpy

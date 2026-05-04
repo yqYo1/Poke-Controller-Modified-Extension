@@ -1,25 +1,7 @@
 name: Pytest
 
 # Pytest runs under Nix with Python 3.14 + nixpkgs packages.
-# pygame is NOT installed — the test suite uses thorough mocking
-# (conftest.py mocks all GUI, camera, serial, etc. dependencies)
-# and no test file imports pygame directly.
-#
-# Analysis of pygame/Python 3.14 resolution:
-#   Option A (build pygame from source with SDL2): HIGH cost —
-#     adds SDL2 + SDL_image + SDL_mixer + SDL_ttf as nix build deps,
-#     adds ~3-5 min to CI, and pygame isn't imported by any test.
-#   Option B (skip pygame-dependent tests): RECOMMENDED —
-#     tests are pure mock-based, don't touch pygame code at all.
-#     Zero overhead, same coverage where it matters.
-#   Option C (use older Python): REJECTED —
-#     pyproject.toml requires >=3.14, would drift from prod target.
-#
-# If pygame-dependent tests are added later, add to flake.nix:
-#   pythonEnv = pkgs.python314.withPackages (ps: with ps; [
-#     pytest numpy ruff
-#     (ps.pygame.override { inherit (pkgs) SDL2 SDL2_image SDL2_mixer SDL2_ttf; })
-#   ]);
+# Controller input is handled by Rust core; pygame is not required.
 
 on:
   push:

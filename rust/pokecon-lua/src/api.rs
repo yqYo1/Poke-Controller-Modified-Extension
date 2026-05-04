@@ -57,7 +57,7 @@ impl ApiHandle {
     /// Store a Lua function reference in the Lua registry and return its
     /// integer key.  The caller must own the Lua lock.
     pub fn store_callback(lua: &Lua, func: &LuaFunction) -> usize {
-        if let Some(reg) = lua.named_registry_value::<Table>("pokecon_callbacks").ok() {
+        if let Ok(reg) = lua.named_registry_value::<Table>("pokecon_callbacks") {
             let next_key: usize = reg.get("__next_key").unwrap_or(1usize);
             reg.set("__next_key", next_key + 1).ok();
             reg.set(next_key, func.clone()).ok();

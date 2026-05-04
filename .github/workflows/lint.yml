@@ -25,7 +25,7 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run cargo clippy
-        run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+        run: nix run .#clippy
 
   python-lint:
     runs-on: ubuntu-latest
@@ -35,6 +35,6 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run ruff check
-        run: nix develop --command ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
+        run: nix run .#ruff-check
       - name: Run ruff format check
-        run: nix develop --command ruff format --check .
+        run: nix run .#ruff-format-check

@@ -55,11 +55,11 @@ def get_rank_match_result():
             if os.path.exists(path):
                 print("過去にDLしたデータを利用してデータ取得を試みます。")
                 with open(path, "r") as json_file:
-                    data_ = json.load(json_file, encoding="utf-8")
+                    data_ = json.load(json_file)
     else:
         print("過去にDLしたランクマッチのデータを利用します。")
         with open(path, "r") as json_file:
-            data_ = json.load(json_file, encoding="utf-8")
+            data_ = json.load(json_file)
     return data_
 
 
@@ -549,11 +549,11 @@ class GetFromHomeGUI:
                 if os.path.exists(path):
                     print("過去にDLしたデータを利用します。")
                     with open(path, "r") as json_file:
-                        poke_dic = json.load(json_file, encoding="utf-8")
+                        poke_dic = json.load(json_file)
         else:
             print("過去にDLしたデータを利用します。")
             with open(path, "r") as json_file:
-                poke_dic = json.load(json_file, encoding="utf-8")
+                poke_dic = json.load(json_file)
 
         return poke_dic
 

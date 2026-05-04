@@ -12,6 +12,12 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 config = "0.15"
+toml = { workspace = true }
+dirs = "6"
 
 pokecon-events = { path = "../pokecon-events" }
 pokecon-serial = { path = "../pokecon-serial" }
+
+[dev-dependencies]
+tempfile = "3"
+

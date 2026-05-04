@@ -4,6 +4,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tracing::{debug, error, info};
 
+
 #[derive(Error, Debug)]
 pub enum SerialError {
     #[error("Failed to open serial port: {0}")]
@@ -60,11 +61,11 @@ impl Sender {
 
         info!("connecting to {} ({})", path, baudrate);
 
-        let port = match tokio_serial::new(&path, baudrate).open_async() {
+        let port = match tokio_serial::new(&path, baudrate).open_native_async() {
             Ok(p) => p,
             Err(e) => {
                 error!("COM Port: can't be established: {}", e);
-                return Err(SerialError::OpenError(e));
+                return Err(SerialError::OpenError(e.into()));
             }
         };
 
@@ -85,14 +86,14 @@ impl Sender {
     }
 
     pub async fn write_row(&mut self, row: &str, is_show: bool) -> Result<(), SerialError> {
-        let port = self.port.as_mut().ok_or(SerialError::NotOpen)?;
-
         if let Some(ref before) = self.before {
             if before != "end" && is_show {
                 let output: Vec<&str> = before.split(' ').collect();
                 self.show_input(&output);
             }
         }
+
+        let port = self.port.as_mut().ok_or(SerialError::NotOpen)?;
 
         let data = format!("{}\r\n", row);
         port.write_all(data.as_bytes()).await.map_err(|e| {

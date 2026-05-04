@@ -134,11 +134,20 @@ def _apply_import_patches() -> None:
 
     # Mock ImageProcessing — the real file uses Python 3.12+ syntax (type CropFmt = ...)
     _mock_imgproc = types.ModuleType("ImageProcessing")
-    _mock_imgproc.ImageProcessing = MagicMock
+    import numpy as _np
+    # Create a callable class mock that works with isinstance() AND attribute access
+    # image_type must be accessible both as: ImageProcessing.image_type AND instance.image_type
+    class _MockImgProcMeta(type):
+        def __getattr__(cls, name):
+            return MagicMock()
+        def __call__(cls, *args, **kwargs):
+            return MagicMock()
+    class _MockImgProc(metaclass=_MockImgProcMeta):
+        image_type = _np.ndarray
+    _mock_imgproc.ImageProcessing = _MockImgProc
     _mock_imgproc.getImage = MagicMock(return_value=None)
     _mock_imgproc.crop_image = MagicMock(return_value=None)
     _mock_imgproc.opneImage = MagicMock()
-    _mock_imgproc.image_type = MagicMock
     sys.modules["ImageProcessing"] = _mock_imgproc
 
     # Mock Camera — the real file may have version-dependent imports

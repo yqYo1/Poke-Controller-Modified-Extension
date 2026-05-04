@@ -163,9 +163,10 @@ def _apply_import_patches() -> None:
         _mock_cmds = types.ModuleType("Commands")
         _mock_cmds.__path__ = []  # Make it a package
         sys.modules["Commands"] = _mock_cmds
-    
+
     # Mock Commands.Keys for direct imports - use actual pokecon classes
     import pokecon as _pokecon
+
     _mock_keys = types.ModuleType("Commands.Keys")
     _mock_keys.Button = _pokecon.Button
     _mock_keys.Direction = _pokecon.Direction
@@ -176,7 +177,7 @@ def _apply_import_patches() -> None:
     _mock_keys.SendFormat = _pokecon.SendFormat
     _mock_keys.Tilt = _pokecon.Tilt
     sys.modules["Commands.Keys"] = _mock_keys
-    
+
     # Mock Commands.PythonCommandBase for direct imports - use actual pokecon classes
     _mock_pybase = types.ModuleType("Commands.PythonCommandBase")
     _mock_pybase.PythonCommand = _pokecon.PythonCommand

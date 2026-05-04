@@ -27,7 +27,6 @@ from typing import (
     Callable,
     ClassVar,
     Concatenate,
-    Final,
     Literal,
     ParamSpec,
     Sequence,
@@ -36,10 +35,6 @@ from typing import (
 
 if TYPE_CHECKING:
     from typing import Any
-
-    from cv2.typing import MatLike
-
-    from ImageProcessing import CropFmt
 
 
 # ---------------------------------------------------------------------------

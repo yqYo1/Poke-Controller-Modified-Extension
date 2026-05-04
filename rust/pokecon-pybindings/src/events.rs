@@ -1,35 +1,95 @@
 use pyo3::prelude::*;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
+/// A synchronous event bus for registering and dispatching Python callbacks.
+///
+/// Python usage::
+///
+///     from pokecon.events import EventBus
+///
+///     def handler(event_type, data):
+///         print(f"Got {event_type}: {data}")
+///
+///     bus = EventBus()
+///     bus.on("my_event", handler)
+///     bus.emit("my_event", '{"key": "value"}')
+///
+/// This class is intentionally **not** async.  All callbacks are invoked
+/// synchronously from the calling thread.
 #[pyclass]
-#[derive(Clone)]
 pub struct EventBus {
-    inner: Arc<Mutex<pokecon_events::EventBus>>,
+    /// Python callbacks keyed by event type string.
+    callbacks: Mutex<HashMap<String, Vec<PyObject>>>,
 }
 
 #[pymethods]
 impl EventBus {
     #[new]
-    fn new() -> PyResult<Self> {
-        Ok(Self {
-            inner: Arc::new(Mutex::new(pokecon_events::EventBus::new())),
-        })
+    fn new() -> Self {
+        Self {
+            callbacks: Mutex::new(HashMap::new()),
+        }
     }
 
-    fn emit(&self, event_type: String, data: String) -> PyResult<()> {
-        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {}", e))
+    /// Register a callback for *event_type*.
+    ///
+    /// The callback receives two positional arguments: ``(event_type, data)``
+    /// where *data* is the JSON string passed to :meth:`emit`.
+    fn on(&self, event_type: String, callback: PyObject) -> PyResult<()> {
+        let mut inner = self.callbacks.lock().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
         })?;
-        rt.block_on(async {
-            let bus = self.inner.lock().await;
-            let event = pokecon_events::Event::new(
-                &event_type,
-                serde_json::from_str(&data).unwrap_or(serde_json::Value::Null),
-            );
-            bus.emit(&event);
-        });
+        inner.entry(event_type).or_default().push(callback);
         Ok(())
+    }
+
+    /// Remove all callbacks registered for *event_type*.
+    fn off(&self, event_type: &str) -> PyResult<()> {
+        let mut inner = self.callbacks.lock().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
+        })?;
+        inner.remove(event_type);
+        Ok(())
+    }
+
+    /// Emit an event, calling all registered callbacks synchronously.
+    ///
+    /// Each callback is called with ``(event_type, data)``.
+    ///
+    /// To avoid deadlocks, the callback list is cloned before invocation so
+    /// that callbacks can safely call back into the bus.
+    fn emit(&self, py: Python<'_>, event_type: String, data: String) -> PyResult<()> {
+        // Clone callbacks while holding the lock, then release before calling Python
+        let callbacks: Vec<PyObject> = {
+            let inner = self.callbacks.lock().map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
+            })?;
+            inner.get(&event_type).map_or_else(Vec::new, |cbs| cbs.clone())
+        };
+
+        for cb in &callbacks {
+            let args = (event_type.clone(), data.clone());
+            cb.bind(py).call(args, None)?;
+        }
+
+        Ok(())
+    }
+
+    /// Return ``True`` if at least one callback is registered for *event_type*.
+    fn has_handlers(&self, event_type: &str) -> bool {
+        self.callbacks
+            .lock()
+            .map(|inner| inner.contains_key(event_type))
+            .unwrap_or(false)
+    }
+
+    /// Return the number of registered event types.
+    fn num_event_types(&self) -> usize {
+        self.callbacks
+            .lock()
+            .map(|inner| inner.len())
+            .unwrap_or(0)
     }
 }
 

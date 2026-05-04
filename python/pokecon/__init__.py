@@ -17,6 +17,7 @@ import types
 # ---------------------------------------------------------------------------
 from pokecon.commands import ImageProcPythonCommand, PythonCommand
 from pokecon.keys import (
+    NEUTRAL,
     Button,
     Direction,
     Hat,
@@ -32,7 +33,6 @@ from pokecon.keys import (
     direction_center,
     direction_max,
     direction_min,
-    NEUTRAL,
 )
 
 

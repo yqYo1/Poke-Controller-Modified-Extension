@@ -71,8 +71,9 @@
             ps: with ps; [
               pytest
               numpy
+              scipy
               ruff
-              basedpyright
+              pillow
             ]
           );
 
@@ -80,8 +81,9 @@
           pythonPkgs = with pkgs.python314Packages; [
             pytest
             numpy
+            scipy
             ruff
-            basedpyright
+            pillow
           ];
         in
         {
@@ -125,6 +127,8 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${self}"
+                PYTHONPATH="${self}/python:$PYTHONPATH"
+                export PYTHONPATH
                 ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
               '';
             }}/bin/ruff-check";
@@ -149,12 +153,14 @@
               '';
             }}/bin/ruff-format-check";
 
-            # nix run .#test  — run pytest (no pygame dependency)
+            # nix run .#test  — run pytest
             test = mkApp "${pkgs.writeShellApplication {
               name = "test";
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${self}"
+                PYTHONPATH="${self}/python:$PYTHONPATH"
+                export PYTHONPATH
                 exec pytest tests/ -v --tb=short
               '';
             }}/bin/test";
@@ -203,16 +209,6 @@
               '';
             }}/bin/maturin-develop";
 
-            # nix run .#basedpyright  — run type checker
-            basedpyright = mkApp "${pkgs.writeShellApplication {
-              name = "basedpyright";
-              runtimeInputs = [ pythonEnv ];
-              text = ''
-                cd "${self}"
-                exec basedpyright --project pyrightconfig.json
-              '';
-            }}/bin/basedpyright";
-
             # nix run .#check  — run ALL checks (CI gate)
             check = mkApp "${pkgs.writeShellApplication {
               name = "check";
@@ -227,11 +223,15 @@
                 echo "═══════════════════════════════════════════"
                 echo "  ruff check"
                 echo "═══════════════════════════════════════════"
+                PYTHONPATH="${self}/python:$PYTHONPATH"
+                export PYTHONPATH
                 ruff check --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
                 echo ""
                 echo "═══════════════════════════════════════════"
                 echo "  pytest"
                 echo "═══════════════════════════════════════════"
+                PYTHONPATH="${self}/python:$PYTHONPATH"
+                export PYTHONPATH
                 pytest tests/ -v --tb=short
                 echo ""
                 echo "═══════════════════════════════════════════"
@@ -311,7 +311,6 @@
               echo "  build-rust        - build Rust workspace only"
               echo "  cargo-test        - run Rust tests"
               echo "  maturin-develop   - dev-install Python bindings"
-              echo "  basedpyright      - type checking"
               echo "  check             - full CI gate"
             '';
           };

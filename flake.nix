@@ -60,14 +60,15 @@
               pkgs.uv
             ];
             text = ''
-              cd "${self}"
+              # Run from current directory (writable) instead of nix store
+              workdir="$PWD"
               # Ensure Python bindings are built
-              if [ ! -f "python/pokecon/pokecon*.so" ] && [ ! -f "python/pokecon/pokecon*.pyd" ]; then
+              if [ ! -f "$workdir/python/pokecon/pokecon*.so" ] && [ ! -f "$workdir/python/pokecon/pokecon*.pyd" ]; then
                 echo "Building Python bindings..."
                 uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
               fi
               # Launch the application
-              PYTHONPATH="${self}/python:$PYTHONPATH"
+              PYTHONPATH="$workdir/python:$PYTHONPATH"
               export PYTHONPATH
               exec python -m pokecon "$@"
             '';

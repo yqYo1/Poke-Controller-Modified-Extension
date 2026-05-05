@@ -1,9 +1,97 @@
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
-/// A Python command that holds named callbacks.
+use pokecon_notify::discord::DiscordNotifier;
+use pokecon_notify::line::LineNotifier;
+use pokecon_notify::{Notification, Notifier};
+use pokecon_serial::keypress::KeyPress;
+use pokecon_serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
+
+// ---------------------------------------------------------------------------
+// Helper: parse a button string like "A", "A|B", "A+B", "DPAD_UP"
+// into a Vec of GamepadInput values.
+// ---------------------------------------------------------------------------
+fn parse_buttons(buttons: &str) -> Vec<GamepadInput> {
+    let parts: Vec<&str> = buttons
+        .split(['|', '+', ','])
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut result = Vec::new();
+    for part in parts {
+        match part.to_uppercase().as_str() {
+            // Standard buttons
+            "A" => result.push(GamepadInput::SingleButton(Button::A)),
+            "B" => result.push(GamepadInput::SingleButton(Button::B)),
+            "X" => result.push(GamepadInput::SingleButton(Button::X)),
+            "Y" => result.push(GamepadInput::SingleButton(Button::Y)),
+            "L" => result.push(GamepadInput::SingleButton(Button::L)),
+            "R" => result.push(GamepadInput::SingleButton(Button::R)),
+            "ZL" => result.push(GamepadInput::SingleButton(Button::ZL)),
+            "ZR" => result.push(GamepadInput::SingleButton(Button::ZR)),
+            "MINUS" | "-" => result.push(GamepadInput::SingleButton(Button::MINUS)),
+            "PLUS" | "+" => result.push(GamepadInput::SingleButton(Button::PLUS)),
+            "LCLICK" | "L3" => result.push(GamepadInput::SingleButton(Button::LCLICK)),
+            "RCLICK" | "R3" => result.push(GamepadInput::SingleButton(Button::RCLICK)),
+            "HOME" => result.push(GamepadInput::SingleButton(Button::HOME)),
+            "CAPTURE" => result.push(GamepadInput::SingleButton(Button::CAPTURE)),
+            "SELECT" => result.push(GamepadInput::SingleButton(Button::SELECT)),
+            "START" => result.push(GamepadInput::SingleButton(Button::START)),
+            // Hat / D-Pad
+            "DPAD_UP" | "TOP" => result.push(GamepadInput::SingleHat(Hat::TOP)),
+            "DPAD_DOWN" | "BTM" => result.push(GamepadInput::SingleHat(Hat::BTM)),
+            "DPAD_LEFT" | "LEFT" => result.push(GamepadInput::SingleHat(Hat::LEFT)),
+            "DPAD_RIGHT" | "RIGHT" => result.push(GamepadInput::SingleHat(Hat::RIGHT)),
+            "DPAD_TOP_RIGHT" | "TOP_RIGHT" => result.push(GamepadInput::SingleHat(Hat::TOP_RIGHT)),
+            "DPAD_BTM_RIGHT" | "BTM_RIGHT" => result.push(GamepadInput::SingleHat(Hat::BTM_RIGHT)),
+            "DPAD_BTM_LEFT" | "BTM_LEFT" => result.push(GamepadInput::SingleHat(Hat::BTM_LEFT)),
+            "DPAD_TOP_LEFT" | "TOP_LEFT" => result.push(GamepadInput::SingleHat(Hat::TOP_LEFT)),
+            // Left stick directions
+            "LSTICK_UP" | "L_UP" => {
+                result.push(GamepadInput::SingleDirection(Direction::up(Stick::Left)))
+            }
+            "LSTICK_DOWN" | "L_DOWN" => {
+                result.push(GamepadInput::SingleDirection(Direction::down(Stick::Left)))
+            }
+            "LSTICK_LEFT" | "L_LEFT" => {
+                result.push(GamepadInput::SingleDirection(Direction::left(Stick::Left)))
+            }
+            "LSTICK_RIGHT" | "L_RIGHT" => {
+                result.push(GamepadInput::SingleDirection(Direction::right(Stick::Left)))
+            }
+            // Right stick directions
+            "RSTICK_UP" | "R_UP" => {
+                result.push(GamepadInput::SingleDirection(Direction::up(Stick::Right)))
+            }
+            "RSTICK_DOWN" | "R_DOWN" => {
+                result.push(GamepadInput::SingleDirection(Direction::down(Stick::Right)))
+            }
+            "RSTICK_LEFT" | "R_LEFT" => {
+                result.push(GamepadInput::SingleDirection(Direction::left(Stick::Right)))
+            }
+            "RSTICK_RIGHT" | "R_RIGHT" => result.push(GamepadInput::SingleDirection(
+                Direction::right(Stick::Right),
+            )),
+            _ => {
+                // Unknown button name — silently ignore (matching Python behaviour
+                // where unrecognised names are simply skipped)
+            }
+        }
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// PythonCommand
+// ---------------------------------------------------------------------------
+
+/// A Python command that holds named callbacks and provides
+/// controller input / notification methods.
 ///
 /// This is the Python-facing representation of a command.  User scripts register
 /// callback functions (e.g. ``"do"``) that the Rust runtime can invoke
@@ -19,10 +107,24 @@ use std::sync::Mutex;
 ///     cmd = PythonCommand("my_command")
 ///     cmd.register_callback("do", on_do)
 ///     result = cmd.trigger("do", {"arg": 42})
+///
+///     # Input methods
+///     cmd.press("A", 0.1, 0.1)
+///     cmd.hold("A|B", 0.5)
+///     cmd.wait(1.0)
+///
+///     # Notifications
+///     cmd.line_text("Hello from Rust!")
+///     cmd.discord_text("Hello Discord!")
 #[pyclass]
 pub struct PythonCommand {
     name: String,
     callbacks: Mutex<HashMap<String, PyObject>>,
+    alive: bool,
+    keypress: Option<KeyPress>,
+    runtime: Option<tokio::runtime::Runtime>,
+    discord: Option<DiscordNotifier>,
+    line: Option<LineNotifier>,
 }
 
 #[pymethods]
@@ -32,6 +134,11 @@ impl PythonCommand {
         Self {
             name,
             callbacks: Mutex::new(HashMap::new()),
+            alive: true,
+            keypress: None,
+            runtime: None,
+            discord: None,
+            line: None,
         }
     }
 
@@ -43,9 +150,10 @@ impl PythonCommand {
 
     /// Register a Python callback for a named event (e.g. ``"do"``).
     fn register_callback(&self, event: String, callback: PyObject) -> PyResult<()> {
-        let mut callbacks = self.callbacks.lock().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
-        })?;
+        let mut callbacks = self
+            .callbacks
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Mutex poisoned: {}", e)))?;
         callbacks.insert(event, callback);
         Ok(())
     }
@@ -62,9 +170,10 @@ impl PythonCommand {
         // Clone the callback while holding the lock so we can release it
         // before calling into Python (avoids potential deadlocks).
         let cb = {
-            let callbacks = self.callbacks.lock().map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!("Mutex poisoned: {}", e))
-            })?;
+            let callbacks = self
+                .callbacks
+                .lock()
+                .map_err(|e| PyRuntimeError::new_err(format!("Mutex poisoned: {}", e)))?;
             callbacks.get(&event).cloned()
         };
 
@@ -77,6 +186,265 @@ impl PythonCommand {
                 }
             }
             None => Ok(None),
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Core input methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Press (and release) a button or combination of buttons.
+    ///
+    /// * ``buttons`` — button name(s) separated by ``|``, ``+``, or ``,``
+    ///   (e.g. ``"A"``, ``"A|B"``, ``"DPAD_UP"``).
+    /// * ``duration`` — how long to hold the buttons (seconds, default 0.1).
+    /// * ``wait`` — how long to wait after releasing (seconds, default 0.1).
+    fn press(&mut self, buttons: String, duration: f64, wait: f64) -> PyResult<()> {
+        self.check_alive()?;
+
+        let inputs = parse_buttons(&buttons);
+        if inputs.is_empty() {
+            // If nothing to press, just wait
+            Self::sleep_wait(duration);
+            Self::sleep_wait(wait);
+            return Ok(());
+        }
+
+        // Get or create keypress
+        let rt = self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+        });
+
+        let kp = self.keypress.get_or_insert_with(|| {
+            let sender = pokecon_serial::sender::Sender::new(false);
+            KeyPress::new(sender)
+        });
+
+        // Press → wait → release → wait
+        rt.block_on(kp.input(&inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial input failed: {}", e)))?;
+
+        Self::sleep_wait(duration);
+
+        rt.block_on(kp.input_end(&inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial input_end failed: {}", e)))?;
+
+        Self::sleep_wait(wait);
+
+        Ok(())
+    }
+
+    /// Hold down a button or combination of buttons.
+    ///
+    /// * ``buttons`` — button name(s) separated by ``|``, ``+``, or ``,``.
+    /// * ``duration`` — how long to continue holding (seconds, default 0.1).
+    fn hold(&mut self, buttons: String, duration: f64) -> PyResult<()> {
+        self.check_alive()?;
+
+        let inputs = parse_buttons(&buttons);
+        if inputs.is_empty() {
+            Self::sleep_wait(duration);
+            return Ok(());
+        }
+
+        let rt = self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+        });
+
+        let kp = self.keypress.get_or_insert_with(|| {
+            let sender = pokecon_serial::sender::Sender::new(false);
+            KeyPress::new(sender)
+        });
+
+        rt.block_on(kp.hold(&inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial hold failed: {}", e)))?;
+
+        Self::sleep_wait(duration);
+
+        Ok(())
+    }
+
+    /// Release all currently held buttons.
+    ///
+    /// * ``duration`` — how long to wait after releasing (seconds, default 0.1).
+    fn hold_end(&mut self, duration: f64) -> PyResult<()> {
+        self.check_alive()?;
+
+        if let Some(ref mut kp) = self.keypress {
+            let rt = self.runtime.get_or_insert_with(|| {
+                tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+            });
+
+            rt.block_on(kp.neutral())
+                .map_err(|e| PyRuntimeError::new_err(format!("Serial hold_end failed: {}", e)))?;
+        }
+
+        Self::sleep_wait(duration);
+
+        Ok(())
+    }
+
+    /// Wait (sleep) for the given duration in seconds.
+    fn wait(&self, wait_time: f64) -> PyResult<()> {
+        Self::sleep_wait(wait_time);
+        Ok(())
+    }
+
+    /// Short wait of 0.1 seconds.
+    fn short_wait(&self) -> PyResult<()> {
+        Self::sleep_wait(0.1);
+        Ok(())
+    }
+
+    /// Check whether the command is still alive.
+    ///
+    /// Returns ``True`` if alive, ``False`` if ``finish()`` has been called
+    /// or the command has been stopped.
+    fn check_if_alive(&self) -> bool {
+        self.alive
+    }
+
+    /// Gracefully finish the command — sets the alive flag to ``False`` and
+    /// releases any held buttons.
+    fn finish(&mut self) -> PyResult<()> {
+        self.alive = false;
+
+        // Release held buttons
+        if let Some(ref mut kp) = self.keypress {
+            let rt = self.runtime.get_or_insert_with(|| {
+                tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+            });
+
+            let _ = rt.block_on(kp.neutral());
+            let _ = rt.block_on(kp.end());
+        }
+
+        Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Notification methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Send a LINE notification.
+    ///
+    /// * ``text`` — the message text to send.
+    /// * ``token`` — optional LINE channel access token.  If not provided, uses
+    ///   the notifier created from ``set_line_token()``.
+    fn line_text(&mut self, text: String, token: Option<String>) -> PyResult<()> {
+        let rt = self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+        });
+
+        // If a token is provided, create a temporary notifier.
+        // Otherwise use the stored one (if available).
+        if let Some(token) = token {
+            let notifier = LineNotifier::new(token);
+            let notification = Notification::new(text);
+            rt.block_on(notifier.send(&notification))
+                .map_err(|e| PyRuntimeError::new_err(format!("LINE notification failed: {}", e)))?;
+        } else if let Some(ref notifier) = self.line {
+            let notification = Notification::new(text);
+            rt.block_on(notifier.send(&notification))
+                .map_err(|e| PyRuntimeError::new_err(format!("LINE notification failed: {}", e)))?;
+        } else {
+            // No token and no notifier configured — log and return Ok
+            tracing::info!("LINE notification skipped (no notifier configured)");
+        }
+
+        Ok(())
+    }
+
+    /// Send a Discord notification via webhook.
+    ///
+    /// * ``text`` — the message content to send.
+    /// * ``webhook_url`` — optional Discord webhook URL.  If not provided,
+    ///   uses the notifier created from ``set_discord_webhook()``.
+    fn discord_text(&mut self, text: String, webhook_url: Option<String>) -> PyResult<()> {
+        let rt = self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+        });
+
+        if let Some(url) = webhook_url {
+            let notifier = DiscordNotifier::new(url);
+            let notification = Notification::new(text);
+            rt.block_on(notifier.send(&notification)).map_err(|e| {
+                PyRuntimeError::new_err(format!("Discord notification failed: {}", e))
+            })?;
+        } else if let Some(ref notifier) = self.discord {
+            let notification = Notification::new(text);
+            rt.block_on(notifier.send(&notification)).map_err(|e| {
+                PyRuntimeError::new_err(format!("Discord notification failed: {}", e))
+            })?;
+        } else {
+            tracing::info!("Discord notification skipped (no webhook configured)");
+        }
+
+        Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Configuration helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Set the LINE channel access token for future ``line_text()`` calls.
+    fn set_line_token(&mut self, token: String) {
+        self.line = Some(LineNotifier::new(token));
+    }
+
+    /// Set the Discord webhook URL for future ``discord_text()`` calls.
+    fn set_discord_webhook(&mut self, webhook_url: String) {
+        self.discord = Some(DiscordNotifier::new(webhook_url));
+    }
+
+    /// Open a serial connection.
+    ///
+    /// * ``port_num`` — COM port number (e.g. ``3`` for ``COM3``).
+    /// * ``port_name`` — optional explicit port name (overrides port_num).
+    /// * ``baudrate`` — baud rate (default 115200).
+    fn open_serial(
+        &mut self,
+        port_num: u32,
+        port_name: Option<String>,
+        baudrate: Option<u32>,
+    ) -> PyResult<bool> {
+        let rt = self.runtime.get_or_insert_with(|| {
+            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
+        });
+
+        let kp = self.keypress.get_or_insert_with(|| {
+            let sender = pokecon_serial::sender::Sender::new(false);
+            KeyPress::new(sender)
+        });
+
+        let baud = baudrate.unwrap_or(115200);
+        let opened = rt
+            .block_on(kp.sender_mut().open(port_num, port_name.as_deref(), baud))
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to open serial: {}", e)))?;
+
+        Ok(opened)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+impl PythonCommand {
+    /// Check the alive flag; returns ``Err`` (with a clear message) if dead.
+    fn check_alive(&self) -> PyResult<()> {
+        if !self.alive {
+            return Err(PyRuntimeError::new_err(
+                "Command is no longer alive. Has finish() been called?",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Sleep for the given number of seconds (free function, no &self needed).
+    fn sleep_wait(seconds: f64) {
+        if seconds > 0.0 {
+            std::thread::sleep(Duration::from_secs_f64(seconds));
         }
     }
 }

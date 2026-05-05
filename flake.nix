@@ -63,12 +63,19 @@
                             # Run from current directory (writable) instead of nix store
                             workdir="$PWD"
                             # Ensure Python bindings are built
-                            if [ ! -f "$workdir/python/pokecon/pokecon"*.so ] && [ ! -f "$workdir/python/pokecon/pokecon"*.pyd ]; then
+                            found_so=
+                            for f in "$workdir/python/pokecon/pokecon"*.so "$workdir/python/pokecon/pokecon"*.pyd; do
+                              if [ -f "$f" ]; then
+                                found_so=1
+                                break
+                              fi
+                            done
+                            if [ -z "$found_so" ]; then
                               echo "Building Python bindings..."
                               maturin build --release \
                                 --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
                                 --out /tmp/pokecon-wheels 2>&1
-                              wheel=$(ls /tmp/pokecon-wheels/pokecon-*.whl 2>/dev/null | head -1)
+                              wheel=$(find /tmp/pokecon-wheels -name 'pokecon-*.whl' 2>/dev/null | head -1)
                               if [ -n "$wheel" ]; then
                                 mkdir -p /tmp/pokecon-extracted
                                 python -c "
@@ -293,7 +300,7 @@
                                     maturin build --release \
                                       --manifest-path rust/pokecon-pybindings/Cargo.toml \
                                       --out /tmp/pokecon-wheels 2>&1
-                                    wheel=$(ls /tmp/pokecon-wheels/pokecon-*.whl 2>/dev/null | head -1)
+                                    wheel=$(find /tmp/pokecon-wheels -name 'pokecon-*.whl' 2>/dev/null | head -1)
                                     if [ -n "$wheel" ]; then
                                       mkdir -p /tmp/pokecon-extracted
                                       python -c "
@@ -529,14 +536,6 @@
             shellHook = ''
               export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
               export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
-              export LD_LIBRARY_PATH="${
-                pkgs.lib.makeLibraryPath [
-                  pkgs.openssl
-                  pkgs.gtk3
-                  pkgs.webkitgtk_4_1
-                  pkgs.curl
-                ]
-              }:$LD_LIBRARY_PATH"
 
               echo "Poke Controller Modified Extension development environment loaded."
               echo "Rust: $(rustc --version)"

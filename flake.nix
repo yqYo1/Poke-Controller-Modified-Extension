@@ -278,6 +278,18 @@
               }
             }/bin/maturin-develop";
 
+            # nix run .#tauri-dev  — run Tauri dev server
+            tauri-dev = mkApp "${
+              pkgs.writeShellApplication {
+                name = "tauri-dev";
+                runtimeInputs = [ rustEnv pkgs.tauri ];
+                text = ''
+                  cd "${self}/src-tauri"
+                  cargo tauri dev
+                '';
+              }
+            }/bin/tauri-dev";
+
             # nix run .#check  — run ALL checks (CI gate)
             check = mkApp "${
               pkgs.writeShellApplication {
@@ -362,6 +374,8 @@
                 gst_all_1.gst-plugins-ugly
                 gst_all_1.gst-libav
 
+                tauri
+
                 nix-tree
               ];
 
@@ -392,6 +406,7 @@
               echo "  build-rust        - build Rust workspace only"
               echo "  cargo-test        - run Rust tests"
               echo "  maturin-develop   - dev-install Python bindings"
+              echo "  tauri-dev         - run Tauri dev server"
               echo "  check             - full CI gate"
             '';
           };

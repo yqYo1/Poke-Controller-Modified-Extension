@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poke-Controller</title>
+  <link rel="stylesheet" href="src/main.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Poke-Controller Modified Extension</h1>
+      <p class="subtitle">Web/Tauri UI (Phase 8 — Skeleton)</p>
+    </header>
+
+    <main class="layout">
+      <!-- Camera Preview Placeholder -->
+      <section id="camera-panel" class="panel">
+        <h2>Camera Preview</h2>
+        <div id="camera-placeholder" class="placeholder">
+          <p>Camera feed will appear here</p>
+          <span class="icon">📷</span>
+        </div>
+      </section>
+
+      <!-- Command List Placeholder -->
+      <section id="commands-panel" class="panel">
+        <h2>Command List</h2>
+        <div id="commands-placeholder" class="placeholder">
+          <p>Command list will appear here</p>
+          <span class="icon">🎮</span>
+        </div>
+      </section>
+
+      <!-- Log Output Placeholder -->
+      <section id="log-panel" class="panel">
+        <h2>Log Output</h2>
+        <pre id="log-output" class="log">
+<span class="log-info">[INFO] Poke-Controller UI initialized</span>
+<span class="log-info">[INFO] Waiting for commands...</span>
+        </pre>
+      </section>
+    </main>
+
+    <footer>
+      <span id="status-indicator" class="status connected">● Connected</span>
+      <button id="btn-greet" class="btn">Test Greet</button>
+    </footer>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

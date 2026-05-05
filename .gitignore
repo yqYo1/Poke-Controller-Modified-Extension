@@ -130,3 +130,26 @@ result-*
 !/tests/
 /tests/*
 !/tests/*.py
+
+# Tauri v2 app skeleton
+!/src-tauri/
+/src-tauri/*
+!/src-tauri/Cargo.toml
+!/src-tauri/build.rs
+!/src-tauri/src/
+/src-tauri/src/*
+!/src-tauri/src/*.rs
+!/src-tauri/tauri.conf.json
+!/src-tauri/capabilities/
+/src-tauri/capabilities/*
+!/src-tauri/capabilities/default.json
+
+# Web frontend
+!/web/
+/web/*
+!/web/index.html
+!/web/package.json
+!/web/src/
+/web/src/*
+!/web/src/*.js
+!/web/src/*.css

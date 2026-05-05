@@ -1,128 +1,203 @@
 # Poke-Controller Modified Extension
 
-[moi_poke](https://github.com/Moi-poke)氏が開発した[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)をベースに機能を追加したゲーム機自動化支援ソフトウェアです。
+Rustコア + Python互換層 + Web/Tauri UI へのリファクタリング版
 
-[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)からUIを一新、並列起動や対応ゲーム機の種類を増やしています。(ver. 0.1.6時点ではSwitch/3DS/DS/GCに対応。)
+## 概要
 
-また、Modified版に対する後方互換性保持をMUSTとして開発をしています。
-2025/3/31時点では、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)で動作する自動化のスクリプト(後述)はすべて動作する(はず)です。
+本プロジェクトは、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)をベースに、**Rustコア**へ段階的に移行しつつ、既存のPythonユーザースクリプトとの**完全な後方互換性**を保持したゲーム機自動化支援ソフトウェアです。
 
-![カイリューかわいい](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/image/pokecon_modified_extension_image_20250402.png)
+### 主な特徴
 
+| 特徴 | 説明 |
+|------|------|
+| **Rustコア** | シリアル通信、画像処理、イベント駆動アーキテクチャをRustで再実装 |
+| **Python互換層** | 既存スクリプト（`Commands.PythonCommandBase`等）がそのまま動作 |
+| **PyO3バインディング** | Rust機能をPythonから直接利用可能 |
+| **Web/Tauri UI** | スマホ対応のレスポンシブWeb UI + ネイティブデスクトップアプリ |
+| **PWA対応** | ホーム画面追加、オフライン対応のプログレッシブWebアプリ |
+| **リアルタイム通信** | WebSocketによるカメラ映像・コマンド状態のリアルタイム配信 |
 
-## 更新履歴
+### 対応プラットフォーム
 
-[Github - 更新履歴](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/changelog.txt)
+- **OS**: Windows 10/11, macOS, Linux
+- **Python**: 3.14以上（PEP 695型パラメータ構文対応）
+- **ゲーム機**: Nintendo Switch, 3DS, DS, GameCube
+- **ブラウザ**: Chrome, Safari, Firefox（スマホ・タブレット対応）
 
+---
 
-## Poke-Controller とは?
+## クイックスタート
 
-Poke-Controllerの概要は[KawaSwitch](https://github.com/KawaSwitch)氏が開発した[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)および[moi_poke](https://github.com/Moi-poke)氏が開発した[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)を参照してください。
+### エンドユーザー向け
 
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/yqYo1/Poke-Controller-Modified-Extension.git
+cd Poke-Controller-Modified-Extension
 
-## Poke-Controller Modifiedとの差分について
+# 2. Nix開発環境に入る（推奨）
+nix develop
 
-[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)に対し、以下の機能追加および仕様変更を実施しています。
-- 使用時における便利機能の追加
-  - 2つ目のログ画面を追加(常時表示しておきたい情報の表示を想定)
-  - 更新確認機能を追加
-  - シリアルデバイスをコンボボックスで設定する機能を追加
-  - スクリプトのFilter機能を追加
-  - スクリプトのショートカット割り当て機能を追加
-  - スクリプトの一時停止機能を追加
-  - ログ画面クリア機能を追加
-  - ログ画面の上書き用関数を追加
-  - メインウィンドウに埋め込まれたソフトウェアコントローラーを追加(表示ON/OFF可能)
-  - スクリプト一時停止機能を追加
-  - ToolTip表示機能を追加
-- スクリプト開発に役立つ機能の追加
-  - 画像認識時の類似度を自動化スクリプトの記載によらず出力できる機能を追加(ON/OFF可能)
-  - 画像認識時の探索範囲および認識結果をGUI上に表示する機能を追加(ON/OFF可能)
-  - 画面キャプチャ機能を拡張
-    - キャプチャしている画面部分を'Ctrl+Alt+左クリック'しながらドラッグした範囲をキャプチャすることが可能\
-      このとき、名前をつけて保存のダイアログボックスが出て、任意の名前をつけることが可能
-- スクリプト開発者への問い合わせ時に必要な情報の表示する機能の追加
-  - ライブラリのversion情報の表示機能の追加
-  - 問い合わせ用テンプレート文章作成アシスタント機能の追加
-- 並列起動への対応
-  - ProfileによるPokeCon側の設定複数保持機能を追加
-  - 同一名称のキャプチャデバイスが接続された場合に対応できるよう仕様を変更
-- 3DS自動化基板への対応([Qingpi](https://qiita.com/u1f992/items/09617ae326288a0df703)/3DS Controller)
-  - 送信するシリアルデータのフォーマットを3種(Poke-Controller向け/Qingpi向け/3DS Controller向け)から選択する機能を追加
-  - PokeConの画面上でタッチスクリーンを操作する機能を追加([Qingpi](https://qiita.com/u1f992/items/09617ae326288a0df703)のみ)
-- ゲームパッドによる操作への対応
-  - Pro-Controllerによる操作機能を追加(ver.0.1.5時点ではPro-Controllerのみ対応。)
-  - 操作時のログを取得する機能を追加(再生可能)
-- MQTTおよびSocket通信関連への対応
-  - 関連する関数を追加
-- 画像認識関連の関数の拡張
-  - 画像の2値化に対応
-  - 引数および関数を追加
-- ダイアログ関数の拡張
-  - ウィジェットの複数列表示(改行)機能を追加
-  - 前回の入力の保持や呼び出しが可能なダイアログ関数を追加
-- 通知機能の拡充
-  - WindowsのNotificationによる通知機能を追加
-  - ~~Discord Webhookを用いた通知機能を追加~~(同様の機能が[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)に実装済み)
-  - プログラムの開始および終了時に通知する機能を追加(ON/OFF可能)
-- UI刷新(設定画面のタブ化およびログ画面を2画面化)
-  - ログ画面の2画面化に伴う機能の追加(サイズや標準出力先など)
-  - レイアウトカスタマイズ機能の追加
+# 3. Web UIを起動
+nix run .#tauri-dev    # Tauriデスクトップアプリ
+# または
+nix run .#web-dev      # ブラウザで開く
+```
 
+ブラウザで `http://localhost:8020` を開くと、スマホ対応のWeb UIが表示されます。
 
-## 推奨環境
+### スクリプト開発者向け
 
-- OS
-  - Windows10/11
-  - (一応Mac/Linuxでも動作するはずですが未確認です。issueおよびPRには対応します。)
-- Python
-  - 3.12以上(従来の3.7はサポートが終了しているためサポート対象外とします。)
+既存のPythonスクリプトは**変更なし**で動作します。新規作成時は以下を継承してください：
 
+```python
+from Commands.PythonCommandBase import PythonCommand
+from Commands.Keys import Button
 
-## 開発環境
+class MyCommand(PythonCommand):
+    NAME = "My Command"
+    def do(self):
+        self.press(Button.A, duration=0.1, wait=0.2)
+```
 
-Python 3.12.2
+詳細は [Docs/user-guide.md](Docs/user-guide.md) を参照。
 
+### 本体開発者向け
 
-## Installation
+```bash
+# テスト実行
+nix run .#check        # すべてのチェック（pytest + ruff + clippy + treefmt）
+nix run .#test         # Pythonテストのみ
+nix run .#cargo-test   # Rustテストのみ
 
-必要なライブラリは[Github - requirements](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/requirements.txt)を参照してください。
+# PyO3バインディングビルド
+maturin develop --manifest-path rust/pokecon-pybindings/Cargo.toml
 
+# フォーマット
+nix run .#fmt
+```
 
-## Wiki
+詳細は [Docs/developer-guide.md](Docs/developer-guide.md) を参照。
 
-現在作成を検討しております。
-3DSの自動化については[こちら](https://draco-meteor.hatenablog.com/entry/20240514)の記事を参照ください。
+---
 
+## ドキュメント一覧
 
-## 謝辞
+| ドキュメント | 対象読者 | 内容 |
+|-------------|---------|------|
+| [Docs/user-guide.md](Docs/user-guide.md) | エンドユーザー | インストール、使い方、Web UI操作 |
+| [Docs/script-guide.md](Docs/script-guide.md) | スクリプト開発者 | PythonCommand API、画像認識、サンプル |
+| [Docs/developer-guide.md](Docs/developer-guide.md) | 本体開発者 | アーキテクチャ、ビルド、Rust/Python連携 |
+| [Docs/api-reference.md](Docs/api-reference.md) | スクリプト開発者 | 全APIリファレンス |
+| [Docs/web-ui-guide.md](Docs/web-ui-guide.md) | エンドユーザー | Web UI詳細、スマホ操作、PWA |
 
-[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)の開発者である[KawaSwitch](https://github.com/KawaSwitch)氏、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)の開発者である[moi_poke](https://github.com/Moi-poke)氏にそれぞれ感謝申し上げます。
+---
 
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tr>
-    <td align="center"><a href="https://github.com/KawaSwitch"><img src="https://avatars3.githubusercontent.com/u/41296626?v=4" width="100px;" alt=""/><br /><sub><b>KawaSwitch</b></sub></a><br /><a href="https://github.com/KawaSwitch/Poke-Controller/commits?author=KawaSwitch" title="Code">💻</a> <a href="#maintenance-KawaSwitch" title="Maintenance">🚧</a> <a href="https://github.com/KawaSwitch/Poke-Controller/commits?author=KawaSwitch" title="Documentation">📖</a> <a href="#question-KawaSwitch" title="Answering Questions">💬</a></td>
-    <td align="center"><a href="https://github.com/Moi-poke"><img src="https://avatars1.githubusercontent.com/u/59233665?v=4" width="100px;" alt=""/><br /><sub><b>Moi-poke</b></sub></a><br /><a href="https://github.com/KawaSwitch/Poke-Controller/commits?author=Moi-poke" title="Code">💻</a> <a href="#question-Moi-poke" title="Answering Questions">💬</a></td>
-  </tr>
-</table>
+## プロジェクト構造
 
-<!-- markdownlint-enable -->
-<!-- prettier-ignore-end -->
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+```
+Poke-Controller-Modified-Extension/
+├── README.md                 # 本ファイル
+├── flake.nix                 # Nix開発環境定義
+├── pyproject.toml            # Pythonパッケージ設定
+├── Cargo.toml                # Rustワークスペース定義
+│
+├── rust/                     # Rustコア実装
+│   ├── pokecon-core/         # コマンドマネージャー、設定、プロファイル
+│   ├── pokecon-serial/       # シリアル通信、キー入力フォーマット
+│   ├── pokecon-cv/           # カメラ、画像処理（OpenCV連携）
+│   ├── pokecon-events/       # イベントバス、ハンドラレジストリ
+│   ├── pokecon-net/          # Socket/MQTT通信
+│   ├── pokecon-notify/       # Discord/LINE/Windows通知
+│   ├── pokecon-lua/          # LuaJIT統合
+│   └── pokecon-pybindings/   # PyO3 Pythonバインディング
+│
+├── python/pokecon/           # Python互換層
+│   ├── __init__.py           # インポートハック（後方互換性）
+│   ├── commands.py           # PythonCommand/ImageProcPythonCommand
+│   ├── keys.py               # Button/Hat/Stick/Direction
+│   ├── _meta.py              # CommandMeta（メタクラス）
+│   ├── _adapter.py           # Rustコアアダプター
+│   └── script_loader.py      # スクリプト動的ロード
+│
+├── src-tauri/                # Tauri v2 デスクトップアプリ
+│   ├── src/main.rs           # HTTPサーバー + WebSocket + APIエンドポイント
+│   └── Cargo.toml            # Tauri専用依存関係
+│
+├── web/                      # Webフロントエンド（React + Vite）
+│   ├── index.html            # PWAメタタグ付きエントリ
+│   ├── src/
+│   │   ├── main.jsx          # Reactアプリエントリ
+│   │   ├── App.jsx           # ルーティング・状態管理
+│   │   ├── api/client.js     # HTTP/WebSocket APIクライアント
+│   │   ├── components/       # UIコンポーネント
+│   │   │   ├── Dashboard.jsx    # ダッシュボード（カメラ・ログ）
+│   │   │   ├── Controller.jsx   # 仮想ゲームパッド
+│   │   │   ├── Scripts.jsx     # スクリプト一覧・実行
+│   │   │   ├── Settings.jsx    # 設定（シリアル接続等）
+│   │   │   ├── NavBar.jsx      # ボトムナビゲーション
+│   │   │   └── StatusBar.jsx   # 接続状態表示
+│   │   └── styles.css        # モバイルファーストCSS
+│   └── public/manifest.json  # PWAマニフェスト
+│
+├── SerialController/         # 既存Pythonコード（後方互換性）
+│   ├── Commands/
+│   │   ├── PythonCommandBase.py
+│   │   ├── CommandBase.py
+│   │   ├── Keys.py
+│   │   └── PythonCommands/   # ユーザースクリプト配置先
+│   ├── Window.py             # tkinter GUI（従来版）
+│   └── ...
+│
+└── tests/                    # テスト
+    ├── conftest.py           # モック設定
+    └── test_script_compatibility.py  # 互換性テスト（58ケース）
+```
 
-## 貢献
+---
 
-このプロジェクトは, [all-contributors](https://github.com/all-contributors/all-contributors)仕様に準拠しています. どんな貢献も歓迎します。
+## 技術スタック
 
+### バックエンド
+
+| レイヤー | 技術 |
+|---------|------|
+| コア言語 | Rust 2024 Edition |
+| シリアル通信 | tokio-serial |
+| 画像処理 | opencv-rust, ndarray |
+| 非同期ランタイム | tokio |
+| HTTPサーバー | axum |
+| WebSocket | axum::ws |
+| Python連携 | PyO3 + maturin |
+
+### フロントエンド
+
+| レイヤー | 技術 |
+|---------|------|
+| フレームワーク | React 19 |
+| ビルドツール | Vite 6 |
+| スタイリング | CSS Modules（モバイルファースト） |
+| PWA | Web App Manifest, Service Worker |
+| 通信 | Fetch API + WebSocket |
+
+### 開発環境
+
+| ツール | 用途 |
+|-------|------|
+| Nix | 再現性のある開発環境 |
+| treefmt | 一括フォーマット（nixfmt, rustfmt, ruff） |
+| ruff | Pythonリント・フォーマット |
+| clippy | Rustリント |
+| basedpyright | Python型チェック |
+| pytest | Pythonテスト |
+| cargo | Rustビルド・テスト |
+
+---
 
 ## ライセンス
 
-本プロジェクトはMITライセンスです。
-詳細は [Github - LISENCE](https://github.com/futo030/Poke-Controller-Modified-Extension/blob/master/LICENSE) を参照ください。
-※今後変更の可能性があります。
+MIT License
 
-また, 本プロジェクトではLGPLライセンスのDirectShowLib-2005.dllを同梱し使用しています。
-[About DirectShowLib](http://directshownet.sourceforge.net/)  
+## 謝辞
+
+[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)の開発者である[KawaSwitch](https://github.com/KawaSwitch)氏、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)の開発者である[moi_poke](https://github.com/Moi-poke)氏に感謝申し上げます。

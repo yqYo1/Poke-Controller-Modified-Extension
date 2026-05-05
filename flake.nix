@@ -41,7 +41,7 @@
             overlays = [ (import rust-overlay) ];
           };
           rustToolchain = pkgsWithOverlays.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-          
+
           # buildRustPackage is available via rustPlatform in nixpkgs
           buildRustPackage = pkgs.rustPlatform.buildRustPackage;
 
@@ -287,19 +287,19 @@
                 pname = "pokecon-tauri";
                 version = "0.1.0";
                 src = self;
-                
+
                 cargoLock = {
                   lockFile = self + "/Cargo.lock";
                   allowBuiltinFetchGit = true;
                 };
-                
+
                 buildAndTestSubdir = "src-tauri";
-                
+
                 nativeBuildInputs = [
                   pkgs.pkg-config
                   pkgs.wrapGAppsHook4
                 ];
-                
+
                 buildInputs = [
                   pkgs.glib
                   pkgs.gtk3
@@ -317,7 +317,7 @@
                   pkgs.xorg.libXrandr
                   pkgs.xorg.libXi
                 ];
-                
+
                 # Tauri requires icons during build
                 preBuild = ''
                   mkdir -p src-tauri/icons
@@ -326,14 +326,14 @@
                   cp src-tauri/icons/icon.png src-tauri/icons/32x32.png
                   cp src-tauri/icons/icon.png src-tauri/icons/128x128.png
                   cp src-tauri/icons/icon.png src-tauri/icons/128x128@2x.png
-                  
+
                   # Skip tauri-build's runtime validation in nix sandbox
                   export TAURI_SKIP_BUILD=1
                 '';
-                
+
                 # Skip tests — Tauri app requires display/GTK which is not available in nix build sandbox
                 doCheck = false;
-                
+
                 # Override buildPhase to skip tauri-build's default behavior
                 buildPhase = ''
                   # Create placeholder icons (Tauri requires them during build)
@@ -342,27 +342,30 @@
                   cp src-tauri/icons/icon.png src-tauri/icons/32x32.png
                   cp src-tauri/icons/icon.png src-tauri/icons/128x128.png
                   cp src-tauri/icons/icon.png src-tauri/icons/128x128@2x.png
-                  
+
                   export TAURI_SKIP_BUILD=1
                   cd src-tauri
                   cargo build --release --offline
                 '';
-                
+
                 # Override checkPhase to prevent cargoCheckHook from running tests
                 checkPhase = "true";
                 cargoCheckFlags = "--no-run";
-                
+
                 # Disable cargoCheckHook completely
                 dontUseCargoCheckHook = true;
-                
+
                 # Disable cargoBuildHook's test execution
-                cargoBuildFlags = ["--release" "--offline"];
-                
+                cargoBuildFlags = [
+                  "--release"
+                  "--offline"
+                ];
+
                 installPhase = ''
                   mkdir -p $out/bin
                   find . -name "pokecon-tauri" -type f -executable -print0 | head -z -n 1 | xargs -0 -I {} cp {} $out/bin/
                 '';
-                
+
                 meta = {
                   description = "Poke-Controller Modified Extension Tauri UI";
                   license = pkgs.lib.licenses.mit;
@@ -396,7 +399,7 @@
                 text = ''
                   # Set PKG_CONFIG_PATH for all GTK/WebKit dependencies (zlib is in share/pkgconfig)
                   export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig:${pkgs.dbus.dev}/lib/pkgconfig:${pkgs.xorg.libX11.dev}/lib/pkgconfig:${pkgs.xorg.libXcursor.dev}/lib/pkgconfig:${pkgs.xorg.libXrandr.dev}/lib/pkgconfig:${pkgs.xorg.libXi.dev}/lib/pkgconfig''${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-                  
+
                   cd "${self}/src-tauri"
                   cargo tauri dev
                 '';

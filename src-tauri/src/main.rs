@@ -40,7 +40,10 @@ fn main() {
             rt.block_on(server_handle).expect("server task failed");
         }
         _ => {
-            tracing::info!("Tauri UI mode — HTTP server at http://127.0.0.1:{}", args.port);
+            tracing::info!(
+                "Tauri UI mode — HTTP server at http://127.0.0.1:{}",
+                args.port
+            );
             start_tauri(args.port);
         }
     }
@@ -53,8 +56,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf) {
         .route("/api/greet", axum::routing::get(api_greet))
         .nest_service(
             "/",
-            tower_http::services::ServeDir::new(&web_dir)
-                .append_index_html_on_directories(true),
+            tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -76,7 +78,9 @@ async fn api_status() -> axum::Json<serde_json::Value> {
 }
 
 /// Greet endpoint — same API in both modes.
-async fn api_greet(axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> axum::Json<serde_json::Value> {
+async fn api_greet(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::Json<serde_json::Value> {
     let name = params.get("name").map(|s| s.as_str()).unwrap_or("Trainer");
     axum::Json(serde_json::json!({
         "message": format!("Hello, {}! Welcome to Poke-Controller.", name)
@@ -96,7 +100,7 @@ fn start_tauri(port: u16) {
             .inner_size(1280.0, 800.0)
             .center()
             .build()?;
-            
+
             tracing::debug!("Tauri window opened with WebView");
             Ok(())
         })

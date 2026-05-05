@@ -25,7 +25,11 @@ from __future__ import annotations
 
 import importlib.util as _importlib_util
 
-_RUST_CORE_AVAILABLE: bool = _importlib_util.find_spec("pokecon_core") is not None
+# Check for the compiled Rust extension specifically.
+# The Python package has ``commands`` (with 's'); the Rust extension has
+# ``command`` (without 's') as a submodule.  We use this distinction to
+# detect whether the Rust ``pokecon`` extension is actually installed.
+_RUST_CORE_AVAILABLE: bool = _importlib_util.find_spec("pokecon.command") is not None
 
 
 class _RustCoreAdapter:
@@ -51,7 +55,7 @@ class _RustCoreAdapter:
 
     @property
     def available(self) -> bool:
-        """``True`` when the Rust ``pokecon_core`` extension is importable."""
+        """``True`` when the Rust ``pokecon`` extension is importable."""
         return self._use_rust
 
     # ── Serial / KeyPress bridge stubs (for future Rust integration) ───────
@@ -59,13 +63,18 @@ class _RustCoreAdapter:
     def press_button(self, button_name: str, duration_ms: int) -> None:
         """Send a button-press via Rust serial (when bindings exist)."""
         if self._use_rust:
-            # TODO: dispatch to pokecon_core.serial.press(…)
-            msg = "Rust serial bindings not yet wired"
-            raise NotImplementedError(msg)
+            try:
+                import pokecon.command as _cmd
+
+                _cmd.press_button(button_name, duration_ms)
+                return
+            except (ImportError, AttributeError):
+                msg = "Rust serial bindings not yet wired"
+                raise NotImplementedError(msg) from None
         msg = "Rust serial bindings not available"
         raise NotImplementedError(msg)
 
-    # ── Image processing bridge stubs ───────────────────────────────────────
+    # ── Image processing bridge methods ──────────────────────────────────────
 
     def template_match(
         self,
@@ -74,9 +83,13 @@ class _RustCoreAdapter:
     ) -> tuple[bool, tuple[int, int], float]:
         """Run template matching via Rust CV (when bindings exist)."""
         if self._use_rust:
-            # TODO: dispatch to pokecon_core.cv.template_match(…)
-            msg = "Rust CV bindings not yet wired"
-            raise NotImplementedError(msg)
+            try:
+                import pokecon.image_proc as _ip
+
+                return _ip.template_match(template_path, threshold)
+            except (ImportError, AttributeError):
+                msg = "Rust CV bindings not yet wired"
+                raise NotImplementedError(msg) from None
         msg = "Rust CV bindings not available"
         raise NotImplementedError(msg)
 

@@ -17,36 +17,225 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from logging import Logger
 
-    Buttons = Button | Hat | Direction | Touchscreen
-    ButtonsList = list[Buttons]
-    GamepadInput = ButtonsList | Buttons
-
-
 # ---------------------------------------------------------------------------
-# Button (IntFlag) — matches original exactly
+# Try to import Rust-backed types from the compiled pokecon extension
 # ---------------------------------------------------------------------------
-class Button(IntFlag):
-    Y = auto()  # 1
-    B = auto()  # 2
-    A = auto()  # 3
-    X = auto()  # 4
-    L = auto()  # 5
-    R = auto()  # 6
-    ZL = auto()  # 7
-    ZR = auto()  # 8
-    MINUS = auto()  # 9
-    PLUS = auto()  # 10
-    LCLICK = auto()  # 11
-    RCLICK = auto()  # 12
-    HOME = auto()  # 13
-    CAPTURE = auto()  # 14
-    SELECT = MINUS  # for 3DS, 9
-    START = PLUS  # for 3DS, 10
-    POWER = LCLICK  # for 3DS, 11
-    WIRELESS = RCLICK  # for 3DS, 12
+try:
+    # When the Rust extension is installed (via maturin), its keys submodule
+    # provides Rust-accelerated types.  This import succeeds only when the
+    # compiled ``pokecon`` extension is available; otherwise it falls through
+    # to the pure-Python definitions below.
+    from pokecon.keys import (  # type: ignore[import-unused]
+        Button as Button,
+        Direction as Direction,
+        Hat as Hat,
+        Stick as Stick,
+        Touchscreen as Touchscreen,
+    )
+
+    _RUST_KEYS_AVAILABLE = True
+except ImportError:
+    _RUST_KEYS_AVAILABLE = False
 
 
-# Conversion dicts (same as original)
+# ===================================================================
+# Pure-Python fallback type definitions
+# ===================================================================
+# The classes below are defined only when the Rust extension is NOT
+# available.  They mirror the original ``Commands.Keys`` API exactly.
+# ===================================================================
+
+if not _RUST_KEYS_AVAILABLE:
+
+    # -------------------------------------------------------------------
+    # Button (IntFlag)
+    # -------------------------------------------------------------------
+    class Button(IntFlag):
+        Y = auto()  # 1
+        B = auto()  # 2
+        A = auto()  # 3
+        X = auto()  # 4
+        L = auto()  # 5
+        R = auto()  # 6
+        ZL = auto()  # 7
+        ZR = auto()  # 8
+        MINUS = auto()  # 9
+        PLUS = auto()  # 10
+        LCLICK = auto()  # 11
+        RCLICK = auto()  # 12
+        HOME = auto()  # 13
+        CAPTURE = auto()  # 14
+        SELECT = MINUS  # for 3DS, 9
+        START = PLUS  # for 3DS, 10
+        POWER = LCLICK  # for 3DS, 11
+        WIRELESS = RCLICK  # for 3DS, 12
+
+    # -------------------------------------------------------------------
+    # Hat (IntEnum)
+    # -------------------------------------------------------------------
+    class Hat(IntEnum):
+        TOP = 0
+        TOP_RIGHT = 1
+        RIGHT = 2
+        BTM_RIGHT = 3
+        BTM = 4
+        BTM_LEFT = 5
+        LEFT = 6
+        TOP_LEFT = 7
+        CENTER = 8
+
+    # -------------------------------------------------------------------
+    # Stick (Enum)
+    # -------------------------------------------------------------------
+    class Stick(Enum):
+        LEFT = auto()
+        RIGHT = auto()
+
+    # -------------------------------------------------------------------
+    # Direction
+    # -------------------------------------------------------------------
+    class Direction:
+        UP: Direction
+        RIGHT: Direction
+        DOWN: Direction
+        LEFT: Direction
+        UP_RIGHT: Direction
+        DOWN_RIGHT: Direction
+        DOWN_LEFT: Direction
+        UP_LEFT: Direction
+        R_UP: Direction
+        R_RIGHT: Direction
+        R_DOWN: Direction
+        R_LEFT: Direction
+        R_UP_RIGHT: Direction
+        R_DOWN_RIGHT: Direction
+        R_DOWN_LEFT: Direction
+        R_UP_LEFT: Direction
+
+        def __init__(
+            self,
+            stick: Stick,
+            angle: tuple[int, int] | float,
+            magnification: float = 1.0,
+            isDegree: bool = True,
+            showName: str | None = None,
+        ) -> None:
+            self._logger: Logger = getLogger(__name__)
+            self._logger.addHandler(NullHandler())
+            self._logger.setLevel(DEBUG)
+            self._logger.propagate = True
+
+            self.stick: Final = stick
+            self.angle_for_show: Final = angle
+            self.showName: str | None = showName
+            if magnification > 1.0:
+                self.mag: float = 1.0
+            elif magnification < 0:
+                self.mag = 0.0
+            else:
+                self.mag = magnification
+
+            if isinstance(angle, tuple):
+                self.x: int = angle[0]
+                self.y: int = angle[1]
+                self.showName = "(" + str(self.x) + ", " + str(self.y) + ")"
+            else:
+                angle_rad = math.radians(angle) if isDegree else angle
+                self.x = math.ceil(127.5 * math.cos(angle_rad) * self.mag + 127.5)
+                self.y = math.floor(127.5 * math.sin(angle_rad) * self.mag + 127.5)
+
+        @property
+        def name(self) -> str:
+            return self.__repr__()
+
+        def __repr__(self) -> str:
+            if self.showName:
+                return f"<{self.stick}, {self.showName}>"
+            return f"<{self.stick}, {self.angle_for_show}[deg]>"
+
+        def __eq__(self, other: object) -> bool:
+            if not isinstance(other, Direction):
+                return False
+            return bool(
+                self.stick == other.stick and self.angle_for_show == other.angle_for_show,
+            )
+
+        def __hash__(self) -> int:
+            return hash((self.x, self.y, self.stick))
+
+        def getTilting(self) -> list[Tilt]:
+            tilting: list[Tilt] = []
+            if self.stick == Stick.LEFT:
+                if self.x < direction_center:
+                    tilting.append(Tilt.LEFT)
+                elif self.x > direction_center:
+                    tilting.append(Tilt.RIGHT)
+                if self.y < direction_center - 1:
+                    tilting.append(Tilt.DOWN)
+                elif self.y > direction_center - 1:
+                    tilting.append(Tilt.UP)
+            elif self.stick == Stick.RIGHT:
+                if self.x < direction_center:
+                    tilting.append(Tilt.R_LEFT)
+                elif self.x > direction_center:
+                    tilting.append(Tilt.R_RIGHT)
+                if self.y < direction_center - 1:
+                    tilting.append(Tilt.R_DOWN)
+                elif self.y > direction_center - 1:
+                    tilting.append(Tilt.R_UP)
+            return tilting
+
+    # Predefined Left-stick directions
+    Direction.UP = Direction(Stick.LEFT, 90, showName="UP")
+    Direction.RIGHT = Direction(Stick.LEFT, 0, showName="RIGHT")
+    Direction.DOWN = Direction(Stick.LEFT, -90, showName="DOWN")
+    Direction.LEFT = Direction(Stick.LEFT, -180, showName="LEFT")
+    Direction.UP_RIGHT = Direction(Stick.LEFT, 45, showName="UP_RIGHT")
+    Direction.DOWN_RIGHT = Direction(Stick.LEFT, -45, showName="DOWN_RIGHT")
+    Direction.DOWN_LEFT = Direction(Stick.LEFT, -135, showName="DOWN_LEFT")
+    Direction.UP_LEFT = Direction(Stick.LEFT, 135, showName="UP_LEFT")
+    # Predefined Right-stick directions
+    Direction.R_UP = Direction(Stick.RIGHT, 90, showName="UP")
+    Direction.R_RIGHT = Direction(Stick.RIGHT, 0, showName="RIGHT")
+    Direction.R_DOWN = Direction(Stick.RIGHT, -90, showName="DOWN")
+    Direction.R_LEFT = Direction(Stick.RIGHT, -180, showName="LEFT")
+    Direction.R_UP_RIGHT = Direction(Stick.RIGHT, 45, showName="UP_RIGHT")
+    Direction.R_DOWN_RIGHT = Direction(Stick.RIGHT, -45, showName="DOWN_RIGHT")
+    Direction.R_DOWN_LEFT = Direction(Stick.RIGHT, -135, showName="DOWN_LEFT")
+    Direction.R_UP_LEFT = Direction(Stick.RIGHT, 135, showName="UP_LEFT")
+
+    # -------------------------------------------------------------------
+    # Touchscreen
+    # -------------------------------------------------------------------
+    class Touchscreen:
+        def __init__(self, x: int, y: int) -> None:
+            self._logger: Final[Logger] = getLogger(__name__)
+            self._logger.addHandler(NullHandler())
+            self._logger.setLevel(DEBUG)
+            self._logger.propagate = True
+
+            self.x: int = x
+            self.y: int = y
+
+        @property
+        def name(self) -> str:
+            return f"<Touchscreen, ({self.x}, {self.y})>"
+
+        def __eq__(self, other: object) -> bool:
+            if not isinstance(other, Touchscreen):
+                return False
+            return bool(self.x == other.x and self.y == other.y)
+
+        def __hash__(self) -> int:
+            return hash((self.x, self.y))
+
+
+
+# ===================================================================
+# Unconditional definitions (conversion tables, constants)
+# ===================================================================
+
+# Conversion dicts (same as original) — work with both Rust and Python types
 conversion_default_button: dict[Button, Button] = {
     Button.Y: Button.Y,
     Button.B: Button.B,
@@ -89,37 +278,23 @@ conversion_3ds_controller_button: dict[Button, int] = {
     Button.WIRELESS: 0,
 }
 
-
-# ---------------------------------------------------------------------------
-# Hat (IntEnum) — matches original exactly
-# ---------------------------------------------------------------------------
-class Hat(IntEnum):
-    TOP = 0
-    TOP_RIGHT = 1
-    RIGHT = 2
-    BTM_RIGHT = 3
-    BTM = 4
-    BTM_LEFT = 5
-    LEFT = 6
-    TOP_LEFT = 7
-    CENTER = 8
-
-
 convert_hat_default = list(range(9))
 convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
 
+# Direction constants
+direction_min = 0
+direction_center = 128
+direction_max = 255
 
-# ---------------------------------------------------------------------------
-# Stick (Enum) — matches original exactly
-# ---------------------------------------------------------------------------
-class Stick(Enum):
-    LEFT = auto()
-    RIGHT = auto()
+NEUTRAL = (128, 127)
 
+# ===================================================================
+# Always-available definitions (no Rust equivalent — pure Python only)
+# ===================================================================
 
-# ---------------------------------------------------------------------------
-# Tilt (Enum) — matches original exactly
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Tilt (Enum)
+# -------------------------------------------------------------------
 class Tilt(Enum):
     UP = auto()
     RIGHT = auto()
@@ -131,17 +306,10 @@ class Tilt(Enum):
     R_LEFT = auto()
 
 
-# ---------------------------------------------------------------------------
-# Direction constants
-# ---------------------------------------------------------------------------
-direction_min = 0
-direction_center = 128
-direction_max = 255
-
-
-# ---------------------------------------------------------------------------
-# SendFormat — matches original, can later delegate to Rust
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# SendFormat
+# -------------------------------------------------------------------
+# -------------------------------------------------------------------
 class SendFormat:
     """Builds serial frames from button/hat/stick/touchscreen state.
 
@@ -340,152 +508,9 @@ class SendFormat:
         ]
 
 
-# ---------------------------------------------------------------------------
-# Direction — matches original exactly
-# ---------------------------------------------------------------------------
-class Direction:
-    UP: Direction
-    RIGHT: Direction
-    DOWN: Direction
-    LEFT: Direction
-    UP_RIGHT: Direction
-    DOWN_RIGHT: Direction
-    DOWN_LEFT: Direction
-    UP_LEFT: Direction
-    R_UP: Direction
-    R_RIGHT: Direction
-    R_DOWN: Direction
-    R_LEFT: Direction
-    R_UP_RIGHT: Direction
-    R_DOWN_RIGHT: Direction
-    R_DOWN_LEFT: Direction
-    R_UP_LEFT: Direction
-
-    def __init__(
-        self,
-        stick: Stick,
-        angle: tuple[int, int] | float,
-        magnification: float = 1.0,
-        isDegree: bool = True,
-        showName: str | None = None,
-    ) -> None:
-        self._logger: Logger = getLogger(__name__)
-        self._logger.addHandler(NullHandler())
-        self._logger.setLevel(DEBUG)
-        self._logger.propagate = True
-
-        self.stick: Final = stick
-        self.angle_for_show: Final = angle
-        self.showName: str | None = showName
-        if magnification > 1.0:
-            self.mag: float = 1.0
-        elif magnification < 0:
-            self.mag = 0.0
-        else:
-            self.mag = magnification
-
-        if isinstance(angle, tuple):
-            self.x: int = angle[0]
-            self.y: int = angle[1]
-            self.showName = "(" + str(self.x) + ", " + str(self.y) + ")"
-        else:
-            angle_rad = math.radians(angle) if isDegree else angle
-            self.x = math.ceil(127.5 * math.cos(angle_rad) * self.mag + 127.5)
-            self.y = math.floor(127.5 * math.sin(angle_rad) * self.mag + 127.5)
-
-    @property
-    def name(self) -> str:
-        return self.__repr__()
-
-    def __repr__(self) -> str:
-        if self.showName:
-            return f"<{self.stick}, {self.showName}>"
-        return f"<{self.stick}, {self.angle_for_show}[deg]>"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Direction):
-            return False
-        return bool(
-            self.stick == other.stick and self.angle_for_show == other.angle_for_show,
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.x, self.y, self.stick))
-
-    def getTilting(self) -> list[Tilt]:
-        tilting: list[Tilt] = []
-        if self.stick == Stick.LEFT:
-            if self.x < direction_center:
-                tilting.append(Tilt.LEFT)
-            elif self.x > direction_center:
-                tilting.append(Tilt.RIGHT)
-            if self.y < direction_center - 1:
-                tilting.append(Tilt.DOWN)
-            elif self.y > direction_center - 1:
-                tilting.append(Tilt.UP)
-        elif self.stick == Stick.RIGHT:
-            if self.x < direction_center:
-                tilting.append(Tilt.R_LEFT)
-            elif self.x > direction_center:
-                tilting.append(Tilt.R_RIGHT)
-            if self.y < direction_center - 1:
-                tilting.append(Tilt.R_DOWN)
-            elif self.y > direction_center - 1:
-                tilting.append(Tilt.R_UP)
-        return tilting
-
-
-NEUTRAL = (128, 127)
-
-# Predefined Left-stick directions
-Direction.UP = Direction(Stick.LEFT, 90, showName="UP")
-Direction.RIGHT = Direction(Stick.LEFT, 0, showName="RIGHT")
-Direction.DOWN = Direction(Stick.LEFT, -90, showName="DOWN")
-Direction.LEFT = Direction(Stick.LEFT, -180, showName="LEFT")
-Direction.UP_RIGHT = Direction(Stick.LEFT, 45, showName="UP_RIGHT")
-Direction.DOWN_RIGHT = Direction(Stick.LEFT, -45, showName="DOWN_RIGHT")
-Direction.DOWN_LEFT = Direction(Stick.LEFT, -135, showName="DOWN_LEFT")
-Direction.UP_LEFT = Direction(Stick.LEFT, 135, showName="UP_LEFT")
-# Predefined Right-stick directions
-Direction.R_UP = Direction(Stick.RIGHT, 90, showName="UP")
-Direction.R_RIGHT = Direction(Stick.RIGHT, 0, showName="RIGHT")
-Direction.R_DOWN = Direction(Stick.RIGHT, -90, showName="DOWN")
-Direction.R_LEFT = Direction(Stick.RIGHT, -180, showName="LEFT")
-Direction.R_UP_RIGHT = Direction(Stick.RIGHT, 45, showName="UP_RIGHT")
-Direction.R_DOWN_RIGHT = Direction(Stick.RIGHT, -45, showName="DOWN_RIGHT")
-Direction.R_DOWN_LEFT = Direction(Stick.RIGHT, -135, showName="DOWN_LEFT")
-Direction.R_UP_LEFT = Direction(Stick.RIGHT, 135, showName="UP_LEFT")
-
-
-# ---------------------------------------------------------------------------
-# Touchscreen — matches original exactly
-# ---------------------------------------------------------------------------
-class Touchscreen:
-    def __init__(self, x: int, y: int) -> None:
-        self._logger: Final[Logger] = getLogger(__name__)
-        self._logger.addHandler(NullHandler())
-        self._logger.setLevel(DEBUG)
-        self._logger.propagate = True
-
-        self.x: int = x
-        self.y: int = y
-
-    @property
-    def name(self) -> str:
-        return f"<Touchscreen, ({self.x}, {self.y})>"
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Touchscreen):
-            return False
-        return bool(self.x == other.x and self.y == other.y)
-
-    def __hash__(self) -> int:
-        return hash((self.x, self.y))
-
-
-# ---------------------------------------------------------------------------
-# KeyPress — matches original exactly (may later delegate to Rust)
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# KeyPress
+# -------------------------------------------------------------------
 class KeyPress:
     serial_data_format_name: str = "Default"
 
@@ -714,3 +739,23 @@ class KeyPress:
         for wtime, row in zip(waittime, serialcommands, strict=False):
             time.sleep(wtime)
             self.ser.writeRow_wo_perf_counter(row, is_show=False)
+
+
+__all__ = [
+    "Button",
+    "Direction",
+    "Hat",
+    "KeyPress",
+    "SendFormat",
+    "Stick",
+    "Tilt",
+    "Touchscreen",
+    "NEUTRAL",
+    "conversion_default_button",
+    "conversion_3ds_controller_button",
+    "convert_hat_default",
+    "convert_hat_3ds_controller",
+    "direction_min",
+    "direction_max",
+    "direction_center",
+]

@@ -282,7 +282,10 @@
             tauri-dev = mkApp "${
               pkgs.writeShellApplication {
                 name = "tauri-dev";
-                runtimeInputs = [ rustEnv pkgs.tauri ];
+                runtimeInputs = [
+                  rustEnv
+                  pkgs.tauri
+                ];
                 text = ''
                   cd "${self}/src-tauri"
                   cargo tauri dev

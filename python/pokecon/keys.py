@@ -27,9 +27,17 @@ try:
     # to the pure-Python definitions below.
     from pokecon.keys import (  # type: ignore[import-unused]
         Button as Button,
+    )
+    from pokecon.keys import (
         Direction as Direction,
+    )
+    from pokecon.keys import (
         Hat as Hat,
+    )
+    from pokecon.keys import (
         Stick as Stick,
+    )
+    from pokecon.keys import (
         Touchscreen as Touchscreen,
     )
 
@@ -46,7 +54,6 @@ except ImportError:
 # ===================================================================
 
 if not _RUST_KEYS_AVAILABLE:
-
     # -------------------------------------------------------------------
     # Button (IntFlag)
     # -------------------------------------------------------------------
@@ -157,7 +164,8 @@ if not _RUST_KEYS_AVAILABLE:
             if not isinstance(other, Direction):
                 return False
             return bool(
-                self.stick == other.stick and self.angle_for_show == other.angle_for_show,
+                self.stick == other.stick
+                and self.angle_for_show == other.angle_for_show,
             )
 
         def __hash__(self) -> int:
@@ -230,7 +238,6 @@ if not _RUST_KEYS_AVAILABLE:
             return hash((self.x, self.y))
 
 
-
 # ===================================================================
 # Unconditional definitions (conversion tables, constants)
 # ===================================================================
@@ -291,6 +298,7 @@ NEUTRAL = (128, 127)
 # ===================================================================
 # Always-available definitions (no Rust equivalent — pure Python only)
 # ===================================================================
+
 
 # -------------------------------------------------------------------
 # Tilt (Enum)

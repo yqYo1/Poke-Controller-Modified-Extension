@@ -156,6 +156,11 @@ impl CommandManager {
         self.active.as_deref()
     }
 
+    /// Stop the active command without unloading it from the command list.
+    pub fn stop(&mut self) {
+        self.active = None;
+    }
+
     fn extract_description(path: &Path) -> Option<String> {
         let content = std::fs::read_to_string(path).ok()?;
         content

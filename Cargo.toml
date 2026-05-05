@@ -9,7 +9,7 @@ members = [
     "rust/pokecon-lua",
     "rust/pokecon-events",
     "rust/pokecon-pybindings",
-    # "src-tauri",  # Tauri app excluded from default workspace — build via nix run .#tauri-dev
+    # "src-tauri",  # Tauri app — built separately via nix run .#tauri-build
 ]
 
 [workspace.package]

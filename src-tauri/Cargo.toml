@@ -24,6 +24,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["fs", "cors"] }
+tokio-serial = "5.4"
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }

@@ -11,11 +11,11 @@ struct Args {
     #[arg(long = "ui", default_value = "tauri")]
     ui: String,
 
-    /// Port for web UI mode (only used when --ui=web)
+    /// Port for HTTP server (used in both web and tauri modes)
     #[arg(long, default_value = "8020")]
     port: u16,
 
-    /// Static files directory for web UI mode
+    /// Static files directory
     #[arg(long = "web-dir", default_value = "web")]
     web_dir: PathBuf,
 }
@@ -30,65 +30,76 @@ fn main() {
         )
         .init();
 
+    // Start the HTTP server in both modes — Tauri embeds it internally
+    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+    let server_handle = rt.spawn(start_http_server(args.port, args.web_dir.clone()));
+
     match args.ui.as_str() {
         "web" => {
-            tracing::info!("Starting web UI server on port {}", args.port);
-            start_web_server(args.port, args.web_dir);
+            tracing::info!("Web UI mode — serving at http://127.0.0.1:{}", args.port);
+            rt.block_on(server_handle).expect("server task failed");
         }
         _ => {
-            tracing::info!("Starting Tauri native UI");
-            start_tauri();
+            tracing::info!("Tauri UI mode — HTTP server at http://127.0.0.1:{}", args.port);
+            start_tauri(args.port);
         }
     }
 }
 
-/// Start the web UI mode — serves the web frontend via axum HTTP server.
-fn start_web_server(port: u16, web_dir: PathBuf) {
-    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-    rt.block_on(async {
-        let app = axum::Router::new()
-            // Serve static files from the web directory
-            .nest_service(
-                "/",
-                tower_http::services::ServeDir::new(&web_dir)
-                    .append_index_html_on_directories(true),
-            )
-            // Placeholder for future API endpoints
-            .route("/api/status", axum::routing::get(api_status));
+/// Start the HTTP server — shared between web and tauri modes.
+async fn start_http_server(port: u16, web_dir: PathBuf) {
+    let app = axum::Router::new()
+        .route("/api/status", axum::routing::get(api_status))
+        .route("/api/greet", axum::routing::get(api_greet))
+        .nest_service(
+            "/",
+            tower_http::services::ServeDir::new(&web_dir)
+                .append_index_html_on_directories(true),
+        );
 
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        tracing::info!("Web UI listening on http://{}", addr);
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    tracing::info!("HTTP server listening on http://{}", addr);
 
-        let listener = tokio::net::TcpListener::bind(addr)
-            .await
-            .expect("failed to bind address");
-        axum::serve(listener, app).await.expect("server error");
-    });
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("failed to bind address");
+    axum::serve(listener, app).await.expect("server error");
 }
 
-/// Placeholder API endpoint — returns basic status info.
+/// Status endpoint — returns basic info.
 async fn api_status() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
-        "mode": "web"
+        "mode": "shared"
     }))
 }
 
-/// Start the Tauri native window mode.
-fn start_tauri() {
-    tauri::Builder::default()
-        .setup(|_app| {
-            tracing::debug!("Tauri app setup complete");
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![greet,])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+/// Greet endpoint — same API in both modes.
+async fn api_greet(axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>) -> axum::Json<serde_json::Value> {
+    let name = params.get("name").map(|s| s.as_str()).unwrap_or("Trainer");
+    axum::Json(serde_json::json!({
+        "message": format!("Hello, {}! Welcome to Poke-Controller.", name)
+    }))
 }
 
-/// Simple greet command — placeholder for IPC communication.
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! Welcome to Poke-Controller.", name)
+/// Start the Tauri native window — loads the same web UI via WebView.
+fn start_tauri(port: u16) {
+    tauri::Builder::default()
+        .setup(move |app| {
+            let window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::External(format!("http://127.0.0.1:{}", port).parse().unwrap()),
+            )
+            .title("Poke-Controller Modified Extension")
+            .inner_size(1280.0, 800.0)
+            .center()
+            .build()?;
+            
+            tracing::debug!("Tauri window opened with WebView");
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

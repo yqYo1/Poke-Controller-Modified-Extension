@@ -57,20 +57,32 @@
             runtimeInputs = [
               rustEnv
               pythonEnv
-              pkgs.uv
+              pkgs.maturin
             ];
             text = ''
-              # Run from current directory (writable) instead of nix store
-              workdir="$PWD"
-              # Ensure Python bindings are built
-              if [ ! -f "$workdir/python/pokecon/pokecon*.so" ] && [ ! -f "$workdir/python/pokecon/pokecon*.pyd" ]; then
-                echo "Building Python bindings..."
-                uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
-              fi
-              # Launch the application
-              PYTHONPATH="$workdir/python:$PYTHONPATH"
-              export PYTHONPATH
-              exec python -m pokecon "$@"
+                            # Run from current directory (writable) instead of nix store
+                            workdir="$PWD"
+                            # Ensure Python bindings are built
+                            if [ ! -f "$workdir/python/pokecon/pokecon"*.so ] && [ ! -f "$workdir/python/pokecon/pokecon"*.pyd ]; then
+                              echo "Building Python bindings..."
+                              maturin build --release \
+                                --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
+                                --out /tmp/pokecon-wheels 2>&1
+                              wheel=$(ls /tmp/pokecon-wheels/pokecon-*.whl 2>/dev/null | head -1)
+                              if [ -n "$wheel" ]; then
+                                mkdir -p /tmp/pokecon-extracted
+                                python -c "
+              import zipfile, sys
+              with zipfile.ZipFile('$wheel', 'r') as z:
+                  z.extractall('/tmp/pokecon-extracted')
+              "
+                                cp /tmp/pokecon-extracted/pokecon*.so "$workdir/python/pokecon/" 2>/dev/null || true
+                              fi
+                            fi
+                            # Launch the application
+                            PYTHONPATH="$workdir/python:$PYTHONPATH"
+                            export PYTHONPATH
+                            exec python -m pokecon "$@"
             '';
           };
 
@@ -217,7 +229,7 @@
                 runtimeInputs = [
                   rustEnv
                   pythonEnv
-                  pkgs.uv
+                  pkgs.maturin
                 ];
                 text = ''
                   workdir="$(mktemp -d)"
@@ -229,7 +241,7 @@
                   cargo build --workspace --all-features
                   echo ""
                   echo "=== Building Python maturin package ==="
-                  uv run maturin build --manifest-path rust/pokecon-pybindings/Cargo.toml
+                  maturin build --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist/
                 '';
               }
             }/bin/build";
@@ -273,11 +285,29 @@
                 runtimeInputs = [
                   rustEnv
                   pythonEnv
-                  pkgs.uv
+                  pkgs.maturin
                 ];
                 text = ''
-                  cd "${self}"
-                  uv run maturin develop --uv --manifest-path rust/pokecon-pybindings/Cargo.toml
+                                    cd "${self}"
+                                    echo "=== Building Python bindings in-place ==="
+                                    maturin build --release \
+                                      --manifest-path rust/pokecon-pybindings/Cargo.toml \
+                                      --out /tmp/pokecon-wheels 2>&1
+                                    wheel=$(ls /tmp/pokecon-wheels/pokecon-*.whl 2>/dev/null | head -1)
+                                    if [ -n "$wheel" ]; then
+                                      mkdir -p /tmp/pokecon-extracted
+                                      python -c "
+                  import zipfile
+                  with zipfile.ZipFile('$wheel', 'r') as z:
+                      z.extractall('/tmp/pokecon-extracted')
+                  "
+                                      mkdir -p python/pokecon
+                                      cp /tmp/pokecon-extracted/pokecon*.so python/pokecon/ 2>/dev/null || true
+                                      echo "✓ Python bindings built and installed to python/pokecon/"
+                                    else
+                                      echo "Error: No wheel was built" >&2
+                                      exit 1
+                                    fi
                 '';
               }
             }/bin/maturin-develop";
@@ -468,7 +498,7 @@
               ++ pythonPkgs
               ++ [
 
-                uv
+                maturin
 
                 nodejs_20
                 pnpm

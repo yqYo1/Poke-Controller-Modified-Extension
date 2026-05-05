@@ -153,4 +153,9 @@ result-*
 !/web/src/
 /web/src/*
 !/web/src/*.js
+!/web/src/*.jsx
 !/web/src/*.css
+!/web/src/api/
+!/web/src/api/*.js
+!/web/src/components/
+!/web/src/components/*.jsx

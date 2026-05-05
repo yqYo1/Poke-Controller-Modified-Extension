@@ -9,6 +9,7 @@ members = [
     "rust/pokecon-lua",
     "rust/pokecon-events",
     "rust/pokecon-pybindings",
+    "src-tauri",
 ]
 
 [workspace.package]

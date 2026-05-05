@@ -97,6 +97,7 @@ result-*
 # =============================================================================
 
 !/Cargo.toml
+!/Cargo.lock
 !/rust-toolchain.toml
 !/flake.nix
 !/.envrc

@@ -60,51 +60,51 @@
               pkgs.maturin
             ];
             text = ''
-              # When run remotely, self is in nix store (read-only).
-              # Use a writable temp dir for build artifacts.
-              workdir="$(mktemp -d)"
-              trap 'rm -rf "$workdir"' EXIT
-              
-              # Copy source to writable location for maturin build
-              cp -r "${self}/." "$workdir/"
-              chmod -R +w "$workdir"
-              
-              # Build Python bindings in the writable copy
-              found_so=
-              for f in "$workdir/python/pokecon/pokecon"*.so "$workdir/python/pokecon/pokecon"*.pyd; do
-                if [ -f "$f" ]; then
-                  found_so=1
-                  break
-                fi
-              done
-              if [ -z "$found_so" ]; then
-                echo "Building Python bindings..."
-                maturin build --release \
-                  --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
-                  --out "$workdir/dist/" 2>&1
-                wheel=$(find "$workdir/dist" -name 'pokecon-*.whl' 2>/dev/null | head -1)
-                if [ -n "$wheel" ]; then
-                  python -c "
-import zipfile
-import os
-wheel = '$wheel'
-out_dir = '$workdir/python/pokecon'
-os.makedirs(out_dir, exist_ok=True)
-with zipfile.ZipFile(wheel, 'r') as z:
-    for name in z.namelist():
-        if name.endswith('.so') or name.endswith('.pyd'):
-            z.extract(name, out_dir)
-            basename = os.path.basename(name)
-            os.rename(os.path.join(out_dir, name), os.path.join(out_dir, basename))
-"
-                fi
-              fi
-              
-              # Launch the application from the writable copy
-              PYTHONPATH="$workdir/python:$PYTHONPATH"
-              export PYTHONPATH
-              cd "$workdir"
-              exec python -m pokecon "$@"
+                            # When run remotely, self is in nix store (read-only).
+                            # Use a writable temp dir for build artifacts.
+                            workdir="$(mktemp -d)"
+                            trap 'rm -rf "$workdir"' EXIT
+                            
+                            # Copy source to writable location for maturin build
+                            cp -r "${self}/." "$workdir/"
+                            chmod -R +w "$workdir"
+                            
+                            # Build Python bindings in the writable copy
+                            found_so=
+                            for f in "$workdir/python/pokecon/pokecon"*.so "$workdir/python/pokecon/pokecon"*.pyd; do
+                              if [ -f "$f" ]; then
+                                found_so=1
+                                break
+                              fi
+                            done
+                            if [ -z "$found_so" ]; then
+                              echo "Building Python bindings..."
+                              maturin build --release \
+                                --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
+                                --out "$workdir/dist/" 2>&1
+                              wheel=$(find "$workdir/dist" -name 'pokecon-*.whl' 2>/dev/null | head -1)
+                              if [ -n "$wheel" ]; then
+                                python -c "
+              import zipfile
+              import os
+              wheel = '$wheel'
+              out_dir = '$workdir/python/pokecon'
+              os.makedirs(out_dir, exist_ok=True)
+              with zipfile.ZipFile(wheel, 'r') as z:
+                  for name in z.namelist():
+                      if name.endswith('.so') or name.endswith('.pyd'):
+                          z.extract(name, out_dir)
+                          basename = os.path.basename(name)
+                          os.rename(os.path.join(out_dir, name), os.path.join(out_dir, basename))
+              "
+                              fi
+                            fi
+                            
+                            # Launch the application from the writable copy
+                            PYTHONPATH="$workdir/python:$PYTHONPATH"
+                            export PYTHONPATH
+                            cd "$workdir"
+                            exec python -m pokecon "$@"
             '';
           };
 
@@ -310,40 +310,40 @@ with zipfile.ZipFile(wheel, 'r') as z:
                   pkgs.maturin
                 ];
                 text = ''
-                  # When run remotely, self is in nix store (read-only).
-                  # Use a writable temp dir for build artifacts.
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  
-                  # Copy source to writable location
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  
-                  echo "=== Building Python bindings in-place ==="
-                  cd "$workdir"
-                  maturin build --release \
-                    --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
-                    --out "$workdir/dist/" 2>&1
-                  wheel=$(find "$workdir/dist" -name 'pokecon-*.whl' 2>/dev/null | head -1)
-                  if [ -n "$wheel" ]; then
-                    python -c "
-import zipfile
-import os
-wheel = '$wheel'
-out_dir = '$workdir/python/pokecon'
-os.makedirs(out_dir, exist_ok=True)
-with zipfile.ZipFile(wheel, 'r') as z:
-    for name in z.namelist():
-        if name.endswith('.so') or name.endswith('.pyd'):
-            z.extract(name, out_dir)
-            basename = os.path.basename(name)
-            os.rename(os.path.join(out_dir, name), os.path.join(out_dir, basename))
-"
-                    echo "✓ Python bindings built and installed to $workdir/python/pokecon/"
-                  else
-                    echo "Error: No wheel was built" >&2
-                    exit 1
-                  fi
+                                    # When run remotely, self is in nix store (read-only).
+                                    # Use a writable temp dir for build artifacts.
+                                    workdir="$(mktemp -d)"
+                                    trap 'rm -rf "$workdir"' EXIT
+                                    
+                                    # Copy source to writable location
+                                    cp -r "${self}/." "$workdir/"
+                                    chmod -R +w "$workdir"
+                                    
+                                    echo "=== Building Python bindings in-place ==="
+                                    cd "$workdir"
+                                    maturin build --release \
+                                      --manifest-path "$workdir/rust/pokecon-pybindings/Cargo.toml" \
+                                      --out "$workdir/dist/" 2>&1
+                                    wheel=$(find "$workdir/dist" -name 'pokecon-*.whl' 2>/dev/null | head -1)
+                                    if [ -n "$wheel" ]; then
+                                      python -c "
+                  import zipfile
+                  import os
+                  wheel = '$wheel'
+                  out_dir = '$workdir/python/pokecon'
+                  os.makedirs(out_dir, exist_ok=True)
+                  with zipfile.ZipFile(wheel, 'r') as z:
+                      for name in z.namelist():
+                          if name.endswith('.so') or name.endswith('.pyd'):
+                              z.extract(name, out_dir)
+                              basename = os.path.basename(name)
+                              os.rename(os.path.join(out_dir, name), os.path.join(out_dir, basename))
+                  "
+                                      echo "✓ Python bindings built and installed to $workdir/python/pokecon/"
+                                    else
+                                      echo "Error: No wheel was built" >&2
+                                      exit 1
+                                    fi
                 '';
               }
             }/bin/maturin-develop";

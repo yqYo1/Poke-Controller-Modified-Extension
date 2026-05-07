@@ -32,13 +32,13 @@ def create_parser() -> argparse.ArgumentParser:
         help="Configuration profile to use (default: 'default')",
     )
 
-    # UI mode
+    # UI mode - auto detects GUI environment
     parser.add_argument(
         "--ui",
-        choices=["web", "tauri", "legacy", "headless"],
-        default="legacy",
-        help="UI mode to use (default: 'legacy')",
-    )
+        choices=["web", "tauri", "legacy", "headless", "auto"],
+        default="auto",
+        help="UI mode to use (default: 'auto' — detects GUI environment)",
+    );
 
     # Logging
     parser.add_argument(

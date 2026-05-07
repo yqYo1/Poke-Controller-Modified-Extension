@@ -31,7 +31,18 @@ def main() -> int:
         print(f"Profile: {args.profile}")
 
     # Launch UI based on mode
-    if args.ui == "legacy":
+    ui_mode = args.ui
+    if ui_mode == "auto":
+        # Auto-detect GUI environment
+        import os
+        if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            ui_mode = "tauri"
+        else:
+            ui_mode = "web"
+        if args.verbose > 0:
+            print(f"Auto-detected UI mode: {ui_mode}")
+
+    if ui_mode == "legacy":
         print("Launching legacy tkinter UI...")
         # TODO: Import and launch legacy UI
         # from SerialController.Window import Window
@@ -39,21 +50,72 @@ def main() -> int:
         print("Legacy UI not yet integrated. Use --ui web for Web UI.")
         return 1
 
-    elif args.ui == "web":
+    elif ui_mode == "web":
         print(f"Launching Web UI on {args.web_host}:{args.web_port}...")
-        # TODO: Import and launch web UI
-        # from pokecon_web import start_server
-        # start_server(host=args.web_host, port=args.web_port)
-        print("Web UI not yet integrated.")
-        return 1
+        # The web UI is served by the Tauri binary's Axum server
+        # Launch via subprocess: pokecon-tauri --ui web
+        import subprocess
+        import shutil
+        import os
 
-    elif args.ui == "tauri":
+        # Find the Tauri binary
+        tauri_binary = shutil.which("pokecon-tauri")
+        if tauri_binary is None:
+            # Try to find it in common locations
+            for path in [
+                "src-tauri/target/release/pokecon-tauri",
+                "src-tauri/target/debug/pokecon-tauri",
+            ]:
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    tauri_binary = os.path.abspath(path)
+                    break
+
+        if tauri_binary is None:
+            print("Error: pokecon-tauri binary not found.")
+            print("Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml")
+            return 1
+
+        cmd = [
+            tauri_binary,
+            "--ui", "web",
+            "--port", str(args.web_port),
+        ]
+        if args.verbose > 0:
+            print(f"Running: {' '.join(cmd)}")
+        return subprocess.call(cmd)
+
+    elif ui_mode == "tauri":
         print("Launching Tauri UI...")
-        # TODO: Import and launch Tauri UI
-        print("Tauri UI not yet integrated.")
-        return 1
+        # Launch the Tauri binary
+        import subprocess
+        import shutil
+        import os
 
-    elif args.ui == "headless":
+        tauri_binary = shutil.which("pokecon-tauri")
+        if tauri_binary is None:
+            for path in [
+                "src-tauri/target/release/pokecon-tauri",
+                "src-tauri/target/debug/pokecon-tauri",
+            ]:
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    tauri_binary = os.path.abspath(path)
+                    break
+
+        if tauri_binary is None:
+            print("Error: pokecon-tauri binary not found.")
+            print("Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml")
+            return 1
+
+        cmd = [
+            tauri_binary,
+            "--ui", "tauri",
+            "--port", str(args.web_port),
+        ]
+        if args.verbose > 0:
+            print(f"Running: {' '.join(cmd)}")
+        return subprocess.call(cmd)
+
+    elif ui_mode == "headless":
         print("Running in headless mode...")
         # TODO: Load scripts and run without UI
         from pokecon.script_loader import ScriptLoader

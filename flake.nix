@@ -174,8 +174,96 @@
           };
 
           apps = {
-            # nix run .  — launch Poke-Controller application
-            default = mkApp "${pokeconApp}/bin/pokecon";
+            # nix run .  — launch Poke-Controller application (Tauri or Web UI)
+            default = mkApp "${
+              pkgs.writeShellApplication {
+                name = "pokecon";
+                runtimeInputs = [
+                  rustEnv
+                  pkgs.nodejs_20
+                  pkgs.pkg-config
+                  pkgs.glib
+                  pkgs.gtk3
+                  pkgs.pango
+                  pkgs.harfbuzz
+                  pkgs.cairo
+                  pkgs.atk
+                  pkgs.gdk-pixbuf
+                  pkgs.libsoup_3
+                  pkgs.webkitgtk_4_1
+                  pkgs.librsvg
+                  pkgs.dbus
+                  pkgs.libx11
+                  pkgs.libxcursor
+                  pkgs.libxrandr
+                  pkgs.libxi
+                ];
+                text = ''
+                  workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
+
+                  cp -r "${self}/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
+
+                  # Set PKG_CONFIG_PATH for GTK/WebKit dependencies
+                  export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig:${pkgs.dbus.dev}/lib/pkgconfig:${pkgs.libx11.dev}/lib/pkgconfig:${pkgs.libxcursor.dev}/lib/pkgconfig:${pkgs.libxrandr.dev}/lib/pkgconfig:${pkgs.libxi.dev}/lib/pkgconfig''${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
+                  # Build web UI
+                  echo "=== Building Web UI ==="
+                  cd "$workdir/web"
+                  npm install --no-audit --no-fund 2>&1
+                  npx vite build 2>&1
+                  cd "$workdir"
+
+                  # Build Tauri binary
+                  echo "=== Building Tauri binary ==="
+                  mkdir -p "$workdir/src-tauri/icons"
+                  # Generate minimal valid PNG: 1x1 transparent pixel
+                  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x60\x00\x00\x00\x02\x00\x01\xe2!\xbc\x33\x00\x00\x00\x00IEND\xaeB`\x82' > "$workdir/src-tauri/icons/icon.png"
+                  cp "$workdir/src-tauri/icons/icon.png" "$workdir/src-tauri/icons/32x32.png"
+                  cp "$workdir/src-tauri/icons/icon.png" "$workdir/src-tauri/icons/128x128.png"
+                  cp "$workdir/src-tauri/icons/icon.png" "$workdir/src-tauri/icons/128x128@2x.png"
+
+                  export TAURI_SKIP_BUILD=1
+
+                  # Use cache directory to avoid full rebuild on every run
+                  CACHEDIR="$HOME/.cache/pokecon-tauri"
+                  mkdir -p "$CACHEDIR"
+
+                  # Check for cached binary and web assets
+                  if [ -f "$CACHEDIR/pokecon-tauri" ] && [ -d "$CACHEDIR/web-dist" ]; then
+                    echo "=== Using cached build ==="
+                    mkdir -p "$workdir/src-tauri/target/release"
+                    cp "$CACHEDIR/pokecon-tauri" "$workdir/src-tauri/target/release/pokecon-tauri"
+                    mkdir -p "$workdir/web/dist"
+                    cp -r "$CACHEDIR/web-dist"/* "$workdir/web/dist/"
+                  else
+                    echo "=== Building Tauri binary (first run, may take a few minutes) ==="
+                    cargo build --release --manifest-path "$workdir/src-tauri/Cargo.toml" 2>&1
+                    # Cache for next run
+                    cp "$workdir/src-tauri/target/release/pokecon-tauri" "$CACHEDIR/"
+                    cp -r "$workdir/web/dist" "$CACHEDIR/web-dist"
+                  fi
+
+                  # Detect GUI environment
+                  UI_MODE="web"
+                  if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+                    UI_MODE="tauri"
+                  fi
+
+                  echo "=== Launching in $UI_MODE mode ==="
+                  exec "$workdir/src-tauri/target/release/pokecon-tauri" \
+                    --ui "$UI_MODE" \
+                    --web-dir "$workdir/web/dist" \
+                    "$@"
+                '';
+              }
+            }/bin/pokecon";
+
+            # nix run .#python-app  — launch Python-based entry point (legacy)
+            python-app = mkApp "${pokeconApp}/bin/pokecon";
+
             fmt = mkApp "${config.treefmt.build.wrapper}/bin/treefmt";
 
             # nix run .#clippy  — run Rust linter
@@ -379,10 +467,10 @@
                   pkgs.webkitgtk_4_1
                   pkgs.librsvg
                   pkgs.dbus
-                  pkgs.xorg.libX11
-                  pkgs.xorg.libXcursor
-                  pkgs.xorg.libXrandr
-                  pkgs.xorg.libXi
+                  pkgs.libx11
+                  pkgs.libxcursor
+                  pkgs.libxrandr
+                  pkgs.libxi
                 ];
 
                 # Tauri requires icons during build
@@ -458,14 +546,14 @@
                   pkgs.webkitgtk_4_1
                   pkgs.librsvg
                   pkgs.dbus
-                  pkgs.xorg.libX11
-                  pkgs.xorg.libXcursor
-                  pkgs.xorg.libXrandr
-                  pkgs.xorg.libXi
+                  pkgs.libx11
+                  pkgs.libxcursor
+                  pkgs.libxrandr
+                  pkgs.libxi
                 ];
                 text = ''
                   # Set PKG_CONFIG_PATH for all GTK/WebKit dependencies (zlib is in share/pkgconfig)
-                  export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig:${pkgs.dbus.dev}/lib/pkgconfig:${pkgs.xorg.libX11.dev}/lib/pkgconfig:${pkgs.xorg.libXcursor.dev}/lib/pkgconfig:${pkgs.xorg.libXrandr.dev}/lib/pkgconfig:${pkgs.xorg.libXi.dev}/lib/pkgconfig''${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+                  export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig:${pkgs.dbus.dev}/lib/pkgconfig:${pkgs.libx11.dev}/lib/pkgconfig:${pkgs.libxcursor.dev}/lib/pkgconfig:${pkgs.libxrandr.dev}/lib/pkgconfig:${pkgs.libxi.dev}/lib/pkgconfig''${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 
                   cd "${self}/src-tauri"
                   cargo tauri dev
@@ -572,6 +660,8 @@
               echo "Node.js: $(node --version)"
               echo ""
               echo "Available task apps: nix run .#<task>"
+              echo "  (default)       - run Tauri/Web UI (GUI auto-detection)"
+              echo "  python-app      - launch Python entry point (legacy)"
               echo "  fmt               - format all files (treefmt)"
               echo "  clippy            - Rust linter"
               echo "  ruff-check        - Python linter"

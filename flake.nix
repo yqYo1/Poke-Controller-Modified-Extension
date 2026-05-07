@@ -101,7 +101,7 @@
                             fi
                             
                             # Launch the application from the writable copy
-                            PYTHONPATH="$workdir/python${PYTHONPATH:+:$PYTHONPATH}"
+                            PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
                             export PYTHONPATH
                             cd "$workdir"
                             exec python -m pokecon "$@"

@@ -182,6 +182,7 @@
                   rustEnv
                   pkgs.nodejs_20
                   pkgs.pkg-config
+                  pkgs.stdenv.cc
                   pkgs.glib
                   pkgs.gtk3
                   pkgs.pango
@@ -248,15 +249,42 @@
 
                   # Detect GUI environment
                   UI_MODE="web"
-                  if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+                  if [ -n "''${DISPLAY:-}" ] || [ -n "''${WAYLAND_DISPLAY:-}" ]; then
                     UI_MODE="tauri"
                   fi
 
+                  # Set LD_LIBRARY_PATH for Tauri runtime dependencies
+                  export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+                    pkgs.glib
+                    pkgs.gtk3
+                    pkgs.pango
+                    pkgs.harfbuzz
+                    pkgs.cairo
+                    pkgs.atk
+                    pkgs.gdk-pixbuf
+                    pkgs.libsoup_3
+                    pkgs.webkitgtk_4_1
+                    pkgs.librsvg
+                    pkgs.dbus
+                    pkgs.libx11
+                    pkgs.libxcursor
+                    pkgs.libxrandr
+                    pkgs.libxi
+                    pkgs.stdenv.cc.cc.lib
+                  ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
                   echo "=== Launching in $UI_MODE mode ==="
-                  exec "$workdir/src-tauri/target/release/pokecon-tauri" \
-                    --ui "$UI_MODE" \
-                    --web-dir "$workdir/web/dist" \
-                    "$@"
+                  # Only pass --ui if user didn't specify it
+                  if [[ "$*" == *"--ui"* ]]; then
+                    exec "$workdir/src-tauri/target/release/pokecon-tauri" \
+                      --web-dir "$workdir/web/dist" \
+                      "$@"
+                  else
+                    exec "$workdir/src-tauri/target/release/pokecon-tauri" \
+                      --ui "$UI_MODE" \
+                      --web-dir "$workdir/web/dist" \
+                      "$@"
+                  fi
                 '';
               }
             }/bin/pokecon";

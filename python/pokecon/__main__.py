@@ -35,6 +35,7 @@ def main() -> int:
     if ui_mode == "auto":
         # Auto-detect GUI environment
         import os
+
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             ui_mode = "tauri"
         else:
@@ -54,9 +55,9 @@ def main() -> int:
         print(f"Launching Web UI on {args.web_host}:{args.web_port}...")
         # The web UI is served by the Tauri binary's Axum server
         # Launch via subprocess: pokecon-tauri --ui web
-        import subprocess
-        import shutil
         import os
+        import shutil
+        import subprocess
 
         # Find the Tauri binary
         tauri_binary = shutil.which("pokecon-tauri")
@@ -72,13 +73,17 @@ def main() -> int:
 
         if tauri_binary is None:
             print("Error: pokecon-tauri binary not found.")
-            print("Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml")
+            print(
+                "Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml"
+            )
             return 1
 
         cmd = [
             tauri_binary,
-            "--ui", "web",
-            "--port", str(args.web_port),
+            "--ui",
+            "web",
+            "--port",
+            str(args.web_port),
         ]
         if args.verbose > 0:
             print(f"Running: {' '.join(cmd)}")
@@ -87,9 +92,9 @@ def main() -> int:
     elif ui_mode == "tauri":
         print("Launching Tauri UI...")
         # Launch the Tauri binary
-        import subprocess
-        import shutil
         import os
+        import shutil
+        import subprocess
 
         tauri_binary = shutil.which("pokecon-tauri")
         if tauri_binary is None:
@@ -103,13 +108,17 @@ def main() -> int:
 
         if tauri_binary is None:
             print("Error: pokecon-tauri binary not found.")
-            print("Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml")
+            print(
+                "Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml"
+            )
             return 1
 
         cmd = [
             tauri_binary,
-            "--ui", "tauri",
-            "--port", str(args.web_port),
+            "--ui",
+            "tauri",
+            "--port",
+            str(args.web_port),
         ]
         if args.verbose > 0:
             print(f"Running: {' '.join(cmd)}")

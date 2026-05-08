@@ -38,7 +38,7 @@ def create_parser() -> argparse.ArgumentParser:
         choices=["web", "tauri", "legacy", "headless", "auto"],
         default="auto",
         help="UI mode to use (default: 'auto' — detects GUI environment)",
-    );
+    )
 
     # Logging
     parser.add_argument(

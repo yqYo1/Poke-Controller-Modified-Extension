@@ -15,6 +15,7 @@
 # not ignore
 !/.gitignore
 !/flake.lock
+!/AGENTS.md
 !/ExecutePokeConModified-Extension.bat
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE

@@ -10,6 +10,8 @@
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    git-hooks.url = "github:cachix/git-hooks.nix";
+    git-hooks.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -19,6 +21,7 @@
       systems,
       treefmt-nix,
       rust-overlay,
+      git-hooks,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -26,6 +29,7 @@
 
       imports = [
         treefmt-nix.flakeModule
+        git-hooks.flakeModule
       ];
 
       perSystem =
@@ -636,6 +640,23 @@
             }/bin/check";
           };
 
+          # ── git-hooks (pre-commit) configuration ───────────────────────
+          pre-commit = {
+            check.enable = false; # skip in nix flake check (sandbox limitation)
+            settings = {
+              hooks = {
+                nix-fmt = {
+                  enable = true;
+                  name = "nix-fmt";
+                  entry = "${config.treefmt.build.wrapper}/bin/treefmt";
+                  language = "system";
+                  pass_filenames = false;
+                  stages = [ "pre-commit" ];
+                };
+              };
+            };
+          };
+
           devShells.default = pkgs.mkShell {
             name = "pokecon-devshell";
 
@@ -680,11 +701,14 @@
                 cargo-tauri
 
                 nix-tree
-              ];
+              ]
+              ++ config.pre-commit.enabledPackages;
 
             shellHook = ''
               export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
               export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+              ${config.pre-commit.installationScript}
 
               echo "Poke Controller Modified Extension development environment loaded."
               echo "Rust: $(rustc --version)"

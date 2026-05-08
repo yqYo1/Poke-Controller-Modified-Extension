@@ -945,11 +945,10 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/commands/start", post(commands_start))
         .route("/api/commands/stop", post(commands_stop))
         .route("/api/commands/active", get(commands_active))
-        .with_state(state)
-        .nest_service(
-            "/",
+        .fallback_service(
             tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true),
-        );
+        )
+        .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     tracing::info!("HTTP server listening on http://{}", addr);

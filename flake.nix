@@ -254,7 +254,9 @@
                   fi
 
                   # Set LD_LIBRARY_PATH for Tauri runtime dependencies
+                  # Prepend Nix paths and filter out host paths to avoid glibc ABI mismatch
                   export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+                    pkgs.glibc
                     pkgs.glib
                     pkgs.gtk3
                     pkgs.pango
@@ -271,7 +273,7 @@
                     pkgs.libxrandr
                     pkgs.libxi
                     pkgs.stdenv.cc.cc.lib
-                  ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                  ]}"
 
                   echo "=== Launching in $UI_MODE mode ==="
                   # Only pass --ui if user didn't specify it

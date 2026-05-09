@@ -286,17 +286,6 @@
 
                 # Wrapper script for runtime behavior (cache, UI mode detection)
                 pokecon-launcher = pkgs.writeShellScriptBin "pokecon" ''
-                  # Use cache directory to avoid full rebuild on every run
-                  CACHEDIR="$HOME/.cache/pokecon-tauri"
-                  mkdir -p "$CACHEDIR"
-
-                  # Cache the nix-built binary + web assets
-                  if [ ! -f "$CACHEDIR/pokecon-tauri" ] || [ "$CACHEDIR/pokecon-tauri" -ot "${pokecon-tauri}/bin/pokecon-tauri" ]; then
-                    echo "=== Caching Tauri binary ==="
-                    cp "${pokecon-tauri}/bin/pokecon-tauri" "$CACHEDIR/"
-                    cp -r "${self}/web/dist" "$CACHEDIR/web-dist" 2>/dev/null || true
-                  fi
-
                   # Detect GUI environment
                   UI_MODE="web"
                   if [ -n "''${DISPLAY:-}" ] || [ -n "''${WAYLAND_DISPLAY:-}" ]; then
@@ -305,11 +294,11 @@
 
                   echo "=== Launching in $UI_MODE mode ==="
                   if [[ "$*" == *"--ui"* ]]; then
-                    exec "$CACHEDIR/pokecon-tauri" \
+                    exec "${pokecon-tauri}/bin/pokecon-tauri" \
                       --web-dir "${self}/web/dist" \
                       "$@"
                   else
-                    exec "$CACHEDIR/pokecon-tauri" \
+                    exec "${pokecon-tauri}/bin/pokecon-tauri" \
                       --ui "$UI_MODE" \
                       --web-dir "${self}/web/dist" \
                       "$@"

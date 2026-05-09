@@ -177,62 +177,100 @@
             };
           };
 
+          packages = {
+            # Tauri package built with nixpkgs best practices
+            pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
+              pname = "pokecon-tauri";
+              version = "0.1.0";
+              src = self;
+
+              cargoLock = {
+                lockFile = self + "/src-tauri/Cargo.lock";
+                allowBuiltinFetchGit = true;
+              };
+
+              cargoRoot = "src-tauri";
+              buildAndTestSubdir = finalAttrs.cargoRoot;
+
+              # npm frontend dependencies
+              npmDeps = pkgs.fetchNpmDeps {
+                name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
+                inherit (finalAttrs) src;
+                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+              };
+
+              nativeBuildInputs = with pkgs; [
+                cargo-tauri.hook
+                nodejs_20
+                npmHooks.npmConfigHook
+                pkg-config
+                wrapGAppsHook4
+              ];
+
+              buildInputs = with pkgs; [
+                glib
+                glib-networking
+                gtk3
+                pango
+                harfbuzz
+                cairo
+                atk
+                gdk-pixbuf
+                libsoup_3
+                webkitgtk_4_1
+                librsvg
+                dbus
+                libx11
+                libxcursor
+                libxrandr
+                libxi
+                gst_all_1.gstreamer
+                gst_all_1.gst-plugins-base
+                gst_all_1.gst-plugins-good
+              ];
+
+              # Skip tauri-build runtime validation in sandbox
+              TAURI_SKIP_BUILD = "1";
+
+              # Disable tauri bundling, we just need the binary
+              tauriBundleType = "";
+
+              # Disable default tauri build hook and build manually
+              dontTauriBuild = true;
+
+              # Build web UI and Tauri binary manually
+              buildPhase = ''
+                runHook preBuild
+
+                # Build web UI (npm already configured by npmHooks.npmConfigHook)
+                cd web
+                npx vite build
+                cd ..
+
+                # Build Tauri binary
+                cd src-tauri
+                cargo build --release --offline
+                cd ..
+
+                runHook postBuild
+              '';
+
+              installPhase = ''
+                runHook preInstall
+                mkdir -p $out/bin
+                cp src-tauri/target/release/pokecon-tauri $out/bin/
+                runHook postInstall
+              '';
+
+              doCheck = false;
+            });
+          };
+
           apps = {
             # nix run .  — launch Poke-Controller application (Tauri or Web UI)
             default =
               let
-                # Tauri package built with nixpkgs best practices
-                pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
-                  pname = "pokecon-tauri";
-                  version = "0.1.0";
-                  src = self;
-
-                  cargoLock = {
-                    lockFile = self + "/src-tauri/Cargo.lock";
-                    allowBuiltinFetchGit = true;
-                  };
-
-                  # npm frontend dependencies
-                  # Note: We don't use fetchNpmDeps because the project doesn't have package-lock.json
-                  # Instead, we run npm install in preBuild phase
-
-                  cargoRoot = "src-tauri";
-                  buildAndTestSubdir = finalAttrs.cargoRoot;
-
-                  nativeBuildInputs = with pkgs; [
-                    cargo-tauri.hook
-                    nodejs_20
-                    pkg-config
-                    wrapGAppsHook4
-                  ];
-
-                  buildInputs = with pkgs; [
-                    glib
-                    glib-networking
-                    gtk3
-                    pango
-                    harfbuzz
-                    cairo
-                    atk
-                    gdk-pixbuf
-                    libsoup_3
-                    webkitgtk_4_1
-                    librsvg
-                    dbus
-                    libx11
-                    libxcursor
-                    libxrandr
-                    libxi
-                    gst_all_1.gstreamer
-                    gst_all_1.gst-plugins-base
-                    gst_all_1.gst-plugins-good
-                  ];
-
-                  # Skip tauri-build runtime validation in sandbox
-                  TAURI_SKIP_BUILD = "1";
-
-                  doCheck = false;
-                });
+                pokecon-tauri = config.packages.pokecon-tauri;
 
                 # Wrapper script for runtime behavior (cache, UI mode detection)
                 pokecon-launcher = pkgs.writeShellScriptBin "pokecon" ''

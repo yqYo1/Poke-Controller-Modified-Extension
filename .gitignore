@@ -52,6 +52,14 @@
 !/src-tauri/icons/
 !/src-tauri/src/
 !/src-tauri/build.rs
+!/web/
+/web/*
+!/web/package.json
+!/web/package-lock.json
+!/web/vite.config.ts
+!/web/index.html
+!/web/src/
+!/web/public/
 !/SerialController/Commands/
 /SerialController/Commands/*
 !/SerialController/Commands/*.py

@@ -195,9 +195,24 @@
               # npm frontend dependencies
               npmDeps = pkgs.fetchNpmDeps {
                 name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
-                inherit (finalAttrs) src;
-                hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+                src = builtins.path {
+                  path = self + "/web";
+                  name = "web-npm-deps";
+                };
+                hash = "sha256-AfRizRYTwuQlzJdqFwdcStGDw1IBaceMD0tLi2WSK0E=";
               };
+
+              # Copy package-lock.json and package.json to root for npmConfigHook
+              # Generate minimal icons for Tauri build
+              postPatch = ''
+                cp ${self}/web/package-lock.json ./package-lock.json
+                cp ${self}/web/package.json ./package.json
+                mkdir -p src-tauri/icons
+                printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x60\x00\x00\x00\x02\x00\x01\xe2!\xbc\x33\x00\x00\x00\x00IEND\xaeB`\x82' > src-tauri/icons/icon.png
+                cp src-tauri/icons/icon.png src-tauri/icons/32x32.png
+                cp src-tauri/icons/icon.png src-tauri/icons/128x128.png
+                cp src-tauri/icons/icon.png src-tauri/icons/128x128@2x.png
+              '';
 
               nativeBuildInputs = with pkgs; [
                 cargo-tauri.hook

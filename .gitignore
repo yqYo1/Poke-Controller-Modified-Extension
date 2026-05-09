@@ -45,9 +45,13 @@
 /Docs/*
 !/Docs/*.md
 
-!/SerialController/
-/SerialController/*
-!/SerialController/*.py
+!/src-tauri/
+!/src-tauri/Cargo.lock
+!/src-tauri/Cargo.toml
+!/src-tauri/tauri.conf.json
+!/src-tauri/icons/
+!/src-tauri/src/
+!/src-tauri/build.rs
 !/SerialController/Commands/
 /SerialController/Commands/*
 !/SerialController/Commands/*.py

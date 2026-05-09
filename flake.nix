@@ -195,10 +195,7 @@
               # npm frontend dependencies
               npmDeps = pkgs.fetchNpmDeps {
                 name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
-                src = builtins.path {
-                  path = self + "/web";
-                  name = "web-npm-deps";
-                };
+                src = ./web;
                 hash = "sha256-AfRizRYTwuQlzJdqFwdcStGDw1IBaceMD0tLi2WSK0E=";
               };
 

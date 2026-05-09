@@ -645,64 +645,63 @@
             check.enable = false; # skip in nix flake check (sandbox limitation)
             settings = {
               hooks = {
-                nix-fmt = {
+                treefmt = {
                   enable = true;
-                  name = "nix-fmt";
                   entry = "${config.treefmt.build.wrapper}/bin/treefmt";
-                  language = "system";
                   pass_filenames = false;
-                  stages = [ "pre-commit" ];
                 };
               };
             };
           };
 
-          devShells.default = pkgs.mkShell {
+          devShells.default = config.pre-commit.devShell.overrideAttrs (old: {
             name = "pokecon-devshell";
 
-            packages =
-              with pkgs;
-              [
-                rustToolchain
-                cargo-expand
-                cargo-flamegraph
-                rust-analyzer
-                clippy
-                rustfmt
+            nativeBuildInputs =
+              old.nativeBuildInputs
+              ++ (
+                with pkgs;
+                [
+                  rustToolchain
+                  cargo-expand
+                  cargo-flamegraph
+                  rust-analyzer
+                  clippy
+                  rustfmt
 
-                pkgs.python314
-              ]
-              ++ pythonPkgs
-              ++ [
+                  python314
+                ]
+                ++ pythonPkgs
+                ++ [
 
-                maturin
+                  maturin
 
-                nodejs_20
-                pnpm
-                yarn
+                  nodejs_20
+                  pnpm
+                  yarn
 
-                pkg-config
-                openssl
-                sqlite
-                curl
-                wget
-                git
-                just
+                  pkg-config
+                  openssl
+                  sqlite
+                  curl
+                  wget
+                  git
+                  just
 
-                webkitgtk_4_1
-                gtk3
-                gst_all_1.gstreamer
-                gst_all_1.gst-plugins-base
-                gst_all_1.gst-plugins-good
-                gst_all_1.gst-plugins-bad
-                gst_all_1.gst-plugins-ugly
-                gst_all_1.gst-libav
+                  webkitgtk_4_1
+                  gtk3
+                  gst_all_1.gstreamer
+                  gst_all_1.gst-plugins-base
+                  gst_all_1.gst-plugins-good
+                  gst_all_1.gst-plugins-bad
+                  gst_all_1.gst-plugins-ugly
+                  gst_all_1.gst-libav
 
-                cargo-tauri
+                  cargo-tauri
 
-                nix-tree
-              ]
-              ++ config.pre-commit.enabledPackages;
+                  nix-tree
+                ]
+              );
 
             shellHook = ''
               export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
@@ -730,7 +729,7 @@
               echo "  tauri-dev         - run Tauri dev server"
               echo "  check             - full CI gate"
             '';
-          };
+          });
         };
     };
 }

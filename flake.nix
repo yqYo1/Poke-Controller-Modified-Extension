@@ -286,6 +286,9 @@
 
                 # Wrapper script for runtime behavior (cache, UI mode detection)
                 pokecon-launcher = pkgs.writeShellScriptBin "pokecon" ''
+                  # Set GSettings backend to memory to avoid D-Bus dependency
+                  export GSETTINGS_BACKEND=memory
+
                   # Detect GUI environment
                   UI_MODE="web"
                   if [ -n "''${DISPLAY:-}" ] || [ -n "''${WAYLAND_DISPLAY:-}" ]; then

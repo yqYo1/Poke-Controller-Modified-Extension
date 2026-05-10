@@ -157,12 +157,14 @@ result-*
 !/src-tauri/capabilities/
 /src-tauri/capabilities/*
 !/src-tauri/capabilities/default.json
+!/src-tauri/icons/
 
 # Web frontend
 !/web/
 /web/*
 !/web/index.html
 !/web/package.json
+!/web/vite.config.ts
 !/web/src/
 /web/src/*
 !/web/src/*.js

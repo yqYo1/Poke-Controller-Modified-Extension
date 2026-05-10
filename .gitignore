@@ -164,7 +164,8 @@ result-*
 /web/*
 !/web/index.html
 !/web/package.json
-!/web/vite.config.ts
+!/web/package-lock.json
+!/web/vite.config.js
 !/web/src/
 /web/src/*
 !/web/src/*.js

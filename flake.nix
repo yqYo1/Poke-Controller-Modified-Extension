@@ -328,6 +328,7 @@
                   # because WebKitGTK's compositing mode is initialized before application code runs.
                   if [ -n "''${POKECON_DISABLE_COMPOSITING:-}" ]; then
                     export WEBKIT_DISABLE_COMPOSITING_MODE=1
+                    export WEBKIT_DISABLE_DMABUF_RENDERER=1
                   fi
 
                   # Detect GUI environment for default mode

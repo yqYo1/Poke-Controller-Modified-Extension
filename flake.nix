@@ -321,8 +321,11 @@
                   # Force X11 backend for WebKitGTK EGL compatibility
                   export GDK_BACKEND=x11
 
-                  # Disable hardware compositing to avoid EGL issues on Intel GPU
-                  export WEBKIT_DISABLE_COMPOSITING_MODE=1
+                  # Allow user to override WebKitGTK compositing mode via environment
+                  # Default: enabled (hardware acceleration). Set WEBKIT_DISABLE_COMPOSITING_MODE=1 to disable.
+                  if [ -n "''${WEBKIT_DISABLE_COMPOSITING_MODE:-}" ]; then
+                    export WEBKIT_DISABLE_COMPOSITING_MODE
+                  fi
 
                   # Detect GUI environment for default mode
                   UI_MODE="web"

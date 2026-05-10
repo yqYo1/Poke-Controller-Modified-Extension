@@ -327,9 +327,9 @@
                       --web-dir "${self}/web/dist" \
                       "$@"
                   else
-                    # Default to web mode for nix run (tauri mode requires clean process)
+                    # Default: auto-detect based on GUI environment
                     exec "${pokecon-tauri}/bin/pokecon-tauri" \
-                      --ui "web" \
+                      --ui "$UI_MODE" \
                       --web-dir "${self}/web/dist" \
                       "$@"
                   fi

@@ -185,7 +185,16 @@
               src = builtins.path {
                 path = self;
                 name = "pokecon-source";
-                filter = path: type: true;
+                filter =
+                  path: type:
+                  pkgs.lib.hasInfix "/src-tauri/icons/" (toString path)
+                  || pkgs.lib.hasInfix "/web/" (toString path)
+                  || pkgs.lib.hasInfix "/Cargo" (toString path)
+                  || pkgs.lib.hasInfix "/src/" (toString path)
+                  || pkgs.lib.hasInfix "/package" (toString path)
+                  || pkgs.lib.hasInfix "/vite" (toString path)
+                  || pkgs.lib.hasInfix "/index.html" (toString path)
+                  || type == "directory";
               };
 
               cargoLock = {

@@ -322,9 +322,9 @@
                   export GDK_BACKEND=x11
 
                   # Allow user to override WebKitGTK compositing mode via environment
-                  # Default: enabled (hardware acceleration). Set WEBKIT_DISABLE_COMPOSITING_MODE=1 to disable.
-                  if [ -n "''${WEBKIT_DISABLE_COMPOSITING_MODE:-}" ]; then
-                    export WEBKIT_DISABLE_COMPOSITING_MODE
+                  # Default: enabled (hardware acceleration). Set POKECON_DISABLE_COMPOSITING=1 to disable.
+                  if [ -n "''${POKECON_DISABLE_COMPOSITING:-}" ]; then
+                    export WEBKIT_DISABLE_COMPOSITING_MODE=1
                   fi
 
                   # Detect GUI environment for default mode

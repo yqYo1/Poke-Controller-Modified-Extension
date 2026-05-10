@@ -189,6 +189,7 @@
                 ".html"
                 ".css"
                 ".js"
+                ".jsx"
                 ".ts"
                 ".tsx"
                 ".png"

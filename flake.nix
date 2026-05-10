@@ -297,6 +297,9 @@
                 runHook preInstall
                 mkdir -p $out/bin
                 cp src-tauri/target/release/pokecon-tauri $out/bin/
+                # Copy built web assets for runtime serving
+                mkdir -p $out/web/dist
+                cp -r web/dist/* $out/web/dist/ 2>/dev/null || true
                 runHook postInstall
               '';
 
@@ -315,22 +318,34 @@
                   # Set GSettings backend to memory to avoid D-Bus dependency
                   export GSETTINGS_BACKEND=memory
 
-                  # Detect GUI environment
+                  # Detect GUI environment for default mode
                   UI_MODE="web"
                   if [ -n "''${DISPLAY:-}" ] || [ -n "''${WAYLAND_DISPLAY:-}" ]; then
                     UI_MODE="tauri"
                   fi
 
-                  echo "=== Launching in $UI_MODE mode ==="
+                  # Check if user explicitly specified --ui
                   if [[ "$*" == *"--ui"* ]]; then
+                    # User specified mode explicitly — parse it for logging
+                    USER_MODE="$UI_MODE"
+                    for arg in "$@"; do
+                      if [ "$arg" = "--ui" ]; then
+                        NEXT_IS_UI=1
+                      elif [ "''${NEXT_IS_UI:-}" = "1" ]; then
+                        USER_MODE="$arg"
+                        NEXT_IS_UI=0
+                      fi
+                    done
+                    echo "=== Launching in $USER_MODE mode (explicit) ==="
                     exec "${pokecon-tauri}/bin/pokecon-tauri" \
-                      --web-dir "${self}/web/dist" \
+                      --web-dir "${pokecon-tauri}/web/dist" \
                       "$@"
                   else
                     # Default: auto-detect based on GUI environment
+                    echo "=== Launching in $UI_MODE mode (auto-detected) ==="
                     exec "${pokecon-tauri}/bin/pokecon-tauri" \
                       --ui "$UI_MODE" \
-                      --web-dir "${self}/web/dist" \
+                      --web-dir "${pokecon-tauri}/web/dist" \
                       "$@"
                   fi
                 '';

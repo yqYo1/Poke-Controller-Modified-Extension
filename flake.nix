@@ -264,12 +264,7 @@
                 librsvg
                 dbus
                 libx11
-                libxcursor
-                libxrandr
-                libxi
-                gst_all_1.gstreamer
-                gst_all_1.gst-plugins-base
-                gst_all_1.gst-plugins-good
+                libcanberra-gtk3
               ];
 
               # Skip tauri-build runtime validation in sandbox

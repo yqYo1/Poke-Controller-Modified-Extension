@@ -27,10 +27,6 @@ struct Args {
     #[arg(long = "ui", default_value = "tauri")]
     ui: String,
 
-    /// Disable WebKitGTK hardware compositing (software rendering fallback)
-    #[arg(long = "disable-compositing")]
-    disable_compositing: bool,
-
     /// Port for HTTP server (used in both web and tauri modes)
     #[arg(long, default_value = "8020")]
     port: u16,
@@ -969,11 +965,6 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
 
 fn main() {
     let args = Args::parse();
-
-    // Apply --disable-compositing flag to WebKitGTK environment
-    if args.disable_compositing {
-        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-    }
 
     // Initialize tracing
     tracing_subscriber::fmt()

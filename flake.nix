@@ -321,9 +321,17 @@
                   # Force X11 backend for WebKitGTK EGL compatibility
                   export GDK_BACKEND=x11
 
+                  # Detect --disable-compositing in arguments and apply before launch
+                  HAS_DISABLE_COMPOSITING=0
+                  for arg in "$@"; do
+                    if [ "$arg" = "--disable-compositing" ]; then
+                      HAS_DISABLE_COMPOSITING=1
+                    fi
+                  done
+
                   # Allow user to override WebKitGTK compositing mode via environment
                   # Default: enabled (hardware acceleration). Set POKECON_DISABLE_COMPOSITING=1 to disable.
-                  if [ -n "''${POKECON_DISABLE_COMPOSITING:-}" ]; then
+                  if [ -n "''${POKECON_DISABLE_COMPOSITING:-}" ] || [ "$HAS_DISABLE_COMPOSITING" = "1" ]; then
                     export WEBKIT_DISABLE_COMPOSITING_MODE=1
                   fi
 

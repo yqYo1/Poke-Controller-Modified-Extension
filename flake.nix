@@ -182,22 +182,39 @@
             pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
               pname = "pokecon-tauri";
               version = "0.1.0";
-              src = pkgs.lib.sources.sourceFilesBySuffices self [
-                ".rs"
-                ".toml"
-                ".json"
-                ".html"
-                ".css"
-                ".js"
-                ".jsx"
-                ".ts"
-                ".tsx"
-                ".png"
-                ".lock"
-                ".md"
-                ".py"
-                ".nix"
-              ];
+              src = builtins.path {
+                path = self.outPath;
+                name = "pokecon-source";
+                filter =
+                  path: type:
+                  let
+                    p = toString path;
+                  in
+                  type == "directory"
+                  || pkgs.lib.hasSuffix ".rs" p
+                  || pkgs.lib.hasSuffix ".toml" p
+                  || pkgs.lib.hasSuffix ".json" p
+                  || pkgs.lib.hasSuffix ".html" p
+                  || pkgs.lib.hasSuffix ".css" p
+                  || pkgs.lib.hasSuffix ".js" p
+                  || pkgs.lib.hasSuffix ".jsx" p
+                  || pkgs.lib.hasSuffix ".ts" p
+                  || pkgs.lib.hasSuffix ".tsx" p
+                  || pkgs.lib.hasSuffix ".png" p
+                  || pkgs.lib.hasSuffix ".lock" p
+                  || pkgs.lib.hasSuffix ".md" p
+                  || pkgs.lib.hasSuffix ".py" p
+                  || pkgs.lib.hasSuffix ".nix" p
+                  || pkgs.lib.hasSuffix ".conf" p
+                  || pkgs.lib.hasSuffix ".yml" p
+                  || pkgs.lib.hasSuffix ".yaml" p
+                  || pkgs.lib.hasSuffix ".txt" p
+                  || pkgs.lib.hasSuffix ".svg" p
+                  || pkgs.lib.hasSuffix ".woff" p
+                  || pkgs.lib.hasSuffix ".woff2" p
+                  || pkgs.lib.hasSuffix ".ttf" p
+                  || pkgs.lib.hasSuffix ".eot" p;
+              };
 
               cargoLock = {
                 lockFile = self + "/src-tauri/Cargo.lock";

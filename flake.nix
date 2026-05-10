@@ -182,7 +182,11 @@
             pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
               pname = "pokecon-tauri";
               version = "0.1.0";
-              src = self;
+              src = builtins.path {
+                path = self;
+                name = "pokecon-source";
+                filter = path: type: true;
+              };
 
               cargoLock = {
                 lockFile = self + "/src-tauri/Cargo.lock";

@@ -194,6 +194,10 @@
                   || pkgs.lib.hasInfix "/package" (toString path)
                   || pkgs.lib.hasInfix "/vite" (toString path)
                   || pkgs.lib.hasInfix "/index.html" (toString path)
+                  || pkgs.lib.hasInfix "/benches/" (toString path)
+                  || pkgs.lib.hasInfix "/pyproject.toml" (toString path)
+                  || pkgs.lib.hasInfix "/README" (toString path)
+                  || pkgs.lib.hasInfix "/LICENSE" (toString path)
                   || type == "directory";
               };
 

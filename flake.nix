@@ -182,24 +182,21 @@
             pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
               pname = "pokecon-tauri";
               version = "0.1.0";
-              src = builtins.path {
-                path = self;
-                name = "pokecon-source";
-                filter =
-                  path: type:
-                  pkgs.lib.hasInfix "/src-tauri/icons/" (toString path)
-                  || pkgs.lib.hasInfix "/web/" (toString path)
-                  || pkgs.lib.hasInfix "/Cargo" (toString path)
-                  || pkgs.lib.hasInfix "/src/" (toString path)
-                  || pkgs.lib.hasInfix "/package" (toString path)
-                  || pkgs.lib.hasInfix "/vite" (toString path)
-                  || pkgs.lib.hasInfix "/index.html" (toString path)
-                  || pkgs.lib.hasInfix "/benches/" (toString path)
-                  || pkgs.lib.hasInfix "/pyproject.toml" (toString path)
-                  || pkgs.lib.hasInfix "/README" (toString path)
-                  || pkgs.lib.hasInfix "/LICENSE" (toString path)
-                  || type == "directory";
-              };
+              src = pkgs.lib.sources.sourceFilesBySuffices self [
+                ".rs"
+                ".toml"
+                ".json"
+                ".html"
+                ".css"
+                ".js"
+                ".ts"
+                ".tsx"
+                ".png"
+                ".lock"
+                ".md"
+                ".py"
+                ".nix"
+              ];
 
               cargoLock = {
                 lockFile = self + "/src-tauri/Cargo.lock";

@@ -321,6 +321,9 @@
                   # Force X11 backend for WebKitGTK EGL compatibility
                   export GDK_BACKEND=x11
 
+                  # Disable hardware compositing to avoid EGL issues on Intel GPU
+                  export WEBKIT_DISABLE_COMPOSITING_MODE=1
+
                   # Detect GUI environment for default mode
                   UI_MODE="web"
                   if [ -n "''${DISPLAY:-}" ] || [ -n "''${WAYLAND_DISPLAY:-}" ]; then

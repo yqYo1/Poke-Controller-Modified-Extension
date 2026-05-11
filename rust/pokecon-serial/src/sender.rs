@@ -1,7 +1,7 @@
 use std::io;
 use thiserror::Error;
 use tokio::io::{AsyncWriteExt, BufWriter};
-use tokio_serial::{SerialPortBuilderExt, SerialStream};
+use tokio_serial::{SerialPort, SerialPortBuilderExt, SerialStream};
 use tracing::{debug, error, info};
 
 #[derive(Error, Debug)]
@@ -26,12 +26,16 @@ pub enum SerialError {
 
     #[error("Unsupported OS")]
     UnsupportedOS,
+
+    #[error("Failed to set baudrate: {0}")]
+    BaudrateError(String),
 }
 
 pub struct Sender {
     port: Option<BufWriter<SerialStream>>,
     is_show_serial: bool,
     before: Option<String>,
+    data_format: String,
 }
 
 impl Sender {
@@ -40,6 +44,7 @@ impl Sender {
             port: None,
             is_show_serial,
             before: None,
+            data_format: "Default".to_string(),
         }
     }
 
@@ -96,6 +101,27 @@ impl Sender {
 
     pub fn is_opened(&self) -> bool {
         self.port.is_some()
+    }
+
+    /// Set baudrate on the open serial port.
+    pub async fn set_baudrate(&mut self, baudrate: u32) -> Result<(), SerialError> {
+        let port = self.port.as_mut().ok_or(SerialError::NotOpen)?;
+        let serial = port.get_mut();
+        serial
+            .set_baud_rate(baudrate)
+            .map_err(|e| SerialError::BaudrateError(e.to_string()))?;
+        info!("Serial baudrate changed to {}", baudrate);
+        Ok(())
+    }
+
+    /// Set the data format name (e.g. "Default", "Qingpi", "3DS Controller").
+    pub fn set_data_format(&mut self, format: &str) {
+        self.data_format = format.to_string();
+    }
+
+    /// Get the current data format name.
+    pub fn get_data_format(&self) -> &str {
+        &self.data_format
     }
 
     pub async fn write_row(&mut self, row: &str, is_show: bool) -> Result<(), SerialError> {

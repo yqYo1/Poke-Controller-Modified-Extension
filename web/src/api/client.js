@@ -32,6 +32,12 @@ export class APIClient {
     });
   }
   closeSerial() { return this._fetch('/api/serial/close', { method: 'POST' }); }
+  updateSerialConfig(config) {
+    return this._fetch('/api/serial/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
   writeSerial(data) {
     return this._fetch('/api/serial/write', {
       method: 'POST',

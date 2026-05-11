@@ -4,6 +4,7 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api 
   const [ports, setPorts] = useState([]);
   const [selectedPort, setSelectedPort] = useState('');
   const [baudrate, setBaudrate] = useState(9600);
+  const [dataFormat, setDataFormat] = useState('Default');
   const [customPort, setCustomPort] = useState('');
 
   // Camera state
@@ -93,6 +94,24 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api 
     onSerialOpen({ port_name: portName, baudrate });
   };
 
+  const handleBaudrateChange = async (newBaudrate) => {
+    setBaudrate(newBaudrate);
+    try {
+      await api.updateSerialConfig({ baudrate: newBaudrate });
+    } catch (err) {
+      console.error('Failed to update baudrate:', err);
+    }
+  };
+
+  const handleDataFormatChange = async (newFormat) => {
+    setDataFormat(newFormat);
+    try {
+      await api.updateSerialConfig({ data_format: newFormat });
+    } catch (err) {
+      console.error('Failed to update data format:', err);
+    }
+  };
+
   return (
     <div className="settings">
       <section className="panel">
@@ -129,14 +148,25 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api 
           <label>ボーレート</label>
           <select
             value={baudrate}
-            onChange={(e) => setBaudrate(Number(e.target.value))}
-            disabled={serialOpen}
+            onChange={(e) => handleBaudrateChange(Number(e.target.value))}
           >
             <option value={9600}>9600</option>
             <option value={19200}>19200</option>
             <option value={38400}>38400</option>
             <option value={57600}>57600</option>
             <option value={115200}>115200</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>データフォーマット</label>
+          <select
+            value={dataFormat}
+            onChange={(e) => handleDataFormatChange(e.target.value)}
+          >
+            <option value="Default">Default</option>
+            <option value="Qingpi">Qingpi</option>
+            <option value="3DS Controller">3DS Controller</option>
           </select>
         </div>
 

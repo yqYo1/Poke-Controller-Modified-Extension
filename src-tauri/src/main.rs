@@ -15,7 +15,7 @@ use pokecon_core::command_manager::CommandManager;
 use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, MockCameraBackend, PixelFormat};
 use pokecon_events::EventBus;
 use pokecon_serial::SendFormat;
-use pokecon_serial::keypress::KeyPress;
+use pokecon_serial::keypress::{KeyPress, SerialFormat};
 use pokecon_serial::keys::{Button, Direction, GamepadInput, Stick, Touchscreen};
 use pokecon_serial::sender::Sender;
 
@@ -827,6 +827,54 @@ async fn serial_write(
     }
 }
 
+/// POST /api/serial/config — set baudrate and data format
+async fn serial_config(
+    State(state): State<AppState>,
+    Json(body): Json<SerialConfigRequest>,
+) -> Json<serde_json::Value> {
+    // Separate scopes to avoid holding locks simultaneously
+    if let Some(baudrate) = body.baudrate {
+        let mut sender = state.serial.lock().await;
+        if sender.is_opened() {
+            if let Err(e) = sender.set_baudrate(baudrate).await {
+                return Json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("Failed to set baudrate: {}", e)
+                }));
+            }
+        }
+    }
+
+    if let Some(ref format_str) = body.data_format {
+        let format = match format_str.as_str() {
+            "Default" => SerialFormat::Default,
+            "Qingpi" => SerialFormat::Qingpi,
+            "3DS Controller" => SerialFormat::_3dsController,
+            _ => {
+                return Json(serde_json::json!({
+                    "status": "error",
+                    "message": format!("Invalid data format: {}", format_str)
+                }));
+            }
+        };
+        let mut kp = state.keypress.lock().await;
+        kp.set_serial_format(format);
+        let mut sender = state.serial.lock().await;
+        sender.set_data_format(format_str);
+    }
+
+    Json(serde_json::json!({
+        "status": "ok",
+        "message": "Serial config updated"
+    }))
+}
+
+#[derive(Deserialize)]
+struct SerialConfigRequest {
+    baudrate: Option<u32>,
+    data_format: Option<String>,
+}
+
 /// Get serial connection status.
 async fn serial_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let sender = state.serial.lock().await;
@@ -999,6 +1047,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/serial/open", post(serial_open))
         .route("/api/serial/close", post(serial_close))
         .route("/api/serial/write", post(serial_write))
+        .route("/api/serial/config", post(serial_config))
         .route("/api/serial/status", get(serial_status))
         // Command management endpoints
         .route("/api/commands", get(commands_list))

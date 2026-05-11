@@ -33,3 +33,4 @@ pokecon-core = { path = "../rust/pokecon-core" }
 pokecon-events = { path = "../rust/pokecon-events" }
 pokecon-serial = { path = "../rust/pokecon-serial" }
 pokecon-cv = { path = "../rust/pokecon-cv" }
+pokecon-notify = { path = "../rust/pokecon-notify" }

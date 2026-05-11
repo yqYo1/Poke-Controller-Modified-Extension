@@ -15,6 +15,10 @@ use pokecon_core::command_manager::CommandManager;
 use pokecon_core::profile::ProfileManager;
 use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, MockCameraBackend, PixelFormat};
 use pokecon_events::EventBus;
+use pokecon_notify::discord::DiscordNotifier;
+use pokecon_notify::line::LineNotifier;
+use pokecon_notify::windows::WindowsNotifier;
+use pokecon_notify::{Notification, Notifier};
 use pokecon_serial::SendFormat;
 use pokecon_serial::keypress::{KeyPress, SerialFormat};
 use pokecon_serial::keys::{Button, Direction, GamepadInput, Stick, Touchscreen};
@@ -64,6 +68,8 @@ struct AppState {
     keyboard_enabled: Arc<Mutex<bool>>,
     /// Profile manager
     profile_manager: Arc<Mutex<ProfileManager>>,
+    /// Notification configuration
+    notification_config: Arc<Mutex<NotificationConfig>>,
 }
 
 // ── Helper: Parse a button name string into a Button bitflag ────────────────────
@@ -160,7 +166,6 @@ fn format_default_row(fmt: &SendFormat, l_stick_changed: bool, r_stick_changed: 
 
     result
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // Controller Endpoints
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1219,6 +1224,144 @@ async fn profile_set(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// Notification Endpoints
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Notification configuration stored in shared state.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct NotificationConfig {
+    /// Enable Windows desktop toast notifications
+    windows_enabled: bool,
+    /// Enable LINE messaging notifications
+    line_enabled: bool,
+    /// Enable Discord webhook notifications
+    discord_enabled: bool,
+    /// Discord webhook URL
+    #[serde(default)]
+    discord_webhook_url: String,
+    /// LINE channel access token
+    #[serde(default)]
+    line_access_token: String,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            windows_enabled: true,
+            line_enabled: false,
+            discord_enabled: false,
+            discord_webhook_url: String::new(),
+            line_access_token: String::new(),
+        }
+    }
+}
+
+/// GET /api/notifications/config — get current notification settings
+async fn notifications_get_config(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let cfg = state.notification_config.lock().await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "windows_enabled": cfg.windows_enabled,
+        "line_enabled": cfg.line_enabled,
+        "discord_enabled": cfg.discord_enabled,
+        "discord_webhook_url": cfg.discord_webhook_url,
+        "line_access_token": cfg.line_access_token,
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct NotificationConfigRequest {
+    windows_enabled: Option<bool>,
+    line_enabled: Option<bool>,
+    discord_enabled: Option<bool>,
+    discord_webhook_url: Option<String>,
+    line_access_token: Option<String>,
+}
+
+/// POST /api/notifications/config — update notification settings
+async fn notifications_set_config(
+    State(state): State<AppState>,
+    Json(body): Json<NotificationConfigRequest>,
+) -> Json<serde_json::Value> {
+    let mut cfg = state.notification_config.lock().await;
+    if let Some(v) = body.windows_enabled {
+        cfg.windows_enabled = v;
+    }
+    if let Some(v) = body.line_enabled {
+        cfg.line_enabled = v;
+    }
+    if let Some(v) = body.discord_enabled {
+        cfg.discord_enabled = v;
+    }
+    if let Some(v) = body.discord_webhook_url {
+        cfg.discord_webhook_url = v;
+    }
+    if let Some(v) = body.line_access_token {
+        cfg.line_access_token = v;
+    }
+    tracing::info!("Notification config updated");
+    Json(serde_json::json!({
+        "status": "ok",
+        "message": "Notification config updated",
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct SendNotificationRequest {
+    /// Notification message text
+    message: String,
+    /// Optional title
+    title: Option<String>,
+}
+
+/// POST /api/notifications/send — send a test notification using current settings
+async fn notifications_send(
+    State(state): State<AppState>,
+    Json(body): Json<SendNotificationRequest>,
+) -> Json<serde_json::Value> {
+    let cfg = state.notification_config.lock().await;
+
+    let notification = Notification::new(&body.message)
+        .with_title(body.title.unwrap_or_else(|| "Poke-Controller".to_string()));
+
+    let mut results = Vec::new();
+
+    // Windows desktop notification
+    if cfg.windows_enabled {
+        let notifier = WindowsNotifier::new("Poke-Controller");
+        match notifier.send(&notification).await {
+            Ok(_) => results.push(serde_json::json!({"channel": "windows", "status": "sent"})),
+            Err(e) => results.push(serde_json::json!({"channel": "windows", "status": "error", "error": e.to_string()})),
+        }
+    }
+
+    // LINE notification
+    if cfg.line_enabled && !cfg.line_access_token.is_empty() {
+        let notifier = LineNotifier::new(&cfg.line_access_token);
+        match notifier.send(&notification).await {
+            Ok(_) => results.push(serde_json::json!({"channel": "line", "status": "sent"})),
+            Err(e) => results.push(
+                serde_json::json!({"channel": "line", "status": "error", "error": e.to_string()}),
+            ),
+        }
+    }
+
+    // Discord notification
+    if cfg.discord_enabled && !cfg.discord_webhook_url.is_empty() {
+        let notifier = DiscordNotifier::new(&cfg.discord_webhook_url);
+        match notifier.send(&notification).await {
+            Ok(_) => results.push(serde_json::json!({"channel": "discord", "status": "sent"})),
+            Err(e) => results.push(serde_json::json!({"channel": "discord", "status": "error", "error": e.to_string()})),
+        }
+    }
+
+    Json(serde_json::json!({
+        "status": "ok",
+        "results": results,
+    }))
+}
+
 // Server Setup
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1270,6 +1413,12 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/commands/reload", post(commands_reload))
         // Profile management endpoints
         .route("/api/profile", get(profile_list).post(profile_set))
+        // Notification endpoints
+        .route(
+            "/api/notifications/config",
+            get(notifications_get_config).post(notifications_set_config),
+        )
+        .route("/api/notifications/send", post(notifications_send))
         .fallback_service(
             tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true),
         )
@@ -1315,6 +1464,7 @@ fn main() {
         gamepad_type: Arc::new(Mutex::new("ProController".to_string())),
         keyboard_enabled: Arc::new(Mutex::new(false)),
         profile_manager: Arc::new(Mutex::new(pm)),
+        notification_config: Arc::new(Mutex::new(NotificationConfig::default())),
     };
 
     // Start the HTTP server in both modes — Tauri embeds it internally

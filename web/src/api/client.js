@@ -130,6 +130,21 @@ export class APIClient {
       body: JSON.stringify({ name }'),
     });
   }
+  // Notification settings (Phase 5)
+  getNotificationConfig() { return this._fetch('/api/notifications/config'); }
+  updateNotificationConfig(config) {
+    return this._fetch('/api/notifications/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+  sendTestNotification({ message, title }) {
+    return this._fetch('/api/notifications/send', {
+      method: 'POST',
+      body: JSON.stringify({ message, title }),
+    });
+  }
+
 }
 
 export class WebSocketClient {

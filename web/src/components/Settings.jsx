@@ -15,8 +15,32 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api,
   const [cameraInfo, setCameraInfo] = useState(null);
   const [gamepadType, setGamepadType] = useState('ProController');
   const [keyboardEnabled, setKeyboardEnabled] = useState(false);
+  const [notifyWindows, setNotifyWindows] = useState(true);
+  const [notifyLine, setNotifyLine] = useState(false);
+  const [notifyDiscord, setNotifyDiscord] = useState(false);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
+  const [lineAccessToken, setLineAccessToken] = useState("");
+  const [notifyTestResult, setNotifyTestResult] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem("pokecon-theme") || "dark");
+  const [windowWidth, setWindowWidth] = useState(() => parseInt(localStorage.getItem("pokecon-win-width") || "1280", 10));
+  const [windowHeight, setWindowHeight] = useState(() => parseInt(localStorage.getItem("pokecon-win-height") || "800", 10));
+  const [btnPosition, setBtnPosition] = useState(() => localStorage.getItem("pokecon-btn-position") || "bottom");
 
-  useEffect(() => { loadPorts(); loadCameras(); loadControllerSettings(); }, []);
+  useEffect(() => { loadPorts(); loadCameras(); loadControllerSettings(); loadNotificationConfig(); }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("pokecon-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("pokecon-win-width", String(windowWidth));
+    localStorage.setItem("pokecon-win-height", String(windowHeight));
+  }, [windowWidth, windowHeight]);
+
+  useEffect(() => {
+    localStorage.setItem("pokecon-btn-position", btnPosition);
+  }, [btnPosition]);
 
   const loadPorts = async () => {
     try { const d = await api.getSerialPorts(); setPorts(d.ports || []); }
@@ -41,6 +65,57 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api,
     const nv = !keyboardEnabled;
     setKeyboardEnabled(nv);
     try { await api.setKeyboardEnabled(nv); } catch (e) { console.error(e); setKeyboardEnabled(!nv); }
+  };
+
+  const loadNotificationConfig = async () => {
+    try {
+      const d = await api.getNotificationConfig();
+      if (d.windows_enabled !== undefined) setNotifyWindows(d.windows_enabled);
+      if (d.line_enabled !== undefined) setNotifyLine(d.line_enabled);
+      if (d.discord_enabled !== undefined) setNotifyDiscord(d.discord_enabled);
+      if (d.discord_webhook_url !== undefined) setDiscordWebhookUrl(d.discord_webhook_url);
+      if (d.line_access_token !== undefined) setLineAccessToken(d.line_access_token);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleNotifyConfigChange = async (update) => {
+    if (update.windows_enabled !== undefined) setNotifyWindows(update.windows_enabled);
+    if (update.line_enabled !== undefined) setNotifyLine(update.line_enabled);
+    if (update.discord_enabled !== undefined) setNotifyDiscord(update.discord_enabled);
+    if (update.discord_webhook_url !== undefined) setDiscordWebhookUrl(update.discord_webhook_url);
+    if (update.line_access_token !== undefined) setLineAccessToken(update.line_access_token);
+    try { await api.updateNotificationConfig(update); } catch (e) { console.error(e); }
+  };
+
+  const handleSendTestNotification = async () => {
+    setNotifyTestResult(null);
+    try {
+      const d = await api.sendTestNotification({
+        message: "This is a test notification from Poke-Controller!",
+        title: "Test Notification",
+      });
+      setNotifyTestResult(d);
+    } catch (e) {
+      setNotifyTestResult({ status: "error", message: e.message });
+    }
+  };
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+  };
+
+  const handleWindowSizePreset = (preset) => {
+    switch (preset) {
+      case "small": setWindowWidth(800); setWindowHeight(600); break;
+      case "medium": setWindowWidth(1024); setWindowHeight(768); break;
+      case "large": setWindowWidth(1280); setWindowHeight(900); break;
+      case "xlarge": setWindowWidth(1920); setWindowHeight(1080); break;
+      default: break;
+    }
+  };
+
+  const handleBtnPositionChange = (pos) => {
+    setBtnPosition(pos);
   };
 
   const loadCameras = async () => {
@@ -165,6 +240,79 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api,
       </section>
 
       <section className="panel">
+        <div className="panel-header"><h2>Notification Settings</h2></div>
+        <div className="form-group">
+          <label><input type="checkbox" checked={notifyWindows} onChange={e => handleNotifyConfigChange({ windows_enabled: e.target.checked })} style={{marginRight:"8px"}} />Windows Desktop Notification</label>
+        </div>
+        <div className="form-group">
+          <label><input type="checkbox" checked={notifyLine} onChange={e => handleNotifyConfigChange({ line_enabled: e.target.checked })} style={{marginRight:"8px"}} />LINE Notification</label>
+        </div>
+        {notifyLine && <div className="form-group">
+          <label>LINE Access Token</label>
+          <input type="password" value={lineAccessToken} onChange={e => setLineAccessToken(e.target.value)} onBlur={e => handleNotifyConfigChange({ line_access_token: e.target.value })} placeholder="Enter LINE channel access token" />
+        </div>}
+        <div className="form-group">
+          <label><input type="checkbox" checked={notifyDiscord} onChange={e => handleNotifyConfigChange({ discord_enabled: e.target.checked })} style={{marginRight:"8px"}} />Discord Notification</label>
+        </div>
+        {notifyDiscord && <div className="form-group">
+          <label>Discord Webhook URL</label>
+          <input type="text" value={discordWebhookUrl} onChange={e => setDiscordWebhookUrl(e.target.value)} onBlur={e => handleNotifyConfigChange({ discord_webhook_url: e.target.value })} placeholder="https://discord.com/api/webhooks/..." />
+        </div>}
+        <div className="button-row">
+          <button className="btn btn-primary" onClick={handleSendTestNotification}>Send Test Notification</button>
+        </div>
+        {notifyTestResult && <div className="info-list" style={{marginTop:"8px"}}>
+          {notifyTestResult.results && notifyTestResult.results.map((r, i) => (
+            <div key={i} className="info-item">
+              <span className="info-label">{r.channel}</span>
+              <span className={"info-value " + (r.status === "sent" ? "text-success" : "text-error")}>{r.status === "sent" ? "\u2713 Sent" : "\u2717 " + (r.error || "Failed")}</span>
+            </div>
+          ))}
+          {notifyTestResult.status === "error" && <div className="info-item">
+            <span className="info-label">Error</span>
+            <span className="info-value text-error">{notifyTestResult.message}</span>
+          </div>}
+        </div>}
+      </section>
+
+            <section className="panel">
+        <div className="panel-header"><h2>Theme and Display</h2></div>
+        <div className="form-group">
+          <label>Theme</label>
+          <div className="theme-toggle">
+            <button className={"btn " + (theme === "dark" ? "btn-primary" : "btn-secondary")} onClick={() => handleThemeChange("dark")}>Dark</button>
+            <button className={"btn " + (theme === "light" ? "btn-primary" : "btn-secondary")} onClick={() => handleThemeChange("light")}>Light</button>
+          </div>
+        </div>
+        <div className="form-group">
+          <label>Window Size</label>
+          <div className="theme-toggle">
+            <button className="btn btn-secondary" onClick={() => handleWindowSizePreset("small")}>Small</button>
+            <button className="btn btn-secondary" onClick={() => handleWindowSizePreset("medium")}>Medium</button>
+            <button className="btn btn-secondary" onClick={() => handleWindowSizePreset("large")}>Large</button>
+            <button className="btn btn-secondary" onClick={() => handleWindowSizePreset("xlarge")}>X-Large</button>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group"><label>Width (px)</label><input type="number" value={windowWidth} onChange={e => setWindowWidth(Number(e.target.value))} min={640} max={3840} /></div>
+          <div className="form-group"><label>Height (px)</label><input type="number" value={windowHeight} onChange={e => setWindowHeight(Number(e.target.value))} min={480} max={2160} /></div>
+        </div>
+      </section>
+
+            <section className="panel">
+        <div className="panel-header"><h2>Button Position</h2></div>
+        <div className="form-group">
+          <label>Navigation Bar Position</label>
+          <div className="theme-toggle">
+            <button className={"btn " + (btnPosition === "bottom" ? "btn-primary" : "btn-secondary")} onClick={() => handleBtnPositionChange("bottom")}>Bottom</button>
+            <button className={"btn " + (btnPosition === "top" ? "btn-primary" : "btn-secondary")} onClick={() => handleBtnPositionChange("top")}>Top</button>
+            <button className={"btn " + (btnPosition === "left" ? "btn-primary" : "btn-secondary")} onClick={() => handleBtnPositionChange("left")}>Left</button>
+            <button className={"btn " + (btnPosition === "right" ? "btn-primary" : "btn-secondary")} onClick={() => handleBtnPositionChange("right")}>Right</button>
+          </div>
+        </div>
+      </section>
+
+            <section className="panel">
         <div className="panel-header"><h2>Info</h2></div>
         <div className="info-list">
           <div className="info-item"><span className="info-label">Version</span><span className="info-value">0.1.0</span></div>

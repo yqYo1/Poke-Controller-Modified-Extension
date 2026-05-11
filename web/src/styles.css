@@ -1044,3 +1044,54 @@ body {
 .form-row .form-group {
   flex: 1;
 }
+
+
+/* =========================================================================
+   Phase 5: UI/UX Enhancements
+   ========================================================================= */
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-hover: #e8e8e8;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --accent: #ff6b6b;
+  --accent-hover: #ff5252;
+  --success: #4caf50;
+  --warning: #ff9800;
+  --error: #f44336;
+  --info: #2196f3;
+  --border: #dddddd;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Theme toggle button group */
+.theme-toggle {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.theme-toggle .btn {
+  flex: 1;
+  min-width: 60px;
+  justify-content: center;
+}
+
+/* Text colors for notification results */
+.text-success {
+  color: var(--success);
+}
+
+.text-error {
+  color: var(--error);
+}
+
+/* Window size number inputs */
+.form-row .form-group input[type="number"] {
+  width: 100%;
+}

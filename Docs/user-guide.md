@@ -26,6 +26,22 @@ nix develop
 
 初回はRustツールチェインやPythonライブラリのダウンロードに時間がかかります。
 
+#### Linux（非NixOS）でのTauri実行
+
+Ubuntu等の非NixOS LinuxでTauriデスクトップUIを実行する場合、**nixGL**が必要です：
+
+```bash
+# nixGLのインストール
+nix-channel --add https://github.com/nix-community/nixGL/archive/main.tar.gz nixgl
+nix-channel --update
+nix-env -iA nixgl.auto.nixGLDefault
+
+# nixGL経由で起動
+nixGL nix run . -- --ui tauri
+```
+
+nixGLがない場合、`Could not create default EGL display: EGL_BAD_PARAMETER`等のGPUエラーが発生します。詳細は[トラブルシューティング](#5-トラブルシューティング)を参照。
+
 ### 方法 B: 手動インストール
 
 #### 必要環境
@@ -84,22 +100,28 @@ ls /dev/ttyUSB* /dev/ttyACM*
 
 ### 起動方法
 
-#### Tauri デスクトップアプリ
+#### Tauri デスクトップアプリ（デフォルト）
 
 ```bash
-nix run .#tauri-dev
+# 自動的にTauri UIが起動（GUI環境がある場合）
+nix run .
+
+# 明示的にTauriモードを指定
+nix run . -- --ui tauri
 ```
 
 ネイティブウィンドウが開きます。内部でHTTPサーバーも起動するため、ブラウザからも同じURLでアクセスできます。
 
-#### Web ブラウザ
+**非NixOS Linuxの場合はnixGLが必要：**
+```bash
+nixGL nix run . -- --ui tauri
+```
+
+#### Web ブラウザ（HTTPサーバーのみ）
 
 ```bash
-# バックエンドのみ起動
-nix run .#web-dev
-
-# 別ターミナルでフロントエンド
-cd web && npm install && npm run dev
+# バックエンドのみ起動（ブラウザで開く）
+nix run . -- --ui web
 ```
 
 ブラウザで `http://localhost:8020` を開きます。
@@ -187,6 +209,37 @@ curl http://127.0.0.1:8020/api/status
 # ファイアウォールを確認（Windows Defender等）
 # ポート8020が開いているか確認
 ```
+
+### Q: Linuxで `EGL_BAD_PARAMETER` エラーが出る
+
+非NixOS Linux（Ubuntu等）でTauri UIを起動した際、`Could not create default EGL display: EGL_BAD_PARAMETER`等のエラーが出る場合：
+
+**原因**: NixパッケージのOpenGLライブラリとホストのGPUドライバが不一致
+
+**解決策**: [nixGL](https://github.com/nix-community/nixGL)をインストールして経由で実行：
+
+```bash
+# nixGLインストール
+nix-channel --add https://github.com/nix-community/nixGL/archive/main.tar.gz nixgl
+nix-channel --update
+nix-env -iA nixgl.auto.nixGLDefault
+
+# nixGL経由で起動
+nixGL nix run . -- --ui tauri
+```
+
+Intel GPUの場合は `nixGLIntel`、NVIDIAの場合は `nixGLNvidia` を使用してください。
+
+### Q: ウィンドウが黒いまま表示されない（Linux）
+
+WebKitGTKのレンダリング問題が考えられます。以下の環境変数を試行：
+
+```bash
+# Compositing無効化
+POKECON_DISABLE_COMPOSITING=1 nixGL nix run . -- --ui tauri
+```
+
+これは `WEBKIT_DISABLE_COMPOSITING_MODE=1` と `WEBKIT_DISABLE_DMABUF_RENDERER=1` を設定します。
 
 ### Q: シリアルポートが見つからない
 

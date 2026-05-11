@@ -38,10 +38,23 @@ cd Poke-Controller-Modified-Extension
 # 2. Nix開発環境に入る（推奨）
 nix develop
 
-# 3. Web UIを起動
-nix run .#tauri-dev    # Tauriデスクトップアプリ
+# 3. アプリケーションを起動
+nix run .              # Tauriデスクトップアプリ（デフォルト）
 # または
-nix run .#web-dev      # ブラウザで開く
+nix run . -- --ui web  # ブラウザで開く
+```
+
+**非NixOS Linux（Ubuntu等）の場合:**
+Tauri UIを起動するには[nixGL](https://github.com/nix-community/nixGL)が必要です：
+
+```bash
+# nixGLのインストール
+nix-channel --add https://github.com/nix-community/nixGL/archive/main.tar.gz nixgl
+nix-channel --update
+nix-env -iA nixgl.auto.nixGLDefault
+
+# nixGL経由で起動
+nixGL nix run . -- --ui tauri
 ```
 
 ブラウザで `http://localhost:8020` を開くと、スマホ対応のWeb UIが表示されます。
@@ -85,7 +98,7 @@ nix run .#fmt
 
 | ドキュメント | 対象読者 | 内容 |
 |-------------|---------|------|
-| [Docs/user-guide.md](Docs/user-guide.md) | エンドユーザー | インストール、使い方、Web UI操作 |
+| [Docs/user-guide.md](Docs/user-guide.md) | エンドユーザー | インストール、使い方、Web UI操作、トラブルシューティング |
 | [Docs/script-guide.md](Docs/script-guide.md) | スクリプト開発者 | PythonCommand API、画像認識、サンプル |
 | [Docs/developer-guide.md](Docs/developer-guide.md) | 本体開発者 | アーキテクチャ、ビルド、Rust/Python連携 |
 | [Docs/api-reference.md](Docs/api-reference.md) | スクリプト開発者 | 全APIリファレンス |

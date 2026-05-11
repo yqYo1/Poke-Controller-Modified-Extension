@@ -134,8 +134,17 @@ nix run .#check
 # PyO3ビルド
 nix run .#maturin-develop
 
+# Tauri開発サーバー
+nix run .#tauri-dev
+
 # Tauriビルド
 nix run .#tauri-build
+
+# アプリケーション起動（デフォルト: Tauri）
+nix run .
+
+# Web UIのみ起動
+nix run . -- --ui web
 ```
 
 ### 手動ビルド
@@ -447,6 +456,7 @@ nix run .#fmt            # treefmt実行
 nix run .#maturin-develop # PyO3ビルド
 nix run .#tauri-dev      # Tauri開発サーバー
 nix run .#tauri-build    # Tauriビルド
+nix run .                # アプリケーション起動（デフォルト）
 ```
 
 ---

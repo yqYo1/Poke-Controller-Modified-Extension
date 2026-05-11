@@ -5,6 +5,7 @@ import Scripts from './components/Scripts.jsx';
 import Settings from './components/Settings.jsx';
 import NavBar from './components/NavBar.jsx';
 import StatusBar from './components/StatusBar.jsx';
+import ControllerWindow from './components/ControllerWindow.jsx';
 import { APIClient, WebSocketClient } from './api/client.js';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -20,6 +21,7 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [cameraFrame, setCameraFrame] = useState(null);
   const [flip, setFlip] = useState('none');
+  const [controllerWindowOpen, setControllerWindowOpen] = useState(false);
   const wsRef = useRef(null);
   const apiRef = useRef(new APIClient(API_BASE));
 
@@ -35,11 +37,11 @@ export default function App() {
 
     ws.onOpen = () => {
       setConnected(true);
-      addLog('WebSocket接続完了', 'success');
+      addLog('WebSocket connected', 'success');
     };
     ws.onClose = () => {
       setConnected(false);
-      addLog('WebSocket切断', 'warn');
+      addLog('WebSocket disconnected', 'warn');
     };
     ws.onMessage = (data) => {
       switch (data.type) {
@@ -48,14 +50,14 @@ export default function App() {
           break;
         case 'command.start':
           setActiveCommand(data.payload.name);
-          addLog(`コマンド開始: ${data.payload.name}`, 'success');
+          addLog(`Command started: ${data.payload.name}`, 'success');
           break;
         case 'command.stop':
           setActiveCommand(null);
-          addLog('コマンド停止', 'info');
+          addLog('Command stopped', 'info');
           break;
         case 'command.error':
-          addLog(`エラー: ${data.payload.message}`, 'error');
+          addLog(`Error: ${data.payload.message}`, 'error');
           break;
         case 'serial.data':
           addLog(`Serial: ${data.payload.data}`, 'info');
@@ -67,12 +69,10 @@ export default function App() {
 
     ws.connect();
 
-    // 初期状態確認
     api.getSerialStatus().then(status => setSerialOpen(status.is_open)).catch(() => {});
     api.getCameraStatus().then(status => setCameraOpen(status.is_open)).catch(() => {});
     api.getActiveCommand().then(cmd => setActiveCommand(cmd.active ? cmd.name : null)).catch(() => {});
 
-    // 定期ヘルスチェック
     const interval = setInterval(() => {
       api.getStatus().catch(() => setConnected(false));
     }, 5000);
@@ -87,9 +87,9 @@ export default function App() {
     try {
       await apiRef.current.openSerial(config);
       setSerialOpen(true);
-      addLog(`シリアルポート接続: ${config.port_name || config.port_num}`, 'success');
+      addLog(`Serial port connected: ${config.port_name || config.port_num}`, 'success');
     } catch (err) {
-      addLog(`接続失敗: ${err.message}`, 'error');
+      addLog(`Connection failed: ${err.message}`, 'error');
     }
   };
 
@@ -97,9 +97,9 @@ export default function App() {
     try {
       await apiRef.current.closeSerial();
       setSerialOpen(false);
-      addLog('シリアルポート切断', 'info');
+      addLog('Serial port disconnected', 'info');
     } catch (err) {
-      addLog(`切断失敗: ${err.message}`, 'error');
+      addLog(`Disconnect failed: ${err.message}`, 'error');
     }
   };
 
@@ -107,9 +107,9 @@ export default function App() {
     try {
       await apiRef.current.openCamera(config);
       setCameraOpen(true);
-      addLog('カメラ接続', 'success');
+      addLog('Camera connected', 'success');
     } catch (err) {
-      addLog(`カメラ接続失敗: ${err.message}`, 'error');
+      addLog(`Camera connection failed: ${err.message}`, 'error');
     }
   };
 
@@ -117,9 +117,9 @@ export default function App() {
     try {
       await apiRef.current.updateCameraConfig({ flip: mode });
       setFlip(mode);
-      addLog(`反転モード: ${mode}`, 'info');
+      addLog(`Flip mode: ${mode}`, 'info');
     } catch (err) {
-      addLog(`反転設定失敗: ${err.message}`, 'error');
+      addLog(`Flip setting failed: ${err.message}`, 'error');
     }
   };
 
@@ -128,9 +128,9 @@ export default function App() {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `capture_${timestamp}.jpg`;
       const result = await apiRef.current.captureCamera(filename);
-      addLog(`キャプチャ保存: ${result.path || filename}`, 'success');
+      addLog(`Capture saved: ${result.path || filename}`, 'success');
     } catch (err) {
-      addLog(`キャプチャ失敗: ${err.message}`, 'error');
+      addLog(`Capture failed: ${err.message}`, 'error');
     }
   };
 
@@ -140,39 +140,39 @@ export default function App() {
       setCameraOpen(false);
       setCameraFrame(null);
       setFlip('none');
-      addLog('カメラ切断', 'info');
+      addLog('Camera disconnected', 'info');
     } catch (err) {
-      addLog(`カメラ切断失敗: ${err.message}`, 'error');
+      addLog(`Camera disconnect failed: ${err.message}`, 'error');
     }
   };
 
   const handleInput = async (type, params) => {
     if (!serialOpen) {
-      addLog('シリアルポート未接続', 'error');
+      addLog('Serial port not connected', 'error');
       return;
     }
     try {
       await apiRef.current.sendInput(type, params);
     } catch (err) {
-      addLog(`入力エラー: ${err.message}`, 'error');
+      addLog(`Input error: ${err.message}`, 'error');
     }
   };
 
   const handleCommandStart = async (name) => {
     try {
       await apiRef.current.startCommand(name);
-      addLog(`コマンド開始: ${name}`, 'success');
+      addLog(`Command started: ${name}`, 'success');
     } catch (err) {
-      addLog(`コマンド開始失敗: ${err.message}`, 'error');
+      addLog(`Command start failed: ${err.message}`, 'error');
     }
   };
 
   const handleCommandStop = async () => {
     try {
       await apiRef.current.stopCommand();
-      addLog('コマンド停止', 'info');
+      addLog('Command stopped', 'info');
     } catch (err) {
-      addLog(`停止失敗: ${err.message}`, 'error');
+      addLog(`Stop failed: ${err.message}`, 'error');
     }
   };
 
@@ -210,6 +210,7 @@ export default function App() {
         onSerialOpen={handleSerialOpen}
         onSerialClose={handleSerialClose}
         api={apiRef.current}
+        onControllerWindowOpen={() => setControllerWindowOpen(true)}
       />
     ),
   };
@@ -221,6 +222,12 @@ export default function App() {
         {tabs[activeTab]}
       </main>
       <NavBar activeTab={activeTab} onChange={setActiveTab} />
+      <ControllerWindow
+        visible={controllerWindowOpen}
+        onClose={() => setControllerWindowOpen(false)}
+        onInput={handleInput}
+        serialOpen={serialOpen}
+      />
     </div>
   );
 }

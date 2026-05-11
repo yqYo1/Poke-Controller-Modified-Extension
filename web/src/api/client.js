@@ -78,6 +78,22 @@ export class APIClient {
     });
   }
 
+  // Controller settings
+  getControllerType() { return this._fetch('/api/controller/type'); }
+  setControllerType(gamepad_type) {
+    return this._fetch('/api/controller/type', {
+      method: 'POST',
+      body: JSON.stringify({ gamepad_type }),
+    });
+  }
+  getKeyboardEnabled() { return this._fetch('/api/controller/keyboard'); }
+  setKeyboardEnabled(enabled) {
+    return this._fetch('/api/controller/keyboard', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
   // Commands
   getCommands() { return this._fetch('/api/commands'); }
   loadCommand(name) {

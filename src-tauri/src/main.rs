@@ -51,6 +51,10 @@ struct AppState {
     camera: Arc<Mutex<Option<Camera>>>,
     /// Broadcast channel for WebSocket event forwarding
     event_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+    /// Current gamepad type ("ProController" or "Xinput")
+    gamepad_type: Arc<Mutex<String>>,
+    /// Whether keyboard input is enabled
+    keyboard_enabled: Arc<Mutex<bool>>,
 }
 
 // ── Helper: Parse a button name string into a Button bitflag ────────────────────
@@ -146,6 +150,76 @@ fn format_default_row(fmt: &SendFormat, l_stick_changed: bool, r_stick_changed: 
     }
 
     result
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Controller Endpoints
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+struct ControllerTypeRequest {
+    /// Gamepad type: "ProController" or "Xinput"
+    gamepad_type: String,
+}
+
+/// POST /api/controller/type — set the gamepad type
+async fn controller_set_type(
+    State(state): State<AppState>,
+    Json(body): Json<ControllerTypeRequest>,
+) -> Json<serde_json::Value> {
+    match body.gamepad_type.as_str() {
+        "ProController" | "Xinput" => {
+            let mut gt = state.gamepad_type.lock().await;
+            *gt = body.gamepad_type.clone();
+            tracing::info!("Gamepad type set to: {}", body.gamepad_type);
+            Json(serde_json::json!({
+                "status": "ok",
+                "gamepad_type": body.gamepad_type,
+            }))
+        }
+        _ => Json(serde_json::json!({
+            "status": "error",
+            "message": format!("Invalid gamepad type: '{}'. Must be 'ProController' or 'Xinput'", body.gamepad_type),
+        })),
+    }
+}
+
+/// GET /api/controller/type — get the current gamepad type
+async fn controller_get_type(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let gt = state.gamepad_type.lock().await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "gamepad_type": gt.clone(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct KeyboardRequest {
+    /// Whether keyboard input is enabled
+    enabled: bool,
+}
+
+/// POST /api/controller/keyboard — enable or disable keyboard input
+async fn controller_set_keyboard(
+    State(state): State<AppState>,
+    Json(body): Json<KeyboardRequest>,
+) -> Json<serde_json::Value> {
+    let mut ke = state.keyboard_enabled.lock().await;
+    *ke = body.enabled;
+    tracing::info!("Keyboard input enabled: {}", body.enabled);
+    Json(serde_json::json!({
+        "status": "ok",
+        "keyboard_enabled": body.enabled,
+    }))
+}
+
+/// GET /api/controller/keyboard — get keyboard enable state
+async fn controller_get_keyboard(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let ke = state.keyboard_enabled.lock().await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "keyboard_enabled": *ke,
+    }))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1026,6 +1100,15 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         // Core endpoints
         .route("/api/status", get(api_status))
         .route("/api/greet", get(api_greet))
+        // Controller endpoints
+        .route(
+            "/api/controller/type",
+            get(controller_get_type).post(controller_set_type),
+        )
+        .route(
+            "/api/controller/keyboard",
+            get(controller_get_keyboard).post(controller_set_keyboard),
+        )
         // Camera endpoints
         .route("/api/cameras", get(cameras_list))
         .route("/api/camera/status", get(camera_status))
@@ -1095,6 +1178,8 @@ fn main() {
         event_bus: EventBus::new(),
         camera: Arc::new(Mutex::new(None)),
         event_tx,
+        gamepad_type: Arc::new(Mutex::new("ProController".to_string())),
+        keyboard_enabled: Arc::new(Mutex::new(false)),
     };
 
     // Start the HTTP server in both modes — Tauri embeds it internally

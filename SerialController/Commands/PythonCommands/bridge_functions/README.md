@@ -2,7 +2,7 @@
 作成者：フウ(@dragonite303)
 
 ## 要約
-本プログラムはPoke-Controller Modified ExtensinoとPoke-Controller Modifiedの互換性を保持するための関数です。
+本プログラムはPoke-Controller Modified ExtensionとPoke-Controller Modifiedの互換性を保持するための関数です。
 
 ## 開発環境
 * python v3.12.6
@@ -37,7 +37,7 @@ License.txtを確認して下さい。
 
 ## 利用上の注意
 * 勝手に改変して使用いただいて構いません。
-* Lisence.txtに記載の通り改変しての配布は禁止とさせていただきます。
+* Licence.txtに記載の通り改変しての配布は禁止とさせていただきます。
 * 想定外の動作をした場合でも責任はとれません。自己責任で利用ください。
 * 商用利用/自作発言はお控えください。
 

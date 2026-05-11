@@ -1,4 +1,29 @@
 # Typos spell checker configuration
 # Backward-compatible aliases are intentionally named with typos
+
+[files]
+extend-exclude = [
+    "target/",
+    "dist/",
+    "result",
+    "result-*",
+    "*.lock",
+    "Cargo.lock",
+    "src-tauri/Cargo.lock",
+    "node_modules/",
+    "__pycache__/",
+    ".venv/",
+    "*.min.js",
+    "*.min.css",
+    "changelog.txt",
+    "SerialController/db/pokedex.json",
+]
+
 [default]
-extend-ignore-identifiers-re = ["opneImage", "bf_show_informations", "controllButtons", "sendWinNotfication"]
+extend-ignore-identifiers-re = [
+    "opneImage",
+    "bf_show_informations",
+    "controllButtons",
+    "sendWinNotfication",
+]
+extend-ignore-words-re = ["^ser$"]

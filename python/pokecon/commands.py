@@ -1345,5 +1345,18 @@ class ImageProcPythonCommand(PythonCommand, ABC):
 CommandMeta.register_interface("PythonCommand", "v1", PythonCommand)
 CommandMeta.register_interface("ImageProcPythonCommand", "v1", ImageProcPythonCommand)
 
+
+def _import_imageprocessing():
+    """Lazy import ImageProcessing functions."""
+    try:
+        from ImageProcessing import crop_image, getImage, openImage  # noqa: F401
+
+        return openImage, crop_image, getImage
+    except ImportError:
+        return None, None, None
+
+
 # Deprecated aliases for backward compatibility
-opneImage = openImage
+_openImage, _crop_image, _getImage = _import_imageprocessing()
+if _openImage is not None:
+    opneImage = _openImage

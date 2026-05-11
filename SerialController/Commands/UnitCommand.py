@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from Commands.Sender import Sender
 
 
-# Sigle button command
+# Single button command
 class UnitCommand(CommandBase.Command):
     def __init__(self) -> None:
         super().__init__()

@@ -1276,13 +1276,13 @@ class ImageProcPythonCommand(PythonCommand, ABC):
         title: str = "image",
     ) -> None:
         """Display camera frame in a popup window."""
-        from ImageProcessing import opneImage
+        from ImageProcessing import openImage
 
         crop_cv2, _ = convertCv2Format(crop_fmt=crop_fmt, crop=crop)
         if self.camera is None:
             raise RuntimeError("Camera not initialized")
         src = self.camera.readFrame()
-        opneImage(src, crop=crop_cv2, title=title)
+        openImage(src, crop=crop_cv2, title=title)
 
     def LINE_image(
         self,
@@ -1344,3 +1344,6 @@ class ImageProcPythonCommand(PythonCommand, ABC):
 # the existing PythonCommand class will remain available as the v1 impl.
 CommandMeta.register_interface("PythonCommand", "v1", PythonCommand)
 CommandMeta.register_interface("ImageProcPythonCommand", "v1", ImageProcPythonCommand)
+
+# Deprecated aliases for backward compatibility
+opneImage = openImage

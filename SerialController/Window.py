@@ -149,7 +149,7 @@ class PokeControllerApp:
         self.canvas_frame: Final = ttk.Frame(self.camera_lf)
         self.canvas_frame.configure(height="360", relief="groove", width="640")
         self.canvas_frame.grid(column=0, columnspan=7, row=1)
-        self.camera_lf.configure(text="Main Panel")  # modfied
+        self.camera_lf.configure(text="Main Panel")  # modified
         self.camera_lf.grid(
             column=0,
             columnspan=3,
@@ -998,8 +998,8 @@ class PokeControllerApp:
         self.notification_f.pack()
         self.controller_nb.add(self.notification_f, sticky="nsew", text="Notification")
         self.others_f = ttk.Frame(self.controller_nb)
-        self.othres_outputs_lf = ttk.Labelframe(self.others_f)
-        self.outputs_size_adjuster_lf = ttk.Labelframe(self.othres_outputs_lf)
+        self.others_outputs_lf = ttk.Labelframe(self.others_f)
+        self.outputs_size_adjuster_lf = ttk.Labelframe(self.others_outputs_lf)
         self.area_size_scale = ttk.Scale(self.outputs_size_adjuster_lf)
         self.area_size = tk.IntVar(value=20)
         self.area_size_scale.configure(
@@ -1019,7 +1019,7 @@ class PokeControllerApp:
             row=0,
             sticky="ew",
         )
-        self.outputs_stdout_dest_lf = ttk.Labelframe(self.othres_outputs_lf)
+        self.outputs_stdout_dest_lf = ttk.Labelframe(self.others_outputs_lf)
         self.stdout_destination_1_rb = ttk.Radiobutton(self.outputs_stdout_dest_lf)
         self.stdout_destination = tk.StringVar(value="1")
         self.stdout_destination_1_rb.configure(
@@ -1057,7 +1057,7 @@ class PokeControllerApp:
             row=0,
             sticky="ew",
         )
-        self.outputs_clear_lf = ttk.Labelframe(self.othres_outputs_lf)
+        self.outputs_clear_lf = ttk.Labelframe(self.others_outputs_lf)
         self.outputs_text_area_1_clear_button = ttk.Button(self.outputs_clear_lf)
         self.outputs_text_area_1_clear_button.configure(text="Clear(#1)")
         self.outputs_text_area_1_clear_button.grid(
@@ -1080,14 +1080,14 @@ class PokeControllerApp:
         self.outputs_text_area_2_clear_button.configure(command=self.clearTextArea2)
         self.outputs_clear_lf.configure(text="Clear Outputs")
         self.outputs_clear_lf.grid(column=2, padx="5", pady="5", row=0, sticky="ew")
-        self.othres_outputs_lf.configure(
+        self.others_outputs_lf.configure(
             height="200",
             text="Outputs/Dialogue Settings",
             width="200",
         )
-        self.othres_outputs_lf.grid(column=0, padx="5", row=0, sticky="ew")
-        # self.othres_right_frame_lf = ttk.Labelframe(self.others_f)
-        self.select_right_frame_widget = ttk.Labelframe(self.othres_outputs_lf)
+        self.others_outputs_lf.grid(column=0, padx="5", row=0, sticky="ew")
+        # self.others_right_frame_lf = ttk.Labelframe(self.others_f)
+        self.select_right_frame_widget = ttk.Labelframe(self.others_outputs_lf)
         self.select_right_frame_widget_cb = ttk.Combobox(self.select_right_frame_widget)
         self.right_frame_widget_mode = tk.StringVar(value="ALL (default)")
         right_frame_widget_mode_list = [
@@ -1125,7 +1125,7 @@ class PokeControllerApp:
             row=1,
             sticky="ew",
         )
-        self.pos_software_controller_lf = ttk.Labelframe(self.othres_outputs_lf)
+        self.pos_software_controller_lf = ttk.Labelframe(self.others_outputs_lf)
         self.pos_software_controller = tk.StringVar(value="2")
         self.pos_top_rb = ttk.Radiobutton(self.pos_software_controller_lf)
         self.pos_top_rb.configure(
@@ -1151,7 +1151,7 @@ class PokeControllerApp:
             row=1,
             sticky="ew",
         )
-        self.pos_dialogue_buttons_lf: Final = ttk.Labelframe(self.othres_outputs_lf)
+        self.pos_dialogue_buttons_lf: Final = ttk.Labelframe(self.others_outputs_lf)
         self.pos_dialogue_buttons: Final = tk.IntVar(value=2)
         self.pos_dialogue_top_rb: Final = ttk.Radiobutton(self.pos_dialogue_buttons_lf)
         self.pos_dialogue_top_rb.configure(
@@ -1203,7 +1203,7 @@ class PokeControllerApp:
             row=1,
             sticky="ew",
         )
-        # self.othres_right_frame_lf.grid(column='1', padx='5', row='1', sticky='ew')
+        # self.others_right_frame_lf.grid(column='1', padx='5', row='1', sticky='ew')
         # self.others_help_lf = ttk.Labelframe(self.others_f)
         # self.others_help_lf.configure(text='Help')
         # self.others_help_lf.grid(column='0', padx='5', row='1', sticky='ew')
@@ -2300,7 +2300,7 @@ class PokeControllerApp:
             command = f'open "{directory}"'
             subprocess.run(command, shell=True, check=False)
 
-    def sendWinNotfication(self) -> None:
+    def sendWinNotification(self) -> None:
         global flag_import_plyer
         if flag_import_plyer:
             notification.notify(
@@ -2709,7 +2709,7 @@ class PokeControllerApp:
                     commandindex = i
                     break
 
-            # cur_commnadにショートカットのコマンドを割り当てる。
+            # cur_commandにショートカットのコマンドを割り当てる。
             if commandindex == -1:
                 print("shortcut Python command name error.")
                 return False
@@ -2732,7 +2732,7 @@ class PokeControllerApp:
                 if name == commandname:
                     commandindex = i
                     break
-            # cur_commnadにショートカットのコマンドを割り当てる。
+            # cur_commandにショートカットのコマンドを割り当てる。
             if commandindex == -1:
                 print("shortcut Mcu command name error.")
                 return False
@@ -2747,7 +2747,7 @@ class PokeControllerApp:
         print("shortcut command type error.")
         return False
 
-    def controllButtons(self, event) -> None:
+    def controlButtons(self, event) -> None:
         note = event.widget
         if self.start_button["text"] == "Start":
             if note.tab(note.select(), "text") == "Shortcut":
@@ -3230,6 +3230,10 @@ class PokeControllerApp:
         self.root.update_idletasks()
         self.root.after(self.preview.next_frames, self.update)
 
+
+# Deprecated aliases for backward compatibility
+controllButtons = controlButtons
+sendWinNotfication = sendWinNotification
 
 # ToolTipのクラスは以下のサイトを参考に作成
 # https://www.ishikawasekkei.com/index.php/2020/05/17/python-tkinter-gui-programing-tooltip/

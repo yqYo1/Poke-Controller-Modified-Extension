@@ -17,7 +17,7 @@ class InfinityCafe(PythonCommand):
 
     def do(self):
         while True:
-            # battle agaist a master at PP times
+            # battle against a master at PP times
             for __ in range(0, self.pp_max):
                 self.wait(1)
 

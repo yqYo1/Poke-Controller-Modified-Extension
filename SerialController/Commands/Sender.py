@@ -132,7 +132,7 @@ class Sender:
             self._logger.error("Maybe Using a port that is not open.")
             self._logger.error(e)
         # self._logger.debug(f"{row}")
-        # Show sending serial datas
+        # Show sending serial data
         if self.is_show_serial.get():
             print(row)
 
@@ -154,7 +154,7 @@ class Sender:
             self._logger.error("Maybe Using a port that is not open.")
             self._logger.error(e)
         # self._logger.debug(f"{values}")
-        # Show sending serial datas
+        # Show sending serial data
         if self.is_show_serial.get():
             print(values)
 
@@ -170,7 +170,7 @@ class Sender:
             self._logger.error("Maybe Using a port that is not open.")
             self._logger.error(e)
         # self._logger.debug(f"{row}")
-        # Show sending serial datas
+        # Show sending serial data
         if self.is_show_serial.get():
             print(row)
 

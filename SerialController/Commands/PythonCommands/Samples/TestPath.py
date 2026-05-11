@@ -41,7 +41,7 @@ def _test_save_capture(command: ImageProcPythonCommand):
             )
         else:
             print(
-                f"----------\n[SUCCESSED]\ninput: {test_case[0]}\nexpected: {test_case[1]}\n----------\n"
+                f"----------\n[SUCCEEDED]\ninput: {test_case[0]}\nexpected: {test_case[1]}\n----------\n"
             )
             os.remove(test_case[1])
 
@@ -84,7 +84,7 @@ def _test_is_contain_template(command: ImageProcPythonCommand):
         try:
             command.isContainTemplate(test_case[0])
             print(
-                f"----------\n[SUCCESSED]\ninput: {test_case[0]}\nexpected: {test_case[1]}\n----------\n"
+                f"----------\n[SUCCEEDED]\ninput: {test_case[0]}\nexpected: {test_case[1]}\n----------\n"
             )
         except Exception as e:
             print(

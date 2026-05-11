@@ -20,7 +20,7 @@ class BridgeFunctionsSample(ImageProcPythonCommand):
 
         # プログラム情報の表示
         developer = "(名前)"
-        self.bf.bf_show_informations(self.NAME, developer)
+        self.bf.bf_show_information(self.NAME, developer)
 
         # テンプレートファイルディレクトリの設定
         self.bf.set_template_directory(

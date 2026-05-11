@@ -26,7 +26,10 @@ except Exception:
 from Commands import CommandBase
 from Commands.Keys import KeyPress
 from DiscordNotify import Discord_Notify
-from ImageProcessing import ImageProcessing, crop_image, getImage, opneImage
+from ImageProcessing import ImageProcessing, crop_image, getImage, openImage
+
+# Deprecated aliases for backward compatibility
+opneImage = openImage
 from LineNotify import Line_Notify
 from Settings import GuiSettings
 

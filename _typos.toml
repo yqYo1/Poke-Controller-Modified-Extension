@@ -1,0 +1,4 @@
+# Typos spell checker configuration
+# Backward-compatible aliases are intentionally named with typos
+[default]
+extend-ignore-identifiers-re = ["opneImage", "bf_show_informations", "controllButtons", "sendWinNotfication"]

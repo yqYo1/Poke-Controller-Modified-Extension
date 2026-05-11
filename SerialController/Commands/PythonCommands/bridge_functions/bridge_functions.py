@@ -275,7 +275,7 @@ class BridgeFunctions(object):
             ret = self.commands.dialogue6widget(title, dialogue_list, need=need)
         return ret
 
-    def bf_show_informations(
+    def bf_show_information(
         self,
         name: str,
         developer: str | list,
@@ -310,3 +310,7 @@ class BridgeFunctions(object):
         text += "---------------------------------------------"
 
         self.bf_print(text)
+
+
+# Deprecated aliases for backward compatibility
+bf_show_informations = bf_show_information

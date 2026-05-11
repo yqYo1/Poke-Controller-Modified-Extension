@@ -173,7 +173,7 @@ def doPreprocessImage(
     return src, width, height
 
 
-def opneImage(
+def openImage(
     image: MatLike,
     crop: list[int] | None = None,
     title: str = "image",
@@ -186,6 +186,10 @@ def opneImage(
     cv2.imshow(f"{title}", src)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+# Deprecated alias for backward compatibility
+opneImage = openImage
 
 
 class ImageProcessing:

@@ -40,6 +40,7 @@ export class APIClient {
   }
 
   // Camera
+  getCameras() { return this._fetch('/api/cameras'); }
   getCameraStatus() { return this._fetch('/api/camera/status'); }
   openCamera({ device_index, width, height }) {
     return this._fetch('/api/camera/open', {

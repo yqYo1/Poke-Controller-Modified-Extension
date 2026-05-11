@@ -10,10 +10,11 @@ description = "Camera capture and image processing for Poke-Controller"
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
-
+libc = "0.2"
 pokecon-events = { path = "../pokecon-events" }
 
 [dev-dependencies]

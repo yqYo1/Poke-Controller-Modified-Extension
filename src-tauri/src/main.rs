@@ -152,6 +152,15 @@ fn format_default_row(fmt: &SendFormat, l_stick_changed: bool, r_stick_changed: 
 // Camera Endpoints
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// GET /api/cameras — list available camera devices (placeholder)
+async fn cameras_list() -> Json<serde_json::Value> {
+    // TODO: Implement real camera enumeration when backend is ready
+    Json(serde_json::json!({
+        "status": "ok",
+        "devices": [{"index": 0, "name": "Default Camera"}],
+    }))
+}
+
 /// GET /api/camera/status — get camera connection status
 async fn camera_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cam = state.camera.lock().await;
@@ -195,8 +204,7 @@ async fn camera_open(
         fps: 30,
     };
 
-    // Create a new Camera with MockCameraBackend by default.
-    // In production, swap MockCameraBackend for a real implementation.
+    // MockCameraBackendを使用（実装時にV4L2/OpenCVバックエンドに置き換え）
     let backend = MockCameraBackend::new();
     let mut camera = Camera::new(Box::new(backend));
 
@@ -920,6 +928,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/status", get(api_status))
         .route("/api/greet", get(api_greet))
         // Camera endpoints
+        .route("/api/cameras", get(cameras_list))
         .route("/api/camera/status", get(camera_status))
         .route("/api/camera/open", post(camera_open))
         .route("/api/camera/close", post(camera_close))

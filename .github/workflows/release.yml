@@ -1,0 +1,93 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  rust-publish:
+    name: Publish Rust crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Publish pokecon-events
+        run: cargo publish -p pokecon-events
+        working-directory: .
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-serial
+        run: cargo publish -p pokecon-serial
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-cv
+        run: cargo publish -p pokecon-cv
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-notify
+        run: cargo publish -p pokecon-notify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-net
+        run: cargo publish -p pokecon-net
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-lua
+        run: cargo publish -p pokecon-lua
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-core
+        run: cargo publish -p pokecon-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish pokecon-pybindings
+        run: cargo publish -p pokecon-pybindings
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+  python-publish:
+    name: Build and publish Python wheel to PyPI
+    runs-on: ubuntu-latest
+    needs: [rust-publish]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64
+          manylinux: auto
+          args: --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-wheels
+          path: dist/
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          command: upload
+          args: --skip-existing dist/*
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [python-publish]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download python wheels
+        uses: actions/download-artifact@v8
+        with:
+          name: python-wheels
+          path: dist/
+      - name: Generate release notes
+        run: |
+          echo "# Poke-Controller Modified Extension ${{ github.ref_name }}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "See [CHANGELOG](https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/main/changelog.txt) for detailed changes." >> RELEASE_NOTES.md
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: dist/*

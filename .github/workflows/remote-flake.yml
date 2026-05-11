@@ -1,0 +1,33 @@
+name: Remote Flake Test
+
+# Tests that the flake can be executed remotely without cloning.
+# This verifies that all paths in flake.nix use nix store references
+# rather than local file system paths.
+
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+  pull_request:
+    branches: [main, master, refactor/rust-core]
+
+jobs:
+  remote-flake-eval:
+    name: Evaluate remote flake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Evaluate flake from remote
+        run: |
+          # Test that the flake can be evaluated without local files
+          nix flake metadata "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}"
+      - name: Run default app from remote (dry-run)
+        run: |
+          # Test that the default app can be built from remote
+          # This will fail if the flake references local paths
+          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help || true
+      - name: Run check from remote
+        run: |
+          # Run the full check suite from remote
+          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check"

@@ -1,0 +1,31 @@
+name: Rust CI
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+    paths:
+      - 'rust/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'rust/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+jobs:
+  build:
+    name: Build and test (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check formatting
+        run: nix fmt -- --ci
+      - name: Clippy
+        run: nix run .#clippy
+      - name: Build all crates
+        run: nix run .#build-rust
+      - name: Run tests
+        run: nix run .#cargo-test

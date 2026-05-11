@@ -11,6 +11,9 @@
 !/.github/workflows/basedpyright.yml
 !/.github/workflows/lint.yml
 !/.github/workflows/pytest.yml
+!/.github/workflows/release.yml
+!/.github/workflows/rust-ci.yml
+!/.github/workflows/remote-flake.yml
 
 # not ignore
 !/.gitignore

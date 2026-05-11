@@ -57,6 +57,13 @@ export class APIClient {
     });
   }
 
+  updateCameraConfig(config) {
+    return this._fetch('/api/camera/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
   // Input
   sendInput(type, params) {
     return this._fetch(`/api/input/${type}`, {

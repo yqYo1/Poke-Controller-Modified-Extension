@@ -12,7 +12,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use pokecon_core::command_manager::CommandManager;
-use pokecon_cv::camera::{Camera, CameraConfig, Frame, MockCameraBackend, PixelFormat};
+use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, MockCameraBackend, PixelFormat};
 use pokecon_events::EventBus;
 use pokecon_serial::SendFormat;
 use pokecon_serial::keypress::KeyPress;
@@ -175,6 +175,7 @@ async fn camera_status(State(state): State<AppState>) -> Json<serde_json::Value>
                 "width": cfg.width,
                 "height": cfg.height,
                 "fps": cfg.fps,
+                "flip": cfg.flip.as_str(),
             }))
         }
         None => Json(serde_json::json!({
@@ -202,6 +203,7 @@ async fn camera_open(
         width: body.width.unwrap_or(1280),
         height: body.height.unwrap_or(720),
         fps: 30,
+        flip: Default::default(),
     };
 
     // MockCameraBackendを使用（実装時にV4L2/OpenCVバックエンドに置き換え）
@@ -274,6 +276,14 @@ struct CaptureRequest {
     filename: String,
 }
 
+#[derive(Deserialize)]
+struct CameraConfigRequest {
+    width: Option<u32>,
+    height: Option<u32>,
+    fps: Option<u32>,
+    flip: Option<String>,
+}
+
 /// POST /api/camera/capture — save current frame to a file
 async fn camera_capture(
     State(state): State<AppState>,
@@ -304,6 +314,47 @@ async fn camera_capture(
                 "message": e.to_string(),
             })),
         },
+        None => Json(serde_json::json!({
+            "status": "error",
+            "message": "Camera not opened",
+        })),
+    }
+}
+
+/// POST /api/camera/config - update camera configuration (width, height, fps, flip)
+async fn camera_config(
+    State(state): State<AppState>,
+    Json(body): Json<CameraConfigRequest>,
+) -> Json<serde_json::Value> {
+    let mut cam = state.camera.lock().await;
+    match cam.as_mut() {
+        Some(camera) => {
+            let mut config = camera.config().clone();
+
+            if let Some(width) = body.width {
+                config.width = width;
+            }
+            if let Some(height) = body.height {
+                config.height = height;
+            }
+            if let Some(fps) = body.fps {
+                config.fps = fps;
+            }
+            if let Some(ref flip_str) = body.flip {
+                config.flip = FlipMode::parse_str(flip_str);
+            }
+
+            camera.update_config(config.clone());
+
+            Json(serde_json::json!({
+                "status": "ok",
+                "device_index": config.device_index,
+                "width": config.width,
+                "height": config.height,
+                "fps": config.fps,
+                "flip": config.flip.as_str(),
+            }))
+        }
         None => Json(serde_json::json!({
             "status": "error",
             "message": "Camera not opened",
@@ -934,6 +985,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/camera/close", post(camera_close))
         .route("/api/camera/frame", get(camera_frame))
         .route("/api/camera/capture", post(camera_capture))
+        .route("/api/camera/config", post(camera_config))
         // Key input endpoints
         .route("/api/input/press", post(input_press))
         .route("/api/input/hold", post(input_hold))

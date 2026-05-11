@@ -19,6 +19,7 @@ export default function App() {
   const [activeCommand, setActiveCommand] = useState(null);
   const [logs, setLogs] = useState([]);
   const [cameraFrame, setCameraFrame] = useState(null);
+  const [flip, setFlip] = useState('none');
   const wsRef = useRef(null);
   const apiRef = useRef(new APIClient(API_BASE));
 
@@ -112,11 +113,33 @@ export default function App() {
     }
   };
 
+  const handleFlipChange = async (mode) => {
+    try {
+      await apiRef.current.updateCameraConfig({ flip: mode });
+      setFlip(mode);
+      addLog(`反転モード: ${mode}`, 'info');
+    } catch (err) {
+      addLog(`反転設定失敗: ${err.message}`, 'error');
+    }
+  };
+
+  const handleCapture = async () => {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `capture_${timestamp}.jpg`;
+      const result = await apiRef.current.captureCamera(filename);
+      addLog(`キャプチャ保存: ${result.path || filename}`, 'success');
+    } catch (err) {
+      addLog(`キャプチャ失敗: ${err.message}`, 'error');
+    }
+  };
+
   const handleCameraClose = async () => {
     try {
       await apiRef.current.closeCamera();
       setCameraOpen(false);
       setCameraFrame(null);
+      setFlip('none');
       addLog('カメラ切断', 'info');
     } catch (err) {
       addLog(`カメラ切断失敗: ${err.message}`, 'error');
@@ -160,6 +183,9 @@ export default function App() {
         cameraOpen={cameraOpen}
         onCameraOpen={handleCameraOpen}
         onCameraClose={handleCameraClose}
+        onCapture={handleCapture}
+        flip={flip}
+        onFlipChange={handleFlipChange}
         logs={logs}
         activeCommand={activeCommand}
       />

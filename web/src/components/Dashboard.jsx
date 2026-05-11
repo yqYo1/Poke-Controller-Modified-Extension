@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Dashboard({ cameraFrame, cameraOpen, onCameraOpen, onCameraClose, logs, activeCommand }) {
+export default function Dashboard({ cameraFrame, cameraOpen, onCameraOpen, onCameraClose, onCapture, flip, onFlipChange, logs, activeCommand }) {
   return (
     <div className="dashboard">
       {/* カメラプレビュー */}
@@ -16,13 +16,48 @@ export default function Dashboard({ cameraFrame, cameraOpen, onCameraOpen, onCam
         </div>
         <div className="camera-viewport">
           {cameraFrame ? (
-            <img src={`data:image/jpeg;base64,${cameraFrame}`} alt="Camera" />
+            <img
+              src={`data:image/jpeg;base64,${cameraFrame}`}
+              alt="Camera"
+              className={`camera-image${cameraOpen && flip !== 'none' ? ' flipped' : ''}`}
+              data-flip={cameraOpen ? flip : 'none'}
+            />
           ) : (
             <div className="camera-placeholder">
               <span className="placeholder-icon">📷</span>
               <p>カメラ未接続</p>
             </div>
           )}
+        </div>
+        {/* Camera controls toolbar */}
+        <div className="camera-toolbar">
+          <div className="flip-controls">
+            <span className="toolbar-label">反転:</span>
+            {['none', 'horizontal', 'vertical', 'both'].map((mode) => (
+              <button
+                key={mode}
+                className={`btn btn-flip ${flip === mode ? 'active' : ''}`}
+                onClick={() => onFlipChange(mode)}
+                disabled={!cameraOpen}
+                title={
+                  mode === 'none' ? '反転なし' :
+                  mode === 'horizontal' ? '水平反転' :
+                  mode === 'vertical' ? '垂直反転' : '両方向反転'
+                }
+              >
+                {mode === 'none' ? '⛔' :
+                 mode === 'horizontal' ? '↔' :
+                 mode === 'vertical' ? '↕' : '🔄'}
+              </button>
+            ))}
+          </div>
+          <button
+            className="btn btn-capture"
+            onClick={onCapture}
+            disabled={!cameraOpen}
+          >
+            📸 キャプチャ
+          </button>
         </div>
       </section>
 

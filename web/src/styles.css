@@ -599,6 +599,10 @@ body {
   padding: 8px;
 }
 
+.scripts .panel {
+  margin-bottom: 10px;
+}
+
 .active-banner {
   display: flex;
   align-items: center;
@@ -612,31 +616,230 @@ body {
 .command-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .command-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: 10px 12px;
   background: var(--bg-panel);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.command-card:hover {
+  background: var(--bg-hover);
 }
 
 .command-info h3 {
-  font-size: 14px;
-  margin-bottom: 2px;
+  font-size: 13px;
+  margin-bottom: 1px;
 }
 
 .command-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
 .command-path {
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* Filter Inputs */
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.filter-group {
+  flex: 1;
+}
+
+.filter-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-input::placeholder {
+  color: var(--text-muted);
+}
+
+.filter-label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tabs: All / Python / MCU */
+.filter-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.filter-tab {
+  padding: 5px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filter-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.filter-tab:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+/* Shortcut Buttons */
+.shortcut-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.shortcut-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 8px 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.shortcut-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.shortcut-btn:active:not(:disabled) {
+  background: var(--accent);
+  transform: scale(0.96);
+}
+
+.shortcut-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shortcut-btn .shortcut-num {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.shortcut-btn .shortcut-name {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+/* Profile Selector */
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.profile-select {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.profile-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.profile-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Toolbar row with action buttons */
+.toolbar-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.toolbar-row .btn {
+  flex: 1;
+  font-size: 11px;
+  padding: 6px 8px;
+  justify-content: center;
+}
+
+/* Keyboard shortcut hints */
+.shortcut-hints {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.shortcut-hint {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
 }
 
 /* Settings */

@@ -12,6 +12,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use pokecon_core::command_manager::CommandManager;
+use pokecon_core::profile::ProfileManager;
 use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, MockCameraBackend, PixelFormat};
 use pokecon_events::EventBus;
 use pokecon_serial::SendFormat;
@@ -38,6 +39,10 @@ struct Args {
     /// Scripts directory for command manager
     #[arg(long = "scripts-dir", default_value = "scripts")]
     scripts_dir: PathBuf,
+
+    /// Profiles directory for profile manager
+    #[arg(long = "profiles-dir", default_value = "profiles")]
+    profiles_dir: PathBuf,
 }
 
 /// Shared application state accessible from all HTTP handlers.
@@ -46,6 +51,8 @@ struct Args {
 struct AppState {
     serial: Arc<Mutex<Sender>>,
     keypress: Arc<Mutex<KeyPress>>,
+    /// Filter string for commands
+    command_filter: Arc<Mutex<String>>,
     command_manager: Arc<Mutex<CommandManager>>,
     event_bus: EventBus,
     camera: Arc<Mutex<Option<Camera>>>,
@@ -55,6 +62,8 @@ struct AppState {
     gamepad_type: Arc<Mutex<String>>,
     /// Whether keyboard input is enabled
     keyboard_enabled: Arc<Mutex<bool>>,
+    /// Profile manager
+    profile_manager: Arc<Mutex<ProfileManager>>,
 }
 
 // ── Helper: Parse a button name string into a Button bitflag ────────────────────
@@ -1090,6 +1099,125 @@ async fn commands_active(State(state): State<AppState>) -> Json<serde_json::Valu
     }
 }
 
+/// POST /api/commands/filter — set command filter string and return filtered list
+#[derive(Deserialize)]
+struct FilterRequest {
+    filter: String,
+}
+
+async fn commands_filter(
+    State(state): State<AppState>,
+    Json(body): Json<FilterRequest>,
+) -> Json<serde_json::Value> {
+    // Store the filter in shared state
+    {
+        let mut filter = state.command_filter.lock().await;
+        *filter = body.filter.clone();
+    }
+
+    // Return filtered command list
+    let cm = state.command_manager.lock().await;
+    let filter_lower = body.filter.to_lowercase();
+    let commands: Vec<serde_json::Value> = cm
+        .list()
+        .iter()
+        .filter(|info| {
+            if filter_lower.is_empty() {
+                return true;
+            }
+            let name_match = info.name.to_lowercase().contains(&filter_lower);
+            let desc_match = info
+                .description
+                .as_ref()
+                .map(|d| d.to_lowercase().contains(&filter_lower))
+                .unwrap_or(false);
+            let path_match = info
+                .path
+                .to_string_lossy()
+                .to_lowercase()
+                .contains(&filter_lower);
+            name_match || desc_match || path_match
+        })
+        .map(|info| {
+            serde_json::json!({
+                "name": info.name,
+                "path": info.path.to_string_lossy(),
+                "description": info.description,
+            })
+        })
+        .collect();
+    Json(serde_json::json!({ "status": "ok", "filter": body.filter, "commands": commands }))
+}
+
+/// POST /api/commands/reload — rescan the scripts directory and reload all commands
+async fn commands_reload(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut cm = state.command_manager.lock().await;
+    match cm.scan() {
+        Ok(names) => {
+            let commands: Vec<serde_json::Value> = cm
+                .list()
+                .iter()
+                .map(|info| {
+                    serde_json::json!({
+                        "name": info.name,
+                        "path": info.path.to_string_lossy(),
+                        "description": info.description,
+                    })
+                })
+                .collect();
+            Json(serde_json::json!({
+                "status": "ok",
+                "message": format!("Scanned {} commands", names.len()),
+                "commands": commands,
+            }))
+        }
+        Err(e) => Json(serde_json::json!({
+            "status": "error",
+            "message": format!("Failed to reload commands: {}", e),
+        })),
+    }
+}
+
+/// GET /api/profile — list all available profiles
+async fn profile_list(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let pm = state.profile_manager.lock().await;
+    let profiles: Vec<serde_json::Value> = pm
+        .list()
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "name": p.name,
+                "description": p.description,
+                "active": pm.active_name() == Some(&p.name),
+            })
+        })
+        .collect();
+    Json(serde_json::json!({
+        "status": "ok",
+        "profiles": profiles,
+        "active": pm.active_name(),
+    }))
+}
+
+/// POST /api/profile — activate a profile by name
+async fn profile_set(
+    State(state): State<AppState>,
+    Json(body): Json<NameRequest>,
+) -> Json<serde_json::Value> {
+    let mut pm = state.profile_manager.lock().await;
+    match pm.activate(&body.name) {
+        Ok(_) => Json(serde_json::json!({
+            "status": "ok",
+            "message": format!("Profile {} activated", body.name),
+            "active": body.name,
+        })),
+        Err(e) => Json(serde_json::json!({
+            "status": "error",
+            "message": e.to_string(),
+        })),
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Server Setup
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1138,6 +1266,10 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/commands/start", post(commands_start))
         .route("/api/commands/stop", post(commands_stop))
         .route("/api/commands/active", get(commands_active))
+        .route("/api/commands/filter", post(commands_filter))
+        .route("/api/commands/reload", post(commands_reload))
+        // Profile management endpoints
+        .route("/api/profile", get(profile_list).post(profile_set))
         .fallback_service(
             tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true),
         )
@@ -1171,15 +1303,18 @@ fn main() {
 
     // Create shared application state
     let cm = CommandManager::new(&args.scripts_dir).expect("failed to create command manager");
+    let pm = ProfileManager::new(&args.profiles_dir).expect("failed to create profile manager");
     let state = AppState {
         serial: Arc::new(Mutex::new(Sender::new(true))),
         keypress: Arc::new(Mutex::new(KeyPress::new(Sender::new(true)))),
+        command_filter: Arc::new(Mutex::new(String::new())),
         command_manager: Arc::new(Mutex::new(cm)),
         event_bus: EventBus::new(),
         camera: Arc::new(Mutex::new(None)),
         event_tx,
         gamepad_type: Arc::new(Mutex::new("ProController".to_string())),
         keyboard_enabled: Arc::new(Mutex::new(false)),
+        profile_manager: Arc::new(Mutex::new(pm)),
     };
 
     // Start the HTTP server in both modes — Tauri embeds it internally

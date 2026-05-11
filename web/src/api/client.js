@@ -97,19 +97,39 @@ export class APIClient {
   // Commands
   getCommands() { return this._fetch('/api/commands'); }
   loadCommand(name) {
-    return this._fetch('/api/commands/load', {
+    return this._fetch('/api/commands/load, {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name }'),
     });
   }
   startCommand(name) {
-    return this._fetch('/api/commands/start', {
+    return this._fetch('/api/commands/start, {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name }'),
     });
   }
-  stopCommand() { return this._fetch('/api/commands/stop', { method: 'POST' }); }
+  stopCommand() { return this._fetch('/api/commands/stop, { method: 'POST' }'); }
   getActiveCommand() { return this._fetch('/api/commands/active'); }
+
+  // Command filter and reload (Phase 4)
+  filterCommands(filter) {
+    return this._fetch('/api/commands/filter, {
+      method: 'POST',
+      body: JSON.stringify({ filter }'),
+    });
+  }
+  reloadCommands() {
+    return this._fetch('/api/commands/reload, { method: 'POST' }');
+  }
+
+  // Profile management (Phase 4)
+  getProfiles() { return this._fetch('/api/profile'); }
+  setProfile(name) {
+    return this._fetch('/api/profile, {
+      method: 'POST',
+      body: JSON.stringify({ name }'),
+    });
+  }
 }
 
 export class WebSocketClient {

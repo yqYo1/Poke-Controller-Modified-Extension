@@ -492,7 +492,29 @@
               }
             }/bin/cargo-test";
 
-            # nix run .#maturin-develop  — build + install Python package in dev mode
+            # nix run .#typos  — run spell checker
+            typos = mkApp "${
+              pkgs.writeShellApplication {
+                name = "typos";
+                runtimeInputs = [ pkgs.typos ];
+                text = ''
+                  cd "${self}"
+                  exec typos "$@"
+                '';
+              }
+            }/bin/typos";
+
+            # nix run .#typos-check  — check typos (CI, no fixes)
+            typos-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "typos-check";
+                runtimeInputs = [ pkgs.typos ];
+                text = ''
+                  cd "${self}"
+                  exec typos --no-exit-code "$@"
+                '';
+              }
+            }/bin/typos-check";
             maturin-develop = mkApp "${
               pkgs.writeShellApplication {
                 name = "maturin-develop";
@@ -698,6 +720,11 @@
                   pytest -p no:cacheprovider tests/ -v --tb=short
                   echo ""
                   echo "═══════════════════════════════════════════"
+                  echo "  typos (spell check)"
+                  echo "═══════════════════════════════════════════"
+                  ${pkgs.typos}/bin/typos
+                  echo ""
+                  echo "═══════════════════════════════════════════"
                   echo "  formatting (check mode)"
                   echo "═══════════════════════════════════════════"
                   ${config.treefmt.build.wrapper}/bin/treefmt --ci
@@ -716,6 +743,11 @@
                 treefmt = {
                   enable = true;
                   entry = "${config.treefmt.build.wrapper}/bin/treefmt";
+                  pass_filenames = false;
+                };
+                typos = {
+                  enable = true;
+                  entry = "${pkgs.typos}/bin/typos";
                   pass_filenames = false;
                 };
               };
@@ -768,6 +800,7 @@
                   cargo-tauri
 
                   nix-tree
+                  typos
                 ]
               );
 
@@ -795,6 +828,8 @@
               echo "  cargo-test        - run Rust tests"
               echo "  maturin-develop   - dev-install Python bindings"
               echo "  tauri-dev         - run Tauri dev server"
+              echo "  typos             - run spell checker"
+              echo "  typos-check       - check typos (CI)"
               echo "  check             - full CI gate"
             '';
           });

@@ -800,6 +800,10 @@
                   npm ci --legacy-peer-deps 2>&1
 
                   echo ""
+                  echo "=== Running svelte-kit sync ==="
+                  npx svelte-kit sync 2>&1
+
+                  echo ""
                   echo "═══════════════════════════════════════════"
                   echo "  eslint"
                   echo "═══════════════════════════════════════════"

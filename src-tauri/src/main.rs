@@ -2052,6 +2052,7 @@ async fn notifications_send(
         notifications_get_config,
         notifications_set_config,
         notifications_send,
+        api_openapi_json,
     ),
     components(
         schemas(

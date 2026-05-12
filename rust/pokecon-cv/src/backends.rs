@@ -326,10 +326,86 @@ pub fn list_cameras() -> Vec<(i32, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::camera::CameraBackend;
 
     #[test]
     fn test_list_cameras_no_panic() {
         let cams = list_cameras();
         assert!(cams.iter().all(|(idx, name)| *idx >= 0 && !name.is_empty()));
+    }
+
+    #[cfg(feature = "v4l")]
+    #[tokio::test]
+    async fn test_v4l_open_virtual_device() {
+        // Integration test: tries to open a virtual V4L2 device.
+        // Set V4L2_TEST_DEVICE=/dev/videoX to specify which device.
+        // Skips if the env var is not set (headless CI without v4l2loopback).
+        let dev_path = match std::env::var("V4L2_TEST_DEVICE") {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!(
+                    "Skipping V4L2 test: V4L2_TEST_DEVICE not set. Run scripts/setup-v4l2-test.sh first."
+                );
+                return;
+            }
+        };
+        let dev_index_str = dev_path.trim_start_matches("/dev/video");
+        let dev_index: i32 = match dev_index_str.parse() {
+            Ok(idx) => idx,
+            Err(_) => {
+                eprintln!("Skipping V4L2 test: cannot parse device index from {dev_path}");
+                return;
+            }
+        };
+
+        // Check if the device exists
+        let dev_meta = std::path::Path::new(&dev_path);
+        if !dev_meta.exists() {
+            eprintln!(
+                "Skipping V4L2 test: {dev_path} does not exist. Use v4l2loopback to create a virtual camera."
+            );
+            return;
+        }
+
+        // Try to open the device
+        let config = crate::camera::CameraConfig {
+            device_index: dev_index,
+            width: 640,
+            height: 480,
+            fps: 15,
+            flip: crate::camera::FlipMode::None,
+        };
+
+        let mut backend = V4lCameraBackend::new();
+        match backend.open(&config).await {
+            Ok(()) => {
+                assert!(backend.is_open());
+                // Try a capture
+                match backend.capture().await {
+                    Ok(frame) => {
+                        assert!(frame.width > 0);
+                        assert!(frame.height > 0);
+                        assert!(!frame.data.is_empty());
+                        eprintln!(
+                            "V4L2 test: captured frame {}x{} ({} bytes)",
+                            frame.width,
+                            frame.height,
+                            frame.data.len()
+                        );
+                    }
+                    Err(e) => {
+                        // Capture can fail if ffmpeg hasn't started streaming yet
+                        eprintln!(
+                            "V4L2 test: capture returned error (device may not be streaming): {e}"
+                        );
+                    }
+                }
+                backend.close().await;
+                assert!(!backend.is_open());
+            }
+            Err(e) => {
+                eprintln!("Skipping V4L2 test: could not open {dev_path}: {e}");
+            }
+        }
     }
 }

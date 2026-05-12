@@ -32,6 +32,10 @@
 !/requirements-nuitka.txt
 !/renovate.json
 
+!/scripts/
+/scripts/*
+!/scripts/*.sh
+
 
 !/DirectShowLib/
 /DirectShowLib/*

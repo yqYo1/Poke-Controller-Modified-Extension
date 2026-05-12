@@ -770,6 +770,9 @@
                   rustfmt
 
                   python314
+
+                  # libclang is required to build v4l2-sys-mit (v4l dependency)
+                  libclang
                 ]
                 ++ pythonPkgs
                 ++ [
@@ -801,12 +804,19 @@
 
                   nix-tree
                   typos
+
+                  # Test infrastructure: virtual V4L2 and serial devices
+                  v4l-utils
+                  ffmpeg-headless
+                  socat
                 ]
               );
 
             shellHook = ''
               export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
               export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
+              # LIBCLANG_PATH must be set for v4l2-sys-mit (bindgen)
+              export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
               ${config.pre-commit.installationScript}
 
@@ -831,6 +841,10 @@
               echo "  typos             - run spell checker"
               echo "  typos-check       - check typos (CI)"
               echo "  check             - full CI gate"
+              echo ""
+              echo "Test helpers:"
+              echo "  scripts/setup-v4l2-test.sh   - create virtual V4L2 camera"
+              echo "  scripts/setup-serial-test.sh  - create virtual serial port pair"
             '';
           });
         };

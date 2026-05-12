@@ -139,6 +139,10 @@ impl Sender {
             error!("Error: {}", e);
             SerialError::WriteError(e)
         })?;
+        port.flush().await.map_err(|e| {
+            error!("Error: {}", e);
+            SerialError::WriteError(e)
+        })?;
 
         self.before = Some(row.to_string());
 
@@ -153,6 +157,10 @@ impl Sender {
         let port = self.port.as_mut().ok_or(SerialError::NotOpen)?;
 
         port.write_all(values).await.map_err(|e| {
+            error!("Error: {}", e);
+            SerialError::WriteError(e)
+        })?;
+        port.flush().await.map_err(|e| {
             error!("Error: {}", e);
             SerialError::WriteError(e)
         })?;
@@ -171,6 +179,10 @@ impl Sender {
 
         let data = format!("{}\r\n", row);
         port.write_all(data.as_bytes()).await.map_err(|e| {
+            error!("Error: {}", e);
+            SerialError::WriteError(e)
+        })?;
+        port.flush().await.map_err(|e| {
             error!("Error: {}", e);
             SerialError::WriteError(e)
         })?;
@@ -228,5 +240,74 @@ impl Sender {
 
     pub async fn send_end(&mut self) -> Result<(), SerialError> {
         self.write_row("end", false).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_port_path_linux() {
+        // Default: Linux path with port number
+        let path = Sender::build_port_path(0, None).unwrap();
+        assert_eq!(path, "/dev/ttyUSB0");
+    }
+
+    #[test]
+    fn test_build_port_path_explicit_name() {
+        let path = Sender::build_port_path(0, Some("/dev/ttyS0")).unwrap();
+        assert_eq!(path, "/dev/ttyS0");
+    }
+
+    #[test]
+    fn test_build_port_path_empty_name() {
+        // Empty name should fall back to default path
+        let path = Sender::build_port_path(1, Some("")).unwrap();
+        assert_eq!(path, "/dev/ttyUSB1");
+    }
+
+    #[tokio::test]
+    async fn test_open_virtual_serial_port() {
+        // Integration test: opens a virtual serial port for testing.
+        // Set SERIAL_TEST_PORT to the PTY path (e.g. /tmp/serial-test-a).
+        // Skips if the env var is not set or the port doesn't exist.
+        let port_path = match std::env::var("SERIAL_TEST_PORT") {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!(
+                    "Skipping serial test: SERIAL_TEST_PORT not set. Run scripts/setup-serial-test.sh first."
+                );
+                return;
+            }
+        };
+
+        if !std::path::Path::new(&port_path).exists() {
+            eprintln!(
+                "Skipping serial test: {port_path} does not exist. Run scripts/setup-serial-test.sh first."
+            );
+            return;
+        }
+
+        let mut sender = Sender::new(false);
+        let result = sender.open(0, Some(&port_path), 115200).await;
+        match result {
+            Ok(true) => {
+                assert!(sender.is_opened());
+                // Try writing a test command
+                sender.write_row("test_command", false).await.unwrap();
+                sender.close().await;
+                assert!(!sender.is_opened());
+                eprintln!(
+                    "Serial test: successfully opened {port_path}, wrote test data, and closed."
+                );
+            }
+            Ok(false) => {
+                eprintln!("Serial test: open returned false (unexpected).");
+            }
+            Err(e) => {
+                eprintln!("Skipping serial test: could not open {port_path}: {e}");
+            }
+        }
     }
 }

@@ -55,14 +55,8 @@
 		} catch {
 			keyboardEnabled = false;
 		}
-		// Load key mappings from keyboard config endpoint if available
-		try {
-			// Use generic get to fetch keyboard mappings from a potential endpoint
-			const resp = await api.getKeyboardEnabled();
-			keyMappings = { ...defaultMappings };
-		} catch {
-			keyMappings = { ...defaultMappings };
-		}
+		// Initialize with default mappings (server-side persistence not yet implemented)
+		keyMappings = { ...defaultMappings };
 	}
 
 	async function toggleKeyboard() {

@@ -43,9 +43,11 @@
 
 	function getCanvasPos(e: MouseEvent): { x: number; y: number } {
 		const rect = canvasEl!.getBoundingClientRect();
+		const scaleX = canvasWidth / rect.width;
+		const scaleY = canvasHeight / rect.height;
 		return {
-			x: e.clientX - rect.left,
-			y: e.clientY - rect.top,
+			x: (e.clientX - rect.left) * scaleX,
+			y: (e.clientY - rect.top) * scaleY,
 		};
 	}
 

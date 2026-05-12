@@ -26,9 +26,10 @@
 
 	async function checkConnection() {
 		try {
-			// Try checking general status as a proxy for Home connectivity
-			const status = await api.getStatus();
-			connected = status.serial && status.camera;
+			// TODO: Implement dedicated Pokemon Home status endpoint
+			// For now, assume connected if we can reach the API
+			await api.getStatus();
+			connected = true;
 		} catch {
 			connected = false;
 		}
@@ -65,12 +66,9 @@
 	}
 
 	async function loadBoxList() {
-		try {
-			const res = await api.getCommands();
-			boxes = res.map((c) => c.name);
-		} catch {
-			boxes = [];
-		}
+		// TODO: Replace with actual Pokemon Home box list API when available
+		// For now, generate placeholder box names
+		boxes = Array.from({ length: 32 }, (_, i) => `ボックス ${i + 1}`);
 	}
 
 	async function retrieveBox() {

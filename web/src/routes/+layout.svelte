@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { dev } from '$app/environment';
 	import { base } from '$app/paths';
 	import '../app.css';
@@ -9,10 +10,12 @@
 
 	let { children } = $props();
 
-	// Register service worker for PWA support
-	if (!dev && 'serviceWorker' in navigator) {
-		navigator.serviceWorker.register(`${base}/service-worker.js`);
-	}
+	// Register service worker for PWA support (client-side only)
+	onMount(() => {
+		if (!dev && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register(`${base}/service-worker.js`);
+		}
+	});
 </script>
 
 <ThemeProvider>

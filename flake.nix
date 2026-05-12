@@ -690,6 +690,51 @@
             # nix run .#tauri  — build Tauri app (verify Cargo.lock is present)
             tauri = mkApp "${config.packages.pokecon-tauri}/bin/pokecon-tauri";
 
+            # nix run .#npm-update  — update npm deps and sync flake.nix hash
+            # Usage: nix run .#npm-update
+            # This updates package-lock.json and patches flake.nix with the new hash.
+            npm-update = mkApp "${
+              pkgs.writeShellApplication {
+                name = "npm-update";
+                runtimeInputs = [
+                  pkgs.nodejs_20
+                  pkgs.nix
+                  pkgs.gnused
+                  pkgs.gnugrep
+                ];
+                text = ''
+                  set -euo pipefail
+
+                  WEB_DIR="${self}/web"
+                  FLAKE="${self}/flake.nix"
+
+                  echo "=== Updating npm dependencies ==="
+                  cd "$WEB_DIR"
+                  npm install "$@"
+
+                  echo ""
+                  echo "=== Computing new npm deps hash ==="
+                  # Use nix-prefetch-url to compute the hash of npm deps
+                  NEW_HASH=$(nix-prefetch-url --unpack "file://$WEB_DIR/package-lock.json" 2>&1 | tail -1 || true)
+
+                  if [ -z "$NEW_HASH" ] || [ "$NEW_HASH" = "" ]; then
+                    echo "ERROR: Failed to compute npm deps hash" >&2
+                    echo "You may need to update the hash manually in flake.nix" >&2
+                    exit 1
+                  fi
+
+                  echo "New hash: $NEW_HASH"
+
+                  # Update the hash in flake.nix
+                  sed -i "s|hash = \"sha256-.*\";|hash = \"$NEW_HASH\";|" "$FLAKE"
+
+                  echo ""
+                  echo "=== Updated flake.nix with new npm deps hash ==="
+                  echo "Please commit both package-lock.json and flake.nix changes"
+                '';
+              }
+            }/bin/npm-update";
+
             # nix run .#check  — run ALL checks (CI gate)
             check = mkApp "${
               pkgs.writeShellApplication {
@@ -830,6 +875,29 @@
               export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
               ${config.pre-commit.installationScript}
+
+              # Auto-setup node_modules from nix store if missing or outdated
+              # This ensures reproducible npm deps without running npm install
+              WEB_DIR="$PWD/web"
+              if [ -f "$WEB_DIR/package-lock.json" ]; then
+                LOCK_HASH=$(nix-hash --type sha256 --flat "$WEB_DIR/package-lock.json" 2>&1 | head -1)
+                HASH_FILE="$WEB_DIR/.node_modules.hash"
+                
+                if [ ! -d "$WEB_DIR/node_modules" ] || [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>&1)" != "$LOCK_HASH" ]; then
+                  echo "=== Setting up node_modules from nix store ==="
+                  # Use npmHooks.npmConfigHook approach: copy from nix store
+                  # The npm deps are already fetched by nix, we just need to link them
+                  if [ -d "${self}/web/node_modules" ]; then
+                    rm -rf "$WEB_DIR/node_modules"
+                    cp -r "${self}/web/node_modules" "$WEB_DIR/node_modules"
+                    chmod -R +w "$WEB_DIR/node_modules"
+                    echo "$LOCK_HASH" > "$HASH_FILE"
+                    echo "✓ node_modules synced from nix store"
+                  else
+                    echo "⚠ node_modules not in nix store. Run: nix run .#npm-update"
+                  fi
+                fi
+              fi
 
               echo "Poke Controller Modified Extension development environment loaded."
               echo "Rust: $(rustc --version)"

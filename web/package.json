@@ -11,7 +11,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "svelte-check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest"
+    "test": "vitest --passWithNoTests"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

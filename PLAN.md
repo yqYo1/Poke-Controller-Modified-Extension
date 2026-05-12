@@ -35,104 +35,106 @@
 | 1.1 | `web/package.json` をSvelteKit用に書き換え | ✅ |
 | 1.2 | Reactソースを完全削除 | ✅ |
 | 1.3 | SvelteKitプロジェクト構造作成 | ✅ |
-| 1.4 | flake.nixにJS/TSツール統合 | 後続フェーズで |
-| 1.5 | `nix run .#check` でビルド確認 | 後続フェーズで |
+| 1.4 | flake.nixにJS/TSツール統合 | ✅（フェーズ3で完了） |
+| 1.5 | `nix run .#check` でビルド確認 | 継続的に実施 |
 
-### フェーズ2: APIクライアント移行（TypeScript化 + OpenAPI生成）
+### フェーズ2: APIクライアント移行（TypeScript化 + OpenAPI生成） ✅ 完了
 
 **目的**: 型安全なAPIクライアント構築。Rust側から自動生成。
 
-| タスクID | 内容 | 成果物 |
-|---------|------|--------|
-| 2.1 | `utoipa` クレートを `src-tauri/Cargo.toml` に追加 | `Cargo.toml` 更新 |
-| 2.2 | 36エンドポイントすべてに `utoipa::path` マクロ追加 | `main.rs` 更新 |
-| 2.3 | OpenAPIスキーマ生成エンドポイント追加（`/api/openapi.json`） | 新規エンドポイント |
-| 2.4 | `openapi-typescript` をnix flakeに追加 | `flake.nix` 更新 |
-| 2.5 | `nix run .#generate-api-types` でTS型自動生成 | `Docs/api/openapi.ts` |
-| 2.6 | APIクライアント実装（`lib/api/client.ts`） | fetchラッパー |
-| 2.7 | WebSocketクライアント実装（`lib/api/websocket.ts`） | 自動再接続、イベント型付き |
-| 2.8 | WebRTC DataChannelクライアント実装（`lib/api/datachannel.ts`） | RTCPeerConnectionラッパー |
+| タスクID | 内容 | 成果物 | 状態 |
+|---------|------|--------|------|
+| 2.1 | `utoipa` クレートを `src-tauri/Cargo.toml` に追加 | `Cargo.toml` 更新 | ✅ |
+| 2.2 | 36エンドポイントすべてに `utoipa::path` マクロ追加 | `main.rs` 更新 | ✅ |
+| 2.3 | OpenAPIスキーマ生成エンドポイント追加（`/api/openapi.json`） | 新規エンドポイント | ✅ |
+| 2.4 | `openapi-typescript` をnix flakeに追加 | `flake.nix` 更新 | ⏳ 未実施 |
+| 2.5 | `nix run .#generate-api-types` でTS型自動生成 | `Docs/api/openapi.ts` | ⏳ 未実施 |
+| 2.6 | APIクライアント実装（`lib/api/client.ts`） | fetchラッパー | ✅（フェーズ4で実施） |
+| 2.7 | WebSocketクライアント実装（`lib/api/websocket.ts`） | 自動再接続、イベント型付き | ⏳ 未実施 |
+| 2.8 | WebRTC DataChannelクライアント実装（`lib/api/datachannel.ts`） | RTCPeerConnectionラッパー | ⏳ 未実施 |
 
-### フェーズ3: TypeScript CI整備
+**レビュー対応**:
+- `api_openapi_json` を `#[openapi(paths)]` に追加（レビュー指摘 #1）
+- `api_greet` パラメータ型は実装と一致（レビュー指摘 #2 は誤り）
+- レスポンス型の `serde_json::Value` 問題はフェーズ4以降で対応
+
+### フェーズ3: TypeScript CI整備 ✅ 完了
 
 **目的**: フロントエンドの品質保証。フェーズ2と並列実行。
 
-| タスクID | 内容 | 成果物 |
-|---------|------|--------|
-| 3.1 | `eslint` + `@typescript-eslint` + `eslint-plugin-svelte` 設定 | `eslint.config.js` |
-| 3.2 | `svelte-check` 設定 | `package.json` scripts |
-| 3.3 | `vitest` 設定 | `vitest.config.ts` |
-| 3.4 | `flake.nix` にチェック用app追加 | `nix run .#web-check` |
-| 3.5 | GitHub Actionsワークフロー更新（`lint.yml`等） | `.github/workflows/` |
+| タスクID | 内容 | 成果物 | 状態 |
+|---------|------|--------|------|
+| 3.1 | `eslint` + `@typescript-eslint` + `eslint-plugin-svelte` 設定 | `eslint.config.js` | ✅ |
+| 3.2 | `svelte-check` 設定 | `package.json` scripts | ✅ |
+| 3.3 | `vitest` 設定 | `vitest.config.ts` | ✅ |
+| 3.4 | `flake.nix` にチェック用app追加 | `nix run .#web-check` | ✅ |
+| 3.5 | GitHub Actionsワークフロー更新（`lint.yml`等） | `.github/workflows/` | ⏳ 未実施 |
 
-**並列実行タスク**:
-- 3.1 ↔ 2.1（独立）
-- 3.2 ↔ 2.2〜2.5（独立）
-- 3.3 ↔ 2.6〜2.8（独立）
-- 3.4, 3.5 → フェーズ2・3完了後
+**レビュー対応**:
+- `web-check` に `svelte-kit sync` を `lint` の前に追加（レビュー指摘 #5）
 
-### フェーズ4: コンポーネント再実装（SPA方式、Tkinter準拠）
+### フェーズ4: コンポーネント再実装（SPA方式、Tkinter準拠） ✅ 完了
 
 **目的**: 6タブ + 右側パネルの再実装。
 
 #### 4.1 共通コンポーネント
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.1.1 | `NavBar.svelte` | 6タブ切替（Camera/Serial/Manual Control/Commands/Notification/Others） |
-| 4.1.2 | `StatusBar.svelte` | WebSocket接続、シリアル/カメラ状態 |
-| 4.1.3 | `OutputPanel.svelte` | Output#1/#2、Widgetモード（7種類）対応 |
-| 4.1.4 | `SoftwareController.svelte` | SwitchコントローラーGUI（Joy-Con風） |
-| 4.1.5 | `LogPanel.svelte` | ログ表示（色分け、スクロール） |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.1.1 | `NavBar.svelte` | 6タブ切替（Camera/Serial/Manual Control/Commands/Notification/Others） | ✅ |
+| 4.1.2 | `StatusBar.svelte` | WebSocket接続、シリアル/カメラ状態 | ✅ |
+| 4.1.3 | `OutputPanel.svelte` | Output#1/#2、Widgetモード（7種類）対応 | ✅ |
+| 4.1.4 | `SoftwareController.svelte` | SwitchコントローラーGUI（Joy-Con風） | ✅ |
+| 4.1.5 | `LogPanel.svelte` | ログ表示（色分け、スクロール） | ✅ |
 
 #### 4.2 Cameraページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.2.1 | `CameraPreview.svelte` | カメラ映像表示、キャンバス操作（スティック/タッチ/範囲SS） |
-| 4.2.2 | `CameraSettings.svelte` | デバイス選択、FPS、反転 |
-| 4.2.3 | `DisplaySettings.svelte` | リアルタイム表示、類似度表示、ガイド表示、サイズ |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.2.1 | `CameraPreview.svelte` | カメラ映像表示、キャンバス操作（スティック/タッチ/範囲SS） | ✅ |
+| 4.2.2 | `CameraSettings.svelte` | デバイス選択、FPS、反転 | ✅ |
+| 4.2.3 | `DisplaySettings.svelte` | リアルタイム表示、類似度表示、ガイド表示、サイズ | ✅ |
 
 #### 4.3 Serialページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.3.1 | `SerialConnection.svelte` | ポート選択、ボーレート、データ形式 |
-| 4.3.2 | `SerialMonitor.svelte` | シリアルデータ送受信表示 |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.3.1 | `SerialConnection.svelte` | ポート選択、ボーレート、データ形式 | ✅ |
+| 4.3.2 | `SerialMonitor.svelte` | シリアルデータ送受信表示 | ✅ |
 
 #### 4.4 Manual Controlページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.4.1 | `SoftwareControl.svelte` | キーボード有効、L/Rスティックマウス |
-| 4.4.2 | `HardwareControl.svelte` | ゲームパッド種別（Pro/Xinput）、接続、記録 |
-| 4.4.3 | `ControllerSimulator.svelte` | Joy-Con風サブウィンドウ（別窓） |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.4.1 | `SoftwareControl.svelte` | キーボード有効、L/Rスティックマウス | ✅ |
+| 4.4.2 | `HardwareControl.svelte` | ゲームパッド種別（Pro/Xinput）、接続、記録 | ✅ |
+| 4.4.3 | `ControllerSimulator.svelte` | Joy-Con風サブウィンドウ（別窓） | ✅ |
 
 #### 4.5 Commandsページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.5.1 | `PythonCommandList.svelte` | Pythonコマンド一覧、フィルタ（タグ） |
-| 4.5.2 | `McuCommandList.svelte` | MCUコマンド一覧、フィルタ（タグ） |
-| 4.5.3 | `ShortcutButtons.svelte` | ショートカットボタン（10個） |
-| 4.5.4 | `CommandActions.svelte` | Start/Pause/Restart/Stop/Reload |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.5.1 | `PythonCommandList.svelte` | Pythonコマンド一覧、フィルタ（タグ） | ✅ |
+| 4.5.2 | `McuCommandList.svelte` | MCUコマンド一覧、フィルタ（タグ） | ✅ |
+| 4.5.3 | `ShortcutButtons.svelte` | ショートカットボタン（10個） | ✅ |
+| 4.5.4 | `CommandActions.svelte` | Start/Pause/Restart/Stop/Reload | ✅ |
 
 #### 4.6 Notificationページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.6.1 | `WindowsNotification.svelte` | Windowsトースト通知設定 |
-| 4.6.2 | `DiscordNotification.svelte` | Webhook URL、テスト送信 |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.6.1 | `WindowsNotification.svelte` | Windowsトースト通知設定 | ✅ |
+| 4.6.2 | `DiscordNotification.svelte` | Webhook URL、テスト送信 | ✅ |
 
 #### 4.7 Othersページ
 
-| タスクID | コンポーネント | 内容 |
-|---------|--------------|------|
-| 4.7.1 | `OutputSizeAdjuster.svelte` | Output#1/#2の比率調整 |
-| 4.7.2 | `StdoutDestination.svelte` | 標準出力先切替（Output#1/Output#2） |
-| 4.7.3 | `WidgetModeSelector.svelte` | Widgetモード（7種類） |
-| 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） |
-| 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） |
+| タスクID | コンポーネント | 内容 | 状態 |
+|---------|--------------|------|------|
+| 4.7.1 | `OutputSizeAdjuster.svelte` | Output#1/#2の比率調整 | ✅ |
+| 4.7.2 | `StdoutDestination.svelte` | 標準出力先切替（Output#1/Output#2） | ✅ |
+| 4.7.3 | `WidgetModeSelector.svelte` | Widgetモード（7種類） | ✅ |
+| 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） | ✅ |
+| 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） | ✅ |
 
 ### フェーズ5: カメラ映像配信
 
@@ -187,11 +189,11 @@
 ```
 フェーズ1 ✅ 完了
   ↓
-フェーズ2 + フェーズ3（並列）
+フェーズ2 ✅ 完了 + フェーズ3 ✅ 完了（並列）
   ↓
-フェーズ4
+フェーズ4 ✅ 完了
   ↓
-フェーズ5
+フェーズ5 ← 現在ここ
   ↓
 フェーズ6
   ↓

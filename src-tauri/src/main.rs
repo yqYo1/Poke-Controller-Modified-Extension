@@ -2210,7 +2210,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
 
     let app = axum::Router::new()
         // Root redirect: / → /ui/
-        .route("/", get(|| async { Redirect::permanent("/ui/") }))
+        .route("/", get(|| async { Redirect::temporary("/ui/") }))
         // ── Mobile placeholder (TODO) ───────────────────────────────────
         .route(
             "/mobile",

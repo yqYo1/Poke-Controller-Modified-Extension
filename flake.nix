@@ -831,6 +831,54 @@
                 '';
               }
             }/bin/web-check";
+
+            # nix run .#generate-api-types  — generate TypeScript types from OpenAPI schema
+            generate-api-types = mkApp "${
+              pkgs.writeShellApplication {
+                name = "generate-api-types";
+                runtimeInputs = [
+                  pkgs.nodejs_20
+                  pkgs.curl
+                ];
+                text = ''
+                  set -euo pipefail
+
+                  WEB_DIR="${self}/web"
+                  OPENAPI_URL="http://127.0.0.1:8020/api/openapi.json"
+                  OUTPUT="$WEB_DIR/src/lib/api/types.ts"
+                  TMP_JSON="$(mktemp).json"
+                  trap 'rm -f "$TMP_JSON"' EXIT
+
+                  echo "=== Fetching OpenAPI schema from $OPENAPI_URL ==="
+                  if curl -sf "$OPENAPI_URL" > "$TMP_JSON"; then
+                    echo "✓ OpenAPI schema fetched"
+                  else
+                    echo ""
+                    echo "ERROR: Backend server is not running at $OPENAPI_URL" >&2
+                    echo "" >&2
+                    echo "Please start the backend server first:" >&2
+                    echo "  nix run .#tauri-dev" >&2
+                    echo "" >&2
+                    echo "Or build and run the Rust server in web mode:" >&2
+                    echo "  nix run .#default -- --ui web" >&2
+                    echo "" >&2
+                    exit 1
+                  fi
+
+                  echo ""
+                  echo "=== Generating TypeScript types ==="
+                  cd "$WEB_DIR"
+                  npm ci --legacy-peer-deps 2>&1
+                  npx openapi-typescript "$TMP_JSON" --output "$OUTPUT" 2>&1
+
+                  echo ""
+                  if [ -f "$OUTPUT" ]; then
+                    LINES=$(wc -l < "$OUTPUT")
+                    echo "✓ TypeScript types generated: $OUTPUT ($LINES lines)"
+                  fi
+                '';
+              }
+            }/bin/generate-api-types";
           };
 
           # ── git-hooks (pre-commit) configuration ───────────────────────
@@ -970,6 +1018,8 @@
               echo "  typos             - run spell checker"
               echo "  typos-check       - check typos (CI)"
               echo "  check             - full CI gate"
+              echo "  web-check         - run TS/JS checks (eslint + svelte-check + vitest)"
+              echo "  generate-api-types - generate TS types from OpenAPI schema"
               echo ""
               echo "Test helpers:"
               echo "  scripts/setup-v4l2-test.sh   - create virtual V4L2 camera"

@@ -10,6 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "svelte-check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "generate-api-types": "openapi-typescript http://localhost:8020/api/openapi.json --output ./src/lib/api/types.ts",
     "lint": "eslint .",
     "test": "vitest --passWithNoTests"
   },
@@ -24,6 +25,7 @@
     "eslint": "^9.0.0",
     "eslint-plugin-svelte": "^3.0.0",
     "globals": "^15.0.0",
+    "openapi-typescript": "^7.0.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "^5.0.0",

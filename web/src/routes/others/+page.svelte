@@ -14,8 +14,8 @@
 			profiles = list.map((p) => p.name);
 		}).catch(console.warn);
 		api.getMouseStick().then((c) => {
-			mouseStickLEnabled = c.stick === 'left' ? c.enabled : mouseStickLEnabled;
-			mouseStickREnabled = c.stick === 'right' ? c.enabled : mouseStickREnabled;
+			mouseStickLEnabled = c.left_enabled;
+			mouseStickREnabled = c.right_enabled;
 			mouseSensitivity = c.sensitivity;
 		}).catch(console.warn);
 	});

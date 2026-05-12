@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { api, wsClient as wsClientSingleton } from '$lib/api/client';
+	import { api, wsClient as wsClientSingleton, type WebSocketClient } from '$lib/api/client';
 
 	let wsConnected = $state(false);
 	let serialConnected = $state(false);

@@ -27,6 +27,7 @@ tower-http = { version = "0.6", features = ["fs", "cors"] }
 tokio-serial = "5.4"
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 base64 = "0.22"
+url = "2"
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }

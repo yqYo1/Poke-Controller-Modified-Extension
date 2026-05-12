@@ -10,6 +10,7 @@ use axum::routing::{get, post};
 use clap::Parser;
 use serde::Deserialize;
 use tokio::sync::Mutex;
+use url::Url;
 
 use pokecon_core::command_manager::CommandManager;
 use pokecon_core::profile::ProfileManager;
@@ -381,13 +382,14 @@ async fn camera_capture(
     match cam.as_ref() {
         Some(camera) => match camera.capture().await {
             Ok(frame) => {
-                // Save as JPEG file
-                let path = PathBuf::from(&body.filename);
+                // SECURITY: Sanitize filename to prevent path traversal
+                let safe_filename = sanitize_filename(&body.filename);
+                let path = PathBuf::from("Captures").join(&safe_filename);
                 match save_frame_as_jpeg(&frame, &path) {
                     Ok(()) => Json(serde_json::json!({
                         "status": "ok",
-                        "message": format!("Captured to {}", body.filename),
-                        "path": body.filename,
+                        "message": format!("Captured to {}", path.display()),
+                        "path": path.to_string_lossy(),
                         "width": frame.width,
                         "height": frame.height,
                     })),
@@ -409,6 +411,84 @@ async fn camera_capture(
     }
 }
 
+/// Sanitize a filename to prevent path traversal attacks.
+/// Strips directory separators and `..` sequences, keeping only the final filename component.
+fn sanitize_filename(name: &str) -> String {
+    // Use std::path to get the file name component only (strips all directory parts)
+    let path = PathBuf::from(name);
+    let file_name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| name.to_string());
+    // Remove any remaining path separators or special characters
+    file_name
+        .chars()
+        .filter(|&c| !std::path::is_separator(c) && c != '\0')
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Validate that a URL is safe to use (no SSRF).
+/// Only http/https schemes allowed, private/internal IPs rejected.
+fn validate_webhook_url(url_str: &str) -> Result<(), String> {
+    if url_str.is_empty() {
+        return Ok(()); // Empty URLs are allowed (means "not configured")
+    }
+
+    let parsed = Url::parse(url_str).map_err(|_| format!("Invalid URL: {}", url_str))?;
+
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(format!(
+            "Unsupported URL scheme '{}'. Only http and https are allowed.",
+            scheme
+        ));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| format!("URL has no host: {}", url_str))?;
+
+    // Block private/internal hostnames
+    let lower_host = host.to_lowercase();
+    if lower_host == "localhost"
+        || lower_host == "localhost.localdomain"
+        || lower_host.ends_with(".local")
+        || lower_host.ends_with(".internal")
+        || lower_host == "127.0.0.1"
+        || lower_host == "::1"
+        || lower_host == "[::1]"
+        || lower_host.starts_with("10.")
+        || lower_host.starts_with("172.16.")
+        || lower_host.starts_with("172.17.")
+        || lower_host.starts_with("172.18.")
+        || lower_host.starts_with("172.19.")
+        || lower_host.starts_with("172.20.")
+        || lower_host.starts_with("172.21.")
+        || lower_host.starts_with("172.22.")
+        || lower_host.starts_with("172.23.")
+        || lower_host.starts_with("172.24.")
+        || lower_host.starts_with("172.25.")
+        || lower_host.starts_with("172.26.")
+        || lower_host.starts_with("172.27.")
+        || lower_host.starts_with("172.28.")
+        || lower_host.starts_with("172.29.")
+        || lower_host.starts_with("172.30.")
+        || lower_host.starts_with("172.31.")
+        || lower_host.starts_with("192.168.")
+        || lower_host == "0.0.0.0"
+        || lower_host.starts_with("169.254.")
+    {
+        return Err(format!(
+            "URL host '{}' is a private/internal address and is not allowed",
+            host
+        ));
+    }
+
+    Ok(())
+}
+
 /// POST /api/camera/config - update camera configuration (width, height, fps, flip)
 async fn camera_config(
     State(state): State<AppState>,
@@ -420,12 +500,30 @@ async fn camera_config(
             let mut config = camera.config().clone();
 
             if let Some(width) = body.width {
+                if width == 0 || width > 4096 {
+                    return Json(serde_json::json!({
+                        "status": "error",
+                        "message": format!("Invalid width: {}. Must be between 1 and 4096.", width),
+                    }));
+                }
                 config.width = width;
             }
             if let Some(height) = body.height {
+                if height == 0 || height > 4096 {
+                    return Json(serde_json::json!({
+                        "status": "error",
+                        "message": format!("Invalid height: {}. Must be between 1 and 4096.", height),
+                    }));
+                }
                 config.height = height;
             }
             if let Some(fps) = body.fps {
+                if fps == 0 || fps > 120 {
+                    return Json(serde_json::json!({
+                        "status": "error",
+                        "message": format!("Invalid fps: {}. Must be between 1 and 120.", fps),
+                    }));
+                }
                 config.fps = fps;
             }
             if let Some(ref flip_str) = body.flip {
@@ -557,31 +655,40 @@ async fn input_press(
         }));
     }
 
-    let mut sender = state.serial.lock().await;
-    if !sender.is_opened() {
-        return Json(serde_json::json!({
-            "status": "error",
-            "message": "Serial port not open"
-        }));
-    }
+    // Build the press row and release row first, while holding the lock
+    let release_row = {
+        let mut sender = state.serial.lock().await;
+        if !sender.is_opened() {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": "Serial port not open"
+            }));
+        }
 
-    let mut fmt = SendFormat::new();
-    fmt.set_button(&buttons);
+        let mut fmt = SendFormat::new();
+        fmt.set_button(&buttons);
 
-    let row = format_default_row(&fmt, false, false);
-    if let Err(e) = sender.write_row(&row, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
-    }
+        let press_row = format_default_row(&fmt, false, false);
+        if let Err(e) = sender.write_row(&press_row, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
 
-    // Release after duration
+        // Build release row while we still have the lock
+        let release_fmt = SendFormat::new();
+        format_default_row(&release_fmt, false, false)
+    }; // Lock is dropped here
+
+    // Release after duration (lock released, safe to sleep)
     if body.duration > 0 {
         tokio::time::sleep(tokio::time::Duration::from_millis(body.duration)).await;
     }
 
-    let release_fmt = SendFormat::new();
-    let release_row = format_default_row(&release_fmt, false, false);
-    if let Err(e) = sender.write_row(&release_row, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+    // Re-acquire lock to send release
+    {
+        let mut sender = state.serial.lock().await;
+        if let Err(e) = sender.write_row(&release_row, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
     }
 
     if body.wait > 0 {
@@ -663,35 +770,43 @@ async fn input_stick(
 
     let direction = Direction::from_xy(stick, body.x, body.y);
 
-    let mut sender = state.serial.lock().await;
-    if !sender.is_opened() {
-        return Json(serde_json::json!({
-            "status": "error",
-            "message": "Serial port not open"
-        }));
-    }
+    // Build the movement row and center row while holding the lock
+    let center_row = {
+        let mut sender = state.serial.lock().await;
+        if !sender.is_opened() {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": "Serial port not open"
+            }));
+        }
 
-    let mut fmt = SendFormat::new();
-    fmt.set_any_direction(&[direction.clone()]);
+        let mut fmt = SendFormat::new();
+        fmt.set_any_direction(std::slice::from_ref(&direction));
 
-    let l_changed = matches!(stick, Stick::Left);
-    let r_changed = matches!(stick, Stick::Right);
-    let row = format_default_row(&fmt, l_changed, r_changed);
+        let l_changed = matches!(stick, Stick::Left);
+        let r_changed = matches!(stick, Stick::Right);
+        let row = format_default_row(&fmt, l_changed, r_changed);
 
-    if let Err(e) = sender.write_row(&row, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
-    }
+        if let Err(e) = sender.write_row(&row, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
 
-    // Wait for duration
+        // Build center row while we still have the lock
+        let center_fmt = SendFormat::new();
+        format_default_row(&center_fmt, l_changed, r_changed)
+    }; // Lock is dropped here
+
+    // Wait for duration (lock released, safe to sleep)
     if body.duration > 0 {
         tokio::time::sleep(tokio::time::Duration::from_millis(body.duration)).await;
     }
 
-    // Recenter
-    let center_fmt = SendFormat::new();
-    let center_row = format_default_row(&center_fmt, l_changed, r_changed);
-    if let Err(e) = sender.write_row(&center_row, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+    // Re-acquire lock to recenter
+    {
+        let mut sender = state.serial.lock().await;
+        if let Err(e) = sender.write_row(&center_row, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
     }
 
     Json(serde_json::json!({
@@ -707,35 +822,43 @@ async fn input_touch(
 ) -> Json<serde_json::Value> {
     let touch = Touchscreen::new(body.x, body.y);
 
-    let mut sender = state.serial.lock().await;
-    if !sender.is_opened() {
-        return Json(serde_json::json!({
-            "status": "error",
-            "message": "Serial port not open"
-        }));
-    }
+    // Build the touch data and release data while holding the lock
+    let release_data = {
+        let mut sender = state.serial.lock().await;
+        if !sender.is_opened() {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": "Serial port not open"
+            }));
+        }
 
-    // For touchscreen in Default format, we need to use a format that supports it.
-    // Default serial format does not include touchscreen data (only Qingpi/3DS do).
-    // Send via Qingpi format for touch support.
-    let mut fmt = SendFormat::new();
-    fmt.set_touchscreen(&[touch]);
+        // For touchscreen in Default format, we need to use a format that supports it.
+        // Default serial format does not include touchscreen data (only Qingpi/3DS do).
+        // Send via Qingpi format for touch support.
+        let mut fmt = SendFormat::new();
+        fmt.set_touchscreen(&[touch]);
 
-    // Use a simple row approach: write the Qingpi format bytes
-    let qingpi_data = fmt.convert_to_qingpi();
-    if let Err(e) = sender.write_list(&qingpi_data, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
-    }
+        // Use a simple row approach: write the Qingpi format bytes
+        let qingpi_data = fmt.convert_to_qingpi();
+        if let Err(e) = sender.write_list(&qingpi_data, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
+
+        // Build release data while we still have the lock
+        let release_fmt = SendFormat::new();
+        release_fmt.convert_to_qingpi()
+    }; // Lock is dropped here
 
     if body.duration > 0 {
         tokio::time::sleep(tokio::time::Duration::from_millis(body.duration)).await;
     }
 
-    // Release touch
-    let release_fmt = SendFormat::new();
-    let release_data = release_fmt.convert_to_qingpi();
-    if let Err(e) = sender.write_list(&release_data, true).await {
-        return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+    // Re-acquire lock to release touch
+    {
+        let mut sender = state.serial.lock().await;
+        if let Err(e) = sender.write_list(&release_data, true).await {
+            return Json(serde_json::json!({ "status": "error", "message": e.to_string() }));
+        }
     }
 
     Json(serde_json::json!({
@@ -920,7 +1043,8 @@ async fn serial_config(
     State(state): State<AppState>,
     Json(body): Json<SerialConfigRequest>,
 ) -> Json<serde_json::Value> {
-    // Separate scopes to avoid holding locks simultaneously
+    // Separate scopes to avoid holding multiple locks simultaneously
+    // Lock ordering: serial → keypress (consistent across all endpoints)
     if let Some(baudrate) = body.baudrate {
         let mut sender = state.serial.lock().await;
         if sender.is_opened() {
@@ -931,7 +1055,7 @@ async fn serial_config(
                 }));
             }
         }
-    }
+    } // serial lock released
 
     if let Some(ref format_str) = body.data_format {
         let format = match format_str.as_str() {
@@ -945,10 +1069,15 @@ async fn serial_config(
                 }));
             }
         };
-        let mut kp = state.keypress.lock().await;
-        kp.set_serial_format(format);
-        let mut sender = state.serial.lock().await;
-        sender.set_data_format(format_str);
+        // Update serial format first (serial → keypress order)
+        {
+            let mut sender = state.serial.lock().await;
+            sender.set_data_format(format_str);
+        } // serial lock released
+        {
+            let mut kp = state.keypress.lock().await;
+            kp.set_serial_format(format);
+        } // keypress lock released
     }
 
     Json(serde_json::json!({
@@ -1265,9 +1394,20 @@ async fn notifications_get_config(State(state): State<AppState>) -> Json<serde_j
         "windows_enabled": cfg.windows_enabled,
         "line_enabled": cfg.line_enabled,
         "discord_enabled": cfg.discord_enabled,
-        "discord_webhook_url": cfg.discord_webhook_url,
-        "line_access_token": cfg.line_access_token,
+        "discord_webhook_url": mask_secret(&cfg.discord_webhook_url),
+        "line_access_token": mask_secret(&cfg.line_access_token),
     }))
+}
+
+/// Mask a secret value for safe display (show last 4 chars, rest as ****).
+fn mask_secret(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    if value.len() <= 4 {
+        return "****".to_string();
+    }
+    format!("****{}", &value[value.len() - 4..])
 }
 
 #[derive(serde::Deserialize)]
@@ -1295,6 +1435,13 @@ async fn notifications_set_config(
         cfg.discord_enabled = v;
     }
     if let Some(v) = body.discord_webhook_url {
+        // SSRF protection: validate webhook URL
+        if let Err(e) = validate_webhook_url(&v) {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Invalid discord_webhook_url: {}", e),
+            }));
+        }
         cfg.discord_webhook_url = v;
     }
     if let Some(v) = body.line_access_token {
@@ -1349,10 +1496,21 @@ async fn notifications_send(
 
     // Discord notification
     if cfg.discord_enabled && !cfg.discord_webhook_url.is_empty() {
-        let notifier = DiscordNotifier::new(&cfg.discord_webhook_url);
-        match notifier.send(&notification).await {
-            Ok(_) => results.push(serde_json::json!({"channel": "discord", "status": "sent"})),
-            Err(e) => results.push(serde_json::json!({"channel": "discord", "status": "error", "error": e.to_string()})),
+        // SSRF protection: validate URL before sending
+        if let Err(e) = validate_webhook_url(&cfg.discord_webhook_url) {
+            results.push(serde_json::json!({
+                "channel": "discord",
+                "status": "error",
+                "error": format!("Invalid webhook URL: {}", e),
+            }));
+        } else {
+            let notifier = DiscordNotifier::new(&cfg.discord_webhook_url);
+            match notifier.send(&notification).await {
+                Ok(_) => results.push(serde_json::json!({"channel": "discord", "status": "sent"})),
+                Err(e) => results.push(
+                    serde_json::json!({"channel": "discord", "status": "error", "error": e.to_string()}),
+                ),
+            }
         }
     }
 

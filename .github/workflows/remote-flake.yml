@@ -26,8 +26,14 @@ jobs:
         run: |
           # Test that the default app can be built from remote
           # This will fail if the flake references local paths
-          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help || true
-      - name: Run check from remote
+          # NOTE: || true intentionally removed — errors must not be suppressed
+          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help
+      - name: Build Tauri app from remote
         run: |
-          # Run the full check suite from remote
+          # Build the Tauri app from remote to verify Cargo.lock is present
+          # This ensures the #tauri app entry (and its src-tauri/Cargo.lock) is valid
+          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#tauri" -- --help
+      - name: Run full check from remote
+        run: |
+          # Run the full check suite from remote (clippy, ruff, pytest, typos, fmt)
           nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check"

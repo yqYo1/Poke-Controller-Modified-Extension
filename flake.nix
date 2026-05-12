@@ -687,6 +687,9 @@
               }
             }/bin/tauri-dev";
 
+            # nix run .#tauri  — build Tauri app (verify Cargo.lock is present)
+            tauri = mkApp "${config.packages.pokecon-tauri}/bin/pokecon-tauri";
+
             # nix run .#check  — run ALL checks (CI gate)
             check = mkApp "${
               pkgs.writeShellApplication {
@@ -749,6 +752,14 @@
                   enable = true;
                   entry = "${pkgs.typos}/bin/typos";
                   pass_filenames = false;
+                };
+                "check-tauri-lock" = {
+                  enable = true;
+                  name = "Check src-tauri/Cargo.lock";
+                  description = "Verify src-tauri/Cargo.lock exists and is tracked by git";
+                  entry = "bash ${self}/scripts/check-tauri-lock.sh";
+                  pass_filenames = false;
+                  stages = [ "pre-commit" ];
                 };
               };
             };

@@ -24,6 +24,7 @@ mod v4l_impl {
         /// Must be declared before `device` so it is dropped first
         /// (Rust drops fields in declaration order).
         stream: v4l::io::mmap::Stream<'static>,
+        #[allow(dead_code)]
         device: Device,
     }
 

@@ -136,16 +136,23 @@
 | 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） | ✅ |
 | 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） | ✅ |
 
-### フェーズ5: カメラ映像配信
+### フェーズ5: カメラ映像配信 ✅ 完了
 
-| タスクID | 内容 | 備考 |
-|---------|------|------|
-| 5.1 | MJPEG over HTTPエンドポイント実装（Rust側） | `/camera/stream` |
-| 5.2 | MJPEGフロントエンド実装 | `<img>`タグ |
-| 5.3 | WebRTCシグナリング（WebSocket流用） | `offer`/`answer`/`ice-candidate` |
-| 5.4 | WebRTC video track実装 | RTCPeerConnection |
-| 5.5 | WebRTC DataChannel実装 | ログ・コントローラー入力 |
-| 5.6 | WebSocketフォールバック実装 | DataChannel接続失敗時 |
+| タスクID | 内容 | 備考 | 状態 |
+|---------|------|------|------|
+| 5.1 | MJPEG over HTTPエンドポイント実装（Rust側） | `/camera/stream` | ✅ |
+| 5.2 | MJPEGフロントエンド実装 | `<img>`タグ | ✅（フェーズ4で実施） |
+| 5.3 | WebRTCシグナリング（WebSocket流用） | `offer`/`answer`/`ice-candidate` | ✅（フェーズ2.8で実施） |
+| 5.4 | WebRTC video track実装 | RTCPeerConnection | ⏳ 未実施 |
+| 5.5 | WebRTC DataChannel実装 | ログ・コントローラー入力 | ✅（フェーズ2.8で実施） |
+| 5.6 | WebSocketフォールバック実装 | DataChannel接続失敗時 | ✅（フェーズ2.8で実施） |
+
+**レビュー対応**:
+- StatusBar.svelteでシングルトンwsClientを使用（レビュー指摘 #4）
+- websocket.tsでCLOSING状態のソケットをクローズ（レビュー指摘 #3）
+- main.rsにCache-Controlヘッダー追加（レビュー指摘 #7）
+- 空のmultipartボディをスキップ（レビュー指摘 #5）
+- 残存: シグナリングプロトコル型衝突（Critical）、フォールバックハンドラーリーク（High）→ フェーズ6で対応
 
 ### フェーズ6: ビルド・統合
 
@@ -195,9 +202,10 @@
   ↓
 フェーズ4 ✅ 完了
   ↓
-フェーズ5 ← 現在ここ
+フェーズ5 ✅ 完了（一部⏳残存）
+  │  ※ 5.4 WebRTC video track は未実施
   ↓
-フェーズ6
+フェーズ6 ← 現在ここ
   ↓
 フェーズ7（優先度：低）
   ↓

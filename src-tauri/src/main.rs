@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -571,40 +571,39 @@ fn validate_webhook_url(url_str: &str) -> Result<(), String> {
         .host_str()
         .ok_or_else(|| format!("URL has no host: {}", url_str))?;
 
-    // Block private/internal hostnames
+    // Block private/internal addresses (SSRF prevention)
     let lower_host = host.to_lowercase();
+
+    // Block internal hostnames
     if lower_host == "localhost"
         || lower_host == "localhost.localdomain"
         || lower_host.ends_with(".local")
         || lower_host.ends_with(".internal")
-        || lower_host == "127.0.0.1"
-        || lower_host == "::1"
-        || lower_host == "[::1]"
-        || lower_host.starts_with("10.")
-        || lower_host.starts_with("172.16.")
-        || lower_host.starts_with("172.17.")
-        || lower_host.starts_with("172.18.")
-        || lower_host.starts_with("172.19.")
-        || lower_host.starts_with("172.20.")
-        || lower_host.starts_with("172.21.")
-        || lower_host.starts_with("172.22.")
-        || lower_host.starts_with("172.23.")
-        || lower_host.starts_with("172.24.")
-        || lower_host.starts_with("172.25.")
-        || lower_host.starts_with("172.26.")
-        || lower_host.starts_with("172.27.")
-        || lower_host.starts_with("172.28.")
-        || lower_host.starts_with("172.29.")
-        || lower_host.starts_with("172.30.")
-        || lower_host.starts_with("172.31.")
-        || lower_host.starts_with("192.168.")
-        || lower_host == "0.0.0.0"
-        || lower_host.starts_with("169.254.")
     {
         return Err(format!(
-            "URL host '{}' is a private/internal address and is not allowed",
+            "URL host '{}' is an internal hostname and is not allowed",
             host
         ));
+    }
+
+    // Parse as IP and block loopback/private/link-local addresses
+    if let Ok(ip) = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<IpAddr>()
+    {
+        let is_blocked = match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback() || v4.is_private() || v4.is_unspecified() || v4.is_link_local()
+            }
+            IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+        };
+        if is_blocked {
+            return Err(format!(
+                "URL host '{}' is a private/internal IP address and is not allowed",
+                ip
+            ));
+        }
     }
 
     Ok(())

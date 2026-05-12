@@ -12,13 +12,45 @@ mod v4l_impl {
 
     use crate::camera::{CameraBackend, CameraConfig, CameraError, Frame, PixelFormat};
 
+    /// Wraps a V4L2 Device and its associated MmapStream together.
+    ///
+    /// `MmapStream` internally holds an `Arc<Handle>` cloned from the `Device`,
+    /// so the stream's mmap'd buffers remain valid independently of the `Device`.
+    /// The lifetime parameter in `MmapStream<'a>` is only a phantom marker for
+    /// the mmap'd buffer regions — it does not actually borrow from the `Device`
+    /// struct. By owning both in a single struct, we enforce drop order
+    /// (stream before device) at the type level, making the `'static` lifetime sound.
+    struct CameraInner {
+        /// Must be declared before `device` so it is dropped first
+        /// (Rust drops fields in declaration order).
+        stream: v4l::io::mmap::Stream<'static>,
+        device: Device,
+    }
+
+    impl CameraInner {
+        fn new(device: Device, stream: v4l::io::mmap::Stream<'_>) -> Self {
+            // Safety: MmapStream does not actually borrow from the Device —
+            // it only holds an Arc<Handle> which keeps the V4L2 file descriptor
+            // alive. The mmap'd buffers are backed by this fd and remain valid
+            // as long as the Handle (Arc) lives. Since Stream already owns its
+            // own Arc<Handle>, the buffers survive the Device's lifetime.
+            // By wrapping both in CameraInner with stream before device,
+            // we guarantee stream is dropped first, which is always valid.
+            let stream = unsafe {
+                std::mem::transmute::<v4l::io::mmap::Stream<'_>, v4l::io::mmap::Stream<'static>>(
+                    stream,
+                )
+            };
+            Self { stream, device }
+        }
+    }
+
     /// Video4Linux2 camera backend for Linux.
     ///
     /// Uses the `v4l` crate to access camera devices via V4L2.
     /// Supports mmap-based streaming and negotiates the best pixel format.
     pub struct V4lCameraBackend {
-        device: Option<Device>,
-        stream: Option<MmapStream<'static>>,
+        inner: Option<CameraInner>,
         config: Option<CameraConfig>,
         is_open: bool,
         negotiated_fourcc: Option<v4l::FourCC>,
@@ -27,8 +59,7 @@ mod v4l_impl {
     impl V4lCameraBackend {
         pub fn new() -> Self {
             Self {
-                device: None,
-                stream: None,
+                inner: None,
                 config: None,
                 is_open: false,
                 negotiated_fourcc: None,
@@ -192,8 +223,7 @@ mod v4l_impl {
                 )
             })?;
 
-            self.device = Some(device);
-            self.stream = Some(stream);
+            self.inner = Some(CameraInner::new(device, stream));
             self.config = Some(config.clone());
             self.negotiated_fourcc = Some(fourcc);
             self.is_open = true;
@@ -215,7 +245,7 @@ mod v4l_impl {
                 return Err(CameraError::NotInitialized);
             }
 
-            let stream = self.stream.as_mut().ok_or(CameraError::CaptureError(
+            let inner = self.inner.as_mut().ok_or(CameraError::CaptureError(
                 "Stream not initialized".to_string(),
             ))?;
 
@@ -227,7 +257,8 @@ mod v4l_impl {
                 "No configuration set".to_string(),
             ))?;
 
-            let (buf, _meta) = stream
+            let (buf, _meta) = inner
+                .stream
                 .next()
                 .map_err(|e| CameraError::CaptureError(format!("V4L capture error: {}", e)))?;
 
@@ -236,8 +267,7 @@ mod v4l_impl {
 
         async fn close(&mut self) {
             self.is_open = false;
-            self.stream = None;
-            self.device = None;
+            self.inner = None;
             self.config = None;
             self.negotiated_fourcc = None;
             tracing::info!("V4L camera closed");

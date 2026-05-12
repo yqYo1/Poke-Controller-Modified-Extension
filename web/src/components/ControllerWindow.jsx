@@ -86,9 +86,9 @@ export default function ControllerWindow({ visible, onClose, onInput, serialOpen
     const normX = Math.max(-1.0, Math.min(1.0, dx / maxPixels));
     const normY = Math.max(-1.0, Math.min(1.0, dy / maxPixels));
 
-    // Convert to 0-255 range (128 = center)
-    const stickX = Math.round(128 + normX * 127.5);
-    const stickY = Math.round(128 + normY * 127.5);
+    // Convert to 0-255 range (128 = center), clamp to avoid u8 overflow in Rust
+    const stickX = Math.min(255, Math.max(0, Math.round(128 + normX * 127.5)));
+    const stickY = Math.min(255, Math.max(0, Math.round(128 + normY * 127.5)));
 
     // Throttle to ~60fps
     const now = Date.now();

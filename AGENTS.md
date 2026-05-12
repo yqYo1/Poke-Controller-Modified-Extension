@@ -25,6 +25,13 @@
 ### Investigation-First Approach
 - [2026-05-09] **Investigate root causes thoroughly before proposing solutions.** Avoid shortcut approaches that skip proper investigation.
 
+### CI Monitoring (Mandatory)
+- [2026-05-12] **After EVERY git push to origin, verify CI results on GitHub.** Local `nix run .#check` passing does NOT guarantee CI will pass (environment differences, feature flags, etc.).
+- [2026-05-12] **Use `scripts/ci-watch.sh` to monitor CI after push.** This script polls GitHub Actions and blocks until all jobs complete, reporting success/failure.
+- [2026-05-12] **If CI fails, fix before declaring completion.** Never tell user "CI passed" without actually checking GitHub.
+- [2026-05-12] **CI watch command:** `scripts/ci-watch.sh [branch] [timeout-seconds]` (default: current branch, 600s timeout)
+- [2026-05-12] **Alternative:** `gh run watch` or `gh run list --branch <branch>` to check status manually.
+
 ## Quick Reference
 
 ```bash

@@ -1,13 +1,18 @@
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
+use axum::body::Body;
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::IntoResponse;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use clap::Parser;
+use futures::stream;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::Mutex;
@@ -130,11 +135,9 @@ fn parse_buttons(names: &[String]) -> Vec<Button> {
     names.iter().filter_map(|n| parse_button(n)).collect()
 }
 
-// ── Helper: Encode a camera Frame as base64 JPEG ───────────────────────────────
+// ── Helper: Encode a camera Frame as raw JPEG bytes ────────────────────────
 
-fn frame_to_base64_jpeg(frame: &Frame) -> Result<String, String> {
-    use base64::Engine;
-
+fn frame_to_jpeg_bytes(frame: &Frame) -> Result<Vec<u8>, String> {
     // Normalize pixel data to RGB (3 bytes per pixel) for JPEG encoding
     let (data, width, height) = match frame.format {
         PixelFormat::Rgb => (frame.data.clone(), frame.width, frame.height),
@@ -171,7 +174,16 @@ fn frame_to_base64_jpeg(frame: &Frame) -> Result<String, String> {
             .map_err(|e| format!("JPEG encode error: {}", e))?;
     }
 
-    Ok(base64::engine::general_purpose::STANDARD.encode(&buf))
+    Ok(buf)
+}
+
+// ── Helper: Encode a camera Frame as base64 JPEG ───────────────────────────────
+
+fn frame_to_base64_jpeg(frame: &Frame) -> Result<String, String> {
+    use base64::Engine;
+
+    let jpeg_bytes = frame_to_jpeg_bytes(frame)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&jpeg_bytes))
 }
 
 // ── Helper: Convert send format to default serial row string ───────────────────
@@ -574,6 +586,83 @@ async fn camera_frame(State(state): State<AppState>) -> Json<serde_json::Value> 
             "message": "Camera not opened",
         })),
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MJPEG over HTTP Stream Endpoint
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MJPEG_BOUNDARY: &str = "mjpeg-frame";
+
+/// GET /camera/stream — MJPEG over HTTP streaming endpoint
+///
+/// Returns a multipart/x-mixed-replace stream of JPEG frames at ~30 fps.
+/// Returns 404 if the camera is not open.
+async fn camera_stream(State(state): State<AppState>) -> Response {
+    // Quick check: camera must be open
+    {
+        let cam = state.camera.lock().await;
+        if cam.is_none() {
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "status": "error",
+                        "message": "Camera not opened",
+                    })
+                    .to_string(),
+                ))
+                .unwrap();
+        }
+    }
+
+    let state2 = state.clone();
+
+    // Build an infinite stream of JPEG frames wrapped in multipart boundaries
+    let stream = stream::unfold(state2, |state| async move {
+        // Capture a single frame under the camera lock
+        let jpeg_result: Option<Vec<u8>> = {
+            let cam = state.camera.lock().await;
+            match cam.as_ref() {
+                Some(camera) => match camera.capture().await {
+                    Ok(frame) => frame_to_jpeg_bytes(&frame).ok(),
+                    Err(_) => None,
+                },
+                None => return None, // Camera closed → end stream
+            }
+        };
+
+        match jpeg_result {
+            Some(jpeg_bytes) => {
+                let header = format!(
+                    "\r\n--{MJPEG_BOUNDARY}\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
+                    jpeg_bytes.len()
+                );
+                let mut chunk = Vec::with_capacity(header.len() + jpeg_bytes.len() + 2);
+                chunk.extend_from_slice(header.as_bytes());
+                chunk.extend_from_slice(&jpeg_bytes);
+                chunk.extend_from_slice(b"\r\n");
+
+                // Throttle to ~30 fps
+                tokio::time::sleep(Duration::from_millis(33)).await;
+                Some((Ok::<_, axum::Error>(Bytes::from(chunk)), state))
+            }
+            None => {
+                // Capture failed — short sleep and retry
+                tokio::time::sleep(Duration::from_millis(33)).await;
+                Some((Ok::<_, axum::Error>(Bytes::from("")), state))
+            }
+        }
+    });
+
+    Response::builder()
+        .header(
+            "Content-Type",
+            format!("multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}"),
+        )
+        .body(Body::from_stream(stream))
+        .unwrap()
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -2135,6 +2224,8 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route("/api/camera/frame", get(camera_frame))
         .route("/api/camera/capture", post(camera_capture))
         .route("/api/camera/config", post(camera_config))
+        // MJPEG stream endpoint (non-API, raw HTTP streaming)
+        .route("/camera/stream", get(camera_stream))
         // Key input endpoints
         .route("/api/input/press", post(input_press))
         .route("/api/input/hold", post(input_hold))

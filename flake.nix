@@ -781,6 +781,52 @@
                 '';
               }
             }/bin/check";
+
+            # nix run .#web-check  — run TypeScript/JS checks (eslint + svelte-check + vitest)
+            web-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "web-check";
+                runtimeInputs = [
+                  pkgs.nodejs_20
+                ];
+                text = ''
+                  workdir="$(mktemp -d)"
+                  trap 'rm -rf "$workdir"' EXIT
+                  cp -r "${self}/web/." "$workdir/"
+                  chmod -R +w "$workdir"
+                  cd "$workdir"
+
+                  echo "=== Installing npm dependencies ==="
+                  npm ci --legacy-peer-deps 2>&1
+
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  eslint"
+                  echo "═══════════════════════════════════════════"
+                  npm run lint 2>&1 || EXIT_CODE=$?
+
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  svelte-check"
+                  echo "═══════════════════════════════════════════"
+                  npm run svelte-check 2>&1 || EXIT_CODE=$?
+
+                  echo ""
+                  echo "═══════════════════════════════════════════"
+                  echo "  vitest"
+                  echo "═══════════════════════════════════════════"
+                  npm test 2>&1 || EXIT_CODE=$?
+
+                  echo ""
+                  if [ -n "''${EXIT_CODE:-}" ]; then
+                    echo "✗ Some checks failed"
+                    exit 1
+                  else
+                    echo "✓ All web checks passed"
+                  fi
+                '';
+              }
+            }/bin/web-check";
           };
 
           # ── git-hooks (pre-commit) configuration ───────────────────────

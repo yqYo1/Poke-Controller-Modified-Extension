@@ -173,6 +173,11 @@ result-*
 !/web/package.json
 !/web/package-lock.json
 !/web/vite.config.js
+!/web/vite.config.ts
+!/web/tsconfig.json
+!/web/eslint.config.js
+!/web/svelte.config.js
+!/web/vitest.config.ts
 !/web/src/
 /web/src/*
 !/web/src/*.js

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MenuBar from '$lib/components/MenuBar.svelte';
 	import NavBar from '$lib/components/NavBar.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
 
@@ -6,6 +7,7 @@
 </script>
 
 <div class="flex h-screen flex-col bg-gray-950 text-gray-100">
+	<MenuBar />
 	<NavBar />
 	<main class="flex-1 overflow-auto p-4">
 		{@render children()}

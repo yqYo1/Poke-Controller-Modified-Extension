@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
+	import CaptureRegion from '$lib/components/CaptureRegion.svelte';
 	import OutputPanel from '$lib/components/OutputPanel.svelte';
 	import LogPanel from '$lib/components/LogPanel.svelte';
 
@@ -11,6 +12,7 @@
 	let frameHeight = $state(480);
 	let frameSrc = $state<string | null>(null);
 	let captureName = $state('capture.png');
+	let showRegionSelector = $state(false);
 
 	onMount(() => {
 		api.getCameras().then((list) => {
@@ -80,9 +82,17 @@
 
 			<div class="rounded border border-gray-700 bg-gray-900 p-3">
 				<h3 class="mb-2 text-sm font-medium text-gray-200">キャプチャ</h3>
-				<div class="flex items-center gap-2">
-					<input bind:value={captureName} class="flex-1 rounded bg-gray-800 px-2 py-1 text-xs text-gray-200" />
-					<button onclick={handleCapture} class="rounded bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-600">保存</button>
+				<div class="space-y-2">
+					<div class="flex items-center gap-2">
+						<input bind:value={captureName} class="flex-1 rounded bg-gray-800 px-2 py-1 text-xs text-gray-200" />
+						<button onclick={handleCapture} class="rounded bg-green-700 px-3 py-1 text-xs text-white hover:bg-green-600">保存</button>
+					</div>
+					<button
+						onclick={() => (showRegionSelector = !showRegionSelector)}
+						class="w-full rounded bg-gray-700 px-3 py-1 text-xs text-gray-300 hover:bg-gray-600"
+					>
+						{showRegionSelector ? '範囲選択を閉じる' : 'キャプチャ範囲を選択'}
+					</button>
 				</div>
 			</div>
 		</div>
@@ -97,6 +107,17 @@
 				{/if}
 			</div>
 		</div>
+
+		{#if showRegionSelector}
+			<div class="rounded border border-gray-700 bg-gray-900 p-3">
+				<h3 class="mb-2 text-sm font-medium text-gray-200">キャプチャ範囲選択</h3>
+				<CaptureRegion
+					width={frameWidth}
+					height={frameHeight}
+					imageSrc={frameSrc}
+				/>
+			</div>
+		{/if}
 	</div>
 
 	<OutputPanel title="カメラ出力" />

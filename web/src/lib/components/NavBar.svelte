@@ -7,6 +7,8 @@
 		{ label: 'シリアル', href: `${base}/serial` },
 		{ label: '手動制御', href: `${base}/manual` },
 		{ label: 'コマンド', href: `${base}/commands` },
+		{ label: 'キーコンフィグ', href: `${base}/keyconfig` },
+		{ label: 'Pokemon Home', href: `${base}/pokemonhome` },
 		{ label: '通知', href: `${base}/notification` },
 		{ label: 'その他', href: `${base}/others` },
 	];

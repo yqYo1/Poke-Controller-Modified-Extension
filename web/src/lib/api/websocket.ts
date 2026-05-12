@@ -151,9 +151,12 @@ export class WebSocketClient {
 		if (
 			this.ws &&
 			(this.ws.readyState === WebSocket.OPEN ||
-				this.ws.readyState === WebSocket.CONNECTING)
+				this.ws.readyState === WebSocket.CONNECTING ||
+				this.ws.readyState === WebSocket.CLOSING)
 		) {
-			return;
+			// Close existing socket before creating new one to prevent leaks
+			this.ws.close();
+			this.ws = null;
 		}
 
 		try {

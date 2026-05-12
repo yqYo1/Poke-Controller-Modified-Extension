@@ -649,9 +649,9 @@ async fn camera_stream(State(state): State<AppState>) -> Response {
                 Some((Ok::<_, axum::Error>(Bytes::from(chunk)), state))
             }
             None => {
-                // Capture failed — short sleep and retry
+                // Capture failed — skip frame and retry
                 tokio::time::sleep(Duration::from_millis(33)).await;
-                Some((Ok::<_, axum::Error>(Bytes::from("")), state))
+                Some((Ok::<_, axum::Error>(Bytes::new()), state))
             }
         }
     });
@@ -661,6 +661,12 @@ async fn camera_stream(State(state): State<AppState>) -> Response {
             "Content-Type",
             format!("multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}"),
         )
+        .header(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+        )
+        .header("Pragma", "no-cache")
+        .header("Expires", "0")
         .body(Body::from_stream(stream))
         .unwrap()
 }

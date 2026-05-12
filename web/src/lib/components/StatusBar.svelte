@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { api, WebSocketClient } from '$lib/api/client';
+	import { api, wsClient as wsClientSingleton } from '$lib/api/client';
 
 	let wsConnected = $state(false);
 	let serialConnected = $state(false);
@@ -23,7 +23,7 @@
 
 	onMount(() => {
 		const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-		wsClient = new WebSocketClient(`${protocol}//${location.host}/ws`);
+		wsClient = wsClientSingleton;
 
 		wsClient.on('connect', () => {
 			wsConnected = true;

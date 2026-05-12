@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { dev } from '$app/environment';
 	import { base } from '$app/paths';
+	import '../app.css';
 	import MenuBar from '$lib/components/MenuBar.svelte';
 	import NavBar from '$lib/components/NavBar.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
+	import ThemeProvider from '$lib/components/ThemeProvider.svelte';
 
 	let { children } = $props();
 
@@ -13,11 +15,13 @@
 	}
 </script>
 
-<div class="flex h-screen flex-col bg-gray-950 text-gray-100">
-	<MenuBar />
-	<NavBar />
-	<main class="flex-1 overflow-auto p-4">
-		{@render children()}
-	</main>
-	<StatusBar />
-</div>
+<ThemeProvider>
+	<div class="flex h-screen flex-col" style="background-color: var(--color-bg-primary); color: var(--color-text-primary);">
+		<MenuBar />
+		<NavBar />
+		<main class="flex-1 overflow-auto p-4">
+			{@render children()}
+		</main>
+		<StatusBar />
+	</div>
+</ThemeProvider>

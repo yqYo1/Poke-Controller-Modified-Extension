@@ -148,8 +148,8 @@
 				class="absolute left-0 z-50 min-w-44 rounded border border-gray-700 bg-gray-800 shadow-xl"
 				role="menu"
 			>
-				{@const menu = menus.find((m) => m.id === activeMenu)}
-				{#if menu}
+				{#each [menus.find((m) => m.id === activeMenu)] as menu}
+					{#if menu}
 					{#each menu.items as item}
 						{#if item.separator}
 							<div class="my-1 border-t border-gray-700"></div>
@@ -167,7 +167,8 @@
 							</button>
 						{/if}
 					{/each}
-				{/if}
+					{/if}
+				{/each}
 			</div>
 		{/if}
 	</div>

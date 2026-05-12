@@ -181,8 +181,14 @@ result-*
 !/web/src/
 /web/src/*
 !/web/src/*.js
-!/web/src/*.jsx
-!/web/src/*.css
+!/web/src/*.ts
+!/web/src/*.svelte
+!/web/src/lib/
+!/web/src/lib/**/*.ts
+!/web/src/lib/**/*.svelte
+!/web/src/routes/
+!/web/src/routes/**/*.svelte
+!/web/src/routes/**/*.ts
 !/web/src/api/
 !/web/src/api/*.js
 !/web/src/components/

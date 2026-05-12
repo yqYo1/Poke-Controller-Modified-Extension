@@ -1,3 +1,4 @@
+// @ts-nocheck
 export class APIClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;

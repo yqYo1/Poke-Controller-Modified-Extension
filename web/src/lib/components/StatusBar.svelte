@@ -24,19 +24,22 @@
 	onMount(() => {
 		const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		wsClient = new WebSocketClient(`${protocol}//${location.host}/ws`);
-		wsClient.onOpen = () => {
+
+		wsClient.on('connect', () => {
 			wsConnected = true;
 			updateStatus();
-		};
-		wsClient.onClose = () => {
+		});
+		wsClient.on('disconnect', () => {
 			wsConnected = false;
-		};
-		wsClient.onMessage = () => {
+		});
+		wsClient.on('message', () => {
 			updateStatus();
-		};
+		});
 		wsClient.connect();
 		updateStatus();
+
 		const interval = setInterval(updateStatus, 5000);
+
 		onDestroy(() => {
 			clearInterval(interval);
 			wsClient?.disconnect();

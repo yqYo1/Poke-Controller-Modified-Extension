@@ -1,5 +1,22 @@
 import { env } from '$env/dynamic/public';
 
+// ─── Re-export typed WebSocket client ───────────────────────────────────────
+export {
+	type LogLevel,
+	type LogMessage,
+	type StatusMessage,
+	type FrameMessage,
+	type CommandMessage,
+	type SerialMessage,
+	type CameraMessage,
+	type WSMessage,
+	type WebSocketEventMap,
+	WebSocketClient,
+	wsClient,
+} from './websocket';
+
+// ─── REST API types ─────────────────────────────────────────────────────────
+
 export interface StatusResponse {
 	camera: boolean;
 	serial: boolean;
@@ -71,6 +88,8 @@ export interface NotificationConfig {
 export interface ProfileEntry {
 	name: string;
 }
+
+// ─── REST API client ────────────────────────────────────────────────────────
 
 export class APIClient {
 	constructor(public baseUrl: string = env.PUBLIC_API_URL ?? '') {}
@@ -214,69 +233,6 @@ export class APIClient {
 			method: 'POST',
 			body: JSON.stringify(data),
 		});
-	}
-}
-
-export type WebSocketMessageHandler = (data: Record<string, unknown>) => void;
-
-export class WebSocketClient {
-	ws: WebSocket | null = null;
-	onOpen: (() => void) | null = null;
-	onClose: (() => void) | null = null;
-	onMessage: WebSocketMessageHandler | null = null;
-	reconnectInterval = 3000;
-	shouldReconnect = true;
-
-	constructor(public url: string) {}
-
-	connect() {
-		this.shouldReconnect = true;
-		this._connect();
-	}
-
-	private _connect() {
-		try {
-			this.ws = new WebSocket(this.url);
-			this.ws.onopen = () => {
-				if (this.onOpen) this.onOpen();
-			};
-			this.ws.onmessage = (event: MessageEvent) => {
-				try {
-					const data = JSON.parse(event.data) as Record<string, unknown>;
-					if (this.onMessage) this.onMessage(data);
-				} catch (e) {
-					console.warn('WS parse error:', e);
-				}
-			};
-			this.ws.onclose = () => {
-				if (this.onClose) this.onClose();
-				if (this.shouldReconnect) {
-					setTimeout(() => this._connect(), this.reconnectInterval);
-				}
-			};
-			this.ws.onerror = (err: Event) => {
-				console.error('WS error:', err);
-			};
-		} catch (err) {
-			console.error('WS connect error:', err);
-			if (this.shouldReconnect) {
-				setTimeout(() => this._connect(), this.reconnectInterval);
-			}
-		}
-	}
-
-	disconnect() {
-		this.shouldReconnect = false;
-		if (this.ws) {
-			this.ws.close();
-			this.ws = null;
-		}
-	}
-
-	send(data: Record<string, unknown>) {
-		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-			this.ws.send(JSON.stringify(data));
-		}
 	}
 }
 

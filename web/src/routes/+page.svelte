@@ -1,12 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 
 	let status = $state('initializing');
 
 	onMount(() => {
-		// TODO: detect appropriate UI and redirect
-		// /ui - desktop UI
-		// /mobile - mobile UI (future)
+		// Attempt to auto-detect device and redirect accordingly
+		// For desktop: serve as-is (already at /ui)
+		// For mobile: future /mobile route (TODO)
+		if (browser && window.innerWidth < 768) {
+			// TODO: redirect to /mobile when mobile UI is implemented
+			// goto('/mobile');
+			console.debug('Mobile viewport detected — mobile UI pending');
+		}
 		status = 'ready';
 	});
 </script>
@@ -19,7 +26,8 @@
 	<h1>Poke-Controller</h1>
 	<p>Status: {status}</p>
 	<nav>
-		<a href="/ui">Open UI</a>
+		<a href="/api/status">API Status</a>
+		<a href="/camera/stream">Camera Stream</a>
 	</nav>
 </div>
 

@@ -9,7 +9,7 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use clap::Parser;
 use futures::stream;
@@ -2204,7 +2204,23 @@ async fn api_openapi_json() -> Json<serde_json::Value> {
 
 /// Start the HTTP server — shared between web and tauri modes.
 async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
+    // ── Static UI files served under /ui/ ───────────────────────────────
+    let ui_service =
+        tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true);
+
     let app = axum::Router::new()
+        // Root redirect: / → /ui/
+        .route("/", get(|| async { Redirect::permanent("/ui/") }))
+        // ── Mobile placeholder (TODO) ───────────────────────────────────
+        .route(
+            "/mobile",
+            get(|| async {
+                (
+                    StatusCode::NOT_IMPLEMENTED,
+                    "Mobile UI is not yet implemented — coming in a future phase.",
+                )
+            }),
+        )
         // Core endpoints
         .route("/api/status", get(api_status))
         .route("/api/greet", get(api_greet))
@@ -2263,9 +2279,8 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
             get(notifications_get_config).post(notifications_set_config),
         )
         .route("/api/notifications/send", post(notifications_send))
-        .fallback_service(
-            tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true),
-        )
+        // ── UI static files at /ui/* ────────────────────────────────────
+        .nest("/ui", axum::Router::new().fallback_service(ui_service))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));

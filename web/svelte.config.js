@@ -4,7 +4,7 @@ import adapter from '@sveltejs/adapter-static';
 const config = {
 	compilerOptions: {
 		// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
-		runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
+		runes: ({ filename }) => (filename.split(/[/\\\\]/).includes('node_modules') ? undefined : true)
 	},
 	kit: {
 		adapter: adapter({
@@ -16,7 +16,9 @@ const config = {
 			strict: true,
 		}),
 		paths: {
-			base: '',
+			// All UI routes are served under /ui/ prefix
+			// The Rust backend handles / → /ui/ redirect
+			base: '/ui',
 		},
 	}
 };

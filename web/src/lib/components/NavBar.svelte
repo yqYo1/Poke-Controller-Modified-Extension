@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 
 	const tabs = [
-		{ label: 'カメラ', href: '/camera' },
-		{ label: 'シリアル', href: '/serial' },
-		{ label: '手動制御', href: '/manual' },
-		{ label: 'コマンド', href: '/commands' },
-		{ label: '通知', href: '/notification' },
-		{ label: 'その他', href: '/others' },
+		{ label: 'カメラ', href: `${base}/camera` },
+		{ label: 'シリアル', href: `${base}/serial` },
+		{ label: '手動制御', href: `${base}/manual` },
+		{ label: 'コマンド', href: `${base}/commands` },
+		{ label: '通知', href: `${base}/notification` },
+		{ label: 'その他', href: `${base}/others` },
 	];
 </script>
 

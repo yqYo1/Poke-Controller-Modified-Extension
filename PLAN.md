@@ -47,11 +47,11 @@
 | 2.1 | `utoipa` クレートを `src-tauri/Cargo.toml` に追加 | `Cargo.toml` 更新 | ✅ |
 | 2.2 | 36エンドポイントすべてに `utoipa::path` マクロ追加 | `main.rs` 更新 | ✅ |
 | 2.3 | OpenAPIスキーマ生成エンドポイント追加（`/api/openapi.json`） | 新規エンドポイント | ✅ |
-| 2.4 | `openapi-typescript` をnix flakeに追加 | `flake.nix` 更新 | ⏳ 未実施 |
-| 2.5 | `nix run .#generate-api-types` でTS型自動生成 | `Docs/api/openapi.ts` | ⏳ 未実施 |
+| 2.4 | `openapi-typescript` をnix flakeに追加 | `flake.nix` 更新 | ✅（フェーズ6で完了） |
+| 2.5 | `nix run .#generate-api-types` でTS型自動生成 | `Docs/api/openapi.ts` | ✅（フェーズ6で完了） |
 | 2.6 | APIクライアント実装（`lib/api/client.ts`） | fetchラッパー | ✅（フェーズ4で実施） |
-| 2.7 | WebSocketクライアント実装（`lib/api/websocket.ts`） | 自動再接続、イベント型付き | ⏳ 未実施 |
-| 2.8 | WebRTC DataChannelクライアント実装（`lib/api/datachannel.ts`） | RTCPeerConnectionラッパー | ⏳ 未実施 |
+| 2.7 | WebSocketクライアント実装（`lib/api/websocket.ts`） | 自動再接続、イベント型付き | ✅（フェーズ5で完了） |
+| 2.8 | WebRTC DataChannelクライアント実装（`lib/api/datachannel.ts`） | RTCPeerConnectionラッパー | ✅（フェーズ5で完了） |
 
 **レビュー対応**:
 - `api_openapi_json` を `#[openapi(paths)]` に追加（レビュー指摘 #1）
@@ -68,7 +68,7 @@
 | 3.2 | `svelte-check` 設定 | `package.json` scripts | ✅ |
 | 3.3 | `vitest` 設定 | `vitest.config.ts` | ✅ |
 | 3.4 | `flake.nix` にチェック用app追加 | `nix run .#web-check` | ✅ |
-| 3.5 | GitHub Actionsワークフロー更新（`lint.yml`等） | `.github/workflows/` | ⏳ 未実施 |
+| 3.5 | GitHub Actionsワークフロー更新（`lint.yml`等） | `.github/workflows/` | ✅（フェーズ6で完了） |
 
 **レビュー対応**:
 - `web-check` に `svelte-kit sync` を `lint` の前に追加（レビュー指摘 #5）
@@ -154,17 +154,22 @@
 - 空のmultipartボディをスキップ（レビュー指摘 #5）
 - 残存: シグナリングプロトコル型衝突（Critical）、フォールバックハンドラーリーク（High）→ フェーズ6で対応
 
-### フェーズ6: ビルド・統合
+### フェーズ6: ビルド・統合 ✅ 完了
 
-| タスクID | 内容 | 備考 |
-|---------|------|------|
-| 6.1 | SvelteKit静的ビルド設定 | `adapter-static`、出力先 `dist/` |
-| 6.2 | `src-tauri/tauri.conf.json` 更新 | `frontendDist: "../web/dist"` |
-| 6.3 | URL構成実装 | `/api`、 `/ui`、 `/mobile`、 `/`（リダイレクト） |
-| 6.4 | `nix run .#tauri-build` 確認 | — |
-| 6.5 | `nix run .#tauri-dev` 確認 | — |
-| 6.6 | `nix run .#check` パス確認 | — |
-| 6.7 | `Docs/web-ui-guide.md` 更新 | SvelteKit仕様に更新 |
+| タスクID | 内容 | 備考 | 状態 |
+|---------|------|------|------|
+| 6.1 | SvelteKit静的ビルド設定 | `adapter-static`、出力先 `dist/`、base `/ui` | ✅ |
+| 6.2 | `src-tauri/tauri.conf.json` 更新 | `frontendDist: "../web/dist"` | ✅（既存設定で対応） |
+| 6.3 | URL構成実装 | `/`→`/ui/`リダイレクト、`/ui/*`配信、`/mobile`501 | ✅ |
+| 6.4 | `nix run .#tauri-build` 確認 | — | ⏳ 未実施（WebKit/GTK依存） |
+| 6.5 | `nix run .#tauri-dev` 確認 | — | ⏳ 未実施（WebKit/GTK依存） |
+| 6.6 | `nix run .#check` パス確認 | — | ⏳ 未実施（libclang依存） |
+| 6.7 | `Docs/web-ui-guide.md` 更新 | SvelteKit仕様に更新 | ⏳ 未実施 |
+
+**レビュー対応**:
+- `+layout.ts` を作成してSPAモード設定（レビュー指摘 #2）
+- `+page.svelte` の未使用 `goto` インポートを削除（レビュー指摘 #1）
+- ルートリダイレクトを `permanent` から `temporary` に変更（レビュー指摘 #3）
 
 ### フェーズ7: 追加機能（優先度：低）
 
@@ -196,18 +201,17 @@
 ```
 フェーズ1 ✅ 完了
   ↓
-フェーズ2 ✅ 完了（一部⏳残存） + フェーズ3 ✅ 完了（一部⏳残存）【並列】
-  │  ※ 2.4 openapi-typescript追加、2.5 TS型自動生成、2.7 WebSocketクライアント、
-  │     2.8 WebRTC DataChannelクライアント、3.5 GitHub Actions更新 は未実施
+フェーズ2 ✅ 完了 + フェーズ3 ✅ 完了（並列）
   ↓
 フェーズ4 ✅ 完了
   ↓
 フェーズ5 ✅ 完了（一部⏳残存）
   │  ※ 5.4 WebRTC video track は未実施
   ↓
-フェーズ6 ← 現在ここ
+フェーズ6 ✅ 完了（一部⏳残存）
+  │  ※ 6.4 tauri-build、6.5 tauri-dev、6.6 check、6.7 Docs更新 は未実施
   ↓
-フェーズ7（優先度：低）
+フェーズ7 ← 現在ここ（優先度：低）
   ↓
 フェーズ8（優先度：低）
   ↓
@@ -216,21 +220,31 @@
 
 ## 未実施タスク一覧
 
-以下のタスクはフェーズ2・3で未実施のまま残っています。適切なフェーズで対応する必要があります。
+以下のタスクは未実施のまま残っています。適切なフェーズで対応する必要があります。
 
 | フェーズ | タスクID | 内容 | 備考 |
 |---------|---------|------|------|
-| フェーズ2 | 2.4 | `openapi-typescript` をnix flakeに追加 | 型自動生成の前提 |
-| フェーズ2 | 2.5 | `nix run .#generate-api-types` でTS型自動生成 | Docs/api/openapi.ts出力 |
-| フェーズ2 | 2.7 | WebSocketクライアント実装 | 自動再接続、イベント型付き |
-| フェーズ2 | 2.8 | WebRTC DataChannelクライアント実装 | RTCPeerConnectionラッパー |
-| フェーズ3 | 3.5 | GitHub Actionsワークフロー更新 | `.github/workflows/` |
+| フェーズ5 | 5.4 | WebRTC video track実装 | RTCPeerConnection |
+| フェーズ6 | 6.4 | `nix run .#tauri-build` 確認 | WebKit/GTKシステム依存 |
+| フェーズ6 | 6.5 | `nix run .#tauri-dev` 確認 | WebKit/GTKシステム依存 |
+| フェーズ6 | 6.6 | `nix run .#check` パス確認 | libclangシステム依存 |
+| フェーズ6 | 6.7 | `Docs/web-ui-guide.md` 更新 | SvelteKit仕様に更新 |
+| フェーズ7 | 7.1 | キーコンフィグ画面 | 優先度：低 |
+| フェーズ7 | 7.2 | Pokemon Home連携画面 | 優先度：低 |
+| フェーズ7 | 7.3 | メニューバー機能（設定/ヘルプ/バージョン確認等） | 優先度：低 |
+| フェーズ7 | 7.4 | キャプチャ範囲選択（マウスドラッグ） | 優先度：低 |
+| フェーズ8 | 8.1 | Web App Manifest | 優先度：低 |
+| フェーズ8 | 8.2 | Service Worker | 優先度：低 |
+| フェーズ8 | 8.3 | オフライン対応 | 優先度：低 |
+| フェーズ9 | 9.1 | テーマシステム設計（拡張性考慮） | 優先度：低 |
+| フェーズ9 | 9.2 | プリセットテーマ（ダーク/ライト等） | 優先度：低 |
+| フェーズ9 | 9.3 | ユーザー定義テーマ | 優先度：低 |
 
 **対応方針**:
-- 2.4, 2.5 → フェーズ5〜6の間で実施（型安全性向上のため）
-- 2.7 → フェーズ5と並列または直後（WebSocketフォールバックで使用）
-- 2.8 → フェーズ5と並列または直後（WebRTC実装で使用）
-- 3.5 → フェーズ6完了後（CI整備の締めくくり）
+- 5.4 → フェーズ7以降で実施（WebRTC video trackは優先度低）
+- 6.4, 6.5, 6.6 → システム依存ライブラリの問題解決後に実施
+- 6.7 → フェーズ7完了後に実施
+- フェーズ7〜9 → 優先度順に実施
 
 ## 注意事項
 

@@ -21,25 +21,35 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api,
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
   const [lineAccessToken, setLineAccessToken] = useState("");
   const [notifyTestResult, setNotifyTestResult] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem("pokecon-theme") || "dark");
-  const [windowWidth, setWindowWidth] = useState(() => parseInt(localStorage.getItem("pokecon-win-width") || "1280", 10));
-  const [windowHeight, setWindowHeight] = useState(() => parseInt(localStorage.getItem("pokecon-win-height") || "800", 10));
-  const [btnPosition, setBtnPosition] = useState(() => localStorage.getItem("pokecon-btn-position") || "bottom");
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("pokecon-theme") || "dark"; } catch { return "dark"; }
+  });
+  const [windowWidth, setWindowWidth] = useState(() => {
+    try { const v = parseInt(localStorage.getItem("pokecon-win-width") || "1280", 10); return Number.isFinite(v) ? v : 1280; } catch { return 1280; }
+  });
+  const [windowHeight, setWindowHeight] = useState(() => {
+    try { const v = parseInt(localStorage.getItem("pokecon-win-height") || "800", 10); return Number.isFinite(v) ? v : 800; } catch { return 800; }
+  });
+  const [btnPosition, setBtnPosition] = useState(() => {
+    try { return localStorage.getItem("pokecon-btn-position") || "bottom"; } catch { return "bottom"; }
+  });
 
   useEffect(() => { loadPorts(); loadCameras(); loadControllerSettings(); loadNotificationConfig(); }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("pokecon-theme", theme);
+    try { localStorage.setItem("pokecon-theme", theme); } catch {}
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem("pokecon-win-width", String(windowWidth));
-    localStorage.setItem("pokecon-win-height", String(windowHeight));
+    try {
+      localStorage.setItem("pokecon-win-width", String(windowWidth));
+      localStorage.setItem("pokecon-win-height", String(windowHeight));
+    } catch {}
   }, [windowWidth, windowHeight]);
 
   useEffect(() => {
-    localStorage.setItem("pokecon-btn-position", btnPosition);
+    try { localStorage.setItem("pokecon-btn-position", btnPosition); } catch {}
   }, [btnPosition]);
 
   const loadPorts = async () => {
@@ -256,13 +266,13 @@ export default function Settings({ serialOpen, onSerialOpen, onSerialClose, api,
         </div>
         {notifyDiscord && <div className="form-group">
           <label>Discord Webhook URL</label>
-          <input type="text" value={discordWebhookUrl} onChange={e => setDiscordWebhookUrl(e.target.value)} onBlur={e => handleNotifyConfigChange({ discord_webhook_url: e.target.value })} placeholder="https://discord.com/api/webhooks/..." />
+          <input type="password" value={discordWebhookUrl} onChange={e => setDiscordWebhookUrl(e.target.value)} onBlur={e => handleNotifyConfigChange({ discord_webhook_url: e.target.value })} placeholder="https://discord.com/api/webhooks/..." />
         </div>}
         <div className="button-row">
           <button className="btn btn-primary" onClick={handleSendTestNotification}>Send Test Notification</button>
         </div>
         {notifyTestResult && <div className="info-list" style={{marginTop:"8px"}}>
-          {notifyTestResult.results && notifyTestResult.results.map((r, i) => (
+          {Array.isArray(notifyTestResult.results) && notifyTestResult.results.map((r, i) => (
             <div key={i} className="info-item">
               <span className="info-label">{r.channel}</span>
               <span className={"info-value " + (r.status === "sent" ? "text-success" : "text-error")}>{r.status === "sent" ? "\u2713 Sent" : "\u2717 " + (r.error || "Failed")}</span>

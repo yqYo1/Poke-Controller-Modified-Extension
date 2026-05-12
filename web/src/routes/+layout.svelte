@@ -1,9 +1,16 @@
 <script lang="ts">
+	import { dev } from '$app/environment';
+	import { base } from '$app/paths';
 	import MenuBar from '$lib/components/MenuBar.svelte';
 	import NavBar from '$lib/components/NavBar.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
 
 	let { children } = $props();
+
+	// Register service worker for PWA support
+	if (!dev && 'serviceWorker' in navigator) {
+		navigator.serviceWorker.register(`${base}/service-worker.js`);
+	}
 </script>
 
 <div class="flex h-screen flex-col bg-gray-950 text-gray-100">

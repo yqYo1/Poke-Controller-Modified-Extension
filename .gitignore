@@ -193,3 +193,8 @@ result-*
 !/web/src/api/*.js
 !/web/src/components/
 !/web/src/components/*.jsx
+!/web/static/
+/web/static/*
+!/web/static/*.json
+!/web/static/*.svg
+!/web/static/*.html

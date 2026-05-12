@@ -1,0 +1,26 @@
+{
+  "name": "Poke-Controller Modified",
+  "short_name": "PokeCon",
+  "description": "Poke-Controller Modified Extension - Web UI for Pokémon controller automation",
+  "start_url": "/ui/",
+  "scope": "/ui/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e94560",
+  "orientation": "natural",
+  "categories": ["utilities", "games"],
+  "icons": [
+    {
+      "src": "/ui/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/ui/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

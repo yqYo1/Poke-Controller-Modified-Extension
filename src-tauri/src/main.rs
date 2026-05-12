@@ -9,6 +9,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use clap::Parser;
 use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::Mutex;
 use url::Url;
 
@@ -29,6 +30,8 @@ use pokecon_serial::SendFormat;
 use pokecon_serial::keypress::{KeyPress, SerialFormat};
 use pokecon_serial::keys::{Button, Direction, GamepadInput, Stick, Touchscreen};
 use pokecon_serial::sender::Sender;
+use utoipa::OpenApi;
+use utoipa::ToSchema;
 
 /// Poke-Controller Modified Extension — Tauri/Web UI
 #[derive(Parser, Debug)]
@@ -56,7 +59,7 @@ struct Args {
 }
 
 /// Configuration for mouse-to-stick control.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
 struct MouseStickConfig {
     /// Whether left-stick mouse control is enabled
     left_enabled: bool,
@@ -199,13 +202,22 @@ fn format_default_row(fmt: &SendFormat, l_stick_changed: bool, r_stick_changed: 
 // Controller Endpoints
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct ControllerTypeRequest {
     /// Gamepad type: "ProController" or "Xinput"
     gamepad_type: String,
 }
 
 /// POST /api/controller/type — set the gamepad type
+#[utoipa::path(
+    post,
+    path = "/api/controller/type",
+    tag = "controller",
+    request_body = ControllerTypeRequest,
+    responses(
+        (status = 200, description = "Gamepad type set", body = serde_json::Value)
+    )
+)]
 async fn controller_set_type(
     State(state): State<AppState>,
     Json(body): Json<ControllerTypeRequest>,
@@ -228,6 +240,14 @@ async fn controller_set_type(
 }
 
 /// GET /api/controller/type — get the current gamepad type
+#[utoipa::path(
+    get,
+    path = "/api/controller/type",
+    tag = "controller",
+    responses(
+        (status = 200, description = "Current gamepad type", body = serde_json::Value)
+    )
+)]
 async fn controller_get_type(State(state): State<AppState>) -> Json<serde_json::Value> {
     let gt = state.gamepad_type.lock().await;
     Json(serde_json::json!({
@@ -236,13 +256,22 @@ async fn controller_get_type(State(state): State<AppState>) -> Json<serde_json::
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct KeyboardRequest {
     /// Whether keyboard input is enabled
     enabled: bool,
 }
 
 /// POST /api/controller/keyboard — enable or disable keyboard input
+#[utoipa::path(
+    post,
+    path = "/api/controller/keyboard",
+    tag = "controller",
+    request_body = KeyboardRequest,
+    responses(
+        (status = 200, description = "Keyboard input state set", body = serde_json::Value)
+    )
+)]
 async fn controller_set_keyboard(
     State(state): State<AppState>,
     Json(body): Json<KeyboardRequest>,
@@ -257,6 +286,14 @@ async fn controller_set_keyboard(
 }
 
 /// GET /api/controller/keyboard — get keyboard enable state
+#[utoipa::path(
+    get,
+    path = "/api/controller/keyboard",
+    tag = "controller",
+    responses(
+        (status = 200, description = "Keyboard enable state", body = serde_json::Value)
+    )
+)]
 async fn controller_get_keyboard(State(state): State<AppState>) -> Json<serde_json::Value> {
     let ke = state.keyboard_enabled.lock().await;
     Json(serde_json::json!({
@@ -265,7 +302,7 @@ async fn controller_get_keyboard(State(state): State<AppState>) -> Json<serde_js
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct MouseStickRequest {
     /// Stick identifier: "left" or "right"
     stick: String,
@@ -281,6 +318,15 @@ fn default_sensitivity() -> f32 {
 }
 
 /// POST /api/controller/mouse_stick — enable/disable mouse-to-stick control
+#[utoipa::path(
+    post,
+    path = "/api/controller/mouse_stick",
+    tag = "controller",
+    request_body = MouseStickRequest,
+    responses(
+        (status = 200, description = "Mouse stick config updated", body = serde_json::Value)
+    )
+)]
 async fn controller_set_mouse_stick(
     State(state): State<AppState>,
     Json(body): Json<MouseStickRequest>,
@@ -325,6 +371,14 @@ async fn controller_set_mouse_stick(
 }
 
 /// GET /api/controller/mouse_stick — get current mouse stick configuration
+#[utoipa::path(
+    get,
+    path = "/api/controller/mouse_stick",
+    tag = "controller",
+    responses(
+        (status = 200, description = "Current mouse stick config", body = serde_json::Value)
+    )
+)]
 async fn controller_get_mouse_stick(State(state): State<AppState>) -> Json<serde_json::Value> {
     let ms = state.mouse_stick.lock().await;
     Json(serde_json::json!({
@@ -340,6 +394,14 @@ async fn controller_get_mouse_stick(State(state): State<AppState>) -> Json<serde
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// GET /api/cameras — list available camera devices
+#[utoipa::path(
+    get,
+    path = "/api/cameras",
+    tag = "camera",
+    responses(
+        (status = 200, description = "List of available camera devices", body = serde_json::Value)
+    )
+)]
 async fn cameras_list() -> Json<serde_json::Value> {
     #[cfg(feature = "v4l")]
     {
@@ -368,6 +430,14 @@ async fn cameras_list() -> Json<serde_json::Value> {
 }
 
 /// GET /api/camera/status — get camera connection status
+#[utoipa::path(
+    get,
+    path = "/api/camera/status",
+    tag = "camera",
+    responses(
+        (status = 200, description = "Camera connection status and config", body = serde_json::Value)
+    )
+)]
 async fn camera_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cam = state.camera.lock().await;
     match cam.as_ref() {
@@ -391,7 +461,7 @@ async fn camera_status(State(state): State<AppState>) -> Json<serde_json::Value>
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct CameraOpenRequest {
     device_index: Option<i32>,
     width: Option<u32>,
@@ -399,6 +469,15 @@ struct CameraOpenRequest {
 }
 
 /// POST /api/camera/open — open camera with optional config
+#[utoipa::path(
+    post,
+    path = "/api/camera/open",
+    tag = "camera",
+    request_body = CameraOpenRequest,
+    responses(
+        (status = 200, description = "Camera opened", body = serde_json::Value)
+    )
+)]
 async fn camera_open(
     State(state): State<AppState>,
     Json(body): Json<CameraOpenRequest>,
@@ -439,6 +518,14 @@ async fn camera_open(
 }
 
 /// POST /api/camera/close — close camera
+#[utoipa::path(
+    post,
+    path = "/api/camera/close",
+    tag = "camera",
+    responses(
+        (status = 200, description = "Camera closed", body = serde_json::Value)
+    )
+)]
 async fn camera_close(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut cam = state.camera.lock().await;
     if let Some(ref camera) = *cam {
@@ -452,6 +539,14 @@ async fn camera_close(State(state): State<AppState>) -> Json<serde_json::Value> 
 }
 
 /// GET /api/camera/frame — get current frame as base64 JPEG
+#[utoipa::path(
+    get,
+    path = "/api/camera/frame",
+    tag = "camera",
+    responses(
+        (status = 200, description = "Current camera frame as base64 JPEG", body = serde_json::Value)
+    )
+)]
 async fn camera_frame(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cam = state.camera.lock().await;
     match cam.as_ref() {
@@ -481,12 +576,12 @@ async fn camera_frame(State(state): State<AppState>) -> Json<serde_json::Value> 
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct CaptureRequest {
     filename: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct CameraConfigRequest {
     width: Option<u32>,
     height: Option<u32>,
@@ -495,6 +590,15 @@ struct CameraConfigRequest {
 }
 
 /// POST /api/camera/capture — save current frame to a file
+#[utoipa::path(
+    post,
+    path = "/api/camera/capture",
+    tag = "camera",
+    request_body = CaptureRequest,
+    responses(
+        (status = 200, description = "Frame captured to file", body = serde_json::Value)
+    )
+)]
 async fn camera_capture(
     State(state): State<AppState>,
     Json(body): Json<CaptureRequest>,
@@ -610,6 +714,15 @@ fn validate_webhook_url(url_str: &str) -> Result<(), String> {
 }
 
 /// POST /api/camera/config - update camera configuration (width, height, fps, flip)
+#[utoipa::path(
+    post,
+    path = "/api/camera/config",
+    tag = "camera",
+    request_body = CameraConfigRequest,
+    responses(
+        (status = 200, description = "Camera config updated", body = serde_json::Value)
+    )
+)]
 async fn camera_config(
     State(state): State<AppState>,
     Json(body): Json<CameraConfigRequest>,
@@ -707,7 +820,7 @@ fn save_frame_as_jpeg(frame: &Frame, path: &PathBuf) -> Result<(), String> {
 // Key Input Endpoints
 // ═══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct PressRequest {
     buttons: Vec<String>,
     /// Duration in milliseconds to hold before releasing (default: 50)
@@ -722,7 +835,7 @@ fn default_press_duration() -> u64 {
     50
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct HoldRequest {
     buttons: Vec<String>,
     /// Duration in milliseconds to hold (default: 0 = indefinite via keypress hold state)
@@ -730,7 +843,7 @@ struct HoldRequest {
     duration: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct StickRequest {
     /// Stick identifier: "left" or "right"
     stick: String,
@@ -747,7 +860,7 @@ fn default_stick_duration() -> u64 {
     100
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct TouchRequest {
     /// X coordinate (0–?)
     x: u16,
@@ -763,6 +876,15 @@ fn default_touch_duration() -> u64 {
 }
 
 /// POST /api/input/press — press buttons for a duration, then release
+#[utoipa::path(
+    post,
+    path = "/api/input/press",
+    tag = "input",
+    request_body = PressRequest,
+    responses(
+        (status = 200, description = "Buttons pressed", body = serde_json::Value)
+    )
+)]
 async fn input_press(
     State(state): State<AppState>,
     Json(body): Json<PressRequest>,
@@ -822,6 +944,15 @@ async fn input_press(
 }
 
 /// POST /api/input/hold — hold buttons (toggle on)
+#[utoipa::path(
+    post,
+    path = "/api/input/hold",
+    tag = "input",
+    request_body = HoldRequest,
+    responses(
+        (status = 200, description = "Buttons held", body = serde_json::Value)
+    )
+)]
 async fn input_hold(
     State(state): State<AppState>,
     Json(body): Json<HoldRequest>,
@@ -858,6 +989,14 @@ async fn input_hold(
 }
 
 /// POST /api/input/release — release all held buttons
+#[utoipa::path(
+    post,
+    path = "/api/input/release",
+    tag = "input",
+    responses(
+        (status = 200, description = "All buttons released", body = serde_json::Value)
+    )
+)]
 async fn input_release(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut kp = state.keypress.lock().await;
     match kp.neutral().await {
@@ -873,6 +1012,15 @@ async fn input_release(State(state): State<AppState>) -> Json<serde_json::Value>
 }
 
 /// POST /api/input/stick — move a stick and recenter after duration
+#[utoipa::path(
+    post,
+    path = "/api/input/stick",
+    tag = "input",
+    request_body = StickRequest,
+    responses(
+        (status = 200, description = "Stick moved", body = serde_json::Value)
+    )
+)]
 async fn input_stick(
     State(state): State<AppState>,
     Json(body): Json<StickRequest>,
@@ -936,6 +1084,15 @@ async fn input_stick(
 }
 
 /// POST /api/input/touch — tap the touchscreen
+#[utoipa::path(
+    post,
+    path = "/api/input/touch",
+    tag = "input",
+    request_body = TouchRequest,
+    responses(
+        (status = 200, description = "Touchscreen tapped", body = serde_json::Value)
+    )
+)]
 async fn input_touch(
     State(state): State<AppState>,
     Json(body): Json<TouchRequest>,
@@ -992,6 +1149,14 @@ async fn input_touch(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// GET /ws — WebSocket upgrade endpoint for real-time events
+#[utoipa::path(
+    get,
+    path = "/ws",
+    tag = "websocket",
+    responses(
+        (status = 101, description = "WebSocket upgrade successful")
+    )
+)]
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, state))
 }
@@ -1054,6 +1219,14 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Status endpoint — returns basic info.
+#[utoipa::path(
+    get,
+    path = "/api/status",
+    tag = "core",
+    responses(
+        (status = 200, description = "API status information", body = serde_json::Value)
+    )
+)]
 async fn api_status() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "ok",
@@ -1063,6 +1236,17 @@ async fn api_status() -> Json<serde_json::Value> {
 }
 
 /// Greet endpoint — same API in both modes.
+#[utoipa::path(
+    get,
+    path = "/api/greet",
+    tag = "core",
+    params(
+        ("name" = Option<String>, Query, description = "Name to greet"),
+    ),
+    responses(
+        (status = 200, description = "Greeting message", body = serde_json::Value)
+    )
+)]
 async fn api_greet(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Json<serde_json::Value> {
@@ -1077,6 +1261,14 @@ async fn api_greet(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// List available serial ports on the system.
+#[utoipa::path(
+    get,
+    path = "/api/serial/ports",
+    tag = "serial",
+    responses(
+        (status = 200, description = "List of available serial ports", body = serde_json::Value)
+    )
+)]
 async fn serial_ports() -> Json<serde_json::Value> {
     match tokio_serial::available_ports() {
         Ok(ports) => {
@@ -1097,7 +1289,7 @@ async fn serial_ports() -> Json<serde_json::Value> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct OpenRequest {
     port_num: u32,
     port_name: Option<String>,
@@ -1105,6 +1297,15 @@ struct OpenRequest {
 }
 
 /// Open a serial port connection.
+#[utoipa::path(
+    post,
+    path = "/api/serial/open",
+    tag = "serial",
+    request_body = OpenRequest,
+    responses(
+        (status = 200, description = "Serial port opened", body = serde_json::Value)
+    )
+)]
 async fn serial_open(
     State(state): State<AppState>,
     Json(body): Json<OpenRequest>,
@@ -1126,6 +1327,14 @@ async fn serial_open(
 }
 
 /// Close the serial port connection.
+#[utoipa::path(
+    post,
+    path = "/api/serial/close",
+    tag = "serial",
+    responses(
+        (status = 200, description = "Serial port closed", body = serde_json::Value)
+    )
+)]
 async fn serial_close(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut sender = state.serial.lock().await;
     sender.close().await;
@@ -1135,12 +1344,21 @@ async fn serial_close(State(state): State<AppState>) -> Json<serde_json::Value> 
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct WriteRequest {
     data: String,
 }
 
 /// Write data to the serial port.
+#[utoipa::path(
+    post,
+    path = "/api/serial/write",
+    tag = "serial",
+    request_body = WriteRequest,
+    responses(
+        (status = 200, description = "Data written to serial port", body = serde_json::Value)
+    )
+)]
 async fn serial_write(
     State(state): State<AppState>,
     Json(body): Json<WriteRequest>,
@@ -1159,6 +1377,15 @@ async fn serial_write(
 }
 
 /// POST /api/serial/config — set baudrate and data format
+#[utoipa::path(
+    post,
+    path = "/api/serial/config",
+    tag = "serial",
+    request_body = SerialConfigRequest,
+    responses(
+        (status = 200, description = "Serial config updated", body = serde_json::Value)
+    )
+)]
 async fn serial_config(
     State(state): State<AppState>,
     Json(body): Json<SerialConfigRequest>,
@@ -1206,13 +1433,21 @@ async fn serial_config(
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct SerialConfigRequest {
     baudrate: Option<u32>,
     data_format: Option<String>,
 }
 
 /// Get serial connection status.
+#[utoipa::path(
+    get,
+    path = "/api/serial/status",
+    tag = "serial",
+    responses(
+        (status = 200, description = "Serial connection status", body = serde_json::Value)
+    )
+)]
 async fn serial_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let sender = state.serial.lock().await;
     Json(serde_json::json!({
@@ -1225,6 +1460,14 @@ async fn serial_status(State(state): State<AppState>) -> Json<serde_json::Value>
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// List all available (loaded) commands.
+#[utoipa::path(
+    get,
+    path = "/api/commands",
+    tag = "commands",
+    responses(
+        (status = 200, description = "List of commands", body = serde_json::Value)
+    )
+)]
 async fn commands_list(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cm = state.command_manager.lock().await;
     let commands: Vec<serde_json::Value> = cm
@@ -1241,12 +1484,21 @@ async fn commands_list(State(state): State<AppState>) -> Json<serde_json::Value>
     Json(serde_json::json!({ "commands": commands }))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct NameRequest {
     name: String,
 }
 
 /// Load a command by scanning the scripts directory for the given name.
+#[utoipa::path(
+    post,
+    path = "/api/commands/load",
+    tag = "commands",
+    request_body = NameRequest,
+    responses(
+        (status = 200, description = "Command loaded", body = serde_json::Value)
+    )
+)]
 async fn commands_load(
     State(state): State<AppState>,
     Json(body): Json<NameRequest>,
@@ -1280,6 +1532,15 @@ async fn commands_load(
 }
 
 /// Start (activate) a command by name.
+#[utoipa::path(
+    post,
+    path = "/api/commands/start",
+    tag = "commands",
+    request_body = NameRequest,
+    responses(
+        (status = 200, description = "Command started", body = serde_json::Value)
+    )
+)]
 async fn commands_start(
     State(state): State<AppState>,
     Json(body): Json<NameRequest>,
@@ -1316,6 +1577,14 @@ async fn commands_start(
 }
 
 /// Stop the currently active command.
+#[utoipa::path(
+    post,
+    path = "/api/commands/stop",
+    tag = "commands",
+    responses(
+        (status = 200, description = "Command stopped", body = serde_json::Value)
+    )
+)]
 async fn commands_stop(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut cm = state.command_manager.lock().await;
     let name = cm.active_name().map(|s| s.to_string());
@@ -1338,6 +1607,14 @@ async fn commands_stop(State(state): State<AppState>) -> Json<serde_json::Value>
 }
 
 /// Get information about the currently active command.
+#[utoipa::path(
+    get,
+    path = "/api/commands/active",
+    tag = "commands",
+    responses(
+        (status = 200, description = "Currently active command info", body = serde_json::Value)
+    )
+)]
 async fn commands_active(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cm = state.command_manager.lock().await;
     match cm.active() {
@@ -1354,11 +1631,20 @@ async fn commands_active(State(state): State<AppState>) -> Json<serde_json::Valu
 }
 
 /// POST /api/commands/filter — set command filter string and return filtered list
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct FilterRequest {
     filter: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/commands/filter",
+    tag = "commands",
+    request_body = FilterRequest,
+    responses(
+        (status = 200, description = "Filtered command list", body = serde_json::Value)
+    )
+)]
 async fn commands_filter(
     State(state): State<AppState>,
     Json(body): Json<FilterRequest>,
@@ -1404,6 +1690,14 @@ async fn commands_filter(
 }
 
 /// POST /api/commands/reload — rescan the scripts directory and reload all commands
+#[utoipa::path(
+    post,
+    path = "/api/commands/reload",
+    tag = "commands",
+    responses(
+        (status = 200, description = "Commands reloaded", body = serde_json::Value)
+    )
+)]
 async fn commands_reload(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut cm = state.command_manager.lock().await;
     match cm.scan() {
@@ -1433,6 +1727,14 @@ async fn commands_reload(State(state): State<AppState>) -> Json<serde_json::Valu
 }
 
 /// GET /api/profile — list all available profiles
+#[utoipa::path(
+    get,
+    path = "/api/profile",
+    tag = "profile",
+    responses(
+        (status = 200, description = "List of profiles", body = serde_json::Value)
+    )
+)]
 async fn profile_list(State(state): State<AppState>) -> Json<serde_json::Value> {
     let pm = state.profile_manager.lock().await;
     let profiles: Vec<serde_json::Value> = pm
@@ -1454,6 +1756,15 @@ async fn profile_list(State(state): State<AppState>) -> Json<serde_json::Value> 
 }
 
 /// POST /api/profile — activate a profile by name
+#[utoipa::path(
+    post,
+    path = "/api/profile",
+    tag = "profile",
+    request_body = NameRequest,
+    responses(
+        (status = 200, description = "Profile activated", body = serde_json::Value)
+    )
+)]
 async fn profile_set(
     State(state): State<AppState>,
     Json(body): Json<NameRequest>,
@@ -1478,7 +1789,7 @@ async fn profile_set(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Notification configuration stored in shared state.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
 struct NotificationConfig {
     /// Enable Windows desktop toast notifications
     windows_enabled: bool,
@@ -1507,6 +1818,14 @@ impl Default for NotificationConfig {
 }
 
 /// GET /api/notifications/config — get current notification settings
+#[utoipa::path(
+    get,
+    path = "/api/notifications/config",
+    tag = "notifications",
+    responses(
+        (status = 200, description = "Current notification settings", body = serde_json::Value)
+    )
+)]
 async fn notifications_get_config(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cfg = state.notification_config.lock().await;
     Json(serde_json::json!({
@@ -1530,7 +1849,7 @@ fn mask_secret(value: &str) -> String {
     format!("****{}", &value[value.len() - 4..])
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct NotificationConfigRequest {
     windows_enabled: Option<bool>,
     line_enabled: Option<bool>,
@@ -1540,6 +1859,15 @@ struct NotificationConfigRequest {
 }
 
 /// POST /api/notifications/config — update notification settings
+#[utoipa::path(
+    post,
+    path = "/api/notifications/config",
+    tag = "notifications",
+    request_body = NotificationConfigRequest,
+    responses(
+        (status = 200, description = "Notification config updated", body = serde_json::Value)
+    )
+)]
 async fn notifications_set_config(
     State(state): State<AppState>,
     Json(body): Json<NotificationConfigRequest>,
@@ -1574,7 +1902,7 @@ async fn notifications_set_config(
     }))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct SendNotificationRequest {
     /// Notification message text
     message: String,
@@ -1583,6 +1911,15 @@ struct SendNotificationRequest {
 }
 
 /// POST /api/notifications/send — send a test notification using current settings
+#[utoipa::path(
+    post,
+    path = "/api/notifications/send",
+    tag = "notifications",
+    request_body = SendNotificationRequest,
+    responses(
+        (status = 200, description = "Notification sent", body = serde_json::Value)
+    )
+)]
 async fn notifications_send(
     State(state): State<AppState>,
     Json(body): Json<SendNotificationRequest>,
@@ -1669,6 +2006,103 @@ async fn notifications_send(
     }))
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// OpenAPI Documentation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        api_status,
+        api_greet,
+        controller_set_type,
+        controller_get_type,
+        controller_set_keyboard,
+        controller_get_keyboard,
+        controller_set_mouse_stick,
+        controller_get_mouse_stick,
+        cameras_list,
+        camera_status,
+        camera_open,
+        camera_close,
+        camera_frame,
+        camera_capture,
+        camera_config,
+        input_press,
+        input_hold,
+        input_release,
+        input_stick,
+        input_touch,
+        ws_handler,
+        serial_ports,
+        serial_open,
+        serial_close,
+        serial_write,
+        serial_config,
+        serial_status,
+        commands_list,
+        commands_load,
+        commands_start,
+        commands_stop,
+        commands_active,
+        commands_filter,
+        commands_reload,
+        profile_list,
+        profile_set,
+        notifications_get_config,
+        notifications_set_config,
+        notifications_send,
+    ),
+    components(
+        schemas(
+            ControllerTypeRequest,
+            KeyboardRequest,
+            MouseStickRequest,
+            CameraOpenRequest,
+            CaptureRequest,
+            CameraConfigRequest,
+            PressRequest,
+            HoldRequest,
+            StickRequest,
+            TouchRequest,
+            OpenRequest,
+            WriteRequest,
+            SerialConfigRequest,
+            NameRequest,
+            FilterRequest,
+            NotificationConfigRequest,
+            SendNotificationRequest,
+            MouseStickConfig,
+            NotificationConfig,
+        )
+    ),
+    tags(
+        (name = "core", description = "Core API endpoints"),
+        (name = "controller", description = "Controller configuration endpoints"),
+        (name = "camera", description = "Camera management endpoints"),
+        (name = "input", description = "Game input endpoints"),
+        (name = "websocket", description = "WebSocket real-time event endpoint"),
+        (name = "serial", description = "Serial port management endpoints"),
+        (name = "commands", description = "Command management endpoints"),
+        (name = "profile", description = "Profile management endpoints"),
+        (name = "notifications", description = "Notification configuration and sending endpoints"),
+    )
+)]
+struct ApiDoc;
+
+/// GET /api/openapi.json — return the OpenAPI specification as JSON
+#[utoipa::path(
+    get,
+    path = "/api/openapi.json",
+    tag = "core",
+    responses(
+        (status = 200, description = "OpenAPI specification in JSON format", body = serde_json::Value)
+    )
+)]
+async fn api_openapi_json() -> Json<serde_json::Value> {
+    Json(serde_json::to_value(ApiDoc::openapi()).unwrap())
+}
+
 // Server Setup
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1678,6 +2112,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         // Core endpoints
         .route("/api/status", get(api_status))
         .route("/api/greet", get(api_greet))
+        .route("/api/openapi.json", get(api_openapi_json))
         // Controller endpoints
         .route(
             "/api/controller/type",

@@ -29,6 +29,7 @@ image = { version = "0.24", default-features = false, features = ["jpeg"] }
 base64 = "0.22"
 url = "2"
 futures = "0.3"
+utoipa = { version = "5", features = ["axum_extras"] }
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }

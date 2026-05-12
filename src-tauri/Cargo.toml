@@ -28,6 +28,7 @@ tokio-serial = "5.4"
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 base64 = "0.22"
 url = "2"
+futures = "0.3"
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }
@@ -35,3 +36,7 @@ pokecon-events = { path = "../rust/pokecon-events" }
 pokecon-serial = { path = "../rust/pokecon-serial" }
 pokecon-cv = { path = "../rust/pokecon-cv" }
 pokecon-notify = { path = "../rust/pokecon-notify" }
+
+[features]
+default = []
+v4l = ["pokecon-cv/v4l"]

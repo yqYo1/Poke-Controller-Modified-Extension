@@ -15,7 +15,13 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
 libc = "0.2"
+v4l = { version = "0.14", optional = true }
+jpeg-decoder = { version = "0.3", optional = true }
 pokecon-events = { path = "../pokecon-events" }
+
+[features]
+default = []
+v4l = ["dep:v4l", "dep:jpeg-decoder"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

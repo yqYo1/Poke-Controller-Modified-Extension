@@ -12,9 +12,14 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use url::Url;
 
+use futures::future::join_all;
 use pokecon_core::command_manager::CommandManager;
 use pokecon_core::profile::ProfileManager;
-use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, MockCameraBackend, PixelFormat};
+#[cfg(feature = "v4l")]
+use pokecon_cv::backends::{V4lCameraBackend, list_cameras as v4l_list_cameras};
+#[cfg(not(feature = "v4l"))]
+use pokecon_cv::camera::MockCameraBackend;
+use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, PixelFormat};
 use pokecon_events::EventBus;
 use pokecon_notify::discord::DiscordNotifier;
 use pokecon_notify::line::LineNotifier;
@@ -50,6 +55,27 @@ struct Args {
     profiles_dir: PathBuf,
 }
 
+/// Configuration for mouse-to-stick control.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct MouseStickConfig {
+    /// Whether left-stick mouse control is enabled
+    left_enabled: bool,
+    /// Whether right-stick mouse control is enabled
+    right_enabled: bool,
+    /// Sensitivity multiplier (default: 1.0)
+    sensitivity: f32,
+}
+
+impl Default for MouseStickConfig {
+    fn default() -> Self {
+        Self {
+            left_enabled: false,
+            right_enabled: false,
+            sensitivity: 1.0,
+        }
+    }
+}
+
 /// Shared application state accessible from all HTTP handlers.
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -71,6 +97,8 @@ struct AppState {
     profile_manager: Arc<Mutex<ProfileManager>>,
     /// Notification configuration
     notification_config: Arc<Mutex<NotificationConfig>>,
+    /// Mouse stick control configuration
+    mouse_stick: Arc<Mutex<MouseStickConfig>>,
 }
 
 // ── Helper: Parse a button name string into a Button bitflag ────────────────────
@@ -237,17 +265,106 @@ async fn controller_get_keyboard(State(state): State<AppState>) -> Json<serde_js
     }))
 }
 
+#[derive(Deserialize)]
+struct MouseStickRequest {
+    /// Stick identifier: "left" or "right"
+    stick: String,
+    /// Whether to enable mouse-to-stick control
+    enabled: bool,
+    /// Sensitivity multiplier (optional, default: 1.0)
+    #[serde(default = "default_sensitivity")]
+    sensitivity: f32,
+}
+
+fn default_sensitivity() -> f32 {
+    1.0
+}
+
+/// POST /api/controller/mouse_stick — enable/disable mouse-to-stick control
+async fn controller_set_mouse_stick(
+    State(state): State<AppState>,
+    Json(body): Json<MouseStickRequest>,
+) -> Json<serde_json::Value> {
+    let mut ms = state.mouse_stick.lock().await;
+    match body.stick.to_lowercase().as_str() {
+        "left" => {
+            ms.left_enabled = body.enabled;
+            ms.sensitivity = body.sensitivity;
+            tracing::info!(
+                "Left stick mouse control: {} (sensitivity: {})",
+                body.enabled,
+                body.sensitivity
+            );
+            Json(serde_json::json!({
+                "status": "ok",
+                "stick": "left",
+                "enabled": body.enabled,
+                "sensitivity": body.sensitivity,
+            }))
+        }
+        "right" => {
+            ms.right_enabled = body.enabled;
+            ms.sensitivity = body.sensitivity;
+            tracing::info!(
+                "Right stick mouse control: {} (sensitivity: {})",
+                body.enabled,
+                body.sensitivity
+            );
+            Json(serde_json::json!({
+                "status": "ok",
+                "stick": "right",
+                "enabled": body.enabled,
+                "sensitivity": body.sensitivity,
+            }))
+        }
+        _ => Json(serde_json::json!({
+            "status": "error",
+            "message": format!("Invalid stick: '{}'. Must be 'left' or 'right'", body.stick),
+        })),
+    }
+}
+
+/// GET /api/controller/mouse_stick — get current mouse stick configuration
+async fn controller_get_mouse_stick(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let ms = state.mouse_stick.lock().await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "left_enabled": ms.left_enabled,
+        "right_enabled": ms.right_enabled,
+        "sensitivity": ms.sensitivity,
+    }))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Camera Endpoints
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// GET /api/cameras — list available camera devices (placeholder)
+/// GET /api/cameras — list available camera devices
 async fn cameras_list() -> Json<serde_json::Value> {
-    // TODO: Implement real camera enumeration when backend is ready
-    Json(serde_json::json!({
-        "status": "ok",
-        "devices": [{"index": 0, "name": "Default Camera"}],
-    }))
+    #[cfg(feature = "v4l")]
+    {
+        let devices: Vec<serde_json::Value> = v4l_list_cameras()
+            .into_iter()
+            .map(|(idx, name)| {
+                serde_json::json!({
+                    "index": idx,
+                    "name": name,
+                })
+            })
+            .collect();
+        Json(serde_json::json!({
+            "status": "ok",
+            "devices": devices,
+        }))
+    }
+
+    #[cfg(not(feature = "v4l"))]
+    {
+        Json(serde_json::json!({
+            "status": "ok",
+            "devices": [{"index": 0, "name": "Default Camera"}],
+        }))
+    }
 }
 
 /// GET /api/camera/status — get camera connection status
@@ -295,8 +412,12 @@ async fn camera_open(
         flip: Default::default(),
     };
 
-    // MockCameraBackendを使用（実装時にV4L2/OpenCVバックエンドに置き換え）
+    // Choose backend: V4lCameraBackend with "v4l" feature, MockCameraBackend otherwise
+    #[cfg(feature = "v4l")]
+    let backend = V4lCameraBackend::new();
+    #[cfg(not(feature = "v4l"))]
     let backend = MockCameraBackend::new();
+
     let mut camera = Camera::new(Box::new(backend));
 
     match camera.open(config).await {
@@ -1468,51 +1589,80 @@ async fn notifications_send(
     Json(body): Json<SendNotificationRequest>,
 ) -> Json<serde_json::Value> {
     let cfg = state.notification_config.lock().await;
-
     let notification = Notification::new(&body.message)
         .with_title(body.title.unwrap_or_else(|| "Poke-Controller".to_string()));
 
-    let mut results = Vec::new();
+    // Extract config values before spawning tasks
+    let windows_enabled = cfg.windows_enabled;
+    let line_enabled = cfg.line_enabled;
+    let line_token = cfg.line_access_token.clone();
+    let discord_enabled = cfg.discord_enabled;
+    let discord_url = cfg.discord_webhook_url.clone();
+    drop(cfg); // Release the lock before spawning parallel tasks
 
-    // Windows desktop notification
-    if cfg.windows_enabled {
-        let notifier = WindowsNotifier::new("Poke-Controller");
-        match notifier.send(&notification).await {
-            Ok(_) => results.push(serde_json::json!({"channel": "windows", "status": "sent"})),
-            Err(e) => results.push(serde_json::json!({"channel": "windows", "status": "error", "error": e.to_string()})),
-        }
+    let mut handles: Vec<tokio::task::JoinHandle<serde_json::Value>> = Vec::new();
+
+    // Windows desktop notification — parallel task
+    if windows_enabled {
+        let notif = notification.clone();
+        handles.push(tokio::spawn(async move {
+            let notifier = WindowsNotifier::new("Poke-Controller");
+            match notifier.send(&notif).await {
+                Ok(_) => serde_json::json!({"channel": "windows", "status": "sent"}),
+                Err(e) => serde_json::json!({"channel": "windows", "status": "error", "error": e.to_string()}),
+            }
+        }));
     }
 
-    // LINE notification
-    if cfg.line_enabled && !cfg.line_access_token.is_empty() {
-        let notifier = LineNotifier::new(&cfg.line_access_token);
-        match notifier.send(&notification).await {
-            Ok(_) => results.push(serde_json::json!({"channel": "line", "status": "sent"})),
-            Err(e) => results.push(
-                serde_json::json!({"channel": "line", "status": "error", "error": e.to_string()}),
-            ),
-        }
+    // LINE Notify notification — parallel task
+    if line_enabled && !line_token.is_empty() {
+        let notif = notification.clone();
+        handles.push(tokio::spawn(async move {
+            let notifier = LineNotifier::new(line_token);
+            match notifier.send(&notif).await {
+                Ok(_) => serde_json::json!({"channel": "line", "status": "sent"}),
+                Err(e) => serde_json::json!({"channel": "line", "status": "error", "error": e.to_string()}),
+            }
+        }));
     }
 
-    // Discord notification
-    if cfg.discord_enabled && !cfg.discord_webhook_url.is_empty() {
+    // Discord webhook notification — parallel task
+    if discord_enabled && !discord_url.is_empty() {
         // SSRF protection: validate URL before sending
-        if let Err(e) = validate_webhook_url(&cfg.discord_webhook_url) {
-            results.push(serde_json::json!({
-                "channel": "discord",
-                "status": "error",
-                "error": format!("Invalid webhook URL: {}", e),
+        if let Err(e) = validate_webhook_url(&discord_url) {
+            handles.push(tokio::spawn(async move {
+                serde_json::json!({
+                    "channel": "discord",
+                    "status": "error",
+                    "error": format!("Invalid webhook URL: {}", e),
+                })
             }));
         } else {
-            let notifier = DiscordNotifier::new(&cfg.discord_webhook_url);
-            match notifier.send(&notification).await {
-                Ok(_) => results.push(serde_json::json!({"channel": "discord", "status": "sent"})),
-                Err(e) => results.push(
-                    serde_json::json!({"channel": "discord", "status": "error", "error": e.to_string()}),
-                ),
-            }
+            let notif = notification.clone();
+            handles.push(tokio::spawn(async move {
+                let notifier = DiscordNotifier::new(discord_url);
+                match notifier.send(&notif).await {
+                    Ok(_) => serde_json::json!({"channel": "discord", "status": "sent"}),
+                    Err(e) => serde_json::json!({"channel": "discord", "status": "error", "error": e.to_string()}),
+                }
+            }));
         }
     }
+
+    // Wait for all notification tasks to complete in parallel
+    let results: Vec<serde_json::Value> = join_all(handles)
+        .await
+        .into_iter()
+        .map(|r| {
+            r.unwrap_or_else(|e| {
+                serde_json::json!({
+                    "channel": "unknown",
+                    "status": "error",
+                    "error": format!("notification task panicked: {}", e),
+                })
+            })
+        })
+        .collect();
 
     Json(serde_json::json!({
         "status": "ok",
@@ -1537,6 +1687,10 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         .route(
             "/api/controller/keyboard",
             get(controller_get_keyboard).post(controller_set_keyboard),
+        )
+        .route(
+            "/api/controller/mouse_stick",
+            get(controller_get_mouse_stick).post(controller_set_mouse_stick),
         )
         // Camera endpoints
         .route("/api/cameras", get(cameras_list))
@@ -1623,6 +1777,7 @@ fn main() {
         keyboard_enabled: Arc::new(Mutex::new(false)),
         profile_manager: Arc::new(Mutex::new(pm)),
         notification_config: Arc::new(Mutex::new(NotificationConfig::default())),
+        mouse_stick: Arc::new(Mutex::new(MouseStickConfig::default())),
     };
 
     // Start the HTTP server in both modes — Tauri embeds it internally

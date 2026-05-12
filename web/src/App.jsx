@@ -227,6 +227,7 @@ export default function App() {
         onClose={() => setControllerWindowOpen(false)}
         onInput={handleInput}
         serialOpen={serialOpen}
+        api={apiRef.current}
       />
     </div>
   );

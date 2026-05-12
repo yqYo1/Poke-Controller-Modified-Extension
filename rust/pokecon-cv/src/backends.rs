@@ -1,76 +1,305 @@
-use std::sync::Arc;
+// Camera backend types used conditionally via cfg-gated modules.
+// Top-level imports are for the `list_cameras` stub and re-exports.
 
-use tokio::sync::Mutex;
+#[cfg(feature = "v4l")]
+mod v4l_impl {
+    use tracing;
+    use v4l::buffer::Type;
+    use v4l::io::traits::CaptureStream;
+    use v4l::prelude::*;
+    use v4l::video::Capture;
+    use v4l::video::capture::Parameters;
 
-use crate::camera::{CameraBackend, CameraConfig, CameraError, Frame, PixelFormat};
+    use crate::camera::{CameraBackend, CameraConfig, CameraError, Frame, PixelFormat};
 
-/// OpenCV-based camera backend (cross-platform)
-pub struct OpencvCameraBackend {
-    // OpenCV VideoCapture is not Send/Safe, so we use a workaround
-    // In practice, we use a separate thread for capture
-    is_open: bool,
-    config: Option<CameraConfig>,
-}
-
-impl OpencvCameraBackend {
-    pub fn new() -> Self {
-        Self {
-            is_open: false,
-            config: None,
-        }
-    }
-}
-
-impl Default for OpencvCameraBackend {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait::async_trait]
-impl CameraBackend for OpencvCameraBackend {
-    async fn open(&mut self, config: &CameraConfig) -> Result<(), CameraError> {
-        // For now, mark as open. Real implementation would use opencv crate
-        // or call into Python's cv2 via PyO3
-        self.is_open = true;
-        self.config = Some(config.clone());
-        Ok(())
+    /// Video4Linux2 camera backend for Linux.
+    ///
+    /// Uses the `v4l` crate to access camera devices via V4L2.
+    /// Supports mmap-based streaming and negotiates the best pixel format.
+    pub struct V4lCameraBackend {
+        device: Option<Device>,
+        stream: Option<MmapStream<'static>>,
+        config: Option<CameraConfig>,
+        is_open: bool,
+        negotiated_fourcc: Option<v4l::FourCC>,
     }
 
-    async fn capture(&mut self) -> Result<Frame, CameraError> {
-        if !self.is_open {
-            return Err(CameraError::NotInitialized);
+    impl V4lCameraBackend {
+        pub fn new() -> Self {
+            Self {
+                device: None,
+                stream: None,
+                config: None,
+                is_open: false,
+                negotiated_fourcc: None,
+            }
         }
 
-        // Return a placeholder frame for now
-        // Real implementation would capture from OpenCV
-        let (width, height) = self
-            .config
-            .as_ref()
-            .map(|c| (c.width, c.height))
-            .unwrap_or((1280, 720));
+        /// Try to set the best available pixel format on the device.
+        fn negotiate_format(
+            device: &Device,
+            width: u32,
+            height: u32,
+        ) -> Result<v4l::FourCC, CameraError> {
+            let preferred_formats = [
+                v4l::FourCC::new(b"RGB3"),
+                v4l::FourCC::new(b"MJPG"),
+                v4l::FourCC::new(b"YUYV"),
+                v4l::FourCC::new(b"GREY"),
+            ];
 
-        Ok(Frame {
-            width,
-            height,
-            data: vec![128; (width * height * 3) as usize],
-            format: PixelFormat::Rgb,
-        })
+            for pref in &preferred_formats {
+                let fmt = v4l::Format::new(width, height, *pref);
+                match device.set_format(&fmt) {
+                    Ok(actual_fmt) => {
+                        tracing::info!(
+                            "V4L: negotiated format {:?} (actual {}x{})",
+                            actual_fmt.fourcc,
+                            actual_fmt.width,
+                            actual_fmt.height,
+                        );
+                        return Ok(actual_fmt.fourcc);
+                    }
+                    Err(e) => {
+                        tracing::debug!("V4L: format {:?} not available: {}", pref, e);
+                        continue;
+                    }
+                }
+            }
+
+            Err(CameraError::OpenError(
+                0,
+                "No supported pixel format found on device".to_string(),
+            ))
+        }
+
+        /// Convert a v4l buffer to RGB Frame.
+        fn convert_frame(
+            buf_data: &[u8],
+            width: u32,
+            height: u32,
+            fourcc: v4l::FourCC,
+        ) -> Result<Frame, CameraError> {
+            let frame_size = (width * height) as usize;
+
+            match fourcc.to_string().as_str() {
+                "RGB3" => Ok(Frame {
+                    width,
+                    height,
+                    data: buf_data.to_vec(),
+                    format: PixelFormat::Rgb,
+                }),
+                "GREY" => {
+                    let mut rgb = Vec::with_capacity(frame_size * 3);
+                    for &g in buf_data.iter().take(frame_size) {
+                        rgb.extend_from_slice(&[g, g, g]);
+                    }
+                    Ok(Frame {
+                        width,
+                        height,
+                        data: rgb,
+                        format: PixelFormat::Rgb,
+                    })
+                }
+                "YUYV" => {
+                    let mut rgb = Vec::with_capacity(frame_size * 3);
+                    for chunk in buf_data.chunks(4) {
+                        if chunk.len() < 4 {
+                            break;
+                        }
+                        let y0 = chunk[0] as i32;
+                        let u = chunk[1] as i32;
+                        let y1 = chunk[2] as i32;
+                        let v = chunk[3] as i32;
+
+                        for &y in &[y0, y1] {
+                            let c = y - 16;
+                            let d = u - 128;
+                            let e = v - 128;
+                            let r = (298 * c + 409 * e + 128) >> 8;
+                            let g = (298 * c - 100 * d - 208 * e + 128) >> 8;
+                            let b = (298 * c + 516 * d + 128) >> 8;
+                            rgb.push(r.clamp(0, 255) as u8);
+                            rgb.push(g.clamp(0, 255) as u8);
+                            rgb.push(b.clamp(0, 255) as u8);
+                        }
+                    }
+                    rgb.truncate(frame_size * 3);
+                    Ok(Frame {
+                        width,
+                        height,
+                        data: rgb,
+                        format: PixelFormat::Rgb,
+                    })
+                }
+                "MJPG" => {
+                    let decoder = jpeg_decoder::Decoder::new(buf_data);
+                    let mut reader = decoder;
+                    let pixels = reader.decode().map_err(|e| {
+                        CameraError::CaptureError(format!("MJPEG decode error: {:?}", e))
+                    })?;
+                    let info = reader
+                        .info()
+                        .ok_or_else(|| CameraError::CaptureError("No JPEG info".to_string()))?;
+                    Ok(Frame {
+                        width: info.width as u32,
+                        height: info.height as u32,
+                        data: pixels,
+                        format: PixelFormat::Rgb,
+                    })
+                }
+                _ => Err(CameraError::CaptureError(format!(
+                    "Unsupported pixel format: {}",
+                    fourcc
+                ))),
+            }
+        }
+
+        /// Try to set frame rate via V4L2 streaming parameters.
+        fn set_fps(device: &Device, fps: u32) {
+            let params = Parameters::with_fps(fps);
+            if let Err(e) = device.set_params(&params) {
+                tracing::warn!("V4L: could not set frame rate to {} fps: {}", fps, e);
+            }
+        }
     }
 
-    async fn close(&mut self) {
-        self.is_open = false;
-        self.config = None;
+    impl Default for V4lCameraBackend {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
-    fn is_open(&self) -> bool {
-        self.is_open
+    #[async_trait::async_trait]
+    impl CameraBackend for V4lCameraBackend {
+        async fn open(&mut self, config: &CameraConfig) -> Result<(), CameraError> {
+            let dev_index = config.device_index as usize;
+
+            let device = Device::new(dev_index).map_err(|e| {
+                CameraError::OpenError(
+                    config.device_index,
+                    format!("Failed to open /dev/video{}: {}", config.device_index, e),
+                )
+            })?;
+
+            let fourcc = Self::negotiate_format(&device, config.width, config.height)?;
+            Self::set_fps(&device, config.fps);
+
+            let stream = MmapStream::with_buffers(&device, Type::VideoCapture, 4).map_err(|e| {
+                CameraError::OpenError(
+                    config.device_index,
+                    format!("Failed to create stream: {}", e),
+                )
+            })?;
+
+            self.device = Some(device);
+            self.stream = Some(stream);
+            self.config = Some(config.clone());
+            self.negotiated_fourcc = Some(fourcc);
+            self.is_open = true;
+
+            tracing::info!(
+                "V4L camera opened: /dev/video{} ({}x{} @ {} fps, format: {:?})",
+                config.device_index,
+                config.width,
+                config.height,
+                config.fps,
+                fourcc,
+            );
+
+            Ok(())
+        }
+
+        async fn capture(&mut self) -> Result<Frame, CameraError> {
+            if !self.is_open {
+                return Err(CameraError::NotInitialized);
+            }
+
+            let stream = self.stream.as_mut().ok_or(CameraError::CaptureError(
+                "Stream not initialized".to_string(),
+            ))?;
+
+            let fourcc = self.negotiated_fourcc.ok_or(CameraError::CaptureError(
+                "No format negotiated".to_string(),
+            ))?;
+
+            let config = self.config.as_ref().ok_or(CameraError::CaptureError(
+                "No configuration set".to_string(),
+            ))?;
+
+            let (buf, _meta) = stream
+                .next()
+                .map_err(|e| CameraError::CaptureError(format!("V4L capture error: {}", e)))?;
+
+            Self::convert_frame(buf, config.width, config.height, fourcc)
+        }
+
+        async fn close(&mut self) {
+            self.is_open = false;
+            self.stream = None;
+            self.device = None;
+            self.config = None;
+            self.negotiated_fourcc = None;
+            tracing::info!("V4L camera closed");
+        }
+
+        fn is_open(&self) -> bool {
+            self.is_open
+        }
+    }
+
+    /// List available V4L2 camera devices by probing device indices.
+    pub fn list_cameras() -> Vec<(i32, String)> {
+        let mut cameras: Vec<(i32, String)> = Vec::new();
+
+        for idx in 0..64 {
+            match Device::new(idx) {
+                Ok(device) => {
+                    if let Ok(caps) = device.query_caps() {
+                        if caps
+                            .capabilities
+                            .contains(v4l::capability::Flags::VIDEO_CAPTURE)
+                        {
+                            cameras.push((idx as i32, caps.card));
+                        } else {
+                            tracing::debug!("V4L: /dev/video{} is not a video capture device", idx);
+                        }
+                    } else {
+                        cameras.push((idx as i32, format!("/dev/video{}", idx)));
+                    }
+                }
+                Err(_) => {
+                    // Stop probing after first miss if we already found cameras
+                    if !cameras.is_empty() && idx > 4 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        cameras
     }
 }
 
-/// List available camera devices (placeholder)
+// ── Re-exports ────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "v4l")]
+pub use v4l_impl::*;
+
+// ── Stub when v4l feature is disabled ─────────────────────────────────────────
+
+#[cfg(not(feature = "v4l"))]
 pub fn list_cameras() -> Vec<(i32, String)> {
-    // In a real implementation, this would enumerate /dev/video* devices
-    // or use OpenCV to list available cameras
     vec![(0, "Default Camera".to_string())]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_cameras_no_panic() {
+        let cams = list_cameras();
+        assert!(cams.iter().all(|(idx, name)| *idx >= 0 && !name.is_empty()));
+    }
 }

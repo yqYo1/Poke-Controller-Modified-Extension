@@ -94,6 +94,15 @@ export class APIClient {
     });
   }
 
+  // Mouse stick control
+  getMouseStick() { return this._fetch('/api/controller/mouse_stick'); }
+  setMouseStick({ stick, enabled, sensitivity = 1.0 }) {
+    return this._fetch('/api/controller/mouse_stick', {
+      method: 'POST',
+      body: JSON.stringify({ stick, enabled, sensitivity }),
+    });
+  }
+
   // Commands
   getCommands() { return this._fetch('/api/commands'); }
   loadCommand(name) {

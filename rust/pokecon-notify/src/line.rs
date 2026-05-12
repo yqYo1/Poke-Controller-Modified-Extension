@@ -1,19 +1,18 @@
-//! LINE Messaging API notifier (dummy implementation).
+//! LINE Notify API notifier.
 //!
-//! This module provides a placeholder [`LineNotifier`] that logs
-//! notifications via `tracing` instead of actually calling the
-//! LINE Messaging API.  Replace with a real implementation that
-//! uses the LINE Messaging API SDK or raw HTTP requests.
+//! Sends messages via the [LINE Notify API](https://notify-bot.line.me/doc/en/).
+//!
+//! Uses a personal access token obtained from the LINE Notify service
+//! (https://notify-bot.line.me/my/).  Unlike the LINE Messaging API,
+//! LINE Notify is a simpler service that sends notifications to a single
+//! recipient (the user who generated the token).
 
-use crate::{Notification, Notifier, NotifyResult};
+use crate::{Notification, Notifier, NotifyError, NotifyResult};
 use async_trait::async_trait;
-use tracing::info;
+use reqwest::Client;
+use tracing::{debug, error};
 
-/// Dummy notifier for LINE Messenger.
-///
-/// Currently logs all notifications at `info` level.  A real
-/// implementation should POST to `https://api.line.me/v2/bot/message/push`
-/// using a channel access token.
+/// Notifier that delivers messages via the LINE Notify API.
 ///
 /// # Example
 ///
@@ -21,55 +20,94 @@ use tracing::info;
 /// use pokecon_notify::{Notifier, Notification, line::LineNotifier};
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let notifier = LineNotifier::new("your-channel-access-token");
-/// notifier.send(&Notification::new("Hello LINE!")).await?;
+/// let notifier = LineNotifier::new("your-line-notify-access-token");
+/// notifier.send(&Notification::new("Hello from Poke-Controller!")).await?;
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct LineNotifier {
-    /// Channel access token for the LINE Messaging API.
-    #[allow(dead_code)]
-    channel_access_token: String,
+    /// Access token for the LINE Notify API
+    /// (obtained from https://notify-bot.line.me/my/)
+    access_token: String,
+    /// Shared reqwest client for HTTP requests
+    client: Client,
 }
 
 impl LineNotifier {
-    /// Create a new LINE notifier with the given channel access token.
-    pub fn new(channel_access_token: impl Into<String>) -> Self {
+    /// Create a new LINE Notify notifier with the given access token.
+    ///
+    /// The access token must be a valid LINE Notify personal access token.
+    /// Tokens can be generated at https://notify-bot.line.me/my/
+    pub fn new(access_token: impl Into<String>) -> Self {
         Self {
-            channel_access_token: channel_access_token.into(),
+            access_token: access_token.into(),
+            client: Client::new(),
         }
+    }
+
+    /// Set a custom [`reqwest::Client`] (useful for testing with mocks).
+    pub fn with_client(mut self, client: Client) -> Self {
+        self.client = client;
+        self
     }
 }
 
 #[async_trait]
 impl Notifier for LineNotifier {
     async fn send(&self, notification: &Notification) -> NotifyResult<()> {
-        // TODO: Replace with real LINE Messaging API call
-        // https://developers.line.biz/en/reference/messaging-api/#send-push-message
-        //
-        // let body = json!({
-        //     "to": "...",
-        //     "messages": [{
-        //         "type": "text",
-        //         "text": notification.message,
-        //     }],
-        // });
-        //
-        // let resp = client
-        //     .post("https://api.line.me/v2/bot/message/push")
-        //     .header("Authorization", format!("Bearer {}", self.channel_access_token))
-        //     .json(&body)
-        //     .send()
-        //     .await?;
+        let message = build_message_text(notification);
 
-        info!(
-            message = %notification.message,
-            title = ?notification.title,
-            "[LINE dummy] Would send notification"
+        debug!(
+            message = %message,
+            "Sending LINE Notify notification"
         );
 
+        let response = self
+            .client
+            .post("https://notify-api.line.me/api/notify")
+            .header("Authorization", format!("Bearer {}", self.access_token))
+            .form(&[("message", message)])
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body: serde_json::Value = response.json().await.unwrap_or_default();
+
+        if !status.is_success() {
+            let msg = body
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error");
+            error!(
+                %status,
+                %msg,
+                "LINE Notify API returned error"
+            );
+            return Err(NotifyError::Other(format!(
+                "LINE Notify API returned HTTP {status}: {msg}"
+            )));
+        }
+
+        debug!("LINE Notify notification sent successfully");
         Ok(())
+    }
+}
+
+/// Build the message text to send via LINE Notify.
+///
+/// The LINE Notify API supports a single `message` field.  If a title is
+/// provided, it is prepended in the format `[Title] message`.
+fn build_message_text(notification: &Notification) -> String {
+    match &notification.title {
+        Some(title) => {
+            if let Some(subtitle) = &notification.subtitle {
+                format!("[{}]\n{}\n\n{}", title, subtitle, notification.message)
+            } else {
+                format!("[{}]\n{}", title, notification.message)
+            }
+        }
+        None => notification.message.clone(),
     }
 }
 
@@ -77,11 +115,29 @@ impl Notifier for LineNotifier {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_build_message_text_plain() {
+        let n = Notification::new("test message");
+        assert_eq!(build_message_text(&n), "test message");
+    }
+
+    #[test]
+    fn test_build_message_text_with_title() {
+        let n = Notification::new("body").with_title("Title");
+        assert_eq!(build_message_text(&n), "[Title]\nbody");
+    }
+
+    #[test]
+    fn test_build_message_text_with_subtitle() {
+        let n = Notification::new("body")
+            .with_title("Title")
+            .with_subtitle("Sub");
+        assert_eq!(build_message_text(&n), "[Title]\nSub\n\nbody");
+    }
+
     #[tokio::test]
-    async fn test_line_notifier_dummy() {
+    async fn test_line_notifier_creation() {
         let notifier = LineNotifier::new("test-token");
-        // Should not fail – the dummy impl always returns Ok.
-        let result = notifier.send(&Notification::new("test")).await;
-        assert!(result.is_ok());
+        assert_eq!(notifier.access_token, "test-token");
     }
 }

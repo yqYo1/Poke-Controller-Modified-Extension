@@ -180,11 +180,15 @@
                 };
                 ruff-format = {
                   includes = [ "*.py" ];
-                  options = [ "--config=pyproject.toml" ];
+                  options = [
+                    "--config=pyproject.toml"
+                    "--no-cache"
+                  ];
                 };
                 ruff-check = {
                   includes = [ "*.py" ];
                   options = [
+                    "--no-cache"
                     "--select"
                     "E,W,F,I"
                     "--ignore"
@@ -391,7 +395,7 @@
                 runtimeInputs = [ rustEnv ];
                 text = ''
                   ${setupWorkdir}
-                  cargo clippy --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
+                  cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
                 '';
               }
             }/bin/clippy";
@@ -437,7 +441,10 @@
             basedpyright = mkApp "${
               pkgs.writeShellApplication {
                 name = "basedpyright";
-                runtimeInputs = [ pythonEnv pkgs.basedpyright ];
+                runtimeInputs = [
+                  pythonEnv
+                  pkgs.basedpyright
+                ];
                 text = ''
                   cd "${self}"
                   exec basedpyright python/
@@ -878,7 +885,7 @@
                     echo "═══════════════════════════════════════════"
                     echo "  clippy"
                     echo "═══════════════════════════════════════════"
-                    cargo clippy --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
+                    cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
                     echo ""
                     echo "═══════════════════════════════════════════"
                     echo "  cargo test"
@@ -905,7 +912,7 @@
                     echo "═══════════════════════════════════════════"
                     echo "  formatting (check mode)"
                     echo "═══════════════════════════════════════════"
-                    ${config.treefmt.build.wrapper}/bin/treefmt --ci
+                    ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "${self}"
                     echo ""
                     echo "✓ All checks passed"
                   '';

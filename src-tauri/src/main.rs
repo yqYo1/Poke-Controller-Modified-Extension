@@ -1280,7 +1280,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                                 }
                                 // ── WebRTC video signaling ──────────────────────
                                 Some("signaling") => {
-                                    handle_webrtc_signaling(&mut socket, &state, cmd).await;
+                                    handle_webrtc_signaling(&mut socket, &state, &cmd).await;
                                 }
                                 _ => {} // Unknown type, ignore
                             }
@@ -1426,6 +1426,7 @@ fn generate_video_answer_sdp(offer_sdp: &str) -> String {
         .unwrap_or(96);
 
     // Try to find the rtpmap for the selected payload type
+    let default_codec = format!("a=rtpmap:{} VP8/90000", payload_type);
     let codec_info = offer_sdp
         .lines()
         .find(|l| l.starts_with(&format!("a=rtpmap:{}", payload_type)))
@@ -1433,7 +1434,7 @@ fn generate_video_answer_sdp(offer_sdp: &str) -> String {
             // Sanitize: reject non-ASCII characters and enforce max length
             line.len() <= 128 && line.is_ascii()
         })
-        .unwrap_or(&format!("a=rtpmap:{} VP8/90000", payload_type));
+        .unwrap_or(&default_codec);
 
     format!(
         "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=video 9 UDP/TLS/RTP/SAVPF {}\r\nc=IN IP4 0.0.0.0\r\na=inactive\r\na=mid:0\r\n{}\r\n",

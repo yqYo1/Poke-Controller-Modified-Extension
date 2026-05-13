@@ -137,21 +137,37 @@ Poke-Controller-Modified-Extension/
 │   ├── src/main.rs           # HTTPサーバー + WebSocket + APIエンドポイント
 │   └── Cargo.toml            # Tauri専用依存関係
 │
-├── web/                      # Webフロントエンド（React + Vite）
-│   ├── index.html            # PWAメタタグ付きエントリ
+├── web/                      # Webフロントエンド（SvelteKit + Svelte 5）
+│   ├── package.json          # SvelteKit依存関係・スクリプト
+│   ├── svelte.config.js      # SvelteKit設定（adapter-static, /ui base）
+│   ├── vite.config.ts        # Vite設定（HMR proxy → :8020）
 │   ├── src/
-│   │   ├── main.jsx          # Reactアプリエントリ
-│   │   ├── App.jsx           # ルーティング・状態管理
-│   │   ├── api/client.js     # HTTP/WebSocket APIクライアント
-│   │   ├── components/       # UIコンポーネント
-│   │   │   ├── Dashboard.jsx    # ダッシュボード（カメラ・ログ）
-│   │   │   ├── Controller.jsx   # 仮想ゲームパッド
-│   │   │   ├── Scripts.jsx     # スクリプト一覧・実行
-│   │   │   ├── Settings.jsx    # 設定（シリアル接続等）
-│   │   │   ├── NavBar.jsx      # ボトムナビゲーション
-│   │   │   └── StatusBar.jsx   # 接続状態表示
-│   │   └── styles.css        # モバイルファーストCSS
-│   └── public/manifest.json  # PWAマニフェスト
+│   │   ├── app.html          # HTMLエントリ（PWAメタタグ付き）
+│   │   ├── routes/           # SvelteKitファイルベースルーティング
+│   │   │   ├── +layout.svelte    # ルートレイアウト（MenuBar/NavBar/StatusBar）
+│   │   │   ├── camera/          # カメラ設定・プレビュー
+│   │   │   ├── serial/          # シリアル通信
+│   │   │   ├── manual/          # 手動制御（ゲームパッド）
+│   │   │   ├── commands/        # スクリプト一覧・実行
+│   │   │   ├── keyconfig/       # キーコンフィグ
+│   │   │   ├── notification/    # 通知設定
+│   │   │   ├── pokemonhome/     # Pokémon Home連携
+│   │   │   └── others/          # プロファイル・テーマ設定
+│   │   ├── lib/
+│   │   │   ├── api/
+│   │   │   │   ├── client.ts      # 型付きREST/WebSocketクライアント
+│   │   │   │   ├── types.ts       # OpenAPI自動生成型定義
+│   │   │   │   ├── websocket.ts   # 型付きWebSocket（自動再接続）
+│   │   │   │   └── datachannel.ts # WebRTC DataChannel（WSフォールバック付き）
+│   │   │   ├── components/
+│   │   │   │   ├── MenuBar.svelte          # メニューバー
+│   │   │   │   ├── NavBar.svelte           # タブナビゲーション
+│   │   │   │   ├── StatusBar.svelte        # 接続状態表示
+│   │   │   │   ├── SoftwareController.svelte # 仮想ゲームパッド
+│   │   │   │   ├── LogPanel.svelte         # ログパネル
+│   │   │   │   └── CaptureRegion.svelte    # キャプチャ範囲選択
+│   │   │   └── theme.ts       # テーマ管理（ライト/ダーク/カスタム）
+│   │   └── service-worker.ts  # PWA Service Worker（オフライン対応）
 │
 ├── SerialController/         # 既存Pythonコード（後方互換性）
 │   ├── Commands/
@@ -187,11 +203,13 @@ Poke-Controller-Modified-Extension/
 
 | レイヤー | 技術 |
 |---------|------|
-| フレームワーク | React 19 |
+| フレームワーク | SvelteKit 2 + Svelte 5 (runes) |
 | ビルドツール | Vite 6 |
-| スタイリング | CSS Modules（モバイルファースト） |
-| PWA | Web App Manifest, Service Worker |
-| 通信 | Fetch API + WebSocket |
+| スタイリング | Tailwind CSS 3 |
+| UI基盤 | CSS Custom Properties（テーマ対応） |
+| PWA | Service Worker, Web App Manifest |
+| 通信 | Fetch API + WebSocket + WebRTC DataChannel |
+| API型定義 | openapi-typescript（OpenAPI自動生成） |
 
 ### 開発環境
 

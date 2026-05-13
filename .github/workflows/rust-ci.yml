@@ -32,4 +32,8 @@ jobs:
       - name: Build all crates
         run: nix run .#build-rust
       - name: Run tests
-        run: nix run .#cargo-test
+        run: |
+          # GitHub Actions doesn't support bwrap (AppArmor restriction)
+          # Use cargo test directly with libclang from nix
+          export LIBCLANG_PATH="$(nix build --no-link --print-out-paths .#packages.x86_64-linux.libclang 2>/dev/null || echo /nix/store/*-clang-*/lib)/lib"
+          nix develop --command cargo test --workspace --all-features --exclude pokecon-pybindings

@@ -1439,7 +1439,7 @@ fn generate_video_answer_sdp(offer_sdp: &str) -> String {
             return generate_basic_answer(offer_sdp);
         }
     };
-    let mut api = rtc.sdp_api();
+    let api = rtc.sdp_api();
     match api.accept_offer(offer) {
         Ok(answer) => answer.to_sdp_string(),
         Err(_) => generate_basic_answer(offer_sdp),

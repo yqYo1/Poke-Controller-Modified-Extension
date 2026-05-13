@@ -21,10 +21,7 @@
 	let logFilter = $state('all');
 	let customContent = $state('');
 
-	$derived.by(() => {
-		if (logFilter === 'all') return logEntries;
-		return logEntries.filter(e => e.level === logFilter);
-	});
+	// filtered inline below
 
 	// ── Bar chart dimensions ───────────────────────────────────────────────
 	const barMax = 70;

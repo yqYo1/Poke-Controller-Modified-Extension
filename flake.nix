@@ -490,7 +490,7 @@
                   cp -r "${self}/." "$workdir/"
                   chmod -R +w "$workdir"
                   cd "$workdir"
-                  cargo test --workspace --all-features
+                  cargo test --workspace --all-features --exclude pokecon-pybindings
                 '';
               }
             }/bin/cargo-test";

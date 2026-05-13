@@ -35,7 +35,7 @@
 		</button>
 	</div>
 
-	<!-- Controller simulator (togglable sub-window) -->
+	<!-- Controller simulator (toggleable sub-window) -->
 	<ControllerSimulator visible={showSimulator} />
 
 	<OutputPanel title="制御出力" />

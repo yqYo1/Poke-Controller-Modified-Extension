@@ -132,6 +132,21 @@ export interface ProfileEntry {
 	name: string;
 }
 
+/** Information about a connected gamepad. */
+export interface GamepadInfo {
+	index: number;
+	name: string;
+	connected: boolean;
+}
+
+/** Controller hardware status. */
+export interface ControllerStatus {
+	connected: boolean;
+	gamepad_type: string;
+	vibration_enabled: boolean;
+	recording: boolean;
+}
+
 /** Generic success envelope returned by most mutation endpoints. */
 export interface SuccessResponse {
 	success: boolean;
@@ -266,6 +281,51 @@ export class APIClient {
 		return this._fetch<SuccessResponse>('/api/controller/mouse_stick', {
 			method: 'POST',
 			body: JSON.stringify(config),
+		});
+	}
+
+	// ── Gamepad hardware control ──────────────────────────────────────────
+
+	/** Get the hardware controller status. */
+	getControllerStatus() {
+		return this._fetch<ControllerStatus>('/api/controller/status');
+	}
+	/** Connect a gamepad (ProController / Xinput / DirectInput). */
+	gamepadConnect(gamepad_type: string) {
+		return this._fetch<SuccessResponse>('/api/controller/gamepad/connect', {
+			method: 'POST',
+			body: JSON.stringify({ gamepad_type }),
+		});
+	}
+	/** Disconnect the current gamepad. */
+	gamepadDisconnect() {
+		return this._fetch<SuccessResponse>('/api/controller/gamepad/disconnect', { method: 'POST' });
+	}
+	/** List connected gamepads. */
+	gamepadList() {
+		return this._fetch<GamepadInfo[]>('/api/controller/gamepad/list');
+	}
+	/** Enable keyboard input. */
+	enableKeyboard() {
+		return this.setKeyboardEnabled(true);
+	}
+	/** Disable keyboard input. */
+	disableKeyboard() {
+		return this.setKeyboardEnabled(false);
+	}
+	/** Start recording controller inputs. */
+	startRecording() {
+		return this._fetch<SuccessResponse>('/api/controller/recording/start', { method: 'POST' });
+	}
+	/** Stop recording controller inputs. */
+	stopRecording() {
+		return this._fetch<SuccessResponse>('/api/controller/recording/stop', { method: 'POST' });
+	}
+	/** Enable or disable vibration. */
+	setVibrationEnabled(enabled: boolean) {
+		return this._fetch<SuccessResponse>('/api/controller/vibration', {
+			method: 'POST',
+			body: JSON.stringify({ enabled }),
 		});
 	}
 

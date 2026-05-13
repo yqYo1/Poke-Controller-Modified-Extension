@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, type CameraDevice } from '$lib/api/client';
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	interface CameraSettings {
 		width: number;
 		height: number;
@@ -119,6 +120,7 @@
 		}
 	}
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	function flipFromString(val: string) {
 		switch (val) {
 			case 'horizontal':

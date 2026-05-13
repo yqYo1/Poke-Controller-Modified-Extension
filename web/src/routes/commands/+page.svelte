@@ -9,7 +9,7 @@
 	import CommandActions from './CommandActions.svelte';
 
 	let selectedCommand = $state('');
-	let running = $state(false);
+	// running state managed by CommandActions component
 
 	onMount(() => {
 		api.getActiveCommand().then((r) => {

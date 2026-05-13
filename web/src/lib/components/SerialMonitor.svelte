@@ -33,7 +33,7 @@
 	let hexMode = $state(false);
 	let showTimestamp = $state(true);
 	let monitorContainer: HTMLDivElement | undefined = $state();
-	let wsConnected = $state(false);
+	// wsConnected not needed - status comes from wsClient events
 
 	let entryCounter = 0;
 
@@ -153,7 +153,7 @@
 
 	function formatAscii(data: string): string {
 		// Replace non-printable characters with visible representation
-		return data.replace(/[\x00-\x1F\x7F-\x9F]/g, (ch) => {
+		return data.replace(/[\u0000-\u001F\u007F-\u009F]/g, (ch) => {
 			const code = ch.charCodeAt(0);
 			if (code === 0x0a) return '\\n';
 			if (code === 0x0d) return '\\r';

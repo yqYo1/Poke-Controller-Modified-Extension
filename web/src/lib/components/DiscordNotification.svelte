@@ -79,11 +79,6 @@
 		testSending = false;
 	}
 
-	const messagePreview = $derived(
-		settings.username
-			? `[\${settings.username}] ${testTitle || "Poke-Controller"}: ${testMessage}`
-			: `${testTitle || "Poke-Controller"}: ${testMessage}`
-	);
 </script>
 
 <div class="rounded border border-gray-700 bg-gray-900 p-3">

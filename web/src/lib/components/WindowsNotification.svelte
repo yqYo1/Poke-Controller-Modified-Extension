@@ -115,7 +115,7 @@
 					bind:value={settings.priority}
 					class="w-36 rounded bg-gray-800 px-2 py-1 text-gray-200"
 				>
-					{#each priorities as p}
+					{#each priorities as p (p)}
 						<option value={p}>{p}</option>
 					{/each}
 				</select>

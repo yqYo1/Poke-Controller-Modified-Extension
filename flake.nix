@@ -55,6 +55,15 @@
             inherit program;
           };
 
+          # ── Shared workdir setup for apps needing a writable source copy ──
+          setupWorkdir = ''
+            workdir="$(mktemp -d)"
+            trap 'rm -rf "$workdir"' EXIT
+            cp -r "${self}/." "$workdir/"
+            chmod -R +w "$workdir"
+            cd "$workdir"
+          '';
+
           # ── Poke-Controller application package ────────────────────────
           pokeconApp = pkgs.writeShellApplication {
             name = "pokecon";
@@ -131,6 +140,15 @@
             ruff
             pillow
           ];
+
+          # ── npm dependencies (shared between Tauri build and check) ──
+          npmDeps = pkgs.fetchNpmDeps {
+            name = "pokecon-npm-deps";
+            src = ./web;
+            hash = "sha256-2H2CeQurs9PyXTAJg9ber7m/7Sad3v29UhNXPMYzWAY=";
+            makeCacheWritable = true;
+            npmFlags = [ "--legacy-peer-deps" ];
+          };
         in
         {
           treefmt = {
@@ -225,13 +243,7 @@
               buildAndTestSubdir = finalAttrs.cargoRoot;
 
               # npm frontend dependencies
-              npmDeps = pkgs.fetchNpmDeps {
-                name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
-                src = ./web;
-                hash = "sha256-2H2CeQurs9PyXTAJg9ber7m/7Sad3v29UhNXPMYzWAY=";
-                makeCacheWritable = true;
-                npmFlags = [ "--legacy-peer-deps" ];
-              };
+              inherit npmDeps;
 
               # Copy package-lock.json and package.json to root for npmConfigHook
               # Copy actual icons for Tauri build
@@ -378,12 +390,8 @@
                 name = "clippy";
                 runtimeInputs = [ rustEnv ];
                 text = ''
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  cd "$workdir"
-                  cargo clippy --all-targets --all-features -- -D warnings
+                  ${setupWorkdir}
+                  cargo clippy --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
                 '';
               }
             }/bin/clippy";
@@ -429,7 +437,7 @@
             basedpyright = mkApp "${
               pkgs.writeShellApplication {
                 name = "basedpyright";
-                runtimeInputs = [ pythonEnv ];
+                runtimeInputs = [ pythonEnv pkgs.basedpyright ];
                 text = ''
                   cd "${self}"
                   exec basedpyright python/
@@ -460,11 +468,7 @@
                   pkgs.maturin
                 ];
                 text = ''
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  cd "$workdir"
+                  ${setupWorkdir}
                   echo "=== Building Rust workspace ==="
                   cargo build --workspace --all-features
                   echo ""
@@ -480,34 +484,45 @@
                 name = "build-rust";
                 runtimeInputs = [ rustEnv ];
                 text = ''
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  cd "$workdir"
+                  ${setupWorkdir}
                   cargo build --workspace --all-features
                 '';
               }
             }/bin/build-rust";
 
             # nix run .#cargo-test  — run Rust tests
-            cargo-test = mkApp "${
-              pkgs.writeShellApplication {
-                name = "cargo-test";
-                runtimeInputs = [
-                  rustEnv
-                  pythonEnv
-                ];
-                text = ''
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  cd "$workdir"
-                  cargo test --workspace --all-features --exclude pokecon-pybindings
-                '';
-              }
-            }/bin/cargo-test";
+            cargo-test =
+              let
+                cargoTestScript = pkgs.writeShellApplication {
+                  name = "cargo-test";
+                  runtimeInputs = [
+                    rustEnv
+                    pkgs.libclang
+                  ];
+                  text = ''
+                    ${setupWorkdir}
+
+                    # libclang is required for v4l2-sys-mit (bindgen)
+                    export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+
+                    echo "=== Running cargo test ==="
+                    cargo test --workspace --all-features --exclude pokecon-pybindings
+                  '';
+                };
+              in
+              mkApp "${
+                pkgs.buildFHSEnv {
+                  name = "cargo-test-fhs";
+                  targetPkgs = pkgs: [
+                    rustEnv
+                    pkgs.libclang
+                    pkgs.gcc
+                    pkgs.linuxHeaders
+                    pkgs.glibc.dev
+                  ];
+                  runScript = "${cargoTestScript}/bin/cargo-test";
+                }
+              }/bin/cargo-test-fhs";
 
             # nix run .#typos  — run spell checker
             typos = mkApp "${
@@ -785,11 +800,27 @@
                   npm install "$@"
 
                   echo ""
-                  echo "=== Computing new npm deps hash ==="
-                  # Use nix-prefetch-url to compute the hash of npm deps
-                  NEW_HASH=$(nix-prefetch-url --unpack "file://$WEB_DIR/package-lock.json" 2>&1 | tail -1 || true)
+                  echo "=== Computing new npm deps hash === "
+                  echo "NOTE: fetchNpmDeps expects a recursive NAR hash (SRI format)"
+                  echo "of the node_modules directory, NOT a flat hash of package-lock.json."
+                  echo ""
 
-                  if [ -z "$NEW_HASH" ] || [ "$NEW_HASH" = "" ]; then
+                  # Create a temp directory to generate the npm cache
+                  TMPDIR="$(mktemp -d)"
+                  cd "$TMPDIR"
+                  cp "$WEB_DIR/package.json" .
+                  cp "$WEB_DIR/package-lock.json" .
+
+                  # Install dependencies to generate node_modules
+                  echo "Installing npm dependencies to compute hash..."
+                  npm ci --legacy-peer-deps 2>&1
+
+                  # Compute the correct recursive NAR hash in SRI format
+                  echo "Computing recursive hash..."
+                  B64_HASH=$(nix-hash --type sha256 --base64 node_modules 2>&1 | tail -1)
+                  NEW_HASH="sha256-''${B64_HASH}"
+
+                  if [ -z "$NEW_HASH" ] || [ "$NEW_HASH" = "sha256-" ]; then
                     echo "ERROR: Failed to compute npm deps hash" >&2
                     echo "You may need to update the hash manually in flake.nix" >&2
                     exit 1
@@ -815,23 +846,44 @@
                   name = "check";
                   runtimeInputs = [
                     rustEnv
-                    pythonEnv
                     pkgs.libclang
                   ];
                   text = ''
-                    workdir="$(mktemp -d)"
-                    trap 'rm -rf "$workdir"' EXIT
-                    cp -r "${self}/." "$workdir/"
-                    chmod -R +w "$workdir"
-                    cd "$workdir"
+                    ${setupWorkdir}
 
                     # libclang is required for v4l2-sys-mit (bindgen)
                     export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
                     echo "═══════════════════════════════════════════"
+                    echo "  web-check (eslint + svelte-check + vitest)"
+                    echo "═══════════════════════════════════════════"
+                    (cd "$workdir/web"
+                      echo "=== Installing npm dependencies (pre-fetched) ==="
+                      export npm_config_cache="${npmDeps}"
+                      npm ci --offline --legacy-peer-deps 2>&1
+                      echo ""
+                      echo "=== Running svelte-kit sync ==="
+                      npx svelte-kit sync 2>&1
+                      echo ""
+                      echo "--- eslint ---"
+                      npm run lint 2>&1
+                      echo ""
+                      echo "--- svelte-check ---"
+                      npm run svelte-check 2>&1
+                      echo ""
+                      echo "--- vitest ---"
+                      npm test 2>&1
+                    ) || { echo "✗ web-check failed"; exit 1; }
+                    echo ""
+                    echo "═══════════════════════════════════════════"
                     echo "  clippy"
                     echo "═══════════════════════════════════════════"
-                    cargo clippy --all-targets --all-features -- -D warnings
+                    cargo clippy --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
+                    echo ""
+                    echo "═══════════════════════════════════════════"
+                    echo "  cargo test"
+                    echo "═══════════════════════════════════════════"
+                    cargo test --workspace --all-features --exclude pokecon-pybindings
                     echo ""
                     echo "═══════════════════════════════════════════"
                     echo "  ruff check"
@@ -870,7 +922,8 @@
                     config.treefmt.build.wrapper
                     pkgs.gcc
                     pkgs.linuxHeaders
-                    pkgs.glibc.dev # ← sys/time.h and other system headers
+                    pkgs.glibc.dev
+                    pkgs.nodejs_20
                   ];
                   runScript = "${checkScript}/bin/check";
                 }

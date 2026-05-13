@@ -271,7 +271,7 @@ export function toggleDarkLight(): ThemeState {
 /**
  * Add a user-defined custom theme.
  */
-export function addCustomTheme(theme: Omit<UserTheme, 'builtIn'> & { id?: string }): ThemeState {
+export function addCustomTheme(theme: Omit<UserTheme, 'builtIn' | 'id'> & { id?: string }): ThemeState {
 	const state = getThemeState();
 	const id = theme.id ?? `custom-${Date.now()}`;
 	const newTheme: UserTheme = {

@@ -564,7 +564,7 @@ mod tests {
     fn test_pybutton_invert() {
         let btn = PyButton::new(0x0004);
         let inv = btn.__invert__();
-        assert_eq!(inv.bits(), !0x0004 & 0xFFFF);
+        assert_eq!(inv.bits(), !0x0004);
     }
 
     #[test]

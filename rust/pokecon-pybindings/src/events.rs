@@ -113,7 +113,7 @@ mod tests {
         let bus = EventBus::new();
         Python::with_gil(|py| {
             let obj = py.None();
-            bus.on("evt".to_string(), obj.into()).unwrap();
+            bus.on("evt".to_string(), obj).unwrap();
             assert!(bus.has_handlers("evt"));
             assert_eq!(bus.num_event_types(), 1);
         });
@@ -124,7 +124,7 @@ mod tests {
         let bus = EventBus::new();
         Python::with_gil(|py| {
             let obj = py.None();
-            bus.on("evt".to_string(), obj.into()).unwrap();
+            bus.on("evt".to_string(), obj).unwrap();
             assert!(bus.has_handlers("evt"));
             bus.off("evt").unwrap();
             assert!(!bus.has_handlers("evt"));
@@ -136,8 +136,8 @@ mod tests {
     fn test_multiple_callbacks_same_event() {
         let bus = EventBus::new();
         Python::with_gil(|py| {
-            let obj1: PyObject = py.None().into();
-            let obj2: PyObject = py.None().into();
+            let obj1: PyObject = py.None();
+            let obj2: PyObject = py.None();
             bus.on("evt".to_string(), obj1).unwrap();
             bus.on("evt".to_string(), obj2).unwrap();
             assert!(bus.has_handlers("evt"));

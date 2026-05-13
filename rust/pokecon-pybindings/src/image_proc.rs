@@ -111,8 +111,8 @@ mod tests {
     #[test]
     fn test_crop_invalid_format() {
         Python::with_gil(|py| {
-            // Create a 2D array (not 3D)
-            let shape = [4usize, 4];
+            // Create a 2D array (not 3D) — use single-channel 3D shape
+            let shape = [4usize, 4, 1];
             let data = vec![0u8; 16];
             let array = numpy::PyArray3::from_owned_array(
                 py,
@@ -150,8 +150,8 @@ mod tests {
     #[test]
     fn test_grayscale_invalid_format() {
         Python::with_gil(|py| {
-            // 2D array should fail
-            let shape = [4usize, 4];
+            // 2D array should fail — use single-channel 3D shape
+            let shape = [4usize, 4, 1];
             let data = vec![0u8; 16];
             let array = numpy::PyArray3::from_owned_array(
                 py,

@@ -480,7 +480,10 @@
             cargo-test = mkApp "${
               pkgs.writeShellApplication {
                 name = "cargo-test";
-                runtimeInputs = [ rustEnv ];
+                runtimeInputs = [
+                  rustEnv
+                  pythonEnv
+                ];
                 text = ''
                   workdir="$(mktemp -d)"
                   trap 'rm -rf "$workdir"' EXIT
@@ -737,70 +740,72 @@
 
             # nix run .#check  — run ALL checks (CI gate)
             # Wrapped in buildFHSEnv to isolate libclang from host glibc
-            check = let
-              checkScript = pkgs.writeShellApplication {
-                name = "check";
-                runtimeInputs = [
-                  rustEnv
-                  pythonEnv
-                  pkgs.libclang
-                ];
-                text = ''
-                  workdir="$(mktemp -d)"
-                  trap 'rm -rf "$workdir"' EXIT
-                  cp -r "${self}/." "$workdir/"
-                  chmod -R +w "$workdir"
-                  cd "$workdir"
+            check =
+              let
+                checkScript = pkgs.writeShellApplication {
+                  name = "check";
+                  runtimeInputs = [
+                    rustEnv
+                    pythonEnv
+                    pkgs.libclang
+                  ];
+                  text = ''
+                    workdir="$(mktemp -d)"
+                    trap 'rm -rf "$workdir"' EXIT
+                    cp -r "${self}/." "$workdir/"
+                    chmod -R +w "$workdir"
+                    cd "$workdir"
 
-                  # libclang is required for v4l2-sys-mit (bindgen)
-                  export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+                    # libclang is required for v4l2-sys-mit (bindgen)
+                    export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
-                  echo "═══════════════════════════════════════════"
-                  echo "  clippy"
-                  echo "═══════════════════════════════════════════"
-                  cargo clippy --all-targets --all-features -- -D warnings
-                  echo ""
-                  echo "═══════════════════════════════════════════"
-                  echo "  ruff check"
-                  echo "═══════════════════════════════════════════"
-                  export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
-                  ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
-                  echo ""
-                  echo "═══════════════════════════════════════════"
-                  echo "  pytest"
-                  echo "═══════════════════════════════════════════"
-                  export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
-                  pytest -p no:cacheprovider tests/ -v --tb=short
-                  echo ""
-                  echo "═══════════════════════════════════════════"
-                  echo "  typos (spell check)"
-                  echo "═══════════════════════════════════════════"
-                  ${pkgs.typos}/bin/typos
-                  echo ""
-                  echo "═══════════════════════════════════════════"
-                  echo "  formatting (check mode)"
-                  echo "═══════════════════════════════════════════"
-                  ${config.treefmt.build.wrapper}/bin/treefmt --ci
-                  echo ""
-                  echo "✓ All checks passed"
-                '';
-              };
-            in mkApp "${
-              pkgs.buildFHSEnv {
-                name = "check-fhs";
-                targetPkgs = pkgs: [
-                  rustEnv
-                  pythonEnv
-                  pkgs.libclang
-                  pkgs.typos
-                  config.treefmt.build.wrapper
-                  pkgs.gcc
-                  pkgs.linuxHeaders
-                  pkgs.glibc.dev  # ← sys/time.h and other system headers
-                ];
-                runScript = "${checkScript}/bin/check";
-              }
-            }/bin/check-fhs";
+                    echo "═══════════════════════════════════════════"
+                    echo "  clippy"
+                    echo "═══════════════════════════════════════════"
+                    cargo clippy --all-targets --all-features -- -D warnings
+                    echo ""
+                    echo "═══════════════════════════════════════════"
+                    echo "  ruff check"
+                    echo "═══════════════════════════════════════════"
+                    export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
+                    ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
+                    echo ""
+                    echo "═══════════════════════════════════════════"
+                    echo "  pytest"
+                    echo "═══════════════════════════════════════════"
+                    export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
+                    pytest -p no:cacheprovider tests/ -v --tb=short
+                    echo ""
+                    echo "═══════════════════════════════════════════"
+                    echo "  typos (spell check)"
+                    echo "═══════════════════════════════════════════"
+                    ${pkgs.typos}/bin/typos
+                    echo ""
+                    echo "═══════════════════════════════════════════"
+                    echo "  formatting (check mode)"
+                    echo "═══════════════════════════════════════════"
+                    ${config.treefmt.build.wrapper}/bin/treefmt --ci
+                    echo ""
+                    echo "✓ All checks passed"
+                  '';
+                };
+              in
+              mkApp "${
+                pkgs.buildFHSEnv {
+                  name = "check-fhs";
+                  targetPkgs = pkgs: [
+                    rustEnv
+                    pythonEnv
+                    pkgs.libclang
+                    pkgs.typos
+                    config.treefmt.build.wrapper
+                    pkgs.gcc
+                    pkgs.linuxHeaders
+                    pkgs.glibc.dev # ← sys/time.h and other system headers
+                  ];
+                  runScript = "${checkScript}/bin/check";
+                }
+              }/bin/check-fhs";
 
             # nix run .#web-check  — run TypeScript/JS checks (eslint + svelte-check + vitest)
             web-check = mkApp "${

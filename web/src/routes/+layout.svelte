@@ -8,7 +8,7 @@
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import ThemeProvider from '$lib/components/ThemeProvider.svelte';
 
-	let { children } = $props();
+	let { children }: { children: () => any } = $props();
 
 	// Register service worker for PWA support (client-side only)
 	onMount(() => {

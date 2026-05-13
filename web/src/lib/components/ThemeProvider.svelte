@@ -11,6 +11,12 @@
 		type ThemeMode
 	} from '$lib/theme';
 
+	let {
+		children
+	}: {
+		children: () => any;
+	} = $props();
+
 	let themeState = $state<ThemeState>(getThemeState());
 	let unsubscribe: (() => void) | null = null;
 

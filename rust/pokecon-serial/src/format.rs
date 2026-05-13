@@ -416,10 +416,7 @@ mod tests {
         let result = fmt.convert_to_qingpi();
         assert_eq!(result.len(), 11);
         assert_eq!(result[0], 0xAB); // magic byte
-        assert_eq!(
-            result[1],
-            (Button::A.bits() | Button::X.bits()) as u8 & 0xFF
-        );
+        assert_eq!(result[1], (Button::A.bits() | Button::X.bits()) as u8);
         assert_eq!(result[3], CONVERT_HAT_DEFAULT[Hat::TOP as usize]);
         assert_eq!(result[6], DIRECTION_CENTER); // rx default
         assert_eq!(result[7], DIRECTION_CENTER); // ry default

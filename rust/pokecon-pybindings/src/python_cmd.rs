@@ -476,11 +476,17 @@ mod tests {
     #[test]
     fn test_register_callback() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
 
-            let callback =
-                |_args: &pyo3::types::PyTuple, _kwargs: Option<&pyo3::types::PyDict>| Ok(42i64);
-            let callback = pyo3::types::PyFunction::new(py, callback);
+            let callback = pyo3::types::PyCFunction::new_closure(
+                py,
+                None,
+                None,
+                |_args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+                 _kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>|
+                 -> PyResult<i64> { Ok(42) },
+            )
+            .unwrap();
 
             cmd.call_method1("register_callback", ("do", callback))
                 .unwrap();
@@ -495,7 +501,7 @@ mod tests {
     #[test]
     fn test_trigger_nonexistent() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
             let result = cmd.call_method1("trigger", ("nope", py.None())).unwrap();
             assert!(result.is_none());
         });
@@ -504,7 +510,7 @@ mod tests {
     #[test]
     fn test_finish_marks_dead() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
             cmd.call_method0("finish").unwrap();
             let alive: bool = cmd
                 .call_method0("check_if_alive")
@@ -518,7 +524,7 @@ mod tests {
     #[test]
     fn test_wait() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
             // Should not panic
             cmd.call_method1("wait", (0.01f64,)).unwrap();
         });
@@ -527,7 +533,7 @@ mod tests {
     #[test]
     fn test_short_wait() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
             cmd.call_method0("short_wait").unwrap();
         });
     }
@@ -633,7 +639,7 @@ mod tests {
     #[test]
     fn test_config_setters() {
         Python::with_gil(|py| {
-            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let cmd = Bound::new(py, PythonCommand::new("cmd".to_string())).unwrap();
             cmd.call_method1("set_line_token", ("test-token",)).unwrap();
             cmd.call_method1("set_discord_webhook", ("https://example.com/webhook",))
                 .unwrap();

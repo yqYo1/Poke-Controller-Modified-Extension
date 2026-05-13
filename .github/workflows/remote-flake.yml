@@ -14,6 +14,8 @@ jobs:
   remote-flake-eval:
     name: Evaluate remote flake
     runs-on: ubuntu-latest
+    env:
+      NIX_CONFIG: "tarball-ttl = 0"
     steps:
       - uses: cachix/install-nix-action@v31
         with:
@@ -21,19 +23,19 @@ jobs:
       - name: Evaluate flake from remote
         run: |
           # Test that the flake can be evaluated without local files
-          nix flake metadata "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}"
+          nix flake metadata --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}"
       - name: Run default app from remote (dry-run)
         run: |
           # Test that the default app can be built from remote
           # This will fail if the flake references local paths
           # NOTE: || true intentionally removed — errors must not be suppressed
-          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help
+          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help
       - name: Build Tauri app from remote
         run: |
           # Build the Tauri app from remote to verify Cargo.lock is present
           # This ensures the #tauri app entry (and its src-tauri/Cargo.lock) is valid
-          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#tauri" -- --help
+          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#tauri" -- --help
       - name: Run full check from remote
         run: |
           # Run the full check suite from remote (clippy, ruff, pytest, typos, fmt)
-          nix run "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check"
+          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check"

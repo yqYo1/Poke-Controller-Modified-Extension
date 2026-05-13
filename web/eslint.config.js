@@ -23,6 +23,9 @@ export default [
 				parser: ts.parser,
 			},
 		},
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off',
+		},
 	},
 	{
 		ignores: ['dist/', '.svelte-kit/', 'node_modules/'],

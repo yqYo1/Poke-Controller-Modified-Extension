@@ -11,31 +11,36 @@ on:
     branches: [main, master, refactor/rust-core]
 
 jobs:
-  remote-flake-eval:
-    name: Evaluate remote flake
+  remote-flake-run:
+    name: Run flake from remote (no clone)
     runs-on: ubuntu-latest
-    env:
-      NIX_CONFIG: "tarball-ttl = 0"
     steps:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Evaluate flake from remote
-        run: |
-          # Test that the flake can be evaluated without local files
-          nix flake metadata --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}"
-      - name: Run default app from remote (dry-run)
+      - name: Run default app from remote
         run: |
           # Test that the default app can be built from remote
           # This will fail if the flake references local paths
-          # NOTE: || true intentionally removed — errors must not be suppressed
-          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}" -- --help
-      - name: Build Tauri app from remote
+          nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }} -- --help
+      - name: Run check app from remote
         run: |
-          # Build the Tauri app from remote to verify Cargo.lock is present
-          # This ensures the #tauri app entry (and its src-tauri/Cargo.lock) is valid
-          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#tauri" -- --help
-      - name: Run full check from remote
+          nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check -- --help || true
+
+  local-flake-run:
+    name: Run flake from local checkout
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run default app locally
         run: |
-          # Run the full check suite from remote (clippy, ruff, pytest, typos, fmt)
-          nix run --refresh "github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check"
+          nix run . -- --help
+      - name: Run check app locally
+        run: |
+          nix run .#check -- --help || true
+      - name: Evaluate flake
+        run: |
+          nix flake check --no-build

@@ -228,7 +228,9 @@
               npmDeps = pkgs.fetchNpmDeps {
                 name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
                 src = ./web;
-                hash = "sha256-AfRizRYTwuQlzJdqFwdcStGDw1IBaceMD0tLi2WSK0E=";
+                hash = "sha256-2H2CeQurs9PyXTAJg9ber7m/7Sad3v29UhNXPMYzWAY=";
+                makeCacheWritable = true;
+                npmFlags = [ "--legacy-peer-deps" ];
               };
 
               # Copy package-lock.json and package.json to root for npmConfigHook
@@ -422,6 +424,18 @@
                 '';
               }
             }/bin/ruff-format-check";
+
+            # nix run .#basedpyright  — run Python type checker
+            basedpyright = mkApp "${
+              pkgs.writeShellApplication {
+                name = "basedpyright";
+                runtimeInputs = [ pythonEnv ];
+                text = ''
+                  cd "${self}"
+                  exec basedpyright python/
+                '';
+              }
+            }/bin/basedpyright";
 
             # nix run .#test  — run pytest
             test = mkApp "${

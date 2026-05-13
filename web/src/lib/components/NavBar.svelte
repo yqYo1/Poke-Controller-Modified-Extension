@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { resolve } from '$app/paths';
+	import { base } from '$app/paths';
 
 	const tabs = [
 		{ label: 'カメラ', href: '/camera' },
@@ -17,9 +17,9 @@
 <nav class="flex bg-gray-800 text-white">
 	{#each tabs as { label, href } (href)}
 		<a
-			href={resolve(href)}
+			href="{base}{href}"
 			class="px-4 py-3 text-sm font-medium transition-colors hover:bg-gray-700 aria-[current=page]:bg-blue-600 aria-[current=page]:text-white"
-			aria-current={$page.url.pathname === resolve(href) ? 'page' : undefined}
+			aria-current={$page.url.pathname === `${base}${href}` ? 'page' : undefined}
 		>
 			{label}
 		</a>

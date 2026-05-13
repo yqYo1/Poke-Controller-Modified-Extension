@@ -30,6 +30,8 @@ base64 = "0.22"
 url = "2"
 futures = "0.3"
 utoipa = { version = "5", features = ["axum_extras"] }
+str0m = "0.19"
+rand = "0.8"
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }

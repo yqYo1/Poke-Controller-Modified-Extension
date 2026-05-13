@@ -351,11 +351,7 @@ impl Vp8RtpPacket {
         // RTP fixed header (RFC 3550 Section 5.1)
         // V=2, P=0, X=0, CC=0, M, PT=96 (dynamic VP8)
         let first_byte: u8 = 0b1000_0000; // version 2, no padding/extension/CSRC
-        let pt_marker: u8 = if marker {
-            0b1000_0000 | 96
-        } else {
-            96
-        };
+        let pt_marker: u8 = if marker { 0b1000_0000 | 96 } else { 96 };
         bytes.push(first_byte);
         bytes.push(pt_marker);
         bytes.extend_from_slice(&sequence.to_be_bytes());
@@ -562,8 +558,7 @@ mod tests {
     #[test]
     fn test_vp8_rtp_packet_construction() {
         let frame = vec![0u8; 64];
-        let packet =
-            Vp8RtpPacket::from_vp8_frame(&frame, 0x12345678, 0, 0, true);
+        let packet = Vp8RtpPacket::from_vp8_frame(&frame, 0x12345678, 0, 0, true);
 
         // Header (12) + descriptor (1) + frame (64) = 77 bytes
         assert_eq!(packet.bytes.len(), 77);

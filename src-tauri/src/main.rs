@@ -1422,10 +1422,10 @@ async fn handle_webrtc_signaling(
 fn generate_video_answer_sdp(offer_sdp: &str) -> String {
     // Create a minimal Rtc to generate the answer SDP.
     use std::time::Instant;
-    use str0m::{Candidate, Rtc};
     use str0m::change::SdpOffer;
     use str0m::net::Protocol;
-    
+    use str0m::{Candidate, Rtc};
+
     let mut rtc = Rtc::new(Instant::now());
     // Add a dummy local candidate (port is informational)
     let addr = "127.0.0.1:9".parse().unwrap();

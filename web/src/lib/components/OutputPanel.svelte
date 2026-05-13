@@ -21,7 +21,7 @@
 	let logFilter = $state('all');
 	let customContent = $state('');
 
-	$derived(() => {
+	$derived.by(() => {
 		if (logFilter === 'all') return logEntries;
 		return logEntries.filter(e => e.level === logFilter);
 	});
@@ -74,7 +74,7 @@
 						<div
 							class="flex-1 rounded-t transition-all duration-300"
 							style="height: {(val / barMax) * barHeight}px; background-color: hsl({(i / sampleData.length) * 360}, 70%, 55%); min-width: 20px;"
-							title="{val}"
+							title={String(val)}
 						>
 						</div>
 					{/each}

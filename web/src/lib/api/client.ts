@@ -9,6 +9,7 @@ export {
 	type CommandMessage,
 	type SerialMessage,
 	type CameraMessage,
+	type SignalingMessage,
 	type WSMessage,
 	type WebSocketEventMap,
 	WebSocketClient,

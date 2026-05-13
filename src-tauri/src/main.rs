@@ -1272,10 +1272,17 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
                         tracing::debug!("WS received: {}", text);
                         // Parse incoming JSON commands (optional)
                         if let Ok(cmd) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some("ping") = cmd.get("type").and_then(|v| v.as_str()) {
-                                let _ = socket.send(Message::Text(
-                                    serde_json::json!({"type": "pong"}).to_string().into()
-                                )).await;
+                            match cmd.get("type").and_then(|v| v.as_str()) {
+                                Some("ping") => {
+                                    let _ = socket.send(Message::Text(
+                                        serde_json::json!({"type": "pong"}).to_string().into()
+                                    )).await;
+                                }
+                                // ── WebRTC video signaling ──────────────────────
+                                Some("signaling") => {
+                                    handle_webrtc_signaling(&mut socket, &state, cmd).await;
+                                }
+                                _ => {} // Unknown type, ignore
                             }
                         }
                     }
@@ -1307,6 +1314,131 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
     }
 
     tracing::info!("WebSocket client disconnected");
+}
+
+/// Process WebRTC video signaling messages from the frontend.
+///
+/// The frontend sends SDP offers/answers and ICE candidates for video,
+/// and the backend responds to establish the signaling protocol.
+/// Since the backend does not have a full WebRTC media stack,
+/// signaling completes gracefully and the frontend falls back to
+/// MJPEG streaming for actual video data.
+///
+/// Supported signaling subtypes:
+/// - `video_offer`    → backend responds with acknowledgment + MJPEG URL
+/// - `video_answer`   → stored for future use (not currently processed)
+/// - `video_candidate`→ acknowledged (not currently used)
+async fn handle_webrtc_signaling(
+    socket: &mut WebSocket,
+    _state: &AppState,
+    cmd: &serde_json::Value,
+) {
+    let subtype = cmd.get("subtype").and_then(|v| v.as_str()).unwrap_or("");
+
+    match subtype {
+        "video_offer" => {
+            // The frontend sent a WebRTC SDP offer for video.
+            // Respond with an inactive answer indicating the backend
+            // cannot send RTP media, and provide the MJPEG stream URL
+            // as the actual video source.
+            //
+            // The offer SDP is acknowledged but not fully parsed —
+            // a minimal answer is generated to complete the handshake.
+            if let Some(offer_sdp) = cmd.get("sdp").and_then(|v| v.as_str()) {
+                let answer_sdp = generate_video_answer_sdp(offer_sdp);
+                let _ = socket
+                    .send(Message::Text(
+                        serde_json::json!({
+                            "type": "signaling",
+                            "subtype": "video_answer",
+                            "sdp": answer_sdp,
+                        })
+                        .to_string()
+                        .into(),
+                    ))
+                    .await;
+
+                // Provide the MJPEG stream URL for fallback
+                let _ = socket
+                    .send(Message::Text(
+                        serde_json::json!({
+                            "type": "signaling",
+                            "subtype": "video_info",
+                            "mjpeg_url": "/camera/stream",
+                        })
+                        .to_string()
+                        .into(),
+                    ))
+                    .await;
+
+                tracing::debug!("WebRTC video offer processed");
+            }
+        }
+        "video_answer" => {
+            // Frontend sent an answer (unusual for this flow but handled)
+            tracing::debug!("WebRTC video answer received (ignored)");
+            // Acknowledge receipt
+            let _ = socket
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "signaling",
+                        "subtype": "video_info",
+                        "mjpeg_url": "/camera/stream",
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+        "video_candidate" => {
+            // Frontend sent an ICE candidate — acknowledge
+            tracing::debug!("WebRTC ICE candidate received (acknowledged)");
+            let _ = socket
+                .send(Message::Text(
+                    serde_json::json!({
+                        "type": "signaling",
+                        "subtype": "video_info",
+                        "mjpeg_url": "/camera/stream",
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+        }
+        _ => {
+            tracing::warn!("Unknown signaling subtype: {}", subtype);
+        }
+    }
+}
+
+/// Generate a minimal SDP answer for a video offer.
+///
+/// Since the backend does not send actual RTP, the answer uses
+/// `inactive` direction.  The answer matches the first video codec
+/// from the offer to keep the WebRTC peer connection happy.
+fn generate_video_answer_sdp(offer_sdp: &str) -> String {
+    // Try to extract the first video payload type from the offer
+    let payload_type = offer_sdp
+        .lines()
+        .find(|l| l.starts_with("m=video"))
+        .and_then(|line| line.split_whitespace().nth(3))
+        .and_then(|pt| pt.parse::<u16>().ok())
+        .unwrap_or(96);
+
+    // Try to find the rtpmap for the selected payload type
+    let codec_info = offer_sdp
+        .lines()
+        .find(|l| l.starts_with(&format!("a=rtpmap:{}", payload_type)))
+        .filter(|line| {
+            // Sanitize: reject non-ASCII characters and enforce max length
+            line.len() <= 128 && line.is_ascii()
+        })
+        .unwrap_or(&format!("a=rtpmap:{} VP8/90000", payload_type));
+
+    format!(
+        "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=video 9 UDP/TLS/RTP/SAVPF {}\r\nc=IN IP4 0.0.0.0\r\na=inactive\r\na=mid:0\r\n{}\r\n",
+        payload_type, codec_info
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

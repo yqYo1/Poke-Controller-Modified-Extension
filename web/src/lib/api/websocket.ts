@@ -47,6 +47,14 @@ export interface CameraMessage {
 	device_index?: number;
 }
 
+export interface SignalingMessage {
+	type: 'signaling';
+	subtype: 'video_offer' | 'video_answer' | 'video_candidate' | 'video_info';
+	sdp?: string;
+	candidate?: RTCIceCandidateInit;
+	mjpeg_url?: string;
+}
+
 /**
  * Discriminated union of all known WebSocket message types.
  */
@@ -56,7 +64,8 @@ export type WSMessage =
 	| FrameMessage
 	| CommandMessage
 	| SerialMessage
-	| CameraMessage;
+	| CameraMessage
+	| SignalingMessage;
 
 // ─── Event System ───────────────────────────────────────────────────────────
 

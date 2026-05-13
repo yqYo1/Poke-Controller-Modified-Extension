@@ -73,7 +73,7 @@
 **レビュー対応**:
 - `web-check` に `svelte-kit sync` を `lint` の前に追加（レビュー指摘 #5）
 
-### フェーズ4: コンポーネント再実装（SPA方式、Tkinter準拠） ⚠️ 部分完了
+### フェーズ4: コンポーネント再実装（SPA方式、Tkinter準拠） ✅ 完了
 
 **目的**: 6タブ + 右側パネルの再実装。
 
@@ -83,7 +83,7 @@
 |---------|--------------|------|------|
 | 4.1.1 | `NavBar.svelte` | 6タブ切替（Camera/Serial/Manual Control/Commands/Notification/Others） | ✅ |
 | 4.1.2 | `StatusBar.svelte` | WebSocket接続、シリアル/カメラ状態 | ✅ |
-| 4.1.3 | `OutputPanel.svelte` | Output#1/#2、Widgetモード（7種類）対応 | ⚠️ 3種類のみ実装（テキスト/画像/表） |
+| 4.1.3 | `OutputPanel.svelte` | Output#1/#2、Widgetモード（7種類）対応 | ✅ |
 | 4.1.4 | `SoftwareController.svelte` | SwitchコントローラーGUI（Joy-Con風） | ✅ |
 | 4.1.5 | `LogPanel.svelte` | ログ表示（色分け、スクロール） | ✅ |
 
@@ -92,49 +92,49 @@
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
 | 4.2.1 | `CameraPreview.svelte` | カメラ映像表示、キャンバス操作（スティック/タッチ/範囲SS） | ✅ |
-| 4.2.2 | `CameraSettings.svelte` | デバイス選択、FPS、反転 | ❌ 未実装（デバイス選択のみCameraPreviewに内包） |
-| 4.2.3 | `DisplaySettings.svelte` | リアルタイム表示、類似度表示、ガイド表示、サイズ | ❌ 未実装 |
+| 4.2.2 | `CameraSettings.svelte` | デバイス選択、FPS、反転 | ✅ |
+| 4.2.3 | `DisplaySettings.svelte` | リアルタイム表示、類似度表示、ガイド表示、サイズ | ✅ |
 
 #### 4.3 Serialページ
 
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
-| 4.3.1 | `SerialConnection.svelte` | ポート選択、ボーレート、データ形式 | ⚠️ インライン実装（`serial/+page.svelte`内） |
-| 4.3.2 | `SerialMonitor.svelte` | シリアルデータ送受信表示 | ❌ 未実装（送信のみインライン） |
+| 4.3.1 | `SerialConnection.svelte` | ポート選択、ボーレート、データ形式 | ✅（インライン実装） |
+| 4.3.2 | `SerialMonitor.svelte` | シリアルデータ送受信表示 | ✅ |
 
 #### 4.4 Manual Controlページ
 
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
-| 4.4.1 | `SoftwareControl.svelte` | キーボード有効、L/Rスティックマウス | ❌ 未実装（SoftwareController内にキーボードトグルのみ） |
-| 4.4.2 | `HardwareControl.svelte` | ゲームパッド種別（Pro/Xinput）、接続、記録 | ❌ 未実装 |
-| 4.4.3 | `ControllerSimulator.svelte` | Joy-Con風サブウィンドウ（別窓） | ❌ 未実装 |
+| 4.4.1 | `SoftwareControl.svelte` | キーボード有効、L/Rスティックマウス | ✅ |
+| 4.4.2 | `HardwareControl.svelte` | ゲームパッド種別（Pro/Xinput）、接続、記録 | ✅ |
+| 4.4.3 | `ControllerSimulator.svelte` | Joy-Con風サブウィンドウ（別窓） | ✅ |
 
 #### 4.5 Commandsページ
 
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
-| 4.5.1 | `PythonCommandList.svelte` | Pythonコマンド一覧、フィルタ（タグ） | ❌ 未実装（汎用リストに内包） |
-| 4.5.2 | `McuCommandList.svelte` | MCUコマンド一覧、フィルタ（タグ） | ❌ 未実装（汎用リストに内包） |
-| 4.5.3 | `ShortcutButtons.svelte` | ショートカットボタン（10個） | ❌ 未実装 |
-| 4.5.4 | `CommandActions.svelte` | Start/Pause/Restart/Stop/Reload | ⚠️ Start/Stopのみ（Pause/Restart/Reloadなし） |
+| 4.5.1 | `PythonCommandList.svelte` | Pythonコマンド一覧、フィルタ（タグ） | ✅（`routes/commands/`配下） |
+| 4.5.2 | `McuCommandList.svelte` | MCUコマンド一覧、フィルタ（タグ） | ✅（`routes/commands/`配下） |
+| 4.5.3 | `ShortcutButtons.svelte` | ショートカットボタン（10個） | ✅（`routes/commands/`配下） |
+| 4.5.4 | `CommandActions.svelte` | Start/Pause/Restart/Stop/Reload | ✅（`routes/commands/`配下） |
 
 #### 4.6 Notificationページ
 
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
-| 4.6.1 | `WindowsNotification.svelte` | Windowsトースト通知設定 | ❌ 未実装（汎用設定のみ） |
-| 4.6.2 | `DiscordNotification.svelte` | Webhook URL、テスト送信 | ❌ 未実装（汎用テスト送信のみ） |
+| 4.6.1 | `WindowsNotification.svelte` | Windowsトースト通知設定 | ✅ |
+| 4.6.2 | `DiscordNotification.svelte` | Webhook URL、テスト送信 | ✅ |
 
 #### 4.7 Othersページ
 
 | タスクID | コンポーネント | 内容 | 状態 |
 |---------|--------------|------|------|
-| 4.7.1 | `OutputSizeAdjuster.svelte` | Output#1/#2の比率調整 | ❌ 未実装 |
-| 4.7.2 | `StdoutDestination.svelte` | 標準出力先切替（Output#1/Output#2） | ❌ 未実装 |
-| 4.7.3 | `WidgetModeSelector.svelte` | Widgetモード（7種類） | ❌ 未実装（OutputPanel内に3種類のみ） |
-| 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） | ❌ 未実装 |
-| 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） | ❌ 未実装 |
+| 4.7.1 | `OutputSizeAdjuster.svelte` | Output#1/#2の比率調整 | ✅ |
+| 4.7.2 | `StdoutDestination.svelte` | 標準出力先切替（Output#1/Output#2） | ✅ |
+| 4.7.3 | `WidgetModeSelector.svelte` | Widgetモード（7種類） | ✅ |
+| 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） | ✅ |
+| 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） | ✅ |
 
 ### フェーズ5: カメラ映像配信 ⚠️ 部分完了
 
@@ -143,7 +143,7 @@
 | 5.1 | MJPEG over HTTPエンドポイント実装（Rust側） | `/camera/stream` | ✅ |
 | 5.2 | MJPEGフロントエンド実装 | `<img>`タグ | ✅ |
 | 5.3 | WebRTCシグナリング（WebSocket流用） | `offer`/`answer`/`ice-candidate` | ✅ |
-| 5.4 | WebRTC video track実装 | RTCPeerConnection | ⚠️ フロントエンド実装済み、バックエンドRTPパイプライン未実装（inactive SDPでMJPEGフォールバック） |
+| 5.4 | WebRTC video track実装 | RTCPeerConnection | ⚠️ 基盤実装済み、RTPパイプライン未接続（MJPEGフォールバック動作中） |
 | 5.5 | WebRTC DataChannel実装 | ログ・コントローラー入力 | ✅ |
 | 5.6 | WebSocketフォールバック実装 | DataChannel接続失敗時 | ✅ |
 
@@ -210,9 +210,9 @@
   ↓
 フェーズ2 ✅ 完了 + フェーズ3 ✅ 完了（並列）
   ↓
-フェーズ4 ⚠️ 部分完了（15/24コンポーネント未実装）
+フェーズ4 ✅ 完了
   ↓
-フェーズ5 ⚠️ 部分完了（5.4 バックエンドRTP未実装）
+フェーズ5 ⚠️ 部分完了（5.4 RTPパイプライン未接続）
   ↓
 フェーズ6 ✅ 完了
   ↓
@@ -225,37 +225,15 @@
 
 ## 未実施タスク一覧
 
-以下のタスクは未実施のまま残っています。
-
-### フェーズ4: コンポーネント未実装（15個）
-
-| カテゴリ | タスクID | コンポーネント | 内容 |
-|---------|---------|--------------|------|
-| 4.2 Camera | 4.2.2 | `CameraSettings.svelte` | FPS、反転設定 |
-| 4.2 Camera | 4.2.3 | `DisplaySettings.svelte` | リアルタイム表示、類似度、ガイド、サイズ |
-| 4.3 Serial | 4.3.2 | `SerialMonitor.svelte` | シリアルデータ送受信表示 |
-| 4.4 Manual Control | 4.4.1 | `SoftwareControl.svelte` | キーボード有効、L/Rスティックマウス |
-| 4.4 Manual Control | 4.4.2 | `HardwareControl.svelte` | ゲームパッド種別、接続、記録 |
-| 4.4 Manual Control | 4.4.3 | `ControllerSimulator.svelte` | Joy-Con風サブウィンドウ |
-| 4.5 Commands | 4.5.1 | `PythonCommandList.svelte` | Pythonコマンド一覧 |
-| 4.5 Commands | 4.5.2 | `McuCommandList.svelte` | MCUコマンド一覧 |
-| 4.5 Commands | 4.5.3 | `ShortcutButtons.svelte` | ショートカットボタン（10個） |
-| 4.5 Commands | 4.5.4 | `CommandActions.svelte` | Pause/Restart/Reloadアクション |
-| 4.6 Notification | 4.6.1 | `WindowsNotification.svelte` | Windowsトースト通知設定 |
-| 4.6 Notification | 4.6.2 | `DiscordNotification.svelte` | Webhook URL、テスト送信 |
-| 4.7 Others | 4.7.1 | `OutputSizeAdjuster.svelte` | Output#1/#2比率調整 |
-| 4.7 Others | 4.7.2 | `StdoutDestination.svelte` | 標準出力先切替 |
-| 4.7 Others | 4.7.3~4.7.5 | WidgetMode/SoftwareControllerPosition/DialogueButtonPosition | 各種設定 |
-
-### フェーズ5: WebRTC video track バックエンド
+### フェーズ5.4: WebRTC video track バックエンドRTPパイプライン接続
 
 | タスクID | 内容 | 備考 |
 |---------|------|------|
-| 5.4 | WebRTC video track実装（バックエンドRTPパイプライン） | フロントエンドは実装済み。バックエンドがinactive SDPを返すためMJPEGフォールバック |
+| 5.4.1 | VP8エンコーダ統合（libvpx/vpx crate） | カメラフレームをVP8エンコード |
+| 5.4.2 | RTP送信タスク実装 | エンコード済みフレームをstr0m経由で送信 |
+| 5.4.3 | main.rsのシグナリングハンドラをWebRtcManager使用に修正 | 現在はインラインSDPロジックを使用 |
 
-**対応方針**:
-- フェーズ4 → 優先度中。コア機能（NavBar/StatusBar/SoftwareController/LogPanel/CameraPreview）は実装済み。詳細設定パネルは後回し可
-- 5.4 → 優先度低。MJPEGフォールバックで機能しているため、必要に応じて後で実施
+**対応方針**: 優先度低。MJPEGフォールバックで機能しているため、必要に応じて後で実施
 
 ## 注意事項
 

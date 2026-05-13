@@ -25,6 +25,12 @@
 ### Investigation-First Approach
 - [2026-05-09] **Investigate root causes thoroughly before proposing solutions.** Avoid shortcut approaches that skip proper investigation.
 
+### Architecture Documentation
+- [2026-05-13] **`architecture_report.md`** contains a comprehensive per-crate analysis covering all 38 `.rs` files across 9 crates. Read this before making cross-cutting changes.
+- [2026-05-13] **`REFACTORING_PLAN.md`** contains prioritized refactoring tasks (P0–P3) with specific code locations.
+- [2026-05-13] **Test gaps identified**: `src-tauri` (no tests), `pokecon-pybindings` (tests added in this session), `pokecon-serial::format/keypress/keys` (tests added in this session).
+- [2026-05-13] **Integration tests** added: `pokecon-serial/tests/format_send_pipeline.rs`, `pokecon-events/tests/event_bus_integration.rs`, `pokecon-cv/tests/image_pipeline_integration.rs`.
+
 ### CI Monitoring (Mandatory)
 - [2026-05-12] **After EVERY git push to origin, verify CI results on GitHub.** Local `nix run .#check` passing does NOT guarantee CI will pass (environment differences, feature flags, etc.).
 - [2026-05-12] **Use `scripts/ci-watch.sh` to monitor CI after push.** This script polls GitHub Actions and blocks until all jobs complete, reporting success/failure.

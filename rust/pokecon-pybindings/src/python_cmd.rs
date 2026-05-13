@@ -453,3 +453,191 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PythonCommand>()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_python_command() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("test_cmd".to_string())).unwrap();
+            let name: String = cmd.getattr("name").unwrap().extract().unwrap();
+            assert_eq!(name, "test_cmd");
+            let alive: bool = cmd
+                .call_method0("check_if_alive")
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(alive);
+        });
+    }
+
+    #[test]
+    fn test_register_callback() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+
+            let callback =
+                |_args: &pyo3::types::PyTuple, _kwargs: Option<&pyo3::types::PyDict>| Ok(42i64);
+            let callback = pyo3::types::PyFunction::new(py, callback);
+
+            cmd.call_method1("register_callback", ("do", callback))
+                .unwrap();
+
+            // Trigger with empty kwargs
+            let result = cmd.call_method1("trigger", ("do", py.None())).unwrap();
+            // Should return Some(42)
+            assert!(!result.is_none());
+        });
+    }
+
+    #[test]
+    fn test_trigger_nonexistent() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            let result = cmd.call_method1("trigger", ("nope", py.None())).unwrap();
+            assert!(result.is_none());
+        });
+    }
+
+    #[test]
+    fn test_finish_marks_dead() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            cmd.call_method0("finish").unwrap();
+            let alive: bool = cmd
+                .call_method0("check_if_alive")
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(!alive);
+        });
+    }
+
+    #[test]
+    fn test_wait() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            // Should not panic
+            cmd.call_method1("wait", (0.01f64,)).unwrap();
+        });
+    }
+
+    #[test]
+    fn test_short_wait() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            cmd.call_method0("short_wait").unwrap();
+        });
+    }
+
+    #[test]
+    fn test_parse_buttons_single() {
+        let result = parse_buttons("A");
+        assert_eq!(result.len(), 1);
+        assert!(matches!(result[0], GamepadInput::SingleButton(Button::A)));
+    }
+
+    #[test]
+    fn test_parse_buttons_combo_pipe() {
+        let result = parse_buttons("A|B|X");
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_buttons_combo_plus() {
+        let result = parse_buttons("A+B+X");
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_buttons_combo_comma() {
+        let result = parse_buttons("A, B, Y");
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_buttons_dpad() {
+        let result = parse_buttons("DPAD_UP");
+        assert_eq!(result.len(), 1);
+        assert!(matches!(result[0], GamepadInput::SingleHat(Hat::TOP)));
+
+        let result = parse_buttons("DPAD_DOWN");
+        assert!(matches!(result[0], GamepadInput::SingleHat(Hat::BTM)));
+    }
+
+    #[test]
+    fn test_parse_buttons_stick() {
+        let result = parse_buttons("LSTICK_UP");
+        assert_eq!(result.len(), 1);
+        assert!(matches!(result[0], GamepadInput::SingleDirection(_)));
+
+        let result = parse_buttons("RSTICK_LEFT");
+        assert!(matches!(result[0], GamepadInput::SingleDirection(_)));
+    }
+
+    #[test]
+    fn test_parse_buttons_stick_shorthand() {
+        let result = parse_buttons("L_UP");
+        assert_eq!(result.len(), 1);
+
+        let result = parse_buttons("R_RIGHT");
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_buttons_aliases() {
+        let result = parse_buttons("TOP");
+        assert!(matches!(result[0], GamepadInput::SingleHat(Hat::TOP)));
+
+        let result = parse_buttons("SELECT");
+        assert!(matches!(
+            result[0],
+            GamepadInput::SingleButton(Button::SELECT)
+        ));
+
+        let result = parse_buttons("START");
+        assert!(matches!(
+            result[0],
+            GamepadInput::SingleButton(Button::START)
+        ));
+    }
+
+    #[test]
+    fn test_parse_buttons_empty() {
+        let result = parse_buttons("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_buttons_unknown_ignored() {
+        let result = parse_buttons("A+UNKNOWN+B");
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_sleep_wait_zero() {
+        PythonCommand::sleep_wait(0.0);
+        // Should not panic or sleep
+    }
+
+    #[test]
+    fn test_sleep_wait_positive() {
+        let start = std::time::Instant::now();
+        PythonCommand::sleep_wait(0.01);
+        let elapsed = start.elapsed();
+        assert!(elapsed >= std::time::Duration::from_millis(9));
+    }
+
+    #[test]
+    fn test_config_setters() {
+        Python::with_gil(|py| {
+            let cmd = Bound::new(py, PythonCommand::new("cmd")).unwrap();
+            cmd.call_method1("set_line_token", ("test-token",)).unwrap();
+            cmd.call_method1("set_discord_webhook", ("https://example.com/webhook",))
+                .unwrap();
+            // No panic = success
+        });
+    }
+}

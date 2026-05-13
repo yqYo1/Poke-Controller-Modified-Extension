@@ -494,3 +494,60 @@ nix run .                # アプリケーション起動（デフォルト）
 - [スクリプト開発者向けガイド](script-guide.md) - PythonCommand API
 - [APIリファレンス](api-reference.md) - 全API詳細
 - [Web UI詳細](web-ui-guide.md) - PWA設定、フロントエンド
+
+---
+
+## 11. アーキテクチャレポートとテストカバレッジ
+
+詳細なアーキテクチャ分析は `architecture_report.md` を参照。
+
+### 現状のテストカバレッジ
+
+| クレート | 単体テスト | 統合テスト | カバレッジ |
+|---------|-----------|-----------|-----------|
+| pokecon-core | ✅ profile, settings, command_manager | — | 高 |
+| pokecon-serial | ✅ keys, format, keypress, sender | ✅ フォーマットパイプライン | 高 |
+| pokecon-cv | ✅ camera, image_processing, backends | ✅ 画像処理パイプライン | 高 |
+| pokecon-events | ✅ bus, registry, user_event | ✅ イベントバス ＋ レジストリ連携 | 高 |
+| pokecon-net | ✅ mqtt, socket | — | 中 |
+| pokecon-notify | ✅ discord, line, windows | — | 中 |
+| pokecon-lua | ✅ api, runtime | — | 高 |
+| pokecon-pybindings | ✅ keys, events, image_proc, python_cmd | — | 中 (新規) |
+| src-tauri | ❌ (未対応) | — | 低 (未対応) |
+
+### テスト実行方法
+
+```bash
+# 全Rustテスト
+nix run .#cargo-test
+
+# 特定クレートのテスト
+cargo test -p pokecon-serial
+cargo test -p pokecon-cv
+cargo test -p pokecon-events
+cargo test -p pokecon-core
+
+# 統合テストのみ
+cargo test --test format_send_pipeline
+cargo test --test image_pipeline_integration
+cargo test --test event_bus_integration
+```
+
+### ベンチマーク実行
+
+```bash
+# シリアルフォーマットベンチ
+cargo bench -p pokecon-serial
+
+# 画像処理ベンチ
+cargo bench -p pokecon-cv
+```
+
+### リファクタリング計画
+
+`REFACTORING_PLAN.md` に詳細なリファクタリング計画を記載。優先順位：
+
+1. **P0（即時）**: src-tauri/main.rs の分割、重複コード排除、不足テストの追加
+2. **P1（重要）**: unsafe transmute の除去、Lua デッドロック修正、PythonCommand ランタイム管理改善
+3. **P2（機能）**: Lua API の実機能化、イベントフェーズ配線
+4. **P3（ポリッシュ）**: WindowsNotifier の改名、ドキュメント改善、CI 拡充

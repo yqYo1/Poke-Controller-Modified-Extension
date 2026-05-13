@@ -300,3 +300,300 @@ impl From<Touchscreen> for GamepadInput {
         GamepadInput::SingleTouchscreen(t)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Button bitflag tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_button_bits() {
+        assert_eq!(Button::A.bits(), 0x0004);
+        assert_eq!(Button::B.bits(), 0x0002);
+        assert_eq!(Button::X.bits(), 0x0008);
+        assert_eq!(Button::Y.bits(), 0x0001);
+        assert_eq!(Button::L.bits(), 0x0010);
+        assert_eq!(Button::R.bits(), 0x0020);
+        assert_eq!(Button::ZL.bits(), 0x0040);
+        assert_eq!(Button::ZR.bits(), 0x0080);
+        assert_eq!(Button::MINUS.bits(), 0x0100);
+        assert_eq!(Button::PLUS.bits(), 0x0200);
+        assert_eq!(Button::LCLICK.bits(), 0x0400);
+        assert_eq!(Button::RCLICK.bits(), 0x0800);
+        assert_eq!(Button::HOME.bits(), 0x1000);
+        assert_eq!(Button::CAPTURE.bits(), 0x2000);
+    }
+
+    #[test]
+    fn test_button_or_combines() {
+        let combo = Button::A | Button::B;
+        assert!(combo.contains(Button::A));
+        assert!(combo.contains(Button::B));
+        assert!(!combo.contains(Button::X));
+        assert_eq!(combo.bits(), 0x0006);
+    }
+
+    #[test]
+    fn test_button_and() {
+        let combo = Button::A | Button::B;
+        let mask = Button::A | Button::X;
+        let result = combo & mask;
+        assert_eq!(result, Button::A);
+        assert!(!result.contains(Button::B));
+    }
+
+    #[test]
+    fn test_button_default_is_empty() {
+        assert_eq!(Button::default().bits(), 0);
+    }
+
+    #[test]
+    fn test_button_aliases() {
+        assert_eq!(Button::SELECT, Button::MINUS);
+        assert_eq!(Button::START, Button::PLUS);
+        assert_eq!(Button::POWER, Button::LCLICK);
+        assert_eq!(Button::WIRELESS, Button::RCLICK);
+    }
+
+    #[test]
+    fn test_button_from_bits_truncate() {
+        let b = Button::from_bits_truncate(0xFFFF);
+        assert!(b.contains(Button::A));
+        assert!(b.contains(Button::CAPTURE));
+    }
+
+    // ── Hat tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_hat_default_is_top() {
+        assert_eq!(Hat::default(), Hat::TOP);
+    }
+
+    #[test]
+    fn test_hat_values() {
+        assert_eq!(Hat::TOP as u8, 0);
+        assert_eq!(Hat::TOP_RIGHT as u8, 1);
+        assert_eq!(Hat::RIGHT as u8, 2);
+        assert_eq!(Hat::BTM_RIGHT as u8, 3);
+        assert_eq!(Hat::BTM as u8, 4);
+        assert_eq!(Hat::BTM_LEFT as u8, 5);
+        assert_eq!(Hat::LEFT as u8, 6);
+        assert_eq!(Hat::TOP_LEFT as u8, 7);
+        assert_eq!(Hat::CENTER as u8, 8);
+    }
+
+    // ── Direction tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_direction_from_angle_center() {
+        let d = Direction::from_angle(Stick::Left, 90.0, 0.0);
+        assert_eq!(d.stick, Stick::Left);
+        // At 0.0 magnification, both x and y should be at center (127/128)
+        assert!(d.x == 127 || d.x == 128);
+        assert!(d.y == 127 || d.y == 128);
+    }
+
+    #[test]
+    fn test_direction_from_angle_full_up() {
+        let d = Direction::from_angle(Stick::Left, 90.0, 1.0);
+        assert_eq!(d.stick, Stick::Left);
+        // 90°: x=cos(90°)*127.5+127.5 ≈ 127.5 → 127 or 128
+        //       y=sin(90°)*127.5+127.5 ≈ 255.0 → 255
+        assert_eq!(d.y, 255);
+    }
+
+    #[test]
+    fn test_direction_from_xy() {
+        let d = Direction::from_xy(Stick::Right, 200, 50);
+        assert_eq!(d.stick, Stick::Right);
+        assert_eq!(d.x, 200);
+        assert_eq!(d.y, 50);
+        assert_eq!(d.show_name, Some("(200, 50)".to_string()));
+    }
+
+    #[test]
+    fn test_direction_get_tilting_left() {
+        let d = Direction::from_xy(Stick::Left, 200, 200);
+        let tilts = d.get_tilting();
+        assert!(tilts.contains(&Tilt::Right));
+        assert!(tilts.contains(&Tilt::Up));
+        assert!(!tilts.contains(&Tilt::Left));
+        assert!(!tilts.contains(&Tilt::Down));
+    }
+
+    #[test]
+    fn test_direction_get_tilting_right() {
+        let d = Direction::from_xy(Stick::Right, 200, 200);
+        let tilts = d.get_tilting();
+        assert!(tilts.contains(&Tilt::RRight));
+        assert!(tilts.contains(&Tilt::RUp));
+    }
+
+    #[test]
+    fn test_direction_get_tilting_center() {
+        let d = Direction::from_xy(Stick::Left, 128, 128);
+        let tilts = d.get_tilting();
+        assert!(tilts.is_empty());
+    }
+
+    #[test]
+    fn test_direction_get_tilting_left_bottom_left() {
+        let d = Direction::from_xy(Stick::Left, 0, 0);
+        let tilts = d.get_tilting();
+        assert!(tilts.contains(&Tilt::Left));
+        assert!(tilts.contains(&Tilt::Down));
+    }
+
+    #[test]
+    fn test_direction_convenience_methods() {
+        // Left stick directions
+        assert_eq!(Direction::up(Stick::Left).get_tilting(), vec![Tilt::Up]);
+        assert_eq!(Direction::down(Stick::Left).get_tilting(), vec![Tilt::Down]);
+        assert_eq!(Direction::left(Stick::Left).get_tilting(), vec![Tilt::Left]);
+        assert_eq!(
+            Direction::right(Stick::Left).get_tilting(),
+            vec![Tilt::Right]
+        );
+        // Right stick directions
+        assert_eq!(Direction::up(Stick::Right).get_tilting(), vec![Tilt::RUp]);
+        assert_eq!(
+            Direction::down(Stick::Right).get_tilting(),
+            vec![Tilt::RDown]
+        );
+        assert_eq!(
+            Direction::left(Stick::Right).get_tilting(),
+            vec![Tilt::RLeft]
+        );
+        assert_eq!(
+            Direction::right(Stick::Right).get_tilting(),
+            vec![Tilt::RRight]
+        );
+    }
+
+    #[test]
+    fn test_direction_diagonal_left() {
+        let up_right = Direction::up_right(Stick::Left);
+        let tilts = up_right.get_tilting();
+        assert!(tilts.contains(&Tilt::Up));
+        assert!(tilts.contains(&Tilt::Right));
+
+        let down_left = Direction::down_left(Stick::Left);
+        let tilts = down_left.get_tilting();
+        assert!(tilts.contains(&Tilt::Down));
+        assert!(tilts.contains(&Tilt::Left));
+    }
+
+    #[test]
+    fn test_direction_diagonal_right() {
+        let up_right = Direction::up_right(Stick::Right);
+        let tilts = up_right.get_tilting();
+        assert!(tilts.contains(&Tilt::RUp));
+        assert!(tilts.contains(&Tilt::RRight));
+
+        let down_left = Direction::down_left(Stick::Right);
+        let tilts = down_left.get_tilting();
+        assert!(tilts.contains(&Tilt::RDown));
+        assert!(tilts.contains(&Tilt::RLeft));
+    }
+
+    // ── GamepadInput tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_gamepad_input_from_button() {
+        let input: GamepadInput = Button::A.into();
+        assert_eq!(input.buttons(), vec![Button::A]);
+        assert!(input.hats().is_empty());
+        assert!(input.directions().is_empty());
+        assert!(input.touchscreens().is_empty());
+    }
+
+    #[test]
+    fn test_gamepad_input_from_hat() {
+        let input: GamepadInput = Hat::TOP.into();
+        assert_eq!(input.hats(), vec![Hat::TOP]);
+        assert!(input.buttons().is_empty());
+    }
+
+    #[test]
+    fn test_gamepad_input_from_direction() {
+        let dir = Direction::from_xy(Stick::Left, 200, 50);
+        let input: GamepadInput = dir.clone().into();
+        assert_eq!(input.directions(), vec![dir]);
+    }
+
+    #[test]
+    fn test_gamepad_input_from_touchscreen() {
+        let ts = Touchscreen::new(100, 50);
+        let input: GamepadInput = ts.into();
+        assert_eq!(input.touchscreens(), vec![Touchscreen::new(100, 50)]);
+    }
+
+    #[test]
+    fn test_gamepad_input_multiple_collects() {
+        let input = GamepadInput::Multiple(vec![
+            GamepadInput::SingleButton(Button::A),
+            GamepadInput::SingleHat(Hat::TOP),
+            GamepadInput::SingleButton(Button::B),
+        ]);
+        assert_eq!(input.buttons(), vec![Button::A, Button::B]);
+        assert_eq!(input.hats(), vec![Hat::TOP]);
+    }
+
+    // ── Touchscreen tests ──────────────────────────────────────────────
+
+    #[test]
+    fn test_touchscreen_new() {
+        let ts = Touchscreen::new(500, 200);
+        assert_eq!(ts.x, 500);
+        assert_eq!(ts.y, 200);
+    }
+
+    // ── Conversion table tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_convert_button_default_identity() {
+        assert_eq!(convert_button_default(Button::A), Button::A);
+        assert_eq!(
+            convert_button_default(Button::B | Button::X),
+            Button::B | Button::X
+        );
+    }
+
+    #[test]
+    fn test_convert_button_3ds_values() {
+        // A=0x0004 → bit 1 (value 1)
+        assert_eq!(convert_button_3ds(Button::A), 1);
+        // B=0x0002 → bit 2 (value 2)
+        assert_eq!(convert_button_3ds(Button::B), 2);
+        // X=0x0008 → bit 4 (value 4)
+        assert_eq!(convert_button_3ds(Button::X), 4);
+        // Y=0x0001 → bit 8 (value 8)
+        assert_eq!(convert_button_3ds(Button::Y), 8);
+        // HOME=0x1000 → bit 64
+        assert_eq!(convert_button_3ds(Button::HOME), 64);
+    }
+
+    #[test]
+    fn test_convert_button_3ds_combo() {
+        let combo = Button::A | Button::B;
+        assert_eq!(convert_button_3ds(combo), 1 | 2);
+    }
+
+    #[test]
+    fn test_convert_hat_3ds_controller() {
+        // Center → 0 (CENTER=8 → lookup 8 → value 0)
+        assert_eq!(CONVERT_HAT_3DS_CONTROLLER[Hat::CENTER as usize], 0);
+        // TOP → 8
+        assert_eq!(CONVERT_HAT_3DS_CONTROLLER[Hat::TOP as usize], 8);
+        // RIGHT → 4
+        assert_eq!(CONVERT_HAT_3DS_CONTROLLER[Hat::RIGHT as usize], 4);
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(DIRECTION_MIN, 0);
+        assert_eq!(DIRECTION_CENTER, 128);
+        assert_eq!(DIRECTION_MAX, 255);
+    }
+}

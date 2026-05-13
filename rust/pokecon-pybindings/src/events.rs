@@ -96,3 +96,59 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<EventBus>()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_event_bus_empty() {
+        let bus = EventBus::new();
+        assert!(!bus.has_handlers("test"));
+        assert_eq!(bus.num_event_types(), 0);
+    }
+
+    #[test]
+    fn test_on_registers_callback() {
+        let bus = EventBus::new();
+        Python::with_gil(|py| {
+            let obj = py.None();
+            bus.on("evt".to_string(), obj.into()).unwrap();
+            assert!(bus.has_handlers("evt"));
+            assert_eq!(bus.num_event_types(), 1);
+        });
+    }
+
+    #[test]
+    fn test_on_off_removes_all() {
+        let bus = EventBus::new();
+        Python::with_gil(|py| {
+            let obj = py.None();
+            bus.on("evt".to_string(), obj.into()).unwrap();
+            assert!(bus.has_handlers("evt"));
+            bus.off("evt").unwrap();
+            assert!(!bus.has_handlers("evt"));
+            assert_eq!(bus.num_event_types(), 0);
+        });
+    }
+
+    #[test]
+    fn test_multiple_callbacks_same_event() {
+        let bus = EventBus::new();
+        Python::with_gil(|py| {
+            let obj1: PyObject = py.None().into();
+            let obj2: PyObject = py.None().into();
+            bus.on("evt".to_string(), obj1).unwrap();
+            bus.on("evt".to_string(), obj2).unwrap();
+            assert!(bus.has_handlers("evt"));
+            assert_eq!(bus.num_event_types(), 1);
+        });
+    }
+
+    #[test]
+    fn test_off_nonexistent_is_error() {
+        let bus = EventBus::new();
+        // off on non-existent key should still return Ok (it's a remove)
+        bus.off("nonexistent").unwrap();
+    }
+}

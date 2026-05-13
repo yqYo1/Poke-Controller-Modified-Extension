@@ -525,3 +525,240 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_direction, m)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── PyButton tests (Rust-side only, no GIL) ─────────────────────────
+
+    #[test]
+    fn test_pybutton_bits() {
+        let btn = PyButton::new(0x0004);
+        assert_eq!(btn.bits(), 0x0004);
+    }
+
+    #[test]
+    fn test_pybutton_repr() {
+        let btn = PyButton::new(0x0004);
+        assert_eq!(btn.__repr__(), "<Button 0x0004>");
+    }
+
+    #[test]
+    fn test_pybutton_or() {
+        let a = PyButton::new(0x0004);
+        let b = PyButton::new(0x0002);
+        let result = a.__or__(&b);
+        assert_eq!(result.bits(), 0x0006);
+    }
+
+    #[test]
+    fn test_pybutton_and() {
+        let ab = PyButton::new(0x0006);
+        let a = PyButton::new(0x0004);
+        let result = ab.__and__(&a);
+        assert_eq!(result.bits(), 0x0004);
+    }
+
+    #[test]
+    fn test_pybutton_invert() {
+        let btn = PyButton::new(0x0004);
+        let inv = btn.__invert__();
+        assert_eq!(inv.bits(), !0x0004 & 0xFFFF);
+    }
+
+    #[test]
+    fn test_pybutton_bool() {
+        let zero = PyButton::new(0x0000);
+        let non_zero = PyButton::new(0x0004);
+        assert!(!zero.__bool__());
+        assert!(non_zero.__bool__());
+    }
+
+    #[test]
+    fn test_pybutton_hash() {
+        let btn = PyButton::new(0x0004);
+        assert_eq!(btn.__hash__(), 0x0004);
+    }
+
+    #[test]
+    fn test_pybutton_class_constants() {
+        assert_eq!(PyButton::A().inner, RustButton::A);
+        assert_eq!(PyButton::B().inner, RustButton::B);
+        assert_eq!(PyButton::X().inner, RustButton::X);
+        assert_eq!(PyButton::Y().inner, RustButton::Y);
+        assert_eq!(PyButton::L().inner, RustButton::L);
+        assert_eq!(PyButton::R().inner, RustButton::R);
+        assert_eq!(PyButton::ZL().inner, RustButton::ZL);
+        assert_eq!(PyButton::ZR().inner, RustButton::ZR);
+        assert_eq!(PyButton::MINUS().inner, RustButton::MINUS);
+        assert_eq!(PyButton::PLUS().inner, RustButton::PLUS);
+        assert_eq!(PyButton::LCLICK().inner, RustButton::LCLICK);
+        assert_eq!(PyButton::RCLICK().inner, RustButton::RCLICK);
+        assert_eq!(PyButton::HOME().inner, RustButton::HOME);
+        assert_eq!(PyButton::CAPTURE().inner, RustButton::CAPTURE);
+    }
+
+    // ── PyHat tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_pyhat_value() {
+        let hat = PyHat::new(0);
+        assert_eq!(hat.value(), 0);
+        assert_eq!(hat.__repr__(), "<Hat TOP>");
+    }
+
+    #[test]
+    fn test_pyhat_class_constants() {
+        assert_eq!(PyHat::TOP().inner, RustHat::TOP);
+        assert_eq!(PyHat::CENTER().inner, RustHat::CENTER);
+        assert_eq!(PyHat::LEFT().inner, RustHat::LEFT);
+        assert_eq!(PyHat::RIGHT().inner, RustHat::RIGHT);
+        assert_eq!(PyHat::BTM().inner, RustHat::BTM);
+    }
+
+    #[test]
+    fn test_pyhat_unknown_maps_to_center() {
+        let hat = PyHat::new(99);
+        assert_eq!(hat.inner, RustHat::CENTER);
+    }
+
+    // ── PyStick tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_pystick_new() {
+        let left = PyStick::new("Left").unwrap();
+        assert_eq!(left.inner, RustStick::Left);
+        let right = PyStick::new("Right").unwrap();
+        assert_eq!(right.inner, RustStick::Right);
+    }
+
+    #[test]
+    fn test_pystick_invalid() {
+        assert!(PyStick::new("Invalid").is_err());
+    }
+
+    #[test]
+    fn test_pystick_class_constants() {
+        assert_eq!(PyStick::LEFT().inner, RustStick::Left);
+        assert_eq!(PyStick::RIGHT().inner, RustStick::Right);
+    }
+
+    #[test]
+    fn test_pystick_repr() {
+        let left = PyStick::new("Left").unwrap();
+        assert_eq!(left.__repr__(), "<Stick Left>");
+    }
+
+    // ── PyDirection tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_pydirection_from_xy() {
+        let left = PyStick::new("Left").unwrap();
+        let dir = PyDirection::from_xy(&left, 200, 50);
+        assert_eq!(dir.x(), 200);
+        assert_eq!(dir.y(), 50);
+        assert_eq!(dir.stick().inner, RustStick::Left);
+    }
+
+    #[test]
+    fn test_pydirection_from_angle() {
+        let right = PyStick::new("Right").unwrap();
+        let dir = PyDirection::from_angle(&right, 90.0, 1.0);
+        assert_eq!(dir.y(), 255); // sin(90)*127.5+127.5 = 255
+    }
+
+    #[test]
+    fn test_pydirection_static_methods() {
+        let left = PyStick::new("Left").unwrap();
+        let d = PyDirection::up(&left);
+        assert_eq!(d.y(), 255);
+
+        let d = PyDirection::down(&left);
+        assert_eq!(d.y(), 0);
+
+        let d = PyDirection::left(&left);
+        assert_eq!(d.x(), 0);
+
+        let d = PyDirection::right(&left);
+        assert_eq!(d.x(), 255);
+
+        // Right stick variants
+        let right = PyStick::new("Right").unwrap();
+        let d = PyDirection::up(&right);
+        assert_eq!(d.y(), 255);
+        let d = PyDirection::down(&right);
+        assert_eq!(d.y(), 0);
+    }
+
+    #[test]
+    fn test_pydirection_repr() {
+        let left = PyStick::new("Left").unwrap();
+        let dir = PyDirection::from_xy(&left, 128, 128);
+        let repr = dir.__repr__();
+        assert!(repr.contains("Left"));
+        assert!(repr.contains("128"));
+    }
+
+    // ── PyTouchscreen tests ───────────────────────────────────────────
+
+    #[test]
+    fn test_pytouchscreen_new() {
+        let ts = PyTouchscreen::new(500, 200);
+        assert_eq!(ts.x(), 500);
+        assert_eq!(ts.y(), 200);
+    }
+
+    #[test]
+    fn test_pytouchscreen_repr() {
+        let ts = PyTouchscreen::new(100, 50);
+        assert_eq!(ts.__repr__(), "<Touchscreen x=100 y=50>");
+    }
+
+    #[test]
+    fn test_pytouchscreen_eq() {
+        let ts1 = PyTouchscreen::new(100, 50);
+        let ts2 = PyTouchscreen::new(100, 50);
+        let ts3 = PyTouchscreen::new(200, 100);
+        assert!(ts1.__eq__(&ts2));
+        assert!(!ts1.__eq__(&ts3));
+    }
+
+    // ── Legacy helper function tests ──────────────────────────────────
+
+    #[test]
+    fn test_convert_button_function() {
+        let result = convert_button(0x0006).unwrap();
+        assert_eq!(result, vec!["Button[1]", "Button[2]"]);
+    }
+
+    #[test]
+    fn test_convert_button_zero() {
+        let result = convert_button(0x0000).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_direction_function() {
+        assert_eq!(get_direction(0).unwrap(), "TOP");
+        assert_eq!(get_direction(4).unwrap(), "BTM");
+        assert_eq!(get_direction(8).unwrap(), "CENTER");
+        assert_eq!(get_direction(99).unwrap(), "CENTER");
+    }
+
+    // ── Python-interop tests (require GIL) ────────────────────────────
+
+    #[test]
+    fn test_pybutton_creation_in_python() {
+        Python::with_gil(|_py| {
+            let _btn = PyButton::new(0x0004);
+        });
+    }
+
+    #[test]
+    fn test_pyhat_creation_in_python() {
+        Python::with_gil(|_py| {
+            let _hat = PyHat::new(0);
+        });
+    }
+}

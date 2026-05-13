@@ -742,6 +742,7 @@
                 runtimeInputs = [
                   rustEnv
                   pythonEnv
+                  pkgs.libclang
                 ];
                 text = ''
                   workdir="$(mktemp -d)"
@@ -749,6 +750,9 @@
                   cp -r "${self}/." "$workdir/"
                   chmod -R +w "$workdir"
                   cd "$workdir"
+
+                  # libclang is required for v4l2-sys-mit (bindgen)
+                  export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
                   echo "═══════════════════════════════════════════"
                   echo "  clippy"

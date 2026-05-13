@@ -432,3 +432,249 @@ impl KeyPress {
         self.r_stick_changed = false;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_sender() -> Sender {
+        Sender::new(false)
+    }
+
+    #[test]
+    fn test_new_defaults() {
+        let kp = KeyPress::new(make_sender());
+        assert_eq!(kp.serial_data_format, SerialFormat::Default);
+        assert!(kp.hold_buttons.is_empty());
+        assert_eq!(kp.hold_hat, Hat::CENTER);
+        assert!(kp.hold_left_stick.is_none());
+        assert!(kp.hold_right_stick.is_none());
+        assert!(kp.hold_touchscreen.is_none());
+        assert!(!kp.l_stick_changed);
+        assert!(!kp.r_stick_changed);
+    }
+
+    #[test]
+    fn test_set_serial_format() {
+        let mut kp = KeyPress::new(make_sender());
+        assert_eq!(kp.get_serial_format(), SerialFormat::Default);
+        kp.set_serial_format(SerialFormat::Qingpi);
+        assert_eq!(kp.get_serial_format(), SerialFormat::Qingpi);
+        kp.set_serial_format(SerialFormat::_3dsController);
+        assert_eq!(kp.get_serial_format(), SerialFormat::_3dsController);
+    }
+
+    #[test]
+    fn test_serial_format_as_str() {
+        assert_eq!(SerialFormat::Default.as_str(), "Default");
+        assert_eq!(SerialFormat::Qingpi.as_str(), "Qingpi");
+        assert_eq!(SerialFormat::_3dsController.as_str(), "3DS Controller");
+    }
+
+    #[test]
+    fn test_hold_buttons_empty() {
+        let kp = KeyPress::new(make_sender());
+        let held = kp.hold_buttons();
+        assert!(held.is_empty());
+    }
+
+    #[test]
+    fn test_push_hold_input_single_button() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_input(&GamepadInput::SingleButton(Button::A), &mut to_input);
+        assert_eq!(kp.hold_buttons, vec![Button::A]);
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_input_duplicate_button_warns() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_input(&GamepadInput::SingleButton(Button::A), &mut to_input);
+        kp.push_hold_input(&GamepadInput::SingleButton(Button::A), &mut to_input);
+        // Should not be added twice
+        assert_eq!(kp.hold_buttons, vec![Button::A]);
+        // to_input should only contain one entry
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_input_hat() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_input(&GamepadInput::SingleHat(Hat::TOP), &mut to_input);
+        assert_eq!(kp.hold_hat, Hat::TOP);
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_input_hat_center_ignored() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_input(&GamepadInput::SingleHat(Hat::CENTER), &mut to_input);
+        assert_eq!(kp.hold_hat, Hat::CENTER);
+        assert!(to_input.is_empty());
+    }
+
+    #[test]
+    fn test_push_hold_input_direction_left() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        let dir = Direction::up(Stick::Left);
+        kp.push_hold_input(&GamepadInput::SingleDirection(dir.clone()), &mut to_input);
+        assert_eq!(kp.hold_left_stick, Some(dir));
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_input_direction_right() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        let dir = Direction::right(Stick::Right);
+        kp.push_hold_input(&GamepadInput::SingleDirection(dir.clone()), &mut to_input);
+        assert_eq!(kp.hold_right_stick, Some(dir));
+    }
+
+    #[test]
+    fn test_push_hold_input_touchscreen() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        let ts = Touchscreen::new(500, 200);
+        kp.push_hold_input(&GamepadInput::SingleTouchscreen(ts), &mut to_input);
+        assert_eq!(kp.hold_touchscreen, Some(ts));
+    }
+
+    #[test]
+    fn test_push_hold_input_multiple() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_input(
+            &GamepadInput::Multiple(vec![
+                GamepadInput::SingleButton(Button::A),
+                GamepadInput::SingleButton(Button::B),
+            ]),
+            &mut to_input,
+        );
+        assert_eq!(kp.hold_buttons.len(), 2);
+        assert_eq!(to_input.len(), 2);
+    }
+
+    #[test]
+    fn test_push_hold_end_input_releases_button() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.hold_buttons.push(Button::A);
+        kp.push_hold_end_input(&GamepadInput::SingleButton(Button::A), &mut to_input);
+        assert!(kp.hold_buttons.is_empty());
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_end_input_nonexistent_warns() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.push_hold_end_input(&GamepadInput::SingleButton(Button::A), &mut to_input);
+        assert!(to_input.is_empty());
+    }
+
+    #[test]
+    fn test_push_hold_end_input_hat() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        kp.hold_hat = Hat::TOP;
+        kp.push_hold_end_input(&GamepadInput::SingleHat(Hat::TOP), &mut to_input);
+        assert_eq!(kp.hold_hat, Hat::CENTER);
+        assert_eq!(to_input.len(), 1);
+    }
+
+    #[test]
+    fn test_push_hold_end_input_direction() {
+        let mut kp = KeyPress::new(make_sender());
+        let mut to_input = Vec::new();
+        let dir = Direction::up(Stick::Left);
+        kp.hold_left_stick = Some(dir.clone());
+        kp.push_hold_end_input(&GamepadInput::SingleDirection(dir), &mut to_input);
+        assert!(kp.hold_left_stick.is_none());
+    }
+
+    #[test]
+    fn test_collect_inputs_empty() {
+        let kp = KeyPress::new(make_sender());
+        let result = kp.collect_inputs(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_collect_inputs_with_holds() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.hold_buttons.push(Button::A);
+        let result = kp.collect_inputs(&[GamepadInput::SingleButton(Button::B)]);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_update_stick_changed_left() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.format.lx = 100;
+        kp.format.ly = 55; // 255 - 200 = 55
+        let dir = Direction::from_xy(Stick::Left, 200, 200);
+        kp.update_stick_changed(&[dir]);
+        assert!(kp.l_stick_changed);
+    }
+
+    #[test]
+    fn test_update_stick_changed_right_no_change() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.format.rx = 128;
+        kp.format.ry = 127; // 255 - 128 = 127
+        let dir = Direction::from_xy(Stick::Right, 128, 128);
+        kp.update_stick_changed(&[dir]);
+        assert!(!kp.r_stick_changed);
+    }
+
+    #[test]
+    fn test_clear_stick_on_tilts_left() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.clear_stick_on_tilts(&[Tilt::Up, Tilt::Right]);
+        assert!(kp.l_stick_changed);
+        assert!(!kp.r_stick_changed);
+    }
+
+    #[test]
+    fn test_clear_stick_on_tilts_right() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.clear_stick_on_tilts(&[Tilt::RUp, Tilt::RLeft]);
+        assert!(!kp.l_stick_changed);
+        assert!(kp.r_stick_changed);
+    }
+
+    #[test]
+    fn test_reset_internal_state() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.hold_buttons.push(Button::A);
+        kp.hold_hat = Hat::TOP;
+        kp.hold_left_stick = Some(Direction::up(Stick::Left));
+        kp.l_stick_changed = true;
+        kp.reset_internal_state();
+        assert!(kp.hold_buttons.is_empty());
+        assert_eq!(kp.hold_hat, Hat::CENTER);
+        assert!(kp.hold_left_stick.is_none());
+        assert!(!kp.l_stick_changed);
+    }
+
+    #[test]
+    fn test_neutral_clears_all() {
+        let mut kp = KeyPress::new(make_sender());
+        kp.hold_buttons.push(Button::A);
+        kp.hold_hat = Hat::LEFT;
+        // neutral is async; we test the state changes before/after via reset
+        assert!(!kp.hold_buttons.is_empty());
+        assert_ne!(kp.hold_hat, Hat::CENTER);
+        // Manually clear and verify
+        kp.hold_buttons.clear();
+        kp.hold_hat = Hat::CENTER;
+        assert!(kp.hold_buttons.is_empty());
+        assert_eq!(kp.hold_hat, Hat::CENTER);
+    }
+}

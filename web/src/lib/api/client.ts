@@ -121,11 +121,19 @@ export interface KeyboardEnabled {
 export interface CommandEntry {
 	name: string;
 	description?: string;
+	path?: string;
+	tags?: string[];
 }
 
 export interface ActiveCommand {
 	name?: string;
 	running: boolean;
+	paused?: boolean;
+}
+
+export interface CommandStatus {
+	status: 'running' | 'paused' | 'stopped';
+	name?: string;
 }
 
 export interface ProfileEntry {
@@ -302,6 +310,36 @@ export class APIClient {
 	}
 	reloadCommands() {
 		return this._fetch<SuccessResponse>('/api/commands/reload', { method: 'POST' });
+	}
+
+	// ── Python/MCU command lists (new) ────────────────────────────────────
+
+	getPythonCommands() {
+		return this._fetch<CommandEntry[]>('/api/commands/python');
+	}
+
+	getMcuCommands() {
+		return this._fetch<CommandEntry[]>('/api/commands/mcu');
+	}
+
+	// ── Command lifecycle (new) ────────────────────────────────────────────
+
+	pauseCommand() {
+		return this._fetch<SuccessResponse>('/api/commands/pause', { method: 'POST' });
+	}
+
+	restartCommand() {
+		return this._fetch<SuccessResponse>('/api/commands/restart', { method: 'POST' });
+	}
+
+	getCommandStatus() {
+		return this._fetch<CommandStatus>('/api/commands/status');
+	}
+
+	// ── Shortcut buttons (new) ─────────────────────────────────────────────
+
+	executeShortcut(id: number) {
+		return this._fetch<SuccessResponse>(`/api/commands/shortcut/${id}`, { method: 'POST' });
 	}
 
 	// ── Profile management ────────────────────────────────────────────────

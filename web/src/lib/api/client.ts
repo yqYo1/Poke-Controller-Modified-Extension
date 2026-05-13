@@ -137,6 +137,32 @@ export interface SuccessResponse {
 	success: boolean;
 }
 
+/** Windows-specific notification settings. */
+export interface WindowsNotificationSettings {
+	/** Enable Windows toast notifications */
+	enabled: boolean;
+	/** Toast display duration in seconds */
+	duration_secs?: number;
+	/** Enable notification sound */
+	sound_enabled?: boolean;
+	/** Toast priority (Default, High, Critical) */
+	priority?: string;
+	/** App user model ID for Windows notifications */
+	app_id?: string;
+}
+
+/** Discord-specific notification settings. */
+export interface DiscordNotificationSettings {
+	/** Enable Discord webhook notifications */
+	enabled: boolean;
+	/** Discord webhook URL */
+	webhook_url?: string;
+	/** Custom username override for the webhook */
+	username?: string;
+	/** Custom avatar URL for the webhook */
+	avatar_url?: string;
+}
+
 // ─── REST API client ────────────────────────────────────────────────────────
 
 export class APIClient {
@@ -329,6 +355,39 @@ export class APIClient {
 	}
 	sendTestNotification(data: SendNotificationRequest) {
 		return this._fetch<SuccessResponse>('/api/notifications/send', {
+			method: 'POST',
+			body: JSON.stringify(data),
+		});
+	}
+
+	// ── Notification: Windows-specific settings ────────────────────────────
+
+	getWindowsNotificationSettings() {
+		return this._fetch<WindowsNotificationSettings>('/api/notification/windows/settings');
+	}
+	updateWindowsNotificationSettings(config: Partial<WindowsNotificationSettings>) {
+		return this._fetch<SuccessResponse>('/api/notification/windows/settings', {
+			method: 'POST',
+			body: JSON.stringify(config),
+		});
+	}
+
+	// ── Notification: Discord-specific settings ────────────────────────────
+
+	getDiscordNotificationSettings() {
+		return this._fetch<DiscordNotificationSettings>('/api/notification/discord/settings');
+	}
+	updateDiscordNotificationSettings(config: Partial<DiscordNotificationSettings>) {
+		return this._fetch<SuccessResponse>('/api/notification/discord/settings', {
+			method: 'POST',
+			body: JSON.stringify(config),
+		});
+	}
+
+	// ── Notification: Test ─────────────────────────────────────────────────
+
+	testNotification(data: SendNotificationRequest) {
+		return this._fetch<SuccessResponse>('/api/notification/test', {
 			method: 'POST',
 			body: JSON.stringify(data),
 		});

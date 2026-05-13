@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { api } from '$lib/api/client';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let controllerType = $state('Pro Controller');
 	let keyboardEnabled = $state(false);
 
-	let pressedButtons = $state<Set<string>>(new Set());
+	let pressedButtons = new SvelteSet<string>();
 
 	const faceButtons = [
 		{ id: 'a', label: 'A', row: 0, col: 3 },
@@ -27,13 +28,6 @@
 		{ id: 'zr', label: 'ZR', row: 0, col: 3 },
 	];
 
-	const systemButtons = [
-		{ id: 'minus', label: '-', row: 0, col: 0 },
-		{ id: 'plus', label: '+', row: 0, col: 2 },
-		{ id: 'home', label: 'HOME', row: 0, col: 1 },
-		{ id: 'capture', label: '撮影', row: 0, col: 0 },
-	];
-
 	const leftStick = { id: 'left_stick', label: 'Lスティック' };
 	const rightStick = { id: 'right_stick', label: 'Rスティック' };
 
@@ -43,7 +37,6 @@
 		} else {
 			pressedButtons.delete(button);
 		}
-		pressedButtons = new Set(pressedButtons);
 		api.sendInput('button', { button, pressed }).catch(console.warn);
 	}
 
@@ -72,7 +65,7 @@
 	<div class="mx-auto max-w-md">
 		<div class="grid grid-cols-5 gap-1">
 			<!-- ショルダーボタン -->
-			{#each shoulderButtons as btn}
+			{#each shoulderButtons as btn (btn.id)}
 				<button
 					onmousedown={() => sendButtonInput(btn.id, true)}
 					onmouseup={() => sendButtonInput(btn.id, false)}
@@ -98,7 +91,7 @@
 
 			<!-- D-Pad -->
 			<div style="grid-row: 2; grid-column: 3" class="grid grid-cols-3 gap-0.5 place-content-center rounded bg-gray-800 p-1">
-				{#each dpadButtons as btn}
+				{#each dpadButtons as btn (btn.id)}
 					<button
 						onmousedown={() => sendButtonInput(btn.id, true)}
 						onmouseup={() => sendButtonInput(btn.id, false)}
@@ -149,7 +142,7 @@
 
 			<!-- フェイスボタン A/B/X/Y -->
 			<div style="grid-row: 3; grid-column: 4 / 6" class="grid grid-cols-2 gap-1 place-content-center rounded bg-gray-800 p-2">
-				{#each faceButtons as btn}
+				{#each faceButtons as btn (btn.id)}
 					<button
 						onmousedown={() => sendButtonInput(btn.id, true)}
 						onmouseup={() => sendButtonInput(btn.id, false)}

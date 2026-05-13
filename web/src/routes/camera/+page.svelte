@@ -58,7 +58,7 @@
 					<label class="flex items-center justify-between text-xs text-gray-400">
 						<span>デバイス</span>
 						<select bind:value={selectedIndex} class="w-48 rounded bg-gray-800 px-2 py-1 text-gray-200">
-							{#each cameras as cam}
+							{#each cameras as cam (cam.device_index)}
 								<option value={cam.device_index}>{cam.name}</option>
 							{/each}
 						</select>

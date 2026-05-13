@@ -22,7 +22,6 @@
 	}
 
 	onMount(() => {
-		const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 		wsClient = wsClientSingleton;
 
 		wsClient.on('connect', () => {

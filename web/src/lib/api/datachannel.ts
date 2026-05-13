@@ -27,6 +27,7 @@ export interface DataChannelEventMap {
 	state: DataChannelState;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventCallback = (...args: any[]) => void;
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -101,10 +102,6 @@ export class DataChannelClient {
 	 *                   `'state'`)
 	 * @param listener - Callback invoked when the event fires
 	 */
-	on(event: 'connect', listener: () => void): void;
-	on(event: 'disconnect', listener: () => void): void;
-	on(event: 'message', listener: (data: string) => void): void;
-	on(event: 'state', listener: (state: DataChannelState) => void): void;
 	on(event: string, listener: EventCallback): void {
 		if (!this.listeners.has(event)) {
 			this.listeners.set(event, new Set());
@@ -118,18 +115,10 @@ export class DataChannelClient {
 	 * @param event    - Event name
 	 * @param listener - The same function reference passed to `on()`
 	 */
-	off(event: 'connect', listener: () => void): void;
-	off(event: 'disconnect', listener: () => void): void;
-	off(event: 'message', listener: (data: string) => void): void;
-	off(event: 'state', listener: (state: DataChannelState) => void): void;
 	off(event: string, listener: EventCallback): void {
 		this.listeners.get(event)?.delete(listener);
 	}
 
-	private emit(event: 'connect'): void;
-	private emit(event: 'disconnect'): void;
-	private emit(event: 'message', data: string): void;
-	private emit(event: 'state', state: DataChannelState): void;
 	private emit(event: string, ...args: unknown[]): void {
 		const handlers = this.listeners.get(event);
 		if (handlers) {
@@ -236,8 +225,8 @@ export class DataChannelClient {
 
 		// Listen to the fallback for incoming messages
 		const handler = (msg: WSMessage) => {
-			if ('data' in msg && typeof (msg as any).data === 'string') {
-				this.emit('message', (msg as any).data);
+			if ('data' in msg && typeof msg.data === 'string') {
+				this.emit('message', msg.data);
 			}
 		};
 		this.fallback.on('message', handler);

@@ -121,7 +121,7 @@
 	<div class="relative select-none" role="menubar">
 		<!-- Menu bar -->
 		<div class="flex items-center bg-gray-800 text-xs text-gray-200">
-			{#each menus as menu}
+			{#each menus as menu (menu.id)}
 				<button
 					onclick={() => toggleMenu(menu.id)}
 					onmouseenter={() => { if (activeMenu) activeMenu = menu.id; }}
@@ -137,7 +137,6 @@
 
 		<!-- Dropdown -->
 		{#if activeMenu}
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
 				class="fixed inset-0 z-40"
 				onclick={closeMenu}
@@ -148,9 +147,9 @@
 				class="absolute left-0 z-50 min-w-44 rounded border border-gray-700 bg-gray-800 shadow-xl"
 				role="menu"
 			>
-				{#each [menus.find((m) => m.id === activeMenu)] as menu}
+				{#each [menus.find((m) => m.id === activeMenu)] as menu (menu?.id ?? 'active-menu')}
 					{#if menu}
-					{#each menu.items as item}
+					{#each menu.items as item (item.label + (item.separator ? '-sep' : ''))}
 						{#if item.separator}
 							<div class="my-1 border-t border-gray-700"></div>
 						{:else}

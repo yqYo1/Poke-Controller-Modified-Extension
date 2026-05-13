@@ -59,7 +59,7 @@
 							const p = ports.find((x) => x.port_name === selectedName);
 							if (p) selectedNum = p.port_num;
 						}} class="rounded bg-gray-800 px-2 py-1 text-xs text-gray-200">
-							{#each ports as port}
+							{#each ports as port (port.port_num)}
 								<option value={port.port_name}>{port.port_name}</option>
 							{/each}
 						</select>
@@ -69,7 +69,7 @@
 				<div class="flex items-center justify-between">
 					<span class="text-xs text-gray-400">ボーレート</span>
 					<select bind:value={baudrate} class="rounded bg-gray-800 px-2 py-1 text-xs text-gray-200">
-						{#each baudrates as b}
+						{#each baudrates as b (b)}
 							<option value={b}>{b}</option>
 						{/each}
 					</select>

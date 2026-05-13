@@ -8,14 +8,12 @@
 	let filteredCommands = $state<{ name: string; description?: string }[]>([]);
 	let filterText = $state('');
 	let selectedCommand = $state('');
-	let activeCommand = $state<string | null>(null);
 	let running = $state(false);
 
 	onMount(() => {
 		refreshCommands();
 		api.getActiveCommand().then((r) => {
 			running = r.running;
-			activeCommand = r.name ?? null;
 		}).catch(() => {});
 	});
 
@@ -45,13 +43,11 @@
 		if (!selectedCommand) return;
 		await api.startCommand(selectedCommand);
 		running = true;
-		activeCommand = selectedCommand;
 	}
 
 	async function stopRunning() {
 		await api.stopCommand();
 		running = false;
-		activeCommand = null;
 	}
 </script>
 
@@ -70,7 +66,7 @@
 				<button onclick={refreshCommands} class="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600">再読み込み</button>
 			</div>
 			<div class="max-h-60 overflow-y-auto">
-				{#each filteredCommands as cmd}
+				{#each filteredCommands as cmd (cmd.name)}
 					<button
 						onclick={() => selectCommand(cmd.name)}
 						class="w-full rounded px-2 py-1 text-left text-xs transition-colors {selectedCommand === cmd.name ? 'bg-blue-700 text-white' : 'text-gray-300 hover:bg-gray-700'}"

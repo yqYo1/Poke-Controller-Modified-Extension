@@ -1,23 +1,20 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import {
 		initThemeSystem,
 		subscribe,
-		getThemeState,
 		resolveThemeVariables,
 		applyThemeToDocument,
-		applyThemeModeClass,
-		type ThemeState,
-		type ThemeMode
+		applyThemeModeClass
 	} from '$lib/theme';
 
 	let {
 		children
 	}: {
-		children: () => any;
+		children: Snippet;
 	} = $props();
 
-	let themeState = $state<ThemeState>(getThemeState());
 	let unsubscribe: (() => void) | null = null;
 
 	onMount(() => {
@@ -26,7 +23,6 @@
 
 		// Subscribe to changes from other tabs/components
 		unsubscribe = subscribe((state) => {
-			themeState = state;
 			const variables = resolveThemeVariables(state);
 			applyThemeModeClass(state);
 			applyThemeToDocument(variables);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import { dev } from '$app/environment';
 	import { base } from '$app/paths';
 	import '../app.css';
@@ -8,7 +9,7 @@
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import ThemeProvider from '$lib/components/ThemeProvider.svelte';
 
-	let { children }: { children: () => any } = $props();
+	let { children }: { children: Snippet } = $props();
 
 	// Register service worker for PWA support (client-side only)
 	onMount(() => {

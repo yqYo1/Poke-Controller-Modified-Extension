@@ -10,7 +10,7 @@
 	<div class="flex items-center justify-between border-b border-gray-700 px-3 py-2">
 		<span class="text-sm font-medium text-gray-200">{title}</span>
 		<div class="flex gap-1">
-			{#each widgetOptions as option}
+			{#each widgetOptions as option (option)}
 				<button
 					onclick={() => (selectedWidget = option)}
 					class="rounded px-2 py-0.5 text-xs transition-colors {selectedWidget === option ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"

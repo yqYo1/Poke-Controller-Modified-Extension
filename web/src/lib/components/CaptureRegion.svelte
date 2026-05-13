@@ -81,7 +81,7 @@
 		drawCanvas();
 	}
 
-	function handleMouseUp(_e: MouseEvent) {
+	function handleMouseUp() {
 		if (!isDrawing) return;
 		isDrawing = false;
 		if (regionWidth > 5 && regionHeight > 5) {

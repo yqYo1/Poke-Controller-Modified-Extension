@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
+	import { base } from '$app/paths';
 	let status = $state('initializing');
 
 	onMount(() => {
@@ -25,8 +25,10 @@
 	<h1>Poke-Controller</h1>
 	<p>Status: {status}</p>
 	<nav>
-		<a href="/api/status">API Status</a>
-		<a href="/camera/stream">Camera Stream</a>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+		<a href="{base}/api/status">API Status</a>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+		<a href="{base}/camera/stream">Camera Stream</a>
 	</nav>
 </div>
 

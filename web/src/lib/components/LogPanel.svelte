@@ -5,21 +5,10 @@
 		message: string;
 	}
 
-	let { maxEntries = 500 }: { maxEntries?: number } = $props();
-
 	let logs = $state<LogEntry[]>([]);
 	let filterLevel = $state<string>('all');
 	let autoScroll = $state(true);
 	let logContainer: HTMLDivElement | undefined = $state();
-
-	function addLog(level: LogEntry['level'], message: string) {
-		const entry: LogEntry = {
-			timestamp: new Date().toLocaleTimeString('ja-JP'),
-			level,
-			message,
-		};
-		logs = [...logs.slice(1 - maxEntries), entry];
-	}
 
 	function clearLogs() {
 		logs = [];

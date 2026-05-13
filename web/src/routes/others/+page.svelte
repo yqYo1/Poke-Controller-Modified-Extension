@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { api } from '$lib/api/client';
 	import LogPanel from '$lib/components/LogPanel.svelte';
 	import {
@@ -10,9 +10,6 @@
 		addCustomTheme,
 		removeCustomTheme,
 		updateCustomTheme,
-		resolveThemeVariables,
-		applyThemeToDocument,
-		applyThemeModeClass,
 		getThemeLabel,
 		BUILTIN_PRESETS,
 		type ThemeState,
@@ -38,9 +35,6 @@
 	let customTextPrimary = $state('#f1f5f9');
 	let customAccent = $state('#60a5fa');
 
-	// Preview state
-	let previewMode = $state<ThemeMode | null>(null);
-
 	// Unsubscribe function
 	let unsubscribe: (() => void) | null = null;
 
@@ -58,6 +52,10 @@
 		unsubscribe = subscribe((state) => {
 			themeState = state;
 		});
+	});
+
+	onDestroy(() => {
+		unsubscribe?.();
 	});
 
 	// ── Profile / Mouse stick actions ─────────────────────────────────────
@@ -81,24 +79,6 @@
 	function handleActivateMode(mode: ThemeMode) {
 		const newState = activateTheme(mode);
 		themeState = newState;
-	}
-
-	function handlePreviewTheme(mode: ThemeMode, variables: Record<string, string>) {
-		previewMode = mode;
-		if (mode === 'custom') {
-			applyThemeModeClass({ mode: 'custom', activeThemeId: 'preview', customThemes: [] });
-		} else {
-			applyThemeModeClass({ mode, activeThemeId: mode, customThemes: [] });
-		}
-		applyThemeToDocument(variables);
-	}
-
-	function handleClearPreview() {
-		previewMode = null;
-		const state = getThemeState();
-		const variables = resolveThemeVariables(state);
-		applyThemeModeClass(state);
-		applyThemeToDocument(variables);
 	}
 
 	function buildCustomVars(): Record<string, string> {
@@ -183,7 +163,7 @@
 		<div class="rounded border p-3" style="border-color: var(--color-border); background-color: var(--color-bg-card);">
 			<h3 class="mb-2 text-sm font-medium" style="color: var(--color-text-primary);">プロファイル</h3>
 			<div class="space-y-1">
-				{#each profiles as name}
+				{#each profiles as name (name)}
 					<button
 						onclick={() => switchProfile(name)}
 						class="w-full rounded px-2 py-1 text-left text-xs"
@@ -262,7 +242,7 @@
 			{#if themeState.customThemes.length > 0}
 				<div class="mb-3 space-y-1">
 					<p class="mb-1 text-xs font-medium" style="color: var(--color-text-secondary);">カスタムテーマ</p>
-					{#each themeState.customThemes as ct}
+					{#each themeState.customThemes as ct (ct.id)}
 						<div
 							class="flex items-center gap-2 rounded px-2 py-1 text-xs"
 							style="background-color: {themeState.activeThemeId === ct.id && themeState.mode === 'custom' ? 'var(--color-accent-light)' : 'transparent'}; color: var(--color-text-primary);"

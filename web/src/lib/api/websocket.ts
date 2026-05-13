@@ -66,6 +66,7 @@ export interface WebSocketEventMap {
 	message: WSMessage;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventCallback = (...args: any[]) => void;
 
 // ─── WebSocket Client ───────────────────────────────────────────────────────
@@ -103,9 +104,6 @@ export class WebSocketClient {
 	 * @param event - Event name (`'connect'`, `'disconnect'`, `'message'`)
 	 * @param listener - Callback invoked when the event fires
 	 */
-	on(event: 'connect', listener: () => void): void;
-	on(event: 'disconnect', listener: () => void): void;
-	on(event: 'message', listener: (msg: WSMessage) => void): void;
 	on(event: string, listener: EventCallback): void {
 		if (!this.listeners.has(event)) {
 			this.listeners.set(event, new Set());
@@ -119,9 +117,6 @@ export class WebSocketClient {
 	 * @param event - Event name
 	 * @param listener - The same function reference passed to `on()`
 	 */
-	off(event: 'connect', listener: () => void): void;
-	off(event: 'disconnect', listener: () => void): void;
-	off(event: 'message', listener: (msg: WSMessage) => void): void;
 	off(event: string, listener: EventCallback): void {
 		this.listeners.get(event)?.delete(listener);
 	}

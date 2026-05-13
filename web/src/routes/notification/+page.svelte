@@ -29,7 +29,7 @@
 		<div class="rounded border border-gray-700 bg-gray-900 p-3">
 			<h3 class="mb-2 text-sm font-medium text-gray-200">設定</h3>
 			<div class="space-y-2">
-				{#each Object.entries(config) as [key, value]}
+				{#each Object.entries(config) as [key] (key)}
 					<label class="flex items-center justify-between text-xs text-gray-400">
 						<span>{key}</span>
 						<input

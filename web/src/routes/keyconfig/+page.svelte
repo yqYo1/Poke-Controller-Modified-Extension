@@ -141,7 +141,7 @@
 		<div class="rounded border border-gray-700 bg-gray-900 p-3">
 			<h3 class="mb-2 text-sm font-medium text-gray-200">キー割り当て</h3>
 			<div class="max-h-80 space-y-1 overflow-y-auto">
-				{#each controllerButtons as button}
+				{#each controllerButtons as button (button)}
 					<div class="flex items-center justify-between rounded px-2 py-1 hover:bg-gray-800">
 						<span class="text-xs font-medium text-gray-300">{button}</span>
 						<button

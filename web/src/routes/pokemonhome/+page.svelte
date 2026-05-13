@@ -10,7 +10,6 @@
 	let message = $state<string | null>(null);
 
 	// Box / Pokemon data
-	let boxes = $state<string[]>([]);
 	let selectedBox = $state(1);
 	let boxData = $state<{ slot: number; name: string; species: string; shiny: boolean }[]>([]);
 
@@ -56,7 +55,6 @@
 		try {
 			await api.sendInput('pokemon_home', { action: 'disconnect' });
 			connected = false;
-			boxes = [];
 			boxData = [];
 			message = 'Pokemon Homeから切断しました';
 		} catch (e) {
@@ -68,7 +66,6 @@
 	async function loadBoxList() {
 		// TODO: Replace with actual Pokemon Home box list API when available
 		// For now, generate placeholder box names
-		boxes = Array.from({ length: 32 }, (_, i) => `ボックス ${i + 1}`);
 	}
 
 	async function retrieveBox() {
@@ -165,7 +162,7 @@
 						class="rounded bg-gray-800 px-2 py-1 text-gray-200"
 						disabled={!connected}
 					>
-						{#each boxNumbers as num}
+						{#each boxNumbers as num (num)}
 							<option value={num}>ボックス {num}</option>
 						{/each}
 					</select>
@@ -235,7 +232,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each boxData as entry}
+							{#each boxData as entry (entry.slot)}
 								<tr class="border-t border-gray-800 hover:bg-gray-800">
 									<td class="px-2 py-1 text-gray-400">{entry.slot}</td>
 									<td class="px-2 py-1 text-gray-200">{entry.name}</td>

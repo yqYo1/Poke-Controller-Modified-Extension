@@ -10,3 +10,5 @@ pub use keys::{
     Tilt, Touchscreen,
 };
 pub use sender::{Sender, SerialError};
+
+// ci-trigger: verify flake.nix cargo-test fix with --exclude pokecon-pybindings

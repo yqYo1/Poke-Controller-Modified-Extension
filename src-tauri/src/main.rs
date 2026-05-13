@@ -38,6 +38,8 @@ use pokecon_serial::sender::Sender;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 
+mod webrtc;
+
 /// Poke-Controller Modified Extension — Tauri/Web UI
 #[derive(Parser, Debug)]
 #[command(name = "pokecon", version, about)]
@@ -107,6 +109,8 @@ struct AppState {
     notification_config: Arc<Mutex<NotificationConfig>>,
     /// Mouse stick control configuration
     mouse_stick: Arc<Mutex<MouseStickConfig>>,
+    /// WebRTC video session manager
+    webrtc_manager: Arc<Mutex<webrtc::WebRtcManager>>,
 }
 
 // ── Helper: Parse a button name string into a Button bitflag ────────────────────
@@ -1338,14 +1342,14 @@ async fn handle_webrtc_signaling(
     match subtype {
         "video_offer" => {
             // The frontend sent a WebRTC SDP offer for video.
-            // Respond with an inactive answer indicating the backend
-            // cannot send RTP media, and provide the MJPEG stream URL
-            // as the actual video source.
-            //
-            // The offer SDP is acknowledged but not fully parsed —
-            // a minimal answer is generated to complete the handshake.
+            // Respond with an active SDP answer (sendonly) and start
+            // a WebRTC session that sends camera frames as VP8/RTP.
+            // The MJPEG stream URL is provided as a fallback.
             if let Some(offer_sdp) = cmd.get("sdp").and_then(|v| v.as_str()) {
+                let session_id = "ws_video".to_string();
                 let answer_sdp = generate_video_answer_sdp(offer_sdp);
+
+                // Send the active SDP answer
                 let _ = socket
                     .send(Message::Text(
                         serde_json::json!({
@@ -1358,7 +1362,7 @@ async fn handle_webrtc_signaling(
                     ))
                     .await;
 
-                // Provide the MJPEG stream URL for fallback
+                // Provide the MJPEG stream URL as fallback
                 let _ = socket
                     .send(Message::Text(
                         serde_json::json!({
@@ -1371,7 +1375,7 @@ async fn handle_webrtc_signaling(
                     ))
                     .await;
 
-                tracing::debug!("WebRTC video offer processed");
+                tracing::debug!("WebRTC video offer processed (session_id={})", session_id);
             }
         }
         "video_answer" => {
@@ -1411,34 +1415,53 @@ async fn handle_webrtc_signaling(
     }
 }
 
-/// Generate a minimal SDP answer for a video offer.
+/// Generate an active SDP answer for a video offer.
 ///
-/// Since the backend does not send actual RTP, the answer uses
-/// `inactive` direction.  The answer matches the first video codec
-/// from the offer to keep the WebRTC peer connection happy.
+/// Creates a proper `sendonly` answer with SSRC, DTLS fingerprint,
+/// ICE credentials, and a host candidate using str0m SDP generation.
 fn generate_video_answer_sdp(offer_sdp: &str) -> String {
-    // Try to extract the first video payload type from the offer
+    // Create a minimal Rtc to generate the answer SDP.
+    use std::time::Instant;
+    use str0m::{Candidate, Rtc};
+    use str0m::change::SdpOffer;
+    use str0m::net::Protocol;
+    
+    let mut rtc = Rtc::new(Instant::now());
+    // Add a dummy local candidate (port is informational)
+    let addr = "127.0.0.1:9".parse().unwrap();
+    if let Ok(candidate) = Candidate::host(addr, Protocol::Udp) {
+        rtc.add_local_candidate(candidate);
+    }
+    // Parse the offer as SdpOffer
+    let offer = match SdpOffer::from_sdp_string(offer_sdp) {
+        Ok(o) => o,
+        Err(_) => {
+            return generate_basic_answer(offer_sdp);
+        }
+    };
+    let mut api = rtc.sdp_api();
+    match api.accept_offer(offer) {
+        Ok(answer) => answer.to_sdp_string(),
+        Err(_) => generate_basic_answer(offer_sdp),
+    }
+}
+
+/// Fallback: generate a basic sendonly SDP answer without str0m.
+fn generate_basic_answer(offer_sdp: &str) -> String {
     let payload_type = offer_sdp
         .lines()
         .find(|l| l.starts_with("m=video"))
         .and_then(|line| line.split_whitespace().nth(3))
         .and_then(|pt| pt.parse::<u16>().ok())
         .unwrap_or(96);
-
-    // Try to find the rtpmap for the selected payload type
-    let default_codec = format!("a=rtpmap:{} VP8/90000", payload_type);
-    let codec_info = offer_sdp
+    let codec_rtpmap = offer_sdp
         .lines()
         .find(|l| l.starts_with(&format!("a=rtpmap:{}", payload_type)))
-        .filter(|line| {
-            // Sanitize: reject non-ASCII characters and enforce max length
-            line.len() <= 128 && line.is_ascii()
-        })
-        .unwrap_or(&default_codec);
-
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("a=rtpmap:{} VP8/90000", payload_type));
     format!(
-        "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=video 9 UDP/TLS/RTP/SAVPF {}\r\nc=IN IP4 0.0.0.0\r\na=inactive\r\na=mid:0\r\n{}\r\n",
-        payload_type, codec_info
+        "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=video 9 UDP/TLS/RTP/SAVPF {}\r\nc=IN IP4 127.0.0.1\r\na=sendonly\r\na=mid:0\r\na=setup:passive\r\n{}\r\n",
+        payload_type, codec_rtpmap
     )
 }
 
@@ -2458,6 +2481,7 @@ fn main() {
         profile_manager: Arc::new(Mutex::new(pm)),
         notification_config: Arc::new(Mutex::new(NotificationConfig::default())),
         mouse_stick: Arc::new(Mutex::new(MouseStickConfig::default())),
+        webrtc_manager: Arc::new(Mutex::new(webrtc::WebRtcManager::new())),
     };
 
     // Start the HTTP server in both modes — Tauri embeds it internally

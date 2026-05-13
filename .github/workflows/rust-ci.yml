@@ -6,12 +6,16 @@ on:
       - 'rust/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'flake.nix'
+      - 'flake.lock'
   pull_request:
     branches: [main, master]
     paths:
       - 'rust/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - 'flake.nix'
+      - 'flake.lock'
 jobs:
   build:
     name: Build and test (Rust)

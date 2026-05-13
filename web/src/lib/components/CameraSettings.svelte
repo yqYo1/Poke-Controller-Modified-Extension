@@ -12,7 +12,7 @@
 
 	let {
 		deviceIndex = 0,
-		onDeviceChange = (_index: number) => {},
+		onDeviceChange = (_index: number) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
 		disabled = false,
 	}: {
 		deviceIndex?: number;

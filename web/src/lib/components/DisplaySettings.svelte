@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 <script lang="ts">
 	let {
 		showPreview = true,
@@ -7,12 +6,12 @@
 		guideType = 'crosshair' as 'crosshair' | 'grid' | 'both' | 'none',
 		displaySize = 100,
 		scaleMode = 'fit' as 'fit' | 'fill' | 'stretch',
-		onShowPreviewChange = (_v: boolean) => {},
-		onShowSimilarityChange = (_v: boolean) => {},
-		onShowGuideChange = (_v: boolean) => {},
-		onGuideTypeChange = (_v: string) => {},
-		onDisplaySizeChange = (_v: number) => {},
-		onScaleModeChange = (_v: string) => {},
+		onShowPreviewChange = (_v: boolean) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
+		onShowSimilarityChange = (_v: boolean) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
+		onShowGuideChange = (_v: boolean) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
+		onGuideTypeChange = (_v: string) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
+		onDisplaySizeChange = (_v: number) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
+		onScaleModeChange = (_v: string) => {}, // eslint-disable-line @typescript-eslint/no-unused-vars
 	}: {
 		showPreview?: boolean;
 		showSimilarity?: boolean;

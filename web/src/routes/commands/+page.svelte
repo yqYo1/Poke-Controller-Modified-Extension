@@ -9,7 +9,8 @@
 	import CommandActions from './CommandActions.svelte';
 
 	let selectedCommand = $state('');
-	// running state managed by CommandActions component
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	let running = $state(false);
 
 	onMount(() => {
 		api.getActiveCommand().then((r) => {

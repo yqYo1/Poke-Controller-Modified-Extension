@@ -736,8 +736,9 @@
             }/bin/npm-update";
 
             # nix run .#check  — run ALL checks (CI gate)
-            check = mkApp "${
-              pkgs.writeShellApplication {
+            # Wrapped in buildFHSEnv to isolate libclang from host glibc
+            check = let
+              checkScript = pkgs.writeShellApplication {
                 name = "check";
                 runtimeInputs = [
                   rustEnv
@@ -783,8 +784,23 @@
                   echo ""
                   echo "✓ All checks passed"
                 '';
+              };
+            in mkApp "${
+              pkgs.buildFHSEnv {
+                name = "check-fhs";
+                targetPkgs = pkgs: [
+                  rustEnv
+                  pythonEnv
+                  pkgs.libclang
+                  pkgs.typos
+                  config.treefmt.build.wrapper
+                  pkgs.gcc
+                  pkgs.linuxHeaders
+                  pkgs.glibc.dev  # ← sys/time.h and other system headers
+                ];
+                runScript = "${checkScript}/bin/check";
               }
-            }/bin/check";
+            }/bin/check-fhs";
 
             # nix run .#web-check  — run TypeScript/JS checks (eslint + svelte-check + vitest)
             web-check = mkApp "${
@@ -883,6 +899,107 @@
                 '';
               }
             }/bin/generate-api-types";
+
+            # nix run .#setup-bwrap  — setup bubblewrap for non-NixOS systems
+            # Required on Ubuntu 24.04+ where AppArmor blocks unprivileged user namespaces.
+            # Run once with sudo: sudo nix run .#setup-bwrap
+            setup-bwrap = mkApp "${
+              pkgs.writeShellApplication {
+                name = "setup-bwrap";
+                runtimeInputs = [ pkgs.coreutils ];
+                text = ''
+                  set -euo pipefail
+
+                  APPARMOR_DIR="/etc/apparmor.d"
+                  PROFILE_FILE="$APPARMOR_DIR/bwrap"
+
+                  echo "=== Bubblewrap Setup for Non-NixOS Systems ==="
+                  echo ""
+
+                  # Check if running as root
+                  if [ "$EUID" -ne 0 ]; then
+                    echo "ERROR: This script must be run as root (use sudo)" >&2
+                    echo "  sudo nix run .#setup-bwrap" >&2
+                    exit 1
+                  fi
+
+                  # Check if AppArmor is active
+                  if ! command -v aa-status >/dev/null 2>&1; then
+                    echo "AppArmor is not installed. No setup needed."
+                    echo "You may need to install uidmap:"
+                    echo "  sudo apt install uidmap"
+                    exit 0
+                  fi
+
+                  # Check if profile already exists
+                  if [ -f "$PROFILE_FILE" ]; then
+                    echo "AppArmor profile for bwrap already exists:"
+                    echo "  $PROFILE_FILE"
+                    echo ""
+                    echo "To recreate it, delete the file first:"
+                    echo "  sudo rm $PROFILE_FILE"
+                    exit 0
+                  fi
+
+                  # Create AppArmor profile
+                  echo "Creating AppArmor profile for bwrap..."
+                  mkdir -p "$APPARMOR_DIR"
+                  cat > "$PROFILE_FILE" << 'PROFILE_EOF'
+                  abi <abi/4.0>,
+                  include <tunables/global>
+
+                  profile bwrap /usr/bin/bwrap flags=(unconfined) {
+                    userns,
+
+                    # Site-specific additions and overrides. See local/README for details.
+                    include if exists <local/bwrap>
+                  }
+                  PROFILE_EOF
+
+                  # Remove leading whitespace from heredoc
+                  sed -i 's/^[[:space:]]*//' "$PROFILE_FILE"
+
+                  echo "Profile created: $PROFILE_FILE"
+                  echo ""
+
+                  # Load the profile
+                  if command -v apparmor_parser >/dev/null 2>&1; then
+                    echo "Loading AppArmor profile..."
+                    apparmor_parser -r "$PROFILE_FILE"
+                    echo "Profile loaded successfully."
+                  else
+                    echo "WARNING: apparmor_parser not found. Please restart AppArmor:"
+                    echo "  sudo systemctl restart apparmor"
+                  fi
+
+                  # Disable AppArmor restriction on unprivileged userns (Ubuntu 24.04+)
+                  echo ""
+                  echo "Checking kernel.apparmor_restrict_unprivileged_userns..."
+                  CURRENT_VAL=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo "unknown")
+                  if [ "$CURRENT_VAL" = "1" ]; then
+                    echo "Current value: 1 (restricted)"
+                    echo "Disabling restriction..."
+                    sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+                    echo "Restriction disabled."
+                    echo ""
+                    echo "NOTE: To make this change persistent across reboots, add to /etc/sysctl.conf:"
+                    echo "  kernel.apparmor_restrict_unprivileged_userns=0"
+                  elif [ "$CURRENT_VAL" = "0" ]; then
+                    echo "Current value: 0 (already unrestricted)"
+                  else
+                    echo "Could not determine current value (got: $CURRENT_VAL)"
+                  fi
+
+                  echo ""
+                  echo "=== Setup Complete ==="
+                  echo ""
+                  echo "You can now run: nix run .#check"
+                  echo ""
+                  echo "NOTE: If bwrap still fails, ensure uidmap is installed:"
+                  echo "  sudo apt install uidmap"
+                '';
+              }
+            }/bin/setup-bwrap";
           };
 
           # ── git-hooks (pre-commit) configuration ───────────────────────

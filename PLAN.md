@@ -136,16 +136,22 @@
 | 4.7.4 | `SoftwareControllerPosition.svelte` | Software-Controller位置（TOP/BOTTOM） | ✅ |
 | 4.7.5 | `DialogueButtonPosition.svelte` | ダイアログボタン位置（TOP/BOTTOM/BOTH） | ✅ |
 
-### フェーズ5: カメラ映像配信 ⚠️ 部分完了
+### フェーズ5: カメラ映像配信 ✅ 完了
 
 | タスクID | 内容 | 備考 | 状態 |
 |---------|------|------|------|
 | 5.1 | MJPEG over HTTPエンドポイント実装（Rust側） | `/camera/stream` | ✅ |
 | 5.2 | MJPEGフロントエンド実装 | `<img>`タグ | ✅ |
 | 5.3 | WebRTCシグナリング（WebSocket流用） | `offer`/`answer`/`ice-candidate` | ✅ |
-| 5.4 | WebRTC video track実装 | RTCPeerConnection | ⚠️ 基盤実装済み、RTPパイプライン未接続（MJPEGフォールバック動作中） |
+| 5.4 | WebRTC video track実装 | RTCPeerConnection + VP8エンコード + RTP送信 | ✅ |
 | 5.5 | WebRTC DataChannel実装 | ログ・コントローラー入力 | ✅ |
 | 5.6 | WebSocketフォールバック実装 | DataChannel接続失敗時 | ✅ |
+
+**実装詳細**:
+- `oxideav-vp8`（pure Rust VP8エンコーダ）を使用
+- `WebRtcManager`がセッション管理とRTP送信タスクを統合
+- カメラフレームをYUV変換→VP8エンコード→RTPパケット化→str0m経由で送信
+- シグナリングハンドラが`WebRtcManager`を使用（インラインSDPロジックを置換）
 
 **レビュー対応**:
 - StatusBar.svelteでシングルトンwsClientを使用（レビュー指摘 #4）
@@ -212,7 +218,7 @@
   ↓
 フェーズ4 ✅ 完了
   ↓
-フェーズ5 ⚠️ 部分完了（5.4 RTPパイプライン未接続）
+フェーズ5 ✅ 完了
   ↓
 フェーズ6 ✅ 完了
   ↓
@@ -225,15 +231,7 @@
 
 ## 未実施タスク一覧
 
-### フェーズ5.4: WebRTC video track バックエンドRTPパイプライン接続
-
-| タスクID | 内容 | 備考 |
-|---------|------|------|
-| 5.4.1 | VP8エンコーダ統合（libvpx/vpx crate） | カメラフレームをVP8エンコード |
-| 5.4.2 | RTP送信タスク実装 | エンコード済みフレームをstr0m経由で送信 |
-| 5.4.3 | main.rsのシグナリングハンドラをWebRtcManager使用に修正 | 現在はインラインSDPロジックを使用 |
-
-**対応方針**: 優先度低。MJPEGフォールバックで機能しているため、必要に応じて後で実施
+**全てのフェーズが完了しました。** PLAN.mdに記載されたすべてのタスクが実装済みです。
 
 ## 注意事項
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
+	import { page } from '$app/stores';
 	import { dev } from '$app/environment';
 	import { base } from '$app/paths';
 	import '../app.css';
@@ -11,21 +12,50 @@
 
 	let { children }: { children: Snippet } = $props();
 
-	// Register service worker for PWA support (client-side only)
+	// Whether we're on the main app page (not a sub-route)
+	let isMainPage = $state(false);
+
 	onMount(() => {
+		// Register service worker for PWA support (client-side only)
 		if (!dev && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register(`${base}/service-worker.js`);
 		}
+
+		// Check if we're on the main page
+		const unsubscribe = page.subscribe(p => {
+			isMainPage = p.url.pathname === base || p.url.pathname === base + '/';
+		});
+		return unsubscribe;
 	});
 </script>
 
 <ThemeProvider>
-	<div class="flex h-screen flex-col" style="background-color: var(--color-bg-primary); color: var(--color-text-primary);">
+	<div class="tk-window">
 		<MenuBar />
-		<NavBar />
-		<main class="flex-1 overflow-auto p-4">
+		{#if !isMainPage}
+			<NavBar />
+		{/if}
+		<main class="tk-content">
 			{@render children()}
 		</main>
 		<StatusBar />
 	</div>
 </ThemeProvider>
+
+<style>
+	.tk-window {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+		background-color: var(--color-bg-primary, #0f172a);
+		color: var(--color-text-primary, #f1f5f9);
+		overflow: hidden;
+	}
+
+	.tk-content {
+		flex: 1;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+</style>

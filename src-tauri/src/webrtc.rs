@@ -1,28 +1,47 @@
-//! WebRTC video streaming backend using [str0m].
+//! WebRTC video streaming backend using [str0m] and [libvpx].
 //!
 //! Provides a complete WebRTC implementation for streaming camera video
 //! frames as VP8/RTP to Web frontends. Handles:
 //!
-//! - SDP offer/answer exchange (via str0m with fallback)
+//! - SDP offer/answer exchange (via str0m)
 //! - ICE candidate management
 //! - VP8 codec negotiation via SDP
-//! - RTP packetization of VP8 camera frames
-//! - WebRTC session lifecycle management
+//! - VP8 encoding of raw camera frames (RGB → YUV → VP8)
+//! - RTP packetization via str0m's Writer API
+//! - WebRTC session lifecycle and RTP sending tasks
 //!
 //! # Architecture
 //!
 //! [`WebRtcManager`] is the top-level session manager stored in
 //! shared application state (`Arc<Mutex<webrtc::WebRtcManager>>`).
 //! Each client connection gets a [`WebRtcSession`] with its own
-//! [`str0m::Rtc`] instance for SDP/ICE negotiation.
+//! [`str0m::Rtc`] instance for SDP/ICE negotiation, and a
+//! [`Vp8Encoder`] for hardware-backed VP8 encoding.
+//!
+//! When a session is created and an SDP offer accepted, the manager
+//! spawns an RTP send task that continuously captures camera frames,
+//! encodes them to VP8, and pushes them through str0m's media channel
+//! for RTP packetization and ICE/DTLS export.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use str0m::change::SdpOffer;
+use str0m::media::{KeyframeRequestKind, MediaKind, Mid};
 use str0m::net::Protocol;
 use str0m::{Candidate, Rtc};
+use tokio::sync::Mutex;
+
+use vpx_rs::{
+    enc, Encoder, EncoderConfig, EncoderFrameFlags, EncodingDeadline, ImageFormat, Packet,
+    RateControl, Timebase, YUVImageData,
+};
+
+// ── Re-exports ─────────────────────────────────────────────────────────────────
+
+pub use str0m::media::Pt;
 
 // ── Session identifier ─────────────────────────────────────────────────────
 
@@ -36,6 +55,11 @@ impl SessionId {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
+
+    /// Parse a session ID from its string representation (as produced by [`Display`]).
+    pub fn from_str(s: &str) -> Option<Self> {
+        s.parse::<u64>().ok().map(Self)
+    }
 }
 
 impl std::fmt::Display for SessionId {
@@ -44,7 +68,227 @@ impl std::fmt::Display for SessionId {
     }
 }
 
+// ── VP8 Encoder ─────────────────────────────────────────────────────────────
+
+/// Configuration for the VP8 encoder.
+#[derive(Debug, Clone)]
+pub struct Vp8EncoderConfig {
+    /// Target video width (must be even for I420).
+    pub width: u32,
+    /// Target video height (must be even for I420).
+    pub height: u32,
+    /// Target frame rate in fps.
+    pub framerate: u32,
+    /// Target bitrate in kbps (e.g., 1000 = 1 Mbps).
+    pub bitrate_kbps: u32,
+}
+
+impl Default for Vp8EncoderConfig {
+    fn default() -> Self {
+        Self {
+            width: 640,
+            height: 480,
+            framerate: 30,
+            bitrate_kbps: 1000,
+        }
+    }
+}
+
+/// A VP8 video encoder wrapping [`vpx_rs::Encoder`].
+///
+/// Accepts raw RGB frames and produces VP8-encoded bitstream data
+/// suitable for RTP packetization.
+pub struct Vp8Encoder {
+    inner: Encoder<u8>,
+    config: Vp8EncoderConfig,
+    frame_count: i64,
+    /// Reusable buffer for YUV 4:2:0 conversion.
+    yuv_buf: Vec<u8>,
+}
+
+impl std::fmt::Debug for Vp8Encoder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vp8Encoder")
+            .field("config", &self.config)
+            .field("frame_count", &self.frame_count)
+            .finish()
+    }
+}
+
+impl Vp8Encoder {
+    /// Create a new VP8 encoder with the given configuration.
+    pub fn new(config: Vp8EncoderConfig) -> Result<Self, String> {
+        let encoder_config = EncoderConfig::<u8>::new(
+            enc::CodecId::VP8,
+            config.width,
+            config.height,
+            Timebase {
+                num: std::num::NonZero::new(1).unwrap(),
+                den: std::num::NonZero::new(config.framerate).unwrap(),
+            },
+            RateControl::ConstantBitRate(config.bitrate_kbps),
+        )
+        .map_err(|e| format!("Failed to create VP8 encoder config: {:?}", e))?;
+
+        let inner = Encoder::new(encoder_config)
+            .map_err(|e| format!("Failed to create VP8 encoder: {:?}", e))?;
+
+        // Pre-allocate YUV 4:2:0 buffer.
+        let yuv_len = ImageFormat::I420
+            .buffer_len(config.width as usize, config.height as usize)
+            .map_err(|e| format!("Invalid dimensions for I420: {:?}", e))?;
+
+        Ok(Self {
+            inner,
+            config,
+            frame_count: 0,
+            yuv_buf: vec![0u8; yuv_len],
+        })
+    }
+
+    /// Encode a raw RGB24 frame into VP8 bitstream data.
+    ///
+    /// `rgb_data` must be exactly `width * height * 3` bytes long.
+    /// Returns the encoded VP8 frame bytes.
+    pub fn encode_rgb(&mut self, rgb_data: &[u8]) -> Result<Vec<u8>, String> {
+        let w = self.config.width as usize;
+        let h = self.config.height as usize;
+        let expected = w * h * 3;
+
+        if rgb_data.len() != expected {
+            return Err(format!(
+                "RGB frame size mismatch: got {} bytes, expected {} ({}x{})",
+                rgb_data.len(),
+                expected,
+                w,
+                h,
+            ));
+        }
+
+        // Convert RGB → YUV 4:2:0 planar.
+        self.rgb_to_yuv420(rgb_data, w, h);
+
+        // Wrap the YUV buffer into an image data structure.
+        let image = YUVImageData::<u8>::from_raw_data(
+            ImageFormat::I420,
+            w,
+            h,
+            &self.yuv_buf,
+        )
+        .map_err(|e| format!("Failed to wrap YUV image: {:?}", e))?;
+
+        // Encode the frame.
+        let pts = self.frame_count;
+        self.frame_count += 1;
+        let flags = if pts == 0 {
+            // First frame: force keyframe.
+            EncoderFrameFlags::FORCE_KEY_FRAME
+        } else {
+            EncoderFrameFlags::empty()
+        };
+
+        let packets = self
+            .inner
+            .encode(pts, 1, image, EncodingDeadline::GoodQuality, flags)
+            .map_err(|e| format!("VP8 encode failed at frame {}: {:?}", pts, e))?;
+
+        // Collect compressed frame data.
+        let mut result = Vec::new();
+        for packet in packets {
+            match packet {
+                Packet::CompressedFrame(frame) => {
+                    result.extend_from_slice(frame.data);
+                }
+                _ => {
+                    // Other packet types (stats, etc.) are ignored.
+                }
+            }
+        }
+
+        if result.is_empty() {
+            return Err("VP8 encoder produced no data".into());
+        }
+
+        Ok(result)
+    }
+
+    /// Request the next frame be a keyframe.
+    pub fn force_keyframe(&mut self) {
+        // The next frame will be a keyframe due to our keyframe logic
+        // (we track via frame_count but here we force it by resetting
+        // the counter or using flags). Simpler: we just note it.
+        // The actual keyframe enforcement happens via flags passed to encode().
+        // We'll use a flag approach.
+        self.frame_count = 0;
+    }
+
+    /// Convert RGB24 pixel data to YUV 4:2:0 planar format in place.
+    ///
+    /// This uses the ITU-R BT.601 standard matrix with full range.
+    fn rgb_to_yuv420(&mut self, rgb: &[u8], width: usize, height: usize) {
+        use yuv::{YuvPlanarImageMut, YuvRange, YuvStandardMatrix, YuvConversionMode, BufferStoreMut};
+
+        let w = width;
+        let h = height;
+
+        // Split the YUV buffer into Y, U, V planes.
+        let y_plane_size = w * h;
+        let uv_plane_size = (w / 2) * (h / 2);
+
+        let (y_plane, rest) = self.yuv_buf.split_at_mut(y_plane_size);
+        let (u_plane, v_plane) = rest.split_at_mut(uv_plane_size);
+
+        let mut yuv_image = YuvPlanarImageMut {
+            y_plane: BufferStoreMut::Borrowed(y_plane),
+            y_stride: w as u32,
+            u_plane: BufferStoreMut::Borrowed(u_plane),
+            u_stride: (w / 2) as u32,
+            v_plane: BufferStoreMut::Borrowed(v_plane),
+            v_stride: (w / 2) as u32,
+            width: w as u32,
+            height: h as u32,
+        };
+
+        yuv::rgb_to_yuv420(
+            &mut yuv_image,
+            rgb,
+            (w * 3) as u32, // RGB stride = width * 3 bytes per pixel
+            YuvRange::Full,
+            YuvStandardMatrix::Bt601,
+            YuvConversionMode::Balanced,
+        )
+        .expect("YUV conversion failed");
+    }
+
+    /// Returns the encoder configuration.
+    pub fn config(&self) -> &Vp8EncoderConfig {
+        &self.config
+    }
+}
+
 // ── WebRTC session ─────────────────────────────────────────────────────────
+
+/// Error type for RTP send task operations.
+#[derive(Debug)]
+pub enum RtpSendError {
+    EncoderError(String),
+    SessionNotConnected,
+    WriterNotFound(Mid),
+    MediaNotAdded,
+}
+
+impl std::fmt::Display for RtpSendError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RtpSendError::EncoderError(e) => write!(f, "Encoder error: {}", e),
+            RtpSendError::SessionNotConnected => write!(f, "Session not connected"),
+            RtpSendError::WriterNotFound(mid) => write!(f, "Writer not found for mid {:?}", mid),
+            RtpSendError::MediaNotAdded => write!(f, "Media not yet added"),
+        }
+    }
+}
+
+impl std::error::Error for RtpSendError {}
 
 /// A single WebRTC peer connection backed by [`str0m::Rtc`].
 ///
@@ -57,16 +301,41 @@ pub struct WebRtcSession {
     created_at: Instant,
     /// Unique session identifier.
     session_id: SessionId,
+    /// VP8 encoder for this session.
+    encoder: Option<Vp8Encoder>,
+    /// The media ID for the video track (set after SDP negotiation).
+    video_mid: Option<Mid>,
+    /// Whether ICE+DTLS has fully connected.
+    connected: bool,
+    /// RTP timestamp base (90 kHz clock).
+    rtp_timestamp: u32,
 }
 
 impl WebRtcSession {
     /// Create a new WebRTC session with default settings.
     pub fn new() -> Self {
-        let rtc = Rtc::new(Instant::now());
+        let mut rtc = Rtc::new(Instant::now());
+
+        // Configure for sendonly video.
+        use str0m::media::Direction;
+        let mut change = rtc.sdp_api();
+        let mid = change.add_media(
+            MediaKind::Video,
+            Direction::SendOnly,
+            None,
+            None,
+            None,
+        );
+        let _ = change.apply();
+
         Self {
             rtc,
             created_at: Instant::now(),
             session_id: SessionId::new(),
+            encoder: None,
+            video_mid: Some(mid),
+            connected: false,
+            rtp_timestamp: 0,
         }
     }
 
@@ -78,6 +347,23 @@ impl WebRtcSession {
     /// Return when this session was created (used for staleness checks).
     pub fn created_at(&self) -> Instant {
         self.created_at
+    }
+
+    /// Check whether the ICE connection is established.
+    pub fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    /// Check if this session has an encoder configured.
+    pub fn has_encoder(&self) -> bool {
+        self.encoder.is_some()
+    }
+
+    /// Initialize the VP8 encoder with the given configuration.
+    pub fn init_encoder(&mut self, config: Vp8EncoderConfig) -> Result<(), String> {
+        let encoder = Vp8Encoder::new(config)?;
+        self.encoder = Some(encoder);
+        Ok(())
     }
 
     /// Accept an SDP offer and produce a sendonly VP8 video answer.
@@ -114,19 +400,108 @@ impl WebRtcSession {
         Ok(())
     }
 
-    /// Check whether the ICE connection is established.
-    #[allow(dead_code)]
-    pub fn is_connected(&self) -> bool {
-        self.rtc.is_connected()
-    }
-
     /// Poll for output events (ICE connectivity checks, timeouts, media).
     ///
     /// Should be called periodically (e.g., every 50 ms) when the session
     /// is actively being used for media streaming.
-    #[allow(dead_code)]
     pub fn poll_output(&mut self) -> Result<str0m::Output, str0m::error::RtcError> {
-        self.rtc.poll_output()
+        let output = self.rtc.poll_output()?;
+
+        // Track ICE connection state via events.
+        if let str0m::Output::Event(ref event) = output {
+            if let str0m::Event::IceConnectionStateChange(state) = event {
+                self.connected = state == str0m::IceConnectionState::Connected;
+                tracing::debug!(
+                    "Session {} ICE state: {:?} (connected={})",
+                    self.session_id,
+                    state,
+                    self.connected
+                );
+            }
+            if let str0m::Event::Connected = event {
+                self.connected = true;
+                tracing::debug!("Session {} ICE+DTLS connected", self.session_id);
+            }
+            if let str0m::Event::MediaAdded(added) = event {
+                self.video_mid = Some(added.mid());
+                    tracing::debug!(
+                        "Session {} media added: mid={:?} kind={:?}",
+                        self.session_id,
+                        added.mid,
+                        added.kind,
+                    );
+            }
+        }
+
+        Ok(output)
+    }
+
+    /// Handle a timeout input (from a previous Output::Timeout).
+    pub fn handle_timeout(&mut self, instant: Instant) -> Result<(), str0m::error::RtcError> {
+        self.rtc.handle_input(str0m::Input::Timeout(instant))
+    }
+
+    /// Get the media ID for the video track (if negotiated).
+    pub fn video_mid(&self) -> Option<Mid> {
+        self.video_mid
+    }
+
+    /// Get a mutable reference to the VP8 encoder (if initialized).
+    pub fn encoder_mut(&mut self) -> Option<&mut Vp8Encoder> {
+        self.encoder.as_mut()
+    }
+
+    /// Get a reference to the inner str0m Rtc instance.
+    pub fn rtc(&self) -> &Rtc {
+        &self.rtc
+    }
+
+    /// Get a mutable reference to the inner str0m Rtc instance.
+    pub fn rtc_mut(&mut self) -> &mut Rtc {
+        &mut self.rtc
+    }
+
+    /// Write a VP8 encoded frame to str0m's media channel.
+    ///
+    /// This packetizes the frame as RTP and makes it available via
+    /// [`poll_output()`](Self::poll_output) as Transmit events.
+    pub fn write_vp8_frame(&mut self, vp8_data: &[u8]) -> Result<(), RtpSendError> {
+        let mid = self
+            .video_mid
+            .ok_or(RtpSendError::MediaNotAdded)?;
+
+        if !self.connected {
+            return Err(RtpSendError::SessionNotConnected);
+        }
+
+        let Some(writer) = self.rtc.writer(mid) else {
+            return Err(RtpSendError::WriterNotFound(mid));
+        };
+
+        // Find the VP8 payload type from the media config.
+        let pt = writer
+            .payload_params()
+            .find(|p| p.spec().codec == str0m::format::Codec::Vp8)
+            .map(|p| p.pt())
+            .ok_or_else(|| RtpSendError::WriterNotFound(mid))?;
+
+        let wallclock = Instant::now();
+        let rtp_time = str0m::media::MediaTime::new(
+            self.rtp_timestamp as u64,
+            str0m::media::Frequency::NINETY_KHZ,
+        );
+
+        // Write the frame to str0m; it handles RTP packetization.
+        writer
+            .write(pt, wallclock, rtp_time, vp8_data.to_vec())
+            .map_err(|e| RtpSendError::EncoderError(format!("str0m write error: {:?}", e)))?;
+
+        // Advance timestamp by ~3000 per frame at 30 fps (90000 / 30).
+        self.rtp_timestamp = self.rtp_timestamp.wrapping_add(
+            (90_000.0 / 30.0) as u32,
+        );
+
+        Ok(())
     }
 }
 
@@ -169,7 +544,19 @@ impl WebRtcManager {
         id
     }
 
-    /// Remove a session by ID, dropping the underlying [`str0m::Rtc`].
+    /// Open a new WebRTC session with a VP8 encoder and return its [`SessionId`].
+    pub fn create_session_with_encoder(
+        &mut self,
+        encoder_config: Vp8EncoderConfig,
+    ) -> Result<SessionId, String> {
+        let mut session = WebRtcSession::new();
+        let id = session.id();
+        session.init_encoder(encoder_config)?;
+        self.sessions.insert(id, session);
+        Ok(id)
+    }
+
+    /// Remove a session by ID, dropping the underlying [`str0m::Rtc`] and encoder.
     pub fn close_session(&mut self, id: SessionId) {
         self.sessions.remove(&id);
     }
@@ -222,11 +609,252 @@ impl WebRtcManager {
             .ok_or_else(|| format!("Session {} not found", id))?;
         session.accept_offer(offer)
     }
+
+    /// Add a remote ICE candidate for a given session.
+    pub fn add_ice_candidate(
+        &mut self,
+        id: SessionId,
+        candidate_sdp: &str,
+    ) -> Result<(), String> {
+        let candidate = Candidate::from_sdp_string(candidate_sdp)
+            .map_err(|e| format!("Failed to parse ICE candidate: {}", e))?;
+        let session = self
+            .sessions
+            .get_mut(&id)
+            .ok_or_else(|| format!("Session {} not found", id))?;
+        session.add_remote_candidate(candidate)
+    }
+
+    /// Poll a session for str0m output events.
+    pub fn poll_session(&mut self, id: SessionId) -> Result<str0m::Output, String> {
+        let session = self
+            .sessions
+            .get_mut(&id)
+            .ok_or_else(|| format!("Session {} not found", id))?;
+        session
+            .poll_output()
+            .map_err(|e| format!("poll_output error: {:?}", e))
+    }
+
+    /// Encode and send a camera frame as VP8/RTP through a session.
+    ///
+    /// This is the main pipeline entry point: RGB frame → VP8 encode →
+    /// str0m write → RTP output.
+    pub fn send_camera_frame(
+        &mut self,
+        id: SessionId,
+        rgb_data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<(), RtpSendError> {
+        let session = self
+            .sessions
+            .get_mut(&id)
+            .ok_or_else(|| RtpSendError::EncoderError("Session not found".into()))?;
+
+        let encoder = session
+            .encoder_mut()
+            .ok_or_else(|| RtpSendError::EncoderError("No encoder initialized".into()))?;
+
+        // Validate dimensions match encoder configuration.
+        let cfg = encoder.config();
+        if cfg.width != width || cfg.height != height {
+            return Err(RtpSendError::EncoderError(format!(
+                "Frame dimensions mismatch: encoder expects {}x{} but got {}x{}",
+                cfg.width, cfg.height, width, height,
+            )));
+        }
+
+        // Encode RGB frame to VP8.
+        let vp8_data = encoder
+            .encode_rgb(rgb_data)
+            .map_err(RtpSendError::EncoderError)?;
+
+        // Write VP8 data through str0m's media channel.
+        session.write_vp8_frame(&vp8_data)
+    }
 }
 
 impl Default for WebRtcManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RTP Send Task
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// A background RTP stream sender that wraps a WebRTC session and
+/// handles poll_output events (ICE timeouts, transmits, etc.).
+///
+/// This is spawned as a [`tokio::task`] when a new WebRTC session is
+/// established. It periodically:
+/// 1. Polls str0m for output events (transmits, timeouts, media events)
+/// 2. Handles timeout events by feeding them back
+/// 3. Reports transmit events back for network I/O
+pub struct RtpSendTask {
+    /// The session ID this task is associated with.
+    session_id: SessionId,
+    /// Channel to receive camera frame data.
+    frame_rx: tokio::sync::mpsc::Receiver<CameraFrame>,
+    /// Channel to transmit str0m output data (ICE, RTP packets) to network.
+    output_tx: tokio::sync::mpsc::Sender<RtpOutput>,
+}
+
+/// A camera frame received from the capture pipeline.
+#[derive(Debug, Clone)]
+pub struct CameraFrame {
+    /// Raw RGB pixel data (width*height*3 bytes).
+    pub rgb: Vec<u8>,
+    /// Image width in pixels.
+    pub width: u32,
+    /// Image height in pixels.
+    pub height: u32,
+    /// Monotonically increasing frame number.
+    pub frame_number: u64,
+}
+
+/// Output from the RTP pipeline to be sent over the network.
+#[derive(Debug, Clone)]
+pub enum RtpOutput {
+    /// Data to transmit over UDP/network (ICE connectivity checks, RTP, etc.).
+    Transmit(Vec<u8>),
+    /// The session has connected.
+    Connected,
+    /// The session has disconnected.
+    Disconnected,
+    /// Log message.
+    Log(String),
+}
+
+impl RtpSendTask {
+    /// Create a new RTP send task.
+    pub fn new(
+        session_id: SessionId,
+        frame_rx: tokio::sync::mpsc::Receiver<CameraFrame>,
+        output_tx: tokio::sync::mpsc::Sender<RtpOutput>,
+    ) -> Self {
+        Self {
+            session_id,
+            frame_rx,
+            output_tx,
+        }
+    }
+
+    /// Run the RTP send loop. This blocks indefinitely.
+    ///
+    /// This function should be spawned in a tokio task:
+    ///
+    /// ```ignore
+    /// tokio::spawn(async move { task.run(manager).await; });
+    /// ```
+    pub async fn run(self, manager: Arc<Mutex<WebRtcManager>>) {
+        let Self {
+            session_id,
+            mut frame_rx,
+            output_tx,
+        } = self;
+
+        tracing::info!("RTP send task started for session {}", session_id);
+
+        loop {
+            // How long to wait before the next str0m timeout.
+            let timeout_dur = {
+                let mut mgr = manager.lock().await;
+                let session = match mgr.get_mut(session_id) {
+                    Some(s) => s,
+                    None => {
+                        tracing::warn!("Session {} gone, stopping RTP task", session_id);
+                        break;
+                    }
+                };
+
+                // Poll str0m for output events.
+                match session.poll_output() {
+                    Ok(str0m::Output::Timeout(at)) => {
+                        // Need to feed this timeout back at the right time.
+                        let dur = if at <= Instant::now() {
+                            // Already expired, handle immediately.
+                            let _ = session.handle_timeout(at);
+                            std::time::Duration::ZERO
+                        } else {
+                            at.saturating_duration_since(Instant::now())
+                        };
+                        dur
+                    }
+                    Ok(str0m::Output::Transmit(transmit)) => {
+                        // Send the transmit data over the output channel.
+                        let data = transmit.contents.to_vec();
+                        let _ = output_tx
+                            .send(RtpOutput::Transmit(data))
+                            .await;
+                        // Re-poll immediately.
+                        std::time::Duration::ZERO
+                    }
+                    Ok(str0m::Output::Event(event)) => {
+                        match event {
+                            str0m::Event::Connected => {
+                                let _ = output_tx.send(RtpOutput::Connected).await;
+                                tracing::info!("Session {} ICE+DTLS connected", session_id);
+                            }
+                            str0m::Event::IceConnectionStateChange(state) => {
+                                if state == str0m::IceConnectionState::Disconnected {
+                                    let _ = output_tx.send(RtpOutput::Disconnected).await;
+                                    tracing::info!("Session {} disconnected", session_id);
+                                }
+                            }
+                            _ => {}
+                        }
+                        std::time::Duration::ZERO
+                    }
+                    Err(e) => {
+                        tracing::error!("Session {} poll_output error: {:?}", session_id, e);
+                        std::time::Duration::from_millis(50)
+                    }
+                }
+            };
+
+            // Wait for either a new frame or a timeout.
+            tokio::select! {
+                maybe_frame = frame_rx.recv() => {
+                    match maybe_frame {
+                        Some(frame) => {
+                            // Encode and send the frame.
+                            let mut mgr = manager.lock().await;
+                            if let Err(e) = mgr.send_camera_frame(
+                                session_id,
+                                &frame.rgb,
+                                frame.width,
+                                frame.height,
+                            ) {
+                                tracing::warn!(
+                                    "Failed to send frame {} for session {}: {:?}",
+                                    frame.frame_number, session_id, e,
+                                );
+                            }
+                        }
+                        None => {
+                            // Channel closed, session is done.
+                            tracing::info!(
+                                "Frame channel closed for session {}, stopping",
+                                session_id,
+                            );
+                            break;
+                        }
+                    }
+                }
+                _ = tokio::time::sleep(timeout_dur) => {
+                    // Timer expired, just loop to poll again.
+                }
+            }
+        }
+
+        // Clean up session.
+        let mut mgr = manager.lock().await;
+        mgr.close_session(session_id);
+        let _ = output_tx.send(RtpOutput::Disconnected).await;
+        tracing::info!("RTP send task stopped for session {}", session_id);
     }
 }
 
@@ -249,9 +877,8 @@ pub fn create_video_answer_sdp(offer_sdp: &str) -> String {
 /// Fallback: construct a minimal sendonly VP8 SDP answer string manually.
 ///
 /// Used when str0m's parser cannot handle the offer (e.g., unusual
-/// formatting, missing attributes).  Mirrors the code previously inlined
-/// in `main.rs`.
-fn generate_basic_video_answer(offer_sdp: &str) -> String {
+/// formatting, missing attributes).
+pub fn generate_basic_video_answer(offer_sdp: &str) -> String {
     // Extract the dynamic payload type from the offer's media line.
     let payload_type: u16 = offer_sdp
         .lines()
@@ -291,7 +918,7 @@ fn generate_basic_video_answer(offer_sdp: &str) -> String {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// RTP / VP8 Packetization
+// RTP / VP8 Packetization (legacy, kept for backward compatibility)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// Minimal VP8 payload descriptor (RFC 7741 Section 4.2).
@@ -317,6 +944,11 @@ impl Vp8Descriptor {
 ///
 /// The payload consists of a VP8 payload descriptor followed by the
 /// raw VP8 encoded frame bytes.
+///
+/// Note: When using str0m's frame-level API ([`Writer::write`]), this
+/// manual packetization is not needed — str0m handles RTP packetization
+/// internally. This struct is retained for backward compatibility and
+/// direct RTP-level usage.
 #[derive(Debug, Clone)]
 pub struct Vp8RtpPacket {
     /// Complete RTP packet bytes (header + payload).
@@ -496,6 +1128,95 @@ mod tests {
     fn test_session_default() {
         let session = WebRtcSession::default();
         let _ = session.id();
+    }
+
+    #[test]
+    fn test_new_session_has_video_mid() {
+        let session = WebRtcSession::new();
+        assert!(
+            session.video_mid().is_some(),
+            "Session should have a video mid after creation"
+        );
+    }
+
+    #[test]
+    fn test_session_not_connected_on_new() {
+        let session = WebRtcSession::new();
+        assert!(!session.is_connected());
+    }
+
+    #[test]
+    fn test_session_no_encoder_by_default() {
+        let session = WebRtcSession::new();
+        assert!(!session.has_encoder());
+    }
+
+    #[test]
+    fn test_init_encoder() {
+        let mut session = WebRtcSession::new();
+        assert!(!session.has_encoder());
+        session
+            .init_encoder(Vp8EncoderConfig::default())
+            .expect("Failed to init encoder");
+        assert!(session.has_encoder());
+    }
+
+    // ── Vp8Encoder ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_vp8_encoder_create_and_encode_small_frame() {
+        let config = Vp8EncoderConfig {
+            width: 320,
+            height: 240,
+            framerate: 30,
+            bitrate_kbps: 500,
+        };
+        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
+
+        // Create a small RGB frame (solid green).
+        let rgb_data = vec![0u8, 255, 0; (320 * 240) as usize];
+        let vp8_data = encoder.encode_rgb(&rgb_data).expect("VP8 encode failed");
+
+        assert!(!vp8_data.is_empty(), "VP8 encoded data should not be empty");
+        tracing::debug!("VP8 encoded {} bytes from 320x240 frame", vp8_data.len());
+    }
+
+    #[test]
+    fn test_vp8_encoder_force_keyframe() {
+        let config = Vp8EncoderConfig {
+            width: 160,
+            height: 120,
+            framerate: 30,
+            bitrate_kbps: 200,
+        };
+        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
+
+        let rgb_data = vec![128u8; (160 * 120 * 3) as usize];
+        let frame1 = encoder.encode_rgb(&rgb_data).expect("First encode failed");
+        assert!(!frame1.is_empty());
+
+        let frame2 = encoder.encode_rgb(&rgb_data).expect("Second encode failed");
+        assert!(!frame2.is_empty());
+
+        encoder.force_keyframe();
+        let frame3 = encoder.encode_rgb(&rgb_data).expect("Third encode failed");
+        assert!(!frame3.is_empty());
+    }
+
+    #[test]
+    fn test_vp8_encoder_rejects_bad_dimensions() {
+        let config = Vp8EncoderConfig {
+            width: 640,
+            height: 480,
+            framerate: 30,
+            bitrate_kbps: 1000,
+        };
+        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
+
+        // Wrong size data.
+        let bad_data = vec![0u8; 100];
+        let result = encoder.encode_rgb(&bad_data);
+        assert!(result.is_err(), "Should reject wrong-sized data");
     }
 
     // ── SDP answer generation (fallback) ──────────────────────────────

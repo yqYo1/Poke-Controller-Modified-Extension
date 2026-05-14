@@ -33,6 +33,10 @@ utoipa = { version = "5", features = ["axum_extras"] }
 str0m = "0.19"
 rand = "0.8"
 
+# VP8 encoding via libvpx
+vpx-rs = "0.2"
+yuv = "0.8"
+
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }
 pokecon-events = { path = "../rust/pokecon-events" }

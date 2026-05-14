@@ -33,8 +33,8 @@ utoipa = { version = "5", features = ["axum_extras"] }
 str0m = "0.19"
 rand = "0.8"
 
-# VP8 encoding via libvpx
-vpx-rs = "0.2"
+# VP8 encoding (pure Rust — no system dependency)
+oxideav-vp8 = { version = "0.1", default-features = false }
 yuv = "0.8"
 
 # Workspace crates

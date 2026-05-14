@@ -1412,10 +1412,7 @@ async fn handle_webrtc_signaling(
                     Ok(answer) => answer,
                     Err(e) => {
                         // Fall back to basic answer on error.
-                        tracing::warn!(
-                            "str0m offer acceptance failed ({}), using fallback",
-                            e
-                        );
+                        tracing::warn!("str0m offer acceptance failed ({}), using fallback", e);
                         mgr.close_session(session_id);
                         webrtc::generate_basic_video_answer(offer_sdp)
                     }
@@ -1446,8 +1443,7 @@ async fn handle_webrtc_signaling(
                     while let Some(output) = output_rx.recv().await {
                         match output {
                             webrtc::RtpOutput::Transmit(data) => {
-                                let _ = rtp_output_tx_clone
-                                    .send(RtpOutputEvent::Transmit(data));
+                                let _ = rtp_output_tx_clone.send(RtpOutputEvent::Transmit(data));
                             }
                             webrtc::RtpOutput::Connected => {
                                 let _ = rtp_output_tx_clone
@@ -1465,11 +1461,7 @@ async fn handle_webrtc_signaling(
                 });
 
                 // Create the RTP send task and spawn it.
-                let send_task = webrtc::RtpSendTask::new(
-                    session_id,
-                    frame_rx,
-                    output_tx,
-                );
+                let send_task = webrtc::RtpSendTask::new(session_id, frame_rx, output_tx);
                 let mgr_clone = state.webrtc_manager.clone();
                 tokio::spawn(async move {
                     send_task.run(mgr_clone).await;

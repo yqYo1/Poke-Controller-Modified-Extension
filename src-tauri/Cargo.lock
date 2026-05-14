@@ -461,29 +461,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bindgen"
-version = "0.68.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "726e4313eb6ec35d2730258ad4e15b547ee75d6afaa1361a922e78e59b7d8078"
-dependencies = [
- "bitflags 2.11.1",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "log",
- "peeking_take_while",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 1.1.0",
- "shlex",
- "syn 2.0.117",
- "which",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1455,16 +1432,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "env-libvpx-sys"
-version = "5.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26ecdc636a02003406cc821aa9d703c888a966a3fd9bbdae9f7cf27d71720147"
-dependencies = [
- "bindgen 0.68.1",
- "pkg-config",
 ]
 
 [[package]]
@@ -3256,6 +3223,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxideav-vp8"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f4c0f98d2900480f5c7ad040e5a8f62b88bd3bb0e5cab4f4d9210c1f848c142"
+
+[[package]]
 name = "pango"
 version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3586,6 +3559,7 @@ dependencies = [
  "clap",
  "futures",
  "image",
+ "oxideav-vp8",
  "pokecon-core",
  "pokecon-cv",
  "pokecon-events",
@@ -3604,7 +3578,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "utoipa",
- "vpx-rs",
  "yuv",
 ]
 
@@ -5823,7 +5796,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6779878362b9bacadc7893eac76abe69612e8837ef746573c4a5239daf11990b"
 dependencies = [
- "bindgen 0.65.1",
+ "bindgen",
 ]
 
 [[package]]
@@ -5843,17 +5816,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vpx-rs"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4e40f45ae445d686326aa4c6a3af56eca3ea482605f74d6e61f52e8e0064a4d"
-dependencies = [
- "bitflags 2.11.1",
- "env-libvpx-sys",
- "thiserror 2.0.18",
-]
 
 [[package]]
 name = "vswhom"

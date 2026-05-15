@@ -20,21 +20,21 @@ use url::Url;
 
 use futures::future::join_all;
 use pokecon_core::command_manager::CommandManager;
-use pokecon_core::profile::ProfileManager;
 #[cfg(feature = "v4l")]
-use pokecon_cv::backends::{V4lCameraBackend, list_cameras as v4l_list_cameras};
+use pokecon_core::cv::backends::{V4lCameraBackend, list_cameras as v4l_list_cameras};
 #[cfg(not(feature = "v4l"))]
-use pokecon_cv::camera::MockCameraBackend;
-use pokecon_cv::camera::{Camera, CameraConfig, FlipMode, Frame, PixelFormat};
-use pokecon_events::EventBus;
-use pokecon_notify::discord::DiscordNotifier;
-use pokecon_notify::line::LineNotifier;
-use pokecon_notify::windows::WindowsNotifier;
-use pokecon_notify::{Notification, Notifier};
-use pokecon_serial::SendFormat;
-use pokecon_serial::keypress::{KeyPress, SerialFormat};
-use pokecon_serial::keys::{Button, Direction, GamepadInput, Stick, Touchscreen};
-use pokecon_serial::sender::Sender;
+use pokecon_core::cv::camera::MockCameraBackend;
+use pokecon_core::cv::camera::{Camera, CameraConfig, FlipMode, Frame, PixelFormat};
+use pokecon_core::events::EventBus;
+use pokecon_core::notify::discord::DiscordNotifier;
+use pokecon_core::notify::line::LineNotifier;
+use pokecon_core::notify::windows::WindowsNotifier;
+use pokecon_core::notify::{Notification, Notifier};
+use pokecon_core::profile::ProfileManager;
+use pokecon_core::serial::SendFormat;
+use pokecon_core::serial::keypress::{KeyPress, SerialFormat};
+use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Stick, Touchscreen};
+use pokecon_core::serial::sender::Sender;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 

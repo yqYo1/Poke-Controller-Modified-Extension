@@ -40,12 +40,11 @@ thiserror = { version = "2", optional = true }
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }
-pokecon-events = { path = "../rust/pokecon-events" }
-pokecon-serial = { path = "../rust/pokecon-serial" }
-pokecon-cv = { path = "../rust/pokecon-cv" }
-pokecon-notify = { path = "../rust/pokecon-notify" }
 
 [features]
-default = []
+default = ["notify", "v4l"]
 vaapi = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next", "dep:thiserror"]
-v4l = ["pokecon-cv/v4l"]
+v4l = ["pokecon-core/v4l"]
+notify = ["pokecon-core/notify"]
+mqtt = ["pokecon-core/mqtt"]
+lua = ["pokecon-core/lua"]

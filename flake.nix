@@ -704,6 +704,7 @@
                     pkgs.cargo-tauri
                     pkgs.pkg-config
                     pkgs.libclang
+                    pkgs.nodejs
                     pkgs.glib
                     pkgs.glib-networking
                     pkgs.gtk3
@@ -751,6 +752,7 @@
                     pkgs.cargo-tauri
                     pkgs.pkg-config
                     pkgs.libclang
+                    pkgs.nodejs
                     pkgs.glib
                     pkgs.glib-networking
                     pkgs.gtk3

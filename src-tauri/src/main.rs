@@ -38,6 +38,8 @@ use pokecon_serial::sender::Sender;
 use utoipa::OpenApi;
 use utoipa::ToSchema;
 
+#[cfg(feature = "vaapi")]
+mod vaapi_encoder;
 mod webrtc;
 
 /// Poke-Controller Modified Extension — Tauri/Web UI
@@ -1352,10 +1354,10 @@ enum RtpOutputEvent {
     Disconnected(webrtc::SessionId),
 }
 
-/// Process WebRTC video signaling messages from the frontend.
+/// Handles WebRTC signaling messages over the WebSocket.
 ///
-/// The frontend sends SDP offers/answers and ICE candidates for video,
-/// and the backend creates/manages a WebRTC session with VP8 encoding
+/// The frontend sends SDP offers/answers and ICE candidates,
+/// and the backend creates/manages a WebRTC session with H.264/HEVC encoding
 /// and RTP streaming via the [`webrtc::WebRtcManager`].
 ///
 /// Supported signaling subtypes:
@@ -1375,29 +1377,52 @@ async fn handle_webrtc_signaling(
     match subtype {
         "video_offer" => {
             // The frontend sent a WebRTC SDP offer for video.
-            // Create a WebRTC session with VP8 encoder, accept the offer,
+            // Create a WebRTC session with VAAPI encoder, accept the offer,
             // and return the SDP answer.
             if let Some(offer_sdp) = cmd.get("sdp").and_then(|v| v.as_str()) {
                 let mut mgr = state.webrtc_manager.lock().await;
 
-                // Create a session with a VP8 encoder (640x480 @ 30fps, 1 Mbps).
-                let encoder_config = webrtc::Vp8EncoderConfig {
-                    width: 640,
-                    height: 480,
-                    framerate: 30,
-                    bitrate_kbps: 1000,
-                };
-
-                let session_id = match mgr.create_session_with_encoder(encoder_config) {
-                    Ok(id) => id,
-                    Err(e) => {
-                        tracing::error!("Failed to create WebRTC session: {}", e);
+                // Create a VAAPI hardware encoder (H.264, 640x480 @ 30fps, 1 Mbps).
+                // Requires the `vaapi` feature to be enabled.
+                let encoder: Box<dyn webrtc::VideoEncoder> = {
+                    #[cfg(feature = "vaapi")]
+                    {
+                        use crate::vaapi_encoder::{VaapiConfig, VaapiEncoder};
+                        let config = VaapiConfig {
+                            width: 640,
+                            height: 480,
+                            framerate: 30,
+                            bitrate_kbps: 1000,
+                            ..Default::default()
+                        };
+                        match VaapiEncoder::new(config) {
+                            Ok(e) => Box::new(e),
+                            Err(e) => {
+                                tracing::error!("Failed to create VAAPI encoder: {}", e);
+                                let _ = socket
+                                    .send(Message::Text(
+                                        serde_json::json!({
+                                            "type": "signaling",
+                                            "subtype": "video_error",
+                                            "message": format!("Failed to create VAAPI encoder: {}", e),
+                                        })
+                                        .to_string()
+                                        .into(),
+                                    ))
+                                    .await;
+                                return;
+                            }
+                        }
+                    }
+                    #[cfg(not(feature = "vaapi"))]
+                    {
+                        tracing::error!("VAAPI encoder not available (enable 'vaapi' feature)");
                         let _ = socket
                             .send(Message::Text(
                                 serde_json::json!({
                                     "type": "signaling",
                                     "subtype": "video_error",
-                                    "message": format!("Failed to create session: {}", e),
+                                    "message": "VAAPI hardware encoder not available. Enable 'vaapi' feature.".to_string(),
                                 })
                                 .to_string()
                                 .into(),
@@ -1406,6 +1431,8 @@ async fn handle_webrtc_signaling(
                         return;
                     }
                 };
+
+                let session_id = mgr.create_session_with_encoder(encoder);
 
                 // Accept the SDP offer and generate the answer.
                 let answer_sdp = match mgr.accept_offer(session_id, offer_sdp) {
@@ -1482,7 +1509,7 @@ async fn handle_webrtc_signaling(
                     .await;
 
                 tracing::info!(
-                    "WebRTC video session created (id={}, encoder=640x480@30 VP8)",
+                    "WebRTC video session created (id={}, encoder=640x480@30 H.264 VAAPI)",
                     session_id,
                 );
             }

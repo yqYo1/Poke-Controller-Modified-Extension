@@ -1,4 +1,4 @@
-use pokecon_serial::keys::{
+use pokecon_core::serial::keys::{
     Button as RustButton, Direction as RustDirection, Hat as RustHat, Stick as RustStick,
     Touchscreen as RustTouchscreen,
 };

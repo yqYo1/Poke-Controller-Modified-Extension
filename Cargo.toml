@@ -1,13 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "rust/pokecon-serial",
-    "rust/pokecon-cv",
     "rust/pokecon-core",
-    "rust/pokecon-notify",
-    "rust/pokecon-net",
-    "rust/pokecon-lua",
-    "rust/pokecon-events",
     "rust/pokecon-pybindings",
     # "src-tauri",  # Tauri app — built separately via nix run .#tauri-build
 ]

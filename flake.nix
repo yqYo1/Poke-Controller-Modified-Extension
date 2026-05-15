@@ -856,7 +856,7 @@
                     pkgs.libclang
                   ];
                   text = ''
-                    ${setupWorkdir}
+                    cd "${self}"
 
                     # libclang is required for v4l2-sys-mit (bindgen)
                     export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
@@ -864,7 +864,7 @@
                     echo "═══════════════════════════════════════════"
                     echo "  web-check (eslint + svelte-check + vitest)"
                     echo "═══════════════════════════════════════════"
-                    (cd "$workdir/web"
+                    (cd "${self}/web"
                       echo "=== Installing npm dependencies (pre-fetched) ==="
                       export npm_config_cache="${npmDeps}"
                       npm ci --offline --legacy-peer-deps 2>&1
@@ -895,13 +895,13 @@
                     echo "═══════════════════════════════════════════"
                     echo "  ruff check"
                     echo "═══════════════════════════════════════════"
-                    export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
+                    export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                     ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
                     echo ""
                     echo "═══════════════════════════════════════════"
                     echo "  pytest"
                     echo "═══════════════════════════════════════════"
-                    export PYTHONPATH="$workdir/python''${PYTHONPATH:+:$PYTHONPATH}"
+                    export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
                     pytest -p no:cacheprovider tests/ -v --tb=short
                     echo ""
                     echo "═══════════════════════════════════════════"
@@ -1182,6 +1182,10 @@
 
                   # libclang is required to build v4l2-sys-mit (v4l dependency)
                   libclang
+
+                  # libva for VAAPI hardware encoding (via FFmpeg)
+                  libva
+                  libva-utils
                 ]
                 ++ pythonPkgs
                 ++ [

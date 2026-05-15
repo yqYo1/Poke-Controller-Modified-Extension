@@ -25,5 +25,7 @@ extend-ignore-identifiers-re = [
     "bf_show_informations",
     "controllButtons",
     "sendWinNotfication",
+    "cros-libva",
+    "cros-codecs",
 ]
 extend-ignore-words-re = ["^ser$"]

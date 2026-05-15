@@ -1,27 +1,19 @@
-//! WebRTC video streaming backend using [str0m] and pure-Rust VP8 encoding.
+//! WebRTC video streaming backend using [str0m] with H.264/HEVC encoding
+//! via VAAPI hardware acceleration.
 //!
 //! Provides a complete WebRTC implementation for streaming camera video
-//! frames as VP8/RTP to Web frontends. Handles:
-//!
-//! - SDP offer/answer exchange (via str0m)
-//! - ICE candidate management
-//! - VP8 codec negotiation via SDP
-//! - VP8 encoding of raw camera frames (RGB → YUV → VP8)
-//! - RTP packetization via str0m's Writer API
-//! - WebRTC session lifecycle and RTP sending tasks
+//! frames to Web frontends.
 //!
 //! # Architecture
 //!
 //! [`WebRtcManager`] is the top-level session manager stored in
 //! shared application state (`Arc<Mutex<webrtc::WebRtcManager>>`).
 //! Each client connection gets a [`WebRtcSession`] with its own
-//! [`str0m::Rtc`] instance for SDP/ICE negotiation, and a
-//! [`Vp8Encoder`] for pure-Rust VP8 encoding.
+//! [`str0m::Rtc`] instance for SDP/ICE negotiation.
 //!
-//! When a session is created and an SDP offer accepted, the manager
-//! spawns an RTP send task that continuously captures camera frames,
-//! encodes them to VP8, and pushes them through str0m's media channel
-//! for RTP packetization and ICE/DTLS export.
+//! The encoder type is selected per-session based on feature flags and
+//! hardware availability:
+//! - **H.264/HEVC** (hardware) — VAAPI-accelerated via FFmpeg (feature `vaapi`)
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,18 +21,46 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use str0m::change::SdpOffer;
+use str0m::format::Codec;
 use str0m::media::{MediaKind, Mid};
 use str0m::net::Protocol;
 use str0m::{Candidate, Rtc};
 use tokio::sync::Mutex;
 
-use oxideav_vp8::{Vp8Frame, encoder::encode_vp8_keyframe};
-
-// ── Re-exports ─────────────────────────────────────────────────────────────────
-
 pub use str0m::media::Pt;
 
-// ── Session identifier ─────────────────────────────────────────────────────
+#[cfg(feature = "vaapi")]
+pub use crate::vaapi_encoder::VaapiConfig;
+
+// ── VideoEncoder trait ──────────────────────────────────────────────────
+
+/// A video encoder that accepts raw RGB frames and produces encoded bitstream
+/// suitable for RTP packetization via str0m.
+///
+/// The encoder output must be in **Annex B byte-stream format** (NAL units
+/// separated by `00 00 00 01` or `00 00 01` start codes).  str0m's internal
+/// H.264/H.265 packetizers parse Annex B natively: they split on start codes,
+/// strip AUD/filler NALUs, cache SPS/PPS for STAP-A/AP emission, and
+/// fragment large NALUs into FU-A/FU packets.
+pub trait VideoEncoder: Send + 'static {
+    /// Encode a raw RGB24 frame (width × height × 3 bytes) into encoded
+    /// bitstream data (H.264/HEVC NAL units in Annex B format).
+    fn encode_rgb(&mut self, rgb: &[u8]) -> Result<Vec<u8>, String>;
+
+    /// Returns the codec name for SDP/media negotiation (e.g. `"H264"`, `"H265"`).
+    fn codec_name(&self) -> &'static str;
+
+    /// Returns the configured video width in pixels.
+    fn width(&self) -> u32;
+
+    /// Returns the configured video height in pixels.
+    fn height(&self) -> u32;
+
+    /// Returns the configured frame rate in fps.
+    fn framerate(&self) -> u32;
+}
+
+// ── Session identifier ─────────────────────────────────────────────────
 
 /// Unique identifier for a single WebRTC peer connection session.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -65,174 +85,7 @@ impl std::fmt::Display for SessionId {
     }
 }
 
-// ── VP8 Encoder ─────────────────────────────────────────────────────────────
-
-/// Configuration for the VP8 encoder.
-#[derive(Debug, Clone)]
-pub struct Vp8EncoderConfig {
-    /// Target video width (must be even for I420).
-    pub width: u32,
-    /// Target video height (must be even for I420).
-    pub height: u32,
-    /// Target frame rate in fps.
-    pub framerate: u32,
-    /// Target bitrate in kbps (e.g., 1000 = 1 Mbps).
-    pub bitrate_kbps: u32,
-}
-
-impl Default for Vp8EncoderConfig {
-    fn default() -> Self {
-        Self {
-            width: 640,
-            height: 480,
-            framerate: 30,
-            bitrate_kbps: 1000,
-        }
-    }
-}
-
-/// A VP8 video encoder backed by [`oxideav_vp8`].
-///
-/// Accepts raw RGB frames and produces VP8-encoded bitstream data
-/// suitable for RTP packetization. Uses pure-Rust encoding (no system
-/// library dependencies).
-pub struct Vp8Encoder {
-    config: Vp8EncoderConfig,
-    frame_count: u64,
-    /// Reusable buffer for YUV 4:2:0 conversion.
-    yuv_buf: Vec<u8>,
-}
-
-impl std::fmt::Debug for Vp8Encoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Vp8Encoder")
-            .field("config", &self.config)
-            .field("frame_count", &self.frame_count)
-            .finish()
-    }
-}
-
-impl Vp8Encoder {
-    /// Create a new VP8 encoder with the given configuration.
-    pub fn new(config: Vp8EncoderConfig) -> Result<Self, String> {
-        // Pre-allocate YUV 4:2:0 buffer.
-        let w = config.width as usize;
-        let h = config.height as usize;
-        let y_len = w * h;
-        let uv_len = (w / 2) * (h / 2);
-
-        Ok(Self {
-            config,
-            frame_count: 0,
-            yuv_buf: vec![0u8; y_len + 2 * uv_len],
-        })
-    }
-
-    /// Encode a raw RGB24 frame into VP8 bitstream data.
-    ///
-    /// `rgb_data` must be exactly `width * height * 3` bytes long.
-    /// Returns the encoded VP8 frame bytes.
-    pub fn encode_rgb(&mut self, rgb_data: &[u8]) -> Result<Vec<u8>, String> {
-        let w = self.config.width as usize;
-        let h = self.config.height as usize;
-        let expected = w * h * 3;
-
-        if rgb_data.len() != expected {
-            return Err(format!(
-                "RGB frame size mismatch: got {} bytes, expected {} ({}x{})",
-                rgb_data.len(),
-                expected,
-                w,
-                h,
-            ));
-        }
-
-        // Convert RGB → YUV 4:2:0 planar.
-        self.rgb_to_yuv420(rgb_data, w, h);
-
-        // Build Vp8Frame from the YUV buffer (tightly-packed I420 planes).
-        let y_plane_size = w * h;
-        let uv_plane_size = (w / 2) * (h / 2);
-
-        let (y_plane, rest) = self.yuv_buf.split_at(y_plane_size);
-        let (u_plane, v_plane) = rest.split_at(uv_plane_size);
-
-        let frame = Vp8Frame {
-            width: self.config.width,
-            height: self.config.height,
-            pts: Some(self.frame_count as i64),
-            y: y_plane.to_vec(),
-            u: u_plane.to_vec(),
-            v: v_plane.to_vec(),
-            y_stride: self.config.width,
-            uv_stride: (self.config.width + 1) / 2,
-        };
-
-        // Map bitrate to VP8 quantiser index (0 = best quality, 127 = worst).
-        let qindex = 127u8.saturating_sub((self.config.bitrate_kbps / 10).min(127) as u8);
-
-        let result = encode_vp8_keyframe(self.config.width, self.config.height, qindex, &frame)
-            .map_err(|e| format!("VP8 encode failed at frame {}: {:?}", self.frame_count, e))?;
-
-        self.frame_count += 1;
-        Ok(result)
-    }
-
-    /// Request the next frame be a keyframe.
-    ///
-    /// With `oxideav-vp8` every frame is encoded as a keyframe,
-    /// so this is a no-op (retained for API compatibility).
-    pub fn force_keyframe(&mut self) {
-        // All frames are keyframes — nothing to do.
-    }
-
-    /// Convert RGB24 pixel data to YUV 4:2:0 planar format in place.
-    ///
-    /// This uses the ITU-R BT.601 standard matrix with full range.
-    fn rgb_to_yuv420(&mut self, rgb: &[u8], width: usize, height: usize) {
-        use yuv::{
-            BufferStoreMut, YuvConversionMode, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
-        };
-
-        let w = width;
-        let h = height;
-
-        // Split the YUV buffer into Y, U, V planes.
-        let y_plane_size = w * h;
-        let uv_plane_size = (w / 2) * (h / 2);
-
-        let (y_plane, rest) = self.yuv_buf.split_at_mut(y_plane_size);
-        let (u_plane, v_plane) = rest.split_at_mut(uv_plane_size);
-
-        let mut yuv_image = YuvPlanarImageMut {
-            y_plane: BufferStoreMut::Borrowed(y_plane),
-            y_stride: w as u32,
-            u_plane: BufferStoreMut::Borrowed(u_plane),
-            u_stride: (w / 2) as u32,
-            v_plane: BufferStoreMut::Borrowed(v_plane),
-            v_stride: (w / 2) as u32,
-            width: w as u32,
-            height: h as u32,
-        };
-
-        yuv::rgb_to_yuv420(
-            &mut yuv_image,
-            rgb,
-            (w * 3) as u32, // RGB stride = width * 3 bytes per pixel
-            YuvRange::Full,
-            YuvStandardMatrix::Bt601,
-            YuvConversionMode::Balanced,
-        )
-        .expect("YUV conversion failed");
-    }
-
-    /// Returns the encoder configuration.
-    pub fn config(&self) -> &Vp8EncoderConfig {
-        &self.config
-    }
-}
-
-// ── WebRTC session ─────────────────────────────────────────────────────────
+// ── WebRTC session ─────────────────────────────────────────────────────
 
 /// Error type for RTP send task operations.
 #[derive(Debug)]
@@ -267,8 +120,8 @@ pub struct WebRtcSession {
     created_at: Instant,
     /// Unique session identifier.
     session_id: SessionId,
-    /// VP8 encoder for this session.
-    encoder: Option<Vp8Encoder>,
+    /// Video encoder for this session (VAAPI H.264/HEVC).
+    encoder: Option<Box<dyn VideoEncoder>>,
     /// The media ID for the video track (set after SDP negotiation).
     video_mid: Option<Mid>,
     /// Whether ICE+DTLS has fully connected.
@@ -278,9 +131,16 @@ pub struct WebRtcSession {
 }
 
 impl WebRtcSession {
-    /// Create a new WebRTC session with default settings.
+    /// Create a new WebRTC session with H.264/HEVC codec configuration.
+    ///
+    /// VP8/VP9/AV1 are disabled since we only use H.264/HEVC hardware encoding.
     pub fn new() -> Self {
-        let mut rtc = Rtc::new(Instant::now());
+        let mut config = str0m::RtcConfig::new()
+            .clear_codecs()
+            .enable_h264(true)
+            .enable_h265(true);
+
+        let mut rtc = config.build(Instant::now());
 
         // Configure for sendonly video.
         use str0m::media::Direction;
@@ -319,14 +179,12 @@ impl WebRtcSession {
         self.encoder.is_some()
     }
 
-    /// Initialize the VP8 encoder with the given configuration.
-    pub fn init_encoder(&mut self, config: Vp8EncoderConfig) -> Result<(), String> {
-        let encoder = Vp8Encoder::new(config)?;
+    /// Initialize the video encoder for this session.
+    pub fn init_encoder(&mut self, encoder: Box<dyn VideoEncoder>) {
         self.encoder = Some(encoder);
-        Ok(())
     }
 
-    /// Accept an SDP offer and produce a sendonly VP8 video answer.
+    /// Accept an SDP offer and produce a sendonly video answer.
     ///
     /// Adds a local host ICE candidate, parses the offer via str0m,
     /// and returns the SDP answer string on success.
@@ -406,9 +264,9 @@ impl WebRtcSession {
         self.video_mid
     }
 
-    /// Get a mutable reference to the VP8 encoder (if initialized).
-    pub fn encoder_mut(&mut self) -> Option<&mut Vp8Encoder> {
-        self.encoder.as_mut()
+    /// Get a mutable reference to the video encoder (if initialized).
+    pub fn encoder_mut(&mut self) -> Option<&mut dyn VideoEncoder> {
+        self.encoder.as_deref_mut()
     }
 
     /// Get a reference to the inner str0m Rtc instance.
@@ -421,11 +279,17 @@ impl WebRtcSession {
         &mut self.rtc
     }
 
-    /// Write a VP8 encoded frame to str0m's media channel.
+    /// Write an encoded video frame to str0m's media channel.
     ///
-    /// This packetizes the frame as RTP and makes it available via
-    /// [`poll_output()`](Self::poll_output) as Transmit events.
-    pub fn write_vp8_frame(&mut self, vp8_data: &[u8]) -> Result<(), RtpSendError> {
+    /// This packetizes the frame as RTP (using the given [`Codec`]) and
+    /// makes it available via [`poll_output()`](Self::poll_output) as
+    /// Transmit events.
+    pub fn write_video_frame(
+        &mut self,
+        encoded_data: &[u8],
+        codec: Codec,
+        framerate: u32,
+    ) -> Result<(), RtpSendError> {
         let mid = self.video_mid.ok_or(RtpSendError::MediaNotAdded)?;
 
         if !self.connected {
@@ -436,10 +300,10 @@ impl WebRtcSession {
             return Err(RtpSendError::WriterNotFound(mid));
         };
 
-        // Find the VP8 payload type from the media config.
+        // Find the payload type for the given codec.
         let pt = writer
             .payload_params()
-            .find(|p| p.spec().codec == str0m::format::Codec::Vp8)
+            .find(|p| p.spec().codec == codec)
             .map(|p| p.pt())
             .ok_or_else(|| RtpSendError::WriterNotFound(mid))?;
 
@@ -451,11 +315,17 @@ impl WebRtcSession {
 
         // Write the frame to str0m; it handles RTP packetization.
         writer
-            .write(pt, wallclock, rtp_time, vp8_data.to_vec())
+            .write(pt, wallclock, rtp_time, encoded_data.to_vec())
             .map_err(|e| RtpSendError::EncoderError(format!("str0m write error: {:?}", e)))?;
 
-        // Advance timestamp by ~3000 per frame at 30 fps (90000 / 30).
-        self.rtp_timestamp = self.rtp_timestamp.wrapping_add((90_000.0 / 30.0) as u32);
+        // Advance RTP timestamp based on encoder's configured framerate.
+        // 90kHz clock / framerate = timestamp increment per frame.
+        let increment = if framerate > 0 {
+            90_000u32 / framerate
+        } else {
+            3_000 // fallback to 30fps equivalent
+        };
+        self.rtp_timestamp = self.rtp_timestamp.wrapping_add(increment);
 
         Ok(())
     }
@@ -467,7 +337,7 @@ impl Default for WebRtcSession {
     }
 }
 
-// ── WebRTC manager ─────────────────────────────────────────────────────────
+// ── WebRTC manager ─────────────────────────────────────────────────────
 
 /// Top-level manager for all active WebRTC video sessions.
 ///
@@ -489,10 +359,10 @@ impl WebRtcManager {
         }
     }
 
-    /// Open a new WebRTC session and return its [`SessionId`].
+    /// Open a new WebRTC session (without an encoder) and return its [`SessionId`].
     ///
-    /// The caller should later call [`close_session`](Self::close_session)
-    /// when the session ends.
+    /// The caller may later call [`init_encoder`](WebRtcSession::init_encoder)
+    /// on the session if encoding is needed.
     pub fn create_session(&mut self) -> SessionId {
         let session = WebRtcSession::new();
         let id = session.id();
@@ -500,16 +370,16 @@ impl WebRtcManager {
         id
     }
 
-    /// Open a new WebRTC session with a VP8 encoder and return its [`SessionId`].
-    pub fn create_session_with_encoder(
-        &mut self,
-        encoder_config: Vp8EncoderConfig,
-    ) -> Result<SessionId, String> {
+    /// Open a new WebRTC session with the given [`VideoEncoder`].
+    ///
+    /// The caller creates the encoder (e.g. [`VaapiEncoder`]) and passes
+    /// it in as a boxed trait object.
+    pub fn create_session_with_encoder(&mut self, encoder: Box<dyn VideoEncoder>) -> SessionId {
         let mut session = WebRtcSession::new();
         let id = session.id();
-        session.init_encoder(encoder_config)?;
+        session.init_encoder(encoder);
         self.sessions.insert(id, session);
-        Ok(id)
+        id
     }
 
     /// Remove a session by ID, dropping the underlying [`str0m::Rtc`] and encoder.
@@ -588,10 +458,21 @@ impl WebRtcManager {
             .map_err(|e| format!("poll_output error: {:?}", e))
     }
 
-    /// Encode and send a camera frame as VP8/RTP through a session.
+    /// Encode and send a camera frame as H.264/HEVC RTP through a session.
     ///
-    /// This is the main pipeline entry point: RGB frame → VP8 encode →
+    /// This is the main pipeline entry point: RGB frame → encode →
     /// str0m write → RTP output.
+    ///
+    /// The encoder output is expected to be in Annex B byte-stream format
+    /// (NAL units with `00 00 00 01` start codes).  str0m's packetizers
+    /// parse Annex B natively and handle SPS/PPS caching, AUD/filler
+    /// stripping, and FU fragmentation automatically.
+    ///
+    /// # Panics / Errors
+    ///
+    /// Returns [`RtpSendError::EncoderError`] if `width * height * 3` does
+    /// not match `rgb_data.len()`, or if `width`/`height` differ from the
+    /// encoder's configured dimensions.
     pub fn send_camera_frame(
         &mut self,
         id: SessionId,
@@ -608,22 +489,51 @@ impl WebRtcManager {
             .encoder_mut()
             .ok_or_else(|| RtpSendError::EncoderError("No encoder initialized".into()))?;
 
-        // Validate dimensions match encoder configuration.
-        let cfg = encoder.config();
-        if cfg.width != width || cfg.height != height {
+        let expected_size = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|v| v.checked_mul(3))
+            .ok_or_else(|| RtpSendError::EncoderError("width/height overflow".into()))?;
+
+        if rgb_data.len() != expected_size {
             return Err(RtpSendError::EncoderError(format!(
-                "Frame dimensions mismatch: encoder expects {}x{} but got {}x{}",
-                cfg.width, cfg.height, width, height,
+                "RGB buffer size mismatch: expected {} bytes ({}x{}x3), got {}",
+                expected_size,
+                width,
+                height,
+                rgb_data.len()
             )));
         }
 
-        // Encode RGB frame to VP8.
-        let vp8_data = encoder
+        if width != encoder.width() || height != encoder.height() {
+            return Err(RtpSendError::EncoderError(format!(
+                "Frame dimensions {}x{} don't match encoder dimensions {}x{}",
+                width,
+                height,
+                encoder.width(),
+                encoder.height()
+            )));
+        }
+
+        // Encode RGB frame to H.264/HEVC (Annex B byte-stream).
+        let encoded_data = encoder
             .encode_rgb(rgb_data)
             .map_err(RtpSendError::EncoderError)?;
 
-        // Write VP8 data through str0m's media channel.
-        session.write_vp8_frame(&vp8_data)
+        // Determine the str0m Codec from the encoder's codec name.
+        let codec = match encoder.codec_name() {
+            "H264" => Codec::H264,
+            "H265" => Codec::H265,
+            other => {
+                return Err(RtpSendError::EncoderError(format!(
+                    "Unknown codec: {}",
+                    other
+                )));
+            }
+        };
+
+        // Write encoded frame through str0m's media channel.
+        let framerate = encoder.framerate();
+        session.write_video_frame(&encoded_data, codec, framerate)
     }
 }
 
@@ -633,9 +543,9 @@ impl Default for WebRtcManager {
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 // RTP Send Task
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
 /// A background RTP stream sender that wraps a WebRTC session and
 /// handles poll_output events (ICE timeouts, transmits, etc.).
@@ -808,14 +718,15 @@ impl RtpSendTask {
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 // SDP Helpers
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
-/// Parse a VP8 SDP offer and produce a `sendonly` answer.
+/// Parse an SDP offer and produce a `sendonly` answer.
 ///
 /// Uses str0m if parsing succeeds; otherwise falls back to a manually-
-/// constructed minimal answer.  The answer advertises VP8 / payload type 96.
+/// constructed minimal answer.  The answer advertises H.264 / payload type 96
+/// (or whatever PT the offer specifies).
 pub fn create_video_answer_sdp(offer_sdp: &str) -> String {
     let mut session = WebRtcSession::new();
     match session.accept_offer(offer_sdp) {
@@ -824,7 +735,7 @@ pub fn create_video_answer_sdp(offer_sdp: &str) -> String {
     }
 }
 
-/// Fallback: construct a minimal sendonly VP8 SDP answer string manually.
+/// Fallback: construct a minimal sendonly H.264 SDP answer string manually.
 ///
 /// Used when str0m's parser cannot handle the offer (e.g., unusual
 /// formatting, missing attributes).
@@ -837,12 +748,12 @@ pub fn generate_basic_video_answer(offer_sdp: &str) -> String {
         .and_then(|pt| pt.parse().ok())
         .unwrap_or(96);
 
-    // Preserve the codec rtpmap from the offer, or default to VP8.
+    // Preserve the codec rtpmap from the offer, or default to H.264.
     let codec_rtpmap = offer_sdp
         .lines()
         .find(|l| l.starts_with(&format!("a=rtpmap:{}", payload_type)))
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("a=rtpmap:{} VP8/90000", payload_type));
+        .unwrap_or_else(|| format!("a=rtpmap:{} H264/90000", payload_type));
 
     format!(
         concat!(
@@ -867,101 +778,9 @@ pub fn generate_basic_video_answer(offer_sdp: &str) -> String {
     )
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// RTP / VP8 Packetization (legacy, kept for backward compatibility)
-// ═════════════════════════════════════════════════════════════════════════════
-
-/// Minimal VP8 payload descriptor (RFC 7741 Section 4.2).
-///
-/// Currently produces a single-byte descriptor with:
-/// - X=0 (no extended control bits)
-/// - N=0 (non-reference frame)
-/// - S=1 (start of VP8 partition)
-/// - PID=0 (partition index)
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Vp8Descriptor;
-
-impl Vp8Descriptor {
-    /// Encode the VP8 payload descriptor as a byte slice.
-    ///
-    /// Returns a single byte `0b0001_0000` (S=1, PID=0).
-    pub fn encode(&self) -> [u8; 1] {
-        [0b0001_0000] // S=1, PID=0
-    }
-}
-
-/// A fully-formed RTP packet containing VP8 video data.
-///
-/// The payload consists of a VP8 payload descriptor followed by the
-/// raw VP8 encoded frame bytes.
-///
-/// Note: When using str0m's frame-level API ([`Writer::write`]), this
-/// manual packetization is not needed — str0m handles RTP packetization
-/// internally. This struct is retained for backward compatibility and
-/// direct RTP-level usage.
-#[derive(Debug, Clone)]
-pub struct Vp8RtpPacket {
-    /// Complete RTP packet bytes (header + payload).
-    pub bytes: Vec<u8>,
-    /// RTP sequence number (for debugging / logging).
-    pub sequence: u16,
-}
-
-impl Vp8RtpPacket {
-    /// Build an RTP packet from a VP8-encoded video frame.
-    ///
-    /// # Arguments
-    /// - `frame_data` -- complete VP8 encoded frame (one packet, no fragmentation).
-    /// - `ssrc` -- RTP synchronization source identifier.
-    /// - `sequence` -- RTP sequence number (increment per packet).
-    /// - `timestamp` -- RTP timestamp (90 kHz clock; increment by 3000 approx 30 fps).
-    /// - `marker` -- set `true` on the last (and only) packet of a frame.
-    ///
-    /// # Returns
-    /// A `Vp8RtpPacket` containing the complete serialized RTP datagram.
-    pub fn from_vp8_frame(
-        frame_data: &[u8],
-        ssrc: u32,
-        sequence: u16,
-        timestamp: u32,
-        marker: bool,
-    ) -> Self {
-        let descriptor = Vp8Descriptor.encode();
-        let total_len = 12 + descriptor.len() + frame_data.len(); // 12-byte RTP header
-        let mut bytes = Vec::with_capacity(total_len);
-
-        // RTP fixed header (RFC 3550 Section 5.1)
-        // V=2, P=0, X=0, CC=0, M, PT=96 (dynamic VP8)
-        let first_byte: u8 = 0b1000_0000; // version 2, no padding/extension/CSRC
-        let pt_marker: u8 = if marker { 0b1000_0000 | 96 } else { 96 };
-        bytes.push(first_byte);
-        bytes.push(pt_marker);
-        bytes.extend_from_slice(&sequence.to_be_bytes());
-        bytes.extend_from_slice(&timestamp.to_be_bytes());
-        bytes.extend_from_slice(&ssrc.to_be_bytes());
-
-        // VP8 payload descriptor + raw frame data
-        bytes.extend_from_slice(&descriptor);
-        bytes.extend_from_slice(frame_data);
-
-        Self { bytes, sequence }
-    }
-
-    /// Consume the packet and return the raw bytes suitable for sending
-    /// over a UDP socket or WebRTC data channel.
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
-    }
-
-    /// Return the RTP payload type (always 96 for VP8).
-    pub const fn payload_type() -> u8 {
-        96
-    }
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 // ICE Candidate Helpers
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
 /// Parse a string-encoded ICE candidate (from a `candidate:` SDP attribute)
 /// and return a [`str0m::Candidate`].
@@ -981,9 +800,9 @@ pub fn create_host_candidate(addr: &str) -> Result<Candidate, String> {
         .map_err(|e| format!("Failed to create host candidate: {}", e))
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 // Tests
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
 #[cfg(test)]
 mod tests {
@@ -1101,74 +920,6 @@ mod tests {
         assert!(!session.has_encoder());
     }
 
-    #[test]
-    fn test_init_encoder() {
-        let mut session = WebRtcSession::new();
-        assert!(!session.has_encoder());
-        session
-            .init_encoder(Vp8EncoderConfig::default())
-            .expect("Failed to init encoder");
-        assert!(session.has_encoder());
-    }
-
-    // ── Vp8Encoder ────────────────────────────────────────────────────
-
-    #[test]
-    fn test_vp8_encoder_create_and_encode_small_frame() {
-        let config = Vp8EncoderConfig {
-            width: 320,
-            height: 240,
-            framerate: 30,
-            bitrate_kbps: 500,
-        };
-        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
-
-        // Create a small RGB frame (solid green).
-        let rgb_data = [0u8, 255, 0].repeat((320 * 240) as usize);
-        let vp8_data = encoder.encode_rgb(&rgb_data).expect("VP8 encode failed");
-
-        assert!(!vp8_data.is_empty(), "VP8 encoded data should not be empty");
-        tracing::debug!("VP8 encoded {} bytes from 320x240 frame", vp8_data.len());
-    }
-
-    #[test]
-    fn test_vp8_encoder_force_keyframe() {
-        let config = Vp8EncoderConfig {
-            width: 160,
-            height: 120,
-            framerate: 30,
-            bitrate_kbps: 200,
-        };
-        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
-
-        let rgb_data = vec![128u8; (160 * 120 * 3) as usize];
-        let frame1 = encoder.encode_rgb(&rgb_data).expect("First encode failed");
-        assert!(!frame1.is_empty());
-
-        let frame2 = encoder.encode_rgb(&rgb_data).expect("Second encode failed");
-        assert!(!frame2.is_empty());
-
-        encoder.force_keyframe();
-        let frame3 = encoder.encode_rgb(&rgb_data).expect("Third encode failed");
-        assert!(!frame3.is_empty());
-    }
-
-    #[test]
-    fn test_vp8_encoder_rejects_bad_dimensions() {
-        let config = Vp8EncoderConfig {
-            width: 640,
-            height: 480,
-            framerate: 30,
-            bitrate_kbps: 1000,
-        };
-        let mut encoder = Vp8Encoder::new(config).expect("Failed to create VP8 encoder");
-
-        // Wrong size data.
-        let bad_data = vec![0u8; 100];
-        let result = encoder.encode_rgb(&bad_data);
-        assert!(result.is_err(), "Should reject wrong-sized data");
-    }
-
     // ── SDP answer generation (fallback) ──────────────────────────────
 
     #[test]
@@ -1180,12 +931,12 @@ mod tests {
             "t=0 0\r\n",
             "m=video 9 UDP/TLS/RTP/SAVPF 96\r\n",
             "c=IN IP4 127.0.0.1\r\n",
-            "a=rtpmap:96 VP8/90000\r\n"
+            "a=rtpmap:96 H264/90000\r\n"
         );
         let answer = generate_basic_video_answer(offer);
         assert!(answer.contains("m=video"));
         assert!(answer.contains("a=sendonly"));
-        assert!(answer.contains("a=rtpmap:96 VP8/90000"));
+        assert!(answer.contains("a=rtpmap:96 H264/90000"));
     }
 
     #[test]
@@ -1193,18 +944,18 @@ mod tests {
         let offer = concat!(
             "v=0\r\n",
             "m=video 9 UDP/TLS/RTP/SAVPF 120\r\n",
-            "a=rtpmap:120 VP8/90000\r\n"
+            "a=rtpmap:120 H264/90000\r\n"
         );
         let answer = generate_basic_video_answer(offer);
         assert!(answer.contains("m=video 9 UDP/TLS/RTP/SAVPF 120"));
-        assert!(answer.contains("a=rtpmap:120 VP8/90000"));
+        assert!(answer.contains("a=rtpmap:120 H264/90000"));
     }
 
     #[test]
-    fn test_basic_video_answer_defaults_to_vp8() {
+    fn test_basic_video_answer_defaults_to_h264() {
         let offer = "v=0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n";
         let answer = generate_basic_video_answer(offer);
-        assert!(answer.contains("a=rtpmap:96 VP8/90000"));
+        assert!(answer.contains("a=rtpmap:96 H264/90000"));
     }
 
     #[test]
@@ -1213,88 +964,6 @@ mod tests {
         let answer = create_video_answer_sdp("not-a-real-sdp");
         assert!(answer.contains("m=video"));
         assert!(answer.contains("a=sendonly"));
-    }
-
-    // ── VP8 descriptor ────────────────────────────────────────────────
-
-    #[test]
-    fn test_vp8_descriptor_encode() {
-        let bytes = Vp8Descriptor.encode();
-        assert_eq!(bytes.len(), 1);
-        assert_eq!(bytes[0], 0b0001_0000); // S=1, PID=0
-    }
-
-    // ── RTP packet construction ───────────────────────────────────────
-
-    #[test]
-    fn test_vp8_rtp_packet_construction() {
-        let frame = vec![0u8; 64];
-        let packet = Vp8RtpPacket::from_vp8_frame(&frame, 0x12345678, 0, 0, true);
-
-        // Header (12) + descriptor (1) + frame (64) = 77 bytes
-        assert_eq!(packet.bytes.len(), 77);
-        assert_eq!(packet.sequence, 0);
-
-        // RTP version bits should be set (first byte high 2 bits = 10)
-        assert_eq!(packet.bytes[0] >> 6, 0b10, "RTP version should be 2");
-
-        // Marker bit + payload type = 96 | 0x80 = 0xE0, or 96 if no marker
-        assert_eq!(packet.bytes[1], 96 | 0x80, "marker + PT=96");
-
-        // Sequence number at bytes [2,3]
-        assert_eq!(&packet.bytes[2..4], &[0x00, 0x00]);
-
-        // SSRC at bytes [8..12]
-        assert_eq!(&packet.bytes[8..12], &[0x12, 0x34, 0x56, 0x78]);
-
-        // VP8 descriptor at byte 12
-        assert_eq!(packet.bytes[12], 0b0001_0000);
-
-        // Frame data follows descriptor
-        assert_eq!(&packet.bytes[13..], &[0u8; 64]);
-    }
-
-    #[test]
-    fn test_vp8_rtp_packet_sequence_increments() {
-        let frame = vec![0xABu8; 16];
-        let p1 = Vp8RtpPacket::from_vp8_frame(&frame, 1, 100, 3000, true);
-        let p2 = Vp8RtpPacket::from_vp8_frame(&frame, 1, 101, 6000, true);
-
-        assert_eq!(p1.sequence, 100);
-        assert_eq!(p2.sequence, 101);
-        assert_eq!(&p1.bytes[2..4], &[0x00, 100]);
-        assert_eq!(&p2.bytes[2..4], &[0x00, 101]);
-    }
-
-    #[test]
-    fn test_vp8_rtp_packet_different_timestamps() {
-        let frame = vec![0u8; 8];
-        let p1 = Vp8RtpPacket::from_vp8_frame(&frame, 1, 0, 0, true);
-        let p2 = Vp8RtpPacket::from_vp8_frame(&frame, 1, 1, 3000, true);
-
-        // Timestamp at bytes [4..8]
-        assert_eq!(&p1.bytes[4..8], &[0, 0, 0, 0]);
-        assert_eq!(&p2.bytes[4..8], &[0, 0, 0x0B, 0xB8]); // 3000 in hex
-    }
-
-    #[test]
-    fn test_vp8_rtp_packet_no_marker() {
-        let frame = vec![0u8; 4];
-        let packet = Vp8RtpPacket::from_vp8_frame(&frame, 1, 0, 0, false);
-        assert_eq!(packet.bytes[1], 96, "marker bit should not be set");
-    }
-
-    #[test]
-    fn test_into_bytes() {
-        let frame = vec![0u8; 4];
-        let packet = Vp8RtpPacket::from_vp8_frame(&frame, 1, 0, 0, true);
-        let bytes = packet.into_bytes();
-        assert_eq!(bytes.len(), 12 + 1 + 4); // 17
-    }
-
-    #[test]
-    fn test_payload_type_constant() {
-        assert_eq!(Vp8RtpPacket::payload_type(), 96);
     }
 
     // ── ICE candidate helpers ─────────────────────────────────────────

@@ -5,7 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Core logic: settings, command management, profiles for Poke-Controller"
+description = "Poke-Controller core library: serial, camera, events, notifications, networking, and Lua scripting"
+build = "build.rs"
 
 [dependencies]
 tokio = { workspace = true }
@@ -16,10 +17,37 @@ tracing = { workspace = true }
 config = "0.15"
 toml = { workspace = true }
 dirs = "6"
+bitflags = "2"
+parking_lot = { workspace = true }
+glob = "0.3"
+regex = "1"
+libc = "0.2"
+async-trait = "0.1"
 
-pokecon-events = { path = "../pokecon-events" }
-pokecon-serial = { path = "../pokecon-serial" }
+# Serial
+ tokio-serial = "5.4"
+
+# CV (optional)
+v4l = { version = "0.14", optional = true }
+jpeg-decoder = { version = "0.3", optional = true }
+
+# Notify (optional)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+notify-rust = { version = "4", optional = true }
+
+# Net (optional)
+rumqttc = { version = "0.24", optional = true }
+bytes = { version = "1", optional = true }
+
+# Lua (optional)
+mlua = { workspace = true, optional = true }
+
+[features]
+default = []
+v4l = ["dep:v4l", "dep:jpeg-decoder"]
+notify = ["dep:reqwest", "dep:notify-rust"]
+mqtt = ["dep:rumqttc", "dep:bytes"]
+lua = ["dep:mlua"]
 
 [dev-dependencies]
 tempfile = "3"
-

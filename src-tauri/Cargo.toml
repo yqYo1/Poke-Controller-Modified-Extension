@@ -33,9 +33,10 @@ utoipa = { version = "5", features = ["axum_extras"] }
 str0m = "0.19"
 rand = "0.8"
 
-# VP8 encoding (pure Rust — no system dependency)
-oxideav-vp8 = { version = "0.1", default-features = false }
-yuv = "0.8"
+# FFmpeg for VAAPI hardware encoding (Linux only, optional)
+ffmpeg-next = { version = "8.1", optional = true }
+ffmpeg-sys-next = { version = "8.1", optional = true }
+thiserror = { version = "2", optional = true }
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }
@@ -46,4 +47,5 @@ pokecon-notify = { path = "../rust/pokecon-notify" }
 
 [features]
 default = []
+vaapi = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next", "dep:thiserror"]
 v4l = ["pokecon-cv/v4l"]

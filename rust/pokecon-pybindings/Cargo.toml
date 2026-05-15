@@ -21,10 +21,4 @@ numpy = "0.25"
 ndarray = "0.16"
 
 
-pokecon-serial = { path = "../pokecon-serial" }
-pokecon-cv = { path = "../pokecon-cv" }
-pokecon-core = { path = "../pokecon-core" }
-pokecon-notify = { path = "../pokecon-notify" }
-pokecon-net = { path = "../pokecon-net" }
-pokecon-events = { path = "../pokecon-events" }
-pokecon-lua = { path = "../pokecon-lua" }
+pokecon-core = { path = "../pokecon-core", features = ["v4l", "notify", "mqtt", "lua"] }

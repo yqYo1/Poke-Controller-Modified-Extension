@@ -143,15 +143,19 @@
 | 5.1 | MJPEG over HTTPエンドポイント実装（Rust側） | `/camera/stream` | ✅ |
 | 5.2 | MJPEGフロントエンド実装 | `<img>`タグ | ✅ |
 | 5.3 | WebRTCシグナリング（WebSocket流用） | `offer`/`answer`/`ice-candidate` | ✅ |
-| 5.4 | WebRTC video track実装 | RTCPeerConnection + VP8エンコード + RTP送信 | ✅ |
+| 5.4 | WebRTC video track実装 | RTCPeerConnection + VAAPI H.264/HEVCエンコード + RTP送信 | ✅ |
 | 5.5 | WebRTC DataChannel実装 | ログ・コントローラー入力 | ✅ |
 | 5.6 | WebSocketフォールバック実装 | DataChannel接続失敗時 | ✅ |
 
 **実装詳細**:
-- `oxideav-vp8`（pure Rust VP8エンコーダ）を使用
-- `WebRtcManager`がセッション管理とRTP送信タスクを統合
-- カメラフレームをYUV変換→VP8エンコード→RTPパケット化→str0m経由で送信
+- `ffmpeg-next` + `ffmpeg-sys-next` を使用したVAAPIハードウェアエンコード（H.264/HEVC）
+- `VaapiEncoder`が`VideoEncoder`トレイトを実装し、WebRTCパイプラインに統合
+- カメラフレームをNV12変換→VAAPIハードウェアアップロード→H.264/HEVCエンコード→RTPパケット化→str0m経由で送信
+- VP8/VP9/AV1は無効化。H.264/HEVCのみをSDP協議
 - シグナリングハンドラが`WebRtcManager`を使用（インラインSDPロジックを置換）
+
+**注意**: 以前は`oxideav-vp8`（pure Rust VP8エンコーダ）を使用していたが、
+VAAPIハードウェアエンコードに移行済み。`libva`のバージョン固定は不要（FFmpegが抽象化）。
 
 **レビュー対応**:
 - StatusBar.svelteでシングルトンwsClientを使用（レビュー指摘 #4）

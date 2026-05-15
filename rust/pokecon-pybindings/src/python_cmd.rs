@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use pokecon_notify::discord::DiscordNotifier;
-use pokecon_notify::line::LineNotifier;
-use pokecon_notify::{Notification, Notifier};
-use pokecon_serial::keypress::KeyPress;
-use pokecon_serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
+use pokecon_core::notify::discord::DiscordNotifier;
+use pokecon_core::notify::line::LineNotifier;
+use pokecon_core::notify::{Notification, Notifier};
+use pokecon_core::serial::keypress::KeyPress;
+use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
 
 // ---------------------------------------------------------------------------
 // Helper: parse a button string like "A", "A|B", "A+B", "DPAD_UP"
@@ -216,7 +216,7 @@ impl PythonCommand {
         });
 
         let kp = self.keypress.get_or_insert_with(|| {
-            let sender = pokecon_serial::sender::Sender::new(false);
+            let sender = pokecon_core::serial::sender::Sender::new(false);
             KeyPress::new(sender)
         });
 
@@ -252,7 +252,7 @@ impl PythonCommand {
         });
 
         let kp = self.keypress.get_or_insert_with(|| {
-            let sender = pokecon_serial::sender::Sender::new(false);
+            let sender = pokecon_core::serial::sender::Sender::new(false);
             KeyPress::new(sender)
         });
 
@@ -413,7 +413,7 @@ impl PythonCommand {
         });
 
         let kp = self.keypress.get_or_insert_with(|| {
-            let sender = pokecon_serial::sender::Sender::new(false);
+            let sender = pokecon_core::serial::sender::Sender::new(false);
             KeyPress::new(sender)
         });
 

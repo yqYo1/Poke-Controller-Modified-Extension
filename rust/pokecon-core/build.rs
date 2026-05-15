@@ -159,10 +159,17 @@ fn generate_lua_types_from_source(api_source: &str) -> String {
 
 /// Extract a string literal from lines starting at position i.
 ///
-/// Looks for the first pair of double quotes on the current or subsequent lines.
+/// Looks for the first pair of double quotes on the current or subsequent lines,
+/// skipping comment lines to avoid false positives.
 fn extract_string_literal(lines: &[&str], i: &mut usize) -> String {
     while *i < lines.len() {
         let line = lines[*i];
+        // Skip comment-only lines
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//") {
+            *i += 1;
+            continue;
+        }
         // Look for "name" pattern
         if let Some(start) = line.find('"') {
             if let Some(end) = line[start + 1..].find('"') {
@@ -535,6 +542,34 @@ mod tests {
         let def = result.unwrap();
         assert_eq!(def.name, "log");
         assert!(def.signature.contains("msg: string"));
+    }
+
+    #[test]
+    fn test_extract_string_literal() {
+        let lines = vec!["// \"commented_out\"", "    \"actual_name\","];
+        let mut i = 0;
+        let result = extract_string_literal(&lines, &mut i);
+        assert_eq!(result, "actual_name");
+    }
+
+    #[test]
+    fn test_extract_string_literal_skips_comments() {
+        let lines = vec!["// This is a comment with \"quotes\"", "    \"real_name\","];
+        let mut i = 0;
+        let result = extract_string_literal(&lines, &mut i);
+        assert_eq!(result, "real_name");
+    }
+
+    #[test]
+    fn test_parse_tuple_elements_empty() {
+        let elems = parse_tuple_elements("()");
+        assert!(elems.is_empty());
+    }
+
+    #[test]
+    fn test_parse_tuple_elements_single() {
+        let elems = parse_tuple_elements("(x)");
+        assert_eq!(elems, vec!["x"]);
     }
 
     #[test]

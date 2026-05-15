@@ -131,6 +131,7 @@ result-*
 !/rust/pokecon-*/
 /rust/pokecon-*/*
 !/rust/pokecon-*/Cargo.toml
+!/rust/pokecon-*/build.rs
 !/rust/pokecon-*/src/
 /rust/pokecon-*/src/*
 !/rust/pokecon-*/src/*.rs

@@ -49,7 +49,7 @@ fn main() {
     let out_path = out_dir.join("pokecon.d.lua");
     fs::write(&out_path, &lua_types).expect("Failed to write pokecon.d.lua");
 
-    println!("cargo:warning=Generated Lua types: {}", out_path.display());
+    eprintln!("Generated Lua types: {}", out_path.display());
 }
 
 /// Parse api.rs source code and extract function signatures for Lua type generation.
@@ -98,7 +98,20 @@ fn generate_lua_types_from_source(api_source: &str) -> String {
 
     // If we couldn't parse any functions, fall back to static definitions
     if functions.is_empty() {
+        println!(
+            "cargo:warning=Lua type generation: failed to parse any functions from api.rs, using static fallback"
+        );
         return generate_lua_types_static();
+    }
+
+    // Validate: warn if we parsed fewer functions than expected
+    const EXPECTED_FUNCTION_COUNT: usize = 18;
+    if functions.len() < EXPECTED_FUNCTION_COUNT {
+        println!(
+            "cargo:warning=Lua type generation: parsed {} functions, expected {}. Some functions may be missing from type definitions.",
+            functions.len(),
+            EXPECTED_FUNCTION_COUNT
+        );
     }
 
     // Generate class definition
@@ -522,5 +535,96 @@ mod tests {
         let def = result.unwrap();
         assert_eq!(def.name, "log");
         assert!(def.signature.contains("msg: string"));
+    }
+
+    #[test]
+    fn test_extract_function_signature_move_single() {
+        // move |_, name: Type| pattern (used by "off")
+        let lines = vec!["lua.create_function(move |_, event_name: String| {"];
+        let mut i = 0;
+        let result = extract_function_signature(&lines, &mut i, "off");
+        assert!(result.is_some());
+        let def = result.unwrap();
+        assert_eq!(def.name, "off");
+        assert!(def.signature.contains("event_name: string"));
+    }
+
+    #[test]
+    fn test_extract_function_signature_vec_param() {
+        // Vec<String> single param (used by "hold_end")
+        let lines = vec!["lua.create_function(|_, buttons: Vec<String>| {"];
+        let mut i = 0;
+        let result = extract_function_signature(&lines, &mut i, "hold_end");
+        assert!(result.is_some());
+        let def = result.unwrap();
+        assert_eq!(def.name, "hold_end");
+        assert!(def.signature.contains("buttons: string[]"));
+    }
+
+    #[test]
+    fn test_generate_lua_types_from_source_end_to_end() {
+        let api_source = r#"
+        api.set(
+            "wait",
+            lua.create_function(|_, ms: u64| {
+                Ok(())
+            })?,
+        )?;
+
+        api.set(
+            "press",
+            lua.create_function(|_, (buttons, opts): (Vec<String>, Option<Table>)| {
+                Ok(())
+            })?,
+        )?;
+
+        api.set(
+            "on",
+            lua.create_function(move |lua, (event_name, callback): (String, LuaFunction)| {
+                Ok(())
+            })?,
+        )?;
+
+        api.set(
+            "log",
+            lua.create_function(|_, msg: String| {
+                Ok(())
+            })?,
+        )?;
+        "#;
+
+        let output = generate_lua_types_from_source(api_source);
+
+        // Verify all functions are present
+        assert!(
+            output.contains("---@field wait fun(ms: integer)"),
+            "wait function missing"
+        );
+        assert!(
+            output.contains("---@field press fun(buttons: string[], opts: table?)"),
+            "press function missing"
+        );
+        assert!(
+            output.contains("---@field on fun(event_name: string, callback: fun(...))"),
+            "on function missing"
+        );
+        assert!(
+            output.contains("---@field log fun(msg: string)"),
+            "log function missing"
+        );
+
+        // Verify global declaration
+        assert!(output.contains("---@type PokeConApi"));
+        assert!(output.contains("pokecon = {}"));
+    }
+
+    #[test]
+    fn test_generate_lua_types_static_fallback() {
+        let output = generate_lua_types_static();
+        assert!(output.contains("---@class PokeConApi"));
+        assert!(output.contains("---@field wait fun(ms: integer)"));
+        assert!(output.contains("---@field press_button fun(button: string, duration: integer)"));
+        assert!(output.contains("---@type PokeConApi"));
+        assert!(output.contains("pokecon = {}"));
     }
 }

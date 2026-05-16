@@ -9,8 +9,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use mlua::Lua;
 use crate::events::{Event, EventBus, EventPhase};
+use mlua::Lua;
 
 use crate::lua::api::{ApiHandle, PokeConApi};
 

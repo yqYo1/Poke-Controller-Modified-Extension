@@ -96,7 +96,10 @@ impl KeyPress {
         &mut self.format
     }
 
-    pub async fn input(&mut self, btns: &[GamepadInput]) -> Result<(), crate::serial::sender::SerialError> {
+    pub async fn input(
+        &mut self,
+        btns: &[GamepadInput],
+    ) -> Result<(), crate::serial::sender::SerialError> {
         let all_btns = self.collect_inputs(btns);
 
         let buttons: Vec<Button> = all_btns.iter().flat_map(|g| g.buttons()).collect();
@@ -264,7 +267,10 @@ impl KeyPress {
         }
     }
 
-    pub async fn hold(&mut self, btns: &[GamepadInput]) -> Result<(), crate::serial::sender::SerialError> {
+    pub async fn hold(
+        &mut self,
+        btns: &[GamepadInput],
+    ) -> Result<(), crate::serial::sender::SerialError> {
         let mut to_input = Vec::new();
 
         for btn in btns {

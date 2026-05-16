@@ -285,14 +285,14 @@
                 libcanberra-gtk3
                 # libclang for v4l2-sys-mit (bindgen)
                 libclang
-                # V4L2 headers for v4l2-sys-mit
-                v4l-utils
+                # V4L2 headers for v4l2-sys-mit (linux/videodev2.h)
+                linuxHeaders
               ];
 
               # Set LIBCLANG_PATH for v4l2-sys-mit build
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               # Include V4L2 headers in the build environment
-              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.v4l-utils}/include";
+              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.linuxHeaders}/include";
 
               # Skip tauri-build runtime validation in sandbox
               TAURI_SKIP_BUILD = "1";

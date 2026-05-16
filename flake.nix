@@ -283,7 +283,12 @@
                 dbus
                 libx11
                 libcanberra-gtk3
+                # libclang for v4l2-sys-mit (bindgen)
+                libclang
               ];
+
+              # Set LIBCLANG_PATH for v4l2-sys-mit build
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
 
               # Skip tauri-build runtime validation in sandbox
               TAURI_SKIP_BUILD = "1";

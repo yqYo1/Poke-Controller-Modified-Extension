@@ -292,7 +292,7 @@
               # Set LIBCLANG_PATH for v4l2-sys-mit build
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               # Include V4L2 headers in the build environment
-              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.linuxHeaders}/include";
+              BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.linuxHeaders}/include -I${pkgs.glibc.dev}/include";
 
               # Skip tauri-build runtime validation in sandbox
               TAURI_SKIP_BUILD = "1";

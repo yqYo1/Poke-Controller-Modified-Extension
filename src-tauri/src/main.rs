@@ -1343,6 +1343,7 @@ async fn handle_ws(mut socket: WebSocket, state: AppState) {
 }
 
 /// Internal event type for RTP output forwarded to the WebSocket client.
+#[cfg_attr(not(feature = "vaapi"), allow(dead_code))]
 #[derive(Debug)]
 enum RtpOutputEvent {
     /// Binary data to send over the WebSocket (ICE, RTP, etc.).
@@ -1361,7 +1362,7 @@ enum RtpOutputEvent {
 ///
 /// Supported signaling subtypes:
 /// - `video_offer`    → creates a WebRTC session, accepts the SDP offer,
-///                      starts an RTP send task, and returns the SDP answer
+///   starts an RTP send task, and returns the SDP answer
 /// - `video_answer`   → stored / acknowledged (unusual for this flow)
 /// - `video_candidate`→ forwarded to the active WebRTC session
 /// - `video_close`    → closes the active session
@@ -1371,6 +1372,7 @@ async fn handle_webrtc_signaling(
     cmd: &serde_json::Value,
     rtp_output_tx: &tokio::sync::mpsc::UnboundedSender<RtpOutputEvent>,
 ) {
+    let _ = &rtp_output_tx;
     let subtype = cmd.get("subtype").and_then(|v| v.as_str()).unwrap_or("");
 
     match subtype {
@@ -1378,14 +1380,30 @@ async fn handle_webrtc_signaling(
             // The frontend sent a WebRTC SDP offer for video.
             // Create a WebRTC session with VAAPI encoder, accept the offer,
             // and return the SDP answer.
-            if let Some(offer_sdp) = cmd.get("sdp").and_then(|v| v.as_str()) {
-                let mut mgr = state.webrtc_manager.lock().await;
 
-                // Create a VAAPI hardware encoder (H.264, 640x480 @ 30fps, 1 Mbps).
-                // Requires the `vaapi` feature to be enabled.
-                let encoder: Box<dyn webrtc::VideoEncoder> = {
-                    #[cfg(feature = "vaapi")]
-                    {
+            #[cfg(not(feature = "vaapi"))]
+            {
+                tracing::error!("VAAPI encoder not available (enable 'vaapi' feature)");
+                let _ = socket
+                    .send(Message::Text(
+                        serde_json::json!({
+                            "type": "signaling",
+                            "subtype": "video_error",
+                            "message": "VAAPI hardware encoder not available. Enable 'vaapi' feature.".to_string(),
+                        })
+                        .to_string()
+                        .into(),
+                    ))
+                    .await;
+            }
+
+            #[cfg(feature = "vaapi")]
+            {
+                if let Some(offer_sdp) = cmd.get("sdp").and_then(|v| v.as_str()) {
+                    let mut mgr = state.webrtc_manager.lock().await;
+
+                    // Create a VAAPI hardware encoder (H.264, 640x480 @ 30fps, 1 Mbps).
+                    let encoder: Box<dyn webrtc::VideoEncoder> = {
                         use crate::vaapi_encoder::{VaapiConfig, VaapiEncoder};
                         let config = VaapiConfig {
                             width: 640,
@@ -1412,105 +1430,89 @@ async fn handle_webrtc_signaling(
                                 return;
                             }
                         }
-                    }
-                    #[cfg(not(feature = "vaapi"))]
-                    {
-                        tracing::error!("VAAPI encoder not available (enable 'vaapi' feature)");
-                        let _ = socket
-                            .send(Message::Text(
-                                serde_json::json!({
-                                    "type": "signaling",
-                                    "subtype": "video_error",
-                                    "message": "VAAPI hardware encoder not available. Enable 'vaapi' feature.".to_string(),
-                                })
-                                .to_string()
-                                .into(),
-                            ))
-                            .await;
-                        return;
-                    }
-                };
+                    };
 
-                let session_id = mgr.create_session_with_encoder(encoder);
+                    let session_id = mgr.create_session_with_encoder(encoder);
 
-                // Accept the SDP offer and generate the answer.
-                let answer_sdp = match mgr.accept_offer(session_id, offer_sdp) {
-                    Ok(answer) => answer,
-                    Err(e) => {
-                        // Fall back to basic answer on error.
-                        tracing::warn!("str0m offer acceptance failed ({}), using fallback", e);
-                        mgr.close_session(session_id);
-                        webrtc::generate_basic_video_answer(offer_sdp)
-                    }
-                };
+                    // Accept the SDP offer and generate the answer.
+                    let answer_sdp = match mgr.accept_offer(session_id, offer_sdp) {
+                        Ok(answer) => answer,
+                        Err(e) => {
+                            // Fall back to basic answer on error.
+                            tracing::warn!("str0m offer acceptance failed ({}), using fallback", e);
+                            mgr.close_session(session_id);
+                            webrtc::generate_basic_video_answer(offer_sdp)
+                        }
+                    };
 
-                // Send the SDP answer to the frontend.
-                let _ = socket
-                    .send(Message::Text(
-                        serde_json::json!({
-                            "type": "signaling",
-                            "subtype": "video_answer",
-                            "sdp": answer_sdp,
-                        })
-                        .to_string()
-                        .into(),
-                    ))
-                    .await;
+                    // Send the SDP answer to the frontend.
+                    let _ = socket
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "signaling",
+                                "subtype": "video_answer",
+                                "sdp": answer_sdp,
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
 
-                // Start the RTP send task in the background.
-                let (_frame_tx, frame_rx) = tokio::sync::mpsc::channel::<webrtc::CameraFrame>(32);
-                let (output_tx, mut output_rx) =
-                    tokio::sync::mpsc::channel::<webrtc::RtpOutput>(32);
+                    // Start the RTP send task in the background.
+                    let (_frame_tx, frame_rx) = tokio::sync::mpsc::channel::<webrtc::CameraFrame>(32);
+                    let (output_tx, mut output_rx) =
+                        tokio::sync::mpsc::channel::<webrtc::RtpOutput>(32);
 
-                // Spawn a task to forward RTP output events to the WebSocket.
-                let rtp_output_tx_clone = rtp_output_tx.clone();
-                let session_id_clone = session_id;
-                tokio::spawn(async move {
-                    while let Some(output) = output_rx.recv().await {
-                        match output {
-                            webrtc::RtpOutput::Transmit(data) => {
-                                let _ = rtp_output_tx_clone.send(RtpOutputEvent::Transmit(data));
-                            }
-                            webrtc::RtpOutput::Connected => {
-                                let _ = rtp_output_tx_clone
-                                    .send(RtpOutputEvent::Connected(session_id_clone));
-                            }
-                            webrtc::RtpOutput::Disconnected => {
-                                let _ = rtp_output_tx_clone
-                                    .send(RtpOutputEvent::Disconnected(session_id_clone));
-                            }
-                            webrtc::RtpOutput::Log(msg) => {
-                                tracing::debug!("RTP session {}: {}", session_id_clone, msg);
+                    // Spawn a task to forward RTP output events to the WebSocket.
+                    let rtp_output_tx_clone = rtp_output_tx.clone();
+                    let session_id_clone = session_id;
+                    tokio::spawn(async move {
+                        while let Some(output) = output_rx.recv().await {
+                            match output {
+                                webrtc::RtpOutput::Transmit(data) => {
+                                    let _ = rtp_output_tx_clone.send(RtpOutputEvent::Transmit(data));
+                                }
+                                webrtc::RtpOutput::Connected => {
+                                    let _ = rtp_output_tx_clone
+                                        .send(RtpOutputEvent::Connected(session_id_clone));
+                                }
+                                webrtc::RtpOutput::Disconnected => {
+                                    let _ = rtp_output_tx_clone
+                                        .send(RtpOutputEvent::Disconnected(session_id_clone));
+                                }
+                                webrtc::RtpOutput::Log(msg) => {
+                                    tracing::debug!("RTP session {}: {}", session_id_clone, msg);
+                                }
                             }
                         }
-                    }
-                });
+                    });
 
-                // Create the RTP send task and spawn it.
-                let send_task = webrtc::RtpSendTask::new(session_id, frame_rx, output_tx);
-                let mgr_clone = state.webrtc_manager.clone();
-                tokio::spawn(async move {
-                    send_task.run(mgr_clone).await;
-                });
+                    // Create the RTP send task and spawn it.
+                    let send_task = webrtc::RtpSendTask::new(session_id, frame_rx, output_tx);
+                    let mgr_clone = state.webrtc_manager.clone();
+                    tokio::spawn(async move {
+                        send_task.run(mgr_clone).await;
+                    });
 
-                // Provide the MJPEG stream URL as a fallback.
-                let _ = socket
-                    .send(Message::Text(
-                        serde_json::json!({
-                            "type": "signaling",
-                            "subtype": "video_info",
-                            "session_id": session_id.to_string(),
-                            "mjpeg_url": "/camera/stream",
-                        })
-                        .to_string()
-                        .into(),
-                    ))
-                    .await;
+                    // Provide the MJPEG stream URL as a fallback.
+                    let _ = socket
+                        .send(Message::Text(
+                            serde_json::json!({
+                                "type": "signaling",
+                                "subtype": "video_info",
+                                "session_id": session_id.to_string(),
+                                "mjpeg_url": "/camera/stream",
+                            })
+                            .to_string()
+                            .into(),
+                        ))
+                        .await;
 
-                tracing::info!(
-                    "WebRTC video session created (id={}, encoder=640x480@30 H.264 VAAPI)",
-                    session_id,
-                );
+                    tracing::info!(
+                        "WebRTC video session created (id={}, encoder=640x480@30 H.264 VAAPI)",
+                        session_id,
+                    );
+                }
             }
         }
         "video_answer" => {

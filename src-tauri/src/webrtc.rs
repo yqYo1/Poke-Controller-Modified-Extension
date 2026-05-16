@@ -27,8 +27,6 @@ use str0m::net::Protocol;
 use str0m::{Candidate, Rtc};
 use tokio::sync::Mutex;
 
-pub use str0m::media::Pt;
-
 #[cfg(feature = "vaapi")]
 pub use crate::vaapi_encoder::VaapiConfig;
 
@@ -74,6 +72,7 @@ impl SessionId {
     }
 
     /// Parse a session ID from its string representation (as produced by [`Display`]).
+    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Option<Self> {
         s.parse::<u64>().ok().map(Self)
     }
@@ -89,6 +88,7 @@ impl std::fmt::Display for SessionId {
 
 /// Error type for RTP send task operations.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum RtpSendError {
     EncoderError(String),
     SessionNotConnected,
@@ -113,6 +113,7 @@ impl std::error::Error for RtpSendError {}
 ///
 /// Each session maintains its own ICE/DTLS state machine and can
 /// accept one SDP offer to produce a sendonly video answer.
+#[allow(dead_code)]
 pub struct WebRtcSession {
     /// The underlying str0m peer connection.
     rtc: Rtc,
@@ -130,12 +131,13 @@ pub struct WebRtcSession {
     rtp_timestamp: u32,
 }
 
+#[allow(dead_code)]
 impl WebRtcSession {
     /// Create a new WebRTC session with H.264/HEVC codec configuration.
     ///
     /// VP8/VP9/AV1 are disabled since we only use H.264/HEVC hardware encoding.
     pub fn new() -> Self {
-        let mut config = str0m::RtcConfig::new()
+        let config = str0m::RtcConfig::new()
             .clear_codecs()
             .enable_h264(true)
             .enable_h265(true);
@@ -165,16 +167,19 @@ impl WebRtcSession {
     }
 
     /// Return when this session was created (used for staleness checks).
+    #[allow(dead_code)]
     pub fn created_at(&self) -> Instant {
         self.created_at
     }
 
     /// Check whether the ICE connection is established.
+    #[allow(dead_code)]
     pub fn is_connected(&self) -> bool {
         self.connected
     }
 
     /// Check if this session has an encoder configured.
+    #[allow(dead_code)]
     pub fn has_encoder(&self) -> bool {
         self.encoder.is_some()
     }
@@ -260,6 +265,7 @@ impl WebRtcSession {
     }
 
     /// Get the media ID for the video track (if negotiated).
+    #[allow(dead_code)]
     pub fn video_mid(&self) -> Option<Mid> {
         self.video_mid
     }
@@ -270,11 +276,13 @@ impl WebRtcSession {
     }
 
     /// Get a reference to the inner str0m Rtc instance.
+    #[allow(dead_code)]
     pub fn rtc(&self) -> &Rtc {
         &self.rtc
     }
 
     /// Get a mutable reference to the inner str0m Rtc instance.
+    #[allow(dead_code)]
     pub fn rtc_mut(&mut self) -> &mut Rtc {
         &mut self.rtc
     }
@@ -305,7 +313,7 @@ impl WebRtcSession {
             .payload_params()
             .find(|p| p.spec().codec == codec)
             .map(|p| p.pt())
-            .ok_or_else(|| RtpSendError::WriterNotFound(mid))?;
+            .ok_or(RtpSendError::WriterNotFound(mid))?;
 
         let wallclock = Instant::now();
         let rtp_time = str0m::media::MediaTime::new(
@@ -320,11 +328,7 @@ impl WebRtcSession {
 
         // Advance RTP timestamp based on encoder's configured framerate.
         // 90kHz clock / framerate = timestamp increment per frame.
-        let increment = if framerate > 0 {
-            90_000u32 / framerate
-        } else {
-            3_000 // fallback to 30fps equivalent
-        };
+        let increment = 90_000u32.checked_div(framerate).unwrap_or(3_000);
         self.rtp_timestamp = self.rtp_timestamp.wrapping_add(increment);
 
         Ok(())
@@ -344,12 +348,14 @@ impl Default for WebRtcSession {
 /// This is the struct stored in shared application state via
 /// `Arc<Mutex<webrtc::WebRtcManager>>`.  It owns a collection of
 /// [`WebRtcSession`]s keyed by [`SessionId`].
+#[allow(dead_code)]
 pub struct WebRtcManager {
     sessions: HashMap<SessionId, WebRtcSession>,
     /// Monotonically-increasing RTP sequence number counter.
     next_sequence: u64,
 }
 
+#[allow(dead_code)]
 impl WebRtcManager {
     /// Create a new empty WebRTC session manager.
     pub fn new() -> Self {
@@ -363,6 +369,7 @@ impl WebRtcManager {
     ///
     /// The caller may later call [`init_encoder`](WebRtcSession::init_encoder)
     /// on the session if encoding is needed.
+    #[allow(dead_code)]
     pub fn create_session(&mut self) -> SessionId {
         let session = WebRtcSession::new();
         let id = session.id();
@@ -404,6 +411,7 @@ impl WebRtcManager {
     }
 
     /// Number of currently-active sessions.
+    #[allow(dead_code)]
     pub fn session_count(&self) -> usize {
         self.sessions.len()
     }
@@ -411,6 +419,7 @@ impl WebRtcManager {
     /// Remove sessions that have lived longer than `timeout`.
     ///
     /// Call this from a periodic background task to prevent resource leaks.
+    #[allow(dead_code)]
     pub fn cleanup_stale_sessions(&mut self, timeout: std::time::Duration) {
         let now = Instant::now();
         self.sessions
@@ -418,6 +427,7 @@ impl WebRtcManager {
     }
 
     /// Allocate the next RTP sequence number (wraps at u16::MAX).
+    #[allow(dead_code)]
     pub fn next_sequence(&mut self) -> u16 {
         let seq = self.next_sequence as u16;
         self.next_sequence = self.next_sequence.wrapping_add(1);
@@ -448,6 +458,7 @@ impl WebRtcManager {
     }
 
     /// Poll a session for str0m output events.
+    #[allow(dead_code)]
     pub fn poll_session(&mut self, id: SessionId) -> Result<str0m::Output, String> {
         let session = self
             .sessions
@@ -555,6 +566,7 @@ impl Default for WebRtcManager {
 /// 1. Polls str0m for output events (transmits, timeouts, media events)
 /// 2. Handles timeout events by feeding them back
 /// 3. Reports transmit events back for network I/O
+#[allow(dead_code)]
 pub struct RtpSendTask {
     /// The session ID this task is associated with.
     session_id: SessionId,
@@ -566,6 +578,7 @@ pub struct RtpSendTask {
 
 /// A camera frame received from the capture pipeline.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CameraFrame {
     /// Raw RGB pixel data (width*height*3 bytes).
     pub rgb: Vec<u8>,
@@ -579,6 +592,7 @@ pub struct CameraFrame {
 
 /// Output from the RTP pipeline to be sent over the network.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum RtpOutput {
     /// Data to transmit over UDP/network (ICE connectivity checks, RTP, etc.).
     Transmit(Vec<u8>),
@@ -586,10 +600,9 @@ pub enum RtpOutput {
     Connected,
     /// The session has disconnected.
     Disconnected,
-    /// Log message.
-    Log(String),
 }
 
+#[allow(dead_code)]
 impl RtpSendTask {
     /// Create a new RTP send task.
     pub fn new(
@@ -636,14 +649,13 @@ impl RtpSendTask {
                 match session.poll_output() {
                     Ok(str0m::Output::Timeout(at)) => {
                         // Need to feed this timeout back at the right time.
-                        let dur = if at <= Instant::now() {
+                        if at <= Instant::now() {
                             // Already expired, handle immediately.
                             let _ = session.handle_timeout(at);
                             std::time::Duration::ZERO
                         } else {
                             at.saturating_duration_since(Instant::now())
-                        };
-                        dur
+                        }
                     }
                     Ok(str0m::Output::Transmit(transmit)) => {
                         // Send the transmit data over the output channel.
@@ -658,11 +670,9 @@ impl RtpSendTask {
                                 let _ = output_tx.send(RtpOutput::Connected).await;
                                 tracing::info!("Session {} ICE+DTLS connected", session_id);
                             }
-                            str0m::Event::IceConnectionStateChange(state) => {
-                                if state == str0m::IceConnectionState::Disconnected {
+                            str0m::Event::IceConnectionStateChange(str0m::IceConnectionState::Disconnected) => {
                                     let _ = output_tx.send(RtpOutput::Disconnected).await;
                                     tracing::info!("Session {} disconnected", session_id);
-                                }
                             }
                             _ => {}
                         }
@@ -727,6 +737,7 @@ impl RtpSendTask {
 /// Uses str0m if parsing succeeds; otherwise falls back to a manually-
 /// constructed minimal answer.  The answer advertises H.264 / payload type 96
 /// (or whatever PT the offer specifies).
+#[allow(dead_code)]
 pub fn create_video_answer_sdp(offer_sdp: &str) -> String {
     let mut session = WebRtcSession::new();
     match session.accept_offer(offer_sdp) {
@@ -786,12 +797,14 @@ pub fn generate_basic_video_answer(offer_sdp: &str) -> String {
 /// and return a [`str0m::Candidate`].
 ///
 /// This is a convenience wrapper around [`Candidate::from_sdp_string`].
+#[allow(dead_code)]
 pub fn parse_ice_candidate(sdp_line: &str) -> Result<Candidate, String> {
     Candidate::from_sdp_string(sdp_line)
         .map_err(|e| format!("Failed to parse ICE candidate: {}", e))
 }
 
 /// Create a local host ICE candidate for the given UDP address.
+#[allow(dead_code)]
 pub fn create_host_candidate(addr: &str) -> Result<Candidate, String> {
     let socket_addr = addr
         .parse()

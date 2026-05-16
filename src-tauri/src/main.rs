@@ -1459,7 +1459,8 @@ async fn handle_webrtc_signaling(
                         .await;
 
                     // Start the RTP send task in the background.
-                    let (_frame_tx, frame_rx) = tokio::sync::mpsc::channel::<webrtc::CameraFrame>(32);
+                    let (_frame_tx, frame_rx) =
+                        tokio::sync::mpsc::channel::<webrtc::CameraFrame>(32);
                     let (output_tx, mut output_rx) =
                         tokio::sync::mpsc::channel::<webrtc::RtpOutput>(32);
 
@@ -1470,7 +1471,8 @@ async fn handle_webrtc_signaling(
                         while let Some(output) = output_rx.recv().await {
                             match output {
                                 webrtc::RtpOutput::Transmit(data) => {
-                                    let _ = rtp_output_tx_clone.send(RtpOutputEvent::Transmit(data));
+                                    let _ =
+                                        rtp_output_tx_clone.send(RtpOutputEvent::Transmit(data));
                                 }
                                 webrtc::RtpOutput::Connected => {
                                     let _ = rtp_output_tx_clone

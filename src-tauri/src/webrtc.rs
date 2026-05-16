@@ -670,9 +670,11 @@ impl RtpSendTask {
                                 let _ = output_tx.send(RtpOutput::Connected).await;
                                 tracing::info!("Session {} ICE+DTLS connected", session_id);
                             }
-                            str0m::Event::IceConnectionStateChange(str0m::IceConnectionState::Disconnected) => {
-                                    let _ = output_tx.send(RtpOutput::Disconnected).await;
-                                    tracing::info!("Session {} disconnected", session_id);
+                            str0m::Event::IceConnectionStateChange(
+                                str0m::IceConnectionState::Disconnected,
+                            ) => {
+                                let _ = output_tx.send(RtpOutput::Disconnected).await;
+                                tracing::info!("Session {} disconnected", session_id);
                             }
                             _ => {}
                         }

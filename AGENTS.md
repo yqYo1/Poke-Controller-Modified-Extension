@@ -37,6 +37,7 @@
 - [2026-05-12] **If CI fails, fix before declaring completion.** Never tell user "CI passed" without actually checking GitHub.
 - [2026-05-12] **CI watch command:** `scripts/ci-watch.sh [branch] [timeout-seconds]` (default: current branch, 600s timeout)
 - [2026-05-12] **Alternative:** `gh run watch` or `gh run list --branch <branch>` to check status manually.
+- [2026-05-16] **After push, monitor CI until completion without user reminder.** Do not wait for user to prompt CI check. Automatically poll `gh run list` and fix failures immediately.
 
 ## Quick Reference
 

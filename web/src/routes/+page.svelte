@@ -322,26 +322,6 @@
 				</div>
 			</div>
 		</div>
-
-		<!-- Line Notification -->
-		<div class="tk-labelframe">
-			<div class="tk-labelframe-label">Line Notification</div>
-			<div class="tk-labelframe-content">
-				<div class="form-row">
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Start</span>
-					</label>
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>End</span>
-					</label>
-					<button class="tk-btn">Test</button>
-				</div>
-			</div>
-		</div>
-
-		<!-- Discord Notification -->
 		<div class="tk-labelframe">
 			<div class="tk-labelframe-label">Discord Notification</div>
 			<div class="tk-labelframe-content">

@@ -27,7 +27,6 @@ use pokecon_core::cv::camera::MockCameraBackend;
 use pokecon_core::cv::camera::{Camera, CameraConfig, FlipMode, Frame, PixelFormat};
 use pokecon_core::events::EventBus;
 use pokecon_core::notify::discord::DiscordNotifier;
-use pokecon_core::notify::line::LineNotifier;
 use pokecon_core::notify::windows::WindowsNotifier;
 use pokecon_core::notify::{Notification, Notifier};
 use pokecon_core::profile::ProfileManager;
@@ -2173,26 +2172,19 @@ async fn profile_set(
 struct NotificationConfig {
     /// Enable Windows desktop toast notifications
     windows_enabled: bool,
-    /// Enable LINE messaging notifications
-    line_enabled: bool,
     /// Enable Discord webhook notifications
     discord_enabled: bool,
     /// Discord webhook URL
     #[serde(default)]
     discord_webhook_url: String,
-    /// LINE channel access token
-    #[serde(default)]
-    line_access_token: String,
 }
 
 impl Default for NotificationConfig {
     fn default() -> Self {
         Self {
             windows_enabled: true,
-            line_enabled: false,
             discord_enabled: false,
             discord_webhook_url: String::new(),
-            line_access_token: String::new(),
         }
     }
 }
@@ -2211,10 +2203,8 @@ async fn notifications_get_config(State(state): State<AppState>) -> Json<serde_j
     Json(serde_json::json!({
         "status": "ok",
         "windows_enabled": cfg.windows_enabled,
-        "line_enabled": cfg.line_enabled,
         "discord_enabled": cfg.discord_enabled,
         "discord_webhook_url": mask_secret(&cfg.discord_webhook_url),
-        "line_access_token": mask_secret(&cfg.line_access_token),
     }))
 }
 
@@ -2232,10 +2222,8 @@ fn mask_secret(value: &str) -> String {
 #[derive(serde::Serialize, serde::Deserialize, ToSchema)]
 struct NotificationConfigRequest {
     windows_enabled: Option<bool>,
-    line_enabled: Option<bool>,
     discord_enabled: Option<bool>,
     discord_webhook_url: Option<String>,
-    line_access_token: Option<String>,
 }
 
 /// POST /api/notifications/config — update notification settings
@@ -2256,9 +2244,6 @@ async fn notifications_set_config(
     if let Some(v) = body.windows_enabled {
         cfg.windows_enabled = v;
     }
-    if let Some(v) = body.line_enabled {
-        cfg.line_enabled = v;
-    }
     if let Some(v) = body.discord_enabled {
         cfg.discord_enabled = v;
     }
@@ -2271,9 +2256,6 @@ async fn notifications_set_config(
             }));
         }
         cfg.discord_webhook_url = v;
-    }
-    if let Some(v) = body.line_access_token {
-        cfg.line_access_token = v;
     }
     tracing::info!("Notification config updated");
     Json(serde_json::json!({
@@ -2310,8 +2292,6 @@ async fn notifications_send(
 
     // Extract config values before spawning tasks
     let windows_enabled = cfg.windows_enabled;
-    let line_enabled = cfg.line_enabled;
-    let line_token = cfg.line_access_token.clone();
     let discord_enabled = cfg.discord_enabled;
     let discord_url = cfg.discord_webhook_url.clone();
     drop(cfg); // Release the lock before spawning parallel tasks
@@ -2326,18 +2306,6 @@ async fn notifications_send(
             match notifier.send(&notif).await {
                 Ok(_) => serde_json::json!({"channel": "windows", "status": "sent"}),
                 Err(e) => serde_json::json!({"channel": "windows", "status": "error", "error": e.to_string()}),
-            }
-        }));
-    }
-
-    // LINE Notify notification — parallel task
-    if line_enabled && !line_token.is_empty() {
-        let notif = notification.clone();
-        handles.push(tokio::spawn(async move {
-            let notifier = LineNotifier::new(line_token);
-            match notifier.send(&notif).await {
-                Ok(_) => serde_json::json!({"channel": "line", "status": "sent"}),
-                Err(e) => serde_json::json!({"channel": "line", "status": "error", "error": e.to_string()}),
             }
         }));
     }

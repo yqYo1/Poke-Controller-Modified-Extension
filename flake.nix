@@ -702,8 +702,17 @@
                 }
               }/bin/tauri-build-fhs";
 
-            # nix run .#tauri  — build Tauri app (verify Cargo.lock is present)
-            tauri = mkApp "${config.packages.pokecon-tauri}/bin/pokecon-tauri";
+            # nix run .#tauri  — run Tauri app with explicit web-dir
+            tauri = mkApp "${
+              pkgs.writeShellApplication {
+                name = "pokecon-tauri-launcher";
+                text = ''
+                  exec ${config.packages.pokecon-tauri}/bin/pokecon-tauri \
+                    --web-dir ${config.packages.pokecon-tauri}/web/dist \
+                    "$@"
+                '';
+              }
+            }/bin/pokecon-tauri-launcher";
 
             # nix run .#npm-update  — update npm deps and sync flake.nix hash
             # Usage: nix run .#npm-update

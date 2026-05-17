@@ -2462,8 +2462,11 @@ async fn api_openapi_json() -> Json<serde_json::Value> {
 /// Start the HTTP server — shared between web and tauri modes.
 async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
     // ── Static UI files served under /ui/ ───────────────────────────────
-    let ui_service =
-        tower_http::services::ServeDir::new(&web_dir).append_index_html_on_directories(true);
+    let ui_service = tower_http::services::ServeDir::new(&web_dir)
+        .append_index_html_on_directories(true)
+        .fallback(tower_http::services::ServeFile::new(
+            web_dir.join("index.html"),
+        ));
 
     let app = axum::Router::new()
         // Root redirect: / → /ui/

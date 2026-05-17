@@ -2540,7 +2540,7 @@ async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
         )
         .route("/api/notifications/send", post(notifications_send))
         // ── UI static files at /ui/* ────────────────────────────────────
-        .nest("/ui", axum::Router::new().fallback_service(ui_service))
+        .nest_service("/ui", ui_service)
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));

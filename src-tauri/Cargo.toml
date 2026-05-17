@@ -40,6 +40,8 @@ thiserror = { version = "2", optional = true }
 
 # Workspace crates
 pokecon-core = { path = "../rust/pokecon-core" }
+mime_guess = "2.0.5"
+tower = "0.5.3"
 
 [features]
 default = ["notify", "v4l"]

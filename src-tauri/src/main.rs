@@ -2461,12 +2461,53 @@ async fn api_openapi_json() -> Json<serde_json::Value> {
 
 /// Start the HTTP server — shared between web and tauri modes.
 async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
-    // ── Static UI files served under /ui/ ───────────────────────────────
-    let ui_service = tower_http::services::ServeDir::new(&web_dir)
+    // ── Static UI files served under /ui/* ──────────────────────────────
+    let index_path = web_dir.join("index.html");
+    let web_dir = std::sync::Arc::new(web_dir);
+    let index_path = std::sync::Arc::new(index_path);
+
+    let ui_service = tower_http::services::ServeDir::new(web_dir.as_ref())
         .append_index_html_on_directories(true)
-        .fallback(tower_http::services::ServeFile::new(
-            web_dir.join("index.html"),
-        ));
+        .fallback(tower::service_fn(move |req: axum::extract::Request| {
+            let index_path = std::sync::Arc::clone(&index_path);
+            async move {
+                let path = req.uri().path();
+                tracing::debug!("ServeDir fallback for path: {}", path);
+                // If path has a file extension, the file genuinely doesn't exist — 404
+                if std::path::Path::new(path).extension().is_some() {
+                    tracing::debug!("Returning 404 for file with extension: {}", path);
+                    Ok::<_, std::convert::Infallible>(
+                        axum::http::StatusCode::NOT_FOUND.into_response(),
+                    )
+                } else {
+                    // Client-side route — serve index.html
+                    tracing::debug!("Serving index.html for client route: {}", path);
+                    match tokio::fs::read_to_string(index_path.as_ref()).await {
+                        Ok(html) => {
+                            tracing::debug!("Successfully read index.html ({} bytes)", html.len());
+                            Ok::<_, std::convert::Infallible>(
+                                (
+                                    axum::http::StatusCode::OK,
+                                    [(axum::http::header::CONTENT_TYPE, "text/html")],
+                                    html,
+                                )
+                                    .into_response(),
+                            )
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to read index.html: {}", e);
+                            Ok::<_, std::convert::Infallible>(
+                                (
+                                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                    format!("Failed to load index.html: {}", e),
+                                )
+                                    .into_response(),
+                            )
+                        }
+                    }
+                }
+            }
+        }));
 
     let app = axum::Router::new()
         // Root redirect: / → /ui/

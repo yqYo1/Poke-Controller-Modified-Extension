@@ -54,7 +54,7 @@ struct Args {
     port: u16,
 
     /// Static files directory
-    #[arg(long = "web-dir", default_value = "web")]
+    #[arg(long = "web-dir", default_value = "web/dist")]
     web_dir: PathBuf,
 
     /// Scripts directory for command manager
@@ -2615,7 +2615,9 @@ fn start_tauri(port: u16) {
             let _window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                tauri::WebviewUrl::External(format!("http://127.0.0.1:{}", port).parse().unwrap()),
+                tauri::WebviewUrl::External(
+                    format!("http://127.0.0.1:{}/ui/", port).parse().unwrap(),
+                ),
             )
             .title("Poke-Controller Modified Extension")
             .inner_size(1280.0, 800.0)

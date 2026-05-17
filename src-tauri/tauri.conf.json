@@ -3,12 +3,6 @@
   "productName": "Poke-Controller",
   "version": "0.1.0",
   "identifier": "com.pokecontroller.app",
-  "build": {
-    "frontendDist": "../web/dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "cd ../web && npm run dev",
-    "beforeBuildCommand": "cd ../web && npm run build"
-  },
   "app": {
     "security": {
       "csp": null

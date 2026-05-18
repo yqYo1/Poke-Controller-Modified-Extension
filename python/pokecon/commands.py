@@ -33,6 +33,12 @@ from typing import (
     TypeVar,
 )
 
+from pokecon._adapter import (
+    _RUST_CORE_AVAILABLE,
+    RustBindingError,
+    _get_rust_module,
+    _wrap_rust_error,
+)
 from pokecon._meta import CommandMeta
 
 if TYPE_CHECKING:
@@ -1326,6 +1332,238 @@ class ImageProcPythonCommand(PythonCommand, ABC):
                     image=cropped_image,
                     keys=keys,
                 )
+
+
+# ===================================================================
+# CommandEngine — Rust CommandManager wrapper
+# ===================================================================
+
+
+class CommandEngine:
+    """Python wrapper around the Rust ``CommandManager`` (``pokecon.command.Command``).
+
+    Provides a Pythonic interface for discovering, loading, running, and
+    stopping automation scripts.  Delegates to the Rust-backed
+    ``pokecon.command.Command`` when the native extension is available;
+    otherwise raises ``RustBindingError``.
+
+    Usage::
+
+        engine = CommandEngine(\"/path/to/scripts\")
+        names = engine.scan()          # discover commands
+        engine.load(\"/path/to/script.py\")
+        engine.run(\"my_script\")       # set as active
+        print(engine.status())
+        engine.stop()                  # stop active command
+    """
+
+    def __init__(self, script_dir: str) -> None:
+        """Initialize the command engine for the given *script_dir*.
+
+        Parameters
+        ----------
+        script_dir : str
+            Path to the directory containing automation scripts.
+            The directory is created if it does not exist.
+        """
+        if _RUST_CORE_AVAILABLE:
+            try:
+                cmd_mod = _get_rust_module("command")
+                self._rust_cmd = cmd_mod.Command(script_dir)
+            except (ImportError, AttributeError) as exc:
+                raise RustBindingError(
+                    f"Failed to create Rust Command: {exc}",
+                ) from exc
+        else:
+            raise RustBindingError(
+                "CommandEngine requires the Rust extension (pokecon.command). "
+                "The native extension was not found.",
+            )
+
+    # ── Discovery ───────────────────────────────────────────────────
+
+    def scan(self) -> list[str]:
+        """Scan the script directory and discover available commands.
+
+        Returns
+        -------
+        list[str]
+            Names of commands found in the script directory.
+        """
+        try:
+            return list(self._rust_cmd.scan())
+        except Exception as exc:
+            raise _wrap_rust_error(exc, "scan() failed") from exc
+
+    # ── Load / Unload / Reload ──────────────────────────────────────
+
+    def load(self, path: str) -> str:
+        """Load a command from the given file *path*.
+
+        The command name is derived from the file stem (filename without
+        extension).
+
+        Parameters
+        ----------
+        path : str
+            Full or relative path to the script file.
+
+        Returns
+        -------
+        str
+            The derived command name.
+
+        Raises
+        ------
+        RustBindingError
+            If the command cannot be loaded (file not found, already loaded).
+        """
+        try:
+            return str(self._rust_cmd.load(path))
+        except Exception as exc:
+            raise _wrap_rust_error(exc, f"Failed to load command from {path}") from exc
+
+    def unload(self, name: str) -> None:
+        """Unload a previously loaded command by *name*.
+
+        Parameters
+        ----------
+        name : str
+            Command name to unload.
+
+        Raises
+        ------
+        RustBindingError
+            If the command is not loaded.
+        """
+        try:
+            self._rust_cmd.unload(name)
+        except Exception as exc:
+            raise _wrap_rust_error(exc, f"Failed to unload command '{name}'") from exc
+
+    def reload(self, name: str) -> None:
+        """Reload metadata (description, etc.) for the command *name* from disk.
+
+        Parameters
+        ----------
+        name : str
+            Command name to reload.
+
+        Raises
+        ------
+        RustBindingError
+            If the command is not loaded.
+        """
+        try:
+            self._rust_cmd.reload(name)
+        except Exception as exc:
+            raise _wrap_rust_error(exc, f"Failed to reload command '{name}'") from exc
+
+    # ── Execution ───────────────────────────────────────────────────
+
+    def run(self, name: str) -> None:
+        """Set the named command as the active (running) command.
+
+        The command must have been previously loaded via ``load()`` or
+        ``scan()``.
+
+        Parameters
+        ----------
+        name : str
+            Name of a previously-loaded command to activate.
+
+        Raises
+        ------
+        RustBindingError
+            If the command is not loaded.
+        """
+        try:
+            self._rust_cmd.run(name)
+        except Exception as exc:
+            raise _wrap_rust_error(exc, f"Failed to run command '{name}'") from exc
+
+    def stop(self) -> None:
+        """Stop the currently active command without unloading it.
+
+        After calling ``stop()``, ``active_name()`` returns ``None`` until
+        ``run()`` is called again.
+        """
+        try:
+            self._rust_cmd.stop()
+        except Exception:
+            pass  # stop is best-effort; no meaningful error possible
+
+    # ── Queries ─────────────────────────────────────────────────────
+
+    def status(self) -> dict[str, object]:
+        """Return a dictionary describing the current state.
+
+        Returns
+        -------
+        dict
+            Keys:
+
+            * ``active`` — name of the currently active command, or ``None``
+            * ``commands`` — list of all loaded command names
+            * ``count`` — number of loaded commands
+        """
+        try:
+            raw = self._rust_cmd.status()
+            return {
+                "active": raw.get("active"),
+                "commands": list(raw.get("commands", [])),
+                "count": raw.get("count", 0),
+            }
+        except Exception as exc:
+            raise _wrap_rust_error(exc, "status() failed") from exc
+
+    def active_name(self) -> str | None:
+        """Return the name of the currently active command, or ``None``."""
+        try:
+            result = self._rust_cmd.active_name()
+            return str(result) if result is not None else None
+        except Exception as exc:
+            raise _wrap_rust_error(exc, "active_name() failed") from exc
+
+    def names(self) -> list[str]:
+        """Return a list of all loaded command names."""
+        try:
+            return list(self._rust_cmd.names())
+        except Exception as exc:
+            raise _wrap_rust_error(exc, "names() failed") from exc
+
+    def count(self) -> int:
+        """Return the number of loaded commands."""
+        try:
+            return int(self._rust_cmd.count())
+        except Exception as exc:
+            raise _wrap_rust_error(exc, "count() failed") from exc
+
+    def is_loaded(self, name: str) -> bool:
+        """Check whether a particular command is loaded.
+
+        Parameters
+        ----------
+        name : str
+            Command name to check.
+
+        Returns
+        -------
+        bool
+            ``True`` if the command is loaded.
+        """
+        try:
+            return bool(self._rust_cmd.is_loaded(name))
+        except Exception as exc:
+            raise _wrap_rust_error(exc, f"is_loaded('{name}') failed") from exc
+
+    def __repr__(self) -> str:
+        try:
+            active = self.active_name() or "none"
+            cnt = self.count()
+            return f"<CommandEngine count={cnt} active='{active}'>"
+        except Exception:
+            return "<CommandEngine (unavailable)>"
 
 
 # ---------------------------------------------------------------------------

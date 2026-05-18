@@ -26,7 +26,7 @@ from pokecon.cli_args import (
 # ---------------------------------------------------------------------------
 # Import our wrapper implementations
 # ---------------------------------------------------------------------------
-from pokecon.commands import ImageProcPythonCommand, PythonCommand
+from pokecon.commands import CommandEngine, ImageProcPythonCommand, PythonCommand
 from pokecon.keys import (
     NEUTRAL,
     Button,
@@ -114,6 +114,7 @@ def _patch_modules() -> None:
 _patch_modules()
 
 __all__ = [
+    "CommandEngine",
     "PythonCommand",
     "ImageProcPythonCommand",
     "Button",

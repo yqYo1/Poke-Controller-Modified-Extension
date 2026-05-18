@@ -413,6 +413,10 @@ impl ImageProcessor {
     /// Compute interframe difference from three consecutive frames.
     /// Returns a binarized difference image (absdiff(frame1,frame2) &
     /// absdiff(frame2,frame3) thresholded).
+    ///
+    /// Non-grayscale frames are automatically converted to grayscale before
+    /// processing.  The conversion is performed iteratively (no recursion) to
+    /// avoid stack overflow.
     pub fn interframe_diff(
         frame1: &Frame,
         frame2: &Frame,
@@ -420,61 +424,50 @@ impl ImageProcessor {
         threshold: u8,
         blur_ksize: u8,
     ) -> Result<Frame, ImageError> {
-        if frame1.format != PixelFormat::Gray
-            || frame2.format != PixelFormat::Gray
-            || frame3.format != PixelFormat::Gray
-        {
-            // Auto-convert to grayscale if needed
-            let f1 = if frame1.format == PixelFormat::Gray {
-                frame1.clone()
-            } else {
-                Self::grayscale(frame1)?
-            };
-            let f2 = if frame2.format == PixelFormat::Gray {
-                frame2.clone()
-            } else {
-                Self::grayscale(frame2)?
-            };
-            let f3 = if frame3.format == PixelFormat::Gray {
-                frame3.clone()
-            } else {
-                Self::grayscale(frame3)?
-            };
-            return Self::interframe_diff(&f1, &f2, &f3, threshold, blur_ksize);
-        }
+        // Convert all frames to grayscale upfront (iterative, no recursion)
+        let f1 = if frame1.format == PixelFormat::Gray {
+            frame1.clone()
+        } else {
+            Self::grayscale(frame1)?
+        };
+        let f2 = if frame2.format == PixelFormat::Gray {
+            frame2.clone()
+        } else {
+            Self::grayscale(frame2)?
+        };
+        let f3 = if frame3.format == PixelFormat::Gray {
+            frame3.clone()
+        } else {
+            Self::grayscale(frame3)?
+        };
 
-        if frame1.width != frame2.width
-            || frame1.height != frame2.height
-            || frame1.width != frame3.width
-            || frame1.height != frame3.height
+        if f1.width != f2.width
+            || f1.height != f2.height
+            || f1.width != f3.width
+            || f1.height != f3.height
         {
             return Err(ImageError::InvalidDimensions);
         }
 
-        let n = frame1.data.len();
+        let n = f1.data.len();
         let mut diff = vec![0u8; n];
 
         // diff = absdiff(f1,f2) AND absdiff(f2,f3)
         for (i, d) in diff.iter_mut().enumerate().take(n) {
-            let d1 = (frame1.data[i] as i16 - frame2.data[i] as i16).unsigned_abs() as u8;
-            let d2 = (frame2.data[i] as i16 - frame3.data[i] as i16).unsigned_abs() as u8;
+            let d1 = (f1.data[i] as i16 - f2.data[i] as i16).unsigned_abs() as u8;
+            let d2 = (f2.data[i] as i16 - f3.data[i] as i16).unsigned_abs() as u8;
             let val = d1.min(d2);
             *d = if val >= threshold { 255 } else { 0 };
         }
 
         // Simple box blur (median-like) with ksize
         if blur_ksize > 0 {
-            Self::box_blur_in_place(
-                &mut diff,
-                frame1.width as usize,
-                frame1.height as usize,
-                blur_ksize,
-            );
+            Self::box_blur_in_place(&mut diff, f1.width as usize, f1.height as usize, blur_ksize);
         }
 
         Ok(Frame {
-            width: frame1.width,
-            height: frame1.height,
+            width: f1.width,
+            height: f1.height,
             data: diff,
             format: PixelFormat::Gray,
         })

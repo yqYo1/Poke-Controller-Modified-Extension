@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use pokecon_core::notify::discord::DiscordNotifier;
@@ -10,6 +11,14 @@ use pokecon_core::notify::line::LineNotifier;
 use pokecon_core::notify::{Notification, Notifier};
 use pokecon_core::serial::keypress::KeyPress;
 use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
+
+// ---------------------------------------------------------------------------
+// Global tokio runtime shared across all PythonCommand instances.
+// ---------------------------------------------------------------------------
+fn global_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"))
+}
 
 // ---------------------------------------------------------------------------
 // Helper: parse a button string like "A", "A|B", "A+B", "DPAD_UP"
@@ -122,7 +131,6 @@ pub struct PythonCommand {
     callbacks: Mutex<HashMap<String, PyObject>>,
     alive: bool,
     keypress: Option<KeyPress>,
-    runtime: Option<tokio::runtime::Runtime>,
     discord: Option<DiscordNotifier>,
     line: Option<LineNotifier>,
 }
@@ -136,7 +144,6 @@ impl PythonCommand {
             callbacks: Mutex::new(HashMap::new()),
             alive: true,
             keypress: None,
-            runtime: None,
             discord: None,
             line: None,
         }
@@ -211,9 +218,7 @@ impl PythonCommand {
         }
 
         // Get or create keypress
-        let rt = self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-        });
+        let rt = global_runtime();
 
         let kp = self.keypress.get_or_insert_with(|| {
             let sender = pokecon_core::serial::sender::Sender::new(false);
@@ -247,9 +252,7 @@ impl PythonCommand {
             return Ok(());
         }
 
-        let rt = self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-        });
+        let rt = global_runtime();
 
         let kp = self.keypress.get_or_insert_with(|| {
             let sender = pokecon_core::serial::sender::Sender::new(false);
@@ -271,9 +274,7 @@ impl PythonCommand {
         self.check_alive()?;
 
         if let Some(ref mut kp) = self.keypress {
-            let rt = self.runtime.get_or_insert_with(|| {
-                tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-            });
+            let rt = global_runtime();
 
             rt.block_on(kp.neutral())
                 .map_err(|e| PyRuntimeError::new_err(format!("Serial hold_end failed: {}", e)))?;
@@ -311,9 +312,7 @@ impl PythonCommand {
 
         // Release held buttons
         if let Some(ref mut kp) = self.keypress {
-            let rt = self.runtime.get_or_insert_with(|| {
-                tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-            });
+            let rt = global_runtime();
 
             let _ = rt.block_on(kp.neutral());
             let _ = rt.block_on(kp.end());
@@ -332,9 +331,7 @@ impl PythonCommand {
     /// * ``token`` — optional LINE channel access token.  If not provided, uses
     ///   the notifier created from ``set_line_token()``.
     fn line_text(&mut self, text: String, token: Option<String>) -> PyResult<()> {
-        let rt = self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-        });
+        let rt = global_runtime();
 
         // If a token is provided, create a temporary notifier.
         // Otherwise use the stored one (if available).
@@ -361,9 +358,7 @@ impl PythonCommand {
     /// * ``webhook_url`` — optional Discord webhook URL.  If not provided,
     ///   uses the notifier created from ``set_discord_webhook()``.
     fn discord_text(&mut self, text: String, webhook_url: Option<String>) -> PyResult<()> {
-        let rt = self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-        });
+        let rt = global_runtime();
 
         if let Some(url) = webhook_url {
             let notifier = DiscordNotifier::new(url);
@@ -408,9 +403,7 @@ impl PythonCommand {
         port_name: Option<String>,
         baudrate: Option<u32>,
     ) -> PyResult<bool> {
-        let rt = self.runtime.get_or_insert_with(|| {
-            tokio::runtime::Runtime::new().expect("Failed to create tokio runtime")
-        });
+        let rt = global_runtime();
 
         let kp = self.keypress.get_or_insert_with(|| {
             let sender = pokecon_core::serial::sender::Sender::new(false);

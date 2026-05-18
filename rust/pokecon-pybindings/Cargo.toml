@@ -19,7 +19,7 @@ tracing = { workspace = true }
 pyo3 = { workspace = true }
 numpy = "0.25"
 ndarray = "0.16"
-
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif"] }
 
 pokecon-core = { path = "../pokecon-core", features = ["v4l", "notify", "mqtt", "lua"] }
 

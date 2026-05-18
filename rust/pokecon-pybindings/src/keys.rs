@@ -1,8 +1,66 @@
-use pokecon_core::serial::keys::{
-    Button as RustButton, Direction as RustDirection, Hat as RustHat, Stick as RustStick,
-    Touchscreen as RustTouchscreen,
-};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyList;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+use pokecon_core::serial::keypress::{KeyPress, SerialFormat};
+use pokecon_core::serial::keys::{
+    Button as RustButton, Direction as RustDirection, GamepadInput, Hat as RustHat,
+    Stick as RustStick, Touchscreen as RustTouchscreen,
+};
+
+// ============================================================
+// Global tokio runtime
+// ============================================================
+
+fn global_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"))
+}
+
+// ============================================================
+// Helper: convert Python objects to GamepadInput
+// ============================================================
+
+/// Try to convert a single Python object to a GamepadInput.
+/// Supports Button, Hat, Direction, and Touchscreen types.
+fn pyobj_to_gamepad_input(obj: &Bound<'_, PyAny>) -> PyResult<GamepadInput> {
+    // Try Button
+    if let Ok(btn) = obj.downcast::<PyButton>() {
+        return Ok(GamepadInput::SingleButton(btn.borrow().inner));
+    }
+    // Try Hat
+    if let Ok(hat) = obj.downcast::<PyHat>() {
+        return Ok(GamepadInput::SingleHat(hat.borrow().inner));
+    }
+    // Try Direction
+    if let Ok(dir) = obj.downcast::<PyDirection>() {
+        return Ok(GamepadInput::SingleDirection(dir.borrow().inner.clone()));
+    }
+    // Try Touchscreen
+    if let Ok(ts) = obj.downcast::<PyTouchscreen>() {
+        return Ok(GamepadInput::SingleTouchscreen(ts.borrow().inner));
+    }
+    Err(PyTypeError::new_err(
+        "Expected Button, Hat, Direction, Touchscreen, or list of these",
+    ))
+}
+
+/// Convert a Python object to a Vec<GamepadInput>.
+/// Accepts either a single input object or a list of input objects.
+fn pyany_to_gamepad_inputs(obj: &Bound<'_, PyAny>) -> PyResult<Vec<GamepadInput>> {
+    // If it's a list, iterate and convert each element
+    if let Ok(list) = obj.downcast::<PyList>() {
+        let mut result = Vec::with_capacity(list.len());
+        for item in list.iter() {
+            result.push(pyobj_to_gamepad_input(&item)?);
+        }
+        return Ok(result);
+    }
+    // Otherwise, treat as a single input
+    Ok(vec![pyobj_to_gamepad_input(obj)?])
+}
 
 // ============================================================
 // Button
@@ -303,7 +361,7 @@ impl PyStick {
             "Left" => RustStick::Left,
             "Right" => RustStick::Right,
             _ => {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                return Err(PyValueError::new_err(format!(
                     "Unknown stick: '{}'. Use 'Left' or 'Right'.",
                     name
                 )));
@@ -484,6 +542,233 @@ impl PyTouchscreen {
 }
 
 // ============================================================
+// KeyManager — high-level key input manager
+// ============================================================
+
+/// High-level manager for controller key inputs.
+///
+/// Provides ``press``, ``hold``, ``release``, ``release_all``,
+/// ``is_pressed``, and ``get_state`` methods for interacting with
+/// the Switch/3DS controller.
+///
+/// Python usage::
+///
+///     from pokecon.keys import KeyManager, Button, Hat, Direction
+///
+///     km = KeyManager()
+///     km.open_serial(port_num=0, baudrate=115200)
+///
+///     # Press a single button
+///     km.press(Button.A)
+///
+///     # Press multiple inputs together (combo)
+///     km.press([Button.A, Button.B])
+///     km.press([Button.A, Hat.UP])
+///
+///     # Hold a button
+///     km.hold(Button.A)
+///
+///     # Check if a button is being held
+///     assert km.is_pressed(Button.A)
+///
+///     # Release a specific button
+///     km.release(Button.A)
+///
+///     # Or release everything
+///     km.release_all()
+///
+///     # Get current hold state
+///     state = km.get_state()
+#[pyclass(name = "KeyManager")]
+pub struct PyKeyManager {
+    inner: KeyPress,
+}
+
+#[pymethods]
+impl PyKeyManager {
+    /// Create a new KeyManager instance.
+    ///
+    /// A serial connection must be opened via ``open_serial()``
+    /// before input methods can be used.
+    #[new]
+    fn new() -> Self {
+        let sender = pokecon_core::serial::sender::Sender::new(false);
+        Self {
+            inner: KeyPress::new(sender),
+        }
+    }
+
+    /// Open a serial connection.
+    ///
+    /// * ``port_num`` — COM port number (e.g. ``0`` for ``/dev/ttyUSB0`` or ``COM1``).
+    /// * ``port_name`` — optional explicit port path (overrides auto-detection).
+    /// * ``baudrate`` — baud rate (default 115200).
+    ///
+    /// Returns ``True`` if the port was opened successfully.
+    #[pyo3(signature = (port_num, port_name = None, baudrate = None))]
+    fn open_serial(
+        &mut self,
+        port_num: u32,
+        port_name: Option<String>,
+        baudrate: Option<u32>,
+    ) -> PyResult<bool> {
+        let rt = global_runtime();
+        let baud = baudrate.unwrap_or(115200);
+        rt.block_on(
+            self.inner
+                .sender_mut()
+                .open(port_num, port_name.as_deref(), baud),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to open serial: {e}")))
+    }
+
+    /// Press (and release) a button or combination of inputs.
+    ///
+    /// * ``inputs`` — a single ``Button``, ``Hat``, ``Direction``, ``Touchscreen``,
+    ///   or a Python ``list`` of them.
+    /// * ``duration`` — how long to hold the inputs (seconds, default 0.1).
+    /// * ``wait`` — how long to wait after releasing (seconds, default 0.1).
+    #[pyo3(signature = (inputs, duration = 0.1, wait = 0.1))]
+    fn press(&mut self, inputs: &Bound<'_, PyAny>, duration: f64, wait: f64) -> PyResult<()> {
+        let gamepad_inputs = pyany_to_gamepad_inputs(inputs)?;
+        if gamepad_inputs.is_empty() {
+            Self::sleep_wait(duration);
+            Self::sleep_wait(wait);
+            return Ok(());
+        }
+
+        let rt = global_runtime();
+
+        rt.block_on(self.inner.input(&gamepad_inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial input failed: {e}")))?;
+
+        Self::sleep_wait(duration);
+
+        rt.block_on(self.inner.input_end(&gamepad_inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial input_end failed: {e}")))?;
+
+        Self::sleep_wait(wait);
+
+        Ok(())
+    }
+
+    /// Hold down a button or combination of inputs.
+    ///
+    /// * ``inputs`` — a single ``Button``, ``Hat``, ``Direction``, ``Touchscreen``,
+    ///   or a Python ``list`` of them.
+    /// * ``duration`` — how long to continue holding (seconds, default 0.1).
+    #[pyo3(signature = (inputs, duration = 0.1))]
+    fn hold(&mut self, inputs: &Bound<'_, PyAny>, duration: f64) -> PyResult<()> {
+        let gamepad_inputs = pyany_to_gamepad_inputs(inputs)?;
+        if gamepad_inputs.is_empty() {
+            Self::sleep_wait(duration);
+            return Ok(());
+        }
+
+        let rt = global_runtime();
+
+        rt.block_on(self.inner.hold(&gamepad_inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial hold failed: {e}")))?;
+
+        Self::sleep_wait(duration);
+
+        Ok(())
+    }
+
+    /// Release a specific button or combination of inputs.
+    ///
+    /// * ``inputs`` — a single ``Button``, ``Hat``, ``Direction``, ``Touchscreen``,
+    ///   or a Python ``list`` of them.
+    /// * ``wait`` — how long to wait after releasing (seconds, default 0.1).
+    #[pyo3(signature = (inputs, wait = 0.1))]
+    fn release(&mut self, inputs: &Bound<'_, PyAny>, wait: f64) -> PyResult<()> {
+        let gamepad_inputs = pyany_to_gamepad_inputs(inputs)?;
+        if gamepad_inputs.is_empty() {
+            Self::sleep_wait(wait);
+            return Ok(());
+        }
+
+        let rt = global_runtime();
+
+        rt.block_on(self.inner.hold_end(&gamepad_inputs))
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial release failed: {e}")))?;
+
+        Self::sleep_wait(wait);
+
+        Ok(())
+    }
+
+    /// Release all currently held buttons and inputs.
+    ///
+    /// * ``wait`` — how long to wait after releasing (seconds, default 0.1).
+    #[pyo3(signature = (wait = 0.1))]
+    fn release_all(&mut self, wait: f64) -> PyResult<()> {
+        let rt = global_runtime();
+
+        rt.block_on(self.inner.neutral())
+            .map_err(|e| PyRuntimeError::new_err(format!("Serial release_all failed: {e}")))?;
+
+        Self::sleep_wait(wait);
+
+        Ok(())
+    }
+
+    /// Check if a specific button or input is currently being held down.
+    ///
+    /// * ``input`` — a single ``Button``, ``Hat``, ``Direction``, or ``Touchscreen``.
+    ///
+    /// Returns ``True`` if the input is in the current hold state.
+    fn is_pressed(&self, input: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let target = pyobj_to_gamepad_input(input)?;
+        let held = self.inner.hold_buttons();
+        Ok(held.contains(&target))
+    }
+
+    /// Get the list of currently held inputs as human-readable strings.
+    ///
+    /// Returns a Python list of ``GamepadInput`` representations currently
+    /// being held (e.g. ``['SingleButton(A)', 'SingleHat(TOP)']``).
+    fn get_state(&self) -> Vec<String> {
+        self.inner
+            .hold_buttons()
+            .iter()
+            .map(|g| format!("{g:?}"))
+            .collect()
+    }
+
+    /// Set the serial communication format.
+    ///
+    /// * ``format`` — one of ``'Default'``, ``'Qingpi'``, or ``'3DS Controller'``.
+    fn set_serial_format(&mut self, format: &str) -> PyResult<()> {
+        let sf = match format {
+            "Default" => SerialFormat::Default,
+            "Qingpi" => SerialFormat::Qingpi,
+            "3DS Controller" => SerialFormat::_3dsController,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown serial format: '{format}'. Use 'Default', 'Qingpi', or '3DS Controller'."
+                )));
+            }
+        };
+        self.inner.set_serial_format(sf);
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        let n = self.inner.hold_buttons().len();
+        format!("<KeyManager held={n}>")
+    }
+}
+
+impl PyKeyManager {
+    fn sleep_wait(seconds: f64) {
+        if seconds > 0.0 {
+            std::thread::sleep(Duration::from_secs_f64(seconds));
+        }
+    }
+}
+
+// ============================================================
 // Legacy helper functions
 // ============================================================
 
@@ -521,6 +806,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStick>()?;
     m.add_class::<PyDirection>()?;
     m.add_class::<PyTouchscreen>()?;
+    m.add_class::<PyKeyManager>()?;
     m.add_function(wrap_pyfunction!(convert_button, m)?)?;
     m.add_function(wrap_pyfunction!(get_direction, m)?)?;
     Ok(())
@@ -724,6 +1010,136 @@ mod tests {
         assert!(!ts1.__eq__(&ts3));
     }
 
+    // ── KeyManager tests (Rust-side state, no serial) ─────────────────
+
+    #[test]
+    fn test_keymanager_new() {
+        let km = PyKeyManager::new();
+        assert!(km.inner.hold_buttons().is_empty());
+        let repr = km.__repr__();
+        assert!(repr.contains("held=0"));
+    }
+
+    #[test]
+    fn test_keymanager_get_state_empty() {
+        let km = PyKeyManager::new();
+        let state = km.get_state();
+        assert!(state.is_empty());
+    }
+
+    #[test]
+    fn test_keymanager_is_pressed_empty() {
+        Python::with_gil(|py| {
+            let km = PyKeyManager::new();
+            // Create a button in Python to test is_pressed
+            let btn_type = py.get_type::<PyButton>();
+            let btn_a = btn_type.call_method0("A").unwrap();
+            let result = km.is_pressed(&btn_a).unwrap();
+            assert!(!result);
+        });
+    }
+
+    #[test]
+    fn test_keymanager_set_serial_format_valid() {
+        let mut km = PyKeyManager::new();
+        assert!(km.set_serial_format("Default").is_ok());
+        assert!(km.set_serial_format("Qingpi").is_ok());
+        assert!(km.set_serial_format("3DS Controller").is_ok());
+    }
+
+    #[test]
+    fn test_keymanager_set_serial_format_invalid() {
+        let mut km = PyKeyManager::new();
+        let result = km.set_serial_format("Invalid");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_keymanager_open_serial_errors_when_no_port() {
+        // Without a real serial port, open should return an error
+        let rt = global_runtime();
+        let mut km = PyKeyManager::new();
+        let result = rt.block_on(async {
+            km.inner
+                .sender_mut()
+                .open(999, Some("/dev/null"), 115200)
+                .await
+        });
+        assert!(result.is_err());
+    }
+
+    // ── Conversion helper tests ───────────────────────────────────────
+
+    #[test]
+    fn test_pyobj_to_gamepad_input_button() {
+        Python::with_gil(|py| {
+            let btn_type = py.get_type::<PyButton>();
+            let btn_a = btn_type.call_method0("A").unwrap();
+            let result = pyobj_to_gamepad_input(&btn_a).unwrap();
+            assert_eq!(result, GamepadInput::SingleButton(RustButton::A));
+        });
+    }
+
+    #[test]
+    fn test_pyobj_to_gamepad_input_hat() {
+        Python::with_gil(|py| {
+            let hat_type = py.get_type::<PyHat>();
+            let hat_top = hat_type.call_method0("TOP").unwrap();
+            let result = pyobj_to_gamepad_input(&hat_top).unwrap();
+            assert_eq!(result, GamepadInput::SingleHat(RustHat::TOP));
+        });
+    }
+
+    #[test]
+    fn test_pyobj_to_gamepad_input_direction() {
+        Python::with_gil(|py| {
+            let stick_type = py.get_type::<PyStick>();
+            let left = stick_type.call_method0("LEFT").unwrap();
+            let dir_type = py.get_type::<PyDirection>();
+            let dir_up = dir_type
+                .call_method1("from_angle", (left, 90.0, 1.0))
+                .unwrap();
+            let result = pyobj_to_gamepad_input(&dir_up).unwrap();
+            let expected = GamepadInput::SingleDirection(RustDirection::up(RustStick::Left));
+            assert_eq!(result, expected);
+        });
+    }
+
+    #[test]
+    fn test_pyobj_to_gamepad_input_invalid_type() {
+        Python::with_gil(|py| {
+            let invalid = "invalid".into_pyobject(py).unwrap();
+            let result = pyobj_to_gamepad_input(&invalid);
+            assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn test_pyany_to_gamepad_inputs_single() {
+        Python::with_gil(|py| {
+            let btn_type = py.get_type::<PyButton>();
+            let btn_a = btn_type.call_method0("A").unwrap();
+            let result = pyany_to_gamepad_inputs(&btn_a).unwrap();
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0], GamepadInput::SingleButton(RustButton::A));
+        });
+    }
+
+    #[test]
+    fn test_pyany_to_gamepad_inputs_list() {
+        Python::with_gil(|py| {
+            let btn_type = py.get_type::<PyButton>();
+            let btn_a = btn_type.call_method0("A").unwrap();
+            let btn_b = btn_type.call_method0("B").unwrap();
+
+            let list = PyList::new(py, [btn_a, btn_b]).unwrap();
+            let result = pyany_to_gamepad_inputs(&list.as_borrowed()).unwrap();
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0], GamepadInput::SingleButton(RustButton::A));
+            assert_eq!(result[1], GamepadInput::SingleButton(RustButton::B));
+        });
+    }
+
     // ── Legacy helper function tests ──────────────────────────────────
 
     #[test]
@@ -759,6 +1175,29 @@ mod tests {
     fn test_pyhat_creation_in_python() {
         Python::with_gil(|_py| {
             let _hat = PyHat::new(0);
+        });
+    }
+
+    #[test]
+    fn test_keymanager_creation_in_python() {
+        Python::with_gil(|_py| {
+            let _km = PyKeyManager::new();
+        });
+    }
+
+    #[test]
+    fn test_keymanager_is_pressed_with_list_errors() {
+        // is_pressed only accepts a single input, not a list
+        Python::with_gil(|py| {
+            let km = PyKeyManager::new();
+            let btn_type = py.get_type::<PyButton>();
+            let btn_a = btn_type.call_method0("A").unwrap();
+            let btn_b = btn_type.call_method0("B").unwrap();
+
+            let list = PyList::new(py, [btn_a, btn_b]).unwrap();
+            let result = km.is_pressed(&list.as_borrowed());
+            // Should error because is_pressed() expects a single input
+            assert!(result.is_err());
         });
     }
 }

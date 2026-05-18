@@ -1,5 +1,4 @@
 use clap::Parser;
-use pokecon_core::settings::{DEFAULT_PROFILES_DIR, DEFAULT_SCRIPTS_DIR};
 use std::path::PathBuf;
 
 /// Poke-Controller Modified Extension — Tauri/Web UI
@@ -18,13 +17,13 @@ pub struct Args {
     #[arg(long = "web-dir", default_value = "web/dist")]
     pub web_dir: PathBuf,
 
-    /// Scripts directory for command manager
-    #[arg(long = "scripts-dir", default_value = DEFAULT_SCRIPTS_DIR)]
-    pub scripts_dir: PathBuf,
+    /// Scripts directory for command manager (default: config file or "scripts")
+    #[arg(long = "scripts-dir")]
+    pub scripts_dir: Option<PathBuf>,
 
-    /// Profiles directory for profile manager
-    #[arg(long = "profiles-dir", default_value = DEFAULT_PROFILES_DIR)]
-    pub profiles_dir: PathBuf,
+    /// Profiles directory for profile manager (default: config file or "profiles")
+    #[arg(long = "profiles-dir")]
+    pub profiles_dir: Option<PathBuf>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

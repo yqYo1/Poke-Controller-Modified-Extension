@@ -66,8 +66,7 @@ pub struct NotifySettings {
     /// Enable Discord webhook notifications
     pub discord_enabled: bool,
     /// Discord webhook URL
-    #[serde(default)]
-    pub discord_webhook_url: String,
+    pub discord_webhook_url: Option<String>,
     /// LINE Notify access token
     pub line_access_token: Option<String>,
 }
@@ -77,7 +76,7 @@ impl Default for NotifySettings {
         Self {
             windows_enabled: true,
             discord_enabled: false,
-            discord_webhook_url: String::new(),
+            discord_webhook_url: None,
             line_access_token: None,
         }
     }
@@ -168,7 +167,7 @@ mod tests {
             notify: NotifySettings {
                 windows_enabled: true,
                 discord_enabled: true,
-                discord_webhook_url: "https://discord.com/api/webhooks/xxx".to_string(),
+                discord_webhook_url: Some("https://discord.com/api/webhooks/xxx".to_string()),
                 line_access_token: None,
             },
             script_dir: PathBuf::from("custom_scripts"),

@@ -20,8 +20,12 @@ pub struct MouseStickConfig {
     /// Whether right-stick mouse control is enabled
     pub right_enabled: bool,
     /// Sensitivity multiplier (default: 1.0)
-    #[serde(default)]
+    #[serde(default = "default_sensitivity")]
     pub sensitivity: f32,
+}
+
+fn default_sensitivity() -> f32 {
+    1.0
 }
 
 impl Default for MouseStickConfig {
@@ -29,7 +33,7 @@ impl Default for MouseStickConfig {
         Self {
             left_enabled: false,
             right_enabled: false,
-            sensitivity: 1.0,
+            sensitivity: default_sensitivity(),
         }
     }
 }
@@ -102,8 +106,8 @@ mod tests {
         let config: MouseStickConfig = serde_json::from_str(json).unwrap();
         assert!(config.left_enabled);
         assert!(config.right_enabled);
-        // #[serde(default)] uses f32 default (0.0), not struct Default (1.0)
-        assert_eq!(config.sensitivity, 0.0);
+        // Uses default_sensitivity() = 1.0
+        assert_eq!(config.sensitivity, 1.0);
     }
 
     #[test]

@@ -101,6 +101,11 @@ pub fn validate_webhook_url(url_str: &str) -> Result<(), String> {
         .host_str()
         .ok_or_else(|| format!("URL has no host: {url_str}"))?;
 
+    // Reject empty host (e.g., http:///path)
+    if host.is_empty() {
+        return Err(format!("URL host is empty: {url_str}"));
+    }
+
     // Block private/internal addresses (SSRF prevention)
     let lower_host = host.to_lowercase();
 
@@ -395,13 +400,6 @@ mod tests {
     #[test]
     fn test_validate_webhook_url_accepts_public_hostname() {
         assert!(validate_webhook_url("https://discord.com/api/webhooks/xxx").is_ok());
-    }
-
-    #[test]
-    fn test_validate_webhook_url_no_host_is_error() {
-        // http:///path has an empty host, which does not parse as an IP
-        // and is not a blocked hostname, so validation passes as-is
-        assert!(validate_webhook_url("http:///path").is_ok());
     }
 
     // ── mask_secret ────────────────────────────────────────────────────

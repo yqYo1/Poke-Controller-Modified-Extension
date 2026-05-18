@@ -30,7 +30,7 @@ pub async fn notifications_get_config(State(state): State<AppState>) -> Json<ser
         "status": "ok",
         "windows_enabled": cfg.windows_enabled,
         "discord_enabled": cfg.discord_enabled,
-        "discord_webhook_url": helpers::mask_secret(&cfg.discord_webhook_url),
+        "discord_webhook_url": cfg.discord_webhook_url.as_deref().map(helpers::mask_secret),
     }))
 }
 
@@ -70,7 +70,7 @@ pub async fn notifications_set_config(
                 "message": format!("Invalid discord_webhook_url: {e}"),
             }));
         }
-        cfg.discord_webhook_url = v;
+        cfg.discord_webhook_url = Some(v);
     }
     tracing::info!("Notification config updated");
     Json(serde_json::json!({
@@ -108,7 +108,7 @@ pub async fn notifications_send(
     // Extract config values before spawning tasks
     let windows_enabled = cfg.windows_enabled;
     let discord_enabled = cfg.discord_enabled;
-    let discord_url = cfg.discord_webhook_url.clone();
+    let discord_url = cfg.discord_webhook_url.clone().unwrap_or_default();
     drop(cfg); // Release the lock before spawning parallel tasks
 
     let mut handles: Vec<tokio::task::JoinHandle<serde_json::Value>> = Vec::new();

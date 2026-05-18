@@ -51,26 +51,11 @@ fn main() {
         }
     };
 
-    // Merge: CLI args take precedence over config file settings
-    let scripts_dir = if args.scripts_dir.to_string_lossy()
-        == pokecon_core::settings::DEFAULT_SCRIPTS_DIR
-        && settings.script_dir.to_string_lossy() != pokecon_core::settings::DEFAULT_SCRIPTS_DIR
-    {
-        // Config file has a custom scripts_dir and CLI didn't override
-        settings.script_dir.clone()
-    } else {
-        args.scripts_dir.clone()
-    };
+    // Merge: CLI args take precedence over config file settings.
+    // If a CLI arg is not provided (None), fall back to config file or default.
+    let scripts_dir = args.scripts_dir.clone().unwrap_or(settings.script_dir);
 
-    let profiles_dir = if args.profiles_dir.to_string_lossy()
-        == pokecon_core::settings::DEFAULT_PROFILES_DIR
-        && settings.profile_dir.to_string_lossy() != pokecon_core::settings::DEFAULT_PROFILES_DIR
-    {
-        // Config file has a custom profiles_dir and CLI didn't override
-        settings.profile_dir.clone()
-    } else {
-        args.profiles_dir.clone()
-    };
+    let profiles_dir = args.profiles_dir.clone().unwrap_or(settings.profile_dir);
 
     // Create broadcast channel for WebSocket event forwarding
     let (event_tx, _) = tokio::sync::broadcast::channel::<serde_json::Value>(256);

@@ -2,6 +2,7 @@ mod events;
 mod image_proc;
 mod keys;
 mod python_cmd;
+mod sender;
 
 use pyo3::prelude::*;
 
@@ -22,6 +23,10 @@ fn pokecon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let cmd_module = PyModule::new(m.py(), "command")?;
     python_cmd::register(&cmd_module)?;
     m.add_submodule(&cmd_module)?;
+
+    let sender_module = PyModule::new(m.py(), "sender")?;
+    sender::register(&sender_module)?;
+    m.add_submodule(&sender_module)?;
 
     Ok(())
 }

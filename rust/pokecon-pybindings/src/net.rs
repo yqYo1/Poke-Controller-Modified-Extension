@@ -1215,6 +1215,80 @@ impl PyMqttClient {
         self.inner.is_connected()
     }
 
+    /// Verify the MQTT connection is alive.
+    ///
+    /// Checks both the event loop health and the last-known connection state.
+    ///
+    /// Returns
+    /// -------
+    /// bool
+    ///     ``True`` if the event loop is running and the broker acknowledged
+    ///     the connection; ``False`` otherwise.
+    fn verify_connection(&self) -> PyResult<bool> {
+        let rt = global_runtime();
+        rt.block_on(self.inner.verify_connection())
+            .map_err(|e| PyRuntimeError::new_err(format!("MQTT verify_connection failed: {e}")))
+    }
+
+    /// Connect to the MQTT broker with a timeout.
+    ///
+    /// Waits up to ``timeout_secs`` seconds for the actual MQTT connection
+    /// to be established (as confirmed by the broker's CONNACK response).
+    ///
+    /// Parameters
+    /// ----------
+    /// timeout_secs : float
+    ///     Maximum time to wait for connection in seconds.
+    #[pyo3(signature = (timeout_secs))]
+    fn connect_with_timeout(&mut self, timeout_secs: f64) -> PyResult<()> {
+        let rt = global_runtime();
+        rt.block_on(self.inner.connect_with_timeout(timeout_secs as u64))
+            .map_err(|e| PyRuntimeError::new_err(format!("MQTT connect_with_timeout failed: {e}")))
+    }
+
+    /// Attempt to reconnect to the MQTT broker with exponential backoff.
+    ///
+    /// Disconnects the current session and re-establishes the connection.
+    /// Retries up to `max_reconnect_attempts` times with doubling delay.
+    fn reconnect(&mut self) -> PyResult<()> {
+        let rt = global_runtime();
+        rt.block_on(self.inner.reconnect())
+            .map_err(|e| PyRuntimeError::new_err(format!("MQTT reconnect failed: {e}")))
+    }
+
+    /// Set the maximum number of reconnection attempts.
+    ///
+    /// Parameters
+    /// ----------
+    /// max : int
+    ///     Maximum number of reconnection attempts (default: 5).
+    fn set_max_reconnect_attempts(&mut self, max: usize) {
+        self.inner.set_max_reconnect_attempts(max);
+    }
+
+    /// Get the maximum number of reconnection attempts.
+    fn get_max_reconnect_attempts(&self) -> usize {
+        self.inner.max_reconnect_attempts()
+    }
+
+    /// Set the base delay in seconds for reconnection backoff.
+    ///
+    /// The actual delay doubles with each failed attempt:
+    /// ``delay = base * 2^(attempt - 1)``.
+    ///
+    /// Parameters
+    /// ----------
+    /// secs : int
+    ///     Base delay in seconds (default: 1).
+    fn set_reconnect_base_delay(&mut self, secs: u64) {
+        self.inner.set_reconnect_base_delay(secs);
+    }
+
+    /// Get the base delay in seconds for reconnection backoff.
+    fn get_reconnect_base_delay(&self) -> u64 {
+        self.inner.reconnect_base_delay()
+    }
+
     fn __repr__(&self) -> String {
         if self.inner.is_connected() {
             format!(

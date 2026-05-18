@@ -649,7 +649,7 @@ impl PokeConApi {
                 let mut event = Event::new(&event_name, json_data);
                 if let Some(ref h) = handle {
                     if let Some(ref bus) = h.event_bus {
-                        bus.emit(&event);
+                        bus.emit(&mut event);
                     }
                 }
                 println!(

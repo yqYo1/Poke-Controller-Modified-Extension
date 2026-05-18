@@ -108,7 +108,7 @@ impl EventBus {
         // handlers call back into the bus (e.g. `on` / `off`).
         let handlers: Option<Vec<EventHandler>> = {
             let guard = self.handlers.read();
-            guard.get(&event.event_type).map(|h| h.clone())
+            guard.get(&event.event_type).cloned()
         };
 
         let Some(handlers) = handlers else {

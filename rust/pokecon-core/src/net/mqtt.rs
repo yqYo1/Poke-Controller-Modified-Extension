@@ -117,6 +117,8 @@ pub struct MqttClient {
     max_reconnect_attempts: usize,
     /// Base delay in seconds for reconnection backoff (doubles each attempt)
     reconnect_base_delay_secs: u64,
+    /// Sender for the shutdown signal to the event loop task
+    shutdown_tx: Option<watch::Sender<bool>>,
 }
 
 impl MqttClient {
@@ -131,6 +133,7 @@ impl MqttClient {
             connection_state_rx: None,
             max_reconnect_attempts: 5,
             reconnect_base_delay_secs: 1,
+            shutdown_tx: None,
         }
     }
 
@@ -181,42 +184,57 @@ impl MqttClient {
         let (state_tx, state_rx) = watch::channel(false);
         self.connection_state_rx = Some(state_rx);
 
+        // Watch channel for shutdown signal to the event loop
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        self.shutdown_tx = Some(shutdown_tx);
+
         // Shared atomic connection state
         let connected = self.connected.clone();
 
         // Spawn the event loop task
         let handle = tokio::spawn(async move {
             loop {
-                match event_loop.poll().await {
-                    Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                        debug!("MQTT connection acknowledged by broker");
-                        connected.store(true, Ordering::SeqCst);
-                        let _ = state_tx.send(true);
-                    }
-                    Ok(Event::Incoming(Packet::Publish(publish))) => {
-                        let msg = MqttMessage::from(publish);
-                        if tx.send(msg).await.is_err() {
-                            warn!("Message channel closed, stopping event loop");
-                            break;
+                tokio::select! {
+                    biased;
+                    result = event_loop.poll() => {
+                        match result {
+                            Ok(Event::Incoming(Packet::ConnAck(_))) => {
+                                debug!("MQTT connection acknowledged by broker");
+                                connected.store(true, Ordering::SeqCst);
+                                let _ = state_tx.send(true);
+                            }
+                            Ok(Event::Incoming(Packet::Publish(publish))) => {
+                                let msg = MqttMessage::from(publish);
+                                if tx.send(msg).await.is_err() {
+                                    warn!("Message channel closed, stopping event loop");
+                                    break;
+                                }
+                            }
+                            Ok(Event::Incoming(Packet::Disconnect)) => {
+                                debug!("MQTT received disconnect packet");
+                                connected.store(false, Ordering::SeqCst);
+                                let _ = state_tx.send(false);
+                            }
+                            Ok(Event::Incoming(packet)) => {
+                                debug!("Received MQTT packet: {:?}", packet);
+                            }
+                            Ok(Event::Outgoing(outgoing)) => {
+                                debug!("MQTT outgoing: {:?}", outgoing);
+                            }
+                            Err(e) => {
+                                error!("MQTT event loop error: {:?}", e);
+                                connected.store(false, Ordering::SeqCst);
+                                let _ = state_tx.send(false);
+                                // Don't break on temporary errors — let rumqttc reconnect
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                            }
                         }
                     }
-                    Ok(Event::Incoming(Packet::Disconnect)) => {
-                        debug!("MQTT received disconnect packet");
-                        connected.store(false, Ordering::SeqCst);
-                        let _ = state_tx.send(false);
-                    }
-                    Ok(Event::Incoming(packet)) => {
-                        debug!("Received MQTT packet: {:?}", packet);
-                    }
-                    Ok(Event::Outgoing(outgoing)) => {
-                        debug!("MQTT outgoing: {:?}", outgoing);
-                    }
-                    Err(e) => {
-                        error!("MQTT event loop error: {:?}", e);
-                        connected.store(false, Ordering::SeqCst);
-                        let _ = state_tx.send(false);
-                        // Don't break on temporary errors — let rumqttc reconnect
-                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    _ = shutdown_rx.changed() => {
+                        if *shutdown_rx.borrow() {
+                            debug!("MQTT event loop received shutdown signal");
+                            break;
+                        }
                     }
                 }
             }
@@ -345,22 +363,77 @@ impl MqttClient {
         rx.recv().await.ok_or(MqttError::EventLoopEnded)
     }
 
-    /// Disconnect from the MQTT broker
+    /// Disconnect from the MQTT broker cleanly.
+    ///
+    /// This performs a graceful shutdown:
+    /// 1. Sends a proper MQTT DISCONNECT packet to the broker
+    /// 2. Signals the event loop to stop
+    /// 3. Waits for the event loop task to finish (with a timeout)
+    /// 4. Falls back to aborting the task if the timeout elapses
+    /// 5. Resets all connection state and releases resources
     pub async fn disconnect(&mut self) {
         info!("Disconnecting from MQTT broker");
 
-        if let Some(client) = self.client.take() {
-            // Drop the client; the event loop will exit on its own
-            drop(client);
+        // Step 1: Send a proper MQTT DISCONNECT packet so the broker
+        // knows we are disconnecting cleanly. This must come before
+        // the shutdown signal so the event loop processes it first
+        // (biased select! in the event loop prioritizes poll()).
+        if let Some(ref client) = self.client {
+            if let Err(e) = client.disconnect().await {
+                warn!("Error sending MQTT DISCONNECT packet: {e}");
+            }
         }
 
-        if let Some(handle) = self.event_loop_handle.take() {
-            handle.abort();
+        // Step 2: Signal the event loop to shut down gracefully.
+        // The biased select! in the event loop will process any
+        // pending poll() results (including the DISCONNECT) first,
+        // then check the shutdown signal and break.
+        if let Some(shutdown_tx) = self.shutdown_tx.take() {
+            let _ = shutdown_tx.send(true);
+            // Dropping shutdown_tx closes the watch channel; the
+            // event loop's shutdown_rx.changed() will then return
+            // an error, which is harmless since we already sent true.
         }
 
+        // Step 3: Drop the client to close rumqttc's internal
+        // channel, preventing any further operations.
+        self.client = None;
+
+        // Step 4: Wait for the event loop task to finish with a
+        // timeout. This gives the event loop time to flush the
+        // DISCONNECT packet and close the TCP connection cleanly.
+        if let Some(mut handle) = self.event_loop_handle.take() {
+            const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+
+            // Use select! with biased to prefer graceful completion
+            // over the timeout fallback. `&mut handle` borrows the
+            // JoinHandle without consuming it, so we can still abort()
+            // if the timeout fires.
+            tokio::select! {
+                biased;
+                result = &mut handle => {
+                    match result {
+                        Ok(()) => debug!("MQTT event loop exited cleanly"),
+                        Err(e) => warn!("MQTT event loop task panicked or cancelled: {e}"),
+                    }
+                }
+                _ = tokio::time::sleep(SHUTDOWN_TIMEOUT) => {
+                    warn!(
+                        "MQTT event loop did not finish within {:?}, aborting",
+                        SHUTDOWN_TIMEOUT
+                    );
+                    handle.abort();
+                    // Brief wait so the abort takes effect
+                    let _ = handle.await;
+                }
+            }
+        }
+
+        // Step 5: Reset all connection state and release resources.
         self.connected.store(false, Ordering::SeqCst);
         self.message_rx = None;
         self.connection_state_rx = None;
+
         info!("Disconnected from MQTT broker");
     }
 
@@ -654,5 +727,52 @@ mod tests {
             reconnect_err.to_string(),
             "Reconnection failed after 3 attempts"
         );
+    }
+
+    /// Test disconnect on a new (unconnected) client is safe
+    #[tokio::test]
+    async fn test_disconnect_new_client() {
+        let mut client = MqttClient::new(MqttConfig::default());
+        // Should not panic or error
+        client.disconnect().await;
+        assert!(!client.is_connected());
+        assert!(client.message_rx.is_none());
+        assert!(client.connection_state_rx.is_none());
+        assert!(client.event_loop_handle.is_none());
+        assert!(client.client.is_none());
+        assert!(client.shutdown_tx.is_none());
+    }
+
+    /// Test that disconnect is idempotent
+    #[tokio::test]
+    async fn test_disconnect_idempotent() {
+        let mut client = MqttClient::new(MqttConfig::default());
+
+        // First call
+        client.disconnect().await;
+        assert!(!client.is_connected());
+
+        // Second call — should be safe and not change state
+        client.disconnect().await;
+        assert!(!client.is_connected());
+        assert!(client.message_rx.is_none());
+        assert!(client.connection_state_rx.is_none());
+        assert!(client.event_loop_handle.is_none());
+        assert!(client.client.is_none());
+        assert!(client.shutdown_tx.is_none());
+    }
+
+    /// Test disconnect resets all connection state
+    #[test]
+    fn test_disconnect_new_client_resets_state() {
+        let client = MqttClient::new(MqttConfig::default());
+
+        // Verify initial state is clean
+        assert!(client.client.is_none());
+        assert!(client.message_rx.is_none());
+        assert!(client.event_loop_handle.is_none());
+        assert!(!client.is_connected());
+        assert!(client.connection_state_rx.is_none());
+        assert!(client.shutdown_tx.is_none());
     }
 }

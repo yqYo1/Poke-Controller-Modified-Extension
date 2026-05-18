@@ -265,6 +265,26 @@ impl LuaRuntime {
         &self.api_handle
     }
 
+    /// Attach a KeyPress instance for serial controller input.
+    /// This enables `press()`, `hold()`, `release()`, and `send_serial()`
+    /// Lua API functions to actually communicate with hardware.
+    pub fn set_keypress(&mut self, keypress: crate::serial::keypress::KeyPress) {
+        // Use make_mut since we need exclusive access to the ApiHandle
+        // (the Arc has only one strong reference in typical usage)
+        if let Some(inner) = Arc::get_mut(&mut self.api_handle) {
+            inner.set_keypress(keypress);
+        }
+    }
+
+    /// Attach a Camera instance for image capture and template matching.
+    /// This enables `capture()` and `match_template()` Lua API functions.
+    #[cfg(feature = "v4l")]
+    pub fn set_camera(&mut self, camera: crate::cv::Camera) {
+        if let Some(inner) = Arc::get_mut(&mut self.api_handle) {
+            inner.set_camera(camera);
+        }
+    }
+
     /// Check whether a script has been loaded.
     pub fn is_loaded(&self) -> bool {
         self.loaded_script.is_some()

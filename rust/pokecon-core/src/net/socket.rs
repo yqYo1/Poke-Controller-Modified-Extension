@@ -4,7 +4,7 @@ use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tracing::{debug, info};
+use tracing::{debug, info, trace, warn};
 
 /// Socket communication error types
 #[derive(Error, Debug)]
@@ -154,12 +154,40 @@ impl SocketClient {
             .to_string())
     }
 
-    /// Close the socket connection
-    pub fn close(&mut self) {
-        debug!("Closing socket connection to {:?}", self.addr);
-        self.writer = None;
-        self.reader = None;
+    /// Gracefully close the socket connection.
+    ///
+    /// Flushes any buffered outgoing data, performs a graceful TCP shutdown
+    /// (sends FIN to the peer), and releases all associated resources.
+    /// Errors during shutdown are logged at debug level and do not panic.
+    pub async fn close(&mut self) {
+        let addr_hint = self.addr.clone().unwrap_or_else(|| "unknown".to_string());
+        debug!("Gracefully closing socket connection to {addr_hint}");
+
+        // Flush any buffered outgoing data before initiating shutdown
+        if let Some(ref mut writer) = self.writer {
+            if let Err(e) = writer.flush().await {
+                warn!("Failed to flush writer during close: {e}");
+            }
+
+            // Perform a graceful TCP shutdown on the write half (sends FIN).
+            // This lets the peer know we are done sending.
+            if let Err(e) = writer.get_mut().shutdown().await {
+                debug!("TCP shutdown on write half for {addr_hint}: {e}");
+            }
+        }
+
+        // Drop reader and writer to release kernel resources
+        if self.reader.is_some() {
+            trace!("Dropping TCP read half for {addr_hint}");
+            self.reader = None;
+        }
+        if self.writer.is_some() {
+            trace!("Dropping TCP write half for {addr_hint}");
+            self.writer = None;
+        }
         self.addr = None;
+
+        info!("Socket connection to {addr_hint} closed");
     }
 
     /// Check if the socket is currently connected
@@ -176,6 +204,23 @@ impl SocketClient {
 impl Default for SocketClient {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for SocketClient {
+    /// Best-effort synchronous cleanup when the client is dropped.
+    ///
+    /// This cannot perform async flush/shutdown, but ensures kernel
+    /// resources are released. The async `close()` method should be
+    /// called explicitly for a graceful shutdown.
+    fn drop(&mut self) {
+        if self.writer.is_some() || self.reader.is_some() {
+            let addr_hint = self.addr.as_deref().unwrap_or("unknown");
+            debug!(
+                "SocketClient to {addr_hint} dropped without explicit close — \
+                 some data may not have been flushed"
+            );
+        }
     }
 }
 
@@ -222,8 +267,9 @@ mod tests {
         assert!(client.is_connected());
         assert_eq!(client.addr(), Some(addr.as_str()));
 
-        client.close();
+        client.close().await;
         assert!(!client.is_connected());
+        assert!(client.addr().is_none());
     }
 
     #[tokio::test]
@@ -239,7 +285,7 @@ mod tests {
         let n = client.receive(&mut buf).await.unwrap();
         assert_eq!(&buf[..n], msg);
 
-        client.close();
+        client.close().await;
     }
 
     #[tokio::test]
@@ -252,7 +298,7 @@ mod tests {
         let response = client.receive_line().await.unwrap();
         assert_eq!(response, "test line");
 
-        client.close();
+        client.close().await;
     }
 
     #[tokio::test]
@@ -274,6 +320,14 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_receive_without_connect() {
+        let mut client = SocketClient::new();
+        let mut buf = vec![0u8; 1024];
+        let result = client.receive(&mut buf).await;
+        assert!(matches!(result, Err(SocketError::NotConnected)));
+    }
+
+    #[tokio::test]
     async fn test_default() {
         let client = SocketClient::default();
         assert!(!client.is_connected());
@@ -284,5 +338,74 @@ mod tests {
         let timeout = Duration::from_millis(100);
         let client = SocketClient::with_timeout(timeout);
         assert!(!client.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_close_not_connected() {
+        let mut client = SocketClient::new();
+        // Calling close on an unconnected client should be a no-op
+        client.close().await;
+        assert!(!client.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_close_idempotent() {
+        let addr = start_echo_server().await;
+        let mut client = SocketClient::new();
+        client.connect(&addr).await.unwrap();
+
+        client.close().await;
+        assert!(!client.is_connected());
+
+        // Second close should be safe (no-op)
+        client.close().await;
+        assert!(!client.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_after_close() {
+        let addr = start_echo_server().await;
+        let mut client = SocketClient::new();
+
+        // First connection
+        client.connect(&addr).await.unwrap();
+        assert!(client.is_connected());
+        client.close().await;
+        assert!(!client.is_connected());
+
+        // Reconnect
+        client.connect(&addr).await.unwrap();
+        assert!(client.is_connected());
+
+        let msg = b"reconnect test";
+        client.send(msg).await.unwrap();
+        let mut buf = vec![0u8; 1024];
+        let n = client.receive(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], msg);
+
+        client.close().await;
+    }
+
+    #[tokio::test]
+    async fn test_operations_after_close_fail() {
+        let addr = start_echo_server().await;
+        let mut client = SocketClient::new();
+        client.connect(&addr).await.unwrap();
+        client.close().await;
+
+        // Operations after close should return NotConnected
+        assert!(matches!(
+            client.send(b"data").await,
+            Err(SocketError::NotConnected)
+        ));
+        let mut buf = vec![0u8; 1024];
+        assert!(matches!(
+            client.receive(&mut buf).await,
+            Err(SocketError::NotConnected)
+        ));
+        assert!(matches!(
+            client.receive_line().await,
+            Err(SocketError::NotConnected)
+        ));
     }
 }

@@ -477,7 +477,8 @@ impl PySocketClient {
 
     /// Close the socket connection.
     fn close(&mut self) {
-        self.inner.close();
+        let rt = global_runtime();
+        rt.block_on(self.inner.close());
     }
 
     /// Check whether the socket is currently connected.

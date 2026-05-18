@@ -10,7 +10,7 @@ use pokecon_core::notify::discord::DiscordNotifier;
 use pokecon_core::notify::line::LineNotifier;
 use pokecon_core::notify::{Notification, Notifier};
 use pokecon_core::serial::keypress::KeyPress;
-use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
+use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick, parse_buttons};
 
 // ---------------------------------------------------------------------------
 // Global tokio runtime shared across all PythonCommand instances.
@@ -18,81 +18,6 @@ use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick};
 fn global_runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("Failed to create tokio runtime"))
-}
-
-// ---------------------------------------------------------------------------
-// Helper: parse a button string like "A", "A|B", "A+B", "DPAD_UP"
-// into a Vec of GamepadInput values.
-// ---------------------------------------------------------------------------
-fn parse_buttons(buttons: &str) -> Vec<GamepadInput> {
-    let parts: Vec<&str> = buttons
-        .split(['|', '+', ','])
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let mut result = Vec::new();
-    for part in parts {
-        match part.to_uppercase().as_str() {
-            // Standard buttons
-            "A" => result.push(GamepadInput::SingleButton(Button::A)),
-            "B" => result.push(GamepadInput::SingleButton(Button::B)),
-            "X" => result.push(GamepadInput::SingleButton(Button::X)),
-            "Y" => result.push(GamepadInput::SingleButton(Button::Y)),
-            "L" => result.push(GamepadInput::SingleButton(Button::L)),
-            "R" => result.push(GamepadInput::SingleButton(Button::R)),
-            "ZL" => result.push(GamepadInput::SingleButton(Button::ZL)),
-            "ZR" => result.push(GamepadInput::SingleButton(Button::ZR)),
-            "MINUS" | "-" => result.push(GamepadInput::SingleButton(Button::MINUS)),
-            "PLUS" => result.push(GamepadInput::SingleButton(Button::PLUS)),
-            "LCLICK" | "L3" => result.push(GamepadInput::SingleButton(Button::LCLICK)),
-            "RCLICK" | "R3" => result.push(GamepadInput::SingleButton(Button::RCLICK)),
-            "HOME" => result.push(GamepadInput::SingleButton(Button::HOME)),
-            "CAPTURE" => result.push(GamepadInput::SingleButton(Button::CAPTURE)),
-            "SELECT" => result.push(GamepadInput::SingleButton(Button::SELECT)),
-            "START" => result.push(GamepadInput::SingleButton(Button::START)),
-            // Hat / D-Pad
-            "DPAD_UP" | "TOP" => result.push(GamepadInput::SingleHat(Hat::TOP)),
-            "DPAD_DOWN" | "BTM" => result.push(GamepadInput::SingleHat(Hat::BTM)),
-            "DPAD_LEFT" | "LEFT" => result.push(GamepadInput::SingleHat(Hat::LEFT)),
-            "DPAD_RIGHT" | "RIGHT" => result.push(GamepadInput::SingleHat(Hat::RIGHT)),
-            "DPAD_TOP_RIGHT" | "TOP_RIGHT" => result.push(GamepadInput::SingleHat(Hat::TOP_RIGHT)),
-            "DPAD_BTM_RIGHT" | "BTM_RIGHT" => result.push(GamepadInput::SingleHat(Hat::BTM_RIGHT)),
-            "DPAD_BTM_LEFT" | "BTM_LEFT" => result.push(GamepadInput::SingleHat(Hat::BTM_LEFT)),
-            "DPAD_TOP_LEFT" | "TOP_LEFT" => result.push(GamepadInput::SingleHat(Hat::TOP_LEFT)),
-            // Left stick directions
-            "LSTICK_UP" | "L_UP" => {
-                result.push(GamepadInput::SingleDirection(Direction::up(Stick::Left)))
-            }
-            "LSTICK_DOWN" | "L_DOWN" => {
-                result.push(GamepadInput::SingleDirection(Direction::down(Stick::Left)))
-            }
-            "LSTICK_LEFT" | "L_LEFT" => {
-                result.push(GamepadInput::SingleDirection(Direction::left(Stick::Left)))
-            }
-            "LSTICK_RIGHT" | "L_RIGHT" => {
-                result.push(GamepadInput::SingleDirection(Direction::right(Stick::Left)))
-            }
-            // Right stick directions
-            "RSTICK_UP" | "R_UP" => {
-                result.push(GamepadInput::SingleDirection(Direction::up(Stick::Right)))
-            }
-            "RSTICK_DOWN" | "R_DOWN" => {
-                result.push(GamepadInput::SingleDirection(Direction::down(Stick::Right)))
-            }
-            "RSTICK_LEFT" | "R_LEFT" => {
-                result.push(GamepadInput::SingleDirection(Direction::left(Stick::Right)))
-            }
-            "RSTICK_RIGHT" | "R_RIGHT" => result.push(GamepadInput::SingleDirection(
-                Direction::right(Stick::Right),
-            )),
-            _ => {
-                // Unknown button name — silently ignore (matching Python behaviour
-                // where unrecognised names are simply skipped)
-            }
-        }
-    }
-    result
 }
 
 // ---------------------------------------------------------------------------
@@ -450,6 +375,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pokecon_core::serial::keys::parse_buttons;
 
     #[test]
     fn test_new_python_command() {

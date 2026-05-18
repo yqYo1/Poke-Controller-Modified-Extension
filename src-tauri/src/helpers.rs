@@ -3,34 +3,7 @@ use std::path::PathBuf;
 
 use pokecon_core::cv::camera::{Frame, PixelFormat};
 use pokecon_core::serial::SendFormat;
-use pokecon_core::serial::keys::Button;
 use url::Url;
-
-// ── Helper: Parse a button name string into a Button bitflag ────────────────────
-
-pub fn parse_button(name: &str) -> Option<Button> {
-    match name.to_uppercase().as_str() {
-        "A" => Some(Button::A),
-        "B" => Some(Button::B),
-        "X" => Some(Button::X),
-        "Y" => Some(Button::Y),
-        "L" => Some(Button::L),
-        "R" => Some(Button::R),
-        "ZL" => Some(Button::ZL),
-        "ZR" => Some(Button::ZR),
-        "MINUS" | "SELECT" => Some(Button::MINUS),
-        "PLUS" | "START" => Some(Button::PLUS),
-        "LCLICK" | "L3" | "POWER" => Some(Button::LCLICK),
-        "RCLICK" | "R3" | "WIRELESS" => Some(Button::RCLICK),
-        "HOME" => Some(Button::HOME),
-        "CAPTURE" => Some(Button::CAPTURE),
-        _ => None,
-    }
-}
-
-pub fn parse_buttons(names: &[String]) -> Vec<Button> {
-    names.iter().filter_map(|n| parse_button(n)).collect()
-}
 
 // ── Helper: Encode a camera Frame as raw JPEG bytes ────────────────────────
 

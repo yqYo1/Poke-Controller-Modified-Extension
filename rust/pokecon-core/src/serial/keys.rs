@@ -26,7 +26,7 @@ bitflags! {
     }
 }
 
-pub const CONVERSION_3DS_CONTROLLER_BUTTON: [(Button, u16); 14] = [
+pub const CONVERSION_3DS_CONTROLLER_BUTTON: [(Button, u16); 11] = [
     (Button::A, 1),
     (Button::B, 2),
     (Button::X, 4),
@@ -34,13 +34,10 @@ pub const CONVERSION_3DS_CONTROLLER_BUTTON: [(Button, u16); 14] = [
     (Button::L, 16),
     (Button::R, 32),
     (Button::HOME, 64),
-    (Button::START, 128),
-    (Button::SELECT, 256),
-    (Button::POWER, 512),
-    (Button::PLUS, 128),
-    (Button::MINUS, 256),
-    (Button::LCLICK, 512),
-    (Button::RCLICK, 0),
+    (Button::PLUS, 128),   // includes alias START
+    (Button::MINUS, 256),  // includes alias SELECT
+    (Button::LCLICK, 512), // includes alias POWER
+    (Button::RCLICK, 0),   // includes alias WIRELESS
 ];
 
 pub fn convert_button_default(btn: Button) -> Button {

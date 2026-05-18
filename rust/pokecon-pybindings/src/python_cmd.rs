@@ -44,7 +44,7 @@ fn parse_buttons(buttons: &str) -> Vec<GamepadInput> {
             "ZL" => result.push(GamepadInput::SingleButton(Button::ZL)),
             "ZR" => result.push(GamepadInput::SingleButton(Button::ZR)),
             "MINUS" | "-" => result.push(GamepadInput::SingleButton(Button::MINUS)),
-            "PLUS" | "+" => result.push(GamepadInput::SingleButton(Button::PLUS)),
+            "PLUS" => result.push(GamepadInput::SingleButton(Button::PLUS)),
             "LCLICK" | "L3" => result.push(GamepadInput::SingleButton(Button::LCLICK)),
             "RCLICK" | "R3" => result.push(GamepadInput::SingleButton(Button::RCLICK)),
             "HOME" => result.push(GamepadInput::SingleButton(Button::HOME)),

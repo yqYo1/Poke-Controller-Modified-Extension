@@ -304,6 +304,150 @@ impl Default for LuaRuntime {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+/// Convert a Lua `Value` into a `serde_json::Value`.
+///
+/// Supports all basic Lua types:
+/// - `nil` → JSON `null`
+/// - `boolean` → JSON `bool`
+/// - `integer` / `number` → JSON `number`
+/// - `string` → JSON `string` (lossy on non-UTF-8)
+/// - `table` → JSON array (if all integer keys 1..n) or JSON object
+///
+/// Unsupported types (`function`, `thread`, `userdata`, `lightuserdata`,
+/// `error`, `luau`-specific types) are converted to JSON `null`.
+///
+/// Circular references in tables are detected and replaced with `null`.
+pub fn lua_value_to_json(lua: &Lua, value: &mlua::Value) -> mlua::Result<serde_json::Value> {
+    let mut visited: Vec<mlua::Table> = Vec::new();
+    lua_value_to_json_inner(lua, value, &mut visited)
+}
+
+/// Internal recursive helper that tracks visited tables for cycle detection.
+fn lua_value_to_json_inner(
+    lua: &Lua,
+    value: &mlua::Value,
+    visited: &mut Vec<mlua::Table>,
+) -> mlua::Result<serde_json::Value> {
+    match value {
+        mlua::Value::Nil => Ok(serde_json::Value::Null),
+
+        mlua::Value::Boolean(b) => Ok(serde_json::Value::Bool(*b)),
+
+        mlua::Value::Integer(i) => Ok(serde_json::Value::Number(serde_json::Number::from(*i))),
+
+        mlua::Value::Number(n) => {
+            // f64 may be NaN or Infinity — map those to null
+            if let Some(num) = serde_json::Number::from_f64(*n) {
+                Ok(serde_json::Value::Number(num))
+            } else {
+                Ok(serde_json::Value::Null)
+            }
+        }
+
+        mlua::Value::String(s) => Ok(serde_json::Value::String(s.to_string_lossy())),
+
+        mlua::Value::Table(t) => {
+            // ── Cycle detection ────────────────────────────────
+            if visited.contains(t) {
+                return Ok(serde_json::Value::Null);
+            }
+            visited.push(t.clone());
+
+            let result = table_to_json(lua, t, visited)?;
+
+            visited.pop();
+            Ok(result)
+        }
+
+        // ── Unsupported types → null ──────────────────────────
+        mlua::Value::LightUserData(_)
+        | mlua::Value::Function(_)
+        | mlua::Value::Thread(_)
+        | mlua::Value::UserData(_)
+        | mlua::Value::Error(_)
+        | mlua::Value::Other(_) => Ok(serde_json::Value::Null),
+    }
+}
+
+/// Convert a Lua `Table` to a JSON value, using key inspection to decide
+/// whether to produce an array or an object.
+fn table_to_json(
+    lua: &Lua,
+    table: &mlua::Table,
+    visited: &mut Vec<mlua::Table>,
+) -> mlua::Result<serde_json::Value> {
+    // Collect all keys first (avoids holding the Lua lock across recursion)
+    let mut keys: Vec<mlua::Value> = Vec::new();
+    table.for_each(|key: mlua::Value, _value: mlua::Value| {
+        keys.push(key);
+        Ok(())
+    })?;
+
+    if keys.is_empty() {
+        // Empty table — default to empty array
+        return Ok(serde_json::Value::Array(Vec::new()));
+    }
+
+    if is_array_keys(&keys) {
+        // ── Array mode ────────────────────────────────────────
+        let len = keys.len();
+        let mut arr = Vec::with_capacity(len);
+        for i in 1..=len {
+            let val: mlua::Value = table.raw_get(i as i64)?;
+            arr.push(lua_value_to_json_inner(lua, &val, visited)?);
+        }
+        Ok(serde_json::Value::Array(arr))
+    } else {
+        // ── Object mode ───────────────────────────────────────
+        let mut map = serde_json::Map::new();
+        for key in &keys {
+            let val: mlua::Value = table.raw_get(key.clone())?;
+            let k = lua_value_to_json_inner(lua, key, visited)?;
+            let v = lua_value_to_json_inner(lua, &val, visited)?;
+
+            // JSON object keys must be strings — convert non-string keys
+            let key_str = match k {
+                serde_json::Value::String(s) => s,
+                other => format!("{}", other),
+            };
+            map.insert(key_str, v);
+        }
+        Ok(serde_json::Value::Object(map))
+    }
+}
+
+/// Determine whether a set of Lua keys represents a JSON array.
+///
+/// Returns `true` if all keys are positive integers forming the exact
+/// contiguous set {1, 2, …, n} (order-independent).
+fn is_array_keys(keys: &[mlua::Value]) -> bool {
+    let mut int_keys: Vec<i64> = Vec::with_capacity(keys.len());
+
+    for key in keys {
+        match key {
+            mlua::Value::Integer(i) if *i >= 1 => int_keys.push(*i),
+            _ => return false, // non-integer key → object
+        }
+    }
+
+    if int_keys.len() != keys.len() {
+        return false;
+    }
+
+    // Sort and deduplicate to detect sparse arrays
+    int_keys.sort_unstable();
+    int_keys.dedup();
+
+    // Must be exactly {1, 2, …, n}
+    for (idx, k) in int_keys.iter().enumerate() {
+        if *k != (idx as i64 + 1) {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Convert a Rust [`Event`] into a Lua table suitable for passing to callbacks.
 fn event_to_lua_table(lua: &Lua, event: &Event) -> mlua::Result<mlua::Table> {
     let t = lua.create_table()?;
@@ -588,5 +732,286 @@ mod tests {
 
         let counter: i64 = runtime.eval("return counter").await.unwrap();
         assert_eq!(counter, 2);
+    }
+
+    // ── lua_value_to_json tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_lua_value_to_json_nil() {
+        let lua = Lua::new();
+        let result = lua_value_to_json(&lua, &mlua::Value::Nil).unwrap();
+        assert_eq!(result, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_lua_value_to_json_boolean() {
+        let lua = Lua::new();
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Boolean(true)).unwrap(),
+            serde_json::Value::Bool(true),
+        );
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Boolean(false)).unwrap(),
+            serde_json::Value::Bool(false),
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_integer() {
+        let lua = Lua::new();
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Integer(42)).unwrap(),
+            serde_json::json!(42),
+        );
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Integer(-1)).unwrap(),
+            serde_json::json!(-1),
+        );
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Integer(0)).unwrap(),
+            serde_json::json!(0),
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_number() {
+        let lua = Lua::new();
+        let result = lua_value_to_json(&lua, &mlua::Value::Number(3.14)).unwrap();
+        assert_eq!(result, serde_json::json!(3.14));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_nan_infinity() {
+        let lua = Lua::new();
+        // NaN → null
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Number(f64::NAN)).unwrap(),
+            serde_json::Value::Null,
+        );
+        // Infinity → null
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Number(f64::INFINITY)).unwrap(),
+            serde_json::Value::Null,
+        );
+        // -Infinity → null
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::Number(f64::NEG_INFINITY)).unwrap(),
+            serde_json::Value::Null,
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_string() {
+        let lua = Lua::new();
+        let s = lua.create_string("hello world").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::String(s)).unwrap();
+        assert_eq!(result, serde_json::json!("hello world"));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_string_non_utf8() {
+        let lua = Lua::new();
+        let s = lua.create_string(b"test\xff").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::String(s)).unwrap();
+        assert_eq!(result, serde_json::json!("test\u{fffd}"));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_unsupported_types() {
+        let lua = Lua::new();
+        // LightUserData
+        let ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let lud = mlua::LightUserData(ptr);
+        assert_eq!(
+            lua_value_to_json(&lua, &mlua::Value::LightUserData(lud)).unwrap(),
+            serde_json::Value::Null,
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_array() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        table.set(1, 10).unwrap();
+        table.set(2, 20).unwrap();
+        table.set(3, 30).unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result, serde_json::json!([10, 20, 30]));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_empty_table() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result, serde_json::json!([]));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_object() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        table.set("name", "Alice").unwrap();
+        table.set("age", 30).unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result, serde_json::json!({"name": "Alice", "age": 30}));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_mixed_array() {
+        let lua = Lua::new();
+        // Table with both array-style and hash-style keys → object
+        let table = lua.create_table().unwrap();
+        table.set(1, "a").unwrap();
+        table.set(2, "b").unwrap();
+        table.set("extra", "c").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        // Since not all keys are integer, it should be an object
+        assert!(
+            result.is_object(),
+            "mixed table should be an object, got: {:?}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_sparse_array() {
+        let lua = Lua::new();
+        // Table with gaps in integer keys → object (not array)
+        let table = lua.create_table().unwrap();
+        table.set(1, "first").unwrap();
+        table.set(3, "third").unwrap(); // gap at 2
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert!(
+            result.is_object(),
+            "sparse table should be an object, got: {:?}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_nested_tables() {
+        let lua = Lua::new();
+        let inner = lua.create_table().unwrap();
+        inner.set("x", 1).unwrap();
+        inner.set("y", 2).unwrap();
+
+        let outer = lua.create_table().unwrap();
+        outer.set("point", inner).unwrap();
+        outer.set("label", "origin").unwrap();
+
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(outer)).unwrap();
+        assert_eq!(
+            result,
+            serde_json::json!({"point": {"x": 1, "y": 2}, "label": "origin"}),
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_nested_arrays() {
+        let lua = Lua::new();
+        let inner = lua.create_table().unwrap();
+        inner.set(1, 1).unwrap();
+        inner.set(2, 2).unwrap();
+        inner.set(3, 3).unwrap();
+
+        let outer = lua.create_table().unwrap();
+        outer.set(1, inner).unwrap();
+
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(outer)).unwrap();
+        assert_eq!(result, serde_json::json!([[1, 2, 3]]));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_circular_reference() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        table.set("name", "self-ref").unwrap();
+        table.set("self", table.clone()).unwrap(); // circular reference
+
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        // The "self" field should be null to break the cycle
+        assert_eq!(
+            result.get("name").and_then(|v| v.as_str()),
+            Some("self-ref"),
+        );
+        assert_eq!(result.get("self").unwrap(), &serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_lua_value_to_json_circular_nested() {
+        let lua = Lua::new();
+        // a → b → a (cycle)
+        let a = lua.create_table().unwrap();
+        let b = lua.create_table().unwrap();
+        a.set("name", "a").unwrap();
+        b.set("name", "b").unwrap();
+        a.set("child", b.clone()).unwrap();
+        b.set("parent", a.clone()).unwrap();
+
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(a)).unwrap();
+        assert_eq!(result.get("name").and_then(|v| v.as_str()), Some("a"),);
+        let child = result.get("child").unwrap();
+        assert_eq!(child.get("name").and_then(|v| v.as_str()), Some("b"),);
+        // parent should be null (circular)
+        assert_eq!(child.get("parent").unwrap(), &serde_json::Value::Null,);
+    }
+
+    #[test]
+    fn test_lua_value_to_json_mixed_nested_types() {
+        let lua = Lua::new();
+        // Test a realistic scenario: table with various types
+        let table = lua.create_table().unwrap();
+        table.set("null_val", mlua::Value::Nil).unwrap();
+        table.set("bool_val", true).unwrap();
+        table.set("int_val", 42).unwrap();
+        table.set("float_val", 3.14).unwrap();
+        table.set("str_val", "text").unwrap();
+
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result["null_val"], serde_json::Value::Null);
+        assert_eq!(result["bool_val"], serde_json::json!(true));
+        assert_eq!(result["int_val"], serde_json::json!(42));
+        assert_eq!(result["float_val"], serde_json::json!(3.14));
+        assert_eq!(result["str_val"], serde_json::json!("text"));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_integer_keys_out_of_order() {
+        let lua = Lua::new();
+        // Keys set out of order but still consecutive 1..3
+        let table = lua.create_table().unwrap();
+        table.set(2, "middle").unwrap();
+        table.set(1, "first").unwrap();
+        table.set(3, "last").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result, serde_json::json!(["first", "middle", "last"]));
+    }
+
+    #[test]
+    fn test_lua_value_to_json_start_at_zero() {
+        let lua = Lua::new();
+        // Table with key 0 — should be object, not array
+        let table = lua.create_table().unwrap();
+        table.set(0, "zero").unwrap();
+        table.set(1, "one").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert!(
+            result.is_object(),
+            "table with key 0 should be an object, got: {:?}",
+            result,
+        );
+    }
+
+    #[test]
+    fn test_lua_value_to_json_duplicate_integer_keys() {
+        let lua = Lua::new();
+        // Duplicate key (last write wins in Lua)
+        let table = lua.create_table().unwrap();
+        table.set(1, "first").unwrap();
+        table.set(1, "replaced").unwrap();
+        table.set(2, "second").unwrap();
+        let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
+        assert_eq!(result, serde_json::json!(["replaced", "second"]));
     }
 }

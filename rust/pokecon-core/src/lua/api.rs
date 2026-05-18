@@ -754,8 +754,8 @@ impl PokeConApi {
             lua.create_function(|_, message: String| {
                 #[cfg(feature = "notify")]
                 {
-                    use crate::notify::{Notification, Notifier, windows::WindowsNotifier};
-                    let notifier = WindowsNotifier::new("Poke-Controller");
+                    use crate::notify::{Notification, Notifier, windows::DesktopNotifier};
+                    let notifier = DesktopNotifier::new("Poke-Controller");
                     let notification = Notification::new(message.clone());
                     let rt = global_runtime();
                     match rt.block_on(notifier.send(&notification)) {

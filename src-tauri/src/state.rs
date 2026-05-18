@@ -6,6 +6,7 @@ use pokecon_core::events::EventBus;
 use pokecon_core::profile::ProfileManager;
 use pokecon_core::serial::keypress::KeyPress;
 use pokecon_core::serial::sender::Sender;
+use pokecon_core::settings::NotifySettings;
 use tokio::sync::Mutex;
 use utoipa::ToSchema;
 
@@ -19,6 +20,7 @@ pub struct MouseStickConfig {
     /// Whether right-stick mouse control is enabled
     pub right_enabled: bool,
     /// Sensitivity multiplier (default: 1.0)
+    #[serde(default)]
     pub sensitivity: f32,
 }
 
@@ -28,28 +30,6 @@ impl Default for MouseStickConfig {
             left_enabled: false,
             right_enabled: false,
             sensitivity: 1.0,
-        }
-    }
-}
-
-/// Notification configuration stored in shared state.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ToSchema)]
-pub struct NotificationConfig {
-    /// Enable Windows desktop toast notifications
-    pub windows_enabled: bool,
-    /// Enable Discord webhook notifications
-    pub discord_enabled: bool,
-    /// Discord webhook URL
-    #[serde(default)]
-    pub discord_webhook_url: String,
-}
-
-impl Default for NotificationConfig {
-    fn default() -> Self {
-        Self {
-            windows_enabled: true,
-            discord_enabled: false,
-            discord_webhook_url: String::new(),
         }
     }
 }
@@ -74,9 +54,77 @@ pub struct AppState {
     /// Profile manager
     pub profile_manager: Arc<Mutex<ProfileManager>>,
     /// Notification configuration
-    pub notification_config: Arc<Mutex<NotificationConfig>>,
+    pub notification_config: Arc<Mutex<NotifySettings>>,
     /// Mouse stick control configuration
     pub mouse_stick: Arc<Mutex<MouseStickConfig>>,
     /// WebRTC video session manager
     pub webrtc_manager: Arc<Mutex<webrtc::WebRtcManager>>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── MouseStickConfig ───────────────────────────────────────────────
+
+    #[test]
+    fn test_mouse_stick_config_default() {
+        let config = MouseStickConfig::default();
+        assert!(!config.left_enabled);
+        assert!(!config.right_enabled);
+        assert_eq!(config.sensitivity, 1.0);
+    }
+
+    #[test]
+    fn test_mouse_stick_config_serialize_roundtrip() {
+        let config = MouseStickConfig {
+            left_enabled: true,
+            right_enabled: false,
+            sensitivity: 2.5,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: MouseStickConfig = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.left_enabled);
+        assert!(!deserialized.right_enabled);
+        assert_eq!(deserialized.sensitivity, 2.5);
+    }
+
+    #[test]
+    fn test_mouse_stick_config_deserialize_partial() {
+        // Ensure missing fields get defaults from the struct, not serde defaults
+        let json = r#"{"left_enabled": true, "right_enabled": true}"#;
+        let config: MouseStickConfig = serde_json::from_str(json).unwrap();
+        assert!(config.left_enabled);
+        assert!(config.right_enabled);
+        // #[serde(default)] uses f32 default (0.0), not struct Default (1.0)
+        assert_eq!(config.sensitivity, 0.0);
+    }
+
+    #[test]
+    fn test_mouse_stick_config_clone() {
+        let a = MouseStickConfig {
+            left_enabled: true,
+            right_enabled: true,
+            sensitivity: 0.5,
+        };
+        let b = a.clone();
+        assert_eq!(a.left_enabled, b.left_enabled);
+        assert_eq!(a.right_enabled, b.right_enabled);
+        assert_eq!(a.sensitivity, b.sensitivity);
+    }
+
+    #[test]
+    fn test_mouse_stick_config_debug() {
+        let config = MouseStickConfig::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("left_enabled"));
+        assert!(debug_str.contains("right_enabled"));
+        assert!(debug_str.contains("sensitivity"));
+    }
 }

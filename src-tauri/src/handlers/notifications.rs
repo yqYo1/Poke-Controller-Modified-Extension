@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use pokecon_core::notify::discord::DiscordNotifier;
-use pokecon_core::notify::windows::WindowsNotifier;
+use pokecon_core::notify::windows::DesktopNotifier;
 use pokecon_core::notify::{Notification, Notifier};
 
 use crate::helpers;
@@ -117,7 +117,7 @@ pub async fn notifications_send(
     if windows_enabled {
         let notif = notification.clone();
         handles.push(tokio::spawn(async move {
-            let notifier = WindowsNotifier::new("Poke-Controller");
+            let notifier = DesktopNotifier::new("Poke-Controller");
             match notifier.send(&notif).await {
                 Ok(_) => serde_json::json!({"channel": "windows", "status": "sent"}),
                 Err(e) => serde_json::json!({"channel": "windows", "status": "error", "error": e.to_string()}),

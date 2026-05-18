@@ -460,7 +460,7 @@ class SendFormat:
             )
         str_Hat = str(int(self.format["hat"]))
         str_format = (
-            format(send_btn, "#06x")
+            format(send_btn, "#08x")
             + (space + str_Hat)
             + (space + str_L if self.L_stick_changed else "")
             + (space + str_R if self.R_stick_changed else "")

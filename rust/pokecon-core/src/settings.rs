@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+/// Default scripts directory name.
+pub const DEFAULT_SCRIPTS_DIR: &str = "scripts";
+/// Default profiles directory name.
+pub const DEFAULT_PROFILES_DIR: &str = "profiles";
+
 #[derive(Debug, Error)]
 pub enum SettingsError {
     #[error("IO error: {0}")]
@@ -52,11 +57,30 @@ impl Default for CameraSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(default)]
 pub struct NotifySettings {
-    pub discord_webhook_url: Option<String>,
+    /// Enable Windows desktop toast notifications
+    pub windows_enabled: bool,
+    /// Enable Discord webhook notifications
+    pub discord_enabled: bool,
+    /// Discord webhook URL
+    #[serde(default)]
+    pub discord_webhook_url: String,
+    /// LINE Notify access token
     pub line_access_token: Option<String>,
+}
+
+impl Default for NotifySettings {
+    fn default() -> Self {
+        Self {
+            windows_enabled: true,
+            discord_enabled: false,
+            discord_webhook_url: String::new(),
+            line_access_token: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,8 +101,8 @@ impl Default for Settings {
             serial: SerialSettings::default(),
             camera: CameraSettings::default(),
             notify: NotifySettings::default(),
-            script_dir: PathBuf::from("scripts"),
-            profile_dir: PathBuf::from("profiles"),
+            script_dir: PathBuf::from(DEFAULT_SCRIPTS_DIR),
+            profile_dir: PathBuf::from(DEFAULT_PROFILES_DIR),
             auto_connect: false,
             log_level: "info".to_string(),
         }
@@ -142,7 +166,9 @@ mod tests {
                 fps: 60,
             },
             notify: NotifySettings {
-                discord_webhook_url: Some("https://discord.com/api/webhooks/xxx".to_string()),
+                windows_enabled: true,
+                discord_enabled: true,
+                discord_webhook_url: "https://discord.com/api/webhooks/xxx".to_string(),
                 line_access_token: None,
             },
             script_dir: PathBuf::from("custom_scripts"),

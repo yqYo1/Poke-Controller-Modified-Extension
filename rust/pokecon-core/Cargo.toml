@@ -14,7 +14,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-config = "0.15"
 toml = { workspace = true }
 dirs = "6"
 bitflags = "2"
@@ -23,6 +22,7 @@ glob = "0.3"
 regex = "1"
 libc = "0.2"
 async-trait = "0.1"
+utoipa = { version = "5", optional = true, features = ["axum_extras"] }
 
 # Serial
  tokio-serial = "5.4"
@@ -48,6 +48,7 @@ v4l = ["dep:v4l", "dep:jpeg-decoder"]
 notify = ["dep:reqwest", "dep:notify-rust"]
 mqtt = ["dep:rumqttc", "dep:bytes"]
 lua = ["dep:mlua"]
+utoipa = ["dep:utoipa"]
 
 [dev-dependencies]
 tempfile = "3"

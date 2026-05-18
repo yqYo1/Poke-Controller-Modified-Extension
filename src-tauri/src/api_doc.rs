@@ -71,7 +71,7 @@ use utoipa::OpenApi;
             crate::handlers::notifications::NotificationConfigRequest,
             crate::handlers::notifications::SendNotificationRequest,
             crate::state::MouseStickConfig,
-            crate::state::NotificationConfig,
+            pokecon_core::settings::NotifySettings,
         )
     ),
     tags(

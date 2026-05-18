@@ -8,7 +8,7 @@ pub enum SerialFormat {
     #[default]
     Default,
     Qingpi,
-    _3dsController,
+    ThreeDsController,
 }
 
 impl SerialFormat {
@@ -16,7 +16,7 @@ impl SerialFormat {
         match self {
             SerialFormat::Default => "Default",
             SerialFormat::Qingpi => "Qingpi",
-            SerialFormat::_3dsController => "3DS Controller",
+            SerialFormat::ThreeDsController => "3DS Controller",
         }
     }
 }
@@ -111,7 +111,7 @@ impl KeyPress {
         self.update_stick_changed(&directions);
 
         match self.serial_data_format {
-            SerialFormat::_3dsController => {
+            SerialFormat::ThreeDsController => {
                 self.format.reset_all_buttons();
                 for btn in &buttons {
                     let bits_3ds = crate::serial::keys::convert_button_3ds(*btn);
@@ -166,7 +166,7 @@ impl KeyPress {
         self.clear_stick_on_tilts(&tilts);
 
         match self.serial_data_format {
-            SerialFormat::_3dsController => {
+            SerialFormat::ThreeDsController => {
                 let buttons: Vec<Button> = btns.iter().flat_map(|g| g.buttons()).collect();
                 for btn in &buttons {
                     let bits_3ds = crate::serial::keys::convert_button_3ds(*btn);
@@ -370,7 +370,7 @@ impl KeyPress {
 
     pub async fn end(&mut self) -> Result<(), crate::serial::sender::SerialError> {
         match self.serial_data_format {
-            SerialFormat::Qingpi | SerialFormat::_3dsController => Ok(()),
+            SerialFormat::Qingpi | SerialFormat::ThreeDsController => Ok(()),
             SerialFormat::Default => self.sender.write_row("end", false).await,
         }
     }
@@ -466,15 +466,15 @@ mod tests {
         assert_eq!(kp.get_serial_format(), SerialFormat::Default);
         kp.set_serial_format(SerialFormat::Qingpi);
         assert_eq!(kp.get_serial_format(), SerialFormat::Qingpi);
-        kp.set_serial_format(SerialFormat::_3dsController);
-        assert_eq!(kp.get_serial_format(), SerialFormat::_3dsController);
+        kp.set_serial_format(SerialFormat::ThreeDsController);
+        assert_eq!(kp.get_serial_format(), SerialFormat::ThreeDsController);
     }
 
     #[test]
     fn test_serial_format_as_str() {
         assert_eq!(SerialFormat::Default.as_str(), "Default");
         assert_eq!(SerialFormat::Qingpi.as_str(), "Qingpi");
-        assert_eq!(SerialFormat::_3dsController.as_str(), "3DS Controller");
+        assert_eq!(SerialFormat::ThreeDsController.as_str(), "3DS Controller");
     }
 
     #[test]

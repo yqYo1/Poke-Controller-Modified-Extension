@@ -81,4 +81,4 @@ pub trait Notifier: Send + Sync {
 
 pub use discord::DiscordNotifier;
 pub use line::LineNotifier;
-pub use windows::WindowsNotifier;
+pub use windows::DesktopNotifier;

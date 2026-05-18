@@ -743,7 +743,7 @@ impl PyKeyManager {
         let sf = match format {
             "Default" => SerialFormat::Default,
             "Qingpi" => SerialFormat::Qingpi,
-            "3DS Controller" => SerialFormat::_3dsController,
+            "3DS Controller" => SerialFormat::ThreeDsController,
             _ => {
                 return Err(PyValueError::new_err(format!(
                     "Unknown serial format: '{format}'. Use 'Default', 'Qingpi', or '3DS Controller'."
@@ -850,7 +850,9 @@ mod tests {
     fn test_pybutton_invert() {
         let btn = PyButton::new(0x0004);
         let inv = btn.__invert__();
-        assert_eq!(inv.bits(), !0x0004);
+        // Button bitflags uses 14 bits (0x0001..0x2000); bits 14-15 are
+        // undefined so from_bits_truncate drops them.
+        assert_eq!(inv.bits(), !0x0004u16 & 0x3FFF);
     }
 
     #[test]
@@ -1032,8 +1034,7 @@ mod tests {
         Python::with_gil(|py| {
             let km = PyKeyManager::new();
             // Create a button in Python to test is_pressed
-            let btn_type = py.get_type::<PyButton>();
-            let btn_a = btn_type.call_method0("A").unwrap();
+            let btn_a = Bound::new(py, PyButton::A()).unwrap().into_any();
             let result = km.is_pressed(&btn_a).unwrap();
             assert!(!result);
         });
@@ -1073,8 +1074,7 @@ mod tests {
     #[test]
     fn test_pyobj_to_gamepad_input_button() {
         Python::with_gil(|py| {
-            let btn_type = py.get_type::<PyButton>();
-            let btn_a = btn_type.call_method0("A").unwrap();
+            let btn_a = Bound::new(py, PyButton::A()).unwrap().into_any();
             let result = pyobj_to_gamepad_input(&btn_a).unwrap();
             assert_eq!(result, GamepadInput::SingleButton(RustButton::A));
         });
@@ -1083,8 +1083,7 @@ mod tests {
     #[test]
     fn test_pyobj_to_gamepad_input_hat() {
         Python::with_gil(|py| {
-            let hat_type = py.get_type::<PyHat>();
-            let hat_top = hat_type.call_method0("TOP").unwrap();
+            let hat_top = Bound::new(py, PyHat::TOP()).unwrap().into_any();
             let result = pyobj_to_gamepad_input(&hat_top).unwrap();
             assert_eq!(result, GamepadInput::SingleHat(RustHat::TOP));
         });
@@ -1093,12 +1092,9 @@ mod tests {
     #[test]
     fn test_pyobj_to_gamepad_input_direction() {
         Python::with_gil(|py| {
-            let stick_type = py.get_type::<PyStick>();
-            let left = stick_type.call_method0("LEFT").unwrap();
-            let dir_type = py.get_type::<PyDirection>();
-            let dir_up = dir_type
-                .call_method1("from_angle", (left, 90.0, 1.0))
-                .unwrap();
+            let dir_up = Bound::new(py, PyDirection::from_angle(&PyStick::LEFT(), 90.0, 1.0))
+                .unwrap()
+                .into_any();
             let result = pyobj_to_gamepad_input(&dir_up).unwrap();
             let expected = GamepadInput::SingleDirection(RustDirection::up(RustStick::Left));
             assert_eq!(result, expected);
@@ -1117,8 +1113,7 @@ mod tests {
     #[test]
     fn test_pyany_to_gamepad_inputs_single() {
         Python::with_gil(|py| {
-            let btn_type = py.get_type::<PyButton>();
-            let btn_a = btn_type.call_method0("A").unwrap();
+            let btn_a = Bound::new(py, PyButton::A()).unwrap().into_any();
             let result = pyany_to_gamepad_inputs(&btn_a).unwrap();
             assert_eq!(result.len(), 1);
             assert_eq!(result[0], GamepadInput::SingleButton(RustButton::A));
@@ -1128,9 +1123,8 @@ mod tests {
     #[test]
     fn test_pyany_to_gamepad_inputs_list() {
         Python::with_gil(|py| {
-            let btn_type = py.get_type::<PyButton>();
-            let btn_a = btn_type.call_method0("A").unwrap();
-            let btn_b = btn_type.call_method0("B").unwrap();
+            let btn_a = Bound::new(py, PyButton::A()).unwrap().into_any();
+            let btn_b = Bound::new(py, PyButton::B()).unwrap().into_any();
 
             let list = PyList::new(py, [btn_a, btn_b]).unwrap();
             let result = pyany_to_gamepad_inputs(&list.as_borrowed()).unwrap();
@@ -1190,9 +1184,8 @@ mod tests {
         // is_pressed only accepts a single input, not a list
         Python::with_gil(|py| {
             let km = PyKeyManager::new();
-            let btn_type = py.get_type::<PyButton>();
-            let btn_a = btn_type.call_method0("A").unwrap();
-            let btn_b = btn_type.call_method0("B").unwrap();
+            let btn_a = Bound::new(py, PyButton::A()).unwrap().into_any();
+            let btn_b = Bound::new(py, PyButton::B()).unwrap().into_any();
 
             let list = PyList::new(py, [btn_a, btn_b]).unwrap();
             let result = km.is_pressed(&list.as_borrowed());

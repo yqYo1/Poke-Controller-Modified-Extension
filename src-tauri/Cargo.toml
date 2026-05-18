@@ -39,7 +39,7 @@ ffmpeg-sys-next = { version = "8.1", optional = true }
 thiserror = { version = "2", optional = true }
 
 # Workspace crates
-pokecon-core = { path = "../rust/pokecon-core" }
+pokecon-core = { path = "../rust/pokecon-core", features = ["utoipa"] }
 mime_guess = "2.0.5"
 tower = "0.5.3"
 

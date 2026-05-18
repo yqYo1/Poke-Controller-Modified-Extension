@@ -135,8 +135,7 @@ impl PyLineNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// DesktopNotifier  —  wraps pokecon_core::notify::WindowsNotifier
-// ---------------------------------------------------------------------------
+// DesktopNotifier  —  wraps pokecon_core::notify::DesktopNotifier
 
 /// Notifier that displays native desktop toast notifications.
 ///
@@ -162,7 +161,7 @@ impl PyLineNotifier {
 ///     )
 #[pyclass(name = "DesktopNotifier")]
 pub struct PyDesktopNotifier {
-    inner: notify::WindowsNotifier,
+    inner: notify::DesktopNotifier,
 }
 
 #[pymethods]
@@ -170,7 +169,7 @@ impl PyDesktopNotifier {
     #[new]
     fn new(app_name: String) -> Self {
         Self {
-            inner: notify::WindowsNotifier::new(app_name),
+            inner: notify::DesktopNotifier::new(app_name),
         }
     }
 
@@ -283,7 +282,7 @@ fn send_line(access_token: String, message: String, title: Option<String>) -> Py
 #[pyfunction]
 #[pyo3(signature = (app_name, message, title = None))]
 fn send_desktop(app_name: String, message: String, title: Option<String>) -> PyResult<()> {
-    let notifier = notify::WindowsNotifier::new(app_name);
+    let notifier = notify::DesktopNotifier::new(app_name);
     let mut notification = notify::Notification::new(message);
     if let Some(t) = title {
         notification = notification.with_title(t);
@@ -384,12 +383,11 @@ mod tests {
     fn test_notification_new() {
         Python::with_gil(|py| {
             let notif = Bound::new(py, PyNotification::new("test".to_string())).unwrap();
-            let msg: String = notif.call_method0("message").unwrap().extract().unwrap();
+            let msg: String = notif.getattr("message").unwrap().extract().unwrap();
             assert_eq!(msg, "test");
-            let title: Option<String> = notif.call_method0("title").unwrap().extract().unwrap();
+            let title: Option<String> = notif.getattr("title").unwrap().extract().unwrap();
             assert!(title.is_none());
-            let subtitle: Option<String> =
-                notif.call_method0("subtitle").unwrap().extract().unwrap();
+            let subtitle: Option<String> = notif.getattr("subtitle").unwrap().extract().unwrap();
             assert!(subtitle.is_none());
         });
     }
@@ -402,9 +400,9 @@ mod tests {
                 PyNotification::new("body".to_string()).with_title("mytitle".to_string()),
             )
             .unwrap();
-            let msg: String = notif.call_method0("message").unwrap().extract().unwrap();
+            let msg: String = notif.getattr("message").unwrap().extract().unwrap();
             assert_eq!(msg, "body");
-            let title: Option<String> = notif.call_method0("title").unwrap().extract().unwrap();
+            let title: Option<String> = notif.getattr("title").unwrap().extract().unwrap();
             assert_eq!(title.as_deref(), Some("mytitle"));
         });
     }
@@ -419,11 +417,14 @@ mod tests {
                     .with_subtitle("sub".to_string()),
             )
             .unwrap();
-            let sub: Option<String> = notif.call_method0("subtitle").unwrap().extract().unwrap();
-            assert_eq!(sub.as_deref(), Some("sub"));
+            let msg: String = notif.getattr("message").unwrap().extract().unwrap();
+            assert_eq!(msg, "body");
+            let title: Option<String> = notif.getattr("title").unwrap().extract().unwrap();
+            assert_eq!(title.as_deref(), Some("t"));
+            let subtitle: Option<String> = notif.getattr("subtitle").unwrap().extract().unwrap();
+            assert_eq!(subtitle.as_deref(), Some("sub"));
         });
     }
-
     #[test]
     fn test_notification_repr() {
         Python::with_gil(|py| {

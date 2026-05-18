@@ -23,10 +23,10 @@ use tracing::{debug, warn};
 /// # Example
 ///
 /// ```no_run
-/// use pokecon_core::notify::{Notifier, Notification, windows::WindowsNotifier};
+/// use pokecon_core::notify::{Notifier, Notification, windows::DesktopNotifier};
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let notifier = WindowsNotifier::new("Poke-Controller");
+/// let notifier = DesktopNotifier::new("Poke-Controller");
 /// notifier.send(
 ///     &Notification::new("Shiny Pokémon encountered!")
 ///         .with_title("Pokémon Alert"),
@@ -35,12 +35,12 @@ use tracing::{debug, warn};
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-pub struct WindowsNotifier {
+pub struct DesktopNotifier {
     /// Application name displayed in the notification.
     app_name: String,
 }
 
-impl WindowsNotifier {
+impl DesktopNotifier {
     /// Create a new desktop notifier.
     ///
     /// `app_name` is shown as the notification source (e.g. in the
@@ -53,7 +53,7 @@ impl WindowsNotifier {
 }
 
 #[async_trait]
-impl Notifier for WindowsNotifier {
+impl Notifier for DesktopNotifier {
     async fn send(&self, notification: &Notification) -> NotifyResult<()> {
         let mut native = NativeNotification::new();
 
@@ -100,13 +100,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_windows_notifier_creation() {
-        let notifier = WindowsNotifier::new("Poke-Controller");
+        let notifier = DesktopNotifier::new("Poke-Controller");
         assert_eq!(notifier.app_name, "Poke-Controller");
     }
 
     #[tokio::test]
     async fn test_windows_notifier_display() {
-        let notifier = WindowsNotifier::new("Test-App");
+        let notifier = DesktopNotifier::new("Test-App");
         // In a CI/headless environment this may fail, but the code path
         // should not panic.
         let result = notifier

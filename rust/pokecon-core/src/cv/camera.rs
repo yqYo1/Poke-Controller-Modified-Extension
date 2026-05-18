@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -139,14 +138,14 @@ pub trait CameraBackend: Send + Sync {
 }
 
 pub struct Camera {
-    backend: Arc<Mutex<Box<dyn CameraBackend>>>,
+    backend: Mutex<Box<dyn CameraBackend>>,
     config: CameraConfig,
 }
 
 impl Camera {
     pub fn new(backend: Box<dyn CameraBackend>) -> Self {
         Self {
-            backend: Arc::new(Mutex::new(backend)),
+            backend: Mutex::new(backend),
             config: CameraConfig::default(),
         }
     }

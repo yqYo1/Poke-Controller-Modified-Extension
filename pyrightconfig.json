@@ -8,7 +8,7 @@
   "defineConstant": {
     "DEBUG": true
   },
-  "pythonVersion": "3.12",
+  "pythonVersion": "3.14",
   "pythonPlatform": "All",
   "analyzeUnannotatedFunctions": true,
   "deprecateTypingAliases": true,

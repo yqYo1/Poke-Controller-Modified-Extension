@@ -259,11 +259,11 @@ mod tests {
             cmd.call_method1("run", ("my_cmd",)).unwrap();
 
             let status = cmd.call_method0("status").unwrap();
-            let active: Option<String> = status.getattr("active").unwrap().extract().unwrap();
+            let active: Option<String> = status.get_item("active").unwrap().extract().unwrap();
             assert_eq!(active.as_deref(), Some("my_cmd"));
-            let commands: Vec<String> = status.getattr("commands").unwrap().extract().unwrap();
+            let commands: Vec<String> = status.get_item("commands").unwrap().extract().unwrap();
             assert!(commands.contains(&"my_cmd".to_string()));
-            let count: usize = status.getattr("count").unwrap().extract().unwrap();
+            let count: usize = status.get_item("count").unwrap().extract().unwrap();
             assert_eq!(count, 1);
         });
     }

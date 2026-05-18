@@ -165,7 +165,7 @@ pub async fn serial_config(
         let format = match format_str.as_str() {
             "Default" => SerialFormat::Default,
             "Qingpi" => SerialFormat::Qingpi,
-            "3DS Controller" => SerialFormat::_3dsController,
+            "3DS Controller" => SerialFormat::ThreeDsController,
             _ => {
                 return Json(serde_json::json!({
                     "status": "error",

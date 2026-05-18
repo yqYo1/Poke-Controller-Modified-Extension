@@ -22,3 +22,6 @@ ndarray = "0.16"
 
 
 pokecon-core = { path = "../pokecon-core", features = ["v4l", "notify", "mqtt", "lua"] }
+
+[dev-dependencies]
+tempfile = "3"

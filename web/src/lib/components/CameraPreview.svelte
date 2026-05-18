@@ -240,9 +240,19 @@
 				接続中...
 			</div>
 		{:else}
-			<span class="text-xs text-gray-500">
-				{cameraOpen ? '準備中...' : 'カメラを開くとプレビューが表示されます'}
-			</span>
+			<div class="flex flex-col items-center justify-center text-gray-500">
+				<svg
+					class="mb-2 h-12 w-12 opacity-50"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+				>
+					<path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+					<path d="M9.75 9.75l4.5 4.5M14.25 9.75l-4.5 4.5" stroke-linecap="round" />
+				</svg>
+				<span class="text-xs">{cameraOpen ? '準備中...' : 'No image'}</span>
+			</div>
 		{/if}
 	</div>
 </div>

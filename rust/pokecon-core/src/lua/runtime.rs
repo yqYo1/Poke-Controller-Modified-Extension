@@ -776,8 +776,8 @@ mod tests {
     #[test]
     fn test_lua_value_to_json_number() {
         let lua = Lua::new();
-        let result = lua_value_to_json(&lua, &mlua::Value::Number(3.14)).unwrap();
-        assert_eq!(result, serde_json::json!(3.14));
+        let result = lua_value_to_json(&lua, &mlua::Value::Number(2.5)).unwrap();
+        assert_eq!(result, serde_json::json!(2.5));
     }
 
     #[test]
@@ -965,14 +965,14 @@ mod tests {
         table.set("null_val", mlua::Value::Nil).unwrap();
         table.set("bool_val", true).unwrap();
         table.set("int_val", 42).unwrap();
-        table.set("float_val", 3.14).unwrap();
+        table.set("float_val", 2.5).unwrap();
         table.set("str_val", "text").unwrap();
 
         let result = lua_value_to_json(&lua, &mlua::Value::Table(table)).unwrap();
         assert_eq!(result["null_val"], serde_json::Value::Null);
         assert_eq!(result["bool_val"], serde_json::json!(true));
         assert_eq!(result["int_val"], serde_json::json!(42));
-        assert_eq!(result["float_val"], serde_json::json!(3.14));
+        assert_eq!(result["float_val"], serde_json::json!(2.5));
         assert_eq!(result["str_val"], serde_json::json!("text"));
     }
 

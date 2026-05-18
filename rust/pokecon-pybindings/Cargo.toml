@@ -20,6 +20,10 @@ pyo3 = { workspace = true }
 numpy = "0.25"
 ndarray = "0.16"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+rumqttc = "0.24"
 
 pokecon-core = { path = "../pokecon-core", features = ["v4l", "notify", "mqtt", "lua"] }
 

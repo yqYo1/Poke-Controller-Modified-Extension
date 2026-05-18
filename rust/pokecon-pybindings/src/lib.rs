@@ -2,6 +2,7 @@ mod command;
 mod events;
 mod image_proc;
 mod keys;
+mod net;
 mod notify;
 mod python_cmd;
 mod sender;
@@ -33,6 +34,10 @@ fn pokecon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let notify_module = PyModule::new(m.py(), "notify")?;
     notify::register(&notify_module)?;
     m.add_submodule(&notify_module)?;
+
+    let net_module = PyModule::new(m.py(), "net")?;
+    net::register(&net_module)?;
+    m.add_submodule(&net_module)?;
 
     Ok(())
 }

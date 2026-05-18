@@ -57,7 +57,7 @@ pub enum EventBusError {
 }
 
 /// Type alias for event handler functions
-pub type EventHandler = Arc<dyn Fn(&Event) + Send + Sync>;
+pub type EventHandler = Arc<dyn Fn(&mut Event) + Send + Sync>;
 
 /// A simple event bus for dispatching events
 #[derive(Clone)]
@@ -76,7 +76,7 @@ impl EventBus {
     /// Register a handler for a specific event type
     pub fn on<F>(&self, event_type: &str, handler: F)
     where
-        F: Fn(&Event) + Send + Sync + 'static,
+        F: Fn(&mut Event) + Send + Sync + 'static,
     {
         let mut handlers = self.handlers.write();
         handlers
@@ -96,15 +96,41 @@ impl EventBus {
         Ok(())
     }
 
-    /// Emit an event to all registered handlers
-    pub fn emit(&self, event: &Event) {
-        let handlers = self.handlers.read();
-        if let Some(handlers) = handlers.get(&event.event_type) {
-            for handler in handlers {
+    /// Emit an event to all registered handlers.
+    ///
+    /// Handlers are invoked synchronously in registration order.
+    /// The handler list is cloned before invocation so that handlers
+    /// can safely register/unregister other handlers without deadlocking.
+    /// If a handler panics, subsequent handlers still run.
+    pub fn emit(&self, event: &mut Event) {
+        // Clone the handler list under the read lock, then release it
+        // before invoking any handler.  This prevents deadlocks when
+        // handlers call back into the bus (e.g. `on` / `off`).
+        let handlers: Option<Vec<EventHandler>> = {
+            let guard = self.handlers.read();
+            guard.get(&event.event_type).map(|h| h.clone())
+        };
+
+        let Some(handlers) = handlers else {
+            return;
+        };
+
+        for handler in &handlers {
+            // Isolate panics so a misbehaving handler doesn't
+            // prevent subsequent handlers from running.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 handler(event);
-                if event.propagation_stopped {
-                    break;
-                }
+            }));
+            if let Err(e) = result {
+                debug!(
+                    "Handler panicked for event type '{}': {:?}",
+                    event.event_type,
+                    e.downcast_ref::<&str>().unwrap_or(&"<unknown>")
+                );
+            }
+            if event.propagation_stopped {
+                debug!("Propagation stopped for event type '{}'", event.event_type);
+                break;
             }
         }
     }
@@ -160,8 +186,8 @@ mod tests {
             called_clone.store(true, Ordering::SeqCst);
         });
 
-        let event = Event::new("test.event", serde_json::json!({}));
-        bus.emit(&event);
+        let mut event = Event::new("test.event", serde_json::json!({}));
+        bus.emit(&mut event);
 
         assert!(called.load(Ordering::SeqCst));
     }
@@ -169,9 +195,9 @@ mod tests {
     #[test]
     fn test_event_bus_no_handler() {
         let bus = EventBus::new();
-        let event = Event::new("unknown", serde_json::json!({}));
+        let mut event = Event::new("unknown", serde_json::json!({}));
         // Should not panic
-        bus.emit(&event);
+        bus.emit(&mut event);
     }
 
     #[test]
@@ -207,9 +233,9 @@ mod tests {
         let second_called = Arc::new(AtomicBool::new(false));
 
         let first = first_called.clone();
-        bus.on("test", move |_event| {
+        bus.on("test", move |event| {
             first.store(true, Ordering::SeqCst);
-            // Cannot stop propagation from &Event, so just track ordering
+            event.stop_propagation();
         });
 
         let second = second_called.clone();
@@ -217,10 +243,100 @@ mod tests {
             second.store(true, Ordering::SeqCst);
         });
 
-        let event = Event::new("test", serde_json::json!({}));
-        bus.emit(&event);
+        let mut event = Event::new("test", serde_json::json!({}));
+        bus.emit(&mut event);
 
         assert!(first_called.load(Ordering::SeqCst));
-        assert!(second_called.load(Ordering::SeqCst));
+        assert!(
+            !second_called.load(Ordering::SeqCst),
+            "second handler should NOT have been called because propagation was stopped"
+        );
+        assert!(event.propagation_stopped);
+    }
+
+    #[test]
+    fn test_event_bus_panic_isolation() {
+        let bus = EventBus::new();
+        let second_called = Arc::new(AtomicBool::new(false));
+
+        // First handler panics
+        bus.on("test", |_event| {
+            panic!("intentional panic");
+        });
+
+        let second = second_called.clone();
+        bus.on("test", move |_event| {
+            second.store(true, Ordering::SeqCst);
+        });
+
+        let mut event = Event::new("test", serde_json::json!({}));
+        // Should not panic overall — the panicking handler is isolated
+        bus.emit(&mut event);
+
+        assert!(
+            second_called.load(Ordering::SeqCst),
+            "second handler MUST be called even though first handler panicked"
+        );
+    }
+
+    #[test]
+    fn test_event_bus_handler_can_register_new_handler() {
+        // Regression test: handlers should be able to call `on` inside
+        // an emit without deadlocking (handler list is cloned beforehand).
+        let bus = Arc::new(EventBus::new());
+        let inner_called = Arc::new(AtomicBool::new(false));
+
+        let inner = inner_called.clone();
+        let bus_clone = bus.clone();
+        bus.on("outer", move |_event| {
+            // Register a new handler from inside a handler — would
+            // deadlock with the old implementation that held the
+            // read lock during handler execution.
+            let inner_inner = inner.clone();
+            bus_clone.on("inner", move |_event| {
+                inner_inner.store(true, Ordering::SeqCst);
+            });
+        });
+
+        let mut event = Event::new("outer", serde_json::json!({}));
+        bus.emit(&mut event);
+
+        // The inner handler should now be registered
+        assert!(bus.has_handlers("inner"));
+
+        // Emit the inner event
+        let mut inner_event = Event::new("inner", serde_json::json!({}));
+        bus.emit(&mut inner_event);
+
+        assert!(
+            inner_called.load(Ordering::SeqCst),
+            "handler registered inside another handler must be callable"
+        );
+    }
+
+    #[test]
+    fn test_event_bus_handler_can_off_inside_emit() {
+        // Regression test: handlers should be able to call `off` inside
+        // an emit without deadlocking.
+        let bus = EventBus::new();
+
+        bus.on("test", |_event| {
+            // no-op
+        });
+
+        let mut event = Event::new("test", serde_json::json!({}));
+        bus.emit(&mut event);
+
+        // off after emit
+        bus.off("test").unwrap();
+        assert!(!bus.has_handlers("test"));
+    }
+
+    #[test]
+    fn test_event_bus_emit_unknown_type() {
+        let bus = EventBus::new();
+        let mut event = Event::new("nonexistent", serde_json::json!({}));
+        // Should not panic — just no handlers
+        bus.emit(&mut event);
     }
 }

@@ -646,7 +646,7 @@ impl PokeConApi {
             "emit",
             lua.create_function(move |_, (event_name, data): (String, Option<Value>)| {
                 let json_data = lua_value_to_json(&data);
-                let event = Event::new(&event_name, json_data);
+                let mut event = Event::new(&event_name, json_data);
                 if let Some(ref h) = handle {
                     if let Some(ref bus) = h.event_bus {
                         bus.emit(&event);

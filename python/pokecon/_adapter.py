@@ -1454,6 +1454,148 @@ def is_rust_touchscreen(obj: Any) -> bool:
     return _is_rust_touchscreen(obj)
 
 
+# ── Dialogue adapters ────────────────────────────────────────────────
+
+
+def show_message_dialog(
+    title: str,
+    message: str,
+    kind: str = "info",
+) -> None:
+    """Show a message box dialog via Rust bindings or pure-Python tkinter.
+
+    Parameters
+    ----------
+    title : str
+        Dialog window title.
+    message : str
+        Message body text.
+    kind : str, optional
+        Message kind: ``'info'``, ``'warning'``, or ``'error'`` (default ``'info'``).
+    """
+    if _RUST_CORE_AVAILABLE:
+        try:
+            dialogue_mod = _get_rust_module("dialogue")
+            dialogue_mod.show_message(title, message, kind)
+            return
+        except (ImportError, AttributeError) as exc:
+            _logger.warning(
+                "Rust show_message not available, falling back: %s",
+                exc,
+            )
+            raise
+
+    from pokecon.dialogue import show_message as _py_show_message  # noqa: PLC0415
+
+    _py_show_message(title, message, kind)
+
+
+def confirm_dialog(title: str, message: str) -> bool:
+    """Show a confirmation dialog.
+
+    Parameters
+    ----------
+    title : str
+        Dialog window title.
+    message : str
+        Confirmation question text.
+
+    Returns
+    -------
+    bool
+        ``True`` if the user clicked Yes.
+    """
+    if _RUST_CORE_AVAILABLE:
+        try:
+            dialogue_mod = _get_rust_module("dialogue")
+            return dialogue_mod.confirm(title, message)
+        except (ImportError, AttributeError) as exc:
+            _logger.warning(
+                "Rust confirm not available, falling back: %s",
+                exc,
+            )
+            raise
+
+    from pokecon.dialogue import confirm as _py_confirm  # noqa: PLC0415
+
+    return _py_confirm(title, message)
+
+
+def input_dialog(
+    title: str,
+    prompt: str,
+    default: str = "",
+) -> str | None:
+    """Show a text input dialog.
+
+    Parameters
+    ----------
+    title : str
+        Dialog window title.
+    prompt : str
+        Label text.
+    default : str, optional
+        Default text.
+
+    Returns
+    -------
+    str or None
+        Entered text, or ``None`` if cancelled.
+    """
+    if _RUST_CORE_AVAILABLE:
+        try:
+            dialogue_mod = _get_rust_module("dialogue")
+            return dialogue_mod.input_dialog(title, prompt, default)
+        except (ImportError, AttributeError) as exc:
+            _logger.warning(
+                "Rust input_dialog not available, falling back: %s",
+                exc,
+            )
+            raise
+
+    from pokecon.dialogue import input_dialog as _py_input_dialog  # noqa: PLC0415
+
+    return _py_input_dialog(title, prompt, default)
+
+
+def show_dialogue(
+    title: str,
+    message: str | int | list[str | int],
+    desc: str | None = None,
+    need: type[list[Any]] | type[dict[str, Any]] = list,
+) -> list[str] | dict[str, str] | None:
+    """Show an entry-based input dialog (original Poke-Controller API).
+
+    .. note::
+       This function always uses the pure-Python implementation because the
+       compiled ``pokecon.dialogue`` Rust module shadows the Python source
+       file, making delegation from Rust impractical.  Simple dialogs
+       (``show_message``, ``confirm``, ``input_dialog``) use Rust bindings
+       when available.
+
+    Parameters
+    ----------
+    title : str
+        Dialog title.
+    message : str | int | list[str | int]
+        Entry field definitions.
+    desc : str, optional
+        Description text.
+    need : type, optional
+        Return type: ``list`` or ``dict``.
+
+    Returns
+    -------
+    list[str] or dict[str, str] or None
+        User input values.
+    """
+    # Always use pure-Python implementation to avoid module name collision
+    # between the Rust ``pokecon.dialogue`` extension and ``dialogue.py``.
+    from pokecon.dialogue import dialogue as _py_dialogue  # noqa: PLC0415
+
+    return _py_dialogue(title, message, desc, need)
+
+
 __all__ = [
     # Core adapter class (used by CommandMeta)
     "_RustCoreAdapter",
@@ -1503,4 +1645,9 @@ __all__ = [
     "image_in_range",
     "image_threshold",
     "image_preprocess",
+    # Module adapter functions — Dialogue
+    "show_message_dialog",
+    "confirm_dialog",
+    "input_dialog",
+    "show_dialogue",
 ]

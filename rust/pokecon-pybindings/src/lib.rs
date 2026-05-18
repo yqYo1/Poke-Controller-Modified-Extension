@@ -1,4 +1,5 @@
 mod command;
+mod dialogue;
 mod events;
 mod image_proc;
 mod keys;
@@ -26,6 +27,10 @@ fn pokecon(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let cmd_module = PyModule::new(m.py(), "command")?;
     command::register(&cmd_module)?;
     m.add_submodule(&cmd_module)?;
+
+    let dialogue_module = PyModule::new(m.py(), "dialogue")?;
+    dialogue::register(&dialogue_module)?;
+    m.add_submodule(&dialogue_module)?;
 
     let sender_module = PyModule::new(m.py(), "sender")?;
     sender::register(&sender_module)?;

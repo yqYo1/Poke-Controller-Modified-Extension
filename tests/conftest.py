@@ -5,10 +5,16 @@ import sys
 import types
 from unittest.mock import MagicMock
 
+
 # Create mock tkinter before anything else imports it
+def _mock_tk_widget(*args, **kwargs):
+    """Return a MagicMock that doesn't use its first arg as a spec."""
+    return MagicMock()
+
+
 _mock_tk = types.ModuleType("tkinter")
 _mock_tk.BooleanVar = MagicMock
-_mock_tk.Toplevel = MagicMock
+_mock_tk.Toplevel = _mock_tk_widget
 _mock_tk.Text = MagicMock
 for name in [
     "Label",
@@ -31,7 +37,9 @@ for name in [
     "Menubutton",
     "Message",
     "PanedWindow",
-    "Toplevel",
+]:
+    setattr(_mock_tk, name, _mock_tk_widget)
+for name in [
     "simpledialog",
     "colorchooser",
     "filedialog",
@@ -60,6 +68,7 @@ _mock_tkm.showwarning = MagicMock()
 _mock_tkm.showerror = MagicMock()
 _mock_tkm.askokcancel = MagicMock(return_value=True)
 _mock_tkm.askyesno = MagicMock(return_value=True)
+_mock_tkm.askretrycancel = MagicMock(return_value=True)
 _mock_tk.messagebox = _mock_tkm
 
 _mock_tks = types.ModuleType("tkinter.simpledialog")

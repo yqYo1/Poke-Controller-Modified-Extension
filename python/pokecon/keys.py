@@ -12,7 +12,7 @@ import time
 from collections import OrderedDict
 from enum import Enum, IntEnum, IntFlag, auto
 from logging import DEBUG, NullHandler, getLogger
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -26,24 +26,16 @@ try:
     # compiled ``pokecon`` extension is available; otherwise it falls through
     # to the pure-Python definitions below.
     from pokecon.keys import (  # type: ignore[import-unused]
-        Button as Button,
-    )
-    from pokecon.keys import (
-        Direction as Direction,
-    )
-    from pokecon.keys import (
-        Hat as Hat,
-    )
-    from pokecon.keys import (
-        Stick as Stick,
-    )
-    from pokecon.keys import (
-        Touchscreen as Touchscreen,
+        Button,
+        Direction,
+        Hat,
+        Stick,
+        Touchscreen,
     )
 
-    _RUST_KEYS_AVAILABLE = True
+    _RUST_KEYS_AVAILABLE: bool = True
 except ImportError:
-    _RUST_KEYS_AVAILABLE = False
+    _RUST_KEYS_AVAILABLE: bool = False
 
 
 # ===================================================================
@@ -239,8 +231,14 @@ if not _RUST_KEYS_AVAILABLE:
 
 
 # ===================================================================
-# Unconditional definitions (conversion tables, constants)
+# Unconditional definitions (conversion tables, constants, type aliases)
 # ===================================================================
+
+# Type alias for controller input types (Button, Hat, Direction, Touchscreen).
+# Accepts either a single input or a list of inputs (legacy API compatibility).
+# Defined here after both Rust import and pure-Python fallback are resolved.
+_KeyInput = Button | Hat | Direction | Touchscreen
+_KeyInputs = _KeyInput | list[_KeyInput]
 
 # Conversion dicts (same as original) — work with both Rust and Python types
 conversion_default_button: dict[Button, Button] = {
@@ -285,15 +283,15 @@ conversion_3ds_controller_button: dict[Button, int] = {
     Button.WIRELESS: 0,
 }
 
-convert_hat_default = list(range(9))
-convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
+convert_hat_default: list[int] = list(range(9))
+convert_hat_3ds_controller: list[int] = [8, 0, 4, 0, 2, 0, 1, 0, 0]
 
 # Direction constants
-direction_min = 0
-direction_center = 128
-direction_max = 255
+direction_min: int = 0
+direction_center: int = 128
+direction_max: int = 255
 
-NEUTRAL = (128, 127)
+NEUTRAL: tuple[int, int] = (128, 127)
 
 # ===================================================================
 # Always-available definitions (no Rust equivalent — pure Python only)
@@ -522,7 +520,7 @@ class SendFormat:
 class KeyPress:
     serial_data_format_name: str = "Default"
 
-    def __init__(self, ser) -> None:
+    def __init__(self, ser: Any) -> None:  # noqa: ANN401
         self._logger: Final[Logger] = getLogger(__name__)
         self._logger.addHandler(NullHandler())
         self._logger.setLevel(DEBUG)
@@ -555,8 +553,8 @@ class KeyPress:
         self.ed: float = 0.0
 
     @property
-    def holdButtons(self):
-        hold_btns = list(self.holdButton)
+    def holdButtons(self) -> list[_KeyInput]:
+        hold_btns: list[Any] = list(self.holdButton)
         if self.holdHat != Hat.CENTER:
             hold_btns.append(self.holdHat)
         if self.holdLeftStick:
@@ -570,7 +568,7 @@ class KeyPress:
     def init_hat(self) -> None:
         pass
 
-    def input(self, btns, ifPrint: bool = True) -> None:
+    def input(self, btns: _KeyInputs, ifPrint: bool = True) -> None:  # noqa: ARG002
         self._pushing = dict(self.format.format)
         if not isinstance(btns, list):
             btns = [btns]
@@ -602,8 +600,8 @@ class KeyPress:
 
     def inputEnd(
         self,
-        btns,
-        ifPrint: bool = True,
+        btns: _KeyInputs,
+        ifPrint: bool = True,  # noqa: ARG002
         unset_hat: bool = True,
         unset_Touchscreen: bool = True,
     ) -> None:
@@ -645,7 +643,7 @@ class KeyPress:
             else:
                 self.ser.writeRow(self.format.convert2str())
 
-    def hold(self, btns) -> None:
+    def hold(self, btns: _KeyInputs) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -684,7 +682,7 @@ class KeyPress:
         if len(btns) > 0:
             self.input(btns)
 
-    def holdEnd(self, btns) -> None:
+    def holdEnd(self, btns: _KeyInputs) -> None:
         if not isinstance(btns, list):
             btns = [btns]
 
@@ -750,6 +748,7 @@ class KeyPress:
 
 
 __all__ = [
+    "NEUTRAL",
     "Button",
     "Direction",
     "Hat",
@@ -758,12 +757,11 @@ __all__ = [
     "Stick",
     "Tilt",
     "Touchscreen",
-    "NEUTRAL",
-    "conversion_default_button",
     "conversion_3ds_controller_button",
-    "convert_hat_default",
+    "conversion_default_button",
     "convert_hat_3ds_controller",
-    "direction_min",
-    "direction_max",
+    "convert_hat_default",
     "direction_center",
+    "direction_max",
+    "direction_min",
 ]

@@ -230,12 +230,30 @@ class _CommandBaseStub(ABC):
 
     # ── Dialog functions ────────────────────────────────────────────
     def dialogue(self, title: str, message, desc=None, need=list):
-        print(f"dialogue({title}): stubbed")
-        return []
+        """Show an entry-based input dialog.
+
+        See ``pokecon.dialogue.dialogue()`` for parameter details.
+
+        Returns
+        -------
+        list[str] or dict[str, str] or None
+        """
+        from pokecon.dialogue import dialogue as _dialogue
+
+        return _dialogue(title, message, desc, need)
 
     def dialogue6widget(self, title: str, dialogue_list, desc=None, need=list):
-        print(f"dialogue6widget({title}): stubbed")
-        return {}
+        """Show a multi-widget input dialog.
+
+        See ``pokecon.dialogue.dialogue6widget()`` for parameter details.
+
+        Returns
+        -------
+        list or dict or None
+        """
+        from pokecon.dialogue import dialogue6widget as _dialogue6widget
+
+        return _dialogue6widget(title, dialogue_list, desc, need)
 
     def dialogue6widget_save_settings(
         self, title: str, dialogue_list, filename, desc=None, need=list

@@ -129,8 +129,6 @@ web/
 │   │       ├── LogPanel.svelte       # Filterable log viewer
 │   │       └── OutputPanel.svelte    # Tabbed output panel (text/image/table)
 │   │
-│   └── api/
-│       └── client.js             # Legacy JS client (keep during migration)
 ```
 
 ### Key Files Explained

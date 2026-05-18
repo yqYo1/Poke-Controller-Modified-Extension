@@ -32,21 +32,22 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 │                  PyO3 バインディング                      │
 │         (rust/pokecon-pybindings/ - Rust↔Python)         │
 ├─────────────────────────────────────────────────────────┤
-│                    Rust コア                             │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐     │
-│  │ pokecon-│ │ pokecon-│ │ pokecon-│ │ pokecon-│     │
-│  │ serial  │ │ cv      │ │ net     │ │ notify  │     │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘     │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐                  │
-│  │ pokecon-│ │ pokecon-│ │ pokecon-│                  │
-│  │ core    │ │ events  │ │ lua     │                  │
-│  └─────────┘ └─────────┘ └─────────┘                  │
+│                    Rust コア                              │
+│  ┌────────────────────────────────────────────────┐     │
+│  │              pokecon-core                       │     │
+│  │  ┌────────┐ ┌──────┐ ┌────────┐ ┌────────┐   │     │
+│  │  │ serial │ │ cv   │ │ events │ │ net    │   │     │
+│  │  └────────┘ └──────┘ └────────┘ └────────┘   │     │
+│  │  ┌────────┐ ┌──────┐                          │     │
+│  │  │ notify │ │ lua  │                          │     │
+│  │  └────────┘ └──────┘                          │     │
+│  └────────────────────────────────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
 │                  HTTP/WebSocket API                      │
 │              (axum + tokio - 非同期)                     │
 ├─────────────────────────────────────────────────────────┤
 │                  Web フロントエンド                       │
-│              (React 19 + Vite + PWA)                     │
+│            (SvelteKit 2 + Svelte 5 (runes))             │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -59,7 +60,7 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 | PyO3バインディング | Rust↔Python橋渡し | PyO3, maturin |
 | Rustコア | ハードウェア制御、画像処理 | Rust 2024 |
 | HTTP API | REST/WebSocket提供 | axum, tokio |
-| Webフロントエンド | UI表示、ユーザー操作 | React 19, Vite |
+| Webフロントエンド | UI表示、ユーザー操作 | SvelteKit 2 + Svelte 5 (runes) |
 
 ---
 
@@ -74,15 +75,54 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 ├── Cargo.toml                # Rustワークスペース
 ├── rust-toolchain.toml       # Rustツールチェイン
 │
-├── rust/                       # Rustコア（8クレート）
-│   ├── pokecon-core/           # コマンドマネージャー、設定
-│   ├── pokecon-serial/         # シリアル通信、キー入力
-│   ├── pokecon-cv/             # カメラ、画像処理
-│   ├── pokecon-events/         # イベントバス、レジストリ
-│   ├── pokecon-net/            # Socket、MQTT
-│   ├── pokecon-notify/         # Discord、LINE、Windows通知
-│   ├── pokecon-lua/            # LuaJIT統合
-│   └── pokecon-pybindings/     # PyO3バインディング
+├── rust/                       # Rustコア（2クレート）
+│   ├── pokecon-core/           # 全コア機能を統合
+│   │   ├── Cargo.toml
+│   │   ├── build.rs
+│   │   ├── src/
+│   │   │   ├── lib.rs           # モジュール再エクスポート
+│   │   │   ├── command_manager.rs
+│   │   │   ├── settings.rs
+│   │   │   ├── profile.rs
+│   │   │   ├── serial/          # シリアル通信、キー入力
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── sender.rs
+│   │   │   │   ├── keypress.rs
+│   │   │   │   ├── keys.rs
+│   │   │   │   └── format.rs
+│   │   │   ├── cv/              # カメラ、画像処理
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── camera.rs
+│   │   │   │   ├── image_processing.rs
+│   │   │   │   └── backends.rs
+│   │   │   ├── events/          # イベントバス、レジストリ
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── bus.rs
+│   │   │   │   ├── registry.rs
+│   │   │   │   ├── handler.rs
+│   │   │   │   └── user_event.rs
+│   │   │   ├── lua/             # LuaJIT統合
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── api.rs
+│   │   │   │   └── runtime.rs
+│   │   │   ├── net/             # Socket、MQTT
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── socket.rs
+│   │   │   │   └── mqtt.rs
+│   │   │   └── notify/          # Discord、LINE、Windows通知
+│   │   │       ├── mod.rs
+│   │   │       ├── discord.rs
+│   │   │       ├── line.rs
+│   │   │       └── windows.rs
+│   │   └── tests/               # 統合テスト
+│   └── pokecon-pybindings/      # PyO3バインディング
+│       ├── Cargo.toml
+│       └── src/
+│           ├── lib.rs
+│           ├── keys.rs
+│           ├── python_cmd.rs
+│           ├── image_proc.rs
+│           └── events.rs
 │
 ├── python/pokecon/             # Python互換層
 │   ├── __init__.py             # インポートハック
@@ -93,18 +133,70 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 │   └── script_loader.py        # 動的ロード
 │
 ├── src-tauri/                  # Tauri v2デスクトップアプリ
-│   ├── src/main.rs             # HTTPサーバー、API、WebSocket
-│   └── Cargo.toml              # Tauri専用依存
+│   ├── src/
+│   │   ├── main.rs             # HTTPサーバー、API、WebSocket
+│   │   ├── webrtc.rs           # WebRTCシグナリング
+│   │   └── vaapi_encoder.rs    # VAAPIハードウェアエンコード
+│   ├── Cargo.toml              # Tauri専用依存
+│   └── tauri.conf.json
 │
-├── web/                        # Webフロントエンド
-│   ├── index.html              # PWAエントリ
-│   ├── vite.config.js          # Vite設定
-│   └── src/
-│       ├── main.jsx            # Reactエントリ
-│       ├── App.jsx             # ルーティング
-│       ├── api/client.js       # APIクライアント
-│       ├── components/         # UIコンポーネント
-│       └── styles.css          # モバイルファーストCSS
+├── web/                        # Webフロントエンド（SvelteKit）
+│   ├── package.json
+│   ├── svelte.config.js        # SvelteKit設定（adapter-static, /ui base）
+│   ├── vite.config.ts          # Vite設定
+│   ├── tsconfig.json
+│   ├── src/
+│   │   ├── app.html            # HTMLテンプレート
+│   │   ├── app.css             # グローバルスタイル
+│   │   ├── app.d.ts            # 型定義
+│   │   ├── service-worker.ts   # Service Worker (PWA)
+│   │   ├── routes/             # ページルーティング
+│   │   │   ├── +layout.svelte  # ルートレイアウト
+│   │   │   ├── +layout.ts      # レイアウトローダー
+│   │   │   ├── +page.svelte    # トップページ
+│   │   │   ├── serial/
+│   │   │   │   └── +page.svelte
+│   │   │   ├── camera/
+│   │   │   │   └── +page.svelte
+│   │   │   ├── commands/
+│   │   │   │   ├── +page.svelte
+│   │   │   │   ├── CommandActions.svelte
+│   │   │   │   ├── McuCommandList.svelte
+│   │   │   │   ├── PythonCommandList.svelte
+│   │   │   │   └── ShortcutButtons.svelte
+│   │   │   ├── keyconfig/
+│   │   │   │   └── +page.svelte
+│   │   │   ├── manual/
+│   │   │   │   └── +page.svelte
+│   │   │   ├── notification/
+│   │   │   │   └── +page.svelte
+│   │   │   ├── others/
+│   │   │   │   └── +page.svelte
+│   │   │   └── pokemonhome/
+│   │   │       └── +page.svelte
+│   │   └── lib/
+│   │       ├── api/            # APIクライアント
+│   │       │   ├── client.ts
+│   │       │   ├── types.ts
+│   │       │   ├── websocket.ts
+│   │       │   ├── webrtc-video.ts
+│   │       │   └── datachannel.ts
+│   │       ├── components/     # 再利用可能UIコンポーネント
+│   │       │   ├── NavBar.svelte
+│   │       │   ├── MenuBar.svelte
+│   │       │   ├── StatusBar.svelte
+│   │       │   ├── MainToolbar.svelte
+│   │       │   ├── ThemeProvider.svelte
+│   │       │   ├── SoftwareController.svelte
+│   │       │   ├── HardwareControl.svelte
+│   │       │   ├── CameraPreview.svelte
+│   │       │   ├── SerialMonitor.svelte
+│   │       │   ├── LogPanel.svelte
+│   │       │   ├── OutputPanel.svelte
+│   │       │   ├── ControllerSimulator.svelte
+│   │       │   └── ... （その他多数）
+│   │       └── theme.ts        # テーマ設定
+│   └── dist/                   # ビルド出力
 │
 ├── SerialController/           # 既存コード（後方互換性）
 │   ├── Commands/
@@ -112,6 +204,9 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 │   │   ├── Keys.py
 │   │   └── PythonCommands/     # ユーザースクリプト
 │   └── Window.py               # tkinter GUI
+│
+├── scripts/                    # ユーティリティスクリプト
+│   └── ci-watch.sh
 │
 └── tests/                      # テスト
     ├── conftest.py             # モック設定
@@ -157,7 +252,7 @@ pip install -e ".[dev]"
 
 # Rustビルド
 cargo check                    # ワークスペース全体
-cargo check -p pokecon-serial  # 特定クレート
+cargo check -p pokecon-core    # 特定クレート
 cargo test                     # テスト実行
 
 # PyO3ビルド
@@ -182,6 +277,7 @@ npm run build
 | treefmt | `treefmt` |
 | PyO3ビルド | `maturin develop` |
 | Webビルド | `cd web && npm run build` |
+| Svelteチェック | `cd web && npm run check` |
 
 ---
 
@@ -191,13 +287,7 @@ npm run build
 
 | クレート | 用途 | 主要モジュール |
 |---------|------|--------------|
-| `pokecon-core` | コマンド管理、設定 | `command_manager`, `settings`, `profile` |
-| `pokecon-serial` | シリアル通信 | `sender`, `keypress`, `keys`, `format` |
-| `pokecon-cv` | 画像処理 | `camera`, `image_processing` |
-| `pokecon-events` | イベント駆動 | `bus`, `registry`, `handler`, `user_event` |
-| `pokecon-net` | ネットワーク | `socket`, `mqtt` |
-| `pokecon-notify` | 通知 | `discord`, `line`, `windows` |
-| `pokecon-lua` | Lua統合 | `api`, `runtime` |
+| `pokecon-core` | 全コア機能（コマンド管理、シリアル通信、画像処理、イベント駆動、ネットワーク、通知、Lua統合、設定・プロファイル管理） | `command_manager`, `settings`, `profile`, `serial::{sender,keypress,keys,format}`, `cv::{camera,image_processing,backends}`, `events::{bus,registry,handler,user_event}`, `net::{socket,mqtt}`, `notify::{discord,line,windows}`, `lua::{api,runtime}` |
 | `pokecon-pybindings` | Python連携 | `keys`, `python_cmd`, `image_proc`, `events` |
 
 ### シリアル通信フロー
@@ -219,7 +309,7 @@ sender.write_row(data).await?;
 ### イベントバス
 
 ```rust
-use pokecon_events::{EventBus, Event};
+use pokecon_core::events::{EventBus, Event};
 
 let bus = EventBus::new();
 
@@ -342,7 +432,7 @@ impl PythonCommand {
 ```
 ┌─────────────┐     HTTP/WebSocket      ┌─────────────┐
 │   Web UI    │ ◄─────────────────────► │   Tauri     │
-│  (React)    │    http://127.0.0.1    │  (Rust)     │
+│  (SvelteKit)│    http://127.0.0.1    │  (Rust)     │
 │             │        :8020           │             │
 └─────────────┘                        └─────────────┘
                                               │
@@ -350,7 +440,7 @@ impl PythonCommand {
                                               ▼
                                         ┌─────────────┐
                                         │  Rust コア   │
-                                        │  (各クレート) │
+                                        │ (pokecon-core)│
                                         └─────────────┘
 ```
 
@@ -358,21 +448,43 @@ impl PythonCommand {
 
 | カテゴリ | エンドポイント | メソッド | 説明 |
 |---------|--------------|---------|------|
-| Status | `/api/status` | GET | ヘルスチェック |
-| Serial | `/api/serial/ports` | GET | ポート一覧 |
+| **Status** | `/api/status` | GET | ヘルスチェック |
+| | `/api/greet` | GET | グリーティング |
+| | `/api/openapi.json` | GET | OpenAPIスキーマ |
+| **Controller** | `/api/controller/type` | GET/POST | コントローラ種別取得/設定 |
+| | `/api/controller/keyboard` | GET/POST | キーボード設定取得/設定 |
+| | `/api/controller/mouse_stick` | GET/POST | マウススティック設定取得/設定 |
+| **Camera** | `/api/cameras` | GET | カメラ一覧 |
+| | `/api/camera/status` | GET | カメラ状態 |
+| | `/api/camera/open` | POST | カメラ接続 |
+| | `/api/camera/close` | POST | カメラ切断 |
+| | `/api/camera/frame` | GET | フレーム取得 (base64) |
+| | `/api/camera/capture` | POST | キャプチャ実行 |
+| | `/api/camera/config` | POST | カメラ設定変更 |
+| | `/camera/stream` | GET | MJPEGストリーム |
+| **Input** | `/api/input/press` | POST | ボタン押下 |
+| | `/api/input/hold` | POST | ボタン長押し開始 |
+| | `/api/input/release` | POST | ボタン長押し解除 |
+| | `/api/input/stick` | POST | スティック操作 |
+| | `/api/input/touch` | POST | タッチ操作 |
+| **Serial** | `/api/serial/ports` | GET | ポート一覧 |
 | | `/api/serial/open` | POST | ポート接続 |
 | | `/api/serial/close` | POST | ポート切断 |
 | | `/api/serial/write` | POST | データ送信 |
-| Camera | `/api/camera/status` | GET | カメラ状態 |
-| | `/api/camera/open` | POST | カメラ接続 |
-| | `/api/camera/frame` | GET | フレーム取得 (base64) |
-| Input | `/api/input/press` | POST | ボタン押下 |
-| | `/api/input/stick` | POST | スティック操作 |
-| | `/api/input/touch` | POST | タッチ操作 |
-| Command | `/api/commands` | GET | スクリプト一覧 |
+| | `/api/serial/config` | POST | シリアル設定変更 |
+| | `/api/serial/status` | GET | シリアル状態 |
+| **Commands** | `/api/commands` | GET | スクリプト一覧 |
+| | `/api/commands/load` | POST | スクリプト読み込み |
 | | `/api/commands/start` | POST | スクリプト開始 |
 | | `/api/commands/stop` | POST | スクリプト停止 |
-| WebSocket | `/ws` | GET | リアルタイムイベント |
+| | `/api/commands/active` | GET | アクティブなスクリプト |
+| | `/api/commands/filter` | POST | フィルター設定 |
+| | `/api/commands/reload` | POST | スクリプト再読み込み |
+| **Profile** | `/api/profile` | GET/POST | プロファイル一覧/設定 |
+| **Notifications** | `/api/notifications/config` | GET/POST | 通知設定取得/更新 |
+| | `/api/notifications/send` | POST | 通知送信 |
+| **WebSocket** | `/ws` | GET | リアルタイムイベント |
+| **Static** | `/ui/*` | GET | SvelteKit静的ファイル |
 
 ### WebSocket イベント
 
@@ -407,8 +519,7 @@ ws.onmessage = (event) => {
 |--------|------|------|
 | Python互換性 | `tests/test_script_compatibility.py` | 58ケース（インポート、インスタンス化、API呼び出し） |
 | Rustユニット | `rust/*/src/` | 各クレートのユニットテスト |
-| Rustベンチマーク | `rust/*/benches/` | 性能テスト |
-| Rust統合 | `rust/pokecon-serial/tests/` | 統合テスト |
+| Rust統合 | `rust/pokecon-core/src/serial/tests/` 等 | 統合テスト |
 
 ### モック戦略
 
@@ -505,14 +616,14 @@ nix run .                # アプリケーション起動（デフォルト）
 
 | クレート | 単体テスト | 統合テスト | カバレッジ |
 |---------|-----------|-----------|-----------|
-| pokecon-core | ✅ profile, settings, command_manager | — | 高 |
-| pokecon-serial | ✅ keys, format, keypress, sender | ✅ フォーマットパイプライン | 高 |
-| pokecon-cv | ✅ camera, image_processing, backends | ✅ 画像処理パイプライン | 高 |
-| pokecon-events | ✅ bus, registry, user_event | ✅ イベントバス ＋ レジストリ連携 | 高 |
-| pokecon-net | ✅ mqtt, socket | — | 中 |
-| pokecon-notify | ✅ discord, line, windows | — | 中 |
-| pokecon-lua | ✅ api, runtime | — | 高 |
-| pokecon-pybindings | ✅ keys, events, image_proc, python_cmd | — | 中 (新規) |
+| `pokecon-core` | | | |
+| ├ serial | ✅ keys, format, keypress, sender | ✅ フォーマットパイプライン | 高 |
+| ├ cv | ✅ camera, image_processing, backends | ✅ 画像処理パイプライン | 高 |
+| ├ events | ✅ bus, registry, user_event, handler | ✅ イベントバス ＋ レジストリ連携 | 高 |
+| ├ net | ✅ mqtt, socket | — | 中 |
+| ├ notify | ✅ discord, line, windows | — | 中 |
+| └ lua | ✅ api, runtime | — | 高 |
+| `pokecon-pybindings` | ✅ keys, events, image_proc, python_cmd | — | 中 (新規) |
 | src-tauri | ❌ (未対応) | — | 低 (未対応) |
 
 ### テスト実行方法
@@ -521,11 +632,13 @@ nix run .                # アプリケーション起動（デフォルト）
 # 全Rustテスト
 nix run .#cargo-test
 
-# 特定クレートのテスト
-cargo test -p pokecon-serial
-cargo test -p pokecon-cv
-cargo test -p pokecon-events
+# 特定モジュールのテスト
 cargo test -p pokecon-core
+
+# pokecon-core 内の特定モジュール
+cargo test -p pokecon-core -- serial
+cargo test -p pokecon-core -- cv
+cargo test -p pokecon-core -- events
 
 # 統合テストのみ
 cargo test --test format_send_pipeline
@@ -537,10 +650,10 @@ cargo test --test event_bus_integration
 
 ```bash
 # シリアルフォーマットベンチ
-cargo bench -p pokecon-serial
+cargo bench -p pokecon-core -- serial
 
 # 画像処理ベンチ
-cargo bench -p pokecon-cv
+cargo bench -p pokecon-core -- cv
 ```
 
 ### リファクタリング計画

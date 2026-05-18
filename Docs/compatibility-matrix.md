@@ -5,19 +5,19 @@
 This document maps the original Python-only `Poke-Controller-Modified-Extension` API (SerialController/)
 to the new Rust-backed architecture on the `refactor/rust-core` branch.
 
-## 1. Module: `Commands.Keys` → `python/pokecon/keys.py` + Rust `pokecon-serial`
+## 1. Module: `Commands.Keys` → `python/pokecon/keys.py` + Rust `pokecon-core::serial`
 
 | Old API | Old Type | New API Location | Rust Equivalent | Status |
 |---------|----------|-----------------|-----------------|--------|
-| `Button` | `IntFlag` enum | `pokecon.keys.Button` | `pokecon_serial::keys::Button` (bitflags) | ⚠️ String stub, should be IntFlag |
-| `Hat` | `IntEnum` enum | `pokecon.keys.Hat` | `pokecon_serial::keys::Hat` (enum) | ⚠️ String stub, should be IntEnum |
-| `Stick` | `Enum` | **MISSING** | `pokecon_serial::keys::Stick` (enum) | ❌ Not exposed |
-| `Tilt` | `Enum` | **MISSING** | `pokecon_serial::keys::Tilt` (enum) | ❌ Not exposed |
-| `Direction` | Class with x,y,stick | **MISSING** | `pokecon_serial::keys::Direction` (struct) | ❌ Not exposed |
-| `Touchscreen` | Class with x,y | **MISSING** | `pokecon_serial::keys::Touchscreen` (struct) | ❌ Not exposed |
-| `SendFormat` | Builds serial frames | **MISSING** | `pokecon_serial::format::SendFormat` | ❌ Not exposed |
-| `KeyPress` | Serial input handler | **MISSING** | `pokecon_serial::keypress::KeyPress` | ❌ Not exposed |
-| `GamepadInput` | Type alias | **MISSING** | `pokecon_serial::keys::GamepadInput` (enum) | ❌ Not exposed |
+| `Button` | `IntFlag` enum | `pokecon.keys.Button` | `pokecon_core::serial::keys::Button` (bitflags) | ⚠️ String stub, should be IntFlag |
+| `Hat` | `IntEnum` enum | `pokecon.keys.Hat` | `pokecon_core::serial::keys::Hat` (enum) | ⚠️ String stub, should be IntEnum |
+| `Stick` | `Enum` | **MISSING** | `pokecon_core::serial::keys::Stick` (enum) | ❌ Not exposed |
+| `Tilt` | `Enum` | **MISSING** | `pokecon_core::serial::keys::Tilt` (enum) | ❌ Not exposed |
+| `Direction` | Class with x,y,stick | **MISSING** | `pokecon_core::serial::keys::Direction` (struct) | ❌ Not exposed |
+| `Touchscreen` | Class with x,y | **MISSING** | `pokecon_core::serial::keys::Touchscreen` (struct) | ❌ Not exposed |
+| `SendFormat` | Builds serial frames | **MISSING** | `pokecon_core::serial::format::SendFormat` | ❌ Not exposed |
+| `KeyPress` | Serial input handler | **MISSING** | `pokecon_core::serial::keypress::KeyPress` | ❌ Not exposed |
+| `GamepadInput` | Type alias | **MISSING** | `pokecon_core::serial::keys::GamepadInput` (enum) | ❌ Not exposed |
 | `Direction.{UP,DOWN,...}` | Predefined class vars | **MISSING** | `Direction::up(d)`, etc. (methods) | ❌ Not exposed |
 
 ## 2. Module: `Commands.PythonCommandBase` → `python/pokecon/commands.py` + Rust `pokecon-pybindings/src/python_cmd.rs`
@@ -77,7 +77,7 @@ to the new Rust-backed architecture on the `refactor/rust-core` branch.
 | `Command.mqtt_*()` | **MISSING** | ❌ |
 | Various class vars (isPause, canvas, isGuide, etc.) | **MISSING** | ❌ |
 
-## 4. Module: `Commands.Sender` → Rust `pokecon-serial/src/sender.rs`
+## 4. Module: `Commands.Sender` → Rust `pokecon-core/src/serial/sender.rs`
 
 | Old API | Rust Equivalent | Py binding | Status |
 |---------|----------------|------------|--------|
@@ -89,7 +89,7 @@ to the new Rust-backed architecture on the `refactor/rust-core` branch.
 | `Sender.writeList()` | `Sender::write_list()` | **MISSING** | ❌ |
 | `Sender.writeRow_wo_perf_counter()` | `Sender::write_row_wo_counter()` | **MISSING** | ❌ |
 
-## 5. Module: `ImageProcessing` → Rust `pokecon-cv`
+## 5. Module: `ImageProcessing` → Rust `pokecon-core::cv`
 
 | Old API | Rust Equivalent | Py binding | Status |
 |---------|----------------|------------|--------|

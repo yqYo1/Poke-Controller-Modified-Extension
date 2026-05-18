@@ -21,8 +21,8 @@ The `rust/pokecon-pybindings/` crate exposes 4 submodules with minimal surface a
 - **`Tilt`** (Enum with 8 directions)
 - **`Direction`** (PyO3 class with x, y, stick, predefined class variables)
 - **`Touchscreen`** (PyO3 class with x, y)
-- **`SendFormat`** (PyO3 class wrapping `pokecon_serial::format::SendFormat`)
-- **`KeyPress`** (PyO3 class wrapping `pokecon_serial::keypress::KeyPress`)
+- **`SendFormat`** (PyO3 class wrapping `pokecon_core::serial::format::SendFormat`)
+- **`KeyPress`** (PyO3 class wrapping `pokecon_core::serial::keypress::KeyPress`)
 
 ### Functions
 

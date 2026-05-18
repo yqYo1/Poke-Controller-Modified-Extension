@@ -115,15 +115,53 @@ Poke-Controller-Modified-Extension/
 ├── pyproject.toml            # Pythonパッケージ設定
 ├── Cargo.toml                # Rustワークスペース定義
 │
-├── rust/                     # Rustコア実装
-│   ├── pokecon-core/         # コマンドマネージャー、設定、プロファイル
-│   ├── pokecon-serial/       # シリアル通信、キー入力フォーマット
-│   ├── pokecon-cv/           # カメラ、画像処理（OpenCV連携）
-│   ├── pokecon-events/       # イベントバス、ハンドラレジストリ
-│   ├── pokecon-net/          # Socket/MQTT通信
-│   ├── pokecon-notify/       # Discord/LINE/Windows通知
-│   ├── pokecon-lua/          # LuaJIT統合
+├── rust/                     # Rustコア実装（2クレート）
+│   ├── pokecon-core/         # 統合コアライブラリ
+│   │   ├── Cargo.toml
+│   │   ├── build.rs
+│   │   └── src/
+│   │       ├── lib.rs            # エントリ、モジュール宣言、re-export
+│   │       ├── command_manager.rs # コマンド管理
+│   │       ├── profile.rs        # プロファイル
+│   │       ├── settings.rs       # 設定
+│   │       ├── serial/           # シリアル通信
+│   │       │   ├── mod.rs
+│   │       │   ├── format.rs     # シリアルフォーマット
+│   │       │   ├── keypress.rs   # キー入力
+│   │       │   ├── keys.rs       # ボタン/スティック定義
+│   │       │   └── sender.rs     # 送信
+│   │       ├── cv/               # カメラ・画像処理（OpenCV）
+│   │       │   ├── mod.rs
+│   │       │   ├── camera.rs
+│   │       │   ├── backends.rs
+│   │       │   └── image_processing.rs
+│   │       ├── events/           # イベントバス
+│   │       │   ├── mod.rs
+│   │       │   ├── bus.rs
+│   │       │   ├── handler.rs
+│   │       │   ├── registry.rs
+│   │       │   └── user_event.rs
+│   │       ├── notify/           # 通知（feature "notify"）
+│   │       │   ├── mod.rs
+│   │       │   ├── discord.rs
+│   │       │   ├── line.rs
+│   │       │   └── windows.rs
+│   │       ├── net/              # ネットワーク（feature "mqtt"）
+│   │       │   ├── mod.rs
+│   │       │   ├── mqtt.rs
+│   │       │   └── socket.rs
+│   │       └── lua/              # LuaJIT統合（feature "lua"）
+│   │           ├── mod.rs
+│   │           ├── api.rs
+│   │           └── runtime.rs
 │   └── pokecon-pybindings/   # PyO3 Pythonバインディング
+│       ├── Cargo.toml
+│       └── src/
+│           ├── lib.rs           # エントリ、モジュール宣言
+│           ├── keys.rs          # Python側キー型公開
+│           ├── python_cmd.rs    # PythonCommand関連
+│           ├── image_proc.rs    # 画像処理関数
+│           └── events.rs        # イベントリスナー
 │
 ├── python/pokecon/           # Python互換層
 │   ├── __init__.py           # インポートハック（後方互換性）
@@ -134,8 +172,12 @@ Poke-Controller-Modified-Extension/
 │   └── script_loader.py      # スクリプト動的ロード
 │
 ├── src-tauri/                # Tauri v2 デスクトップアプリ
-│   ├── src/main.rs           # HTTPサーバー + WebSocket + APIエンドポイント
-│   └── Cargo.toml            # Tauri専用依存関係
+│   ├── Cargo.toml            # Tauri専用依存関係
+│   ├── build.rs
+│   └── src/
+│       ├── main.rs           # HTTPサーバー + WebSocket + APIエンドポイント
+│       ├── webrtc.rs         # WebRTCライブプレビュー
+│       └── vaapi_encoder.rs  # VAAPIハードウェアエンコード
 │
 ├── web/                      # Webフロントエンド（SvelteKit + Svelte 5）
 │   ├── package.json          # SvelteKit依存関係・スクリプト
@@ -143,31 +185,64 @@ Poke-Controller-Modified-Extension/
 │   ├── vite.config.ts        # Vite設定（HMR proxy → :8020）
 │   ├── src/
 │   │   ├── app.html          # HTMLエントリ（PWAメタタグ付き）
+│   │   ├── app.css           # グローバルスタイル
+│   │   ├── app.d.ts          # アプリ型定義
 │   │   ├── routes/           # SvelteKitファイルベースルーティング
 │   │   │   ├── +layout.svelte    # ルートレイアウト（MenuBar/NavBar/StatusBar）
-│   │   │   ├── camera/          # カメラ設定・プレビュー
-│   │   │   ├── serial/          # シリアル通信
-│   │   │   ├── manual/          # 手動制御（ゲームパッド）
-│   │   │   ├── commands/        # スクリプト一覧・実行
-│   │   │   ├── keyconfig/       # キーコンフィグ
-│   │   │   ├── notification/    # 通知設定
-│   │   │   ├── pokemonhome/     # Pokémon Home連携
-│   │   │   └── others/          # プロファイル・テーマ設定
+│   │   │   ├── +layout.ts        # レイアウトローダー
+│   │   │   ├── +page.svelte      # トップページ
+│   │   │   ├── camera/+page.svelte         # カメラ設定・プレビュー
+│   │   │   ├── serial/+page.svelte         # シリアル通信
+│   │   │   ├── manual/+page.svelte         # 手動制御（ゲームパッド）
+│   │   │   ├── commands/
+│   │   │   │   ├── +page.svelte
+│   │   │   │   ├── CommandActions.svelte
+│   │   │   │   ├── McuCommandList.svelte
+│   │   │   │   ├── PythonCommandList.svelte
+│   │   │   │   └── ShortcutButtons.svelte
+│   │   │   ├── keyconfig/+page.svelte      # キーコンフィグ
+│   │   │   ├── notification/+page.svelte   # 通知設定
+│   │   │   ├── pokemonhome/+page.svelte    # Pokémon Home連携
+│   │   │   └── others/+page.svelte         # プロファイル・テーマ設定
 │   │   ├── lib/
 │   │   │   ├── api/
 │   │   │   │   ├── client.ts      # 型付きREST/WebSocketクライアント
 │   │   │   │   ├── types.ts       # OpenAPI自動生成型定義
 │   │   │   │   ├── websocket.ts   # 型付きWebSocket（自動再接続）
+│   │   │   │   ├── webrtc-video.ts # WebRTC映像ストリーム管理
 │   │   │   │   └── datachannel.ts # WebRTC DataChannel（WSフォールバック付き）
+│   │   │   ├── assets/
+│   │   │   │   └── favicon.svg
 │   │   │   ├── components/
-│   │   │   │   ├── MenuBar.svelte          # メニューバー
-│   │   │   │   ├── NavBar.svelte           # タブナビゲーション
-│   │   │   │   ├── StatusBar.svelte        # 接続状態表示
-│   │   │   │   ├── SoftwareController.svelte # 仮想ゲームパッド
-│   │   │   │   ├── LogPanel.svelte         # ログパネル
-│   │   │   │   └── CaptureRegion.svelte    # キャプチャ範囲選択
+│   │   │   │   ├── CameraPreview.svelte          # カメラライブプレビュー
+│   │   │   │   ├── CameraSettings.svelte         # カメラ設定UI
+│   │   │   │   ├── CaptureRegion.svelte          # キャプチャ範囲選択
+│   │   │   │   ├── ControllerSimulator.svelte    # コントローラシミュレータ
+│   │   │   │   ├── DialogueButtonPosition.svelte # ダイアログボタン位置設定
+│   │   │   │   ├── DiscordNotification.svelte    # Discord通知設定
+│   │   │   │   ├── DisplaySettings.svelte        # 表示設定
+│   │   │   │   ├── HardwareControl.svelte        # ハードウェア制御
+│   │   │   │   ├── LogPanel.svelte               # ログパネル
+│   │   │   │   ├── MainToolbar.svelte            # メインツールバー
+│   │   │   │   ├── MenuBar.svelte                # メニューバー
+│   │   │   │   ├── NavBar.svelte                 # タブナビゲーション
+│   │   │   │   ├── OutputPanel.svelte            # 出力パネル
+│   │   │   │   ├── OutputSizeAdjuster.svelte     # 出力サイズ調整
+│   │   │   │   ├── RightPanel.svelte             # 右パネル
+│   │   │   │   ├── SerialMonitor.svelte          # シリアルモニタ
+│   │   │   │   ├── SoftwareControllerPosition.svelte # ソフトコン位置設定
+│   │   │   │   ├── SoftwareController.svelte     # 仮想ゲームパッド
+│   │   │   │   ├── SoftwareControl.svelte        # ソフトウェア制御
+│   │   │   │   ├── StatusBar.svelte              # 接続状態表示
+│   │   │   │   ├── StdoutDestination.svelte      # 標準出力先設定
+│   │   │   │   ├── ThemeProvider.svelte           # テーマプロバイダ
+│   │   │   │   ├── TkinterNotebook.svelte        # タブパネル（ノートブック）
+│   │   │   │   ├── WidgetModeSelector.svelte     # ウィジェットモード選択
+│   │   │   │   └── WindowsNotification.svelte    # Windows通知設定
 │   │   │   └── theme.ts       # テーマ管理（ライト/ダーク/カスタム）
-│   │   └── service-worker.ts  # PWA Service Worker（オフライン対応）
+│   │   ├── service-worker.ts  # PWA Service Worker（オフライン対応）
+│   │   ├── api/client.js      # 旧RESTクライアント（後方互換性）
+│   │   └── usage_analysis_result.md  # 使用状況分析レポート
 │
 ├── SerialController/         # 既存Pythonコード（後方互換性）
 │   ├── Commands/
@@ -180,7 +255,13 @@ Poke-Controller-Modified-Extension/
 │
 └── tests/                    # テスト
     ├── conftest.py           # モック設定
-    └── test_script_compatibility.py  # 互換性テスト（58ケース）
+    ├── test_script_compatibility.py  # 互換性テスト（58ケース）
+    └── benchmarks/           # ベンチマークテスト
+        ├── run_all_benchmarks.py
+        ├── test_benchmark_image_processing.py
+        ├── test_benchmark_serial_latency.py
+        └── test_benchmark_template_matching.py
+
 ```
 
 ---

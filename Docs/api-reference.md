@@ -240,13 +240,30 @@ Touchscreen(100, 200)  # x=100, y=200
 
 - ベースURL: `http://127.0.0.1:8020`
 - レスポンス形式: JSON
-- エラーレスポンス: `{ "error": "message" }`
+- エラーレスポンス: `{ "status": "error", "message": "..." }`
+- ステータス取得成功時のレスポンスは原則 `{ "status": "ok", ... }`
 
-### Status
+### Core
+
+#### `GET /`
+
+ルートアクセス。`/ui/` へ一時リダイレクト。
+
+**Response:** `302 Found` → `Location: /ui/`
+
+---
+
+#### `GET /mobile`
+
+Mobile UI プレースホルダ（未実装）。
+
+**Response:** `501 Not Implemented`
+
+---
 
 #### `GET /api/status`
 
-ヘルスチェック。
+ヘルスチェック。サーバーの稼働状態とバージョンを返す。
 
 **Response:**
 ```json
@@ -257,72 +274,196 @@ Touchscreen(100, 200)  # x=100, y=200
 }
 ```
 
-### Serial
+---
 
-#### `GET /api/serial/ports`
+#### `GET /api/greet`
 
-利用可能なシリアルポート一覧。
+挨拶メッセージを返す。クエリパラメータ `?name=` で名前を指定可能（デフォルト: `Trainer`）。
+
+**Query:**
+| パラメータ | 型 | デフォルト | 説明 |
+|-----------|-----|----------|------|
+| `name` | `string` | `"Trainer"` | 挨拶対象の名前 |
 
 **Response:**
 ```json
 {
-  "ports": ["/dev/ttyUSB0", "/dev/ttyACM0"]
+  "message": "Hello, Trainer! Welcome to Poke-Controller."
 }
 ```
 
-#### `POST /api/serial/open`
+---
 
-シリアルポートを開く。
+#### `GET /api/openapi.json`
+
+OpenAPI 3.0 スキーマを JSON 形式で返す。
+
+**Response:** OpenAPI specification (JSON)
+
+---
+
+### Controller
+
+#### `GET /api/controller/type`
+
+現在のコントローラー種別を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "gamepad_type": "ProController"
+}
+```
+
+#### `POST /api/controller/type`
+
+コントローラー種別を設定。
 
 **Request:**
 ```json
 {
-  "port_num": 0,
-  "port_name": "/dev/ttyUSB0",
-  "baudrate": 9600
+  "gamepad_type": "ProController"
 }
 ```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `gamepad_type` | `string` | `"ProController"` または `"Xinput"` |
 
 **Response:**
 ```json
 {
-  "success": true,
-  "port": "/dev/ttyUSB0"
+  "status": "ok",
+  "gamepad_type": "ProController"
 }
 ```
 
-#### `POST /api/serial/close`
+---
 
-シリアルポートを閉じる。
+#### `GET /api/controller/keyboard`
 
-#### `POST /api/serial/write`
+キーボード入力の有効/無効状態を取得。
 
-データを送信。
+**Response:**
+```json
+{
+  "status": "ok",
+  "keyboard_enabled": false
+}
+```
+
+#### `POST /api/controller/keyboard`
+
+キーボード入力を有効化/無効化。
 
 **Request:**
 ```json
 {
-  "data": "btn_a\r\n"
+  "enabled": true
 }
 ```
-
-#### `GET /api/serial/status`
-
-接続状態を取得。
 
 **Response:**
 ```json
 {
-  "is_open": true,
-  "port": "/dev/ttyUSB0"
+  "status": "ok",
+  "keyboard_enabled": true
 }
 ```
+
+---
+
+#### `GET /api/controller/mouse_stick`
+
+マウススティック制御の設定を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "left_enabled": false,
+  "right_enabled": false,
+  "sensitivity": 1.0
+}
+```
+
+#### `POST /api/controller/mouse_stick`
+
+マウススティック制御を有効化/無効化。
+
+**Request:**
+```json
+{
+  "stick": "left",
+  "enabled": true,
+  "sensitivity": 1.5
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `stick` | `string` | `"left"` または `"right"` |
+| `enabled` | `bool` | 有効/無効 |
+| `sensitivity` | `float` | 感度倍率（デフォルト: 1.0） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "stick": "left",
+  "enabled": true,
+  "sensitivity": 1.5
+}
+```
+
+---
 
 ### Camera
 
+#### `GET /api/cameras`
+
+利用可能なカメラデバイス一覧を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "devices": [
+    { "index": 0, "name": "Integrated Camera" },
+    { "index": 1, "name": "USB Camera" }
+  ]
+}
+```
+
+---
+
 #### `GET /api/camera/status`
 
-カメラ状態を取得。
+カメラの接続状態と現在の設定を取得。
+
+**Response（接続中）:**
+```json
+{
+  "status": "ok",
+  "is_open": true,
+  "device_index": 0,
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "flip": "none"
+}
+```
+
+**Response（未接続）:**
+```json
+{
+  "status": "ok",
+  "is_open": false
+}
+```
+
+---
 
 #### `POST /api/camera/open`
 
@@ -337,26 +478,39 @@ Touchscreen(100, 200)  # x=100, y=200
 }
 ```
 
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `device_index` | `int` | カメラデバイスインデックス |
+| `width` | `int` | 解像度幅（オプション） |
+| `height` | `int` | 解像度高さ（オプション） |
+
+---
+
 #### `POST /api/camera/close`
 
 カメラを閉じる。
 
+---
+
 #### `GET /api/camera/frame`
 
-現在のフレームを取得（base64 JPEG）。
+現在のフレームを base64 JPEG で取得。
 
 **Response:**
 ```json
 {
   "image": "/9j/4AAQSkZJRgABAQ...",
   "width": 1280,
-  "height": 720
+  "height": 720,
+  "format": "jpeg"
 }
 ```
 
+---
+
 #### `POST /api/camera/capture`
 
-フレームをファイルに保存。
+現在のフレームをファイルに保存。
 
 **Request:**
 ```json
@@ -365,69 +519,291 @@ Touchscreen(100, 200)  # x=100, y=200
 }
 ```
 
+**Response:**
+```json
+{
+  "status": "ok",
+  "path": "/path/to/screenshot.jpg"
+}
+```
+
+---
+
+#### `POST /api/camera/config`
+
+カメラの設定（解像度、FPS、フリップ）を更新。
+
+**Request:**
+```json
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "flip": "horizontal"
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `width` | `int` | 幅（1〜4096、オプション） |
+| `height` | `int` | 高さ（1〜4096、オプション） |
+| `fps` | `int` | FPS（1〜120、オプション） |
+| `flip` | `string` | `"none"`, `"horizontal"`, `"vertical"`, `"both"`（オプション） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "device_index": 0,
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "flip": "horizontal"
+}
+```
+
+---
+
+#### `GET /camera/stream`
+
+MJPEG ストリームを配信（マルチパートHTTPレスポンス）。
+
+**Response:** `Content-Type: multipart/x-mixed-replace; boundary=frame`
+
+---
+
 ### Input
 
 #### `POST /api/input/press`
 
-ボタンを押下。
+ボタンを押下 → duration ミリ秒待機 → 解放 → wait ミリ秒待機。
 
 **Request:**
 ```json
 {
-  "buttons": "A",
-  "duration": 0.1,
-  "wait": 0.1
+  "buttons": ["A"],
+  "duration": 100,
+  "wait": 100
 }
 ```
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|----------|------|
+| `buttons` | `string[]` | 必須 | ボタン名の配列（`"A"`, `"B"`, `"X"`, `"Y"`, `"L"`, `"R"`, `"ZL"`, `"ZR"`, `"MINUS"`, `"PLUS"`, `"LCLICK"`, `"RCLICK"`, `"HOME"`, `"CAPTURE"`） |
+| `duration` | `int` | `50` | 押下継続時間（ミリ秒） |
+| `wait` | `int` | `0` | 解放後の待機時間（ミリ秒） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Buttons pressed: A"
+}
+```
+
+---
 
 #### `POST /api/input/hold`
 
-ボタンをhold。
+ボタンを押しっぱなしにする。`duration` を指定しない場合は `POST /api/input/release` で解放するまで継続。
 
 **Request:**
 ```json
 {
-  "buttons": "A",
-  "duration": 1.0
+  "buttons": ["A"],
+  "duration": 1000
 }
 ```
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|----------|------|
+| `buttons` | `string[]` | 必須 | ボタン名の配列 |
+| `duration` | `int` | `0` | ホールド時間（ミリ秒、0=解放まで継続） |
+
+---
 
 #### `POST /api/input/release`
 
-全ボタンを解放。
+全ボタンを解放する（hold 状態の解除）。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "All buttons released"
+}
+```
+
+---
 
 #### `POST /api/input/stick`
 
-スティックを操作。
+アナログスティックを操作。
 
 **Request:**
 ```json
 {
-  "stick": "LSTICK",
+  "stick": "left",
   "x": 128,
   "y": 0,
-  "duration": 0.5
+  "duration": 500
 }
 ```
 
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `stick` | `string` | `"left"` または `"right"` |
+| `x` | `int` | X座標（0〜255、128=中央） |
+| `y` | `int` | Y座標（0〜255、128=中央） |
+| `duration` | `int` | 操作継続時間（ミリ秒、デフォルト: 0） |
+
+---
+
 #### `POST /api/input/touch`
 
-タッチ操作。
+タッチスクリーン操作。
 
 **Request:**
 ```json
 {
   "x": 100,
   "y": 200,
-  "duration": 0.1
+  "duration": 100
 }
 ```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `x` | `int` | X座標 |
+| `y` | `int` | Y座標 |
+| `duration` | `int` | タップ継続時間（ミリ秒、デフォルト: 0） |
+
+---
+
+### Serial
+
+#### `GET /api/serial/ports`
+
+利用可能なシリアルポート一覧を取得。
+
+**Response:**
+```json
+{
+  "ports": ["/dev/ttyUSB0", "/dev/ttyACM0"]
+}
+```
+
+---
+
+#### `POST /api/serial/open`
+
+シリアルポートを開く。
+
+**Request:**
+```json
+{
+  "port_name": "/dev/ttyUSB0",
+  "baudrate": 9600
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `port_name` | `string` | ポートのパス（例: `"/dev/ttyUSB0"`） |
+| `baudrate` | `int` | ボーレート（デフォルト: 9600） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "port": "/dev/ttyUSB0"
+}
+```
+
+---
+
+#### `POST /api/serial/close`
+
+シリアルポートを閉じる。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Serial port closed"
+}
+```
+
+---
+
+#### `POST /api/serial/write`
+
+シリアルポートにデータを送信。
+
+**Request:**
+```json
+{
+  "data": "btn_a\r\n"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Data written"
+}
+```
+
+---
+
+#### `POST /api/serial/config`
+
+シリアルポートの設定（ボーレート、データ形式）を更新。
+
+**Request:**
+```json
+{
+  "baudrate": 115200,
+  "data_format": "default"
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `baudrate` | `int` | ボーレート（オプション） |
+| `data_format` | `string` | データ形式（オプション） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Serial config updated"
+}
+```
+
+---
+
+#### `GET /api/serial/status`
+
+シリアルポートの接続状態を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "is_open": true,
+  "port": "/dev/ttyUSB0"
+}
+```
+
+---
 
 ### Commands
 
 #### `GET /api/commands`
 
-スクリプト一覧を取得。
+利用可能なスクリプト一覧を取得。
 
 **Response:**
 ```json
@@ -435,16 +811,18 @@ Touchscreen(100, 200)  # x=100, y=200
   "commands": [
     {
       "name": "MashA",
-      "path": "SerialController/Commands/PythonCommands/MashA.py",
+      "path": "scripts/PythonCommands/MashA.py",
       "description": "A連打"
     }
   ]
 }
 ```
 
+---
+
 #### `POST /api/commands/load`
 
-スクリプトをロード。
+スクリプトをロード（名前指定）。
 
 **Request:**
 ```json
@@ -453,25 +831,242 @@ Touchscreen(100, 200)  # x=100, y=200
 }
 ```
 
+**Response:**
+```json
+{
+  "status": "ok",
+  "name": "MashA"
+}
+```
+
+---
+
 #### `POST /api/commands/start`
 
-スクリプトを開始。
+ロード済みのスクリプトを開始。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Command started"
+}
+```
+
+---
 
 #### `POST /api/commands/stop`
 
 実行中のスクリプトを停止。
 
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Command stopped"
+}
+```
+
+---
+
 #### `GET /api/commands/active`
 
-実行中のスクリプト情報。
+現在実行中のスクリプト情報を取得。
+
+**Response（実行中）:**
+```json
+{
+  "active": true,
+  "name": "MashA",
+  "path": "scripts/PythonCommands/MashA.py",
+  "description": "A連打"
+}
+```
+
+**Response（未実行）:**
+```json
+{
+  "active": false
+}
+```
+
+---
+
+#### `POST /api/commands/filter`
+
+スクリプト一覧にフィルターを適用して結果を返す。
+
+**Request:**
+```json
+{
+  "filter": "mash"
+}
+```
 
 **Response:**
 ```json
 {
-  "active": true,
-  "name": "MashA"
+  "status": "ok",
+  "filter": "mash",
+  "commands": [
+    {
+      "name": "MashA",
+      "path": "scripts/PythonCommands/MashA.py",
+      "description": "A連打"
+    }
+  ]
 }
 ```
+
+---
+
+#### `POST /api/commands/reload`
+
+スクリプトディレクトリを再スキャンしてスクリプト一覧をリロード。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Scanned 5 commands",
+  "commands": [
+    { "name": "MashA", "path": "scripts/PythonCommands/MashA.py", "description": "A連打" }
+  ]
+}
+```
+
+---
+
+### Profile
+
+#### `GET /api/profile`
+
+利用可能なプロファイル一覧を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "profiles": [
+    {
+      "name": "default",
+      "description": "Default profile",
+      "active": true
+    },
+    {
+      "name": "pogo",
+      "description": "Pokémon GO profile",
+      "active": false
+    }
+  ],
+  "active": "default"
+}
+```
+
+#### `POST /api/profile`
+
+プロファイルをアクティブ化。
+
+**Request:**
+```json
+{
+  "name": "pogo"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Profile pogo activated",
+  "active": "pogo"
+}
+```
+
+---
+
+### Notifications
+
+#### `GET /api/notifications/config`
+
+現在の通知設定を取得。
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "windows_enabled": true,
+  "discord_enabled": false,
+  "discord_webhook_url": ""
+}
+```
+
+#### `POST /api/notifications/config`
+
+通知設定を更新。
+
+**Request:**
+```json
+{
+  "windows_enabled": true,
+  "discord_enabled": true,
+  "discord_webhook_url": "https://discord.com/api/webhooks/..."
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `windows_enabled` | `bool` | Windows通知の有効/無効（オプション） |
+| `discord_enabled` | `bool` | Discord通知の有効/無効（オプション） |
+| `discord_webhook_url` | `string` | Discord Webhook URL（オプション、SSRF対策済み） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "Notification config updated"
+}
+```
+
+---
+
+#### `POST /api/notifications/send`
+
+現在の設定を使用してテスト通知を送信。
+
+**Request:**
+```json
+{
+  "message": "Hello from Poke-Controller!",
+  "title": "Test Notification"
+}
+```
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `message` | `string` | 通知メッセージ（必須） |
+| `title` | `string` | 通知タイトル（オプション、デフォルト: "Poke-Controller"） |
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "results": [
+    { "channel": "windows", "status": "sent" },
+    { "channel": "discord", "status": "error", "error": "..." }
+  ]
+}
+```
+
+### Static Files
+
+#### `GET /ui/*`
+
+SvelteKit でビルドされた静的ファイルを配信。`/ui/` 以下の任意のパスにアクセスすると対応するファイルが返される。
+
+**例:**
+- `GET /ui/` → `index.html`
+- `GET /ui/_app/version.json` → バージョンファイル
 
 ---
 

@@ -258,14 +258,42 @@ class _CommandBaseStub(ABC):
     def dialogue6widget_save_settings(
         self, title: str, dialogue_list, filename, desc=None, need=list
     ):
-        print(f"dialogue6widget_save_settings({title}): stubbed")
-        return []
+        """Show a multi-widget dialog with settings persistence.
+
+        See ``pokecon.dialogue.dialogue6widget_save_settings()`` for
+        parameter details.
+
+        Returns
+        -------
+        list or dict or None
+        """
+        from pokecon.dialogue import (
+            dialogue6widget_save_settings as _dialogue6widget_save_settings,
+        )
+
+        return _dialogue6widget_save_settings(
+            title, dialogue_list, filename, desc, need
+        )
 
     def dialogue6widget_select_settings(
         self, title: str, dialogue_list, dirname, desc=None, need=list
     ):
-        print(f"dialogue6widget_select_settings({title}): stubbed")
-        return []
+        """Show a multi-widget dialog with settings selection.
+
+        See ``pokecon.dialogue.dialogue6widget_select_settings()`` for
+        parameter details.
+
+        Returns
+        -------
+        list or dict or None
+        """
+        from pokecon.dialogue import (
+            dialogue6widget_select_settings as _dialogue6widget_select_settings,
+        )
+
+        return _dialogue6widget_select_settings(
+            title, dialogue_list, dirname, desc, need
+        )
 
     # ── Socket functions ────────────────────────────────────────────
     def socket_change_alive(self, flag: bool) -> None:

@@ -165,6 +165,113 @@ fn dialogue(
     })
 }
 
+// ---------------------------------------------------------------------------
+// dialogue6widget() — delegates to pure-Python implementation
+// ---------------------------------------------------------------------------
+
+/// Internal helper: load the pure-Python dialogue module via importlib.
+fn _load_py_dialogue_module(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let importlib = py.import("importlib")?;
+    let util = importlib.getattr("util")?;
+
+    let spec = util.call_method1("find_spec", ("pokecon.commands",))?;
+    let origin: String = spec.getattr("origin")?.extract()?;
+
+    let py_path = {
+        let p = std::path::Path::new(&origin);
+        let parent = p.parent().ok_or_else(|| {
+            PyRuntimeError::new_err(format!("cannot determine parent of {}", origin))
+        })?;
+        let dialogue_py = parent.join("dialogue.py");
+        dialogue_py.to_string_lossy().to_string()
+    };
+
+    let file_spec = util.call_method1(
+        "spec_from_file_location",
+        ("pokecon._dialogue_py", &py_path),
+    )?;
+    let py_mod = util.call_method1("module_from_spec", (&file_spec,))?;
+    let loader = file_spec.getattr("loader")?;
+    loader.call_method1("exec_module", (&py_mod,))?;
+
+    Ok(py_mod)
+}
+
+/// Show a multi-widget input dialog (original Poke-Controller API).
+#[pyfunction]
+#[pyo3(signature = (title, dialogue_list, desc = None, need = "list"))]
+fn dialogue6widget(
+    title: String,
+    dialogue_list: PyObject,
+    desc: Option<String>,
+    need: &str,
+) -> PyResult<PyObject> {
+    Python::with_gil(|py| {
+        let py_mod = _load_py_dialogue_module(py)?;
+        let desc_str: String = desc.unwrap_or_default();
+        let desc_arg = if desc_str.is_empty() {
+            py.None()
+        } else {
+            desc_str.into_py(py)
+        };
+        let result =
+            py_mod.call_method1("dialogue6widget", (&title, &dialogue_list, desc_arg, need))?;
+        Ok(result.into())
+    })
+}
+
+/// Show a multi-widget dialog with settings persistence.
+#[pyfunction]
+#[pyo3(signature = (title, dialogue_list, filename, desc = None, need = "list"))]
+fn dialogue6widget_save_settings(
+    title: String,
+    dialogue_list: PyObject,
+    filename: String,
+    desc: Option<String>,
+    need: &str,
+) -> PyResult<PyObject> {
+    Python::with_gil(|py| {
+        let py_mod = _load_py_dialogue_module(py)?;
+        let desc_str: String = desc.unwrap_or_default();
+        let desc_arg = if desc_str.is_empty() {
+            py.None()
+        } else {
+            desc_str.into_py(py)
+        };
+        let result = py_mod.call_method1(
+            "dialogue6widget_save_settings",
+            (&title, &dialogue_list, &filename, desc_arg, need),
+        )?;
+        Ok(result.into())
+    })
+}
+
+/// Show a multi-widget dialog with settings selection.
+#[pyfunction]
+#[pyo3(signature = (title, dialogue_list, dirname, desc = None, need = "list"))]
+fn dialogue6widget_select_settings(
+    title: String,
+    dialogue_list: PyObject,
+    dirname: String,
+    desc: Option<String>,
+    need: &str,
+) -> PyResult<PyObject> {
+    Python::with_gil(|py| {
+        let py_mod = _load_py_dialogue_module(py)?;
+        let desc_str: String = desc.unwrap_or_default();
+        let desc_arg = if desc_str.is_empty() {
+            py.None()
+        } else {
+            desc_str.into_py(py)
+        };
+        let result = py_mod.call_method1(
+            "dialogue6widget_select_settings",
+            (&title, &dialogue_list, &dirname, desc_arg, need),
+        )?;
+        Ok(result.into())
+    })
+}
+
 // ===================================================================
 // Module registration
 // ===================================================================
@@ -176,6 +283,9 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dialogue, m)?)?;
     m.add_function(wrap_pyfunction!(ok_cancel, m)?)?;
     m.add_function(wrap_pyfunction!(retry_cancel, m)?)?;
+    m.add_function(wrap_pyfunction!(dialogue6widget, m)?)?;
+    m.add_function(wrap_pyfunction!(dialogue6widget_save_settings, m)?)?;
+    m.add_function(wrap_pyfunction!(dialogue6widget_select_settings, m)?)?;
     Ok(())
 }
 
@@ -199,6 +309,9 @@ mod tests {
                 "dialogue",
                 "ok_cancel",
                 "retry_cancel",
+                "dialogue6widget",
+                "dialogue6widget_save_settings",
+                "dialogue6widget_select_settings",
             ] {
                 assert!(
                     m.getattr(name).is_ok(),

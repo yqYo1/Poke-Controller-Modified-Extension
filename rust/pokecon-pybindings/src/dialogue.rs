@@ -209,13 +209,11 @@ fn dialogue6widget(
     Python::with_gil(|py| {
         let py_mod = _load_py_dialogue_module(py)?;
         let desc_str: String = desc.unwrap_or_default();
-        let desc_arg = if desc_str.is_empty() {
-            py.None()
+        let result = if desc_str.is_empty() {
+            py_mod.call_method1("dialogue6widget", (&title, &dialogue_list, py.None(), need))?
         } else {
-            desc_str.into_py(py)
+            py_mod.call_method1("dialogue6widget", (&title, &dialogue_list, &desc_str, need))?
         };
-        let result =
-            py_mod.call_method1("dialogue6widget", (&title, &dialogue_list, desc_arg, need))?;
         Ok(result.into())
     })
 }
@@ -233,15 +231,17 @@ fn dialogue6widget_save_settings(
     Python::with_gil(|py| {
         let py_mod = _load_py_dialogue_module(py)?;
         let desc_str: String = desc.unwrap_or_default();
-        let desc_arg = if desc_str.is_empty() {
-            py.None()
+        let result = if desc_str.is_empty() {
+            py_mod.call_method1(
+                "dialogue6widget_save_settings",
+                (&title, &dialogue_list, &filename, py.None(), need),
+            )?
         } else {
-            desc_str.into_py(py)
+            py_mod.call_method1(
+                "dialogue6widget_save_settings",
+                (&title, &dialogue_list, &filename, &desc_str, need),
+            )?
         };
-        let result = py_mod.call_method1(
-            "dialogue6widget_save_settings",
-            (&title, &dialogue_list, &filename, desc_arg, need),
-        )?;
         Ok(result.into())
     })
 }
@@ -259,15 +259,17 @@ fn dialogue6widget_select_settings(
     Python::with_gil(|py| {
         let py_mod = _load_py_dialogue_module(py)?;
         let desc_str: String = desc.unwrap_or_default();
-        let desc_arg = if desc_str.is_empty() {
-            py.None()
+        let result = if desc_str.is_empty() {
+            py_mod.call_method1(
+                "dialogue6widget_select_settings",
+                (&title, &dialogue_list, &dirname, py.None(), need),
+            )?
         } else {
-            desc_str.into_py(py)
+            py_mod.call_method1(
+                "dialogue6widget_select_settings",
+                (&title, &dialogue_list, &dirname, &desc_str, need),
+            )?
         };
-        let result = py_mod.call_method1(
-            "dialogue6widget_select_settings",
-            (&title, &dialogue_list, &dirname, desc_arg, need),
-        )?;
         Ok(result.into())
     })
 }

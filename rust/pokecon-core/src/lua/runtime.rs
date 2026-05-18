@@ -211,10 +211,11 @@ impl LuaRuntime {
     ///
     /// Returns the number of Lua callbacks that were invoked.
     pub async fn dispatch_event(&self, event: &Event) -> usize {
-        let lua = self.lua.lock().await;
         let event_name = &event.event_type;
 
-        // Look up callback keys for this event type
+        // Look up callback keys WITHOUT holding the Lua lock.
+        // This prevents lock ordering inversion between the parking_lot
+        // `lua_callbacks` Mutex and the tokio `lua` Mutex.
         let keys = {
             let cbs = self.api_handle.lua_callbacks.lock();
             cbs.get(event_name).cloned().unwrap_or_default()
@@ -223,6 +224,17 @@ impl LuaRuntime {
         if keys.is_empty() {
             return 0;
         }
+
+        // ── CAUTION: Re-entrancy risk ──────────────────────────────────
+        // The Lua lock is held across `func.call()`.  If a Lua callback
+        // calls `pokecon.emit()` which triggers a Rust handler that calls
+        // `dispatch_event()` again, the second call will deadlock because
+        // `tokio::sync::Mutex` is not re-entrant.
+        //
+        // A full fix would require deferred event processing or a
+        // re-entrant locking mechanism.  For now, the lock is scoped to
+        // the minimum needed: we already fetched callback keys above.
+        let lua = self.lua.lock().await;
 
         // Retrieve the callback registry table from Lua
         let registry: mlua::Table = match lua.named_registry_value("pokecon_callbacks") {

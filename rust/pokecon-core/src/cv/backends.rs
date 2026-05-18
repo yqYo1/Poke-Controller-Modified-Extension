@@ -18,30 +18,20 @@ mod v4l_impl {
     /// so the stream's mmap'd buffers remain valid independently of the `Device`.
     /// The lifetime parameter in `MmapStream<'a>` is only a phantom marker for
     /// the mmap'd buffer regions — it does not actually borrow from the `Device`
-    /// struct. By owning both in a single struct, we enforce drop order
-    /// (stream before device) at the type level, making the `'static` lifetime sound.
-    struct CameraInner {
+    /// struct. By making this struct generic over `'a` and storing `Stream<'a>`,
+    /// Rust's type inference automatically selects `'static` at the point of use
+    /// because `V4lCameraBackend` stores `CameraInner<'static>`.
+    /// The field declaration order (stream before device) ensures correct drop order.
+    struct CameraInner<'a> {
         /// Must be declared before `device` so it is dropped first
         /// (Rust drops fields in declaration order).
-        stream: v4l::io::mmap::Stream<'static>,
+        stream: v4l::io::mmap::Stream<'a>,
         #[allow(dead_code)]
         device: Device,
     }
 
-    impl CameraInner {
-        fn new(device: Device, stream: v4l::io::mmap::Stream<'_>) -> Self {
-            // Safety: MmapStream does not actually borrow from the Device —
-            // it only holds an Arc<Handle> which keeps the V4L2 file descriptor
-            // alive. The mmap'd buffers are backed by this fd and remain valid
-            // as long as the Handle (Arc) lives. Since Stream already owns its
-            // own Arc<Handle>, the buffers survive the Device's lifetime.
-            // By wrapping both in CameraInner with stream before device,
-            // we guarantee stream is dropped first, which is always valid.
-            let stream = unsafe {
-                std::mem::transmute::<v4l::io::mmap::Stream<'_>, v4l::io::mmap::Stream<'static>>(
-                    stream,
-                )
-            };
+    impl<'a> CameraInner<'a> {
+        fn new(device: Device, stream: v4l::io::mmap::Stream<'a>) -> Self {
             Self { stream, device }
         }
     }
@@ -51,7 +41,7 @@ mod v4l_impl {
     /// Uses the `v4l` crate to access camera devices via V4L2.
     /// Supports mmap-based streaming and negotiates the best pixel format.
     pub struct V4lCameraBackend {
-        inner: Option<CameraInner>,
+        inner: Option<CameraInner<'static>>,
         config: Option<CameraConfig>,
         is_open: bool,
         negotiated_fourcc: Option<v4l::FourCC>,

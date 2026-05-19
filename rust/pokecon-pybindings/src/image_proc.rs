@@ -1,4 +1,4 @@
-use numpy::{PyArray3, PyArrayMethods};
+use numpy::{PyArray3, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;

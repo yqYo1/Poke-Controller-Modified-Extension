@@ -53,10 +53,7 @@ pub async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
             Some(html)
         }
         Err(e) => {
-            tracing::error!(
-                "SPA fallback FAILED to load {}: {e}",
-                index_path.display()
-            );
+            tracing::error!("SPA fallback FAILED to load {}: {e}", index_path.display());
             None
         }
     };

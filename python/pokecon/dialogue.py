@@ -31,7 +31,7 @@ def _ensure_root() -> None:
     global _ROOT
     try:
         root_exists = _ROOT is not None and bool(_ROOT.winfo_exists())
-    except (tk.TclError, AttributeError):
+    except tk.TclError, AttributeError:
         root_exists = False
 
     if _ROOT is None or not root_exists:
@@ -273,7 +273,7 @@ def _apply_saved_settings(
             elif widget_type == "Scale" and len(new_item) >= 5:
                 try:
                     new_item[4] = float(saved_val)
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     pass
             result.append(new_item)
         else:
@@ -642,7 +642,7 @@ class _SixWidgetDialog:
         if self._widget_refs:
             try:
                 self._widget_refs[0].focus_set()
-            except (tk.TclError, AttributeError):
+            except tk.TclError, AttributeError:
                 pass
 
     # ── widget building ──────────────────────────────────────────────

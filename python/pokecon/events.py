@@ -144,7 +144,7 @@ def _serialize_data(data: Any) -> str:
         return data
     try:
         return json.dumps(data, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return str(data)
 
 

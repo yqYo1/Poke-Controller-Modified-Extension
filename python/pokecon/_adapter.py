@@ -182,7 +182,7 @@ def _is_rust_button(obj: Any) -> bool:
     try:
         keys_mod = _get_rust_module("keys")
         return isinstance(obj, keys_mod.Button)
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         return False
 
 
@@ -193,7 +193,7 @@ def _is_rust_hat(obj: Any) -> bool:
     try:
         keys_mod = _get_rust_module("keys")
         return isinstance(obj, keys_mod.Hat)
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         return False
 
 
@@ -204,7 +204,7 @@ def _is_rust_direction(obj: Any) -> bool:
     try:
         keys_mod = _get_rust_module("keys")
         return isinstance(obj, keys_mod.Direction)
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         return False
 
 
@@ -215,7 +215,7 @@ def _is_rust_stick(obj: Any) -> bool:
     try:
         keys_mod = _get_rust_module("keys")
         return isinstance(obj, keys_mod.Stick)
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         return False
 
 
@@ -226,7 +226,7 @@ def _is_rust_touchscreen(obj: Any) -> bool:
     try:
         keys_mod = _get_rust_module("keys")
         return isinstance(obj, keys_mod.Touchscreen)
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         return False
 
 
@@ -1290,7 +1290,7 @@ class _RustCoreAdapter:
 
                 _cmd.press_button(button_name, duration_ms)
                 return
-            except (ImportError, AttributeError):
+            except ImportError, AttributeError:
                 msg = "Rust serial bindings not yet wired"
                 raise NotImplementedError(msg) from None
 
@@ -1388,7 +1388,7 @@ class _RustCoreAdapter:
                 import pokecon.image_proc as _ip  # noqa: PLC0415
 
                 return _ip.template_match(template_path, threshold)
-            except (ImportError, AttributeError):
+            except ImportError, AttributeError:
                 msg = "Rust CV bindings not yet wired"
                 raise NotImplementedError(msg) from None
 

@@ -38,46 +38,84 @@ use crate::state::AppState;
 /// Start the HTTP server — shared between web and tauri modes.
 pub async fn start_http_server(port: u16, web_dir: PathBuf, state: AppState) {
     // ── Static UI files served under /ui/* ──────────────────────────────
-    let index_path = web_dir.join("index.html");
     let web_dir = Arc::new(web_dir);
-    let index_path = Arc::new(index_path);
+    let index_path = web_dir.join("index.html");
+
+    // Read index.html once at startup and cache it for SPA fallback responses.
+    // This avoids a filesystem read on every client-side route navigation.
+    let index_html = match tokio::fs::read_to_string(&index_path).await {
+        Ok(html) => {
+            tracing::info!(
+                "SPA fallback loaded: {} ({} bytes)",
+                index_path.display(),
+                html.len()
+            );
+            Some(html)
+        }
+        Err(e) => {
+            tracing::error!(
+                "SPA fallback FAILED to load {}: {e}",
+                index_path.display()
+            );
+            None
+        }
+    };
 
     let ui_service = tower_http::services::ServeDir::new(web_dir.as_ref())
         .append_index_html_on_directories(true)
         .fallback(service_fn(move |req: axum::extract::Request| {
-            let index_path = Arc::clone(&index_path);
+            let index_html = index_html.clone();
             async move {
                 let path = req.uri().path();
-                tracing::debug!("ServeDir fallback for path: {path}");
-                // If path has a file extension, the file genuinely doesn't exist — 404
-                if std::path::Path::new(path).extension().is_some() {
-                    tracing::debug!("Returning 404 for file with extension: {path}");
-                    Ok::<_, std::convert::Infallible>(StatusCode::NOT_FOUND.into_response())
-                } else {
-                    // Client-side route — serve index.html
-                    tracing::debug!("Serving index.html for client route: {path}");
-                    match tokio::fs::read_to_string(index_path.as_ref()).await {
-                        Ok(html) => {
-                            tracing::debug!("Successfully read index.html ({} bytes)", html.len());
-                            Ok::<_, std::convert::Infallible>(
-                                (
-                                    StatusCode::OK,
-                                    [(axum::http::header::CONTENT_TYPE, "text/html")],
-                                    html,
-                                )
-                                    .into_response(),
+                let stripped = path.trim_start_matches('/');
+
+                // ── Determine if this is a request for an actual file ──
+                // The fallback is invoked when ServeDir cannot find the file.
+                // If the path has a file extension, the file genuinely doesn't
+                // exist (e.g. a stale asset reference) — return 404.
+                // If the path has NO extension, it's a client-side SPA route —
+                // serve index.html so the SPA router can handle it.
+                let is_likely_file =
+                    stripped.contains('.') && !stripped.ends_with('/');
+
+                if is_likely_file {
+                    tracing::debug!(
+                        "ServeDir fallback — returning 404 for missing file: {path}"
+                    );
+                    return Ok::<_, std::convert::Infallible>(
+                        StatusCode::NOT_FOUND.into_response(),
+                    );
+                }
+
+                // ── Client-side SPA route — serve fallback index.html ──
+                match &index_html {
+                    Some(html) => {
+                        tracing::info!(
+                            "SPA fallback — serving index.html for client route: {path}"
+                        );
+                        Ok::<_, std::convert::Infallible>(
+                            (
+                                StatusCode::OK,
+                                [(axum::http::header::CONTENT_TYPE, "text/html")],
+                                html.clone(),
                             )
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to read index.html: {e}");
-                            Ok::<_, std::convert::Infallible>(
-                                (
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    format!("Failed to load index.html: {e}"),
-                                )
-                                    .into_response(),
+                                .into_response(),
+                        )
+                    }
+                    None => {
+                        tracing::error!(
+                            "SPA fallback — index.html unavailable for route: {path}"
+                        );
+                        Ok::<_, std::convert::Infallible>(
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "SPA fallback not available — index.html was not loaded at startup. \
+                                 Ensure the web frontend is built before starting the server. \
+                                 Run: cd web && npm run build"
+                                    .to_string(),
                             )
-                        }
+                                .into_response(),
+                        )
                     }
                 }
             }

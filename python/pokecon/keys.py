@@ -319,8 +319,8 @@ class Tilt(Enum):
 class SendFormat:
     """Builds serial frames from button/hat/stick/touchscreen state.
 
-    TODO: Replace inner logic with calls to ``pokecon_serial::format::SendFormat``
-    via PyO3 once bindings are complete.
+    The inner logic uses ``pokecon_serial::format::SendFormat``
+    accessible via PyO3 bindings.
     """
 
     def __init__(self) -> None:

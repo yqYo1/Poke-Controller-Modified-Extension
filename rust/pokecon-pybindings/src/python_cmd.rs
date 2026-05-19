@@ -10,7 +10,7 @@ use pokecon_core::notify::discord::DiscordNotifier;
 use pokecon_core::notify::line::LineNotifier;
 use pokecon_core::notify::{Notification, Notifier};
 use pokecon_core::serial::keypress::KeyPress;
-use pokecon_core::serial::keys::{Button, Direction, GamepadInput, Hat, Stick, parse_buttons};
+use pokecon_core::serial::keys::{Button, GamepadInput, Hat, parse_buttons};
 
 // ---------------------------------------------------------------------------
 // Global tokio runtime shared across all PythonCommand instances.

@@ -132,12 +132,12 @@ Poke-Controller Modified Extension のアーキテクチャ、ビルド方法、
 │   ├── _adapter.py             # Rustアダプター
 │   └── script_loader.py        # 動的ロード
 │
-├── src-tauri/                  # Tauri v2デスクトップアプリ
+├── src-server/                  # HTTP/WebSocket/WebRTC server (renamed from src-tauri)
 │   ├── src/
-│   │   ├── main.rs             # HTTPサーバー、API、WebSocket
-│   │   ├── webrtc.rs           # WebRTCシグナリング
-│   │   └── vaapi_encoder.rs    # VAAPIハードウェアエンコード
-│   ├── Cargo.toml              # Tauri専用依存
+│   │   ├── main.rs             # HTTP server, API, WebSocket
+│   │   ├── webrtc.rs           # WebRTC signaling
+│   │   └── vaapi_encoder.rs    # VAAPI hardware encoding
+│   ├── Cargo.toml              # Server dependencies
 │   └── tauri.conf.json
 │
 ├── web/                        # Webフロントエンド（SvelteKit）
@@ -624,7 +624,7 @@ nix run .                # アプリケーション起動（デフォルト）
 | ├ notify | ✅ discord, line, windows | — | 中 |
 | └ lua | ✅ api, runtime | — | 高 |
 | `pokecon-pybindings` | ✅ keys, events, image_proc, python_cmd | — | 中 (新規) |
-| src-tauri | ❌ (未対応) | — | 低 (未対応) |
+| src-server | ❌ (未対応) | — | 低 (未対応) |
 
 ### テスト実行方法
 
@@ -660,7 +660,7 @@ cargo bench -p pokecon-core -- cv
 
 `REFACTORING_PLAN.md` に詳細なリファクタリング計画を記載。優先順位：
 
-1. **P0（即時）**: src-tauri/main.rs の分割、重複コード排除、不足テストの追加
+1. **P0（即時）**: src-server/main.rs の分割、重複コード排除、不足テストの追加
 2. **P1（重要）**: unsafe transmute の除去、Lua デッドロック修正、PythonCommand ランタイム管理改善
 3. **P2（機能）**: Lua API の実機能化、イベントフェーズ配線
 4. **P3（ポリッシュ）**: WindowsNotifier の改名、ドキュメント改善、CI 拡充

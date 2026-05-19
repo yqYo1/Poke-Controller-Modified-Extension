@@ -28,7 +28,7 @@
 ### Architecture Documentation
 - [2026-05-13] **`architecture_report.md`** contains a comprehensive per-crate analysis covering all 38 `.rs` files across 9 crates. Read this before making cross-cutting changes.
 - [2026-05-13] **`REFACTORING_PLAN.md`** contains prioritized refactoring tasks (P0–P3) with specific code locations.
-- [2026-05-13] **Test gaps identified**: `src-tauri` (no tests), `pokecon-pybindings` (tests added in this session), `pokecon-serial::format/keypress/keys` (tests added in this session).
+- [2026-05-13] **Test gaps identified**: `src-server` (no tests), `pokecon-pybindings` (tests added in this session), `pokecon-serial::format/keypress/keys` (tests added in this session).
 - [2026-05-13] **Integration tests** added: `pokecon-serial/tests/format_send_pipeline.rs`, `pokecon-events/tests/event_bus_integration.rs`, `pokecon-cv/tests/image_pipeline_integration.rs`.
 
 ### CI Monitoring (Mandatory)

@@ -201,8 +201,8 @@
 
           packages = {
             # Tauri package built with nixpkgs best practices
-            pokecon-tauri = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
-              pname = "pokecon-tauri";
+            pokecon-server = pkgs.rustPlatform.buildRustPackage (finalAttrs: {
+              pname = "pokecon-server";
               version = "0.1.0";
               src = builtins.path {
                 path = self.outPath;
@@ -239,11 +239,11 @@
               };
 
               cargoLock = {
-                lockFile = self + "/src-tauri/Cargo.lock";
+                lockFile = self + "/src-server/Cargo.lock";
                 allowBuiltinFetchGit = true;
               };
 
-              cargoRoot = "src-tauri";
+              cargoRoot = "src-server";
               buildAndTestSubdir = finalAttrs.cargoRoot;
 
               # npm frontend dependencies
@@ -256,8 +256,8 @@
                 cp ${self}/web/package.json ./package.json
 
                 # Copy actual icons from source
-                mkdir -p src-tauri/icons
-                cp ${self}/src-tauri/icons/* src-tauri/icons/ 2>/dev/null || true
+                mkdir -p src-server/icons
+                cp ${self}/src-server/icons/* src-server/icons/ 2>/dev/null || true
               '';
 
               nativeBuildInputs = with pkgs; [
@@ -312,8 +312,8 @@
                 npx vite build
                 cd ..
 
-                # Build Tauri binary
-                cd src-tauri
+                # Build server binary
+                cd src-server
                 cargo build --release --offline
                 cd ..
 
@@ -323,7 +323,7 @@
               installPhase = ''
                 runHook preInstall
                 mkdir -p $out/bin
-                cp src-tauri/target/release/pokecon-tauri $out/bin/
+                cp src-server/target/release/pokecon-server $out/bin/
                 # Copy built web assets for runtime serving
                 mkdir -p $out/web/dist
                 cp -r web/dist/* $out/web/dist/ 2>/dev/null || true
@@ -338,7 +338,7 @@
             # nix run .  — launch Poke-Controller application (Tauri or Web UI)
             default =
               let
-                pokecon-tauri = config.packages.pokecon-tauri;
+                pokecon-server = config.packages.pokecon-server;
 
                 # Wrapper script for runtime behavior (cache, UI mode detection)
                 pokecon-launcher = pkgs.writeShellScriptBin "pokecon" ''
@@ -377,15 +377,15 @@
                       fi
                     done
                     echo "=== Launching in $USER_MODE mode (explicit) ==="
-                    exec "${pokecon-tauri}/bin/pokecon-tauri" \
-                      --web-dir "${pokecon-tauri}/web/dist" \
+                    exec "${pokecon-server}/bin/pokecon-server" \
+                      --web-dir "${pokecon-server}/web/dist" \
                       "$@"
                   else
                     # Default: auto-detect based on GUI environment
                     echo "=== Launching in $UI_MODE mode (auto-detected) ==="
-                    exec "${pokecon-tauri}/bin/pokecon-tauri" \
+                    exec "${pokecon-server}/bin/pokecon-server" \
                       --ui "$UI_MODE" \
-                      --web-dir "${pokecon-tauri}/web/dist" \
+                      --web-dir "${pokecon-server}/web/dist" \
                       "$@"
                   fi
                 '';
@@ -657,11 +657,11 @@
                     cp -r "${self}/." "$workdir/"
                     chmod -R +w "$workdir"
 
-                    cd "$workdir/src-tauri"
+                    cd "$workdir/src-server"
                     echo "=== Building Tauri app (release) ==="
                     cargo build --release --all-features
                     echo ""
-                    echo "✓ Build complete. Binary at $workdir/src-tauri/target/release/pokecon-tauri"
+                    echo "✓ Build complete. Binary at $workdir/src-server/target/release/pokecon-server"
                   '';
                 };
               in
@@ -705,14 +705,14 @@
             # nix run .#tauri  — run Tauri app with explicit web-dir
             tauri = mkApp "${
               pkgs.writeShellApplication {
-                name = "pokecon-tauri-launcher";
+                name = "pokecon-server-launcher";
                 text = ''
-                  exec ${config.packages.pokecon-tauri}/bin/pokecon-tauri \
-                    --web-dir ${config.packages.pokecon-tauri}/web/dist \
+                  exec ${config.packages.pokecon-server}/bin/pokecon-server \
+                    --web-dir ${config.packages.pokecon-server}/web/dist \
                     "$@"
                 '';
               }
-            }/bin/pokecon-tauri-launcher";
+            }/bin/pokecon-server-launcher";
 
             # nix run .#npm-update  — update npm deps and sync flake.nix hash
             # Usage: nix run .#npm-update
@@ -1081,11 +1081,11 @@
                   entry = "${pkgs.typos}/bin/typos";
                   pass_filenames = false;
                 };
-                "check-tauri-lock" = {
+                "check-server-lock" = {
                   enable = true;
-                  name = "Check src-tauri/Cargo.lock";
-                  description = "Verify src-tauri/Cargo.lock exists and is tracked by git";
-                  entry = "bash ${self}/scripts/check-tauri-lock.sh";
+                  name = "Check src-server/Cargo.lock";
+                  description = "Verify src-server/Cargo.lock exists and is tracked by git";
+                  entry = "bash ${self}/scripts/check-server-lock.sh";
                   pass_filenames = false;
                   stages = [ "pre-commit" ];
                 };

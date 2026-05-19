@@ -1,11 +1,11 @@
 [package]
-name = "pokecon-tauri"
+name = "pokecon-server"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
 homepage = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
-description = "Tauri v2 native desktop UI for Poke-Controller"
+description = "HTTP/WebSocket/WebRTC server for Poke-Controller"
 
 # Exclude from workspace — built independently
 [workspace]

@@ -54,27 +54,27 @@ def main() -> int:
     elif ui_mode == "web":
         print(f"Launching Web UI on {args.web_host}:{args.web_port}...")
         # The web UI is served by the Tauri binary's Axum server
-        # Launch via subprocess: pokecon-tauri --ui web
+        # Launch via subprocess: pokecon-server --ui web
         import os
         import shutil
         import subprocess
 
-        # Find the Tauri binary
-        tauri_binary = shutil.which("pokecon-tauri")
+        # Find the server binary
+        tauri_binary = shutil.which("pokecon-server")
         if tauri_binary is None:
             # Try to find it in common locations
             for path in [
-                "src-tauri/target/release/pokecon-tauri",
-                "src-tauri/target/debug/pokecon-tauri",
+                "src-server/target/release/pokecon-server",
+                "src-server/target/debug/pokecon-server",
             ]:
                 if os.path.isfile(path) and os.access(path, os.X_OK):
                     tauri_binary = os.path.abspath(path)
                     break
 
         if tauri_binary is None:
-            print("Error: pokecon-tauri binary not found.")
+            print("Error: pokecon-server binary not found.")
             print(
-                "Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml"
+                "Please build it first with: cargo build --release --manifest-path src-server/Cargo.toml"
             )
             return 1
 
@@ -96,20 +96,20 @@ def main() -> int:
         import shutil
         import subprocess
 
-        tauri_binary = shutil.which("pokecon-tauri")
+        tauri_binary = shutil.which("pokecon-server")
         if tauri_binary is None:
             for path in [
-                "src-tauri/target/release/pokecon-tauri",
-                "src-tauri/target/debug/pokecon-tauri",
+                "src-server/target/release/pokecon-server",
+                "src-server/target/debug/pokecon-server",
             ]:
                 if os.path.isfile(path) and os.access(path, os.X_OK):
                     tauri_binary = os.path.abspath(path)
                     break
 
         if tauri_binary is None:
-            print("Error: pokecon-tauri binary not found.")
+            print("Error: pokecon-server binary not found.")
             print(
-                "Please build it first with: cargo build --release --manifest-path src-tauri/Cargo.toml"
+                "Please build it first with: cargo build --release --manifest-path src-server/Cargo.toml"
             )
             return 1
 

@@ -171,13 +171,13 @@ Poke-Controller-Modified-Extension/
 │   ├── _adapter.py           # Rustコアアダプター
 │   └── script_loader.py      # スクリプト動的ロード
 │
-├── src-tauri/                # Tauri v2 デスクトップアプリ
-│   ├── Cargo.toml            # Tauri専用依存関係
+├── src-server/                # HTTP/WebSocket/WebRTC server (renamed from src-tauri)
+│   ├── Cargo.toml            # Server dependencies
 │   ├── build.rs
 │   └── src/
-│       ├── main.rs           # HTTPサーバー + WebSocket + APIエンドポイント
-│       ├── webrtc.rs         # WebRTCライブプレビュー
-│       └── vaapi_encoder.rs  # VAAPIハードウェアエンコード
+│       ├── main.rs           # HTTP server + WebSocket + API endpoints
+│       ├── webrtc.rs         # WebRTC live preview
+│       └── vaapi_encoder.rs  # VAAPI hardware encoding
 │
 ├── web/                      # Webフロントエンド（SvelteKit + Svelte 5）
 │   ├── package.json          # SvelteKit依存関係・スクリプト

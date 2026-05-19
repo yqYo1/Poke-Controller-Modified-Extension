@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
 #
-# check-tauri-lock.sh — Verify src-tauri/Cargo.lock exists and is tracked by git.
+# check-server-lock.sh — Verify src-server/Cargo.lock exists and is tracked by git.
 #
 # This script is used both by pre-commit hooks (via flake.nix) and CI
 # (via remote-flake.yml or standalone execution). It detects if the
-# Cargo.lock file for the Tauri Rust project is missing or untracked,
+# Cargo.lock file for the server Rust project is missing or untracked,
 # which would cause remote flake evaluations to fail.
 #
 # Design for git-hooks.nix pre-commit compatibility:
 #
-# git-hooks.nix pre-commit hooks run via "bash ${self}/scripts/check-tauri-lock.sh"
+# git-hooks.nix pre-commit hooks run via "bash ${self}/scripts/check-server-lock.sh"
 # where ${self} resolves to a Nix store path (e.g., /nix/store/xxxx-source/).
 # In this context:
 #   - The working directory is set to the actual git repository root
@@ -24,7 +24,7 @@
 # NOT for git commands.
 #
 # Usage:
-#   ./scripts/check-tauri-lock.sh
+#   ./scripts/check-server-lock.sh
 #
 # Exit codes:
 #   0 — all checks pass
@@ -38,7 +38,7 @@ set -euo pipefail
 ORIGINAL_DIR="$(pwd)"
 
 # Determine the source root from the script's own location.
-# When run as "bash ${self}/scripts/check-tauri-lock.sh", this resolves
+# When run as "bash ${self}/scripts/check-server-lock.sh", this resolves
 # to ${self} (Nix store path or actual repo root).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -67,17 +67,17 @@ fi
 pass() { echo -e "${GREEN}PASS${NC}  $1"; }
 fail() { echo -e "${RED}FAIL${NC}  $1"; }
 
-echo "═══ src-tauri/Cargo.lock checks ═══"
+echo "═══ src-server/Cargo.lock checks ═══"
 echo ""
 
 # ── Check 1: File exists ──────────────────────────────────────────────────
-LOCKFILE_SRC="src-tauri/Cargo.lock"
+LOCKFILE_SRC="src-server/Cargo.lock"
 ABSOLUTE_LOCKFILE="${REPO_ROOT}/${LOCKFILE_SRC}"
 if [[ -f "${ABSOLUTE_LOCKFILE}" ]]; then
   pass "${LOCKFILE_SRC} exists on disk."
 else
   fail "${LOCKFILE_SRC} does not exist!"
-  echo "       Run 'cd src-tauri && cargo generate-lockfile' to create it." >&2
+  echo "       Run 'cd src-server && cargo generate-lockfile' to create it." >&2
   errors=$((errors + 1))
 fi
 

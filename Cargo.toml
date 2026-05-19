@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "rust/pokecon-core",
     "rust/pokecon-pybindings",
-    # "src-tauri",  # Tauri app — built separately via nix run .#tauri-build
+    # "src-server",  # Server app — built separately via nix run .#tauri-build
 ]
 
 [workspace.package]

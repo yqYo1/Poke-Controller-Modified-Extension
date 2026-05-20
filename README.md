@@ -73,7 +73,7 @@ class MyCommand(PythonCommand):
         self.press(Button.A, duration=0.1, wait=0.2)
 ```
 
-詳細は [Docs/user-guide.md](Docs/user-guide.md) を参照。
+詳細は [docs/user/guide.md](docs/user/guide.md) を参照。
 
 ### 本体開発者向け
 
@@ -90,7 +90,7 @@ maturin develop --manifest-path rust/pokecon-pybindings/Cargo.toml
 nix run .#fmt
 ```
 
-詳細は [Docs/developer-guide.md](Docs/developer-guide.md) を参照。
+詳細は [docs/developer/guide.md](docs/developer/guide.md) を参照。
 
 ---
 
@@ -98,11 +98,11 @@ nix run .#fmt
 
 | ドキュメント | 対象読者 | 内容 |
 |-------------|---------|------|
-| [Docs/user-guide.md](Docs/user-guide.md) | エンドユーザー | インストール、使い方、Web UI操作、トラブルシューティング |
-| [Docs/script-guide.md](Docs/script-guide.md) | スクリプト開発者 | PythonCommand API、画像認識、サンプル |
-| [Docs/developer-guide.md](Docs/developer-guide.md) | 本体開発者 | アーキテクチャ、ビルド、Rust/Python連携 |
-| [Docs/api-reference.md](Docs/api-reference.md) | スクリプト開発者 | 全APIリファレンス |
-| [Docs/web-ui-guide.md](Docs/web-ui-guide.md) | エンドユーザー | Web UI詳細、スマホ操作、PWA |
+| [docs/user/guide.md](docs/user/guide.md) | エンドユーザー | インストール、使い方、Web UI操作、トラブルシューティング |
+| [docs/script/guide.md](docs/script/guide.md) | スクリプト開発者 | PythonCommand API、画像認識、サンプル |
+| [docs/developer/guide.md](docs/developer/guide.md) | 本体開発者 | アーキテクチャ、ビルド、Rust/Python連携 |
+| [docs/user/api-reference.md](docs/user/api-reference.md) | スクリプト開発者 | 全APIリファレンス |
+| [docs/user/web-ui.md](docs/user/web-ui.md) | エンドユーザー | Web UI詳細、スマホ操作、PWA |
 
 ---
 

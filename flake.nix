@@ -218,6 +218,7 @@
                   || pkgs.lib.hasSuffix ".json" p
                   || pkgs.lib.hasSuffix ".html" p
                   || pkgs.lib.hasSuffix ".css" p
+                  || pkgs.lib.hasSuffix ".svelte" p
                   || pkgs.lib.hasSuffix ".js" p
                   || pkgs.lib.hasSuffix ".jsx" p
                   || pkgs.lib.hasSuffix ".ts" p
@@ -341,6 +342,9 @@
                 pokecon-server = config.packages.pokecon-server;
 
                 # Wrapper script for runtime behavior (cache, UI mode detection)
+                # NOTE: The web directory is determined at build time via nix string
+                # interpolation. When launched via `nix run`, the nix store path is
+                # used. For development with local web builds, use --web-dir explicitly.
                 pokecon-launcher = pkgs.writeShellScriptBin "pokecon" ''
                   # Set GSettings backend to memory to avoid D-Bus dependency
                   export GSETTINGS_BACKEND=memory
@@ -364,6 +368,10 @@
                     UI_MODE="tauri"
                   fi
 
+                  # Default web directory: nix store build (determined at build time).
+                  # Users can override with --web-dir for local development builds.
+                  WEB_DIR="${pokecon-server}/web/dist"
+
                   # Check if user explicitly specified --ui
                   if [[ "$*" == *"--ui"* ]]; then
                     # User specified mode explicitly — parse it for logging
@@ -378,14 +386,14 @@
                     done
                     echo "=== Launching in $USER_MODE mode (explicit) ==="
                     exec "${pokecon-server}/bin/pokecon-server" \
-                      --web-dir "${pokecon-server}/web/dist" \
+                      --web-dir "$WEB_DIR" \
                       "$@"
                   else
                     # Default: auto-detect based on GUI environment
                     echo "=== Launching in $UI_MODE mode (auto-detected) ==="
                     exec "${pokecon-server}/bin/pokecon-server" \
                       --ui "$UI_MODE" \
-                      --web-dir "${pokecon-server}/web/dist" \
+                      --web-dir "$WEB_DIR" \
                       "$@"
                   fi
                 '';

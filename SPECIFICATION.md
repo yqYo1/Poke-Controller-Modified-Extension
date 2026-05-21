@@ -60,7 +60,9 @@ This document specifies the requirements for the new web/desktop UI of Poke-Cont
 +-------------------------------------------------------------+
 ```
 
-### 2.2 Tab Structure (6 Tabs)
+### 2.2 Tab Structure (6 Main Tabs + 3 Sub-tabs)
+
+> **Note on tab count**: This specification describes **6 main tabs** at the top level. The Commands tab contains **3 sub-tabs** (Python Command, Mcu Command, Shortcut), which brings the total to 9 distinct tabbed interfaces. PLAN.md references an "8-tab structure" which counts the Commands sub-tabs differently. This specification consistently uses "6 main tabs" to refer to the top-level notebook tabs.
 
 | # | Tab Name | Priority | Description |
 |---|----------|----------|-------------|
@@ -146,7 +148,7 @@ The UI must support 7 display combinations for the right side panel, selectable 
 | Control | Type | Description |
 |---------|------|-------------|
 | **Camera device selection** | Combobox | Dropdown of available camera devices |
-| **FPS** | Spinbox/Combobox | Configurable frames per second |
+| **FPS** | Combobox | Configurable frames per second (1–30fps) |
 | **Flip** | Checkbox | Horizontal/vertical flip toggle |
 
 #### 4.1.3 Display Mode Toggles (Checkboxes)

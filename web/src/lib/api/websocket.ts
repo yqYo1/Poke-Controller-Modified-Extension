@@ -1,5 +1,5 @@
 /**
- * Typed WebSocket client with automatic reconnection (exponential backoff)
+ * Typed WebSocket client with automatic reconnection (fixed 3-second interval)
  * and event-based listener pattern.
  *
  * @module websocket
@@ -85,9 +85,7 @@ export class WebSocketClient {
 	private url: string;
 	private shouldReconnect = true;
 	private reconnectAttempts = 0;
-	private readonly baseDelay = 1000; // 1 second
-	private readonly maxDelay = 30000; // 30 seconds
-	private readonly maxRetries = 10;
+	private readonly reconnectInterval = 3000; // 3 seconds
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private listeners = new Map<string, Set<EventCallback>>();
 
@@ -200,29 +198,14 @@ export class WebSocketClient {
 	private _scheduleReconnect(): void {
 		if (!this.shouldReconnect) return;
 
-		if (this.reconnectAttempts >= this.maxRetries) {
-			console.warn(
-				'WebSocket max reconnect attempts reached',
-				this.maxRetries,
-			);
-			return;
-		}
-
-		// Exponential back-off with jitter (±25 %)
-		const delay = Math.min(
-			this.baseDelay * 2 ** this.reconnectAttempts,
-			this.maxDelay,
-		);
-		const jitter = delay * (0.75 + Math.random() * 0.5);
-
 		this.reconnectAttempts++;
 		console.info(
-			`WebSocket reconnecting in ${Math.round(jitter)} ms (attempt ${this.reconnectAttempts})`,
+			`WebSocket reconnecting in ${this.reconnectInterval} ms (attempt ${this.reconnectAttempts})`,
 		);
 
 		this.reconnectTimer = setTimeout(() => {
 			this._connect();
-		}, jitter);
+		}, this.reconnectInterval);
 	}
 
 	/**

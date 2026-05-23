@@ -220,7 +220,7 @@
 			class="tk-btn tk-btn-start"
 			onclick={handleStart}
 			disabled={!selectedCommand || !canStart}
-			title="開始 (F5)"
+			title="開始 (F6)"
 		>
 			▶ 開始
 		</button>

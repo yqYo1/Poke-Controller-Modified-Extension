@@ -52,12 +52,30 @@
 	const appVersion = 'v0.1.0';
 
 	// ── Camera capture handler ─────────────────────────────────────────────
+	let showRealtime = $state(true);
+	let showValue = $state(false);
+	let showGuide = $state(true);
+	let captureFormat = $state<'png' | 'jpeg'>('png');
+	let captureName = $state('capture.png');
+	let fps = $state(30);
+	let flip = $state('none');
+
 	async function handleCapture() {
 		try {
-			await api.captureCamera('capture.png');
+			const ext = captureFormat;
+			const name = captureName.includes('.')
+				? captureName.replace(/\.(png|jpe?g)$/i, `.${ext}`)
+				: `${captureName}.${ext}`;
+			await api.captureCamera(name);
 		} catch (e) {
 			console.error('Capture failed:', e);
 		}
+	}
+
+	// Update filename extension when capture format changes
+	function handleFormatChange() {
+		const base = captureName.replace(/\.(png|jpe?g)$/i, '');
+		captureName = `${base}.${captureFormat}`;
 	}
 
 	// ── Tab content snippets ───────────────────────────────────────────────
@@ -112,16 +130,18 @@
 					<input type="text" class="tk-input tk-input-narrow" readonly placeholder="0" />
 					<span class="tk-separator-v"></span>
 					<span class="form-label">FPS:</span>
-					<select class="tk-select tk-input-narrow">
-						<option>60</option>
-						<option>45</option>
-						<option selected>30</option>
-						<option>15</option>
-						<option>5</option>
+					<select class="tk-select tk-input-narrow" bind:value={fps}>
+						<option value={1}>1</option>
+						<option value={5}>5</option>
+						<option value={10}>10</option>
+						<option value={15}>15</option>
+						<option value={20}>20</option>
+						<option value={24}>24</option>
+						<option value={30}>30</option>
 					</select>
 					<span class="tk-separator-v"></span>
 					<span class="form-label">Flip:</span>
-					<select class="tk-select">
+					<select class="tk-select" bind:value={flip}>
 						<option>None</option>
 						<option>Vertical</option>
 						<option>Horizontal</option>
@@ -139,15 +159,15 @@
 			<div class="tk-labelframe-content">
 				<div class="form-row">
 					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" checked />
+						<input type="checkbox" class="tk-checkbox" bind:checked={showRealtime} />
 						<span>Show Realtime</span>
 					</label>
 					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
+						<input type="checkbox" class="tk-checkbox" bind:checked={showValue} />
 						<span>Show Value</span>
 					</label>
 					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" checked />
+						<input type="checkbox" class="tk-checkbox" bind:checked={showGuide} />
 						<span>Show Guide</span>
 					</label>
 					<span class="tk-separator-v"></span>
@@ -165,11 +185,30 @@
 		</div>
 
 		<!-- Capture controls -->
-		<div class="form-row" style="padding: 6px; gap: 8px;">
-			<button class="tk-btn" onclick={handleCapture}>Capture</button>
-			<button class="tk-btn" onclick={() => (showRegionSelector = !showRegionSelector)}>
-				{showRegionSelector ? 'Close Region Selector' : 'Select Capture Region'}
-			</button>
+		<div class="tk-labelframe">
+			<div class="tk-labelframe-label">Capture</div>
+			<div class="tk-labelframe-content">
+				<div class="form-row">
+					<input
+						bind:value={captureName}
+						class="tk-input flex-1"
+						placeholder="capture.png"
+						style="min-width: 120px;"
+					/>
+					<select
+						bind:value={captureFormat}
+						onchange={handleFormatChange}
+						class="tk-select"
+					>
+						<option value="png">PNG</option>
+						<option value="jpeg">JPEG</option>
+					</select>
+					<button class="tk-btn" onclick={handleCapture}>Capture</button>
+					<button class="tk-btn" onclick={() => (showRegionSelector = !showRegionSelector)}>
+						{showRegionSelector ? 'Close Region Selector' : 'Select Capture Region'}
+					</button>
+				</div>
+			</div>
 		</div>
 
 		{#if showRegionSelector}

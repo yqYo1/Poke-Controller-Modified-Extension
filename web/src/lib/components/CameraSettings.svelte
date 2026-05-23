@@ -191,12 +191,13 @@
 			disabled={disabled}
 			class="w-full rounded bg-gray-800 px-2 py-1.5 text-xs text-gray-200 disabled:opacity-50"
 		>
+			<option value={1}>1</option>
 			<option value={5}>5</option>
 			<option value={10}>10</option>
 			<option value={15}>15</option>
+			<option value={20}>20</option>
 			<option value={24}>24</option>
 			<option value={30}>30</option>
-			<option value={60}>60</option>
 		</select>
 	</div>
 

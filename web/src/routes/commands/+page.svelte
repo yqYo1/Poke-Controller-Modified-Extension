@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import PythonCommandList from './PythonCommandList.svelte';
 	import McuCommandList from './McuCommandList.svelte';
@@ -38,43 +37,8 @@
 		}
 	}
 
-	// ── Keyboard shortcuts for execution control ─────────────────────────────
-	function handleKeyDown(event: KeyboardEvent) {
-		const target = event.target as HTMLElement;
-		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-			return;
-		}
-
-		// F1-F10 handled in ShortcutButtons
-
-		// Escape: Stop
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			api.stopCommand().catch(console.warn);
-			return;
-		}
-
-		// F5: Start
-		if (event.key === 'F5' && !event.shiftKey) {
-			event.preventDefault();
-			if (selectedCommand) {
-				api.startCommand(selectedCommand).catch(console.warn);
-			}
-			return;
-		}
-
-		// Shift+F6: Pause
-		if (event.key === 'F6' && event.shiftKey) {
-			event.preventDefault();
-			api.stopCommand().catch(console.warn);
-			return;
-		}
-	}
-
-	onMount(() => {
-		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
-	});
+	// Keyboard shortcuts (F5=Start, Shift+F6=Pause, Escape=Stop) are handled
+	// by CommandActions.svelte to avoid duplicate event listeners.
 </script>
 
 <div class="tab-content">

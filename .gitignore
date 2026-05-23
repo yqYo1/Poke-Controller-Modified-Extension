@@ -19,6 +19,8 @@
 !/.gitignore
 !/flake.lock
 !/AGENTS.md
+!/PLAN.md
+!/SPECIFICATION.md
 !/ExecutePokeConModified-Extension.bat
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE

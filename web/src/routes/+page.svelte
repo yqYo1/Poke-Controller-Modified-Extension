@@ -369,8 +369,8 @@
 					<div class="tk-labelframe-label">Clear Outputs</div>
 					<div class="tk-labelframe-content">
 						<div class="form-row">
-							<button class="tk-btn">Clear(#1)</button>
-							<button class="tk-btn">Clear(#2)</button>
+							<button class="tk-btn" onclick={() => window.dispatchEvent(new CustomEvent('clear-outputs', { detail: { panel: 1 } }))}>Clear(#1)</button>
+							<button class="tk-btn" onclick={() => window.dispatchEvent(new CustomEvent('clear-outputs', { detail: { panel: 2 } }))}>Clear(#2)</button>
 						</div>
 					</div>
 				</div>
@@ -414,15 +414,15 @@
 					<div class="tk-labelframe-content">
 						<div class="form-row">
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" />
+								<input type="radio" name="dlgpos" class="tk-radio" value="top" checked={uiStore.dialogueButtonPosition === 'top'} onchange={() => uiStore.setDialogueButtonPosition('top')} />
 								<span>TOP</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" checked />
+								<input type="radio" name="dlgpos" class="tk-radio" value="bottom" checked={uiStore.dialogueButtonPosition === 'bottom'} onchange={() => uiStore.setDialogueButtonPosition('bottom')} />
 								<span>BOTTOM</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" />
+								<input type="radio" name="dlgpos" class="tk-radio" value="both" checked={uiStore.dialogueButtonPosition === 'both'} onchange={() => uiStore.setDialogueButtonPosition('both')} />
 								<span>BOTH</span>
 							</label>
 						</div>

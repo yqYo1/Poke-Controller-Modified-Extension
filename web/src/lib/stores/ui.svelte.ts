@@ -86,6 +86,12 @@ export let splitRatio = $state<number>(50);
 /** Destination panel for stdout log output. */
 export let stdoutDestination = $state<StdoutDestination>(1);
 
+/** Dialogue button position (TOP / BOTTOM / BOTH). */
+export type DialogueButtonPos = 'top' | 'bottom' | 'both';
+
+/** Dialogue button placement position. */
+export let dialogueButtonPosition = $state<DialogueButtonPos>('both');
+
 /** Whether the store is still fetching initial values from the API. */
 export let loading = $state<boolean>(true);
 
@@ -115,10 +121,11 @@ export async function initUIStore(): Promise<void> {
 	error = null;
 
 	try {
-		const [widgetSettings, outputSettings, controllerSettings] = await Promise.all([
+		const [widgetSettings, outputSettings, controllerSettings, dialogueSettings] = await Promise.all([
 			api.getWidgetMode(),
 			api.getOutputSettings(),
 			api.getControllerPosition(),
+			api.getDialogueButtonPosition(),
 		]);
 
 		const parsed = parseInt(widgetSettings.mode, 10) as WidgetModeNumber;
@@ -129,6 +136,7 @@ export async function initUIStore(): Promise<void> {
 		splitRatio = outputSettings.split_ratio;
 		stdoutDestination = outputSettings.stdout_destination;
 		controllerPosition = controllerSettings.position;
+		dialogueButtonPosition = dialogueSettings.position;
 	} catch (e) {
 		error = e instanceof Error ? e.message : String(e);
 	} finally {
@@ -195,6 +203,20 @@ export async function setStdoutDestination(dest: StdoutDestination): Promise<voi
 		await api.updateOutputSettings({ stdout_destination: dest });
 	} catch (e) {
 		stdoutDestination = previous;
+		throw e;
+	}
+}
+
+/**
+ * Set the dialogue button position and persist to the backend.
+ */
+export async function setDialogueButtonPosition(pos: DialogueButtonPos): Promise<void> {
+	const previous = dialogueButtonPosition;
+	dialogueButtonPosition = pos;
+	try {
+		await api.updateDialogueButtonPosition(pos);
+	} catch (e) {
+		dialogueButtonPosition = previous;
 		throw e;
 	}
 }

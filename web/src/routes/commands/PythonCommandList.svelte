@@ -119,7 +119,10 @@
 					class:selected={selectedName === cmd.name}
 					onclick={() => handleSelect(cmd.name)}
 				>
-					<span class="cmd-name">{cmd.name}</span>
+					<span class="cmd-top">
+						<span class="cmd-name">{cmd.name}</span>
+						<span class="cmd-tag">{deriveTag(cmd.name)}</span>
+					</span>
 					{#if cmd.description}
 						<span class="cmd-desc">{cmd.description}</span>
 					{/if}
@@ -213,5 +216,27 @@
 
 	.command-item.selected .cmd-desc {
 		color: #bfdbfe;
+	}
+
+	.cmd-top {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.cmd-tag {
+		font-size: 8px;
+		font-weight: 600;
+		padding: 1px 4px;
+		border-radius: 3px;
+		background-color: var(--color-accent, #3b82f6);
+		color: #fff;
+		white-space: nowrap;
+		line-height: 1.2;
+		text-transform: uppercase;
+	}
+
+	.command-item.selected .cmd-tag {
+		background-color: rgba(255, 255, 255, 0.25);
 	}
 </style>

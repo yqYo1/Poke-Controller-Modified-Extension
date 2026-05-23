@@ -222,14 +222,17 @@
 				{recording ? '入力を記録中...' : 'クリックして入力の記録を開始'}
 			</p>
 		</div>
-		<button
-			onclick={toggleRecording}
-			class="rounded px-3 py-1 text-xs font-medium {recording
-				? 'bg-red-600 text-white hover:bg-red-500'
-				: 'border border-gray-600 text-gray-300 hover:bg-gray-700'}"
-		>
-			{recording ? '■ 停止' : '● 録画'}
-		</button>
+		<label class="flex items-center gap-2 cursor-pointer">
+			<input
+				type="checkbox"
+				checked={recording}
+				onchange={toggleRecording}
+				class="h-4 w-4 accent-red-500"
+			/>
+			<span class="text-xs font-medium {recording ? 'text-red-400' : 'text-gray-400'}">
+				{recording ? '記録中' : '録画'}
+			</span>
+		</label>
 	</div>
 
 	<!-- ── Vibration toggle ─────────────────────────────────────────────── -->

@@ -15,6 +15,26 @@
 	let loading = $state(true);
 	let selectedName = $state<string | null>(null);
 	let filterText = $state('');
+	let filterTag = $state('');
+
+	// Derive unique tags from command names (since API doesn't return tags directly)
+	let availableTags = $derived.by<string[]>(() => {
+		const tags = [''];
+		for (const cmd of allCommands) {
+			const tag = deriveTag(cmd.name);
+			if (tag && !tags.includes(tag)) tags.push(tag);
+		}
+		return tags.sort();
+	});
+
+	function deriveTag(name: string): string {
+		if (name.startsWith('mcu_read_')) return 'Read';
+		if (name.startsWith('mcu_write_')) return 'Write';
+		if (name.startsWith('mcu_ctrl_') || name.startsWith('mcu_control_')) return 'Control';
+		if (name.startsWith('mcu_set_') || name.startsWith('mcu_config_')) return 'Config';
+		if (name.startsWith('mcu_test_')) return 'Test';
+		return 'General';
+	}
 
 	// ── Load commands ────────────────────────────────────────────────────────
 	async function loadCommands() {
@@ -35,16 +55,24 @@
 
 	// Reactive filter
 	$effect(() => {
-		if (!filterText) {
-			filteredCommands = allCommands;
-			return;
+		let result = allCommands;
+
+		// Tag filter
+		if (filterTag) {
+			result = result.filter((c) => deriveTag(c.name) === filterTag);
 		}
-		const lower = filterText.toLowerCase();
-		filteredCommands = allCommands.filter(
-			(c) =>
-				c.name.toLowerCase().includes(lower) ||
-				(c.description ?? '').toLowerCase().includes(lower),
-		);
+
+		// Text filter
+		if (filterText) {
+			const lower = filterText.toLowerCase();
+			result = result.filter(
+				(c) =>
+					c.name.toLowerCase().includes(lower) ||
+					(c.description ?? '').toLowerCase().includes(lower),
+			);
+		}
+
+		filteredCommands = result;
 	});
 
 	function handleSelect(name: string) {
@@ -59,6 +87,17 @@
 
 	<!-- Filter bar -->
 	<div class="filter-bar">
+		<select
+			class="tk-select-xs"
+			bind:value={filterTag}
+		>
+			<option value="">全てのタグ</option>
+			{#each availableTags as tag (tag)}
+				{#if tag}
+					<option value={tag}>{tag}</option>
+				{/if}
+			{/each}
+		</select>
 		<input
 			type="text"
 			class="tk-input-xs"
@@ -80,7 +119,10 @@
 					class:selected={selectedName === cmd.name}
 					onclick={() => handleSelect(cmd.name)}
 				>
-					<span class="cmd-name">{cmd.name}</span>
+					<span class="cmd-top">
+						<span class="cmd-name">{cmd.name}</span>
+						<span class="cmd-tag">{deriveTag(cmd.name)}</span>
+					</span>
 					{#if cmd.description}
 						<span class="cmd-desc">{cmd.description}</span>
 					{/if}
@@ -107,6 +149,18 @@
 		color: var(--color-text-primary, #f1f5f9);
 		flex: 1;
 		min-width: 80px;
+	}
+
+	:global(.tk-select-xs) {
+		font-family: 'Segoe UI', system-ui, sans-serif;
+		font-size: 10px;
+		padding: 1px 2px;
+		border: 1px solid var(--color-border, #475569);
+		border-radius: 2px;
+		background-color: var(--color-bg-primary, #0f172a);
+		color: var(--color-text-primary, #f1f5f9);
+		flex: 1;
+		min-width: 60px;
 	}
 
 	.command-list {
@@ -162,5 +216,27 @@
 
 	.command-item.selected .cmd-desc {
 		color: #bfdbfe;
+	}
+
+	.cmd-top {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.cmd-tag {
+		font-size: 8px;
+		font-weight: 600;
+		padding: 1px 4px;
+		border-radius: 3px;
+		background-color: var(--color-accent, #3b82f6);
+		color: #fff;
+		white-space: nowrap;
+		line-height: 1.2;
+		text-transform: uppercase;
+	}
+
+	.command-item.selected .cmd-tag {
+		background-color: rgba(255, 255, 255, 0.25);
 	}
 </style>

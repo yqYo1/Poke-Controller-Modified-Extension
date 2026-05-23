@@ -7,8 +7,6 @@
 		{ label: 'シリアル', href: '/serial' },
 		{ label: '手動制御', href: '/manual' },
 		{ label: 'コマンド', href: '/commands' },
-		{ label: 'キーコンフィグ', href: '/keyconfig' },
-		{ label: 'Pokemon Home', href: '/pokemonhome' },
 		{ label: '通知', href: '/notification' },
 		{ label: 'その他', href: '/others' },
 	] as const;

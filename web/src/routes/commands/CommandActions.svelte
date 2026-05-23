@@ -116,7 +116,7 @@
 		}
 	}
 
-	// ── Keyboard shortcuts (F5=Start, Shift+F6=Pause, Escape=Stop) ───────────
+	// ── Keyboard shortcuts (F5=Reload, F6=Start, Shift+F6=Pause, Escape=Stop) ─
 	function handleKeyDown(event: KeyboardEvent) {
 		const target = event.target as HTMLElement;
 		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -124,6 +124,12 @@
 		}
 
 		if (event.key === 'F5' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+			event.preventDefault();
+			handleReload();
+			return;
+		}
+
+		if (event.key === 'F6' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.preventDefault();
 			handleStart();
 			return;
@@ -245,7 +251,7 @@
 		<button
 			class="tk-btn tk-btn-reload"
 			onclick={handleReload}
-			title="再読み込み"
+			title="再読み込み (F5)"
 		>
 			⟳ 再読み込み
 		</button>

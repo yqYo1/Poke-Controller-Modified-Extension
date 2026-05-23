@@ -5,6 +5,7 @@
 	import CameraPreview from '$lib/components/CameraPreview.svelte';
 	import CaptureRegion from '$lib/components/CaptureRegion.svelte';
 	import { api } from '$lib/api/client';
+	import * as uiStore from '$lib/stores/ui.svelte';
 
 	// ── Tab state ──────────────────────────────────────────────────────────
 	let activeTab = $state('camera');
@@ -351,7 +352,7 @@
 				<div class="tk-labelframe tk-inset">
 					<div class="tk-labelframe-label">Size Adjuster</div>
 					<div class="tk-labelframe-content">
-						<input type="range" min="0" max="100" class="tk-range" value="50" />
+						<input type="range" min="0" max="100" class="tk-range" value={uiStore.splitRatio} oninput={(e) => uiStore.setSplitRatio(Number((e.target as HTMLInputElement).value))} />
 					</div>
 				</div>
 
@@ -359,16 +360,16 @@
 				<div class="tk-labelframe tk-inset">
 					<div class="tk-labelframe-label">Standard Output Destination</div>
 					<div class="tk-labelframe-content">
-						<div class="form-row">
-							<label class="tk-radio-label">
-								<input type="radio" name="stdout" class="tk-radio" checked />
-								<span>Output#1</span>
-							</label>
-							<label class="tk-radio-label">
-								<input type="radio" name="stdout" class="tk-radio" />
-								<span>Output#2</span>
-							</label>
-						</div>
+					<div class="form-row">
+						<label class="tk-radio-label">
+							<input type="radio" name="stdout" class="tk-radio" value={1} checked={uiStore.stdoutDestination === 1} onchange={() => uiStore.setStdoutDestination(1)} />
+							<span>Output#1</span>
+						</label>
+						<label class="tk-radio-label">
+							<input type="radio" name="stdout" class="tk-radio" value={2} checked={uiStore.stdoutDestination === 2} onchange={() => uiStore.setStdoutDestination(2)} />
+							<span>Output#2</span>
+						</label>
+					</div>
 					</div>
 				</div>
 
@@ -387,15 +388,15 @@
 				<div class="tk-labelframe tk-inset">
 					<div class="tk-labelframe-label">Widget Mode</div>
 					<div class="tk-labelframe-content">
-						<select class="tk-select tk-select-wide">
-							<option>ALL (default)</option>
-							<option>Output#1 + Output#2</option>
-							<option>Output#1 + Software-Controller</option>
-							<option>Output#2 + Software-Controller</option>
-							<option>Output#1 Only</option>
-							<option>Output#2 Only</option>
-							<option>Software-Controller Only</option>
-						</select>
+					<select class="tk-select tk-select-wide" value={uiStore.widgetMode} onchange={(e) => uiStore.setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}>
+						<option value={1}>ALL (default)</option>
+						<option value={2}>Output#1 + Output#2</option>
+						<option value={3}>Output#1 + Software-Controller</option>
+						<option value={4}>Output#2 + Software-Controller</option>
+						<option value={5}>Output#1 Only</option>
+						<option value={6}>Output#2 Only</option>
+						<option value={7}>Software-Controller Only</option>
+					</select>
 					</div>
 				</div>
 
@@ -405,11 +406,11 @@
 					<div class="tk-labelframe-content">
 						<div class="form-row">
 							<label class="tk-radio-label">
-								<input type="radio" name="swpos" class="tk-radio" />
+								<input type="radio" name="swpos" class="tk-radio" value="top" checked={uiStore.controllerPosition === 'top'} onchange={() => uiStore.setControllerPosition('top')} />
 								<span>TOP</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="swpos" class="tk-radio" checked />
+								<input type="radio" name="swpos" class="tk-radio" value="bottom" checked={uiStore.controllerPosition === 'bottom'} onchange={() => uiStore.setControllerPosition('bottom')} />
 								<span>BOTTOM</span>
 							</label>
 						</div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SoftwareController from './SoftwareController.svelte';
+	import { currentWidgetConfig, controllerPosition, splitRatio } from '$lib/stores/ui.svelte.ts';
 
 	let output1Lines = $state<string[]>([]);
 	let output2Lines = $state<string[]>([]);
@@ -28,57 +29,79 @@
 </script>
 
 <div class="right-panel">
-	<!-- Output#1 -->
-	<div class="tk-labelframe">
-		<div class="tk-labelframe-label">Output#1</div>
-		<div class="tk-labelframe-content">
-			<div class="output-toolbar">
-				<button class="tk-btn tk-btn-sm" onclick={clearOutput1}>Clear</button>
-			</div>
-			<div
-				bind:this={output1Container}
-				class="output-textarea"
-			>
-				{#if output1Lines.length === 0}
-					<span class="text-gray-500 italic">[output #1]</span>
-				{:else}
-					{#each output1Lines as line (line)}
-						<div class="output-line">{line}</div>
-					{/each}
-				{/if}
+	{#if controllerPosition === 'top' && currentWidgetConfig.showController}
+		<!-- Software Controller (top) -->
+		<div class="tk-labelframe softcon-frame">
+			<div class="tk-labelframe-label">Software-Controller</div>
+			<div class="tk-labelframe-content softcon-content">
+				<SoftwareController />
 			</div>
 		</div>
-	</div>
+	{/if}
 
-	<!-- Output#2 -->
-	<div class="tk-labelframe">
-		<div class="tk-labelframe-label">Output#2</div>
-		<div class="tk-labelframe-content">
-			<div class="output-toolbar">
-				<button class="tk-btn tk-btn-sm" onclick={clearOutput2}>Clear</button>
-			</div>
-			<div
-				bind:this={output2Container}
-				class="output-textarea"
-			>
-				{#if output2Lines.length === 0}
-					<span class="text-gray-500 italic">[output #2]</span>
-				{:else}
-					{#each output2Lines as line (line)}
-						<div class="output-line">{line}</div>
-					{/each}
-				{/if}
+	{#if currentWidgetConfig.showOutput1}
+		<!-- Output#1 -->
+		<div
+			class="tk-labelframe"
+			style="flex: {splitRatio} 1 0%"
+		>
+			<div class="tk-labelframe-label">Output#1</div>
+			<div class="tk-labelframe-content">
+				<div class="output-toolbar">
+					<button class="tk-btn tk-btn-sm" onclick={clearOutput1}>Clear</button>
+				</div>
+				<div
+					bind:this={output1Container}
+					class="output-textarea"
+				>
+					{#if output1Lines.length === 0}
+						<span class="text-gray-500 italic">[output #1]</span>
+					{:else}
+						{#each output1Lines as line (line)}
+							<div class="output-line">{line}</div>
+						{/each}
+					{/if}
+				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 
-	<!-- Software Controller -->
-	<div class="tk-labelframe softcon-frame">
-		<div class="tk-labelframe-label">Software-Controller</div>
-		<div class="tk-labelframe-content softcon-content">
-			<SoftwareController />
+	{#if currentWidgetConfig.showOutput2}
+		<!-- Output#2 -->
+		<div
+			class="tk-labelframe"
+			style="flex: {100 - splitRatio} 1 0%"
+		>
+			<div class="tk-labelframe-label">Output#2</div>
+			<div class="tk-labelframe-content">
+				<div class="output-toolbar">
+					<button class="tk-btn tk-btn-sm" onclick={clearOutput2}>Clear</button>
+				</div>
+				<div
+					bind:this={output2Container}
+					class="output-textarea"
+				>
+					{#if output2Lines.length === 0}
+						<span class="text-gray-500 italic">[output #2]</span>
+					{:else}
+						{#each output2Lines as line (line)}
+							<div class="output-line">{line}</div>
+						{/each}
+					{/if}
+				</div>
+			</div>
 		</div>
-	</div>
+	{/if}
+
+	{#if controllerPosition === 'bottom' && currentWidgetConfig.showController}
+		<!-- Software Controller (bottom) -->
+		<div class="tk-labelframe softcon-frame">
+			<div class="tk-labelframe-label">Software-Controller</div>
+			<div class="tk-labelframe-content softcon-content">
+				<SoftwareController />
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>

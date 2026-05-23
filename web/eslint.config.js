@@ -28,6 +28,21 @@ export default [
 		},
 	},
 	{
+		files: ['**/*.svelte.ts'],
+		languageOptions: {
+			parser: ts.parser,
+			globals: {
+				'$state': 'readonly',
+				'$derived': 'readonly',
+				'$effect': 'readonly',
+				'$props': 'readonly',
+			},
+		},
+		rules: {
+			'prefer-const': 'off',
+		},
+	},
+	{
 		ignores: ['dist/', '.svelte-kit/', 'node_modules/'],
 	},
 ];

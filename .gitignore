@@ -193,8 +193,11 @@ result-*
 !/web/src/lib/
 !/web/src/lib/**/*.ts
 !/web/src/lib/**/*.svelte
+!/web/src/lib/**/*.svelte.ts
 !/web/src/lib/components/
 !/web/src/lib/components/*.svelte
+!/web/src/lib/stores/
+!/web/src/lib/stores/*.svelte.ts
 !/web/src/routes/
 !/web/src/routes/**/*.svelte
 !/web/src/routes/**/*.ts

@@ -4,6 +4,9 @@
 	import TkinterNotebook from '$lib/components/TkinterNotebook.svelte';
 	import CameraPreview from '$lib/components/CameraPreview.svelte';
 	import CaptureRegion from '$lib/components/CaptureRegion.svelte';
+	import SoftwareController from '$lib/components/SoftwareController.svelte';
+	import SoftwareControl from '$lib/components/SoftwareControl.svelte';
+	import HardwareControl from '$lib/components/HardwareControl.svelte';
 	import { api } from '$lib/api/client';
 	import * as uiStore from '$lib/stores/ui.svelte';
 
@@ -197,51 +200,17 @@
 
 {#snippet manualTab()}
 	<div class="tab-content">
-		<!-- Software -->
-		<div class="tk-labelframe">
-			<div class="tk-labelframe-label">Software</div>
-			<div class="tk-labelframe-content">
-				<div class="form-row">
-					<button class="tk-btn">Controller</button>
-				</div>
-				<div class="form-row">
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Use Keyboard</span>
-					</label>
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Use LStick Mouse</span>
-					</label>
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Use RStick Mouse</span>
-					</label>
-				</div>
-			</div>
+		<!-- Software Control (§4.3.1) + Switch Controller Simulator (§4.3.3) -->
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<!-- §4.3.3 Switch Controller Simulator: Full Joy-Con layout -->
+			<SoftwareController />
+
+			<!-- §4.3.1 Software Control: Keyboard + LStick/RStick Mouse checkboxes -->
+			<SoftwareControl />
 		</div>
 
-		<!-- Hardware -->
-		<div class="tk-labelframe">
-			<div class="tk-labelframe-label">Hardware</div>
-			<div class="tk-labelframe-content">
-				<div class="form-row">
-					<span class="form-label">Controller type:</span>
-					<select class="tk-select">
-						<option selected>Pro Controller</option>
-						<option>Xinput</option>
-					</select>
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Use Controller</span>
-					</label>
-					<label class="tk-checkbox-label">
-						<input type="checkbox" class="tk-checkbox" />
-						<span>Record Controller</span>
-					</label>
-				</div>
-			</div>
-		</div>
+		<!-- §4.3.2 Hardware Control: ProController/Xinput radio + Record checkbox -->
+		<HardwareControl />
 	</div>
 {/snippet}
 

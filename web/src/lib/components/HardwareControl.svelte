@@ -2,9 +2,9 @@
 	import { onMount } from 'svelte';
 	import { api, type GamepadInfo } from '$lib/api/client';
 
-	// ── Gamepad type selection ────────────────────────────────────────────
-	const gamepadTypes = ['Pro Controller', 'Xinput', 'DirectInput'] as const;
-	let selectedType = $state<string>('Pro Controller');
+	// ── Controller type radio selection ──────────────────────────────────
+	// SPEC §4.3.2: ProController and Xinput as radio buttons
+	let controllerType = $state<'ProController' | 'Xinput'>('ProController');
 
 	// ── Connection state ──────────────────────────────────────────────────
 	let connected = $state(false);
@@ -24,7 +24,10 @@
 		// Load current controller type
 		api.getControllerType()
 			.then((r) => {
-				selectedType = r.gamepad_type;
+				const t = r.gamepad_type;
+				if (t === 'ProController' || t === 'Xinput') {
+					controllerType = t;
+				}
 			})
 			.catch(console.warn);
 
@@ -69,10 +72,9 @@
 				connected = false;
 				connectionStatus = '未接続';
 			} else {
-				await api.gamepadConnect(selectedType);
+				await api.gamepadConnect(controllerType);
 				connected = true;
-				connectionStatus = `${selectedType} 接続済み`;
-				// Refresh gamepad list after connect
+				connectionStatus = `${controllerType} 接続済み`;
 				await refreshGamepadList();
 			}
 		} catch (e) {
@@ -83,9 +85,10 @@
 		}
 	}
 
-	async function handleTypeChange() {
+	async function handleTypeChange(type: 'ProController' | 'Xinput') {
+		controllerType = type;
 		try {
-			await api.setControllerType(selectedType);
+			await api.setControllerType(type);
 			// If already connected, reconnect with new type
 			if (connected) {
 				await api.gamepadDisconnect();
@@ -130,21 +133,33 @@
 <div class="rounded border border-gray-700 bg-gray-900 p-4">
 	<h3 class="mb-3 text-sm font-medium text-gray-200">ハードウェアコントロール</h3>
 
-	<!-- ── Gamepad type selection ───────────────────────────────────────── -->
+	<!-- ── Controller type radio buttons (SPEC §4.3.2) ─────────────────── -->
 	<div class="mb-3">
 		<label class="mb-1 block text-xs text-gray-400">コントローラータイプ</label>
-		<select
-			value={selectedType}
-			onchange={(e) => {
-				selectedType = (e.target as HTMLSelectElement).value;
-				handleTypeChange();
-			}}
-			class="w-full rounded bg-gray-800 px-2 py-1.5 text-xs text-gray-200"
-		>
-			{#each gamepadTypes as type (type)}
-				<option value={type}>{type}</option>
-			{/each}
-		</select>
+		<div class="flex gap-4 rounded bg-gray-800 px-3 py-2">
+			<label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+				<input
+					type="radio"
+					name="controllerType"
+					value="ProController"
+					checked={controllerType === 'ProController'}
+					onchange={() => handleTypeChange('ProController')}
+					class="accent-blue-500"
+				/>
+				<span>ProController</span>
+			</label>
+			<label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+				<input
+					type="radio"
+					name="controllerType"
+					value="Xinput"
+					checked={controllerType === 'Xinput'}
+					onchange={() => handleTypeChange('Xinput')}
+					class="accent-blue-500"
+				/>
+				<span>Xinput</span>
+			</label>
+		</div>
 	</div>
 
 	<!-- ── Connection status ────────────────────────────────────────────── -->
@@ -199,7 +214,7 @@
 		</div>
 	</div>
 
-	<!-- ── Recording controls ───────────────────────────────────────────── -->
+	<!-- ── Recording controls (SPEC §4.3.2) ─────────────────────────────── -->
 	<div class="mb-3 flex items-center justify-between rounded bg-gray-800 px-3 py-2">
 		<div>
 			<span class="text-xs font-medium text-gray-200">入力記録</span>

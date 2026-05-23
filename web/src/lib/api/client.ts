@@ -8,6 +8,7 @@ export {
 	type FrameMessage,
 	type CommandMessage,
 	type SerialMessage,
+	type SerialDataMessage,
 	type CameraMessage,
 	type WSMessage,
 	type WebSocketEventMap,

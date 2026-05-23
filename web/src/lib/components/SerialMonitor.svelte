@@ -49,8 +49,9 @@
 			connected = msg.connected;
 			if (msg.baudrate !== undefined) baudrate = msg.baudrate;
 			if (msg.port_name !== undefined) portName = msg.port_name;
+		} else if (msg.type === 'serial_data') {
+			addEntry('RX', msg.data);
 		}
-		// Future: handle serial_data messages when available from backend
 	}
 
 	function handleWSConnect() {

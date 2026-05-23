@@ -3,14 +3,43 @@
 	import { uiState, WIDGET_MODES } from '$lib/stores/ui.svelte.ts';
 	import { onMount } from 'svelte';
 	import { wsClient } from '$lib/api/websocket';
-	import type { LogMessage } from '$lib/api/websocket';
+	import type { LogMessage, LogLevel } from '$lib/api/websocket';
 
 	let currentWidgetConfig = $derived(WIDGET_MODES[uiState.widgetMode] ?? WIDGET_MODES[1]);
 
-	let output1Lines = $state<string[]>([]);
-	let output2Lines = $state<string[]>([]);
+	// ─── Structured log entries (preserve level info) ──────────────────────
+	interface OutputEntry {
+		line: string;
+		level: LogLevel | 'log';
+	}
+
+	let output1Entries = $state<OutputEntry[]>([]);
+	let output2Entries = $state<OutputEntry[]>([]);
+
 	let output1Container: HTMLDivElement | undefined = $state();
 	let output2Container: HTMLDivElement | undefined = $state();
+
+	let filter1 = $state<'all' | LogLevel>('all');
+	let filter2 = $state<'all' | LogLevel>('all');
+
+	const filterLevels: { value: 'all' | LogLevel; label: string }[] = [
+		{ value: 'all', label: 'ALL' },
+		{ value: 'debug', label: 'DEBUG' },
+		{ value: 'info', label: 'INFO' },
+		{ value: 'warn', label: 'WARN' },
+		{ value: 'error', label: 'ERROR' },
+	];
+
+	const filtered1 = $derived(
+		filter1 === 'all'
+			? output1Entries
+			: output1Entries.filter((e) => e.level === filter1),
+	);
+	const filtered2 = $derived(
+		filter2 === 'all'
+			? output2Entries
+			: output2Entries.filter((e) => e.level === filter2),
+	);
 
 	$effect(() => {
 		if (output1Container) {
@@ -25,11 +54,25 @@
 	});
 
 	function clearOutput1() {
-		output1Lines = [];
+		output1Entries = [];
 	}
 
 	function clearOutput2() {
-		output2Lines = [];
+		output2Entries = [];
+	}
+
+	async function copyOutput1() {
+		const text = filtered1.map((e) => e.line).join('\n');
+		if (text) {
+			await navigator.clipboard.writeText(text);
+		}
+	}
+
+	async function copyOutput2() {
+		const text = filtered2.map((e) => e.line).join('\n');
+		if (text) {
+			await navigator.clipboard.writeText(text);
+		}
 	}
 
 	function handleClearOutputs(e: Event) {
@@ -50,10 +93,11 @@
 		const handleMessage = (msg: LogMessage) => {
 			if (msg.type === 'log') {
 				const line = `[${msg.timestamp}] [${msg.level}] ${msg.message}`;
+				const entry: OutputEntry = { line, level: msg.level };
 				if (uiState.stdoutDestination === 1) {
-					output1Lines = [...output1Lines, line];
+					output1Entries = [...output1Entries, entry];
 				} else {
-					output2Lines = [...output2Lines, line];
+					output2Entries = [...output2Entries, entry];
 				}
 			}
 		};
@@ -87,17 +131,26 @@
 			<div class="tk-labelframe-label">Output#1</div>
 			<div class="tk-labelframe-content">
 				<div class="output-toolbar">
+					<select
+						bind:value={filter1}
+						class="tk-select tk-select-sm"
+					>
+						{#each filterLevels as fl (fl.value)}
+							<option value={fl.value}>{fl.label}</option>
+						{/each}
+					</select>
+					<button class="tk-btn tk-btn-sm" onclick={copyOutput1}>Copy</button>
 					<button class="tk-btn tk-btn-sm" onclick={clearOutput1}>Clear</button>
 				</div>
 				<div
 					bind:this={output1Container}
 					class="output-textarea"
 				>
-					{#if output1Lines.length === 0}
+					{#if filtered1.length === 0}
 						<span class="text-gray-500 italic">[output #1]</span>
 					{:else}
-						{#each output1Lines as line (line)}
-							<div class="output-line">{line}</div>
+						{#each filtered1 as entry (entry.line)}
+							<div class="output-line">{entry.line}</div>
 						{/each}
 					{/if}
 				</div>
@@ -114,17 +167,26 @@
 			<div class="tk-labelframe-label">Output#2</div>
 			<div class="tk-labelframe-content">
 				<div class="output-toolbar">
+					<select
+						bind:value={filter2}
+						class="tk-select tk-select-sm"
+					>
+						{#each filterLevels as fl (fl.value)}
+							<option value={fl.value}>{fl.label}</option>
+						{/each}
+					</select>
+					<button class="tk-btn tk-btn-sm" onclick={copyOutput2}>Copy</button>
 					<button class="tk-btn tk-btn-sm" onclick={clearOutput2}>Clear</button>
 				</div>
 				<div
 					bind:this={output2Container}
 					class="output-textarea"
 				>
-					{#if output2Lines.length === 0}
+					{#if filtered2.length === 0}
 						<span class="text-gray-500 italic">[output #2]</span>
 					{:else}
-						{#each output2Lines as line (line)}
-							<div class="output-line">{line}</div>
+						{#each filtered2 as entry (entry.line)}
+							<div class="output-line">{entry.line}</div>
 						{/each}
 					{/if}
 				</div>
@@ -250,5 +312,27 @@
 	.tk-btn-sm {
 		font-size: 10px;
 		padding: 0px 6px;
+	}
+
+	.tk-select {
+		font-family: 'Segoe UI', system-ui, sans-serif;
+		font-size: 11px;
+		padding: 1px 4px;
+		border: 1px solid var(--color-border, #475569);
+		border-radius: 2px;
+		background-color: var(--color-bg-tertiary, #334155);
+		color: var(--color-text-primary, #f1f5f9);
+		cursor: pointer;
+		user-select: none;
+		outline: none;
+	}
+
+	.tk-select:hover {
+		border-color: var(--color-accent-hover, #3b82f6);
+	}
+
+	.tk-select-sm {
+		font-size: 10px;
+		padding: 0px 4px;
 	}
 </style>

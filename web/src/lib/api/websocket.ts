@@ -41,6 +41,11 @@ export interface SerialMessage {
 	baudrate?: number;
 }
 
+export interface SerialDataMessage {
+	type: 'serial_data';
+	data: string;
+}
+
 export interface CameraMessage {
 	type: 'camera';
 	opened: boolean;
@@ -64,6 +69,7 @@ export type WSMessage =
 	| FrameMessage
 	| CommandMessage
 	| SerialMessage
+	| SerialDataMessage
 	| CameraMessage
 	| SignalingMessage;
 

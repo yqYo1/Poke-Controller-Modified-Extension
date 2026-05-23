@@ -10,7 +10,6 @@
 	// ── Types ────────────────────────────────────────────────────────────
 	type StickMode = 'left' | 'right';
 	type CaptureFormat = 'png' | 'jpeg';
-	type MouseAction = 'none' | 'stick' | 'colorpicker' | 'rangescreenshot' | 'namedsave';
 
 	// ── Reactive state ───────────────────────────────────────────────────
 	let cameraOpen = $state(false);
@@ -19,8 +18,6 @@
 	let captureFormat = $state<CaptureFormat>('png');
 	let previewWidth = $state(640);
 	let previewHeight = $state(360);
-
-	// Mouse operation mode
 	let stickMode = $state<StickMode>('left');
 	let lStickEnabled = $state(true);
 
@@ -29,33 +26,42 @@
 	let showValue = $state(false);
 	let showGuide = $state(false);
 
-	// Canvas overlay state
-	let canvasEl = $state<HTMLCanvasElement | null>(null);
-
-	// Drag state (individual reactive vars to avoid complex object typing issues)
-	let dragActive = $state(false);
-	let dragStartX = $state(0);
-	let dragStartY = $state(0);
-	let dragCurX = $state(0);
-	let dragCurY = $state(0);
-	let dragAction = $state<MouseAction>('none');
-
-	let colorPickResult = $state<string | null>(null);
 	let statusMessage = $state<string | null>(null);
+	let colorPickResult = $state<string | null>(null);
 
 	// ── Lifecycle ────────────────────────────────────────────────────────
 	onMount(() => {
 		const handler = (e: Event) => handleCameraState(e as CustomEvent<{ opened: boolean }>);
+		const colorHandler = (e: Event) => handleColorPick(e as CustomEvent);
+		const captureHandler = (e: Event) => handleCaptureEvent(e as CustomEvent);
 		window.addEventListener('camera-state', handler);
+		window.addEventListener('camera-colorpick', colorHandler);
+		window.addEventListener('camera-capture', captureHandler);
 		loadMouseStickSettings();
 		return () => {
 			window.removeEventListener('camera-state', handler);
+			window.removeEventListener('camera-colorpick', colorHandler);
+			window.removeEventListener('camera-capture', captureHandler);
 		};
 	});
 
 	// ── Handlers ─────────────────────────────────────────────────────────
 	function handleCameraState(e: CustomEvent<{ opened: boolean }>) {
 		cameraOpen = e.detail.opened;
+	}
+
+	function handleColorPick(e: CustomEvent<{ hex: string | null; rgb: string | null; x: number; y: number }>) {
+		const d = e.detail;
+		if (d.hex && d.rgb) {
+			colorPickResult = `${d.hex} / ${d.rgb}`;
+			showStatus(`Color at (${d.x}, ${d.y}): ${d.hex}`, 5000);
+		} else {
+			showStatus(`Color picker: position (${d.x}, ${d.y})`, 3000);
+		}
+	}
+
+	function handleCaptureEvent(e: CustomEvent<{ filename: string; type: string }>) {
+		showStatus(`Captured: ${e.detail.filename} (${e.detail.type})`);
 	}
 
 	async function loadMouseStickSettings() {
@@ -100,193 +106,6 @@
 		}
 	}
 
-	// ── Canvas operations ────────────────────────────────────────────────
-	function getCanvasPos(e: MouseEvent): { x: number; y: number } {
-		if (!canvasEl) return { x: 0, y: 0 };
-		const rect = canvasEl.getBoundingClientRect();
-		return {
-			x: (e.clientX - rect.left) * (canvasEl.width / rect.width),
-			y: (e.clientY - rect.top) * (canvasEl.height / rect.height),
-		};
-	}
-
-	function resetDrag() {
-		dragActive = false;
-		dragStartX = 0;
-		dragStartY = 0;
-		dragCurX = 0;
-		dragCurY = 0;
-		dragAction = 'none';
-	}
-
-	function handleCanvasMouseDown(e: MouseEvent) {
-		if (!canvasEl || !cameraOpen) return;
-
-		const pos = getCanvasPos(e);
-
-		// Determine action based on modifier keys
-		if (e.ctrlKey && e.shiftKey) {
-			dragAction = 'rangescreenshot';
-		} else if (e.ctrlKey && e.altKey) {
-			dragAction = 'namedsave';
-		} else if (e.ctrlKey) {
-			// Color picker — single click, no drag
-			pickColor(pos.x, pos.y);
-			return;
-		} else {
-			dragAction = 'stick';
-			if (!lStickEnabled) return;
-		}
-
-		dragActive = true;
-		dragStartX = pos.x;
-		dragStartY = pos.y;
-		dragCurX = pos.x;
-		dragCurY = pos.y;
-
-		if (dragAction === 'stick') {
-			// Send initial center position
-			api.sendInput('stick', { stick: stickMode, x: 128, y: 128 }).catch(() => {});
-		}
-
-		drawOverlay();
-	}
-
-	function handleCanvasMouseMove(e: MouseEvent) {
-		if (!dragActive || !canvasEl) return;
-		const pos = getCanvasPos(e);
-		dragCurX = pos.x;
-		dragCurY = pos.y;
-
-		if (dragAction === 'stick') {
-			// Calculate stick values based on drag offset from start
-			const dx = (pos.x - dragStartX) / (canvasEl.width / 2);
-			const dy = (pos.y - dragStartY) / (canvasEl.height / 2);
-			const stickX = Math.round(Math.min(255, Math.max(0, 128 + dx * 127)));
-			const stickY = Math.round(Math.min(255, Math.max(0, 128 + dy * 127)));
-			api.sendInput('stick', { stick: stickMode, x: stickX, y: stickY }).catch(() => {});
-		}
-
-		drawOverlay();
-	}
-
-	function handleCanvasMouseUp() {
-		if (!dragActive) return;
-
-		if (dragAction === 'rangescreenshot' || dragAction === 'namedsave') {
-			const w = Math.abs(dragCurX - dragStartX);
-			const h = Math.abs(dragCurY - dragStartY);
-			if (w > 10 && h > 10) {
-				if (dragAction === 'namedsave') {
-					const name = prompt('Save capture as:', 'capture');
-					if (name) {
-						api.captureCamera(`${name}.${captureFormat}`).catch(console.warn);
-						showStatus(`Named capture: ${name}.${captureFormat}`);
-					}
-				} else {
-					const filename = `capture_region_${Date.now()}.${captureFormat}`;
-					api.captureCamera(filename).catch(console.warn);
-					showStatus(`Region captured: ${filename}`);
-				}
-			}
-		}
-
-		// Reset stick to center on release
-		if (dragAction === 'stick') {
-			api.sendInput('stick', { stick: stickMode, x: 128, y: 128 }).catch(() => {});
-		}
-
-		resetDrag();
-		drawOverlay();
-	}
-
-	// ── Color picker ─────────────────────────────────────────────────────
-	function pickColor(x: number, y: number) {
-		if (!canvasEl) return;
-		const ctx = canvasEl.getContext('2d');
-		if (!ctx) return;
-		try {
-			const pixel = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
-			const hex = `#${pixel[0].toString(16).padStart(2, '0')}${pixel[1].toString(16).padStart(2, '0')}${pixel[2].toString(16).padStart(2, '0')}`;
-			const rgb = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
-			colorPickResult = `${hex} / ${rgb}`;
-			showStatus(`Color at (${Math.round(x)}, ${Math.round(y)}): ${hex}`, 5000);
-		} catch {
-			colorPickResult = 'Cross-origin canvas — color picker unavailable';
-		}
-		drawOverlay();
-	}
-
-	// ── Canvas overlay drawing ───────────────────────────────────────────
-	function drawOverlay() {
-		if (!canvasEl) return;
-		const ctx = canvasEl.getContext('2d');
-		if (!ctx) return;
-
-		ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-		if (!dragActive) return;
-
-		const sx = dragStartX;
-		const sy = dragStartY;
-		const cx = dragCurX;
-		const cy = dragCurY;
-
-		if (dragAction === 'stick') {
-			// Draw stick indicator at current position
-			ctx.beginPath();
-			ctx.arc(cx, cy, 16, 0, Math.PI * 2);
-			const color = stickMode === 'left' ? 'rgba(86, 204, 242, 0.35)' : 'rgba(233, 81, 78, 0.35)';
-			const stroke = stickMode === 'left' ? '#56CCF2' : '#E9514E';
-			ctx.fillStyle = color;
-			ctx.fill();
-			ctx.strokeStyle = stroke;
-			ctx.lineWidth = 2;
-			ctx.stroke();
-
-			// Crosshair
-			ctx.beginPath();
-			ctx.moveTo(cx - 10, cy);
-			ctx.lineTo(cx + 10, cy);
-			ctx.moveTo(cx, cy - 10);
-			ctx.lineTo(cx, cy + 10);
-			ctx.strokeStyle = '#fff';
-			ctx.lineWidth = 1.5;
-			ctx.stroke();
-
-			// Label
-			ctx.fillStyle = 'rgba(255,255,255,0.85)';
-			ctx.font = '11px sans-serif';
-			ctx.textAlign = 'left';
-			ctx.fillText(stickMode === 'left' ? 'LSTICK' : 'RSTICK', cx + 20, cy + 4);
-		} else {
-			const x = Math.min(sx, cx);
-			const y = Math.min(sy, cy);
-			const w = Math.abs(cx - sx);
-			const h = Math.abs(cy - sy);
-			if (w < 2 || h < 2) return;
-
-			// Dim outside region
-			ctx.fillStyle = 'rgba(0,0,0,0.35)';
-			ctx.fillRect(0, 0, canvasEl.width, y);
-			ctx.fillRect(0, y, x, h);
-			ctx.fillRect(x + w, y, canvasEl.width - x - w, h);
-			ctx.fillRect(0, y + h, canvasEl.width, canvasEl.height - y - h);
-
-			const borderColor = dragAction === 'namedsave' ? '#22c55e' : '#3b82f6';
-			ctx.strokeStyle = borderColor;
-			ctx.lineWidth = 2;
-			ctx.strokeRect(x, y, w, h);
-
-			// Dimension label
-			if (w > 50 && h > 18) {
-				ctx.fillStyle = dragAction === 'namedsave' ? 'rgba(34,197,94,0.9)' : 'rgba(59,130,246,0.9)';
-				ctx.font = '11px monospace';
-				ctx.textAlign = 'left';
-				ctx.fillText(`${Math.round(w)}\u00D7${Math.round(h)}`, x + 4, y + 14);
-			}
-		}
-	}
-
 	// ── Format change handler ────────────────────────────────────────────
 	function handleFormatChange() {
 		const base = captureName.replace(/\.(png|jpe?g)$/i, '');
@@ -305,24 +124,12 @@
 	<div class="grid grid-cols-1 gap-2 lg:grid-cols-5">
 		<!-- ── LEFT: Video Preview ──────────────────────────────────── -->
 		<div class="space-y-2 lg:col-span-3">
-			<div class="relative overflow-hidden rounded border border-gray-700 bg-gray-900">
-				<CameraPreview height={previewHeight} />
-
-				<!-- Transparent Canvas overlay for mouse ops -->
-				<canvas
-					bind:this={canvasEl}
-					width={previewWidth}
-					height={previewHeight}
-					onmousedown={handleCanvasMouseDown}
-					onmousemove={handleCanvasMouseMove}
-					onmouseup={handleCanvasMouseUp}
-					onmouseleave={handleCanvasMouseUp}
-					class="absolute inset-0"
-					class:pointer-events-none={!cameraOpen}
-					role="img"
-					aria-label="Camera mouse operations"
-				/>
-			</div>
+			<CameraPreview
+				height={previewHeight}
+				{previewWidth}
+				{stickMode}
+				{lStickEnabled}
+			/>
 
 			<!-- Mouse operation bar -->
 			<div class="rounded border border-gray-700 bg-gray-900 px-2 py-1.5">
@@ -339,7 +146,7 @@
 						</button>
 					</div>
 					<span class="text-[9px] text-gray-600">
-						Drag=Stick | Ctrl+Click=Color | Ctrl+Shift+Click=Region SS | Ctrl+Alt+Click=Named Save
+						Drag=Stick | Ctrl+Click=Color | Ctrl+Shift+Drag=Region SS | Ctrl+Alt+Drag=Named Save
 					</span>
 				</div>
 				{#if colorPickResult}
@@ -422,7 +229,5 @@
 </div>
 
 <style>
-	canvas.pointer-events-none {
-		pointer-events: none;
-	}
+	/* No page-level canvas styles needed anymore — CameraPreview owns the overlay */
 </style>

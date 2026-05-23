@@ -13,13 +13,13 @@
 
 	// ── Widget mode combobox options ─────────────────────────────────────────
 	const widgetModeOptions = [
-		{ value: 1, label: 'ALL (default)' },
-		{ value: 2, label: 'Output#1 + Output#2' },
-		{ value: 3, label: 'Output#1 + Software-Controller' },
-		{ value: 4, label: 'Output#2 + Software-Controller' },
-		{ value: 5, label: 'Output#1 Only' },
-		{ value: 6, label: 'Output#2 Only' },
-		{ value: 7, label: 'Software-Controller Only' },
+		{ value: 1, label: 'Full panel' },
+		{ value: 2, label: 'Single output' },
+		{ value: 3, label: 'Single output (swapped)' },
+		{ value: 4, label: 'Outputs only' },
+		{ value: 5, label: 'Controller only' },
+		{ value: 6, label: 'Output #1 only' },
+		{ value: 7, label: 'Output #2 only' },
 	];
 
 	// ── Dialogue button position options ─────────────────────────────────────

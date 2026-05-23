@@ -380,13 +380,13 @@
 					<div class="tk-labelframe-label">Widget Mode</div>
 					<div class="tk-labelframe-content">
 					<select class="tk-select tk-select-wide" value={uiState.widgetMode} onchange={(e) => setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}>
-						<option value={1}>ALL (default)</option>
-						<option value={2}>Output#1 + Output#2</option>
-						<option value={3}>Output#1 + Software-Controller</option>
-						<option value={4}>Output#2 + Software-Controller</option>
-						<option value={5}>Output#1 Only</option>
-						<option value={6}>Output#2 Only</option>
-						<option value={7}>Software-Controller Only</option>
+						<option value={1}>Full panel</option>
+						<option value={2}>Single output</option>
+						<option value={3}>Single output (swapped)</option>
+						<option value={4}>Outputs only</option>
+						<option value={5}>Controller only</option>
+						<option value={6}>Output #1 only</option>
+						<option value={7}>Output #2 only</option>
 					</select>
 					</div>
 				</div>

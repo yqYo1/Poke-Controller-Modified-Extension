@@ -1,6 +1,9 @@
 <script lang="ts">
 	import SoftwareController from './SoftwareController.svelte';
 	import { uiState, WIDGET_MODES } from '$lib/stores/ui.svelte.ts';
+	import { onMount } from 'svelte';
+	import { wsClient } from '$lib/api/websocket';
+	import type { LogMessage } from '$lib/api/websocket';
 
 	let currentWidgetConfig = $derived(WIDGET_MODES[uiState.widgetMode] ?? WIDGET_MODES[1]);
 
@@ -28,6 +31,40 @@
 	function clearOutput2() {
 		output2Lines = [];
 	}
+
+	function handleClearOutputs(e: Event) {
+		const detail = (e as CustomEvent).detail;
+		if (detail?.panel === 1) {
+			clearOutput1();
+		} else if (detail?.panel === 2) {
+			clearOutput2();
+		} else {
+			clearOutput1();
+			clearOutput2();
+		}
+	}
+
+	onMount(() => {
+		window.addEventListener('clear-outputs', handleClearOutputs);
+
+		const handleMessage = (msg: LogMessage) => {
+			if (msg.type === 'log') {
+				const line = `[${msg.timestamp}] [${msg.level}] ${msg.message}`;
+				if (uiState.stdoutDestination === 1) {
+					output1Lines = [...output1Lines, line];
+				} else {
+					output2Lines = [...output2Lines, line];
+				}
+			}
+		};
+
+		wsClient.on('message', handleMessage);
+
+		return () => {
+			window.removeEventListener('clear-outputs', handleClearOutputs);
+			wsClient.off('message', handleMessage);
+		};
+	});
 </script>
 
 <div class="right-panel">

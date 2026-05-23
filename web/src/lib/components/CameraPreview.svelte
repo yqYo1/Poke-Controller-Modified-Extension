@@ -129,6 +129,7 @@
 				console.warn('Failed to close camera:', e);
 			}
 			cameraOpen = false;
+			dispatchCameraState(false);
 		} else {
 			try {
 				await api.openCamera({
@@ -138,11 +139,16 @@
 				});
 				cameraOpen = true;
 				connectVideo();
+				dispatchCameraState(true);
 			} catch (e) {
 				error = `Failed to open camera: ${e instanceof Error ? e.message : String(e)}`;
 				cameraOpen = false;
 			}
 		}
+	}
+
+	function dispatchCameraState(opened: boolean) {
+		window.dispatchEvent(new CustomEvent('camera-state', { detail: { opened } }));
 	}
 </script>
 

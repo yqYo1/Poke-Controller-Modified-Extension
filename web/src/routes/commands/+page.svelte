@@ -1,41 +1,136 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
-	import OutputPanel from '$lib/components/OutputPanel.svelte';
-	import LogPanel from '$lib/components/LogPanel.svelte';
 	import PythonCommandList from './PythonCommandList.svelte';
 	import McuCommandList from './McuCommandList.svelte';
 	import ShortcutButtons from './ShortcutButtons.svelte';
 	import CommandActions from './CommandActions.svelte';
 
-	let selectedCommand = $state('');
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	let running = $state(false);
+	// ── Sub-tab state ────────────────────────────────────────────────────────
+	type SubTab = 'python' | 'mcu' | 'shortcut';
+	let activeSubTab = $state<SubTab>('python');
 
-	onMount(() => {
-		api.getActiveCommand().then((r) => {
-			running = r.running;
-		}).catch(() => {});
-	});
+	// ── Shared state ─────────────────────────────────────────────────────────
+	let selectedCommand = $state('');
 
 	function handleSelectCommand(name: string) {
 		selectedCommand = name;
 		api.loadCommand(name).catch(console.warn);
 	}
+
+	function handleTriggerShortcut(slotIndex: number) {
+		// Load the command assigned to this shortcut slot from localStorage
+		try {
+			const raw = localStorage.getItem('pokecon-shortcuts');
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				if (Array.isArray(parsed) && parsed.length === 10) {
+					const cmd = parsed[slotIndex];
+					if (typeof cmd === 'string' && cmd) {
+						selectedCommand = cmd;
+						api.loadCommand(cmd).catch(console.warn);
+						api.startCommand(cmd).catch(console.warn);
+					}
+				}
+			}
+		} catch {
+			// ignore
+		}
+	}
+
+	// ── Keyboard shortcuts for execution control ─────────────────────────────
+	function handleKeyDown(event: KeyboardEvent) {
+		const target = event.target as HTMLElement;
+		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+			return;
+		}
+
+		// F1-F10 handled in ShortcutButtons
+
+		// Escape: Stop
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			api.stopCommand().catch(console.warn);
+			return;
+		}
+
+		// F5: Start
+		if (event.key === 'F5' && !event.shiftKey) {
+			event.preventDefault();
+			if (selectedCommand) {
+				api.startCommand(selectedCommand).catch(console.warn);
+			}
+			return;
+		}
+
+		// Shift+F6: Pause
+		if (event.key === 'F6' && event.shiftKey) {
+			event.preventDefault();
+			api.stopCommand().catch(console.warn);
+			return;
+		}
+	}
+
+	onMount(() => {
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	});
 </script>
 
-<div class="space-y-4">
-	<h2 class="text-lg font-bold">コマンド</h2>
-
-	<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-		<PythonCommandList onSelect={handleSelectCommand} />
-		<McuCommandList onSelect={handleSelectCommand} />
+<div class="tab-content">
+	<!-- §4.4.1 Sub-tab Structure: 3 internal tabs -->
+	<div class="tk-inner-notebook">
+		<div class="tk-notebook-tabs">
+			<button
+				class="tk-notebook-tab"
+				class:active={activeSubTab === 'python'}
+				onclick={() => (activeSubTab = 'python')}
+			>
+				Python Command
+			</button>
+			<button
+				class="tk-notebook-tab"
+				class:active={activeSubTab === 'mcu'}
+				onclick={() => (activeSubTab = 'mcu')}
+			>
+				Mcu Command
+			</button>
+			<button
+				class="tk-notebook-tab"
+				class:active={activeSubTab === 'shortcut'}
+				onclick={() => (activeSubTab = 'shortcut')}
+			>
+				Shortcut
+			</button>
+		</div>
+		<div class="tk-notebook-content">
+			{#if activeSubTab === 'python'}
+				<!-- §4.4.2 Python Command List -->
+				<PythonCommandList onSelect={handleSelectCommand} />
+			{:else if activeSubTab === 'mcu'}
+				<!-- §4.4.2 MCU Command List -->
+				<McuCommandList onSelect={handleSelectCommand} />
+			{:else if activeSubTab === 'shortcut'}
+				<!-- §4.4.3 Shortcut Buttons (10 buttons) -->
+				<ShortcutButtons
+					bind:selectedCommand
+					onTriggerShortcut={handleTriggerShortcut}
+				/>
+			{/if}
+		</div>
 	</div>
 
-	<ShortcutButtons />
-
-	<CommandActions bind:selectedCommand />
-
-	<OutputPanel title="コマンド出力" />
-	<LogPanel />
+	<!-- §4.4.4 Execution Control -->
+	<div class="mt-2">
+		<CommandActions bind:selectedCommand />
+	</div>
 </div>
+
+<style>
+	.tab-content {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 2px;
+	}
+</style>

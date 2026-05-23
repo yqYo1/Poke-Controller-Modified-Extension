@@ -7,12 +7,45 @@
 	import SoftwareController from '$lib/components/SoftwareController.svelte';
 	import SoftwareControl from '$lib/components/SoftwareControl.svelte';
 	import HardwareControl from '$lib/components/HardwareControl.svelte';
+	import PythonCommandList from './commands/PythonCommandList.svelte';
+	import McuCommandList from './commands/McuCommandList.svelte';
+	import ShortcutButtons from './commands/ShortcutButtons.svelte';
+	import CommandActions from './commands/CommandActions.svelte';
 	import { api } from '$lib/api/client';
 	import * as uiStore from '$lib/stores/ui.svelte';
 
 	// ── Tab state ──────────────────────────────────────────────────────────
 	let activeTab = $state('camera');
 	let showRegionSelector = $state(false);
+
+	// ── Commands sub-tab state ──────────────────────────────────────────────
+	type SubTab = 'python' | 'mcu' | 'shortcut';
+	let activeSubTab = $state<SubTab>('python');
+	let selectedCommand = $state('');
+
+	function handleSelectCommand(name: string) {
+		selectedCommand = name;
+		api.loadCommand(name).catch(console.warn);
+	}
+
+	function handleTriggerShortcut(slotIndex: number) {
+		try {
+			const raw = localStorage.getItem('pokecon-shortcuts');
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				if (Array.isArray(parsed) && parsed.length === 10) {
+					const cmd = parsed[slotIndex];
+					if (typeof cmd === 'string' && cmd) {
+						selectedCommand = cmd;
+						api.loadCommand(cmd).catch(console.warn);
+						api.startCommand(cmd).catch(console.warn);
+					}
+				}
+			}
+		} catch {
+			// ignore
+		}
+	}
 
 	// ── Application title ──────────────────────────────────────────────────
 	const appName = 'Poke-Controller Modified Extension';
@@ -216,59 +249,48 @@
 
 {#snippet commandsTab()}
 	<div class="tab-content">
-		<!-- Command selector inner notebook -->
+		<!-- Command selector inner notebook with 3 sub-tabs -->
 		<div class="tk-inner-notebook">
 			<div class="tk-notebook-tabs">
-				<button class="tk-notebook-tab active">Python Command</button>
-				<button class="tk-notebook-tab">Mcu Command</button>
-				<button class="tk-notebook-tab">Shortcut</button>
+				<button
+					class="tk-notebook-tab"
+					class:active={activeSubTab === 'python'}
+					onclick={() => (activeSubTab = 'python')}
+				>
+					Python Command
+				</button>
+				<button
+					class="tk-notebook-tab"
+					class:active={activeSubTab === 'mcu'}
+					onclick={() => (activeSubTab = 'mcu')}
+				>
+					Mcu Command
+				</button>
+				<button
+					class="tk-notebook-tab"
+					class:active={activeSubTab === 'shortcut'}
+					onclick={() => (activeSubTab = 'shortcut')}
+				>
+					Shortcut
+				</button>
 			</div>
 			<div class="tk-notebook-content">
-				<!-- Python Command tab -->
-				<div class="form-row">
-					<span class="form-label">Filter:</span>
-					<select class="tk-select">
-						<option>-</option>
-					</select>
-				</div>
-				<div class="form-row">
-					<span class="form-label">Command:</span>
-					<select class="tk-select tk-select-wide">
-						<option value="">(Select command)</option>
-					</select>
-				</div>
-
-				<!-- Shortcut buttons (10 buttons in 2 rows of 5) -->
-				<div class="shortcut-grid">
-					<div class="shortcut-row">
-						<button class="tk-btn tk-btn-shortcut">Shortcut(1)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(2)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(3)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(4)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(5)</button>
-					</div>
-					<div class="shortcut-row">
-						<button class="tk-btn tk-btn-shortcut">Shortcut(6)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(7)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(8)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(9)</button>
-						<button class="tk-btn tk-btn-shortcut">Shortcut(10)</button>
-					</div>
-				</div>
+				{#if activeSubTab === 'python'}
+					<PythonCommandList onSelect={handleSelectCommand} />
+				{:else if activeSubTab === 'mcu'}
+					<McuCommandList onSelect={handleSelectCommand} />
+				{:else if activeSubTab === 'shortcut'}
+					<ShortcutButtons
+						bind:selectedCommand
+						onTriggerShortcut={handleTriggerShortcut}
+					/>
+				{/if}
 			</div>
 		</div>
 
-		<!-- Action commands -->
-		<div class="action-commands">
-			<div class="form-row">
-				<span class="form-label">Set Shortcut:</span>
-				<input type="text" class="tk-input tk-input-narrow" placeholder="(select)" />
-				<button class="tk-btn">Set</button>
-				<span class="tk-separator-v"></span>
-				<button class="tk-btn">Reload</button>
-				<button class="tk-btn tk-btn-start">Start</button>
-				<button class="tk-btn">Pause</button>
-			</div>
+		<!-- Execution Control -->
+		<div class="mt-2">
+			<CommandActions bind:selectedCommand />
 		</div>
 	</div>
 {/snippet}
@@ -724,21 +746,4 @@
 		gap: 3px;
 	}
 
-	/* ── Shortcut buttons ───────────────────────────────────────────────────── */
-	:global(.shortcut-grid) {
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		padding: 4px 0;
-	}
-
-	:global(.shortcut-row) {
-		display: flex;
-		gap: 4px;
-	}
-
-	/* ── Action commands ────────────────────────────────────────────────────── */
-	:global(.action-commands) {
-		padding: 4px 0;
-	}
 </style>

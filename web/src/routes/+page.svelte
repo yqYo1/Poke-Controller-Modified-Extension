@@ -12,7 +12,7 @@
 	import ShortcutButtons from './commands/ShortcutButtons.svelte';
 	import CommandActions from './commands/CommandActions.svelte';
 	import { api } from '$lib/api/client';
-	import * as uiStore from '$lib/stores/ui.svelte';
+	import { uiState, setWidgetMode, setSplitRatio, setStdoutDestination, setControllerPosition, setDialogueButtonPosition } from '$lib/stores/ui.svelte';
 
 	// ── Tab state ──────────────────────────────────────────────────────────
 	let activeTab = $state('camera');
@@ -343,7 +343,7 @@
 				<div class="tk-labelframe tk-inset">
 					<div class="tk-labelframe-label">Size Adjuster</div>
 					<div class="tk-labelframe-content">
-						<input type="range" min="0" max="100" class="tk-range" value={uiStore.splitRatio} oninput={(e) => uiStore.setSplitRatio(Number((e.target as HTMLInputElement).value))} />
+						<input type="range" min="0" max="100" class="tk-range" value={uiState.splitRatio} oninput={(e) => setSplitRatio(Number((e.target as HTMLInputElement).value))} />
 					</div>
 				</div>
 
@@ -353,11 +353,11 @@
 					<div class="tk-labelframe-content">
 					<div class="form-row">
 						<label class="tk-radio-label">
-							<input type="radio" name="stdout" class="tk-radio" value={1} checked={uiStore.stdoutDestination === 1} onchange={() => uiStore.setStdoutDestination(1)} />
+							<input type="radio" name="stdout" class="tk-radio" value={1} checked={uiState.stdoutDestination === 1} onchange={() => setStdoutDestination(1)} />
 							<span>Output#1</span>
 						</label>
 						<label class="tk-radio-label">
-							<input type="radio" name="stdout" class="tk-radio" value={2} checked={uiStore.stdoutDestination === 2} onchange={() => uiStore.setStdoutDestination(2)} />
+							<input type="radio" name="stdout" class="tk-radio" value={2} checked={uiState.stdoutDestination === 2} onchange={() => setStdoutDestination(2)} />
 							<span>Output#2</span>
 						</label>
 					</div>
@@ -379,7 +379,7 @@
 				<div class="tk-labelframe tk-inset">
 					<div class="tk-labelframe-label">Widget Mode</div>
 					<div class="tk-labelframe-content">
-					<select class="tk-select tk-select-wide" value={uiStore.widgetMode} onchange={(e) => uiStore.setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}>
+					<select class="tk-select tk-select-wide" value={uiState.widgetMode} onchange={(e) => setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}>
 						<option value={1}>ALL (default)</option>
 						<option value={2}>Output#1 + Output#2</option>
 						<option value={3}>Output#1 + Software-Controller</option>
@@ -397,11 +397,11 @@
 					<div class="tk-labelframe-content">
 						<div class="form-row">
 							<label class="tk-radio-label">
-								<input type="radio" name="swpos" class="tk-radio" value="top" checked={uiStore.controllerPosition === 'top'} onchange={() => uiStore.setControllerPosition('top')} />
+								<input type="radio" name="swpos" class="tk-radio" value="top" checked={uiState.controllerPosition === 'top'} onchange={() => setControllerPosition('top')} />
 								<span>TOP</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="swpos" class="tk-radio" value="bottom" checked={uiStore.controllerPosition === 'bottom'} onchange={() => uiStore.setControllerPosition('bottom')} />
+								<input type="radio" name="swpos" class="tk-radio" value="bottom" checked={uiState.controllerPosition === 'bottom'} onchange={() => setControllerPosition('bottom')} />
 								<span>BOTTOM</span>
 							</label>
 						</div>
@@ -414,15 +414,15 @@
 					<div class="tk-labelframe-content">
 						<div class="form-row">
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" value="top" checked={uiStore.dialogueButtonPosition === 'top'} onchange={() => uiStore.setDialogueButtonPosition('top')} />
+								<input type="radio" name="dlgpos" class="tk-radio" value="top" checked={uiState.dialogueButtonPosition === 'top'} onchange={() => setDialogueButtonPosition('top')} />
 								<span>TOP</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" value="bottom" checked={uiStore.dialogueButtonPosition === 'bottom'} onchange={() => uiStore.setDialogueButtonPosition('bottom')} />
+								<input type="radio" name="dlgpos" class="tk-radio" value="bottom" checked={uiState.dialogueButtonPosition === 'bottom'} onchange={() => setDialogueButtonPosition('bottom')} />
 								<span>BOTTOM</span>
 							</label>
 							<label class="tk-radio-label">
-								<input type="radio" name="dlgpos" class="tk-radio" value="both" checked={uiStore.dialogueButtonPosition === 'both'} onchange={() => uiStore.setDialogueButtonPosition('both')} />
+								<input type="radio" name="dlgpos" class="tk-radio" value="both" checked={uiState.dialogueButtonPosition === 'both'} onchange={() => setDialogueButtonPosition('both')} />
 								<span>BOTH</span>
 							</label>
 						</div>

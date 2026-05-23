@@ -36,6 +36,9 @@ export type ControllerPosition = 'top' | 'bottom';
 /** Stdout log destination panel. */
 export type StdoutDestination = 1 | 2;
 
+/** Dialogue button position (TOP / BOTTOM / BOTH). */
+export type DialogueButtonPos = 'top' | 'bottom' | 'both';
+
 // ── Widget mode definitions (SPECIFICATION.md §3) ──────────────────────────
 
 /**
@@ -77,13 +80,14 @@ export const WIDGET_MODE_LIST: WidgetModeConfig[] = [
 /**
  * Internal reactive state container.
  *
- * We use a single $state object whose properties are *mutated* (never
- * reassigned on the container itself).  This avoids Svelte 5's
- * `state_invalid_export` error which fires when an exported `let` + $state
- * variable is reassigned.
+ * We use a single `$state` object whose properties are *mutated* (never
+ * reassigned on the container itself).  The mutated object is exported as
+ * `uiState` so consumers read its properties reactively inside Svelte
+ * component templates or `$derived` expressions.
  *
- * Each public-facing field below is re-exported as a *read-only*
- * `$derived` value so consumers keep the same `import { ... }` pattern.
+ * We avoid exporting `$derived()` values from this module because Svelte 5
+ * forbids `export $derived()` in `.svelte.ts` files (build-time error:
+ * `derived_invalid_export`).
  */
 const _state = $state({
 	/** Currently selected widget mode (1-7). */
@@ -102,39 +106,15 @@ const _state = $state({
 	error: null as string | null,
 });
 
-/** Currently selected widget mode (1-7). */
-export const widgetMode = $derived(_state.widgetMode);
-
-/** Software-Controller position in the right panel. */
-export const controllerPosition = $derived(_state.controllerPosition);
-
-/** Output split ratio (0-100): percentage allocated to Output #1. */
-export const splitRatio = $derived(_state.splitRatio);
-
-/** Destination panel for stdout log output. */
-export const stdoutDestination = $derived(_state.stdoutDestination);
-
-/** Dialogue button position (TOP / BOTTOM / BOTH). */
-export type DialogueButtonPos = 'top' | 'bottom' | 'both';
-
-/** Dialogue button placement position. */
-export const dialogueButtonPosition = $derived(_state.dialogueButtonPosition);
-
-/** Whether the store is still fetching initial values from the API. */
-export const loading = $derived(_state.loading);
-
-/** Non-null if initialisation (or a later API call) failed. */
-export const error = $derived(_state.error);
-
-// ── Derived state ──────────────────────────────────────────────────────────
-
-/** Resolved config for the currently active widget mode. */
-export const currentWidgetConfig = $derived<WidgetModeConfig>(
-	WIDGET_MODES[_state.widgetMode] ?? WIDGET_MODES[1],
-);
-
-/** True once initialisation has completed (success or error). */
-export const isInitialized = $derived<boolean>(!_state.loading);
+/**
+ * Exported reactive UI state object.
+ *
+ * Read properties reactively in Svelte component templates or `$derived()`
+ * expressions, e.g. `uiState.widgetMode`, `uiState.controllerPosition`.
+ * For derived computations (e.g. `currentWidgetConfig`), compute them
+ * locally in the component with `$derived(...)`.
+ */
+export const uiState = _state;
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 

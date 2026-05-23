@@ -1,6 +1,8 @@
 <script lang="ts">
 	import SoftwareController from './SoftwareController.svelte';
-	import { currentWidgetConfig, controllerPosition, splitRatio } from '$lib/stores/ui.svelte.ts';
+	import { uiState, WIDGET_MODES } from '$lib/stores/ui.svelte.ts';
+
+	let currentWidgetConfig = $derived(WIDGET_MODES[uiState.widgetMode] ?? WIDGET_MODES[1]);
 
 	let output1Lines = $state<string[]>([]);
 	let output2Lines = $state<string[]>([]);
@@ -29,7 +31,7 @@
 </script>
 
 <div class="right-panel">
-	{#if controllerPosition === 'top' && currentWidgetConfig.showController}
+	{#if uiState.controllerPosition === 'top' && currentWidgetConfig.showController}
 		<!-- Software Controller (top) -->
 		<div class="tk-labelframe softcon-frame">
 			<div class="tk-labelframe-label">Software-Controller</div>
@@ -43,7 +45,7 @@
 		<!-- Output#1 -->
 		<div
 			class="tk-labelframe"
-			style="flex: {splitRatio} 1 0%"
+			style="flex: {uiState.splitRatio} 1 0%"
 		>
 			<div class="tk-labelframe-label">Output#1</div>
 			<div class="tk-labelframe-content">
@@ -70,7 +72,7 @@
 		<!-- Output#2 -->
 		<div
 			class="tk-labelframe"
-			style="flex: {100 - splitRatio} 1 0%"
+			style="flex: {100 - uiState.splitRatio} 1 0%"
 		>
 			<div class="tk-labelframe-label">Output#2</div>
 			<div class="tk-labelframe-content">
@@ -93,7 +95,7 @@
 		</div>
 	{/if}
 
-	{#if controllerPosition === 'bottom' && currentWidgetConfig.showController}
+	{#if uiState.controllerPosition === 'bottom' && currentWidgetConfig.showController}
 		<!-- Software Controller (bottom) -->
 		<div class="tk-labelframe softcon-frame">
 			<div class="tk-labelframe-label">Software-Controller</div>

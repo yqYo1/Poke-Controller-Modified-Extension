@@ -185,7 +185,7 @@
 
 	<!-- FPS -->
 	<div class="mb-3">
-		<label class="mb-1 block text-xs text-gray-400">FPS</label>
+		<span class="mb-1 block text-xs text-gray-400">FPS</span>
 		<select
 			bind:value={fps}
 			disabled={disabled}

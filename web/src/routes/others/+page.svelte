@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import * as uiStore from '$lib/stores/ui.svelte';
+	import { uiState, setWidgetMode, setSplitRatio, setStdoutDestination, setControllerPosition, setDialogueButtonPosition, initUIStore } from '$lib/stores/ui.svelte';
+
+	let isInitialized = $derived(!uiState.loading);
 
 	// ── Initialise uiStore if not already loaded ─────────────────────────────
 	onMount(() => {
-		if (!uiStore.isInitialized) {
-			uiStore.initUIStore().catch(console.warn);
+		if (!isInitialized) {
+			initUIStore().catch(console.warn);
 		}
 	});
 
@@ -49,13 +51,13 @@
 
 	<!-- Main content -->
 	<div class="tk-main" style="padding: 8px;">
-		{#if uiStore.loading}
+		{#if uiState.loading}
 			<div class="tk-statusbar">
 				<span>Loading settings...</span>
 			</div>
-		{:else if uiStore.error}
+		{:else if uiState.error}
 			<div class="tk-statusbar tk-status-error">
-				<span>Error: {uiStore.error}</span>
+				<span>Error: {uiState.error}</span>
 			</div>
 		{:else}
 			<div class="tk-labelframe">
@@ -72,14 +74,14 @@
 									min="0"
 									max="100"
 									class="tk-range"
-									value={uiStore.splitRatio}
-									oninput={(e) => uiStore.setSplitRatio(Number((e.target as HTMLInputElement).value))}
+									value={uiState.splitRatio}
+									oninput={(e) => setSplitRatio(Number((e.target as HTMLInputElement).value))}
 								/>
-								<span class="tk-label">{uiStore.splitRatio}%</span>
+								<span class="tk-label">{uiState.splitRatio}%</span>
 							</div>
 							<div class="form-row" style="margin-top: 4px;">
 								<span class="tk-label" style="color: var(--color-text-tertiary); font-size: 10px;">
-									Output#1: {uiStore.splitRatio}% — Output#2: {100 - uiStore.splitRatio}%
+									Output#1: {uiState.splitRatio}% — Output#2: {100 - uiState.splitRatio}%
 								</span>
 							</div>
 						</div>
@@ -96,8 +98,8 @@
 										name="stdout"
 										class="tk-radio"
 										value={1}
-										checked={uiStore.stdoutDestination === 1}
-										onchange={() => uiStore.setStdoutDestination(1)}
+										checked={uiState.stdoutDestination === 1}
+										onchange={() => setStdoutDestination(1)}
 									/>
 									<span>Output#1</span>
 								</label>
@@ -107,8 +109,8 @@
 										name="stdout"
 										class="tk-radio"
 										value={2}
-										checked={uiStore.stdoutDestination === 2}
-										onchange={() => uiStore.setStdoutDestination(2)}
+										checked={uiState.stdoutDestination === 2}
+										onchange={() => setStdoutDestination(2)}
 									/>
 									<span>Output#2</span>
 								</label>
@@ -134,8 +136,8 @@
 						<div class="tk-labelframe-content">
 							<select
 								class="tk-select tk-select-wide"
-								value={uiStore.widgetMode}
-								onchange={(e) => uiStore.setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}
+								value={uiState.widgetMode}
+								onchange={(e) => setWidgetMode(Number((e.target as HTMLSelectElement).value) as 1 | 2 | 3 | 4 | 5 | 6 | 7)}
 							>
 								{#each widgetModeOptions as opt (opt.value)}
 									<option value={opt.value}>{opt.label}</option>
@@ -155,8 +157,8 @@
 										name="swpos"
 										class="tk-radio"
 										value="top"
-										checked={uiStore.controllerPosition === 'top'}
-										onchange={() => uiStore.setControllerPosition('top')}
+										checked={uiState.controllerPosition === 'top'}
+										onchange={() => setControllerPosition('top')}
 									/>
 									<span>TOP</span>
 								</label>
@@ -166,8 +168,8 @@
 										name="swpos"
 										class="tk-radio"
 										value="bottom"
-										checked={uiStore.controllerPosition === 'bottom'}
-										onchange={() => uiStore.setControllerPosition('bottom')}
+										checked={uiState.controllerPosition === 'bottom'}
+										onchange={() => setControllerPosition('bottom')}
 									/>
 									<span>BOTTOM</span>
 								</label>
@@ -187,8 +189,8 @@
 											name="dlgpos"
 											class="tk-radio"
 											value={opt.value}
-											checked={uiStore.dialogueButtonPosition === opt.value}
-											onchange={() => uiStore.setDialogueButtonPosition(opt.value)}
+											checked={uiState.dialogueButtonPosition === opt.value}
+											onchange={() => setDialogueButtonPosition(opt.value)}
 										/>
 										<span>{opt.label}</span>
 									</label>
@@ -202,7 +204,7 @@
 
 		<!-- Status bar -->
 		<div class="tk-statusbar" style="margin-top: 8px;">
-			<span class="tk-statusbar-text">Output Size Adjuster: {uiStore.splitRatio}% | Widget Mode: {uiStore.widgetMode} | Position: {uiStore.controllerPosition}</span>
+			<span class="tk-statusbar-text">Output Size Adjuster: {uiState.splitRatio}% | Widget Mode: {uiState.widgetMode} | Position: {uiState.controllerPosition}</span>
 		</div>
 	</div>
 </div>

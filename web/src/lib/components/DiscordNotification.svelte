@@ -1,21 +1,15 @@
 <script lang="ts">
-	import { onMount } from "svelte";
-	import { api } from "$lib/api/client";
-	import type { DiscordNotificationSettings } from "$lib/api/client";
+	import { onMount } from 'svelte';
+	import { api } from '$lib/api/client';
 
-	let settings = $state<DiscordNotificationSettings>({
-		enabled: false,
-		webhook_url: "",
-		username: "",
-		avatar_url: "",
-	});
+	let webhookUrl = $state('');
+	let username = $state('');
+	let avatarUrl = $state('');
 	let loading = $state(true);
 	let saving = $state(false);
 	let testSending = $state(false);
-	let testMessage = $state("Discord Webhook テスト通知");
-	let testTitle = $state("Poke-Controller");
-	let statusMessage = $state("");
-	let statusType = $state<"success" | "error" | "">("");
+	let statusMessage = $state('');
+	let statusType = $state<'success' | 'error' | ''>('');
 	let connectionOk = $state<boolean | null>(null);
 
 	const webhookPattern = /^https:\/\/discord\.com\/api\/webhooks\//;
@@ -26,42 +20,50 @@
 
 	async function loadSettings() {
 		try {
-			const result = await api.getDiscordNotificationSettings();
-			settings = { ...settings, ...result };
+			// Use the generic notification config to load
+			const config = await api.getNotificationConfig();
+			webhookUrl = config.discord_webhook_url ?? '';
 			checkConnection();
 		} catch (e) {
-			console.warn("Failed to load Discord notification settings:", e);
+			console.warn('Failed to load Discord notification settings:', e);
 		}
 		loading = false;
 	}
 
 	function checkConnection() {
-		if (settings.webhook_url && webhookPattern.test(settings.webhook_url)) {
+		if (webhookUrl && webhookPattern.test(webhookUrl)) {
 			connectionOk = true;
-		} else if (settings.webhook_url && settings.webhook_url.length > 0) {
+		} else if (webhookUrl && webhookUrl.length > 0) {
 			connectionOk = false;
 		} else {
 			connectionOk = null;
 		}
 	}
 
-	function setStatus(msg: string, type: "success" | "error") {
+	function setStatus(msg: string, type: 'success' | 'error') {
 		statusMessage = msg;
 		statusType = type;
 		setTimeout(() => {
-			statusMessage = "";
-			statusType = "";
+			statusMessage = '';
+			statusType = '';
 		}, 3000);
 	}
 
-	async function saveSettings() {
+	async function saveWebhookUrl() {
 		saving = true;
 		try {
-			await api.updateDiscordNotificationSettings(settings);
+			if (webhookUrl && !webhookPattern.test(webhookUrl)) {
+				setStatus('Invalid webhook URL format (must start with https://discord.com/api/webhooks/)', 'error');
+				saving = false;
+				return;
+			}
+			await api.updateNotificationConfig({
+				discord_webhook_url: webhookUrl || null,
+			});
 			checkConnection();
-			setStatus("設定を保存しました", "success");
+			setStatus('Webhook URL saved', 'success');
 		} catch (e) {
-			setStatus("保存に失敗しました: " + (e as Error).message, "error");
+			setStatus('Save failed: ' + (e as Error).message, 'error');
 		}
 		saving = false;
 	}
@@ -69,159 +71,205 @@
 	async function sendTest() {
 		testSending = true;
 		try {
-			// Also update global notification config to ensure discord is enabled for the test
+			// Enable discord for the test
 			await api.updateNotificationConfig({ discord_enabled: true });
-			await api.sendTestNotification({ message: testMessage, title: testTitle });
-			setStatus("テスト通知を送信しました", "success");
+			await api.sendTestNotification({
+				message: 'Discord webhook test notification',
+				title: 'Poke-Controller Test',
+			});
+			setStatus('Test notification sent', 'success');
 		} catch (e) {
-			setStatus("送信に失敗しました: " + (e as Error).message, "error");
+			setStatus('Send failed: ' + (e as Error).message, 'error');
 		}
 		testSending = false;
 	}
-
 </script>
 
-<div class="rounded border border-gray-700 bg-gray-900 p-3">
-	<div class="mb-3 flex items-center justify-between">
-		<h3 class="text-sm font-medium text-gray-200">Discord Webhook 通知</h3>
+<div class="tk-labelframe">
+	<div class="tk-labelframe-label">Discord Notification</div>
+	<div class="tk-labelframe-content">
 		{#if loading}
-			<span class="text-xs text-gray-500">読み込み中...</span>
-		{/if}
-	</div>
-
-	{#if !loading}
-		<div class="space-y-3">
-			<!-- Enable toggle -->
-			<label class="flex items-center justify-between text-xs text-gray-400">
-				<span>Webhook 通知を有効にする</span>
-				<input
-					type="checkbox"
-					bind:checked={settings.enabled}
-					class="accent-blue-500"
-				/>
-			</label>
-
-			<!-- Webhook URL -->
-			<label class="flex flex-col gap-1 text-xs text-gray-400">
-				<span>Webhook URL</span>
-				<input
-					type="url"
-					bind:value={settings.webhook_url}
-					oninput={() => checkConnection()}
-					placeholder="https://discord.com/api/webhooks/..."
-					class="w-full rounded bg-gray-800 px-2 py-1 font-mono text-gray-200"
-				/>
-			</label>
-
-			<!-- Connection status -->
-			{#if connectionOk === true}
-				<div class="flex items-center gap-1 text-xs text-green-400">
-					<span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>
-					<span>Webhook URL は有効です</span>
-				</div>
-			{:else if connectionOk === false}
-				<div class="flex items-center gap-1 text-xs text-yellow-400">
-					<span class="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
-					<span>Webhook URL の形式が無効です（discord.com/api/webhooks/ が必要）</span>
-				</div>
-			{/if}
-
-			<!-- Username override -->
-			<label class="flex flex-col gap-1 text-xs text-gray-400">
-				<span>ユーザー名（上書き）</span>
-				<input
-					type="text"
-					bind:value={settings.username}
-					placeholder="Poke-Controller Bot"
-					class="w-full rounded bg-gray-800 px-2 py-1 text-gray-200"
-				/>
-			</label>
-
-			<!-- Avatar URL -->
-			<label class="flex flex-col gap-1 text-xs text-gray-400">
-				<span>アバターURL（上書き）</span>
-				<input
-					type="url"
-					bind:value={settings.avatar_url}
-					placeholder="https://example.com/avatar.png"
-					class="w-full rounded bg-gray-800 px-2 py-1 text-gray-200"
-				/>
-			</label>
-
-			<!-- Save button -->
-			<button
-				onclick={saveSettings}
-				disabled={saving}
-				class="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-			>
-				{saving ? "保存中..." : "保存"}
-			</button>
-
-			<!-- Status message -->
-			{#if statusMessage}
-				<div
-					class="rounded px-2 py-1 text-xs {statusType === "success"
-						? "bg-green-900 text-green-300"
-						: "bg-red-900 text-red-300"}"
-				>
-					{statusMessage}
-				</div>
-			{/if}
-
-			<!-- Message preview -->
-			{#if settings.enabled}
-				<hr class="border-gray-700" />
-				<h4 class="text-xs font-medium text-gray-400">メッセージプレビュー</h4>
-				<div class="rounded bg-gray-800 p-2 text-xs text-gray-300">
-					<div class="flex items-start gap-2">
-						{#if settings.avatar_url}
-							<img
-								src={settings.avatar_url}
-								alt="avatar"
-								class="h-8 w-8 rounded-full"
-								onerror={(e) => {
-									(e.target as HTMLImageElement).style.display = "none";
-								}}
-							/>
-						{:else}
-							<div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-								{settings.username ? settings.username.charAt(0).toUpperCase() : "P"}
+			<span class="text-[10px] text-gray-500">Loading...</span>
+		{:else}
+			<div class="space-y-2">
+				<!-- Webhook URL -->
+				<div class="form-row form-col">
+					<span class="tk-label">Webhook URL</span>
+					<div class="flex-1">
+						<input
+							type="url"
+							bind:value={webhookUrl}
+							oninput={checkConnection}
+							placeholder="https://discord.com/api/webhooks/..."
+							class="tk-input w-full"
+						/>
+						<!-- Connection status -->
+						{#if connectionOk === true}
+							<div class="flex items-center gap-1 text-[10px] text-green-400" style="margin-top: 2px;">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-green-500"></span>
+								<span>Valid webhook URL format</span>
+							</div>
+						{:else if connectionOk === false}
+							<div class="flex items-center gap-1 text-[10px] text-yellow-400" style="margin-top: 2px;">
+								<span class="inline-block h-1.5 w-1.5 rounded-full bg-yellow-500"></span>
+								<span>Invalid format — must start with https://discord.com/api/webhooks/</span>
 							</div>
 						{/if}
-						<div>
-							<span class="font-medium text-blue-400">{settings.username || "Poke-Controller Bot"}</span>
-							<span class="ml-1 text-gray-500">Today at 12:00</span>
-							<p class="mt-0.5">{testTitle ? `**${testTitle}**` : ""} {testMessage}</p>
-						</div>
 					</div>
 				</div>
 
-				<!-- Test send -->
-				<h4 class="text-xs font-medium text-gray-400">テスト送信</h4>
-				<label class="flex items-center justify-between text-xs text-gray-400">
-					<span>タイトル</span>
+				<!-- Save webhook URL -->
+				<div class="form-row" style="padding-top: 2px;">
+					<button
+						onclick={saveWebhookUrl}
+						disabled={saving}
+						class="tk-btn w-full"
+					>
+						{saving ? 'Saving...' : 'Save Webhook URL'}
+					</button>
+				</div>
+
+				<!-- Username (optional) -->
+				<div class="form-row form-col">
+					<span class="tk-label">Username</span>
 					<input
 						type="text"
-						bind:value={testTitle}
-						class="w-36 rounded bg-gray-800 px-2 py-1 text-gray-200"
+						bind:value={username}
+						placeholder="Poke-Controller Bot (optional)"
+						class="tk-input w-full"
 					/>
-				</label>
-				<label class="flex items-center justify-between text-xs text-gray-400">
-					<span>メッセージ</span>
+				</div>
+
+				<!-- Avatar URL (optional) -->
+				<div class="form-row form-col">
+					<span class="tk-label">Avatar URL</span>
 					<input
-						type="text"
-						bind:value={testMessage}
-						class="w-36 rounded bg-gray-800 px-2 py-1 text-gray-200"
+						type="url"
+						bind:value={avatarUrl}
+						placeholder="https://example.com/avatar.png (optional)"
+						class="tk-input w-full"
 					/>
-				</label>
-				<button
-					onclick={sendTest}
-					disabled={testSending || !settings.webhook_url}
-					class="w-full rounded bg-green-700 px-3 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
-				>
-					{testSending ? "送信中..." : "テスト通知を送信"}
-				</button>
-			{/if}
-		</div>
-	{/if}
+				</div>
+
+				<!-- Status message -->
+				{#if statusMessage}
+					<div
+						class="rounded px-2 py-1 text-[10px] {statusType === 'success'
+							? 'bg-green-900 text-green-300'
+							: 'bg-red-900 text-red-300'}"
+					>
+						{statusMessage}
+					</div>
+				{/if}
+
+				<!-- Test button -->
+				<div class="form-row" style="padding-top: 4px;">
+					<button
+						onclick={sendTest}
+						disabled={testSending}
+						class="tk-btn w-full"
+					>
+						{testSending ? 'Sending...' : 'Test'}
+					</button>
+				</div>
+			</div>
+		{/if}
+	</div>
 </div>
+
+<style>
+	.form-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 2px 0;
+	}
+	.form-row + .form-row {
+		padding-top: 4px;
+	}
+	.form-col {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.tk-label {
+		font-size: 11px;
+		color: var(--color-text-secondary, #94a3b8);
+		min-width: 100px;
+		flex-shrink: 0;
+	}
+
+	.tk-input {
+		font-family: 'Segoe UI', system-ui, sans-serif;
+		font-size: 11px;
+		padding: 2px 6px;
+		border: 1px solid var(--color-border, #475569);
+		border-radius: 2px;
+		background-color: var(--color-bg-input, #1e293b);
+		color: var(--color-text-primary, #f1f5f9);
+		outline: none;
+		box-sizing: border-box;
+	}
+	.tk-input:focus {
+		border-color: var(--color-accent, #60a5fa);
+	}
+	.tk-input::placeholder {
+		color: var(--color-text-tertiary, #64748b);
+	}
+
+	.tk-btn {
+		font-family: 'Segoe UI', system-ui, sans-serif;
+		font-size: 11px;
+		padding: 2px 10px;
+		border: 1px solid var(--color-border, #475569);
+		border-radius: 2px;
+		background-color: var(--color-bg-tertiary, #334155);
+		color: var(--color-text-primary, #f1f5f9);
+		cursor: pointer;
+		user-select: none;
+		white-space: nowrap;
+		line-height: 1.4;
+	}
+	.tk-btn:hover:not(:disabled) {
+		background-color: var(--color-accent-hover, #3b82f6);
+		color: #fff;
+	}
+	.tk-btn:active:not(:disabled) {
+		background-color: var(--color-accent, #60a5fa);
+	}
+	.tk-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.w-full {
+		width: 100%;
+	}
+	.flex-1 {
+		flex: 1;
+	}
+
+	/* ── Labelframe (Tkinter-style bordered group) ─── */
+	:global(.tk-labelframe) {
+		border: 2px solid var(--color-border, #334155);
+		border-radius: 2px;
+		background-color: var(--color-bg-card, #1e293b);
+		position: relative;
+		margin-top: 6px;
+	}
+	:global(.tk-labelframe-label) {
+		position: absolute;
+		top: -10px;
+		left: 8px;
+		background-color: var(--color-bg-secondary, #1e293b);
+		padding: 0 4px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-secondary, #94a3b8);
+		font-family: 'Segoe UI', system-ui, sans-serif;
+		z-index: 1;
+	}
+	:global(.tk-labelframe-content) {
+		padding: 10px 4px 4px 4px;
+	}
+</style>

@@ -1140,6 +1140,7 @@
                   curl
                   wget
                   git
+                  openssh
                   just
 
                   webkitgtk_4_1

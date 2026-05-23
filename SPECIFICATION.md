@@ -602,6 +602,218 @@ The original Python/Tkinter UI used `tkinter.ttk.Notebook` with the following st
 - **Source**: Logs received via WebSocket.
 - **Clear**: "Clear Outputs" button in Others tab.
 
+-
+## 14. Python Public API Specification
+
+> **Version**: 2.1.0-draft  
+> **Date**: 2026-05-23  
+> **Scope**: Python compatibility layer and PyO3 bindings  
+> **Source**: Grill-me session decisions (refactor/rust-core branch)
+
 ---
 
-*This specification is a living document. Updates should be made when new requirements are communicated by the user. Information marked as "Phase 7" or "Future Phase" is recorded for completeness but is not in current implementation scope.*
+### 14.1 Design Philosophy
+
+- **Core in Rust**: All core processing is implemented in Rust. Python is used only where necessary (user script API, compatibility layer).
+- **Meta-class based switching**:  provides hooks for future implementation switching. Currently all implementations flow to PyO3 (Rust bindings).
+- **Backward compatibility**: All pre-refactoring scripts must work without modification.
+- **Type hints**: New APIs must have working type hints. Legacy APIs are marked deprecated but preserved.
+
+### 14.2 Package Structure
+
+
+
+PyO3 modules (rust/pokecon-pybindings):
+-  — Input types (Button, Hat, Direction, Stick, Touchscreen)
+-  — Command scanning/loading
+-  — Event bus
+-  — Notifications (Discord, LINE stub, Windows)
+-  — Serial communication
+-  — Dialog functions
+-  — Image processing (opencv-rust)
+-  — Socket, MQTT, HTTP clients
+
+### 14.3 Command Classes
+
+#### 14.3.1 Class Hierarchy
+
+
+
+#### 14.3.2 PythonCommand
+
+**Import**: 
+
+**Lifecycle Methods**:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Abstract — override with automation logic |
+|  |  | Gracefully stop the script |
+|  |  | Check stop flag; raises  if terminating |
+
+**Input Methods**:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Press button(s) for duration, then release and wait |
+|  |  | Repeat press |
+|  |  | Hold button(s) in pressed state |
+|  |  | Release previously held button(s) |
+|  |  | Sleep for wait seconds |
+|  |  | Busy-loop wait (high precision) |
+|  |  | Send raw serial commands |
+|  |  | Reload COM port connection |
+
+**Output Methods** (PyO3 implementation):
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Print to upper log panel |
+|  |  | Print to lower log panel |
+|  |  | Print to non-stdout log panel |
+|  |  | Print to stdout-assigned panel |
+|  |  | Same as print_s |
+|  |  | Upper log with mode (w/a/d) |
+|  |  | Lower log with mode |
+|  |  | Non-stdout log with mode |
+|  |  | Stdout log with mode |
+
+**Dialog Methods** (blocking web popups):
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Simple entry dialog (deprecated, use show_dialog) |
+|  |  | Multi-widget dialog (deprecated, use show_dialog) |
+
+**Socket Methods**:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Connect to socket server |
+|  |  | Disconnect from socket server |
+|  |  | Send message over socket |
+|  |  | Receive message with header filter |
+|  |  | Receive with multiple header filters |
+|  |  | Change socket IP address |
+|  |  | Change socket port |
+|  |  | Set socket alive flag |
+
+**MQTT Methods**:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Publish message to MQTT topic |
+|  |  | Subscribe and receive with header filter |
+|  |  | Subscribe with multiple header filters |
+|  |  | Change MQTT broker address |
+|  |  | Change MQTT client ID |
+|  |  | Change MQTT connection name |
+|  |  | Change publish token |
+|  |  | Change subscribe token |
+
+**Notification Methods**:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Send text via Discord webhook |
+|  |  | Send text + screenshot via Discord webhook |
+|  |  | No-op stub (LINE service EOL) |
+|  |  | No-op stub (LINE service EOL) |
+|  |  | Windows desktop toast notification |
+
+#### 14.3.3 ImageProcPythonCommand
+
+**Import**: 
+
+Extends  with camera and image processing capabilities.
+
+**Constructor**: 
+
+**Image Processing Methods** (Rust opencv-rust implementation):
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Template matching against camera frame |
+|  |  | Multi-template matching |
+|  |  | GPU-accelerated template matching |
+|  |  | Inverse template matching |
+|  |  | Save camera frame to ./Captures/ |
+|  |  | Display camera frame in popup |
+|  |  | Get camera frame as OpenCV image array |
+|  |  | Load image file |
+|  |  | Change template image directory |
+|  |  | Resolve relative filename to full path |
+|  |  | Draw rectangle on GUI canvas overlay |
+|  |  | Draw text on GUI canvas overlay |
+
+**Internal Functions** (exposed with  prefix):
+| Function | Signature | Description |
+|----------|-----------|-------------|
+|  |  | Core template matching |
+|  |  | Convert image to grayscale |
+|  |  | Resize image |
+
+#### 14.3.4 McuCommandBase
+
+**Import**: 
+
+For firmware-based commands. Same meta-class switching as PythonCommand.
+
+### 14.4 Meta-Class Design (CommandMeta)
+
+
+
+### 14.5 KeyPress and Sender
+
+#### 14.5.1 KeyPress
+
+- **Not exposed directly** to user scripts
+- Only  is accessible (resets controller to neutral state)
+- Internal implementation in Rust, exposed via PyO3
+
+#### 14.5.2 Sender
+
+**PyO3 implementation** with limited public API:
+| Method | Signature | Description |
+|--------|-----------|-------------|
+|  |  | Write serial row |
+|  |  | Direct serial write (pySerial-compatible type conversion in PyO3) |
+
+Other Sender methods are not exposed as Sender class; integrated into appropriate other classes.
+
+### 14.6 New Dialog API (Type-Safe)
+
+**Deprecated**: ,  — preserved for compatibility, marked deprecated.
+
+**New API**:  with Widget class and type hints.
+
+
+
+### 14.7 Event System (Dynamic Config)
+
+For use in dynamic configuration files (Python and Lua).
+
+
+
+
+
+### 14.8 Configuration File System
+
+#### 14.8.1 Python Config
+
+
+
+#### 14.8.2 Lua Config
+
+
+
+### 14.9 Script Compatibility Requirements
+
+| Requirement | Status |
+|-------------|--------|
+| All 17+ sample scripts work unchanged | ✅ Required |
+|  | ✅ Preserved via module patching |
+|  | ✅ Preserved via module patching |
+|  | ✅ Available |
+|  | ✅ Available |
+|  | ✅ Available (Rust serial wrapper) |
+| Image processing APIs | ✅ Rust implementation (opencv-rust) |
+| Discord notifications | ✅ Implemented |
+| LINE notifications | ⚠️ No-op stub (service EOL) |
+| Windows notifications | ✅ Implemented |
+
+---
+
+*This specification is a living document. Updates should be made when new requirements are communicated by the user.*

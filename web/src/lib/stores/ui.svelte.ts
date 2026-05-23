@@ -74,39 +74,67 @@ export const WIDGET_MODE_LIST: WidgetModeConfig[] = [
 
 // ── Reactive state (Svelte 5 runes) ────────────────────────────────────────
 
+/**
+ * Internal reactive state container.
+ *
+ * We use a single $state object whose properties are *mutated* (never
+ * reassigned on the container itself).  This avoids Svelte 5's
+ * `state_invalid_export` error which fires when an exported `let` + $state
+ * variable is reassigned.
+ *
+ * Each public-facing field below is re-exported as a *read-only*
+ * `$derived` value so consumers keep the same `import { ... }` pattern.
+ */
+const _state = $state({
+	/** Currently selected widget mode (1-7). */
+	widgetMode: 1 as WidgetModeNumber,
+	/** Software-Controller position in the right panel. */
+	controllerPosition: 'bottom' as ControllerPosition,
+	/** Output split ratio (0-100): percentage allocated to Output #1. */
+	splitRatio: 50,
+	/** Destination panel for stdout log output. */
+	stdoutDestination: 1 as StdoutDestination,
+	/** Dialogue button placement position. */
+	dialogueButtonPosition: 'both' as DialogueButtonPos,
+	/** Whether the store is still fetching initial values from the API. */
+	loading: true,
+	/** Non-null if initialisation (or a later API call) failed. */
+	error: null as string | null,
+});
+
 /** Currently selected widget mode (1-7). */
-export let widgetMode = $state<WidgetModeNumber>(1);
+export const widgetMode = $derived(_state.widgetMode);
 
 /** Software-Controller position in the right panel. */
-export let controllerPosition = $state<ControllerPosition>('bottom');
+export const controllerPosition = $derived(_state.controllerPosition);
 
 /** Output split ratio (0-100): percentage allocated to Output #1. */
-export let splitRatio = $state<number>(50);
+export const splitRatio = $derived(_state.splitRatio);
 
 /** Destination panel for stdout log output. */
-export let stdoutDestination = $state<StdoutDestination>(1);
+export const stdoutDestination = $derived(_state.stdoutDestination);
 
 /** Dialogue button position (TOP / BOTTOM / BOTH). */
 export type DialogueButtonPos = 'top' | 'bottom' | 'both';
 
 /** Dialogue button placement position. */
-export let dialogueButtonPosition = $state<DialogueButtonPos>('both');
+export const dialogueButtonPosition = $derived(_state.dialogueButtonPosition);
 
 /** Whether the store is still fetching initial values from the API. */
-export let loading = $state<boolean>(true);
+export const loading = $derived(_state.loading);
 
 /** Non-null if initialisation (or a later API call) failed. */
-export let error = $state<string | null>(null);
+export const error = $derived(_state.error);
 
 // ── Derived state ──────────────────────────────────────────────────────────
 
 /** Resolved config for the currently active widget mode. */
-export let currentWidgetConfig = $derived<WidgetModeConfig>(
-	WIDGET_MODES[widgetMode] ?? WIDGET_MODES[1],
+export const currentWidgetConfig = $derived<WidgetModeConfig>(
+	WIDGET_MODES[_state.widgetMode] ?? WIDGET_MODES[1],
 );
 
 /** True once initialisation has completed (success or error). */
-export let isInitialized = $derived<boolean>(!loading);
+export const isInitialized = $derived<boolean>(!_state.loading);
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 
@@ -117,8 +145,8 @@ export let isInitialized = $derived<boolean>(!loading);
  * `+layout.svelte`'s `onMount`).
  */
 export async function initUIStore(): Promise<void> {
-	loading = true;
-	error = null;
+	_state.loading = true;
+	_state.error = null;
 
 	try {
 		const [widgetSettings, outputSettings, controllerSettings, dialogueSettings] = await Promise.all([
@@ -130,17 +158,17 @@ export async function initUIStore(): Promise<void> {
 
 		const parsed = parseInt(widgetSettings.mode, 10) as WidgetModeNumber;
 		if (parsed >= 1 && parsed <= 7) {
-			widgetMode = parsed;
+			_state.widgetMode = parsed;
 		}
 
-		splitRatio = outputSettings.split_ratio;
-		stdoutDestination = outputSettings.stdout_destination;
-		controllerPosition = controllerSettings.position;
-		dialogueButtonPosition = dialogueSettings.position;
+		_state.splitRatio = outputSettings.split_ratio;
+		_state.stdoutDestination = outputSettings.stdout_destination;
+		_state.controllerPosition = controllerSettings.position;
+		_state.dialogueButtonPosition = dialogueSettings.position;
 	} catch (e) {
-		error = e instanceof Error ? e.message : String(e);
+		_state.error = e instanceof Error ? e.message : String(e);
 	} finally {
-		loading = false;
+		_state.loading = false;
 	}
 }
 
@@ -152,12 +180,12 @@ export async function initUIStore(): Promise<void> {
  * Updates the reactive store optimistically; reverts on API failure.
  */
 export async function setWidgetMode(mode: WidgetModeNumber): Promise<void> {
-	const previous = widgetMode;
-	widgetMode = mode;
+	const previous = _state.widgetMode;
+	_state.widgetMode = mode;
 	try {
 		await api.updateWidgetMode(String(mode));
 	} catch (e) {
-		widgetMode = previous;
+		_state.widgetMode = previous;
 		throw e;
 	}
 }
@@ -166,12 +194,12 @@ export async function setWidgetMode(mode: WidgetModeNumber): Promise<void> {
  * Set the controller position and persist to the backend.
  */
 export async function setControllerPosition(position: ControllerPosition): Promise<void> {
-	const previous = controllerPosition;
-	controllerPosition = position;
+	const previous = _state.controllerPosition;
+	_state.controllerPosition = position;
 	try {
 		await api.updateControllerPosition(position);
 	} catch (e) {
-		controllerPosition = previous;
+		_state.controllerPosition = previous;
 		throw e;
 	}
 }
@@ -183,12 +211,12 @@ export async function setControllerPosition(position: ControllerPosition): Promi
  */
 export async function setSplitRatio(ratio: number): Promise<void> {
 	const clamped = Math.max(0, Math.min(100, Math.round(ratio)));
-	const previous = splitRatio;
-	splitRatio = clamped;
+	const previous = _state.splitRatio;
+	_state.splitRatio = clamped;
 	try {
 		await api.updateOutputSettings({ split_ratio: clamped });
 	} catch (e) {
-		splitRatio = previous;
+		_state.splitRatio = previous;
 		throw e;
 	}
 }
@@ -197,12 +225,12 @@ export async function setSplitRatio(ratio: number): Promise<void> {
  * Set the stdout destination panel and persist to the backend.
  */
 export async function setStdoutDestination(dest: StdoutDestination): Promise<void> {
-	const previous = stdoutDestination;
-	stdoutDestination = dest;
+	const previous = _state.stdoutDestination;
+	_state.stdoutDestination = dest;
 	try {
 		await api.updateOutputSettings({ stdout_destination: dest });
 	} catch (e) {
-		stdoutDestination = previous;
+		_state.stdoutDestination = previous;
 		throw e;
 	}
 }
@@ -211,12 +239,12 @@ export async function setStdoutDestination(dest: StdoutDestination): Promise<voi
  * Set the dialogue button position and persist to the backend.
  */
 export async function setDialogueButtonPosition(pos: DialogueButtonPos): Promise<void> {
-	const previous = dialogueButtonPosition;
-	dialogueButtonPosition = pos;
+	const previous = _state.dialogueButtonPosition;
+	_state.dialogueButtonPosition = pos;
 	try {
 		await api.updateDialogueButtonPosition(pos);
 	} catch (e) {
-		dialogueButtonPosition = previous;
+		_state.dialogueButtonPosition = previous;
 		throw e;
 	}
 }

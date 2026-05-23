@@ -202,7 +202,7 @@
 
 	<!-- Flip controls -->
 	<div class="mb-3 space-y-2">
-		<label class="mb-1 block text-xs text-gray-400">反転</label>
+		<span class="mb-1 block text-xs text-gray-400">反転</span>
 		<label class="flex cursor-pointer items-center gap-2">
 			<input
 				type="checkbox"

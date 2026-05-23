@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
+	import type { DiscordNotificationSettings } from '$lib/api/client';
 
 	let webhookUrl = $state('');
 	let username = $state('');
@@ -11,6 +12,7 @@
 	let statusMessage = $state('');
 	let statusType = $state<'success' | 'error' | ''>('');
 	let connectionOk = $state<boolean | null>(null);
+	let fullSettings = $state<DiscordNotificationSettings | null>(null);
 
 	const webhookPattern = /^https:\/\/discord\.com\/api\/webhooks\//;
 
@@ -20,9 +22,11 @@
 
 	async function loadSettings() {
 		try {
-			// Use the generic notification config to load
-			const config = await api.getNotificationConfig();
-			webhookUrl = config.discord_webhook_url ?? '';
+			const settings = await api.getDiscordNotificationSettings();
+			fullSettings = settings;
+			webhookUrl = settings.webhook_url ?? '';
+			username = settings.username ?? '';
+			avatarUrl = settings.avatar_url ?? '';
 			checkConnection();
 		} catch (e) {
 			console.warn('Failed to load Discord notification settings:', e);
@@ -57,11 +61,16 @@
 				saving = false;
 				return;
 			}
-			await api.updateNotificationConfig({
-				discord_webhook_url: webhookUrl || null,
-			});
+			const settings: DiscordNotificationSettings = {
+				enabled: fullSettings?.enabled ?? true,
+				webhook_url: webhookUrl || '',
+				username: username || '',
+				avatar_url: avatarUrl || '',
+			};
+			await api.updateDiscordNotificationSettings(settings);
+			fullSettings = settings;
 			checkConnection();
-			setStatus('Webhook URL saved', 'success');
+			setStatus('Discord settings saved', 'success');
 		} catch (e) {
 			setStatus('Save failed: ' + (e as Error).message, 'error');
 		}
@@ -71,8 +80,13 @@
 	async function sendTest() {
 		testSending = true;
 		try {
-			// Enable discord for the test
-			await api.updateNotificationConfig({ discord_enabled: true });
+			// Ensure Discord is enabled for the test
+			if (fullSettings) {
+				await api.updateDiscordNotificationSettings({
+					...fullSettings,
+					enabled: true,
+				});
+			}
 			await api.sendTestNotification({
 				message: 'Discord webhook test notification',
 				title: 'Poke-Controller Test',
@@ -125,7 +139,7 @@
 						disabled={saving}
 						class="tk-btn w-full"
 					>
-						{saving ? 'Saving...' : 'Save Webhook URL'}
+						{saving ? 'Saving...' : 'Save Settings'}
 					</button>
 				</div>
 

@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
+	import type { WindowsNotificationSettings } from '$lib/api/client';
 
 	let notifyOnStart = $state(false);
 	let notifyOnEnd = $state(false);
+	let fullSettings = $state<WindowsNotificationSettings | null>(null);
 	let loading = $state(true);
 	let testSending = $state(false);
 	let statusMessage = $state('');
@@ -15,9 +17,12 @@
 
 	async function loadSettings() {
 		try {
-			const config = await api.getNotificationConfig();
-			notifyOnStart = config.windows_enabled;
-			notifyOnEnd = config.windows_enabled;
+			const settings = await api.getWindowsNotificationSettings();
+			fullSettings = settings;
+			// Backend only has a single `enabled` flag (no separate start/end).
+			// Both checkboxes are kept for UX parity; both control the same flag.
+			notifyOnStart = settings.enabled;
+			notifyOnEnd = settings.enabled;
 		} catch (e) {
 			console.warn('Failed to load Windows notification settings:', e);
 		}
@@ -35,8 +40,12 @@
 
 	async function saveOnStart() {
 		notifyOnStart = !notifyOnStart;
+		if (!fullSettings) return;
 		try {
-			await api.updateNotificationConfig({ windows_enabled: notifyOnStart || notifyOnEnd });
+			await api.updateWindowsNotificationSettings({
+				...fullSettings,
+				enabled: notifyOnStart || notifyOnEnd,
+			});
 		} catch (e) {
 			setStatus('Save failed: ' + (e as Error).message, 'error');
 		}
@@ -44,8 +53,12 @@
 
 	async function saveOnEnd() {
 		notifyOnEnd = !notifyOnEnd;
+		if (!fullSettings) return;
 		try {
-			await api.updateNotificationConfig({ windows_enabled: notifyOnStart || notifyOnEnd });
+			await api.updateWindowsNotificationSettings({
+				...fullSettings,
+				enabled: notifyOnStart || notifyOnEnd,
+			});
 		} catch (e) {
 			setStatus('Save failed: ' + (e as Error).message, 'error');
 		}

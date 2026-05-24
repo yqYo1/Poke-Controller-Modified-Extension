@@ -28,14 +28,14 @@ This document describes the implementation plan to bring the current SvelteKit U
 |-------|-------------|--------|
 | 0 | Project setup, CI/CD, Nix flake | ✅ Complete |
 | 1 | SvelteKit scaffold, remove React | ✅ Complete |
-| 2 | API/OpenAPI integration | 🔄 Partial (client exists, not wired to UI) |
+| 2 | API/OpenAPI integration | ✅ Complete |
 | 3 | TypeScript CI, linting, testing | 🔄 Partial |
-| 4 | Component reimplementation | ❌ Not started |
-| 5 | Camera streaming (WebRTC/MJPEG) | ❌ Not started |
-| 6 | Build integration, Tauri config | ❌ Not started |
-| 7 | Low-priority features (key config, Pokémon Home) | ❌ Not started |
-| 8 | PWA support | ❌ Future phase |
-| 9 | Theme support (Tailwind v4) | ❌ Future phase |
+| 4 | Component reimplementation | ✅ Complete |
+| 5 | Camera streaming (WebRTC/MJPEG) | ✅ Complete |
+| 6 | Build integration, Tauri config | ✅ Complete |
+| 7 | Low-priority features (key config, Pokémon Home) | ✅ Complete |
+| 8 | PWA support | ✅ Complete |
+| 9 | Theme support (Tailwind v4) | ✅ Complete |
 
 ---
 

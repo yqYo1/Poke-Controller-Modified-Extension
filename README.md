@@ -24,6 +24,19 @@ Rustコア + Python互換層 + Web/Tauri UI へのリファクタリング版
 - **ゲーム機**: Nintendo Switch, 3DS, DS, GameCube
 - **ブラウザ**: Chrome, Safari, Firefox（スマホ・タブレット対応）
 
+### UI/UX 機能
+
+| 機能 | 説明 |
+|------|------|
+| **ナビゲーション** | NavBarは6タブ（カメラ/シリアル/手動制御/コマンド/通知/その他）。keyconfig/pokemonhomeはダイレクトURLでアクセス可能 |
+| **カメラマウス操作** | ドラッグ=スティック入力、Ctrl+クリック=カラーピッカー、Ctrl+Shift+ドラッグ=範囲スクリーンショット、Ctrl+Alt+ドラッグ=名前付き保存 |
+| **コマンドショートカット** | F5=再読み込み、F6=開始、Shift+F6=一時停止、Escape=停止 |
+| **シリアルRX統合** | WebSocket `serial_data` メッセージをシリアルモニタに表示 |
+| **出力パネル** | クリップボードコピー対応、ログレベルフィルタ（ALL/INFO/WARN/ERROR） |
+| **MCUタグ** | MCUコマンド一覧にタグフィルタとタグバッジを表示 |
+| **録画機能** | ボタンからチェックボックスに変更、記録状態を視覚表示 |
+| **通知設定** | Windows通知設定を専用API（`getWindowsNotificationSettings` 等）経由で管理 |
+
 ---
 
 ## クイックスタート
@@ -200,9 +213,9 @@ Poke-Controller-Modified-Extension/
 │   │   │   │   ├── McuCommandList.svelte
 │   │   │   │   ├── PythonCommandList.svelte
 │   │   │   │   └── ShortcutButtons.svelte
-│   │   │   ├── keyconfig/+page.svelte      # キーコンフィグ
+│   │   │   ├── keyconfig/+page.svelte      # キーコンフィグ（NavBar非表示・直接URLのみ）
 │   │   │   ├── notification/+page.svelte   # 通知設定
-│   │   │   ├── pokemonhome/+page.svelte    # Pokémon Home連携
+│   │   │   ├── pokemonhome/+page.svelte    # Pokémon Home連携（NavBar非表示・直接URLのみ）
 │   │   │   └── others/+page.svelte         # プロファイル・テーマ設定
 │   │   ├── lib/
 │   │   │   ├── api/
@@ -218,27 +231,22 @@ Poke-Controller-Modified-Extension/
 │   │   │   │   ├── CameraSettings.svelte         # カメラ設定UI
 │   │   │   │   ├── CaptureRegion.svelte          # キャプチャ範囲選択
 │   │   │   │   ├── ControllerSimulator.svelte    # コントローラシミュレータ
-│   │   │   │   ├── DialogueButtonPosition.svelte # ダイアログボタン位置設定
 │   │   │   │   ├── DiscordNotification.svelte    # Discord通知設定
 │   │   │   │   ├── DisplaySettings.svelte        # 表示設定
 │   │   │   │   ├── HardwareControl.svelte        # ハードウェア制御
 │   │   │   │   ├── LogPanel.svelte               # ログパネル
 │   │   │   │   ├── MainToolbar.svelte            # メインツールバー
 │   │   │   │   ├── MenuBar.svelte                # メニューバー
-│   │   │   │   ├── NavBar.svelte                 # タブナビゲーション
-│   │   │   │   ├── OutputPanel.svelte            # 出力パネル
-│   │   │   │   ├── OutputSizeAdjuster.svelte     # 出力サイズ調整
-│   │   │   │   ├── RightPanel.svelte             # 右パネル
-│   │   │   │   ├── SerialMonitor.svelte          # シリアルモニタ
-│   │   │   │   ├── SoftwareControllerPosition.svelte # ソフトコン位置設定
+│   │   │   │   ├── NavBar.svelte                 # タブナビゲーション（6タブ）
+│   │   │   │   ├── OutputPanel.svelte            # 出力パネル（ログレベルフィルタ）
+│   │   │   │   ├── RightPanel.svelte             # 右パネル（クリップボードコピー）
+│   │   │   │   ├── SerialMonitor.svelte          # シリアルモニタ（serial_data受信）
 │   │   │   │   ├── SoftwareController.svelte     # 仮想ゲームパッド
-│   │   │   │   ├── SoftwareControl.svelte        # ソフトウェア制御
+│   │   │   │   ├── SoftwareControl.svelte        # ソフトウェア制御（キーボード+マウス）
 │   │   │   │   ├── StatusBar.svelte              # 接続状態表示
-│   │   │   │   ├── StdoutDestination.svelte      # 標準出力先設定
 │   │   │   │   ├── ThemeProvider.svelte           # テーマプロバイダ
 │   │   │   │   ├── TkinterNotebook.svelte        # タブパネル（ノートブック）
-│   │   │   │   ├── WidgetModeSelector.svelte     # ウィジェットモード選択
-│   │   │   │   └── WindowsNotification.svelte    # Windows通知設定
+│   │   │   │   └── WindowsNotification.svelte    # Windows通知設定（専用API）
 │   │   │   └── theme.ts       # テーマ管理（ライト/ダーク/カスタム）
 │   │   ├── service-worker.ts  # PWA Service Worker（オフライン対応）
 │   │   ├── api/client.js      # 旧RESTクライアント（後方互換性）

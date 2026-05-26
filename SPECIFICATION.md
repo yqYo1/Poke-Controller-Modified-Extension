@@ -601,218 +601,446 @@ The original Python/Tkinter UI used `tkinter.ttk.Notebook` with the following st
 - **Output #1 and Output #2**: Log display with ratio adjustment via slider (0–100).
 - **Source**: Logs received via WebSocket.
 - **Clear**: "Clear Outputs" button in Others tab.
+---
 
--
-## 14. Python Public API Specification
+## 14. Python公開API仕様と開発環境設定
 
 > **Version**: 2.1.0-draft  
-> **Date**: 2026-05-23  
-> **Scope**: Python compatibility layer and PyO3 bindings  
-> **Source**: Grill-me session decisions (refactor/rust-core branch)
+> **Date**: 2026-05-27  
+> **Scope**: Python互換レイヤー、PyO3バインディング、開発環境自動構築  
+> **Source**: Grill-meセッション決定事項（refactor/rust-coreブランチ）
 
 ---
 
-### 14.1 Design Philosophy
+### 14.1 設計方針
 
-- **Core in Rust**: All core processing is implemented in Rust. Python is used only where necessary (user script API, compatibility layer).
-- **Meta-class based switching**:  provides hooks for future implementation switching. Currently all implementations flow to PyO3 (Rust bindings).
-- **Backward compatibility**: All pre-refactoring scripts must work without modification.
-- **Type hints**: New APIs must have working type hints. Legacy APIs are marked deprecated but preserved.
+- **コアはRust**: すべてのコア処理はRustで実装。Pythonは必要な部分のみ（ユーザースクリプトAPI、互換レイヤー）。
+- **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてPyO3（Rustバインディング）に流れる。
+- **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
+- **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは非推奨として保持される。
 
-### 14.2 Package Structure
+### 14.2 パッケージ構造
 
+```
+pokecon/
+├── __init__.py          # パッケージエントリ、モジュールパッチ
+├── commands.py          # PythonCommand、ImageProcPythonCommand、CommandEngine
+├── keys.py              # Button、Hat、Direction、Stick、Touchscreen、SendFormat
+├── events.py            # EventBus（動的設定用）
+├── dialogue.py          # ダイアログ関数（ブロッキングWebポップアップ）
+├── _meta.py             # CommandMetaメタクラス
+├── _adapter.py          # Rustコアアダプタ
+├── cli_args.py          # CLI引数解析
+├── script_loader.py     # スクリプト検出と読み込み
+└── scripts_dir.py       # XDG準拠スクリプトディレクトリユーティリティ
+```
 
+PyO3モジュール（rust/pokecon-pybindings）:
+- `pokecon.keys` — 入力型（Button、Hat、Direction、Stick、Touchscreen）
+- `pokecon.command` — コマンドスキャン/読み込み
+- `pokecon.events` — イベントバス
+- `pokecon.notify` — 通知（Discord、LINEスタブ、Windows）
+- `pokecon.sender` — シリアル通信
+- `pokecon.dialogue` — ダイアログ関数
+- `pokecon.image_proc` — 画像処理（opencv-rust）
+- `pokecon.net` — Socket、MQTT、HTTPクライアント
 
-PyO3 modules (rust/pokecon-pybindings):
--  — Input types (Button, Hat, Direction, Stick, Touchscreen)
--  — Command scanning/loading
--  — Event bus
--  — Notifications (Discord, LINE stub, Windows)
--  — Serial communication
--  — Dialog functions
--  — Image processing (opencv-rust)
--  — Socket, MQTT, HTTP clients
+### 14.3 コマンドクラス
 
-### 14.3 Command Classes
+#### 14.3.1 クラス階層
 
-#### 14.3.1 Class Hierarchy
-
-
+```
+Command (ABC, metaclass=CommandMeta)
+├── PythonCommand (ABC)
+│   └── ImageProcPythonCommand (ABC)
+└── McuCommandBase
+```
 
 #### 14.3.2 PythonCommand
 
-**Import**: 
+**Import**: `from Commands.PythonCommandBase import PythonCommand`
 
-**Lifecycle Methods**:
-| Method | Signature | Description |
+**ライフサイクルメソッド**:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Abstract — override with automation logic |
-|  |  | Gracefully stop the script |
-|  |  | Check stop flag; raises  if terminating |
+| `do()` | `do() -> None` | 抽象 — 自動化ロジックをオーバーライド |
+| `finish()` | `finish() -> None` | スクリプトを正常停止 |
+| `checkIfAlive()` | `checkIfAlive() -> Literal[True]` | 停止フラグ確認；終了時は`StopThread`を送出 |
 
-**Input Methods**:
-| Method | Signature | Description |
+**入力メソッド**:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Press button(s) for duration, then release and wait |
-|  |  | Repeat press |
-|  |  | Hold button(s) in pressed state |
-|  |  | Release previously held button(s) |
-|  |  | Sleep for wait seconds |
-|  |  | Busy-loop wait (high precision) |
-|  |  | Send raw serial commands |
-|  |  | Reload COM port connection |
+| `press()` | `press(buttons, duration=0.1, wait=0.1)` | ボタンをduration秒押下後解放、wait秒待機 |
+| `pressRep()` | `pressRep(buttons, repeat, duration=0.1, interval=0.1, wait=0.1)` | 繰り返し押下 |
+| `hold()` | `hold(buttons, wait=0.1)` | ボタンを押下状態で保持 |
+| `holdEnd()` | `holdEnd(buttons)` | 保持中のボタンを解放 |
+| `wait()` | `wait(wait: float)` | wait秒スリープ |
+| `short_wait()` | `short_wait(wait: float)` | ビジーループ待機（高精度） |
+| `direct_serial()` | `direct_serial(commands, waittimes)` | 生シリアルコマンド送信 |
+| `reload_com_port()` | `reload_com_port()` | COMポート接続を再読み込み |
 
-**Output Methods** (PyO3 implementation):
-| Method | Signature | Description |
+**出力メソッド**（PyO3実装）:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Print to upper log panel |
-|  |  | Print to lower log panel |
-|  |  | Print to non-stdout log panel |
-|  |  | Print to stdout-assigned panel |
-|  |  | Same as print_s |
-|  |  | Upper log with mode (w/a/d) |
-|  |  | Lower log with mode |
-|  |  | Non-stdout log with mode |
-|  |  | Stdout log with mode |
+| `print_t1()` | `print_t1(*objects, sep=' ', end='\n')` | 上部ログパネルへ出力 |
+| `print_t2()` | `print_t2(*objects, sep=' ', end='\n')` | 下部ログパネルへ出力 |
+| `print_t()` | `print_t(*objects, sep=' ', end='\n')` | stdout以外のログパネルへ出力 |
+| `print_s()` | `print_s(*objects, sep=' ', end='\n')` | stdout割り当てパネルへ出力 |
+| `print_ts()` | `print_ts(*objects, sep=' ', end='\n')` | `print_s`と同じ |
+| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\n')` | 上部ログ（モード付き w/a/d） |
+| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\n')` | 下部ログ（モード付き） |
+| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\n')` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\n')` | stdoutログ（モード付き） |
 
-**Dialog Methods** (blocking web popups):
-| Method | Signature | Description |
+**ダイアログメソッド**（ブロッキングWebポップアップ）:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Simple entry dialog (deprecated, use show_dialog) |
-|  |  | Multi-widget dialog (deprecated, use show_dialog) |
+| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、show_dialog使用） |
+| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、show_dialog使用） |
 
-**Socket Methods**:
-| Method | Signature | Description |
+**Socketメソッド**:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Connect to socket server |
-|  |  | Disconnect from socket server |
-|  |  | Send message over socket |
-|  |  | Receive message with header filter |
-|  |  | Receive with multiple header filters |
-|  |  | Change socket IP address |
-|  |  | Change socket port |
-|  |  | Set socket alive flag |
+| `socket_connect()` | `socket_connect()` | Socketサーバへ接続 |
+| `socket_disconnect()` | `socket_disconnect()` | Socketサーバから切断 |
+| `socket_transmit_message()` | `socket_transmit_message(message)` | Socket経由でメッセージ送信 |
+| `socket_receive_message()` | `socket_receive_message(header, show_msg=False)` | ヘッダーフィルタ付き受信 |
+| `socket_receive_message2()` | `socket_receive_message2(headerlist, show_msg=False)` | 複数ヘッダーフィルタ付き受信 |
+| `socket_change_ipaddr()` | `socket_change_ipaddr(addr)` | Socket IPアドレス変更 |
+| `socket_change_port()` | `socket_change_port(port)` | Socketポート変更 |
+| `socket_change_alive()` | `socket_change_alive(flag)` | Socket aliveフラグ設定 |
 
-**MQTT Methods**:
-| Method | Signature | Description |
+**MQTTメソッド**:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Publish message to MQTT topic |
-|  |  | Subscribe and receive with header filter |
-|  |  | Subscribe with multiple header filters |
-|  |  | Change MQTT broker address |
-|  |  | Change MQTT client ID |
-|  |  | Change MQTT connection name |
-|  |  | Change publish token |
-|  |  | Change subscribe token |
+| `mqtt_transmit_message()` | `mqtt_transmit_message(roomid, message)` | MQTTトピックへメッセージ公開 |
+| `mqtt_receive_message()` | `mqtt_receive_message(roomid, header, show_msg=False)` | ヘッダーフィルタ付き購読/受信 |
+| `mqtt_receive_message2()` | `mqtt_receive_message2(roomid, headerlist, show_msg=False)` | 複数ヘッダーフィルタ付き購読 |
+| `mqtt_change_broker_address()` | `mqtt_change_broker_address(broker_address)` | MQTTブローカーアドレス変更 |
+| `mqtt_change_id()` | `mqtt_change_id(mqtt_id)` | MQTTクライアントID変更 |
+| `mqtt_change_clientId()` | `mqtt_change_clientId(clientId)` | MQTT接続名変更 |
+| `mqtt_change_pub_token()` | `mqtt_change_pub_token(pub_token)` | 公開トークン変更 |
+| `mqtt_change_sub_token()` | `mqtt_change_sub_token(sub_token)` | 購読トークン変更 |
 
-**Notification Methods**:
-| Method | Signature | Description |
+**通知メソッド**:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Send text via Discord webhook |
-|  |  | Send text + screenshot via Discord webhook |
-|  |  | No-op stub (LINE service EOL) |
-|  |  | No-op stub (LINE service EOL) |
-|  |  | Windows desktop toast notification |
+| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテスト送信 |
+| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテキスト+スクリーンショット送信 |
+| `LINE_text()` | `LINE_text(txt, token='')` | No-opスタブ（LINEサービスEOL） |
+| `LINE_image()` | `LINE_image(txt, crop_fmt='', crop=None, token='')` | No-opスタブ（LINEサービスEOL） |
+| `win_notification()` | `win_notification()` | Windowsデスクトップトースト通知 |
 
 #### 14.3.3 ImageProcPythonCommand
 
-**Import**: 
+**Import**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
 
-Extends  with camera and image processing capabilities.
+`PythonCommand`を拡張し、カメラと画像処理機能を追加。
 
-**Constructor**: 
+**コンストラクタ**: `ImageProcPythonCommand(cam, gui=None)`
 
-**Image Processing Methods** (Rust opencv-rust implementation):
-| Method | Signature | Description |
+**画像処理メソッド**（Rust opencv-rust実装）:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Template matching against camera frame |
-|  |  | Multi-template matching |
-|  |  | GPU-accelerated template matching |
-|  |  | Inverse template matching |
-|  |  | Save camera frame to ./Captures/ |
-|  |  | Display camera frame in popup |
-|  |  | Get camera frame as OpenCV image array |
-|  |  | Load image file |
-|  |  | Change template image directory |
-|  |  | Resolve relative filename to full path |
-|  |  | Draw rectangle on GUI canvas overlay |
-|  |  | Draw text on GUI canvas overlay |
+| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, ...)` | カメラフレームに対するテンプレートマッチング |
+| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, ...)` | マルチテンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, ...)` | GPU高速テンプレートマッチング |
+| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, ...)` | 逆テンプレートマッチング |
+| `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True)` | カメラフレームを./Captures/へ保存 |
+| `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image')` | カメラフレームをポップアップ表示 |
+| `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None)` | カメラフレームをOpenCV画像配列で取得 |
+| `openImage()` | `openImage(filename, mode='t')` | 画像ファイルを読み込み |
+| `setTemplateDir()` | `setTemplateDir(path)` | テンプレート画像ディレクトリを変更 |
+| `get_filespec()` | `get_filespec(filename, mode='t')` | 相対ファイル名をフルパスに解決 |
+| `displayRectangle()` | `displayRectangle(max_loc, width, height, tag=None, ms=2000, color=None, crop_fmt='', crop=None)` | GUIキャンバスオーバーレイに矩形描画 |
+| `displayText()` | `displayText(position, txt, tag=None, ms=2000, font='UD デジタル 教科書体 NP-B', fontsize=20, color='black')` | GUIキャンバスオーバーレイにテキスト描画 |
 
-**Internal Functions** (exposed with  prefix):
-| Function | Signature | Description |
-|----------|-----------|-------------|
-|  |  | Core template matching |
-|  |  | Convert image to grayscale |
-|  |  | Resize image |
+**内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
+| 関数 | シグネチャ | 説明 |
+|------|-----------|-------------|
+| `_template_match()` | `_template_match(image, template, threshold, use_gray, ...)` | コアテンプレートマッチング |
+| `_grayscale()` | `_grayscale(image)` | グレースケール変換 |
+| `_resize()` | `_resize(image, width, height)` | 画像リサイズ |
 
 #### 14.3.4 McuCommandBase
 
-**Import**: 
+**Import**: `from Commands.McuCommandBase import McuCommandBase`
 
-For firmware-based commands. Same meta-class switching as PythonCommand.
+ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
-### 14.4 Meta-Class Design (CommandMeta)
+### 14.4 メタクラス設計（CommandMeta）
 
+```python
+class CommandMeta(type):
+    """実装切り替え用メタクラス。
+    
+    現状はすべての実装がPyO3（Rustバインディング）に流れる。
+    将来: クラス変数や関数使用パターンに基づいて切り替え。
+    """
+    def __call__(cls, *args, **kwargs):
+        # 将来: cls.__target_implementation__等をチェック
+        # 現状: 常にPyO3実装を使用
+        return super().__call__(*args, **kwargs)
+```
 
-
-### 14.5 KeyPress and Sender
+### 14.5 KeyPressとSender
 
 #### 14.5.1 KeyPress
 
-- **Not exposed directly** to user scripts
-- Only  is accessible (resets controller to neutral state)
-- Internal implementation in Rust, exposed via PyO3
+- ユーザースクリプトに**直接公開されない**
+- `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
+- 内部実装はRust、PyO3経由で公開
 
 #### 14.5.2 Sender
 
-**PyO3 implementation** with limited public API:
-| Method | Signature | Description |
+**PyO3実装**（限定公開API）:
+| メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|  |  | Write serial row |
-|  |  | Direct serial write (pySerial-compatible type conversion in PyO3) |
+| `writeRow()` | `writeRow(row: str)` | シリアル行を書き込み |
+| `ser.write()` | `ser.write(data)` | 直接シリアル書き込み（PyO3でpySerial互換型変換） |
 
-Other Sender methods are not exposed as Sender class; integrated into appropriate other classes.
+その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
 
-### 14.6 New Dialog API (Type-Safe)
+### 14.6 新ダイアログAPI（型安全）
 
-**Deprecated**: ,  — preserved for compatibility, marked deprecated.
+**非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**New API**:  with Widget class and type hints.
+**新API**: `show_dialog()` with Widgetクラスと型ヒント。
 
+```python
+from typing import Generic, TypeVar, overload, Literal
 
+T = TypeVar('T')
 
-### 14.7 Event System (Dynamic Config)
+class Widget(Generic[T]):
+    @overload
+    def __init__(self: "Widget[str]", widget_type: Literal["Entry"], label: str, default: str) -> None: ...
+    
+    @overload
+    def __init__(self: "Widget[bool]", widget_type: Literal["Check"], label: str, default: bool) -> None: ...
+    
+    @overload
+    def __init__(self: "Widget[T]", widget_type: Literal["Combo"], label: str, options: list[T], default: T) -> None: ...
+    
+    @overload
+    def __init__(self: "Widget[int]", widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
+    
+    def __init__(self, widget_type, label, *args, **kwargs) -> None:
+        self.widget_type = widget_type
+        self.label = label
+        self.value: T | None = None  # ダイアログ後に結果を格納
 
-For use in dynamic configuration files (Python and Lua).
+# 使用例
+entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
+check = Widget("Check", "有効", True)  # Widget[bool]
+combo = Widget("Combo", "選択肢", ["A", "B", "C"], "A")  # Widget[str]
+spin = Widget("Spin", "数値", [1, 2, 3], 1)  # Widget[int]
 
+show_dialog("タイトル", widgets=[entry, check, combo, spin])
 
+print(entry.value)  # str
+print(check.value)  # bool
+print(combo.value)  # str
+print(spin.value)  # int
+```
 
+### 14.7 イベントシステム（動的設定）
 
+動的設定ファイル（PythonおよびLua）で使用。
 
-### 14.8 Configuration File System
+```python
+# Python設定
+import pokecon
 
-#### 14.8.1 Python Config
+pokecon.autocmd.create("camera.open", callback=lambda: print("Camera opened"))
+pokecon.autocmd.create("serial.connect", pattern="COM3", callback=lambda: print("Connected"))
+```
 
+```lua
+-- Lua設定（Neovim風require-less）
+pokecon.autocmd.create("camera.open", {
+    callback = function()
+        print("Camera opened")
+    end
+})
+```
 
+### 14.8 設定ファイルシステム
 
-#### 14.8.2 Lua Config
+#### 14.8.1 Python設定
 
+```python
+# config.py
+import pokecon
 
+pokecon.opt.camera.fps = 60
+pokecon.opt.camera.resolution = "1280x720"
+pokecon.opt.serial.port = "COM3"
+pokecon.opt.serial.baudrate = 115200
 
-### 14.9 Script Compatibility Requirements
+pokecon.keymap.set("controller", "A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+```
 
-| Requirement | Status |
-|-------------|--------|
-| All 17+ sample scripts work unchanged | ✅ Required |
-|  | ✅ Preserved via module patching |
-|  | ✅ Preserved via module patching |
-|  | ✅ Available |
-|  | ✅ Available |
-|  | ✅ Available (Rust serial wrapper) |
-| Image processing APIs | ✅ Rust implementation (opencv-rust) |
-| Discord notifications | ✅ Implemented |
-| LINE notifications | ⚠️ No-op stub (service EOL) |
-| Windows notifications | ✅ Implemented |
+#### 14.8.2 Lua設定
+
+```lua
+-- config.lua
+pokecon.opt.camera.fps = 60
+pokecon.opt.serial.port = "COM3"
+
+pokecon.autocmd.create("camera.open", {
+    callback = function()
+        print("Camera opened")
+    end
+})
+```
+
+### 14.9 スクリプト互換性要件
+
+| 要件 | 状態 |
+|------|------|
+| 17以上のサンプルスクリプトが変更なしで動作 | ✅ 必須 |
+| `from Commands.PythonCommandBase import PythonCommand` | ✅ モジュールパッチで保持 |
+| `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 |
+| `self.keys.neutral()` | ✅ 利用可能 |
+| `self.keys.ser.writeRow()` | ✅ 利用可能 |
+| `self.keys.ser.ser.write()` | ✅ 利用可能（Rustシリアルラッパー） |
+| 画像処理API | ✅ Rust実装（opencv-rust） |
+| Discord通知 | ✅ 実装済み |
+| LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
+| Windows通知 | ✅ 実装済み |
+
+### 14.10 開発環境自動構築
+
+#### 14.10.1 ディレクトリ構造
+
+```
+~/.config/pokecon/                    # XDG_CONFIG_HOME（ユーザーが編集する）
+├── pyproject.toml                    # Python LSP設定
+├── .luarc.json                       # Lua LSP設定（lua-language-server & EmmyLua共用）
+├── .vscode/settings.json             # Pylance用（オプション）
+├── settings.toml                     # ユーザー設定
+│   [python.packages]                 # ユーザー追加ライブラリ
+├── init.py                           # Python動的設定テンプレート
+└── init.lua                          # Lua動的設定テンプレート
+
+~/.local/share/pokecon/               # XDG_DATA_HOME（自動管理）
+├── typings/                          # Python型定義（.pyi、Rust側で自動生成）
+├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）
+├── venv/                             # Python仮想環境
+└── python/                           # python-build-standalone（非nix環境）
+```
+
+#### 14.10.2 設定ファイル生成タイミング
+
+- **存在しない時に生成**（初回、アップデート、削除後等）
+- **nix環境**: nix式で指定した場合のみnix側で生成。指定しなかった場合はアプリ起動時に存在しないためアプリ側で生成。
+- **非nix環境**: アプリ側で自動生成
+
+#### 14.10.3 Python管理（非nix環境）
+
+```rust
+// Rust側
+struct PythonManager {
+    data_dir: PathBuf,           // ~/.local/share/pokecon/
+    expected_python_version: Option<String>, // オプション（デフォルト推奨）
+}
+
+impl PythonManager {
+    fn ensure_python(&self) -> PathBuf {
+        // 1. 期待するバージョンがない場合はデフォルトを使用
+        // 2. 既存のPythonが期待するバージョンかチェック
+        // 3. ない場合はastral-sh/python-build-standaloneをダウンロード
+        // 4. 仮想環境を構築
+        // 5. 必須パッケージ + ユーザーパッケージをインストール
+    }
+}
+```
+
+#### 14.10.4 必須パッケージ管理
+
+- **リポジトリ内`pyproject.toml`**からビルド時に取得
+- **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
+- `cargo:rerun-if-changed=../pyproject.toml`で再ビルドトリガー
+
+```rust
+// build.rs
+fn main() {
+    println!("cargo:rerun-if-changed=../pyproject.toml");
+    // pyproject.tomlを読み込み、依存関係をパース
+    // 生成コードをOUT_DIRに書き出し
+}
+```
+
+#### 14.10.5 ユーザーパッケージ設定
+
+```toml
+# ~/.config/pokecon/settings.toml
+# ユーザーが触る設定ファイル（必須パッケージは含まない）
+
+[python]
+# Pythonバージョン（オプション、デフォルト推奨）
+# version = "3.12"  # 非推奨: 基本的にはデフォルトを使用
+
+# ユーザー追加ライブラリ
+[[python.packages]]
+name = "requests"
+version = ">=2.28.0"  # バージョン指定あり
+
+[[python.packages]]
+name = "numpy"        # バージョン指定なし（最新版）
+
+[[python.packages]]
+name = "custom-lib"
+version = "1.0.0"
+source = "git+https://github.com/user/custom-lib.git"  # 取得元指定
+
+[[python.packages]]
+name = "local-lib"
+version = "0.5.0"
+source = "path=/home/user/projects/local-lib"  # ローカルパス
+```
+
+#### 14.10.6 LSP設定（pyproject.toml）
+
+```toml
+[tool.basedpyright]
+extraPaths = ["/home/username/.local/share/pokecon/typings"]
+venvPath = "/home/username/.local/share/pokecon"
+venv = "venv"
+
+[tool.pyright]
+extraPaths = ["/home/username/.local/share/pokecon/typings"]
+venvPath = "/home/username/.local/share/pokecon"
+venv = "venv"
+
+[tool.mypy]
+mypy_path = ["/home/username/.local/share/pokecon/typings"]
+
+[tool.pylsp.plugins.jedi]
+extra_paths = ["/home/username/.local/share/pokecon/typings"]
+
+[tool.pyrefly]
+search_path = ["/home/username/.local/share/pokecon/typings"]
+
+[tool.ty.environment]
+extra-paths = ["/home/username/.local/share/pokecon/typings"]
+python = "/home/username/.local/share/pokecon/venv/bin/python"
+
+[tool.ruff]
+# ruffはextraPaths未対応（LSP機能限定）
+```
+
+#### 14.10.7 Lua LSP設定（.luarc.json）
+
+```json
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "workspace.library": [
+        "/home/username/.local/share/pokecon/lua-typings"
+    ]
+}
+```
 
 ---
 

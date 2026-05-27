@@ -102,6 +102,7 @@
 - **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。
 - **ログソース**: バックエンドからWebSocket経由で受信したログ。
 - **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
+- **ログレベル**: DEBUG、INFO、WARNING、ERROR、CRITICAL（フィルタリング用）。どのログがどのレベルかは実装時に決定。
 - **独立ボタン**: その他タブの「出力をクリア」ボタン。
 
 ### 2.4 サブタブ構造（コマンドタブ）
@@ -221,11 +222,15 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 #### 4.3.2 ハードウェア制御セクション
 
+> **ステータス: 将来フェーズに延期**
+
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
 | **ProController** | Radio（Xinput連動） | Switch Pro Controller入力モード |
 | **Xinput** | Radio（ProController連動） | Xbox互換コントローラー入力モード |
 | **録画** | Checkbox | 入力記録を有効化 |
+
+**注**: ハードウェア制御はブラウザのAPI制約により実装が複雑なため、将来のフェーズに延期します。今回のリファクタリングではソフトウェア制御（キーボード、マウス）のみを実装します。
 
 #### 4.3.3 Switch Controller Simulator
 
@@ -258,6 +263,33 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 - **表示**: 利用可能なコマンドを表示するListboxまたはTreeview。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
+
+##### タグ体系
+
+タグはコマンドの分類・フィルタリングに使用されるメタデータです。
+
+**自動タグ（ディレクトリ由来）**:
+- コマンドファイルの配置ディレクトリ名から自動生成
+- `@` プレフィックスを付与（例: `@Samples`, `@RankGlitch`）
+- ネストしたディレクトリ構造に対応（例: `Commands/PythonCommands/Samples/RankGlitch/` → `["@Samples", "@RankGlitch"]`）
+
+**手動タグ（クラス属性）**:
+- コマンドクラスの `TAGS` クラス属性で定義
+- `str` または `list[str]` で指定可能
+- `@` プレフィックスは付かない（慣例）
+
+**動的タグ（イベントによる追加）**:
+- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能
+- 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
+
+**タグの統合順序**:
+1. 自動タグ（ディレクトリ由来、`@` プレフィックス付き）
+2. 手動タグ（クラス属性、`@` なし）
+3. 動的タグ（イベントコールバックによる追加）
+
+**フィルター動作**:
+- `in` 演算子による完全一致（部分一致ではない）
+- UI上では `@` なしタグが先、`@` 付きタグが後に表示
 
 #### 4.4.3 ショートカットボタン（10ボタン）
 
@@ -322,7 +354,10 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 
 #### 4.6.2 将来 / フェーズ7項目（優先度低だが必須）
 
-- キー設定エディター（高度なキーバインドUI）。
+- **キー設定エディター（高度なキーバインドUI）**
+  - GUIからの編集は不要
+  - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
+  - 例: `keyboard.shortcuts.F5 = "command_start"`
 - Pokémon Home連携（詳細不明 — 予約セクション）。
 
 ---
@@ -342,8 +377,17 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
-- **シグナリング**: HTTPベースのSDP交換。
+- **シグナリング**: HTTPベースのSDP交換（実装詳細は別途決定）。
 - **自動再接続**: 接続断時に3秒ごとに再試行。
+
+**通信内容**:
+
+| 種類 | 内容 | フォールバック |
+|------|------|--------------|
+| 映像 | WebRTCビデオトラック | HTTP MJPEG |
+| コントローラー入力 | WebRTC DataChannel | WebSocket |
+| ログ | WebRTC DataChannel | WebSocket |
+| API呼び出し | HTTP REST | なし（HTTP必須） |
 
 ### 5.3 WebSocket（フォールバック）
 
@@ -368,8 +412,10 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。
 - **認証**: なし（ローカル/LAN専用）。
-- **モジュール**: 合計約39エンドポイントの約9モジュール。
+- **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
+
+**注**: 本要求仕様ではAPIの概要のみを記載します。具体的なエンドポイント定義はOpenAPI自動生成に従い、別途API仕様書として管理します。
 
 ### 5.5 キーボード入力API
 
@@ -891,10 +937,11 @@ import pokecon
 
 # 基本的なイベント登録
 # 戻り値: HandlerId（ハンドラ解除用）
-handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+# callbackの引数: イベントデータ（dict[str, Any]、イベントごとに型が異なる）
+handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda data: print(data["device_id"]))
 
 # 一度だけ実行
-pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Connected"))
+pokecon.autocmd.once("SerialConnectPost", callback=lambda data: print(data["port"]))
 
 # イベントハンドラ解除
 # 第2引数: HandlerId または コールバック関数
@@ -910,15 +957,15 @@ pokecon.autocmd.clear("my_group")
 ```lua
 -- Lua設定（Neovim風require-less）
 pokecon.autocmd.on("CameraOpenPost", {
-    callback = function()
-        print("Camera opened")
+    callback = function(data)
+        print(data.device_id)
     end,
     group = "my_group"
 })
 
 pokecon.autocmd.once("SerialConnectPost", {
-    callback = function()
-        print("Connected")
+    callback = function(data)
+        print(data.port)
     end
 })
 
@@ -931,6 +978,11 @@ pokecon.autocmd.off_all("CameraOpenPost")
 -- グループ単位で解除
 pokecon.autocmd.clear("my_group")
 ```
+
+**コールバック引数の型**:
+- すべてのイベントコールバックは `dict[str, Any]`（Python）または `table`（Lua）を受け取る
+- イベントごとに異なるフィールドを持つ（§14.7.5参照）
+- LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
 
 #### 14.7.4 イベント定義・発火API
 
@@ -959,22 +1011,44 @@ print(pokecon.event.list_defined())
 
 #### 14.7.5 組み込みイベント一覧
 
-| イベント名 | フェーズ | 説明 |
-|-----------|---------|------|
-| `AppStartupPost` | Post | アプリケーション起動後 |
-| `AppShutdownPre` | Pre | アプリケーション終了前 |
-| `SerialConnectPost` | Post | シリアルポート接続後 |
-| `SerialDisconnectPost` | Post | シリアルポート切断後 |
-| `CameraOpenPost` | Post | カメラオープン後 |
-| `CameraClosePost` | Post | カメラクローズ後 |
-| `CommandStartPre` | Pre | コマンド実行開始前 |
-| `CommandStartPost` | Post | コマンド実行開始後 |
-| `CommandStopPost` | Post | コマンド停止後 |
-| `CommandErrorPost` | Post | コマンドエラー発生後 |
-| `ScriptLoadPost` | Post | スクリプト読み込み後 |
-| `ConfigReloadPost` | Post | 設定再読み込み後 |
-| `InputPressedPre` | Pre | 入力押下前 |
-| `InputReleasedPost` | Post | 入力解放後 |
+| イベント名 | フェーズ | 説明 | コールバックデータ |
+|-----------|---------|------|------------------|
+| `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
+| `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
+| `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
+| `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
+| `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
+| `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
+| `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
+| `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
+| `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
+| `CommandErrorPost` | Post | コマンドエラー発生後 | `{"command_name": str, "error": str}` |
+| `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
+| `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
+| `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
+| `InputPressedPre` | Pre | 入力押下前 | `{"button": str}` |
+| `InputReleasedPost` | Post | 入力解放後 | `{"button": str}` |
+
+**ScriptLoadPre/ScriptLoadPostのタイミング**:
+
+```
+1. 初期処理: script_dirs の解決・存在確認
+2. ファイル探索: 各ディレクトリ内の .py ファイルを探索
+3. クラス抽出: モジュールインポート・コマンドクラス抽出・自動タグ生成
+4. ScriptLoadPre 発火: pokecon.state.command_candidates が設定済み
+   → ユーザーがコールバック内で command_candidates を変更可能
+5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
+6. ScriptLoadPost 発火: すべてのタグ統合完了後
+```
+
+**CommandInfo構造**:
+```python
+class CommandInfo:
+    name: str           # コマンド名（NAME属性）
+    module_path: str    # モジュールファイルパス
+    class_name: str     # クラス名
+    tags: list[str]     # 統合後のタグ一覧（自動+手動+動的）
+```
 
 **命名規則**:
 - **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
@@ -1000,12 +1074,33 @@ BuiltinEvent = Literal[
     "CameraOpenPost", "CameraClosePost",
     "CommandStartPre", "CommandStartPost",
     "CommandStopPost", "CommandErrorPost",
-    "ScriptLoadPost", "ConfigReloadPost",
+    "ScriptLoadPre", "ScriptLoadPost",
+    "ConfigReloadPost",
     "InputPressedPre", "InputReleasedPost"
 ]
 
 # 組み込みイベント + ユーザー定義イベント
 EventName = Union[BuiltinEvent, str]
+```
+
+**イベントデータ型**（実装時に TypedDict または @dataclass で定義）:
+
+```python
+from typing import TypedDict
+
+class ScriptLoadPreData(TypedDict):
+    source_dirs: list[str]
+    candidate_count: int
+
+class ScriptLoadPostData(TypedDict):
+    commands: list[CommandInfo]
+    loaded_count: int
+
+class CameraOpenPostData(TypedDict):
+    device_id: str
+    resolution: tuple[int, int]
+
+# ... その他のイベントデータ型
 ```
 
 #### 14.7.7 コールバックシグネチャ
@@ -1548,6 +1643,7 @@ print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"�
 # コマンド関連
 print(pokecon.state.is_running)         # コマンド実行中（True/False）
 print(pokecon.state.current_command)    # 現在実行中のコマンド名
+print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（ScriptLoadPre前に生成）
 
 # プロファイル関連
 print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名

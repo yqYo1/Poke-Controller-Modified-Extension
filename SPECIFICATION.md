@@ -1,8 +1,8 @@
 # Poke-Controller Modified Extension — UIリファクタリング仕様書
 
-> **バージョン**: 2.0.0-draft  
+> **バージョン**: 2.1.0-draft  
 > **ブランチ**: `refactor/rust-core`  
-> **日付**: 2026-05-21  
+> **日付**: 2026-05-27  
 > **スコープ**: Web/デスクトップUI（SvelteKit）— バックエンドAPIおよびRustコアは対象外  
 > **ソース**: セッション議事録から抽出した過去のユーザー要件（現在のコードベースではない）
 
@@ -279,7 +279,7 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 - `@` プレフィックスは付かない（慣例）
 
 **動的タグ（イベントによる追加）**:
-- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能
+- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§14.7.5参照）
 - 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
 
 **タグの統合順序**:
@@ -1366,7 +1366,60 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 - **nix環境**: nix式で指定した場合のみnix側で生成。指定しなかった場合はアプリ起動時に存在しないためアプリ側で生成。
 - **非nix環境**: アプリ側で自動生成
 
-#### 14.10.3 Python管理（非nix環境）
+#### 14.10.3 Python管理（nix環境）
+
+nix環境では、Pythonインタープリターのパスを**ビルド時にnixストアパスとして埋め込む**。
+
+**実装方式**:
+
+```rust
+// rust/pokecon-core/build.rs
+// nix flakeから渡されたPOKECON_PYTHON_PATHを読み込み、ソースコードに埋め込む
+
+fn main() {
+    // nixビルド時に環境変数として渡される（flake.nixで設定）
+    let python_path = env::var("POKECON_PYTHON_PATH")
+        .unwrap_or_else(|_| "/usr/bin/python3".to_string());
+    
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("python_path.rs");
+    
+    fs::write(&dest_path, format!(
+        r#"pub const PYTHON_PATH: &str = "{}";"#,
+        python_path
+    )).unwrap();
+    
+    println!("cargo:rerun-if-env-changed=POKECON_PYTHON_PATH");
+}
+```
+
+```rust
+// rust/pokecon-core/src/python.rs
+include!(concat!(env!("OUT_DIR"), "/python_path.rs"));
+
+pub fn get_python_path() -> &'static str {
+    PYTHON_PATH
+}
+```
+
+```nix
+# flake.nix（抜粋）
+# nix式でPythonパッケージを指定した場合、POKECON_PYTHON_PATHを設定
+pythonEnv = pkgs.python3.withPackages (ps: [ ... ]);
+
+pokecon-server = rustPlatform.buildRustPackage {
+  # ...
+  POKECON_PYTHON_PATH = "${pythonEnv}/bin/python";
+  # ...
+};
+```
+
+**特徴**:
+- nixストアパスは不変なため、再現性が保証される
+- グローバルPythonを使用しない（nixの隔離性を維持）
+- 非nix環境では環境変数が未設定のため、実行時に別途Pythonを取得するフォールバック動作
+
+#### 14.10.4 Python管理（非nix環境）
 
 ```rust
 // Rust側
@@ -1386,7 +1439,7 @@ impl PythonManager {
 }
 ```
 
-#### 14.10.4 必須パッケージ管理
+#### 14.10.5 必須パッケージ管理
 
 - **リポジトリ内`pyproject.toml`**からビルド時に取得
 - **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
@@ -1401,7 +1454,7 @@ fn main() {
 }
 ```
 
-#### 14.10.5 ユーザーパッケージ設定
+#### 14.10.6 ユーザーパッケージ設定
 
 ```toml
 # ~/.config/pokecon/settings.toml
@@ -1430,7 +1483,7 @@ version = "0.5.0"
 source = "path=/home/user/projects/local-lib"  # ローカルパス
 ```
 
-#### 14.10.6 LSP設定（pyproject.toml）
+#### 14.10.7 LSP設定（pyproject.toml）
 
 ```toml
 [tool.basedpyright]
@@ -1460,7 +1513,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 # ruffはextraPaths未対応（LSP機能限定）
 ```
 
-#### 14.10.7 Lua LSP設定（.luarc.json）
+#### 14.10.8 Lua LSP設定（.luarc.json）
 
 ```json
 {

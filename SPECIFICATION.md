@@ -950,6 +950,12 @@ print(pokecon.event.list_defined())
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
 
+**注記**: 動的設定用イベントシステム（§14.7）とWebSocketイベント（§5.3）は**別々のシステム**です。
+- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— ユーザースクリプトで使用
+- **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
+
+両者は内部で連携しますが、命名規則と用途が異なります。
+
 #### 14.7.6 型ヒント
 
 ```python
@@ -1030,6 +1036,8 @@ print(pokecon.state.active_profile)
          （低）                                    （高）
 ```
 
+**注記**: 動的設定（⑤）が最も優先されるため、CLI引数（④）で上書きした設定も、動的設定ファイルで再度上書きされる可能性があります。動的設定ファイル内で `pokecon.opt.auto_reload_config = True` を設定した場合、ファイル変更時に自動的に再読み込みが行われ、CLI引数での設定が無視されることがあります。
+
 #### 14.8.3 静的設定（settings.toml）
 
 ```toml
@@ -1066,6 +1074,14 @@ description = "デフォルトプロファイル"
 | **プロファイル切替時** | 自動読み込み（新プロファイルの設定を反映） |
 | **手動** | メニュー「Load Dynamic Config」で読み込み |
 | **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン） |
+
+**メニュー項目**（§14.11.1参照）:
+```
+File
+├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
+├── Reload Dynamic Config    ← 現在のファイルを再読み込み
+└── Open Config Directory    ← 設定ディレクトリを開く
+```
 
 #### 14.8.5 動的設定（Python）
 
@@ -1356,6 +1372,197 @@ File
 - 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
 - エラー内容はログパネルに出力
 - フォールバック機構により、前回の有効な設定を維持
+
+### 14.12 キーマップシステム仕様
+
+#### 14.12.1 設計方針
+
+- **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
+- **フラットAPI**: `pokecon.keymap.set(key, callback, state)`
+- **状態指定**: `press`（デフォルト）, `release`, `hold`
+
+#### 14.12.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 基本的なキーマッピング
+pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+
+# 修飾キー付き
+pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
+pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
+pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"), state="release")
+pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
+
+# 特殊キー
+pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
+pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
+pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
+pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
+```
+
+```lua
+-- Lua設定
+pokecon.keymap.set("A", function()
+    pokecon.input.press(pokecon.keys.Button.A)
+end)
+
+pokecon.keymap.set("<C-a>", function()
+    print("Ctrl+A pressed")
+end, {state = "press"})
+```
+
+#### 14.12.3 サポートするキー記法
+
+| 記法 | 説明 | 例 |
+|------|------|-----|
+| `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
+| `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |
+| `<M-x>` | Alt + x | `<M-a>`, `<M-F4>` |
+| `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
+| `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
+| `<Space>` | スペースキー | `<Space>` |
+| `<Enter>` | エンターキー | `<Enter>` |
+| `<Esc>` | エスケープキー | `<Esc>` |
+| `<Tab>` | タブキー | `<Tab>` |
+| `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
+
+#### 14.12.4 キー重複時の優先順位
+
+- 後から登録されたキーバインドが優先される（後勝ち）
+- 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
+- プロファイル切替時は、新プロファイルのキーバインドに置き換えられる
+
+#### 14.12.5 デフォルトキーバインド
+
+| キー | 動作 | 状態 |
+|------|------|------|
+| `<F5>` | コマンド開始 | press |
+| `<F6>` | コマンド停止 | press |
+| `<F7>` | コマンド一時停止 | press |
+| `<F8>` | コマンド再開 | press |
+| `<F9>` | コマンドリロード | press |
+| `<Esc>` | 緊急停止 | press |
+
+### 14.13 相互参照API仕様
+
+#### 14.13.1 設計方針
+
+- **Neovimの`:source`に類似**: `pokecon.source(path)`
+- **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
+- **相対パス・絶対パス両対応**
+
+#### 14.13.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 絶対パス
+pokecon.source("/home/user/.config/pokecon/extra_settings.py")
+
+# 相対パス（設定ディレクトリ基準）
+pokecon.source("./extra_settings.py")
+
+# チルダ展開
+pokecon.source("~/.config/pokecon/extra_settings.py")
+```
+
+```lua
+-- Lua設定
+pokecon.source("~/.config/pokecon/extra_settings.lua")
+```
+
+#### 14.13.3 エラーハンドリング
+
+- 指定されたファイルが存在しない場合はエラーをログに出力
+- ファイルの読み込みに失敗しても、現在の設定は維持される
+- 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
+
+### 14.14 状態取得API仕様
+
+#### 14.14.1 設計方針
+
+- **読み取り専用**: `pokecon.state.<property>`
+- **リアルタイム**: 現在の状態を即座に反映
+- **スレッドセーフ**: 複数スレッドから安全に読み取り可能
+
+#### 14.14.2 利用可能な状態プロパティ
+
+```python
+# Python設定
+import pokecon
+
+# シリアル関連
+print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3"）
+print(pokecon.state.serial_baudrate)    # 現在のボーレート（例: 115200）
+print(pokecon.state.serial_connected)   # 接続状態（True/False）
+
+# カメラ関連
+print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
+print(pokecon.state.camera_fps)         # 現在のFPS
+print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
+
+# コマンド関連
+print(pokecon.state.is_running)         # コマンド実行中（True/False）
+print(pokecon.state.current_command)    # 現在実行中のコマンド名
+
+# プロファイル関連
+print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名
+print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
+
+# 入力関連
+print(pokecon.state.last_input)         # 最後の入力
+print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
+```
+
+```lua
+-- Lua設定
+print(pokecon.state.serial_port)
+print(pokecon.state.camera_opened)
+print(pokecon.state.active_profile)
+```
+
+### 14.15 プロファイルAPI仕様
+
+#### 14.15.1 設計方針
+
+- **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
+- **動的設定ファイル内で使用可能**
+
+#### 14.15.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 現在のプロファイル取得
+current = pokecon.profile.current()
+print(f"Current profile: {current}")
+
+# 利用可能なプロファイル一覧
+profiles = pokecon.profile.list()
+print(f"Available profiles: {profiles}")
+
+# プロファイル切替
+pokecon.profile.switch("custom")
+```
+
+```lua
+-- Lua設定
+print(pokecon.profile.current())
+print(pokecon.profile.list())
+pokecon.profile.switch("custom")
+```
+
+#### 14.15.3 プロファイル切替時の動作
+
+- 新しいプロファイルの設定を読み込み
+- 動的設定ファイル（`init.py`/`init.lua`）を自動再読み込み
+- イベントハンドラをクリアして再登録
+- キーマップをクリアして再登録
 
 ---
 

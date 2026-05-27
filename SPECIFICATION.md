@@ -846,54 +846,316 @@ print(spin.value)  # int
 
 ### 14.7 イベントシステム（動的設定）
 
-動的設定ファイル（PythonおよびLua）で使用。
+動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
+
+#### 14.7.1 設計方針
+
+- **Neovim/Vimライクな設計**: `autocmd` スタイルのイベントハンドラ登録
+- **Pre/Postフェーズ**: すべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ
+- **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（LSP警告のため）
+- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
+- **Python/Lua両対応**: 両言語で同じAPI構造を使用
+
+#### 14.7.2 名前空間設計
+
+| 名前空間 | 用途 | API |
+|---------|------|-----|
+| `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `off_all()`, `clear(group)` |
+| `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
+
+#### 14.7.3 イベントハンドラAPI
 
 ```python
 # Python設定
 import pokecon
 
-pokecon.autocmd.create("camera.open", callback=lambda: print("Camera opened"))
-pokecon.autocmd.create("serial.connect", pattern="COM3", callback=lambda: print("Connected"))
+# 基本的なイベント登録
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 一度だけ実行
+pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Connected"))
+
+# イベントハンドラ解除
+pokecon.autocmd.off("CameraOpenPost", callback=handler_func)
+
+# すべてのハンドラ解除
+pokecon.autocmd.off_all("CameraOpenPost")
+
+# グループ単位で解除
+pokecon.autocmd.clear("my_group")
 ```
 
 ```lua
 -- Lua設定（Neovim風require-less）
-pokecon.autocmd.create("camera.open", {
+pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
         print("Camera opened")
+    end,
+    group = "my_group"
+})
+
+pokecon.autocmd.once("SerialConnectPost", {
+    callback = function()
+        print("Connected")
     end
 })
 ```
+
+#### 14.7.4 イベント定義・発火API
+
+```python
+# ユーザー定義イベント
+pokecon.event.define("MyCustomEvent")
+
+# イベント発火
+pokecon.event.emit("MyCustomEvent", data={"key": "value"})
+
+# 定義済みイベント一覧
+print(pokecon.event.list_defined())
+
+# イベントスキーマ取得
+schema = pokecon.event.get_schema("CameraOpenPost")
+```
+
+```lua
+-- Lua設定
+pokecon.event.define("MyCustomEvent")
+pokecon.event.emit("MyCustomEvent", {key = "value"})
+print(pokecon.event.list_defined())
+```
+
+#### 14.7.5 組み込みイベント一覧
+
+| イベント名 | フェーズ | 説明 |
+|-----------|---------|------|
+| `AppStartupPost` | Post | アプリケーション起動後 |
+| `AppShutdownPre` | Pre | アプリケーション終了前 |
+| `SerialConnectPost` | Post | シリアルポート接続後 |
+| `SerialDisconnectPost` | Post | シリアルポート切断後 |
+| `CameraOpenPost` | Post | カメラオープン後 |
+| `CameraClosePost` | Post | カメラクローズ後 |
+| `CommandStartPre` | Pre | コマンド実行開始前 |
+| `CommandStartPost` | Post | コマンド実行開始後 |
+| `CommandStopPost` | Post | コマンド停止後 |
+| `CommandErrorPost` | Post | コマンドエラー発生後 |
+| `ScriptLoadPost` | Post | スクリプト読み込み後 |
+| `ConfigReloadPost` | Post | 設定再読み込み後 |
+| `InputPressedPre` | Pre | 入力押下前 |
+| `InputReleasedPost` | Post | 入力解放後 |
+
+**命名規則**:
+- **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
+- **Pre/Post後置**: Vim/Neovim風（`BufReadPre`/`BufReadPost`に類似）
+- **名前空間なし**: ドット区切りの名前空間は使用しない
+- **動詞に限定しない**: 名詞・形容詞も可
+
+#### 14.7.6 型ヒント
+
+```python
+from typing import Literal, Union
+
+# 組み込みイベントの厳密な型定義
+BuiltinEvent = Literal[
+    "AppStartupPost", "AppShutdownPre",
+    "SerialConnectPost", "SerialDisconnectPost",
+    "CameraOpenPost", "CameraClosePost",
+    "CommandStartPre", "CommandStartPost",
+    "CommandStopPost", "CommandErrorPost",
+    "ScriptLoadPost", "ConfigReloadPost",
+    "InputPressedPre", "InputReleasedPost"
+]
+
+# 組み込みイベント + ユーザー定義イベント
+EventName = Union[BuiltinEvent, str]
+```
+
+#### 14.7.7 コールバックシグネチャ
+
+```python
+# 引数なし（デフォルト）
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 引数あり（将来の拡張）
+pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
+```
+
+#### 14.7.8 状態取得API
+
+```python
+# 読み取り専用で状態を取得
+print(pokecon.state.serial_port)      # 現在のシリアルポート
+print(pokecon.state.camera_opened)    # カメラがオープンか
+print(pokecon.state.active_profile)   # 現在のアクティブプロファイル
+print(pokecon.state.is_running)       # コマンド実行中か
+```
+
+```lua
+-- Lua設定
+print(pokecon.state.serial_port)
+print(pokecon.state.camera_opened)
+print(pokecon.state.active_profile)
+```
+
+#### 14.7.9 エラーハンドリング
+
+- イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
+- エラー内容はログに出力
+- フォールバック機構により、システム全体の動作を停止しない
 
 ### 14.8 設定ファイルシステム
 
-#### 14.8.1 Python設定
+#### 14.8.1 設定ファイルの種類と対象ユーザー
 
-```python
-# config.py
-import pokecon
+| 種類 | ファイル | 言語 | 用途 | 対象ユーザー |
+|------|---------|------|------|------------|
+| **静的設定** | `settings.toml` | TOML | グローバル設定、プロファイル管理 | **全ユーザー** |
+| **動的設定** | `init.py` | Python | イベントハンドラ、カスタムロジック | **パワーユーザー** |
+| **動的設定** | `init.lua` | Lua | イベントハンドラ、カスタムロジック | **パワーユーザー** |
 
-pokecon.opt.camera.fps = 60
-pokecon.opt.camera.resolution = "1280x720"
-pokecon.opt.serial.port = "COM3"
-pokecon.opt.serial.baudrate = 115200
+**重要**: TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される。
 
-pokecon.keymap.set("controller", "A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+#### 14.8.2 設定の優先順位とマージ方式
+
+設定は以下の5層で優先順位が決まる（**後勝ち**、未設定項目は上位から継承）：
+
+1. **デフォルト値**（アプリケーション内蔵）
+2. **グローバル設定**（`~/.config/pokecon/settings.toml`）
+3. **プロファイル設定**（`~/.config/pokecon/profiles/<name>.toml`）
+4. **起動時引数**（CLIオプション）
+5. **動的設定**（`~/.config/pokecon/init.py` / `init.lua`）
+
+```
+優先順位: ①デフォルト → ②グローバル → ③プロファイル → ④CLI引数 → ⑤動的設定
+         （低）                                    （高）
 ```
 
-#### 14.8.2 Lua設定
+#### 14.8.3 静的設定（settings.toml）
+
+```toml
+# ~/.config/pokecon/settings.toml
+[global]
+language = "ja"
+auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
+
+[python]
+# Pythonバージョン（オプション、デフォルト推奨）
+# version = "3.12"
+
+# ユーザー追加ライブラリ
+[[python.packages]]
+name = "requests"
+version = ">=2.28.0"
+
+[[python.packages]]
+name = "numpy"
+
+[profiles]
+active = "default"
+
+[[profiles.list]]
+name = "default"
+description = "デフォルトプロファイル"
+```
+
+#### 14.8.4 動的設定ファイルの読み込みタイミング
+
+| タイミング | 動作 |
+|-----------|------|
+| **アプリケーション起動時** | 自動読み込み（`init.py` / `init.lua`） |
+| **プロファイル切替時** | 自動読み込み（新プロファイルの設定を反映） |
+| **手動** | メニュー「Load Dynamic Config」で読み込み |
+| **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン） |
+
+#### 14.8.5 動的設定（Python）
+
+```python
+# ~/.config/pokecon/init.py
+import pokecon
+
+# カメラ設定（フラット構造）
+pokecon.opt.camera_fps = 60
+pokecon.opt.camera_resolution = "1280x720"
+
+# シリアル設定（フラット構造）
+pokecon.opt.serial_port = "COM3"
+pokecon.opt.serial_baudrate = 115200
+
+# キーマッピング（Neovim風記法）
+pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
+pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
+
+# イベントハンドラ
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 相互参照（他の設定ファイルを読み込み）
+pokecon.source("~/.config/pokecon/extra_settings.py")
+
+# プロファイル取得
+current_profile = pokecon.profile.current()
+print(f"Current profile: {current_profile}")
+
+# 状態取得（読み取り専用）
+print(pokecon.state.serial_port)
+print(pokecon.state.camera_opened)
+print(pokecon.state.active_profile)
+```
+
+#### 14.8.6 動的設定（Lua）
 
 ```lua
--- config.lua
-pokecon.opt.camera.fps = 60
-pokecon.opt.serial.port = "COM3"
+-- ~/.config/pokecon/init.lua
+-- require不要で pokecon.* に直接アクセス
 
-pokecon.autocmd.create("camera.open", {
+-- カメラ設定（フラット構造）
+pokecon.opt.camera_fps = 60
+pokecon.opt.serial_port = "COM3"
+
+-- キーマッピング（Neovim風記法）
+pokecon.keymap.set("A", function()
+    pokecon.input.press(pokecon.keys.Button.A)
+end)
+
+-- イベントハンドラ
+pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
         print("Camera opened")
     end
 })
+
+-- 相互参照
+pokecon.source("~/.config/pokecon/extra_settings.lua")
+
+-- 状態取得
+print(pokecon.state.serial_port)
+print(pokecon.state.active_profile)
 ```
+
+#### 14.8.7 エラーハンドリング
+
+- 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
+- エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
+- フォールバック機構により、前回の有効な設定を維持
+
+#### 14.8.8 設定ファイルの階層構造
+
+```
+~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）
+├── settings.toml                     # 静的設定（グローバル）
+├── profiles/                         # プロファイル管理
+│   ├── default.toml
+│   └── custom.toml
+├── init.py                           # Python動的設定
+├── init.lua                          # Lua動的設定
+├── pyproject.toml                    # Python LSP設定（自動生成）
+├── .luarc.json                       # Lua LSP設定（自動生成）
+└── .vscode/                          # VS Code設定（オプション）
+    └── settings.json
+```
+
+**設定ディレクトリのカスタマイズ**:
+- 環境変数: `POKECON_HOME=/path/to/config`
+- コマンドライン引数: `--config-dir /path/to/config`
 
 ### 14.9 スクリプト互換性要件
 
@@ -929,7 +1191,23 @@ pokecon.autocmd.create("camera.open", {
 ├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）
 ├── venv/                             # Python仮想環境
 └── python/                           # python-build-standalone（非nix環境）
+
+# 開発用（リポジトリ内）
+python/pokecon/typings/               # 型定義の元データ（開発・メンテナンス用）
+├── __init__.pyi
+├── keys.pyi
+├── commands.pyi
+└── events.pyi
 ```
+
+**注記**: 
+- **実行時生成**: `~/.local/share/pokecon/typings/` 配下の `.pyi` はアプリ起動時にRust側で自動生成
+- **開発用元データ**: `python/pokecon/typings/` 配下の `.pyi` はリポジトリに含め、開発・メンテナンス用として使用
+- **ユーザーが直接触らない**: XDG_DATA_HOME 配下は自動管理。ユーザーが編集するのは XDG_CONFIG_HOME 配下のみ
+
+**未確定事項（grill-me継続中）**:
+- 型定義ファイルの最終的な配布方式については、別途検討が必要
+- 現状: XDG_DATA_HOMEへの自動生成方式で確定、開発用元データはリポジトリ内に配置
 
 #### 14.10.2 設定ファイル生成タイミング
 
@@ -1041,6 +1319,42 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
     ]
 }
 ```
+
+### 14.11 動的設定ファイルのUI
+
+#### 14.11.1 メニュー配置
+
+- **配置場所**: メニューバー内
+- **項目**: 単一の「Load Dynamic Config」メニュー項目
+
+```
+File
+├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
+├── Reload Dynamic Config    ← 現在のファイルを再読み込み
+└── Open Config Directory    ← 設定ディレクトリを開く
+```
+
+#### 14.11.2 ファイル選択と自動判別
+
+- **ファイル選択ダイアログ**: 単一の「Load Dynamic Config」メニューから開く
+- **自動判別**: 拡張子で言語を自動判別
+  - `.py` → Python動的設定ファイル
+  - `.lua` → Lua動的設定ファイル
+- **手動指定**: 拡張子が不明な場合はユーザーに選択を促す
+
+#### 14.11.3 リロード機能
+
+| 機能 | 説明 |
+|------|------|
+| **手動リロード** | 「Reload Dynamic Config」メニューで現在のファイルを再読み込み |
+| **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**） |
+| **有効化方法** | `pokecon.opt.auto_reload_config = True` またはUI設定 |
+
+#### 14.11.4 エラーハンドリング
+
+- 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
+- エラー内容はログパネルに出力
+- フォールバック機構により、前回の有効な設定を維持
 
 ---
 

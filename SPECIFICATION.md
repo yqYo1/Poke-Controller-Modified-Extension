@@ -1,606 +1,607 @@
-# Poke-Controller Modified Extension — UI Refactoring Specification
+# Poke-Controller Modified Extension — UIリファクタリング仕様書
 
-> **Version**: 2.0.0-draft  
-> **Branch**: `refactor/rust-core`  
-> **Date**: 2026-05-21  
-> **Scope**: Web/Desktop UI (SvelteKit) — Backend API and Rust core are out of scope  
-> **Source**: Past user requirements extracted from session transcripts (not current codebase)
+> **バージョン**: 2.0.0-draft  
+> **ブランチ**: `refactor/rust-core`  
+> **日付**: 2026-05-21  
+> **スコープ**: Web/デスクトップUI（SvelteKit）— バックエンドAPIおよびRustコアは対象外  
+> **ソース**: セッション議事録から抽出した過去のユーザー要件（現在のコードベースではない）
 
 ---
 
-## 1. Overview
+## 1. 概要
 
-### 1.1 Purpose
+### 1.1 目的
 
-This document specifies the requirements for the new web/desktop UI of Poke-Controller Modified Extension, replacing the legacy Python/Tkinter UI. The specification is derived **exclusively from past user requirements** communicated during refactoring sessions, not from the current codebase.
+本ドキュメントは、従来のPython/Tkinter UIを置き換えるPoke-Controller Modified Extensionの新しいWeb/デスクトップUIの要件を規定します。本仕様は、リファクタリングセッション中に伝達された**過去のユーザー要件のみ**から導出されており、現在のコードベースからは導出されていません。
 
-### 1.2 Design Philosophy
+### 1.2 設計方針
 
-- **Visual parity with Tkinter**: The new UI must closely match the original Tkinter layout and appearance, not merely replicate features functionally. The layout, colors, button spacing, and widget types must align with the original.
-- **Script compatibility**: All scripts that worked with the pre-refactoring version must continue to work normally. No breaking changes to the script API.
-- **Modern stack**: SvelteKit + Svelte 5 (runes mode) + **Tailwind CSS v4** (confirmed, not subject to change).
-- **Low-latency communication**: WebRTC primary with HTTP/MJPEG and WebSocket fallbacks. WebSocket auto-reconnect every 3 seconds on disconnect.
-- **Type safety**: OpenAPI-generated TypeScript types from Rust backend via `utoipa` v5 + `openapi-typescript`.
-- **No authentication**: The application is designed for local/LAN use only. No API authentication required.
-- **React code fully removed**: Requirements state the React frontend codebase is "garbage" and must never be referenced. The specification derives from Tkinter layout requirements only.
+- **Tkinterとの視覚的パリティ**: 新しいUIは、機能を機能的に再現するだけでなく、元のTkinterのレイアウトと外観に厳密に一致する必要があります。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
+- **スクリプト互換性**: リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更は加えません。
+- **モダンスタック**: SvelteKit + Svelte 5（runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
+- **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてHTTP/MJPEGおよびWebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
+- **型安全性**: Rustバックエンドから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
+- **認証なし**: アプリケーションはローカル/LAN専用に設計。API認証は不要。
+- **Reactコードは完全に削除**: 要件により、Reactフロントエンドコードベースは「ゴミ」と見なされ、参照、インポート、または信頼できる情報源として使用してはなりません。仕様は、Reactの実装ではなく、ユーザーから伝達された元のTkinterレイアウト要件からのみ導出されます。
 
-### 1.3 Target Platforms
+### 1.3 対象プラットフォーム
 
-| Platform | UI Mode | Notes |
+| プラットフォーム | UIモード | 備考 |
 |----------|---------|-------|
-| Desktop (Windows/Linux) | Tauri (WebView wrapper) | Shares axum HTTP server with web mode |
-| Web browser | Standalone SvelteKit SPA | Served by axum HTTP server |
-| Mobile (future) | Responsive SPA | Same codebase, adaptive layout |
+| デスクトップ（Windows/Linux） | Tauri（WebViewラッパー） | Webモードとaxum HTTPサーバーを共有 |
+| Webブラウザ | スタンドアロンSvelteKit SPA | axum HTTPサーバーによって提供 |
+| モバイル（将来） | レスポンシブSPA | 同一コードベース、アダプティブレイアウト |
 
 ---
 
-## 2. UI Layout (Tkinter Parity)
+## 2. UIレイアウト（Tkinterパリティ）
 
-### 2.1 Overall Structure
+### 2.1 全体構造
 
 ```
 +-------------------------------------------------------------+
 |  +----------------------+  +-----------------------------+  |
 |  |                      |  |                             |  |
-|  |   Tab Content Area   |  |   Right Side Panel          |  |
-|  |   (Notebook/TabView) |  |                             |  |
+|  |   タブコンテンツ領域   |  |   右側パネル               |  |
+|  |   (Notebook/TabView)  |  |                             |  |
 |  |                      |  |  +-----------------------+  |  |
-|  |  [Camera]             |  |  |  Software Controller  |  |  |
-|  |  [Serial]             |  |  |  (Joy-Con layout)     |  |  |
-|  |  [Manual Control]     |  |  +-----------------------+  |  |
-|  |  [Commands]           |  |                             |  |
-|  |  [Notification]       |  |  +-----------------------+  |  |
-|  |  [Others]             |  |  |  Output #1            |  |  |
+|  |  [カメラ]             |  |  | ソフトウェアコントローラー|  |  |
+|  |  [シリアル]           |  |  | (Joy-Conレイアウト)   |  |  |
+|  |  [手動制御]           |  |  +-----------------------+  |  |
+|  |  [コマンド]           |  |                             |  |
+|  |  [通知]               |  |  +-----------------------+  |  |
+|  |  [その他]             |  |  | 出力 #1                |  |  |
 |  |                       |  |  +-----------------------+  |  |
 |  |                       |  |                             |  |
 |  |                       |  |  +-----------------------+  |  |
-|  |                       |  |  |  Output #2            |  |  |
+|  |                       |  |  | 出力 #2                |  |  |
 |  |                       |  |  +-----------------------+  |  |
 |  +----------------------+  +-----------------------------+  |
 +-------------------------------------------------------------+
 ```
 
-### 2.2 Tab Structure (6 Main Tabs + 3 Sub-tabs)
+### 2.2 タブ構造（6メインタブ + 3サブタブ）
 
-> **Note on tab count**: This specification describes **6 main tabs** at the top level. The Commands tab contains **3 sub-tabs** (Python Command, Mcu Command, Shortcut), which brings the total to 9 distinct tabbed interfaces. PLAN.md references an "8-tab structure" which counts the Commands sub-tabs differently. This specification consistently uses "6 main tabs" to refer to the top-level notebook tabs.
+> **タブ数に関する注記**: 本仕様では、トップレベルに**6つのメインタブ**を記述します。Commandsタブには**3つのサブタブ**（Python Command、Mcu Command、Shortcut）が含まれ、合計9つの個別のタブ付きインターフェースとなります。PLAN.mdでは「8タブ構造」に言及していますが、これはCommandsサブタブの数え方が異なります。本仕様では、トップレベルのノートブックタブを指す「6メインタブ」で一貫しています。
 
-| # | Tab Name | Priority | Description |
-|---|----------|----------|-------------|
-| 1 | **Camera** | High | Video feed display (Canvas/CaptureArea), device selection, FPS, flip, display mode toggle, mouse-based stick control and screenshot |
-| 2 | **Serial** | High | COM port selection, baud rate, data format (3 types), connect/disconnect, serial monitor |
-| 3 | **Manual Control** | High | Software Control (keyboard, mouse stick emulation), Hardware Control (ProController/Xinput, recording), Switch Controller Simulator with full Joy-Con layout |
-| 4 | **Commands** | High | 3 sub-tabs (Python Command, Mcu Command, Shortcut), command list with tag filter, 10 shortcut buttons, execution control (Start/Pause/Restart/Stop/Reload) |
-| 5 | **Notification** | Medium | Windows notification settings, Discord webhook (URL, username, avatar), LINE UI fully removed |
-| 6 | **Others** | Medium | Output size adjuster, stdout destination, widget mode selector, software controller position, dialogue button position, clear outputs |
+| # | タブ名 | 優先度 | 説明 |
+|--|--------|--------|-------------|
+| 1 | **カメラ** | 高 | 映像表示（Canvas/CaptureArea）、デバイス選択、FPS、フリップ、表示モード切替、マウスベースのスティック制御、スクリーンショット |
+| 2 | **シリアル** | 高 | COMポート選択、ボーレート、データ形式（3種類）、接続/切断、シリアルモニター |
+| 3 | **手動制御** | 高 | ソフトウェア制御（キーボード、マウススティックエミュレーション）、ハードウェア制御（ProController/Xinput、録画）、完全なJoy-ConレイアウトのSwitch Controller Simulator |
+| 4 | **コマンド** | 高 | 3サブタブ（Python Command、Mcu Command、Shortcut）、タグフィルター付きコマンドリスト、10ショートカットボタン、実行制御（開始/一時停止/再開/停止/再読み込み） |
+| 5 | **通知** | 中 | Windows通知設定、Discord Webhook（URL、ユーザー名、アバター）、LINE UIは完全に削除 |
+| 6 | **その他** | 中 | 出力サイズ調整、stdout出力先、ウィジェットモード選択、ソフトウェアコントローラー位置、ダイアログボタン位置、出力クリア |
 
-### 2.3 Right Side Panel
+### 2.3 右側パネル
 
-#### 2.3.1 Software Controller (Joy-Con Layout)
+#### 2.3.1 ソフトウェアコントローラー（Joy-Conレイアウト）
 
-- **Position**: Configurable TOP/BOTTOM within right panel (radio button selection in Others tab).
-- **Appearance**: Joy-Con L (cyan `#56CCF2`) + R (red `#E9514E`) layout.
-- **Active color**: Yellow `#FFD800` when button is actively pressed/held.
-- **Input methods**:
-  - **Hold**: `<Button-1>` press triggers button hold (sends press signal).
-  - **Release**: `<ButtonRelease-1>` triggers button release (sends release signal).
-  - **Shift+Release**: Triggers `holdEndSkip` — only toggles visual state without sending release signal to the backend.
-- **Buttons**: All standard Switch controller buttons:
-  - A, B, X, Y
-  - L, R, ZL, ZR
-  - MINUS (−), PLUS (+)
-  - HOME, CAPTURE
-  - D-pad (Up, Down, Left, Right)
-  - L-stick (analog, 0–255 coordinates)
-  - R-stick (analog, 0–255 coordinates)
-  - Touch screen simulation (320×240 coordinate input)
-- **Analog sticks**: 0–255 range on both X and Y axes. Center position has a ±10% dead zone (values 103–153 are treated as neutral).
+- **位置**: 右パネル内でTOP/BOTTOMを設定可能（その他タブのラジオボタンで選択）。
+- **外観**: Joy-Con L（シアン `#56CCF2`）+ R（赤 `#E9514E`）レイアウト。
+- **アクティブ色**: ボタンが押されている/保持されている間は黄色 `#FFD800`。
+- **入力方法**:
+  - **ホールド**: `<Button-1>` 押下でボタンホールドをトリガー（押下シグナル送信）。
+  - **解放**: `<ButtonRelease-1>` でボタン解放をトリガー（解放シグナル送信）。
+  - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。
+- **ボタン**: すべての標準Switchコントローラーボタン:
+  - A、B、X、Y
+  - L、R、ZL、ZR
+  - MINUS（−）、PLUS（+）
+  - HOME、CAPTURE
+  - D-pad（上、下、左、右）
+  - Lスティック（アナログ、0～255座標）
+  - Rスティック（アナログ、0～255座標）
+  - タッチスクリーンシミュレーション（320×240座標入力）
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置には±10%のデッドゾーンあり（値103～153はニュートラルとして扱われる）。
 
-#### 2.3.2 Output Panels
+#### 2.3.2 出力パネル
 
-- **Output #1**: Primary log/output display.
-- **Output #2**: Secondary log/output display.
-- **Sizing**: Controlled by "Output Size Adjuster" slider (0–100) in Others tab. Determines proportional split between Output#1 and Output#2.
-- **Log source**: Logs received via WebSocket from backend.
-- **Features**: Auto-scroll, clear button, copy to clipboard, log level filtering.
-- **Standalone button**: "Clear Outputs" button in Others tab.
+- **出力 #1**: プライマリログ/出力表示。
+- **出力 #2**: セカンダリログ/出力表示。
+- **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。
+- **ログソース**: バックエンドからWebSocket経由で受信したログ。
+- **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
+- **独立ボタン**: その他タブの「出力をクリア」ボタン。
 
-### 2.4 Sub-tab Structure (Commands Tab)
+### 2.4 サブタブ構造（コマンドタブ）
 
-The Commands tab has 3 sub-tabs (internal tabs):
+Commandsタブには3つのサブタブ（内部タブ）があります:
 
-| # | Sub-tab | Description |
-|---|---------|-------------|
-| 1 | **Python Command** | List/tree of available Python command scripts |
-| 2 | **Mcu Command** | List/tree of available MCU command scripts |
-| 3 | **Shortcut** | 10 shortcut button assignment grid |
+| # | サブタブ | 説明 |
+|--|---------|-------------|
+| 1 | **Python Command** | 利用可能なPythonコマンドスクリプトのリスト/ツリー |
+| 2 | **Mcu Command** | 利用可能なMCUコマンドスクリプトのリスト/ツリー |
+| 3 | **Shortcut** | 10ショートカットボタン割り当てグリッド |
 
 ---
 
-## 3. Widget Modes (7 Types)
+## 3. ウィジェットモード（7種類）
 
-The UI must support 7 display combinations for the right side panel, selectable via a combo box in the Others tab:
+UIは、その他タブのコンボボックスで選択可能な、右側パネルの7つの表示組み合わせをサポートする必要があります:
 
-| Mode | Software Controller | Output #1 | Output #2 | Description |
+| モード | ソフトウェアコントローラー | 出力 #1 | 出力 #2 | 説明 |
 |------|---------------------|-----------|-----------|-------------|
-| 1 | Show | Show | Show | Full panel (default) |
-| 2 | Show | Show | Hide | Single output |
-| 3 | Show | Hide | Show | Single output (swapped) |
-| 4 | Hide | Show | Show | Outputs only |
-| 5 | Show | Hide | Hide | Controller only |
-| 6 | Hide | Show | Hide | Output #1 only |
-| 7 | Hide | Hide | Show | Output #2 only |
+| 1 | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
+| 2 | 表示 | 表示 | 非表示 | 単一出力 |
+| 3 | 表示 | 非表示 | 表示 | 単一出力（入れ替え） |
+| 4 | 非表示 | 表示 | 表示 | 出力のみ |
+| 5 | 表示 | 非表示 | 非表示 | コントローラーのみ |
+| 6 | 非表示 | 表示 | 非表示 | 出力 #1のみ |
+| 7 | 非表示 | 非表示 | 表示 | 出力 #2のみ |
 
 ---
 
-## 4. Tab Specifications
+## 4. タブ仕様
 
-### 4.1 Camera Tab
+### 4.1 カメラタブ
 
-#### 4.1.1 Video Feed Display
+#### 4.1.1 映像表示
 
-- **Display method**: Canvas element (CaptureArea) for video rendering.
-- **Primary stream**: WebRTC video track (low latency).
-- **Fallback**: MJPEG over HTTP (`<img>` tag or equivalent) if WebRTC unavailable.
-- **Frame rate**: Configurable via FPS setting (Spinbox or Combobox).
+- **表示方法**: 映像レンダリング用のCanvas要素（CaptureArea）。
+- **プライマリストリーム**: WebRTCビデオトラック（低遅延）。
+- **フォールバック**: WebRTCが利用できない場合、HTTP上のMJPEG（`<img>`タグまたは同等）。
+- **フレームレート**: FPS設定（SpinboxまたはCombobox）で設定可能。
 
-#### 4.1.2 Camera Settings
+#### 4.1.2 カメラ設定
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **Camera device selection** | Combobox | Dropdown of available camera devices |
-| **FPS** | Combobox | Configurable frames per second (1–30fps) |
-| **Flip** | Checkbox | Horizontal/vertical flip toggle |
+| **カメラデバイス選択** | Combobox | 利用可能なカメラデバイスのドロップダウン |
+| **FPS** | Combobox | 設定可能なフレームレート（1～30fps） |
+| **フリップ** | Checkbox | 水平/垂直フリップ切替 |
 
-#### 4.1.3 Display Mode Toggles (Checkboxes)
+#### 4.1.3 表示モード切替（チェックボックス）
 
-| Mode | Description |
+| モード | 説明 |
 |------|-------------|
-| **Realtime** | Live video feed display |
-| **Value** | Display numeric pixel values or overlay data |
-| **Guide** | Display guide overlays or reference lines |
+| **リアルタイム** | ライブ映像表示 |
+| **値** | 数値ピクセル値またはオーバーレイデータの表示 |
+| **ガイド** | ガイドオーバーレイまたは参照線の表示 |
 
-These are checkboxes for display overlay toggling.
+これらは表示オーバーレイ切替用のチェックボックスです。
 
-#### 4.1.4 Mouse Operations on Canvas
+#### 4.1.4 キャンバス上のマウス操作
 
-The Camera canvas (CaptureArea) supports the following mouse interactions:
+カメラキャンバス（CaptureArea）は以下のマウス操作をサポートします:
 
-| Action | Trigger | Behavior |
+| アクション | トリガー | 動作 |
 |--------|---------|----------|
-| **LStick/RStick control** | Mouse drag on canvas | Emulates left/right analog stick movement based on drag direction/distance |
-| **Color picker** | Ctrl+Click | Picks color value at click position |
-| **Range screenshot** | Ctrl+Shift+Drag | Captures screenshot of selected rectangular region on canvas |
-| **Named save** | Ctrl+Alt+Drag | Saves selected region to a named file prompt |
+| **Lスティック/Rスティック制御** | キャンバス上でマウスドラッグ | ドラッグ方向/距離に基づいて左/右アナログスティック移動をエミュレート |
+| **カラーピッカー** | Ctrl+クリック | クリック位置の色の値を取得 |
+| **範囲スクリーンショット** | Ctrl+Shift+ドラッグ | キャンバス上の選択した矩形領域のスクリーンショットをキャプチャ |
+| **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域を名前付きファイルプロンプトに保存 |
 
-#### 4.1.5 Screenshot Capture
+#### 4.1.5 スクリーンショットキャプチャ
 
-- **Save location**: `./Captures/` directory.
-- **Format**: PNG/JPEG (selectable).
+- **保存場所**: `./Captures/` ディレクトリ。
+- **形式**: PNG/JPEG（選択可能）。
 
-#### 4.1.6 Camera Backend
+#### 4.1.6 カメラバックエンド
 
-- **Backend**: OpenCV (`cv2.CAP_DSHOW` on Windows, `cv2.CAP_V4L2` on Linux).
-- **Threading**: Frame capture runs in separate thread.
+- **バックエンド**: OpenCV（Windowsは `cv2.CAP_DSHOW`、Linuxは `cv2.CAP_V4L2`）。
+- **スレッド**: フレームキャプチャは別スレッドで実行。
 
-### 4.2 Serial Tab
+### 4.2 シリアルタブ
 
-#### 4.2.1 Connection Control
+#### 4.2.1 接続制御
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **COM port selection** | Combobox | Dropdown of available COM/Serial ports |
-| **Refresh button** | Button | Rescan available ports |
-| **Connect/Disconnect** | Toggle button | Connect or disconnect from selected port |
+| **COMポート選択** | Combobox | 利用可能なCOM/シリアルポートのドロップダウン |
+| **更新ボタン** | Button | 利用可能なポートを再スキャン |
+| **接続/切断** | Toggle button | 選択したポートに接続または切断 |
 
-#### 4.2.2 Configuration
+#### 4.2.2 設定
 
-| Setting | Options | Default |
+| 設定 | オプション | デフォルト |
 |---------|---------|---------|
-| **Baud Rate** | 9600 / 115200 | 9600 |
-| **Data Format** | Default / Qingpi / 3DS Controller | Default |
+| **ボーレート** | 9600 / 115200 | 9600 |
+| **データ形式** | デフォルト / Qingpi / 3DS Controller | デフォルト |
 
-- **Default format**: Baud rate 9600.
-- **Qingpi format**: Baud rate 9600.
-- **3DS Controller format**: Baud rate 115200.
+- **デフォルト形式**: ボーレート9600。
+- **Qingpi形式**: ボーレート9600。
+- **3DS Controller形式**: ボーレート115200。
 
-#### 4.2.3 Serial Monitor
+#### 4.2.3 シリアルモニター
 
-- **Component**: Text widget with Scrollbar.
-- **Functionality**: Displays incoming/outgoing serial data in real-time.
-- **Features**: Auto-scroll to latest entry, clear button.
+- **コンポーネント**: スクロールバー付きテキストウィジェット。
+- **機能**: リアルタイムで入出力シリアルデータを表示。
+- **機能**: 最新エントリへの自動スクロール、クリアボタン。
 
-### 4.3 Manual Control Tab
+### 4.3 手動制御タブ
 
-#### 4.3.1 Software Control Section
+#### 4.3.1 ソフトウェア制御セクション
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **Keyboard** | Checkbox | Enables keyboard-based controller input (global hotkeys) |
-| **LStick Mouse** | Checkbox | Enables mouse emulation of left analog stick on canvas |
-| **RStick Mouse** | Checkbox | Enables mouse emulation of right analog stick on canvas |
+| **キーボード** | Checkbox | キーボードベースのコントローラー入力を有効化（グローバルホットキー） |
+| **Lスティックマウス** | Checkbox | キャンバス上の左アナログスティックのマウスエミュレーションを有効化 |
+| **Rスティックマウス** | Checkbox | キャンバス上の右アナログスティックのマウスエミュレーションを有効化 |
 
-#### 4.3.2 Hardware Control Section
+#### 4.3.2 ハードウェア制御セクション
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **ProController** | Radio (with Xinput) | Switch Pro Controller input mode |
-| **Xinput** | Radio (with ProController) | Xbox-compatible controller input mode |
-| **Record** | Checkbox | Enables input recording |
+| **ProController** | Radio（Xinput連動） | Switch Pro Controller入力モード |
+| **Xinput** | Radio（ProController連動） | Xbox互換コントローラー入力モード |
+| **録画** | Checkbox | 入力記録を有効化 |
 
 #### 4.3.3 Switch Controller Simulator
 
-Full Joy-Con style button layout rendered in the tab content area:
+タブコンテンツ領域に表示される完全なJoy-Conスタイルのボタンレイアウト:
 
-- **D-Pad** (Up, Down, Left, Right — directional cross)
-- **L / ZL** (shoulder buttons, left side)
-- **MINUS (−) / CAPTURE** (small buttons, left center)
-- **A / B / X / Y** (face buttons, right side)
-- **R / ZR** (shoulder buttons, right side)
-- **PLUS (+) / HOME** (small buttons, right center)
-- **LSTICK** (clickable analog stick, left side, 0–255 coordinates, ±10% dead zone)
-- **RSTICK** (clickable analog stick, right side, 0–255 coordinates, ±10% dead zone)
-- **Touch screen** (320×240 coordinate grid for touch emulation)
+- **D-Pad**（上、下、左、右 — 方向十字）
+- **L / ZL**（ショルダーボタン、左側）
+- **MINUS（−） / CAPTURE**（小ボタン、左中央）
+- **A / B / X / Y**（フェイスボタン、右側）
+- **R / ZR**（ショルダーボタン、右側）
+- **PLUS（+） / HOME**（小ボタン、右中央）
+- **LSTICK**（クリック可能なアナログスティック、左側、0～255座標、±10%デッドゾーン）
+- **RSTICK**（クリック可能なアナログスティック、右側、0～255座標、±10%デッドゾーン）
+- **タッチスクリーン**（タッチエミュレーション用320×240座標グリッド）
 
-### 4.4 Commands Tab
+### 4.4 コマンドタブ
 
-#### 4.4.1 Sub-tab Structure
+#### 4.4.1 サブタブ構造
 
-The Commands tab contains 3 sub-tabs (internal tab switching):
+Commandsタブには3つのサブタブ（内部タブ切替）が含まれます:
 
-| Sub-tab | Content |
+| サブタブ | 内容 |
 |---------|---------|
-| **Python Command** | Lists available Python command scripts |
-| **Mcu Command** | Lists available MCU command scripts |
-| **Shortcut** | 10 shortcut button assignment grid |
+| **Python Command** | 利用可能なPythonコマンドスクリプトを一覧表示 |
+| **Mcu Command** | 利用可能なMCUコマンドスクリプトを一覧表示 |
+| **Shortcut** | 10ショートカットボタン割り当てグリッド |
 
-#### 4.4.2 Command List
+#### 4.4.2 コマンドリスト
 
-- **Display**: Listbox or Treeview showing available commands.
-- **Tag filter**: Dropdown or combobox to filter commands by label/tag.
-- **Columns**: Command name, tags, description (if Treeview).
+- **表示**: 利用可能なコマンドを表示するListboxまたはTreeview。
+- **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
+- **列**: コマンド名、タグ、説明（Treeviewの場合）。
 
-#### 4.4.3 Shortcut Buttons (10 Buttons)
+#### 4.4.3 ショートカットボタン（10ボタン）
 
-- **Count**: 10 shortcut buttons (requirement changed from original 4 buttons to 10).
-- **Assignment**: User-assignable to any loaded command (click to assign, Shift+Click to assign).
-- **Clear**: Right-click to clear assignment.
-- **Display**: Button label shows assigned command name.
-- **Keyboard shortcuts**: F1–F10 or other assignable hotkeys.
-- **Storage**: Settings saved in `localStorage`.
+- **数**: 10ショートカットボタン（要件が元の4ボタンから10ボタンに変更）。
+- **割り当て**: 読み込まれた任意のコマンドにユーザー割り当て可能（クリックで割り当て、Shift+クリックで割り当て）。
+- **クリア**: 右クリックで割り当てをクリア。
+- **表示**: ボタンラベルに割り当てられたコマンド名を表示。
+- **キーボードショートカット**: F1～F10またはその他の割り当て可能なホットキー。
+- **保存**: 設定は `localStorage` に保存。
 
-#### 4.4.4 Execution Control
+#### 4.4.4 実行制御
 
-| Button | Keyboard Shortcut | Action |
+| ボタン | キーボードショートカット | アクション |
 |--------|-------------------|--------|
-| **Start** | F5 | Begin command execution |
-| **Pause** | Shift+F6 | Pause execution (resumable) |
-| **Restart** | — | Restart from beginning |
-| **Stop** | Escape | Abort execution immediately |
-| **Reload** | — | Reload command list from filesystem |
+| **開始** | F5 | コマンド実行を開始 |
+| **一時停止** | Shift+F6 | 実行を一時停止（再開可能） |
+| **再開** | — | 最初から再実行 |
+| **停止** | Escape | 実行を即座に中断 |
+| **再読み込み** | — | ファイルシステムからコマンドリストを再読み込み |
 
-- **Status display**: Running / Paused / Stopped / Error.
-- **Progress**: Progress bar for supported commands.
+- **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
+- **進捗**: 対応コマンド用のプログレスバー。
 
-### 4.5 Notification Tab
+### 4.5 通知タブ
 
-#### 4.5.1 Windows Notification
+#### 4.5.1 Windows通知
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **Notify on script start** | Checkbox | Send Windows notification when script execution starts |
-| **Notify on script end** | Checkbox | Send Windows notification when script execution ends |
-| **Test** | Button | Send a test notification to verify configuration |
+| **スクリプト開始時に通知** | Checkbox | スクリプト実行開始時にWindows通知を送信 |
+| **スクリプト終了時に通知** | Checkbox | スクリプト実行終了時にWindows通知を送信 |
+| **テスト** | Button | 設定を確認するためのテスト通知を送信 |
 
-#### 4.5.2 Discord Notification
+#### 4.5.2 Discord通知
 
-| Control | Type | Description |
+| コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **Webhook URL** | Text input | Discord webhook URL with validation |
-| **Username** | Text input | Custom username for Discord messages (optional) |
-| **Avatar URL** | Text input | Custom avatar image URL for Discord messages (optional) |
-| **Test** | Button | Send a test notification to verify configuration |
+| **Webhook URL** | Text input | 検証付きのDiscord Webhook URL |
+| **ユーザー名** | Text input | Discordメッセージのカスタムユーザー名（オプション） |
+| **アバターURL** | Text input | Discordメッセージのカスタムアバター画像URL（オプション） |
+| **テスト** | Button | 設定を確認するためのテスト通知を送信 |
 
-#### 4.5.3 LINE Notification
+#### 4.5.3 LINE通知
 
-- **Status**: Service reached End of Life (EOL) — **UI removed entirely** from the Notification tab.
-- **Backward compatibility**: Script API (`notify.line`) preserved for existing user scripts. No UI for configuration.
+- **ステータス**: サービス終了（EOL）— **通知タブからUIは完全に削除**。
+- **後方互換性**: 既存のユーザースクリプト用にスクリプトAPI（`notify.line`）は維持。設定用のUIはなし。
 
-### 4.6 Others Tab
+### 4.6 その他タブ
 
-#### 4.6.1 Settings Groups
+#### 4.6.1 設定グループ
 
-| Section | Controls | Type |
+| セクション | コントロール | 種類 |
 |---------|----------|------|
-| **Output Size Adjuster** | Slider (0–100) to control width ratio between Output#1 and Output#2 | Scale/Slider |
-| **Stdout Destination** | Output#1 / Output#2 radio buttons selecting where stdout prints go | Radio button |
-| **Clear Outputs** | Button to clear both output panels | Button |
-| **Widget Mode** | Combobox with 7 modes (see Section 3) | Combobox |
-| **Software-Controller Position** | TOP / BOTTOM radio buttons for location within right panel | Radio button |
-| **Dialogue Button Position** | TOP / BOTTOM / BOTH radio buttons for dialogue button placement | Radio button |
+| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0～100） | Scale/Slider |
+| **stdout出力先** | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン | Radio button |
+| **出力をクリア** | 両方の出力パネルをクリアするボタン | Button |
+| **ウィジェットモード** | 7モードのコンボボックス（セクション3参照） | Combobox |
+| **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するTOP/BOTTOMラジオボタン | Radio button |
+| **ダイアログボタンの位置** | ダイアログボタン配置用のTOP/BOTTOM/BOTHラジオボタン | Radio button |
 
-#### 4.6.2 Future / Phase 7 Items (Low Priority but Mandatory)
+#### 4.6.2 将来 / フェーズ7項目（優先度低だが必須）
 
-- Key configuration editor (advanced key binding UI).
-- Pokémon Home integration (details unknown — reserved section).
+- キー設定エディター（高度なキーバインドUI）。
+- Pokémon Home連携（詳細不明 — 予約セクション）。
 
 ---
 
-## 5. Communication Protocol
+## 5. 通信プロトコル
 
-### 5.1 Stack Overview
+### 5.1 スタック概要
 
 ```
-Camera Video:     WebRTC video track ──→ MJPEG over HTTP fallback
-Controller Input: WebRTC DataChannel ──→ WebSocket fallback
-Logs/Events:      WebRTC DataChannel ──→ WebSocket fallback
-API Calls:        HTTP REST (axum)     ──→ (no fallback needed)
+カメラ映像:     WebRTCビデオトラック ──→ MJPEG over HTTP フォールバック
+コントローラー入力: WebRTC DataChannel ──→ WebSocket フォールバック
+ログ/イベント:  WebRTC DataChannel ──→ WebSocket フォールバック
+API呼び出し:    HTTP REST（axum）     ──→ （フォールバック不要）
 ```
 
-### 5.2 WebRTC (Primary)
+### 5.2 WebRTC（プライマリ）
 
-- **Video**: WebRTC `RTCPeerConnection` with video track.
-- **DataChannel**: For controller input events and log streaming.
-- **Signaling**: HTTP-based SDP exchange.
-- **Auto-reconnect**: On connection loss, retry every 3 seconds.
+- **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
+- **DataChannel**: コントローラー入力イベントとログストリーミング用。
+- **シグナリング**: HTTPベースのSDP交換。
+- **自動再接続**: 接続断時に3秒ごとに再試行。
 
-### 5.3 WebSocket (Fallback)
+### 5.3 WebSocket（フォールバック）
 
-- **Endpoint**: `/ws`.
-- **Messages**: JSON format.
-- **Auto-reconnect**: On connection loss, retry every 3 seconds.
-- **Events**:
+- **エンドポイント**: `/ws`。
+- **メッセージ**: JSON形式。
+- **自動再接続**: 接続断時に3秒ごとに再試行。
+- **イベント**:
 
-| Event | Direction | Payload |
+| イベント | 方向 | ペイロード |
 |-------|-----------|---------|
-| `camera.frame` | Server → Client | Base64-encoded JPEG frame data |
-| `command.start` | Server → Client | Command execution start notification |
-| `command.stop` | Server → Client | Command execution stop notification |
-| `command.error` | Server → Client | Command execution error details |
-| `serial.data` | Server → Client | Serial port incoming data |
-| `ping` | Bidirectional | Keepalive ping |
-| `pong` | Bidirectional | Keepalive pong response |
+| `camera.frame` | サーバー → クライアント | Base64エンコードJPEGフレームデータ |
+| `command.start` | サーバー → クライアント | コマンド実行開始通知 |
+| `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
+| `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |
+| `serial.data` | サーバー → クライアント | シリアルポート受信データ |
+| `ping` | 双方向 | キープアライブping |
+| `pong` | 双方向 | キープアライブpong応答 |
 
 ### 5.4 HTTP REST API
 
-- **Framework**: axum (Rust backend).
-- **Documentation**: utoipa v5 with OpenAPI specification.
-- **Code generation**: `openapi-typescript` for TypeScript client types.
-- **Authentication**: None (local/LAN use only).
-- **Modules**: ~9 modules with ~39 endpoints total.
-- **Response format**: JSON with consistent structure.
+- **フレームワーク**: axum（Rustバックエンド）。
+- **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
+- **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。
+- **認証**: なし（ローカル/LAN専用）。
+- **モジュール**: 合計約39エンドポイントの約9モジュール。
+- **応答形式**: 一貫した構造のJSON。
 
-### 5.5 Keyboard Input API
+### 5.5 キーボード入力API
 
-| Method | Endpoint | Description |
+| メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|
-| GET | `/api/controller/keyboard` | Get current keyboard configuration |
-| POST | `/api/controller/keyboard` | Set keyboard configuration |
+| GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
+| POST | `/api/controller/keyboard` | キーボード設定を設定 |
 
-- **Shortcuts**: F5 = Reload, F6 = Start, ESC = Stop.
-- **Storage**: Keyboard settings stored in `localStorage`.
+- **ショートカット**: F5 = 再読み込み、F6 = 開始、ESC = 停止。
+- **保存**: キーボード設定は `localStorage` に保存。
 
-### 5.6 Mouse Input API
+### 5.6 マウス入力API
 
-| Method | Endpoint | Description |
+| メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|
-| GET | `/api/controller/mouse_stick?stick=LSTICK|RSTICK` | Get mouse stick configuration |
-| POST | `/api/controller/mouse_stick` | Set mouse stick configuration (stick, enabled, sensitivity) |
-| POST | `/api/input/stick` | Send stick input (`{x: 0–255, y: 0–255}`) |
+| GET | `/api/controller/mouse_stick?stick=LSTICK|RSTICK` | マウススティック設定を取得 |
+| POST | `/api/controller/mouse_stick` | マウススティック設定を設定（stick、enabled、sensitivity） |
+| POST | `/api/input/stick` | スティック入力を送信（`{x: 0–255, y: 0–255}`） |
 
-### 5.7 Gamepad Input API
+### 5.7 ゲームパッド入力API
 
-| Method | Endpoint | Description |
+| メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|
-| GET | `/api/controller/type` | Get current gamepad type configuration |
-| POST | `/api/controller/type` | Set gamepad type (`gamepad_type: "ProController" | "Xinput"`) |
+| GET | `/api/controller/type` | 現在のゲームパッドタイプ設定を取得 |
+| POST | `/api/controller/type` | ゲームパッドタイプを設定（`gamepad_type: "ProController" | "Xinput"`） |
 
-- **Supported buttons**: A, B, X, Y, UP, DOWN, LEFT, RIGHT, L, R, ZL, ZR, MINUS, PLUS, HOME, CAPTURE.
-- **Analog sticks**: 0–255 range for both axes.
-- **Touchpad**: `{x: 0–320, y: 0–240}` coordinates.
+- **対応ボタン**: A、B、X、Y、UP、DOWN、LEFT、RIGHT、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
+- **アナログスティック**: 両軸とも0～255の範囲。
+- **タッチパッド**: `{x: 0–320, y: 0–240}` 座標。
 
 ---
 
-## 6. Type System
+## 6. 型システム
 
 ### 6.1 OpenAPI → TypeScript
 
-- **Source**: Rust backend with `utoipa` v5 macros.
-- **Generation**: `openapi-typescript` CLI.
-- **Output**: `Docs/api/openapi.ts`.
-- **Usage**: All API calls and WebSocket messages must use generated types.
+- **ソース**: `utoipa` v5マクロを使用したRustバックエンド。
+- **生成**: `openapi-typescript` CLI。
+- **出力**: `Docs/api/openapi.ts`。
+- **使用法**: すべてのAPI呼び出しとWebSocketメッセージは生成された型を使用する必要があります。
 
-### 6.2 Type Safety Requirements
+### 6.2 型安全性要件
 
-- Strict TypeScript (`strict: true`).
-- No `any` types for API-related code.
-- Runtime validation with Zod or similar for external inputs.
-
----
-
-## 7. PWA Requirements
-
-> **Status: NOT IMPLEMENTED — FUTURE PHASE ONLY.**  
-> The following requirements are recorded as user requests for future implementation. They are not in current scope.
-
-### 7.1 Manifest
-
-- `manifest.json` with app metadata.
-- Icons for all platforms.
-- Display mode: `standalone`.
-
-### 7.2 Service Worker
-
-- Offline capability for UI assets.
-- Background sync for queued commands (future).
-
-### 7.3 Install Prompt
-
-- Custom install button.
-- Platform-specific install guidance.
+- 厳格なTypeScript（`strict: true`）。
+- API関連コードに `any` 型は不使用。
+- 外部入力に対するZodまたは同等の実行時検証。
 
 ---
 
-## 8. Theme Support
+## 7. PWA要件
 
-> **Status: NOT IMPLEMENTED — FUTURE PHASE ONLY.**  
-> Tailwind CSS v4 is confirmed as the styling framework. Theme system requirements recorded below.
+> **ステータス: 未実装 — 将来フェーズのみ。**  
+> 以下の要件は将来の実装のためのユーザー要求として記録されています。現在のスコープには含まれません。
 
-### 8.1 Built-in Themes
+### 7.1 マニフェスト
 
-- Light theme.
-- Dark theme.
-- System preference auto-detect.
+- アプリメタデータを含む `manifest.json`。
+- 全プラットフォーム用のアイコン。
+- 表示モード: `standalone`。
 
-### 8.2 Custom Themes (Future)
+### 7.2 サービスワーカー
 
-- User-defined color schemes.
-- CSS variable-based theming.
+- UIアセットのオフライン対応。
+- キューに入ったコマンドのバックグラウンド同期（将来）。
+
+### 7.3 インストールプロンプト
+
+- カスタムインストールボタン。
+- プラットフォーム固有のインストールガイダンス。
 
 ---
 
-## 9. Configuration System
+## 8. テーマサポート
 
-### 9.1 Settings File
+> **ステータス: 未実装 — 将来フェーズのみ。**  
+> Tailwind CSS v4がスタイリングフレームワークとして確定しています。テーマシステムの要件は以下に記録されています。
 
-> **IMPORTANT**: `settings.ini` is **abolished**. The legacy INI-based configuration is replaced by Rust-native configuration management. Exact format and storage location are determined by the Rust backend team (out of scope for this UI spec).
+### 8.1 組み込みテーマ
 
-### 9.2 Environment Variables
+- ライトテーマ。
+- ダークテーマ。
+- システム設定の自動検出。
 
-| Variable | Description | Default |
+### 8.2 カスタムテーマ（将来）
+
+- ユーザー定義の配色。
+- CSS変数ベースのテーマ。
+
+---
+
+## 9. 設定システム
+
+### 9.1 設定ファイル
+
+> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、Rustネイティブの設定管理に置き換えられます。正確な形式と保存場所はRustバックエンドチームが決定します（本UI仕様の範囲外）。
+
+### 9.2 環境変数
+
+| 変数 | 説明 | デフォルト |
 |----------|-------------|---------|
-| `POKECON_DISABLE_COMPOSITING` | Disable compositing mode (Tauri) | `0` |
-| `POKECON_WEB_DIR` | Static file directory | `web/dist` |
-| `POKECON_PORT` | HTTP server port | `8020` |
+| `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `0` |
+| `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
+| `POKECON_PORT` | HTTPサーバーポート | `8020` |
 
-### 9.3 Client-Side Storage
+### 9.3 クライアント側ストレージ
 
-| Item | Storage Method | Notes |
+| 項目 | 保存方法 | 備考 |
 |------|---------------|-------|
-| Shortcut button assignments | `localStorage` | 10 button-key bindings |
-| Keyboard settings | `localStorage` | Key mapping configuration |
+| ショートカットボタン割り当て | `localStorage` | 10ボタンキーバインド |
+| キーボード設定 | `localStorage` | キーマッピング設定 |
 
 ---
 
-## 10. Implementation Phases (from PLAN.md)
+## 10. 実装フェーズ（PLAN.mdより）
 
-| Phase | Description | Status |
+| フェーズ | 説明 | ステータス |
 |-------|-------------|--------|
-| 0 | Project setup, CI/CD, Nix flake | ✅ Complete |
-| 1 | SvelteKit scaffold, remove React | ✅ Complete |
-| 2 | API/OpenAPI integration | In Progress |
-| 3 | TypeScript CI, linting, testing | In Progress |
-| 4 | Component reimplementation | Pending |
-| 5 | Camera streaming (WebRTC/MJPEG) | Pending |
-| 6 | Build integration, Tauri config | Pending |
-| 7 | Low-priority features (key config, Pokémon Home) | Pending |
-| 8 | PWA support | Pending |
-| 9 | Theme support (Tailwind v4) | Pending |
+| 0 | プロジェクト設定、CI/CD、Nix flake | ✅ 完了 |
+| 1 | SvelteKitスキャフォールド、React削除 | ✅ 完了 |
+| 2 | API/OpenAPI統合 | 進行中 |
+| 3 | TypeScript CI、リンティング、テスト | 進行中 |
+| 4 | コンポーネント再実装 | 保留中 |
+| 5 | カメラストリーミング（WebRTC/MJPEG） | 保留中 |
+| 6 | ビルド統合、Tauri設定 | 保留中 |
+| 7 | 優先度低の機能（キー設定、Pokémon Home） | 保留中 |
+| 8 | PWAサポート | 保留中 |
+| 9 | テーマサポート（Tailwind v4） | 保留中 |
 
-### 10.1 Process Requirements (User Mandates)
+### 10.1 プロセス要件（ユーザー指示）
 
-The following process requirements have been explicitly mandated by the user and must be followed for all phases:
+以下のプロセス要件はユーザーから明示的に指示されており、全フェーズで遵守する必要があります:
 
-| Requirement | Details |
+| 要件 | 詳細 |
 |-------------|---------|
-| **Execution via nix flake** | All development, testing, and builds must be run through `nix flake` commands. Direct execution of build tools is not permitted. |
-| **opencode review breaks** | Every opencode review boundary must serve as a logical break point. Work should be structured to align with review boundaries. |
-| **Commit and push per phase** | Each completed phase must be committed and pushed. No stacking of multiple phases in a single commit. |
+| **nix flakeによる実行** | すべての開発、テスト、ビルドは `nix flake` コマンドを通じて実行する必要があります。ビルドツールの直接実行は許可されません。 |
+| **opencodeレビュー区切り** | すべてのopencodeレビュー境界は論理的な区切り点として機能する必要があります。作業はレビュー境界に合わせて構造化されるべきです。 |
+| **フェーズごとにコミットとプッシュ** | 完了した各フェーズはコミットされ、プッシュされる必要があります。複数のフェーズを1つのコミットにまとめることはできません。 |
 
 ---
 
-## 11. Key User Requirements and Refusals
+## 11. 主要ユーザー要件と却下事項
 
-This section records explicit user mandates that overrule or clarify the specification.
+このセクションでは、仕様を上書きまたは明確化する明示的なユーザー指示を記録します。
 
-### 11.1 React Code — Complete Removal
+### 11.1 Reactコード — 完全削除
 
-> **Requirement**: The existing React frontend codebase is considered "garbage" and must never be referenced, imported, or used as a source of truth. The SvelteKit implementation must derive its specification from the original Tkinter layout requirements communicated by the user, not from any React implementation.
+> **要件**: 既存のReactフロントエンドコードベースは「ゴミ」と見なされ、参照、インポート、または信頼できる情報源として使用してはなりません。SvelteKit実装は、Reactの実装ではなく、ユーザーから伝達された元のTkinterレイアウト要件からその仕様を導出する必要があります。
 
-### 11.2 Shortcut Buttons — 10 (Not 4)
+### 11.2 ショートカットボタン — 10個（4個ではない）
 
-> **Requirement**: The Commands tab must have exactly **10** shortcut buttons (not 4). This was explicitly changed from the original count.
+> **要件**: Commandsタブには正確に**10個**のショートカットボタンが必要です（4個ではありません）。これは元の数から明示的に変更されました。
 
-### 11.3 Execution Controls — Start/Pause/Restart/Stop (Not Just Start/Stop)
+### 11.3 実行制御 — 開始/一時停止/再開/停止（開始/停止だけではない）
 
-> **Requirement**: The execution control buttons must include **Start, Pause, Restart, and Stop** (not just Start and Stop). Pause must be resumable.
+> **要件**: 実行制御ボタンには**開始、一時停止、再開、および停止**を含める必要があります（開始と停止だけではありません）。一時停止は再開可能でなければなりません。
 
-### 11.4 LINE Notification — UI Removed
+### 11.4 LINE通知 — UI削除
 
-> **Requirement**: The LINE notification UI has been removed from the Notification tab due to service EOL. Script API (`notify.line`) is preserved for backward compatibility only, with no UI configuration.
+> **要件**: LINE通知UIは、サービス終了のため通知タブから削除されました。スクリプトAPI（`notify.line`）は後方互換性のためにのみ維持され、UI設定はありません。
 
-### 11.5 Settings File — `settings.ini` Abolished
+### 11.5 設定ファイル — `settings.ini` 廃止
 
-> **Requirement**: The legacy `settings.ini` file format is abolished. Rust-native configuration management replaces it. Exact format and implementation are out of scope for the UI specification.
+> **要件**: 従来の `settings.ini` ファイル形式は廃止されました。Rustネイティブの設定管理がそれを置き換えます。正確な形式と実装はUI仕様の範囲外です。
 
-### 11.6 PWA — Future Phase Only
+### 11.6 PWA — 将来フェーズのみ
 
-> **Requirement**: PWA implementation is deferred to a future phase. Current scope does not include manifest generation, service workers, or install prompts.
+> **要件**: PWAの実装は将来のフェーズに延期されます。現在のスコープには、マニフェスト生成、サービスワーカー、またはインストールプロンプトは含まれません。
 
-### 11.8 Script Compatibility — All Pre-Refactoring Scripts Must Work
+### 11.8 スクリプト互換性 — リファクタリング前の全スクリプトが動作必須
 
-> **Requirement**: All scripts that worked with the pre-refactoring (Tkinter/Python) version must continue to work normally. No breaking changes to the script API. The Python compatibility layer must maintain full backward compatibility.
+> **要件**: リファクタリング前（Tkinter/Python）のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更はありません。Python互換レイヤーは完全な後方互換性を維持する必要があります。
 
-> **Requirement**: Theme support (light/dark/custom) is deferred to a future phase. Tailwind CSS v4 is confirmed as the styling framework.
+> **要件**: テーマサポート（ライト/ダーク/カスタム）は将来のフェーズに延期されます。Tailwind CSS v4はスタイリングフレームワークとして確定しています。
 
 ---
 
-## 12. Non-Functional Requirements
+## 12. 非機能要件
 
-### 12.1 Performance
+### 12.1 パフォーマンス
 
-| Metric | Target |
+| 指標 | 目標 |
 |--------|--------|
-| Video latency (WebRTC) | < 100ms |
-| Video latency (MJPEG fallback) | < 300ms |
-| Controller input latency | < 50ms |
-| UI responsiveness | 60fps animations, < 16ms input response |
+| ビデオ遅延（WebRTC） | < 100ms |
+| ビデオ遅延（MJPEGフォールバック） | < 300ms |
+| コントローラー入力遅延 | < 50ms |
+| UI応答性 | 60fpsアニメーション、< 16ms入力応答 |
 
-### 12.2 Accessibility
+### 12.2 アクセシビリティ
 
-- Keyboard navigation for all controls.
-- ARIA labels for screen readers.
-- High contrast mode support.
+- すべてのコントロールのキーボードナビゲーション。
+- スクリーンリーダー用のARIAラベル。
+- ハイコントラストモードのサポート。
 
-### 12.3 Browser Support
+### 12.3 ブラウザサポート
 
-| Browser | Minimum Version |
+| ブラウザ | 最小バージョン |
 |---------|----------------|
-| Chrome/Edge | 90+ |
-| Firefox | 88+ |
-| Safari | 14+ |
+| Chrome/Edge | 90以上 |
+| Firefox | 88以上 |
+| Safari | 14以上 |
 
-### 12.4 WebSocket Auto-Reconnect
+### 12.4 WebSocket自動再接続
 
-- On connection loss, automatically retry connection every 3 seconds.
-- Must handle temporary server unavailability gracefully.
+- 接続断時に、3秒ごとに自動的に再接続を試行。
+- 一時的なサーバー利用不能を適切に処理する必要があります。
 
 ---
 
-## 13. Appendix: Tkinter UI Reference
+## 13. 付録: Tkinter UIリファレンス
 
-### 13.1 Original Tab Details
+### 13.1 元のタブ詳細
 
-The original Python/Tkinter UI used `tkinter.ttk.Notebook` with the following structure:
+元のPython/Tkinter UIは `tkinter.ttk.Notebook` を使用し、以下の構造でした:
 
-- **CameraTab**: `cv2.VideoCapture` with threaded frame reader, PIL resize, `ImageTk.PhotoImage` canvas display. Canvas supports mouse-driven stick control, color picker, and region screenshot.
-- **SerialTab**: COM port dropdown, baud rate selector (9600/115200), data format selector (Default/Qingpi/3DS Controller), connect button with status indicator, serial monitor with Text+Scrollbar.
-- **ManualControlTab**: Software Control (Keyboard checkbox, LStick Mouse, RStick Mouse), Hardware Control (ProController/Xinput radio, Record checkbox), Switch Controller Simulator with full Joy-Con layout.
-- **CommandTab**: 3 sub-tabs (Python Command, Mcu Command, Shortcut), file browser, tag filter dropdown, command list with Listbox/Treeview, 10 shortcut buttons, execution buttons (Start/Pause/Restart/Stop/Reload).
-- **NotificationTab**: Discord webhook URL, username, avatar URL inputs with Test buttons. Windows notify start/end checkboxes with Test button. LINE UI (removed — service EOL).
-- **OthersTab**: Output Size Adjuster slider, Stdout Destination radio (Output#1/Output#2), Clear Outputs button, Widget Mode combobox (7 modes), Software-Controller Position radio (TOP/BOTTOM), Dialogue Button Position radio (TOP/BOTTOM/BOTH).
+- **CameraTab**: スレッド化されたフレームリーダー、PILリサイズ、`ImageTk.PhotoImage` キャンバス表示による `cv2.VideoCapture`。キャンバスはマウス駆動のスティック制御、カラーピッカー、領域スクリーンショットをサポート。
+- **SerialTab**: COMポートドロップダウン、ボーレートセレクター（9600/115200）、データ形式セレクター（デフォルト/Qingpi/3DS Controller）、ステータスインジケーター付き接続ボタン、Text+Scrollbar付きシリアルモニター。
+- **ManualControlTab**: ソフトウェア制御（キーボードチェックボックス、LStick Mouse、RStick Mouse）、ハードウェア制御（ProController/Xinputラジオ、録画チェックボックス）、完全なJoy-ConレイアウトのSwitch Controller Simulator。
+- **CommandTab**: 3サブタブ（Python Command、Mcu Command、Shortcut）、ファイルブラウザー、タグフィルタードロップダウン、Listbox/Treeview付きコマンドリスト、10ショートカットボタン、実行ボタン（開始/一時停止/再開/停止/再読み込み）。
+- **NotificationTab**: Discord Webhook URL、ユーザー名、アバターURL入力（テストボタン付き）。Windows通知開始/終了チェックボックス（テストボタン付き）。LINE UI（削除 — サービスEOL）。
+- **OthersTab**: 出力サイズ調整スライダー、stdout出力先ラジオ（出力#1/出力#2）、出力をクリアボタン、ウィジェットモードコンボボックス（7モード）、ソフトウェアコントローラー位置ラジオ（TOP/BOTTOM）、ダイアログボタン位置ラジオ（TOP/BOTTOM/BOTH）。
 
-### 13.2 Original Controller Layout
+### 13.2 元のコントローラーレイアウト
 
-- **Software Controller**: Canvas-based Joy-Con drawing with `<Button-1>` event binding for hold, `<ButtonRelease-1>` for release, Shift+release for `holdEndSkip`.
-- **Colors**: L-side cyan `#56CCF2`, R-side red `#E9514E`, active state yellow `#FFD800`.
-- **Analog stick dead zone**: ±10% from center (values 103–153 treated as neutral on 0–255 scale).
-- **Buttons**: A, B, X, Y, L, R, ZL, ZR, +, −, Home, Capture, D-pad (4 directions), L-stick, R-stick, Touch screen (320×240).
+- **ソフトウェアコントローラー**: CanvasベースのJoy-Con描画。`<Button-1>` イベントバインディングでホールド、`<ButtonRelease-1>` で解放、Shift+解放で `holdEndSkip`。
+- **色**: L側シアン `#56CCF2`、R側赤 `#E9514E`、アクティブ状態黄色 `#FFD800`。
+- **アナログスティックデッドゾーン**: 中央から±10%（0～255スケールで値103～153はニュートラルとして扱われる）。
+- **ボタン**: A、B、X、Y、L、R、ZL、ZR、+、−、Home、Capture、D-pad（4方向）、Lスティック、Rスティック、タッチスクリーン（320×240）。
 
-### 13.3 Original Output Panels
+### 13.3 元の出力パネル
 
-- **Output #1 and Output #2**: Log display with ratio adjustment via slider (0–100).
-- **Source**: Logs received via WebSocket.
-- **Clear**: "Clear Outputs" button in Others tab.
+- **出力 #1 と 出力 #2**: スライダー（0～100）で比率調整可能なログ表示。
+- **ソース**: WebSocket経由で受信したログ。
+- **クリア**: その他タブの「出力をクリア」ボタン。
+
 ---
 
 ## 14. Python公開API仕様と開発環境設定
@@ -1358,4 +1359,4 @@ File
 
 ---
 
-*This specification is a living document. Updates should be made when new requirements are communicated by the user.*
+*本仕様書は生きたドキュメントです。新しい要件がユーザーから伝達された場合、更新を行う必要があります。*

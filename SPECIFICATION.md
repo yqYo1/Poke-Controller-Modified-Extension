@@ -268,14 +268,16 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 - **キーボードショートカット**: F1～F10またはその他の割り当て可能なホットキー。
 - **保存**: 設定は `localStorage` に保存。
 
-#### 4.4.4 実行制御
+#### 4.4.4 実行制御ボタン
 
 | ボタン | キーボードショートカット | アクション |
-|--------|-------------------|--------|
+|--------|------------------------|------------|
 | **開始** | F5 | コマンド実行を開始 |
-| **一時停止** | Shift+F6 | 実行を一時停止（再開可能） |
-| **再開** | — | 最初から再実行 |
-| **停止** | Escape | 実行を即座に中断 |
+| **停止** | F6 | 実行を停止 |
+| **一時停止** | F7 | 実行を一時停止（再開可能） |
+| **再開** | F8 | 一時停止から再開 |
+| **リロード** | F9 | コマンドを再読み込みして開始 |
+| **緊急停止** | Escape | 実行を即座に中断（緊急時用） |
 | **再読み込み** | — | ファイルシステムからコマンドリストを再読み込み |
 
 - **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
@@ -376,7 +378,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
 | POST | `/api/controller/keyboard` | キーボード設定を設定 |
 
-- **ショートカット**: F5 = 再読み込み、F6 = 開始、ESC = 停止。
+- **ショートカット**: F5 = 開始、F6 = 停止、F7 = 一時停止、F8 = 再開、F9 = リロード、ESC = 緊急停止。
 - **保存**: キーボード設定は `localStorage` に保存。
 
 ### 5.6 マウス入力API
@@ -408,6 +410,21 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **生成**: `openapi-typescript` CLI。
 - **出力**: `Docs/api/openapi.ts`。
 - **使用法**: すべてのAPI呼び出しとWebSocketメッセージは生成された型を使用する必要があります。
+
+**ワークフロー**:
+
+```bash
+# 1. RustバックエンドでOpenAPI JSONを生成（ビルド時に自動実行）
+cargo build
+
+# 2. openapi-typescriptでTypeScript型を生成
+npx openapi-typescript http://localhost:3000/api-docs/openapi.json -o src/lib/api/openapi.ts
+
+# 3. フロントエンドで型を使用
+import { paths, components } from '$lib/api/openapi.ts'
+```
+
+**自動化**: `package.json`の`generate:api`スクリプトとして登録。CIでは生成済みの型ファイルをコミット。
 
 ### 6.2 型安全性要件
 
@@ -530,13 +547,15 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 ### 11.5 設定ファイル — `settings.ini` 廃止
 
-> **要件**: 従来の `settings.ini` ファイル形式は廃止されました。Rustネイティブの設定管理がそれを置き換えます。正確な形式と実装はUI仕様の範囲外です。
+> **要件**: 従来の `settings.ini` ファイル形式は廃止されました。Rustネイティブの設定管理がそれを置き換えます。
+
+**注**: UI仕様（§1–13）では設定ファイルの詳細は範囲外とします。設定ファイルの詳細な構造は§14.8で定義されています。
 
 ### 11.6 PWA — 将来フェーズのみ
 
 > **要件**: PWAの実装は将来のフェーズに延期されます。現在のスコープには、マニフェスト生成、サービスワーカー、またはインストールプロンプトは含まれません。
 
-### 11.8 スクリプト互換性 — リファクタリング前の全スクリプトが動作必須
+### 11.7 スクリプト互換性 — リファクタリング前の全スクリプトが動作必須
 
 > **要件**: リファクタリング前（Tkinter/Python）のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更はありません。Python互換レイヤーは完全な後方互換性を維持する必要があります。
 
@@ -871,13 +890,15 @@ print(spin.value)  # int
 import pokecon
 
 # 基本的なイベント登録
-pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+# 戻り値: HandlerId（ハンドラ解除用）
+handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 
 # 一度だけ実行
 pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Connected"))
 
 # イベントハンドラ解除
-pokecon.autocmd.off("CameraOpenPost", callback=handler_func)
+# 第2引数: HandlerId または コールバック関数
+pokecon.autocmd.off("CameraOpenPost", callback=handler_id)
 
 # すべてのハンドラ解除
 pokecon.autocmd.off_all("CameraOpenPost")
@@ -900,6 +921,15 @@ pokecon.autocmd.once("SerialConnectPost", {
         print("Connected")
     end
 })
+
+-- イベントハンドラ解除
+pokecon.autocmd.off("CameraOpenPost", handler_func)
+
+-- すべてのハンドラ解除
+pokecon.autocmd.off_all("CameraOpenPost")
+
+-- グループ単位で解除
+pokecon.autocmd.clear("my_group")
 ```
 
 #### 14.7.4 イベント定義・発火API
@@ -912,9 +942,11 @@ pokecon.event.define("MyCustomEvent")
 pokecon.event.emit("MyCustomEvent", data={"key": "value"})
 
 # 定義済みイベント一覧
+# 戻り値: list[str]
 print(pokecon.event.list_defined())
 
 # イベントスキーマ取得
+# 戻り値: dict[str, Any]（イベントのメタデータ）
 schema = pokecon.event.get_schema("CameraOpenPost")
 ```
 
@@ -986,28 +1018,20 @@ pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
 ```
 
-#### 14.7.8 状態取得API
-
-```python
-# 読み取り専用で状態を取得
-print(pokecon.state.serial_port)      # 現在のシリアルポート
-print(pokecon.state.camera_opened)    # カメラがオープンか
-print(pokecon.state.active_profile)   # 現在のアクティブプロファイル
-print(pokecon.state.is_running)       # コマンド実行中か
-```
-
-```lua
--- Lua設定
-print(pokecon.state.serial_port)
-print(pokecon.state.camera_opened)
-print(pokecon.state.active_profile)
-```
-
-#### 14.7.9 エラーハンドリング
+#### 14.7.8 エラーハンドリング
 
 - イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
-- エラー内容はログに出力
+- エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
 - フォールバック機構により、システム全体の動作を停止しない
+
+**エラーの種類と挙動**:
+
+| エラー種類 | 挙動 | ログ出力 |
+|-----------|------|---------|
+| コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
+| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
+| ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
+| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
 
 ### 14.8 設定ファイルシステム
 
@@ -1090,6 +1114,7 @@ File
 import pokecon
 
 # カメラ設定（フラット構造）
+# 注: UIのComboboxは1-30fpsだが、動的設定では60fpsも設定可能
 pokecon.opt.camera_fps = 60
 pokecon.opt.camera_resolution = "1280x720"
 
@@ -1154,7 +1179,21 @@ print(pokecon.state.active_profile)
 - エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
 - フォールバック機構により、前回の有効な設定を維持
 
-#### 14.8.8 設定ファイルの階層構造
+#### 14.8.8 Luaランタイム
+
+| 項目 | 設定 |
+|------|------|
+| **Lua実装** | LuaJIT 2.1 |
+| **Rust統合** | mlua crate（`luajit` + `vendored` feature） |
+| **ライセンス** | MIT（商用利用可能） |
+| **バインディング** | Rustコアに埋め込み、PyO3と同じプロセス空間で実行 |
+
+```toml
+[dependencies]
+mlua = { version = "0.11", features = ["luajit", "vendored"] }
+```
+
+#### 14.8.9 設定ファイルの階層構造
 
 ```
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）
@@ -1388,6 +1427,7 @@ File
 import pokecon
 
 # 基本的なキーマッピング
+# 戻り値: bool（成功: True, 失敗: False）
 pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
 
 # 修飾キー付き
@@ -1539,15 +1579,21 @@ print(pokecon.state.active_profile)
 import pokecon
 
 # 現在のプロファイル取得
+# 戻り値: str（プロファイル名）
 current = pokecon.profile.current()
 print(f"Current profile: {current}")
 
 # 利用可能なプロファイル一覧
+# 戻り値: list[str]
 profiles = pokecon.profile.list()
 print(f"Available profiles: {profiles}")
 
 # プロファイル切替
-pokecon.profile.switch("custom")
+# 戻り値: bool（成功: True, 失敗: False）
+# エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
+success = pokecon.profile.switch("custom")
+if not success:
+    print("Failed to switch profile")
 ```
 
 ```lua
@@ -1563,6 +1609,19 @@ pokecon.profile.switch("custom")
 - 動的設定ファイル（`init.py`/`init.lua`）を自動再読み込み
 - イベントハンドラをクリアして再登録
 - キーマップをクリアして再登録
+
+### 14.16 用語集
+
+| 用語 | 定義 |
+|------|------|
+| **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。例: `pokecon.opt.camera_fps`（フラット）vs `pokecon.opt.camera.fps`（階層） |
+| **Neovim風** | Neovimエディタの設定・キーマッピング方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
+| **後勝ち** | 同じキー・設定に対して後から適用された値が優先される方式。設定の優先順位やキーマップの重複解決で使用 |
+| **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
+| **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
+| **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
+| **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
+| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
 
 ---
 

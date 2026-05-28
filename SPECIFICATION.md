@@ -2,7 +2,7 @@
 
 > **バージョン**: 2.1.0-draft  
 > **ブランチ**: `refactor/rust-core`  
-> **日付**: 2026-05-27  
+> **日付**: 2026-05-28  
 > **スコープ**: Web/デスクトップUI（SvelteKit）— バックエンドAPIおよびRustコアは対象外  
 > **ソース**: セッション議事録から抽出した過去のユーザー要件（現在のコードベースではない）
 
@@ -268,6 +268,15 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
+**CommandInfo構造体**:
+```python
+class CommandInfo:
+    name: str           # コマンド名（NAME属性）
+    module_path: str    # モジュールファイルパス
+    class_name: str     # クラス名
+    tags: list[str]     # 統合後のタグ一覧（自動+手動+動的）
+```
+
 **自動タグ（ディレクトリ由来）**:
 - Pythonモジュールパスから自動生成（`mod.__name__.split(".")[2:-1]` で中間ディレクトリ名を抽出）
 - `@` プレフィックスを付与（例: `@Samples`, `@RankGlitch`）
@@ -285,6 +294,17 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 - コールバックは引数なし、`pokecon.state` に直接アクセスして変更
 - 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
 
+**動的タグ追加の例**:
+```python
+# init.py での動的タグ追加例
+def add_dynamic_tags():
+    for candidate in pokecon.state.command_candidates:
+        if candidate.name.startswith("Auto"):
+            candidate.tags.append("@Auto")
+
+pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
+```
+
 **タグの統合順序**:
 1. 自動タグ（ディレクトリ由来、`@` プレフィックス付き）
 2. 手動タグ（クラス属性、`@` なし）
@@ -295,16 +315,33 @@ Commandsタブには3つのサブタブ（内部タブ切替）が含まれま�
 - Python側はユーザースクリプトからの参照のみ
 - Rust側は動的設定や実際のバックエンド処理に使用
 
+**タグの重複**:
+- 同じタグが複数回追加された場合、自動的に重複を除去
+- 統合後のタグ一覧はユニークなリストとなる
+
 **フィルター動作**:
-- `in` 演算子による完全一致（部分一致ではない）
+- デフォルトは完全一致（`selected_tag == tag`）
+- マッチング方式は設定で切り替え可能:
+  - **静的設定** (`settings.toml`): `exact`（完全一致） / `partial`（部分一致） / `prefix`（前方一致） / `suffix`（後方一致）
+  - **動的設定** (`init.py` / `init.lua`): カスタムマッチ関数を指定可能
+    ```python
+    # カスタムマッチ関数の例
+    def custom_match(selected: str, tag: str) -> bool:
+        return selected.lower() in tag.lower()
+    
+    pokecon.ui.tag_match_function = custom_match
+    ```
 - UI上では `@` なしタグが先、`@` 付きタグが後に表示
-- ソート関数は動的設定ファイル（`init.py` / `init.lua`）で `pokecon.ui.tag_sort_function = my_sort_func` のように指定可能
-- ファジーファインダーで絞り込み可能（SPA側で処理）
+- ソート関数は動的設定ファイルで `pokecon.ui.tag_sort_function = my_sort_func` のように指定可能
+  - 型: `Callable[[list[str]], list[str]]`
+- ファジーファインダーで絞り込み可能（SPA側で `fuse.js` を使用した部分一致スコアリング）
 - 先頭に `"-"`（フィルター無効）を配置
 
 **タグ専用のstate**:
 - `pokecon.state.tags`: タグ一覧のみ（UI表示、フィルター選択肢生成用）
+  - 型: `list[str]`
 - `pokecon.state.command_candidates`: コマンド候補 + タグリスト（動的タグ追加、フィルタリング、実行用）
+  - 型: `list[CommandInfo]`
 - タグとコマンドの紐づけはコマンド側で管理
 
 #### 4.4.3 ショートカットボタン（10ボタン）
@@ -688,7 +725,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 ## 14. Python公開API仕様と開発環境設定
 
 > **Version**: 2.1.0-draft  
-> **Date**: 2026-05-27  
+> **Date**: 2026-05-28  
 > **Scope**: Python互換レイヤー、PyO3バインディング、開発環境自動構築  
 > **Source**: Grill-meセッション決定事項（refactor/rust-coreブランチ）
 
@@ -1055,15 +1092,6 @@ print(pokecon.event.list_defined())
    → ユーザーがコールバック内で command_candidates を変更可能
 5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
 6. ScriptLoadPost 発火: すべてのタグ統合完了後
-```
-
-**CommandInfo構造**:
-```python
-class CommandInfo:
-    name: str           # コマンド名（NAME属性）
-    module_path: str    # モジュールファイルパス
-    class_name: str     # クラス名
-    tags: list[str]     # 統合後のタグ一覧（自動+手動+動的）
 ```
 
 **命名規則**:
@@ -1712,7 +1740,8 @@ print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"�
 # コマンド関連
 print(pokecon.state.is_running)         # コマンド実行中（True/False）
 print(pokecon.state.current_command)    # 現在実行中のコマンド名
-print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（ScriptLoadPre前に生成）
+print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（list[CommandInfo]）
+print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str]）
 
 # プロファイル関連
 print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名

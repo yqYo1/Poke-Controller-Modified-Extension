@@ -1197,7 +1197,7 @@ pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
 
 1. **デフォルト値**（アプリケーション内蔵）
 2. **グローバル設定**（`~/.config/pokecon/settings.toml`）
-3. **プロファイル設定**（`~/.config/pokecon/profiles/<name>.toml`）
+3. **プロファイル設定**（`~/.config/pokecon/profiles/<name>/settings.toml`）
 4. **起動時引数**（CLIオプション）
 5. **動的設定**（`~/.config/pokecon/init.py` / `init.lua`）
 
@@ -1230,10 +1230,6 @@ name = "numpy"
 
 [profiles]
 active = "default"
-
-[[profiles.list]]
-name = "default"
-description = "デフォルトプロファイル"
 ```
 
 #### 14.8.4 動的設定ファイルの読み込みタイミング
@@ -1345,8 +1341,12 @@ mlua = { version = "0.11", features = ["luajit", "vendored"] }
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）
 ├── settings.toml                     # 静的設定（グローバル）
 ├── profiles/                         # プロファイル管理
-│   ├── default.toml
-│   └── custom.toml
+│   ├── default/
+│   │   └── settings.toml
+│   ├── custom1/
+│   │   └── settings.toml
+│   └── custom2/
+│       └── settings.toml
 ├── init.py                           # Python動的設定
 ├── init.lua                          # Lua動的設定
 ├── pyproject.toml                    # Python LSP設定（自動生成）

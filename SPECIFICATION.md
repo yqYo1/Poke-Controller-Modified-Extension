@@ -1383,11 +1383,15 @@ mlua = { version = "0.11", features = ["luajit", "vendored"] }
 ├── pyproject.toml                    # Python LSP設定
 ├── .luarc.json                       # Lua LSP設定（lua-language-server & EmmyLua共用）
 ├── .vscode/settings.json             # Pylance用（オプション）
-├── settings.toml                     # ユーザー設定
-│   [python.packages]                 # ユーザー追加ライブラリ
+├── settings.toml                     # ユーザー設定（グローバル）
+├── profiles/                         # プロファイル設定
+│   ├── default/
+│   │   └── settings.toml
+│   └── custom/
+│       └── settings.toml
 ├── init.py                           # Python動的設定テンプレート
 └── init.lua                          # Lua動的設定テンプレート
-
+```
 ~/.local/share/pokecon/               # XDG_DATA_HOME（自動管理）
 ├── typings/                          # Python型定義（.pyi、Rust側で自動生成）
 ├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）
@@ -1806,8 +1810,8 @@ pokecon.profile.switch("custom")
 
 #### 14.15.3 プロファイル切替時の動作
 
-- 新しいプロファイルの設定を読み込み
-- 動的設定ファイル（`init.py`/`init.lua`）を自動再読み込み
+- 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
+- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を自動再読み込み
 - イベントハンドラをクリアして再登録
 - キーマップをクリアして再登録
 

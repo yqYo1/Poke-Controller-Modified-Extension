@@ -452,6 +452,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 | イベント | 方向 | ペイロード |
 |-------|-----------|---------|
+| `camera.opened` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
 | `camera.frame` | サーバー → クライアント | Base64エンコードJPEGフレームデータ |
 | `command.start` | サーバー → クライアント | コマンド実行開始通知 |
 | `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
@@ -991,18 +992,18 @@ import pokecon
 
 # 基本的なイベント登録
 # 戻り値: HandlerId（ハンドラ解除用）
-# callbackの引数: イベントデータ（dict[str, Any]、イベントごとに型が異なる）
-handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda data: print(data["device_id"]))
+# callback: 引数なし（デフォルト）。pokecon.state に直接アクセスして情報を取得
+handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 
 # 一度だけ実行
-pokecon.autocmd.once("SerialConnectPost", callback=lambda data: print(data["port"]))
+pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
 
 # イベントハンドラ解除
-# 第2引数: HandlerId または コールバック関数
-pokecon.autocmd.off("CameraOpenPost", callback=handler_id)
+# 引数: HandlerId（on() / once() の戻り値）
+pokecon.autocmd.off(handler_id)
 
-# すべてのハンドラ解除
-pokecon.autocmd.off_all("CameraOpenPost")
+# すべてのハンドラ解除（すべてのイベントのハンドラを一括解除）
+pokecon.autocmd.off_all()
 
 # グループ単位で解除
 pokecon.autocmd.clear("my_group")
@@ -1011,30 +1012,32 @@ pokecon.autocmd.clear("my_group")
 ```lua
 -- Lua設定（Neovim風require-less）
 pokecon.autocmd.on("CameraOpenPost", {
-    callback = function(data)
-        print(data.device_id)
+    callback = function()
+        print("Camera opened")
     end,
     group = "my_group"
 })
 
 pokecon.autocmd.once("SerialConnectPost", {
-    callback = function(data)
-        print(data.port)
+    callback = function()
+        print("Serial connected")
     end
 })
 
 -- イベントハンドラ解除
-pokecon.autocmd.off("CameraOpenPost", handler_func)
+-- 引数: HandlerId（on() / once() の戻り値）
+pokecon.autocmd.off(handler_id)
 
 -- すべてのハンドラ解除
-pokecon.autocmd.off_all("CameraOpenPost")
+pokecon.autocmd.off_all()
 
 -- グループ単位で解除
 pokecon.autocmd.clear("my_group")
 ```
 
-**コールバック引数の型**:
-- すべてのイベントコールバックは `dict[str, Any]`（Python）または `table`（Lua）を受け取る
+**コールバックシグネチャ**:
+- **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
+- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
 - イベントごとに異なるフィールドを持つ（§14.7.5参照）
 - LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
 
@@ -1065,7 +1068,7 @@ print(pokecon.event.list_defined())
 
 #### 14.7.5 組み込みイベント一覧
 
-| イベント名 | フェーズ | 説明 | コールバックデータ |
+| イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
 |-----------|---------|------|------------------|
 | `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
 | `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |

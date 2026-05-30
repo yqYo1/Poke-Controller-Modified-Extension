@@ -32,7 +32,7 @@
 
 ### 1.2 設計方針
 
-- **Tkinterとの視覚的パリティ**: 新しいUIは、機能を機能的に再現するだけでなく、元のTkinterのレイアウトと外観に厳密に一致する必要があります。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
+- **Tkinterとの視覚的パリティ**: 新しいUIは、元のTkinterの機能を再現するだけでなく、元のTkinterのレイアウトと外観に厳密に一致する必要があります。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
 - **スクリプト互換性**: リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更は加えません。
 - **モダンスタック**: SvelteKit + Svelte 5（runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
 - **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてHTTP/MJPEGおよびWebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
@@ -72,9 +72,7 @@
 | **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
 | **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
 | **ユーザースクリプト** | コマンドクラスを継承して作成される、Poke-Controller上で実行されるPythonスクリプト。`PythonCommand`または`ImageProcPythonCommand`を継承する |
-| **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
-| **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
-
+|
 ---
 
 ## 3. 非機能要件
@@ -209,7 +207,7 @@
 - **出力 #1**: プライマリログ/出力表示。
 - **出力 #2**: セカンダリログ/出力表示。
 - **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。
-- **ログソース**: バックエンドからWebSocket経由で受信したログ。
+- **ログソース**: バックエンドからWebRTC DataChannelまたはWebSocket経由で受信したログ。
 - **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
 - **ログレベル**: DEBUG、INFO、WARNING、ERROR、CRITICAL（フィルタリング用）。どのログがどのレベルかは実装時に決定。
 - **独立ボタン**: その他タブの「出力をクリア」ボタン。
@@ -515,11 +513,7 @@ pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
 
 #### 6.6.2 将来 / フェーズ7項目
 
-- **キー設定エディター（高度なキーバインドUI）**
-  - GUIからの編集は不要
-  - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
-  - 例: `keyboard.shortcuts.F5 = "command_start"`
-- Pokémon Home連携（将来的に追加する — APIはmainブランチ準拠で実装）。
+- 将来機能については **§17.2 その他将来的機能** を参照。
 
 ---
 
@@ -816,8 +810,8 @@ Command (ABC, metaclass=CommandMeta)
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n')` | 上部ログ（モード付き w/a/d） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n')` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
-|| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdoutログ（モード付き） |
-|| `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
+| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdoutログ（モード付き） |
+| `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 | メソッド | シグネチャ | 説明 |
@@ -1097,6 +1091,7 @@ pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 -- require不要で pokecon.* に直接アクセス
 
 -- カメラ設定（フラット構造）
+-- 注: UIのComboboxは1-30fpsだが、動的設定では60fpsも設定可能
 pokecon.opt.camera_fps = 60
 pokecon.opt.serial_port = "COM3"
 
@@ -1982,64 +1977,11 @@ class CommandMeta(type):
 
 ## C. 組み込みイベント一覧
 
-| イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
-|-----------|---------|------|------------------|
-| `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
-| `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
-| `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
-| `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
-| `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
-| `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
-| `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
-| `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
-| `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
-| `CommandErrorPost` | Post | コマンドエラー発生後 | `{"command_name": str, "error": str}` |
-| `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
-| `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
-| `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
-| `InputPressedPre` | Pre | 入力押下前 | `{"button": str}` |
-| `InputReleasedPost` | Post | 入力解放後 | `{"button": str}` |
-
-**ScriptLoadPre/ScriptLoadPostのタイミング**:
-
-```
-1. 初期処理: script_dirs の解決・存在確認
-2. ファイル探索: 各ディレクトリ内の .py ファイルを探索
-3. クラス抽出: モジュールインポート・コマンドクラス抽出・自動タグ生成
-4. ScriptLoadPre 発火: pokecon.state.command_candidates が設定済み
-   → ユーザーがコールバック内で command_candidates を変更可能
-5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
-6. ScriptLoadPost 発火: すべてのタグ統合完了後
-```
-
-**命名規則**:
-- **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
-- **Pre/Post後置**: Vim/Neovim風（`BufReadPre`/`BufReadPost`に類似）
-- **名前空間なし**: ドット区切りの名前空間は使用しない
-- **動詞に限定しない**: 名詞・形容詞も可
-
-**注記**: 動的設定用イベントシステム（§11.12）とWebSocketイベント（§7.3）は**別々のシステム**です。
-- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— ユーザースクリプトで使用
-- **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
-
-両者は内部で連携しますが、命名規則と用途が異なります。
-
-**連携方法の概要**:
-- 動的設定イベントはRustコア内のイベントバスで発火・購読される
-- WebSocketイベントはUIとバックエンド間の通信プロトコルとして使用される
-- 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
-- この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
+組み込みイベントの一覧は **§11.12.5 組み込みイベント一覧** を参照。内容は同一です。
 
 ## D. デフォルトキーバインド一覧
 
-| キー | 動作 | 状態 |
-|------|------|------|
-| `<F5>` | コマンド開始 | press |
-| `<F6>` | コマンド停止 | press |
-| `<F7>` | コマンド一時停止 | press |
-| `<F8>` | コマンド再開 | press |
-| `<F9>` | コマンドリロード | press |
-| `<Esc>` | 緊急停止 | press |
+デフォルトキーバインドの一覧は **§11.13.5 デフォルトキーバインド** を参照。内容は同一です。
 
 ---
 

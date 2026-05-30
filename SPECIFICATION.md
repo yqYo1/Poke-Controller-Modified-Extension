@@ -884,7 +884,7 @@ print(combo.value)  # str
 print(spin.value)  # int
 ```
 
-### 5.12 イベントシステム（動的設定）
+### 5.12 イベントシステム
 
 動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
 

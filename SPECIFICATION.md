@@ -39,6 +39,16 @@
 - **認証なし**: アプリケーションはローカル/LAN専用に設計。API認証は不要。
 - **Reactコードは完全に削除**: 要件により、Reactフロントエンドコードベースは「ゴミ」と見なされ、参照、インポート、または信頼できる情報源として使用してはなりません。仕様は、Reactの実装ではなく、ユーザーから伝達された元のTkinterレイアウト要件からのみ導出されます。
 
+**実装レイヤー**:
+
+| レイヤー | 言語 | 役割 | 例 |
+|---------|------|------|-----|
+| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
+| PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.events`, `pokecon.dialogue` |
+| Python互換レイヤー | Python（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
+
+**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型ヒント・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。
+
 ### 1.3 対象プラットフォーム
 
 | プラットフォーム | UIモード | 備考 |
@@ -305,7 +315,7 @@ class CommandInfo:
 - `@` プレフィックスは付かない（慣例）
 
 **動的タグ（イベントによる追加）**:
-- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§14.7.5参照）
+- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§13.7.5参照）
 - コールバックは引数なし、`pokecon.state` に直接アクセスして変更
 - 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
 
@@ -799,7 +809,8 @@ Command (ABC, metaclass=CommandMeta)
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\n')` | 上部ログ（モード付き w/a/d） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\n')` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\n')` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\n')` | stdoutログ（モード付き） |
+|| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\n')` | stdoutログ（モード付き） |
+|| `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 | メソッド | シグネチャ | 説明 |
@@ -969,7 +980,7 @@ print(spin.value)  # int
 
 | 名前空間 | 用途 | API |
 |---------|------|-----|
-| `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `off_all()`, `clear(group)` |
+| `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
 
 #### 13.7.3 イベントハンドラAPI
@@ -990,13 +1001,12 @@ pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connect
 # 引数: HandlerId（on() / once() の戻り値）
 pokecon.autocmd.off(handler_id)
 
-# すべてのハンドラ解除（すべてのイベントのハンドラを一括解除）
-pokecon.autocmd.off_all()
-
-# 特定イベントの全ハンドラ解除（Neovimの `autocmd! EventName` に相当）
-pokecon.autocmd.off_all("CameraOpenPost")
-
-# グループ単位で解除
+# グループ単位で一括解除
+# "all" = すべてのハンドラ解除
+# "CameraOpenPost" = そのイベントの全ハンドラ解除
+# "my_group" = ユーザ定義グループの全ハンドラ解除
+pokecon.autocmd.clear("all")
+pokecon.autocmd.clear("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
 ```
 
@@ -1014,10 +1024,15 @@ pokecon.autocmd.clear("camera_group")
 ```
 
 **グループの特徴**:
-- グループ名は任意の文字列
+- グループ名は任意の文字列（ただし予約グループ名は除く）
 - 同じグループ名を複数のハンドラで共有可能
 - `clear("group_name")` でグループ内の全ハンドラを一括解除
 - グループを指定しない場合はデフォルトグループ（無名）に所属
+
+**予約グループ名**:
+- `"all"` — すべてのハンドラを対象とする特別なグループ
+- 各イベント名（例: `"CameraOpenPost"`, `"SerialConnectPost"` 等）— そのイベントの全ハンドラを対象
+- ユーザーは予約グループ名を `group` パラメータに指定できない（エラー）
 
 ```lua
 -- Lua設定（Neovim風require-less）
@@ -1038,13 +1053,12 @@ pokecon.autocmd.once("SerialConnectPost", {
 -- 引数: HandlerId（on() / once() の戻り値）
 pokecon.autocmd.off(handler_id)
 
--- すべてのハンドラ解除
-pokecon.autocmd.off_all()
-
--- 特定イベントの全ハンドラ解除（Neovimの `autocmd! EventName` に相当）
-pokecon.autocmd.off_all("CameraOpenPost")
-
--- グループ単位で解除
+-- グループ単位で一括解除
+-- "all" = すべてのハンドラ解除
+-- "CameraOpenPost" = そのイベントの全ハンドラ解除
+-- "my_group" = ユーザ定義グループの全ハンドラ解除
+pokecon.autocmd.clear("all")
+pokecon.autocmd.clear("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
 ```
 
@@ -1073,7 +1087,7 @@ pokecon.autocmd.clear("camera_group")
 **コールバックシグネチャ**:
 - **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
 - **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
-- イベントごとに異なるフィールドを持つ（§14.7.5参照）
+- イベントごとに異なるフィールドを持つ（§13.7.5参照）
 - LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
 
 #### 13.7.4 イベント定義・発火API
@@ -1139,7 +1153,7 @@ print(pokecon.event.list_defined())
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
 
-**注記**: 動的設定用イベントシステム（§14.7）とWebSocketイベント（§5.3）は**別々のシステム**です。
+**注記**: 動的設定用イベントシステム（§13.7）とWebSocketイベント（§5.3）は**別々のシステム**です。
 - **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— ユーザースクリプトで使用
 - **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
 
@@ -1279,7 +1293,7 @@ active = "default"
 | **手動** | メニュー「Load Dynamic Config」で読み込み |
 | **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン） |
 
-**メニュー項目**（§14.11.1参照）:
+**メニュー項目**（§13.11.1参照）:
 ```
 File
 ├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
@@ -1375,13 +1389,13 @@ print(pokecon.state.serial_port)
 print(pokecon.state.active_profile)
 ```
 
-#### 13.8.7 エラーハンドリング
+#### 13.8.8 エラーハンドリング
 
 - 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
 - エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
 - フォールバック機構により、前回の有効な設定を維持
 
-#### 13.8.8 Luaランタイム
+#### 13.8.9 Luaランタイム
 
 | 項目 | 設定 |
 |------|------|
@@ -1395,7 +1409,7 @@ print(pokecon.state.active_profile)
 mlua = { version = "0.11", features = ["luajit", "vendored"] }
 ```
 
-#### 13.8.9 設定ファイルの階層構造
+#### 13.8.10 設定ファイルの階層構造
 
 ```
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）

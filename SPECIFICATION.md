@@ -1005,6 +1005,9 @@ pokecon.autocmd.off(handler_id)
 # すべてのハンドラ解除（すべてのイベントのハンドラを一括解除）
 pokecon.autocmd.off_all()
 
+# 特定イベントの全ハンドラ解除（Neovimの `autocmd! EventName` に相当）
+pokecon.autocmd.off_all("CameraOpenPost")
+
 # グループ単位で解除
 pokecon.autocmd.clear("my_group")
 ```
@@ -1030,6 +1033,9 @@ pokecon.autocmd.off(handler_id)
 
 -- すべてのハンドラ解除
 pokecon.autocmd.off_all()
+
+-- 特定イベントの全ハンドラ解除（Neovimの `autocmd! EventName` に相当）
+pokecon.autocmd.off_all("CameraOpenPost")
 
 -- グループ単位で解除
 pokecon.autocmd.clear("my_group")
@@ -1252,7 +1258,29 @@ File
 └── Open Config Directory    ← 設定ディレクトリを開く
 ```
 
-#### 14.8.5 動的設定（Python）
+#### 14.8.5 動的設定ファイルの共存（Neovim準拠）
+
+`init.py` と `init.lua` の両方が存在する場合、**Neovimと同様に一方のみ**読み込まれます。
+
+| 設定 | 読み込まれるファイル |
+|------|-------------------|
+| `settings.toml` で `dynamic_config_language = "python"` を指定 | `init.py` |
+| `settings.toml` で `dynamic_config_language = "lua"` を指定 | `init.lua` |
+| 未指定（デフォルト） | `init.lua` が優先（Neovimと同じ） |
+
+**両方を使いたい場合**: 一方から `pokecon.source()` で另一方を読み込んでください。
+
+```python
+# init.py で init.lua を読み込む例
+pokecon.source("~/.config/pokecon/init.lua")
+```
+
+```lua
+-- init.lua で init.py を読み込む例
+pokecon.source("~/.config/pokecon/init.py")
+```
+
+#### 14.8.6 動的設定（Python）
 
 ```python
 # ~/.config/pokecon/init.py

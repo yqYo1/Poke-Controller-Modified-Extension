@@ -8,10 +8,6 @@
 
 ---
 
-# パートI: 共通基盤
-
-【対象読者】全読者（UI実装者、スクリプト開発者、メンテナー）
-
 ## 0. 本ドキュメントの位置づけ
 
 **本ドキュメントは要求仕様書・要件定義書として運用されます。**
@@ -75,6 +71,9 @@
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
 | **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
 | **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
+| **ユーザースクリプト** | コマンドクラスを継承して作成される、Poke-Controller上で実行されるPythonスクリプト。`PythonCommand`または`ImageProcPythonCommand`を継承する |
+| **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
+| **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 
 ---
 
@@ -147,11 +146,6 @@
 > **要件**: テーマサポート（ライト/ダーク/カスタム）は将来のフェーズに延期されます。Tailwind CSS v4はスタイリングフレームワークとして確定しています。
 
 ---
-
-# パートII: UI仕様
-
-【対象読者】UI実装者（SvelteKitフロントエンド開発者）
-【必須前提知識】Svelte 5（runes）、Tailwind CSS v4、TypeScript
 
 ## 3. UIレイアウト（現§2 + §3統合）
 
@@ -670,24 +664,22 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ---
 
-【対象読者】スクリプト開発者（init.py/init.luaを作成するユーザー）
-【必須前提知識】PythonまたはLuaの基礎
+## 4. コマンドクラス（ユーザースクリプト向け）
 
-### 4. 設計方針
+### 4.1 設計方針
 
 - **コアはRust**: すべてのコア処理はRustで実装。Pythonは必要な部分のみ（ユーザースクリプトAPI、互換レイヤー）。
 - **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてPyO3（Rustバインディング）に流れる。
 - **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
 - **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは非推奨として保持される。
 
-### 4. パッケージ構造
+### 4.2 パッケージ構造
 
 ```
 pokecon/
 ├── __init__.py          # パッケージエントリ、モジュールパッチ
 ├── commands.py          # PythonCommand、ImageProcPythonCommand、CommandEngine
 ├── keys.py              # Button、Hat、Direction、Stick、Touchscreen、SendFormat
-├── events.py            # EventBus（動的設定用）
 ├── dialogue.py          # ダイアログ関数（ブロッキングWebポップアップ）
 ├── _meta.py             # CommandMetaメタクラス
 ├── _adapter.py          # Rustコアアダプタ
@@ -699,16 +691,17 @@ pokecon/
 PyO3モジュール（rust/pokecon-pybindings）:
 - `pokecon.keys` — 入力型（Button、Hat、Direction、Stick、Touchscreen）
 - `pokecon.command` — コマンドスキャン/読み込み
-- `pokecon.events` — イベントバス
 - `pokecon.notify` — 通知（Discord、LINEスタブ、Windows）
 - `pokecon.sender` — シリアル通信
 - `pokecon.dialogue` — ダイアログ関数
 - `pokecon.image_proc` — 画像処理（opencv-rust）
 - `pokecon.net` — Socket、MQTT、HTTPクライアント
 
-### 4. コマンドクラス
+**注**: `events.py`（動的設定用EventBus）は§5「設定システム」に含まれる。
 
-#### 4.1 クラス階層
+### 4.3 コマンドクラス
+
+#### 4.3.1 クラス階層
 
 ```
 Command (ABC, metaclass=CommandMeta)
@@ -717,7 +710,7 @@ Command (ABC, metaclass=CommandMeta)
 └── McuCommandBase
 ```
 
-#### 4.2 PythonCommand
+#### 4.3.2 PythonCommand
 
 **Import**: `from Commands.PythonCommandBase import PythonCommand`
 
@@ -793,7 +786,7 @@ Command (ABC, metaclass=CommandMeta)
 | `LINE_image()` | `LINE_image(txt, crop_fmt='', crop=None, token='')` | No-opスタブ（LINEサービスEOL） |
 | `win_notification()` | `win_notification()` | Windowsデスクトップトースト通知 |
 
-#### 4.3 ImageProcPythonCommand
+#### 4.3.3 ImageProcPythonCommand
 
 **Import**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
 
@@ -824,21 +817,21 @@ Command (ABC, metaclass=CommandMeta)
 | `_grayscale()` | `_grayscale(image)` | グレースケール変換 |
 | `_resize()` | `_resize(image, width, height)` | 画像リサイズ |
 
-#### 4.4 McuCommandBase
+#### 4.3.4 McuCommandBase
 
 **Import**: `from Commands.McuCommandBase import McuCommandBase`
 
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
-### 4. キー入力・シリアル送信
+### 4.4 キー入力・シリアル送信
 
-#### 4.1 KeyPress
+#### 4.4.1 KeyPress
 
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
 - 内部実装はRust、PyO3経由で公開
 
-#### 4.2 Sender
+#### 4.4.2 Sender
 
 **PyO3実装**（限定公開API）:
 | メソッド | シグネチャ | 説明 |
@@ -848,7 +841,7 @@ Command (ABC, metaclass=CommandMeta)
 
 その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
 
-### 4. ダイアログAPI（型安全）
+### 4.5 ダイアログAPI（型安全）
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
@@ -891,11 +884,11 @@ print(combo.value)  # str
 print(spin.value)  # int
 ```
 
-### 4. イベントシステム（動的設定）
+### 5.12 イベントシステム（動的設定）
 
 動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
 
-#### 4.1 設計方針
+#### 5.12.1 設計方針
 
 - **Neovim/Vimライクな設計**: `autocmd` スタイルのイベントハンドラ登録
 - **Pre/Postフェーズ**: すべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ
@@ -903,14 +896,14 @@ print(spin.value)  # int
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
 - **Python/Lua両対応**: 両言語で同じAPI構造を使用
 
-#### 4.2 名前空間設計
+#### 5.12.2 名前空間設計
 
 | 名前空間 | 用途 | API |
 |---------|------|-----|
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
 
-#### 4.3 イベントハンドラAPI
+#### 5.12.3 イベントハンドラAPI
 
 ```python
 # Python設定
@@ -1017,7 +1010,7 @@ pokecon.autocmd.clear("camera_group")
 - イベントごとに異なるフィールドを持つ（§15.5参照）
 - LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
 
-#### 4.4 イベント定義・発火API
+#### 5.12.4 イベント定義・発火API
 
 ```python
 # ユーザー定義イベント
@@ -1042,7 +1035,7 @@ pokecon.event.emit("MyCustomEvent", {key = "value"})
 print(pokecon.event.list_defined())
 ```
 
-#### 4.5 組み込みイベント一覧
+#### 5.12.5 組み込みイベント一覧
 
 | イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
 |-----------|---------|------|------------------|
@@ -1080,8 +1073,8 @@ print(pokecon.event.list_defined())
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
 
-**注記**: 動的設定用イベントシステム（§15）とWebSocketイベント（§7.3）は**別々のシステム**です。
-- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— ユーザースクリプトで使用
+**注記**: 動的設定用イベントシステム（§5.12）とWebSocketイベント（§7.3）は**別々のシステム**です。
+- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定で使用
 - **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
 
 両者は内部で連携しますが、命名規則と用途が異なります。
@@ -1092,7 +1085,7 @@ print(pokecon.event.list_defined())
 - 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
 - この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
 
-#### 4.6 型ヒント
+#### 5.12.6 型ヒント
 
 ```python
 from typing import Literal, Union
@@ -1133,7 +1126,7 @@ class CameraOpenPostData(TypedDict):
 # ... その他のイベントデータ型
 ```
 
-#### 4.7 コールバックシグネチャ
+#### 5.12.7 コールバックシグネチャ
 
 ```python
 # 引数なし（デフォルト）
@@ -1143,7 +1136,7 @@ pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
 ```
 
-#### 4.8 エラーハンドリング
+#### 5.12.8 エラーハンドリング
 
 - イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
 - エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
@@ -1158,15 +1151,15 @@ pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
 | ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
 | 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
 
-### 4. キーマップシステム
+### 5.13 キーマップシステム
 
-#### 4.1 設計方針
+#### 5.13.1 設計方針
 
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
 - **フラットAPI**: `pokecon.keymap.set(key, callback, state)`
 - **状態指定**: `press`（デフォルト）, `release`, `hold`
 
-#### 4.2 API仕様
+#### 5.13.2 API仕様
 
 ```python
 # Python設定
@@ -1200,7 +1193,7 @@ pokecon.keymap.set("<C-a>", function()
 end, {state = "press"})
 ```
 
-#### 4.3 サポートするキー記法
+#### 5.13.3 サポートするキー記法
 
 | 記法 | 説明 | 例 |
 |------|------|-----|
@@ -1215,13 +1208,13 @@ end, {state = "press"})
 | `<Tab>` | タブキー | `<Tab>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
 
-#### 4.4 キー重複時の優先順位
+#### 5.13.4 キー重複時の優先順位
 
 - 後から登録されたキーバインドが優先される（後勝ち）
 - 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
 - プロファイル切替時は、新プロファイルのキーバインドに置き換えられる
 
-#### 4.5 デフォルトキーバインド
+#### 5.13.5 デフォルトキーバインド
 
 | キー | 動作 | 状態 |
 |------|------|------|
@@ -1232,15 +1225,15 @@ end, {state = "press"})
 | `<F9>` | コマンドリロード | press |
 | `<Esc>` | 緊急停止 | press |
 
-### 4. 相互参照API
+### 5.14 相互参照API
 
-#### 4.1 設計方針
+#### 5.14.1 設計方針
 
 - **Neovimの`:source`に類似**: `pokecon.source(path)`
 - **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
 - **相対パス・絶対パス両対応**
 
-#### 4.2 API仕様
+#### 5.14.2 API仕様
 
 ```python
 # Python設定
@@ -1261,21 +1254,21 @@ pokecon.source("~/.config/pokecon/extra_settings.py")
 pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
 
-#### 4.3 エラーハンドリング
+#### 5.14.3 エラーハンドリング
 
 - 指定されたファイルが存在しない場合はエラーをログに出力
 - ファイルの読み込みに失敗しても、現在の設定は維持される
 - 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
 
-### 4. 状態取得API
+### 5.15 状態取得API
 
-#### 4.1 設計方針
+#### 5.15.1 設計方針
 
 - **読み取り専用**: `pokecon.state.<property>`
 - **リアルタイム**: 現在の状態を即座に反映
 - **スレッドセーフ**: 複数スレッドから安全に読み取り可能
 
-#### 4.2 利用可能な状態プロパティ
+#### 5.15.2 利用可能な状態プロパティ
 
 ```python
 # Python設定
@@ -1313,14 +1306,14 @@ print(pokecon.state.camera_opened)
 print(pokecon.state.active_profile)
 ```
 
-### 4. プロファイルAPI
+### 5.16 プロファイルAPI
 
-#### 4.1 設計方針
+#### 5.16.1 設計方針
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
 
-#### 4.2 API仕様
+#### 5.16.2 API仕様
 
 ```python
 # Python設定
@@ -1351,7 +1344,7 @@ print(pokecon.profile.list())
 pokecon.profile.switch("custom")
 ```
 
-#### 4.3 プロファイル切替時の動作
+#### 5.16.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
 - 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を自動再読み込み
@@ -1360,12 +1353,9 @@ pokecon.profile.switch("custom")
 
 ---
 
-【対象読者】全ユーザー（エンドユーザー、パワーユーザー）
-【必須前提知識】TOML、PythonまたはLuaの基礎
-
 ## 5. 設定ファイルシステム
 
-### 3.1 設定の種類と対象ユーザー
+### 5.1 設定の種類と対象ユーザー
 
 | 種類 | ファイル | 言語 | 用途 | 対象ユーザー |
 |------|---------|------|------|------------|
@@ -1375,11 +1365,11 @@ pokecon.profile.switch("custom")
 
 **重要**: TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される。
 
-### 3.2 設定ファイル
+### 5.2 設定ファイル
 
 > **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、Rustネイティブの設定管理に置き換えられます。正確な形式と保存場所はRustバックエンドチームが決定します（本UI仕様の範囲外）。
 
-### 3.3 優先順位とマージ方式
+### 5.3 優先順位とマージ方式
 
 設定は以下の5層で優先順位が決まる（**後勝ち**、未設定項目は上位から継承）：
 
@@ -1396,7 +1386,7 @@ pokecon.profile.switch("custom")
 
 **注記**: 動的設定（⑤）が最も優先されるのは、パワーユーザーが最終的な制御権を持つことを意図した設計です。CLI引数（④）で一時的な上書きを行っても、動的設定ファイルで恒久的な設定を適用できます。ただし、動的設定ファイル内で `pokecon.opt.auto_reload_config = True` を設定した場合、ファイル変更時に自動的に再読み込みが行われ、CLI引数での一時的な設定が上書きされることがあります。これを避けるには、動的設定の自動リロードを無効にするか、CLI引数で `--no-dynamic-config` を指定してください。
 
-### 3.4 静的設定（settings.toml）
+### 5.4 静的設定（settings.toml）
 
 ```toml
 # ~/.config/pokecon/settings.toml
@@ -1420,7 +1410,7 @@ name = "numpy"
 active = "default"
 ```
 
-### 3.5 動的設定の読み込みタイミング
+### 5.5 動的設定の読み込みタイミング
 
 | タイミング | 動作 |
 |-----------|------|
@@ -1437,7 +1427,7 @@ File
 └── Open Config Directory    ← 設定ディレクトリを開く
 ```
 
-### 3.6 動的設定の共存（Neovim準拠）
+### 5.6 動的設定の共存（Neovim準拠）
 
 `init.py` と `init.lua` の両方が存在する場合、**Neovimと同様に一方のみ**読み込まれます。
 
@@ -1459,7 +1449,7 @@ pokecon.source("~/.config/pokecon/init.lua")
 pokecon.source("~/.config/pokecon/init.py")
 ```
 
-### 3.7 動的設定（Python）
+### 5.7 動的設定（Python）
 
 ```python
 # ~/.config/pokecon/init.py
@@ -1495,7 +1485,7 @@ pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 - **優先順位**: 動的設定 > 静的設定（settings.toml）
 - **エラーハンドリング**: 構文エラーの場合はその行をスキップし、残りを続行
 
-### 3.8 動的設定（Lua）
+### 5.8 動的設定（Lua）
 
 ```lua
 -- ~/.config/pokecon/init.lua
@@ -1525,13 +1515,13 @@ print(pokecon.state.serial_port)
 print(pokecon.state.active_profile)
 ```
 
-### 3.9 エラーハンドリング
+### 5.9 エラーハンドリング
 
 - 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
 - エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
 - フォールバック機構により、前回の有効な設定を維持
 
-### 3.10 Luaランタイム
+### 5.10 Luaランタイム
 
 | 項目 | 設定 |
 |------|------|
@@ -1545,7 +1535,7 @@ print(pokecon.state.active_profile)
 mlua = { version = "0.11", features = ["luajit", "vendored"] }
 ```
 
-### 3.11 設定ファイルの階層構造
+### 5.11 設定ファイルの階層構造
 
 ```
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）
@@ -1577,16 +1567,16 @@ mlua = { version = "0.11", features = ["luajit", "vendored"] }
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
 
-## 5. クライアント側ストレージ
+## 6. クライアント側ストレージ
 
 | 項目 | 保存方法 | 備考 |
 |------|---------------|-------|
 | ショートカットボタン割り当て | `localStorage` | 10ボタンキーバインド |
 | キーボード設定 | `localStorage` | キーマッピング設定 |
 
-## 5. 動的設定ファイルのUI
+## 7. 動的設定ファイルのUI
 
-### 3.1 メニュー配置
+### 7.1 メニュー配置
 
 - **配置場所**: メニューバー内
 - **項目**: 単一の「Load Dynamic Config」メニュー項目
@@ -1598,7 +1588,7 @@ File
 └── Open Config Directory    ← 設定ディレクトリを開く
 ```
 
-### 3.2 ファイル選択と自動判別
+### 7.2 ファイル選択と自動判別
 
 - **ファイル選択ダイアログ**: 単一の「Load Dynamic Config」メニューから開く
 - **自動判別**: 拡張子で言語を自動判別
@@ -1606,7 +1596,7 @@ File
   - `.lua` → Lua動的設定ファイル
 - **手動指定**: 拡張子が不明な場合はユーザーに選択を促す
 
-### 3.3 リロード機能
+### 7.3 リロード機能
 
 | 機能 | 説明 |
 |------|------|
@@ -1614,7 +1604,7 @@ File
 | **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**） |
 | **有効化方法** | `pokecon.opt.auto_reload_config = True` またはUI設定 |
 
-### 3.4 エラーハンドリング
+### 7.4 エラーハンドリング
 
 - 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
 - エラー内容はログパネルに出力
@@ -1622,12 +1612,7 @@ File
 
 ---
 
-**【対象読者】** メンテナー（リポジトリ管理者、CI/CD設定者、パッケージャー）
-**【必須前提知識】** Nix、Rust、Pythonパッケージ管理
-
----
-
-## 6. スクリプト互換性要件
+## 8. スクリプト互換性要件
 
 | 要件 | 状態 |
 |------|------|
@@ -1642,9 +1627,9 @@ File
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
 | Windows通知 | ✅ 実装済み |
 
-## 6. 開発環境自動構築
+## 9. 開発環境自動構築
 
-### 3.1 ディレクトリ構造
+### 9.1 ディレクトリ構造
 
 ```
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（ユーザーが編集する）
@@ -1683,13 +1668,13 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 - 型定義ファイルの配布方式は **XDG_DATA_HOMEへの自動生成** で確定
 - 開発用元データはリポジトリ内の `python/pokecon/typings/` に配置
 
-### 3.2 設定ファイル生成タイミング
+### 9.2 設定ファイル生成タイミング
 
 - **存在しない時に生成**（初回、アップデート、削除後等）
 - **nix環境**: nix式で指定した場合のみnix側で生成。指定しなかった場合はアプリ起動時に存在しないためアプリ側で生成。
 - **非nix環境**: アプリ側で自動生成
 
-### 3.3 Python管理（nix環境）
+### 9.3 Python管理（nix環境）
 
 nix環境では、Pythonインタープリターのパスを**ビルド時にnixストアパスとして埋め込む**。
 
@@ -1742,7 +1727,7 @@ pokecon-server = rustPlatform.buildRustPackage {
 - グローバルPythonを使用しない（nixの隔離性を維持）
 - 非nix環境では環境変数が未設定のため、実行時に別途Pythonを取得するフォールバック動作
 
-### 3.4 Python管理（非nix環境）
+### 9.4 Python管理（非nix環境）
 
 ```rust
 // Rust側
@@ -1762,7 +1747,7 @@ impl PythonManager {
 }
 ```
 
-### 3.5 必須パッケージ管理
+### 9.5 必須パッケージ管理
 
 - **リポジトリ内`pyproject.toml`**からビルド時に取得
 - **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
@@ -1777,7 +1762,7 @@ fn main() {
 }
 ```
 
-### 3.6 ユーザーパッケージ設定
+### 9.6 ユーザーパッケージ設定
 
 ```toml
 # ~/.config/pokecon/settings.toml
@@ -1806,7 +1791,7 @@ version = "0.5.0"
 source = "path=/home/user/projects/local-lib"  # ローカルパス
 ```
 
-### 3.7 LSP設定（pyproject.toml）
+### 9.7 LSP設定（pyproject.toml）
 
 ```toml
 [tool.basedpyright]
@@ -1836,7 +1821,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 # ruffはextraPaths未対応（LSP機能限定）
 ```
 
-### 3.8 Lua LSP設定（.luarc.json）
+### 9.8 Lua LSP設定（.luarc.json）
 
 ```json
 {
@@ -1847,30 +1832,30 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 }
 ```
 
-## 6. 将来フェーズ
+## 10. 将来フェーズ
 
-### 3.1 PWA要件
+### 10.1 PWA要件
 
 > **ステータス: 未実装 — 将来フェーズのみ。**  
 > 以下の要件は将来の実装のためのユーザー要求として記録されています。現在のスコープには含まれません。
 
-#### 3.1.1 マニフェスト
+#### 10.1.1 マニフェスト
 
 - アプリメタデータを含む `manifest.json`。
 - 全プラットフォーム用のアイコン。
 - 表示モード: `standalone`。
 
-#### 3.1.2 サービスワーカー
+#### 10.1.2 サービスワーカー
 
 - UIアセットのオフライン対応。
 - キューに入ったコマンドのバックグラウンド同期（将来）。
 
-#### 3.1.3 インストールプロンプト
+#### 10.1.3 インストールプロンプト
 
 - カスタムインストールボタン。
 - プラットフォーム固有のインストールガイダンス。
 
-### 3.2 その他将来的機能
+### 10.2 その他将来的機能
 
 - **キー設定エディター（高度なキーバインドUI）**
   - GUIからの編集は不要

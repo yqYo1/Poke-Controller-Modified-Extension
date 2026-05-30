@@ -1012,6 +1012,25 @@ pokecon.autocmd.off_all("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
 ```
 
+**グループ（Neovimの `augroup` に相当）**:
+
+グループは関連するイベントハンドラをまとめるための仕組みです。Neovimと同様に、グループを指定することでハンドラの管理が容易になります。
+
+```python
+# グループを指定して登録
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"), group="camera_group")
+pokecon.autocmd.on("CameraClosePost", callback=lambda: print("Camera closed"), group="camera_group")
+
+# グループ単位で一括解除
+pokecon.autocmd.clear("camera_group")
+```
+
+**グループの特徴**:
+- グループ名は任意の文字列
+- 同じグループ名を複数のハンドラで共有可能
+- `clear("group_name")` でグループ内の全ハンドラを一括解除
+- グループを指定しない場合はデフォルトグループ（無名）に所属
+
 ```lua
 -- Lua設定（Neovim風require-less）
 pokecon.autocmd.on("CameraOpenPost", {
@@ -1039,6 +1058,28 @@ pokecon.autocmd.off_all("CameraOpenPost")
 
 -- グループ単位で解除
 pokecon.autocmd.clear("my_group")
+```
+
+**Luaでのグループ指定例**:
+
+```lua
+-- グループを指定して登録
+pokecon.autocmd.on("CameraOpenPost", {
+    callback = function()
+        print("Camera opened")
+    end,
+    group = "camera_group"
+})
+
+pokecon.autocmd.on("CameraClosePost", {
+    callback = function()
+        print("Camera closed")
+    end,
+    group = "camera_group"
+})
+
+-- グループ単位で一括解除
+pokecon.autocmd.clear("camera_group")
 ```
 
 **コールバックシグネチャ**:

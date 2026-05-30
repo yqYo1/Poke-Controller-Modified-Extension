@@ -1323,29 +1323,29 @@ pokecon.opt.camera_resolution = "1280x720"
 # シリアル設定（フラット構造）
 pokecon.opt.serial_port = "COM3"
 pokecon.opt.serial_baudrate = 115200
+pokecon.opt.serial_data_format = "default"  # default | qingpi | 3ds
 
-# キーマッピング（Neovim風記法）
-pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
-pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
-pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
+# 通知設定（フラット構造）
+pokecon.opt.discord_webhook_url = "https://discord.com/api/webhooks/..."
+pokecon.opt.discord_username = "PokeCon Bot"
 
-# イベントハンドラ
-pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+# ウィジェットモード（フラット構造）
+pokecon.opt.widget_mode = "mode1"  # mode1〜mode7
 
-# 相互参照（他の設定ファイルを読み込み）
-pokecon.source("~/.config/pokecon/extra_settings.py")
+# ソフトウェアコントローラー位置
+pokecon.opt.controller_position = "top"  # top | bottom
 
-# プロファイル取得
-current_profile = pokecon.profile.current()
-print(f"Current profile: {current_profile}")
-
-# 状態取得（読み取り専用）
-print(pokecon.state.serial_port)
-print(pokecon.state.camera_opened)
-print(pokecon.state.active_profile)
+# ダイアログボタン位置
+pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 ```
 
-#### 13.8.6 動的設定（Lua）
+**動的設定の特徴**:
+- **即時反映**: 設定変更は即座にUIに反映される
+- **永続化なし**: 動的設定はファイルとして保存されるが、Rust側の設定マネージャーとは別の経路で読み込まれる
+- **優先順位**: 動的設定 > 静的設定（settings.toml）
+- **エラーハンドリング**: 構文エラーの場合はその行をスキップし、残りを続行
+
+#### 13.8.7 動的設定（Lua）
 
 ```lua
 -- ~/.config/pokecon/init.lua

@@ -580,6 +580,25 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 ### 3.5 キーボード入力API
 
+キーボード入力は低遅延が要求されるため、**WebRTC DataChannel**または**WebSocket**を使用。**HTTP RESTは使用しない**。
+
+| 通信方式 | 用途 | フォールバック |
+|---------|------|--------------|
+| WebRTC DataChannel | プライマリ — キー入力イベント送信 | WebSocket |
+| WebSocket | フォールバック — キー入力イベント送信 | なし |
+
+**入力イベント形式**（WebSocket / DataChannel共通）:
+
+```json
+{
+  "type": "keyboard_input",
+  "key": "F5",
+  "state": "pressed"
+}
+```
+
+**設定取得/変更**（HTTP REST — 設定変更のみ）:
+
 | メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|
 | GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
@@ -590,13 +609,70 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 ### 3.6 マウス入力API
 
+マウス入力（スティック操作）は低遅延が要求されるため、**WebRTC DataChannel**または**WebSocket**を使用。**HTTP RESTは使用しない**。
+
+| 通信方式 | 用途 | フォールバック |
+|---------|------|--------------|
+| WebRTC DataChannel | プライマリ — マウス/スティック入力イベント送信 | WebSocket |
+| WebSocket | フォールバック — マウス/スティック入力イベント送信 | なし |
+
+**入力イベント形式**（WebSocket / DataChannel共通）:
+
+```json
+{
+  "type": "mouse_stick_input",
+  "stick": "LSTICK",
+  "x": 128,
+  "y": 128
+}
+```
+
+```json
+{
+  "type": "mouse_input",
+  "button": "left",
+  "state": "pressed",
+  "x": 100,
+  "y": 200
+}
+```
+
+**設定取得/変更**（HTTP REST — 設定変更のみ）:
+
 | メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|
 | GET | `/api/controller/mouse_stick?stick=LSTICK|RSTICK` | マウススティック設定を取得 |
 | POST | `/api/controller/mouse_stick` | マウススティック設定を設定（stick、enabled、sensitivity） |
-| POST | `/api/input/stick` | スティック入力を送信（`{x: 0–255, y: 0–255}`） |
 
 ### 3.7 ゲームパッド入力API
+
+ゲームパッド入力は低遅延が要求されるため、**WebRTC DataChannel**または**WebSocket**を使用。**HTTP RESTは使用しない**。
+
+| 通信方式 | 用途 | フォールバック |
+|---------|------|--------------|
+| WebRTC DataChannel | プライマリ — ゲームパッド入力イベント送信 | WebSocket |
+| WebSocket | フォールバック — ゲームパッド入力イベント送信 | なし |
+
+**入力イベント形式**（WebSocket / DataChannel共通）:
+
+```json
+{
+  "type": "gamepad_input",
+  "button": "A",
+  "state": "pressed"
+}
+```
+
+```json
+{
+  "type": "gamepad_input",
+  "stick": "LSTICK",
+  "x": 128,
+  "y": 128
+}
+```
+
+**設定取得/変更**（HTTP REST — 設定変更のみ）:
 
 | メソッド | エンドポイント | 説明 |
 |--------|----------|-------------|

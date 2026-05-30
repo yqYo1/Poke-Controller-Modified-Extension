@@ -427,7 +427,7 @@ pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
   - GUIからの編集は不要
   - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
   - 例: `keyboard.shortcuts.F5 = "command_start"`
-- Pokémon Home連携（詳細不明 — 予約セクション）。
+- Pokémon Home連携（将来的に追加する — APIはmainブランチ準拠で実装）。
 
 ---
 

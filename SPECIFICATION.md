@@ -396,7 +396,7 @@ class CommandInfo:
 - `@` プレフィックスは付かない（慣例）
 
 **動的タグ（イベントによる追加）**:
-- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§10.6.5参照）
+- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§11.12.5参照）
 - コールバックは引数なし、`pokecon.state` に直接アクセスして変更
 - 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
 
@@ -955,473 +955,6 @@ print(combo.value)  # str
 print(spin.value)  # int
 ```
 
-### 10.6 イベントシステム
-
-動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
-
-#### 10.6.1 設計方針
-
-- **Neovim/Vimライクな設計**: `autocmd` スタイルのイベントハンドラ登録
-- **Pre/Postフェーズ**: すべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ
-- **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（LSP警告のため）
-- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
-- **Python/Lua両対応**: 両言語で同じAPI構造を使用
-
-#### 10.6.2 名前空間設計
-
-| 名前空間 | 用途 | API |
-|---------|------|-----|
-| `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
-| `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
-
-#### 10.6.3 イベントハンドラAPI
-
-```python
-# Python設定
-import pokecon
-
-# 基本的なイベント登録
-# 戻り値: HandlerId（ハンドラ解除用）
-# callback: 引数なし（デフォルト）。pokecon.state に直接アクセスして情報を取得
-handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
-
-# 一度だけ実行
-pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
-
-# イベントハンドラ解除
-# 引数: HandlerId（on() / once() の戻り値）
-pokecon.autocmd.off(handler_id)
-
-# グループ単位で一括解除
-# "all" = すべてのハンドラ解除
-# "CameraOpenPost" = そのイベントの全ハンドラ解除
-# "my_group" = ユーザ定義グループの全ハンドラ解除
-pokecon.autocmd.clear("all")
-pokecon.autocmd.clear("CameraOpenPost")
-pokecon.autocmd.clear("my_group")
-```
-
-**グループ（Neovimの `augroup` に相当）**:
-
-グループは関連するイベントハンドラをまとめるための仕組みです。Neovimと同様に、グループを指定することでハンドラの管理が容易になります。
-
-```python
-# グループを指定して登録
-pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"), group="camera_group")
-pokecon.autocmd.on("CameraClosePost", callback=lambda: print("Camera closed"), group="camera_group")
-
-# グループ単位で一括解除
-pokecon.autocmd.clear("camera_group")
-```
-
-**グループの特徴**:
-- グループ名は任意の文字列（ただし予約グループ名は除く）
-- 同じグループ名を複数のハンドラで共有可能
-- `clear("group_name")` でグループ内の全ハンドラを一括解除
-- グループを指定しない場合はデフォルトグループ（無名）に所属
-
-**予約グループ名**:
-- `"all"` — すべてのハンドラを対象とする特別なグループ
-- 各イベント名（例: `"CameraOpenPost"`, `"SerialConnectPost"` 等）— そのイベントの全ハンドラを対象
-- ユーザーは予約グループ名を `group` パラメータに指定できない（エラー）
-
-```lua
--- Lua設定（Neovim風require-less）
-pokecon.autocmd.on("CameraOpenPost", {
-    callback = function()
-        print("Camera opened")
-    end,
-    group = "my_group"
-})
-
-pokecon.autocmd.once("SerialConnectPost", {
-    callback = function()
-        print("Serial connected")
-    end
-})
-
--- イベントハンドラ解除
--- 引数: HandlerId（on() / once() の戻り値）
-pokecon.autocmd.off(handler_id)
-
--- グループ単位で一括解除
--- "all" = すべてのハンドラ解除
--- "CameraOpenPost" = そのイベントの全ハンドラ解除
--- "my_group" = ユーザ定義グループの全ハンドラ解除
-pokecon.autocmd.clear("all")
-pokecon.autocmd.clear("CameraOpenPost")
-pokecon.autocmd.clear("my_group")
-```
-
-**Luaでのグループ指定例**:
-
-```lua
--- グループを指定して登録
-pokecon.autocmd.on("CameraOpenPost", {
-    callback = function()
-        print("Camera opened")
-    end,
-    group = "camera_group"
-})
-
-pokecon.autocmd.on("CameraClosePost", {
-    callback = function()
-        print("Camera closed")
-    end,
-    group = "camera_group"
-})
-
--- グループ単位で一括解除
-pokecon.autocmd.clear("camera_group")
-```
-
-**コールバックシグネチャ**:
-- **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
-- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
-- イベントごとに異なるフィールドを持つ（§10.6.5参照）
-- LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
-
-#### 10.6.4 イベント定義・発火API
-
-```python
-# ユーザー定義イベント
-pokecon.event.define("MyCustomEvent")
-
-# イベント発火
-pokecon.event.emit("MyCustomEvent", data={"key": "value"})
-
-# 定義済みイベント一覧
-# 戻り値: list[str]
-print(pokecon.event.list_defined())
-
-# イベントスキーマ取得
-# 戻り値: dict[str, Any]（イベントのメタデータ）
-schema = pokecon.event.get_schema("CameraOpenPost")
-```
-
-```lua
--- Lua設定
-pokecon.event.define("MyCustomEvent")
-pokecon.event.emit("MyCustomEvent", {key = "value"})
-print(pokecon.event.list_defined())
-```
-
-#### 10.6.5 組み込みイベント一覧
-
-| イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
-|-----------|---------|------|------------------|
-| `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
-| `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
-| `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
-| `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
-| `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
-| `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
-| `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
-| `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
-| `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
-| `CommandErrorPost` | Post | コマンドエラー発生後 | `{"command_name": str, "error": str}` |
-| `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
-| `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
-| `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
-| `InputPressedPre` | Pre | 入力押下前 | `{"button": str}` |
-| `InputReleasedPost` | Post | 入力解放後 | `{"button": str}` |
-
-**ScriptLoadPre/ScriptLoadPostのタイミング**:
-
-```
-1. 初期処理: script_dirs の解決・存在確認
-2. ファイル探索: 各ディレクトリ内の .py ファイルを探索
-3. クラス抽出: モジュールインポート・コマンドクラス抽出・自動タグ生成
-4. ScriptLoadPre 発火: pokecon.state.command_candidates が設定済み
-   → ユーザーがコールバック内で command_candidates を変更可能
-5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
-6. ScriptLoadPost 発火: すべてのタグ統合完了後
-```
-
-**命名規則**:
-- **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
-- **Pre/Post後置**: Vim/Neovim風（`BufReadPre`/`BufReadPost`に類似）
-- **名前空間なし**: ドット区切りの名前空間は使用しない
-- **動詞に限定しない**: 名詞・形容詞も可
-
-**注記**: 動的設定用イベントシステム（§10.6）とWebSocketイベント（§7.3）は**別々のシステム**です。
-- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定で使用
-- **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
-
-両者は内部で連携しますが、命名規則と用途が異なります。
-
-**連携方法の概要**:
-- 動的設定イベントはRustコア内のイベントバスで発火・購読される
-- WebSocketイベントはUIとバックエンド間の通信プロトコルとして使用される
-- 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
-- この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
-
-#### 10.6.6 型ヒント
-
-```python
-from typing import Literal, Union
-
-# 組み込みイベントの厳密な型定義
-BuiltinEvent = Literal[
-    "AppStartupPost", "AppShutdownPre",
-    "SerialConnectPost", "SerialDisconnectPost",
-    "CameraOpenPost", "CameraClosePost",
-    "CommandStartPre", "CommandStartPost",
-    "CommandStopPost", "CommandErrorPost",
-    "ScriptLoadPre", "ScriptLoadPost",
-    "ConfigReloadPost",
-    "InputPressedPre", "InputReleasedPost"
-]
-
-# 組み込みイベント + ユーザー定義イベント
-EventName = Union[BuiltinEvent, str]
-```
-
-**イベントデータ型**（実装時に TypedDict または @dataclass で定義）:
-
-```python
-from typing import TypedDict
-
-class ScriptLoadPreData(TypedDict):
-    source_dirs: list[str]
-    candidate_count: int
-
-class ScriptLoadPostData(TypedDict):
-    commands: list[CommandInfo]
-    loaded_count: int
-
-class CameraOpenPostData(TypedDict):
-    device_id: str
-    resolution: tuple[int, int]
-
-# ... その他のイベントデータ型
-```
-
-#### 10.6.7 コールバックシグネチャ
-
-```python
-# 引数なし（デフォルト）
-pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
-
-# 引数あり（将来の拡張）
-pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
-```
-
-#### 10.6.8 エラーハンドリング
-
-- イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
-- エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
-- フォールバック機構により、システム全体の動作を停止しない
-
-**エラーの種類と挙動**:
-
-| エラー種類 | 挙動 | ログ出力 |
-|-----------|------|---------|
-| コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
-| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
-| ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
-| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
-
-### 10.7 キーマップシステム
-
-#### 10.7.1 設計方針
-
-- **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
-- **フラットAPI**: `pokecon.keymap.set(key, callback, state)`
-- **状態指定**: `press`（デフォルト）, `release`, `hold`
-
-#### 10.7.2 API仕様
-
-```python
-# Python設定
-import pokecon
-
-# 基本的なキーマッピング
-# 戻り値: bool（成功: True, 失敗: False）
-pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
-
-# 修飾キー付き
-pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
-pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
-pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"), state="release")
-pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
-
-# 特殊キー
-pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
-pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
-pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
-pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
-```
-
-```lua
--- Lua設定
-pokecon.keymap.set("A", function()
-    pokecon.input.press(pokecon.keys.Button.A)
-end)
-
-pokecon.keymap.set("<C-a>", function()
-    print("Ctrl+A pressed")
-end, {state = "press"})
-```
-
-#### 10.7.3 サポートするキー記法
-
-| 記法 | 説明 | 例 |
-|------|------|-----|
-| `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
-| `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |
-| `<M-x>` | Alt + x | `<M-a>`, `<M-F4>` |
-| `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
-| `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
-| `<Space>` | スペースキー | `<Space>` |
-| `<Enter>` | エンターキー | `<Enter>` |
-| `<Esc>` | エスケープキー | `<Esc>` |
-| `<Tab>` | タブキー | `<Tab>` |
-| `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
-
-#### 10.7.4 キー重複時の優先順位
-
-- 後から登録されたキーバインドが優先される（後勝ち）
-- 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
-- プロファイル切替時は、新プロファイルのキーバインドに置き換えられる
-
-#### 10.7.5 デフォルトキーバインド
-
-| キー | 動作 | 状態 |
-|------|------|------|
-| `<F5>` | コマンド開始 | press |
-| `<F6>` | コマンド停止 | press |
-| `<F7>` | コマンド一時停止 | press |
-| `<F8>` | コマンド再開 | press |
-| `<F9>` | コマンドリロード | press |
-| `<Esc>` | 緊急停止 | press |
-
-### 10.8 相互参照API
-
-#### 10.8.1 設計方針
-
-- **Neovimの`:source`に類似**: `pokecon.source(path)`
-- **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
-- **相対パス・絶対パス両対応**
-
-#### 10.8.2 API仕様
-
-```python
-# Python設定
-import pokecon
-
-# 絶対パス
-pokecon.source("/home/user/.config/pokecon/extra_settings.py")
-
-# 相対パス（設定ディレクトリ基準）
-pokecon.source("./extra_settings.py")
-
-# チルダ展開
-pokecon.source("~/.config/pokecon/extra_settings.py")
-```
-
-```lua
--- Lua設定
-pokecon.source("~/.config/pokecon/extra_settings.lua")
-```
-
-#### 10.8.3 エラーハンドリング
-
-- 指定されたファイルが存在しない場合はエラーをログに出力
-- ファイルの読み込みに失敗しても、現在の設定は維持される
-- 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
-
-### 10.9 状態取得API
-
-#### 10.9.1 設計方針
-
-- **読み取り専用**: `pokecon.state.<property>`
-- **リアルタイム**: 現在の状態を即座に反映
-- **スレッドセーフ**: 複数スレッドから安全に読み取り可能
-
-#### 10.9.2 利用可能な状態プロパティ
-
-```python
-# Python設定
-import pokecon
-
-# シリアル関連
-print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3"）
-print(pokecon.state.serial_baudrate)    # 現在のボーレート（例: 115200）
-print(pokecon.state.serial_connected)   # 接続状態（True/False）
-
-# カメラ関連
-print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
-print(pokecon.state.camera_fps)         # 現在のFPS
-print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
-
-# コマンド関連
-print(pokecon.state.is_running)         # コマンド実行中（True/False）
-print(pokecon.state.current_command)    # 現在実行中のコマンド名
-print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（list[CommandInfo]）
-print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str]）
-
-# プロファイル関連
-print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名
-print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
-
-# 入力関連
-print(pokecon.state.last_input)         # 最後の入力
-print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
-```
-
-```lua
--- Lua設定
-print(pokecon.state.serial_port)
-print(pokecon.state.camera_opened)
-print(pokecon.state.active_profile)
-```
-
-### 10.10 プロファイルAPI
-
-#### 10.10.1 設計方針
-
-- **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
-- **動的設定ファイル内で使用可能**
-
-#### 10.10.2 API仕様
-
-```python
-# Python設定
-import pokecon
-
-# 現在のプロファイル取得
-# 戻り値: str（プロファイル名）
-current = pokecon.profile.current()
-print(f"Current profile: {current}")
-
-# 利用可能なプロファイル一覧
-# 戻り値: list[str]
-profiles = pokecon.profile.list()
-print(f"Available profiles: {profiles}")
-
-# プロファイル切替
-# 戻り値: bool（成功: True, 失敗: False）
-# エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
-success = pokecon.profile.switch("custom")
-if not success:
-    print("Failed to switch profile")
-```
-
-```lua
--- Lua設定
-print(pokecon.profile.current())
-print(pokecon.profile.list())
-pokecon.profile.switch("custom")
-```
-
-#### 10.10.3 プロファイル切替時の動作
-
-- 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
-- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を自動再読み込み
-- イベントハンドラをクリアして再登録
-- キーマップをクリアして再登録
-
 ---
 
 ## 11. 設定ファイルシステム
@@ -1629,6 +1162,473 @@ mlua = { version = "0.11", features = ["luajit", "vendored"] }
 **設定ディレクトリのカスタマイズ**:
 - 環境変数: `POKECON_HOME=/path/to/config`
 - コマンドライン引数: `--config-dir /path/to/config`
+
+### 11.12 イベントシステム
+
+動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
+
+#### 11.12.1 設計方針
+
+- **Neovim/Vimライクな設計**: `autocmd` スタイルのイベントハンドラ登録
+- **Pre/Postフェーズ**: すべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ
+- **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（LSP警告のため）
+- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
+- **Python/Lua両対応**: 両言語で同じAPI構造を使用
+
+#### 11.12.2 名前空間設計
+
+| 名前空間 | 用途 | API |
+|---------|------|-----|
+| `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
+| `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
+
+#### 11.12.3 イベントハンドラAPI
+
+```python
+# Python設定
+import pokecon
+
+# 基本的なイベント登録
+# 戻り値: HandlerId（ハンドラ解除用）
+# callback: 引数なし（デフォルト）。pokecon.state に直接アクセスして情報を取得
+handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 一度だけ実行
+pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
+
+# イベントハンドラ解除
+# 引数: HandlerId（on() / once() の戻り値）
+pokecon.autocmd.off(handler_id)
+
+# グループ単位で一括解除
+# "all" = すべてのハンドラ解除
+# "CameraOpenPost" = そのイベントの全ハンドラ解除
+# "my_group" = ユーザ定義グループの全ハンドラ解除
+pokecon.autocmd.clear("all")
+pokecon.autocmd.clear("CameraOpenPost")
+pokecon.autocmd.clear("my_group")
+```
+
+**グループ（Neovimの `augroup` に相当）**:
+
+グループは関連するイベントハンドラをまとめるための仕組みです。Neovimと同様に、グループを指定することでハンドラの管理が容易になります。
+
+```python
+# グループを指定して登録
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"), group="camera_group")
+pokecon.autocmd.on("CameraClosePost", callback=lambda: print("Camera closed"), group="camera_group")
+
+# グループ単位で一括解除
+pokecon.autocmd.clear("camera_group")
+```
+
+**グループの特徴**:
+- グループ名は任意の文字列（ただし予約グループ名は除く）
+- 同じグループ名を複数のハンドラで共有可能
+- `clear("group_name")` でグループ内の全ハンドラを一括解除
+- グループを指定しない場合はデフォルトグループ（無名）に所属
+
+**予約グループ名**:
+- `"all"` — すべてのハンドラを対象とする特別なグループ
+- 各イベント名（例: `"CameraOpenPost"`, `"SerialConnectPost"` 等）— そのイベントの全ハンドラを対象
+- ユーザーは予約グループ名を `group` パラメータに指定できない（エラー）
+
+```lua
+-- Lua設定（Neovim風require-less）
+pokecon.autocmd.on("CameraOpenPost", {
+    callback = function()
+        print("Camera opened")
+    end,
+    group = "my_group"
+})
+
+pokecon.autocmd.once("SerialConnectPost", {
+    callback = function()
+        print("Serial connected")
+    end
+})
+
+-- イベントハンドラ解除
+-- 引数: HandlerId（on() / once() の戻り値）
+pokecon.autocmd.off(handler_id)
+
+-- グループ単位で一括解除
+-- "all" = すべてのハンドラ解除
+-- "CameraOpenPost" = そのイベントの全ハンドラ解除
+-- "my_group" = ユーザ定義グループの全ハンドラ解除
+pokecon.autocmd.clear("all")
+pokecon.autocmd.clear("CameraOpenPost")
+pokecon.autocmd.clear("my_group")
+```
+
+**Luaでのグループ指定例**:
+
+```lua
+-- グループを指定して登録
+pokecon.autocmd.on("CameraOpenPost", {
+    callback = function()
+        print("Camera opened")
+    end,
+    group = "camera_group"
+})
+
+pokecon.autocmd.on("CameraClosePost", {
+    callback = function()
+        print("Camera closed")
+    end,
+    group = "camera_group"
+})
+
+-- グループ単位で一括解除
+pokecon.autocmd.clear("camera_group")
+```
+
+**コールバックシグネチャ**:
+- **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
+- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
+- イベントごとに異なるフィールドを持つ（§11.12.5参照）
+- LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
+
+#### 11.12.4 イベント定義・発火API
+
+```python
+# ユーザー定義イベント
+pokecon.event.define("MyCustomEvent")
+
+# イベント発火
+pokecon.event.emit("MyCustomEvent", data={"key": "value"})
+
+# 定義済みイベント一覧
+# 戻り値: list[str]
+print(pokecon.event.list_defined())
+
+# イベントスキーマ取得
+# 戻り値: dict[str, Any]（イベントのメタデータ）
+schema = pokecon.event.get_schema("CameraOpenPost")
+```
+
+```lua
+-- Lua設定
+pokecon.event.define("MyCustomEvent")
+pokecon.event.emit("MyCustomEvent", {key = "value"})
+print(pokecon.event.list_defined())
+```
+
+#### 11.12.5 組み込みイベント一覧
+
+| イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
+|-----------|---------|------|------------------|
+| `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
+| `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
+| `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
+| `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
+| `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
+| `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
+| `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
+| `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
+| `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
+| `CommandErrorPost` | Post | コマンドエラー発生後 | `{"command_name": str, "error": str}` |
+| `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
+| `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
+| `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
+| `InputPressedPre` | Pre | 入力押下前 | `{"button": str}` |
+| `InputReleasedPost` | Post | 入力解放後 | `{"button": str}` |
+
+**ScriptLoadPre/ScriptLoadPostのタイミング**:
+
+```
+1. 初期処理: script_dirs の解決・存在確認
+2. ファイル探索: 各ディレクトリ内の .py ファイルを探索
+3. クラス抽出: モジュールインポート・コマンドクラス抽出・自動タグ生成
+4. ScriptLoadPre 発火: pokecon.state.command_candidates が設定済み
+   → ユーザーがコールバック内で command_candidates を変更可能
+5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
+6. ScriptLoadPost 発火: すべてのタグ統合完了後
+```
+
+**命名規則**:
+- **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
+- **Pre/Post後置**: Vim/Neovim風（`BufReadPre`/`BufReadPost`に類似）
+- **名前空間なし**: ドット区切りの名前空間は使用しない
+- **動詞に限定しない**: 名詞・形容詞も可
+
+**注記**: 動的設定用イベントシステム（§11.12）とWebSocketイベント（§7.3）は**別々のシステム**です。
+- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定で使用
+- **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
+
+両者は内部で連携しますが、命名規則と用途が異なります。
+
+**連携方法の概要**:
+- 動的設定イベントはRustコア内のイベントバスで発火・購読される
+- WebSocketイベントはUIとバックエンド間の通信プロトコルとして使用される
+- 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
+- この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
+
+#### 11.12.6 型ヒント
+
+```python
+from typing import Literal, Union
+
+# 組み込みイベントの厳密な型定義
+BuiltinEvent = Literal[
+    "AppStartupPost", "AppShutdownPre",
+    "SerialConnectPost", "SerialDisconnectPost",
+    "CameraOpenPost", "CameraClosePost",
+    "CommandStartPre", "CommandStartPost",
+    "CommandStopPost", "CommandErrorPost",
+    "ScriptLoadPre", "ScriptLoadPost",
+    "ConfigReloadPost",
+    "InputPressedPre", "InputReleasedPost"
+]
+
+# 組み込みイベント + ユーザー定義イベント
+EventName = Union[BuiltinEvent, str]
+```
+
+**イベントデータ型**（実装時に TypedDict または @dataclass で定義）:
+
+```python
+from typing import TypedDict
+
+class ScriptLoadPreData(TypedDict):
+    source_dirs: list[str]
+    candidate_count: int
+
+class ScriptLoadPostData(TypedDict):
+    commands: list[CommandInfo]
+    loaded_count: int
+
+class CameraOpenPostData(TypedDict):
+    device_id: str
+    resolution: tuple[int, int]
+
+# ... その他のイベントデータ型
+```
+
+#### 11.12.7 コールバックシグネチャ
+
+```python
+# 引数なし（デフォルト）
+pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 引数あり（将来の拡張）
+pokecon.autocmd.on("CameraOpenPost", callback=lambda event: print(event.data))
+```
+
+#### 11.12.8 エラーハンドリング
+
+- イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
+- エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
+- フォールバック機構により、システム全体の動作を停止しない
+
+**エラーの種類と挙動**:
+
+| エラー種類 | 挙動 | ログ出力 |
+|-----------|------|---------|
+| コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
+| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
+| ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
+| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
+
+### 11.13 キーマップシステム
+
+#### 11.13.1 設計方針
+
+- **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
+- **フラットAPI**: `pokecon.keymap.set(key, callback, state)`
+- **状態指定**: `press`（デフォルト）, `release`, `hold`
+
+#### 11.13.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 基本的なキーマッピング
+# 戻り値: bool（成功: True, 失敗: False）
+pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+
+# 修飾キー付き
+pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
+pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
+pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"), state="release")
+pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
+
+# 特殊キー
+pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
+pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
+pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
+pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
+```
+
+```lua
+-- Lua設定
+pokecon.keymap.set("A", function()
+    pokecon.input.press(pokecon.keys.Button.A)
+end)
+
+pokecon.keymap.set("<C-a>", function()
+    print("Ctrl+A pressed")
+end, {state = "press"})
+```
+
+#### 11.13.3 サポートするキー記法
+
+| 記法 | 説明 | 例 |
+|------|------|-----|
+| `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
+| `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |
+| `<M-x>` | Alt + x | `<M-a>`, `<M-F4>` |
+| `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
+| `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
+| `<Space>` | スペースキー | `<Space>` |
+| `<Enter>` | エンターキー | `<Enter>` |
+| `<Esc>` | エスケープキー | `<Esc>` |
+| `<Tab>` | タブキー | `<Tab>` |
+| `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
+
+#### 11.13.4 キー重複時の優先順位
+
+- 後から登録されたキーバインドが優先される（後勝ち）
+- 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
+- プロファイル切替時は、新プロファイルのキーバインドに置き換えられる
+
+#### 11.13.5 デフォルトキーバインド
+
+| キー | 動作 | 状態 |
+|------|------|------|
+| `<F5>` | コマンド開始 | press |
+| `<F6>` | コマンド停止 | press |
+| `<F7>` | コマンド一時停止 | press |
+| `<F8>` | コマンド再開 | press |
+| `<F9>` | コマンドリロード | press |
+| `<Esc>` | 緊急停止 | press |
+
+### 11.14 相互参照API
+
+#### 11.14.1 設計方針
+
+- **Neovimの`:source`に類似**: `pokecon.source(path)`
+- **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
+- **相対パス・絶対パス両対応**
+
+#### 11.14.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 絶対パス
+pokecon.source("/home/user/.config/pokecon/extra_settings.py")
+
+# 相対パス（設定ディレクトリ基準）
+pokecon.source("./extra_settings.py")
+
+# チルダ展開
+pokecon.source("~/.config/pokecon/extra_settings.py")
+```
+
+```lua
+-- Lua設定
+pokecon.source("~/.config/pokecon/extra_settings.lua")
+```
+
+#### 11.14.3 エラーハンドリング
+
+- 指定されたファイルが存在しない場合はエラーをログに出力
+- ファイルの読み込みに失敗しても、現在の設定は維持される
+- 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
+
+### 11.15 状態取得API
+
+#### 11.15.1 設計方針
+
+- **読み取り専用**: `pokecon.state.<property>`
+- **リアルタイム**: 現在の状態を即座に反映
+- **スレッドセーフ**: 複数スレッドから安全に読み取り可能
+
+#### 11.15.2 利用可能な状態プロパティ
+
+```python
+# Python設定
+import pokecon
+
+# シリアル関連
+print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3"）
+print(pokecon.state.serial_baudrate)    # 現在のボーレート（例: 115200）
+print(pokecon.state.serial_connected)   # 接続状態（True/False）
+
+# カメラ関連
+print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
+print(pokecon.state.camera_fps)         # 現在のFPS
+print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
+
+# コマンド関連
+print(pokecon.state.is_running)         # コマンド実行中（True/False）
+print(pokecon.state.current_command)    # 現在実行中のコマンド名
+print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（list[CommandInfo]）
+print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str]）
+
+# プロファイル関連
+print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名
+print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
+
+# 入力関連
+print(pokecon.state.last_input)         # 最後の入力
+print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
+```
+
+```lua
+-- Lua設定
+print(pokecon.state.serial_port)
+print(pokecon.state.camera_opened)
+print(pokecon.state.active_profile)
+```
+
+### 11.16 プロファイルAPI
+
+#### 11.16.1 設計方針
+
+- **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
+- **動的設定ファイル内で使用可能**
+
+#### 11.16.2 API仕様
+
+```python
+# Python設定
+import pokecon
+
+# 現在のプロファイル取得
+# 戻り値: str（プロファイル名）
+current = pokecon.profile.current()
+print(f"Current profile: {current}")
+
+# 利用可能なプロファイル一覧
+# 戻り値: list[str]
+profiles = pokecon.profile.list()
+print(f"Available profiles: {profiles}")
+
+# プロファイル切替
+# 戻り値: bool（成功: True, 失敗: False）
+# エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
+success = pokecon.profile.switch("custom")
+if not success:
+    print("Failed to switch profile")
+```
+
+```lua
+-- Lua設定
+print(pokecon.profile.current())
+print(pokecon.profile.list())
+pokecon.profile.switch("custom")
+```
+
+#### 11.16.3 プロファイル切替時の動作
+
+- 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
+- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を自動再読み込み
+- イベントハンドラをクリアして再登録
+- キーマップをクリアして再登録
 
 ## 12. 環境変数
 
@@ -2017,7 +2017,7 @@ class CommandMeta(type):
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
 
-**注記**: 動的設定用イベントシステム（§10.6）とWebSocketイベント（§7.3）は**別々のシステム**です。
+**注記**: 動的設定用イベントシステム（§11.12）とWebSocketイベント（§7.3）は**別々のシステム**です。
 - **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— ユーザースクリプトで使用
 - **WebSocketイベント**: `camera.frame`（lowercase + ドット区切り）— UIとバックエンド間の通信
 

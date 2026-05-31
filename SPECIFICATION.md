@@ -35,7 +35,7 @@
 - **Tkinterとの機能・視覚的パリティ**: 新しいUIは、元のTkinterの機能・レイアウト・外観に厳密に一致する必要があります。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
 - **スクリプト互換性**: リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更は加えません。
 - **モダンスタック**: SvelteKit + Svelte 5（runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
-- **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてビデオ: HTTP/MJPEG、DataChannel: WebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
+- **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてビデオ: WebCodecs + WebSocket、DataChannel: WebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
 - **型安全性**: Rustバックエンドから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
 - **認証なし**: アプリケーションはローカル/LAN専用に設計。API認証は不要。
 
@@ -81,7 +81,7 @@
 | 指標 | 目標 |
 |--------|--------|
 | ビデオ遅延（WebRTC） | < 100ms |
-| ビデオ遅延（MJPEGフォールバック） | < 300ms |
+| ビデオ遅延（WebCodecs + WebSocketフォールバック） | 50-200ms |
 | コントローラー入力遅延 | < 50ms |
 | UI応答性 | 60fpsアニメーション、< 16ms入力応答 |
 
@@ -247,7 +247,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 - **表示方法**: 映像レンダリング用のCanvas要素（CaptureArea）。
 - **プライマリストリーム**: WebRTCビデオトラック（低遅延）。
-- **フォールバック**: WebRTCが利用できない場合、HTTP上のMJPEG（`<img>`タグまたは同等）。
+- **フォールバック**: WebRTCが利用できない場合、WebCodecs + WebSocket（ブラウザネイティブHWデコード）。
 - **フレームレート**: FPS設定（SpinboxまたはCombobox）で設定可能。
 
 #### 6.1.2 カメラ設定
@@ -525,7 +525,7 @@ pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
 ### 7.1 スタック概要
 
 ```
-カメラ映像:     WebRTCビデオトラック ──→ MJPEG over HTTP フォールバック
+カメラ映像:     WebRTCビデオトラック ──→ WebCodecs + WebSocket フォールバック
 コントローラー入力: WebRTC DataChannel ──→ WebSocket フォールバック
 ログ/イベント:  WebRTC DataChannel ──→ WebSocket フォールバック
 API呼び出し:    HTTP REST（axum）     ──→ （フォールバック不要）
@@ -542,12 +542,47 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 | 種類 | 内容 | フォールバック |
 |------|------|--------------|
-| 映像 | WebRTCビデオトラック | HTTP MJPEG |
+| 映像 | WebRTCビデオトラック | WebCodecs + WebSocket |
 | コントローラー入力 | WebRTC DataChannel | WebSocket |
 | ログ | WebRTC DataChannel | WebSocket |
 | API呼び出し | HTTP REST | なし（HTTP必須） |
 
-### 7.3 WebSocket（フォールバック）
+### 7.3 WebCodecs + WebSocket（フォールバック）
+
+#### 7.3.1 映像フォールバック — WebCodecs
+
+映像フォールバックとして、ブラウザネイティブの **WebCodecs API** を使用した低遅延ストリーミングを採用します。
+
+- **エンコーダー**: サーバーサイド（Rust/ffmpeg）でH.264/HEVC/AV1にエンコード。
+- **転送**: WebSocket経由でエンコード済みビデオフレーム（アクセスユニット）を送信。
+- **デコード**: ブラウザの **VideoDecoder**（WebCodecs）でHWデコードを利用。
+- **描画**: デコード結果を **Canvas** または **VideoFrame** に描画。
+
+**特性**:
+
+| 項目 | 値 |
+|------|------|
+| 遅延 | 50-200ms（MJPEG比で50%以上改善） |
+| エンコード | H.264（優先）/ HEVC / AV1（サーバーが対応可能なコーデックを自動選択） |
+| ABR対応 | 帯域に応じた動的解像度・ビットレート変更 |
+| HWデコード | ブラウザネイティブのハードウェアデコードを活用（CPU負荷低減） |
+
+**ブラウザサポート**:
+
+| ブラウザ | 対応状況 |
+|---------|---------|
+| Safari 26.0+（iOS 26/macOS 26） | 完全対応（Video + Audio） |
+| Safari 16.4-18.7 | Videoのみ対応（Audio非対応） |
+| Chrome 94+ | 完全対応 |
+| Firefox 130+ | 対応（Video + Audio） |
+| Edge 94+ | 完全対応 |
+
+**WebCodecsの利点**:
+- ブラウザネイティブのHWデコードにより低CPU負荷で高品質映像を実現
+- 可変ビットレート・解像度制御によりネットワーク変動に適応
+- MJPEGと比較して帯域使用率を60-80%削減
+
+#### 7.3.2 コントロール/ログフォールバック — WebSocket
 
 - **エンドポイント**: `/ws`。
 - **メッセージ**: JSON形式。
@@ -557,7 +592,6 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | イベント | 方向 | ペイロード |
 |-------|-----------|---------|
 | `camera.opened` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
-| `camera.frame` | サーバー → クライアント | Base64エンコードJPEGフレームデータ |
 | `command.start` | サーバー → クライアント | コマンド実行開始通知 |
 | `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
 | `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |

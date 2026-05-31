@@ -933,7 +933,7 @@ Command (ABC, metaclass=CommandMeta)
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**新API**: `show_dialog()` with Widgetクラスと型ヒント。
+**新API**: `show_dialog()`（ブロッキング）と `show_dialog_async()`（非ブロッキング）。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal
@@ -958,7 +958,7 @@ class Widget(Generic[T]):
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納
 
-# 使用例
+# ブロッキング（既存の挙動）
 entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
 check = Widget("Check", "有効", True)  # Widget[bool]
 combo = Widget("Combo", "選択肢", ["A", "B", "C"], "A")  # Widget[str]
@@ -970,7 +970,29 @@ print(entry.value)  # str
 print(check.value)  # bool
 print(combo.value)  # str
 print(spin.value)  # int
+
+# 非ブロッキング（コールバック方式）
+def on_dialog_result(widgets: list[Widget]):
+    entry = widgets[0]
+    check = widgets[1]
+    print(f"名前: {entry.value}, 有効: {check.value}")
+
+show_dialog_async("タイトル", widgets=[entry, check], callback=on_dialog_result)
+# スクリプトの実行は継続される
 ```
+
+#### 10.5.1 ブロッキングAPI
+
+- `show_dialog(title: str, widgets: list[Widget]) -> None`
+- ダイアログが閉じられるまでスクリプトの実行を停止
+- 結果は各Widgetの`value`属性に格納
+
+#### 10.5.2 非ブロッキングAPI
+
+- `show_dialog_async(title: str, widgets: list[Widget], callback: Callable[[list[Widget]], None]) -> None`
+- ダイアログを表示し、スクリプトの実行を継続
+- ユーザーがダイアログを操作して閉じた後、`callback`が呼び出される
+- `callback`は`widgets`リストを受け取り、各Widgetの`value`から結果を取得
 
 ---
 

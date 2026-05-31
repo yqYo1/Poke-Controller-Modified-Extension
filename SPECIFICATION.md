@@ -933,7 +933,7 @@ Command (ABC, metaclass=CommandMeta)
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**新API**: `show_dialog()`（ブロッキング）と `open_dialog()`（非ブロッキング）。
+**新API**: `input_dialog()`（ブロッキング）と `show_dialog()`（非ブロッキング）。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal
@@ -964,7 +964,7 @@ check = Widget("Check", "有効", True)  # Widget[bool]
 combo = Widget("Combo", "選択肢", ["A", "B", "C"], "A")  # Widget[str]
 spin = Widget("Spin", "数値", [1, 2, 3], 1)  # Widget[int]
 
-show_dialog("タイトル", widgets=[entry, check, combo, spin])
+input_dialog("タイトル", widgets=[entry, check, combo, spin])
 
 print(entry.value)  # str
 print(check.value)  # bool
@@ -983,7 +983,7 @@ open_dialog("タイトル", widgets=[entry, check], callback=on_dialog_result)
 
 #### 10.5.1 ブロッキングAPI
 
-- `show_dialog(title: str, widgets: list[Widget]) -> None`
+- `input_dialog(title: str, widgets: list[Widget]) -> None`
 - ダイアログが閉じられるまでスクリプトの実行を停止
 - 結果は各Widgetの`value`属性に格納
 

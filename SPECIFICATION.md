@@ -933,7 +933,7 @@ Command (ABC, metaclass=CommandMeta)
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**新API**: `show_dialog()`（ブロッキング）と `show_dialog_async()`（非ブロッキング）。
+**新API**: `show_dialog()`（ブロッキング）と `open_dialog()`（非ブロッキング）。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal
@@ -977,7 +977,7 @@ def on_dialog_result(widgets: list[Widget]):
     check = widgets[1]
     print(f"名前: {entry.value}, 有効: {check.value}")
 
-show_dialog_async("タイトル", widgets=[entry, check], callback=on_dialog_result)
+open_dialog("タイトル", widgets=[entry, check], callback=on_dialog_result)
 # スクリプトの実行は継続される
 ```
 
@@ -989,7 +989,7 @@ show_dialog_async("タイトル", widgets=[entry, check], callback=on_dialog_res
 
 #### 10.5.2 非ブロッキングAPI
 
-- `show_dialog_async(title: str, widgets: list[Widget], callback: Callable[[list[Widget]], None]) -> None`
+- `open_dialog(title: str, widgets: list[Widget], callback: Callable[[list[Widget]], None]) -> None`
 - ダイアログを表示し、スクリプトの実行を継続
 - ユーザーがダイアログを操作して閉じた後、`callback`が呼び出される
 - `callback`は`widgets`リストを受け取り、各Widgetの`value`から結果を取得

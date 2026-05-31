@@ -778,22 +778,22 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ### 10.2 パッケージ構造
 
+**Rustコア（PyO3）が提供するモジュール**:
 ```
 pokecon/
-├── __init__.py          # パッケージエントリ、モジュールパッチ
-├── commands.py          # PythonCommand、ImageProcPythonCommand、CommandEngine
-├── keys.py              # Button、Hat、Direction、Stick、Touchscreen、SendFormat
-├── dialogue.py          # ダイアログ関数（ブロッキングWebポップアップ）
-├── _meta.py             # CommandMetaメタクラス
-├── _adapter.py          # Rustコアアダプタ
-├── cli_args.py          # CLI引数解析
-├── script_loader.py     # スクリプト検出と読み込み
-└── scripts_dir.py       # XDG準拠スクリプトディレクトリユーティリティ
+├── __init__.py          # パッケージエントリ（Rustモジュールのエクスポート）
+├── keys.py              # 型ヒント・ドキュメント（実装: Rust/PyO3）
+│   └── Button, Hat, Direction, Stick, Touchscreen, SendFormat
+├── command.py           # 型ヒント・ドキュメント（実装: Rust/PyO3）
+│   └── PythonCommand, ImageProcPythonCommand, CommandEngine
+└── _meta.py             # CommandMetaメタクラス（Python実装）
 ```
 
-PyO3モジュール（rust/pokecon-pybindings）:
+**Rust/PyO3実装（rust/pokecon-pybindings）**:
 - `pokecon.keys` — 入力型（Button、Hat、Direction、Stick、Touchscreen）
 - `pokecon.command` — コマンドスキャン/読み込み
+
+**注**: `keys.py`や`command.py`は型ヒント・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側のPyO3モジュールで行われる。
 - `pokecon.notify` — 通知（Discord、LINEスタブ、Windows）
 - `pokecon.sender` — シリアル通信
 - `pokecon.dialogue` — ダイアログ関数

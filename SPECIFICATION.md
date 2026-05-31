@@ -776,14 +776,15 @@ import { paths, components } from '$lib/api/openapi.ts'
 - **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
 - **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは非推奨として保持される。
 
-### 10.2 コマンドクラスAPI
+### 10.2 公開モジュール
 
-**注**: 以下のクラスはRust/PyO3で実装され、Pythonファイル（`commands.py`等）は型ヒント・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
+**注**: 以下のモジュールはRust/PyO3で実装され、Pythonファイルは型ヒント・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
 
-#### 10.2.1 PythonCommand
-- `pokecon.dialogue` — ダイアログ関数
-- `pokecon.image_proc` — 画像処理（opencv-rust）
-- `pokecon.net` — Socket、MQTT、HTTPクライアント
+| モジュール | 内容 |
+|-----------|------|
+| `pokecon.dialogue` | ダイアログ関数 |
+| `pokecon.image_proc` | 画像処理（opencv-rust） |
+| `pokecon.net` | Socket、MQTT、HTTPクライアント |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
@@ -832,14 +833,14 @@ Command (ABC, metaclass=CommandMeta)
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n')` | 上部ログ（モード付き w/a/d） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n')` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdoutログ（モード付き） |
-| `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
+|| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdoutログ（モード付き） |
+|| `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
-| メソッド | シグネチャ | 説明 |
-|--------|-----------|-------------|
-| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、show_dialog使用） |
-| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、show_dialog使用） |
+|| メソッド | シグネチャ | 説明 |
+||--------|-----------|-------------|
+|| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、show_dialog使用） |
+|| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、show_dialog使用） |
 
 **Socketメソッド**:
 | メソッド | シグネチャ | 説明 |
@@ -1458,24 +1459,18 @@ class CameraOpenPostData(TypedDict):
 # ... その他のイベントデータ型
 ```
 
-#### 11.12.7 コールバックシグネチャ
-
-コールバックシグネチャの仕様は **§11.12.3 コールバックシグネチャ** を参照。内容は同一です。
-
-#### 11.12.8 エラーハンドリング
+#### 11.12.7 エラーハンドリング
 
 - イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
 - エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
 - フォールバック機構により、システム全体の動作を停止しない
 
-**エラーの種類と挙動**:
-
-| エラー種類 | 挙動 | ログ出力 |
-|-----------|------|---------|
-| コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
-| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
-| ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
-| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
+|| エラー種類 | 挙動 | ログ出力 |
+||-----------|------|---------|
+|| コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
+|| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
+|| ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
+|| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
 
 ### 11.13 キーマップシステム
 

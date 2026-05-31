@@ -933,7 +933,7 @@ Command (ABC, metaclass=CommandMeta)
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**新API**: `show_dialog()` — コールバックの有無でブロッキング/非ブロッキングを切り替え。
+**新API**: `show_dialog()` — `dialogue6widget`と同様に複数のウィジェットを同時に作成。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal, Callable
@@ -959,13 +959,16 @@ class Widget(Generic[T]):
         self.value: T | None = None  # ダイアログ後に結果を格納
 
 # ブロッキング（コールバックなし）
-entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
-check = Widget("Check", "有効", True)  # Widget[bool]
-combo = Widget("Combo", "選択肢", ["A", "B", "C"], "A")  # Widget[str]
-spin = Widget("Spin", "数値", [1, 2, 3], 1)  # Widget[int]
+# dialogue6widgetと同様に複数ウィジェットを同時に作成
+result = show_dialog("タイトル", [
+    ("Entry", "名前", "デフォルト"),           # (widget_type, label, default)
+    ("Check", "有効", True),
+    ("Combo", "選択肢", ["A", "B", "C"], "A"),  # (widget_type, label, options, default)
+    ("Spin", "数値", [1, 2, 3], 1),
+])
 
-show_dialog("タイトル", widgets=[entry, check, combo, spin])
-
+# resultはWidgetのリスト
+entry, check, combo, spin = result
 print(entry.value)  # str
 print(check.value)  # bool
 print(combo.value)  # str
@@ -977,22 +980,26 @@ def on_dialog_result(widgets: list[Widget]):
     check = widgets[1]
     print(f"名前: {entry.value}, 有効: {check.value}")
 
-show_dialog("タイトル", widgets=[entry, check], callback=on_dialog_result)
+show_dialog("タイトル", [
+    ("Entry", "名前", "デフォルト"),
+    ("Check", "有効", True),
+], callback=on_dialog_result)
 # スクリプトの実行は継続される
 ```
 
 #### 10.5.1 ブロッキング（デフォルト）
 
-- `show_dialog(title: str, widgets: list[Widget]) -> None`
+- `show_dialog(title: str, widgets: list[tuple]) -> list[Widget]`
 - コールバックを指定しない場合、ダイアログが閉じられるまでスクリプトの実行を停止
-- 結果は各Widgetの`value`属性に格納
+- ウィジェット定義のタプルリストを受け取り、結果のWidgetリストを返す
+- 各Widgetの`value`属性に結果が格納される
 
 #### 10.5.2 非ブロッキング
 
-- `show_dialog(title: str, widgets: list[Widget], callback: Callable[[list[Widget]], None]) -> None`
+- `show_dialog(title: str, widgets: list[tuple], callback: Callable[[list[Widget]], None]) -> None`
 - コールバックを指定した場合、ダイアログを表示し、スクリプトの実行を継続
 - ユーザーがダイアログを操作して閉じた後、`callback`が呼び出される
-- `callback`は`widgets`リストを受け取り、各Widgetの`value`から結果を取得
+- `callback`はWidgetリストを受け取り、各Widgetの`value`から結果を取得
 
 ---
 

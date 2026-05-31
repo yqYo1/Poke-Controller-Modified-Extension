@@ -776,26 +776,11 @@ import { paths, components } from '$lib/api/openapi.ts'
 - **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
 - **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは非推奨として保持される。
 
-### 10.2 パッケージ構造
+### 10.2 コマンドクラスAPI
 
-**Rustコア（PyO3）が提供するモジュール**:
-```
-pokecon/
-├── __init__.py          # パッケージエントリ（Rustモジュールのエクスポート）
-├── keys.py              # 型ヒント・ドキュメント（実装: Rust/PyO3）
-│   └── Button, Hat, Direction, Stick, Touchscreen, SendFormat
-├── command.py           # 型ヒント・ドキュメント（実装: Rust/PyO3）
-│   └── PythonCommand, ImageProcPythonCommand, CommandEngine
-└── _meta.py             # CommandMetaメタクラス（Python実装）
-```
+**注**: 以下のクラスはRust/PyO3で実装され、Pythonファイル（`commands.py`等）は型ヒント・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
 
-**Rust/PyO3実装（rust/pokecon-pybindings）**:
-- `pokecon.keys` — 入力型（Button、Hat、Direction、Stick、Touchscreen）
-- `pokecon.command` — コマンドスキャン/読み込み
-
-**注**: `keys.py`や`command.py`は型ヒント・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側のPyO3モジュールで行われる。
-- `pokecon.notify` — 通知（Discord、LINEスタブ、Windows）
-- `pokecon.sender` — シリアル通信
+#### 10.2.1 PythonCommand
 - `pokecon.dialogue` — ダイアログ関数
 - `pokecon.image_proc` — 画像処理（opencv-rust）
 - `pokecon.net` — Socket、MQTT、HTTPクライアント

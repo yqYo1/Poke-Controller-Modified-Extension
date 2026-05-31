@@ -933,10 +933,10 @@ Command (ABC, metaclass=CommandMeta)
 
 **非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
 
-**新API**: `show_dialog()` — `dialogue6widget`と同様に複数のウィジェットを同時に作成。
+**新API**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。
 
 ```python
-from typing import Generic, TypeVar, overload, Literal, Callable
+from typing import Generic, TypeVar, overload, Literal
 
 T = TypeVar('T')
 
@@ -958,48 +958,55 @@ class Widget(Generic[T]):
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納
 
-# ブロッキング（コールバックなし）
-# dialogue6widgetと同様に複数ウィジェットを同時に作成
-result = show_dialog("タイトル", [
-    ("Entry", "名前", "デフォルト"),           # (widget_type, label, default)
-    ("Check", "有効", True),
-    ("Combo", "選択肢", ["A", "B", "C"], "A"),  # (widget_type, label, options, default)
-    ("Spin", "数値", [1, 2, 3], 1),
-])
+# 事前にWidgetインスタンスを作成
+entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
+check = Widget("Check", "有効", True)  # Widget[bool]
 
-# resultはWidgetのリスト
-entry, check, combo, spin = result
+# ブロッキング（デフォルト）
+dialog_id = show_dialog("タイトル", widgets=[entry, check])
+# dialog_id == 0
 print(entry.value)  # str
 print(check.value)  # bool
-print(combo.value)  # str
-print(spin.value)  # int
 
-# 非ブロッキング（コールバックあり）
-def on_dialog_result(widgets: list[Widget]):
-    entry = widgets[0]
-    check = widgets[1]
-    print(f"名前: {entry.value}, 有効: {check.value}")
-
-show_dialog("タイトル", [
-    ("Entry", "名前", "デフォルト"),
-    ("Check", "有効", True),
-], callback=on_dialog_result)
+# 非ブロッキング
+dialog_id = show_dialog("タイトル", widgets=[entry, check], blocking=False)
+# dialog_id > 0（固有の自然数）
 # スクリプトの実行は継続される
+
+# ダイアログが終了したか確認
+if is_dialog_closed(dialog_id):
+    print(entry.value)
+
+# ブロッキング動作に切り替え
+wait_dialog(dialog_id)
+print(entry.value)
 ```
 
 #### 10.5.1 ブロッキング（デフォルト）
 
-- `show_dialog(title: str, widgets: list[tuple]) -> list[Widget]`
-- コールバックを指定しない場合、ダイアログが閉じられるまでスクリプトの実行を停止
-- ウィジェット定義のタプルリストを受け取り、結果のWidgetリストを返す
-- 各Widgetの`value`属性に結果が格納される
+- `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = True) -> int`
+- `blocking=True`の場合、ダイアログが閉じられるまでスクリプトの実行を停止
+- 返り値は`0`
+- 結果は各Widgetの`value`属性に格納される
 
 #### 10.5.2 非ブロッキング
 
-- `show_dialog(title: str, widgets: list[tuple], callback: Callable[[list[Widget]], None]) -> None`
-- コールバックを指定した場合、ダイアログを表示し、スクリプトの実行を継続
-- ユーザーがダイアログを操作して閉じた後、`callback`が呼び出される
-- `callback`はWidgetリストを受け取り、各Widgetの`value`から結果を取得
+- `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = False) -> int`
+- `blocking=False`の場合、ダイアログを表示し、スクリプトの実行を継続
+- 返り値はユーザースクリプトが開始してから停止するまでの間で固有の自然数（ダイアログID）
+- 結果は各Widgetの`value`属性に格納される
+
+#### 10.5.3 ダイアログ状態確認
+
+- `is_dialog_closed(dialog_id: int) -> bool`
+- 指定したダイアログIDのダイアログが終了しているかどうかを確認
+- 終了していれば`True`、表示中または未表示であれば`False`
+
+#### 10.5.4 ダイアログ待機
+
+- `wait_dialog(dialog_id: int) -> None`
+- 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
+- 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
 
 ---
 

@@ -1604,7 +1604,7 @@ from typing import Callable
 # desc: str | None = None
 
 # 基本的なキーマッピング（noremap、関数rhs）
-pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
+pokecon.keymap.set("a", lambda: pokecon.input.press(pokecon.keys.Button.A))
 
 # 修飾キー付き（noremap、関数rhs）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
@@ -1639,7 +1639,7 @@ pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
 -- Pythonと同じフラットな構造
 
 -- 基本的なキーマッピング（noremap、関数rhs）
-pokecon.keymap.set("A", function()
+pokecon.keymap.set("a", function()
     pokecon.input.press(pokecon.keys.Button.A)
 end)
 
@@ -1669,22 +1669,31 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 
 #### 11.13.3 サポートするキー記法
 
+**原則**: Neovimと同じく、**特殊キーのみ `<>` で囲み、通常キー（アルファベット、数字）はそのまま**。
+
 | 記法 | 説明 | 例 |
 |------|------|-----|
+| `a`〜`z`, `A`〜`Z` | アルファベット（`<>` 不要） | `a`, `A`, `z` |
+| `0`〜`9` | 数字（メインキーボード、`<>` 不要） | `1`, `2`, `9` |
 | `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
 | `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |
 | `<M-x>` | Alt + x | `<M-a>`, `<M-F4>` |
 | `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
 | `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
 | `<Space>` | スペースキー | `<Space>` |
-| `<Enter>` | エンターキー | `<Enter>` |
+| `<Enter>` / `<CR>` | エンターキー | `<Enter>` |
 | `<Esc>` | エスケープキー | `<Esc>` |
 | `<Tab>` | タブキー | `<Tab>` |
+| `<BS>` | バックスペース | `<BS>` |
+| `<Del>` | 削除キー | `<Del>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
+| `<k0>`〜`<k9>` | テンキー | `<k1>`, `<kEnter>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
 
-**注意**: `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です。
+**注意**:
+- `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です
+- 通常キー（`a`〜`z`, `0`〜`9`）に `<>` を付けると、それはユーザー定義仮想キーとして扱われます（例: `<A>` は仮想キー、`A` は通常キー）
 
 #### 11.13.4 キー重複時の優先順位
 

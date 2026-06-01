@@ -1114,21 +1114,8 @@ name = "numpy"
 active = "default"
 
 # UI表示用FPSの選択肢（カスタマイズ可能）
-[[ui.fps_options]]
-value = 5
-label = "5 FPS"
-
-[[ui.fps_options]]
-value = 15
-label = "15 FPS"
-
-[[ui.fps_options]]
-value = 30
-label = "30 FPS"
-
-[[ui.fps_options]]
-value = 60
-label = "60 FPS"
+[ui]
+fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 ```
 
 ### 11.5 動的設定の読み込みタイミング
@@ -1211,12 +1198,7 @@ pokecon.opt.controller_position = "top"  # top | bottom
 pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 
 # UI FPS選択肢（カスタマイズ）
-pokecon.opt.ui_fps_options = [
-    {"value": 5, "label": "5 FPS"},
-    {"value": 15, "label": "15 FPS"},
-    {"value": 30, "label": "30 FPS"},
-    {"value": 60, "label": "60 FPS"},
-]
+pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 ```
 
 **動的設定の特徴**:
@@ -1248,12 +1230,7 @@ pokecon.opt.ui_fps = 30
 pokecon.opt.serial_port = "COM3"
 
 -- UI FPS選択肢（カスタマイズ）
-pokecon.opt.ui_fps_options = {
-    {value = 5, label = "5 FPS"},
-    {value = 15, label = "15 FPS"},
-    {value = 30, label = "30 FPS"},
-    {value = 60, label = "60 FPS"},
-}
+pokecon.opt.ui_fps_options = {5, 15, 30, 60}  -- ラベルは自動生成
 
 -- キーマッピング（Neovim風記法）
 pokecon.keymap.set("A", function()

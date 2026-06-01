@@ -1116,6 +1116,7 @@ active = "default"
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
 fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
+key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 ```
 
 ### 11.5 動的設定の読み込みタイミング
@@ -1199,6 +1200,9 @@ pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 
 # UI FPS選択肢（カスタマイズ）
 pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
+
+# チャタリング判定閾値
+pokecon.opt.key_chattering_threshold_ms = 10
 ```
 
 **動的設定の特徴**:
@@ -1231,6 +1235,9 @@ pokecon.opt.serial_port = "COM3"
 
 -- UI FPS選択肢（カスタマイズ）
 pokecon.opt.ui_fps_options = {5, 15, 30, 60}  -- ラベルは自動生成
+
+-- チャタリング判定閾値
+pokecon.opt.key_chattering_threshold_ms = 10
 
 -- キーマッピング（Neovim風記法）
 pokecon.keymap.set("A", function()
@@ -1579,6 +1586,7 @@ class CameraOpenPostData(TypedDict):
   - **長押しの表現例**: `<C-a>` に「開始処理」、`<Release-C-a>` に「終了処理」をそれぞれマップすることで、ユーザー側で長押し相当の動作を実現
   - **極短時間押下（チャタリング対策）**: `<Release-hoge>` は対応する `<hoge>` のコールバック実行が完了するまで発火を待機。完了後に `<Release-hoge>` のコールバックを実行
   - **連打時の挙動**: 明らかなチャタリング（意図しない短時間連続入力）の場合は `<Release-hoge>` をキャンセル。意図的な素早い連打（2連打等）の場合はキャンセルしない
+  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。修飾キーを除く同一キー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）
 - **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
 - **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は「何もしない」コールバック（`lambda: None`）を登録することで実現する（§11.13.2参照）。
 

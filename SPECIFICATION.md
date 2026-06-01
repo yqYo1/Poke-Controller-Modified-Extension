@@ -1569,25 +1569,38 @@ class CameraOpenPostData(TypedDict):
 #### 11.13.1 設計方針
 
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
-- **フラットAPI**: `pokecon.keymap.set(key, callback, state)`
-- **状態指定**: `press`（デフォルト）, `release`, `hold`
-- **クリア方式**: キーマップは「1キー = 1コールバック」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は「何もしない」コールバック（`lambda: None`）を登録することで実現する（§11.13.2参照）。
+- **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
+  - `pokecon.keymap.set(lhs, rhs, opts)`
+  - デフォルトは `noremap`（`remap=False`）
+  - `remap=True` で再帰マップ有効
+- **rhsの型**: キー文字列（`KBKeys | str`）またはコールバック関数（`Callable`）
+- **長押し対応**: 仮想キー `<Release-*>` を全キーに自動提供（同時押し含む: `<Release-C-a>`）
+- **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
+- **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は「何もしない」コールバック（`lambda: None`）を登録することで実現する（§11.13.2参照）。
 
 #### 11.13.2 API仕様
 
 ```python
 # Python設定
 import pokecon
-
-# 基本的なキーマッピング
-# 戻り値: bool（成功: True, 失敗: False）
+from typing import Callable
+```python
+# 型定義
+# lhs: KBKeys | str（strはユーザー定義仮想キー用）
+# rhs: KBKeys | str | Callable[[], None]
+# opts: dict（remap: bool = False, desc: str | None = None）
+```
+# 基本的なキーマッピング（noremap、関数rhs）
 pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
 
-# 修飾キー付き
-pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"), state="press")
-pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"), state="hold")
-pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"), state="release")
+# 修飾キー付き（noremap、関数rhs）
+pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
+pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"))
+pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"))
 pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
+
+# remap有効（キー→キーのマッピング）
+pokecon.keymap.set("<C-a>", "<Release-A>", {"remap": True})
 
 # 特殊キー
 pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
@@ -1595,19 +1608,47 @@ pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
 pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
 pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
 
+# 長押し（Releaseキー）
+pokecon.keymap.set("<Release-A>", lambda: print("A released"))
+pokecon.keymap.set("<Release-C-a>", lambda: print("Ctrl+A released"))
+
+# ユーザー定義仮想キー（自動登録）
+pokecon.keymap.set("<MyCustomKey>", lambda: print("Custom key triggered"))
+# 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
+pokecon.keymap.set("<C-m>", "<MyCustomKey>", {"remap": True})
+
 # キーマップのクリア（「何もしない」コールバックを登録）
 pokecon.keymap.set("<F5>", lambda: None)  # F5の動作を無効化
 ```
 
 ```lua
 -- Lua設定
+-- optsテーブルでremapとdescを指定
+
+-- 基本的なキーマッピング（noremap、関数rhs）
 pokecon.keymap.set("A", function()
     pokecon.input.press(pokecon.keys.Button.A)
 end)
 
+-- 修飾キー付き（noremap、関数rhs）
 pokecon.keymap.set("<C-a>", function()
     print("Ctrl+A pressed")
-end, {state = "press"})
+end)
+
+-- remap有効（キー→キーのマッピング）
+pokecon.keymap.set("<C-a>", "<Release-A>", {remap = true})
+
+-- 長押し（Releaseキー）
+pokecon.keymap.set("<Release-A>", function()
+    print("A released")
+end)
+
+-- ユーザー定義仮想キー（自動登録）
+pokecon.keymap.set("<MyCustomKey>", function()
+    print("Custom key triggered")
+end)
+-- 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
+pokecon.keymap.set("<C-m>", "<MyCustomKey>", {remap = true})
 ```
 
 #### 11.13.3 サポートするキー記法
@@ -1624,6 +1665,10 @@ end, {state = "press"})
 | `<Esc>` | エスケープキー | `<Esc>` |
 | `<Tab>` | タブキー | `<Tab>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
+| `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
+| `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
+
+**注意**: `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です。
 
 #### 11.13.4 キー重複時の優先順位
 

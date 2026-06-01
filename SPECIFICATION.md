@@ -1512,6 +1512,9 @@ pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
 pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
 pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
 pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
+
+# キーマップのクリア（「何もしない」コールバックを登録）
+pokecon.keymap.set("<F5>", lambda: None)  # F5の動作を無効化
 ```
 
 ```lua
@@ -1681,9 +1684,10 @@ pokecon.profile.switch("custom")
 #### 11.16.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
-- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を自動再読み込み
+- キーマップをクリア（「何もしない」コールバックを登録）してから、デフォルトキーバインドを再登録
+- 静的設定のキーバインドを再登録
+- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を読み直し、動的キーバインドを再登録
 - イベントハンドラをクリアして再登録
-- キーマップをクリアして再登録
 
 ## 12. 環境変数
 

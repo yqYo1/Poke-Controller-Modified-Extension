@@ -1570,9 +1570,10 @@ class CameraOpenPostData(TypedDict):
 
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
 - **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
-  - `pokecon.keymap.set(lhs, rhs, opts)`
+  - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None)`
   - デフォルトは `noremap`（`remap=False`）
   - `remap=True` で再帰マップ有効
+  - Pythonでは型ヒントのためフラットな構造（dictを挟まない）
 - **rhsの型**: キー文字列（`KBKeys | str`）またはコールバック関数（`Callable`）
 - **長押し対応**: 仮想キー `<Release-*>` を全キーに自動提供（同時押し含む: `<Release-C-a>`）
 - **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
@@ -1584,12 +1585,13 @@ class CameraOpenPostData(TypedDict):
 # Python設定
 import pokecon
 from typing import Callable
-```python
+
 # 型定義
 # lhs: KBKeys | str（strはユーザー定義仮想キー用）
 # rhs: KBKeys | str | Callable[[], None]
-# opts: dict（remap: bool = False, desc: str | None = None）
-```
+# remap: bool = False
+# desc: str | None = None
+
 # 基本的なキーマッピング（noremap、関数rhs）
 pokecon.keymap.set("A", lambda: pokecon.input.press(pokecon.keys.Button.A))
 
@@ -1600,7 +1602,7 @@ pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"))
 pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
 
 # remap有効（キー→キーのマッピング）
-pokecon.keymap.set("<C-a>", "<Release-A>", {"remap": True})
+pokecon.keymap.set("<C-a>", "<Release-A>", remap=True)
 
 # 特殊キー
 pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
@@ -1615,15 +1617,15 @@ pokecon.keymap.set("<Release-C-a>", lambda: print("Ctrl+A released"))
 # ユーザー定義仮想キー（自動登録）
 pokecon.keymap.set("<MyCustomKey>", lambda: print("Custom key triggered"))
 # 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
-pokecon.keymap.set("<C-m>", "<MyCustomKey>", {"remap": True})
+pokecon.keymap.set("<C-m>", "<MyCustomKey>", remap=True)
 
-# キーマップのクリア（「何もしない」コールバックを登録）
-pokecon.keymap.set("<F5>", lambda: None)  # F5の動作を無効化
+# 説明文付き
+pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
 ```
 
 ```lua
 -- Lua設定
--- optsテーブルでremapとdescを指定
+-- Pythonと同じフラットな構造
 
 -- 基本的なキーマッピング（noremap、関数rhs）
 pokecon.keymap.set("A", function()
@@ -1636,7 +1638,7 @@ pokecon.keymap.set("<C-a>", function()
 end)
 
 -- remap有効（キー→キーのマッピング）
-pokecon.keymap.set("<C-a>", "<Release-A>", {remap = true})
+pokecon.keymap.set("<C-a>", "<Release-A>", true)
 
 -- 長押し（Releaseキー）
 pokecon.keymap.set("<Release-A>", function()
@@ -1648,7 +1650,10 @@ pokecon.keymap.set("<MyCustomKey>", function()
     print("Custom key triggered")
 end)
 -- 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
-pokecon.keymap.set("<C-m>", "<MyCustomKey>", {remap = true})
+pokecon.keymap.set("<C-m>", "<MyCustomKey>", true)
+
+-- 説明文付き
+pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 ```
 
 #### 11.13.3 サポートするキー記法

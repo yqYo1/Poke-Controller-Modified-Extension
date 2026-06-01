@@ -1681,6 +1681,14 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | Tab | `<Tab>`, `<Tab>` |
 | Space | `<Space>`, `<Space>` |
 | Delete | `<Del>`, `<Delete>` |
+| Meta/Alt | `<M-a>`, `<A-a>`（同じ） |
+| Command/Super | `<D-a>`（Mac） |
+| Nul | `<Nul>`, `<Null>` |
+| Insert | `<Insert>`, `<Ins>` |
+| Home | `<Home>` |
+| End | `<End>` |
+| PageUp | `<PageUp>` |
+| PageDown | `<PageDown>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
 
@@ -1695,10 +1703,15 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
 | `<Space>` | スペースキー | `<Space>` |
 | `<Enter>` / `<CR>` / `<Return>` | エンターキー | `<Enter>` |
-| `<Esc>` | エスケープキー | `<Esc>` |
+| `<Esc>` / `<Escape>` | エスケープキー | `<Esc>` |
 | `<Tab>` | タブキー | `<Tab>` |
 | `<BS>` / `<Backspace>` | バックスペース | `<BS>` |
 | `<Del>` / `<Delete>` | 削除キー | `<Del>` |
+| `<Insert>` / `<Ins>` | 挿入キー | `<Insert>` |
+| `<Home>` | ホームキー | `<Home>` |
+| `<End>` | エンドキー | `<End>` |
+| `<PageUp>` | ページアップ | `<PageUp>` |
+| `<PageDown>` | ページダウン | `<PageDown>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
 | `<k0>`〜`<k9>` | テンキー | `<k1>`, `<kEnter>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |

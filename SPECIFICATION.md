@@ -1689,6 +1689,10 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | End | `<End>` |
 | PageUp | `<PageUp>` |
 | PageDown | `<PageDown>` |
+| Less-than | `<lt>` |
+| Backslash | `<Bslash>` |
+| Vertical bar | `<Bar>` |
+| No-op | `<NOP>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
 
@@ -1714,6 +1718,13 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | `<PageDown>` | ページダウン | `<PageDown>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
 | `<k0>`〜`<k9>` | テンキー | `<k1>`, `<kEnter>` |
+| `<kPlus>` | テンキープラス | `<kPlus>` |
+| `<kMinus>` | テンキーマイナス | `<kMinus>` |
+| `<kEnter>` | テンキーエンター | `<kEnter>` |
+| `<lt>` | Less-than `<` | `<lt>` |
+| `<Bslash>` | Backslash `\` | `<Bslash>` |
+| `<Bar>` | Vertical bar `|` | `<Bar>` |
+| `<NOP>` | No-op（何もしない） | `<NOP>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
 

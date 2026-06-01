@@ -1086,6 +1086,8 @@ print(entry.value)
 
 ### 11.4 静的設定（settings.toml）
 
+**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
+
 ```toml
 # ~/.config/pokecon/settings.toml
 [global]
@@ -1171,6 +1173,15 @@ pokecon.source("~/.config/pokecon/init.py")
 # ~/.config/pokecon/init.py
 import pokecon
 
+# 言語設定
+pokecon.opt.language = "ja"
+
+# 自動リロード設定
+pokecon.opt.auto_reload_config = True
+
+# プロファイル設定
+pokecon.opt.active_profile = "default"
+
 # カメラ設定（フラット構造）
 # camera_fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 pokecon.opt.camera_fps = 60
@@ -1195,6 +1206,14 @@ pokecon.opt.controller_position = "top"  # top | bottom
 
 # ダイアログボタン位置
 pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
+
+# UI FPS選択肢（カスタマイズ）
+pokecon.opt.ui_fps_options = [
+    {"value": 5, "label": "5 FPS"},
+    {"value": 15, "label": "15 FPS"},
+    {"value": 30, "label": "30 FPS"},
+    {"value": 60, "label": "60 FPS"},
+]
 ```
 
 **動的設定の特徴**:
@@ -1209,12 +1228,29 @@ pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 -- ~/.config/pokecon/init.lua
 -- require不要で pokecon.* に直接アクセス
 
+-- 言語設定
+pokecon.opt.language = "ja"
+
+-- 自動リロード設定
+pokecon.opt.auto_reload_config = true
+
+-- プロファイル設定
+pokecon.opt.active_profile = "default"
+
 -- カメラ設定（フラット構造）
 -- camera_fps: バックエンド処理FPS（上限なし）
 pokecon.opt.camera_fps = 60
 -- ui_fps: UI表示用FPS（getter/setterでUIのComboboxと連動）
 pokecon.opt.ui_fps = 30
 pokecon.opt.serial_port = "COM3"
+
+-- UI FPS選択肢（カスタマイズ）
+pokecon.opt.ui_fps_options = {
+    {value = 5, label = "5 FPS"},
+    {value = 15, label = "15 FPS"},
+    {value = 30, label = "30 FPS"},
+    {value = 60, label = "60 FPS"},
+}
 
 -- キーマッピング（Neovim風記法）
 pokecon.keymap.set("A", function()

@@ -1693,6 +1693,8 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | Backslash | `<Bslash>` |
 | Vertical bar | `<Bar>` |
 | No-op | `<NOP>` |
+| Linefeed | `<NL>` |
+| Ignore | `<Ignore>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
 
@@ -1725,6 +1727,8 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | `<Bslash>` | Backslash `\` | `<Bslash>` |
 | `<Bar>` | Vertical bar `|` | `<Bar>` |
 | `<NOP>` | No-op（何もしない） | `<NOP>` |
+| `<NL>` | Linefeed | `<NL>` |
+| `<Ignore>` | 待機キャンセル | `<Ignore>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
 

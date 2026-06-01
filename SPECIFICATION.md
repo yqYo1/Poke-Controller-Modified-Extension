@@ -1671,6 +1671,19 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 
 **原則**: Neovimと同じく、**特殊キーのみ `<>` で囲み、通常キー（アルファベット、数字）はそのまま**。
 
+**同じキーの異なる表現**（Neovim準拠）:
+
+| キー | 別名 |
+|------|------|
+| Enter | `<CR>`, `<Enter>`, `<Return>` |
+| Backspace | `<BS>`, `<Backspace>` |
+| Escape | `<Esc>`, `<Escape>` |
+| Tab | `<Tab>`, `<Tab>` |
+| Space | `<Space>`, `<Space>` |
+| Delete | `<Del>`, `<Delete>` |
+
+**注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
+
 | 記法 | 説明 | 例 |
 |------|------|-----|
 | `a`〜`z`, `A`〜`Z` | アルファベット（`<>` 不要） | `a`, `A`, `z` |
@@ -1681,11 +1694,11 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
 | `<F1>`〜`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
 | `<Space>` | スペースキー | `<Space>` |
-| `<Enter>` / `<CR>` | エンターキー | `<Enter>` |
+| `<Enter>` / `<CR>` / `<Return>` | エンターキー | `<Enter>` |
 | `<Esc>` | エスケープキー | `<Esc>` |
 | `<Tab>` | タブキー | `<Tab>` |
-| `<BS>` | バックスペース | `<BS>` |
-| `<Del>` | 削除キー | `<Del>` |
+| `<BS>` / `<Backspace>` | バックスペース | `<BS>` |
+| `<Del>` / `<Delete>` | 削除キー | `<Del>` |
 | `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
 | `<k0>`〜`<k9>` | テンキー | `<k1>`, `<kEnter>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |

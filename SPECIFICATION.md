@@ -823,7 +823,7 @@ Command (ABC, metaclass=CommandMeta)
 | `direct_serial()` | `direct_serial(commands, waittimes)` | 生シリアルコマンド送信 |
 | `reload_com_port()` | `reload_com_port()` | COMポート接続を再読み込み |
 
-**出力メソッド**（PyO3実装）:
+**出力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `print_t1()` | `print_t1(*objects, sep=' ', end='\\n')` | 上部ログパネルへ出力 |

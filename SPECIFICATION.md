@@ -774,7 +774,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 - **コアはRust**: すべてのコア処理はRustで実装。Pythonは必要な部分のみ（ユーザースクリプトAPI、互換レイヤー）。
 - **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてPyO3（Rustバインディング）に流れる。
 - **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
-- **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは非推奨として保持される。
+- **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは互換性のために保持され、新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
 
 ### 10.2 公開モジュール
 
@@ -837,10 +837,13 @@ Command (ABC, metaclass=CommandMeta)
 || `show_var()` | `show_var(var, widget='print_t1')` | 変数の値を指定ウィジェットに表示 |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
-|| メソッド | シグネチャ | 説明 |
-||--------|-----------|-------------|
-|| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、show_dialog使用） |
-|| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、show_dialog使用） |
+
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、互換性維持） |
+
+**注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
 **Socketメソッド**:
 | メソッド | シグネチャ | 説明 |
@@ -930,11 +933,11 @@ Command (ABC, metaclass=CommandMeta)
 
 その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
 
-### 10.5 ダイアログAPI（型安全）
+### 10.5 ダイアログAPI
 
-**非推奨**: `dialogue()`、`dialogue6widget()` — 互換性のために保持、非推奨マーク。
+**旧API（非推奨）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
 
-**新API**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。
+**新API（推奨）**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。型安全性と一貫性が向上。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal

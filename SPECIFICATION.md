@@ -833,9 +833,9 @@ Command (ABC, metaclass=CommandMeta)
 | `print_ts()` | `print_ts(*objects, sep=' ', end='\\n')` | `print_s`と同じ（互換性のために保持） |
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n')` | 上部ログ（モード付き w/a/d） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n')` | 下部ログ（モード付き） |
-|| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
-|| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdout割り当てパネルへ出力（モード付き w/a/d） |
-|| `show_var()` | `show_var()` | 一時停止時に内部変数の一覧を表示（自動化スクリプト側でselfに定義した変数のみ） |
+| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdout割り当てパネルへ出力（モード付き w/a/d） |
+| `show_var()` | `show_var()` | 一時停止時に内部変数の一覧を表示（自動化スクリプト側でselfに定義した変数のみ） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 

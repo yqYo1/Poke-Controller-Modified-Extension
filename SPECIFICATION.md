@@ -485,6 +485,7 @@ Commands/
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
 - **キーボードショートカット**: F1～F10またはその他の単一キー（修飾キーなし）。修飾キー付きのショートカットはキーバインドシステム（§11.13）で管理。
+- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア。
 - **キーバインド競合**: ショートカットボタンのホットキーと他のキーバインド（デフォルトキーバインド含む）が重複した場合、後から登録されたものが優先（後勝ち）。
 - **保存**: 設定は `localStorage` に保存。
 
@@ -663,7 +664,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
 | POST | `/api/controller/keyboard` | キーボード設定を設定 |
 
-- **ショートカット**: F5 = 開始、F6 = 停止、F7 = 一時停止、F8 = 再開、F9 = リロード、ESC = 緊急停止。
+- **ショートカット**: F5 = 開始、F6 = 停止、F7 = 一時停止、F8 = 再開、F9 = リロード、ESC = 停止。
 - **保存**: キーボード設定は `localStorage` に保存。
 
 ### 7.6 マウス入力API
@@ -826,7 +827,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 |-----------|------|
 | `pokecon.dialogue` | ダイアログ関数 |
 | `pokecon.image_proc` | 画像処理（opencv-rust） |
-| `pokecon.net` | Socket、MQTT、HTTPクライアント | `socket_connect()`, `socket_disconnect()`, `mqtt_transmit_message()`, `http_get()`, `http_post()` |
+| `pokecon.net` | Socket、MQTT、HTTPクライアント（`socket_connect()`, `socket_disconnect()`, `mqtt_transmit_message()`, `http_get()`, `http_post()` 等） |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
@@ -1395,6 +1396,13 @@ pokecon.autocmd.clear("camera_group")
 pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
         print("Camera opened")
+    end
+})
+
+-- グループを指定して登録
+pokecon.autocmd.on("CameraOpenPost", {
+    callback = function()
+        print("Camera opened")
     end,
     group = "my_group"
 })
@@ -1562,7 +1570,7 @@ class CameraOpenPostData(TypedDict):
   - **連打時の挙動**: 明らかなチャタリング（意図しない短時間連続入力）の場合は `<Release-hoge>` をキャンセル。意図的な素早い連打（2連打等）の場合はキャンセルしない
   - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。修飾キーを除く同一キー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）
 - **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
-- **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は「何もしない」コールバック（`lambda: None`）を登録することで実現する（§11.13.2参照）。
+- **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は `<nop>` を rhs に登録することで実現する（§11.13.2参照）。
 
 #### 11.13.2 API仕様
 
@@ -1677,7 +1685,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | Less-than | `<lt>` |
 | Backslash | `<Bslash>` |
 | Vertical bar | `<Bar>` |
-| No-op | `<NOP>` |
+|| No-op | `<nop>` |
 | Linefeed | `<NL>` |
 | Ignore | `<Ignore>` |
 
@@ -1711,7 +1719,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | `<lt>` | Less-than `<` | `<lt>` |
 | `<Bslash>` | Backslash `\` | `<Bslash>` |
 | `<Bar>` | Vertical bar `|` | `<Bar>` |
-| `<NOP>` | No-op（何もしない） | `<NOP>` |
+|| `<nop>` | No-op（何もしない） | `<nop>` |
 | `<NL>` | Linefeed | `<NL>` |
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
@@ -1963,7 +1971,7 @@ File
 | `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 |
 | `self.keys.neutral()` | ✅ 利用可能 |
 | `self.keys.ser.writeRow()` | ✅ 利用可能 |
-| `self.keys.ser.ser.write()` | ✅ 利用可能（Rustシリアルラッパー） |
+| `self.keys.ser.write()` | ✅ 利用可能（Rustシリアルラッパー） |
 | 画像処理API | ✅ Rust実装（opencv-rust） |
 | Discord通知 | ✅ 実装済み |
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |

@@ -1453,7 +1453,7 @@ print(pokecon.event.list_defined())
 
 | イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
 |-----------|---------|------|------------------|
-| `AppStartupPost` | Post | アプリケーション起動後 | `{"pid": int}` |
+| `AppStartupPost` | Post | アプリケーション起動後 | `{}` |
 | `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
 | `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
 | `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
@@ -1849,6 +1849,9 @@ print(pokecon.state.available_profiles) # 利用可能なプロファイル一�
 # 入力関連
 print(pokecon.state.last_input)         # 最後の入力
 print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
+
+# アプリケーション関連
+print(pokecon.state.pid)                # アプリケーションのプロセスID
 ```
 
 ```lua

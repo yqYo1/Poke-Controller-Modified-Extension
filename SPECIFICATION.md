@@ -1333,6 +1333,8 @@ end)
 |---------|------|-----|
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
+| `pokecon.keymap` | キーマップの登録・解除 | `set()`, `del()` |
+| `pokecon.key` | キー入力の仮想発火 | `press()` |
 | `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` 等 |
 
 #### 11.12.3 イベントハンドラAPI
@@ -1760,6 +1762,34 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 | `<Esc>` | 停止 | press |
 
 **注**: デフォルトキーバインドはユーザーが上書き可能。上書き時は§11.13.4「キー重複時の優先順位」に従い、後勝ちで解決される。
+
+#### 11.13.6 キー入力の仮想発火
+
+動的設定専用。スクリプトからキー入力イベントを仮想的に発火する。
+
+```python
+# Python
+pokecon.key.press("a")        # a を押したことにする
+pokecon.key.press("<C-a>")   # Ctrl+A を押したことにする
+pokecon.key.press("<F1>")    # F1 を押したことにする
+```
+
+```lua
+-- Lua
+pokecon.key.press("a")        -- a を押したことにする
+pokecon.key.press("<C-a>")   -- Ctrl+A を押したことにする
+pokecon.key.press("<F1>")    -- F1 を押したことにする
+```
+
+**用途**:
+- マクロ記録/再生
+- スクリプトからのキーイベント発火
+- テスト
+
+**注意**:
+- ユーザー定義仮想キー（`<MyCustomKey>`）も発火可能
+- `<Release-*>` も発火可能（キーを離したことにする）
+- このAPIは動的設定（`init.py`/`init.lua`）専用。ユーザー向けPython APIには公開しない
 
 ### 11.14 相互参照API
 

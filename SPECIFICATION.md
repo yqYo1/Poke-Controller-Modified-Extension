@@ -210,7 +210,7 @@
 - **出力 #1**: プライマリログ/出力表示。
 - **出力 #2**: セカンダリログ/出力表示。
 - **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。
-- **ログソース**: バックエンドからWebRTC DataChannelまたはWebSocket経由で受信したログ。
+- **ログソース**: バックエンドからWebRTC DataChannel（プライマリ）またはWebSocket（フォールバック）経由で受信したログ。WebRTC DataChannelが利用可能な場合はそちらを優先し、接続断時はWebSocketにフォールバック。
 - **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
 - **ログレベル**: DEBUG、INFO、WARNING、ERROR、CRITICAL（フィルタリング用）。各レベルの基準:
   - **DEBUG**: 開発時の詳細情報（関数呼び出し、内部状態変化）
@@ -496,8 +496,8 @@ Commands/
 | **停止** | 実行を停止 |
 | **一時停止** | 実行を一時停止（再開可能） |
 | **再開** | 一時停止から再開 |
-|| **リロード（再読み込み＋開始）** | コマンドを再読み込みして開始 |
-|| **コマンドリスト再読み込み** | ファイルシステムからコマンドリストを再読み込み |
+| **リロード（再読み込み＋開始）** | コマンドを再読み込みして開始 |
+| **コマンドリスト再読み込み** | ファイルシステムからコマンドリストを再読み込み |
 
 キーボードショートカットの割り当ては **§11.13.5 デフォルトキーバインド** を参照。
 
@@ -795,6 +795,20 @@ import { paths, components } from '$lib/api/openapi.ts'
 ---
 
 ## 10. コマンドクラス（ユーザースクリプト向け）
+
+### 10.0 API公開対象者
+
+本ドキュメントに記載するAPIは、以下の2つの対象者に向けて公開されます。
+
+| 対象者 | 説明 | 使用場所 | 公開範囲 |
+|--------|------|----------|----------|
+| **ユーザースクリプト** | 自動化スクリプトを作成・実行する一般ユーザー | `Commands/PythonCommands/` 以下のスクリプト | `PythonCommand` クラスのメソッド、モジュールレベルの関数 |
+| **動的設定** | 高度なカスタマイズを行うパワーユーザー | `~/.config/pokecon/init.py` / `init.lua` | `pokecon.*` 名前空間の全API |
+
+**重要**:
+- ユーザースクリプト向けAPIは動的設定からも使用可能
+- 動的設定専用API（`pokecon.keymap.trigger()` 等）はユーザースクリプトからは公開しない
+- 内部実装の名前空間は本仕様で規定するものではない。ユーザーがアクセスできるAPI名のみを規定する
 
 ### 10.1 設計方針
 
@@ -1240,8 +1254,8 @@ pokecon.opt.ui_fps_options = {5, 15, 30, 60}  -- ラベルは自動生成
 pokecon.opt.key_chattering_threshold_ms = 10
 
 -- キーマッピング（Neovim風記法）
-pokecon.keymap.set("A", function()
-    pokecon.input.press(pokecon.keys.Button.A)
+pokecon.keymap.set("a", function()
+    pokecon.controller.press(pokecon.controller.Button.A)
 end)
 
 -- イベントハンドラ
@@ -1486,8 +1500,8 @@ print(pokecon.event.list_defined())
 | `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
 | `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
 | `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
-| `InputPressedPre` | Pre | 入力押下前 | `{"button": str}` |
-| `InputReleasedPost` | Post | 入力解放後 | `{"button": str}` |
+| `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） | `{"button": str, "source": "controller" | "keyboard"}` |
+| `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） | `{"button": str, "source": "controller" | "keyboard"}` |
 
 **ScriptLoadPre/ScriptLoadPostのタイミング**:
 
@@ -1580,6 +1594,7 @@ class CameraOpenPostData(TypedDict):
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
 - **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
   - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None)`
+  - `pokecon.keymap.trigger(key)` — キー入力イベントを仮想的に発火（動的設定専用）
   - デフォルトは `noremap`（`remap=False`）
   - `remap=True` で再帰マップ有効
   - Pythonでは型ヒントのためフラットな構造（dictを挟まない）
@@ -1594,7 +1609,6 @@ class CameraOpenPostData(TypedDict):
 
 #### 11.13.2 API仕様
 
-```python
 ```python
 # Python設定
 import pokecon
@@ -1634,6 +1648,9 @@ pokecon.keymap.set("<C-m>", "<MyCustomKey>", remap=True)
 
 # 説明文付き
 pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
+
+# キーマップ削除
+pokecon.keymap.del("<F5>")  # F5のキーマップを削除
 ```
 
 ```lua
@@ -1667,6 +1684,9 @@ pokecon.keymap.set("<C-m>", "<MyCustomKey>", true)
 
 -- 説明文付き
 pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
+
+-- キーマップ削除
+pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 ```
 
 #### 11.13.3 サポートするキー記法
@@ -1676,7 +1696,7 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 **印字可能文字の入力ルール**:
 1. ほとんどの文字はそのまま入力（例: `a`, `A`, `1`, `9`, `>`, `;`, `:`, `,`, `@`, `!`, `#`, `$`, `%`, `&`, `*`, `(`, `)`, `-`, `_`, `=`, `+`, `[`, `]`, `{`, `}`, `.`, `/`, `?`）
 2. **例外1**: バックスラッシュ `\` は `<Bslash>` または `\\` で入力
-3. **例外2**: 小なり記号 `<` は `<lt>` または `\u003c` で入力
+3. **例外2**: 小なり記号 `<` は `<lt>` または `\<` で入力
 4. **例外3**: テンキー（`<k0>`〜`<k9>`, `<kPlus>`, `<kMinus>`, `<kEnter>` 等）は `<>` で囲む（メインキーボードの数字とは別のキー）
 
 **同じキーの異なる表現**（Neovim準拠）:

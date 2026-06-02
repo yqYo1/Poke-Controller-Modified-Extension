@@ -1333,8 +1333,7 @@ end)
 |---------|------|-----|
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
-| `pokecon.keymap` | キーマップの登録・解除 | `set()`, `del()` |
-| `pokecon.key` | キー入力の仮想発火 | `press()` |
+| `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
 | `pokecon.controller` | コントローラー（ゲームパッド）操作 | `press()`, `hold()`, `holdEnd()`, `Button`, `Direction`, `Hat` |
 | `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` 等 |
 
@@ -1770,16 +1769,16 @@ pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
 
 ```python
 # Python
-pokecon.key.press("a")        # a を押したことにする
-pokecon.key.press("<C-a>")   # Ctrl+A を押したことにする
-pokecon.key.press("<F1>")    # F1 を押したことにする
+pokecon.keymap.trigger("a")        # a を押したことにする
+pokecon.keymap.trigger("<C-a>")   # Ctrl+A を押したことにする
+pokecon.keymap.trigger("<F1>")    # F1 を押したことにする
 ```
 
 ```lua
 -- Lua
-pokecon.key.press("a")        -- a を押したことにする
-pokecon.key.press("<C-a>")   -- Ctrl+A を押したことにする
-pokecon.key.press("<F1>")    -- F1 を押したことにする
+pokecon.keymap.trigger("a")        -- a を押したことにする
+pokecon.keymap.trigger("<C-a>")   -- Ctrl+A を押したことにする
+pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
 ```
 
 **用途**:

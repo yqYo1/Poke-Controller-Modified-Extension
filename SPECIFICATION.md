@@ -825,7 +825,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 |-----------|------|
 | `pokecon.dialogue` | ダイアログ関数 |
 | `pokecon.image_proc` | 画像処理（opencv-rust） |
-| `pokecon.net` | Socket、MQTT、HTTPクライアント |
+| `pokecon.net` | Socket、MQTT、HTTPクライアント | `socket_connect()`, `socket_disconnect()`, `mqtt_transmit_message()`, `http_get()`, `http_post()` |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
@@ -1217,6 +1217,10 @@ pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
 # チャタリング判定閾値
 pokecon.opt.key_chattering_threshold_ms = 10
+
+# キーマッピング（Neovim風記法）
+pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
+pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
 ```
 
 **動的設定の特徴**:
@@ -1331,7 +1335,7 @@ end)
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
 | `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
 | `pokecon.controller` | コントローラー（ゲームパッド）操作 | `press()`, `hold()`, `holdEnd()`, `Button`, `Direction`, `Hat` |
-| `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` 等 |
+| `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` |
 
 #### 11.12.3 イベントハンドラAPI
 
@@ -1451,8 +1455,8 @@ print(pokecon.event.list_defined())
 | `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
 | `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
 | `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
-| `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） | `{"button": str, "source": "controller" | "keyboard"}` |
-| `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） | `{"button": str, "source": "controller" | "keyboard"}` |
+| `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
+| `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
 
 **ScriptLoadPre/ScriptLoadPostのタイミング**:
 
@@ -1679,7 +1683,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 
 | 記法 | 説明 | 例 |
 |------|------|-----|
-| `a`〜`z`, `A`〜`Z` | アルファベット（`<>` 不要） | `a`, `A`, `z` |
+| `a`〜`z`, `A`〜`Z` | アルファベット（`<>` 不要、`a` と `A` は同じキー） | `a`, `A`, `z` |
 | `0`〜`9` | 数字（メインキーボード、`<>` 不要） | `1`, `2`, `9` |
 | `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
 | `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |

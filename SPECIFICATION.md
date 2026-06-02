@@ -1231,27 +1231,10 @@ pokecon.opt.key_chattering_threshold_ms = 10
 -- ~/.config/pokecon/init.lua
 -- require不要で pokecon.* に直接アクセス
 
--- 言語設定
+-- 設定（Pythonと同じ要素名・同じAPI構造）
 pokecon.opt.language = "ja"
-
--- 自動リロード設定
-pokecon.opt.auto_reload_config = true
-
--- プロファイル設定
-pokecon.opt.active_profile = "default"
-
--- カメラ設定（フラット構造）
--- camera_fps: バックエンド処理FPS（上限なし）
 pokecon.opt.camera_fps = 60
--- ui_fps: UI表示用FPS（getter/setterでUIのComboboxと連動）
 pokecon.opt.ui_fps = 30
-pokecon.opt.serial_port = "COM3"
-
--- UI FPS選択肢（カスタマイズ）
-pokecon.opt.ui_fps_options = {5, 15, 30, 60}  -- ラベルは自動生成
-
--- チャタリング判定閾値
-pokecon.opt.key_chattering_threshold_ms = 10
 
 -- キーマッピング（Neovim風記法）
 pokecon.keymap.set("a", function()
@@ -1264,14 +1247,13 @@ pokecon.autocmd.on("CameraOpenPost", {
         print("Camera opened")
     end
 })
-
--- 相互参照
-pokecon.source("~/.config/pokecon/extra_settings.lua")
-
--- 状態取得
-print(pokecon.state.serial_port)
-print(pokecon.state.active_profile)
 ```
+
+**Lua動的設定の特徴**:
+- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPI（`pokecon.keymap.del()`, `pokecon.keymap.trigger()`, `pokecon.profile.switch()` 等）もPythonと同じシグネチャで使用可能
+- **テーブル構文**: リストは `{}`（例: `{5, 15, 30, 60}`）、辞書は `{key = value}` で指定
+- **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
+- **コールバック**: Luaでは無名関数 `function() ... end` を使用
 
 ### 11.9 エラーハンドリング
 
@@ -1403,56 +1385,21 @@ pokecon.autocmd.clear("camera_group")
 - ユーザーは予約グループ名を `group` パラメータに指定できない（エラー）
 
 ```lua
--- Lua設定（Neovim風require-less）
+-- Lua設定（Neovim風require-less、Pythonと同じAPI構造）
 pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
         print("Camera opened")
     end,
     group = "my_group"
 })
-
-pokecon.autocmd.once("SerialConnectPost", {
-    callback = function()
-        print("Serial connected")
-    end
-})
-
--- イベントハンドラ解除
--- 引数: HandlerId（on() / once() の戻り値）
-pokecon.autocmd.off(handler_id)
-
--- グループ単位で一括解除
--- "all" = すべてのハンドラ解除
--- "CameraOpenPost" = そのイベントの全ハンドラ解除
--- "my_group" = ユーザ定義グループの全ハンドラ解除
-pokecon.autocmd.clear("all")
-pokecon.autocmd.clear("CameraOpenPost")
-pokecon.autocmd.clear("my_group")
 ```
 
-**Luaでのグループ指定例**:
-
-```lua
--- グループを指定して登録
-pokecon.autocmd.on("CameraOpenPost", {
-    callback = function()
-        print("Camera opened")
-    end,
-    group = "camera_group"
-})
-
-pokecon.autocmd.on("CameraClosePost", {
-    callback = function()
-        print("Camera closed")
-    end,
-    group = "camera_group"
-})
-
--- グループ単位で一括解除
-pokecon.autocmd.clear("camera_group")
-```
-
-**コールバックシグネチャ**:
+**Lua動的設定の特徴**:
+- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPIもPythonと同じシグネチャで使用可能
+- **テーブル構文**: 辞書は `{key = value}` で指定（Pythonの `dict` に相当）
+- **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
+- **コールバック**: Luaでは無名関数 `function() ... end` を使用
+- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
 - **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
 - **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
 - イベントごとに異なるフィールドを持つ（§11.12.5参照）
@@ -1477,11 +1424,15 @@ schema = pokecon.event.get_schema("CameraOpenPost")
 ```
 
 ```lua
--- Lua設定
+-- Lua設定（Pythonと同じAPI構造）
 pokecon.event.define("MyCustomEvent")
 pokecon.event.emit("MyCustomEvent", {key = "value"})
 print(pokecon.event.list_defined())
 ```
+
+**Lua動的設定の特徴**:
+- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPIもPythonと同じシグネチャで使用可能
+- **テーブル構文**: 辞書は `{key = value}` で指定（Pythonの `dict` に相当）
 
 #### 11.12.5 組み込みイベント一覧
 
@@ -1836,7 +1787,7 @@ pokecon.source("~/.config/pokecon/extra_settings.py")
 ```
 
 ```lua
--- Lua設定
+-- Lua設定（Pythonと同じAPI構造）
 pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
 
@@ -1924,7 +1875,7 @@ if not success:
 ```
 
 ```lua
--- Lua設定
+-- Lua設定（Pythonと同じAPI構造）
 print(pokecon.profile.current())
 print(pokecon.profile.list())
 pokecon.profile.switch("custom")

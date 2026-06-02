@@ -963,6 +963,7 @@ Command (ABC, metaclass=CommandMeta)
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
 - 内部実装はRust、PyO3経由で公開
+- **注**: `self.keys` は互換性維持のための旧API。内部実装は別の名前（例: `self._controller`）でも構わない
 
 #### 10.4.2 Sender
 

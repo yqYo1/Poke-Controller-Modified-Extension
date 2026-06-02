@@ -1335,6 +1335,7 @@ end)
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
 | `pokecon.keymap` | キーマップの登録・解除 | `set()`, `del()` |
 | `pokecon.key` | キー入力の仮想発火 | `press()` |
+| `pokecon.controller` | コントローラー（ゲームパッド）操作 | `press()`, `hold()`, `holdEnd()`, `Button`, `Direction`, `Hat` |
 | `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` 等 |
 
 #### 11.12.3 イベントハンドラAPI
@@ -1595,9 +1596,9 @@ class CameraOpenPostData(TypedDict):
 #### 11.13.2 API仕様
 
 ```python
+```python
 # Python設定
 import pokecon
-from typing import Callable
 
 # 型定義
 # lhs: KBKeys | str（strはユーザー定義仮想キー用）
@@ -1606,7 +1607,7 @@ from typing import Callable
 # desc: str | None = None
 
 # 基本的なキーマッピング（noremap、関数rhs）
-pokecon.keymap.set("a", lambda: pokecon.input.press(pokecon.keys.Button.A))
+pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
 
 # 修飾キー付き（noremap、関数rhs）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
@@ -1642,7 +1643,7 @@ pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
 
 -- 基本的なキーマッピング（noremap、関数rhs）
 pokecon.keymap.set("a", function()
-    pokecon.input.press(pokecon.keys.Button.A)
+    pokecon.controller.press(pokecon.controller.Button.A)
 end)
 
 -- 修飾キー付き（noremap、関数rhs）

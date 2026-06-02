@@ -871,7 +871,7 @@ Command (ABC, metaclass=CommandMeta)
 | `print_t2()` | `print_t2(*objects, sep=' ', end='\\n')` | 下部ログパネルへ出力 |
 | `print_t()` | `print_t(*objects, sep=' ', end='\\n')` | stdout以外のログパネルへ出力 |
 | `print_s()` | `print_s(*objects, sep=' ', end='\\n')` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n')` | `print_s`と同じ（互換性のために保持） |
+| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n')` | `print_s`と同じ（歴史的経緯で同じ動作のものが複数存在） |
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n')` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n')` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
@@ -1897,7 +1897,7 @@ pokecon.profile.switch("custom")
   - **注**: 動的設定ファイルはグローバル（プロファイル非依存）。プロファイル固有の動的設定が必要な場合は、`settings.toml` で `dynamic_config_language` を切り替えるか、`pokecon.source()` で別ファイルを読み込む
 - イベントハンドラをクリアして再登録
 
-**注**: キーマップのクリアは内部的な処理。ユーザーが直接キーマップを無効化する場合は、`pokecon.keymap.set("<F5>", "<NOP>")` のように `<NOP>` を rhs に登録することで実現する。
+**注**: キーマップのクリアは内部的な処理。ユーザーが直接キーマップを無効化する場合は、`pokecon.keymap.set("<F5>", "<nop>")` のように `<nop>` を rhs に登録することで実現する。
 
 ## 12. 環境変数
 

@@ -1222,6 +1222,7 @@ pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 pokecon.opt.key_chattering_threshold_ms = 10
 
 # キーマッピング（Neovim風記法）
+# 注: pokecon.controller は動的設定専用API。ユーザースクリプトでは self.keys を使用
 pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
 ```

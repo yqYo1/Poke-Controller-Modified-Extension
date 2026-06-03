@@ -107,8 +107,9 @@
 
 ### 3.4 WebSocket自動再接続
 
-- 接続断時に、3秒ごとに自動的に再接続を試行します。
-- 一時的なサーバー利用不能を適切に処理する必要があります（リトライ回数上限: 20回、約1分。上限到達後は手動再接続を促すUI表示）。
+- 接続断時に、自動的に再接続を試行します。
+- 再接続間隔、リトライ回数上限は設定で変更可能（§11.4「静的設定（settings.toml）」参照）。
+- デフォルト値: 3秒ごとに試行、リトライ回数上限20回。上限到達後は手動再接続を促すUI表示。
 
 ---
 
@@ -207,7 +208,7 @@
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
   - タッチスクリーンシミュレーション（320×240座標入力）
-- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置には約±20%のデッドゾーンあり（値103～153はニュートラルとして扱われる）。※103-153は範囲（0-255）に対する約±20%の割合。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
 
@@ -569,7 +570,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
 - **シグナリング**: HTTPベースのSDP交換。WebSocket上のJSONメッセージでOffer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
-- **自動再接続**: 接続断時に3秒ごとに再試行。
+- **自動再接続**: §3.4「WebSocket自動再接続」参照。
 - **フォールバック条件**: 
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
   - 接続確立後、3秒間連続でフレーム/データが受信できない → WebSocketにフォールバック
@@ -622,7 +623,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **エンドポイント**: `/ws`。
 - **メッセージ**: JSON形式。
-- **自動再接続**: 接続断時に3秒ごとに再試行。
+- **自動再接続**: §3.4「WebSocket自動再接続」参照。
 - **イベント**:
 
 | イベント | 方向 | ペイロード |
@@ -673,7 +674,6 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
 | POST | `/api/controller/keyboard` | キーボード設定を設定 |
 
-- **ショートカット**: F5 = 開始、F6 = 停止、F7 = 一時停止、F8 = 再開、F9 = リロード、ESC = 停止。
 - **保存**: キーボード設定は `localStorage` に保存。
 
 ### 7.6 マウス入力API
@@ -806,7 +806,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ## 10. コマンドクラス（ユーザースクリプト向け）
 
-### 10.0 API公開対象者
+### 10.1 API公開対象者
 
 本ドキュメントに記載するAPIは、以下の2つの対象者に向けて公開されます。
 
@@ -820,7 +820,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 - 動的設定専用API（`pokecon.keymap.trigger()` 等）はユーザースクリプトからは公開しない
 - 内部実装の名前空間は本仕様で規定するものではない。ユーザーがアクセスできるAPI名のみを規定する
 
-### 10.1 設計方針
+### 10.2 設計方針
 
 - **コアはRust**: すべてのコア処理はRustで実装。Pythonは必要な部分のみ（ユーザースクリプトAPI、互換レイヤー）。
 - **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてPyO3（Rustバインディング）に流れる。
@@ -828,7 +828,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 - **型ヒント**: 新APIは動作する型ヒントを持つ。旧APIは互換性のために保持され、新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
 - **内部実装の命名**: ユーザースクリプトに公開するAPI（新ダイアログAPI `show_dialog` 以外）は、互換性のため全く同じ名前でアクセスできる必要がある。アクセスできれば内部の命名は自由（妥当なものであれば）。
 
-### 10.2 公開モジュール
+### 10.3 公開モジュール
 
 **注**: 以下のモジュールはRust/PyO3で実装され、Pythonファイルは型ヒント・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
 
@@ -840,9 +840,9 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
-### 10.3 コマンドクラス
+### 10.4 コマンドクラス
 
-#### 10.3.1 クラス階層
+#### 10.4.1 クラス階層
 
 ```
 Command (metaclass=CommandMeta)
@@ -853,7 +853,7 @@ Command (metaclass=CommandMeta)
 
 **注**: すべてのクラスは `CommandMeta` メタクラスを使用。`PythonCommand` と `ImageProcPythonCommand` は抽象メソッド `do()` を持つが、Pythonの `ABC` クラスを継承しない（`CommandMeta` で抽象クラスとして扱われる）。ユーザースクリプトでは `PythonCommand` または `ImageProcPythonCommand` を継承して `do()` を実装する。
 
-#### 10.3.2 PythonCommand
+#### 10.4.2 PythonCommand
 
 **Import**: `from Commands.PythonCommandBase import PythonCommand`
 
@@ -932,7 +932,7 @@ Command (metaclass=CommandMeta)
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '')` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
 | `win_notification()` | `win_notification()` | Windowsデスクトップトースト通知 |
 
-#### 10.3.3 ImageProcPythonCommand
+#### 10.4.3 ImageProcPythonCommand
 
 **Import**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
 
@@ -963,22 +963,22 @@ Command (metaclass=CommandMeta)
 | `_grayscale()` | `_grayscale(image)` | グレースケール変換 |
 | `_resize()` | `_resize(image, width, height)` | 画像リサイズ |
 
-#### 10.3.4 McuCommandBase
+#### 10.4.4 McuCommandBase
 
 **Import**: `from Commands.McuCommandBase import McuCommandBase`
 
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
-### 10.4 キー入力・シリアル送信
+### 10.5 キー入力・シリアル送信
 
-#### 10.4.1 KeyPress
+#### 10.5.1 KeyPress
 
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
 - 内部実装はRust、PyO3経由で公開
 - **注**: `self.keys` は互換性維持のための旧API。内部実装は別の名前（例: `self._controller`）でも構わない。ユーザースクリプトからは引き続き `self.keys` を使用する
 
-#### 10.4.2 Sender
+#### 10.5.2 Sender
 
 **PyO3実装**（限定公開API）:
 | メソッド | シグネチャ | 説明 |
@@ -990,7 +990,7 @@ Command (metaclass=CommandMeta)
 
 その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
 
-### 10.5 ダイアログAPI
+### 10.6 ダイアログAPI
 
 **旧API（互換性維持）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -1001,7 +1001,7 @@ Command (metaclass=CommandMeta)
 - **旧API（この実装独自機能）**: 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある。API変更を伴わない内部的な改善（ログメッセージの形式変更等）は自由に行える
 - **旧API（他実装との互換性必須）**: 他のPoke-Controller互換ソフトとの互換性維持が必要。APIシグネチャの変更は慎重に行う。API変更を伴わない内部的な改善は自由に行える
 
-#### 10.5.0 ダイアログライフサイクル
+#### 10.6.1 ダイアログライフサイクル
 
 **スクリプト停止時の挙動**: ユーザースクリプトが停止（Stopボタン、エラー、強制終了など）した場合、スクリプト内で作成したすべてのダイアログ（ブロッキング・非ブロッキング・`wait_dialog`待機中を含む）を自動で閉じる。
 
@@ -1056,35 +1056,35 @@ pokecon.dialogue.wait_dialog(dialog_id)
 print(entry.value)
 ```
 
-#### 10.5.1 ブロッキング（デフォルト）
+#### 10.6.2 ブロッキング（デフォルト）
 
 - `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = True) -> int`
 - `blocking=True`の場合、ダイアログが閉じられるまでスクリプトの実行を停止
 - 返り値は`0`
 - 結果は各Widgetの`value`属性に格納される
-- **ライフサイクル**: §10.5.0「ダイアログライフサイクル」を参照
+- **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照
 
-#### 10.5.2 非ブロッキング
+#### 10.6.3 非ブロッキング
 
 - `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = False) -> int`
 - `blocking=False`の場合、ダイアログを表示し、スクリプトの実行を継続
 - 返り値はユーザースクリプトが開始してから停止するまでの間で固有の自然数（ダイアログID）
 - 結果は各Widgetの`value`属性に格納される
-- **ライフサイクル**: §10.5.0「ダイアログライフサイクル」を参照
+- **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照
 
-#### 10.5.3 ダイアログ状態確認
+#### 10.6.4 ダイアログ状態確認
 
 - `is_dialog_closed(dialog_id: int) -> bool`
 - 指定したダイアログIDのダイアログが終了しているかどうかを確認
 - 終了していれば`True`、表示中または未表示であれば`False`
-- **ライフサイクル**: §10.5.0「ダイアログライフサイクル」を参照
+- **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照
 
-#### 10.5.4 ダイアログ待機
+#### 10.6.5 ダイアログ待機
 
 - `wait_dialog(dialog_id: int) -> None`
 - 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
 - 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
-- **ライフサイクル**: §10.5.0「ダイアログライフサイクル」を参照
+- **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照
 
 ---
 
@@ -1135,6 +1135,10 @@ print(entry.value)
 [global]
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
+
+[websocket]
+reconnect_interval_sec = 3  # 再接続間隔（秒）
+reconnect_max_retries = 20  # リトライ回数上限
 
 [python]
 # Pythonバージョン（オプション、デフォルト推奨）

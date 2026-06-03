@@ -34,7 +34,7 @@
 
 - **Tkinterとの機能・視覚的パリティ**: 新しいUIは、元のTkinterの機能・レイアウト・外観に厳密に一致する必要があります。ただし、本ドキュメントで明示的に変更された項目（§4「主要ユーザー要件と却下事項」等）は除きます。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
 - **スクリプト互換性**: リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更は加えません。
-- **モダンスタック**: SvelteKit + Svelte 5（runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
+- **モダンスタック**: SvelteKit + Svelte 5（Runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
 - **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてビデオ: WebCodecs + WebSocket、DataChannel: WebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
 - **型安全性**: Rustバックエンドから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
 - **認証なし**: アプリケーションはローカル/LAN専用に設計。API認証は不要。
@@ -72,7 +72,11 @@
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
 | **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
-| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
+|| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
+|| **フォールバック** | プライマリ方式が利用できない場合に使用される代替方式。例: WebRTC不可時のWebSocketフォールバック |
+|| **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
+|| **チャタリング** | 機械的な接点のバウンスにより、意図しない短時間の連続入力が発生する現象 |
+|| **シグナリング** | WebRTCにおいて、通信相手との接続確立に必要な情報（SDP、ICE candidate等）を交換するプロセス |
 |
 ---
 
@@ -85,7 +89,7 @@
 | ビデオ遅延（WebRTC） | < 100ms |
 | ビデオ遅延（WebCodecs + WebSocketフォールバック） | 50-200ms |
 | コントローラー入力遅延 | < 50ms |
-| UI応答性 | 60fpsアニメーション、< 16ms入力応答 |
+|| UI応答性 | 60 FPSアニメーション、< 16ms入力応答 |
 
 ### 3.2 アクセシビリティ
 
@@ -95,16 +99,16 @@
 
 ### 3.3 ブラウザサポート
 
-| ブラウザ | 最小バージョン |
-|---------|----------------|
-| Chrome/Edge | 90以上 |
-| Firefox | 88以上 |
-|| Safari | 14以上（WebRTC対応。WebCodecsはSafari 16.4+で対応） |
+|| ブラウザ | 最小バージョン |
+||---------|----------------|
+|| Chrome/Edge | 90以上 |
+|| Firefox | 130以上（WebCodecs対応のため） |
+|| Safari | 16.4以上（WebRTC対応。WebCodecs VideoはSafari 16.4+で対応） |
 
 ### 3.4 WebSocket自動再接続
 
 - 接続断時に、3秒ごとに自動的に再接続を試行します。
-- 一時的なサーバー利用不能を適切に処理する必要があります。
+- 一時的なサーバー利用不能を適切に処理する必要があります（リトライ回数上限: 20回、約1分。上限到達後は手動再接続を促すUI表示）。
 
 ---
 
@@ -193,7 +197,7 @@
 - **入力方法**:
   - **ホールド**: `<Button-1>` 押下でボタンホールドをトリガー（押下シグナル送信）。
   - **解放**: `<ButtonRelease-1>` でボタン解放をトリガー（解放シグナル送信）。
-  - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。用途: ボタンを押したままの状態で別の操作を行いたい場合（例: Aボタン長押し中に別のボタンを短押し）
+  - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。用途: ボタンを押したままの状態で別の操作を行いたい場合（例: Aボタン長押し中に別のボタンを短押し）。アプリケーション終了時やプロファイル切替時には、holdEndSkip中のボタンも含めて全てのボタンを強制解放する
 - **ボタン**: すべての標準Switchコントローラーボタン:
   - A、B、X、Y
   - L、R、ZL、ZR
@@ -203,7 +207,7 @@
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
   - タッチスクリーンシミュレーション（320×240座標入力）
-- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置には±10%のデッドゾーンあり（値103～153はニュートラルとして扱われる）。※±10%は範囲（0-255）に対する割合。
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置には約±20%のデッドゾーンあり（値103～153はニュートラルとして扱われる）。※103-153は範囲（0-255）に対する約±20%の割合。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
 
@@ -284,7 +288,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 | **Lスティック/Rスティック制御** | キャンバス上でマウスドラッグ | ドラッグ方向/距離に基づいて左/右アナログスティック移動をエミュレート |
 | **カラーピッカー** | Ctrl+クリック | クリック位置の色の値を取得 ※ブラウザのコンテキストメニューと競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **範囲スクリーンショット** | Ctrl+Shift+ドラッグ | キャンバス上の選択した矩形領域のスクリーンショットをキャプチャ ※ブラウザのテキスト選択と競合する可能性あり。対応例: `event.preventDefault()` の使用 |
-| **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域をファイル保存ダイアログで保存。初期ファイル名は `capture_YYYYMMDD_HHMMSS.png` ※ブラウザのショートカットと競合する可能性あり。対応例: `event.preventDefault()` の使用 |
+| **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域をファイル保存ダイアログで保存。初期ファイル名は `capture_YYYYMMDD_HHMMSS.png` ※ブラウザのショートカットと競合する可能性あり（特にLinux/ChromeでOSレベルのウィンドウ移動に使用される場合）。対応例: `event.preventDefault()` の使用、またはユーザー設定で別のキーコンボに変更可能 |
 
 #### 6.1.5 スクリーンショットキャプチャ
 
@@ -469,6 +473,7 @@ Commands/
 - UI上では `@` なしタグが先、`@` 付きタグが後に表示
 - ソート関数は動的設定ファイルで `pokecon.ui.tag_sort_function = my_sort_func` のように指定可能
   - 型: `Callable[[list[str]], list[str]]`
+  - 動的設定（Lua）からも同様に指定可能: `pokecon.ui.tag_sort_function = my_sort_func`
 - 先頭に `"-"`（フィルター無効）を配置
 
 **タグ専用のstate**:
@@ -500,7 +505,7 @@ Commands/
 | **リロード（再読み込み＋開始）** | コマンドを再読み込みして開始 |
 | **コマンドリスト再読み込み** | ファイルシステムからコマンドリストを再読み込み |
 
-キーボードショートカットの割り当ては **§11.13.5 デフォルトキーバインド** を参照。
+キーボードショートカットの割り当ては **§6.4.3 ショートカットボタン** を参照。
 
 - **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
 - **進捗**: 対応コマンド用のプログレスバー。
@@ -535,7 +540,7 @@ Commands/
 
 | セクション | コントロール | 種類 |
 |---------|----------|------|
-| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0〜100、0=出力#1最小/出力#2最大、100=出力#1最大/出力#2最小）。最小でも各出力は10%の幅を確保 | Scale/Slider |
+| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0〜100）。スライダー値は内部で10%〜90%にマッピングされる（`ratio_1 = 10 + slider * 0.8`、`ratio_2 = 100 - ratio_1`）。最小でも各出力は10%の幅を確保 | Scale/Slider |
 | **stdout出力先** | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン | Radio button |
 | **出力をクリア** | 両方の出力パネルをクリアするボタン | Button |
 | **ウィジェットモード** | 7モードのコンボボックス（§5.5参照） | Combobox |
@@ -563,8 +568,12 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
-- **シグナリング**: HTTPベースのSDP交換。具体的なOffer/Answerフロー、ICE candidate交換方式は実装時に決定（低遅延・拡張性を優先）。
+- **シグナリング**: HTTPベースのSDP交換。WebSocket上のJSONメッセージでOffer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
 - **自動再接続**: 接続断時に3秒ごとに再試行。
+- **フォールバック条件**: 
+  - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
+  - 接続確立後、3秒間連続でフレーム/データが受信できない → WebSocketにフォールバック
+  - フォールバック中のWebRTC復旧検出は行わない（手動再接続を促す）
 
 **通信内容**:
 
@@ -592,18 +601,17 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 |------|------|
 | 遅延 | 50-200ms（MJPEG比で50%以上改善） |
 | エンコード | H.264（優先）/ HEVC / AV1（サーバーが対応可能なコーデックを自動選択） |
-| ABR対応 | 帯域に応じた動的解像度・ビットレート変更 |
+| ABR対応 | 固定品質（CRF）でエンコード。帯域測定と品質段階自動選択は将来の拡張 |
 | HWデコード | ブラウザネイティブのハードウェアデコードを活用（CPU負荷低減） |
 
 **ブラウザサポート**:
 
-| ブラウザ | 対応状況 |
-|---------|---------|
-| Safari 26.0+（iOS 26/macOS 26） | 完全対応（Video + Audio） |
-| Safari 16.4-18.7 | Videoのみ対応（Audio非対応） |
-| Chrome 94+ | 完全対応 |
-| Firefox 130+ | 対応（Video + Audio） |
-| Edge 94+ | 完全対応 |
+|| ブラウザ | 対応状況 |
+||---------|---------|
+|| Safari 16.4+ | Video対応（Audioは将来のSafariバージョンで対応予定） |
+|| Chrome 94+ | 完全対応 |
+|| Firefox 130+ | 対応（Video + Audio） |
+|| Edge 94+ | 完全対応 |
 
 **WebCodecsの利点**:
 - ブラウザネイティブのHWデコードにより低CPU負荷で高品質映像を実現
@@ -631,8 +639,9 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **フレームワーク**: axum（Rustバックエンド）。
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
-- **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。
+- **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
+- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `localhost:*` のみ許可（デフォルト）
 - **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
 
@@ -826,8 +835,8 @@ import { paths, components } from '$lib/api/openapi.ts'
 | モジュール | 内容 |
 |-----------|------|
 | `pokecon.dialogue` | ダイアログ関数 |
-| `pokecon.image_proc` | 画像処理（opencv-rust） |
-| `pokecon.net` | Socket、MQTT、HTTPクライアント（`socket_connect()`, `socket_disconnect()`, `mqtt_transmit_message()`, `http_get()`, `http_post()` 等） |
+| `pokecon.image_proc` | 画像処理（opencv-rust）。詳細は §10.3.3 ImageProcPythonCommand 参照 |
+| `pokecon.net` | Socket、MQTT、HTTPクライアント。詳細は §10.3.2 PythonCommand（Socketメソッド）参照 |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
@@ -836,11 +845,13 @@ import { paths, components } from '$lib/api/openapi.ts'
 #### 10.3.1 クラス階層
 
 ```
-Command (ABC, metaclass=CommandMeta)
-├── PythonCommand (ABC)
-│   └── ImageProcPythonCommand (ABC)
+Command (metaclass=CommandMeta)
+├── PythonCommand
+│   └── ImageProcPythonCommand
 └── McuCommandBase
 ```
+
+**注**: すべてのクラスは `CommandMeta` メタクラスを使用。`PythonCommand` と `ImageProcPythonCommand` は抽象メソッド `do()` を持つが、Pythonの `ABC` クラスを継承しない（`CommandMeta` で抽象クラスとして扱われる）。ユーザースクリプトでは `PythonCommand` または `ImageProcPythonCommand` を継承して `do()` を実装する。
 
 #### 10.3.2 PythonCommand
 
@@ -856,13 +867,13 @@ Command (ABC, metaclass=CommandMeta)
 **入力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `press()` | `press(buttons, duration=0.1, wait=0.1)` | ボタンをduration秒押下後解放、wait秒待機 |
-| `pressRep()` | `pressRep(buttons, repeat, duration=0.1, interval=0.1, wait=0.1)` | 繰り返し押下 |
-| `hold()` | `hold(buttons, wait=0.1)` | ボタンを押下状態で保持 |
-| `holdEnd()` | `holdEnd(buttons)` | 保持中のボタンを解放 |
+| `press()` | `press(buttons: Button \| list[Button], duration=0.1, wait=0.1)` | ボタン押下（指定秒数保持後解放） |
+| `pressRep()` | `pressRep(buttons: Button \| list[Button], repeat, duration=0.1, interval=0.1, wait=0.1)` | 繰り返し押下 |
+| `hold()` | `hold(buttons: Button \| list[Button], wait=0.1)` | ボタンを押下状態で保持 |
+| `holdEnd()` | `holdEnd(buttons: Button \| list[Button])` | 保持中のボタンを解放 |
 | `wait()` | `wait(wait: float)` | wait秒スリープ |
 | `short_wait()` | `short_wait(wait: float)` | ビジーループ待機（高精度） |
-| `direct_serial()` | `direct_serial(commands, waittimes)` | 生シリアルコマンド送信 |
+| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float])` | 生シリアルコマンド送信 |
 | `reload_com_port()` | `reload_com_port()` | COMポート接続を再読み込み |
 
 **出力メソッド**:
@@ -883,8 +894,8 @@ Command (ABC, metaclass=CommandMeta)
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title, message, desc=None, need=list)` | 単純入力ダイアログ（非推奨、互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title, dialogue_list, desc=None, need=list)` | マルチウィジェットダイアログ（非推奨、互換性維持） |
+| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None)` | 単純入力ダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None)` | マルチウィジェットダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -917,8 +928,8 @@ Command (ABC, metaclass=CommandMeta)
 |--------|-----------|-------------|
 | `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテスト送信 |
 | `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテキスト+スクリーンショット送信 |
-| `LINE_text()` | `LINE_text(txt, token='')` | No-opスタブ（LINEサービスEOL） |
-| `LINE_image()` | `LINE_image(txt, crop_fmt='', crop=None, token='')` | No-opスタブ（LINEサービスEOL） |
+| `LINE_text()` | `LINE_text(txt: str, token: str = '')` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
+| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '')` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
 | `win_notification()` | `win_notification()` | Windowsデスクトップトースト通知 |
 
 #### 10.3.3 ImageProcPythonCommand
@@ -932,10 +943,10 @@ Command (ABC, metaclass=CommandMeta)
 **画像処理メソッド**（Rust opencv-rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, ...)` | カメラフレームに対するテンプレートマッチング |
-| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, ...)` | マルチテンプレートマッチング |
-| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, ...)` | GPU高速テンプレートマッチング |
-| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, ...)` | 逆テンプレートマッチング |
+| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | カメラフレームに対するテンプレートマッチング |
+| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | マルチテンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | GPU高速テンプレートマッチング |
+| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True)` | カメラフレームを./Captures/へ保存 |
 | `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image')` | カメラフレームをポップアップ表示 |
 | `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None)` | カメラフレームをOpenCV画像配列で取得 |
@@ -965,29 +976,38 @@ Command (ABC, metaclass=CommandMeta)
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
 - 内部実装はRust、PyO3経由で公開
-- **注**: `self.keys` は互換性維持のための旧API。内部実装は別の名前（例: `self._controller`）でも構わない
+- **注**: `self.keys` は互換性維持のための旧API。内部実装は別の名前（例: `self._controller`）でも構わない。ユーザースクリプトからは引き続き `self.keys` を使用する
 
 #### 10.4.2 Sender
 
 **PyO3実装**（限定公開API）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `writeRow()` | `writeRow(row: str)` | シリアル行を書き込み |
-| `ser.write()` | `ser.write(data)` | 直接シリアル書き込み（PyO3でpySerial互換型変換） |
+|| `writeRow()` | `writeRow(row: str)` | シリアル行を書き込み（末尾に改行を自動追加） |
+|| `ser.write()` | `ser.write(data: bytes)` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
+
+**注**: `ser.write()` の引数 `data` は `bytes` 型。`str` を渡す場合は事前にエンコードが必要（`data.encode('utf-8')`）。
 
 その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
 
 ### 10.5 ダイアログAPI
 
-**旧API（非推奨）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
+**旧API（互換性維持）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
 
 **新API（推奨）**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。型安全性と一貫性が向上。
+
+**API分類と扱い**:
+- **新API**: 積極的に推奨。新規スクリプトではこちらを使用
+- **旧API（この実装独自機能）**: 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある。API変更を伴わない内部的な改善（ログメッセージの形式変更等）は自由に行える
+- **旧API（他実装との互換性必須）**: 他のPoke-Controller互換ソフトとの互換性維持が必要。APIシグネチャの変更は慎重に行う。API変更を伴わない内部的な改善は自由に行える
 
 #### 10.5.0 ダイアログライフサイクル
 
 **スクリプト停止時の挙動**: ユーザースクリプトが停止（Stopボタン、エラー、強制終了など）した場合、スクリプト内で作成したすべてのダイアログ（ブロッキング・非ブロッキング・`wait_dialog`待機中を含む）を自動で閉じる。
 
 **不正終了時の挙動**: OKボタン以外でダイアログが閉じられた場合（×ボタン、Escキー、ダイアログの強制終了など）、ユーザースクリプトを停止する。スクリプト停止に伴い、スクリプト内のすべてのダイアログが自動で閉じられる（上記「スクリプト停止時の挙動」を参照）。
+
+**注**: Escキーでの閉じた場合は確認ダイアログを表示し、ユーザーが意図的に停止することを確認する。強制終了（ウィンドウの完全削除等）のみ即座にスクリプトを停止する。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal
@@ -1017,22 +1037,22 @@ entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
 check = Widget("Check", "有効", True)  # Widget[bool]
 
 # ブロッキング（デフォルト）
-dialog_id = show_dialog("タイトル", widgets=[entry, check])
+dialog_id = pokecon.dialogue.show_dialog("タイトル", widgets=[entry, check])
 # dialog_id == 0
 print(entry.value)  # str
 print(check.value)  # bool
 
 # 非ブロッキング
-dialog_id = show_dialog("タイトル", widgets=[entry, check], blocking=False)
+dialog_id = pokecon.dialogue.show_dialog("タイトル", widgets=[entry, check], blocking=False)
 # dialog_id > 0（固有の自然数）
 # スクリプトの実行は継続される
 
 # ダイアログが終了したか確認
-if is_dialog_closed(dialog_id):
+if pokecon.dialogue.is_dialog_closed(dialog_id):
     print(entry.value)
 
 # ブロッキング動作に切り替え
-wait_dialog(dialog_id)
+pokecon.dialogue.wait_dialog(dialog_id)
 print(entry.value)
 ```
 
@@ -1108,10 +1128,12 @@ print(entry.value)
 
 **原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
 
+**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（chicken-and-egg問題を回避）。
+
 ```toml
 # ~/.config/pokecon/settings.toml
 [global]
-language = "ja"
+language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
 
 [python]
@@ -1128,11 +1150,11 @@ version = ">=2.28.0"
 name = "numpy"
 
 [profiles]
-active = "default"
+active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
 
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
-fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
+ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 ```
 
@@ -1207,7 +1229,7 @@ pokecon.opt.discord_webhook_url = "https://discord.com/api/webhooks/..."
 pokecon.opt.discord_username = "PokeCon Bot"
 
 # ウィジェットモード（フラット構造）
-pokecon.opt.widget_mode = "mode1"  # mode1〜mode7
+pokecon.opt.widget_mode = 1  # 1〜7（§5.5参照）
 
 # ソフトウェアコントローラー位置
 pokecon.opt.controller_position = "top"  # top | bottom
@@ -1223,17 +1245,18 @@ pokecon.opt.key_chattering_threshold_ms = 10
 
 # キーマッピング（Neovim風記法）
 # 注: pokecon.controller は動的設定専用API。ユーザースクリプトでは self.keys を使用
-pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
+# 詳細は §11.13.2 参照
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
 ```
 
 **動的設定の特徴**:
 - **即時反映**: 設定変更は即座にUIに反映される
-- **永続化なし**: 動的設定はファイルとして保存されるが、Rust側の設定マネージャーとは別の経路で読み込まれる
+- **永続化なし**: 動的設定はファイルとして保存されているが、`pokecon.opt` の値自体は永続化されない。毎回 init ファイルから再評価される
 - **優先順位**: 動的設定 > 静的設定（settings.toml）
 - **エラーハンドリング**: 
-  - **Python**: 構文エラーの場合はファイル全体の読み込みに失敗し、フォールバック設定を使用
-  - **Lua**: 構文エラーの場合はその行をスキップし、残りを続行
+  - **目標**: 両言語とも構文エラー時に該当行をスキップし、残りを続行
+  - **Python**: 言語仕様によりファイル全体の読み込みが必要。構文エラー時はファイル全体の読み込みに失敗し、フォールバック設定を使用
+  - **Lua**: 構文エラー時に該当行をスキップし、残りを続行
 
 ### 11.8 動的設定（Lua）
 
@@ -1245,6 +1268,17 @@ pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
 pokecon.opt.language = "ja"
 pokecon.opt.camera_fps = 60
 pokecon.opt.ui_fps = 30
+
+-- タグマッチ関数
+pokecon.ui.tag_match_function = function(selected, tag)
+    return selected:lower() == tag:lower()
+end
+
+-- タグソート関数
+pokecon.ui.tag_sort_function = function(tags)
+    table.sort(tags)
+    return tags
+end
 
 -- キーマッピング（Neovim風記法）
 pokecon.keymap.set("a", function()
@@ -1330,7 +1364,7 @@ end)
   - **Postのみ**: イベント発生前に処理を実行しても意味がない場合（例: `AppStartupPost` — アプリケーション起動前にはAPIが利用できない）
   - **Preのみ**: イベント発生後に処理を実行しても意味がない場合（例: `AppShutdownPre` — アプリケーション終了後に状態が失われる）
 - **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（LSP警告のため）
-- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
+- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
 - **Python/Lua両対応**: 両言語で同じAPI構造を使用
 
 #### 11.12.2 名前空間設計
@@ -1355,7 +1389,8 @@ import pokecon
 handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 
 # 一度だけ実行
-pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
+# 発火後の HandlerId は無効になり、off() は何もしない（エラーにはならない）
+handler_id_once = pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
 
 # イベントハンドラ解除
 # 引数: HandlerId（on() / once() の戻り値）
@@ -1365,6 +1400,7 @@ pokecon.autocmd.off(handler_id)
 # "all" = すべてのハンドラ解除
 # "CameraOpenPost" = そのイベントの全ハンドラ解除
 # "my_group" = ユーザ定義グループの全ハンドラ解除
+# 注: イベント名とグループ名が同名の場合、イベント名が優先される（グループ名を指定したい場合は別名を使用）
 pokecon.autocmd.clear("all")
 pokecon.autocmd.clear("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
@@ -1418,7 +1454,7 @@ pokecon.autocmd.on("CameraOpenPost", {
 - **コールバック**: Luaでは無名関数 `function() ... end` を使用
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
 - **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
-- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）。実装時に都合が良い方を選択可能
+- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）の形式もサポート予定。互換性維持のため、引数なしコールバックは引き続き動作する
 - イベントごとに異なるフィールドを持つ（§11.12.5参照）
 - LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
 
@@ -1458,15 +1494,20 @@ print(pokecon.event.list_defined())
 | `AppStartupPost` | Post | アプリケーション起動後 | `{}` |
 | `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
 | `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
+| `SerialDisconnectPre` | Pre | シリアルポート切断前 | `{"port": str}` |
 | `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
 | `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
+| `CameraClosePre` | Pre | カメラクローズ前 | `{"device_id": str}` |
 | `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
 | `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
 | `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
+| `CommandStopPre` | Pre | コマンド停止前 | `{"command_name": str, "command_id": str}` |
 | `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
-| `CommandErrorPost` | Post | コマンドエラー発生後 | `{"command_name": str, "error": str}` |
+| `CommandErrorPre` | Pre | コマンドエラー処理前 | `{"command_name": str, "error": str}` |
+| `CommandErrorPost` | Post | コマンドエラー処理後 | `{"command_name": str, "error": str}` |
 | `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
 | `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
+| `ConfigReloadPre` | Pre | 設定再読み込み前 | `{"config_path": str}` |
 | `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
 | `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
 | `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
@@ -1509,17 +1550,19 @@ from typing import Literal, Union
 # 組み込みイベントの厳密な型定義
 BuiltinEvent = Literal[
     "AppStartupPost", "AppShutdownPre",
-    "SerialConnectPost", "SerialDisconnectPost",
-    "CameraOpenPost", "CameraClosePost",
+    "SerialConnectPost", "SerialDisconnectPre", "SerialDisconnectPost",
+    "CameraOpenPost", "CameraClosePre", "CameraClosePost",
     "CommandStartPre", "CommandStartPost",
-    "CommandStopPost", "CommandErrorPost",
+    "CommandStopPre", "CommandStopPost",
+    "CommandErrorPre", "CommandErrorPost",
     "ScriptLoadPre", "ScriptLoadPost",
-    "ConfigReloadPost",
+    "ConfigReloadPre", "ConfigReloadPost",
     "InputPressedPre", "InputReleasedPost"
 ]
 
 # 組み込みイベント + ユーザー定義イベント
-EventName = Union[BuiltinEvent, str]
+# Union[BuiltinEvent, str] はLSPによりstrに単純化されるが、意図（組み込み vs ユーザー定義の区別）はドキュメントとして残す
+EventName = Union[BuiltinEvent, str]  # 実際にはstrと同等だが、型ヒントの意図を明示
 ```
 
 **イベントデータ型**（実装時に TypedDict または @dataclass で定義）:
@@ -1542,18 +1585,60 @@ class CameraOpenPostData(TypedDict):
 # ... その他のイベントデータ型
 ```
 
-#### 11.12.7 エラーハンドリング
+#### 11.12.7 エラーハンドリングとPreイベントのキャンセル
+
+**エラーハンドリング**:
 
 - イベントハンドラ内でエラーが発生しても、他のハンドラは継続して実行
 - エラー内容はログに出力（イベント名、ハンドラID、エラーメッセージ、スタックトレース）
 - フォールバック機構により、システム全体の動作を停止しない
+
+**Preイベントのキャンセル**:
+
+- Preフェーズのイベント（`CommandStartPre`, `InputPressedPre` 等）では、コールバックが**厳密なbool値 `False`** を返した場合のみ、該当処理をキャンセルする
+- `None`, `0`, `""`, `nil` 等は全て「継続」として扱われる
+- Postイベントではキャンセルは適用されない
+
+```python
+# Python例: CommandStartPreで特定コマンドの実行を阻止
+def on_command_start() -> bool | None:
+    if pokecon.state.current_command == "dangerous_script":
+        return False  # キャンセル
+    # return None  # 継続（明示的なFalse以外は全て継続）
+
+pokecon.autocmd.on("CommandStartPre", callback=on_command_start)
+```
+
+```lua
+-- Lua例: InputPressedPreで特定ボタンの入力を無視
+pokecon.autocmd.on("InputPressedPre", {
+    callback = function()
+        if pokecon.state.last_input == "A" then
+            return false  -- キャンセル
+        end
+        -- nil  -- 継続（明示的なfalse以外は全て継続）
+    end
+})
+```
+
+**コールバック型ヒント**:
+
+```python
+from typing import Callable
+
+# 通常イベント（Post等）: 戻り値なし
+Callback = Callable[[], None]
+
+# Preイベント: Falseでキャンセル、それ以外は継続
+PreCallback = Callable[[], bool | None]
+```
 
 || エラー種類 | 挙動 | ログ出力 |
 ||-----------|------|---------|
 || コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
 || 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
 || ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
-|| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視 | ERRORレベル |
+|| 循環参照（イベント発火中に同じイベントを発火） | 検出して無視（同一イベントの直接再入のみ検出。間接循環 A→B→A は検出対象外） | ERRORレベル |
 
 ### 11.13 キーマップシステム
 
@@ -1579,8 +1664,30 @@ class CameraOpenPostData(TypedDict):
 ```python
 # Python設定
 import pokecon
+from typing import Literal, Callable
 
-# 型定義
+# KBKeys: 定義済みキーの型
+KBKeys = Literal[
+    # アルファベット（小文字）
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    # ファンクションキー
+    "<F1>", "<F2>", "<F3>", "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>", "<F11>", "<F12>",
+    # 特殊キー
+    "<Space>", "<Enter>", "<Return>", "<CR>",
+    "<Backspace>", "<BS>",
+    "<Escape>", "<Esc>",
+    "<Tab>",
+    "<Delete>", "<Del>",
+    "<Insert>", "<Ins>",
+    "<Home>", "<End>", "<PageUp>", "<PageDown>",
+    "<Up>", "<Down>", "<Left>", "<Right>",
+    # 修飾キー（単体）
+    "<Ctrl>", "<Shift>", "<Alt>", "<Meta>", "<Super>",
+    # マウスボタン
+    "<LeftMouse>", "<RightMouse>", "<MiddleMouse>",
+]
+
 # lhs: KBKeys | str（strはユーザー定義仮想キー用）
 # rhs: KBKeys | str | Callable[[], None]
 # remap: bool = False
@@ -1739,16 +1846,18 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 
 #### 11.13.5 デフォルトキーバインド
 
-| キー | 動作 | 状態 |
-|------|------|------|
-| `<F5>` | コマンド開始 | press |
-| `<F6>` | コマンド停止 | press |
-| `<F7>` | コマンド一時停止 | press |
-| `<F8>` | コマンド再開 | press |
-| `<F9>` | コマンドリロード | press |
-| `<Esc>` | 停止 | press |
+**実行制御キー（デフォルト未割り当て、ユーザー設定可能）**:
 
-**注**: デフォルトキーバインドはユーザーが上書き可能。上書き時は§11.13.4「キー重複時の優先順位」に従い、後勝ちで解決される。
+| キー | 動作 | 状態 | デフォルト |
+|------|------|------|-----------|
+| `<F5>` | コマンド開始 | press | 未割り当て |
+| `<F6>` | コマンド停止 | press | 未割り当て |
+| `<F7>` | コマンド一時停止 | press | 未割り当て |
+| `<F8>` | コマンド再開 | press | 未割り当て |
+| `<F9>` | コマンドリロード | press | 未割り当て |
+| `<Esc>` | 停止 | press | 未割り当て |
+
+**注**: デフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタン（§6.4.3）はF1〜F10をデフォルトで使用するため、実行制御キーとの競合を避けるため、デフォルトでは両方とも未割り当てとする。
 
 #### 11.13.6 キー入力の仮想発火
 
@@ -1819,7 +1928,7 @@ pokecon.source("~/.config/pokecon/extra_settings.lua")
 
 - **読み取り専用**: `pokecon.state.<property>`
 - **リアルタイム**: 現在の状態を即座に反映
-- **スレッドセーフ**: 複数スレッドから安全に読み取り可能
+- **スレッドセーフ**: 複数スレッドから安全に読み取り可能。Rust側で`Arc<RwLock<T>>`で保護。書き込みは特定イベント（`ScriptLoadPre`等）のコールバック内または内部処理でのみ行われる
 
 #### 11.15.2 利用可能な状態プロパティ
 
@@ -1839,6 +1948,7 @@ print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"�
 
 # コマンド関連
 print(pokecon.state.is_running)         # コマンド実行中（True/False）
+print(pokecon.state.command_state)      # コマンド状態（"running" | "paused" | "stopped" | "error"）
 print(pokecon.state.current_command)    # 現在実行中のコマンド名
 print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧（list[CommandInfo]）
 print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str]）
@@ -1855,6 +1965,15 @@ print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
 print(pokecon.state.pid)                # アプリケーションのプロセスID
 ```
 
+**`pokecon.opt` と `pokecon.state` の違い**:
+
+| 名前空間 | 性質 | 説明 |
+|---------|------|------|
+| `opt` | 設定値（書き込み可能） | ユーザーが設定した**設定値**。UIコントロールや動的設定で変更される |
+| `state` | 現在値（読み取り専用） | デバイスやシステムが実際に使用している**現在値**。デバイスの能力制限により、`opt` と異なる値を指すことがある |
+
+**例**: `opt.camera_fps = 120` と設定しても、キャプチャデバイスが60fpsまでしか対応しない場合、`state.camera_fps` は `60` となる。
+
 ```lua
 -- Lua設定
 print(pokecon.state.serial_port)
@@ -1868,6 +1987,7 @@ print(pokecon.state.active_profile)
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
+- **`pokecon.opt.active_profile` との関係**: `pokecon.profile.switch("custom")` は内部的に `pokecon.opt.active_profile = "custom"` を設定し、プロファイル切替イベントを発火する。両者は等価だが、`profile.switch()` はイベント発火とエラーハンドリング（存在しないプロファイル名の検証）を行う
 
 #### 11.16.2 API仕様
 
@@ -1904,7 +2024,7 @@ pokecon.profile.switch("custom")
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
 - キーマップをクリアしてから、デフォルトキーバインドを再登録
-  - **クリア方法**: 実装詳細。正しくクリアされていればどのような処理でも良い（例: 全キーに `<NOP>` を登録、内部テーブルをクリア等）
+  - **クリア方法**: 内部テーブルをクリアし、全てのキーマップを削除する。実装方式は問わない（ハッシュテーブルのクリア、全キーに `<nop>` を登録する等）
 - 静的設定のキーバインドを再登録
 - 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を読み直し、動的キーバインドを再登録
   - **注**: 動的設定ファイルはグローバル（プロファイル非依存）。プロファイル固有の動的設定が必要な場合は、`settings.toml` で `dynamic_config_language` を切り替えるか、`pokecon.source()` で別ファイルを読み込む
@@ -1927,7 +2047,7 @@ pokecon.profile.switch("custom")
 | ショートカットボタン割り当て | `localStorage` | 10ボタンキーバインド。ブラウザ単位の設定 |
 | キーボード設定 | `localStorage` | キーマッピング設定。ブラウザ単位の設定 |
 
-**注意**: `localStorage` はブラウザ単位の保存であり、デスクトップアプリ（Tauri）では内部的に保存されます。`settings.toml`（静的設定）とは別系統で、両者は同期されません。
+**注意**: `localStorage` はブラウザ単位の保存であり、デスクトップアプリ（Tauri）では内部的に保存されます。`settings.toml`（静的設定）とは別系統で、両者は同期されません。設定の永続的な共有が必要な場合は、`settings.toml` を手動でコピーするか、将来のバージョンでエクスポート/インポート機能を検討。
 
 ## 14. 動的設定ファイルのUI
 
@@ -1975,8 +2095,8 @@ File
 | `from Commands.PythonCommandBase import PythonCommand` | ✅ モジュールパッチで保持 |
 | `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 |
 | `self.keys.neutral()` | ✅ 利用可能 |
-| `self.keys.ser.writeRow()` | ✅ 利用可能 |
-| `self.keys.ser.write()` | ✅ 利用可能（Rustシリアルラッパー） |
+| `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） |
+| `self.keys.ser.write()` | ✅ 利用可能（引数は `bytes` 型） |
 | 画像処理API | ✅ Rust実装（opencv-rust） |
 | Discord通知 | ✅ 実装済み |
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
@@ -2257,8 +2377,17 @@ class CommandMeta(type):
     
     現状はすべての実装がPyO3（Rustバインディング）に流れる。
     将来: クラス変数や関数使用パターンに基づいて切り替え。
+    
+    抽象クラスとしての機能:
+    - `do()` メソッドを持つクラス（PythonCommand, ImageProcPythonCommand）を
+      抽象クラスとして扱う。`do()` を実装しないサブクラスのインスタンス化を防止。
+    - インスタンス化時に `do()` メソッドの存在を確認し、未実装の場合は
+      `TypeError` を送出。
     """
     def __call__(cls, *args, **kwargs):
+        # 抽象クラスチェック: do() メソッドが定義されているか
+        if hasattr(cls, '__abstractmethods__') and cls.__abstractmethods__:
+            raise TypeError(f"Can't instantiate abstract class {cls.__name__} with abstract method(s) {', '.join(cls.__abstractmethods__)}")
         # 将来: cls.__target_implementation__等をチェック
         # 現状: 常にPyO3実装を使用
         return super().__call__(*args, **kwargs)

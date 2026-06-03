@@ -2170,74 +2170,27 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 
 nix環境では、Pythonインタープリターのパスを**ビルド時にnixストアパスとして埋め込む**。
 
-**実装方式**:
-
-```rust
-// rust/pokecon-core/build.rs
-// nix flakeから渡されたPOKECON_PYTHON_PATHを読み込み、ソースコードに埋め込む
-
-fn main() {
-    // nixビルド時に環境変数として渡される（flake.nixで設定）
-    let python_path = env::var("POKECON_PYTHON_PATH")
-        .unwrap_or_else(|_| "/usr/bin/python3".to_string());
-    
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("python_path.rs");
-    
-    fs::write(&dest_path, format!(
-        r#"pub const PYTHON_PATH: &str = "{}";"#,
-        python_path
-    )).unwrap();
-    
-    println!("cargo:rerun-if-env-changed=POKECON_PYTHON_PATH");
-}
-```
-
-```rust
-// rust/pokecon-core/src/python.rs
-include!(concat!(env!("OUT_DIR"), "/python_path.rs"));
-
-pub fn get_python_path() -> &'static str {
-    PYTHON_PATH
-}
-```
-
-```nix
-# flake.nix（抜粋）
-# nix式でPythonパッケージを指定した場合、POKECON_PYTHON_PATHを設定
-pythonEnv = pkgs.python3.withPackages (ps: [ ... ]);
-
-pokecon-server = rustPlatform.buildRustPackage {
-  # ...
-  POKECON_PYTHON_PATH = "${pythonEnv}/bin/python";
-  # ...
-};
-```
-
-**特徴**:
+**実装概要**:
+- `rust/pokecon-core/build.rs` で `POKECON_PYTHON_PATH` 環境変数を読み込み、ソースコードに埋め込む
+- `flake.nix` で `POKECON_PYTHON_PATH = "${pythonEnv}/bin/python"` を設定
 - nixストアパスは不変なため、再現性が保証される
 - グローバルPythonを使用しない（nixの隔離性を維持）
 - 非nix環境では環境変数が未設定のため、実行時に別途Pythonを取得するフォールバック動作
 
+**詳細な実装**: `rust/pokecon-core/build.rs` および `flake.nix` を参照。
+
 ### 16.4 Python管理（非nix環境）
 
-```rust
-// Rust側
-struct PythonManager {
-    data_dir: PathBuf,           // ~/.local/share/pokecon/
-    expected_python_version: Option<String>, // オプション（デフォルト推奨）
-}
+非nix環境では、`PythonManager` がPythonインタープリターのセットアップを管理する。
 
-impl PythonManager {
-    fn ensure_python(&self) -> PathBuf {
-        // 1. 期待するバージョンがない場合はデフォルトを使用
-        // 2. 既存のPythonが期待するバージョンかチェック
-        // 3. ない場合はastral-sh/python-build-standaloneをダウンロード
-        // 4. 仮想環境を構築
-        // 5. 必須パッケージ + ユーザーパッケージをインストール
-    }
-}
-```
+**実装概要**:
+- `~/.local/share/pokecon/` 配下にPythonをセットアップ
+- 期待するバージョンがない場合はデフォルトを使用
+- 既存のPythonが期待するバージョンかチェック
+- ない場合は astral-sh/python-build-standalone をダウンロード
+- 仮想環境を構築し、必須パッケージ + ユーザーパッケージをインストール
+
+**詳細な実装**: `rust/pokecon-core/src/python.rs` または同等のモジュールを参照。
 
 ### 16.5 必須パッケージ管理
 

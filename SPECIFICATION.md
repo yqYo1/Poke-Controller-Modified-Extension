@@ -915,26 +915,26 @@ Command (metaclass=CommandMeta)
 **Socketメソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `socket_connect()` | `socket_connect()` | Socketサーバへ接続 |
-| `socket_disconnect()` | `socket_disconnect()` | Socketサーバから切断 |
-| `socket_transmit_message()` | `socket_transmit_message(message)` | Socket経由でメッセージ送信 |
-| `socket_receive_message()` | `socket_receive_message(header, show_msg=False)` | ヘッダーフィルタ付き受信 |
-| `socket_receive_message2()` | `socket_receive_message2(headerlist, show_msg=False)` | 複数ヘッダーフィルタ付き受信 |
-| `socket_change_ipaddr()` | `socket_change_ipaddr(addr)` | Socket IPアドレス変更 |
-| `socket_change_port()` | `socket_change_port(port)` | Socketポート変更 |
-| `socket_change_alive()` | `socket_change_alive(flag)` | Socket aliveフラグ設定 |
+| `socket_connect()` | `socket_connect() -> None` | Socketサーバへ接続 |
+| `socket_disconnect()` | `socket_disconnect() -> None` | Socketサーバから切断 |
+| `socket_transmit_message()` | `socket_transmit_message(message: str) -> None` | Socket経由でメッセージ送信 |
+| `socket_receive_message()` | `socket_receive_message(header: str, show_msg: bool = False) -> str | None` | ヘッダーフィルタ付き受信 |
+| `socket_receive_message2()` | `socket_receive_message2(headerlist: list[str], show_msg: bool = False) -> str | None` | 複数ヘッダーフィルタ付き受信 |
+| `socket_change_ipaddr()` | `socket_change_ipaddr(addr: str) -> None` | Socket IPアドレス変更 |
+| `socket_change_port()` | `socket_change_port(port: int) -> None` | Socketポート変更 |
+| `socket_change_alive()` | `socket_change_alive(flag: bool) -> None` | Socket aliveフラグ設定 |
 
 **MQTTメソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `mqtt_transmit_message()` | `mqtt_transmit_message(roomid, message)` | MQTTトピックへメッセージ公開 |
-| `mqtt_receive_message()` | `mqtt_receive_message(roomid, header, show_msg=False)` | ヘッダーフィルタ付き購読/受信 |
-| `mqtt_receive_message2()` | `mqtt_receive_message2(roomid, headerlist, show_msg=False)` | 複数ヘッダーフィルタ付き購読 |
-| `mqtt_change_broker_address()` | `mqtt_change_broker_address(broker_address)` | MQTTブローカーアドレス変更 |
-| `mqtt_change_id()` | `mqtt_change_id(mqtt_id)` | MQTTクライアントID変更 |
-| `mqtt_change_clientId()` | `mqtt_change_clientId(clientId)` | MQTT接続名変更 |
-| `mqtt_change_pub_token()` | `mqtt_change_pub_token(pub_token)` | 公開トークン変更 |
-| `mqtt_change_sub_token()` | `mqtt_change_sub_token(sub_token)` | 購読トークン変更 |
+| `mqtt_transmit_message()` | `mqtt_transmit_message(roomid: str, message: str) -> None` | MQTTトピックへメッセージ公開 |
+| `mqtt_receive_message()` | `mqtt_receive_message(roomid: str, header: str, show_msg: bool = False) -> str | None` | ヘッダーフィルタ付き購読/受信 |
+| `mqtt_receive_message2()` | `mqtt_receive_message2(roomid: str, headerlist: list[str], show_msg: bool = False) -> str | None` | 複数ヘッダーフィルタ付き購読 |
+| `mqtt_change_broker_address()` | `mqtt_change_broker_address(broker_address: str) -> None` | MQTTブローカーアドレス変更 |
+| `mqtt_change_id()` | `mqtt_change_id(mqtt_id: str) -> None` | MQTTクライアントID変更 |
+| `mqtt_change_clientId()` | `mqtt_change_clientId(clientId: str) -> None` | MQTT接続名変更 |
+| `mqtt_change_pub_token()` | `mqtt_change_pub_token(pub_token: str) -> None` | 公開トークン変更 |
+| `mqtt_change_sub_token()` | `mqtt_change_sub_token(sub_token: str) -> None` | 購読トークン変更 |
 
 **通知メソッド**:
 | メソッド | シグネチャ | 説明 |

@@ -817,16 +817,15 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ### 10.1 API公開対象者
 
-本ドキュメントに記載するAPIは、以下の2つの対象者に向けて公開されます。
+本ドキュメントに記載するAPIは、**ユーザースクリプト**向けに公開されます。
 
 | 対象者 | 説明 | 使用場所 | 公開範囲 |
 |--------|------|----------|----------|
 | **ユーザースクリプト** | 自動化スクリプトを作成・実行する一般ユーザー | `Commands/PythonCommands/` 以下のスクリプト | `PythonCommand` クラスのメソッド、モジュールレベルの関数 |
-| **動的設定** | 高度なカスタマイズを行うパワーユーザー | `~/.config/pokecon/init.py` / `init.lua` | `pokecon.*` 名前空間の全API |
 
 **重要**:
-- ユーザースクリプト向けAPIは動的設定からも使用可能
-- 動的設定専用API（`pokecon.keymap.trigger()` 等）はユーザースクリプトからは公開しない
+- ユーザースクリプト向けAPIは動的設定（`init.py`/`init.lua`）からも使用可能
+- 動的設定専用API（`pokecon.keymap.trigger()` 等）は§11「設定ファイルシステム」に記載
 - 内部実装の名前空間は本仕様で規定するものではない。ユーザーがアクセスできるAPI名のみを規定する
 
 ### 10.2 設計方針
@@ -841,11 +840,11 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 **注**: 以下のモジュールはRust/PyO3で実装され、Pythonファイルは型ヒント・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
 
-| モジュール | 内容 |
-|-----------|------|
-| `pokecon.dialogue` | ダイアログ関数 |
-| `pokecon.image_proc` | 画像処理（opencv-rust）。詳細は §10.3.3 ImageProcPythonCommand 参照 |
-| `pokecon.net` | Socket、MQTT、HTTPクライアント。詳細は §10.3.2 PythonCommand（Socketメソッド）参照 |
+| モジュール | 内容 | ユーザースクリプトでのImport例 |
+|-----------|------|------------------------------|
+| `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
+| `image_proc` | 画像処理（opencv-rust）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
+| `net` | Socket、MQTT、HTTPクライアント。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 

@@ -951,6 +951,19 @@ Command (metaclass=CommandMeta)
 
 `PythonCommand`を拡張し、カメラと画像処理機能を追加。
 
+**トリミングパラメータ**:
+- `crop_fmt: str` — トリミング形式。以下の値を指定:
+  - `""` (デフォルト): トリミングなし
+  - `"1"`: Pillow形式 [x_start, y_start, x_end, y_end]
+  - `"2"`: Pillow形式 [x_start, y_start, width, height]
+  - `"3"`: Pillow形式 [x_start, x_end, y_start, y_end]
+  - `"4"`: Pillow形式 [x_start, width, y_start, height]
+  - `"11"`: OpenCV形式 [y_start, x_start, y_end, x_end]
+  - `"12"`: OpenCV形式 [y_start, x_start, height, width]
+  - `"13"`: OpenCV形式 [y_start, y_end, x_start, x_end]
+  - `"14"`: OpenCV形式 [y_start, height, x_start, width]
+- `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
+
 **コンストラクタ**: `ImageProcPythonCommand(cam, gui=None)`
 
 **画像処理メソッド**（Rust opencv-rust実装）:

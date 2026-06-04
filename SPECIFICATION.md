@@ -1542,28 +1542,28 @@ print(pokecon.event.list_defined())
 
 #### 11.12.5 組み込みイベント一覧
 
-| イベント名 | フェーズ | 説明 | イベントデータ（将来の拡張時にコールバック引数として使用） |
-|-----------|---------|------|------------------|
-| `AppStartupPost` | Post | アプリケーション起動後 | `{}` |
-| `AppShutdownPre` | Pre | アプリケーション終了前 | `{}` |
-| `SerialConnectPost` | Post | シリアルポート接続後 | `{"port": str, "baudrate": int}` |
-| `SerialDisconnectPre` | Pre | シリアルポート切断前 | `{"port": str}` |
-| `SerialDisconnectPost` | Post | シリアルポート切断後 | `{"port": str}` |
-| `CameraOpenPost` | Post | カメラオープン後 | `{"device_id": str, "resolution": tuple[int, int]}` |
-| `CameraClosePre` | Pre | カメラクローズ前 | `{"device_id": str}` |
-| `CameraClosePost` | Post | カメラクローズ後 | `{"device_id": str}` |
-| `CommandStartPre` | Pre | コマンド実行開始前 | `{"command_name": str, "command_id": str}` |
-| `CommandStartPost` | Post | コマンド実行開始後 | `{"command_name": str, "command_id": str}` |
-| `CommandStopPre` | Pre | コマンド停止前 | `{"command_name": str, "command_id": str}` |
-| `CommandStopPost` | Post | コマンド停止後 | `{"command_name": str, "command_id": str}` |
-| `CommandErrorPre` | Pre | コマンドエラー処理前 | `{"command_name": str, "error": str}` |
-| `CommandErrorPost` | Post | コマンドエラー処理後 | `{"command_name": str, "error": str}` |
-| `ScriptLoadPre` | Pre | スクリプト読み込み前 | `{"source_dirs": list[str], "candidate_count": int}` |
-| `ScriptLoadPost` | Post | スクリプト読み込み後 | `{"commands": list[CommandInfo], "loaded_count": int}` |
-| `ConfigReloadPre` | Pre | 設定再読み込み前 | `{"config_path": str}` |
-| `ConfigReloadPost` | Post | 設定再読み込み後 | `{"config_path": str}` |
-| `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
-| `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） | `{"button": str, "source": Literal["controller", "keyboard"]}` |
+| イベント名 | フェーズ | 説明 |
+|-----------|---------|------|
+| `AppStartupPost` | Post | アプリケーション起動後 |
+| `AppShutdownPre` | Pre | アプリケーション終了前 |
+| `SerialConnectPost` | Post | シリアルポート接続後 |
+| `SerialDisconnectPre` | Pre | シリアルポート切断前 |
+| `SerialDisconnectPost` | Post | シリアルポート切断後 |
+| `CameraOpenPost` | Post | カメラオープン後 |
+| `CameraClosePre` | Pre | カメラクローズ前 |
+| `CameraClosePost` | Post | カメラクローズ後 |
+| `CommandStartPre` | Pre | コマンド実行開始前 |
+| `CommandStartPost` | Post | コマンド実行開始後 |
+| `CommandStopPre` | Pre | コマンド停止前 |
+| `CommandStopPost` | Post | コマンド停止後 |
+| `CommandErrorPre` | Pre | コマンドエラー処理前 |
+| `CommandErrorPost` | Post | コマンドエラー処理後 |
+| `ScriptLoadPre` | Pre | スクリプト読み込み前 |
+| `ScriptLoadPost` | Post | スクリプト読み込み後 |
+| `ConfigReloadPre` | Pre | 設定再読み込み前 |
+| `ConfigReloadPost` | Post | 設定再読み込み後 |
+| `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） |
+| `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） |
 
 **ScriptLoadPre/ScriptLoadPostのタイミング**:
 

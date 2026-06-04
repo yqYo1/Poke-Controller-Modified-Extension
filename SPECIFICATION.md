@@ -99,11 +99,11 @@
 
 ### 3.3 ブラウザサポート
 
-|| ブラウザ | 最小バージョン |
-||---------|----------------|
-|| Chrome/Edge | 90以上 |
-|| Firefox | 130以上（WebCodecs対応のため） |
-|| Safari | 16.4以上（WebRTC対応。WebCodecs VideoはSafari 16.4+で対応） |
+| ブラウザ | 最小バージョン |
+|---------|----------------|
+| Chrome/Edge | 90以上 |
+| Firefox | 130以上（WebCodecs対応のため） |
+| Safari | 16.4以上（WebRTC対応。WebCodecs VideoはSafari 16.4+で対応） |
 
 ### 3.4 WebSocket自動再接続
 

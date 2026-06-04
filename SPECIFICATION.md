@@ -1141,6 +1141,23 @@ print(entry.value)
 
 ---
 
+### 10.7 スクリプト互換性要件
+
+| 要件 | 状態 |
+|------|------|
+| サンプルスクリプトが変更なしで動作 | ✅ 必須 |
+| `from Commands.PythonCommandBase import PythonCommand` | ✅ モジュールパッチで保持 |
+| `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 |
+| `self.keys.neutral()` | ✅ 利用可能 |
+| `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） |
+| `self.keys.ser.write()` | ✅ 利用可能（引数は `bytes` 型） |
+| 画像処理API | ✅ Rust実装（opencv-rust） |
+| Discord通知 | ✅ 実装済み |
+| LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
+| Windows通知 | ✅ 実装済み |
+
+---
+
 ## 11. 設定ファイルシステム
 
 ### 11.1 設定の種類と対象ユーザー
@@ -2121,23 +2138,6 @@ File
 - 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
 - エラー内容はログパネルに出力
 - フォールバック機構により、前回の有効な設定を維持
-
----
-
-### 10.7 スクリプト互換性要件
-
-| 要件 | 状態 |
-|------|------|
-| サンプルスクリプトが変更なしで動作 | ✅ 必須 |
-| `from Commands.PythonCommandBase import PythonCommand` | ✅ モジュールパッチで保持 |
-| `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 |
-| `self.keys.neutral()` | ✅ 利用可能 |
-| `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） |
-| `self.keys.ser.write()` | ✅ 利用可能（引数は `bytes` 型） |
-| 画像処理API | ✅ Rust実装（opencv-rust） |
-| Discord通知 | ✅ 実装済み |
-| LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
-| Windows通知 | ✅ 実装済み |
 
 ---
 

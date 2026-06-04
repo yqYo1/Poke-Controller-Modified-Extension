@@ -1604,26 +1604,6 @@ BuiltinEvent = Literal[
 EventName = Union[BuiltinEvent, str]  # 実際にはstrと同等だが、型ヒントの意図を明示
 ```
 
-**イベントデータ型**（実装時に TypedDict または @dataclass で定義）:
-
-```python
-from typing import TypedDict
-
-class ScriptLoadPreData(TypedDict):
-    source_dirs: list[str]
-    candidate_count: int
-
-class ScriptLoadPostData(TypedDict):
-    commands: list[CommandInfo]
-    loaded_count: int
-
-class CameraOpenPostData(TypedDict):
-    device_id: str
-    resolution: tuple[int, int]
-
-# ... その他のイベントデータ型
-```
-
 #### 11.12.7 エラーハンドリングとPreイベントのキャンセル
 
 **エラーハンドリング**:

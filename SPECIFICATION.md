@@ -1053,7 +1053,16 @@ class Widget(Generic[T]):
     @overload
     def __init__(self: "Widget[int]", widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
     
-    def __init__(self, widget_type, label, *args, **kwargs) -> None:
+    @overload
+    def __init__(self: "Widget[int]", widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
+    
+    @overload
+    def __init__(self: "Widget[float]", widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
+    
+    @overload
+    def __init__(self: "Widget[str]", widget_type: Literal["Next"], label: str, default: str) -> None: ...
+    
+    def __init__(self, widget_type: str, label: str, *args: object, **kwargs: object) -> None:
         self.widget_type = widget_type
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納

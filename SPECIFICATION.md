@@ -966,7 +966,7 @@ Command (metaclass=CommandMeta)
 |--------|-----------|-------------|
 | `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | カメラフレームに対するテンプレートマッチング |
 | `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | マルチテンプレートマッチング |
-| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | GPU高速テンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
 | `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True)` | カメラフレームを./Captures/へ保存 |
 | `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image')` | カメラフレームをポップアップ表示 |

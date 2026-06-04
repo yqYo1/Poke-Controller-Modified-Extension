@@ -991,6 +991,24 @@ Command (metaclass=CommandMeta)
 
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
+**コンストラクタ**: `McuCommandBase(sync_name: str)`
+
+- `sync_name`: ファームウェアとの同期に使用するコマンド名。`ser.writeRow(sync_name)` で送信される
+
+**メソッド**:
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `start()` | `start(ser: Sender, postProcess: Callable[[], None] | None) -> None` | コマンド開始。`sync_name` をシリアル送信し、`isRunning = True` を設定 |
+| `end()` | `end(ser: Sender) -> None` | コマンド終了。`"end"` をシリアル送信し、`isRunning = False` を設定。`postProcess` が設定されていれば実行 |
+
+**ライフサイクル**:
+1. `McuCommandBase("command_name")` でインスタンス作成
+2. `start(ser, postProcess)` でコマンド開始（ファームウェアに `sync_name` を送信）
+3. ファームウェア側で処理実行
+4. `end(ser)` でコマンド終了（ファームウェアに `"end"` を送信）
+
+**注**: McuCommandはPythonCommandとは異なり、Pythonコード内で処理を実行するのではなく、ファームウェア（マイコン）側で処理を実行する。Python側はコマンドの開始・終了のシグナル送信のみを担当。
+
 ### 10.5 キー入力・シリアル送信
 
 #### 10.5.1 KeyPress

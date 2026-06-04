@@ -1521,17 +1521,6 @@ pokecon.autocmd.on("CameraOpenPost", {
 })
 ```
 
-**Lua動的設定の特徴**:
-- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPIもPythonと同じシグネチャで使用可能
-- **テーブル構文**: 辞書は `{key = value}` で指定（Pythonの `dict` に相当）
-- **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
-- **コールバック**: Luaでは無名関数 `function() ... end` を使用
-- **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能
-- **デフォルト**: 引数なし。コールバック内で `pokecon.state` に直接アクセスして情報を取得
-- **将来の拡張**: 引数あり（`lambda event: print(event.data)`）の形式もサポート予定。互換性維持のため、引数なしコールバックは引き続き動作する
-- イベントごとに異なるフィールドを持つ（§11.12.5参照）
-- LSP対応: 実装時に `TypedDict` または `@dataclass` で各イベントのデータ型を定義し、`@overload` でイベント名に応じた型ヒントを提供
-
 #### 11.12.4 イベント定義・発火API
 
 ```python
@@ -1556,10 +1545,6 @@ pokecon.event.define("MyCustomEvent")
 pokecon.event.emit("MyCustomEvent", {key = "value"})
 print(pokecon.event.list_defined())
 ```
-
-**Lua動的設定の特徴**:
-- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPIもPythonと同じシグネチャで使用可能
-- **テーブル構文**: 辞書は `{key = value}` で指定（Pythonの `dict` に相当）
 
 #### 11.12.5 組み込みイベント一覧
 

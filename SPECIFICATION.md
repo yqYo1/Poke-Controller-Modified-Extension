@@ -1368,10 +1368,11 @@ pokecon.autocmd.on("CameraOpenPost", {
 ```
 
 **Lua動的設定の特徴**:
-- **API構造の統一**: PythonとLuaで設定項目名・API構造は完全に同一。上記例にないAPI（`pokecon.keymap.del()`, `pokecon.keymap.trigger()`, `pokecon.profile.switch()` 等）もPythonと同じシグネチャで使用可能
 - **テーブル構文**: リストは `{}`（例: `{5, 15, 30, 60}`）、辞書は `{key = value}` で指定
 - **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
 - **コールバック**: Luaでは無名関数 `function() ... end` を使用
+
+**注**: API構造の統一については§11.1を参照。PythonとLuaで設定項目名・API構造は完全に同一。
 
 ### 11.9 エラーハンドリング
 

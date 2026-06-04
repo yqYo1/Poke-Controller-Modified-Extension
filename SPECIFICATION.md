@@ -2119,7 +2119,7 @@ File
 
 ---
 
-## 15. スクリプト互換性要件
+### 10.7 スクリプト互換性要件
 
 | 要件 | 状態 |
 |------|------|
@@ -2134,9 +2134,11 @@ File
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
 | Windows通知 | ✅ 実装済み |
 
-## 16. 開発環境自動構築
+---
 
-### 16.1 ディレクトリ構造
+## 15. 開発環境自動構築
+
+### 15.1 ディレクトリ構造
 
 ```
 ~/.config/pokecon/                    # XDG_CONFIG_HOME（ユーザーが編集する）
@@ -2175,13 +2177,13 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 - 型定義ファイルの配布方式は **XDG_DATA_HOMEへの自動生成** で確定
 - 開発用元データはリポジトリ内の `python/pokecon/typings/` に配置
 
-### 16.2 設定ファイル生成タイミング
+### 15.2 設定ファイル生成タイミング
 
 - **存在しない時に生成**（初回、アップデート、削除後等）
 - **nix環境**: nix式で指定した場合のみnix側で生成。指定しなかった場合はアプリ起動時に存在しないためアプリ側で生成。
 - **非nix環境**: アプリ側で自動生成
 
-### 16.3 Python管理（nix環境）
+### 15.3 Python管理（nix環境）
 
 nix環境では、Pythonインタープリターのパスを**ビルド時にnixストアパスとして埋め込む**。
 
@@ -2194,7 +2196,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 
 **詳細な実装**: `rust/pokecon-core/build.rs` および `flake.nix` を参照。
 
-### 16.4 Python管理（非nix環境）
+### 15.4 Python管理（非nix環境）
 
 非nix環境では、`PythonManager` がPythonインタープリターのセットアップを管理する。
 
@@ -2207,7 +2209,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 
 **詳細な実装**: `rust/pokecon-core/src/python.rs` または同等のモジュールを参照。
 
-### 16.5 必須パッケージ管理
+### 15.5 必須パッケージ管理
 
 - **リポジトリ内`pyproject.toml`**からビルド時に取得
 - **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
@@ -2222,7 +2224,7 @@ fn main() {
 }
 ```
 
-### 16.6 ユーザーパッケージ設定
+### 15.6 ユーザーパッケージ設定
 
 ```toml
 # ~/.config/pokecon/settings.toml
@@ -2252,7 +2254,7 @@ version = "0.5.0"
 source = "path=/home/user/projects/local-lib"  # ローカルパス
 ```
 
-### 16.7 LSP設定（pyproject.toml）
+### 15.7 LSP設定（pyproject.toml）
 
 ```toml
 [tool.basedpyright]
@@ -2282,7 +2284,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 # ruffはextraPaths未対応（LSP機能限定）
 ```
 
-### 16.8 Lua LSP設定（.luarc.json）
+### 15.8 Lua LSP設定（.luarc.json）
 
 ```json
 {

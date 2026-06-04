@@ -46,11 +46,11 @@
 | Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
 | PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.events`, `pokecon.dialogue` |
 | Python互換レイヤー | Python 3.14+（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
-| Luaランタイム | Lua 5.4 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
+| Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
 
 **言語仕様**:
 - **Python**: 3.14以上をターゲット。ランタイムは3.14を使用するため、3.14で使用可能な記法を必須とする。可能な限り3.13にも存在する記法を使用し、3.14時点で非推奨・廃止予定の機能、および3.15/3.16で非推奨・廃止予定の機能は使用しない。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
-- **Lua**: 5.4をターゲット。動的設定用のスクリプト言語として使用
+- **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
 **注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型ヒント・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。
 

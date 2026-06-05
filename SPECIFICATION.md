@@ -252,15 +252,15 @@ Commandsタブには3つのサブタブ（内部タブ）があります:
 
 UIは、その他タブのコンボボックスで選択可能な、右側パネルの7つの表示組み合わせをサポートする必要があります:
 
-| モード | 内部識別子 | ソフトウェアコントローラー | 出力 #1 | 出力 #2 | 説明 |
-|------|----------|---------------------|-----------|-----------|-------------|
-| 1 | `default` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
-| 2 | `simple` | 表示 | 表示 | 非表示 | 単一出力 |
-| 3 | `gamepad` | 表示 | 非表示 | 表示 | 単一出力（入れ替え） |
-| 4 | `mouse` | 非表示 | 表示 | 表示 | 出力のみ |
-| 5 | `keyboard` | 表示 | 非表示 | 非表示 | コントローラーのみ |
-| 6 | `custom1` | 非表示 | 表示 | 非表示 | 出力 #1のみ |
-| 7 | `custom2` | 非表示 | 非表示 | 表示 | 出力 #2のみ |
+| モード | 設定値 | 内部識別子 | ソフトウェアコントローラー | 出力 #1 | 出力 #2 | 説明 |
+|------|-------|----------|---------------------|-----------|-----------|-------------|
+| 1 | `1` | `default` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
+| 2 | `2` | `simple` | 表示 | 表示 | 非表示 | 単一出力 |
+| 3 | `3` | `gamepad` | 表示 | 非表示 | 表示 | 単一出力（入れ替え） |
+| 4 | `4` | `mouse` | 非表示 | 表示 | 表示 | 出力のみ |
+| 5 | `5` | `keyboard` | 表示 | 非表示 | 非表示 | コントローラーのみ |
+| 6 | `6` | `custom1` | 非表示 | 表示 | 非表示 | 出力 #1のみ |
+| 7 | `7` | `custom2` | 非表示 | 非表示 | 表示 | 出力 #2のみ |
 
 ---
 
@@ -280,7 +280,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
 | **カメラデバイス選択** | Combobox | 利用可能なカメラデバイスのドロップダウン |
-| **FPS** | Combobox | UI表示用フレームレート（選択肢: 5, 15, 30, 60）。バックエンド処理FPSとは独立。選択肢は静的設定でカスタマイズ可 |
+| **FPS** | Combobox | UI表示用フレームレート（`ui_fps`、選択肢: 5, 15, 30, 60）。バックエンド処理FPS（`camera_fps`）とは独立。選択肢は静的設定でカスタマイズ可 |
 | **フリップ** | Checkbox | 水平/垂直フリップ切替 |
 
 #### 6.1.3 表示モード切替（チェックボックス）
@@ -727,6 +727,17 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 }
 ```
 
+```json
+{
+  "type": "gamepad_input",
+  "touch": {
+    "x": 160,
+    "y": 120,
+    "pressed": true
+  }
+}
+```
+
 **設定取得/変更**（HTTP REST — 設定変更のみ）:
 
 | メソッド | エンドポイント | 説明 |
@@ -911,15 +922,15 @@ Command (metaclass=CommandMeta)
 | `mqtt_change_sub_token()` | `mqtt_change_sub_token(sub_token: str) -> None` | 購読トークン変更 |
 
 **通知メソッド**:
-| メソッド | シグネチャ | 説明 |
-|--------|-----------|-------------|
-| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信 |
-| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+|| メソッド | シグネチャ | 説明 |
+||--------|-----------|-------------|
+|| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+|| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 **ImageProcPythonCommand通知メソッド**（画像処理クラスのみ）:
-| メソッド | シグネチャ | 説明 |
-|--------|-----------|-------------|
-| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信 |
+|| メソッド | シグネチャ | 説明 |
+||--------|-----------|-------------|
+|| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 #### 10.4.3 ImageProcPythonCommand
@@ -1996,7 +2007,7 @@ print(pokecon.state.serial_connected)   # 接続状態（True/False）
 
 # カメラ関連
 print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
-print(pokecon.state.camera_fps)         # 現在のFPS
+print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera_fps` をデバイス能力で制限した実際の値）
 print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
 
 # コマンド関連

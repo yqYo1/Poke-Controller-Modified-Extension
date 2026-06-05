@@ -776,8 +776,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 # 1. RustバックエンドでOpenAPI JSONを生成（ビルド時に自動実行）
 cargo build
 
-# 2. openapi-typescriptでTypeScript型を生成（開発時はSvelteKit devサーバーのポート3000、本番はPOKECON_PORTで指定したポート）
-npx openapi-typescript http://localhost:3000/api-docs/openapi.json -o src/lib/api/openapi.ts
+# 2. openapi-typescriptでTypeScript型を生成（デフォルトポート8020）
+npx openapi-typescript http://localhost:8020/api-docs/openapi.json -o src/lib/api/openapi.ts
 
 # 3. フロントエンドで型を使用
 import { paths, components } from '$lib/api/openapi.ts'

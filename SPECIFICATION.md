@@ -46,7 +46,7 @@
 |---------|------|------|-----|
 | Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
 | PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.events`, `pokecon.dialogue` |
-| Python互換レイヤー | Python 3.14+（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
+| Python互換レイヤー | Python 3.12～3.15互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
 
 **言語仕様**:

@@ -832,7 +832,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 |-----------|------|------------------------------|
 | `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
 | `image_proc` | 画像処理（opencv-rust）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
-| `net` | Socket、MQTT、HTTPクライアント。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
+| `net` | Socket、MQTT、HTTPクライアント。`from Commands import net` でインポート可能な関数群。`PythonCommand` のメソッド（`self.socket_connect()` 等）と同じ機能を提供するが、クラス外から使用可能。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
 
@@ -884,7 +884,7 @@ Command (metaclass=CommandMeta)
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`keys`, `thread`, `_logger` 等の内部変数は除外） |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`_` プレフィックスまたは `keys`, `thread`, `_logger` 等の内部変数は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
@@ -1211,6 +1211,9 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 [profiles]
 active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
+
+# カメラ設定
+camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
@@ -2022,8 +2025,8 @@ print(pokecon.state.active_profile)     # 現在のアクティブプロファ�
 print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
 
 # 入力関連
-print(pokecon.state.last_input)         # 最後の入力
-print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧
+print(pokecon.state.last_input)         # 最後の入力（str | None。キー名またはボタン名）
+print(pokecon.state.holding_buttons)    # 現在保持中のボタン一覧（list[str]）
 
 # アプリケーション関連
 print(pokecon.state.pid)                # アプリケーションのプロセスID
@@ -2052,6 +2055,7 @@ print(pokecon.state.active_profile)
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
 - **`pokecon.opt.active_profile` との関係**: `pokecon.profile.switch("custom")` は内部的に `pokecon.opt.active_profile = "custom"` を設定し、プロファイル切替イベントを発火する。両者は等価だが、`profile.switch()` はイベント発火とエラーハンドリング（存在しないプロファイル名の検証）を行う
+- **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
 #### 11.17.2 API仕様
 

@@ -1981,7 +1981,7 @@ pokecon.source("~/.config/pokecon/extra_settings.lua")
 
 #### 11.16.1 設計方針
 
-- **読み取り専用**: `pokecon.state.<property>`
+- **状態アクセス**: `pokecon.state.<property>` は現在の状態にアクセスする名前空間。原則として読み取りだが、動的設定からの変更が想定されるもの（タグ等）は書き込み可能
 - **リアルタイム**: 現在の状態を即座に反映
 - **スレッドセーフ**: 複数スレッドから安全に読み取り可能。Rust側で`Arc<RwLock<T>>`で保護。書き込みは特定イベント（`ScriptLoadPre`等）のコールバック内または内部処理でのみ行われる
 

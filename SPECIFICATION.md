@@ -904,8 +904,8 @@ Command (metaclass=CommandMeta)
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（旧API） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（旧API） |
+| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -1033,7 +1033,7 @@ Command (metaclass=CommandMeta)
 
 ### 10.6 ダイアログAPI
 
-**旧API**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。
+**旧API（互換性維持）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。
 
 **新API（推奨）**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。型安全性と一貫性が向上。
 

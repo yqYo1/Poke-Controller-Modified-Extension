@@ -32,7 +32,7 @@
 ### 1.2 設計方針
 
 - **Tkinterとの機能・視覚的パリティ**: 新しいUIは、元のTkinterの機能・レイアウト・外観に厳密に一致する必要があります。ただし、本ドキュメントで明示的に変更された項目（§4「主要ユーザー要件と却下事項」等）は除きます。レイアウト、色、ボタンの間隔、ウィジェットの種類はオリジナルに準拠する必要があります。
-- **スクリプト互換性**: リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。スクリプトAPIに破壊的変更は加えません。
+- **スクリプト互換性**: §4.6「スクリプト互換性」を参照。リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。
 - **モダンスタック**: SvelteKit + Svelte 5（Runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
 - **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてビデオ: WebCodecs + WebSocket、DataChannel: WebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
 - **型安全性**: Rustバックエンドから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
@@ -213,7 +213,7 @@
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
   - タッチスクリーンシミュレーション（320×240座標入力）
-- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（中央から±10%、値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
 
@@ -875,35 +875,35 @@ Command (metaclass=CommandMeta)
 **入力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `press()` | `press(buttons: Button \| list[Button], duration=0.1, wait=0.1)` | ボタン押下（指定秒数保持後解放） |
-| `pressRep()` | `pressRep(buttons: Button \| list[Button], repeat, duration=0.1, interval=0.1, wait=0.1)` | 繰り返し押下 |
-| `hold()` | `hold(buttons: Button \| list[Button], wait=0.1)` | ボタンを押下状態で保持 |
-| `holdEnd()` | `holdEnd(buttons: Button \| list[Button])` | 保持中のボタンを解放 |
-| `wait()` | `wait(wait: float)` | wait秒スリープ |
-| `short_wait()` | `short_wait(wait: float)` | ビジーループ待機（高精度） |
-| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float])` | 生シリアルコマンド送信 |
-| `reload_com_port()` | `reload_com_port()` | COMポート接続を再読み込み |
+| `press()` | `press(buttons: Button \| list[Button], duration=0.1, wait=0.1) -> None` | ボタン押下（指定秒数保持後解放） |
+| `pressRep()` | `pressRep(buttons: Button \| list[Button], repeat, duration=0.1, interval=0.1, wait=0.1) -> None` | 繰り返し押下 |
+| `hold()` | `hold(buttons: Button \| list[Button], wait=0.1) -> None` | ボタンを押下状態で保持 |
+| `holdEnd()` | `holdEnd(buttons: Button \| list[Button]) -> None` | 保持中のボタンを解放 |
+| `wait()` | `wait(wait: float) -> None` | wait秒スリープ |
+| `short_wait()` | `short_wait(wait: float) -> None` | ビジーループ待機（高精度） |
+| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信 |
+| `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
 
 **出力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `print_t1()` | `print_t1(*objects, sep=' ', end='\\n')` | 上部ログパネルへ出力 |
-| `print_t2()` | `print_t2(*objects, sep=' ', end='\\n')` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects, sep=' ', end='\\n')` | stdoutではない方のログパネルへ出力。`stdout_destination` の設定により動的に出力先を切り替える（"1"→出力#2、"2"→出力#1） |
-| `print_s()` | `print_s(*objects, sep=' ', end='\\n')` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n')` | `print_s`と同じ（歴史的経緯で同じ動作のものが複数存在） |
-| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n')` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
-| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n')` | 下部ログ（モード付き） |
-| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n')` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n')` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var()` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`keys`, `thread`, `_logger` 等の内部変数は除外） |
+| `print_t1()` | `print_t1(*objects, sep=' ', end='\\n') -> None` | 上部ログパネルへ出力 |
+| `print_t2()` | `print_t2(*objects, sep=' ', end='\\n') -> None` | 下部ログパネルへ出力 |
+| `print_t()` | `print_t(*objects, sep=' ', end='\\n') -> None` | stdoutではない方のログパネルへ出力。`stdout_destination` の設定により動的に出力先を切り替える（"1"→出力#2、"2"→出力#1） |
+| `print_s()` | `print_s(*objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力 |
+| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n') -> None` | `print_s`と同じ（歴史的経緯で同じ動作のものが複数存在） |
+| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n') -> None` | 下部ログ（モード付き） |
+| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n') -> None` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`keys`, `thread`, `_logger` 等の内部変数は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None)` | 単純入力ダイアログ（互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None)` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -934,11 +934,11 @@ Command (metaclass=CommandMeta)
 **通知メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテスト送信 |
-| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK')` | Discord webhook経由でテキスト+スクリーンショット送信 |
-| `LINE_text()` | `LINE_text(txt: str, token: str = '')` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
-| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '')` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
-| `win_notification()` | `win_notification()` | Windowsデスクトップトースト通知 |
+| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信 |
+| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信 |
+| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
+| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
+| `win_notification()` | `win_notification() -> None` | Windowsデスクトップトースト通知 |
 
 #### 10.4.3 ImageProcPythonCommand
 
@@ -964,10 +964,10 @@ Command (metaclass=CommandMeta)
 **画像処理メソッド**（Rust opencv-rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | カメラフレームに対するテンプレートマッチング |
-| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | マルチテンプレートマッチング |
-| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
-| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | 逆テンプレートマッチング |
+| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | カメラフレームに対するテンプレートマッチング |
+| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
+| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True) -> None` | カメラフレームを./Captures/へ保存 |
 | `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image') -> None` | カメラフレームをポップアップ表示 |
 | `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
@@ -1022,8 +1022,8 @@ Command (metaclass=CommandMeta)
 **PyO3実装**（限定公開API）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `writeRow()` | `writeRow(row: str)` | シリアル行を書き込み（末尾に改行を自動追加） |
-| `ser.write()` | `ser.write(data: bytes)` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
+| `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
+| `ser.write()` | `ser.write(data: bytes) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
 
 **注**: `ser.write()` の引数 `data` は `bytes` 型。`str` を渡す場合は事前にエンコードが必要（`data.encode('utf-8')`）。
 
@@ -1689,8 +1689,9 @@ File
 
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
 - **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
-  - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None)`
-  - `pokecon.keymap.trigger(key)` — キー入力イベントを仮想的に発火（動的設定専用）
+  - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None) -> None`
+  - `pokecon.keymap.trigger(key) -> None` — キー入力イベントを仮想的に発火（動的設定専用）
+  - `pokecon.keymap.del(lhs) -> None` — キーマップ削除
   - デフォルトは `noremap`（`remap=False`）
   - `remap=True` で再帰マップ有効
   - Pythonでは型ヒントのためフラットな構造（dictを挟まない）
@@ -1945,13 +1946,13 @@ pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
 import pokecon
 
 # 絶対パス
-pokecon.source("/home/user/.config/pokecon/extra_settings.py")
+pokecon.source("/home/user/.config/pokecon/extra_settings.py")  # -> None
 
 # 相対パス（設定ディレクトリ基準）
-pokecon.source("./extra_settings.py")
+pokecon.source("./extra_settings.py")  # -> None
 
 # チルダ展開
-pokecon.source("~/.config/pokecon/extra_settings.py")
+pokecon.source("~/.config/pokecon/extra_settings.py")  # -> None
 ```
 
 ```lua

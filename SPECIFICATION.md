@@ -578,7 +578,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
-- **シグナリング**: HTTPベースのSDP交換。WebSocket上のJSONメッセージでOffer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
+- **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
 - **自動再接続**: §3.4「WebSocket自動再接続」参照。
 - **フォールバック条件**: 
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
@@ -968,14 +968,14 @@ Command (metaclass=CommandMeta)
 | `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | マルチテンプレートマッチング |
 | `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
 | `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None)` | 逆テンプレートマッチング |
-| `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True)` | カメラフレームを./Captures/へ保存 |
-| `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image')` | カメラフレームをポップアップ表示 |
-| `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None)` | カメラフレームをOpenCV画像配列で取得 |
-| `openImage()` | `openImage(filename, mode='t')` | 画像ファイルを読み込み |
-| `setTemplateDir()` | `setTemplateDir(path)` | テンプレート画像ディレクトリを変更 |
-| `get_filespec()` | `get_filespec(filename, mode='t')` | 相対ファイル名をフルパスに解決 |
-| `displayRectangle()` | `displayRectangle(max_loc, width, height, tag=None, ms=2000, color=None, crop_fmt='', crop=None)` | GUIキャンバスオーバーレイに矩形描画 |
-| `displayText()` | `displayText(position, txt, tag=None, ms=2000, font='UD デジタル 教科書体 NP-B', fontsize=20, color='black')` | GUIキャンバスオーバーレイにテキスト描画 |
+| `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True) -> None` | カメラフレームを./Captures/へ保存 |
+| `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image') -> None` | カメラフレームをポップアップ表示 |
+| `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
+| `openImage()` | `openImage(filename, mode='t') -> MatLike | None` | 画像ファイルを読み込み |
+| `setTemplateDir()` | `setTemplateDir(path) -> None` | テンプレート画像ディレクトリを変更 |
+| `get_filespec()` | `get_filespec(filename, mode='t') -> str` | 相対ファイル名をフルパスに解決 |
+| `displayRectangle()` | `displayRectangle(max_loc, width, height, tag=None, ms=2000, color=None, crop_fmt='', crop=None) -> None` | GUIキャンバスオーバーレイに矩形描画 |
+| `displayText()` | `displayText(position, txt, tag=None, ms=2000, font='UD デジタル 教科書体 NP-B', fontsize=20, color='black') -> None` | GUIキャンバスオーバーレイにテキスト描画 |
 
 **内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
 | 関数 | シグネチャ | 説明 |
@@ -1871,7 +1871,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | `<lt>` | Less-than `<` | `<lt>` |
 | `<Bslash>` | Backslash `\` | `<Bslash>` |
 | `<Bar>` | Vertical bar `|` | `<Bar>` |
-|| `<nop>` | No-op（何もしない） | `<nop>` |
+| `<nop>` | No-op（何もしない） | `<nop>` |
 | `<NL>` | Linefeed | `<NL>` |
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
 | `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
@@ -2290,7 +2290,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 ---
 
-# 付録
+## 付録
 
 ## A. Tkinter UIリファレンス
 

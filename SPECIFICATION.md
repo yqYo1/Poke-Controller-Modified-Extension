@@ -380,8 +380,8 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 - **A / B / X / Y**（フェイスボタン、右側）
 - **R / ZR**（ショルダーボタン、右側）
 - **PLUS（+） / HOME**（小ボタン、右中央）
-- **LSTICK**（クリック可能なアナログスティック、左側、0～255座標、±10%デッドゾーン）
-- **RSTICK**（クリック可能なアナログスティック、右側、0～255座標、±10%デッドゾーン）
+- **LSTICK**（クリック可能なアナログスティック、左側、0～255座標、§5.3.1参照）
+- **RSTICK**（クリック可能なアナログスティック、右側、0～255座標、§5.3.1参照）
 - **タッチスクリーン**（タッチエミュレーション用320×240座標グリッド）
 
 ### 6.4 コマンドタブ
@@ -1048,7 +1048,7 @@ Command (metaclass=CommandMeta)
 
 **不正終了時の挙動**: OKボタン以外でダイアログが閉じられた場合（×ボタン、Escキー、ダイアログの強制終了など）、ユーザースクリプトを停止する。スクリプト停止に伴い、スクリプト内のすべてのダイアログが自動で閉じられる（上記「スクリプト停止時の挙動」を参照）。
 
-**注**: Escキーでの閉じた場合は確認ダイアログを表示し、ユーザーが意図的に停止することを確認する。強制終了（ウィンドウの完全削除等）のみ即座にスクリプトを停止する。
+**注**: ×ボタンおよびEscキーでの終了時は確認ダイアログを表示し、ユーザーが意図的に停止することを確認する。強制終了（ウィンドウの完全削除等）のみ即座にスクリプトを停止する。
 
 ```python
 from typing import Generic, TypeVar, overload, Literal
@@ -1440,6 +1440,7 @@ handler_id_once = pokecon.autocmd.once("SerialConnectPost", callback=lambda: pri
 
 # イベントハンドラ解除
 # 引数: HandlerId（on() / once() の戻り値）
+# 戻り値: None
 pokecon.autocmd.off(handler_id)
 
 # グループ単位で一括解除
@@ -1447,6 +1448,7 @@ pokecon.autocmd.off(handler_id)
 # "CameraOpenPost" = そのイベントの全ハンドラ解除
 # "my_group" = ユーザ定義グループの全ハンドラ解除
 # 注: イベント名とグループ名が同名の場合、イベント名が優先される（グループ名を指定したい場合は別名を使用）
+# 戻り値: None
 pokecon.autocmd.clear("all")
 pokecon.autocmd.clear("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
@@ -1497,9 +1499,11 @@ pokecon.autocmd.on("CameraOpenPost", {
 
 ```python
 # ユーザー定義イベント
+# 戻り値: None
 pokecon.event.define("MyCustomEvent")
 
 # イベント発火
+# 戻り値: None
 pokecon.event.emit("MyCustomEvent", data={"key": "value"})
 
 # 定義済みイベント一覧
@@ -1770,6 +1774,7 @@ pokecon.keymap.set("<C-m>", "<MyCustomKey>", remap=True)
 pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
 
 # キーマップ削除
+# 戻り値: None
 pokecon.keymap.del("<F5>")  # F5のキーマップを削除
 ```
 
@@ -1903,7 +1908,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | `<F9>` | コマンドリロード | press | 未割り当て |
 | `<Esc>` | 停止 | press | 未割り当て |
 
-**注**: デフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタン（§6.4.3）はF1〜F10をデフォルトで使用するため、実行制御キーとの競合を避けるため、デフォルトでは両方とも未割り当てとする。
+**注**: デフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタン（§6.4.3）はF1〜F10を使用可能であるため、実行制御キーとの競合を避けるため、デフォルトでは両方とも未割り当てとする。
 
 #### 11.14.6 キー入力の仮想発火
 
@@ -1911,7 +1916,8 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 
 ```python
 # Python
-pokecon.keymap.trigger("a")        # a を押したことにする
+# 戻り値: None
+pokecon.keymap.trigger("a")         # a を押したことにする
 pokecon.keymap.trigger("<C-a>")   # Ctrl+A を押したことにする
 pokecon.keymap.trigger("<F1>")    # F1 を押したことにする
 ```
@@ -2283,8 +2289,6 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 - **ハードウェア制御**
   - ProController/Xinput対応（§6.3.2参照）
-  - ブラウザのAPI制約により実装が複雑
-  - UI上はハードウェア制御セクションを非表示（グレーアウトではなく非表示）
 - **キー設定（設定ファイルベース）**
   - GUIからの編集は不要
   - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
@@ -2312,7 +2316,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 - **ソフトウェアコントローラー**: CanvasベースのJoy-Con描画。`<Button-1>` イベントバインディングでホールド、`<ButtonRelease-1>` で解放、Shift+解放で `holdEndSkip`。
 - **色**: L側シアン `#56CCF2`、R側赤 `#E9514E`、アクティブ状態黄色 `#FFD800`。
-- **アナログスティックデッドゾーン**: 中央から±10%（0～255スケールで値103～153はニュートラルとして扱われる）。
+- **アナログスティックデッドゾーン**: §5.3.1参照。
 - **ボタン**: A、B、X、Y、L、R、ZL、ZR、+、−、Home、Capture、D-pad（4方向）、Lスティック、Rスティック、タッチスクリーン（320×240）。
 
 ### A.3 元の出力パネル

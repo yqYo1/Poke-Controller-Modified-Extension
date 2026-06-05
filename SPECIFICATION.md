@@ -1031,31 +1031,27 @@ Command (metaclass=CommandMeta)
 **注**: ×ボタンおよびEscキーでの終了時は確認ダイアログを表示し、ユーザーが意図的に停止することを確認する。強制終了（ウィンドウの完全削除等）のみ即座にスクリプトを停止する。
 
 ```python
-from typing import Generic, TypeVar, overload, Literal
-
-T = TypeVar('T')
-
-class Widget(Generic[T]):
+class Widget[T]:
     @overload
-    def __init__(self: "Widget[str]", widget_type: Literal["Entry"], label: str, default: str) -> None: ...
+    def __init__(self, widget_type: Literal["Entry"], label: str, default: str) -> None: ...
     
     @overload
-    def __init__(self: "Widget[bool]", widget_type: Literal["Check"], label: str, default: bool) -> None: ...
+    def __init__(self, widget_type: Literal["Check"], label: str, default: bool) -> None: ...
     
     @overload
-    def __init__(self: "Widget[T]", widget_type: Literal["Combo"], label: str, options: list[T], default: T) -> None: ...
+    def __init__(self, widget_type: Literal["Combo"], label: str, options: list[T], default: T) -> None: ...
     
     @overload
-    def __init__(self: "Widget[int]", widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
+    def __init__(self, widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
     
     @overload
-    def __init__(self: "Widget[int]", widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
+    def __init__(self, widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
     
     @overload
-    def __init__(self: "Widget[float]", widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
+    def __init__(self, widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
     
     @overload
-    def __init__(self: "Widget[str]", widget_type: Literal["Next"], label: str, default: str) -> None: ...
+    def __init__(self, widget_type: Literal["Next"], label: str, default: str) -> None: ...
     
     def __init__(self, widget_type: str, label: str, *args: object, **kwargs: object) -> None:
         self.widget_type = widget_type
@@ -1184,6 +1180,7 @@ print(entry.value)
 [global]
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
+dynamic_config_language = "python"  # "python" | "lua"。動的設定ファイルの言語を指定
 
 [websocket]
 reconnect_interval_sec = 3  # 再接続間隔（秒）
@@ -1410,6 +1407,9 @@ end)
 - **片方のみの例外**: 
   - **Postのみ**: イベント発生前に処理を実行しても意味がない場合（例: `AppStartupPost` — アプリケーション起動前にはAPIが利用できない）
   - **Preのみ**: イベント発生後に処理を実行しても意味がない場合（例: `AppShutdownPre` — アプリケーション終了後に状態が失われる）
+  - **Postのみ（ハードウェア接続）**: `SerialConnectPost`, `CameraOpenPost` — 接続/オープン前にはデバイスが利用できないため、Preフェーズのコールバックで行えることがない
+  - **Preのみ（入力キャンセル）**: `InputPressedPre` — 入力押下をキャンセルするユースケースがあるが、Postフェーズでは入力が既に送信済みで何もできない
+  - **Postのみ（入力解放）**: `InputReleasedPost` — 入力解放前にPreコールバックで行える実用的な処理がない
 - **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（LSP警告のため）
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
 - **Python/Lua両対応**: 両言語で同じAPI構造を使用

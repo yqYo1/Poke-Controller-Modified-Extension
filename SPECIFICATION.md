@@ -386,13 +386,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 #### 6.4.1 サブタブ構造
 
-Commandsタブには3つのサブタブ（内部タブ切替）が含まれます:
-
-| サブタブ | 内容 |
-|---------|---------|
-| **Python Command** | 利用可能なPythonコマンドスクリプトを一覧表示 |
-| **Mcu Command** | 利用可能なMCUコマンドスクリプトを一覧表示 |
-| **Shortcut** | 10ショートカットボタン割り当てグリッド |
+Commandsタブのサブタブ構造については §5.4 を参照。
 
 #### 6.4.2 コマンドリスト
 
@@ -1242,13 +1236,7 @@ key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 | **手動** | メニュー「Load Dynamic Config」で読み込み |
 | **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン）。検知方式はOSネイティブのファイル監視（inotify/kqueue/ReadDirectoryChangesW等）を使用 |
 
-**メニュー項目**（§11.13.1参照）:
-```
-File
-├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
-├── Reload Dynamic Config    ← 現在のファイルを再読み込み
-└── Open Config Directory    ← 設定ディレクトリを開く
-```
+**メニュー項目**: §11.13.1「メニュー配置」を参照。
 
 ### 11.6 動的設定の共存（Neovim準拠）
 
@@ -1406,27 +1394,7 @@ end)
 
 ### 11.11 設定ファイルの階層構造
 
-```
-~/.config/pokecon/                    # XDG_CONFIG_HOME（デフォルト）
-├── settings.toml                     # 静的設定（グローバル）
-├── profiles/                         # プロファイル管理
-│   ├── default/
-│   │   └── settings.toml
-│   ├── custom1/
-│   │   └── settings.toml
-│   └── custom2/
-│       └── settings.toml
-├── init.py                           # Python動的設定
-├── init.lua                          # Lua動的設定
-├── pyproject.toml                    # Python LSP設定（自動生成）
-├── .luarc.json                       # Lua LSP設定（自動生成）
-└── .vscode/                          # VS Code設定（オプション）
-    └── settings.json
-```
-
-**設定ディレクトリのカスタマイズ**:
-- 環境変数: `POKECON_HOME=/path/to/config`
-- コマンドライン引数: `--config-dir /path/to/config`
+設定ファイルのディレクトリ構造については §14.1 を参照。
 
 ### 11.12 イベントシステム
 
@@ -1713,9 +1681,7 @@ File
 
 #### 11.13.4 エラーハンドリング
 
-- 動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作
-- エラー内容はログパネルに出力
-- フォールバック機構により、前回の有効な設定を維持
+動的設定ファイルのエラーハンドリングについては §11.9 を参照。
 
 ### 11.14 キーマップシステム
 

@@ -45,7 +45,7 @@
 | レイヤー | 言語 | 役割 | 例 |
 |---------|------|------|-----|
 | Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
-| PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.events`, `pokecon.dialogue` |
+| PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.event`, `dialogue` |
 | Python互換レイヤー | Python 3.12～3.15互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
 
@@ -392,7 +392,7 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
 
-#### 6.4.2.1 タグ体系
+##### 6.4.2.1 タグ体系
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
@@ -421,7 +421,7 @@ class CommandInfo:
   - `ScriptLoadPre` イベントのコールバックで動的タグ追加が可能（§11.12.5参照）
   - 詳細な例とAPI仕様は§11（設定ファイルシステム）を参照
 
-**タグの書き戻し**:
+**タグ統合の例**:
 
 ```
 ディレクトリ構造:
@@ -1061,6 +1061,8 @@ class Widget(Generic[T]):
         self.widget_type = widget_type
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納
+
+```
 
 ```python
 # 事前にWidgetインスタンスを作成

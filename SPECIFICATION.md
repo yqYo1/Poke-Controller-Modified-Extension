@@ -55,7 +55,7 @@
 
 **注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型ヒント・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。
 
-**Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPython、仮想環境、またはコンテナ）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
+**Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPythonまたは仮想環境）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
 
 ### 1.3 対象プラットフォーム
 
@@ -1212,10 +1212,9 @@ reconnect_max_retries = 20  # リトライ回数上限
 [python]
 # Python実行環境（オプション、デフォルト推奨）
 # デフォルトはバンドルされた3.14ランタイムを使用
-# ユーザー指定のPythonパス、仮想環境、またはコンテナを指定可能
+# ユーザー指定のPythonパス、仮想環境を指定可能
 # interpreter = "/usr/bin/python3.12"  # 例: システムPython
 # venv = "~/.config/pokecon/venv"  # 例: 仮想環境
-# container = "python:3.13-slim"  # 例: コンテナイメージ
 
 # ユーザー追加ライブラリ
 [[python.packages]]
@@ -2205,10 +2204,9 @@ fn main() {
 [python]
 # Python実行環境（オプション、デフォルト推奨）
 # デフォルトはバンドルされた3.14ランタイムを使用
-# ユーザー指定のPythonパス、仮想環境、またはコンテナを指定可能
+# ユーザー指定のPythonパス、仮想環境を指定可能
 # interpreter = "/usr/bin/python3.12"  # 例: システムPython
 # venv = "~/.config/pokecon/venv"  # 例: 仮想環境
-# container = "python:3.13-slim"  # 例: コンテナイメージ
 
 # ユーザー追加ライブラリ
 [[python.packages]]

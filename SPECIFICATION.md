@@ -392,7 +392,7 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
 
-##### タグ体系
+#### タグ体系
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
@@ -1021,7 +1021,7 @@ Command (metaclass=CommandMeta)
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
-| `write()` | `ser.write(data: bytes) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
+| `write()` | `write(data: bytes) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
 
 **注**: `ser.write()` の引数 `data` は `bytes` 型。`str` を渡す場合は事前にエンコードが必要（`data.encode('utf-8')`）。
 

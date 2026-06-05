@@ -392,7 +392,7 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
 
-#### タグ体系
+#### 6.4.2.1 タグ体系
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
@@ -417,23 +417,11 @@ class CommandInfo:
 - `None` の場合は「タグなし」（空リストとして扱う）
 - `@` プレフィックスは付かない（慣例）
 
-**動的タグ（イベントによる追加）**:
-- `ScriptLoadPre` イベントのコールバックで `pokecon.state.command_candidates` を変更することで追加可能（§11.12.5参照）
-- コールバックは引数なし、`pokecon.state` に直接アクセスして変更
-- 自動タグと手動タグは統合され、コマンドクラスの `TAGS` 属性に書き戻される
+- **動的タグ（イベントによる追加）**:
+  - `ScriptLoadPre` イベントのコールバックで動的タグ追加が可能（§11.12.5参照）
+  - 詳細な例とAPI仕様は§11（設定ファイルシステム）を参照
 
-**動的タグ追加の例**:
-```python
-# init.py での動的タグ追加例
-def add_dynamic_tags():
-    for candidate in pokecon.state.command_candidates:
-        if candidate.name.startswith("Auto"):
-            candidate.tags.append("@Auto")
-
-pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
-```
-
-**タグの統合順序と具体例**:
+**タグの書き戻し**:
 
 ```
 ディレクトリ構造:
@@ -467,25 +455,16 @@ Commands/
 - 同じタグが複数回追加された場合、自動的に重複を除去
 - 統合後のタグ一覧はユニークなリストとなる
 
-**フィルター動作**:
-- デフォルトは完全一致（`selected_tag == tag`）
-- マッチング方式は設定で切り替え可能:
-  - **静的設定** (`settings.toml`): `exact`（完全一致） / `partial`（部分一致） / `prefix`（前方一致） / `suffix`（後方一致）
-  - **動的設定** (`init.py` / `init.lua`): カスタムマッチ関数を指定可能
-    ```python
-    # カスタムマッチ関数の例
-    def custom_match(selected: str, tag: str) -> bool:
-        return selected.lower() in tag.lower()
-    
-    pokecon.ui.tag_match_function = custom_match
-    ```
-- **バックエンド側の責務**: タグフィルターのマッチング（完全一致/部分一致/前方一致/後方一致/カスタム関数）。マッチング結果はコマンドリストの表示/非表示を制御
-- **フロントエンド側の責務**: ファジーファインダーによる絞り込み（`fuse.js` を使用した部分一致スコアリング）。これはUI上の利便性向上のための補助機能であり、バックエンドのマッチング方式とは独立して動作する。フロントエンドの絞り込みはバックエンドのマッチング結果に対してさらにフィルタをかける2段階方式
-- UI上では `@` なしタグが先、`@` 付きタグが後に表示
-- ソート関数は動的設定ファイルで `pokecon.ui.tag_sort_function = my_sort_func` のように指定可能
-  - 型: `Callable[[list[str]], list[str]]`
-  - 動的設定（Lua）からも同様に指定可能: `pokecon.ui.tag_sort_function = my_sort_func`
-- 先頭に `"-"`（フィルター無効）を配置
+- **フィルター動作**:
+  - デフォルトは完全一致（`selected_tag == tag`）
+  - マッチング方式は設定で切り替え可能:
+    - **静的設定** (`settings.toml`): `exact`（完全一致） / `partial`（部分一致） / `prefix`（前方一致） / `suffix`（後方一致）
+    - **動的設定** (`init.py` / `init.lua`): カスタムマッチ関数を指定可能（§11.7参照）
+  - **バックエンド側の責務**: タグフィルターのマッチング（完全一致/部分一致/前方一致/後方一致/カスタム関数）。マッチング結果はコマンドリストの表示/非表示を制御
+  - **フロントエンド側の責務**: ファジーファインダーによる絞り込み（`fuse.js` を使用した部分一致スコアリング）。これはUI上の利便性向上のための補助機能であり、バックエンドのマッチング方式とは独立して動作する。フロントエンドの絞り込みはバックエンドのマッチング結果に対してさらにフィルタをかける2段階方式
+  - UI上では `@` なしタグが先、`@` 付きタグが後に表示
+  - ソート関数は動的設定ファイルで指定可能（§11.7参照）
+  - 先頭に `"-"`（フィルター無効）を配置
 
 **タグ専用のstate**:
 - `pokecon.state.tags`: タグ一覧のみ（UI表示、フィルター選択肢生成用）
@@ -497,7 +476,8 @@ Commands/
 #### 6.4.3 ショートカットボタン（10ボタン）
 
 - **数**: 10ショートカットボタン（要件が元の4ボタンから10ボタンに変更）。
-- **割り当て**: 読み込まれた任意のコマンドにユーザー割り当て可能（クリックで割り当て、Shift+クリックで割り当て解除）。
+- **割り当て**: 読み込まれた任意のコマンドにユーザー割り当て可能（クリックで割り当て）。
+- **割り当て解除**: Shift+クリックで割り当てを解除。
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
 - **キーボードショートカット**: F1～F10またはその他の単一キー（修飾キーなし）。修飾キー付きのショートカットはキーバインドシステム（§11.14）で管理。
@@ -517,7 +497,7 @@ Commands/
 | **リロード（再読み込み＋開始）** | コマンドを再読み込みして開始 |
 | **コマンドリスト再読み込み** | ファイルシステムからコマンドリストを再読み込み |
 
-キーボードショートカットの割り当ては **§6.4.3 ショートカットボタン** を参照。
+キーボードショートカットの割り当ては **§11.14.5 デフォルトキーバインド** を参照。
 
 - **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
 - **進捗**: 対応コマンド用のプログレスバー。
@@ -868,7 +848,7 @@ Command (metaclass=CommandMeta)
 |--------|-----------|-------------|
 | `do()` | `do() -> None` | 抽象 — 自動化ロジックをオーバーライド |
 | `finish()` | `finish() -> None` | スクリプトを正常停止 |
-| `checkIfAlive()` | `checkIfAlive() -> Literal[True]` | 停止フラグ確認；終了時は`StopThread`を送出 |
+| `checkIfAlive()` | `checkIfAlive() -> Literal[True]` | 停止フラグ確認。`self.alive` が `True` の場合は `True` を返す。`False` の場合は後処理（`keys` 解放、`postProcess` 実行）を行った上で `StopThread` 例外を送出し、コマンドスレッドを安全に終了させる |
 
 **入力メソッド**:
 | メソッド | シグネチャ | 説明 |
@@ -887,7 +867,7 @@ Command (metaclass=CommandMeta)
 |--------|-----------|-------------|
 | `print_t1()` | `print_t1(*objects, sep=' ', end='\\n') -> None` | 上部ログパネルへ出力 |
 | `print_t2()` | `print_t2(*objects, sep=' ', end='\\n') -> None` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects, sep=' ', end='\\n') -> None` | stdoutではない方のログパネルへ出力。`stdout_destination` の設定により動的に出力先を切り替える（"1"→出力#2、"2"→出力#1） |
+| `print_t()` | `print_t(*objects, sep=' ', end='\\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
 | `print_s()` | `print_s(*objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力 |
 | `print_ts()` | `print_ts(*objects, sep=' ', end='\\n') -> None` | `print_s`と同じ |
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
@@ -1083,27 +1063,28 @@ class Widget(Generic[T]):
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納
 
+```python
 # 事前にWidgetインスタンスを作成
 entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
 check = Widget("Check", "有効", True)  # Widget[bool]
 
 # ブロッキング（デフォルト）
-dialog_id = pokecon.dialogue.show_dialog("タイトル", widgets=[entry, check])
+dialog_id = self.show_dialog("タイトル", widgets=[entry, check])
 # dialog_id == 0
 print(entry.value)  # str
 print(check.value)  # bool
 
 # 非ブロッキング
-dialog_id = pokecon.dialogue.show_dialog("タイトル", widgets=[entry, check], blocking=False)
+dialog_id = self.show_dialog("タイトル", widgets=[entry, check], blocking=False)
 # dialog_id > 0（固有の自然数）
 # スクリプトの実行は継続される
 
 # ダイアログが終了したか確認
-if pokecon.dialogue.is_dialog_closed(dialog_id):
+if self.is_dialog_closed(dialog_id):
     print(entry.value)
 
 # ブロッキング動作に切り替え
-pokecon.dialogue.wait_dialog(dialog_id)
+self.wait_dialog(dialog_id)
 print(entry.value)
 ```
 
@@ -1215,13 +1196,10 @@ reconnect_max_retries = 20  # リトライ回数上限
 # interpreter = "/usr/bin/python3.12"  # 例: システムPython
 # venv = "~/.config/pokecon/venv"  # 例: 仮想環境
 
-# ユーザー追加ライブラリ
-[[python.packages]]
-name = "requests"
-version = ">=2.28.0"
-
-[[python.packages]]
-name = "numpy"
+# ユーザー追加ライブラリ（詳細は§14.6参照）
+# [[python.packages]]
+# name = "requests"
+# version = ">=2.28.0"
 
 [profiles]
 active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
@@ -1312,9 +1290,29 @@ pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 pokecon.opt.key_chattering_threshold_ms = 10
 
 # キーマッピング（Neovim風記法）
-# 注: pokecon.controller は動的設定専用API。ユーザースクリプトでは self.keys を使用
-# 詳細は §11.14.2 参照
+# 注: 以下は動的設定ファイル（init.py/init.lua）での例。
+# ユーザースクリプトでは self.keys を使用（§10.5.1参照）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
+
+# タグマッチ関数（カスタム）
+def custom_match(selected: str, tag: str) -> bool:
+    return selected.lower() in tag.lower()
+
+pokecon.ui.tag_match_function = custom_match
+
+# タグソート関数（カスタム）
+def custom_sort(tags: list[str]) -> list[str]:
+    return sorted(tags, key=lambda t: t.lower())
+
+pokecon.ui.tag_sort_function = custom_sort
+
+# 動的タグ追加（ScriptLoadPreイベント）
+def add_dynamic_tags():
+    for candidate in pokecon.state.command_candidates:
+        if candidate.name.startswith("Auto"):
+            candidate.tags.append("@Auto")
+
+pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
 ```
 
 **動的設定の特徴**:
@@ -2301,9 +2299,11 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 ## 付録
 
-## A. Tkinter UIリファレンス
+本付録は、Tkinter UIの元の実装詳細およびコマンドクラスのメタクラス設計を参考情報として記載します。
 
-### A.1 元のタブ詳細
+### A. Tkinter UIリファレンス
+
+#### A.1 元のタブ詳細
 
 元のPython/Tkinter UIは `tkinter.ttk.Notebook` を使用し、以下の構造でした:
 
@@ -2314,20 +2314,20 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 - **NotificationTab**: Discord Webhook URL、ユーザー名、アバターURL入力（テストボタン付き）。Windows通知開始/終了チェックボックス（テストボタン付き）。LINE UI（削除 — サービスEOL）。
 - **OthersTab**: 出力サイズ調整スライダー、stdout出力先ラジオ（出力#1/出力#2）、出力をクリアボタン、ウィジェットモードコンボボックス（7モード）、ソフトウェアコントローラー位置ラジオ（TOP/BOTTOM）、ダイアログボタン位置ラジオ（TOP/BOTTOM/BOTH）。
 
-### A.2 元のコントローラーレイアウト
+#### A.2 元のコントローラーレイアウト
 
 - **ソフトウェアコントローラー**: CanvasベースのJoy-Con描画。`<Button-1>` イベントバインディングでホールド、`<ButtonRelease-1>` で解放、Shift+解放で `holdEndSkip`。
 - **色**: L側シアン `#56CCF2`、R側赤 `#E9514E`、アクティブ状態黄色 `#FFD800`。
 - **アナログスティックデッドゾーン**: §5.3.1参照。
 - **ボタン**: A、B、X、Y、L、R、ZL、ZR、+、−、Home、Capture、D-pad（4方向）、Lスティック、Rスティック、タッチスクリーン（320×240）。
 
-### A.3 元の出力パネル
+#### A.3 元の出力パネル
 
 - **出力 #1 と 出力 #2**: スライダー（0～100）で比率調整可能なログ表示。
 - **ソース**: WebSocket経由で受信したログ。
 - **クリア**: その他タブの「出力をクリア」ボタン。
 
-## B. メタクラス設計（CommandMeta）
+### B. メタクラス設計（CommandMeta）
 
 ```python
 class CommandMeta(type):

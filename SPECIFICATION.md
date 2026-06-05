@@ -2087,6 +2087,8 @@ pokecon.profile.switch("custom")
 
 **注**: キーマップのクリアは内部的な処理。ユーザーが直接キーマップを無効化する場合は、`pokecon.keymap.set("<F5>", "<nop>")` のように `<nop>` を rhs に登録することで実現する。
 
+---
+
 ## 12. 環境変数
 
 | 変数 | 説明 | デフォルト |
@@ -2094,6 +2096,8 @@ pokecon.profile.switch("custom")
 | `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `0` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
+
+---
 
 ## 13. クライアント側ストレージ
 
@@ -2263,6 +2267,8 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
     ]
 }
 ```
+
+---
 
 ## 15. 今後のバージョンで実装予定
 

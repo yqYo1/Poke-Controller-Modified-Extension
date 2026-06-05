@@ -873,10 +873,10 @@ Command (metaclass=CommandMeta)
 **入力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `press()` | `press(buttons: Button \| list[Button], duration=0.1, wait=0.1) -> None` | ボタン押下（指定秒数保持後解放） |
-| `pressRep()` | `pressRep(buttons: Button \| list[Button], repeat, duration=0.1, interval=0.1, wait=0.1) -> None` | 繰り返し押下 |
-| `hold()` | `hold(buttons: Button \| list[Button], wait=0.1) -> None` | ボタンを押下状態で保持 |
-| `holdEnd()` | `holdEnd(buttons: Button \| list[Button]) -> None` | 保持中のボタンを解放 |
+| `press()` | `press(buttons: GamepadInput, duration=0.1, wait=0.1) -> None` | ボタン押下（指定秒数保持後解放） |
+| `pressRep()` | `pressRep(buttons: GamepadInput, repeat, duration=0.1, interval=0.1, wait=0.1) -> None` | 繰り返し押下 |
+| `hold()` | `hold(buttons: GamepadInput, wait=0.1) -> None` | ボタンを押下状態で保持 |
+| `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
 | `wait()` | `wait(wait: float) -> None` | wait秒スリープ |
 | `short_wait()` | `short_wait(wait: float) -> None` | ビジーループ待機（高精度） |
 | `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信 |
@@ -900,8 +900,10 @@ Command (metaclass=CommandMeta)
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 単純入力ダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type = list) -> list | dict` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list, filename: str, desc: str | None = None, need: type = list) -> list | dict` | 設定保存付きダイアログ（互換性維持） |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type = list) -> list | dict` | 設定選択付きダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -933,10 +935,13 @@ Command (metaclass=CommandMeta)
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信 |
-| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信 |
 | `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+
+**ImageProcPythonCommand通知メソッド**（画像処理クラスのみ）:
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信 |
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
-| `win_notification()` | `win_notification() -> None` | Windowsデスクトップトースト通知 |
 
 #### 10.4.3 ImageProcPythonCommand
 
@@ -962,10 +967,10 @@ Command (metaclass=CommandMeta)
 **画像処理メソッド**（Rust opencv-rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | カメラフレームに対するテンプレートマッチング |
-| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
-| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
-| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, crop_fmt='', crop=None) -> bool` | 逆テンプレートマッチング |
+| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, use_gpu=False, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | カメラフレームに対するテンプレートマッチング |
+| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path_list=None, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | `isContainTemplate()`と同じ処理。関数名は互換性のために維持。GPUは使用しない |
+| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, use_gpu=False, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True) -> None` | カメラフレームを./Captures/へ保存 |
 | `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image') -> None` | カメラフレームをポップアップ表示 |
 | `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
@@ -984,11 +989,11 @@ Command (metaclass=CommandMeta)
 
 #### 10.4.4 McuCommandBase
 
-**Import**: `from Commands.McuCommandBase import McuCommandBase`
+**Import**: `from Commands.McuCommandBase import McuCommand`
 
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
-**コンストラクタ**: `McuCommandBase(sync_name: str)`
+**コンストラクタ**: `McuCommand(sync_name: str)`
 
 - `sync_name`: ファームウェアとの同期に使用するコマンド名。`ser.writeRow(sync_name)` で送信される
 

@@ -192,7 +192,7 @@
 > **タブ数に関する注記**: 本仕様では、トップレベルに**6つのメインタブ**を記述します。Commandsタブには**3つのサブタブ**（Python Command、Mcu Command、Shortcut）が含まれ、合計9つの個別のタブ付きインターフェースとなります。PLAN.md（リポジトリルートの旧設計ドキュメント）では「8タブ構造」に言及していますが、これは旧設計であり、本仕様書の「6メインタブ + 3サブタブ」が最新の正しい定義です。本仕様では、トップレベルのノートブックタブを指す「6メインタブ」で一貫しています。
 
 | # | タブ名 | 説明 |
-|--|--------|-------------|
+|---|--------|-------------|
 | 1 | **カメラ** | 映像表示（Canvas/CaptureArea）、デバイス選択、FPS、フリップ、表示モード切替、マウスベースのスティック制御、スクリーンショット |
 | 2 | **シリアル** | COMポート選択、ボーレート、データ形式（3種類）、接続/切断、シリアルモニター |
 | 3 | **手動制御** | ソフトウェア制御（キーボード、マウススティックエミュレーション）、ハードウェア制御（ProController/Xinput、録画）、完全なJoy-ConレイアウトのSwitch Controller Simulator |
@@ -243,7 +243,7 @@
 Commandsタブには3つのサブタブ（内部タブ）があります:
 
 | # | サブタブ | 説明 |
-|--|---------|-------------|
+|---|---------|-------------|
 | 1 | **Python Command** | 利用可能なPythonコマンドスクリプトのリスト/ツリー |
 | 2 | **Mcu Command** | 利用可能なMCUコマンドスクリプトのリスト/ツリー |
 | 3 | **Shortcut** | 10ショートカットボタン割り当てグリッド |
@@ -554,7 +554,7 @@ Commands/
 #### 6.5.3 LINE通知
 
 - **ステータス**: サービス終了（EOL）— **通知タブからUIは完全に削除**。
-- **後方互換性**: 既存のユーザースクリプト用にスクリプトAPI（`notify.line`）は維持。設定用のUIはなし。
+- **後方互換性**: 既存のユーザースクリプト用にスクリプトAPI（`LINE_text()`、`LINE_image()`）は維持。設定用のUIはなし。
 
 ### 6.6 その他タブ
 
@@ -988,9 +988,9 @@ Command (metaclass=CommandMeta)
 **内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
 | 関数 | シグネチャ | 説明 |
 |------|-----------|-------------|
-| `_template_match()` | `_template_match(image, template, threshold, use_gray, ...)` | コアテンプレートマッチング |
-| `_grayscale()` | `_grayscale(image)` | グレースケール変換 |
-| `_resize()` | `_resize(image, width, height)` | 画像リサイズ |
+| `_template_match()` | `_template_match(image, template, threshold, use_gray, ...) -> tuple[bool, float, tuple[int, int]]` | コアテンプレートマッチング |
+| `_grayscale()` | `_grayscale(image) -> MatLike` | グレースケール変換 |
+| `_resize()` | `_resize(image, width, height) -> MatLike` | 画像リサイズ |
 
 #### 10.4.4 McuCommandBase
 
@@ -2107,8 +2107,6 @@ pokecon.profile.switch("custom")
 | ショートカットボタン割り当て | `localStorage` | 10ボタンキーバインド。ブラウザ単位の設定 |
 | キーボード設定 | `localStorage` | キーマッピング設定。ブラウザ単位の設定 |
 
-
-
 ---
 
 ## 14. 開発環境自動構築
@@ -2128,7 +2126,6 @@ pokecon.profile.switch("custom")
 │       └── settings.toml
 ├── init.py                           # Python動的設定テンプレート
 └── init.lua                          # Lua動的設定テンプレート
-```
 ~/.local/share/pokecon/               # XDG_DATA_HOME（自動管理）
 ├── typings/                          # Python型定義（.pyi、Rust側で自動生成）
 ├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）

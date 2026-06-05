@@ -11,6 +11,8 @@
 
 **本ドキュメントは要求仕様書・要件定義書として運用されます。**
 
+**対象読者**: 本プロジェクトの開発者およびLLM（実装支援エージェント）。エンドユーザー向けの説明書ではありません。
+
 - **仕様が先行し、実装が後に追従する**関係です
 - 実装の都合で仕様を変更することはありません
 - 実装と仕様に齟齬がある場合、**実装を修正してください**
@@ -213,7 +215,7 @@
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
   - タッチスクリーンシミュレーション（320×240座標入力）
-- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（中央から±10%、値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
 
@@ -891,7 +893,7 @@ Command (metaclass=CommandMeta)
 | `print_t2()` | `print_t2(*objects, sep=' ', end='\\n') -> None` | 下部ログパネルへ出力 |
 | `print_t()` | `print_t(*objects, sep=' ', end='\\n') -> None` | stdoutではない方のログパネルへ出力。`stdout_destination` の設定により動的に出力先を切り替える（"1"→出力#2、"2"→出力#1） |
 | `print_s()` | `print_s(*objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n') -> None` | `print_s`と同じ（歴史的経緯で同じ動作のものが複数存在） |
+| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n') -> None` | `print_s`と同じ |
 | `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
 | `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n') -> None` | stdout以外ログ（モード付き） |
@@ -902,8 +904,8 @@ Command (metaclass=CommandMeta)
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue()` | `dialogue(title: str, message: str, desc: str | None = None, need: list[str] | None = None) -> None` | 単純入力ダイアログ（旧API） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[Any], desc: str | None = None, need: list[str] | None = None) -> None` | マルチウィジェットダイアログ（旧API） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -936,8 +938,8 @@ Command (metaclass=CommandMeta)
 |--------|-----------|-------------|
 | `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信 |
 | `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信 |
-| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
-| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。呼び出しても何も起こらず、WARNINGログを出力 |
+| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 | `win_notification()` | `win_notification() -> None` | Windowsデスクトップトースト通知 |
 
 #### 10.4.3 ImageProcPythonCommand
@@ -1031,7 +1033,7 @@ Command (metaclass=CommandMeta)
 
 ### 10.6 ダイアログAPI
 
-**旧API（互換性維持）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新APIの使用を推奨するが、開発時の扱いは新APIと変わらない。
+**旧API**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。
 
 **新API（推奨）**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。型安全性と一貫性が向上。
 

@@ -1,8 +1,8 @@
 # Poke-Controller Modified Extension — 仕様書
 
-> **バージョン**: 2.1.0-draft  
-> **ブランチ**: `refactor/rust-core`  
-> **日付**: 2026-05-28  
+> **バージョン**: 2.1.0-draft
+> **ブランチ**: `refactor/rust-core`
+> **日付**: 2026-05-28
 > **ソース**: セッション議事録から抽出した過去のユーザー要件（現在のコードベースではない）
 
 ---
@@ -557,7 +557,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
 - **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
 - **自動再接続**: §3.4「WebSocket自動再接続」参照。
-- **フォールバック条件**: 
+- **フォールバック条件**:
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
   - 接続確立後、3秒間連続でフレーム/データが受信できない → WebSocketにフォールバック
   - フォールバック中のWebRTC復旧検出は行わない（手動再接続を促す）
@@ -785,7 +785,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ## 9. テーマサポート（今後のバージョンで実装予定）
 
-> **ステータス: 未実装 — 今後のバージョンで実装予定。**  
+> **ステータス: 未実装 — 今後のバージョンで実装予定。**
 > Tailwind CSS v4がスタイリングフレームワークとして確定しています。テーマシステムの要件は以下に記録されています。
 
 ### 9.1 組み込みテーマ
@@ -1045,25 +1045,25 @@ Command (metaclass=CommandMeta)
 class Widget[T]:
     @overload
     def __init__(self, widget_type: Literal["Entry"], label: str, default: str) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Check"], label: str, default: bool) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Combo"], label: str, options: list[T], default: T) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
-    
+
     @overload
     def __init__(self, widget_type: Literal["Next"], label: str, default: str) -> None: ...
-    
+
     def __init__(self, widget_type: str, label: str, *args: object, **kwargs: object) -> None:
         self.widget_type = widget_type
         self.label = label
@@ -1330,7 +1330,7 @@ pokecon.autocmd.on("ScriptLoadPre", callback=add_dynamic_tags)
 - **即時反映**: 設定変更は即座にUIに反映される
 - **永続化なし**: 動的設定はファイルとして保存されているが、`pokecon.opt` の値自体は永続化されない。毎回 init ファイルから再評価される
 - **優先順位**: 動的設定 > 静的設定（settings.toml）
-- **エラーハンドリング**: 
+- **エラーハンドリング**:
   - **目標**: 両言語とも構文エラー時に該当行をスキップし、残りを続行
   - **Python**: 言語仕様によりファイル全体の読み込みが必要。構文エラー時はファイル全体の読み込みに失敗し、フォールバック設定を使用
   - **Lua**: 構文エラー時に該当行をスキップし、残りを続行
@@ -1418,7 +1418,7 @@ end)
 
 - **Neovim/Vimライクな設計**: `autocmd` スタイルのイベントハンドラ登録
 - **Pre/Postフェーズ**: 原則としてすべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ。特別な理由がない限り両方を持つ必要がある
-- **片方のみの例外**: 
+- **片方のみの例外**:
   - **Postのみ**: イベント発生前に処理を実行しても意味がない場合（例: `AppStartupPost` — アプリケーション起動前にはAPIが利用できない）
   - **Preのみ**: イベント発生後に処理を実行しても意味がない場合（例: `AppShutdownPre` — アプリケーション終了後に状態が失われる）
   - **Postのみ（ハードウェア接続）**: `SerialConnectPost`, `CameraOpenPost` — 接続/オープン前にはデバイスが利用できないため、Preフェーズのコールバックで行えることがない
@@ -2152,7 +2152,7 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 └── events.pyi
 ```
 
-**注**: 
+**注**:
 - **実行時生成**: `~/.local/share/pokecon/typings/` 配下の `.pyi` はアプリ起動時にRust側で自動生成
 - **開発用元データ**: `python/pokecon/typings/` 配下の `.pyi` はリポジトリに含め、開発・メンテナンス用として使用
 - **ユーザーが直接触らない**: XDG_DATA_HOME 配下は自動管理。ユーザーが編集するのは XDG_CONFIG_HOME 配下のみ
@@ -2287,7 +2287,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 ### 15.1 PWA要件
 
-> **ステータス: 未実装 — 今後のバージョンで実装予定。**  
+> **ステータス: 未実装 — 今後のバージョンで実装予定。**
 > 以下の要件は将来の実装のためのユーザー要求として記録されています。現在のスコープには含まれません。
 
 #### 15.1.1 マニフェスト
@@ -2353,10 +2353,10 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 ```python
 class CommandMeta(type):
     """実装切り替え用メタクラス。
-    
+
     現状はすべての実装がPyO3（Rustバインディング）に流れる。
     将来: クラス変数や関数使用パターンに基づいて切り替え。
-    
+
     抽象クラスとしての機能:
     - `do()` メソッドを持つクラス（PythonCommand, ImageProcPythonCommand）を
       抽象クラスとして扱う。`do()` を実装しないサブクラスのインスタンス化を防止。

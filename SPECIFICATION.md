@@ -854,8 +854,24 @@ Command (metaclass=CommandMeta)
 | `do()` | `do() -> None` | 抽象 — 自動化ロジックをオーバーライド |
 | `finish()` | `finish() -> None` | スクリプトを正常停止 |
 | `checkIfAlive()` | `checkIfAlive() -> Literal[True]` | 停止フラグ確認。`self.alive` が `True` の場合は `True` を返す。`False` の場合は後処理（`keys` 解放、`postProcess` 実行）を行った上で `StopThread` 例外を送出し、コマンドスレッドを安全に終了させる |
-
 **入力メソッド**:
+
+**GamepadInput型**:
+```python
+type Buttons = Button | Hat | Direction | Touchscreen
+type ButtonsList = list[Buttons]
+type GamepadInput = ButtonsList | Buttons
+```
+
+| 型 | 基底クラス | 説明 |
+|-----|----------|------|
+| `Button` | `IntFlag` | 物理ボタン。`Y`, `B`, `A`, `X`, `L`, `R`, `ZL`, `ZR`, `MINUS`, `PLUS`, `LCLICK`, `RCLICK`, `HOME`, `CAPTURE`。3DS互換エイリアス: `SELECT=MINUS`, `START=PLUS`, `POWER=LCLICK`, `WIRELESS=RCLICK` |
+| `Hat` | `IntEnum` | D-Pad方向。`TOP`, `TOP_RIGHT`, `RIGHT`, `BTM_RIGHT`, `BTM`, `BTM_LEFT`, `LEFT`, `TOP_LEFT`, `CENTER` |
+| `Direction` | クラス（enumではない） | アナログスティックの角度/位置。`Direction(stick, angle, magnification=1.0, isDegree=True, showName=None)` で任意角度を構築可能。定義済みインスタンス: `UP`, `RIGHT`, `DOWN`, `LEFT`, `UP_RIGHT`, `DOWN_RIGHT`, `DOWN_LEFT`, `UP_LEFT`（左スティック）、`R_UP`, `R_RIGHT`, `R_DOWN`, `R_LEFT`, `R_UP_RIGHT`, `R_DOWN_RIGHT`, `R_DOWN_LEFT`, `R_UP_LEFT`（右スティック） |
+| `Touchscreen` | クラス | タッチスクリーン座標。`Touchscreen(x, y)`。Qingpiプロトコルのみで使用 |
+
+`GamepadInput` は単一値またはリストを受け付ける。リストの場合、同じカテゴリの複数項目を同時に送信可能（例: `[Button.A, Button.B]` でA+B同時押し）。
+
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `press()` | `press(buttons: GamepadInput, duration=0.1, wait=0.1) -> None` | ボタン押下（指定秒数保持後解放） |
@@ -948,6 +964,12 @@ Command (metaclass=CommandMeta)
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
 
 **コンストラクタ**: `ImageProcPythonCommand(cam, gui=None)`
+
+**MatLike型**:
+```python
+from cv2.typing import MatLike
+```
+OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理メソッドの戻り値・引数として使用される。
 
 **画像処理メソッド**（Rust opencv-rust実装）:
 | メソッド | シグネチャ | 説明 |

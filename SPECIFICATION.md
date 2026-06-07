@@ -951,7 +951,7 @@ type GamepadInput = ButtonsList | Buttons
 `PythonCommand`を拡張し、カメラと画像処理機能を追加。
 
 **トリミングパラメータ**:
-- `crop_fmt: str` — トリミング形式。以下の値を指定:
+- `crop_fmt: CropFmt` — トリミング形式。以下の値を指定:
   - `""` (デフォルト): トリミングなし
   - `"1"`: Pillow形式 [x_start, y_start, x_end, y_end]
   - `"2"`: Pillow形式 [x_start, y_start, width, height]
@@ -961,6 +961,12 @@ type GamepadInput = ButtonsList | Buttons
   - `"12"`: OpenCV形式 [y_start, x_start, height, width]
   - `"13"`: OpenCV形式 [y_start, y_end, x_start, x_end]
   - `"14"`: OpenCV形式 [y_start, height, x_start, width]
+
+```python
+from typing import Literal
+type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
+```
+
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
 
 **コンストラクタ**: `ImageProcPythonCommand(cam, gui=None)`
@@ -2045,6 +2051,31 @@ pokecon.source("~/.config/pokecon/extra_settings.lua")
 
 #### 11.16.2 利用可能な状態プロパティ
 
+```python
+from typing import Literal
+type CommandState = Literal["running", "paused", "stopped", "error"]
+```
+
+| 属性 | 型 | 説明 |
+|------|-----|------|
+| `serial_port` | `str` | 現在のシリアルポート（例: `"COM3"`） |
+| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`） |
+| `serial_connected` | `bool` | 接続状態 |
+| `camera_opened` | `bool` | カメラオープン状態 |
+| `camera_fps` | `int` | 現在のFPS（`opt.camera_fps` をデバイス能力で制限した実際の値） |
+| `camera_resolution` | `str` | 現在の解像度（例: `"1280x720"`） |
+| `is_running` | `bool` | コマンド実行中 |
+| `command_state` | `CommandState` | コマンド状態 |
+| `current_command` | `str` | 現在実行中のコマンド名 |
+| `command_candidates` | `list[CommandInfo]` | 読み込み候補コマンド一覧 |
+| `tags` | `list[str]` | 利用可能なタグ一覧 |
+| `active_profile` | `str` | 現在のアクティブプロファイル名 |
+| `available_profiles` | `list[str]` | 利用可能なプロファイル一覧 |
+| `last_input` | `str \| None` | 最後の入力（キー名またはボタン名） |
+| `holding_buttons` | `list[str]` | 現在保持中のボタン一覧 |
+| `pid` | `int` | アプリケーションのプロセスID |
+
+**例**:
 ```python
 # Python設定
 import pokecon

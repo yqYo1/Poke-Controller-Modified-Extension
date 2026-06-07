@@ -1489,7 +1489,6 @@ pokecon.autocmd.off(handler_id)
 # "all" = すべてのハンドラ解除
 # "CameraOpenPost" = そのイベントの全ハンドラ解除
 # "my_group" = ユーザ定義グループの全ハンドラ解除
-# 注: イベント名とグループ名が同名の場合、イベント名が優先される（グループ名を指定したい場合は別名を使用）
 # 戻り値: None
 pokecon.autocmd.clear("all")
 pokecon.autocmd.clear("CameraOpenPost")

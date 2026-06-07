@@ -84,7 +84,7 @@
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
 | **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
-| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用 |
+| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用。型: `int`（内部では単調増加する整数） |
 | **フォールバック** | プライマリ方式が利用できない場合に使用される代替方式。例: WebRTC不可時のWebSocketフォールバック |
 | **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
 | **チャタリング** | 機械的な接点のバウンスにより、意図しない短時間の連続入力が発生する現象 |
@@ -530,8 +530,8 @@ Commands/
 | **stdout出力先** | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン | Radio button |
 | **出力をクリア** | 両方の出力パネルをクリアするボタン | Button |
 | **ウィジェットモード** | 7モードのコンボボックス（§5.5参照） | Combobox |
-| **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するTOP/BOTTOMラジオボタン | Radio button |
-| **ダイアログボタンの位置** | ダイアログボタン配置用のTOP/BOTTOM/BOTHラジオボタン | Radio button |
+| **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン | Radio button |
+| **ダイアログボタンの位置** | ダイアログボタン配置用のtop/bottom/bothラジオボタン | Radio button |
 
 ---
 
@@ -998,6 +998,8 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 **Import**: `from Commands.McuCommandBase import McuCommand`
 
+（注: ファイル名は `McuCommandBase.py`、クラス名は `McuCommand`。メインブランチの実装に準拠）
+
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 
 **コンストラクタ**: `McuCommand(sync_name: str)`
@@ -1171,12 +1173,12 @@ print(entry.value)
 | **動的設定** | `init.py` | Python | イベントハンドラ、カスタムロジック | **パワーユーザー** |
 | **動的設定** | `init.lua` | Lua | イベントハンドラ、カスタムロジック | **パワーユーザー** |
 
-**重要**:
-- TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
+|**重要**:
+|- TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
 |- **動的設定にPythonを使用する場合、ユーザースクリプトと別のPythonインタープリターを使用する**。動的設定用インタープリターはRustコアに埋め込まれ、ユーザースクリプト用インタープリターとは独立して管理される
 |- **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。`[python]`（共通セクション）で同時に指定することも可能（詳細は§11.4参照）
 |- **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
-- **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持
+|- **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持
 
 ### 11.2 設定ファイル
 
@@ -1201,7 +1203,7 @@ print(entry.value)
 
 ### 11.4 静的設定（settings.toml）
 
-**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。これにはキーマップ設定（§15.2）も含まれます。
+**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。これにはキーマップ設定（§11.14）も含まれます。
 
 **注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（chicken-and-egg問題を回避）。
 
@@ -1210,7 +1212,7 @@ print(entry.value)
 [global]
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
-dynamic_config_language = "python"  # "python" | "lua"。動的設定ファイルの言語を指定
+dynamic_config_language = "lua"  # "python" | "lua" | "none"。動的設定ファイルの言語を指定。未指定時のデフォルトは "lua"（Neovimと同じ）
 
 [websocket]
 reconnect_interval_sec = 3  # 再接続間隔（秒）
@@ -1257,7 +1259,8 @@ reconnect_max_retries = 20  # リトライ回数上限
 [profiles]
 active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
 
-# カメラ設定
+# カメラ設定（グローバル）
+[camera]
 camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 
 # UI表示用FPSの選択肢（カスタマイズ可能）

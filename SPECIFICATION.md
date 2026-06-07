@@ -208,8 +208,8 @@
 - **外観**: Joy-Con L（シアン `#56CCF2`）+ R（赤 `#E9514E`）レイアウト。
 - **アクティブ色**: ボタンが押されている/保持されている間は黄色 `#FFD800`。
 - **入力方法**:
-  - **ホールド**: `<Button-1>` 押下でボタンホールドをトリガー（押下シグナル送信）。
-  - **解放**: `<ButtonRelease-1>` でボタン解放をトリガー（解放シグナル送信）。
+  - **ホールド**: ポインター押下（`mousedown` / タッチ開始）でボタンホールドをトリガー（押下シグナル送信）。
+  - **解放**: ポインター解放（`mouseup` / タッチ終了）でボタン解放をトリガー（解放シグナル送信）。
   - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。用途: ボタンを押したままの状態で別の操作を行いたい場合（例: Aボタン長押し中に別のボタンを短押し）。アプリケーション終了時やプロファイル切替時には、holdEndSkip中のボタンも含めて全てのボタンを強制解放する
   - **ブラウザ対応**: Shift+クリックによるブラウザのデフォルト動作（テキスト選択等）を防ぐため、`event.preventDefault()` を使用する
 - **ボタン**: すべての標準Switchコントローラーボタン:
@@ -891,9 +891,9 @@ Command (metaclass=CommandMeta)
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 単純入力ダイアログ（互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type = list) -> list | dict` | マルチウィジェットダイアログ（互換性維持） |
-| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list, filename: str, desc: str | None = None, need: type = list) -> list | dict` | 設定保存付きダイアログ（互換性維持） |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type = list) -> list | dict` | 設定選択付きダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list, filename: str, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 設定保存付きダイアログ（互換性維持） |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 

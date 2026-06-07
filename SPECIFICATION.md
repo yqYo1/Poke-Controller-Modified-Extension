@@ -1184,7 +1184,7 @@ print(entry.value)
 
 ### 11.4 静的設定（settings.toml）
 
-**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
+**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。これにはキーマップ設定（§15.2）も含まれます。
 
 **注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（chicken-and-egg問題を回避）。
 

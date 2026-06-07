@@ -225,8 +225,8 @@
 
 #### 5.3.2 出力パネル
 
-- **出力 #1**: プライマリログ/出力表示。
-- **出力 #2**: セカンダリログ/出力表示。
+- **出力 #1（上部ログパネル）**: プライマリログ/出力表示。
+- **出力 #2（下部ログパネル）**: セカンダリログ/出力表示。
 - **サイズ調整**: その他タブの「出力サイズ調整」スライダー（0～100）で制御。出力#1と出力#2の比率を決定。
 - **ログソース**: バックエンドからWebRTC DataChannel（プライマリ）またはWebSocket（フォールバック）経由で受信したログ。WebRTC DataChannelが利用可能な場合はそちらを優先し、接続断時はWebSocketにフォールバック。
 - **機能**: 自動スクロール、クリアボタン、クリップボードにコピー、ログレベルフィルタリング。
@@ -886,25 +886,25 @@ type GamepadInput = ButtonsList | Buttons
 **出力メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `print_t1()` | `print_t1(*objects, sep=' ', end='\\n') -> None` | 上部ログパネルへ出力 |
-| `print_t2()` | `print_t2(*objects, sep=' ', end='\\n') -> None` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects, sep=' ', end='\\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
-| `print_s()` | `print_s(*objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects, sep=' ', end='\\n') -> None` | `print_s`と同じ |
-| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
-| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\\n') -> None` | 下部ログ（モード付き） |
-| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\\n') -> None` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t1()` | `print_t1(*objects, sep=' ', end='\n') -> None` | 上部ログパネルへ出力 |
+| `print_t2()` | `print_t2(*objects, sep=' ', end='\n') -> None` | 下部ログパネルへ出力 |
+| `print_t()` | `print_t(*objects, sep=' ', end='\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
+| `print_s()` | `print_s(*objects, sep=' ', end='\n') -> None` | stdout割り当てパネルへ出力 |
+| `print_ts()` | `print_ts(*objects, sep=' ', end='\n') -> None` | `print_s`と同じ |
+| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\n') -> None` | 下部ログ（モード付き） |
+| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\n') -> None` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
 | `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 単純入力ダイアログ（互換性維持） |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | マルチウィジェットダイアログ（互換性維持） |
-| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list, filename: str, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 設定保存付きダイアログ（互換性維持） |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |
+| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 単純入力ダイアログ（互換性維持） |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | マルチウィジェットダイアログ（互換性維持） |
+| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list, filename: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定保存付きダイアログ（互換性維持） |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -942,7 +942,7 @@ type GamepadInput = ButtonsList | Buttons
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
-| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: Any = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 #### 10.4.3 ImageProcPythonCommand
 

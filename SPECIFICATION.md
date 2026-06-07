@@ -1156,8 +1156,9 @@ print(entry.value)
 
 **重要**:
 - TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
-- **動的設定にPythonを使用する場合、ユーザースクリプトと別のPythonインタープリターを使用する**。動的設定用インタープリターはRustコアに埋め込まれ、ユーザースクリプト用インタープリターとは独立して管理される
-- **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
+|- **動的設定にPythonを使用する場合、ユーザースクリプトと別のPythonインタープリターを使用する**。動的設定用インタープリターはRustコアに埋め込まれ、ユーザースクリプト用インタープリターとは独立して管理される
+|- **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。`[python]`（共通セクション）で同時に指定することも可能（詳細は§11.4参照）
+|- **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
 - **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持
 
 ### 11.2 設定ファイル
@@ -1198,14 +1199,40 @@ dynamic_config_language = "python"  # "python" | "lua"。動的設定ファイ�
 reconnect_interval_sec = 3  # 再接続間隔（秒）
 reconnect_max_retries = 20  # リトライ回数上限
 
-[python]
-# Python実行環境（オプション、デフォルト推奨）
-# デフォルトはバンドルされた3.14ランタイムを使用
-# ユーザー指定のPythonパス、仮想環境を指定可能
-# interpreter = "/usr/bin/python3.12"  # 例: システムPython
-# venv = "~/.config/pokecon/venv"  # 例: 仮想環境
+# Python実行環境設定
+# 原則: [python.script] と [python.dynamic] で別々に指定する（推奨）
+# 簡易: [python] 共通セクションで両方同時に指定する（上書き）
 
-# ユーザー追加ライブラリ（詳細は§14.6参照）
+# ---- 別々に指定する場合（推奨・初期値） ----
+[python.script]
+# ユーザースクリプト用Python実行環境
+# interpreter = "/usr/bin/python3.12"  # 例: システムPython
+# venv = "~/.local/share/pokecon/venv-script"  # 例: 仮想環境
+
+[python.script.packages]
+# ユーザースクリプト用仮想環境への追加インストールパッケージ
+# mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
+# [[python.script.packages.list]]
+# name = "requests"
+# version = ">=2.28.0"
+
+[python.dynamic]
+# 動的設定用Python実行環境
+# interpreter = "/usr/bin/python3.12"
+# venv = "~/.local/share/pokecon/venv-dynamic"
+
+[python.dynamic.packages]
+# 動的設定用仮想環境への追加インストールパッケージ
+# mode = "append"
+# [[python.dynamic.packages.list]]
+# name = "numpy"
+
+# ---- 同時に指定する場合（上書き） ----
+# [python] セクションを使用すると、[python.script] と [python.dynamic] の両方に
+# 同じ設定が適用される。[python.script] / [python.dynamic] が未設定の場合のみ有効
+# [python]
+# interpreter = "/usr/bin/python3.12"
+# venv = "~/.config/pokecon/venv"
 # [[python.packages]]
 # name = "requests"
 # version = ">=2.28.0"
@@ -2215,30 +2242,48 @@ fn main() {
 # ~/.config/pokecon/settings.toml
 # ユーザーが触る設定ファイル（必須パッケージは含まない）
 
-[python]
-# Python実行環境（オプション、デフォルト推奨）
-# デフォルトはバンドルされた3.14ランタイムを使用
-# ユーザー指定のPythonパス、仮想環境を指定可能
-# interpreter = "/usr/bin/python3.12"  # 例: システムPython
-# venv = "~/.config/pokecon/venv"  # 例: 仮想環境
+# ---- 別々に指定する場合（推奨） ----
+[python.script]
+# interpreter = "/usr/bin/python3.12"
+# venv = "~/.local/share/pokecon/venv-script"
 
-# ユーザー追加ライブラリ
-[[python.packages]]
+[python.script.packages]
+mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
+[[python.script.packages.list]]
 name = "requests"
 version = ">=2.28.0"  # バージョン指定あり
 
-[[python.packages]]
+[[python.script.packages.list]]
 name = "numpy"        # バージョン指定なし（最新版）
 
-[[python.packages]]
+[[python.script.packages.list]]
 name = "custom-lib"
 version = "1.0.0"
 source = "git+https://github.com/user/custom-lib.git"  # 取得元指定
 
-[[python.packages]]
+[[python.script.packages.list]]
 name = "local-lib"
 version = "0.5.0"
 source = "path=/home/user/projects/local-lib"  # ローカルパス
+
+[python.dynamic]
+# interpreter = "/usr/bin/python3.12"
+# venv = "~/.local/share/pokecon/venv-dynamic"
+
+[python.dynamic.packages]
+mode = "append"
+[[python.dynamic.packages.list]]
+name = "httpx"
+version = ">=0.24.0"
+
+# ---- 同時に指定する場合（上書き） ----
+# [python] セクションを使用すると両方に同じ設定が適用される
+# [python]
+# interpreter = "/usr/bin/python3.12"
+# venv = "~/.config/pokecon/venv"
+# [[python.packages]]
+# name = "requests"
+# version = ">=2.28.0"
 ```
 
 ### 14.7 LSP設定（pyproject.toml）

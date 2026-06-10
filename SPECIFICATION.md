@@ -1154,6 +1154,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 - `wait_dialog(dialog_id: int) -> int`
 - 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
+- 戻り値はダイアログの結果（`show_dialog()` と同じ値）。ブロッキングダイアログの場合は `0`、非ブロッキングの場合はユーザー入力値
 - 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
 - **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照
 

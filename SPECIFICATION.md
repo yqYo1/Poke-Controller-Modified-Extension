@@ -1002,7 +1002,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 **インポート**: `from Commands.McuCommandBase import McuCommand`
 
-（注: ファイル名は `McuCommandBase.py`、クラス名は `McuCommand`。メインブランチの実装に準拠）
+> **注**: ファイル名は `McuCommandBase.py`、クラス名は `McuCommand`。メインブランチの実装に準拠
 
 ファームウェアベースコマンド用。PythonCommandと同じメタクラス切り替え。
 

@@ -1014,7 +1014,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `end()` | `end(ser: Sender) -> None` | コマンド終了。`"end"` をシリアル送信し、`isRunning = False` を設定。`postProcess` が設定されていれば実行 |
 
 **ライフサイクル**:
-1. `McuCommandBase("command_name")` でインスタンス作成
+1. `McuCommand("command_name")` でインスタンス作成
 2. `start(ser, postProcess)` でコマンド開始（ファームウェアに `sync_name` を送信）
 3. ファームウェア側で処理実行
 4. `end(ser)` でコマンド終了（ファームウェアに `"end"` を送信）

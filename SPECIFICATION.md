@@ -1301,6 +1301,7 @@ key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 |------|-------------------|
 | `settings.toml` で `dynamic_config_language = "python"` を指定 | `init.py` |
 | `settings.toml` で `dynamic_config_language = "lua"` を指定 | `init.lua` |
+| `settings.toml` で `dynamic_config_language = "none"` を指定 | 動的設定を読み込まない |
 | 未指定（デフォルト） | `init.lua` が優先（Neovimと同じ） |
 
 **両方を使いたい場合**: 一方から `pokecon.source()` で另一方を読み込んでください。

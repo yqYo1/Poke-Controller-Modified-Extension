@@ -2332,44 +2332,22 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 
 ### 14.7 LSP設定（pyproject.toml）
 
-```toml
-[tool.basedpyright]
-extraPaths = ["~/.local/share/pokecon/typings"]
-venvPath = "~/.local/share/pokecon"
-venv = "venv"
+LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。以下の項目を設定する必要がある:
 
-[tool.pyright]
-extraPaths = ["~/.local/share/pokecon/typings"]
-venvPath = "~/.local/share/pokecon"
-venv = "venv"
+- **型スタブパス**: `~/.local/share/pokecon/typings` を各LSPの検索パスに追加
+- **仮想環境**: `~/.local/share/pokecon/venv` をPython環境として指定
 
-[tool.mypy]
-mypy_path = ["~/.local/share/pokecon/typings"]
+対応LSP: basedpyright, pyright, mypy, pylsp, pyrefly, ty, ruff
 
-[tool.pylsp.plugins.jedi]
-extra_paths = ["~/.local/share/pokecon/typings"]
-
-[tool.pyrefly]
-search_path = ["~/.local/share/pokecon/typings"]
-
-[tool.ty.environment]
-extra-paths = ["~/.local/share/pokecon/typings"]
-python = "~/.local/share/pokecon/venv/bin/python"
-
-[tool.ruff]
-# ruffはextraPaths未対応（LSP機能限定）
-```
+**詳細な設定例**: リポジトリ内の `pyproject.toml` または開発者ドキュメントを参照。
 
 ### 14.8 Lua LSP設定（.luarc.json）
 
-```json
-{
-    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
-    "workspace.library": [
-        "~/.local/share/pokecon/lua-typings"
-    ]
-}
-```
+Lua LSP設定は `.luarc.json` で管理する。
+
+- **型定義ライブラリ**: `~/.local/share/pokecon/lua-typings` をワークスペースライブラリに追加
+
+**詳細な設定例**: リポジトリ内の `.luarc.json` または開発者ドキュメントを参照。
 
 ---
 

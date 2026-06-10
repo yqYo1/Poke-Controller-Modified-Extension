@@ -1816,7 +1816,7 @@ import pokecon
 from typing import Literal, Callable
 
 # KBKeys: 定義済みキーの型
-KBKeys = Literal[
+type KBKeys = Literal[
     # アルファベット（小文字）
     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",

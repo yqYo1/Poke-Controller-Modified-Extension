@@ -1151,7 +1151,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 #### 10.6.5 ダイアログ待機
 
-- `wait_dialog(dialog_id: int) -> None`
+- `wait_dialog(dialog_id: int) -> int`
 - 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
 - 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
 - **ライフサイクル**: §10.6.1「ダイアログライフサイクル」を参照

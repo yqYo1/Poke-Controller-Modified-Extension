@@ -2480,27 +2480,17 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 
 ### B. メタクラス設計（CommandMeta）
 
-```python
-class CommandMeta(type):
-    """実装切り替え用メタクラス。
+**責務**:
+- **実装切り替え**: クラス変数や関数使用パターンに基づいて、Python実装とPyO3（Rust）実装を切り替える
+- **抽象クラスチェック**: `do()` メソッドを持つクラス（PythonCommand, ImageProcPythonCommand）を抽象クラスとして扱う。`do()` を実装しないサブクラスのインスタンス化を防止
 
-    現状はすべての実装がPyO3（Rustバインディング）に流れる。
-    将来: クラス変数や関数使用パターンに基づいて切り替え。
+**現在の挙動**:
+- すべての実装がPyO3（Rustバインディング）に流れる
+- インスタンス化時に `do()` メソッドの存在を確認し、未実装の場合は `TypeError` を送出
 
-    抽象クラスとしての機能:
-    - `do()` メソッドを持つクラス（PythonCommand, ImageProcPythonCommand）を
-      抽象クラスとして扱う。`do()` を実装しないサブクラスのインスタンス化を防止。
-    - インスタンス化時に `do()` メソッドの存在を確認し、未実装の場合は
-      `TypeError` を送出。
-    """
-    def __call__(cls, *args, **kwargs) -> Any:
-        # 抽象クラスチェック: do() メソッドが定義されているか
-        if hasattr(cls, '__abstractmethods__') and cls.__abstractmethods__:
-            raise TypeError(f"Can't instantiate abstract class {cls.__name__} with abstract method(s) {', '.join(cls.__abstractmethods__)}")
-        # 将来: cls.__target_implementation__等をチェック
-        # 現状: 常にPyO3実装を使用
-        return super().__call__(*args, **kwargs)
-```
+**将来の拡張**:
+- クラス変数 `__target_implementation__` 等をチェックし、動的に実装クラスを選択
+- 純粋Python実装とPyO3実装の切り替えをサポート
 
 ---
 

@@ -1275,6 +1275,10 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 [camera]
 camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 
+# WebRTC設定
+[webrtc]
+stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
+
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）

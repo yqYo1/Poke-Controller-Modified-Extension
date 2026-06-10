@@ -113,7 +113,7 @@
 
 | ブラウザ | 最小バージョン |
 |---------|----------------|
-| Chrome/Edge | 90以上 |
+|| Chrome/Edge | 94以上（WebCodecs対応のため） |
 | Firefox | 130以上（WebCodecs対応のため） |
 | Safari | 16.4以上（WebRTC対応。WebCodecs VideoはSafari 16.4+で対応） |
 

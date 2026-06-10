@@ -2481,6 +2481,11 @@ class CommandMeta(type):
     """
     def __call__(cls, *args, **kwargs):
         # 抽象クラスチェック: do() メソッドが定義されているか
+        # ※ABCMetaを継承していないため、__abstractmethods__は通常設定されない。
+        #  実際のチェックは `do` メソッドの存在確認に置き換えるべき:
+        #  if not hasattr(cls, 'do') or not callable(getattr(cls, 'do')):
+        #      raise TypeError(f"{cls.__name__} must implement do() method")
+        # 現状のコードは将来的な拡張性を考慮したプレースホルダー
         if hasattr(cls, '__abstractmethods__') and cls.__abstractmethods__:
             raise TypeError(f"Can't instantiate abstract class {cls.__name__} with abstract method(s) {', '.join(cls.__abstractmethods__)}")
         # 将来: cls.__target_implementation__等をチェック

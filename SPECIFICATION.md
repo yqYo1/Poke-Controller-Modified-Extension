@@ -1190,7 +1190,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.2 設定ファイル
 
-> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、Rustネイティブの設定管理に置き換えられます。正確な形式と保存場所はRustバックエンドチームが決定します（本UI仕様の範囲外）。
+> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、TOML形式の`settings.toml`に置き換えられます。設定ファイルの形式はTOML、保存場所は`~/.config/pokecon/settings.toml`（グローバル）および`~/.config/pokecon/profiles/<name>/settings.toml`（プロファイル）です。
 
 ### 11.3 優先順位とマージ方式
 

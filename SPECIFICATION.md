@@ -624,7 +624,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
-- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `localhost:*` のみ許可（デフォルト）
+- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `http://localhost:8020` のみ許可（デフォルト）
 - **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
 

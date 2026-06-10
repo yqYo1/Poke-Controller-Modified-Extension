@@ -1627,15 +1627,8 @@ print(pokecon.event.list_defined())
 
 **ScriptLoadPre/ScriptLoadPostのタイミング**:
 
-```
-1. 初期処理: script_dirs の解決・存在確認
-2. ファイル探索: 各ディレクトリ内の .py ファイルを探索
-3. クラス抽出: モジュールインポート・コマンドクラス抽出・自動タグ生成
-4. ScriptLoadPre 発火: pokecon.state.command_candidates が設定済み
-   → ユーザーがコールバック内で command_candidates を変更可能
-5. メイン処理: command_candidates を元に手動タグ統合・動的タグ追加
-6. ScriptLoadPost 発火: すべてのタグ統合完了後
-```
+- **ScriptLoadPre**: コマンドクラスの抽出・自動タグ生成完了後、`command_candidates` が設定済みの状態で発火。ユーザーはコールバック内で `command_candidates` を変更可能
+- **ScriptLoadPost**: 手動タグ統合・動的タグ追加がすべて完了した後に発火
 
 **命名規則**:
 - **パスカルケース（アッパーキャメルケース）**: `CameraOpenPost`, `SerialConnectPost`

@@ -2495,7 +2495,7 @@ class CommandMeta(type):
     - インスタンス化時に `do()` メソッドの存在を確認し、未実装の場合は
       `TypeError` を送出。
     """
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args, **kwargs) -> Any:
         # 抽象クラスチェック: do() メソッドが定義されているか
         # ※ABCMetaを継承していないため、__abstractmethods__は通常設定されない。
         #  実際のチェックは `do` メソッドの存在確認に置き換えるべき:

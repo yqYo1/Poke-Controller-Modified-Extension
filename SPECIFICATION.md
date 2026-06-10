@@ -1085,7 +1085,7 @@ class Widget[T]:
     @overload
     def __init__(self, widget_type: Literal["Next"]) -> None: ...
 
-    def __init__(self, widget_type: str, label: str, *args: object, **kwargs: object) -> None:
+    def __init__(self, widget_type: str, label: str = "", *args: object, **kwargs: object) -> None:
         self.widget_type = widget_type
         self.label = label
         self.value: T | None = None  # ダイアログ後に結果を格納

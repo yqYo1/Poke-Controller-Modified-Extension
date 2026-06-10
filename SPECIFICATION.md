@@ -1045,7 +1045,9 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 **注**: `ser.write()` の引数 `data` は `bytes` 型。`str` を渡す場合は事前にエンコードが必要（`data.encode('utf-8')`）。
 
-その他のSenderメソッドはSenderクラスとして公開されず、適切な他クラスに統合。
+その他のSenderメソッドは、以下のクラスに統合:
+- シリアル接続管理 → `SerialController` クラス
+- コネクション状態 → `pokecon.state` 名前空間
 
 ### 10.6 ダイアログAPI
 

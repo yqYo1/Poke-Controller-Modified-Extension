@@ -1377,7 +1377,7 @@ def custom_sort(tags: list[str]) -> list[str]:
 pokecon.ui.tag_sort_function = custom_sort
 
 # 動的タグ追加（ScriptLoadPreイベント）
-def add_dynamic_tags():
+def add_dynamic_tags() -> None:
     for candidate in pokecon.state.command_candidates:
         if candidate.name.startswith("Auto"):
             candidate.tags.append("@Auto")

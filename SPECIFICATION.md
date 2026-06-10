@@ -37,7 +37,7 @@
 - **スクリプト互換性**: §4.6「スクリプト互換性」を参照。リファクタリング前のバージョンで動作していたすべてのスクリプトは、引き続き正常に動作する必要があります。
 - **モダンスタック**: SvelteKit + Svelte 5（Runesモード）+ **Tailwind CSS v4**（確定、変更不可）。
 - **低遅延通信**: プライマリとしてWebRTC、フォールバックとしてビデオ: WebCodecs + WebSocket、DataChannel: WebSocketを使用。WebSocketは切断時に3秒ごとに自動再接続。
-- **型安全性**: Rustバックエンドから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
+- **型安全性**: Rustコアから `utoipa` v5 + `openapi-typescript` を介してOpenAPI生成のTypeScript型を使用。
 - **認証なし**: アプリケーションはローカル/LAN専用に設計。API認証は不要。
 
 **実装レイヤー**:
@@ -620,7 +620,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 ### 7.4 HTTP REST API
 
-- **フレームワーク**: axum（Rustバックエンド）。
+- **フレームワーク**: axum（Rustコア）。
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
@@ -751,7 +751,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 ### 8.1 OpenAPI → TypeScript
 
-- **ソース**: `utoipa` v5マクロを使用したRustバックエンド。
+- **ソース**: `utoipa` v5マクロを使用したRustコア。
 - **生成**: `openapi-typescript` CLI。
 - **出力**: `src/lib/api/openapi.ts`。
 - **使用法**: すべてのAPI呼び出しとWebSocketメッセージは生成された型を使用する必要があります。
@@ -759,7 +759,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 **ワークフロー**:
 
 ```bash
-# 1. RustバックエンドでOpenAPI JSONを生成（ビルド時に自動実行）
+# 1. RustコアでOpenAPI JSONを生成（ビルド時に自動実行）
 cargo build
 
 # 2. openapi-typescriptでTypeScript型を生成（デフォルトポート8020）

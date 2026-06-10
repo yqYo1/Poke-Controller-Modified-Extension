@@ -838,7 +838,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 Command (metaclass=CommandMeta)
 ├── PythonCommand
 │   └── ImageProcPythonCommand
-└── McuCommandBase
+└── McuCommand
 ```
 
 **注**: すべてのクラスは `CommandMeta` メタクラスを使用（付録B参照）。`PythonCommand` と `ImageProcPythonCommand` は抽象メソッド `do()` を持つが、Pythonの `ABC` クラスを継承しない（`CommandMeta` で抽象クラスとして扱われる）。ユーザースクリプトでは `PythonCommand` または `ImageProcPythonCommand` を継承して `do()` を実装する。

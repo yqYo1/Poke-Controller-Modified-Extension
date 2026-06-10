@@ -1655,7 +1655,7 @@ print(pokecon.event.list_defined())
 from typing import Literal
 
 # 組み込みイベントの厳密な型定義
-BuiltinEvent = Literal[
+type BuiltinEvent = Literal[
     "AppStartupPost", "AppShutdownPre",
     "SerialConnectPost", "SerialDisconnectPre", "SerialDisconnectPost",
     "CameraOpenPost", "CameraClosePre", "CameraClosePost",

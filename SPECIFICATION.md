@@ -1579,6 +1579,7 @@ pokecon.autocmd.on("CameraOpenPost", {
 pokecon.event.define("MyCustomEvent")
 
 # イベント発火
+# 引数: data: dict[str, Any] | None = None
 # 戻り値: None
 pokecon.event.emit("MyCustomEvent", data={"key": "value"})
 

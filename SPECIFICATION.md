@@ -1911,10 +1911,10 @@ pokecon.keymap.set("<MyCustomKey>", function()
     print("Custom key triggered")
 end)
 -- 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
-pokecon.keymap.set("<C-m>", "<MyCustomKey>", true)
+pokecon.keymap.set("<C-m>", "<MyCustomKey>", { remap = true })
 
 -- 説明文付き
-pokecon.keymap.set("<F5>", function() end, false, "F5の動作を無効化")
+pokecon.keymap.set("<F5>", function() end, { remap = false, desc = "F5の動作を無効化" })
 
 -- キーマップ削除
 pokecon.keymap.del("<F5>")  -- F5のキーマップを削除

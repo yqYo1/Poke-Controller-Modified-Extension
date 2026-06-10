@@ -996,9 +996,9 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 **内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
 | 関数 | シグネチャ | 説明 |
 |------|-----------|-------------|
-| `_template_match()` | `_template_match(image, template, threshold, use_gray, ...) -> tuple[bool, float, tuple[int, int]]` | コアテンプレートマッチング |
-| `_grayscale()` | `_grayscale(image) -> MatLike` | グレースケール変換 |
-| `_resize()` | `_resize(image, width, height) -> MatLike` | 画像リサイズ |
+|| `_template_match()` | `_template_match(image: MatLike, template: MatLike, threshold: float, use_gray: bool, mask: MatLike | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop: list[int] | None = None, crop_template: list[int] | None = None, show_image: bool = False) -> tuple[bool, float, tuple[int, int]]` | コアテンプレートマッチング |
+|| `_grayscale()` | `_grayscale(image: MatLike) -> MatLike` | グレースケール変換 |
+|| `_resize()` | `_resize(image: MatLike, width: int, height: int) -> MatLike` | 画像リサイズ |
 
 #### 10.4.4 McuCommandBase
 

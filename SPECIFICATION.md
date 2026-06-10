@@ -1224,7 +1224,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。これにはキーマップ設定（§11.14）も含まれます。
 
-**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（chicken-and-egg問題を回避）。
+**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
 
 ```toml
 # ~/.config/pokecon/settings.toml

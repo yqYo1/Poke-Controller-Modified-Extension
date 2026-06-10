@@ -990,8 +990,8 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 || `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
 || `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
 || `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
-|| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | GUIキャンバスオーバーレイに矩形描画 |
-|| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | GUIキャンバスオーバーレイにテキスト描画 |
+|| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
+|| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
 
 **内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
 | 関数 | シグネチャ | 説明 |

@@ -1752,7 +1752,7 @@ PreCallback = Callable[[], bool | None]
 └── 終了
 
 ヘルプ
-├── Github
+├── GitHub
 ├── Poke-Controller Guide
 ├── 質問テンプレート
 ├── バージョン確認

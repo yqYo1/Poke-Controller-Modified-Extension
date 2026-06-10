@@ -824,7 +824,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 **注**: 以下のモジュールはRust/PyO3で実装され、Pythonファイルは型注釈・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
 
-| モジュール | 内容 | ユーザースクリプトでのImport例 |
+| モジュール | 内容 | ユーザースクリプトでのインポート例 |
 |-----------|------|------------------------------|
 | `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
 | `image_proc` | 画像処理（Rust実装）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
@@ -847,7 +847,7 @@ Command (metaclass=CommandMeta)
 
 #### 10.4.2 PythonCommand
 
-**Import**: `from Commands.PythonCommandBase import PythonCommand`
+**インポート**: `from Commands.PythonCommandBase import PythonCommand`
 
 **ライフサイクルメソッド**:
 | メソッド | シグネチャ | 説明 |
@@ -948,7 +948,7 @@ type GamepadInput = ButtonsList | Buttons
 
 #### 10.4.3 ImageProcPythonCommand
 
-**Import**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
+**インポート**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
 
 `PythonCommand`を拡張し、カメラと画像処理機能を追加。
 
@@ -998,7 +998,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 #### 10.4.4 McuCommandBase
 
-**Import**: `from Commands.McuCommandBase import McuCommand`
+**インポート**: `from Commands.McuCommandBase import McuCommand`
 
 （注: ファイル名は `McuCommandBase.py`、クラス名は `McuCommand`。メインブランチの実装に準拠）
 

@@ -1840,7 +1840,8 @@ pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"))
 pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
 
 # remap有効（キー→キーのマッピング）
-pokecon.keymap.set("<C-a>", "<Release-A>", remap=True)
+# 例: <C-a> を押すと <F5> が発火される
+pokecon.keymap.set("<C-a>", "<F5>", remap=True)
 
 # 特殊キー
 pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))

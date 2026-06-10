@@ -938,20 +938,20 @@ type GamepadInput = ButtonsList | Buttons
 **通知メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|| `discord_text()` | `discord_text(content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテスト送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
 || `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
-
-**ImageProcPythonCommand通知メソッド**（画像処理クラスのみ）:
-| メソッド | シグネチャ | 説明 |
-|--------|-----------|-------------|
-| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
-| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 #### 10.4.3 ImageProcPythonCommand
 
 **インポート**: `from Commands.PythonCommandBase import ImageProcPythonCommand`
 
 `PythonCommand`を拡張し、カメラと画像処理機能を追加。
+
+**通知メソッド**（画像処理クラスのみ）:
+
+|| メソッド | シグネチャ | 説明 |
+||--------|-----------|-------------|
+|| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+|| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 **トリミングパラメータ**:
 - `crop_fmt: CropFmt` — トリミング形式。以下の値を指定:

@@ -2315,53 +2315,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 
 ### 14.6 ユーザーパッケージ設定
 
-```toml
-# ~/.config/pokecon/settings.toml
-# ユーザーが触る設定ファイル（必須パッケージは含まない）
-
-# ---- 別々に指定する場合（推奨） ----
-[python.script]
-# interpreter = "/usr/bin/python3.12"
-# venv = "~/.local/share/pokecon/venv-script"
-
-[python.script.packages]
-mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
-[[python.script.packages.list]]
-name = "requests"
-version = ">=2.28.0"  # バージョン指定あり
-
-[[python.script.packages.list]]
-name = "numpy"        # バージョン指定なし（最新版）
-
-[[python.script.packages.list]]
-name = "custom-lib"
-version = "1.0.0"
-source = "git+https://github.com/user/custom-lib.git"  # 取得元指定
-
-[[python.script.packages.list]]
-name = "local-lib"
-version = "0.5.0"
-source = "path=/home/user/projects/local-lib"  # ローカルパス
-
-[python.dynamic]
-# interpreter = "/usr/bin/python3.12"
-# venv = "~/.local/share/pokecon/venv-dynamic"
-
-[python.dynamic.packages]
-mode = "append"
-[[python.dynamic.packages.list]]
-name = "httpx"
-version = ">=0.24.0"
-
-# ---- 同時に指定する場合（上書き） ----
-# [python] セクションを使用すると両方に同じ設定が適用される
-# [python]
-# interpreter = "/usr/bin/python3.12"
-# venv = "~/.config/pokecon/venv"
-# [[python.packages]]
-# name = "requests"
-# version = ">=2.28.0"
-```
+ユーザーパッケージ設定については §11.4「静的設定（settings.toml）」を参照。
 
 ### 14.7 LSP設定（pyproject.toml）
 

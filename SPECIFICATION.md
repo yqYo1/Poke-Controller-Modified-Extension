@@ -2301,14 +2301,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 - **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
 - `cargo:rerun-if-changed=../pyproject.toml`で再ビルドトリガー
 
-```rust
-// build.rs
-fn main() {
-    println!("cargo:rerun-if-changed=../pyproject.toml");
-    // pyproject.tomlを読み込み、依存関係をパース
-    // 生成コードをOUT_DIRに書き出し
-}
-```
+実装詳細は `rust/pokecon-core/build.rs` を参照。
 
 ### 14.6 ユーザーパッケージ設定
 

@@ -1575,19 +1575,23 @@ pokecon.autocmd.on("CameraOpenPost", {
 
 ```python
 # ユーザー定義イベント
+# pokecon.event.define(event: str) -> None
 # 戻り値: None
 pokecon.event.define("MyCustomEvent")
 
 # イベント発火
+# pokecon.event.emit(event: str, data: dict[str, Any] | None = None) -> None
 # 引数: data: dict[str, Any] | None = None
 # 戻り値: None
 pokecon.event.emit("MyCustomEvent", data={"key": "value"})
 
 # 定義済みイベント一覧
+# pokecon.event.list_defined() -> list[str]
 # 戻り値: list[str]
 print(pokecon.event.list_defined())
 
 # イベントスキーマ取得
+# pokecon.event.get_schema(event: str) -> dict[str, Any]
 # 戻り値: dict[str, Any]（イベントのメタデータ）
 schema = pokecon.event.get_schema("CameraOpenPost")
 ```

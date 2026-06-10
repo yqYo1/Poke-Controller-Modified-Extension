@@ -1232,7 +1232,7 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 # Python実行環境設定
 # 原則: [python.script] と [python.dynamic] で別々に指定する（推奨）
-# 簡易: [python] 共通セクションで両方同時に指定する（上書き）
+# 簡易: [python] 共通セクションで両方同時に指定する（フォールバック）
 
 # ---- 別々に指定する場合（推奨・初期値） ----
 [python.script]

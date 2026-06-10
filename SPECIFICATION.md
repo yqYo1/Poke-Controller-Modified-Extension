@@ -897,7 +897,7 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
+|| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 

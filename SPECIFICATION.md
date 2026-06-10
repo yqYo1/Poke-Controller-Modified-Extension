@@ -1982,7 +1982,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | `<nop>` | No-op（何もしない） | `<nop>` |
 | `<NL>` | Linefeed | `<NL>` |
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
-| `<Release-x>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
+| `<Release-*>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
 
 **注意**:

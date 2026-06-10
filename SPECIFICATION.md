@@ -1740,8 +1740,8 @@ PreCallback = Callable[[], bool | None]
 ```
 メニュー
 ├── コマンド
-│   ├── LINE Token Assignment
-│   ├── LINE Token Check
+│   ├── LINE Token Assignment      ※旧UI互換（LINE通知UIは§4.3で削除済み）
+│   ├── LINE Token Check           ※旧UI互換（LINE通知UIは§4.3で削除済み）
 │   ├── Discord Setting Assignment
 │   ├── Discord Check
 │   ├── Generate Bat File & Profile Directory
@@ -1765,7 +1765,7 @@ PreCallback = Callable[[], bool | None]
 └── LICENSE
 ```
 
-**注**: メインブランチのTkinter UIに準拠。新機能（Fileメニューの動的設定関連）はリファクタリング後の追加機能。
+**注**: メインブランチのTkinter UIに準拠。新機能（Fileメニューの動的設定関連）はリファクタリング後の追加機能。LINE関連メニューは旧UI互換のため残存（§4.3参照）。
 
 #### 11.13.2 ファイル選択と自動判別
 

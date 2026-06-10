@@ -400,9 +400,9 @@ class CommandInfo:
 ```
 
 **自動タグ（ディレクトリ由来）**:
-- Pythonモジュールパスから自動生成（`mod.__name__.split(".")[2:-1]` で中間ディレクトリ名を抽出）
-- `@` プレフィックスを付与（例: `@Samples`, `@RankGlitch`）
-- ネストしたディレクトリ構造に対応（例: `Commands.PythonCommands.Samples.RankGlitch.MashA` → `["@Samples", "@RankGlitch"]`）
+- Pythonモジュールのパスから自動生成（中間ディレクトリ名を `@` プレフィックス付きで抽出）
+- 例: `Commands.PythonCommands.Samples.RankGlitch.MashA` → `["@Samples", "@RankGlitch"]`
+- ネストしたディレクトリ構造に対応
 - 元のディレクトリ名をそのまま使用（PascalCase変換なし）
 
 **手動タグ（クラス属性）**:

@@ -2389,7 +2389,7 @@ python = "~/.local/share/pokecon/venv/bin/python"
 - **ハードウェア制御**
   - ProController/Xinput対応（§6.3.2参照）
 - **キー設定（設定ファイルベース）**
-  - GUIからの編集は不要
+  - UIからの編集は不要
   - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
   - 例: `keyboard.shortcuts.F5 = "command_start"`
 - **Pokemon Home連携**（今後のバージョンで実装予定 — APIはmainブランチ準拠で実装）。

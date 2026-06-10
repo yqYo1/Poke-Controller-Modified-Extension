@@ -1913,6 +1913,7 @@ end)
 pokecon.keymap.set("<C-m>", "<MyCustomKey>", { remap = true })
 
 -- 説明文付き
+-- Luaでは第3引数にオプションテーブルを渡す（Pythonのキーワード引数と等価）
 pokecon.keymap.set("<F5>", function() end, { remap = false, desc = "F5の動作を無効化" })
 
 -- キーマップ削除

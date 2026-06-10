@@ -975,7 +975,7 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
 
-**コンストラクタ**: `ImageProcPythonCommand(cam, gui=None)`
+**コンストラクタ**: `ImageProcPythonCommand(cam: Camera, gui: GUI | None = None)`
 
 **MatLike型**:
 ```python

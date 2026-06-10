@@ -2322,27 +2322,27 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 
 ```toml
 [tool.basedpyright]
-extraPaths = ["/home/username/.local/share/pokecon/typings"]
-venvPath = "/home/username/.local/share/pokecon"
+extraPaths = ["~/.local/share/pokecon/typings"]
+venvPath = "~/.local/share/pokecon"
 venv = "venv"
 
 [tool.pyright]
-extraPaths = ["/home/username/.local/share/pokecon/typings"]
-venvPath = "/home/username/.local/share/pokecon"
+extraPaths = ["~/.local/share/pokecon/typings"]
+venvPath = "~/.local/share/pokecon"
 venv = "venv"
 
 [tool.mypy]
-mypy_path = ["/home/username/.local/share/pokecon/typings"]
+mypy_path = ["~/.local/share/pokecon/typings"]
 
 [tool.pylsp.plugins.jedi]
-extra_paths = ["/home/username/.local/share/pokecon/typings"]
+extra_paths = ["~/.local/share/pokecon/typings"]
 
 [tool.pyrefly]
-search_path = ["/home/username/.local/share/pokecon/typings"]
+search_path = ["~/.local/share/pokecon/typings"]
 
 [tool.ty.environment]
-extra-paths = ["/home/username/.local/share/pokecon/typings"]
-python = "/home/username/.local/share/pokecon/venv/bin/python"
+extra-paths = ["~/.local/share/pokecon/typings"]
+python = "~/.local/share/pokecon/venv/bin/python"
 
 [tool.ruff]
 # ruffはextraPaths未対応（LSP機能限定）
@@ -2354,7 +2354,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
 {
     "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
     "workspace.library": [
-        "/home/username/.local/share/pokecon/lua-typings"
+        "~/.local/share/pokecon/lua-typings"
     ]
 }
 ```

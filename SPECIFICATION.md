@@ -892,7 +892,7 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2()` | `print_t2(*objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログパネルへ出力 |
 | `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
 | `print_s()` | `print_s(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\n') -> None` | `print_s`と同じ |
+| `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\n') -> None` | `print_s`と同じ（旧API互換のための別名） |
 | `print_t1b()` | `print_t1b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |

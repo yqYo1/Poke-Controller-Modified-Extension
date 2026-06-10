@@ -873,27 +873,27 @@ type GamepadInput = ButtonsList | Buttons
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `press()` | `press(buttons: GamepadInput, duration=0.1, wait=0.1) -> None` | ボタン押下（指定秒数保持後解放） |
-| `pressRep()` | `pressRep(buttons: GamepadInput, repeat, duration=0.1, interval=0.1, wait=0.1) -> None` | 繰り返し押下 |
-| `hold()` | `hold(buttons: GamepadInput, wait=0.1) -> None` | ボタンを押下状態で保持 |
-| `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
+|| `press()` | `press(buttons: GamepadInput, duration: float = 0.1, wait: float = 0.1) -> None` | ボタン押下（指定秒数保持後解放） |
+|| `pressRep()` | `pressRep(buttons: GamepadInput, repeat: int, duration: float = 0.1, interval: float = 0.1, wait: float = 0.1) -> None` | 繰り返し押下 |
+|| `hold()` | `hold(buttons: GamepadInput, wait: float = 0.1) -> None` | ボタンを押下状態で保持 |
+|| `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
 | `wait()` | `wait(wait: float) -> None` | wait秒スリープ |
 | `short_wait()` | `short_wait(wait: float) -> None` | ビジーループ待機（高精度） |
 | `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信 |
 | `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
-
 **出力メソッド**:
+
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `print_t1()` | `print_t1(*objects, sep=' ', end='\n') -> None` | 上部ログパネルへ出力 |
-| `print_t2()` | `print_t2(*objects, sep=' ', end='\n') -> None` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects, sep=' ', end='\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
-| `print_s()` | `print_s(*objects, sep=' ', end='\n') -> None` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects, sep=' ', end='\n') -> None` | `print_s`と同じ |
-| `print_t1b()` | `print_t1b(mode, *objects, sep=' ', end='\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
-| `print_t2b()` | `print_t2b(mode, *objects, sep=' ', end='\n') -> None` | 下部ログ（モード付き） |
-| `print_tb()` | `print_tb(mode, *objects, sep=' ', end='\n') -> None` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode, *objects, sep=' ', end='\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t1()` | `print_t1(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | 上部ログパネルへ出力 |
+| `print_t2()` | `print_t2(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | 下部ログパネルへ出力 |
+| `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
+| `print_s()` | `print_s(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout割り当てパネルへ出力 |
+| `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | `print_s`と同じ |
+| `print_t1b()` | `print_t1b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | 下部ログ（モード付き） |
+| `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
 | `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
@@ -934,13 +934,13 @@ type GamepadInput = ButtonsList | Buttons
 **通知メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `discord_text()` | `discord_text(content='', index=0, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテスト送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
-| `LINE_text()` | `LINE_text(txt: str, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+|| `discord_text()` | `discord_text(content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテスト送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+|| `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 **ImageProcPythonCommand通知メソッド**（画像処理クラスのみ）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `discord_image()` | `discord_image(content='', index=0, crop_fmt='', crop=None, keys='DISCORD_WEBHOOK') -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 #### 10.4.3 ImageProcPythonCommand
@@ -980,18 +980,18 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 **画像処理メソッド**（Rust opencv-rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `isContainTemplate()` | `isContainTemplate(template_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, use_gpu=False, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | カメラフレームに対するテンプレートマッチング |
-| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path_list=None, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
-| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | `isContainTemplate()` のラッパー。`use_gpu=True` を固定して呼び出す。本リファクタリングではGPU処理は行わず、CPUで実行する |
-| `isContainedImage()` | `isContainedImage(image_path, threshold=0.7, use_gray=True, show_value=False, show_position=True, show_only_true_rect=True, ms=2000, crop_fmt='', crop=None, mask_path=None, use_gpu=False, BGR_range=None, threshold_binary=None, crop_template=None, show_image=False, color=None) -> bool` | 逆テンプレートマッチング |
-| `saveCapture()` | `saveCapture(filename=None, crop_fmt='', crop=None, mode=True) -> None` | カメラフレームを./Captures/へ保存 |
-| `popupImage()` | `popupImage(crop_fmt='', crop=None, title='image') -> None` | カメラフレームをポップアップ表示 |
-| `getCameraImage()` | `getCameraImage(crop_fmt='', crop=None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
-| `openImage()` | `openImage(filename, mode='t') -> MatLike | None` | 画像ファイルを読み込み |
-| `setTemplateDir()` | `setTemplateDir(path) -> None` | テンプレート画像ディレクトリを変更 |
-| `get_filespec()` | `get_filespec(filename, mode='t') -> str` | 相対ファイル名をフルパスに解決 |
-| `displayRectangle()` | `displayRectangle(max_loc, width, height, tag=None, ms=2000, color=None, crop_fmt='', crop=None) -> None` | GUIキャンバスオーバーレイに矩形描画 |
-| `displayText()` | `displayText(position, txt, tag=None, ms=2000, font='UD デジタル 教科書体 NP-B', fontsize=20, color='black') -> None` | GUIキャンバスオーバーレイにテキスト描画 |
+|| `isContainTemplate()` | `isContainTemplate(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | カメラフレームに対するテンプレートマッチング |
+|| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list: list[str], threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path_list: list[str | None] | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
+|| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` のラッパー。`use_gpu=True` を固定して呼び出す。本リファクタリングではGPU処理は行わず、CPUで実行する |
+|| `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
+|| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを./Captures/へ保存 |
+|| `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示 |
+|| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
+|| `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
+|| `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
+|| `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
+|| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | GUIキャンバスオーバーレイに矩形描画 |
+|| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | GUIキャンバスオーバーレイにテキスト描画 |
 
 **内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
 | 関数 | シグネチャ | 説明 |

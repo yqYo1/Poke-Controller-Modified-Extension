@@ -311,7 +311,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 #### 6.1.6 カメラバックエンド
 
-- **バックエンド**: OpenCV（Windowsは `cv2.CAP_DSHOW`、Linuxは `cv2.CAP_V4L2`）。
+- **バックエンド**: OpenCV。プラットフォームに応じた適切なバックエンドを自動選択。
 - **スレッド**: フレームキャプチャは別スレッドで実行。
 
 ### 6.2 シリアルタブ
@@ -571,7 +571,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 映像フォールバックとして、ブラウザネイティブの **WebCodecs API** を使用した低遅延ストリーミングを採用します。
 
-- **エンコーダー**: サーバーサイド（Rust/ffmpeg）でH.264/HEVC/AV1にエンコード。
+- **エンコーダー**: サーバーサイドでH.264/HEVC/AV1にエンコード。
 - **転送**: WebSocket経由でエンコード済みビデオフレーム（アクセスユニット）を送信。
 - **デコード**: ブラウザの **VideoDecoder**（WebCodecs）でHWデコードを利用。
 - **描画**: デコード結果を **Canvas** または **VideoFrame** に描画。
@@ -825,7 +825,7 @@ import { paths, components } from '$lib/api/openapi.ts'
 | モジュール | 内容 | ユーザースクリプトでのImport例 |
 |-----------|------|------------------------------|
 | `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
-| `image_proc` | 画像処理（opencv-rust）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
+| `image_proc` | 画像処理（Rust実装）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
 | `net` | Socket、MQTT、HTTPクライアント。`from Commands import net` でインポート可能な関数群。`PythonCommand` のメソッド（`self.socket_connect()` 等）と同じ機能を提供するが、クラス外から使用可能。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
 
 **注**: `events.py`（動的設定用EventBus）は§11「設定ファイルシステム」に含まれる。
@@ -977,7 +977,7 @@ from cv2.typing import MatLike
 
 OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理メソッドの戻り値・引数として使用される。
 
-**画像処理メソッド**（Rust opencv-rust実装）:
+**画像処理メソッド**（Rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 || `isContainTemplate()` | `isContainTemplate(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | カメラフレームに対するテンプレートマッチング |
@@ -1168,7 +1168,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `self.keys.neutral()` | ✅ 利用可能 |
 | `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） |
 | `self.keys.ser.write()` | ✅ 利用可能（引数は `bytes` 型） |
-| 画像処理API | ✅ Rust実装（opencv-rust） |
+| 画像処理API | ✅ Rust実装 |
 | Discord通知 | ✅ 実装済み |
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
 | Windows通知 | ✅ 実装済み |
@@ -1289,7 +1289,7 @@ key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 | **アプリケーション起動時** | 自動読み込み（`init.py` / `init.lua`） |
 | **プロファイル切替時** | 自動読み込み（新プロファイルの設定を反映） |
 | **手動** | メニュー「Load Dynamic Config」で読み込み |
-| **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン）。検知方式はOSネイティブのファイル監視（inotify/kqueue/ReadDirectoryChangesW等）を使用 |
+|| **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン）。OSネイティブのファイル監視を使用 |
 
 **メニュー項目**: §11.13.1「メニュー配置」を参照。
 
@@ -1445,7 +1445,7 @@ pokecon.autocmd.on("CameraOpenPost", {
 
 ### 11.10 Luaランタイム
 
-Luaランタイムの実装にはmluaクレート（LuaJIT + vendored features）を使用します。
+Luaランタイムの実装にはLuaJITを使用します。
 
 **エラーハンドリング**:
 - Luaスクリプト内でエラーが発生した場合、エラーメッセージをログパネルにERRORレベルで出力
@@ -1462,7 +1462,6 @@ end)
 | 項目 | 設定 |
 |------|------|
 | **Lua実装** | LuaJIT 2.1 |
-| **Rust統合** | mlua crate（`luajit` + `vendored` feature） |
 | **ライセンス** | MIT（商用利用可能） |
 | **バインディング** | Rustコアに埋め込み、PyO3と同じプロセス空間で実行 |
 
@@ -2274,13 +2273,12 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 nix環境では、Pythonインタープリターのパスを**ビルド時にnixストアパスとして埋め込む**。
 
 **実装概要**:
-- `rust/pokecon-core/build.rs` で `POKECON_PYTHON_PATH` 環境変数を読み込み、ソースコードに埋め込む
-- `flake.nix` で `POKECON_PYTHON_PATH = "${pythonEnv}/bin/python"` を設定
+- ビルド時に環境変数からPythonパスを読み込み、ソースコードに埋め込む
 - nixストアパスは不変なため、再現性が保証される
 - グローバルPythonを使用しない（nixの隔離性を維持）
 - 非nix環境では環境変数が未設定のため、実行時に別途Pythonを取得するフォールバック動作
 
-**詳細な実装**: `rust/pokecon-core/build.rs` および `flake.nix` を参照。
+**詳細な実装**: ビルドスクリプトおよびnix設定ファイルを参照。
 
 ### 14.4 Python管理（非nix環境）
 
@@ -2290,18 +2288,18 @@ nix環境では、Pythonインタープリターのパスを**ビルド時にnix
 - `~/.local/share/pokecon/` 配下にPythonをセットアップ
 - 期待するバージョンがない場合はデフォルトを使用
 - 既存のPythonが期待するバージョンかチェック
-- ない場合は astral-sh/python-build-standalone をダウンロード
+- ない場合はpython-build-standaloneをダウンロード
 - 仮想環境を構築し、必須パッケージ + ユーザーパッケージをインストール
 
-**詳細な実装**: `rust/pokecon-core/src/python.rs` または同等のモジュールを参照。
+**詳細な実装**: Python管理モジュールを参照。
 
 ### 14.5 必須パッケージ管理
 
 - **リポジトリ内`pyproject.toml`**からビルド時に取得
-- **`build.rs`で`OUT_DIR`にコード生成**、`include!`で埋め込み
-- `cargo:rerun-if-changed=../pyproject.toml`で再ビルドトリガー
+- **ビルドスクリプトでコード生成**、ソースに埋め込み
+- pyproject.toml変更時に自動再ビルド
 
-実装詳細は `rust/pokecon-core/build.rs` を参照。
+実装詳細はビルドスクリプトを参照。
 
 ### 14.6 ユーザーパッケージ設定
 

@@ -1943,7 +1943,7 @@ pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
 | Tab | `<Tab>` |
 | Space | `<Space>` |
 | Delete | `<Del>`, `<Delete>` |
-| Meta/Alt | `<M-a>`, `<A-a>`（同じ） |
+|| Meta/Alt | `<M-a>`, `<A-a>`（同じ。`<Alt>` 単体は修飾キーとして使用） |
 | Command/Super | `<D-a>`（Mac） |
 | Nul | `<Nul>`, `<Null>` |
 | Insert | `<Insert>`, `<Ins>` |

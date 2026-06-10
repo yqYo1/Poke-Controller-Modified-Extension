@@ -1739,14 +1739,37 @@ PreCallback = Callable[[], bool | None]
 #### 11.13.1 メニュー配置
 
 - **配置場所**: メニューバー内
-- **項目**: Fileメニュー配下に3項目
+- **メニュー構造**:
 
 ```
-File
-├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
-├── Reload Dynamic Config    ← 現在のファイルを再読み込み
-└── Open Config Directory    ← 設定ディレクトリを開く
+メニュー
+├── コマンド
+│   ├── LINE Token Assignment
+│   ├── LINE Token Check
+│   ├── Discord Setting Assignment
+│   ├── Discord Check
+│   ├── Generate Bat File & Profile Directory
+│   ├── Pokemon Home 連携
+│   ├── キーコンフィグ
+│   └── 画面サイズのリセット
+├── 設定（予約）
+├── File
+│   ├── Load Dynamic Config      ← 新規読み込み（拡張子で自動判別）
+│   ├── Reload Dynamic Config    ← 現在のファイルを再読み込み
+│   └── Open Config Directory    ← 設定ディレクトリを開く
+└── 終了
+
+ヘルプ
+├── Github
+├── Poke-Controller Guide
+├── 質問テンプレート
+├── Version確認
+├── 更新履歴表示
+├── アップデート確認
+└── LICENSE
 ```
+
+**注**: メインブランチのTkinter UIに準拠。新機能（Fileメニューの動的設定関連）はリファクタリング後の追加機能。
 
 #### 11.13.2 ファイル選択と自動判別
 

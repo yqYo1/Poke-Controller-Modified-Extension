@@ -2157,16 +2157,20 @@ import pokecon
 
 # 現在のプロファイル取得
 # 戻り値: str（プロファイル名）
+# pokecon.profile.current() -> str
 current = pokecon.profile.current()
 print(f"Current profile: {current}")
 
 # 利用可能なプロファイル一覧
 # 戻り値: list[str]
+# pokecon.profile.list() -> list[str]
 profiles = pokecon.profile.list()
 print(f"Available profiles: {profiles}")
 
 # プロファイル切替
+# 引数: name: str
 # 戻り値: bool（成功: True, 失敗: False）
+# pokecon.profile.switch(name: str) -> bool
 # エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
 success = pokecon.profile.switch("custom")
 if not success:

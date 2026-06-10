@@ -2437,7 +2437,7 @@ python = "/home/username/.local/share/pokecon/venv/bin/python"
   - GUIからの編集は不要
   - 静的設定ファイル（`settings.toml`）で表現できる範囲で設定可能
   - 例: `keyboard.shortcuts.F5 = "command_start"`
-- **Pokémon Home連携**（今後のバージョンで実装予定 — APIはmainブランチ準拠で実装）。
+- **Pokemon Home連携**（今後のバージョンで実装予定 — APIはmainブランチ準拠で実装）。
 
 ---
 

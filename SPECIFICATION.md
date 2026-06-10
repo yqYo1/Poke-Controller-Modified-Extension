@@ -1281,6 +1281,13 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 # カメラ設定（グローバル）
 [camera]
 camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
+camera_resolution = "1280x720"  # カメラ解像度
+
+# シリアル設定（グローバル）
+[serial]
+serial_port = "/dev/ttyUSB0"  # COMポート（環境に応じて変更）
+serial_baudrate = 9600  # ボーレート
+serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
 
 # WebRTC設定
 [webrtc]

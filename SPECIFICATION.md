@@ -1046,7 +1046,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 ### 10.6 ダイアログAPI
 
-**旧API（互換性維持）**: `dialogue()`、`dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。
+**旧API（互換性維持）**: `dialogue6widget()` — 互換性のために保持。旧APIも新APIと同等の完成度・品質でメンテナンスされる。
 
 **新API（推奨）**: `show_dialog()` — 事前に作成したWidgetインスタンスを渡す方式。型安全性と一貫性が向上。
 

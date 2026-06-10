@@ -1796,6 +1796,8 @@ KBKeys = Literal[
     # アルファベット（小文字）
     "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
     "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    # 数字
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
     # ファンクションキー
     "<F1>", "<F2>", "<F3>", "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>", "<F11>", "<F12>",
     # 特殊キー
@@ -1812,6 +1814,11 @@ KBKeys = Literal[
     # マウスボタン
     "<LeftMouse>", "<RightMouse>", "<MiddleMouse>",
 ]
+
+# 型注釈
+# pokecon.keymap.set(lhs: KBKeys | str, rhs: KBKeys | str | Callable[[], None], remap: bool = False, desc: str | None = None) -> None
+# pokecon.keymap.trigger(key: KBKeys | str) -> None
+# pokecon.keymap.del(lhs: KBKeys | str) -> None
 
 # lhs: KBKeys | str（strはユーザー定義仮想キー用）
 # rhs: KBKeys | str | Callable[[], None]

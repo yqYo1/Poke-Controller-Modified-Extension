@@ -993,13 +993,6 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 || `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
 || `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
 
-**内部関数**（互換レイヤー用に`_`プレフィックスで公開）:
-| 関数 | シグネチャ | 説明 |
-|------|-----------|-------------|
-|| `_template_match()` | `_template_match(image: MatLike, template: MatLike, threshold: float, use_gray: bool, mask: MatLike | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop: list[int] | None = None, crop_template: list[int] | None = None, show_image: bool = False) -> tuple[bool, float, tuple[int, int]]` | コアテンプレートマッチング |
-|| `_grayscale()` | `_grayscale(image: MatLike) -> MatLike` | グレースケール変換 |
-|| `_resize()` | `_resize(image: MatLike, width: int, height: int) -> MatLike` | 画像リサイズ |
-
 #### 10.4.4 McuCommandBase
 
 **Import**: `from Commands.McuCommandBase import McuCommand`

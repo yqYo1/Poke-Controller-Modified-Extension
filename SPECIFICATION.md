@@ -1676,8 +1676,7 @@ BuiltinEvent = Literal[
 ]
 
 # 組み込みイベント + ユーザー定義イベント
-# Union[BuiltinEvent, str] はLSPによりstrに単純化されるが、意図（組み込み vs ユーザー定義の区別）はドキュメントとして残す
-EventName = Union[BuiltinEvent, str]  # 実際にはstrと同等だが、型ヒントの意図を明示
+EventName = Union[BuiltinEvent, str]
 ```
 
 #### 11.12.7 エラーハンドリングとPreイベントのキャンセル

@@ -883,6 +883,8 @@ type GamepadInput = ButtonsList | Buttons
 | `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信 |
 | `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
 **出力メソッド**:
+> **命名規則**: `t1`=出力#1, `t2`=出力#2, `t`=stdout以外の出力, `s`=stdout割り当てパネル, `b`=モード付き（w=上書き, a=追記, d=削除）。例: `print_t1b()` = 出力#1へのモード付き出力
+
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|

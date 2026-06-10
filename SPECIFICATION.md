@@ -78,7 +78,7 @@
 | 用語 | 定義 |
 |------|------|
 | **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。例: `pokecon.opt.camera_fps`（フラット）vs `pokecon.opt.camera.fps`（階層） |
-| **Neovim風** | Neovimエディタの設定・キーマッピング方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
+| **Neovim風** | Neovimエディタの設定・キーマップ方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
 | **後勝ち** | 同じキー・設定に対して後から適用された値が優先される方式。設定の優先順位やキーマップの重複解決で使用 |
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
@@ -741,7 +741,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **対応ボタン**: A、B、X、Y、UP、DOWN、LEFT、RIGHT、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
 - **アナログスティック**: 両軸とも0～255の範囲。
-- **タッチパッド**: `{x: 0–320, y: 0–240}` 座標。
+- **タッチスクリーン**: `{x: 0–320, y: 0–240}` 座標。
 
 ---
 
@@ -1361,7 +1361,7 @@ pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 # チャタリング判定閾値
 pokecon.opt.key_chattering_threshold_ms = 10
 
-# キーマッピング（Neovim風記法）
+# キーマップ（Neovim風記法）
 # 注: 以下は動的設定ファイル（init.py/init.lua）での例。
 # ユーザースクリプトでは self.keys を使用（§10.5.1参照）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
@@ -1417,7 +1417,7 @@ pokecon.ui.tag_sort_function = function(tags)
     return tags
 end
 
--- キーマッピング（Neovim風記法）
+-- キーマップ（Neovim風記法）
 pokecon.keymap.set("a", function()
     pokecon.controller.press(pokecon.controller.Button.A)
 end)
@@ -1827,7 +1827,7 @@ KBKeys = Literal[
 # remap: bool = False
 # desc: str | None = None
 
-# 基本的なキーマッピング（noremap、関数rhs）
+# 基本的なキーマップ（noremap、関数rhs）
 pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
 
 # 修飾キー付き（noremap、関数rhs）
@@ -1866,7 +1866,7 @@ pokecon.keymap.del("<F5>")  # F5のキーマップを削除
 -- Lua設定
 -- Pythonと同じフラットな構造
 
--- 基本的なキーマッピング（noremap、関数rhs）
+-- 基本的なキーマップ（noremap、関数rhs）
 pokecon.keymap.set("a", function()
     pokecon.controller.press(pokecon.controller.Button.A)
 end)
@@ -2215,7 +2215,7 @@ pokecon.profile.switch("custom")
 | 項目 | 保存方法 | 備考 |
 |------|---------------|-------|
 | ショートカットボタン割り当て | `localStorage` | 10ボタンキーマップ。ブラウザ単位の設定 |
-| キーボード設定 | `localStorage` | キーマッピング設定。ブラウザ単位の設定 |
+| キーボード設定 | `localStorage` | キーマップ設定。ブラウザ単位の設定 |
 
 ---
 

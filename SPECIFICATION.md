@@ -1652,7 +1652,7 @@ print(pokecon.event.list_defined())
 #### 11.12.6 型注釈
 
 ```python
-from typing import Literal, Union
+from typing import Literal
 
 # 組み込みイベントの厳密な型定義
 BuiltinEvent = Literal[
@@ -1668,7 +1668,7 @@ BuiltinEvent = Literal[
 ]
 
 # 組み込みイベント + ユーザー定義イベント
-EventName = Union[BuiltinEvent, str]
+type EventName = BuiltinEvent | str
 ```
 
 #### 11.12.7 エラーハンドリングとPreイベントのキャンセル

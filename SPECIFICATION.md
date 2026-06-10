@@ -1824,10 +1824,8 @@ KBKeys = Literal[
 # pokecon.keymap.trigger(key: KBKeys | str) -> None
 # pokecon.keymap.del(lhs: KBKeys | str) -> None
 
-# lhs: KBKeys | str（strはユーザー定義仮想キー用）
-# rhs: KBKeys | str | Callable[[], None]
-# remap: bool = False
-# desc: str | None = None
+# lhs: KBKeys（定義済みキー）または str（ユーザー定義仮想キー）
+# rhs: KBKeys（キー入力）、str（仮想キー参照）、または Callable[[], None]（コールバック関数）
 
 # 基本的なキーマップ（noremap、関数rhs）
 pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))

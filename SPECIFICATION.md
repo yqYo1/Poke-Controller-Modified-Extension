@@ -887,15 +887,15 @@ type GamepadInput = ButtonsList | Buttons
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `print_t1()` | `print_t1(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | 上部ログパネルへ出力 |
-| `print_t2()` | `print_t2(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
-| `print_s()` | `print_s(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout割り当てパネルへ出力 |
-| `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\\n') -> None` | `print_s`と同じ |
-| `print_t1b()` | `print_t1b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
-| `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | 下部ログ（モード付き） |
-| `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout以外ログ（モード付き） |
-| `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t1()` | `print_t1(*objects: object, sep: str = ' ', end: str = '\n') -> None` | 上部ログパネルへ出力 |
+| `print_t2()` | `print_t2(*objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログパネルへ出力 |
+| `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
+| `print_s()` | `print_s(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力 |
+| `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\n') -> None` | `print_s`と同じ |
+| `print_t1b()` | `print_t1b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
+| `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
+| `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
+| `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
 | `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:

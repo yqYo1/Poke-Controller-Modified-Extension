@@ -1648,12 +1648,12 @@ print(pokecon.event.list_defined())
 | `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） |
 | `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） |
 
-#### 11.12.5.1 ScriptLoadPre/ScriptLoadPostのタイミング
+##### 11.12.5.1 ScriptLoadPre/ScriptLoadPostのタイミング
 
 - **ScriptLoadPre**: コマンドクラスの抽出・自動タグ生成完了後、`command_candidates` が設定済みの状態で発火。ユーザーはコールバック内で `command_candidates` を変更可能
 - **ScriptLoadPost**: 手動タグ統合・動的タグ追加がすべて完了した後に発火
 
-#### 11.12.5.2 命名規則
+##### 11.12.5.2 命名規則
 
 - **パスカルケース（アッパーキャメルケース）**: `CameraOpenPost`, `SerialConnectPost`
 - **Pre/Post後置**: Neovim/Vim風（`BufReadPre`/`BufReadPost`に類似）

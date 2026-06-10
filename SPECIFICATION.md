@@ -1713,10 +1713,10 @@ pokecon.autocmd.on("InputPressedPre", {
 from typing import Callable
 
 # 通常イベント（Post等）: 戻り値なし
-Callback = Callable[[], None]
+type Callback = Callable[[], None]
 
 # Preイベント: Falseでキャンセル、それ以外は継続
-PreCallback = Callable[[], bool | None]
+type PreCallback = Callable[[], bool | None]
 ```
 
 | エラー種類 | 挙動 | ログ出力 |

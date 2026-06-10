@@ -1505,7 +1505,9 @@ import pokecon
 
 # 基本的なイベント登録
 # 戻り値: HandlerId（ハンドラ解除用）
-# callback: 引数なし（デフォルト）。pokecon.state に直接アクセスして情報を取得
+# callback: 引数なし。pokecon.state に直接アクセスして情報を取得
+# ※callbackに引数を渡す設計は現時点では不要（state経由で情報取得可能）。
+#  ただし、将来の拡張性を考慮し、callbackに引数を渡す形への変更が容易な設計とする
 handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 
 # 一度だけ実行

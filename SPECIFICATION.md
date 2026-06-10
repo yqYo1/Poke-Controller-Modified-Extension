@@ -903,10 +903,7 @@ type GamepadInput = ButtonsList | Buttons
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 || `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[WidgetInput], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | マルチウィジェットダイアログ（互換性維持） |
-|| `dialogue6widget_save_settings()` | `dialogue6widget_save_settings(title: str, dialogue_list: list[WidgetInput], filename: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定保存付きダイアログ（互換性維持） |
-|| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |str]` | 設定保存付きダイアログ（互換性維持） |
-|| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |idget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |
-**注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
+||| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 設定選択付きダイアログ（互換性維持） |方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
 **Socketメソッド**:
 | メソッド | シグネチャ | 説明 |

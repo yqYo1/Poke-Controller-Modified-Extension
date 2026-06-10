@@ -1638,7 +1638,7 @@ print(pokecon.event.list_defined())
 ```
 
 **命名規則**:
-- **キャメルケース**: `CameraOpenPost`, `SerialConnectPost`
+- **パスカルケース（アッパーキャメルケース）**: `CameraOpenPost`, `SerialConnectPost`
 - **Pre/Post後置**: Vim/Neovim風（`BufReadPre`/`BufReadPost`に類似）
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可

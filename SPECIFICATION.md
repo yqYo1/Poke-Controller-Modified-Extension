@@ -1898,7 +1898,7 @@ pokecon.keymap.set("<C-a>", function()
 end)
 
 -- remap有効（キー→キーのマッピング）
-pokecon.keymap.set("<C-a>", "<Release-A>", true)
+pokecon.keymap.set("<C-a>", "<F5>", { remap = true })
 
 -- 長押し（Releaseキー）
 pokecon.keymap.set("<Release-A>", function()

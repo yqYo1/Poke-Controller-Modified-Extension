@@ -1754,7 +1754,7 @@ PreCallback = Callable[[], bool | None]
 ├── Github
 ├── Poke-Controller Guide
 ├── 質問テンプレート
-├── Version確認
+├── バージョン確認
 ├── 更新履歴表示
 ├── アップデート確認
 └── LICENSE

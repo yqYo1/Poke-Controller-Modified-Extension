@@ -1124,7 +1124,14 @@ print(entry.value)
 
 #### 10.6.2 ブロッキング（デフォルト）
 
-- `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = True) -> int`
+```python
+@overload
+def show_dialog(self, title: str, widgets: list[Widget] | Widget, blocking: Literal[True] = True) -> Literal[0]: ...
+
+@overload
+def show_dialog(self, title: str, widgets: list[Widget] | Widget, blocking: Literal[False]) -> int: ...
+```
+
 - `blocking=True`の場合、ダイアログが閉じられるまでスクリプトの実行を停止
 - 返り値は`0`
 - 結果は各Widgetの`value`属性に格納される
@@ -1132,7 +1139,6 @@ print(entry.value)
 
 #### 10.6.3 非ブロッキング
 
-- `show_dialog(title: str, widgets: list[Widget] | Widget, blocking: bool = False) -> int`
 - `blocking=False`の場合、ダイアログを表示し、スクリプトの実行を継続
 - 返り値はユーザースクリプトが開始してから停止するまでの間で固有の自然数（ダイアログID）
 - 結果は各Widgetの`value`属性に格納される

@@ -551,7 +551,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
-- **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバー: `stun:stun.l.google.com:19302`（デフォルト）。コーデック優先順位: H.264 > VP8 > VP9。
+- **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバーは`settings.toml`で設定可能（デフォルト値あり）。コーデック優先順位: H.264 > VP8 > VP9。
 - **自動再接続**: §3.4「WebSocket自動再接続」参照。
 - **フォールバック条件**:
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動

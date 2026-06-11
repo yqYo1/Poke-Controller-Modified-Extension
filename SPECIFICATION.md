@@ -80,7 +80,7 @@
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
 | **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
-|| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用。型: `int` |
+| **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用。型: `int` |
 | **フォールバック** | プライマリ方式が利用できない場合に使用される代替方式。例: WebRTC不可時のWebSocketフォールバック |
 | **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
 | **チャタリング** | 機械的な接点のバウンスにより、意図しない短時間の連続入力が発生する現象 |
@@ -252,7 +252,7 @@ Commandsタブには3つのサブタブがあります:
 UIは、その他タブのコンボボックスで選択可能な、右側パネルの7つの表示組み合わせをサポートする必要があります。
 設定値（`settings.toml`の `widget_mode`）は以下の文字列をそのまま使用します:
 
-| モード | 設定値 / 内部識別子 | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
+|| モード | 設定値（内部識別子） | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
 |------|--------------------|---------------------|-----------|-----------|-------------|
 | 1 | `ALL (default)` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
 | 2 | `Output#1 + Output#2` | 非表示 | 表示 | 表示 | 出力のみ |
@@ -472,10 +472,10 @@ Commands/
 - **割り当て解除**: Shift+クリックで割り当てを解除。
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
-- **キーボードショートカット**: F1～F10またはその他の単一キー（修飾キーなし）。修飾キー付きのショートカットはキーマップシステム（§11.14）で管理。
-- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア。
+- **キーボードショートカット**: キーマップシステム（§11.14）で管理。デフォルトではF1～F10に割り当て（§11.14.5参照）。修飾キー付きのショートカットも可能
+- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
 - **キーマップ競合**: ショートカットボタンのホットキーと他のキーマップが重複した場合、後から登録されたものが優先（後勝ち）。実行制御キー（§11.14.5）はデフォルトで未割り当てのため、両方ともデフォルトの場合は競合しない
-- **実行制御キーとの関係**: ショートカットボタンのF1～F10は「ボタン押下」システム（UI上のボタンクリックと同等）、実行制御キー（§11.14.5）は「キーマップシステム」（`pokecon.keymap.set()` で登録）で管理。両者は別システムであり、同じFキーが両方に割り当てられていた場合、キーマップシステム（後勝ち）が優先される。ショートカットボタンはデフォルトで空欄（未割り当て）、実行制御キーもデフォルトで未割り当て（§11.14.5参照）
+- **実行制御キーとの関係**: ショートカットボタンはキーマップシステム（`pokecon.keymap.set()` で登録）で管理。実行制御キー（§11.14.5）も同じキーマップシステムで管理。両者は同じシステムであり、同じFキーが両方に割り当てられていた場合、後勝ちが適用される。ショートカットボタンはデフォルトでF1～F10に割り当て、実行制御キーはデフォルトで未割り当て（§11.14.5参照）
 - **保存**: 設定は `localStorage` に保存。
 
 #### 6.4.4 実行制御ボタン
@@ -871,19 +871,19 @@ type GamepadInput = ButtonsList | Buttons
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|| `press()` | `press(buttons: GamepadInput, duration: float = 0.1, wait: float = 0.1) -> None` | ボタン押下（指定秒数保持後解放） |
-|| `pressRep()` | `pressRep(buttons: GamepadInput, repeat: int, duration: float = 0.1, interval: float = 0.1, wait: float = 0.1) -> None` | 繰り返し押下 |
-|| `hold()` | `hold(buttons: GamepadInput, wait: float = 0.1) -> None` | ボタンを押下状態で保持 |
-|| `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
-| `wait()` | `wait(wait: float) -> None` | wait秒スリープ |
-| `short_wait()` | `short_wait(wait: float) -> None` | ビジーループ待機（高精度） |
-|| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信 |
+| `press()` | `press(buttons: GamepadInput, duration: float = 0.1, wait: float = 0.1) -> None` | ボタン押下（指定秒数保持後解放） |
+| `pressRep()` | `pressRep(buttons: GamepadInput, repeat: int, duration: float = 0.1, interval: float = 0.1, wait: float = 0.1) -> None` | 繰り返し押下 |
+| `hold()` | `hold(buttons: GamepadInput, wait: float = 0.1) -> None` | ボタンを押下状態で保持 |
+| `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
+| `wait()` | `wait(wait: float) -> None` | 指定時間待機。>0.1sは `time.sleep()`（CPU効率、低精度）、≤0.1sはビジーループ（`time.perf_counter()`、高精度、高CPU使用率）。いずれの場合も `checkIfAlive()` を呼び出す |
+| `short_wait()` | `short_wait(wait: float) -> None` | 常にビジーループ待機（`time.perf_counter()`、高精度、高CPU使用率）。`checkIfAlive()` を呼び出す |
+| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信。`commands` から `\r`/`\n` を除去し、`zip(waittimes, commands, strict=False)` で並列処理。各コマンド送信前に `waittimes[i]` 秒待機。長さ不一致時は短い側まで実行。`writeRow_wo_perf_counter()` で `\r\n` を付加して送信 |
 
 **設定メソッド**:
 
-|| メソッド | シグネチャ | 説明 |
-||--------|-----------|-------------|
-|| `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
+| `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
 
 **出力メソッド**:
 > **命名規則**: `t1`=出力#1, `t2`=出力#2, `t`=stdout以外の出力, `s`=stdout割り当てパネル, `b`=モード付き（w=上書き, a=追記, d=削除）。例: `print_t1b()` = 出力#1へのモード付き出力
@@ -900,17 +900,17 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-|| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui` は除外） |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行 |
-|| `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
-|| `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機 |
-|| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[WidgetInput], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ |
-|| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ |
+| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行 |
+| `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
+| `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機 |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[WidgetInput], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -941,7 +941,7 @@ type GamepadInput = ButtonsList | Buttons
 **通知メソッド**:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|| `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+| `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 #### 10.4.3 ImageProcPythonCommand
 
@@ -953,8 +953,8 @@ type GamepadInput = ButtonsList | Buttons
 
 || メソッド | シグネチャ | 説明 |
 ||--------|-----------|-------------|
-|| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
-|| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
+| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+| `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 **トリミングパラメータ**:
 - `crop_fmt: CropFmt` — トリミング形式。以下の値を指定:
@@ -987,18 +987,18 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 **画像処理メソッド**（Rust実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-|| `isContainTemplate()` | `isContainTemplate(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | カメラフレームに対するテンプレートマッチング |
-|| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list: list[str], threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path_list: list[str | None] | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
-|| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` の互換性維持スタブ。`use_gpu=True` を固定して呼び出すが、本リファクタリングではGPU処理は行わずCPUで実行する |
-|| `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
-|| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを./Captures/へ保存 |
-|| `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示 |
-|| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
-|| `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
-|| `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
-|| `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
-|| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
-|| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
+| `isContainTemplate()` | `isContainTemplate(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | カメラフレームに対するテンプレートマッチング |
+| `isContainTemplate_max()` | `isContainTemplate_max(template_path_list: list[str], threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path_list: list[str | None] | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
+| `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` の互換性維持スタブ。`use_gpu=True` を固定して呼び出すが、本リファクタリングではGPU処理は行わずCPUで実行する |
+| `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを./Captures/へ保存 |
+| `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示 |
+| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得 |
+| `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
+| `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
+| `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
+| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
+| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
 
 #### 10.4.4 McuCommand（McuCommandBase）
 
@@ -1032,6 +1032,8 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
+- `self.keys.ser.ser.write()` で生シリアル書き込みが可能（PyO3でpySerial互換型変換）。引数は `bytes` 型のみ
+- `self.keys.ser.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
 - **注**: `self.keys` は互換性維持のための旧API。ユーザースクリプトからは引き続き `self.keys` を使用する
 
 #### 10.5.2 Sender
@@ -1040,9 +1042,13 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
-| `write()` | `write(data: bytes) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`data` は `bytes` 型のみ受け付ける |
-
-**注**: `ser.write()` の引数 `data` は `bytes` 型。`str` を渡す場合は事前にエンコードが必要（`data.encode('utf-8')`）。
+| `write()` | `write(data: bytes | bytearray | memoryview | list[int]) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`to_bytes()` 関数により以下の変換が行われる:
+- `bytes`: そのまま通過
+- `bytearray`/`memoryview`: `bytes` に変換
+- `list[int]`（バイト値のリスト）: `bytes(bytearray(seq))` に変換
+- `str`: `TypeError`（`unicode strings are not supported, please encode to bytes`）
+- `int`（スカラー）: N個のゼロバイトを書き込む（`bytearray(n)` の動作）。予期しない動作となるため避けること
+- `float`: `TypeError`
 
 その他のSenderメソッドは、以下のクラスに統合:
 - シリアル接続管理 → `SerialController` クラス（§6.2で定義）
@@ -1059,15 +1065,16 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | 分類 | 対象API | 扱い |
 |------|---------|------|
 | **新API（推奨）** | `show_dialog()` | 積極的に推奨。新規スクリプトではこちらを使用 |
-|| **旧API（この実装独自機能）** | `dialogue6widget()`, `dialogue6widget_select_settings()` | 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある |
+| **旧API（互換性維持）** | `dialogue6widget()`, `dialogue6widget_select_settings()` | 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある |
 | **旧API（他実装との互換性必須）** | `dialogue()`（他実装との互換性を維持する必要がある場合） | 他のPoke-Controller互換ソフトとの互換性維持が必要。APIシグネチャの変更は慎重に行う |
 
 #### 10.6.1 ダイアログライフサイクル
 
 **スクリプト停止時の挙動**: ユーザースクリプトが停止（Stopボタン、エラー、強制終了など）した場合、スクリプト内で作成したすべてのダイアログ（ブロッキング・非ブロッキング・`wait_dialog`待機中を含む）を自動で閉じる。
 
-**不正終了時の挙動**: OKボタン以外でダイアログが閉じられた場合、以下の挙動とする:
-- **×ボタン・Escキー**: 確認ダイアログを表示。ユーザーが「停止」を選択した場合のみスクリプトを停止。「キャンセル」を選択した場合はダイアログを再表示し、スクリプトを継続する
+**不正終了時の挙動**: OKボタン以外でダイアログが閉じられた場合、スクリプトを停止する:
+- **×ボタン**: 確認ダイアログを表示せずにダイアログを閉じ、スクリプトを停止する
+- **Escキー**: ダイアログを閉じずにスクリプトを停止する（ダイアログはスクリプト停止時に自動で閉じられる）
 - **強制終了（ウィンドウの完全削除等）**: 即座にスクリプトを停止する
 - スクリプト停止に伴い、スクリプト内のすべてのダイアログが自動で閉じられる（上記「スクリプト停止時の挙動」を参照）
 
@@ -1809,7 +1816,7 @@ type PreCallback = Callable[[], bool | None]
 - **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
   - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None) -> None`
   - `pokecon.keymap.trigger(key) -> None` — キー入力イベントを仮想的に発火（動的設定専用）
-  - `pokecon.keymap.del(lhs) -> None` — キーマップ削除
+  - `pokecon.keymap.delete(lhs) -> None` — キーマップ削除
   - デフォルトは `noremap`（`remap=False`）
   - `remap=True` で再帰マップ有効
   - Pythonでは型注釈のためフラットな構造（dictを挟まない）
@@ -1858,7 +1865,7 @@ type KBKeys = Literal[
 # 型注釈
 # pokecon.keymap.set(lhs: KBKeys | str, rhs: KBKeys | str | Callable[[], None], remap: bool = False, desc: str | None = None) -> None
 # pokecon.keymap.trigger(key: KBKeys | str) -> None
-# pokecon.keymap.del(lhs: KBKeys | str) -> None
+# pokecon.keymap.delete(lhs: KBKeys | str) -> None
 
 # lhs: KBKeys（定義済みキー）または str（ユーザー定義仮想キー）
 # rhs: KBKeys（キー入力）、str（仮想キー参照）、または Callable[[], None]（コールバック関数）
@@ -1896,7 +1903,7 @@ pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
 
 # キーマップ削除
 # 戻り値: None
-pokecon.keymap.del("<F5>")  # F5のキーマップを削除
+pokecon.keymap.delete("<F5>")  # F5のキーマップを削除
 ```
 
 ```lua
@@ -1933,7 +1940,7 @@ pokecon.keymap.set("<C-m>", "<MyCustomKey>", { remap = true })
 pokecon.keymap.set("<F5>", function() end, { remap = false, desc = "F5の動作を無効化" })
 
 -- キーマップ削除
-pokecon.keymap.del("<F5>")  -- F5のキーマップを削除
+pokecon.keymap.delete("<F5>")  -- F5のキーマップを削除
 ```
 
 #### 11.14.3 サポートするキー記法
@@ -1969,9 +1976,9 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | Less-than | `<lt>` |
 | Backslash | `<Bslash>` |
 | Vertical bar | `<Bar>` |
-| No-op | `<nop>` |
-| Linefeed | `<NL>` |
-| Ignore | `<Ignore>` |
+|| Nul | `<Nul>` |
+|| Linefeed | `<NL>` |
+|| Ignore | `<Ignore>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
 
@@ -2021,18 +2028,32 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 
 #### 11.14.5 デフォルトキーマップ
 
+**ショートカットボタン（デフォルト割り当て）**:
+
+| キー | 動作 | 状態 |
+|------|------|------|
+| `<F1>` | ショートカットボタン1の実行 | press |
+| `<F2>` | ショートカットボタン2の実行 | press |
+| `<F3>` | ショートカットボタン3の実行 | press |
+| `<F4>` | ショートカットボタン4の実行 | press |
+| `<F5>` | ショートカットボタン5の実行 | press |
+| `<F6>` | ショートカットボタン6の実行 | press |
+| `<F7>` | ショートカットボタン7の実行 | press |
+| `<F8>` | ショートカットボタン8の実行 | press |
+| `<F9>` | ショートカットボタン9の実行 | press |
+| `<F10>` | ショートカットボタン10の実行 | press |
+
 **実行制御キー（デフォルト未割り当て、ユーザー設定可能）**:
 
 | キー | 動作 | 状態 | デフォルト |
 |------|------|------|-----------|
-| `<F5>` | コマンド開始 | press | 未割り当て |
-| `<F6>` | コマンド停止 | press | 未割り当て |
-| `<F7>` | コマンド一時停止 | press | 未割り当て |
-| `<F8>` | コマンド再開 | press | 未割り当て |
-| `<F9>` | コマンドリロード | press | 未割り当て |
-| `<Esc>` | — | press | 未割り当て |
+| — | コマンド開始 | press | 未割り当て |
+| — | コマンド停止 | press | 未割り当て |
+| — | コマンド一時停止 | press | 未割り当て |
+| — | コマンド再開 | press | 未割り当て |
+| — | コマンドリロード | press | 未割り当て |
 
-|**注**: デフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタン（§6.4.3）はF1～F10を使用可能であるため、実行制御キーとの競合を避けるため、デフォルトでは両方とも未割り当てとする。
+**注**: 実行制御キーはデフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタンはF1～F10にデフォルト割り当てされているが、ユーザーがキーマップシステムで変更可能（後勝ち）。
 
 #### 11.14.6 キー入力の仮想発火
 

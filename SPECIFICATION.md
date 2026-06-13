@@ -976,7 +976,9 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
 
-**コンストラクタ**: `ImageProcPythonCommand(cam: Camera, gui: GUI | None = None)`
+**コンストラクタ**: `ImageProcPythonCommand(cam: Camera, gui: CaptureArea | None = None)`
+
+> **注**: `cam` と `gui` は互換性維持のためのパラメータ。リファクタリング前のスクリプトでは `cam` を必須、`gui` を省略可能として使用。リファクタリング後はRustコアのカメラ/表示システムに自動的にマッピングされる。ユーザースクリプトから直接インスタンス化する場合は、引数を指定する必要はない（内部で自動設定）
 
 **MatLike型**:
 ```python

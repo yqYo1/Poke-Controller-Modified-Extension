@@ -909,8 +909,9 @@ type GamepadInput = ButtonsList | Buttons
 | `show_dialog()` | `show_dialog(title: str, widgets: list[Widget], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行 |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機 |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[WidgetInput], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[WidgetInput], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
+| `dialogue()` | `dialogue(title: str, message: int | str | list, desc: str = None, need: type = list) -> list | dict` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 

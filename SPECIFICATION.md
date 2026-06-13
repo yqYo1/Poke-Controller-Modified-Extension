@@ -1591,6 +1591,13 @@ pokecon.autocmd.on("CameraOpenPost", {
     end
 })
 
+-- 一度だけ実行
+pokecon.autocmd.once("SerialConnectPost", {
+    callback = function()
+        print("Serial connected")
+    end
+})
+
 -- グループを指定して登録
 pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
@@ -1598,6 +1605,14 @@ pokecon.autocmd.on("CameraOpenPost", {
     end,
     group = "my_group"
 })
+
+-- ハンドラ解除
+pokecon.autocmd.off(handler_id)
+
+-- グループ単位で一括解除
+pokecon.autocmd.clear("all")
+pokecon.autocmd.clear("CameraOpenPost")
+pokecon.autocmd.clear("my_group")
 ```
 
 #### 11.12.4 イベント定義・発火API

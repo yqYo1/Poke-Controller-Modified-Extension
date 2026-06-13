@@ -252,7 +252,7 @@ Commandsタブには3つのサブタブがあります:
 UIは、その他タブのコンボボックスで選択可能な、右側パネルの7つの表示組み合わせをサポートする必要があります。
 設定値（`settings.toml`の `widget_mode`）は以下の文字列をそのまま使用します:
 
-|| モード | 設定値（内部識別子） | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
+| モード | 設定値（内部識別子） | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
 |------|--------------------|---------------------|-----------|-----------|-------------|
 | 1 | `ALL (default)` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
 | 2 | `Output#1 + Output#2` | 非表示 | 表示 | 表示 | 出力のみ |
@@ -951,8 +951,8 @@ type GamepadInput = ButtonsList | Buttons
 
 **通知メソッド**（画像処理クラスのみ）:
 
-|| メソッド | シグネチャ | 説明 |
-||--------|-----------|-------------|
+| メソッド | シグネチャ | 説明 |
+|--------|-----------|-------------|
 | `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] | None = None, keys: str | list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] | None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
@@ -1032,8 +1032,8 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
-- `self.keys.ser.ser.write()` で生シリアル書き込みが可能（PyO3でpySerial互換型変換）。引数は `bytes` 型のみ
-- `self.keys.ser.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
+- `self.keys.ser.write()` で生シリアル書き込みが可能（PyO3でpySerial互換型変換）。引数は `bytes` 型のみ
+- `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
 - **注**: `self.keys` は互換性維持のための旧API。ユーザースクリプトからは引き続き `self.keys` を使用する
 
 #### 10.5.2 Sender
@@ -1066,7 +1066,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 |------|---------|------|
 | **新API（推奨）** | `show_dialog()` | 積極的に推奨。新規スクリプトではこちらを使用 |
 | **旧API（互換性維持）** | `dialogue6widget()`, `dialogue6widget_select_settings()` | 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある |
-| **旧API（他実装との互換性必須）** | `dialogue()`（他実装との互換性を維持する必要がある場合） | 他のPoke-Controller互換ソフトとの互換性維持が必要。APIシグネチャの変更は慎重に行う |
+| **旧API（他実装との互換性必須）** | `dialogue()`（他実装との互換性を維持する必要がある場合） | 他のPoke-Controller互換ソフトとの互換性維持が必要。シグネチャ: `dialogue(title: str, desc: str | None = None) -> str` |
 
 #### 10.6.1 ダイアログライフサイクル
 
@@ -1966,7 +1966,7 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | Space | `<Space>` |
 | Delete | `<Del>`, `<Delete>` |
 | Meta/Alt | `<M-a>`, `<A-a>`（同じ。`<Alt>` 単体は修飾キーとして使用） |
-|| Command/Super | `<D-a>`（将来のmacOS対応時に有効） |
+| Command/Super | `<D-a>`（将来のmacOS対応時に有効） |
 | Nul | `<Nul>`, `<Null>` |
 | Insert | `<Insert>`, `<Ins>` |
 | Home | `<Home>` |
@@ -1976,9 +1976,8 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | Less-than | `<lt>` |
 | Backslash | `<Bslash>` |
 | Vertical bar | `<Bar>` |
-|| Nul | `<Nul>` |
-|| Linefeed | `<NL>` |
-|| Ignore | `<Ignore>` |
+| Linefeed | `<NL>` |
+| Ignore | `<Ignore>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
 

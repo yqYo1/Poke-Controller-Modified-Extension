@@ -1305,6 +1305,9 @@ stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
+
+# 入力処理設定
+[input]
 key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 ```
 

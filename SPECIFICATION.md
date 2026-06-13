@@ -1617,11 +1617,6 @@ pokecon.event.emit("MyCustomEvent")
 # pokecon.event.list_defined() -> list[str]
 # 戻り値: list[str]
 print(pokecon.event.list_defined())
-
-# イベントスキーマ取得
-# pokecon.event.get_schema(event: str) -> dict[str, Any]
-# 戻り値: dict[str, Any]（イベントのメタデータ）
-schema = pokecon.event.get_schema("CameraOpenPost")
 ```
 
 ```lua

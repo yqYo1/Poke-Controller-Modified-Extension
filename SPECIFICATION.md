@@ -737,7 +737,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | GET | `/api/controller/type` | 現在のゲームパッドタイプ設定を取得 |
 | POST | `/api/controller/type` | ゲームパッドタイプを設定（`gamepad_type: "ProController" | "Xinput"`） |
 
-- **対応ボタン**: A、B、X、Y、UP、DOWN、LEFT、RIGHT、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
+- **対応ボタン**: A、B、X、Y、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
+- **十字キー（Hat）**: UP、DOWN、LEFT、RIGHT、TOP_RIGHT、BTM_RIGHT、BTM_LEFT、TOP_LEFT、CENTER。
 - **アナログスティック**: 両軸とも0～255の範囲。
 - **タッチスクリーン**: `{x: 0–320, y: 0–240}` 座標。
 

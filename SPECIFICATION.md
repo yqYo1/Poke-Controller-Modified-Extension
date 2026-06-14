@@ -65,7 +65,7 @@
 | Webブラウザ | スタンドアロンSvelteKit SPA | axum HTTPサーバーによって提供 |
 | モバイル（将来） | レスポンシブSPA | 同一コードベース、アダプティブレイアウト |
 
-**注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、将来的な対応を検討。
+**注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、macOS対応は現在のスコープ外とし、将来のバージョンでの判断とする（§15.2参照）。
 
 ---
 
@@ -86,6 +86,7 @@
 | **チャタリング** | 機械的な接点のバウンスにより、意図しない短時間の連続入力が発生する現象 |
 | **シグナリング** | WebRTCにおいて、通信相手との接続確立に必要な情報（SDP、ICE candidate等）を交換するプロセス |
 | **holdEndSkip** | ボタンホールド中にShift+クリック（またはShift+タッチ終了）を行うことで、バックエンドに解放シグナルを送信せずに視覚的なボタン状態のみをリセットする操作 |
+| **StopThread** | コマンドスレッドを安全に終了させるための例外型。`checkIfAlive()` で `self.alive` が `False` の場合に送出される |
 
 ---
 ## 3. 非機能要件
@@ -907,9 +908,9 @@ type GamepadInput = ButtonsList | Buttons
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
+| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[Any]] | Widget[Any], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
-| `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、ダイアログの結果（常に `0`）を返す |
+| `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、ダイアログの結果を返す |
 | `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
 | `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
 | `dialogue()` | `dialogue(title: str, message: int | str | list, desc: str = None, need: type = list) -> list | dict` | 旧API（他実装との互換性必須）。単純ダイアログ |
@@ -1055,7 +1056,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 - `float`: `TypeError`
 
 その他のSenderメソッドは、以下のクラスに統合:
-- シリアル接続管理 → `SerialController` クラス（§6.2で定義）
+- シリアル接続管理 → `SerialManager` クラス（§6.2で定義）
 - コネクション状態 → `pokecon.state` 名前空間（§11.16で定義）
 
 ### 10.6 ダイアログAPI
@@ -1496,11 +1497,7 @@ end)
 | **ライセンス** | MIT（商用利用可能） |
 | **バインディング** | Rustコアに埋め込み、PyO3と同じプロセス空間で実行 |
 
-### 11.11 設定ファイルの階層構造
-
-設定ファイルのディレクトリ構造については §14.1 を参照。
-
-### 11.12 イベントシステム
+### 11.11 イベントシステム
 
 動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
 
@@ -1767,9 +1764,9 @@ type PreCallback = Callable[[], bool | None]
 | ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
 | 循環参照（イベント発火中に同じイベントを発火） | 検出して無視（同一イベントの直接再入のみ検出。間接循環 A→B→A は検出対象外） | ERRORレベル |
 
-### 11.13 動的設定ファイルのUI
+### 11.12 動的設定ファイルのUI
 
-#### 11.13.1 メニュー配置
+#### 11.12.1 メニュー配置
 
 - **配置場所**: メニューバー内
 - **メニュー構造**:
@@ -1804,7 +1801,7 @@ type PreCallback = Callable[[], bool | None]
 
 **注**: メインブランチのTkinter UIに準拠。新機能（Fileメニューの動的設定関連）はリファクタリング後の追加機能。LINE関連メニューは旧UI互換のため残存（§4.3参照）。
 
-#### 11.13.2 ファイル選択と自動判別
+#### 11.12.2 ファイル選択と自動判別
 
 - **ファイル選択ダイアログ**: 「Load Dynamic Config」メニューから開く
 - **自動判別**: 拡張子で言語を自動判別
@@ -1812,7 +1809,7 @@ type PreCallback = Callable[[], bool | None]
   - `.lua` → Lua動的設定ファイル
 - **手動指定**: 拡張子が不明な場合はユーザーに選択を促す
 
-#### 11.13.3 リロード機能
+#### 11.12.3 リロード種別
 
 | 機能 | 説明 |
 |------|------|
@@ -1820,13 +1817,9 @@ type PreCallback = Callable[[], bool | None]
 | **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**） |
 | **有効化方法** | `pokecon.opt.auto_reload_config = True` またはUI設定 |
 
-#### 11.13.4 エラーハンドリング
+### 11.13 キーマップシステム
 
-動的設定ファイルのエラーハンドリングについては §11.9 を参照。
-
-### 11.14 キーマップシステム
-
-#### 11.14.1 設計方針
+#### 11.13.1 設計方針
 
 - **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
 - **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
@@ -1839,12 +1832,12 @@ type PreCallback = Callable[[], bool | None]
 - **rhsの型**: キー文字列（`KBKeys | str`）またはコールバック関数（`Callable`）
 - **キー解放イベント**: 仮想キー `<Release-*>` を全キーに自動提供（同時押し含む: `<Release-C-a>`）。これにより「押した時」と「離した時」で別々の動作をマップ可能
   - **長押しの表現例**: `<C-a>` に「開始処理」、`<Release-C-a>` に「終了処理」をそれぞれマップすることで、ユーザー側で長押し相当の動作を実現
-  - **極短時間押下（チャタリング対策）**: `<Release-A>` は対応する `<A>` のコールバック実行が完了するまで発火を待機。完了後に `<Release-A>` のコールバックを実行
-  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。直前のReleaseから閾値ms以内のPress+Releaseはチャタリングとみなし、`<Release-A>` をキャンセルする。修飾キーを除く同一キー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）
+  - **極短時間押下（チャタリング対策）**: `<Release-a>` は対応する `<A>` のコールバック実行が完了するまで発火を待機。完了後に `<Release-a>` のコールバックを実行
+  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。直前のReleaseから閾値ms以内のPress+Releaseはチャタリングとみなし、`<Release-a>` をキャンセルする。修飾キーを除く同一キー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）
 - **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
 - **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は `<nop>` を rhs に登録することで実現する（§11.14.3参照）。
 
-#### 11.14.2 API仕様
+#### 11.13.2 API仕様
 
 ```python
 # Python設定
@@ -1906,7 +1899,7 @@ pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
 pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
 
 # 長押し（Releaseキー）
-pokecon.keymap.set("<Release-A>", lambda: print("A released"))
+pokecon.keymap.set("<Release-a>", lambda: print("A released"))
 pokecon.keymap.set("<Release-C-a>", lambda: print("Ctrl+A released"))
 
 # ユーザー定義仮想キー（自動登録）
@@ -1940,7 +1933,7 @@ end)
 pokecon.keymap.set("<C-a>", "<F5>", { remap = true })
 
 -- 長押し（Releaseキー）
-pokecon.keymap.set("<Release-A>", function()
+pokecon.keymap.set("<Release-a>", function()
     print("A released")
 end)
 
@@ -1959,9 +1952,9 @@ pokecon.keymap.set("<F5>", function() end, { remap = false, desc = "F5の動作�
 pokecon.keymap.delete("<F5>")  -- F5のキーマップを削除
 ```
 
-#### 11.14.3 サポートするキー記法
+#### 11.13.3 サポートするキー記法
 
-##### 11.14.3.1 原則
+##### 11.13.3.1 原則
 
 Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能文字（アルファベット、数字、記号類）はそのまま**。
 
@@ -2030,9 +2023,9 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | `<nop>` | No-op（何もしない） | `<nop>` |
 | `<NL>` | Linefeed | `<NL>` |
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
-| `<Release-*>` | キー解放（全キーに自動提供） | `<Release-A>`, `<Release-C-a>` |
+| `<Release-*>` | キー解放（全キーに自動提供） | `<Release-a>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
-##### 11.14.3.2 注意
+##### 11.13.3.2 注意
 
 - `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です
 - 通常の印字可能文字（`a`～`z`, `A`～`Z`, `0`～`9`, `>`, `;`, `:`, `,`, `@` 等）に `<>` を付けると、それはユーザー定義仮想キーとして扱われます（例: `<A>` は仮想キー、`A` は通常キー）
@@ -2043,7 +2036,7 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 - 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
 - プロファイル切替時は、新プロファイルのキーマップに置き換えられる
 
-#### 11.14.5 デフォルトキーマップ
+#### 11.13.4 デフォルトキーマップ
 
 **ショートカットボタン（デフォルト割り当て）**:
 
@@ -2101,15 +2094,15 @@ pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
 - `<Release-*>` も発火可能（キーを離したことにする）
 - このAPIは動的設定（`init.py`/`init.lua`）専用。ユーザー向けPython APIには公開しない
 
-### 11.15 相互参照API
+### 11.14 相互参照API
 
-#### 11.15.1 設計方針
+#### 11.14.1 設計方針
 
 - **Neovimの`:source`に類似**: `pokecon.source(path)`
 - **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
 - **相対パス・絶対パス両対応**
 
-#### 11.15.2 API仕様
+#### 11.14.2 API仕様
 
 ```python
 # Python設定
@@ -2136,15 +2129,15 @@ pokecon.source("~/.config/pokecon/extra_settings.lua")
 - ファイルの読み込みに失敗しても、現在の設定は維持される
 - 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
 
-### 11.16 状態取得API
+### 11.15 状態取得API
 
-#### 11.16.1 設計方針
+#### 11.15.1 設計方針
 
 - **状態アクセス**: `pokecon.state.<property>` は現在の状態にアクセスする名前空間。原則として読み取りだが、動的設定からの変更が想定されるもの（タグ等）は書き込み可能
 - **リアルタイム**: 現在の状態を即座に反映
 - **スレッドセーフ**: 複数スレッドから安全に読み取り可能。書き込みは特定イベント（`ScriptLoadPre`等）のコールバック内または内部処理でのみ行われる
 
-#### 11.16.2 利用可能な状態プロパティ
+#### 11.15.2 状態プロパティ一覧
 
 ```python
 from typing import Literal
@@ -2220,16 +2213,16 @@ print(pokecon.state.camera_opened)
 print(pokecon.state.active_profile)
 ```
 
-### 11.17 プロファイルAPI
+### 11.16 プロファイルAPI
 
-#### 11.17.1 設計方針
+#### 11.16.1 設計方針
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
 - **`pokecon.opt.active_profile` との関係**: `pokecon.profile.switch("custom")` は内部的に `pokecon.opt.active_profile = "custom"` を設定し、プロファイル切替イベントを発火する。両者は等価だが、`profile.switch()` はイベント発火とエラーハンドリング（存在しないプロファイル名の検証）を行う
 - **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
-#### 11.17.2 API仕様
+#### 11.16.2 API仕様
 
 ```python
 # Python設定
@@ -2375,11 +2368,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 
 実装詳細はビルドスクリプトを参照。
 
-### 14.6 ユーザーパッケージ設定
-
-ユーザーパッケージ設定については §11.4を参照。
-
-### 14.7 LSP設定（pyproject.toml）
+### 14.6 LSP設定（pyproject.toml）
 
 LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。以下の項目を設定する必要がある:
 

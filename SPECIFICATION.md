@@ -1635,7 +1635,7 @@ print(pokecon.event.list_defined())
 ```lua
 -- Lua設定（Pythonと同じAPI構造）
 pokecon.event.define("MyCustomEvent")
-pokecon.event.emit("MyCustomEvent", {key = "value"})
+pokecon.event.emit("MyCustomEvent")
 print(pokecon.event.list_defined())
 ```
 

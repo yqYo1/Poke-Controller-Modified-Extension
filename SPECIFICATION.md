@@ -1520,7 +1520,7 @@ end)
 | 名前空間 | 用途 | API |
 |---------|------|-----|
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
-| `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()`, `get_schema()` |
+| `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()` |
 | `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
 | `pokecon.controller` | コントローラー（ゲームパッド）操作 | `press()`, `hold()`, `holdEnd()`, `Button`, `Direction`, `Hat` |
 | `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` |

@@ -2268,6 +2268,130 @@ pokecon.profile.switch("custom")
 
 **注**: キーマップのクリアは内部的な処理。ユーザーが直接キーマップを無効化する場合は、`pokecon.keymap.set("<F5>", "<nop>")` のように `<nop>` を rhs に登録することで実現する。
 
+### 11.17 コントローラーAPI（動的設定用）
+
+#### 11.17.1 設計方針
+
+- **動的設定専用**: `init.py`/`init.lua` からコントローラーを操作するAPI
+- **スクリプトAPIとは別**: `PythonCommand` クラスの `press()`, `hold()`, `holdEnd()` とは異なる設計。動的設定では状態ベースの一括更新が適切
+- **複数ボタン同時操作**: 同じタイミングで複数ボタンの押下・離脱を表現できる必要がある
+- **スティック入力**: x,y座標の絶対値指定、および角度+強度の指定の両方に対応
+- **3DSタッチスクリーン対応**: タッチスクリーンのx,y座標指定
+
+#### 11.17.2 型定義
+
+```python
+from typing import TypedDict, NotRequired, Literal
+
+# スティック入力（x,y絶対値 または 角度+強度）
+class StickInput(TypedDict):
+    x: NotRequired[int]       # -128 ~ 127（絶対値指定時）
+    y: NotRequired[int]       # -128 ~ 127（絶対値指定時）
+    angle: NotRequired[float] # 0.0 ~ 360.0（角度+強度指定時）
+    strength: NotRequired[float] # 0.0 ~ 1.0（角度+強度指定時）
+
+# タッチスクリーン入力（3DS対応）
+class TouchInput(TypedDict):
+    x: int  # 0 ~ 319（3DS上画面幅）
+    y: int  # 0 ~ 239（3DS上画面高さ）
+    pressed: NotRequired[bool]  # True: タッチ開始, False: タッチ終了
+
+# コントローラー状態更新
+class ControllerUpdate(TypedDict):
+    a: NotRequired[bool]
+    b: NotRequired[bool]
+    x: NotRequired[bool]
+    y: NotRequired[bool]
+    l: NotRequired[bool]
+    r: NotRequired[bool]
+    zl: NotRequired[bool]
+    zr: NotRequired[bool]
+    plus: NotRequired[bool]
+    minus: NotRequired[bool]
+    home: NotRequired[bool]
+    capture: NotRequired[bool]
+    left_stick: NotRequired[StickInput]
+    right_stick: NotRequired[StickInput]
+    hat: NotRequired[Literal["up", "down", "left", "right", "up_right", "up_left", "down_right", "down_left", "neutral"]]
+    touch: NotRequired[TouchInput]
+```
+
+#### 11.17.3 API仕様
+
+```python
+# Python設定
+import pokecon
+from typing import TypedDict, NotRequired, Literal
+
+# ボタン更新（指定したボタンのみ更新、未指定のボタンは現在の状態を維持）
+# 引数: ControllerUpdate
+# 戻り値: None
+pokecon.controller.update({"a": True, "b": True})
+
+# スティック絶対値指定
+pokecon.controller.update({"left_stick": {"x": 50, "y": -30}})
+
+# スティック角度+強度指定
+pokecon.controller.update({"right_stick": {"angle": 45.0, "strength": 0.8}})
+
+# タッチスクリーン（3DS対応）
+pokecon.controller.update({"touch": {"x": 160, "y": 120, "pressed": True}})
+
+# 全てのボタン・スティックを未入力状態に戻す
+# 戻り値: None
+pokecon.controller.reset()
+```
+
+```lua
+-- Lua設定（Pythonと同じAPI構造）
+
+-- ボタン更新
+pokecon.controller.update({a = true, b = true})
+
+-- スティック絶対値指定
+pokecon.controller.update({left_stick = {x = 50, y = -30}})
+
+-- スティック角度+強度指定
+pokecon.controller.update({right_stick = {angle = 45.0, strength = 0.8}})
+
+-- タッチスクリーン（3DS対応）
+pokecon.controller.update({touch = {x = 160, y = 120, pressed = true}})
+
+-- 全てリセット
+pokecon.controller.reset()
+```
+
+#### 11.17.4 使用例（キーマップと連携）
+
+```python
+# Python設定
+import pokecon
+
+# キー「a」を押したらAボタンを押す
+pokecon.keymap.set("a", lambda: pokecon.controller.update({"a": True}))
+
+# キー「a」を離したらAボタンを離す
+pokecon.keymap.set("<Release-a>", lambda: pokecon.controller.update({"a": False}))
+
+# 長押し: Ctrl+AでLボタン押下、離したら離脱
+pokecon.keymap.set("<C-a>", lambda: pokecon.controller.update({"l": True}))
+pokecon.keymap.set("<Release-C-a>", lambda: pokecon.controller.update({"l": False}))
+```
+
+```lua
+-- Lua設定
+
+-- キー「a」を押したらAボタンを押す
+pokecon.keymap.set("a", function()
+    pokecon.controller.update({a = true})
+end)
+
+-- キー「a」を離したらAボタンを離す
+pokecon.keymap.set("<Release-a>", function()
+    pokecon.controller.update({a = false})
+end)
+```
+
 ---
 
 ## 12. 環境変数

@@ -1071,7 +1071,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 |------|---------|------|
 | **新API（推奨）** | `show_dialog()` | 積極的に推奨。新規スクリプトではこちらを使用 |
 | **旧API（互換性維持）** | `dialogue6widget()`, `dialogue6widget_select_settings()` | 互換性維持のため残す。APIシグネチャの変更はユーザーからの使用状況を考慮する必要がある |
-| **旧API（他実装との互換性必須）** | `dialogue()`（他実装との互換性を維持する必要がある場合） | 他のPoke-Controller互換ソフトとの互換性維持が必要。シグネチャ: `dialogue(title: str, desc: str | None = None) -> str` |
+| **旧API（他実装との互換性必須）** | `dialogue()`（他実装との互換性を維持する必要がある場合） | 他のPoke-Controller互換ソフトとの互換性維持が必要。シグネチャ: `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` |
 
 #### 10.6.1 ダイアログライフサイクル
 

@@ -1750,11 +1750,8 @@ pokecon.autocmd.on("InputPressedPre", {
 ```python
 from typing import Callable
 
-# 通常イベント（Post等）: 戻り値なし
-type Callback = Callable[[], None]
-
-# Preイベント: Falseでキャンセル、それ以外は継続
-type PreCallback = Callable[[], bool | None]
+# イベントコールバック: 戻り値なし（通常イベント）、または bool | None（Preイベントでキャンセル用）
+type Callback = Callable[[], None | bool]
 ```
 
 | エラー種類 | 挙動 | ログ出力 |

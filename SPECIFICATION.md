@@ -1501,7 +1501,7 @@ end)
 
 動的設定ファイル（PythonおよびLua）で使用するイベント駆動のフックシステム。
 
-#### 11.12.1 設計方針
+#### 11.11.1 設計方針
 
 - **Neovim/Vim風な設計**: `autocmd` スタイルのイベントハンドラ登録
 - **Pre/Postフェーズ**: 原則としてすべてのイベントは `Pre`（事前）と `Post`（事後）の2フェーズを持つ。特別な理由がない限り両方を持つ必要がある
@@ -1515,7 +1515,7 @@ end)
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
 - **Python/Lua両対応**: 両言語で同じAPI構造を使用
 
-#### 11.12.2 名前空間設計
+#### 11.11.2 名前空間設計
 
 | 名前空間 | 用途 | API |
 |---------|------|-----|
@@ -1524,7 +1524,7 @@ end)
 | `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
 | `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` |
 
-#### 11.12.3 イベントハンドラAPI
+#### 11.11.3 イベントハンドラAPI
 
 ```python
 # Python設定
@@ -1613,7 +1613,7 @@ pokecon.autocmd.clear("CameraOpenPost")
 pokecon.autocmd.clear("my_group")
 ```
 
-#### 11.12.4 イベント定義・発火API
+#### 11.11.4 イベント定義・発火API
 
 ```python
 # ユーザー定義イベント
@@ -1639,7 +1639,7 @@ pokecon.event.emit("MyCustomEvent")
 print(pokecon.event.list_defined())
 ```
 
-#### 11.12.5 組み込みイベント一覧
+#### 11.11.5 組み込みイベント一覧
 
 | イベント名 | フェーズ | 説明 |
 |-----------|---------|------|
@@ -1687,7 +1687,7 @@ print(pokecon.event.list_defined())
 - 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
 - この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
 
-#### 11.12.6 型注釈
+#### 11.11.6 型注釈
 
 ```python
 from typing import Literal
@@ -1709,7 +1709,7 @@ type BuiltinEvent = Literal[
 type EventName = BuiltinEvent | str
 ```
 
-#### 11.12.7 エラーハンドリングとPreイベントのキャンセル
+#### 11.11.7 エラーハンドリングとPreイベントのキャンセル
 
 **エラーハンドリング**:
 

@@ -226,7 +226,7 @@
   - D-pad（上、下、左、右）
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
-  - タッチスクリーンシミュレーション（320×240座標入力）
+  - タッチスクリーンシミュレーション（320×240座標入力、0-based: 0～319, 0～239）
 - **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
@@ -747,7 +747,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **対応ボタン**: A、B、X、Y、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
 - **十字キー（Hat）**: UP、DOWN、LEFT、RIGHT、TOP_RIGHT、BTM_RIGHT、BTM_LEFT、TOP_LEFT、CENTER。
 - **アナログスティック**: 両軸とも0～255の範囲。
-- **タッチスクリーン**: `{x: 0–320, y: 0–240}` 座標。
+- **タッチスクリーン**: `{x: 0–319, y: 0–239}` 座標（0-based）。
 
 ---
 
@@ -2272,8 +2272,8 @@ class StickInput(TypedDict):
 
 # タッチスクリーン入力（3DS対応）
 class TouchInput(TypedDict):
-    x: int  # 1 ~ 320（3DS上画面幅）
-    y: int  # 1 ~ 240（3DS上画面高さ）
+    x: int  # 0 ~ 319（3DS上画面幅。0-based）
+    y: int  # 0 ~ 239（3DS上画面高さ。0-based）
     pressed: NotRequired[bool]  # True: タッチ開始, False: タッチ終了
 
 # コントローラー状態更新

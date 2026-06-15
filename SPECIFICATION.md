@@ -1710,17 +1710,15 @@ print(pokecon.event.list_defined())
 - **Pre/Post後置**: Neovim/Vim風（`BufReadPre`/`BufReadPost`に類似）
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
-**注**: 動的設定用イベントシステム（§11.5.6.1）とWebSocketイベント（§7.3.2）は**別々のシステム**です。
-- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定で使用
-- **WebSocketイベント**: `camera.opened`（lowercase + ドット区切り）— UIとバックエンド間の通信
+**注**: 動的設定用イベントシステム（§11.5.6.1）とWebSocketイベント（§7.3.2）は**別々のシステム**です。両者は対応関係を持ちません。
+- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定ファイル（`init.py`/`init.lua`）で使用
+- **WebSocketイベント**: `camera.open`（lowercase + ドット区切り）— UIとバックエンド間の通信プロトコル
 
-両者は内部で連携しますが、命名規則と用途が異なります。
+**命名規則の違い**:
+- 動的設定イベント: イベント名に `Pre`/`Post` を含む（例: `CameraOpenPost`）
+- WebSocketイベント: 動詞原形を使用（例: `camera.open`）
 
-**連携方法の概要**:
-- 動的設定イベントはRustコア内のイベントバスで発火・購読される
-- WebSocketイベントはUIとバックエンド間の通信プロトコルとして使用される
-- 例: `CameraOpenPost` イベントが発火されると、RustコアはWebSocketで `camera.opened` イベントをUIに送信し、UIはカメラ映像の表示を開始する
-- この連携はRustコア内で自動的に行われ、ユーザーが意識する必要はない
+両者は同じタイミングで発火する場合もありますが、別々のシステムとして独立して動作します。ユーザーが両者の対応関係を意識する必要はありません。
 
 ###### 11.5.6.1.6 型注釈
 

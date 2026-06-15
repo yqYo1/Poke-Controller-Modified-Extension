@@ -1539,7 +1539,8 @@ handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera
 
 # 一度だけ実行
 # 発火後の HandlerId は無効になり、off() は何もしない（エラーにはならない）
-handler_id_once = pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"))
+# group パラメータも使用可能（発火前にグループ単位で解除する場合）
+handler_id_once = pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"), group="serial_group")
 
 # イベントハンドラ解除
 # 引数: HandlerId（on() / once() の戻り値）

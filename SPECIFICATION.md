@@ -879,7 +879,7 @@ type GamepadInput = ButtonsList | Buttons
 | `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
 | `wait()` | `wait(wait: float) -> None` | 指定時間待機。>0.1sは `time.sleep()`（CPU効率、低精度）、≤0.1sはビジーループ（`time.perf_counter()`、高精度、高CPU使用率）。いずれの場合も `checkIfAlive()` を呼び出す |
 | `short_wait()` | `short_wait(wait: float) -> None` | 常にビジーループ待機（`time.perf_counter()`、高精度、高CPU使用率）。`checkIfAlive()` を呼び出す |
-| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信。`commands` から `\r`/`\n` を除去し、`zip(waittimes, commands, strict=False)` で並列処理。各コマンド送信前に `waittimes[i]` 秒待機。長さ不一致時は短い側まで実行。`writeRow_wo_perf_counter()` で `\r\n` を付加して送信 |
+| `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信。`commands` から `\r`/`\n` を除去し、`zip(waittimes, commands, strict=False)` で並列処理。各コマンド送信前に `waittimes[i]` 秒待機。長さ不一致時は短い側まで実行。`writeRow_wo_perf_counter()` で `\r\n` を付加して送信。`strict=False` は互換性のため（長さ不一致時もエラーにしない）。空リスト時は何も送信しない |
 
 **設定メソッド**:
 
@@ -902,7 +902,7 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui` は除外） |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
@@ -1249,10 +1249,19 @@ reconnect_interval_sec = 3  # 再接続間隔（秒）
 reconnect_max_retries = 20  # リトライ回数上限
 
 # Python実行環境設定
-# 原則: [python.script] と [python.dynamic] で別々に指定する（推奨）
-# 簡易: [python] 共通セクションで両方同時に指定する（フォールバック）
+# 優先順位: [python.script] / [python.dynamic] > [python]（共通）
+# 未設定項目は上位から継承（完全上書き、deep mergeなし）
 
-# ---- 別々に指定する場合（推奨・初期値） ----
+# ---- 優先順位の詳細 ----
+# 1. [python.script] / [python.dynamic] が存在する場合: その値を使用
+# 2. [python.script] / [python.dynamic] が未設定の項目: [python]（共通）の値を使用
+# 3. [python] も未設定の項目: デフォルト値を使用
+#
+# 例: [python.script] に interpreter のみ設定し、[python] に venv と packages を設定した場合:
+#   - [python.script]: interpreter = 指定値, venv = [python]の値, packages = [python]の値
+#   - [python.dynamic]: interpreter = デフォルト値, venv = [python]の値, packages = [python]の値
+
+# ---- 別々に指定する場合（推奨） ----
 [python.script]
 # ユーザースクリプト用Python実行環境
 # interpreter = "/usr/bin/python3.12"  # 例: システムPython
@@ -1276,9 +1285,9 @@ reconnect_max_retries = 20  # リトライ回数上限
 # [[python.dynamic.packages.list]]
 # name = "numpy"
 
-# ---- 同時に指定する場合（上書き） ----
+# ---- 共通設定のみの場合（シンプル） ----
 # [python] セクションを使用すると、[python.script] と [python.dynamic] の両方に
-# 同じ設定が適用される。[python.script] / [python.dynamic] が未設定の場合のみ有効
+# 同じ設定が適用される。ただし、[python.script] / [python.dynamic] で上書き可能
 # [python]
 # interpreter = "/usr/bin/python3.12"
 # venv = "~/.config/pokecon/venv"
@@ -1794,7 +1803,7 @@ type Callback = Callable[[], None | bool]
 - **キー解放イベント**: 仮想キー `<Release-*>` を全キーに自動提供（同時押し含む: `<Release-C-a>`）。これにより「押した時」と「離した時」で別々の動作をマップ可能
   - **長押しの表現例**: `<C-a>` に「開始処理」、`<Release-C-a>` に「終了処理」をそれぞれマップすることで、ユーザー側で長押し相当の動作を実現
   - **極短時間押下（チャタリング対策）**: `<Release-a>` は対応する `<A>` のコールバック実行が完了するまで発火を待機。完了後に `<Release-a>` のコールバックを実行
-  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。直前のReleaseから閾値ms以内のPress+Releaseはチャタリングとみなし、`<Release-a>` をキャンセルする。修飾キーを除く同一キー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）
+  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。直前のReleaseから閾値ms以内のPress+Releaseはチャタリングとみなし、`<Release-a>` をキャンセルする。修飾キーを除く同一ベースキー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）。**ベースキー**: 修飾キー（`<C-*>`, `<S-*>`, `<M-*>`）を除いた部分。`<C-a>` のベースキーは `a`、`<C-S-a>` のベースキーも `a`。大文字・小文字は区別されない（`a` と `A` は同じベースキー）
 - **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
 - **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は `<nop>` を rhs に登録することで実現する（§11.5.6.2.3参照）。
 

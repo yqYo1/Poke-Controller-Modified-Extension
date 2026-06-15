@@ -2256,15 +2256,15 @@ from typing import TypedDict, NotRequired, Literal
 
 # スティック入力（x,y絶対値 または 角度+強度）
 class StickInput(TypedDict):
-    x: NotRequired[int]       # -128 ~ 127（絶対値指定時）
-    y: NotRequired[int]       # -128 ~ 127（絶対値指定時）
+    x: NotRequired[int]       # 0 ~ 255（絶対値指定時）。中心=128、デッドゾーン=103~153
+    y: NotRequired[int]       # 0 ~ 255（絶対値指定時）。中心=128、デッドゾーン=103~153
     angle: NotRequired[float] # 0.0 ~ 360.0（角度+強度指定時）
     strength: NotRequired[float] # 0.0 ~ 1.0（角度+強度指定時）
 
 # タッチスクリーン入力（3DS対応）
 class TouchInput(TypedDict):
-    x: int  # 0 ~ 319（3DS上画面幅）
-    y: int  # 0 ~ 239（3DS上画面高さ）
+    x: int  # 1 ~ 320（3DS上画面幅）
+    y: int  # 1 ~ 240（3DS上画面高さ）
     pressed: NotRequired[bool]  # True: タッチ開始, False: タッチ終了
 
 # コントローラー状態更新

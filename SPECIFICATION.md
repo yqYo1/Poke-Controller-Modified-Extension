@@ -607,7 +607,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 | イベント | 方向 | ペイロード |
 |-------|-----------|---------|
-| `camera.opened` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
+| `camera.open` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
 | `command.start` | サーバー → クライアント | コマンド実行開始通知 |
 | `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
 | `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |

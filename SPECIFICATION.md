@@ -1947,10 +1947,12 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 
 | キー | 別名 |
 |------|------|
-| Enter | `<CR>`, `<Enter>`, `<Return>` |
-| Backspace | `<BS>`, `<Backspace>` |
-| Escape | `<Esc>`, `<Escape>` |
-| Tab | `<Tab>` |
+| Tab | `<Tab>`, `<C-I>`（エイリアス。ブラウザでは区別不可） |
+| Enter | `<CR>`, `<Enter>`, `<Return>`, `<C-M>`（エイリアス） |
+| Backspace | `<BS>`, `<Backspace>`, `<C-H>`（エイリアス） |
+| Escape | `<Esc>`, `<Escape>`, `<C-[>`（エイリアス） |
+| Linefeed | `<NL>`, `<C-J>`（エイリアス） |
+| Nul | `<Nul>`, `<C-@>`（エイリアス。ブラウザでは検出不可） |
 | Space | `<Space>` |
 | Delete | `<Del>`, `<Delete>` |
 | Meta/Alt | `<M-a>`, `<A-a>`（同じ。`<Alt>` 単体は修飾キーとして使用） |

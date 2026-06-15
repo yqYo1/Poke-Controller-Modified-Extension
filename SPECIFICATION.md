@@ -2517,7 +2517,7 @@ LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。�
 
 **詳細な設定例**: リポジトリ内の `pyproject.toml` または開発者ドキュメントを参照。
 
-### 14.8 Lua LSP設定（.luarc.json）
+### 14.7 Lua LSP設定（.luarc.json）
 
 Lua LSP設定は `.luarc.json` で管理する。
 

@@ -1703,8 +1703,15 @@ print(pokecon.event.list_defined())
 
 ###### 11.5.6.1.5.1 ScriptLoadPre/ScriptLoadPostのタイミング
 
-- **ScriptLoadPre**: コマンドクラスの抽出・自動タグ生成完了後、`command_candidates` が設定済みの状態で発火。ユーザーはコールバック内で `command_candidates` を変更可能
-- **ScriptLoadPost**: 手動タグ統合・動的タグ追加がすべて完了した後に発火
+タグライフサイクルの順序:
+
+1. コマンドクラスの抽出
+2. 自動タグ生成
+3. **ScriptLoadPre**発火 — `command_candidates` が設定済みの状態。ユーザーはコールバック内で `command_candidates` を変更可能（動的タグ追加）
+4. 手動タグ統合（`@tag`形式のタグ）
+5. 動的タグ追加（ScriptLoadPreコールバック内での変更を反映）
+6. **ScriptLoadPost**発火 — すべてのタグ処理が完了した後
+7. **SPA側へのデータ送信** — ScriptLoadPost後にUIにコマンドリストを送信
 
 ###### 11.5.6.1.5.2 命名規則
 

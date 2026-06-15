@@ -1239,6 +1239,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ```toml
 # ~/.config/pokecon/settings.toml
+# 注: 以下は主要な設定項目の例示です。網羅的な一覧ではありません。
+# 未記載の項目も settings.toml で設定可能です（§11.3の優先順位に従う）。
+
 [global]
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）

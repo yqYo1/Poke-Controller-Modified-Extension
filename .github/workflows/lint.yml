@@ -58,3 +58,23 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run web checks (eslint + svelte-check + vitest)
         run: nix run .#web-check
+
+  markdownlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check markdown with markdownlint
+        run: nix run .#markdownlint-check
+
+  textlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check text with textlint
+        run: nix run .#textlint-check

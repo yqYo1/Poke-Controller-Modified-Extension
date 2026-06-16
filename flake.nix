@@ -571,6 +571,54 @@
                 '';
               }
             }/bin/typos-check";
+
+            # nix run .#markdownlint  — run markdown linter
+            markdownlint = mkApp "${
+              pkgs.writeShellApplication {
+                name = "markdownlint";
+                runtimeInputs = [ pkgs.markdownlint-cli ];
+                text = ''
+                  cd "${self}"
+                  exec markdownlint --config .markdownlint.json "$@"
+                '';
+              }
+            }/bin/markdownlint";
+
+            # nix run .#markdownlint-check  — check markdown (CI, no fixes)
+            markdownlint-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "markdownlint-check";
+                runtimeInputs = [ pkgs.markdownlint-cli ];
+                text = ''
+                  cd "${self}"
+                  exec markdownlint --config .markdownlint.json --no-fix "$@"
+                '';
+              }
+            }/bin/markdownlint-check";
+
+            # nix run .#textlint  — run text linter for Japanese
+            textlint = mkApp "${
+              pkgs.writeShellApplication {
+                name = "textlint";
+                runtimeInputs = [ pkgs.nodePackages.textlint ];
+                text = ''
+                  cd "${self}"
+                  exec textlint --config .textlintrc.json "$@"
+                '';
+              }
+            }/bin/textlint";
+
+            # nix run .#textlint-check  — check text (CI, no fixes)
+            textlint-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "textlint-check";
+                runtimeInputs = [ pkgs.nodePackages.textlint ];
+                text = ''
+                  cd "${self}"
+                  exec textlint --config .textlintrc.json "$@"
+                '';
+              }
+            }/bin/textlint-check";
             maturin-develop = mkApp "${
               pkgs.writeShellApplication {
                 name = "maturin-develop";

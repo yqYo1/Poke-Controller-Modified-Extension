@@ -591,7 +591,7 @@
                 runtimeInputs = [ pkgs.markdownlint-cli ];
                 text = ''
                   cd "${self}"
-                  exec markdownlint --config .markdownlint.json --no-fix "$@"
+                  exec markdownlint --config .markdownlint.json "$@"
                 '';
               }
             }/bin/markdownlint-check";
@@ -600,7 +600,7 @@
             textlint = mkApp "${
               pkgs.writeShellApplication {
                 name = "textlint";
-                runtimeInputs = [ pkgs.nodePackages.textlint ];
+                runtimeInputs = [ pkgs.textlint ];
                 text = ''
                   cd "${self}"
                   exec textlint --config .textlintrc.json "$@"
@@ -612,7 +612,7 @@
             textlint-check = mkApp "${
               pkgs.writeShellApplication {
                 name = "textlint-check";
-                runtimeInputs = [ pkgs.nodePackages.textlint ];
+                runtimeInputs = [ pkgs.textlint ];
                 text = ''
                   cd "${self}"
                   exec textlint --config .textlintrc.json "$@"

@@ -1125,7 +1125,9 @@
           # ── git-hooks (pre-commit) configuration ───────────────────────
           pre-commit = {
             check.enable = false; # skip in nix flake check (sandbox limitation)
+            pkgs = pkgs; # explicitly set nixpkgs for pre-commit
             settings = {
+              configPath = ".pre-commit-config.yaml";
               hooks = {
                 treefmt = {
                   enable = true;
@@ -1149,39 +1151,43 @@
                   enable = true;
                   name = "markdownlint";
                   description = "Lint markdown files";
-                  entry = "${pkgs.markdownlint-cli}/bin/markdownlint --config .markdownlint.json";
+                  entry = "nix run .#markdownlint-check --";
                   files = "\\.md$";
                   stages = [ "pre-commit" ];
+                  pass_filenames = true;
                 };
                 textlint = {
                   enable = true;
                   name = "textlint";
                   description = "Lint Japanese text in markdown files";
-                  entry = "${pkgs.textlint}/bin/textlint --config .textlintrc.json";
+                  entry = "nix run .#textlint-check --";
                   files = "\\.md$";
                   stages = [ "pre-commit" ];
+                  pass_filenames = true;
                 };
                 ruff-check = {
                   enable = true;
                   name = "ruff-check";
                   description = "Python linter (ruff)";
-                  entry = "${pkgs.ruff}/bin/ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841";
+                  entry = "nix run .#ruff-check --";
                   files = "\\.py$";
                   stages = [ "pre-commit" ];
+                  pass_filenames = true;
                 };
                 ruff-format = {
                   enable = true;
                   name = "ruff-format";
                   description = "Python formatter (ruff)";
-                  entry = "${pkgs.ruff}/bin/ruff format";
+                  entry = "nix run .#ruff-format --";
                   files = "\\.py$";
                   stages = [ "pre-commit" ];
+                  pass_filenames = true;
                 };
                 clippy = {
                   enable = true;
                   name = "clippy";
                   description = "Rust linter (clippy)";
-                  entry = "${rustToolchain}/bin/cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings";
+                  entry = "nix run .#clippy";
                   files = "\\.rs$";
                   stages = [ "pre-commit" ];
                   pass_filenames = false;
@@ -1190,16 +1196,8 @@
                   enable = true;
                   name = "eslint";
                   description = "JavaScript/TypeScript linter (eslint)";
-                  entry = "${pkgs.nodejs_20}/bin/npx eslint";
+                  entry = "nix run .#web-check --";
                   files = "\\.(js|ts|svelte)$";
-                  stages = [ "pre-commit" ];
-                };
-                svelte-check = {
-                  enable = true;
-                  name = "svelte-check";
-                  description = "Svelte type checker";
-                  entry = "${pkgs.nodejs_20}/bin/npx svelte-check";
-                  files = "\\.svelte$";
                   stages = [ "pre-commit" ];
                   pass_filenames = false;
                 };
@@ -1230,6 +1228,8 @@
                   # libva for VAAPI hardware encoding (via FFmpeg)
                   libva
                   libva-utils
+
+                  pre-commit # explicitly add pre-commit for git hooks
                 ]
                 ++ pythonPkgs
                 ++ [

@@ -1483,7 +1483,7 @@ end
 
 -- キーマップ（Neovim風記法）
 pokecon.keymap.set("a", function()
-    pokecon.controller.press(pokecon.controller.Button.A)
+    pokecon.controller.update({a = true})
 end)
 
 -- イベントハンドラ
@@ -1872,7 +1872,7 @@ type KBKeys = Literal[
 # rhs: KBKeys（キー入力）、str（仮想キー参照）、または Callable[[], None]（コールバック関数）
 
 # 基本的なキーマップ（noremap、関数rhs）
-pokecon.keymap.set("a", lambda: pokecon.controller.press(pokecon.controller.Button.A))
+pokecon.keymap.set("a", lambda: pokecon.controller.update({"a": True}))
 
 # 修飾キー付き（noremap、関数rhs）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
@@ -1913,7 +1913,7 @@ pokecon.keymap.delete("<F5>")  # F5のキーマップを削除
 
 -- 基本的なキーマップ（noremap、関数rhs）
 pokecon.keymap.set("a", function()
-    pokecon.controller.press(pokecon.controller.Button.A)
+    pokecon.controller.update({a = true})
 end)
 
 -- 修飾キー付き（noremap、関数rhs）

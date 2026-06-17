@@ -2087,6 +2087,52 @@ pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
 - `<Release-*>` も発火可能（キーを離したことにする）
 - このAPIは動的設定（`init.py`/`init.lua`）専用。ユーザー向けPython APIには公開しない
 
+###### 11.5.6.2.7 UIカスタマイズAPI
+
+動的設定専用。コマンドリストの表示ロジックをカスタマイズする。
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `tag_match_function` | `Callable[[str, list[str]], bool] \| None` | タグフィルターのマッチ関数。引数: (タグ, コマンドのタグリスト)。戻り値: True=表示, False=非表示 |
+| `tag_sort_function` | `Callable[[list[str]], list[str]] \| None` | タグ一覧のソート関数。引数: タグリスト。戻り値: ソート済みタグリスト |
+
+```python
+# Python
+# タグマッチ関数（カスタム）
+# デフォルト: 完全一致
+pokecon.ui.tag_match_function = lambda tag, cmd_tags: tag in cmd_tags
+
+# 部分一致（"battle" で "battle_raid" もマッチ）
+pokecon.ui.tag_match_function = lambda tag, cmd_tags: any(tag in t for t in cmd_tags)
+
+# タグソート関数（カスタム）
+# デフォルト: アルファベット順
+pokecon.ui.tag_sort_function = lambda tags: sorted(tags)
+
+# 優先度付きソート（特定タグを先頭に）
+def priority_sort(tags: list[str]) -> list[str]:
+    priority = {"main": 0, "sub": 1}
+    return sorted(tags, key=lambda t: priority.get(t, 99))
+pokecon.ui.tag_sort_function = priority_sort
+```
+
+```lua
+-- Lua
+-- タグマッチ関数（カスタム）
+pokecon.ui.tag_match_function = function(tag, cmd_tags)
+    for _, t in ipairs(cmd_tags) do
+        if tag == t then return true end
+    end
+    return false
+end
+
+-- タグソート関数（カスタム）
+pokecon.ui.tag_sort_function = function(tags)
+    table.sort(tags)
+    return tags
+end
+```
+
 ##### 11.5.6.3 相互参照API
 
 ###### 11.5.6.3.1 設計方針

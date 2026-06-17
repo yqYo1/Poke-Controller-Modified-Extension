@@ -93,6 +93,9 @@
 | **シグナリング** | WebRTCにおいて、通信相手との接続確立に必要な情報（SDP、ICE candidate等）を交換するプロセス |
 | **holdEndSkip** | ボタンホールド中にShift+クリック（またはShift+タッチ終了）を行うことで、バックエンドに解放シグナルを送信せずに視覚的なボタン状態のみをリセットする操作 |
 | **StopThread** | コマンドスレッドを安全に終了させるための例外型。`checkIfAlive()` で `self.alive` が `False` の場合に送出される |
+| **noremap** | キーマップにおいて、再帰的なマッピング（remap）を行わない設定。Neovimの `noremap` に相当 |
+| **augroup** | Neovimのイベントハンドラグループ機能。`pokecon.autocmd` の `group` パラメータに相当 |
+| **CRF** | Constant Rate Factor（固定品質係数）。H.264/VP9等の動画エンコーダーで品質を固定し可変ビットレートでエンコードする方式 |
 
 ---
 ## 3. 非機能要件
@@ -382,11 +385,11 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 ### 6.4 Commandsタブ
 
-#### 6.4.1 サブタブ構造
+#### 6.4.1 サブタブ構造とコマンドリスト
 
 Commandsタブのサブタブ構造については §5.4 を参照。
 
-#### 6.4.2 コマンドリスト
+##### 6.4.1.1 コマンドリスト
 
 - **表示**: 利用可能なコマンドを表示するTreeview（階層構造を持つコマンドリスト）。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
@@ -915,12 +918,12 @@ type GamepadInput = ButtonsList | Buttons
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、結果を返す。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
+| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、ダイアログIDを返す（結果は各Widgetの`value`属性から取得）。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
-| `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、ダイアログの結果を返す |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
-| `dialogue()` | `dialogue(title: str, message: int | str | list, desc: str | None = None, need: type = list) -> list | dict` | 旧API（他実装との互換性必須）。単純ダイアログ |
+| `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、戻り値は固定で`0`。結果は各Widgetの`value`属性から取得 |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list] | type[dict] = list) -> list[Any] | dict[str, Any]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[Any] | dict[str, Any]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
+| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[Any] | dict[str, Any]` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -1063,7 +1066,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 - `float`: `TypeError`
 
 その他のSenderメソッドは、以下のクラスに統合:
-- シリアル接続管理 → `SerialManager` クラス（§6.2で定義）
+- シリアル接続管理 → `SerialManager` クラス（§6.2で定義されるUI制御クラス。API仕様は本ドキュメントの範囲外）
 - コネクション状態 → `pokecon.state` 名前空間（§11.5.6.4で定義）
 
 ### 10.6 ダイアログAPI
@@ -1629,7 +1632,8 @@ pokecon.autocmd.on("CameraOpenPost", {
 pokecon.autocmd.once("SerialConnectPost", {
     callback = function()
         print("Serial connected")
-    end
+    end,
+    group = "serial_group"
 })
 
 -- グループを指定して登録
@@ -1856,6 +1860,7 @@ type KBKeys = Literal[
     "<kPlus>", "<kMinus>", "<kEnter>",
     # 特殊キー（§11.5.6.2.3.1のテーブルに定義）
     "<lt>", "<Bslash>", "<Bar>", "<nop>", "<NL>", "<Ignore>", "<Nul>", "<Null>",
+    "<C-I>", "<C-M>", "<C-H>", "<C-[>", "<C-J>", "<C-@>", "<D-a>",
 ]
 
 # 型注釈
@@ -2006,7 +2011,7 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | `<kEnter>` | テンキーエンター | `<kEnter>` |
 | `<lt>` | Less-than `<` | `<lt>` |
 | `<Bslash>` | Backslash `\` | `<Bslash>` |
-| `<Bar>` | Vertical bar `|` | `<Bar>` |
+| `<Bar>` | Vertical bar `\|` | `<Bar>` |
 | `<nop>` | No-op（何もしない） | `<nop>` |
 | `<NL>` | Linefeed | `<NL>` |
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
@@ -2147,7 +2152,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `tags` | `list[str]` | 利用可能なタグ一覧 |
 | `active_profile` | `str` | 現在のアクティブプロファイル名 |
 | `available_profiles` | `list[str]` | 利用可能なプロファイル一覧 |
-| `last_input` | `str | None` | 最後の入力（キー名またはボタン名） |
+| `last_input` | `str \| None` | 最後の入力（キー名またはボタン名） |
 | `holding_buttons` | `list[str]` | 現在保持中のボタン一覧 |
 | `pid` | `int` | アプリケーションのプロセスID |
 
@@ -2340,7 +2345,7 @@ pokecon.controller.reset()
 pokecon.controller.update({a = true, b = true})
 
 -- スティック絶対値指定
-pokecon.controller.update({left_stick = {x = 50, y = -30}})
+pokecon.controller.update({left_stick = {x = 50, y = 50}})
 
 -- スティック角度+強度指定
 pokecon.controller.update({right_stick = {angle = 45.0, strength = 0.8}})

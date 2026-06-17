@@ -920,7 +920,7 @@ type GamepadInput = ButtonsList | Buttons
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> int` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、ダイアログの結果を返す |
 | `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
 | `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list, dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list | dict` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
-| `dialogue()` | `dialogue(title: str, message: int | str | list, desc: str = None, need: type = list) -> list | dict` | 旧API（他実装との互換性必須）。単純ダイアログ |
+| `dialogue()` | `dialogue(title: str, message: int | str | list, desc: str | None = None, need: type = list) -> list | dict` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -1176,9 +1176,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 #### 10.6.5 ダイアログ待機
 
-- `wait_dialog(dialog_id: int) -> int`
+- `wait_dialog(dialog_id: int) -> Literal[0]`
 - 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
-- 戻り値はダイアログの結果。`show_dialog()` の戻り値と同じ（`blocking=True` の場合は `0`、`blocking=False` の場合はダイアログID）
+- 戻り値は固定で `0`（ダイアログの完了を示す。実際のダイアログ結果は各Widgetの `value` 属性から取得）
 - 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
 - **ライフサイクル**: §10.6.1を参照
 
@@ -1792,7 +1792,7 @@ pokecon.autocmd.on("InputPressedPre", {
 from typing import Callable
 
 # イベントコールバック: 戻り値なし（通常イベント）、または bool | None（Preイベントでキャンセル用）
-type Callback = Callable[[], None | bool]
+type Callback = Callable[[], bool | None]
 ```
 
 | エラー種類 | 挙動 | ログ出力 |
@@ -1854,6 +1854,8 @@ type KBKeys = Literal[
     # テンキー
     "<k0>", "<k1>", "<k2>", "<k3>", "<k4>", "<k5>", "<k6>", "<k7>", "<k8>", "<k9>",
     "<kPlus>", "<kMinus>", "<kEnter>",
+    # 特殊キー（§11.5.6.2.3.1のテーブルに定義）
+    "<lt>", "<Bslash>", "<Bar>", "<nop>", "<NL>", "<Ignore>", "<Nul>", "<Null>",
 ]
 
 # 型注釈
@@ -1958,12 +1960,11 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | Backspace | `<BS>`, `<Backspace>`, `<C-H>`（エイリアス） |
 | Escape | `<Esc>`, `<Escape>`, `<C-[>`（エイリアス） |
 | Linefeed | `<NL>`, `<C-J>`（エイリアス） |
-| Nul | `<Nul>`, `<C-@>`（エイリアス。ブラウザでは検出不可） |
+| Nul | `<Nul>`, `<C-@>`, `<Null>`（エイリアス。ブラウザでは検出不可） |
 | Space | `<Space>` |
 | Delete | `<Del>`, `<Delete>` |
 | Meta/Alt | `<M-a>`, `<A-a>`（同じ。`<Alt>` 単体は修飾キーとして使用） |
 | Command/Super | `<D-a>`（将来のmacOS対応時に有効） |
-| Nul | `<Nul>`, `<Null>` |
 | Insert | `<Insert>`, `<Ins>` |
 | Home | `<Home>` |
 | End | `<End>` |
@@ -1972,7 +1973,6 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | Less-than | `<lt>` |
 | Backslash | `<Bslash>` |
 | Vertical bar | `<Bar>` |
-| Linefeed | `<NL>` |
 | Ignore | `<Ignore>` |
 
 **注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
@@ -2012,6 +2012,7 @@ Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能
 | `<Ignore>` | 待機キャンセル | `<Ignore>` |
 | `<Release-*>` | キー解放（全キーに自動提供） | `<Release-a>`, `<Release-C-a>` |
 | `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
+
 ###### 11.5.6.2.3.2 注意
 
 - `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です
@@ -2294,6 +2295,8 @@ class ControllerUpdate(TypedDict):
     r: NotRequired[bool]
     zl: NotRequired[bool]
     zr: NotRequired[bool]
+    lclick: NotRequired[bool]
+    rclick: NotRequired[bool]
     plus: NotRequired[bool]
     minus: NotRequired[bool]
     home: NotRequired[bool]
@@ -2317,7 +2320,7 @@ from typing import TypedDict, NotRequired, Literal
 pokecon.controller.update({"a": True, "b": True})
 
 # スティック絶対値指定
-pokecon.controller.update({"left_stick": {"x": 50, "y": -30}})
+pokecon.controller.update({"left_stick": {"x": 50, "y": 50}})
 
 # スティック角度+強度指定
 pokecon.controller.update({"right_stick": {"angle": 45.0, "strength": 0.8}})

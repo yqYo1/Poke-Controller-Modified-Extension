@@ -1145,6 +1145,22 @@
                   pass_filenames = false;
                   stages = [ "pre-commit" ];
                 };
+                markdownlint = {
+                  enable = true;
+                  name = "markdownlint";
+                  description = "Lint markdown files";
+                  entry = "${pkgs.markdownlint-cli}/bin/markdownlint --config .markdownlint.json";
+                  files = "\\.md$";
+                  stages = [ "pre-commit" ];
+                };
+                textlint = {
+                  enable = true;
+                  name = "textlint";
+                  description = "Lint Japanese text in markdown files";
+                  entry = "${pkgs.textlint}/bin/textlint --config .textlintrc.json";
+                  files = "\\.md$";
+                  stages = [ "pre-commit" ];
+                };
               };
             };
           };

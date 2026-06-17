@@ -11,7 +11,7 @@
 
 **本ドキュメントは要求仕様書として運用されます。**
 
-**対象読者**: 本プロジェクトの開発者およびLLM（実装支援エージェント）。エンドユーザー向けの説明書ではありません。
+**対象読者**: 本プロジェクトの開発者およびLLM（実装支援エージェント）。エンドユーザー向けの説明書ではありません。本ドキュメントに記載されているAPIは、開発者が実装時に参照するための仕様であり、エンドユーザーが直接読むことを想定していません。
 
 - **仕様が先行し、実装が後に追従する**関係です。実装の都合で仕様を変更することはありません
 - 実装と仕様に齟齬がある場合、**実装を修正してください**。齟齬が一時的なもの（実装予定だが未着手など）であれば、コード内にTODOコメントを記すか、他の適切なドキュメントに記載してください
@@ -1014,6 +1014,32 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
 | `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
 | `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
+
+**例**（典型的な使用パターン）:
+
+```python
+# 基本的なテンプレートマッチング
+found = self.isContainTemplate("battle_start.png", threshold=0.8)
+
+# グレースケール無効、特定領域で検索
+found = self.isContainTemplate(
+    "menu_icon.png",
+    use_gray=False,
+    crop=[100, 100, 200, 200]  # x, y, width, height
+)
+
+# マルチテンプレート（最も一致度の高いものを返す）
+best_idx, scores, results = self.isContainTemplate_max(
+    ["template_a.png", "template_b.png", "template_c.png"],
+    threshold=0.75
+)
+
+# 検出位置に矩形を描画（2秒間表示）
+self.displayRectangle([max_x, max_y], width=50, height=50, ms=2000)
+
+# テキストオーバーレイ
+self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
+```
 
 #### 10.4.4 McuCommand（McuCommandBase）
 

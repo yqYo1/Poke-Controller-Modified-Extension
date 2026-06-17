@@ -1161,6 +1161,48 @@
                   files = "\\.md$";
                   stages = [ "pre-commit" ];
                 };
+                ruff-check = {
+                  enable = true;
+                  name = "ruff-check";
+                  description = "Python linter (ruff)";
+                  entry = "${pkgs.ruff}/bin/ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841";
+                  files = "\\.py$";
+                  stages = [ "pre-commit" ];
+                };
+                ruff-format = {
+                  enable = true;
+                  name = "ruff-format";
+                  description = "Python formatter (ruff)";
+                  entry = "${pkgs.ruff}/bin/ruff format";
+                  files = "\\.py$";
+                  stages = [ "pre-commit" ];
+                };
+                clippy = {
+                  enable = true;
+                  name = "clippy";
+                  description = "Rust linter (clippy)";
+                  entry = "${rustToolchain}/bin/cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings";
+                  files = "\\.rs$";
+                  stages = [ "pre-commit" ];
+                  pass_filenames = false;
+                };
+                eslint = {
+                  enable = true;
+                  name = "eslint";
+                  description = "JavaScript/TypeScript linter (eslint)";
+                  entry = "${pkgs.nodejs_20}/bin/npx eslint";
+                  files = "\\.(js|ts|svelte)$";
+                  stages = [ "pre-commit" ];
+                };
+                svelte-check = {
+                  enable = true;
+                  name = "svelte-check";
+                  description = "Svelte type checker";
+                  entry = "${pkgs.nodejs_20}/bin/npx svelte-check";
+                  files = "\\.svelte$";
+                  stages = [ "pre-commit" ];
+                  pass_filenames = false;
+                };
               };
             };
           };

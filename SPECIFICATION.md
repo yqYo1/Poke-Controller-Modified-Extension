@@ -947,7 +947,7 @@ type GamepadInput = ButtonsList | Buttons
 | `mqtt_receive_message2()` | `mqtt_receive_message2(roomid: str, headerlist: list[str], show_msg: bool = False) -> str | None` | 複数ヘッダーフィルタ付き購読 |
 | `mqtt_change_broker_address()` | `mqtt_change_broker_address(broker_address: str) -> None` | MQTTブローカーアドレス変更 |
 | `mqtt_change_id()` | `mqtt_change_id(mqtt_id: str) -> None` | MQTTクライアントID変更 |
-| `mqtt_change_client_id()` | `mqtt_change_client_id(client_id: str) -> None` | MQTT接続名変更 |
+| `mqtt_change_clientId()` | `mqtt_change_clientId(clientId: str) -> None` | MQTT接続名変更 |
 | `mqtt_change_pub_token()` | `mqtt_change_pub_token(pub_token: str) -> None` | 公開トークン変更 |
 | `mqtt_change_sub_token()` | `mqtt_change_sub_token(sub_token: str) -> None` | 購読トークン変更 |
 

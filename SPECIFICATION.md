@@ -52,11 +52,20 @@
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
 
+**Python埋め込み方式**:
+Rustメインプロセス内にCPythonインタープリターを埋め込み、PyO3の`#[pymodule]`/`#[pyclass]`/`#[pyfunction]`でRust APIをPythonに公開する。PythonランタイムはRustと同一プロセス空間で動作し、IPC（プロセス間通信）は不要。PythonからRustの関数呼び出しは直接行われる（ゼロコピー、ゼロシリアライズ）。
+
+**埋め込みの基本フロー**:
+1. `pyo3::append_to_inittab!()` でRust製モジュールをPythonに登録（初期化前）
+2. `Python::initialize()` でCPythonインタープリターを初期化
+3. `Python::attach()` でGILを取得し、Pythonスクリプトを実行
+4. Pythonスクリプト内で `import pokecon` によりRust APIにアクセス
+
 **言語仕様**:
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。
+**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。Rustメインプロセス内のPythonインタープリターは同一アドレス空間で動作するため、Python→RustのAPI呼び出しは直接的な関数呼び出しとして行われる。
 
 **Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPythonまたは仮想環境）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
 

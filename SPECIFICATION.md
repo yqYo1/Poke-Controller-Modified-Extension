@@ -58,7 +58,7 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 **埋め込みの基本フロー**:
 1. `pyo3::append_to_inittab!()` でRust製モジュールをPythonに登録（初期化前）
 2. `Python::initialize()` でCPythonインタープリターを初期化
-3. `Python::attach()` でGILを取得し、Pythonスクリプトを実行
+3. `Python::with_gil()` でGILを取得し、Pythonスクリプトを実行
 4. Pythonスクリプト内で `import pokecon` によりRust APIにアクセス
 
 **言語仕様**:
@@ -88,7 +88,7 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 | Webブラウザ | スタンドアロンSvelteKit SPA | axum HTTPサーバーによって提供 |
 | モバイル（将来） | レスポンシブSPA | 同一コードベース、アダプティブレイアウト |
 
-**注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、macOS対応は現在のスコープ外とし、将来のバージョンでの判断とする（§15.2参照）。
+**注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、macOS対応は現在のスコープ外とし、将来のバージョンでの判断とする。
 
 ---
 
@@ -174,7 +174,7 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 
 ### 4.5 PWA — 今後のバージョンで実装予定
 
-> **要件**: PWAは今後のバージョンで実装予定です。詳細は§15.1を参照。
+> **要件**: PWAは今後のバージョンで実装予定です。
 
 ### 4.6 スクリプト互換性 — リファクタリング前の全スクリプトが動作必須
 
@@ -394,7 +394,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 > **ステータス: 今後のバージョンで実装予定**
 >
-> 現バージョンではハードウェア制御セクションを**非表示**とします（グレーアウトではなく非表示）。詳細は§15.2を参照。
+> 現バージョンではハードウェア制御セクションを**非表示**とします（グレーアウトではなく非表示）。
 
 #### 6.3.3 Switch Controller Simulator
 
@@ -412,7 +412,7 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
 
-##### 6.4.2.1 タグ体系
+##### 6.4.1.2 タグ体系
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
@@ -1473,18 +1473,6 @@ pokecon.opt.key_chattering_threshold_ms = 10
 # ユーザースクリプトでは self.keys を使用（§10.5.1参照）
 pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
 
-# タグマッチ関数（カスタム）
-def custom_match(selected: str, tag: str) -> bool:
-    return selected.lower() in tag.lower()
-
-pokecon.ui.tag_match_function = custom_match
-
-# タグソート関数（カスタム）
-def custom_sort(tags: list[str]) -> list[str]:
-    return sorted(tags, key=lambda t: t.lower())
-
-pokecon.ui.tag_sort_function = custom_sort
-
 # 動的タグ追加（ScriptLoadPreイベント）
 def add_dynamic_tags() -> None:
     for candidate in pokecon.state.command_candidates:
@@ -1512,17 +1500,6 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 pokecon.opt.language = "ja"
 pokecon.opt.camera_fps = 60
 pokecon.opt.ui_fps = 30
-
--- タグマッチ関数
-pokecon.ui.tag_match_function = function(selected, tag)
-    return selected:lower() == tag:lower()
-end
-
--- タグソート関数
-pokecon.ui.tag_sort_function = function(tags)
-    table.sort(tags)
-    return tags
-end
 
 -- キーマップ（Neovim風記法）
 pokecon.keymap.set("a", function()
@@ -1604,7 +1581,6 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()` |
 | `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
-| `pokecon.ui` | UI関連の動的設定 | `tag_match_function`, `tag_sort_function` |
 
 ###### 11.5.6.1.3 イベントハンドラAPI
 
@@ -1887,7 +1863,7 @@ type KBKeys = Literal[
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
     # ファンクションキー
     "<F1>", "<F2>", "<F3>", "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>", "<F11>", "<F12>",
-    # 特殊キー（例示。§11.5.6.2.3.1のテーブルに定義されたすべてのキーが使用可能）
+    # 特殊キー（例示。§11.5.6.2.3のテーブルに定義されたすべてのキーが使用可能）
     "<Space>", "<Enter>", "<Return>", "<CR>",
     "<Backspace>", "<BS>",
     "<Escape>", "<Esc>",
@@ -1903,7 +1879,7 @@ type KBKeys = Literal[
     # テンキー
     "<k0>", "<k1>", "<k2>", "<k3>", "<k4>", "<k5>", "<k6>", "<k7>", "<k8>", "<k9>",
     "<kPlus>", "<kMinus>", "<kEnter>",
-    # 特殊キー（§11.5.6.2.3.1のテーブルに定義）
+    # 特殊キー（§11.5.6.2.3のテーブルに定義）
     "<lt>", "<Bslash>", "<Bar>", "<nop>", "<NL>", "<Ignore>", "<Nul>", "<Null>",
     "<C-I>", "<C-M>", "<C-H>", "<C-[>", "<C-J>", "<C-@>", "<D-a>",
 ]
@@ -2131,52 +2107,6 @@ pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
 - ユーザー定義仮想キー（`<MyCustomKey>`）も発火可能
 - `<Release-*>` も発火可能（キーを離したことにする）
 - このAPIは動的設定（`init.py`/`init.lua`）専用。ユーザー向けPython APIには公開しない
-
-###### 11.5.6.2.7 UIカスタマイズAPI
-
-動的設定専用。コマンドリストの表示ロジックをカスタマイズする。
-
-| プロパティ | 型 | 説明 |
-|-----------|-----|------|
-| `tag_match_function` | `Callable[[str, list[str]], bool] \| None` | タグフィルターのマッチ関数。引数: (タグ, コマンドのタグリスト)。戻り値: True=表示, False=非表示 |
-| `tag_sort_function` | `Callable[[list[str]], list[str]] \| None` | タグ一覧のソート関数。引数: タグリスト。戻り値: ソート済みタグリスト |
-
-```python
-# Python
-# タグマッチ関数（カスタム）
-# デフォルト: 完全一致
-pokecon.ui.tag_match_function = lambda tag, cmd_tags: tag in cmd_tags
-
-# 部分一致（"battle" で "battle_raid" もマッチ）
-pokecon.ui.tag_match_function = lambda tag, cmd_tags: any(tag in t for t in cmd_tags)
-
-# タグソート関数（カスタム）
-# デフォルト: アルファベット順
-pokecon.ui.tag_sort_function = lambda tags: sorted(tags)
-
-# 優先度付きソート（特定タグを先頭に）
-def priority_sort(tags: list[str]) -> list[str]:
-    priority = {"main": 0, "sub": 1}
-    return sorted(tags, key=lambda t: priority.get(t, 99))
-pokecon.ui.tag_sort_function = priority_sort
-```
-
-```lua
--- Lua
--- タグマッチ関数（カスタム）
-pokecon.ui.tag_match_function = function(tag, cmd_tags)
-    for _, t in ipairs(cmd_tags) do
-        if tag == t then return true end
-    end
-    return false
-end
-
--- タグソート関数（カスタム）
-pokecon.ui.tag_sort_function = function(tags)
-    table.sort(tags)
-    return tags
-end
-```
 
 ##### 11.5.6.3 相互参照API
 

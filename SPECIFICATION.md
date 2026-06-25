@@ -667,15 +667,6 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 }
 ```
 
-**設定取得/変更**（HTTP REST — 設定変更のみ）:
-
-| メソッド | エンドポイント | 説明 |
-|--------|----------|-------------|
-| GET | `/api/controller/keyboard` | 現在のキーボード設定を取得 |
-| POST | `/api/controller/keyboard` | キーボード設定を設定 |
-
-- **保存**: キーボード設定は `localStorage` に保存。
-
 ### 7.6 マウス入力API
 
 マウス入力（スティック操作）は低遅延が要求されるため、**WebRTC DataChannel**または**WebSocket**を使用。**HTTP RESTは使用しない**。
@@ -1801,15 +1792,15 @@ type Callback = Callable[[], bool | None]
 | ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
 | 循環参照（イベント発火中に同じイベントを発火） | 検出して無視（同一イベントの直接再入のみ検出。間接循環 A→B→A は検出対象外） | ERRORレベル |
 
-##### 5.6.2 相互参照API
+##### 11.5.6.2 相互参照API
 
-###### 5.6.2.1 設計方針
+###### 11.5.6.2.1 設計方針
 
 - **Neovimの`:source`に類似**: `pokecon.source(path)`
 - **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
 - **相対パス・絶対パス両対応**
 
-###### 5.6.2.2 API仕様
+###### 11.5.6.2.2 API仕様
 
 ```python
 # Python設定
@@ -1830,21 +1821,21 @@ pokecon.source("~/.config/pokecon/extra_settings.py")  # -> None
 pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
 
-###### 5.6.2.3 エラーハンドリング
+###### 11.5.6.2.3 エラーハンドリング
 
 - 指定されたファイルが存在しない場合はエラーをログに出力
 - ファイルの読み込みに失敗しても、現在の設定は維持される
 - 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
 
-##### 5.6.3 状態取得API
+##### 11.5.6.3 状態取得API
 
-###### 5.6.3.1 設計方針
+###### 11.5.6.3.1 設計方針
 
 - **状態アクセス**: `pokecon.state.<property>` は現在の状態にアクセスする名前空間。原則として読み取りだが、動的設定からの変更が想定されるもの（タグ等）は書き込み可能
 - **リアルタイム**: 現在の状態を即座に反映
 - **スレッドセーフ**: 複数スレッドから安全に読み取り可能。書き込みは特定イベント（`ScriptLoadPre`等）のコールバック内または内部処理でのみ行われる
 
-###### 5.6.3.2 状態プロパティ一覧
+###### 11.5.6.3.2 状態プロパティ一覧
 
 ```python
 from typing import Literal
@@ -1920,16 +1911,16 @@ print(pokecon.state.camera_opened)
 print(pokecon.state.active_profile)
 ```
 
-##### 5.6.4 プロファイルAPI
+##### 11.5.6.4 プロファイルAPI
 
-###### 5.6.4.1 設計方針
+###### 11.5.6.4.1 設計方針
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
 - **`pokecon.opt.active_profile` との関係**: `pokecon.profile.switch("custom")` は内部的に `pokecon.opt.active_profile = "custom"` を設定し、プロファイル切替イベントを発火する。両者は等価だが、`profile.switch()` はイベント発火とエラーハンドリング（存在しないプロファイル名の検証）を行う
 - **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
-###### 5.6.4.2 API仕様
+###### 11.5.6.4.2 API仕様
 
 ```python
 # Python設定
@@ -1964,14 +1955,14 @@ print(pokecon.profile.list())
 pokecon.profile.switch("custom")
 ```
 
-###### 5.6.4.3 プロファイル切替時の動作
+###### 11.5.6.4.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
 - イベントハンドラをクリアして再登録
 
-##### 5.6.5 コントローラーAPI（動的設定用）
+##### 11.5.6.5 コントローラーAPI（動的設定用）
 
-###### 5.6.5.1 設計方針
+###### 11.5.6.5.1 設計方針
 
 - **動的設定専用**: `init.py`/`init.lua` からコントローラーを操作するAPI
 - **スクリプトAPIとは別**: `PythonCommand` クラスの `press()`, `hold()`, `holdEnd()` とは異なる設計。動的設定では状態ベースの一括更新が適切
@@ -1979,7 +1970,7 @@ pokecon.profile.switch("custom")
 - **スティック入力**: x,y座標の絶対値指定、および角度+強度の指定の両方に対応
 - **3DSタッチスクリーン対応**: タッチスクリーンのx,y座標指定
 
-###### 5.6.5.2 型定義
+###### 11.5.6.5.2 型定義
 
 ```python
 from typing import TypedDict, NotRequired, Literal
@@ -2019,7 +2010,7 @@ class ControllerUpdate(TypedDict):
     touch: NotRequired[TouchInput]
 ```
 
-###### 5.6.5.3 API仕様
+###### 11.5.6.5.3 API仕様
 
 ```python
 # Python設定

@@ -50,7 +50,7 @@
 | Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
 | PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.event`, `dialogue` |
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
-| Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd`, `pokecon.keymap` |
+| Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd` |
 
 **Python埋め込み方式**:
 Rustメインプロセス内にCPythonインタープリターを埋め込み、PyO3の`#[pymodule]`/`#[pyclass]`/`#[pyfunction]`でRust APIをPythonに公開する。PythonランタイムはRustと同一プロセス空間で動作し、IPC（プロセス間通信）は不要。PythonからRustの関数呼び出しは直接行われる（ゼロコピー、ゼロシリアライズ）。
@@ -97,8 +97,8 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 | 用語 | 定義 |
 |------|------|
 | **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。例: `pokecon.opt.camera_fps`（フラット）vs `pokecon.opt.camera.fps`（階層） |
-| **Neovim/Vim風** | Neovim/Vimエディタの設定・キーマップ方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
-| **後勝ち** | 同じキー・設定に対して後から適用された値が優先される方式。設定の優先順位やキーマップの重複解決で使用 |
+| **Neovim/Vim風** | Neovim/Vimエディタの設定方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
+| **後勝ち** | 同じキー・設定に対して後から適用された値が優先される方式。設定の優先順位で使用 |
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
@@ -110,7 +110,6 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 | **シグナリング** | WebRTCにおいて、通信相手との接続確立に必要な情報（SDP、ICE candidate等）を交換するプロセス |
 | **holdEndSkip** | ボタンホールド中にShift+クリック（またはShift+タッチ終了）を行うことで、バックエンドに解放シグナルを送信せずに視覚的なボタン状態のみをリセットする操作 |
 | **StopThread** | コマンドスレッドを安全に終了させるための例外型。`checkIfAlive()` で `self.alive` が `False` の場合に送出される |
-| **noremap** | キーマップにおいて、再帰的なマッピング（remap）を行わない設定。Neovimの `noremap` に相当 |
 | **augroup** | Neovimのイベントハンドラグループ機能。`pokecon.autocmd` の `group` パラメータに相当 |
 | **CRF** | Constant Rate Factor（固定品質係数）。H.264/VP9等の動画エンコーダーで品質を固定し可変ビットレートでエンコードする方式 |
 
@@ -164,7 +163,7 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 
 > **要件**: LINE通知UIは完全に削除されました。Discord Webhookのみがサポートされます。
 >
-> **メニュー項目について**: LINE Token Assignment / LINE Token Check のメニュー項目は、旧UI互換のためメニュー構造に残存します（§11.5.6.2.1参照）。ただし、これらのメニュー項目を選択しても何も起こらない（No-op）か、削除済みである旨のメッセージを表示します。
+> **メニュー項目について**: LINE Token Assignment / LINE Token Check のメニュー項目は、旧UI互換のためメニュー構造に残存します。ただし、これらのメニュー項目を選択しても何も起こらない（No-op）か、削除済みである旨のメッセージを表示します。
 
 ### 4.4 設定ファイル — `settings.ini` 廃止
 
@@ -499,11 +498,8 @@ Commands/
 - **割り当て解除**: Shift+クリックで割り当てを解除。
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
-- **キーボードショートカット**: キーマップシステム（§11.5.6.2）で管理。デフォルトでは`1`～`0`（数字キー）に割り当て（§11.5.6.2.5参照）。修飾キー付きのショートカットも可能
-- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
-- **キーマップ競合**: ショートカットボタンのホットキーと他のキーマップが重複した場合、後から登録されたものが優先（後勝ち）。実行制御キー（§11.5.6.2.5）はデフォルトで未割り当てのため、両方ともデフォルトの場合は競合しない
-- **実行制御キーとの関係**: ショートカットボタンはキーマップシステム（`pokecon.keymap.set()` で登録）で管理。実行制御キー（§11.5.6.2.5）も同じキーマップシステムで管理。両者は同じシステムであり、同じキーが両方に割り当てられていた場合、後勝ちが適用される。ショートカットボタンはデフォルトで`1`～`0`（数字キー）に割り当て、実行制御キーはデフォルトで未割り当て（§11.5.6.2.5参照）
-- **保存**: 設定は `localStorage` に保存。
+||- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
+||- **保存**: 設定は `localStorage` に保存。
 
 #### 6.4.4 実行制御ボタン
 
@@ -514,8 +510,6 @@ Commands/
 | **一時停止** | 実行を一時停止（再開可能） |
 | **再開** | 一時停止から再開 |
 | **コマンドリスト再読み込み** | ファイルシステムからコマンドリストを再読み込み（コマンドリロード） |
-
-キーボードショートカットの割り当ては **§11.5.6.2.5 デフォルトキーマップ** を参照。
 
 - **状態表示**: 実行中 / 一時停止中 / 停止 / エラー。
 
@@ -834,7 +828,6 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 **重要**:
 - ユーザースクリプト向けAPIは動的設定（`init.py`/`init.lua`）からも使用可能
-- 動的設定専用API（`pokecon.keymap.trigger()` 等）は§11に記載
 - 内部実装の名前空間は本仕様で規定するものではない。ユーザーがアクセスできるAPI名のみを規定する
 
 ### 10.2 設計方針
@@ -1110,7 +1103,7 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 
 その他のSenderメソッドは、以下のクラスに統合:
 - シリアル接続管理 → `SerialManager` クラス（内部実装クラス。UI制御とバックエンドの橋渡しを行う。本ドキュメントではAPI仕様を定義しない）
-- コネクション状態 → `pokecon.state` 名前空間（§11.5.6.4で定義）
+- コネクション状態 → `pokecon.state` 名前空間（§11.5.6.3で定義）
 
 ### 10.6 ダイアログAPI
 
@@ -1286,7 +1279,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.4 静的設定（settings.toml）
 
-**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。これにはキーマップ設定（§11.5.6.2）も含まれます。
+**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
 
 **注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
 
@@ -1373,9 +1366,6 @@ stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 
-# 入力処理設定
-[input]
-key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 ```
 
 ### 11.5 動的設定
@@ -1388,8 +1378,6 @@ key_chattering_threshold_ms = 10  # チャタリング判定閾値（ms）
 | **プロファイル切替時** | 自動読み込み（新プロファイルの設定を反映） |
 | **手動** | メニュー「Load Dynamic Config」で読み込み |
 | **自動リロード** | ファイル変更検知時（デフォルト無効、オプトイン）。OSネイティブのファイル監視を使用 |
-
-**メニュー項目**: §11.5.6.2.1を参照。
 
 #### 11.5.2 共存（Neovim準拠）
 
@@ -1465,14 +1453,6 @@ pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
 # UI FPS選択肢（カスタマイズ）
 pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
-# チャタリング判定閾値
-pokecon.opt.key_chattering_threshold_ms = 10
-
-# キーマップ（Neovim風記法）
-# 注: 以下は動的設定ファイル（init.py/init.lua）での例。
-# ユーザースクリプトでは self.keys を使用（§10.5.1参照）
-pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
-
 # 動的タグ追加（ScriptLoadPreイベント）
 def add_dynamic_tags() -> None:
     for candidate in pokecon.state.command_candidates:
@@ -1500,11 +1480,6 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 pokecon.opt.language = "ja"
 pokecon.opt.camera_fps = 60
 pokecon.opt.ui_fps = 30
-
--- キーマップ（Neovim風記法）
-pokecon.keymap.set("a", function()
-    pokecon.controller.update({a = true})
-end)
 
 -- イベントハンドラ
 pokecon.autocmd.on("CameraOpenPost", {
@@ -1580,7 +1555,6 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 |---------|------|-----|
 | `pokecon.autocmd` | イベントハンドラの登録・解除 | `on()`, `once()`, `off()`, `clear(group)` |
 | `pokecon.event` | イベント定義・発火 | `define()`, `emit()`, `list_defined()` |
-| `pokecon.keymap` | キーマップの登録・解除・発火 | `set()`, `del()`, `trigger()` |
 
 ###### 11.5.6.1.3 イベントハンドラAPI
 
@@ -1827,296 +1801,15 @@ type Callback = Callable[[], bool | None]
 | ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
 | 循環参照（イベント発火中に同じイベントを発火） | 検出して無視（同一イベントの直接再入のみ検出。間接循環 A→B→A は検出対象外） | ERRORレベル |
 
-##### 11.5.6.2 キーマップシステム
+##### 5.6.2 相互参照API
 
-###### 11.5.6.2.1 設計方針
-
-- **Neovim風キー記法**: `<C-a>`, `<S-a>`, `<M-a>`, `<C-S-a>` 等
-- **Neovim準拠API**: `vim.keymap.set` と同じシグネチャ（`mode` 省略版）
-  - `pokecon.keymap.set(lhs, rhs, remap=False, desc=None) -> None`
-  - `pokecon.keymap.trigger(key) -> None` — キー入力イベントを仮想的に発火（動的設定専用）
-  - `pokecon.keymap.delete(lhs) -> None` — キーマップ削除
-  - デフォルトは `noremap`（`remap=False`）
-  - `remap=True` で再帰マップ有効
-  - Pythonでは型注釈のためフラットな構造（dictを挟まない）
-- **rhsの型**: キー文字列（`KBKeys | str`）またはコールバック関数（`Callable`）
-- **キー解放イベント**: 仮想キー `<Release-*>` を全キーに自動提供（同時押し含む: `<Release-C-a>`）。これにより「押した時」と「離した時」で別々の動作をマップ可能
-  - **長押しの表現例**: `<C-a>` に「開始処理」、`<Release-C-a>` に「終了処理」をそれぞれマップすることで、ユーザー側で長押し相当の動作を実現
-  - **極短時間押下（チャタリング対策）**: `<Release-a>` は対応する `<A>` のコールバック実行が完了するまで発火を待機。完了後に `<Release-a>` のコールバックを実行
-  - **チャタリング判定閾値**: 設定可能（デフォルト10ms）。直前のReleaseから閾値ms以内のPress+Releaseはチャタリングとみなし、`<Release-a>` をキャンセルする。修飾キーを除く同一ベースキー間で判定。例: `<C-a>` と `<S-a>`、`<A>` は判定対象（ベースキーが同じ「A」）。`<C-a>` と `<C-b>` は判定対象外（ベースキーが異なる）。**ベースキー**: 修飾キー（`<C-*>`, `<S-*>`, `<M-*>`）を除いた部分。`<C-a>` のベースキーは `a`、`<C-S-a>` のベースキーも `a`。大文字・小文字は区別されない（`a` と `A` は同じベースキー）
-- **ユーザー定義仮想キー**: lhsに新しい名前を入れた時に自動登録。存在チェックは発火時に行う
-- **クリア方式**: キーマップは「1キー = 1rhs」の単純な上書きモデルであるため、専用のクリアAPIは提供しない。キーの無効化は `<nop>` を rhs に登録することで実現する（§11.5.6.2.3参照）。
-
-###### 11.5.6.2.2 API仕様
-
-```python
-# Python設定
-import pokecon
-from typing import Literal, Callable
-
-# KBKeys: 定義済みキーの型
-type KBKeys = Literal[
-    # アルファベット（小文字）
-    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-    # 数字
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-    # ファンクションキー
-    "<F1>", "<F2>", "<F3>", "<F4>", "<F5>", "<F6>", "<F7>", "<F8>", "<F9>", "<F10>", "<F11>", "<F12>",
-    # 特殊キー（例示。§11.5.6.2.3のテーブルに定義されたすべてのキーが使用可能）
-    "<Space>", "<Enter>", "<Return>", "<CR>",
-    "<Backspace>", "<BS>",
-    "<Escape>", "<Esc>",
-    "<Tab>",
-    "<Delete>", "<Del>",
-    "<Insert>", "<Ins>",
-    "<Home>", "<End>", "<PageUp>", "<PageDown>",
-    "<Up>", "<Down>", "<Left>", "<Right>",
-    # 修飾キー（単体）
-    "<Ctrl>", "<Shift>", "<Alt>", "<Meta>", "<Super>",
-    # マウスボタン
-    "<LeftMouse>", "<RightMouse>", "<MiddleMouse>",
-    # テンキー
-    "<k0>", "<k1>", "<k2>", "<k3>", "<k4>", "<k5>", "<k6>", "<k7>", "<k8>", "<k9>",
-    "<kPlus>", "<kMinus>", "<kEnter>",
-    # 特殊キー（§11.5.6.2.3のテーブルに定義）
-    "<lt>", "<Bslash>", "<Bar>", "<nop>", "<NL>", "<Ignore>", "<Nul>", "<Null>",
-    "<C-I>", "<C-M>", "<C-H>", "<C-[>", "<C-J>", "<C-@>", "<D-a>",
-]
-
-# 型注釈
-# pokecon.keymap.set(lhs: KBKeys | str, rhs: KBKeys | str | Callable[[], None], remap: bool = False, desc: str | None = None) -> None
-# pokecon.keymap.trigger(key: KBKeys | str) -> None
-# pokecon.keymap.delete(lhs: KBKeys | str) -> None
-
-# lhs: KBKeys（定義済みキー）または str（ユーザー定義仮想キー）
-# rhs: KBKeys（キー入力）、str（仮想キー参照）、または Callable[[], None]（コールバック関数）
-
-# 基本的なキーマップ（noremap、関数rhs）
-pokecon.keymap.set("a", lambda: pokecon.controller.update({"a": True}))
-
-# 修飾キー付き（noremap、関数rhs）
-pokecon.keymap.set("<C-a>", lambda: print("Ctrl+A pressed"))
-pokecon.keymap.set("<S-a>", lambda: print("Shift+A pressed"))
-pokecon.keymap.set("<M-a>", lambda: print("Alt+A pressed"))
-pokecon.keymap.set("<C-S-a>", lambda: print("Ctrl+Shift+A pressed"))
-
-# remap有効（キー→キーのマッピング）
-# 例: <C-a> を押すと <F5> が発火される
-pokecon.keymap.set("<C-a>", "<F5>", remap=True)
-
-# 特殊キー
-pokecon.keymap.set("<F1>", lambda: print("F1 pressed"))
-pokecon.keymap.set("<Space>", lambda: print("Space pressed"))
-pokecon.keymap.set("<Enter>", lambda: print("Enter pressed"))
-pokecon.keymap.set("<Esc>", lambda: print("Escape pressed"))
-
-# 長押し（Releaseキー）
-pokecon.keymap.set("<Release-a>", lambda: print("A released"))
-pokecon.keymap.set("<Release-C-a>", lambda: print("Ctrl+A released"))
-
-# ユーザー定義仮想キー（自動登録）
-pokecon.keymap.set("<MyCustomKey>", lambda: print("Custom key triggered"))
-# 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
-pokecon.keymap.set("<C-m>", "<MyCustomKey>", remap=True)
-
-# 説明文付き
-pokecon.keymap.set("<F5>", lambda: None, desc="F5の動作を無効化")
-
-# キーマップ削除
-# 戻り値: None
-pokecon.keymap.delete("<F5>")  # F5のキーマップを削除
-```
-
-```lua
--- Lua設定
--- Pythonと同じフラットな構造
-
--- 基本的なキーマップ（noremap、関数rhs）
-pokecon.keymap.set("a", function()
-    pokecon.controller.update({a = true})
-end)
-
--- 修飾キー付き（noremap、関数rhs）
-pokecon.keymap.set("<C-a>", function()
-    print("Ctrl+A pressed")
-end)
-
--- remap有効（キー→キーのマッピング）
-pokecon.keymap.set("<C-a>", "<F5>", { remap = true })
-
--- 長押し（Releaseキー）
-pokecon.keymap.set("<Release-a>", function()
-    print("A released")
-end)
-
--- ユーザー定義仮想キー（自動登録）
-pokecon.keymap.set("<MyCustomKey>", function()
-    print("Custom key triggered")
-end)
--- 他のキーからユーザー定義キーを呼び出し（発火時に存在チェック）
-pokecon.keymap.set("<C-m>", "<MyCustomKey>", { remap = true })
-
--- 説明文付き
--- Luaでは第3引数にオプションテーブルを渡す（Pythonのキーワード引数と等価）
-pokecon.keymap.set("<F5>", function() end, { remap = false, desc = "F5の動作を無効化" })
-
--- キーマップ削除
-pokecon.keymap.delete("<F5>")  -- F5のキーマップを削除
-```
-
-###### 11.5.6.2.3 サポートするキー記法
-
-**原則**
-
-Neovimと同じく、**特殊キーのみ `<>` で囲み、通常の印字可能文字（アルファベット、数字、記号類）はそのまま**。
-
-**印字可能文字の入力ルール**:
-1. ほとんどの文字はそのまま入力（例: `a`, `A`, `1`, `9`, `>`, `;`, `:`, `,`, `@`, `!`, `#`, `$`, `%`, `&`, `*`, `(`, `)`, `-`, `_`, `=`, `+`, `[`, `]`, `{`, `}`, `.`, `/`, `?`）
-2. **例外1**: バックスラッシュ `\` は `<Bslash>` または `\\` で入力
-3. **例外2**: 小なり記号 `<` は `<lt>` または `\<` で入力
-4. **例外3**: テンキー（`<k0>`～`<k9>`, `<kPlus>`, `<kMinus>`, `<kEnter>` 等）は `<>` で囲む（メインキーボードの数字とは別のキー）
-
-**同じキーの異なる表現**（Neovim準拠）:
-
-| キー | 別名 |
-|------|------|
-| Tab | `<Tab>`, `<C-I>`（エイリアス。ブラウザでは区別不可） |
-| Enter | `<CR>`, `<Enter>`, `<Return>`, `<C-M>`（エイリアス） |
-| Backspace | `<BS>`, `<Backspace>`, `<C-H>`（エイリアス） |
-| Escape | `<Esc>`, `<Escape>`, `<C-[>`（エイリアス） |
-| Linefeed | `<NL>`, `<C-J>`（エイリアス） |
-| Nul | `<Nul>`, `<C-@>`, `<Null>`（エイリアス。ブラウザでは検出不可） |
-| Space | `<Space>` |
-| Delete | `<Del>`, `<Delete>` |
-| Meta/Alt | `<M-a>`, `<A-a>`（同じ。`<Alt>` 単体は修飾キーとして使用） |
-| Command/Super | `<D-a>`（将来のmacOS対応時に有効） |
-| Insert | `<Insert>`, `<Ins>` |
-| Home | `<Home>` |
-| End | `<End>` |
-| PageUp | `<PageUp>` |
-| PageDown | `<PageDown>` |
-| Less-than | `<lt>` |
-| Backslash | `<Bslash>` |
-| Vertical bar | `<Bar>` |
-| Ignore | `<Ignore>` |
-
-**注意**: `a` と `A` は**同じキー**として扱われる。キーコードが異なる場合は別のキー（例: メインキーボードの `1` とテンキーの `<k1>` は別のキー）
-
-**要件**: §11.5.6.2.3のテーブルに定義されたすべてのキー（`<Nul>`, `<NL>`, `<Bar>`, `<Ignore>`, `<lt>`, `<Bslash>`, `<nop>` 等を含む）は、キーマップシステムで使用可能。
-
-| 記法 | 説明 | 例 |
-|------|------|-----|
-| `a`～`z`, `A`～`Z` | アルファベット（`<>` 不要、`a` と `A` は同じキー） | `a`, `A`, `z` |
-| `0`～`9` | 数字（メインキーボード、`<>` 不要） | `1`, `2`, `9` |
-| `<C-x>` | Ctrl + x | `<C-a>`, `<C-c>` |
-| `<S-x>` | Shift + x | `<S-a>`, `<S-1>` |
-| `<M-x>` | Alt + x | `<M-a>`, `<M-F4>` |
-| `<C-S-x>` | Ctrl + Shift + x | `<C-S-a>` |
-| `<F1>`～`<F12>` | ファンクションキー | `<F1>`, `<F12>` |
-| `<Space>` | スペースキー | `<Space>` |
-| `<Enter>` / `<CR>` / `<Return>` | エンターキー | `<Enter>` |
-| `<Esc>` / `<Escape>` | エスケープキー | `<Esc>` |
-| `<Tab>` | タブキー | `<Tab>` |
-| `<BS>` / `<Backspace>` | バックスペース | `<BS>` |
-| `<Del>` / `<Delete>` | 削除キー | `<Del>` |
-| `<Insert>` / `<Ins>` | 挿入キー | `<Insert>` |
-| `<Home>` | ホームキー | `<Home>` |
-| `<End>` | エンドキー | `<End>` |
-| `<PageUp>` | ページアップ | `<PageUp>` |
-| `<PageDown>` | ページダウン | `<PageDown>` |
-| `<Up>`/`<Down>`/`<Left>`/`<Right>` | 方向キー | `<Up>`, `<Down>` |
-| `<k0>`～`<k9>` | テンキー | `<k1>`, `<kEnter>` |
-| `<kPlus>` | テンキープラス | `<kPlus>` |
-| `<kMinus>` | テンキーマイナス | `<kMinus>` |
-| `<kEnter>` | テンキーエンター | `<kEnter>` |
-| `<lt>` | Less-than `<` | `<lt>` |
-| `<Bslash>` | Backslash `\` | `<Bslash>` |
-| `<Bar>` | Vertical bar `\|` | `<Bar>` |
-| `<nop>` | No-op（何もしない） | `<nop>` |
-| `<NL>` | Linefeed | `<NL>` |
-| `<Ignore>` | 待機キャンセル | `<Ignore>` |
-| `<Release-*>` | キー解放（全キーに自動提供） | `<Release-a>`, `<Release-C-a>` |
-| `<CustomKey>` | ユーザー定義仮想キー（自動登録） | `<MyCustomKey>` |
-
-**注意事項**
-
-- `<Release-*>` は全ての既存キーに対して自動的に存在する仮想キーです。同時押し（`<C-a>` 等）に対しても `<Release-C-a>` が使用可能です
-- 通常の印字可能文字（`a`～`z`, `A`～`Z`, `0`～`9`, `>`, `;`, `:`, `,`, `@` 等）に `<>` を付けると、それはユーザー定義仮想キーとして扱われます（例: `<A>` は仮想キー、`A` は通常キー）
-
-###### 11.5.6.2.4 キー重複時の優先順位
-
-- 後から登録されたキーマップが優先される（後勝ち）
-- 同じキーに複数のコールバックが登録されている場合、最後に登録されたものが実行される
-- プロファイル切替時は、新プロファイルのキーマップに置き換えられる
-
-###### 11.5.6.2.5 デフォルトキーマップ
-
-**ショートカットボタン（デフォルト割り当て）**:
-
-| キー | 動作 | 状態 |
-|------|------|------|
-| `1` | ショートカットボタン1の実行 | press |
-| `2` | ショートカットボタン2の実行 | press |
-| `3` | ショートカットボタン3の実行 | press |
-| `4` | ショートカットボタン4の実行 | press |
-| `5` | ショートカットボタン5の実行 | press |
-| `6` | ショートカットボタン6の実行 | press |
-| `7` | ショートカットボタン7の実行 | press |
-| `8` | ショートカットボタン8の実行 | press |
-| `9` | ショートカットボタン9の実行 | press |
-| `0` | ショートカットボタン10の実行 | press |
-
-**実行制御キー（デフォルト未割り当て、ユーザー設定可能）**:
-
-| キー | 動作 | 状態 | デフォルト |
-|------|------|------|-----------|
-| — | コマンド開始 | press | 未割り当て |
-| — | コマンド停止 | press | 未割り当て |
-| — | コマンド一時停止 | press | 未割り当て |
-| — | コマンド再開 | press | 未割り当て |
-| — | コマンドリロード | press | 未割り当て |
-
-**注**: 実行制御キーはデフォルトでは未割り当て。ユーザーが `pokecon.keymap.set()` で割り当てることで有効化される。ショートカットボタンは`1`～`0`（数字キー）にデフォルト割り当てされているが、ユーザーがキーマップシステムで変更可能（後勝ち）。
-
-###### 11.5.6.2.6 キー入力の仮想発火
-
-動的設定専用。スクリプトからキー入力イベントを仮想的に発火する。
-
-```python
-# Python
-# 戻り値: None
-pokecon.keymap.trigger("a")         # a を押したことにする
-pokecon.keymap.trigger("<C-a>")   # Ctrl+A を押したことにする
-pokecon.keymap.trigger("<F1>")    # F1 を押したことにする
-```
-
-```lua
--- Lua
-pokecon.keymap.trigger("a")        -- a を押したことにする
-pokecon.keymap.trigger("<C-a>")   -- Ctrl+A を押したことにする
-pokecon.keymap.trigger("<F1>")    -- F1 を押したことにする
-```
-
-**用途**:
-- マクロ記録/再生
-- スクリプトからのキーイベント発火
-- テスト
-
-**注意**:
-- ユーザー定義仮想キー（`<MyCustomKey>`）も発火可能
-- `<Release-*>` も発火可能（キーを離したことにする）
-- このAPIは動的設定（`init.py`/`init.lua`）専用。ユーザー向けPython APIには公開しない
-
-##### 11.5.6.3 相互参照API
-
-###### 11.5.6.3.1 設計方針
+###### 5.6.2.1 設計方針
 
 - **Neovimの`:source`に類似**: `pokecon.source(path)`
 - **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
 - **相対パス・絶対パス両対応**
 
-###### 11.5.6.3.2 API仕様
+###### 5.6.2.2 API仕様
 
 ```python
 # Python設定
@@ -2137,21 +1830,21 @@ pokecon.source("~/.config/pokecon/extra_settings.py")  # -> None
 pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
 
-###### 11.5.6.3.3 エラーハンドリング
+###### 5.6.2.3 エラーハンドリング
 
 - 指定されたファイルが存在しない場合はエラーをログに出力
 - ファイルの読み込みに失敗しても、現在の設定は維持される
 - 循環参照（AがBを読み込み、BがAを読み込む）を検出し、エラーを出力
 
-##### 11.5.6.4 状態取得API
+##### 5.6.3 状態取得API
 
-###### 11.5.6.4.1 設計方針
+###### 5.6.3.1 設計方針
 
 - **状態アクセス**: `pokecon.state.<property>` は現在の状態にアクセスする名前空間。原則として読み取りだが、動的設定からの変更が想定されるもの（タグ等）は書き込み可能
 - **リアルタイム**: 現在の状態を即座に反映
 - **スレッドセーフ**: 複数スレッドから安全に読み取り可能。書き込みは特定イベント（`ScriptLoadPre`等）のコールバック内または内部処理でのみ行われる
 
-###### 11.5.6.4.2 状態プロパティ一覧
+###### 5.6.3.2 状態プロパティ一覧
 
 ```python
 from typing import Literal
@@ -2227,16 +1920,16 @@ print(pokecon.state.camera_opened)
 print(pokecon.state.active_profile)
 ```
 
-##### 11.5.6.5 プロファイルAPI
+##### 5.6.4 プロファイルAPI
 
-###### 11.5.6.5.1 設計方針
+###### 5.6.4.1 設計方針
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
 - **`pokecon.opt.active_profile` との関係**: `pokecon.profile.switch("custom")` は内部的に `pokecon.opt.active_profile = "custom"` を設定し、プロファイル切替イベントを発火する。両者は等価だが、`profile.switch()` はイベント発火とエラーハンドリング（存在しないプロファイル名の検証）を行う
 - **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
-###### 11.5.6.5.2 API仕様
+###### 5.6.4.2 API仕様
 
 ```python
 # Python設定
@@ -2271,21 +1964,14 @@ print(pokecon.profile.list())
 pokecon.profile.switch("custom")
 ```
 
-###### 11.5.6.5.3 プロファイル切替時の動作
+###### 5.6.4.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
-- キーマップをクリアしてから、デフォルトキーマップを再登録
-  - **クリア方法**: 内部テーブルをクリアし、全てのキーマップを削除する。実装方式は問わない（ハッシュテーブルのクリア、全キーに `<nop>` を登録する等）
-- 静的設定のキーマップを再登録
-- 動的設定ファイル（`~/.config/pokecon/init.py`/`init.lua`）を読み直し、動的キーマップを再登録
-  - **注**: 動的設定ファイルはグローバル（プロファイル非依存）。プロファイル固有の動的設定が必要な場合は、`settings.toml` で `dynamic_config_language` を切り替えるか、`pokecon.source()` で別ファイルを読み込む
 - イベントハンドラをクリアして再登録
 
-**注**: キーマップのクリアは内部的な処理。ユーザーが直接キーマップを無効化する場合は、`pokecon.keymap.set("<F5>", "<nop>")` のように `<nop>` を rhs に登録することで実現する。
+##### 5.6.5 コントローラーAPI（動的設定用）
 
-##### 11.5.6.6 コントローラーAPI（動的設定用）
-
-###### 11.5.6.6.1 設計方針
+###### 5.6.5.1 設計方針
 
 - **動的設定専用**: `init.py`/`init.lua` からコントローラーを操作するAPI
 - **スクリプトAPIとは別**: `PythonCommand` クラスの `press()`, `hold()`, `holdEnd()` とは異なる設計。動的設定では状態ベースの一括更新が適切
@@ -2293,7 +1979,7 @@ pokecon.profile.switch("custom")
 - **スティック入力**: x,y座標の絶対値指定、および角度+強度の指定の両方に対応
 - **3DSタッチスクリーン対応**: タッチスクリーンのx,y座標指定
 
-###### 11.5.6.6.2 型定義
+###### 5.6.5.2 型定義
 
 ```python
 from typing import TypedDict, NotRequired, Literal
@@ -2333,7 +2019,7 @@ class ControllerUpdate(TypedDict):
     touch: NotRequired[TouchInput]
 ```
 
-###### 11.5.6.6.3 API仕様
+###### 5.6.5.3 API仕様
 
 ```python
 # Python設定
@@ -2376,37 +2062,6 @@ pokecon.controller.update({touch = {x = 160, y = 120, pressed = true}})
 
 -- 全てリセット
 pokecon.controller.reset()
-```
-
-###### 11.5.6.6.4 使用例（キーマップと連携）
-
-```python
-# Python設定
-import pokecon
-
-# キー「a」を押したらAボタンを押す
-pokecon.keymap.set("a", lambda: pokecon.controller.update({"a": True}))
-
-# キー「a」を離したらAボタンを離す
-pokecon.keymap.set("<Release-a>", lambda: pokecon.controller.update({"a": False}))
-
-# 長押し: Ctrl+AでLボタン押下、離したら離脱
-pokecon.keymap.set("<C-a>", lambda: pokecon.controller.update({"l": True}))
-pokecon.keymap.set("<Release-C-a>", lambda: pokecon.controller.update({"l": False}))
-```
-
-```lua
--- Lua設定
-
--- キー「a」を押したらAボタンを押す
-pokecon.keymap.set("a", function()
-    pokecon.controller.update({a = true})
-end)
-
--- キー「a」を離したらAボタンを離す
-pokecon.keymap.set("<Release-a>", function()
-    pokecon.controller.update({a = false})
-end)
 ```
 
 ---
@@ -2478,8 +2133,7 @@ end)
 
 | 項目 | 保存方法 | 備考 |
 |------|---------------|-------|
-| ショートカットボタン割り当て | `localStorage` | 10ボタンキーマップ。ブラウザ単位の設定 |
-| キーボード設定 | `localStorage` | キーマップ設定。ブラウザ単位の設定 |
+| ショートカットボタン割り当て | `localStorage` | 10ショートカットボタン。ブラウザ単位の設定 |
 
 ---
 

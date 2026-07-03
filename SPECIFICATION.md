@@ -118,6 +118,15 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 | **StopThread** | コマンドスレッドを安全に終了させるための例外型。`checkIfAlive()` で `self.alive` が `False` の場合に送出される |
 | **augroup** | Neovimのイベントハンドラグループ機能。`pokecon.autocmd` の `group` パラメータに相当 |
 | **CRF** | Constant Rate Factor（固定品質係数）。H.264/VP9等の動画エンコーダーで品質を固定し可変ビットレートでエンコードする方式 |
+| **WebRTC** | Web Real-Time Communication。ブラウザ間でP2Pのリアルタイム通信（映像・音声・データ）を行うW3C標準API |
+| **SDP** | Session Description Protocol。WebRTC接続確立時に通信パラメータ（コーデック、解像度等）を交渉するためのテキストベースプロトコル |
+| **ICE** | Interactive Connectivity Establishment。NAT越えの通信経路探索技術。ICE candidateは接続候補アドレス |
+| **STUN** | Session Traversal Utilities for NAT。NAT環境下でのグローバルIPアドレス発見に使用するプロトコル |
+| **SPA** | Single Page Application。単一HTMLページ内で画面遷移を行うWebアプリケーション形式 |
+| **PWA** | Progressive Web App。サービスワーカー等を用いてネイティブアプリライクな動作を実現するWebアプリ形式 |
+| **GIL** | Global Interpreter Lock。CPythonで同時に実行できるスレッドを1つに制限する機構。`Python::with_gil()` で取得する |
+| **OpenAPI** | OpenAPI Specification。REST APIの仕様を記述する標準フォーマット。`utoipa`（Rust）+ `openapi-typescript` でTypeScript型を生成する |
+| **MJPEG** | Motion JPEG。各フレームをJPEGでエンコードする動画フォーマット |
 
 ---
 ## 3. 非機能要件
@@ -497,17 +506,17 @@ Commands/
   - 型: `list[CommandInfo]`
 - タグとコマンドの紐づけはコマンド側で管理
 
-#### 6.4.3 ショートカットボタン（10ボタン）
+#### 6.4.2 ショートカットボタン（10ボタン）
 
 - **数**: 10ショートカットボタン（要件が元の4ボタンから10ボタンに変更）。
 - **割り当て**: 読み込まれた任意のコマンドにユーザー割り当て可能（クリックで割り当て）。
 - **割り当て解除**: Shift+クリックで割り当てを解除。
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
-||- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
-||- **保存**: 設定は `localStorage` に保存。
+- **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
+- **保存**: 設定は `localStorage` に保存。
 
-#### 6.4.4 実行制御ボタン
+#### 6.4.3 実行制御ボタン
 
 | ボタン | アクション |
 |--------|------------|
@@ -1020,7 +1029,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
 | `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
 | `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
-| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: int = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
+| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: float = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
 
 **例**（典型的な使用パターン）:
 

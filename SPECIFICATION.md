@@ -937,9 +937,9 @@ type GamepadInput = ButtonsList | Buttons
 | `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、ダイアログIDを返す（結果は各Widgetの`value`属性から取得）。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、戻り値は固定で`0`。結果は各Widgetの`value`属性から取得 |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list] | type[dict] = list) -> list[Any] | dict[str, Any]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[Any] | dict[str, Any]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
-| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[Any] | dict[str, Any]` | 旧API（他実装との互換性必須）。単純ダイアログ |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
+| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 

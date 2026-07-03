@@ -1724,8 +1724,7 @@ print(pokecon.event.list_defined())
 
 **注**: 動的設定用イベントシステム（§11.5.6.1）とWebSocketイベント（§7.3.2）は**別々のシステム**です。両者は対応関係を持ちません。
 - **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定ファイル（`init.py`/`init.lua`）で使用
-- **WebSocketイベント**: `camera_opened`（snake_case）— フロントエンドとの通信で使用。詳細は§7.3.2を参照
-- **WebSocketイベント**: `camera.open`（lowercase + ドット区切り）— UIとバックエンド間の通信プロトコル
+- **WebSocketイベント**: `camera.open`（lowercase + ドット区切り）— UIとバックエンド間の通信プロトコル。詳細は§7.3.2を参照
 
 **命名規則の違い**:
 - 動的設定イベント: イベント名に `Pre`/`Post` を含む（例: `CameraOpenPost`）

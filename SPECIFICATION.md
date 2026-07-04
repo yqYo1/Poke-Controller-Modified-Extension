@@ -1346,7 +1346,9 @@ reconnect_max_retries = 20  # リトライ回数上限
 # [python]
 # interpreter = "/usr/bin/python3.12"
 # venv = "~/.config/pokecon/venv"
-# [[python.packages]]
+# [python.packages]
+# mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
+# [[python.packages.list]]
 # name = "requests"
 # version = ">=2.28.0"
 

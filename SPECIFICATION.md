@@ -180,7 +180,9 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 
 > **要件**: LINE通知UIは完全に削除されました。Discord Webhookのみがサポートされます。
 >
-> **メニュー項目について**: LINE Token Assignment / LINE Token Check のメニュー項目は、旧UI互換のためメニュー構造に残存します。ただし、これらのメニュー項目を選択しても何も起こらない（No-op）か、削除済みである旨のメッセージを表示します。
+> **メニュー項目について**: LINE Token Assignment / LINE Token Check のメニュー項目は、旧UI互換のためメニュー構造に残存します。これらのメニュー項目を選択した際の挙動は `settings.toml` で切り替え可能です:
+> - **既定**: 削除済みである旨のメッセージを表示（`line_menu_behavior = "message"`）
+> - **No-op**: 何も起こらない（`line_menu_behavior = "noop"`）
 
 ### 4.4 設定ファイル — `settings.ini` 廃止
 
@@ -1407,6 +1409,10 @@ stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
 # 映像フォールバック設定（Motion JPEG over WebSocket）
 [video.fallback]
 jpeg_quality = 85  # JPEG品質（1-100）。デフォルト: 85
+
+# LINE通知メニュー項目の挙動（旧UI互換メニュー）
+[notifications]
+line_menu_behavior = "message"  # "message"（削除済みメッセージ表示、既定） / "noop"（何もしない）
 
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]

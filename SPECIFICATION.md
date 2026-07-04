@@ -127,6 +127,8 @@ Rustメインプロセス内にCPythonインタープリターを埋め込み、
 | **GIL** | Global Interpreter Lock。CPythonで同時に実行できるスレッドを1つに制限する機構。`Python::with_gil()` で取得する |
 | **OpenAPI** | OpenAPI Specification。REST APIの仕様を記述する標準フォーマット。`utoipa`（Rust）+ `openapi-typescript` でTypeScript型を生成する |
 | **MJPEG** | Motion JPEG。各フレームをJPEGでエンコードする動画フォーマット |
+| **Camera** | カメラデバイスを管理するクラス。OpenCVベースで、フレーム取得・FPS制御・反転設定・キャプチャ保存等を担う。`self.camera` として `ImageProcPythonCommand` に注入される。UIフレームワークに依存しない |
+| **CaptureArea** | カメラ映像の表示領域を管理するクラス。元実装は `tk.Canvas` のサブクラス。オーバーレイ描画（矩形・テキスト）、UI表示サイズ管理、マウス/タッチイベント処理等を担う。`self.gui` / `self.canvas` として注入される（エイリアス）。リファクタリング後はUIフレームワークに依存しないバックエンド実装となる |
 
 ---
 ## 3. 非機能要件
@@ -1001,6 +1003,44 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 **コンストラクタ**: `ImageProcPythonCommand(cam: Camera, gui: CaptureArea | None = None)`
 
 > **注**: `cam` と `gui` は互換性維持のためのパラメータ。リファクタリング前のスクリプトでは `cam` を必須、`gui` を省略可能として使用。リファクタリング後もフレームワークが自動的に渡す。**ユーザースクリプト内で他のユーザースクリプトを実行する機能は提供されないため、ユーザースクリプトから `ImageProcPythonCommand` を直接インスタンス化することはない**。`cam` はフレームワークから呼び出される際に必ず渡される
+
+**`self.camera` プロパティ（Camera型）**:
+
+`self.camera` として `ImageProcPythonCommand` に注入される `Camera` クラスの公開API。一部ユーザーは提供されるラッパーメソッド（`getCameraImage()`, `displayRectangle()` 等）に頼らず、直接 `self.camera.*` にアクセスするヘルパー関数を自作するため、**全ての公開メソッド・プロパティを実装する必要がある**。`Camera` クラスはOpenCVベースのロジッククラスであり、Tkinter等のUIフレームワークに依存しない。
+
+| メソッド/プロパティ | シグネチャ | 説明 |
+|---------------------|-----------|------|
+| `image_bgr` (property) | `image_bgr -> MatLike` | 現在のカメラフレーム（BGR形式）のコピーを取得 |
+| `readFrame()` | `readFrame() -> MatLike` | `image_bgr` プロパティのエイリアス。現在のフレームのコピーを返す |
+| `isOpened()` | `isOpened() -> bool` | カメラがオープンされているか |
+| `fps` (property) | `fps -> int` | カメラFPS（取得・設定可能） |
+| `capture_size` (property) | `capture_size -> tuple[int, int]` | キャプチャ解像度 `(width, height)`。UI表示サイズとの比率計算に使用される |
+| `flip` (property) | `flip -> bool` | 画像反転の有無 |
+| `flip_mode` (property) | `flip_mode -> int` | 反転モード（`0`: 上下反転, `1`: 左右反転, `-1`: 上下左右反転） |
+| `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。`"none"` / `"vertical"` / `"horizontal"` / `"both"` |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを `./Captures/` に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
+
+> **注**: `openCamera()`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする
+
+**`self.gui` / `self.canvas` プロパティ（CaptureArea型）**:
+
+`self.gui` として注入される `CaptureArea` クラスの公開API。`self.canvas` は `self.gui` のエイリアスであり、同一の `CaptureArea` インスタンスを指す。一部ユーザーはラッパーメソッドに頼らず直接 `self.gui.*` / `self.canvas.*` にアクセスするヘルパーを自作するため、**独自実装メソッドは全て実装する**。`CaptureArea` はTkinterの `tk.Canvas` に由来するが、リファクタリング後はUIフレームワークに依存しないバックエンド実装となる。
+
+| メソッド | シグネチャ | 説明 |
+|---------|-----------|------|
+| `ImgRect()` | `ImgRect(x1: int, y1: int, x2: int, y2: int, outline: str, tag: str | int, ms: int, flag: bool = True) -> None` | カメラ映像に矩形をオーバーレイ描画。`show_size` と `camera.capture_size` の比率で座標をスケーリング。`flag=True` の場合 `ms` ミリ秒後に自動削除 |
+| `ImgText()` | `ImgText(x1: int, y1: int, txt: str, tag: str | int, ms: int, ft: tuple[str, int] = ("UD デジタル 教科書体 NP-B", 20), color: str = "black", flag: bool = True) -> None` | カメラ映像にテキストをオーバーレイ描画。`flag=True` の場合 `ms` ミリ秒後に自動削除 |
+| `deleteImageRect()` | `deleteImageRect(tag: int | str) -> None` | 指定タグの矩形オーバーレイを削除 |
+| `deleteImageText()` | `deleteImageText(tag: int | str) -> None` | 指定タグのテキストオーバーレイを削除 |
+| `setFps()` | `setFps(fps: str | int) -> None` | UI表示FPSを設定 |
+| `setShowsize()` | `setShowsize(show_height: int, show_width: int) -> None` | UI表示サイズを設定 |
+| `changeRightMouseMode()` | `changeRightMouseMode(mode: str) -> None` | 右クリックモードを変更 |
+| `setTouchscreenArea()` | `setTouchscreenArea(...) -> None` | タッチスクリーン操作領域を設定 |
+| `saveCapture()` | `saveCapture() -> None` | カメラフレームを保存（`camera.saveCapture()` に委譲） |
+| `show_size` (property) | `show_size -> tuple[int, int]` | UI表示サイズ `(height, width)` |
+| `is_show_var` (property) | `is_show_var -> bool` | 映像表示有効フラグ |
+
+> **注（Tkinter由来のUI操作メソッド）**: `update()`（フレーム更新）、`BindLeftClick()`/`BindRightClick()`/`UnbindLeftClick()`/`UnbindRightClick()`（マウスイベントバインド）、`mouseCtrlLeftPress()`/`mouseLeftPress()`/`mouseLeftPressing()`/`mouseRightPress()`/`mouseRightPressing()` 等（マウス/タッチイベント処理）、`StartRangeSS()`/`MotionRangeSS()`/`ReleaseRangeSS()`（範囲スクリーンショット）は、元実装では `tk.Canvas` のAPIに依存していた。リファクタリング後はWebUIのDOMイベント/Canvas APIで再実装する。ユーザースクリプトから直接呼び出されることは想定されないが、フレームワーク内部で使用されるため互換性を維持する
 
 **MatLike型**:
 ```python

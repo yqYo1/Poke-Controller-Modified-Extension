@@ -1394,7 +1394,7 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 # カメラ設定（グローバル）
 [camera]
 camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
-camera_resolution = "1280x720"  # カメラ解像度
+camera_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
 
 # シリアル設定（グローバル）
 [serial]
@@ -1512,8 +1512,8 @@ pokecon.opt.widget_mode = "ALL (default)"  # §5.5参照
 # ソフトウェアコントローラー位置
 pokecon.opt.controller_position = "top"  # top | bottom
 
-# ダイアログボタン位置
-pokecon.opt.dialog_button_position = "bottom"  # top | bottom | both
+# ダイアログボタン位置（ダイアログのOK/Cancelボタンの配置）
+pokecon.opt.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
 
 # UI FPS選択肢（カスタマイズ）
 pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成

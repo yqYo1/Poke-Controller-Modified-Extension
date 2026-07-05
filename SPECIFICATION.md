@@ -518,7 +518,7 @@ Commands/
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
 - **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
-- **保存**: 設定は `localStorage` に保存。
+- **保存**: 設定はバックエンド側のローカルストレージ（`settings.toml` の `[shortcuts]` セクション）に永続化される。これによりブラウザを変えても同一の設定が利用可能。プロファイル切替時にショートカット設定も連動する。
 
 #### 6.4.3 実行制御ボタン
 
@@ -1413,6 +1413,19 @@ jpeg_quality = 85  # JPEG品質（1-100）。デフォルト: 85
 # LINE通知メニュー項目の挙動（旧UI互換メニュー）
 [notifications]
 line_menu_behavior = "message"  # "message"（削除済みメッセージ表示、既定） / "noop"（何もしない）
+
+# ショートカットボタン割り当て（10ボタン）
+[shortcuts]
+button_1 = "Commands.PythonCommands.Samples.RankGlitch.MashA"  # 例: コマンドモジュールパス
+button_2 = ""  # 未割り当て
+button_3 = ""
+button_4 = ""
+button_5 = ""
+button_6 = ""
+button_7 = ""
+button_8 = ""
+button_9 = ""
+button_10 = ""
 
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]

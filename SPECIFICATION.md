@@ -1325,6 +1325,33 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
 
+#### 11.4.1 設定キーの命名規則
+
+設定キーは、`pokecon.opt` からも同じ名前で参照できることを前提に、
+**フラット構造**で定義します。命名規則は、セクション番号や
+`settings.toml` の見出し由来ではなく、設定値の意味上のカテゴリに
+基づきます。
+
+- **グローバル設定**: プレフィックスなし。
+  例: `language`, `active_profile`, `auto_reload_config`。
+- **カテゴリ固有設定**: 意味上のカテゴリをプレフィックスとして付ける。
+  例: `camera_fps`, `ui_fps`, `serial_port`, `dialog_button_position`。
+
+**重要**:
+
+- カテゴリ判定は、仕様書のセクション配置やTOMLの見出しではなく、
+  設定値が自然に属する機能領域で行う。
+- 例えば `camera_fps` はカメラ入力側のFPS、`ui_fps` は表示領域の
+  描画FPSを表す。どちらも単に `fps` とはしない。
+- `settings.toml` のセクションはファイル上の整理単位であり、
+  `pokecon.opt.xxx` のAPI名を決める根拠ではない。
+- メインブランチの設定ファイル形式との互換性は、意図的に維持しない。
+  `settings.ini` から `settings.toml` へ移行するため、設定ファイル形式は
+  本リファクタリングの仕様に従う。
+- 互換性要件は領域ごとに異なる。ユーザースクリプトの公開インターフェイスは
+  ほぼ完全な互換性が必要だが、UIや設定ファイル形式は、同等の機能を
+  提供できればメインブランチと同一形式である必要はない。
+
 ```toml
 # ~/.config/pokecon/settings.toml
 # 注: 以下は主要な設定項目の例示です。網羅的な一覧ではありません。

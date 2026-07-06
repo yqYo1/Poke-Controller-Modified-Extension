@@ -223,6 +223,8 @@ RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]
 
 ```
 +-------------------------------------------------------------+
+|  メニューバー（構成は§11.5.7.1参照）                         |
+|-------------------------------------------------------------|
 |  +----------------------+  +-----------------------------+  |
 |  |                      |  |                             |  |
 |  |   タブコンテンツ領域   |  |   右側パネル               |  |
@@ -242,6 +244,9 @@ RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]
 |  +----------------------+  +-----------------------------+  |
 +-------------------------------------------------------------+
 ```
+
+メニューバーはタブ領域・右側パネルと同じトップレベルUI要素として扱う。
+具体的なメニュー構成は§11.5.7.1に定義する。
 
 ### 5.2 タブ構造（6メインタブ + 3サブタブ）
 
@@ -278,7 +283,7 @@ RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]
   - Lスティック（アナログ、0～255座標）
   - Rスティック（アナログ、0～255座標）
   - タッチスクリーンシミュレーション（320×240座標入力、0-based: 0～319, 0～239）
-- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は最低16ms間隔またはブラウザの`requestAnimationFrame`に同期して送信。無操作時は送信停止。
+- **アナログスティック**: X軸およびY軸ともに0～255の範囲。中央位置にはデッドゾーンあり（値103～153はニュートラルとして扱われる）。マウスドラッグ中は`requestAnimationFrame`に同期して状態を確認し、前回送信から16ms以上経過している場合のみ送信する。無操作時は送信停止。
 
 #### 5.3.2 出力パネル
 
@@ -532,7 +537,7 @@ Commands/
 - **クリア**: 右クリックで割り当てをクリア。
 - **表示**: ボタンラベルに割り当てられたコマンド名を表示。
 - **ショートカット割り当て方法**: ショートカットボタンをクリック → コマンドリストからコマンドを選択 → 割り当て完了。Shift+クリックで割り当て解除。右クリックでクリア
-- **保存**: 設定はバックエンド側のローカルストレージ（`settings.toml` の `[shortcuts]` セクション）に永続化される。これによりブラウザを変えても同一の設定が利用可能。プロファイル切替時にショートカット設定も連動する。
+- **保存**: 設定はバックエンド側のローカルストレージ（`settings.toml` の `[shortcuts]` セクション）に永続化される。アクティブプロファイルの `profiles/<name>/settings.toml` に `[shortcuts]` がある場合はそれを使用し、未設定項目は§11.3の優先順位に従ってグローバル設定から継承する。これによりブラウザを変えても同一の設定が利用可能で、プロファイル切替時にショートカット設定も連動する。
 
 #### 6.4.3 実行制御ボタン
 
@@ -669,7 +674,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
-- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `http://localhost:8020` のみ許可（デフォルト）。Tauriデスクトップモードでは `tauri://localhost` も許可
+- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `http://localhost:8020` のみ許可（デフォルト）。Tauriデスクトップモードでは `tauri://localhost` も許可。SvelteKit開発サーバー（`http://localhost:5173`）は `web/vite.config.ts` の `/api`・`/ws` proxy 経由で `127.0.0.1:8020` に接続し、バックエンド側のCORS許可originを増やさない
 - **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
 
@@ -940,7 +945,7 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ（`isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外） |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ。フレームワークが注入した `isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外する |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
@@ -1038,6 +1043,8 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 
 > **注**: `openCamera()`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする
 
+> **注（反転状態の対応）**: `set_flip("Vertical")` は `flip=True`, `flip_mode=0`、`set_flip("Horizontal")` は `flip=True`, `flip_mode=1`、`set_flip("Both")` は `flip=True`, `flip_mode=-1` と対応する。`set_flip("None")` は `flip=False` とし、`flip_mode` の値は参照しない。
+
 **`self.gui` / `self.canvas` プロパティ（CaptureArea型）**:
 
 `self.gui` として注入される `CaptureArea` クラスの公開API。`self.canvas` は `self.gui` のエイリアスであり、同一の `CaptureArea` インスタンスを指す。一部ユーザーはラッパーメソッドに頼らず直接 `self.gui.*` / `self.canvas.*` にアクセスするヘルパーを自作するため、**独自実装メソッドは全て実装する**。`CaptureArea` はTkinterの `tk.Canvas` に由来するが、リファクタリング後はUIフレームワークに依存しないバックエンド実装となる。
@@ -1080,6 +1087,8 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
 | `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
 | `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: float = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
+
+> **注（`saveCapture()` の層差）**: `self.saveCapture()`（`ImageProcPythonCommand` 継承時）は画像処理APIであり、`crop_fmt` と `crop` を使用する。`self.camera.saveCapture()` は注入された `Camera` APIであり、`crop` と `crop_ax` を使用する。両者は互換性維持のため同名だが、属するレイヤーと引数構造が異なる。
 
 **例**（典型的な使用パターン）:
 
@@ -1341,6 +1350,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **注**: 動的設定（⑤）が最も優先されるのは、パワーユーザーが最終的な制御権を持つことを意図した設計です。動的設定ファイルが読み込まれると、それまでの設定（CLI引数を含む）を上書きします。
 
+**マージ方式**: 設定はキー単位でマージする。下位層に存在しないキーは上位層から継承する。配列やパッケージ一覧などの複合値は、値全体を1つのキーとして扱い、要素単位のdeep mergeは行わない。
+
 ### 11.4 静的設定（settings.toml）
 
 **原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
@@ -1395,7 +1406,7 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 # Python実行環境設定
 # 優先順位: [python.script] / [python.dynamic] > [python]（共通）
-# 未設定項目は上位から継承（完全上書き、deep mergeなし）
+# 未設定項目は上位から継承（キー単位マージ。配列・パッケージ一覧は値全体を置換し、deep mergeなし）
 
 # ---- 優先順位の詳細 ----
 # 1. [python.script] / [python.dynamic] が存在する場合: その値を使用
@@ -1467,6 +1478,9 @@ jpeg_quality = 85  # JPEG品質（1-100）。デフォルト: 85
 # LINE通知メニュー項目の挙動（旧UI互換メニュー）
 [notifications]
 line_menu_behavior = "message"  # "message"（削除済みメッセージ表示、既定） / "noop"（何もしない）
+discord_webhook_url = ""  # Discord Webhook URL。未設定時はDiscord通知を送信しない
+discord_username = ""  # Discordメッセージのカスタムユーザー名（任意）
+discord_avatar_url = ""  # DiscordメッセージのカスタムアバターURL（任意）
 
 # ショートカットボタン割り当て（10ボタン）
 [shortcuts]
@@ -1588,6 +1602,7 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 - 構文エラー時はファイル全体の読み込みに失敗し、フォールバック設定を使用
 - エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
 - フォールバック機構により、前回の有効な設定を維持
+- 初回起動時など前回の有効な設定が存在しない場合は、静的設定（`settings.toml`）を使用する。静的設定も存在しない項目は組み込みデフォルト値を使用する
 
 #### 11.5.5 Lua
 
@@ -1647,6 +1662,7 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 - Pythonとの相互運用時は、各言語のエラーを個別に処理
 - エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
 - フォールバック機構により、前回の有効な設定を維持
+- 初回起動時など前回の有効な設定が存在しない場合は、静的設定（`settings.toml`）を使用する。静的設定も存在しない項目は組み込みデフォルト値を使用する
 
 #### 11.5.6 動的設定の機能
 
@@ -1912,6 +1928,8 @@ from typing import Callable
 type Callback = Callable[[], bool | None]
 ```
 
+Postイベントおよびキャンセル不可イベントでコールバックが値を返した場合、その戻り値は無視される。キャンセル判定に使用されるのはPreイベントの厳密な `False` のみ。
+
 | エラー種類 | 挙動 | ログ出力 |
 |-----------|------|---------|
 | コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
@@ -1971,8 +1989,8 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 
 | 属性 | 型 | 説明 |
 |------|-----|------|
-| `serial_port` | `str` | 現在のシリアルポート（例: `"COM3"`） |
-| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`） |
+| `serial_port` | `str` | 現在のシリアルポート（例: `"COM3"`）。未設定時は空文字 `""` |
+| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial_baudrate` または組み込みデフォルト値 |
 | `serial_connected` | `bool` | 接続状態 |
 | `camera_opened` | `bool` | カメラオープン状態 |
 | `camera_fps` | `int` | 現在のFPS（`opt.camera_fps` をデバイス能力で制限した実際の値） |
@@ -2085,6 +2103,7 @@ pokecon.profile.switch("custom")
 ###### 11.5.6.4.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定を読み込み（`~/.config/pokecon/profiles/<name>/settings.toml`）
+- 現在保持中のすべてのボタンを強制解放（holdEndSkip中のボタンを含む）
 - イベントハンドラをクリアして再登録
 
 ##### 11.5.6.5 コントローラーAPI（動的設定用）
@@ -2236,6 +2255,8 @@ pokecon.controller.reset()
 | **手動リロード** | 「Reload Dynamic Config」メニューで現在のファイルを再読み込み |
 | **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**） |
 | **有効化方法** | `pokecon.opt.auto_reload_config = True` またはUI設定 |
+
+---
 
 ## 12. 環境変数
 

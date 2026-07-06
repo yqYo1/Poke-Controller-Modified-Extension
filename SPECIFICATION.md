@@ -1029,7 +1029,7 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 | `capture_size` (property) | `capture_size -> tuple[int, int]` | キャプチャ解像度 `(width, height)`。UI表示サイズとの比率計算に使用される |
 | `flip` (property) | `flip -> bool` | 画像反転の有無 |
 | `flip_mode` (property) | `flip_mode -> int` | 反転モード（`0`: 上下反転, `1`: 左右反転, `-1`: 上下左右反転） |
-| `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。`"none"` / `"vertical"` / `"horizontal"` / `"both"` |
+| `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。正規値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず受け入れる |
 | `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを `./Captures/` に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
 
 > **注**: `openCamera()`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする

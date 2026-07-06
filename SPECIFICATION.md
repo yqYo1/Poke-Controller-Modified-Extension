@@ -1354,19 +1354,19 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.4 静的設定（settings.toml）
 
-**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）および起動時プロファイル指定（`active_profile`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
+**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
 
-**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。`active_profile` は起動時に使用する静的設定キーであり、動的設定からのプロファイル切替は `pokecon.profile.switch(name)` のみで行う。
+**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
 
 #### 11.4.1 設定キーの命名規則
 
-設定キーは、静的設定専用キー（`dynamic_config_language`, `active_profile`）を除き、`pokecon.opt` からも同じ名前で参照できることを前提に、
+設定キーは、`pokecon.opt` からも同じ名前で参照できることを前提に、
 **フラット構造**で定義します。命名規則は、セクション番号や
 `settings.toml` の見出し由来ではなく、設定値の意味上のカテゴリに
 基づきます。
 
 - **グローバル設定**: プレフィックスなし。
-  例: `language`, `auto_reload_config`。
+  例: `language`, `active_profile`, `auto_reload_config`。
 - **カテゴリ固有設定**: 意味上のカテゴリをプレフィックスとして付ける。
   例: `camera_fps`, `ui_fps`, `serial_port`, `dialog_button_position`。
 
@@ -1378,8 +1378,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   描画FPSを表す。どちらも単に `fps` とはしない。
 - `settings.toml` のセクションはファイル上の整理単位であり、
   `pokecon.opt.xxx` のAPI名を決める根拠ではない。
-- 静的設定専用キーを除き、`settings.toml` 内のキー名そのものが
-  `pokecon.opt.<key>` の属性名になる。セクション名は属性名に付与しない。
+- `settings.toml` 内のキー名そのものが `pokecon.opt.<key>` の属性名になる。
+  セクション名は属性名に付与しない。
 - 例: `[notifications]` 内の `line_menu_behavior` は
   `pokecon.opt.line_menu_behavior` であり、
   `pokecon.opt.notifications_line_menu_behavior` ではない。
@@ -1454,7 +1454,7 @@ reconnect_max_retries = 20  # リトライ回数上限
 # version = ">=2.28.0"
 
 [profiles]
-active_profile = "default"  # 起動時に使用するプロファイル名。動的切替は pokecon.profile.switch(name) を使用
+active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
 
 # カメラ設定（グローバル）
 [camera]
@@ -1555,8 +1555,8 @@ pokecon.opt.language = "ja"
 # 自動リロード設定
 pokecon.opt.auto_reload_config = True
 
-# プロファイル切替（pokecon.opt.active_profile は提供しない）
-pokecon.profile.switch("default")
+# プロファイル切替
+pokecon.opt.active_profile = "default"
 
 # カメラ設定（フラット構造）
 # camera_fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
@@ -2062,7 +2062,7 @@ print(pokecon.state.active_profile)
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
-- **切替APIの一本化**: 動的設定からのプロファイル切替は `pokecon.profile.switch(name)` のみで行う。`pokecon.opt.active_profile` は提供しない
+- **`pokecon.opt.active_profile` との関係**: `pokecon.opt.active_profile` のsetterは、内部的に `pokecon.profile.switch(name)` と同じプロファイル切替処理を呼び出す。どちらの場合も、存在しないプロファイル名の検証、プロファイル切替イベントの発火、新設定読み込み、ボタン強制解放、イベントハンドラ再登録を行う。成功/失敗を戻り値で扱いたい場合は `profile.switch()` を使用する
 - **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
 ###### 11.5.6.4.2 API仕様
@@ -2088,7 +2088,7 @@ print(f"Available profiles: {profiles}")
 # 戻り値: bool（成功: True, 失敗: False）
 # pokecon.profile.switch(name: str) -> bool
 # エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
-# 注: pokecon.opt.active_profile は提供しない。プロファイル切替はこのAPIのみを使用
+# 戻り値で成功/失敗を扱いたい場合は profile.switch() を使用する。pokecon.opt.active_profile への代入も同じ切替処理を実行する
 success = pokecon.profile.switch("custom")
 if not success:
     print("Failed to switch profile")

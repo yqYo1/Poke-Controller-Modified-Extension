@@ -47,25 +47,29 @@
 
 | レイヤー | 言語 | 役割 | 例 |
 |---------|------|------|-----|
-| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
+| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理、Python実行環境管理 |
 | PyO3バインディング | Rust（Pythonに公開） | Python API提供 | `pokecon.event`, `dialogue` |
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | Luaランタイム | LuaJIT 2.1 | 動的設定（`init.lua`）の実行 | `pokecon.autocmd` |
 
-**Python埋め込み方式**:
-Rustメインプロセス内にCPythonインタープリターを埋め込み、PyO3の`#[pymodule]`/`#[pyclass]`/`#[pyfunction]`でRust APIをPythonに公開する。PythonランタイムはRustと同一プロセス空間で動作し、IPC（プロセス間通信）は不要。PythonからRustの関数呼び出しは直接行われる（ゼロコピー、ゼロシリアライズ）。
+**Python実行方式**:
+RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]`/`#[pyclass]`/`#[pyfunction]`でRust APIを公開する。Pythonスクリプト内では `import pokecon` によりRust APIへアクセスする。
 
-**埋め込みの基本フロー**:
-1. `pyo3::append_to_inittab!()` でRust製モジュールをPythonに登録（初期化前）
-2. `Python::initialize()` でCPythonインタープリターを初期化
-3. `Python::with_gil()` でGILを取得し、Pythonスクリプトを実行
-4. Pythonスクリプト内で `import pokecon` によりRust APIにアクセス
+**Python実行環境の分離方針**:
+
+1. ユーザースクリプト用Pythonと動的設定用Pythonは、実行環境を分離する。
+2. 単一のCPythonインタープリター内で名前空間だけを分ける論理分離は採用しない。
+3. 分離手段は、CPythonサブインタープリター（`Py_NewInterpreterFromConfig`）または同等の独立性を確保できるPython実行単位を候補とし、実装方式は設計フェーズで確定する。
+4. 片方の `sys.path`、モジュール読み込み、グローバル状態の変更が、もう片方に影響しないことを保証する。
+5. Pythonオブジェクトを実行環境間で直接共有しない。必要な状態共有はRustコアが管理するAPI境界を経由する。
+6. 別プロセス方式は必須前提ではない。採用する場合は内部実装詳細とし、ユーザーに見える `pokecon` APIの挙動を変えない。
+7. 動的設定でPython（`init.py`）を使用しない場合、動的設定用Python実行環境は生成しない。
 
 **言語仕様**:
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。Rustメインプロセス内のPythonインタープリターは同一アドレス空間で動作するため、Python→RustのAPI呼び出しは直接的な関数呼び出しとして行われる。
+**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。PyO3で同一プロセス内に埋め込む場合、Python→RustのAPI呼び出しは直接的な関数呼び出しとして行われる。実装上の分離方式が異なる場合でも、その内部境界はユーザー向けAPIに露出しない。
 
 **Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPythonまたは仮想環境）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
 
@@ -1310,7 +1314,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **重要**:
 
 - TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
-- **動的設定にPythonを使用する場合、ユーザースクリプトと別のPythonインタープリターを使用する**。動的設定用インタープリターはRustコアに埋め込まれ、ユーザースクリプト用インタープリターとは独立して管理される
+- **動的設定にPythonを使用する場合、ユーザースクリプト用Pythonとは独立したPython実行環境を使用する**。分離の詳細は§1.2のPython実行環境の分離方針に従う
+- 動的設定でPython（`init.py`）を使用しない場合、動的設定用Python実行環境は生成しない
 - **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。`[python]`（共通セクション）で同時に指定することも可能（詳細は§11.4参照）
 - **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
 - **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持
@@ -1630,7 +1635,7 @@ end)
 |------|------|
 | **Lua実装** | LuaJIT 2.1 |
 | **ライセンス** | MIT（商用利用可能） |
-| **バインディング** | Rustコアに埋め込み、PyO3と同じプロセス空間で実行 |
+| **バインディング** | Rustコアが管理するLuaJITランタイムで実行（Python実行環境とは独立） |
 
 ##### 11.5.5.2 エラーハンドリング（Lua）
 

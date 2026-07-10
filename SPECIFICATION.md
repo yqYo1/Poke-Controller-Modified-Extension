@@ -48,7 +48,7 @@
 | レイヤー | 言語 | 役割 | 例 |
 |---------|------|------|-----|
 | Rustコア | Rust | メインプロセス、すべてのコア処理およびユーザースクリプト用Python実行環境 | イベントバス、シリアル通信、画像処理、ユーザースクリプト用CPython（PyO3埋め込み） |
-| PyO3バインディング | Rust（Pythonに公開） | ユーザースクリプト用Python API提供 | `pokecon.event`, `dialogue` |
+| PyO3バインディング | Rust（Pythonに公開） | ユーザースクリプト用Python API提供 | `Commands.PythonCommandBase`, `Commands.Keys` |
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | 動的設定ワーカー | Rustプロセス管理 + CPython + LuaJIT | 動的設定（`init.py`/`init.lua`）の実行（別プロセス） | 動的Python → CPython 3.14、動的Lua → LuaJIT 2.1、`pokecon.autocmd` |
 
@@ -74,7 +74,7 @@ RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプトや動的設定（`init.py`/`init.lua`）から呼び出されるAPIは、原則としてPyO3（Rust製）で実装される。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。ユーザースクリプト用PythonはRustメインプロセスにPyO3で直接埋め込まれるため、Python→RustのAPI呼び出しは同一プロセス内の直接的な関数呼び出しとして行われる。動的設定（Python/Lua）は専用のワーカープロセスで動作するため、`pokecon.*` API呼び出しはRust管理の内部IPCを経由するが、公開APIの名前と動作は同一である。これらの内部境界の詳細はユーザー向けAPIに露出しない。
+**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、RustメインプロセスにPyO3で直接埋め込まれたCPython上で動作し、Python→RustのAPI呼び出しは同一プロセス内の直接的な関数呼び出しとして行われる。動的設定用Python（`init.py`）はワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のPythonバインディング/プロキシを介して提供される。ワーカー内ではPyO3を使用可能だが、実際のコア処理はRust管理の内部IPC経由でメインプロセスと通信する。動的設定用Lua（`init.lua`）はワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシ（PyO3ではなく選択されたRust/Luaバインディング実装）を介して提供され、コア処理は同様にIPC経由である。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。これらの内部境界の詳細（IPCトランスポート、シリアル化方式、クラッシュ動作、プロトコル）はユーザー向けAPIに露出しない。
 
 **Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPythonまたは仮想環境）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
 

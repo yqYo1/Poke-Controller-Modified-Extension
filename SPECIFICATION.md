@@ -1413,7 +1413,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
-  Python環境構造は `pokecon.opt.python.script.packages.mode` / `pokecon.opt.python.script.packages.list` 等を使用可能。
+  Pythonユーザースクリプト環境: `pokecon.opt.python.script.interpreter`（実行ファイルパス）、`pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
+  動的設定ワーカーのPython環境はブートストラップ専用であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境は静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能。
 
 **制約**:
 
@@ -1464,15 +1465,20 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
-| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
+|| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
+|| `[python.script]` | `script_interpreter` | `pokecon.opt.python.script.interpreter` | `str` | |
+|| `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
+|| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
+|| `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
+|| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"` |
 | — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |
 
 **注**:
-- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
-- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
+|- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
+|- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用であり、静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能（§11.4.1参照）。
+|- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 
@@ -1675,6 +1681,15 @@ pokecon.opt.ui.dialog_button_position = "bottom"  # "top"（上部） / "bottom"
 # UI FPS選択肢（階層: ui名前空間）
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
+# Pythonユーザースクリプト実行環境設定
+pokecon.opt.python.script.interpreter = "/usr/bin/python3.12"
+pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
+pokecon.opt.python.script.packages.mode = "append"
+pokecon.opt.python.script.packages.list = [
+    {"name": "requests", "version": ">=2.28.0"},
+    {"name": "numpy"},
+]
+
 # 動的タグ追加（ScriptLoadPreイベント）
 def add_dynamic_tags() -> None:
     for candidate in pokecon.state.command_candidates:
@@ -1706,6 +1721,15 @@ pokecon.opt.ui.fps = 30
 pokecon.opt.ui.widget_mode = "ALL (default)"
 pokecon.opt.ui.controller_position = "top"
 pokecon.opt.ui.dialog_button_position = "bottom"
+
+-- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
+pokecon.opt.python.script.interpreter = "/usr/bin/python3.12"
+pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
+pokecon.opt.python.script.packages.mode = "append"
+pokecon.opt.python.script.packages.list = {
+    {name = "requests", version = ">=2.28.0"},
+    {name = "numpy"}
+}
 
 -- イベントハンドラ
 pokecon.autocmd.on("CameraOpenPost", {

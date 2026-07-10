@@ -582,7 +582,7 @@ Commands/
 | セクション | コントロール | 種類 |
 |---------|----------|------|
 | **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0～100）。スライダー値は10%～90%の範囲にマッピングされ、最小でも各出力は10%の幅を確保 | Scale/Slider |
-| **stdout出力先** | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン | Radio button |
+| **stdout出力先** (`stdout_destination`) | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン。値は `"1"`（出力#1）または `"2"`（出力#2） | Radio button |
 | **出力をクリア** | 両方の出力パネルをクリアするボタン | Button |
 | **ウィジェットモード** | 7モードのコンボボックス（§5.5参照） | Combobox |
 | **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン | Radio button |
@@ -638,14 +638,16 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 |------|------|
 | 遅延 | 50-150ms |
 | エンコード | JPEG（品質パラメータ設定可能） |
-| フレーム独立性 | 各フレームは完全なJPEG。TCP輻輳でフレーム遅延が発生しても次フレームで即座に回復し、デコーダ状態が壊れない |
-| ブラウザサポート | 全ブラウザ対応（JPEGは標準機能） |
+| **フレーム独立性** | 各フレームは完全なJPEG。TCP輻輳でフレーム遅延が発生しても次フレームで即座に回復し、デコーダ状態が壊れない。ただしフレーム独立性だけではWebSocket/TCPキュー内でのフレーム蓄積遅延を防げないため、明示的なバックプレッシャー制御が必要（下記参照） |
+| **ブラウザサポート** | 全ブラウザ対応（JPEGは標準機能） |
 
 **Motion JPEG採用の理由**:
 - **フォールバック層の最優先事項は確実動作**: WebRTCが失敗する環境（UDPブロック、古いブラウザ等）でも確実に動作する必要がある
-- **各フレーム独立**: TCP上のWebSocketでは、H.264等のフレーム間圧縮方式は貧弱なネットワークでTCPバッファにフレームが蓄積し遅延が累積する問題がある。Motion JPEGは各フレームが独立しているため、遅延が蓄積しない
+- **各フレーム独立**: TCP上のWebSocketでは、H.264等のフレーム間圧縮方式は貧弱なネットワークでTCPバッファにフレームが蓄積し遅延が累積する問題がある。Motion JPEGは各フレームが独立しているため、フレームのドロップ/リカバリが可能であり、蓄積遅延をドロップにより解消できる
 - **全ブラウザ対応**: WebCodecs API（H.264 HWデコード用）はSafari 16.4+、Chrome 94+等の制限があるが、JPEGデコードは全ブラウザ標準機能
 - **画像認識用途への適合**: 各フレームが完全なJPEGであり、ブロックノイズが発生しない。テンプレートマッチング等の画像認識デバッグ表示に適する
+
+**バックプレッシャー制御**: 各クライアント（WebSocket接続）に対して、未送信のビデオフレームは最大1つまでとする。より新しいフレームが到着した場合、キュー内に未送信のフレームが存在すればそれを破棄し、新しいフレームに置き換える。これにより、クライアントの処理能力を超えたフレームがWebSocket/TCPキューに無制限に蓄積されることを防ぐ。
 
 #### 7.3.2 コントロール/ログフォールバック — WebSocket
 
@@ -803,15 +805,18 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 ```bash
 # 1. RustコアでOpenAPI JSONを生成（ビルド時に自動実行）
 cargo build
+#    生成されたOpenAPI JSONはビルド成果物として保存（例: target/openapi.json）
 
-# 2. openapi-typescriptでTypeScript型を生成（デフォルトポート8020）
-npx openapi-typescript http://localhost:8020/api-docs/openapi.json -o src/lib/api/openapi.ts
+# 2. ローカルのOpenAPI JSONファイルをターゲットにopenapi-typescriptを実行
+npx openapi-typescript target/openapi.json -o src/lib/api/openapi.ts
 
 # 3. フロントエンドで型を使用
 import { paths, components } from '$lib/api/openapi.ts'
 ```
 
-**自動化**: `package.json`の`generate:api`スクリプトとして登録。CIでは生成済みの型ファイルをコミット。
+> **注**: `localhost:8020` のサーバーが起動していなくても、ビルド時に生成されたローカルJSONファイルに対して実行するため、型生成は独立して動作する。これによりサーバーが起動していない状態でも型生成が可能であり、CIでも同様の方法で生成する。
+
+**自動化**: `package.json`の`generate:api`スクリプトとして登録。CIでは生成済みの型ファイルをgit追跡し、生成失敗時は前回成功時の生成結果をフォールバックとして使用する。
 
 ### 8.2 型安全性要件
 
@@ -931,7 +936,7 @@ type GamepadInput = ButtonsList | Buttons
 | `reload_com_port()` | `reload_com_port() -> None` | COMポート接続を再読み込み |
 
 **出力メソッド**:
-> **注**: `t1`=出力#1, `t2`=出力#2, `t`=stdout以外の出力, `s`=stdout割り当てパネル, `b`=モード付き（w=上書き, a=追記, d=削除）。例: `print_t1b()` = 出力#1へのモード付き出力。ただし、これは便宜的な覚え方であり、厳密な命名規則ではありません。
+> **注（出力メソッド名の覚え方）**: `t` は互換性のためのメソッド名プレフィックス（"text"または"terminal"由来）。`print_t` / `print_tb` （裸の `t` のみ）が「stdout以外の出力パネル」を意味する。`s` は stdout割り当てパネル、`t1`/`t2` はそれぞれ出力#1/出力#2、`b` はモード付き（w=上書き, a=追記, d=削除）を表す。例: `print_t1b()` = 出力#1へのモード付き出力。ただし、これは便宜的な覚え方であり、厳密な命名規則ではありません。
 
 
 | メソッド | シグネチャ | 説明 |
@@ -945,13 +950,13 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ。フレームワークが注入した `isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外する |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ。フレームワークが注入した `isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外する。**注**: これらの除外名は互換性/内部フレームワーク名であり、ユーザーAPIとして定義されるものではない。内部実装の詳細であり、リストに依存したスクリプトを書くべきではない |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` で実行をブロックし、ダイアログIDを返す（結果は各Widgetの`value`属性から取得）。`blocking=False` で非ブロッキング実行。単一WidgetまたはWidgetリストを受け付ける |
+| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` の場合は固定値 `0` を返し、結果は各Widgetの`value`属性から取得。`blocking=False` の場合は固有の正のダイアログIDを返す。単一WidgetまたはWidgetリストを受け付ける |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、戻り値は固定で`0`。結果は各Widgetの`value`属性から取得 |
 | `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
@@ -1523,7 +1528,7 @@ ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 | `settings.toml` で `dynamic_config_language = "none"` を指定 | 動的設定を読み込まない |
 | 未指定（デフォルト） | `init.lua` が優先（Neovimと同じ） |
 
-**両方を使いたい場合**: 一方から `pokecon.source()` で另一方を読み込んでください。
+**両方を使いたい場合**: 一方から `pokecon.source()` で他方を読み込んでください。
 
 ```python
 # init.py で init.lua を読み込む例
@@ -1657,12 +1662,12 @@ end)
 
 Luaの動的設定ファイル読み込み時にエラーが発生しても、アプリケーションは継続して動作します。
 
-- Luaスクリプト内でエラーが発生した場合、エラーメッセージをログパネルにERRORレベルで出力
-- 構文エラー時に該当行をスキップし、残りを続行
+- Luaの `load()` / `loadfile()` は構文解析時にチャンク全体をコンパイルするため、構文エラーはファイル全体の読み込み失敗として扱われます。「該当行をスキップして残りを続行」という動作はLua言語仕様上不可能です
+- 構文エラー発生時は、エラーメッセージをログパネルにERRORレベルで出力（ファイル名・行番号・エラー内容を含む）
+- 実行時エラー（存在しない関数呼び出し等）は、コールバック内で捕捉されエラーメッセージをERRORレベルで出力。アプリケーションの動作は継続
 - エラーが発生してもアプリケーションの動作は継続（Luaランタイムの隔離）
 - Pythonとの相互運用時は、各言語のエラーを個別に処理
-- エラー内容はログパネルに出力（行番号・ファイル名・エラー内容）
-- フォールバック機構により、前回の有効な設定を維持
+- 前回の有効な動的設定を維持するフォールバック機構により、設定値はエラー発生前の状態を保持
 - 初回起動時など前回の有効な設定が存在しない場合は、静的設定（`settings.toml`）を使用する。静的設定も存在しない項目は組み込みデフォルト値を使用する
 
 #### 11.5.6 動的設定の機能

@@ -1409,7 +1409,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
   例: `pokecon.opt.camera.fps`, `pokecon.opt.camera.resolution`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
-  `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord_webhook_url`（通知設定）;
+  `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
@@ -1456,9 +1456,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | |
 | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"` |
 | `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"` |
-| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord_webhook_url` | `str` | |
-| `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord_username` | `str` | |
-| `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord_avatar_url` | `str` | |
+| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | |
+| `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | |
+| `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | |
 | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | |
 | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | |
 | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
@@ -1659,9 +1659,9 @@ pokecon.opt.serial.port = "COM3"
 pokecon.opt.serial.baud_rate = 115200
 pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
 
-# 通知設定（階層: 複数の関連設定をnotifications名前空間にグループ化）
-pokecon.opt.notifications.discord_webhook_url = "https://discord.com/api/webhooks/..."
-pokecon.opt.notifications.discord_username = "PokeCon Bot"
+# 通知設定（階層: 複数の関連設定をnotifications.discord名前空間にグループ化）
+pokecon.opt.notifications.discord.webhook_url = "https://discord.com/api/webhooks/..."
+pokecon.opt.notifications.discord.username = "PokeCon Bot"
 
 # ウィジェットモード（階層: ui名前空間）
 pokecon.opt.ui.widget_mode = "ALL (default)"  # §5.5参照

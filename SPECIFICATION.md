@@ -1476,9 +1476,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |
 
 **注**:
-|- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
-|- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用であり、静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能（§11.4.1参照）。
-|- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
+- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
+- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用であり、静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能（§11.4.1参照）。
+- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 

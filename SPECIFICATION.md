@@ -111,7 +111,8 @@ RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]
 
 | 用語 | 定義 |
 |------|------|
-| **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。例: `pokecon.opt.camera_fps`（フラット）vs `pokecon.opt.camera.fps`（階層） |
+| **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。`pokecon.opt` 名前空間では、意味的に独立した単体の設定のみフラットパスを使用する。例: `pokecon.opt.language`（フラット）vs `pokecon.opt.camera.fps`（階層） |
+| **階層構造（名前空間）** | 意味的に関連する複数の設定値をグループ化するドット区切りの名前空間。`pokecon.opt.camera.fps` のように、サブシステム単位で階層化する。TOMLのセクション構成とは独立した規範的な設計であり、自動変換ルールに依存しない |
 | **Neovim/Vim風** | Neovim/Vimエディタの設定方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
 | **後勝ち** | 複数の設定ソース間で同じキーが存在する場合、優先順位の高いソースの値を採用する方式。起動時設定はこの優先順位に基づく評価パイプラインとして、各ソースを順次適用する |
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
@@ -1337,7 +1338,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - `dynamic_config_language`が`"none"`の場合、動的設定ワーカープロセスは生成しない
 - **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。`[python]`（共通セクション）で同時に指定することも可能（詳細は§11.4参照）
 - **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
-- **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持
+- **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持。フラットパスと階層パスの区別もPython/Luaで同一
 
 ### 11.2 設定ファイル
 
@@ -1394,37 +1395,86 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
 
-#### 11.4.1 設定キーの命名規則
+#### 11.4.1 設定キーと動的設定パスの設計方針
 
-設定キーは、`pokecon.opt` からも同じ名前で参照できることを前提に、
-**フラット構造**で定義します。命名規則は、セクション番号や
-`settings.toml` の見出し由来ではなく、設定値の意味上のカテゴリに
-基づきます。
+`pokecon.opt` 名前空間は、**ハイブリッド構造**（フラット＋階層）で定義します。
+各動的設定パスは規範的に定義され、自動的なTOMLパス変換ルールには依存しません。
 
-- **グローバル設定**: プレフィックスなし。
-  例: `language`, `active_profile`, `auto_reload_config`。
-- **カテゴリ固有設定**: 意味上のカテゴリをプレフィックスとして付ける。
-  例: `camera_fps`, `ui_fps`, `serial_port`, `dialog_button_position`。
+**基本方針**:
 
-**重要**:
+- **フラットパス**: 意味的に独立した単体の設定で、強いサブシステムグループ化を持たないものはフラットとする。
+  例: `pokecon.opt.language`, `pokecon.opt.active_profile`, `pokecon.opt.auto_reload_config`,
+  `pokecon.opt.widget_mode`, `pokecon.opt.controller_position`, `pokecon.opt.dialog_button_position`,
+  `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
-- カテゴリ判定は、仕様書のセクション配置やTOMLの見出しではなく、
-  設定値が自然に属する機能領域で行う。
-- 例えば `camera_fps` はカメラ入力側のFPS、`ui_fps` は表示領域の
-  描画FPSを表す。どちらも単に `fps` とはしない。
-- `settings.toml` のセクションはファイル上の整理単位であり、
-  `pokecon.opt.xxx` のAPI名を決める根拠ではない。
-- `settings.toml` 内のキー名そのものが `pokecon.opt.<key>` の属性名になる。
-  セクション名は属性名に付与しない。
-- 例: `[notifications]` 内の `line_menu_behavior` は
-  `pokecon.opt.line_menu_behavior` であり、
-  `pokecon.opt.notifications_line_menu_behavior` ではない。
+- **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
+  例: `pokecon.opt.camera.fps`, `pokecon.opt.camera.resolution`（カメラ設定）;
+  `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
+  `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord_webhook_url`（通知設定）;
+  `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`（UI表示設定）;
+  `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
+  Python環境構造は `pokecon.opt.python.script.packages.mode` / `pokecon.opt.python.script.packages.list` 等を使用可能。
+
+**制約**:
+
+- TOMLのセクション構成だけで1リーフのみの名前空間を作成しない。
+  `[webrtc]` セクションの `stun_server` は `pokecon.opt.stun_server`（フラット）であり、
+  `pokecon.opt.webrtc.stun_server` ではない。
+- TOMLのセクション構成は `pokecon.opt` の動的API階層を決定する根拠ではない。
+  動的パスは、意味的結束（semantic cohesion）に基づいて本仕様書が規範的に定義する。
+- `settings.toml` 内のキー名と動的設定パスは**独立して設計される**。
+  TOMLキー名の平坦化（プレフィックス付与）と動的パスの階層化は対応関係を持たない。
+  例: TOMLキー `camera_fps` → 動的パス `pokecon.opt.camera.fps`（カメラ名前空間に属し、`camera_` プレフィックスは省略）。
+- 動的パスの命名は、`settings.toml` のキー名の意味的構成要素に基づいて階層化する。
+  元のキーが接頭辞 + 意味本体で構成されている場合、名前空間で接頭辞を置き換える。
+  例: TOMLキー `serial_port`（`serial_` が冗長接頭辞）→ 動的パス `pokecon.opt.serial.port`。
+- 名前空間内のリーフ名は、TOMLキーから冗長なセクション接頭辞を取り除いた上で、
+  必要に応じて可読性のために正規化する。
+  例: TOMLキー `serial_baudrate` → 動的パス `pokecon.opt.serial.baud_rate`（`baud_rate` に正規化）。
 - メインブランチの設定ファイル形式との互換性は、意図的に維持しない。
   `settings.ini` から `settings.toml` へ移行するため、設定ファイル形式は
   本リファクタリングの仕様に従う。
 - 互換性要件は領域ごとに異なる。ユーザースクリプトの公開インターフェイスは
   ほぼ完全な互換性が必要だが、UIや設定ファイル形式は、同等の機能を
   提供できればメインブランチと同一形式である必要はない。
+
+#### 11.4.2 動的設定パス定義一覧
+
+本仕様書で規定する `settings.toml` と `pokecon.opt` の動的設定パスの対応関係を以下に示す。
+この一覧は規範的（normative）であり、各動的設定パスは明示的に定義される。
+
+下記以外のパスについては、§11.4.1の設計方針に従い、今後の設計決定で追加する。
+
+| TOMLセクション | TOMLキー | `pokecon.opt` 動的パス | 型 | 備考 |
+|--------------|---------|----------------------|---|------|
+| `[global]` | `language` | `pokecon.opt.language` | `str` | `"ja"` / `"en"` |
+| `[global]` | `auto_reload_config` | `pokecon.opt.auto_reload_config` | `bool` | |
+| `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | |
+| `[camera]` | `camera_fps` | `pokecon.opt.camera.fps` | `int` | |
+| `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"` |
+| `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | |
+| `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | |
+| `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"` |
+| `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"` |
+| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord_webhook_url` | `str` | |
+| `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord_username` | `str` | |
+| `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord_avatar_url` | `str` | |
+| `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | |
+| `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | |
+| `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
+| `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
+| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
+| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
+| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
+| — | *ランタイムのみ* | `pokecon.opt.widget_mode` | `str` | フラット（単体設定）。§5.5参照 |
+| — | *ランタイムのみ* | `pokecon.opt.controller_position` | `str` | フラット。`"top"` / `"bottom"` |
+| — | *ランタイムのみ* | `pokecon.opt.dialog_button_position` | `str` | フラット。`"top"` / `"bottom"` / `"both"` |
+
+**注**:
+- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
+- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
+- `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
+- ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 
 ```toml
 # ~/.config/pokecon/settings.toml
@@ -1588,42 +1638,42 @@ pokecon.source("~/.config/pokecon/init.py")
 # ~/.config/pokecon/init.py
 import pokecon
 
-# 言語設定
+# 言語設定（フラット: 意味的に独立した単体設定）
 pokecon.opt.language = "ja"
 
-# 自動リロード設定
+# 自動リロード設定（フラット）
 pokecon.opt.auto_reload_config = True
 
-# プロファイル切替
+# プロファイル切替（フラット）
 pokecon.opt.active_profile = "default"
 
-# カメラ設定（フラット構造）
-# camera_fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
-pokecon.opt.camera_fps = 60
-# ui_fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
-pokecon.opt.ui_fps = 30
-pokecon.opt.camera_resolution = "1280x720"
+# カメラ設定（階層: 複数の関連設定をcamera名前空間にグループ化）
+# camera.fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
+pokecon.opt.camera.fps = 60
+# ui.fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
+pokecon.opt.ui.fps = 30
+pokecon.opt.camera.resolution = "1280x720"
 
-# シリアル設定（フラット構造）
-pokecon.opt.serial_port = "COM3"
-pokecon.opt.serial_baudrate = 115200
-pokecon.opt.serial_data_format = "default"  # default | qingpi | 3ds
+# シリアル設定（階層: 複数の関連設定をserial名前空間にグループ化）
+pokecon.opt.serial.port = "COM3"
+pokecon.opt.serial.baud_rate = 115200
+pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
 
-# 通知設定（フラット構造）
-pokecon.opt.discord_webhook_url = "https://discord.com/api/webhooks/..."
-pokecon.opt.discord_username = "PokeCon Bot"
+# 通知設定（階層: 複数の関連設定をnotifications名前空間にグループ化）
+pokecon.opt.notifications.discord_webhook_url = "https://discord.com/api/webhooks/..."
+pokecon.opt.notifications.discord_username = "PokeCon Bot"
 
-# ウィジェットモード（文字列値: "ALL (default)" など7種類。§5.5参照）
+# ウィジェットモード（フラット: 単体設定）
 pokecon.opt.widget_mode = "ALL (default)"  # §5.5参照
 
-# ソフトウェアコントローラー位置
+# ソフトウェアコントローラー位置（フラット）
 pokecon.opt.controller_position = "top"  # top | bottom
 
-# ダイアログボタン位置（ダイアログのOK/Cancelボタンの配置）
+# ダイアログボタン位置（フラット）
 pokecon.opt.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
 
-# UI FPS選択肢（カスタマイズ）
-pokecon.opt.ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成
+# UI FPS選択肢（階層: ui名前空間）
+pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
 # 動的タグ追加（ScriptLoadPreイベント）
 def add_dynamic_tags() -> None:
@@ -1649,10 +1699,10 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 -- ~/.config/pokecon/init.lua
 -- require不要で pokecon.* に直接アクセス
 
--- 設定（Pythonと同じ要素名・同じAPI構造）
+-- 設定（Pythonと同じ要素名・同じAPI構造。フラット＋階層も同一）
 pokecon.opt.language = "ja"
-pokecon.opt.camera_fps = 60
-pokecon.opt.ui_fps = 30
+pokecon.opt.camera.fps = 60
+pokecon.opt.ui.fps = 30
 
 -- イベントハンドラ
 pokecon.autocmd.on("CameraOpenPost", {
@@ -1667,7 +1717,7 @@ pokecon.autocmd.on("CameraOpenPost", {
 - **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
 - **コールバック**: Luaでは無名関数 `function() ... end` を使用
 
-**注**: API構造の統一については§11.1を参照。PythonとLuaで設定項目名・API構造は完全に同一。
+**注**: API構造の統一については§11.1を参照。PythonとLuaで設定項目名・API構造は完全に同一。フラットパスと階層パスの区別も両言語で共通。
 
 ##### 11.5.5.1 Luaランタイム
 
@@ -2029,10 +2079,10 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | 属性 | 型 | 説明 |
 |------|-----|------|
 | `serial_port` | `str` | 現在のシリアルポート（例: `"COM3"`）。未設定時は空文字 `""` |
-| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial_baudrate` または組み込みデフォルト値 |
+| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial.baud_rate` または組み込みデフォルト値 |
 | `serial_connected` | `bool` | 接続状態 |
 | `camera_opened` | `bool` | カメラオープン状態 |
-| `camera_fps` | `int` | 現在のFPS（`opt.camera_fps` をデバイス能力で制限した実際の値） |
+| `camera_fps` | `int` | 現在のFPS（`opt.camera.fps` をデバイス能力で制限した実際の値） |
 | `camera_resolution` | `str` | 現在の解像度（例: `"1280x720"`） |
 | `is_running` | `bool` | コマンド実行中 |
 | `command_state` | `CommandState` | コマンド状態 |
@@ -2057,7 +2107,7 @@ print(pokecon.state.serial_connected)   # 接続状態（True/False）
 
 # カメラ関連
 print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
-print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera_fps` をデバイス能力で制限した実際の値）
+print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera.fps` をデバイス能力で制限した実際の値）
 print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
 
 # コマンド関連
@@ -2086,7 +2136,7 @@ print(pokecon.state.pid)                # アプリケーションのプロセ�
 | `opt` | 設定値（書き込み可能） | ユーザーが設定した**設定値**。UIコントロールや動的設定で変更される |
 | `state` | 現在値（原則読み取り、一部書き込み可能） | デバイスやシステムが実際に使用している**現在値**。動的設定からの変更が想定されるもの（タグ等）は書き込み可能。デバイスの能力制限により、`opt` と異なる値を指すことがある |
 
-**例**: `opt.camera_fps = 120` と設定しても、キャプチャデバイスが60fpsまでしか対応しない場合、`state.camera_fps` は `60` となる。
+**例**: `opt.camera.fps = 120` と設定しても、キャプチャデバイスが60fpsまでしか対応しない場合、`state.camera_fps` は `60` となる。
 
 ```lua
 -- Lua設定

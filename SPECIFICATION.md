@@ -1465,12 +1465,12 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
-|| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-|| `[python.script]` | `script_interpreter` | `pokecon.opt.python.script.interpreter` | `str` | |
-|| `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
-|| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
-|| `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
-|| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
+| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
+| `[python.script]` | `script_interpreter` | `pokecon.opt.python.script.interpreter` | `str` | |
+| `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
+| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
+| `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
+| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"` |
 | — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |

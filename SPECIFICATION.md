@@ -1404,14 +1404,14 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 - **フラットパス**: 意味的に独立した単体の設定で、強いサブシステムグループ化を持たないものはフラットとする。
   例: `pokecon.opt.language`, `pokecon.opt.active_profile`, `pokecon.opt.auto_reload_config`,
-  `pokecon.opt.widget_mode`, `pokecon.opt.controller_position`, `pokecon.opt.dialog_button_position`,
   `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
   例: `pokecon.opt.camera.fps`, `pokecon.opt.camera.resolution`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
   `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord_webhook_url`（通知設定）;
-  `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`（UI表示設定）;
+  `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
+  `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   Python環境構造は `pokecon.opt.python.script.packages.mode` / `pokecon.opt.python.script.packages.list` 等を使用可能。
 
@@ -1466,9 +1466,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
 | — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
-| — | *ランタイムのみ* | `pokecon.opt.widget_mode` | `str` | フラット（単体設定）。§5.5参照 |
-| — | *ランタイムのみ* | `pokecon.opt.controller_position` | `str` | フラット。`"top"` / `"bottom"` |
-| — | *ランタイムのみ* | `pokecon.opt.dialog_button_position` | `str` | フラット。`"top"` / `"bottom"` / `"both"` |
+| — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
+| — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"` |
+| — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |
 
 **注**:
 - `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
@@ -1663,14 +1663,14 @@ pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
 pokecon.opt.notifications.discord_webhook_url = "https://discord.com/api/webhooks/..."
 pokecon.opt.notifications.discord_username = "PokeCon Bot"
 
-# ウィジェットモード（フラット: 単体設定）
-pokecon.opt.widget_mode = "ALL (default)"  # §5.5参照
+# ウィジェットモード（階層: ui名前空間）
+pokecon.opt.ui.widget_mode = "ALL (default)"  # §5.5参照
 
-# ソフトウェアコントローラー位置（フラット）
-pokecon.opt.controller_position = "top"  # top | bottom
+# ソフトウェアコントローラー位置（階層: ui名前空間）
+pokecon.opt.ui.controller_position = "top"  # top | bottom
 
-# ダイアログボタン位置（フラット）
-pokecon.opt.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
+# ダイアログボタン位置（階層: ui名前空間）
+pokecon.opt.ui.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
 
 # UI FPS選択肢（階層: ui名前空間）
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
@@ -1703,6 +1703,9 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 pokecon.opt.language = "ja"
 pokecon.opt.camera.fps = 60
 pokecon.opt.ui.fps = 30
+pokecon.opt.ui.widget_mode = "ALL (default)"
+pokecon.opt.ui.controller_position = "top"
+pokecon.opt.ui.dialog_button_position = "bottom"
 
 -- イベントハンドラ
 pokecon.autocmd.on("CameraOpenPost", {

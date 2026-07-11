@@ -1613,7 +1613,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - `[python.dynamic]` セクションのすべてのキー（interpreter、venv、packages.mode、packages.list等）
 - 動的ワーカーのブートストラップ環境を指定するその他のセレクター
 
-これらの設定がプロファイルTOMLに存在する場合、無視される（エラーにはならないが優先されない）。この制限は起動パイプラインのステップ②（グローバル設定）と③（プロファイル設定）の適用時に強制される。
+これらの設定がプロファイルTOMLに存在する場合、無視され、プロファイルの読み込み・切替は中断されない。既存のグローバル値が有効なままとなる。このとき、デフォルトでは無視されたキー/パスを特定するERRORレベルの診断を出力する。診断出力はグローバル設定 `report_ignored_profile_global_settings` で制御される（§11.4.2参照）。`true`（デフォルト）: プロファイル読み込み/切替を継続し、無視されたキーごとにERROR診断を出力。`false`: 診断を出力せずに黙って無視する。
+この診断設定自体もグローバル専用である。プロファイルTOMLに `report_ignored_profile_global_settings` が指定された場合、その値は無視され、診断出力の要否は既に解決済みのグローバル値によって決定される。ランタイムでの動的代入（`pokecon.opt.config.report_ignored_profile_global_settings = ...`）は、起動後に実行される後続のプロファイル読み込み/切替に対してのみ有効であり、起動中に既に出力された診断を遡って抑制することはできない。
+この制限は起動パイプラインのステップ②（グローバル設定）と③（プロファイル設定）の適用時に強制される。
 
 ### 11.4 静的設定（settings.toml）
 
@@ -1640,7 +1642,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
-  動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境はグローバル静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。
+  動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境はグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。
 
 **制約**:
 
@@ -1676,6 +1678,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 |--------------|---------|----------------------|---|------|
 | `[global]` | `language` | `pokecon.opt.language` | `str` | `"ja"` / `"en"` |
 | `[global]` | `auto_reload_config` | `pokecon.opt.auto_reload_config` | `bool` | |
+| `[config]` | `report_ignored_profile_global_settings` | `pokecon.opt.config.report_ignored_profile_global_settings` | `bool` | グローバル専用。プロファイルTOMLで無視されたグローバル専用設定の診断出力を制御。デフォルト: `true`（ERROR出力）。プロファイルTOMLに指定された場合は無視され、既に解決済みのグローバル値が使用される（§11.3参照）。環境変数: `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS`。CLIは§11.3のブートストラップCLIスキーマ設計で規定する |
 | `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | |
 | `[camera]` | `camera_fps` | `pokecon.opt.camera.fps` | `int` | |
 | `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"` |
@@ -1702,7 +1705,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **注**:
 - `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
-- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。
+- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。
+- `report_ignored_profile_global_settings` はグローバル専用の診断制御設定である（§11.3参照）。プロファイルTOMLに指定された場合、その値は無視され、既に解決済みのグローバル値に基づいて診断出力の要否が決定される。
 - `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
@@ -1716,6 +1720,11 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
 dynamic_config_language = "lua"  # "python" | "lua" | "none"。動的設定ファイルの言語を指定。未指定時のデフォルトは "lua"（Neovimと同じ）
+
+[config]
+# report_ignored_profile_global_settings: プロファイルTOMLに指定されたグローバル専用設定を
+# 無視した際のERROR診断出力を制御（デフォルト: true）。グローバル専用（§11.3参照）。
+# report_ignored_profile_global_settings = true
 
 [websocket]
 reconnect_interval_sec = 3  # 再接続間隔（秒）
@@ -1896,6 +1905,9 @@ pokecon.opt.python.script.packages.list = [
     {"name": "requests", "version": ">=2.28.0"},
     {"name": "numpy"},
 ]
+
+# グローバル専用設定診断の制御（起動後に実行されるプロファイル読み込み/切替にのみ有効）
+# pokecon.opt.config.report_ignored_profile_global_settings = False  # True=ERROR出力（デフォルト）, False=黙って無視
 
 # 動的タグ追加（ScriptLoadPreイベント）
 def add_dynamic_tags() -> None:

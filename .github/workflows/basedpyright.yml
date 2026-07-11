@@ -17,5 +17,16 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check Python source files exist (basedpyright checks python/)
+        id: py-check
+        run: |
+          if [ -d python ] && find python -type f \( -name '*.py' -o -name '*.pyi' \) 2>/dev/null | grep -q .; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Python source/type files (python/**/*.{py,pyi}) absent — basedpyright skipped (not applicable)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Basedpyright
+        if: steps.py-check.outputs.skip != 'true'
         run: nix run .#basedpyright

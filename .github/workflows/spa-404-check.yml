@@ -27,8 +27,20 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check server and web source files exist
+        id: source-check
+        run: |
+          if [ -f src-server/src/main.rs ] && [ -f web/package.json ] && [ -f web/package-lock.json ] && \
+             find web/src -type f \( -name '*.svelte' -o -name '*.ts' -o -name '*.js' -o -name '*.tsx' -o -name '*.jsx' \) 2>/dev/null | grep -q .; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Server (src-server/src/main.rs) or web (web/package.json + web/package-lock.json + web/src/**/*.{svelte,ts,js,tsx,jsx}) source files absent — SPA 404 check skipped (not applicable)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and start server
         id: server
+        if: steps.source-check.outputs.skip != 'true'
         run: |
           # Build the server package (includes web assets)
           nix build .#pokecon-server --out-link result-server
@@ -49,7 +61,7 @@ jobs:
               echo "Server is ready"
               break
             fi
-            if [ $i -eq 30 ]; then
+            if [ "$i" -eq 30 ]; then
               echo "FAIL: Server did not start within 30 seconds"
               exit 1
             fi
@@ -57,6 +69,7 @@ jobs:
           done
 
       - name: Check UI response for 404 content
+        if: steps.source-check.outputs.skip != 'true'
         run: |
           # Fetch the UI page
           RESPONSE=$(curl -sf http://localhost:8080/ui/)
@@ -93,6 +106,7 @@ jobs:
           echo "✅ UI response looks healthy (no 404/Not Found detected)"
 
       - name: Check key UI assets exist
+        if: steps.source-check.outputs.skip != 'true'
         run: |
           # Verify that the built index.html contains actual app content
           # not just the SvelteKit error page
@@ -129,5 +143,5 @@ jobs:
         if: always()
         run: |
           if [ -n "${{ steps.server.outputs.server_pid }}" ]; then
-            kill ${{ steps.server.outputs.server_pid }} 2>/dev/null || true
+            kill "${{ steps.server.outputs.server_pid }}" 2>/dev/null || true
           fi

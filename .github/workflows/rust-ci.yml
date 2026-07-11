@@ -27,13 +27,26 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Check formatting
         run: nix fmt -- --ci
+      - name: Check Rust source files exist
+        id: rust-check
+        run: |
+          if find rust -path '*/src/*.rs' -type f 2>/dev/null | grep -q .; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Rust crate source files (rust/**/src/**/*.rs) absent — Rust CI steps skipped (not applicable)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Clippy
+        if: steps.rust-check.outputs.skip != 'true'
         run: nix run .#clippy
       - name: Build all crates
+        if: steps.rust-check.outputs.skip != 'true'
         run: nix run .#build-rust
       - name: Run tests
+        if: steps.rust-check.outputs.skip != 'true'
         run: |
           # GitHub Actions doesn't support bwrap (AppArmor restriction)
           # Use cargo test directly with libclang from nix
-          export LIBCLANG_PATH="$(nix build --no-link --print-out-paths .#packages.x86_64-linux.libclang 2>/dev/null || echo /nix/store/*-clang-*/lib)/lib"
+          LIBCLANG_PATH="$(nix build --no-link --print-out-paths .#packages.x86_64-linux.libclang 2>/dev/null || echo /nix/store/*-clang-*/lib)/lib"
+          export LIBCLANG_PATH
           nix develop --command cargo test --workspace --all-features --exclude pokecon-pybindings

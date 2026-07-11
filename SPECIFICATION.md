@@ -69,8 +69,8 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 5. プロセス境界により、sys.path、インポート済みモジュール、グローバル状態、Pythonオブジェクトはワーカー間およびRustコアとの間で完全に分離される。Pythonオブジェクトがプロセス境界を越えることはない。LuaJITのグローバル状態も同様に動的設定ワーカープロセス内に隔離される。
 6. 両ワーカーからユーザー向けAPIへのアクセスは、ワーカープロセスがRust管理の内部IPC/API境界（§7.8参照）を経由する。この内部形式は実装詳細であり、公開API（`Commands.*`、`pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
 7. PythonとLuaの動的設定APIは公開APIレベルで同一の動作を提供する。両ランタイムは同一ワーカーから同一のIPC境界を通じてRustメインプロセスと通信する。PythonとLuaのランタイムネイティブオブジェクトはランタイム間またはプロセス境界を越えて直接共有されない。共有される設定値・状態・イベントはRust管理のAPI表現を通じてやり取りされる。
-8. 動的設定ワーカーはアプリケーション生存期間中、ただ一つのワーカープロセスが存在する（`dynamic_config_language="none"`の場合、またはアプリケーション終了時を除く；グローバル動的ブートストラップ再構成が必要な場合は、プロファイル切替とは無関係に管理された置換が可能だが、それは本仕様のプロファイル切替の対象外である）。動的ワーカーとそのCPython/LuaJITランタイム状態はプロファイル切替を越えて永続し、再生成・再初期化されない。グローバルな`init.py`/`init.lua`はアプリケーション起動時に一度だけ評価され、アクティブプロファイルの変更によって再評価されることはない。動的設定のコールバック（イベントハンドラ）もプロファイル切替時にクリア・再登録されず、永続する動的ワーカーはプロファイル切替イベントを受信し、`pokecon.profile.current()`や`pokecon.state`を介して適応する。
-9. プロファイル切替が影響するのはユーザースクリプトワーカーのみである。プロファイル切替時は既存のユーザースクリプトワーカーに協調停止要求を送信した後、直ちに（Pythonの応答を待たずに）Rustメインが全ボタン・スティック・タッチ状態を強制解放し（§11.5.6.4.3参照）、次いでワーカーの正常終了を`shutdown_timeout_ms`まで待機する。タイムアウト時はユーザースクリプトワーカープロセスを強制終了する。新しいユーザースクリプトワーカーは最初のコマンド実行要求時まで遅延生成される（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする。永続する動的設定はプロファイル切替イベントに応答して、新しいユーザースクリプトワーカー生成前に`pokecon.opt.python.script.*`を設定することができる。
+8. 動的設定ワーカーはアプリケーション生存期間中、ただ一つのワーカープロセスが存在する（`dynamic_config_language="none"`の場合、またはアプリケーション終了時を除く；グローバル動的ブートストラップ再構成が必要な場合は、プロファイル切替とは無関係に管理された置換が可能だが、それは本仕様のプロファイル切替の対象外である）。動的ワーカーとそのCPython/LuaJITランタイム状態はプロファイル切替を越えて永続し、再生成・再初期化されない。グローバルな`init.py`/`init.lua`はアプリケーション起動時に一度だけ評価され、アクティブプロファイルの変更によって再評価されることはない。動的設定のコールバック（イベントハンドラ）もプロファイル切替時にクリア・再登録されず、永続する動的ワーカーは`ProfileSwitchPre`/`ProfileSwitchPost`イベントを受信し、`pokecon.profile.current()`、`pokecon.state.pending_profile`、その他のstateを介して適応する。
+9. プロファイル切替が影響するのはユーザースクリプトワーカーのみである。プロファイル切替時は既存のユーザースクリプトワーカーに協調停止要求を送信した後、直ちに（Pythonの応答を待たずに）Rustメインが全ボタン・スティック・タッチ状態を強制解放し（§11.5.6.4.3参照）、次いでワーカーの正常終了を`shutdown_timeout_ms`まで待機する。タイムアウト時はユーザースクリプトワーカープロセスを強制終了する。新しいユーザースクリプトワーカーは最初のコマンド実行要求時まで遅延生成される（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする。永続する動的設定は`ProfileSwitchPost`に応答して、新しいユーザースクリプトワーカー生成前に`pokecon.opt.python.script.*`を設定することができる。
 
 **言語仕様**:
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
@@ -2171,6 +2171,8 @@ print(pokecon.event.list_defined())
 | `ConfigReloadPost` | Post | 設定再読み込み後 |
 | `InputPressedPre` | Pre | 入力押下前（コントローラー・キーボード両方） |
 | `InputReleasedPost` | Post | 入力解放後（コントローラー・キーボード両方） |
+| `ProfileSwitchPre` | Pre | プロファイル切替前（キャンセル可能） |
+| `ProfileSwitchPost` | Post | プロファイル切替後 |
 
 **1. ScriptLoadPre/ScriptLoadPostのタイミング**
 
@@ -2216,7 +2218,8 @@ type BuiltinEvent = Literal[
     "CommandErrorPre", "CommandErrorPost",
     "ScriptLoadPre", "ScriptLoadPost",
     "ConfigReloadPre", "ConfigReloadPost",
-    "InputPressedPre", "InputReleasedPost"
+    "InputPressedPre", "InputReleasedPost",
+    "ProfileSwitchPre", "ProfileSwitchPost"
 ]
 
 # 組み込みイベント + ユーザー定義イベント
@@ -2341,6 +2344,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `command_candidates` | `list[CommandInfo]` | 読み込み候補コマンド一覧 |
 | `tags` | `list[str]` | 利用可能なタグ一覧 |
 | `active_profile` | `str` | 現在のアクティブプロファイル名 |
+| `pending_profile` | `str \\| None` | プロファイル切替中の保留中プロファイル名。切替処理中のみ設定され、完了/キャンセルで `None` に戻る。読み取り専用 |
 | `available_profiles` | `list[str]` | 利用可能なプロファイル一覧 |
 | `last_input` | `str \| None` | 最後の入力（キー名またはボタン名） |
 | `holding_buttons` | `list[str]` | 現在保持中のボタン一覧 |
@@ -2370,6 +2374,7 @@ print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str
 
 # プロファイル関連
 print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名
+print(pokecon.state.pending_profile)    # プロファイル切替中の保留中プロファイル名（str | None）
 print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
 
 # 入力関連
@@ -2394,6 +2399,7 @@ print(pokecon.state.pid)                # アプリケーションのプロセ�
 print(pokecon.state.serial_port)
 print(pokecon.state.camera_opened)
 print(pokecon.state.active_profile)
+print(pokecon.state.pending_profile)
 ```
 
 ##### 11.5.6.4 プロファイルAPI
@@ -2402,7 +2408,9 @@ print(pokecon.state.active_profile)
 
 - **フラットAPI**: `pokecon.profile.current()`, `pokecon.profile.list()`, `pokecon.profile.switch(name)`
 - **動的設定ファイル内で使用可能**
-- **`pokecon.opt.active_profile` との関係**: `pokecon.opt.active_profile` のsetterは、内部的に `pokecon.profile.switch(name)` と同じプロファイル切替処理を呼び出す。どちらの場合も、存在しないプロファイル名の検証、プロファイル切替イベントの発火、新設定読み込み、ボタン強制解放、既存ユーザースクリプトワーカーの終了を行う。動的設定ワーカーのコールバック/イベントハンドラはクリア・再登録されず永続する（§1.2ポイント8参照）。成功/失敗を戻り値で扱いたい場合は `profile.switch()` を使用する
+- **`pokecon.opt.active_profile` との関係**: `pokecon.opt.active_profile` のsetterは、内部的に `pokecon.profile.switch(name)` と同じプロファイル切替処理を呼び出す。成功/失敗を戻り値で扱いたい場合は `profile.switch()` を使用する。`pokecon.opt.active_profile` への代入は戻り値を返せないため、Preイベントでキャンセルされた場合（`ProfileSwitchPre`が`False`を返した場合）は現在値を変更せず、代わりにERROR診断を出力する
+- **切替イベント**: `ProfileSwitchPre`（キャンセル可能）、`ProfileSwitchPost`の2フェーズを持つ。Preは動的設定ワーカーで発火し、厳密な`False`でキャンセル可能。PostはPreがキャンセルされず、かつ既存ユーザーワーカーが停止・新設定が適用された後に発火する（§11.5.6.4.3参照）
+- **保留中プロファイル**: 切替処理中は`pokecon.state.pending_profile`にターゲットプロファイル名が設定される。読み取り専用で、切替完了またはキャンセル時に`None`に戻る
 - **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
 
 ###### 11.5.6.4.2 API仕様
@@ -2432,6 +2440,24 @@ print(f"Available profiles: {profiles}")
 success = pokecon.profile.switch("custom")
 if not success:
     print("Failed to switch profile")
+
+# プロファイル切替イベントのハンドラ登録例
+# ProfileSwitchPre: 切替前（キャンセル可能）
+def on_profile_switch_pre() -> bool | None:
+    if pokecon.state.pending_profile == "restricted":
+        return False  # "restricted"プロファイルへの切替を阻止
+    print(f"Switching from {pokecon.profile.current()} to {pokecon.state.pending_profile}")
+    return None  # 継続
+
+pokecon.autocmd.on("ProfileSwitchPre", callback=on_profile_switch_pre)
+
+# ProfileSwitchPost: 切替後（キャンセル不可、戻り値無視）
+def on_profile_switch_post():
+    print(f"Switched to {pokecon.profile.current()}")
+    # pending_profile は切替完了後に自動的に None に戻る
+    assert pokecon.state.pending_profile is None
+
+pokecon.autocmd.on("ProfileSwitchPost", callback=on_profile_switch_post)
 ```
 
 ```lua
@@ -2439,18 +2465,72 @@ if not success:
 print(pokecon.profile.current())
 print(pokecon.profile.list())
 pokecon.profile.switch("custom")
+
+-- ProfileSwitchPre
+pokecon.autocmd.on("ProfileSwitchPre", {
+    callback = function()
+        if pokecon.state.pending_profile == "restricted" then
+            return false  -- キャンセル
+        end
+        print("Switching from " .. pokecon.profile.current() .. " to " .. pokecon.state.pending_profile)
+        -- nil  -- 継続（明示的なfalse以外は全て継続）
+    end
+})
+
+-- ProfileSwitchPost
+pokecon.autocmd.on("ProfileSwitchPost", {
+    callback = function()
+        print("Switched to " .. pokecon.profile.current())
+        -- pending_profile は切替完了後に自動的に None に戻る
+    end
+})
 ```
 
 ###### 11.5.6.4.3 プロファイル切替時の動作
 
-- 新しいプロファイルの設定（`~/.config/pokecon/profiles/<name>/settings.toml`）を読み込み適用する（注: 動的設定ワーカーのブートストラップ設定はグローバル専用でありプロファイルTOMLではオーバーライド不可。§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）
-- プロファイル切替の期間中、新規のユーザーコマンド開始を防止する
-- 現在アクティブなユーザーコマンド/ワーカーに対し、§7.8の制御IPCを通じて協調停止要求を送信する（既存の`alive`/StopThread/checkIfAliveによる停止セマンティクスを使用）。動的ワーカーはこの影響を受けず永続する
-- Pythonの応答を待たずに、直ちにRustメインが現在保持中のすべてのボタンを強制解放する（holdEndSkip中のボタンを含む）。スティックを中央に戻し、タッチ状態を解放する。この安全状態の解放はRust所有であり、Pythonの協調に依存しない
-- アクティブプロファイル（切替元）の`python.script.shutdown_timeout_ms`で指定されたミリ秒間、ワーカーの正常終了を待機する。デフォルト: `2000`（2秒）
-- タイムアウトが経過した場合、またはIPCが切断/応答不能の場合は、ユーザースクリプトワーカープロセスを強制終了する。Pythonのfinally/atexitはこのパスでは保証されない。強制終了した場合はエラー診断を出力するが、プロファイル切替は継続する
-- 新しいユーザースクリプトワーカーは生成せず、初回のユーザースクリプト実行要求時まで遅延生成する（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする
-- 動的設定ワーカーのコールバック/イベントハンドラはクリア・再登録されず、プロファイル切替を越えて永続する。永続する動的ワーカーはプロファイル切替イベントを受信し、`pokecon.profile.current()`や`pokecon.state`を介して適応する（§1.2ポイント8参照）
+プロファイル切替（`pokecon.profile.switch(name)` または `pokecon.opt.active_profile` への代入）は、以下の番号順トランザクションで実行される。
+
+**トランザクション順序**:
+
+0. **内部ゲート獲得**: プロファイル切替用の内部直列化/コマンド開始防止ゲートを獲得し、トランザクション期間中は新規ユーザーコマンドの開始を防止する。このゲートは後続の成功・キャンセル・失敗の全パスで解放される
+
+1. **検証（副作用なし）**: ターゲットプロファイルの存在確認・名前検証を行い、ターゲットのTOMLを完全にパース・検証する。この段階ではアクティブな状態を一切変更しない。プロファイルTOML内のグローバル専用キーは既存の設定可能ポリシーに従って無視・診断されるが、致命的エラーとはしない。検証/パース失敗時はPre/Postイベントは発火せず、副作用は一切発生しない。`pending_profile`は`None`のまま、`switch()`は`False`を返しエラーをログ出力する
+
+2. **`pending_profile`設定**: 読み取り専用の`pokecon.state.pending_profile`にターゲットプロファイル名を設定する。この時点で`pokecon.profile.current()`/`active_profile`はまだ元のプロファイルを指している
+
+3. **`ProfileSwitchPre`発火（キャンセル可能）**: 永続するグローバル動的設定ワーカーで`ProfileSwitchPre`を発火する。既存のPreイベントキャンセル規則に従い、コールバックが**厳密な`False`**を返した場合のみキャンセルする。`None`/`True`/その他の戻り値は継続として扱われる
+
+4. **キャンセルパス**: Preがキャンセルされた場合:
+   - `pending_profile`を`None`にクリアする
+   - 内部ゲートを解放する
+   - ワーカー/コントローラー/設定への変更は一切行わない
+   - `pokecon.profile.switch(name)`は`False`を返す
+   - `pokecon.opt.active_profile`への代入は現在値を変更せず、ERROR診断を出力する（代入は戻り値を返せないため）
+   - `ProfileSwitchPost`は発火しない
+   - トランザクション終了
+
+5. **旧ワーカー停止（非キャンセルパス開始）**: Preがキャンセルされなかった場合、現在アクティブなユーザースクリプトワーカーに対し、§7.8の制御IPCを通じて協調停止要求（`alive`/StopThread/checkIfAliveによる停止セマンティクス）を送信する。動的設定ワーカーはこの影響を受けず永続する
+
+6. **コントローラー強制解放**: Pythonの応答を待たずに、直ちにRustメインが全ボタン（holdEndSkip中のボタンを含む）を強制解放し、スティックを中央に戻し、タッチ状態を解放する。この安全状態の解放はRust所有であり、Pythonの協調に依存しない
+
+7. **シャットダウン待機**: 切替元プロファイルの`python.script.shutdown_timeout_ms`で指定されたミリ秒間、ワーカーの正常終了を待機する。デフォルト: `2000`（2秒）。タイムアウトが経過した場合、またはIPCが切断/応答不能の場合は、ユーザースクリプトワーカープロセスを強制終了する。Pythonのfinally/atexitはこのパスでは保証されない。強制終了した場合はエラー診断を出力するが、プロファイル切替は継続する
+
+8. **設定アトミック適用（旧ワーカー停止後）**: 旧ユーザーワーカーが完全に終了/強制終了した後にのみ、ターゲットプロファイルの設定（`~/.config/pokecon/profiles/<name>/settings.toml`）をアトミックにコミット・適用する。これにより、アクティブプロファイル/`current()`がターゲットを指すようになる。設定適用は旧ワーカー停止後であるため、新設定が旧ワーカーに影響を与えることはない
+
+9. **新ユーザーワーカー非生成**: 新しいユーザースクリプトワーカーは生成せず、初回のユーザースクリプト実行要求時まで遅延生成する（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする
+
+10. **`pending_profile`クリア**: `pending_profile`を`None`にクリアする。この時点で`pokecon.profile.current()`はターゲットを指し、`pending_profile`は`None`、コントローラーはニュートラル、旧ユーザーワーカーは消失、新ユーザーワーカーは未生成
+
+11. **`ProfileSwitchPost`発火**: 永続するグローバル動的設定ワーカーで`ProfileSwitchPost`を発火する。Post時点では`current()`はターゲット、`pending_profile`は`None`、コントローラーはニュートラル、旧ユーザーワーカーは消失、新ユーザーワーカーは未生成。戻り値は無視される。動的設定のPostコールバックは遅延生成前の新ワーカー設定として`pokecon.opt.python.script.*`を設定可能。Postハンドラ内のエラーは通常のイベントエラーログに従い、成功した切替をロールバックしない
+
+12. **内部ゲート解放**: プロファイル切替用内部ゲートを解放する
+
+**補足**:
+
+- 動的設定ワーカーのコールバック/イベントハンドラはクリア・再登録されず、プロファイル切替を越えて永続する。永続する動的ワーカーは`ProfileSwitchPre`/`ProfileSwitchPost`イベントを受信し、`pokecon.profile.current()`や`pokecon.state.pending_profile`を介して適応する（§1.2ポイント8参照）
+- 上記のトランザクション順序により、旧ワーカー停止より前に新しいプロファイル設定が適用されることはなく、新設定が旧ワーカーの動作に影響を与えることはない
+- `ProfileSwitchPre`のコールバックは引数なし。ペイロードフィールドは追加しない。コールバックは`pokecon.profile.current()`、`pokecon.state.pending_profile`、その他のstateを介して現在/ターゲット情報にアクセスする
+- `ProfileSwitchPost`のコールバックも引数なしで、現在の完全な状態に`pokecon.*`経由でアクセスする
 
 ##### 11.5.6.5 コントローラーAPI（動的設定用）
 

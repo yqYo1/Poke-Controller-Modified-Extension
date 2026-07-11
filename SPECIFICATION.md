@@ -90,15 +90,33 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 - **nix-first**: 本プロジェクトはnix flakeを使用して開発する。すべての開発タスク（ビルド、テスト、型チェック、フォーマット）は`nix run .#<task>`または`nix develop`内で実行する
 - **nix環境優先、非nix環境もサポート**: まずnix環境で動作するよう実装し、その後非nix環境（Windows含む）でも動作するよう調節する。非nix環境では`PythonManager`がワーカープロセス用のPythonランタイムのセットアップを管理する（§14.4参照）
 
-### 1.3 対象プラットフォーム
+### 1.3 対象プラットフォーム・プロセスモデル
+
+Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメインプロセスで動作する。デスクトップモードではTauriウィンドウとaxumサーバーの両方を起動する。WebモードではTauriウィンドウを生成せず、axumサーバーのみを起動する（シグナルハンドラによるグレースフルシャットダウン対応）。二つのモードは同一のRustバイナリから起動方法によって選択される。
 
 | プラットフォーム | UIモード | 備考 |
 |----------|---------|-------|
-| デスクトップ（Windows/Linux） | Tauri（WebViewラッパー） | Webモードとaxum HTTPサーバーを共有 |
-| Webブラウザ | スタンドアロンSvelteKit SPA | axum HTTPサーバーによって提供 |
+| デスクトップ（Windows/Linux） | Tauri（WebViewラッパー） | Tauri + axum 共存。同一Rustメインプロセス |
+| Webブラウザ | スタンドアロンSvelteKit SPA | Tauriウィンドウなし、axumのみ |
 | モバイル（将来） | レスポンシブSPA | 同一コードベース、アダプティブレイアウト |
 
 **注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、macOS対応は現在のスコープ外とし、将来のバージョンでの判断とする。
+
+**プロセス構成**（デスクトップモード）:
+
+```text
+┌─ Rust メインプロセス ────────────────────────────────────┐
+│  Tauri（WebView / ウィンドウ管理）   axum（HTTP / WS）    │
+│  イベントバス / シリアル / カメラ共有メモリ / その他コア │
+└───────────────┬───────────────────────┬──────────────────┘
+                │ 制御IPC               │ 制御IPC
+┌───────────────▼──────────────┐ ┌──────▼───────────────────┐
+│ ユーザースクリプトワーカー   │ │ 動的設定ワーカー        │
+│ （別プロセス）                │ │ （別プロセス）           │
+└──────────────────────────────┘ └──────────────────────────┘
+```
+
+デスクトップライフサイクルの詳細は§15参照。
 
 ### 1.4 対象外機能
 
@@ -1639,7 +1657,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
   `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
-  `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
+  `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`,
+  `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
   動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境はグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。
@@ -1703,6 +1722,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"` |
 | — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |
+| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
 
 **注**:
 - `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
@@ -1813,6 +1833,10 @@ button_10 = ""
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 
+# デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
+[ui.desktop]
+# close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
+
 ```
 
 ### 11.5 動的設定
@@ -1899,6 +1923,9 @@ pokecon.opt.ui.controller_position = "top"  # top | bottom
 # ダイアログボタン位置（階層: ui名前空間）
 pokecon.opt.ui.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
 
+# デスクトップ閉じる動作（階層: ui.desktop名前空間。デスクトップモードのみ、§15参照）
+pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
+
 # UI FPS選択肢（階層: ui名前空間）
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
@@ -1945,6 +1972,9 @@ pokecon.opt.ui.fps = 30
 pokecon.opt.ui.widget_mode = "ALL (default)"
 pokecon.opt.ui.controller_position = "top"
 pokecon.opt.ui.dialog_button_position = "bottom"
+
+-- デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
+pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_backend"
 
 -- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
@@ -2344,7 +2374,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `command_candidates` | `list[CommandInfo]` | 読み込み候補コマンド一覧 |
 | `tags` | `list[str]` | 利用可能なタグ一覧 |
 | `active_profile` | `str` | 現在のアクティブプロファイル名 |
-| `pending_profile` | `str \\| None` | プロファイル切替中の保留中プロファイル名。切替処理中のみ設定され、完了/キャンセルで `None` に戻る。読み取り専用 |
+| `pending_profile` | `str \| None` | プロファイル切替中の保留中プロファイル名。切替処理中のみ設定され、完了/キャンセルで `None` に戻る。読み取り専用 |
 | `available_profiles` | `list[str]` | 利用可能なプロファイル一覧 |
 | `last_input` | `str \| None` | 最後の入力（キー名またはボタン名） |
 | `holding_buttons` | `list[str]` | 現在保持中のボタン一覧 |
@@ -2689,6 +2719,7 @@ pokecon.controller.reset()
 | 変数 | 説明 | デフォルト |
 |----------|-------------|---------|
 | `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `0` |
+| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照） | `"ask"` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
 
@@ -2803,6 +2834,133 @@ Lua LSP設定は `.luarc.json` で管理する。
 - **型定義ライブラリ**: `~/.local/share/pokecon/lua-typings` をワークスペースライブラリに追加
 
 **詳細な設定例**: リポジトリ内の `.luarc.json` または開発者ドキュメントを参照。
+
+---
+
+## 15. デスクトップライフサイクル・閉じる動作
+
+本章は、デスクトップモード（Tauri + axum）におけるアプリケーションのライフサイクル、特に最後のTauriウィンドウを閉じる際の動作について規定する。WebモードではTauriウィンドウが存在しないため、本章の閉じる動作設定（`close_behavior`）は効果を持たない。ただし、OSシャットダウン・SIGTERM/Ctrl+C・致命エラーによるシャットダウンはWebモードでも同様に行われる。
+
+### 15.1 プロセスモデル
+
+プロセス構成は§1.3を参照。本章ではデスクトップモードの閉じる動作と終了ライフサイクルを規定する。
+
+### 15.2 `close_behavior` 設定
+
+デスクトップモードにおいて、ユーザーが最後のTauriウィンドウを閉じようとした際の動作を `close_behavior` で設定する。
+
+| 設定値 | 動作 |
+|--------|------|
+| `"ask"`（デフォルト） | 確認ダイアログを表示し、ユーザーに三つの選択肢を提示する |
+| `"shutdown"` | 確認なしで完全グレースフルシャットダウンを実行する |
+| `"keep_backend"` | 確認なしでTauriウィンドウのみを閉じ、バックエンドを継続する |
+
+**設定経路**:
+
+1. **TOML**: `settings.toml` の `[ui.desktop]` セクション
+   ```toml
+   [ui.desktop]
+   close_behavior = "ask"
+   ```
+
+2. **Python動的設定**:
+   ```python
+   pokecon.opt.ui.desktop.close_behavior = "ask"
+   ```
+
+3. **Lua動的設定**:
+   ```lua
+   pokecon.opt.ui.desktop.close_behavior = "ask"
+   ```
+
+4. **環境変数**:
+
+   ```text
+   POKECON_UI_DESKTOP_CLOSE_BEHAVIOR="ask"
+   ```
+
+5. **CLI引数**:
+
+   ```text
+   --ui-desktop-close-behavior ask
+   ```
+
+型: 文字列リテラル（Python: `Literal["ask", "shutdown", "keep_backend"]`、Lua: 同一文字列値）。
+
+デフォルト: `"ask"`。
+
+### 15.3 閉じる動作の詳細
+
+最後のTauriウィンドウを閉じる操作は、以下の動作に従う。二つ以上のTauriウィンドウが開いている状態で一つを閉じる操作は、単にそのウィンドウを閉じるだけで、閉じる動作の対象外である。
+
+#### 15.3.1 `"ask"` — 確認ダイアログ
+
+確認ダイアログは次の三つのアクションを提示する:
+
+| アクション | 説明 |
+|-----------|------|
+| **バックエンドを継続** | Tauriウィンドウのみを閉じる。axum、カメラ、シリアル、ワーカー、アクティブなコマンドは継続して動作する（§15.4参照） |
+| **すべて終了** | 完全グレースフルシャットダウンを実行する（§15.6参照） |
+| **キャンセル** | ウィンドウを閉じない。アプリケーションは通常状態を維持する |
+
+- この確認ダイアログは設定値を変更/永続化しない。
+- 「次回から表示しない」などのチェックボックスは設けない。
+
+#### 15.3.2 `"shutdown"` — 完全シャットダウン
+
+ユーザーが最後のTauriウィンドウを閉じると、確認なしで§15.6の完全グレースフルシャットダウンを実行する。
+
+#### 15.3.3 `"keep_backend"` — バックエンド継続
+
+ユーザーが最後のTauriウィンドウを閉じると、確認なしでTauriウィンドウのみを閉じる。バックエンド（axum、カメラ、シリアル、ワーカー、アクティブなコマンド）は継続して動作する（§15.4参照）。
+
+### 15.4 バックエンド継続モードの動作
+
+バックエンドが継続されている状態では、以下の機能が提供される。
+
+#### 15.4.1 システムトレイ
+
+バックエンド継続中はOSのシステムトレイにアイコンが表示され、次のメニュー項目を提供する:
+
+| メニュー | 動作 |
+|---------|------|
+| **開く** | Tauriウィンドウを再作成してフォーカスする。既にウィンドウが存在する場合はフォーカスを移動する |
+| **終了** | §15.6の完全グレースフルシャットダウンを実行する |
+
+#### 15.4.2 既存インスタンス検出
+
+バックエンド継続中にデスクトップアプリケーションを再起動しようとした場合、既存のバックエンドインスタンスを検出し、以下の動作を行う:
+
+1. 第二のバックエンドプロセスを起動しない
+2. 既存のバックエンドプロセスにTauriウィンドウの再作成/フォーカスを要求する
+
+### 15.5 確認ダイアログをバイパスするケース
+
+以下のケースでは、`close_behavior` の値にかかわらず、確認ダイアログを表示せずに完全グレースフルシャットダウンを実行する:
+
+- システムトレイの「終了」メニューによる終了
+- SIGTERMまたはCtrl+Cの受信
+- OSのログアウト/シャットダウン
+- アプリケーション内の致命エラー
+
+確認ダイアログを表示できない状態（例: 既にTauriウィンドウが閉じられている、ダイアログ表示に失敗した）の場合も、フェイルセーフとして完全グレースフルシャットダウンを実行する。
+
+### 15.6 完全グレースフルシャットダウンの手順
+
+完全グレースフルシャットダウンは以下の順序で実行される。各ステップで失敗を診断ログへ記録し、実行可能な後続ステップを継続する。個別リソースの停止失敗によって終了処理全体を無期限に停止してはならない:
+
+1. **コントローラー安全状態の強制**: 全ボタン・スティック・タッチ入力を即時に強制解放（ニュートラル/リリース安全状態）
+2. **ユーザースクリプトワーカーの協調停止**: 既存の協調停止＋タイムアウト/強制終了ポリシー（`pokecon.opt.python.script.shutdown_timeout_ms`）に従ってユーザースクリプトワーカーを停止する（§11.5.6.4.3、§1.2のポイント9参照）
+3. **動的設定ワーカーの停止**: グローバル動的ワーカーを停止する（`dynamic_config_language="none"`の場合は該当せず）
+4. **リソース解放**: カメラ、共有メモリ、シリアルリソースを順次解放する
+5. **axumのグレースフルシャットダウン**: HTTPサーバーをグレースフルに停止する
+6. **プロセス終了**: Rustメインプロセスを終了する
+
+このシャットダウン手順はプロファイル切替時のワーカー停止（§11.5.6.4.3参照）と同じ文言・ポリシーを使用する。新たなタイムアウト値は導入しない。
+
+### 15.7 Webモードにおける動作
+
+WebモードではTauriウィンドウが存在しないため、`close_behavior` の設定は効果を持たない。SIGTERM/Ctrl+C/OSシャットダウンによる終了は§15.5および§15.6に従い、完全グレースフルシャットダウンを実行する。
 
 ---
 

@@ -84,7 +84,7 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 - **nix環境**: nix storeのPythonパスをビルド時に決定し、ワーカープロセス実行に使用する。再現性が保証される。ユーザースクリプトワーカーと動的設定ワーカーで同一のランタイムバイナリを使用できるが、venvは分離される。
 - **非nix環境**: python-build-standaloneが配布するPythonを自動ダウンロードし、ワーカープロセス実行に使用する。これにより、実行環境にシステムPythonがインストールされていなくても動作する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用する。
 - **venv**: いずれの環境でも、ワーカーごとにvenvを作成して使用する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用可能。ユーザースクリプトのvenvはプロファイルごとに異なるパスを設定可能であり、プロファイル切替時に対応するvenvを使用する新ユーザースクリプトワーカーが生成される。動的設定ワーカーはプロファイル切替の影響を受けず、アプリケーション全体で単一のワーカーが永続する（§11.5.6.4.3参照）。
-- **ユーザー指定**: `settings.toml`で`[python.script].venv`によりユーザースクリプトワーカーのvenvパスを指定可能。指定がない場合は`~/.local/share/pokecon/venv-script`（デフォルト）を使用する。`[python.script].packages`で追加インストールするパッケージを指定可能。
+- **ユーザー指定**: `settings.toml`で`[python.script].venv`によりユーザースクリプトワーカーのvenvパスを指定可能。指定がない場合はデータディレクトリ（§14.1.1参照）配下の`venv-script`（デフォルト）を使用する。Linuxで`XDG_DATA_HOME`が未設定の場合は`~/.local/share/pokecon/venv-script`に解決される。`[python.script].packages`で追加インストールするパッケージを指定可能。
 
 **開発ワークフロー**:
 - **nix-first**: 本プロジェクトはnix flakeを使用して開発する。すべての開発タスク（ビルド、テスト、型チェック、フォーマット）は`nix run .#<task>`または`nix develop`内で実行する
@@ -137,7 +137,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
-| **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュディレクトリの標準規格。`~/.config/`（XDG_CONFIG_HOME）、`~/.local/share/`（XDG_DATA_HOME）等 |
+| **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュ・状態ディレクトリの標準規格。`${XDG_CONFIG_HOME:-$HOME/.config}/pokecon`（設定）、`${XDG_DATA_HOME:-$HOME/.local/share}/pokecon`（データ）、`${XDG_CACHE_HOME:-$HOME/.cache}/pokecon`（キャッシュ）、`${XDG_STATE_HOME:-$HOME/.local/state}/pokecon`（状態）。Windowsでは各々 `%APPDATA%\PokeCon` / `%LOCALAPPDATA%\PokeCon\data` / `%LOCALAPPDATA%\PokeCon\cache` / `%LOCALAPPDATA%\PokeCon\state` にマッピングされる（§14.1.1参照） |
 | **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用。型: `int` |
 | **フォールバック** | プライマリ方式が利用できない場合に使用される代替方式。例: WebRTC不可時のWebSocketフォールバック |
 | **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
@@ -1578,7 +1578,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.2 設定ファイル
 
-> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、TOML形式の`settings.toml`に置き換えられます。設定ファイルの形式はTOML、保存場所は`~/.config/pokecon/settings.toml`（グローバル）および`~/.config/pokecon/profiles/<name>/settings.toml`（プロファイル）です。
+> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、TOML形式の`settings.toml`に置き換えられます。設定ファイルの形式はTOML、保存場所は設定ディレクトリ（§14.1.1参照）直下の`settings.toml`（グローバル）および`profiles/<name>/settings.toml`（プロファイル）です。
 
 ### 11.3 優先順位と起動時設定評価順序
 
@@ -1587,8 +1587,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **起動パイプライン（適用順）**:
 
 1. **組み込みデフォルト値**（アプリケーション内蔵） — 最下位・最初に適用
-2. **グローバル設定**（`~/.config/pokecon/settings.toml`）
-3. **プロファイル設定**（`~/.config/pokecon/profiles/<name>/settings.toml`）
+2. **グローバル設定**（`settings.toml`、設定ディレクトリ（§14.1.1参照）直下）
+3. **プロファイル設定**（`profiles/<name>/settings.toml`、設定ディレクトリ（§14.1.1参照）配下）
 4. **環境変数**（`POKECON_*` 環境変数） — 動的設定より低いが静的TOMLより高い
 5. **動的設定の即時評価**（`init.py`/`init.lua`のトップレベルコード） — 非遅延トップレベル代入に限る
 6. **通常CLI引数**（一般設定オプション） — 最優先・最後に適用
@@ -1733,7 +1733,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 
 ```toml
-# ~/.config/pokecon/settings.toml
+# 設定ディレクトリ（§14.1.1参照）の settings.toml
 # 注: 以下は主要な設定項目の例示です。網羅的な一覧ではありません。
 # 未記載の項目も settings.toml で設定可能です（§11.3の優先順位に従う）。
 
@@ -1763,8 +1763,8 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 # ---- 明示的に指定する場合（推奨） ----
 [python.script]
-# ユーザースクリプトワーカー用venv
-# venv = "~/.local/share/pokecon/venv-script"  # 例: 仮想環境パス
+# ユーザースクリプトワーカー用venv（未指定時はデータディレクトリ配下 venv-script/）
+# Linux例: venv = "~/.local/share/pokecon/venv-script"
 # シャットダウンタイムアウト（ミリ秒）。プロファイル切替時のユーザースクリプトワーカー正常終了待機時間
 # デフォルト: 2000（2秒）。0 = 協調停止要求後即時強制終了
 # shutdown_timeout_ms = 2000
@@ -1779,7 +1779,7 @@ reconnect_max_retries = 20  # リトライ回数上限
 [python.dynamic]
 # 動的設定ワーカー用Python実行環境（グローバル専用: プロファイルTOMLでは設定不可）
 # interpreter = "/usr/bin/python3.12"  # 動的ワーカーは起動前にバイナリ選択が必要
-# venv = "~/.local/share/pokecon/venv-dynamic"
+# Linux例: venv = "~/.local/share/pokecon/venv-dynamic"
 
 [python.dynamic.packages]
 # 動的設定ワーカーvenvへの追加インストールパッケージ（グローバル専用）
@@ -1865,14 +1865,16 @@ ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 **注**: 両方のランタイムを使用する場合でも、単一の動的設定ワーカープロセス内で動作する。プライマリ言語（`dynamic_config_language`に指定された方）のランタイムがワーカー起動時に初期化され、`pokecon.source()`による他言語ファイルの読み込み時に他方のランタイムがオンデマンドで初期化される。Python/Lua両方のランタイムが同一ワーカー内に同居することで、非対称なプロセス境界を回避し、イベント管理・リロード・Rustメインプロセスからの分離を一元化する。
 
 ```python
-# init.py で init.lua を読み込む例
+# init.py で init.lua を読み込む例（Linuxのデフォルト設定ディレクトリ）
 pokecon.source("~/.config/pokecon/init.lua")
 ```
 
 ```lua
--- init.lua で init.py を読み込む例
+-- init.lua で init.py を読み込む例（Linuxのデフォルト設定ディレクトリ）
 pokecon.source("~/.config/pokecon/init.py")
 ```
+
+Windowsでは§14.1.1の設定ディレクトリへ解決した絶対パスを指定する。
 
 #### 11.5.3 共通特徴
 
@@ -1886,7 +1888,7 @@ pokecon.source("~/.config/pokecon/init.py")
 #### 11.5.4 Python
 
 ```python
-# ~/.config/pokecon/init.py
+# 設定ディレクトリの init.py
 import pokecon
 
 # 言語設定（フラット: 意味的に独立した単体設定）
@@ -1930,6 +1932,7 @@ pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"�
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
 # Pythonユーザースクリプト実行環境設定
+# venvパス: 未指定時はデータディレクトリ配下 venv-script/（Linux例: ~/.local/share/pokecon/venv-script）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.shutdown_timeout_ms = 2000  # プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
 pokecon.opt.python.script.packages.mode = "append"
@@ -1962,7 +1965,7 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 #### 11.5.5 Lua
 
 ```lua
--- ~/.config/pokecon/init.lua
+-- 設定ディレクトリの init.lua
 -- require不要で pokecon.* に直接アクセス
 
 -- 設定（Pythonと同じ要素名・同じAPI構造。フラット＋階層も同一）
@@ -1977,6 +1980,7 @@ pokecon.opt.ui.dialog_button_position = "bottom"
 pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_backend"
 
 -- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
+-- venvパス: 未指定時はデータディレクトリ配下 venv-script/（Linux例: ~/.local/share/pokecon/venv-script）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.shutdown_timeout_ms = 2000  -- プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
 pokecon.opt.python.script.packages.mode = "append"
@@ -2324,19 +2328,20 @@ Postイベントおよびキャンセル不可イベントでコールバック�
 # Python設定
 import pokecon
 
-# 絶対パス
-pokecon.source("/home/user/.config/pokecon/extra_settings.py")  # -> None
+# 絶対パス（Linux例）
+# pokecon.source("/home/user/.config/pokecon/extra_settings.py")
 
-# 相対パス（設定ディレクトリ基準）
+# 相対パス
 pokecon.source("./extra_settings.py")  # -> None
 
-# チルダ展開
-pokecon.source("~/.config/pokecon/extra_settings.py")  # -> None
+# チルダ展開（Linux例）
+# pokecon.source("~/.config/pokecon/extra_settings.py")  # -> None
 ```
 
 ```lua
 -- Lua設定（Pythonと同じAPI構造）
-pokecon.source("~/.config/pokecon/extra_settings.lua")
+pokecon.source("./extra_settings.lua")
+-- Linuxのデフォルト設定ディレクトリ例: pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
 
 ###### 11.5.6.2.3 エラーハンドリング
@@ -2441,7 +2446,7 @@ print(pokecon.state.pending_profile)
 - **`pokecon.opt.active_profile` との関係**: `pokecon.opt.active_profile` のsetterは、内部的に `pokecon.profile.switch(name)` と同じプロファイル切替処理を呼び出す。成功/失敗を戻り値で扱いたい場合は `profile.switch()` を使用する。`pokecon.opt.active_profile` への代入は戻り値を返せないため、Preイベントでキャンセルされた場合（`ProfileSwitchPre`が`False`を返した場合）は現在値を変更せず、代わりにERROR診断を出力する
 - **切替イベント**: `ProfileSwitchPre`（キャンセル可能）、`ProfileSwitchPost`の2フェーズを持つ。Preは動的設定ワーカーで発火し、厳密な`False`でキャンセル可能。PostはPreがキャンセルされず、かつ既存ユーザーワーカーが停止・新設定が適用された後に発火する（§11.5.6.4.3参照）
 - **保留中プロファイル**: 切替処理中は`pokecon.state.pending_profile`にターゲットプロファイル名が設定される。読み取り専用で、切替完了またはキャンセル時に`None`に戻る
-- **作成・削除**: プロファイルの作成・削除はAPIでは行わない。`~/.config/pokecon/profiles/<name>/` ディレクトリを手動で作成・削除する
+- **作成・削除**: プロファイルの作成・削除はAPIでは行わない。設定ディレクトリ（§14.1.1参照）配下の `profiles/<name>/` ディレクトリを手動で作成・削除する
 
 ###### 11.5.6.4.2 API仕様
 
@@ -2545,7 +2550,7 @@ pokecon.autocmd.on("ProfileSwitchPost", {
 
 7. **シャットダウン待機**: 切替元プロファイルの`python.script.shutdown_timeout_ms`で指定されたミリ秒間、ワーカーの正常終了を待機する。デフォルト: `2000`（2秒）。タイムアウトが経過した場合、またはIPCが切断/応答不能の場合は、ユーザースクリプトワーカープロセスを強制終了する。Pythonのfinally/atexitはこのパスでは保証されない。強制終了した場合はエラー診断を出力するが、プロファイル切替は継続する
 
-8. **設定アトミック適用（旧ワーカー停止後）**: 旧ユーザーワーカーが完全に終了/強制終了した後にのみ、ターゲットプロファイルの設定（`~/.config/pokecon/profiles/<name>/settings.toml`）をアトミックにコミット・適用する。これにより、アクティブプロファイル/`current()`がターゲットを指すようになる。設定適用は旧ワーカー停止後であるため、新設定が旧ワーカーに影響を与えることはない
+8. **設定アトミック適用（旧ワーカー停止後）**: 旧ユーザーワーカーが完全に終了/強制終了した後にのみ、ターゲットプロファイルの設定（設定ディレクトリ配下 `profiles/<name>/settings.toml`）をアトミックにコミット・適用する。これにより、アクティブプロファイル/`current()`がターゲットを指すようになる。設定適用は旧ワーカー停止後であるため、新設定が旧ワーカーに影響を与えることはない
 
 9. **新ユーザーワーカー非生成**: 新しいユーザースクリプトワーカーは生成せず、初回のユーザースクリプト実行要求時まで遅延生成する（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする
 
@@ -2742,11 +2747,34 @@ UIの一時状態をブラウザメモリに保持することは実装詳細と
 
 ### 14.1 ディレクトリ構造
 
+#### 14.1.1 プラットフォーム間ベースディレクトリマッピング
+
+アプリケーションが使用するディレクトリは、用途に応じて以下の4種類に分類される。LinuxではXDG Base Directory仕様に従い、Windowsでは対応するKnown Folderを使用する。プラットフォーム間で動作の違いはなく、解決されるパスが異なるのみである。
+
+| 分類 | 内容 | Linux（環境変数フォールバック） | Windows（Known Folderの環境変数表記） |
+|------|------|--------------------------------|------------------------|
+| **Config（設定）** | ユーザーが編集する設定ファイル | `${XDG_CONFIG_HOME:-$HOME/.config}/pokecon` | `%APPDATA%\PokeCon` |
+| **Data（データ）** | アプリが自動生成するデータファイル | `${XDG_DATA_HOME:-$HOME/.local/share}/pokecon` | `%LOCALAPPDATA%\PokeCon\data` |
+| **Cache（キャッシュ）** | 再生成可能なダウンロード・パッケージ・ビルドキャッシュ | `${XDG_CACHE_HOME:-$HOME/.cache}/pokecon` | `%LOCALAPPDATA%\PokeCon\cache` |
+| **State（状態）** | ログ・診断・永続的セッション状態 | `${XDG_STATE_HOME:-$HOME/.local/state}/pokecon` | `%LOCALAPPDATA%\PokeCon\state` |
+
+Linuxでは、各XDG環境変数が未設定、空文字列、または絶対パスではない場合、その変数を未指定として扱い、表中の`$HOME`配下のデフォルトへフォールバックする。表の`${VAR:-default}`はこの解決規則を示す表記であり、シェルによる展開を実装要件とするものではない。
+
+Windowsの`%APPDATA%`と`%LOCALAPPDATA%`は、それぞれRoaming AppDataとLocal AppDataの解決済みKnown Folderを示す表記である。Python/Luaコード内や設定値で文字列をシェル展開することを意味しない。
+
+**分類ルール**:
+- **Config**: `settings.toml`, `profiles/<name>/settings.toml`, `init.py`, `init.lua`, ユーザー編集可能な `pyproject.toml`, `.luarc.json`, オプションの `.vscode/settings.json`。
+- **Data**: 自動生成されるPython/Lua型定義（`typings/`, `lua-typings/`）、アプリ管理のCPythonランタイム、生成されたワーカーvenv（`venv-script/`, `venv-dynamic/`）。
+- **Cache**: 再生成可能なダウンロード・パッケージ・ビルドキャッシュ。認証付きの設定や生成済み型定義はここに置かない。
+- **State**: ログおよび永続的診断・セッション状態。本仕様で別途必要なファイルが指定されていない限り、新たな状態ファイルを発明しない。
+
+以下のディレクトリツリーは、Linuxのデフォルト解決例を示す。Windowsの場合は上記マッピングに従い、`%APPDATA%\PokeCon`（Config）および `%LOCALAPPDATA%\PokeCon\data`（Data）等に読み替える。
+
 ```
-~/.config/pokecon/                    # XDG_CONFIG_HOME（ユーザーが編集する）
-├── pyproject.toml                    # Python LSP設定
-├── .luarc.json                       # Lua LSP設定（lua-language-server & EmmyLua共用）
-├── .vscode/settings.json             # Pylance用（オプション）
+~/.config/pokecon/                    # XDG_CONFIG_HOME（Linux） / %APPDATA%\PokeCon（Windows）
+├── pyproject.toml                    # Python LSP設定（ユーザー編集可）
+├── .luarc.json                       # Lua LSP設定（lua-language-server & EmmyLua共用、ユーザー編集可）
+├── .vscode/settings.json             # Pylance用（オプション、ユーザー編集可）
 ├── settings.toml                     # ユーザー設定（グローバル）
 ├── profiles/                         # プロファイル設定
 │   ├── default/
@@ -2755,11 +2783,14 @@ UIの一時状態をブラウザメモリに保持することは実装詳細と
 │       └── settings.toml
 ├── init.py                           # Python動的設定テンプレート
 └── init.lua                          # Lua動的設定テンプレート
-~/.local/share/pokecon/               # XDG_DATA_HOME（自動管理）
+~/.local/share/pokecon/               # XDG_DATA_HOME（Linux） / %LOCALAPPDATA%\PokeCon\data（Windows）— 自動管理
 ├── typings/                          # Python型定義（.pyi、Rust側で自動生成）
 ├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）
-├── venv/                             # Python仮想環境
+├── venv-script/                      # ユーザースクリプトワーカー用仮想環境
+├── venv-dynamic/                     # 動的設定ワーカー用仮想環境
 └── python/                           # python-build-standalone（非nix環境）
+~/.cache/pokecon/                     # XDG_CACHE_HOME（Linux） / %LOCALAPPDATA%\PokeCon\cache（Windows）— 再生成可能
+~/.local/state/pokecon/               # XDG_STATE_HOME（Linux） / %LOCALAPPDATA%\PokeCon\state（Windows）— ログ等
 
 # 開発用（リポジトリ内）
 python/pokecon/typings/               # 型定義の元データ（開発・メンテナンス用）
@@ -2770,12 +2801,12 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 ```
 
 **注**:
-- **実行時生成**: `~/.local/share/pokecon/typings/` 配下の `.pyi` はアプリ起動時にRust側で自動生成
+- **実行時生成**: データディレクトリ配下の `typings/` の `.pyi` はアプリ起動時にRust側で自動生成
 - **開発用元データ**: `python/pokecon/typings/` 配下の `.pyi` はリポジトリに含め、開発・メンテナンス用として使用
-- **ユーザーが直接触らない**: XDG_DATA_HOME 配下は自動管理。ユーザーが編集するのは XDG_CONFIG_HOME 配下のみ
+- **ユーザーが直接触らない**: データディレクトリ（自動管理）配下はユーザーが編集しない。ユーザーが編集するのは設定ディレクトリ配下のみ
 
 **確定事項**:
-- 型定義ファイルの配布方式は **XDG_DATA_HOMEへの自動生成** で確定
+- 型定義ファイルの配布方式は **データディレクトリへの自動生成** で確定
 - 開発用元データはリポジトリ内の `python/pokecon/typings/` に配置
 
 ### 14.2 設定ファイル生成タイミング
@@ -2800,7 +2831,9 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 非nix環境では、`PythonManager` がワーカープロセス用のPythonランタイムのセットアップを管理する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを作成する。
 
 **実装概要**:
-- `~/.local/share/pokecon/` 配下にPythonをセットアップ
+- データディレクトリ（§14.1.1参照）配下にPythonをセットアップ
+- Linuxで`XDG_DATA_HOME`未設定時の例: `~/.local/share/pokecon/` 配下
+- Windows例: `%LOCALAPPDATA%\PokeCon\data\` 配下
 - 期待するバージョンがない場合はデフォルトを使用
 - 既存のPythonが期待するバージョンかチェック
 - ない場合はpython-build-standaloneをダウンロード
@@ -2820,8 +2853,8 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 
 LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。以下の項目を設定する必要がある:
 
-- **型スタブパス**: `~/.local/share/pokecon/typings` を各LSPの検索パスに追加
-- **仮想環境**: `~/.local/share/pokecon/venv` をPython環境として指定
+- **型スタブパス**: データディレクトリ配下の `typings`（Linux例: `~/.local/share/pokecon/typings`）を各LSPの検索パスに追加
+- **仮想環境**: データディレクトリ配下の `venv-script`（Linux例: `~/.local/share/pokecon/venv-script`）をPython環境として指定
 
 対応LSP: basedpyright, pyright, mypy, pylsp, pyrefly, ty, ruff
 
@@ -2831,7 +2864,7 @@ LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。�
 
 Lua LSP設定は `.luarc.json` で管理する。
 
-- **型定義ライブラリ**: `~/.local/share/pokecon/lua-typings` をワークスペースライブラリに追加
+- **型定義ライブラリ**: データディレクトリ配下の `lua-typings`（Linux例: `~/.local/share/pokecon/lua-typings`）をワークスペースライブラリに追加
 
 **詳細な設定例**: リポジトリ内の `.luarc.json` または開発者ドキュメントを参照。
 

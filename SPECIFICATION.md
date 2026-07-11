@@ -70,13 +70,13 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 6. 両ワーカーからユーザー向けAPIへのアクセスは、ワーカープロセスがRust管理の内部IPC/API境界（§7.8参照）を経由する。この内部形式は実装詳細であり、公開API（`Commands.*`、`pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
 7. PythonとLuaの動的設定APIは公開APIレベルで同一の動作を提供する。両ランタイムは同一ワーカーから同一のIPC境界を通じてRustメインプロセスと通信する。PythonとLuaのランタイムネイティブオブジェクトはランタイム間またはプロセス境界を越えて直接共有されない。共有される設定値・状態・イベントはRust管理のAPI表現を通じてやり取りされる。
 8. 動的設定ワーカーはアプリケーション生存期間中、ただ一つのワーカープロセスが存在する（`dynamic_config_language="none"`の場合、またはアプリケーション終了時を除く；グローバル動的ブートストラップ再構成が必要な場合は、プロファイル切替とは無関係に管理された置換が可能だが、それは本仕様のプロファイル切替の対象外である）。動的ワーカーとそのCPython/LuaJITランタイム状態はプロファイル切替を越えて永続し、再生成・再初期化されない。グローバルな`init.py`/`init.lua`はアプリケーション起動時に一度だけ評価され、アクティブプロファイルの変更によって再評価されることはない。動的設定のコールバック（イベントハンドラ）もプロファイル切替時にクリア・再登録されず、永続する動的ワーカーはプロファイル切替イベントを受信し、`pokecon.profile.current()`や`pokecon.state`を介して適応する。
-9. プロファイル切替が影響するのはユーザースクリプトワーカーのみである。プロファイル切替時は既存のユーザースクリプトワーカーを終了し、ボタン強制解放（§11.5.6.4.3参照）を行った後、新しいユーザースクリプトワーカーは最初のコマンド実行要求時まで遅延生成される（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする。永続する動的設定はプロファイル切替イベントに応答して、新しいユーザースクリプトワーカー生成前に`pokecon.opt.python.script.*`を設定することができる。
+9. プロファイル切替が影響するのはユーザースクリプトワーカーのみである。プロファイル切替時は既存のユーザースクリプトワーカーに協調停止要求を送信した後、直ちに（Pythonの応答を待たずに）Rustメインが全ボタン・スティック・タッチ状態を強制解放し（§11.5.6.4.3参照）、次いでワーカーの正常終了を`shutdown_timeout_ms`まで待機する。タイムアウト時はユーザースクリプトワーカープロセスを強制終了する。新しいユーザースクリプトワーカーは最初のコマンド実行要求時まで遅延生成される（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする。永続する動的設定はプロファイル切替イベントに応答して、新しいユーザースクリプトワーカー生成前に`pokecon.opt.python.script.*`を設定することができる。
 
 **言語仕様**:
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供する。ユーザースクリプトの実行と互換性ロジックはワーカー内のバインディング/プロキシで処理され、カメラキャプチャ、シリアル通信、イベントバス等のコア処理はRustメインプロセスが担当する。画像配列の処理（テンプレートマッチング、トリミング、変換等）はユーザースクリプトワーカー内で実行され、ワーカーはIPC経由でカメラキャプチャ・シリアル通信等のコア処理を呼び出す。プロセス監視、シャットダウンタイムアウト等の内部境界の詳細は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
+**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供する。ユーザースクリプトの実行と互換性ロジックはワーカー内のバインディング/プロキシで処理され、カメラキャプチャ、シリアル通信、イベントバス等のコア処理はRustメインプロセスが担当する。画像配列の処理（テンプレートマッチング、トリミング、変換等）はユーザースクリプトワーカー内で実行され、ワーカーはIPC経由でカメラキャプチャ・シリアル通信等のコア処理を呼び出す。シャットダウンタイムアウトは`python.script.shutdown_timeout_ms`として公開設定化された（§11.4.2参照）。プロセス監視等のその他の内部境界の詳細は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
 
 **Pythonランタイム設定**: ユーザースクリプトのPythonパッケージ環境は、設定されたvenvパスによって決定される。ユーザーが`settings.toml`で`[python.script].venv`を指定できる。指定がない場合はデフォルトの3.14ランタイムでワーカー用venvを作成する。ユーザースクリプトのインタープリターはアプリ管理のCPython 3.14に固定され、venvはそのランタイムとABI互換性のあるsite-packages（パッケージ環境）を提供する。インタープリター実行ファイルパスはユーザー設定の対象外である。
 
@@ -1641,7 +1641,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
-  Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
+  Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
   動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境はグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。
 
 **制約**:
@@ -1696,6 +1696,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
 | `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
+| `[python.script]` | `script_shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
 | `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
 | `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
@@ -1744,6 +1745,9 @@ reconnect_max_retries = 20  # リトライ回数上限
 [python.script]
 # ユーザースクリプトワーカー用venv
 # venv = "~/.local/share/pokecon/venv-script"  # 例: 仮想環境パス
+# シャットダウンタイムアウト（ミリ秒）。プロファイル切替時のユーザースクリプトワーカー正常終了待機時間
+# デフォルト: 2000（2秒）。0 = 協調停止要求後即時強制終了
+# shutdown_timeout_ms = 2000
 
 [python.script.packages]
 # ユーザースクリプトワーカーvenvへの追加インストールパッケージ
@@ -1900,6 +1904,7 @@ pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
 # Pythonユーザースクリプト実行環境設定
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
+pokecon.opt.python.script.shutdown_timeout_ms = 2000  # プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
 pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = [
     {"name": "requests", "version": ">=2.28.0"},
@@ -1943,6 +1948,7 @@ pokecon.opt.ui.dialog_button_position = "bottom"
 
 -- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
+pokecon.opt.python.script.shutdown_timeout_ms = 2000  -- プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
 pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = {
     {name = "requests", version = ">=2.28.0"},
@@ -2438,8 +2444,11 @@ pokecon.profile.switch("custom")
 ###### 11.5.6.4.3 プロファイル切替時の動作
 
 - 新しいプロファイルの設定（`~/.config/pokecon/profiles/<name>/settings.toml`）を読み込み適用する（注: 動的設定ワーカーのブートストラップ設定はグローバル専用でありプロファイルTOMLではオーバーライド不可。§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）
-- 現在保持中のすべてのボタンを強制解放する（holdEndSkip中のボタンを含む）
-- 既存のユーザースクリプトワーカーを終了/停止する（アクティブコマンドの停止順序・タイムアウトの詳細は別途設計）
+- プロファイル切替の期間中、新規のユーザーコマンド開始を防止する
+- 現在アクティブなユーザーコマンド/ワーカーに対し、§7.8の制御IPCを通じて協調停止要求を送信する（既存の`alive`/StopThread/checkIfAliveによる停止セマンティクスを使用）。動的ワーカーはこの影響を受けず永続する
+- Pythonの応答を待たずに、直ちにRustメインが現在保持中のすべてのボタンを強制解放する（holdEndSkip中のボタンを含む）。スティックを中央に戻し、タッチ状態を解放する。この安全状態の解放はRust所有であり、Pythonの協調に依存しない
+- アクティブプロファイル（切替元）の`python.script.shutdown_timeout_ms`で指定されたミリ秒間、ワーカーの正常終了を待機する。デフォルト: `2000`（2秒）
+- タイムアウトが経過した場合、またはIPCが切断/応答不能の場合は、ユーザースクリプトワーカープロセスを強制終了する。Pythonのfinally/atexitはこのパスでは保証されない。強制終了した場合はエラー診断を出力するが、プロファイル切替は継続する
 - 新しいユーザースクリプトワーカーは生成せず、初回のユーザースクリプト実行要求時まで遅延生成する（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする
 - 動的設定ワーカーのコールバック/イベントハンドラはクリア・再登録されず、プロファイル切替を越えて永続する。永続する動的ワーカーはプロファイル切替イベントを受信し、`pokecon.profile.current()`や`pokecon.state`を介して適応する（§1.2ポイント8参照）
 

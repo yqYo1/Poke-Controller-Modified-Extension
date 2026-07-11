@@ -47,7 +47,7 @@
 
 | レイヤー | 言語 | 役割 | 例 |
 |---------|------|------|-----|
-| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
+| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、カメラキャプチャ、UI連携 |
 | ユーザースクリプトワーカー | Rustプロセス管理 + CPython | ユーザースクリプトの実行（別プロセス、プロファイル別venv） | `Commands.PythonCommandBase`, `Commands.Keys`（内部IPCプロキシ経由） |
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | 動的設定ワーカー | Rustプロセス管理 + CPython + LuaJIT | 動的設定（`init.py`/`init.lua`）の実行（別プロセス） | 動的Python → CPython 3.14、動的Lua → LuaJIT 2.1、`pokecon.autocmd` |
@@ -74,7 +74,7 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供する。ユーザースクリプトの実行と互換性ロジックはワーカー内のバインディング/プロキシで処理され、コア処理（シリアル通信、画像処理、イベントバス等）はRustメインプロセスが担当し、ワーカーはIPC経由でコア処理を呼び出す。プロセス監視、シャットダウンタイムアウト等の内部境界の詳細は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
+**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供する。ユーザースクリプトの実行と互換性ロジックはワーカー内のバインディング/プロキシで処理され、カメラキャプチャ、シリアル通信、イベントバス等のコア処理はRustメインプロセスが担当する。画像配列の処理（テンプレートマッチング、トリミング、変換等）はユーザースクリプトワーカー内で実行され、ワーカーはIPC経由でカメラキャプチャ・シリアル通信等のコア処理を呼び出す。プロセス監視、シャットダウンタイムアウト等の内部境界の詳細は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
 
 **Pythonランタイム設定**: ユーザースクリプトのPythonパッケージ環境は、設定されたvenvパスによって決定される。ユーザーが`settings.toml`で`[python.script].venv`を指定できる。指定がない場合はデフォルトの3.14ランタイムでワーカー用venvを作成する。ユーザースクリプトのインタープリターはアプリ管理のCPython 3.14に固定され、venvはそのランタイムとABI互換性のあるsite-packages（パッケージ環境）を提供する。インタープリター実行ファイルパスはユーザー設定の対象外である。
 
@@ -864,24 +864,24 @@ stderrはプロトコル外のout-of-band診断チャネルとして機能し、
 
 #### 7.8.6 設計上の制約
 
-- 本プロトコルは制御プレーンのみを対象とする。カメラフレーム、NumPy配列、スクリーンショット等の大容量メディアデータを本プロトコルで送信することを要件としない。小規模なスカラー値・文字列・バイト列・APIペイロードは許容する。
-- 大容量データ共有機構は本プロトコルの対象外であり、§7.9で定義される共有メモリリース機構を使用する。
+- 本プロトコルは制御プレーンのみを対象とする。ライブカメラフレーム等の大容量メディアデータを本プロトコルで送信することを要件としない。小規模なスカラー値・文字列・バイト列・APIペイロードは許容する。
+- ライブカメラフレームの転送には§7.9で定義される永続共有メモリ出版機構を使用する。その他の大容量配列（テンプレート画像、ユーザー任意の配列等）はワーカー内でローカルに処理され、本プロトコルを経由しない。
 - 本IPCトランスポートおよびスキーマは内部実装詳細であり、公開API（`Commands.*`, `pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
 
-### 7.9 大容量配列の共有メモリリース
+### 7.9 ライブカメラフレームの永続共有メモリ出版
 
-本節は、カメラフレーム、MatLike/NumPy配列、スクリーンショット等の大容量バイナリ配列を、制御用MessagePack IPCを経由せずにワーカーがゼロコピーでアクセスするための機構を定義する。
+本節は、Rustメインプロセスからユーザースクリプトワーカーへのライブカメラフレーム転送に特化した機構を定義する。§7.8（制御IPC）ではカメラフレーム等の大容量データを転送せず、本節の永続共有メモリ領域を使用する。
 
 #### 7.9.1 設計目標
 
-- **低遅延**: 大容量配列の転送を1回のメモリコピー（Rustメインがライブソースからスナップショット領域へコピー）に制限し、ワーカー側での追加コピーを一切行わない。
-- **独立スナップショット**: カメラフレームはライブソースから独立したスナップショット領域へ1回コピーされる。ワーカーはこの独立領域へのゼロコピーndarrayビューを受け取る。元のライブソースが上書きされてもワーカーの参照は影響を受けない。
-- **安全な排他制御**: 世代IDにより解放済み領域の誤使用（ABA/stale descriptor）を検出する。ワーカーの予期せぬ切断・クラッシュ時には、Rustメインが当該ワーカーに割り当てた全リースを解放し世代を無効化する。
-- **明示的な解放不要のAPI**: ndarrayのベース/オーナーオブジェクトがリースを保持し、ndarrayおよびそこから派生した全ビューが到達不能になった時点でファイナライザが解放を通知する。既存スクリプトに明示的な解放APIの追加は不要。
+- **単一の責務**: 本機構はライブカメラフレームの出版のみを目的とする。テンプレート画像、ユーザー任意のNumPy配列、その他の大容量データは転送しない。これらはワーカー内でローカルに処理される。
+- **低遅延**: フレーム転送は1回のメモリコピー（Rustメインがキャプチャソースから共有メモリスロットへ書込み）と、ワーカー側でのプライベートndarrayへの1回のコピー（読み取り時）で構成される。
+- **安定フレーム**: ワーカーは常に完全な1フレームを参照する。途中状態のフレームを読むことはない。
+- **明示的な解放不要のAPI**: ndarrayの生存期間はワーカー内で完結する。フレームコピー後は直ちに共有スロットを解放する（解放はコピー完了時点で暗黙的に行われる）。既存スクリプトに明示的な解放APIの追加は不要。
 
 #### 7.9.2 アーキテクチャ
 
-Rustメインプロセス（以下、メイン）は、大容量配列を格納する名前付き共有メモリ領域の作成・許可・割り当て・再利用・ライフサイクルを管理する。
+Rustメインプロセスは、ライブカメラフレームを格納する名前付き永続共有メモリ領域を作成・管理する。この領域はワーカー生存期間中、継続的にマップされたままとなる。
 
 | プラットフォーム | 共有メモリ機構 |
 |----------------|----------------|
@@ -890,65 +890,53 @@ Rustメインプロセス（以下、メイン）は、大容量配列を格納�
 
 両プラットフォームで同一のプロトコルセマンティクスを提供する。OS実装名は公開ユーザーAPIとして露出しない。
 
-**制御フロー**:
+**フレーム出版フロー**:
 
-1. メインが大容量配列（例: カメラフレーム）を取得する。
-2. メインはその配列を共有メモリ上のリージョン/スロットへ**1回だけコピー**する。このスナップショット領域はライブソース（カメラデバイスバッファ等）から独立しており、以降のソース更新の影響を受けない。
-3. メインはワーカーに対し、§7.8制御IPC経由で以下の情報を含む**ディスクリプタ**を送信する:
-   - リース/リージョン識別子（**`lease_id: uint`**）
-   - 共有メモリ名/ハンドル識別子（**`shm_handle: str`**）
-   - オフセット（**`offset: uint`**）
-   - バイト長（**`byte_length: uint`**）
-   - データ型（**`dtype: str`**、例: `"uint8"`）
-   - 形状（**`shape: array<uint>`**）
-   - ストライド（**`strides: array<uint>`**）
-   - 世代番号（**`generation: uint`**）
-4. ワーカーはディスクリプタを受信し、共有メモリ領域を自プロセス空間にマップする。
-5. ワーカーはマップされたバイト列をラップする**mutable NumPy ndarrayビュー**をゼロコピーで構築する。このndarrayはライブソースではなく独立スナップショット領域を直接参照する。
-6. ndarrayのベース/オーナーオブジェクトがリースを保持し、ファイナライザが解放を担当する。
+1. Rustメインはカメラデバイスからフレームをキャプチャする。
+2. Rustメインはキャプチャしたフレームを共有メモリ上の使用可能スロットへ書き込む（1回のメモリコピー）。
+3. Rustメインは§7.8制御IPC経由で、以下の情報を含む**フレーム通知**をワーカーに送信する:
+   - フレーム識別子（`frame_id: uint`）— 単調増加、新フレームの識別用
+   - 共有メモリ名/ハンドル識別子（`shm_handle: str`）
+   - 使用スロット番号（`slot_index: uint`）
+   - オフセット（`offset: uint`）
+   - バイト長（`byte_length: uint`）
+   - データ型（`dtype: str`、例: `"uint8"`）
+   - 形状（`shape: array<uint>`）
+   - ストライド（`strides: array<uint>`）
+4. ワーカーは通知を受信すると、該当スロットのデータを自身のプライベートmutable NumPy ndarrayにコピーする。
+5. コピー完了後、ワーカーは即座にスロットのピンを解放する（ワーカーはコピーしたndarrayのみを保持し、共有メモリ領域のスロットは短時間のみピン留めされる）。
+6. 以降の画像処理操作（テンプレートマッチング、トリミング、変換等）はすべてワーカー内のプライベートndarray上で実行される。Rustメインとの追加のデータ転送は発生しない。
 
-#### 7.9.3 ディスクリプタ
+#### 7.9.3 フレーム通知
 
-ワーカーが制御IPC経由で受信するディスクリプタは、以下の厳密な型を持つ:
+ワーカーが制御IPC経由で受信するフレーム通知は、以下の厳密な型を持つ:
 
 ```python
 @dataclass
-class LeaseDescriptor:
-    lease_id: int           # メインが割り当てる一意のリース識別子
-    shm_handle: str         # 共有メモリ名前/ハンドル（プラットフォーム抽象化済み）
-    offset: int             # 共有メモリ領域内のオフセット（バイト単位）
-    byte_length: int        # 配列データのバイト長
-    dtype: str              # データ型記述子（例: "uint8"）
-    shape: list[int]        # 配列形状
-    strides: list[int]      # 配列ストライド（バイト単位）
-    generation: int         # 世代番号。インクリメントにより前世代のリースを無効化
+class FrameNotification:
+    frame_id: int             # 単調増加フレーム識別子
+    shm_handle: str           # 共有メモリ名/ハンドル（プラットフォーム抽象化済み）
+    slot_index: int           # 使用スロット番号
+    offset: int               # 共有メモリ領域内のオフセット（バイト単位）
+    byte_length: int          # フレームデータのバイト長
+    dtype: str                # データ型記述子（例: "uint8"）
+    shape: list[int]          # フレーム形状
+    strides: list[int]        # フレームストライド（バイト単位）
 ```
 
-#### 7.9.4 リースのライフサイクル
+#### 7.9.4 スロット同期とワーカーコピー
 
-- **割り当て**: メインがリージョン/スロットを選択し、世代番号を発行し、ワーカーにディスクリプタを送信する。
-- **保持**: ワーカー側のndarrayが生存している間、リースはアクティブである。ndarrayのPyObjectベース/オーナーがリースへの参照を保持する。
-- **解放**: ndarrayおよび全派生ビューが到達不能になった時点で、Python GCがファイナライザを呼び出し、制御IPC経由で解放通知をメインに送信する。既存スクリプトは明示的な解放APIを呼び出す必要はない。
-- **世代IDの更新**: メインはリース解放後、そのリージョン/スロットの世代番号をインクリメントする。これにより、解放済みディスクリプタを使用した後続のアクセスを検出可能とする。ワーカーは受信したディスクリプタの世代番号が期待値と一致することを確認する。不一致の場合はディスクリプタを無効として扱う。
-- **切断/クラッシュ処理**: ワーカーのIPCが切断された場合（EOF/broken pipe）またはワーカープロセスが異常終了した場合、メインは当該ワーカーに割り当てられていた全リースを強制解放し、該当リージョン/スロットの世代番号をインクリメントする。
-- **容量とバックプレッシャー**: 固定プールサイズ、オーバーフロー時のブロック/ドロップ動作、メモリ上限、割り当てフォールバック方式は、本リース機構の容量ポリシーとして後日別途設計する。
+- **スロット数**: 1つ以上の再利用可能スロットを使用する。正確なスロット数、満杯時の動作、リングバッファ方式・バックプレッシャーポリシーは実装設計時に別途決定する。
+- **不変条件**: 書き込み中のスロットを読み取ってはならない。完全なフレームが書き込まれた後にのみアトミックに出版される。
+- **ワーカーのピン留め**: ワーカーはプライベートndarrayへのコピー中のみスロットをピン留めする。コピー完了後は即座に解放する。
+- **ワーカー内ndarray**: ユーザーが保持するフレーム参照（例: `camera.image_bgr` の戻り値）はワーカー内のプライベートメモリ上のndarrayである。共有メモリスロットはピン留めされない。
+- **切断/クラッシュ処理**: ワーカーのIPCが切断された場合（EOF/broken pipe）またはワーカープロセスが異常終了した場合、Rustメインは共有メモリ領域をクリーンアップする。ワーカー側の後処理は不要。
 
-#### 7.9.5 ワーカー→メイン方向の任意NumPy配列送信
+#### 7.9.5 Camera APIとの統合
 
-ワーカーが任意のNumPy配列をメインへ送信する場合:
+Camera.image_bgrプロパティ、readFrame()、getCameraImage()は、§7.9.2に従い、永続共有メモリ上の最新フレームをワーカー内のプライベートndarrayにコピーして返す。この独立性により、ユーザースクリプトが取得したフレームを破壊的に変更しても、後続のフレーム取得や他スクリプトに影響を与えない。
 
-1. ワーカーは制御IPC経由で書き込み可能なリースを要求する。
-2. メインがリースを割り当て、ディスクリプタを返送する。
-3. ワーカーは自身のローカル配列をリース領域へ**1回だけコピー**する。
-4. ワーカーは制御IPC経由でディスクリプタをメインに送信する。
-5. メインが内容を消費した後、リースを解放する。
-6. ワーカーの送信元配列が既に有効な共有メモリリースに基づくndarrayである場合、メインは不要な再コピーを回避する（ディスクリプタの転送のみ行う）。
-
-#### 7.9.6 カメラAPIとの統合
-
-Camera.image_bgrプロパティおよびreadFrame()/getCameraImage()は、§7.9.2に従い、ライブカメラソースから独立したスナップショット領域への1回のコピーを経てndarrayを返す。ndarray構築自体はゼロコピー（共有メモリ上のスナップショットを直接ラップ）である。この独立性により、ユーザースクリプトが取得したフレームを破壊的に変更しても、後続のフレーム取得や他スクリプトに影響を与えない。
-
-#### 7.9.7 性能測定（参考）
+#### 7.9.6 性能測定（参考）
 
 以下の測定値は、本仕様に基づく低遅延データ転送の参考値である。測定環境: Nix管理下のCPython 3.14.6 / NumPy 2.5.0、50回ウォームアップ + 200回ベンチマーク、現在のLinuxホスト、1920×1080フレーム。
 
@@ -956,10 +944,10 @@ Camera.image_bgrプロパティおよびreadFrame()/getCameraImage()は、§7.9.
 |------|-------------|
 | 匿名パイプ（§7.8 MessagePack経由） | 28.23 ms |
 | 共有メモリ + ワーカー側コピー | 3.28 ms |
-| 永続共有メモリゼロコピー（本節） | 1.90 ms |
-| リース即時解放バリアント | 1.82 ms |
 
-上記は単一フレーム転送の単発レイテンシであり、4スロットパイプライン処理の実測値ではない。すべての測定は現在のLinuxホストでの値であり、他プラットフォーム・他解像度での性能は異なる可能性がある。
+上記は単一フレーム転送の単発レイテンシである。すべての測定は現在のLinuxホストでの値であり、他プラットフォーム・他解像度での性能は異なる可能性がある。
+
+ワーカー内の画像処理操作（テンプレートマッチング等）は、このフレーム転送レイテンシとは独立したワーカー内処理時間となる。
 
 ---
 
@@ -1040,12 +1028,12 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 ### 10.3 公開モジュール
 
-**注**: 以下のモジュールはユーザースクリプトワーカー内のバインディング/プロキシを介して提供される。Pythonファイルは型注釈・ドキュメント・互換レイヤーのみを提供し、ワーカー内のバインディング/プロキシがユーザースクリプトの互換性ロジックを処理するとともに、コア処理（シリアル通信、画像処理、イベントバス等）はRustメインプロセスにIPC経由で委譲する。
+**注**: 以下のモジュールはユーザースクリプトワーカー内のバインディング/プロキシを介して提供される。Pythonファイルは型注釈・ドキュメント・互換レイヤーのみを提供し、ワーカー内のバインディング/プロキシがユーザースクリプトの互換性ロジックを処理するとともに、カメラキャプチャ、シリアル通信、イベントバス等のコア処理はRustメインプロセスにIPC経由で委譲する。画像配列の処理（テンプレートマッチング、変換等）はワーカー内で実行する。
 
 | モジュール | 内容 | ユーザースクリプトでのインポート例 |
 |-----------|------|------------------------------|
 | `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
-| `image_proc` | 画像処理（Rust実装）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
+| `image_proc` | 画像処理（ユーザースクリプトワーカー内実装）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
 | `net` | Socket、MQTT、HTTPクライアント。`from Commands import net` でインポート可能な関数群。`PythonCommand` のメソッド（`self.socket_connect()` 等）と同じ機能を提供するが、クラス外から使用可能。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
 
 **注**: イベントシステム（`pokecon.autocmd`, `pokecon.event`）は§11で定義される。
@@ -1208,8 +1196,8 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 
 | メソッド/プロパティ | シグネチャ | 説明 |
 |---------------------|-----------|------|
-| `image_bgr` (property) | `image_bgr -> MatLike` | 現在のカメラフレーム（BGR形式）の変更可能な独立コピーを取得。コピーは§7.9の共有メモリスナップショット領域へ1回行われ、返されるndarrayはその領域をゼロコピーでラップする。戻り値の変更はライブソースや他呼び出しに影響しない |
-| `readFrame()` | `readFrame() -> MatLike` | `image_bgr` プロパティのエイリアス。現在のフレームの変更可能な独立コピーを返す（§7.9の共有メモリリース機構による） |
+| `image_bgr` (property) | `image_bgr -> MatLike` | 現在のカメラフレーム（BGR形式）の変更可能な独立コピーを取得。永続共有メモリ上の最新ライブフレーム領域からワーカー内のプライベートndarrayへ1回コピーされる。このndarrayはワーカー内で自由に変更可能であり、戻り値の変更はライブソースや他呼び出しに影響しない |
+| `readFrame()` | `readFrame() -> MatLike` | `image_bgr` プロパティのエイリアス。現在のフレームの変更可能な独立コピーを返す（永続共有メモリ上のライブフレーム出版機構を経由） |
 | `isOpened()` | `isOpened() -> bool` | カメラがオープンされているか |
 | `fps` (property) | `fps -> int` | カメラFPS（取得・設定可能） |
 | `capture_size` (property) | `capture_size -> tuple[int, int]` | キャプチャ解像度 `(width, height)`。UI表示サイズとの比率計算に使用される |
@@ -1249,7 +1237,7 @@ from cv2.typing import MatLike
 
 OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理メソッドの戻り値・引数として使用される。
 
-**画像処理メソッド**（Rust実装）:
+**画像処理メソッド**（ユーザースクリプトワーカー内実装）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `isContainTemplate()` | `isContainTemplate(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | カメラフレームに対するテンプレートマッチング |
@@ -1257,13 +1245,13 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` の互換性維持スタブ。`use_gpu=True` を固定して呼び出すが、本リファクタリングではGPU処理は行わずCPUで実行する |
 | `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを./Captures/へ保存 |
-| `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示 |
-| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。§7.9の共有メモリリースを経由し、ライブソースから独立した変更可能なコピーを返す |
+| `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示。エンコード・処理はワーカー内で行い、UI表示用の圧縮ペイロードのみをRustメイン経由で送信する |
+| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。返された配列はワーカー内で自由に変更可能 |
 | `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
 | `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
 | `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
-| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（バックエンド側で画像加工） |
-| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: float = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（バックエンド側で画像加工） |
+| `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（UI座標・色などの制御データのみをRustメインに送信） |
+| `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: float = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（テキスト・位置・フォント等の制御データのみをRustメインに送信） |
 
 > **注（`saveCapture()` の層差）**: `self.saveCapture()`（`ImageProcPythonCommand` 継承時）は画像処理APIであり、`crop_fmt` と `crop` を使用する。`self.camera.saveCapture()` は注入された `Camera` APIであり、`crop` と `crop_ax` を使用する。両者は互換性維持のため同名だが、属するレイヤーと引数構造が異なる。
 
@@ -1480,7 +1468,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `self.keys.neutral()` | ✅ 利用可能 |
 | `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） |
 | `self.keys.ser.write()` | ✅ 利用可能（引数は `bytes` 型） |
-| 画像処理API | ✅ Rust実装 |
+| 画像処理API | ✅ ワーカー内実装（ユーザースクリプトワーカー） |
 | Discord通知 | ✅ 実装済み |
 | LINE通知 | ⚠️ No-opスタブ（サービスEOL） |
 | Windows通知 | ✅ 実装済み |

@@ -47,47 +47,46 @@
 
 | レイヤー | 言語 | 役割 | 例 |
 |---------|------|------|-----|
-| Rustコア | Rust | メインプロセス、すべてのコア処理およびユーザースクリプト用Python実行環境 | イベントバス、シリアル通信、画像処理、ユーザースクリプト用CPython（PyO3埋め込み） |
-| PyO3バインディング | Rust（Pythonに公開） | ユーザースクリプト用Python API提供 | `Commands.PythonCommandBase`, `Commands.Keys` |
+| Rustコア | Rust | メインプロセス、すべてのコア処理 | イベントバス、シリアル通信、画像処理 |
+| ユーザースクリプトワーカー | Rustプロセス管理 + CPython | ユーザースクリプトの実行（別プロセス、プロファイル別venv） | `Commands.PythonCommandBase`, `Commands.Keys`（内部IPCプロキシ経由） |
 | Python互換レイヤー | Python 3.12～3.14互換（最小限） | 将来の実装切り替え用フック | `CommandMeta`（`_meta.py`のみ） |
 | 動的設定ワーカー | Rustプロセス管理 + CPython + LuaJIT | 動的設定（`init.py`/`init.lua`）の実行（別プロセス） | 動的Python → CPython 3.14、動的Lua → LuaJIT 2.1、`pokecon.autocmd` |
 
 **設計判断の根拠**: 動的設定のPythonとLuaJITを単一のワーカープロセスに統合することで、非対称なプロセス境界を回避し、`pokecon.source()`・イベント管理・リロード・Rustメインプロセスからの分離を一元化する。両ランタイムが同一ワーカー内に同居することで、動的設定に属するすべてのユーザー作成コードが一貫した分離境界の恩恵を受け、片方の言語だけが別プロセス・片方がメインプロセス内で動作する非対称性を排除する。
 
 **Python実行方式**:
-RustコアはPython実行環境を管理し、Python側にはPyO3の`#[pymodule]`/`#[pyclass]`/`#[pyfunction]`でRust APIを公開する。Pythonスクリプト内では `import pokecon` によりRust APIへアクセスする。
+Rustコアは二つの独立したワーカープロセスを管理する。ユーザースクリプトワーカー（ユーザースクリプト用Python実行）と動的設定ワーカー（動的設定Python/Lua実行）。各ワーカーはRust管理の内部IPC/API境界を介してRustコアと通信し、Pythonオブジェクトがプロセス境界を越えることはない。ユーザースクリプトの公開API（`Commands.*`互換名前空間）はワーカー内のバインディング/プロキシを介して提供される。
 
 **Python実行環境の分離方針**:
 
-1. ユーザースクリプト用Pythonと動的設定（Python/Lua）は、実行環境を完全に分離する。
-2. Rustメインプロセスは、ユーザースクリプト用のCPythonメインインタープリターをPyO3で同一プロセス内に埋め込み、`import pokecon` によるRust API呼び出しを直接的な関数呼び出しとして処理する。
+1. ユーザースクリプト用Pythonと動的設定（Python/Lua）は、実行環境を完全に分離する。それぞれ専用のワーカープロセスで動作し、別々のvenvを使用する。
+2. ユーザースクリプトは専用のOSプロセス（ユーザースクリプトワーカー）で実行する。このワーカーはアクティブプロファイルに対応する選択されたvenvのCPythonメインインタープリターをホストする。プロファイル/venv変更時は既存ワーカーを終了し、新しいvenvで新ワーカーを生成する。同一プロセス内のCPythonインタープリターを再利用しないことで、sys.modules・C拡張の状態がプロファイル間で漏洩することを防止する。ユーザースクリプトワーカーは起動設定解決後、初回のユーザースクリプト実行要求時まで遅延生成される。
 3. 動的設定（`init.py`/`init.lua`）は、Rustメインプロセスとは別の単一のOSプロセス（動的設定ワーカー）で実行する。このワーカーは動的設定専用のCPythonメインインタープリターおよびLuaJITランタイムを同一プロセス内にホストする。
    - `dynamic_config_language = "python"` の場合: ワーカー起動時にCPythonインタープリターを初期化する。LuaJITは `pokecon.source()` で `.lua` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "lua"` の場合: ワーカー起動時にLuaJITランタイムを初期化する。CPythonは `pokecon.source()` で `.py` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "none"` の場合: 動的設定ワーカープロセスを生成しない。
-4. 分離手段としてCPythonサブインタープリターは採用しない。根拠: 単一のCPythonランタイムはただ一つのメインインタープリターを持ち、同一プロセス内に追加で生成できるのはサブインタープリターのみである。サブインタープリターはPyO3およびサードパーティ拡張との互換性が保証されないため、必要な分離を得るために別プロセス方式を採用する。
-5. プロセス境界により、`sys.path`、インポート済みモジュール、グローバル状態、Pythonオブジェクトは完全に分離される。Pythonオブジェクトがプロセス境界を越えることはない。LuaJITのグローバル状態も同様にワーカープロセス内に隔離される。
-6. 動的設定からユーザー向け `pokecon.*` APIへのアクセスは、ワーカープロセスがRust管理の内部IPC/API境界を経由する。この内部形式は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
+4. 分離手段としてCPythonサブインタープリターは採用しない。根拠: 単一のCPythonランタイムはただ一つのメインインタープリターを持ち、同一プロセス内に追加で生成できるのはサブインタープリターのみである。サブインタープリターはPyO3およびサードパーティ拡張との互換性が保証されないため、必要な分離を得るために別プロセス方式を採用する。この判断はユーザースクリプトワーカーと動的設定ワーカーの両方に適用される。
+5. プロセス境界により、sys.path、インポート済みモジュール、グローバル状態、Pythonオブジェクトはワーカー間およびRustコアとの間で完全に分離される。Pythonオブジェクトがプロセス境界を越えることはない。LuaJITのグローバル状態も同様に動的設定ワーカープロセス内に隔離される。
+6. 両ワーカーからユーザー向けAPIへのアクセスは、ワーカープロセスがRust管理の内部IPC/API境界を経由する。この内部形式は実装詳細であり、公開API（`Commands.*`、`pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
 7. PythonとLuaの動的設定APIは公開APIレベルで同一の動作を提供する。両ランタイムは同一ワーカーから同一のIPC境界を通じてRustメインプロセスと通信する。PythonとLuaのランタイムネイティブオブジェクトはランタイム間またはプロセス境界を越えて直接共有されない。共有される設定値・状態・イベントはRust管理のAPI表現を通じてやり取りされる。
 
 **言語仕様**:
 - **Python**: ランタイムは3.14を使用。コードは3.12～3.14で動作するよう記述し、現在公開されている非推奨・廃止予定の機能は避ける。例外を除き厳格な型注釈を必須とする。PEP 695型パラメータ、basedpyrightによる厳格な型チェックを使用
 - **Lua**: LuaJIT 2.1をターゲット。動的設定用のスクリプト言語として使用
 
-**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、RustメインプロセスにPyO3で直接埋め込まれたCPython上で動作し、Python→RustのAPI呼び出しは同一プロセス内の直接的な関数呼び出しとして行われる。動的設定用Python（`init.py`）はワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のPythonバインディング/プロキシを介して提供される。ワーカー内ではPyO3を使用可能だが、実際のコア処理はRust管理の内部IPC経由でメインプロセスと通信する。動的設定用Lua（`init.lua`）はワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシ（PyO3ではなく選択されたRust/Luaバインディング実装）を介して提供され、コア処理は同様にIPC経由である。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はRust側で行う。これらの内部境界の詳細（IPCトランスポート、シリアル化方式、クラッシュ動作、プロトコル）はユーザー向けAPIに露出しない。
+**注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供し、実際の処理はワーカー側で行う。これらの内部境界の詳細（IPCトランスポート、シリアル化方式、プロセス監視、シャットダウンタイムアウト）は後に決定する設計ブランチであり、現時点ではユーザー向けAPIに露出しない。
 
-**Pythonランタイム設定**: ユーザーが`settings.toml`で指定したPython実行環境（システムPythonまたは仮想環境）を使用できる。指定がない場合はデフォルトの3.14ランタイムを使用。
+**Pythonランタイム設定**: ユーザースクリプトのPython実行環境は、設定されたvenvパスによって決定される。ユーザーが`settings.toml`で`[python.script].venv`を指定できる。指定がない場合はデフォルトの3.14ランタイムでワーカー用venvを作成する。ユーザースクリプトのインタープリター実行ファイルパスはユーザー設定としては提供されず、アプリが管理するワーカーランタイムが使用するvenvにより暗黙的に選択される。
 
-**Pythonインタープリターの提供方法**:
-- **動的リンク方式**: PyO3は実行時に`libpython3.x.so`を動的にリンクする。これがPyO3の標準的・推奨される方法である
-- **nix環境**: nix storeのPythonパスをビルド時に決定し、アプリケーションに組み込む。再現性が保証される
-- **非nix環境**: python-build-standaloneが配布するPythonを自動ダウンロードし、使用する。これにより、実行環境にシステムPythonがインストールされていなくても動作する
-- **venv**: いずれの環境でも、venvを作成して使用する。ユーザースクリプト用（Rustメインプロセス埋め込み）と動的設定用（ワーカープロセス）で別々のvenvを使用可能
-- **ユーザー指定**: `settings.toml`でユーザーが任意のPython実行環境を指定可能。指定がある場合はそれを優先する
+**Pythonワーカーランタイムの提供方法**:
+- **nix環境**: nix storeのPythonパスをビルド時に決定し、ワーカープロセス実行に使用する。再現性が保証される。ユーザースクリプトワーカーと動的設定ワーカーで同一のランタイムバイナリを使用できるが、venvは分離される。
+- **非nix環境**: python-build-standaloneが配布するPythonを自動ダウンロードし、ワーカープロセス実行に使用する。これにより、実行環境にシステムPythonがインストールされていなくても動作する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用する。
+- **venv**: いずれの環境でも、ワーカーごとにvenvを作成して使用する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用可能。ユーザースクリプトのvenvはプロファイルごとに異なるパスを設定可能であり、プロファイル切替時に対応するvenvを使用する新ワーカーが生成される。
+- **ユーザー指定**: `settings.toml`で`[python.script].venv`によりユーザースクリプトワーカーのvenvパスを指定可能。指定がない場合は`~/.local/share/pokecon/venv-script`（デフォルト）を使用する。`[python.script].packages`で追加インストールするパッケージを指定可能。
 
 **開発ワークフロー**:
 - **nix-first**: 本プロジェクトはnix flakeを使用して開発する。すべての開発タスク（ビルド、テスト、型チェック、フォーマット）は`nix run .#<task>`または`nix develop`内で実行する
-- **nix環境優先、非nix環境もサポート**: まずnix環境で動作するよう実装し、その後非nix環境（Windows含む）でも動作するよう調節する。非nix環境では`PythonManager`がPythonインタープリターのセットアップを管理する（§14.4参照）
+- **nix環境優先、非nix環境もサポート**: まずnix環境で動作するよう実装し、その後非nix環境（Windows含む）でも動作するよう調節する。非nix環境では`PythonManager`がワーカープロセス用のPythonランタイムのセットアップを管理する（§14.4参照）
 
 ### 1.3 対象プラットフォーム
 
@@ -458,7 +457,7 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
-**CommandInfo構造体**（Python側の型定義。実際の実装はRustのPyO3バインディングで行われる）:
+**CommandInfo構造体**（Python側の型定義。実際の実装はユーザースクリプトワーカーのIPCプロキシで行われる）:
 ```python
 class CommandInfo:
     name: str           # コマンド名（NAME属性）
@@ -867,14 +866,14 @@ import { paths, components } from '$lib/api/openapi.ts'
 ### 10.2 設計方針
 
 - **コアはRust**: すべてのコア処理はRustで実装。Pythonは必要な部分のみ（ユーザースクリプトAPI、互換レイヤー）。
-- **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてPyO3（Rustバインディング）に流れる。
+- **メタクラスによる切り替え**: `CommandMeta`が将来の実装切り替え用フックを提供。現状はすべてユーザースクリプトワーカーのIPCプロキシを経由する。
 - **後方互換性**: リファクタリング前のスクリプトは変更なしで動作する必要がある。
 - **型注釈**: 新APIは動作する型注釈を持つ。旧APIは互換性のために保持され、新APIと同等の完成度・品質でメンテナンスされる（§10.6参照）。
 - **内部実装の命名**: ユーザースクリプトに公開するAPI（新ダイアログAPI `show_dialog` 以外）は、互換性のため全く同じ名前でアクセスできる必要がある。アクセスできれば内部の命名は自由（妥当なものであれば）。
 
 ### 10.3 公開モジュール
 
-**注**: 以下のモジュールはRust/PyO3で実装され、Pythonファイルは型注釈・ドキュメント・互換レイヤーのみを提供する。実際の処理はRust側で行われる。
+**注**: 以下のモジュールはユーザースクリプトワーカー内で実装され、Pythonファイルは型注釈・ドキュメント・互換レイヤーのみを提供する。実際の処理はワーカー側で行われる。
 
 | モジュール | 内容 | ユーザースクリプトでのインポート例 |
 |-----------|------|------------------------------|
@@ -1159,17 +1158,17 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 
 - ユーザースクリプトに**直接公開されない**
 - `self.keys.neutral()`のみアクセス可能（コントローラーをニュートラル状態にリセット）
-- `self.keys.ser.write()` で生シリアル書き込みが可能（PyO3でpySerial互換型変換）。引数は `bytes` 型のみ
+- `self.keys.ser.write()` で生シリアル書き込みが可能（IPCプロキシ経由）。引数は `bytes` 型のみ
 - `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
 - **注**: `self.keys` は互換性維持のための旧API。ユーザースクリプトからは引き続き `self.keys` を使用する
 
 #### 10.5.2 Sender
 
-**PyO3実装**（限定公開API）:
+**IPCプロキシ実装**（限定公開API）:
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
-| `write()` | `write(data: bytes | bytearray | memoryview | list[int]) -> None` | 直接シリアル書き込み（PyO3でpySerial互換型変換）。`to_bytes()` 関数により以下の変換が行われる:
+| `write()` | `write(data: bytes | bytearray | memoryview | list[int]) -> None` | 直接シリアル書き込み（IPCプロキシ経由）。`to_bytes()` 関数により以下の変換が行われる:
 - `bytes`: そのまま通過
 - `bytearray`/`memoryview`: `bytes` に変換
 - `list[int]`（バイト値のリスト）: `bytes(bytearray(seq))` に変換
@@ -1334,9 +1333,9 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **重要**:
 
 - TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
-- **動的設定（Python/Lua）は、ユーザースクリプト用Pythonとは独立したワーカープロセスで実行する**。分離の詳細は§1.2のPython実行環境の分離方針に従う
+- **動的設定（Python/Lua）は、ユーザースクリプト用Pythonとは独立したワーカープロセスで実行する**。ユーザースクリプトは別の専用ワーカープロセス（ユーザースクリプトワーカー）で実行する。分離の詳細は§1.2のPython実行環境の分離方針に従う
 - `dynamic_config_language`が`"none"`の場合、動的設定ワーカープロセスは生成しない
-- **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。`[python]`（共通セクション）で同時に指定することも可能（詳細は§11.4参照）
+- **Python実行環境の設定**: `settings.toml` の `[python.script]` と `[python.dynamic]` で、それぞれ別々にPython実行環境を指定可能。各ワーカーごとに明示的に設定することを推奨（詳細は§11.4参照）。
 - **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
 - **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持。フラットパスと階層パスの区別もPython/Luaで同一
 
@@ -1413,7 +1412,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
-  Pythonユーザースクリプト環境: `pokecon.opt.python.script.interpreter`（実行ファイルパス）、`pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
+  Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
   動的設定ワーカーのPython環境はブートストラップ専用であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境は静的TOML `[python.dynamic]`（および共通 `[python]` からのフォールバック）、環境変数、CLI引数でのみ設定可能。
 
 **制約**:
@@ -1466,7 +1465,6 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-| `[python.script]` | `script_interpreter` | `pokecon.opt.python.script.interpreter` | `str` | |
 | `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
 | `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
 | `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
@@ -1497,53 +1495,36 @@ reconnect_interval_sec = 3  # 再接続間隔（秒）
 reconnect_max_retries = 20  # リトライ回数上限
 
 # Python実行環境設定
-# 優先順位: [python.script] / [python.dynamic] > [python]（共通）
-# 未設定項目は上位から継承（キー単位マージ。配列・パッケージ一覧は値全体を置換し、deep mergeなし）
-
-# ---- 優先順位の詳細 ----
-# 1. [python.script] / [python.dynamic] が存在する場合: その値を使用
-# 2. [python.script] / [python.dynamic] が未設定の項目: [python]（共通）の値を使用
-# 3. [python] も未設定の項目: デフォルト値を使用
+# [python.script]（ユーザースクリプトワーカー）と [python.dynamic]（動的設定ワーカー）は、
+# 独立したワーカープロセスとvenvを持つ。venvの共有は推奨しない（プロファイル分離のため）。
+# 各ワーカーごとに明示的に設定することを推奨。
+# 未設定項目はデフォルト値を使用。
 #
-# 例: [python.script] に interpreter のみ設定し、[python] に venv と packages を設定した場合:
-#   - [python.script]: interpreter = 指定値, venv = [python]の値, packages = [python]の値
-#   - [python.dynamic]: interpreter = デフォルト値, venv = [python]の値, packages = [python]の値
+# 注意: ユーザースクリプトのインタープリター実行ファイルパスはユーザー設定の対象外。
+# ワーカーランタイムはアプリ管理のvenvにより暗黙的に選択される。
 
-# ---- 別々に指定する場合（推奨） ----
+# ---- 明示的に指定する場合（推奨） ----
 [python.script]
-# ユーザースクリプト用Python実行環境
-# interpreter = "/usr/bin/python3.12"  # 例: システムPython
-# venv = "~/.local/share/pokecon/venv-script"  # 例: 仮想環境
+# ユーザースクリプトワーカー用venv
+# venv = "~/.local/share/pokecon/venv-script"  # 例: 仮想環境パス
 
 [python.script.packages]
-# ユーザースクリプト用仮想環境への追加インストールパッケージ
+# ユーザースクリプトワーカーvenvへの追加インストールパッケージ
 # mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
 # [[python.script.packages.list]]
 # name = "requests"
 # version = ">=2.28.0"
 
 [python.dynamic]
-# 動的設定用Python実行環境
-# interpreter = "/usr/bin/python3.12"
+# 動的設定ワーカー用Python実行環境
+# interpreter = "/usr/bin/python3.12"  # 動的ワーカーは起動前にバイナリ選択が必要
 # venv = "~/.local/share/pokecon/venv-dynamic"
 
 [python.dynamic.packages]
-# 動的設定用仮想環境への追加インストールパッケージ
+# 動的設定ワーカーvenvへの追加インストールパッケージ
 # mode = "append"
 # [[python.dynamic.packages.list]]
 # name = "numpy"
-
-# ---- 共通設定のみの場合（シンプル） ----
-# [python] セクションを使用すると、[python.script] と [python.dynamic] の両方に
-# 同じ設定が適用される。ただし、[python.script] / [python.dynamic] で上書き可能
-# [python]
-# interpreter = "/usr/bin/python3.12"
-# venv = "~/.config/pokecon/venv"
-# [python.packages]
-# mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
-# [[python.packages.list]]
-# name = "requests"
-# version = ">=2.28.0"
 
 [profiles]
 active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
@@ -1682,7 +1663,6 @@ pokecon.opt.ui.dialog_button_position = "bottom"  # "top"（上部） / "bottom"
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 
 # Pythonユーザースクリプト実行環境設定
-pokecon.opt.python.script.interpreter = "/usr/bin/python3.12"
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = [
@@ -1723,7 +1703,6 @@ pokecon.opt.ui.controller_position = "top"
 pokecon.opt.ui.dialog_button_position = "bottom"
 
 -- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
-pokecon.opt.python.script.interpreter = "/usr/bin/python3.12"
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = {
@@ -2457,14 +2436,14 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 
 ### 14.4 Python管理（非nix環境）
 
-非nix環境では、`PythonManager` がPythonインタープリターのセットアップを管理する。
+非nix環境では、`PythonManager` がワーカープロセス用のPythonランタイムのセットアップを管理する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを作成する。
 
 **実装概要**:
 - `~/.local/share/pokecon/` 配下にPythonをセットアップ
 - 期待するバージョンがない場合はデフォルトを使用
 - 既存のPythonが期待するバージョンかチェック
 - ない場合はpython-build-standaloneをダウンロード
-- 仮想環境を構築し、必須パッケージ + ユーザーパッケージをインストール
+- ユーザースクリプトワーカー用と動的設定ワーカー用の仮想環境を構築し、必須パッケージ + ユーザーパッケージをそれぞれインストール
 
 **詳細な実装**: Python管理モジュールを参照。
 
@@ -2530,16 +2509,16 @@ Lua LSP設定は `.luarc.json` で管理する。
 ### B. メタクラス設計（CommandMeta）
 
 **責務**:
-- **実装切り替え**: クラス変数や関数使用パターンに基づいて、Python実装とPyO3（Rust）実装を切り替える
+- **実装切り替え**: クラス変数や関数使用パターンに基づいて、ユーザースクリプトワーカー実装と純粋Python実装を切り替える
 - **抽象クラスチェック**: `do()` メソッドを持つクラス（PythonCommand, ImageProcPythonCommand）を抽象クラスとして扱う。`do()` を実装しないサブクラスのインスタンス化を防止
 
 **現在の挙動**:
-- すべての実装がPyO3（Rustバインディング）に流れる
+- すべての実装がユーザースクリプトワーカーのIPCプロキシに流れる
 - インスタンス化時に `do()` メソッドの存在を確認し、未実装の場合は `TypeError` を送出
 
 **将来の拡張**:
 - クラス変数 `__target_implementation__` 等をチェックし、動的に実装クラスを選択
-- 純粋Python実装とPyO3実装の切り替えをサポート
+- ユーザースクリプトワーカーのIPCプロキシ実装と純粋Python実装の切り替えをサポート
 
 ---
 

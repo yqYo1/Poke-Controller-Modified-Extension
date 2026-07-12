@@ -1455,13 +1455,40 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 
 #### 10.6.1 ダイアログライフサイクル
 
-**スクリプト停止時の挙動**: ユーザースクリプトが停止（Stopボタン、エラー、強制終了など）した場合、スクリプト内で作成したすべてのダイアログ（ブロッキング・非ブロッキング・`wait_dialog`待機中を含む）を自動で閉じる。
+**Widget ライフサイクル状態**:
+
+各 Widget インスタンスは、`value`（現在保持している値）と読み取り専用の `has_result`（現在のダイアログ呼び出しでの確定有無）という二つのライフサイクル状態を持つ。`value` と `has_result` は一つの観測可能な完了遷移として更新される。すなわち、`has_result == True` を読み取った時点で `value` は確定値に書換済みであり、逆に `has_result == True` かつ `value` が未書換である状態を観測してはならない。
+
+| フェーズ | value | has_result | 説明 |
+|---------|-------|------------|------|
+| **構築直後** | コンストラクタの `default`（Next の場合は `None`） | `False` | Widget インスタンス生成直後。未確定 |
+| **show_dialog 投入時** | 変更なし（直前の確定値を保持。初回は構築時の値） | `False` にリセット | 新たなダイアログ呼び出しのたびにリセット。過去の確定値は保持される |
+| **OK 確定時** | ユーザーが入力した最終値 | `True` に遷移 | value → has_result の順に設定。デフォルト変更なし＋OK の場合も value==default かつ has_result==True |
+| **ダイアログ正常確定時のNext** | `None`（固定） | `True` に遷移 | `Widget[None]` は値を持たないレイアウト区切りだが、包含ダイアログが正常確定したことをhas_resultで表す |
+| **不正終了時（×/Esc/強制終了）** | 変化なし | 変化なし（`False` のまま） | スクリプト停止（下記「不正終了時の挙動」参照）|
+
+**再利用**: 同一 Widget インスタンスを複数回 `show_dialog` に渡せる。呼び出しごとに has_result が `False` にリセットされ、value は直前の確定値（最初の構築時は default）を保持する。ただし、同一Widgetを複数の実行中ダイアログへ同時に渡すことはできず、後から開始しようとした呼び出しを拒否する。再利用は先のダイアログが正常完了した後に限る。
+
+**Next の意味論**: `Widget[None]`（`Widget("Next")`）はボタンではなく、以降のWidgetを次の列へ配置するためのレイアウト区切りである。旧`dialogue6widget()`の`["Next"]`と同じ役割を持つ。value は常に `None`であり、包含ダイアログの正常完了時に他のWidgetと同様にhas_resultが`True`となる。Next自体の操作や確定イベントは存在しない。
+
+**has_result の読み取り専用性**: `has_result` はユーザースクリプトから読み取り可能だが、直接代入はできない。ランタイムによる強制および生成される `.pyi` における `@property` 定義により、書き込みを禁止する。
+
+**正常完了順序（ブロッキング）**:
+- `show_dialog(..., blocking=True)` が正常復帰した時点で、当該呼び出しに渡された全 Widget の `has_result` が `True` であることが保証される。
+- 各 Widget の `value` はユーザーが OK した最終値を保持する。
+
+**正常完了順序（非ブロッキング）**:
+- `is_dialog_closed(dialog_id)` が `True` を返した時点で、当該ダイアログに渡された全 Widget の `has_result` が `True` であることが保証される（正常 OK 完了の場合）。
+- 非ブロッキング呼び出し直後〜`is_dialog_closed` が `True` を返すまでの間、全 Widget の `has_result` は `False` である。`wait_dialog` 復帰後も同様に全 Widget の `has_result` が `True` である。
+
+**スクリプト停止時の挙動**: ユーザースクリプトが停止（Stopボタン、エラー、強制終了など）した場合、スクリプト内で作成したすべてのダイアログ（ブロッキング・非ブロッキング・`wait_dialog`待機中を含む）を自動で閉じる。その時点で実行中のダイアログに属するWidgetのhas_resultは`False`のままで更新されない。過去に正常完了し、現在どの実行中ダイアログにも属していないWidgetの状態は変更しない。
 
 **不正終了時の挙動**: OKボタン以外でダイアログが閉じられた場合、スクリプトを停止する:
 - **×ボタン**: 確認ダイアログを表示せずにダイアログを閉じ、スクリプトを停止する
 - **Escキー**: ダイアログを閉じずにスクリプトを停止する（ダイアログはスクリプト停止時に自動で閉じられる）
 - **強制終了（ウィンドウの完全削除等）**: 即座にスクリプトを停止する
 - スクリプト停止に伴い、スクリプト内のすべてのダイアログが自動で閉じられる（上記「スクリプト停止時の挙動」を参照）
+- 不正終了した当該ダイアログに属する全Widgetのhas_resultは`False`のまま更新されない。
 
 **Widgetコンストラクタの型推論**: Widgetクラスはselfアノテーション付きオーバーロードにより、コンストラクタ引数から要素型を静的に推論する。以下のコードブロックは、Python 3.14（PEP 695）向けに生成する`.pyi`相当の公開型定義であり、内部実装のコンストラクタ署名を規定しない。
 
@@ -1499,32 +1526,43 @@ class Widget[T]:
     @overload
     def __init__(self: Widget[None], widget_type: Literal["Next"]) -> None: ...
 
-    value: T | None  # ダイアログ後に結果を格納
+    # 確定後の値（has_result == True の場合に確定値として有効）
+    # 構築時はコンストラクタの default（Next の場合は None）を保持
+    value: T
+
+    @property
+    def has_result(self) -> bool: ...
 ```
 
 ```python
 # 事前にWidgetインスタンスを作成
-entry = Widget("Entry", "名前", "デフォルト")  # Widget[str]
-check = Widget("Check", "有効", True)  # Widget[bool]
+entry = Widget("Entry", "名前", "デフォルト")  # Widget[str], value=="デフォルト", has_result==False
+check = Widget("Check", "有効", True)  # Widget[bool], value==True, has_result==False
 
 # ブロッキング（デフォルト）
 dialog_id = self.show_dialog("タイトル", widgets=[entry, check])
 # dialog_id == 0
-print(entry.value)  # str | None
-print(check.value)  # bool | None
+# show_dialog正常復帰時は全Widgetのhas_resultがTrue
+print(entry.value)  # str（確定値）
+print(check.value)  # bool（確定値）
+print(check.has_result)  # True
 
 # 非ブロッキング
 dialog_id = self.show_dialog("タイトル", widgets=[entry, check], blocking=False)
 # dialog_id > 0（固有の自然数）
 # スクリプトの実行は継続される
+# ここではhas_result==False（まだ確定していない）
+print(check.has_result)  # False
 
 # ダイアログが終了したか確認
 if self.is_dialog_closed(dialog_id):
-    print(entry.value)
+    # 正常終了（OK）の場合、全Widgetのhas_resultがTrue
+    print(entry.value)  # str
+    print(check.has_result)  # True
 
 # ブロッキング動作に切り替え
 self.wait_dialog(dialog_id)
-print(entry.value)
+print(entry.value)  # str
 ```
 
 #### 10.6.2 ブロッキング（デフォルト）
@@ -1540,6 +1578,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - `blocking=True`の場合、ダイアログが閉じられるまでスクリプトの実行を停止
 - 返り値は`0`
 - 結果は各Widgetの`value`属性に格納される
+- **正常復帰時**: 当該呼び出しに渡された全Widgetの`has_result`が`True`であることが保証される
 - **ライフサイクル**: §10.6.1を参照
 - **実装制約**: ブロッキング対象はユーザースクリプトの実行単位のみとする。
   Rustバックエンド、WebSocket/WebRTC、フロントエンド応答処理は継続して動作し、
@@ -1551,14 +1590,14 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - `blocking=False`の場合、ダイアログを表示し、スクリプトの実行を継続
 - 返り値はユーザースクリプトが開始してから停止するまでの間で固有の自然数（ダイアログID）
 - 結果は各Widgetの`value`属性に格納される
-- **ライフサイクル**: §10.6.1を参照
+- **注意**: OK確定までは各Widgetの`has_result`は`False`のまま。正常OK完了時に`has_result`が`True`に遷移する。詳細な完了順序は§10.6.1を参照
 
 #### 10.6.4 ダイアログ状態確認
 
 - `is_dialog_closed(dialog_id: int) -> bool`
 - 指定したダイアログIDのダイアログが終了しているかどうかを確認
 - 終了していれば`True`、表示中または未表示であれば`False`
-- **ライフサイクル**: §10.6.1を参照
+- **has_resultとの関係**: `True`返却時、正常OK完了の場合に限り当該ダイアログに渡された全Widgetの`has_result`が`True`であることが保証される。詳細は§10.6.1を参照
 
 #### 10.6.5 ダイアログ待機
 
@@ -1566,7 +1605,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - 指定したダイアログIDのダイアログが終了するまでブロッキングで待機
 - 戻り値は固定で `0`（ダイアログの完了を示す。実際のダイアログ結果は各Widgetの `value` 属性から取得）
 - 非ブロッキングで表示したダイアログを後からブロッキング動作に切り替える際に使用
-- **ライフサイクル**: §10.6.1を参照
+- **has_result保証**: ブロッキング復帰時、当該ダイアログに渡された全Widgetの`has_result`が`True`であることが保証される。詳細は§10.6.1を参照
 - **実装制約**: `show_dialog(..., blocking=True)` と同じく、
   ブロッキング対象はユーザースクリプトの実行単位のみとし、
   バックエンド通信処理やUI応答処理を停止してはならない

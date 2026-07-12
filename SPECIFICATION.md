@@ -78,7 +78,7 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 
 **注**: ユーザースクリプト用Python（`Commands.PythonCommandBase`、`Commands.Keys`等の公開互換名前空間）は、別プロセスのユーザースクリプトワーカー上のCPythonで動作し、Python→RustのAPI呼び出しはワーカー内バインディング/プロキシからRust管理の内部IPC経由で行われる。動的設定用Python（`init.py`）は動的設定ワーカープロセスのCPython上で動作し、`pokecon.*` APIはワーカー内のバインディング/プロキシを介して提供される。動的設定用Lua（`init.lua`）は動的設定ワーカープロセスのLuaJITランタイム上で動作し、`pokecon.*` APIはワーカー内のLuaバインディング/プロキシを介して提供される。PythonとLuaの動的設定APIは公開API（`pokecon.*`）レベルで同一の名前と動作を提供するが、内部のバインディング技術は異なる。Pythonファイル（`commands.py`, `events.py`等）は型注釈・ドキュメント・互換レイヤーのみを提供する。ユーザースクリプトの実行と互換性ロジックはワーカー内のバインディング/プロキシで処理され、カメラキャプチャ、シリアル通信、イベントバス等のコア処理はRustメインプロセスが担当する。画像配列の処理（テンプレートマッチング、トリミング、変換等）はユーザースクリプトワーカー内で実行され、ワーカーはIPC経由でカメラキャプチャ・シリアル通信等のコア処理を呼び出す。シャットダウンタイムアウトは`python.script.shutdown_timeout_ms`として公開設定化された（§11.4.2参照）。プロセス監視等のその他の内部境界の詳細は実装詳細であり、公開APIの名前と動作を変更しない限りユーザーに露出しない。
 
-**Pythonランタイム設定**: ユーザースクリプトのPythonパッケージ環境は、設定されたvenvパスによって決定される。ユーザーが`settings.toml`で`[python.script].venv`を指定できる。指定がない場合はデフォルトの3.14ランタイムでワーカー用venvを作成する。ユーザースクリプトのインタープリターはアプリ管理のCPython 3.14に固定され、venvはそのランタイムとABI互換性のあるsite-packages（パッケージ環境）を提供する。インタープリター実行ファイルパスはユーザー設定の対象外である。
+**Pythonランタイム設定**: 両ワーカーのインタープリターはアプリ管理のCPython 3.14に固定され、実行ファイルパスはユーザー設定の対象外である。ユーザースクリプトのPythonパッケージ環境は、設定されたvenvパスによって決定される。ユーザーが`settings.toml`で`[python.script].venv`を指定できる。指定がない場合はデフォルトの3.14ランタイムでワーカー用venvを作成する。各venvはアプリ管理ランタイムとABI互換性のあるsite-packages（パッケージ環境）を提供する。
 
 **Pythonワーカーランタイムの提供方法**:
 - **nix環境**: nix storeのPythonパスをビルド時に決定し、ワーカープロセス実行に使用する。再現性が保証される。ユーザースクリプトワーカーと動的設定ワーカーで同一のランタイムバイナリを使用できるが、venvは分離される。
@@ -1572,7 +1572,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - TOMLは**動的ではない**。Python/Luaのみが動的設定ファイルとして使用される
 - **動的設定（Python/Lua）は、ユーザースクリプト用Pythonとは独立したワーカープロセスで実行する**。ユーザースクリプトは別の専用ワーカープロセス（ユーザースクリプトワーカー）で実行する。分離の詳細は§1.2のPython実行環境の分離方針に従う
 - `dynamic_config_language`が`"none"`の場合、動的設定ワーカープロセスは生成しない
-- **Python実行環境の設定**: `settings.toml` の `[python.script]`（プロファイルごとに設定可能）と `[python.dynamic]`（グローバル専用、§11.3参照）で、それぞれ別々にPython実行環境を指定可能。各ワーカーごとに明示的に設定することを推奨（詳細は§11.4参照）。
+- **Pythonパッケージ環境の設定**: `settings.toml` の `[python.script]`（プロファイルごとに設定可能）と `[python.dynamic]`（グローバル専用、§11.3参照）で、各ワーカーのvenvと追加パッケージを個別に指定可能。インタープリター本体は両ワーカーともアプリ管理のCPython 3.14に固定される（詳細は§1.2、§11.4参照）。
 - **PythonとLuaで同じ設定が可能**: どちらの動的設定ファイルでも、同じ項目を同じ要素名（`pokecon.opt.xxx`）で設定できる
 - **API構造の統一**: PythonとLuaで設定項目名は完全に同一。言語間で設定の互換性を維持。フラットパスと階層パスの区別もPython/Luaで同一
 
@@ -1628,7 +1628,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **動的設定ワーカーブートストラップ設定のスコープ制限**: 以下の設定はグローバル専用（スコープ`[global]`相当）であり、プロファイルTOMLではオーバーライドできない。これらは動的設定ワーカーの生成・起動方法を決定するブートストラップ設定であり、アプリケーション全体で統一される必要がある:
 - `dynamic_config_language`（動的設定ファイルの言語選択）
 - 動的設定のソース/パスセレクター（`init.py`/`init.lua`の探索パス等）
-- `[python.dynamic]` セクションのすべてのキー（interpreter、venv、packages.mode、packages.list等）
+- `[python.dynamic]` セクションのすべてのキー（venv、packages.mode、packages.list等）
 - 動的ワーカーのブートストラップ環境を指定するその他のセレクター
 
 これらの設定がプロファイルTOMLに存在する場合、無視され、プロファイルの読み込み・切替は中断されない。既存のグローバル値が有効なままとなる。このとき、デフォルトでは無視されたキー/パスを特定するERRORレベルの診断を出力する。診断出力はグローバル設定 `report_ignored_profile_global_settings` で制御される（§11.4.2参照）。`true`（デフォルト）: プロファイル読み込み/切替を継続し、無視されたキーごとにERROR診断を出力。`false`: 診断を出力せずに黙って無視する。
@@ -1661,7 +1661,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
-  動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的ワーカーのPython環境はグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。
+  動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。これらはグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 
 **制約**:
 
@@ -1726,7 +1726,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **注**:
 - `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
-- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのPython環境はブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。
+- `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 - `report_ignored_profile_global_settings` はグローバル専用の診断制御設定である（§11.3参照）。プロファイルTOMLに指定された場合、その値は無視され、既に解決済みのグローバル値に基づいて診断出力の要否が決定される。
 - `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
@@ -1847,7 +1847,7 @@ reconnect_max_retries = 20  # リトライ回数上限
 # venvの共有は推奨しない（プロファイル分離のため）。
 # 未設定項目はデフォルト値を使用。
 #
-# 注意: ユーザースクリプトのインタープリター実行ファイルパスはユーザー設定の対象外。
+# 注意: 両ワーカーのインタープリター実行ファイルパスはユーザー設定の対象外。
 # ワーカーランタイムはアプリ管理のCPython 3.14であり、venvはパッケージ環境を選択する。
 
 # ---- 明示的に指定する場合（推奨） ----
@@ -1866,8 +1866,8 @@ reconnect_max_retries = 20  # リトライ回数上限
 # version = ">=2.28.0"
 
 [python.dynamic]
-# 動的設定ワーカー用Python実行環境（グローバル専用: プロファイルTOMLでは設定不可）
-# interpreter = "/usr/bin/python3.12"  # 動的ワーカーは起動前にバイナリ選択が必要
+# 動的設定ワーカー用venv（グローバル専用: プロファイルTOMLでは設定不可）
+# インタープリター本体はアプリ管理のCPython 3.14固定であり、設定キーを持たない
 # Linux例: venv = "~/.local/share/pokecon/venv-dynamic"
 
 [python.dynamic.packages]

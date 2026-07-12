@@ -590,7 +590,7 @@ Commands/
 
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **Webhook URL** | Text input | Discord Webhook URL。URL形式（`https://discord.com/api/webhooks/...`）の構文検証を行う |
+| **Webhook URL** | Text input | Discord Webhook URL。バックエンドで `https://discord.com/api/webhooks/<id>/<token>` 形式を検証する |
 | **ユーザー名** | Text input | Discordメッセージのカスタムユーザー名（オプション） |
 | **アバターURL** | Text input | Discordメッセージのカスタムアバター画像URL（オプション） |
 | **テスト** | Button | 設定を確認するためのテスト通知を送信 |
@@ -1705,7 +1705,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | |
 | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"` |
 | `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"` |
-| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | |
+| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
 | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | |
 | `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | |
 | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | |
@@ -1731,6 +1731,95 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
+- 備考欄に `Secret` と明記された行は§11.4.3の機密情報取り扱い規則の適用対象である。
+
+#### 11.4.3 機密情報（Secret）の取り扱い
+
+本節は、設定システムおよびユーザースクリプトAPIにおいて機密情報として分類される値の定義、供給元、保存、UI/API公開、ログ出力に関する規則を規定する。決定事項に基づき、OSキーチェーン/資格情報マネージャーは使用しない。
+
+##### 11.4.3.1 分類
+
+以下の値を機密情報（secret）として分類する:
+
+| 値 | 分類理由 | 該当パス／API |
+|----|---------|-------------|
+| Discord Webhook URL | フックURLは悪用されるとサーバーへの不正投稿につながる | `notifications.discord.webhook_url`、動的パス `pokecon.opt.notifications.discord.webhook_url`、環境変数 `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`、CLI `--notifications-discord-webhook-url`、ユーザースクリプトAPI `discord_image()` の `keys` 引数由来の値 |
+| MQTT Publish Token | ブローカーに対する公開認証情報 | `mqtt_change_pub_token()` の `pub_token` 引数 |
+| MQTT Subscribe Token | ブローカーに対する購読認証情報 | `mqtt_change_sub_token()` の `sub_token` 引数 |
+| LINE Token引数（レガシー） | No-opスタブだがトークン値をログに残してはならない（互換性維持） | `LINE_text()` の `token` 引数、`LINE_image()` の `token` 引数 |
+
+`discord_username`、`discord_avatar_url`、MQTT broker address等はsecretに分類しない。
+
+##### 11.4.3.2 供給元と優先順位
+
+秘密値は通常の設定パイプライン（§11.3）に従い、以下の供給元から設定可能:
+
+1. 組み込みデフォルト（空文字 `""` — 未設定状態）
+2. グローバル `settings.toml` の `[notifications]` セクションの `discord_webhook_url`
+3. プロファイル `settings.toml` の同キー
+4. 環境変数 `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`
+5. 動的設定（`init.py`/`init.lua`）の `pokecon.opt.notifications.discord.webhook_url` 代入
+6. CLI `--notifications-discord-webhook-url`（**対応するが非推奨** — シェルの履歴・プロセスリスト経由で他ユーザー・監査ログに露出する可能性があるため）
+
+起動パイプライン評価時、環境変数およびCLIの値を**起動診断ログにエコーしてはならない**。存在有無のみを診断に記録してもよい（ただし存在する事実自体も機密情報につながる可能性があるため、デフォルトでは出力しない）。
+
+##### 11.4.3.3 永続化とファイルシステムパーミッション
+
+アプリケーションが作成するConfigディレクトリと、secretを含み得るConfigファイルを次のように保護する:
+
+- **Linux**: アプリケーションがConfigディレクトリを作成する場合は`0700`、`settings.toml`やプロファイル`settings.toml`等のsecretを含み得るConfigファイルを作成する場合は`0600`を使用する。Data、Cache、State内の実行ファイルや通常データへ`0600`を一律適用しない。
+- **Windows**: アプリケーションがConfigディレクトリを作成する場合、現在のユーザーだけがアクセスでき、配下へ継承されるACLを設定する。具体的なWindows APIは実装詳細とする。Data、Cache、Stateには各Known Folderの標準ACLを使用する。
+
+**既存ファイルの取り扱い**: アプリ作成以前から存在するファイルやユーザーが手動で作成したファイルについて、本規則より広いパーミッション（例: `0644` 等）を検出しても**自動的に `chmod` しない**。代わりに、以下の条件でWARNINGレベルの診断を出力する:
+
+- ファイルパスおよび現在のパーミッション値（8進数）を出力する
+- ファイル内容は決して出力しない
+- 診断は起動時および設定再読み込み時の各パスで一度のみ出力する
+
+##### 11.4.3.4 動的設定のGetter/Setterセマンティクス
+
+`pokecon.opt.notifications.discord.webhook_url` の動的パスは型 `str` を維持する。getter/setterのセマンティクスは以下の通り:
+
+- **Getter（読み取り）**: 未設定時は空文字 `""` を返す。設定済み（空文字以外の値が設定されている）場合、実際の値を返さず固定マスク文字列 `"********"` を返す。
+- **Setter（書き込み）**: 実際の `str` 値を受け付ける。代入 `""`（空文字）は設定をクリアする（未設定状態に戻す）。
+- **動的パスの型は `str` のまま変更しない**: マスクはgetterの動作であり、型宣言 `str` に影響を与えない。
+
+Python/Lua両言語で同一のセマンティクスを提供する。
+
+##### 11.4.3.5 UI / REST / OpenAPI 読み取り
+
+UI（フロントエンド）および内部REST API（設定読み取りエンドポイント）は、秘密値を決して生の文字列として返送しない:
+
+- **UI初期状態ペイロード**: `configured: bool` のみを含める（実際のURLは含めない）。`configured: true` は値が設定済みであることのみを示す。
+- **REST GET 応答**: 同上。`{"configured": true}` または `{"configured": false}` を返す。実際の値を含むフィールドをレスポンススキーマに追加しない。
+- **OpenAPIスキーマ**: 秘密値を返すエンドポイントのレスポンス型に生の文字列フィールドを生成しない。
+- **UIからの送信**: ユーザーが入力した秘密値は送信に必要な間だけクライアント側で保持し、状態管理ストア、`localStorage`、`sessionStorage`、ログへ保存しない。送信完了後は入力状態から破棄する。
+
+**部分更新セマンティクス**:
+
+- リクエストに新しい秘密値を含める → その値で更新する
+- リクエストに秘密値フィールドを**省略**する → 現在の値を維持する（変更しない）
+- リクエストに明示的な空文字 `""` を含める → 設定をクリアする（未設定状態に戻す）
+
+これらのセマンティクスはUIテキスト入力フォームの「空文字でクリア」動作をREST APIでも一貫させるためのものである。
+
+##### 11.4.3.6 ログ・エラー出力の秘匿化（Redaction）
+
+秘密値を含む可能性のあるすべての入力について、ログ・エラーメッセージ・構造化ログペイロード・クラッシュレポート・診断ダンプへの出力時に秘匿化（redaction）を適用する:
+
+| 対象 | 秘匿化ルール |
+|------|------------|
+| `discord_webhook_url` の値 | ログ・エラー中では常に `"<redacted>"` または同等の固定文字列に置換する。検証エラー（URL形式不正等）でも実際の値を出力しない |
+| MQTT 公開トークン（`pub_token`） | 同様に `"<redacted>"` |
+| MQTT 購読トークン（`sub_token`） | 同様に `"<redacted>"` |
+| LINE Token引数（`LINE_text`/`LINE_image` の `token`） | No-opスタブであるが、WARNINGログ出力時にもトークン値を含めない |
+| 今後secret分類が追加された値 | 同様のルールを適用する |
+
+secretに分類されていない値は、本節による秘匿化の対象外である。
+
+##### 11.4.3.7 追加しない機構
+
+デスクトップモードとヘッドレスWebモードで同じ設定経路を維持し、プラットフォーム固有のセッションや対話UIへの依存を避けるため、OSキーチェーン/資格情報マネージャーは使用しない。また、秘密値参照構文、保存時暗号化、専用状態ファイル、独立した公開secret管理APIも追加しない。
 
 ```toml
 # 設定ディレクトリ（§14.1.1参照）の settings.toml
@@ -1913,8 +2002,9 @@ pokecon.opt.serial.baud_rate = 115200
 pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
 
 # 通知設定（階層: 複数の関連設定をnotifications.discord名前空間にグループ化）
-pokecon.opt.notifications.discord.webhook_url = "https://discord.com/api/webhooks/..."
-pokecon.opt.notifications.discord.username = "PokeCon Bot"
+# Discord Webhook URLはsecretのため、動的設定代入ではなく環境変数 POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL での設定を推奨
+pokecon.opt.notifications.discord.webhook_url = ""  # 未設定。設定時は実際のURLを代入（設定済みの場合、getterはマスク値を返す）
+pokecon.opt.notifications.discord.username = ""  # カスタムユーザー名（secretではない）
 
 # ウィジェットモード（階層: ui名前空間）
 pokecon.opt.ui.widget_mode = "ALL (default)"  # §5.5参照
@@ -2727,6 +2817,7 @@ pokecon.controller.reset()
 | `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照） | `"ask"` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
+| `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |
 
 ---
 
@@ -2808,6 +2899,8 @@ python/pokecon/typings/               # 型定義の元データ（開発・メ�
 **確定事項**:
 - 型定義ファイルの配布方式は **データディレクトリへの自動生成** で確定
 - 開発用元データはリポジトリ内の `python/pokecon/typings/` に配置
+
+**ファイルシステムパーミッション**: アプリケーションが作成するConfigディレクトリは`0700`（Linux）/ユーザー専用ACL（Windows）、secretを含み得るConfigファイルは`0600`（Linux）/継承されたユーザー専用ACL（Windows）で作成する。Data、Cache、Stateへこれらの権限を一律適用しない。既存ファイルの広いパーミッションを自動修正しない方針を含む詳細は§11.4.3.3参照。
 
 ### 14.2 設定ファイル生成タイミング
 

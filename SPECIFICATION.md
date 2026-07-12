@@ -1829,16 +1829,17 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 
 すなわち、`pokecon.opt.*`代入は常に同一の即時上書き操作であり、最終的な起動結果の差異は、代入の実行タイミングとパイプラインの適用順序によって自然に生じるものである。
 
-**マージ方式**: 設定はキー単位でマージする。下位層に存在しないキーは上位層から継承する。配列やパッケージ一覧などの複合値は、値全体を1つのキーとして扱い、要素単位のdeep mergeは行わない。
+**マージ方式**: 設定はキー単位でマージする。下位層に存在しないキーは上位層から継承する。配列やパッケージ一覧などの複合値は、値全体を1つのキーとして扱い、要素単位のdeep mergeは行わない。ただし、`packages.list` はパッケージ認識マージの例外対象であり、本方式の対象外とする（§14.5.1参照）。
 
 **動的設定ワーカーブートストラップ設定のスコープ制限**: 以下の設定はグローバル専用（スコープ`[global]`相当）であり、プロファイルTOMLではオーバーライドできない。これらは動的設定ワーカーの生成・起動方法を決定するブートストラップ設定であり、アプリケーション全体で統一される必要がある:
 - `dynamic_config_language`（動的設定ファイルの言語選択）
 - 動的設定のソース/パスセレクター（`init.py`/`init.lua`の探索パス等）
 - `[python.dynamic]` セクションのすべてのキー:
   - `python.dynamic.venv`（動的設定ワーカーvenvパス）
-  - `python.dynamic.packages.mode`（パッケージモード）
   - `python.dynamic.packages.list`（追加パッケージ一覧）
-- 動的ワーカーのブートストラップ環境を指定するその他のセレクター
+  - `python.dynamic.packages.override_application_constraints`（アプリケーション制約オーバーライド）
+  - `python.dynamic.packages.override_package_metadata_constraints`（パッケージメタデータ制約オーバーライド）
+  - `python.dynamic.packages.uv_config`（uv.toml明示パス）
 
 これらの設定がプロファイルTOMLに存在する場合、無視され、プロファイルの読み込み・切替は中断されない。既存のグローバル値が有効なままとなる。このとき、デフォルトでは無視されたキー/パスを特定するERRORレベルの診断を出力する。診断出力はグローバル設定 `report_ignored_profile_global_settings` で制御される（§11.4.2参照）。`true`（デフォルト）: プロファイル読み込み/切替を継続し、無視されたキーごとにERROR診断を出力。`false`: 診断を出力せずに黙って無視する。
 この診断設定自体もグローバル専用である。プロファイルTOMLに `report_ignored_profile_global_settings` が指定された場合、その値は無視され、診断出力の要否は既に解決済みのグローバル値によって決定される。ランタイムでの動的代入（`pokecon.opt.config.report_ignored_profile_global_settings = ...`）は、起動後に実行される後続のプロファイル読み込み/切替に対してのみ有効であり、起動中に既に出力された診断を遡って抑制することはできない。
@@ -1869,7 +1870,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`,
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
-  Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.mode`（`"append"` / `"full"`）、`pokecon.opt.python.script.packages.list`（パッケージ指定）。
+  Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.list`（パッケージ指定）、`pokecon.opt.python.script.packages.uv_config`（uv.toml明示パス）。
   動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。これらはグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 
 **制約**:
@@ -2065,7 +2066,6 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 - `LUA` → `"lua"`、`Python` → `"python"`、`ASK` → `"ask"`、`Keep_Backend` → `"keep_backend"`、`QINGPI` → `"qingpi"`、`DEFAULT` → `"default"`
 - `JA` → `"ja"`、`EN` → `"en"`
 - `TOP` → `"top"`、`BOTTOM` → `"bottom"`、`BOTH` → `"both"`
-- `APPEND` → `"append"`、`FULL` → `"full"`
 
 **制約**:
 - 正規化後も正準値のいずれとも一致しない値は拒否する。値のトリム（空白除去）は行わない。
@@ -2206,11 +2206,15 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
 | `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | |
 | `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
-| `[python.script.packages]` | `mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"`。§11.4.1.3のenum正規化規則に従う |
-| `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
+| `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定。動的代入は設定値へ即時反映されるが、環境への効果は次回のパッケージ解決／venv準備／ワーカー生成時に適用する。実行中ワーカーへ即時インストールしない |
+| `[python.script.packages]` | `override_application_constraints` | `pokecon.opt.python.script.packages.override_application_constraints` | `bool` | デフォルト `false`。`true` にするとユーザー指定制約がアプリケーション必須制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
+| `[python.script.packages]` | `override_package_metadata_constraints` | `pokecon.opt.python.script.packages.override_package_metadata_constraints` | `bool` | デフォルト `false`。`true` にするとユーザー指定制約がパッケージ配布メタデータ／推移的依存関係の制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
+| `[python.script.packages]` | `uv_config` | `pokecon.opt.python.script.packages.uv_config` | `str \| None` | uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。動的パス対応（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-uv-config <path>`。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG=<path>`。§14.5.2「uv.tomlの取り扱い」参照 |
 | `[python.dynamic]` | `venv` | — | `str` | グローバル専用・ブートストラップ専用。動的設定ワーカー用venvパス。`pokecon.opt.python.dynamic.*` の動的パスは存在しない（循環依存／ブートストラップ制約のため）。デフォルト: アプリ管理のDataディレクトリ（§14.1.1 Data）配下の `venv-dynamic`。CLI: `--python-dynamic-venv <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_VENV=<path>`。空入力は無効（起動時エラー）。UI/OpenAPI非公開（再起動が必要）。§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照 |
-| `[python.dynamic.packages]` | `mode` | — | `str` | グローバル専用・ブートストラップ専用。`"append"` / `"full"`。動的パス非対応（同上）。§11.4.1.3のenum正規化規則に従う。CLI: `--python-dynamic-packages-mode`。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_MODE` |
 | `[python.dynamic.packages]` | `list` | — | `list[{name: str, version?: str}]` | グローバル専用・ブートストラップ専用。動的パス非対応（同上）。CLI: `--python-dynamic-packages-list`（JSON文字列）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_LIST` |
+| `[python.dynamic.packages]` | `override_application_constraints` | — | `bool` | グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_application_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-application-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS`。§14.5.1参照 |
+| `[python.dynamic.packages]` | `override_package_metadata_constraints` | — | `bool` | グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_package_metadata_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS`。§14.5.1参照 |
+| `[python.dynamic.packages]` | `uv_config` | — | `str \| None` | グローバル専用・ブートストラップ専用。uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.uv_config` は存在しない）。グローバルなブートストラップ設定として早期解決され、動的venv構築前に適用される。CLI: `--python-dynamic-packages-uv-config <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG=<path>`。UI/OpenAPI非公開（再起動が必要）。§14.5.2「uv.tomlの取り扱い」参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"`。§11.4.1.3のenum正規化規則に従う |
@@ -2354,10 +2358,15 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 [python.script.packages]
 # ユーザースクリプトワーカーvenvへの追加インストールパッケージ
-# mode = "append"  # "append" = 初期値に追加 / "full" = 全指定（必須パッケージは自動追加）
 # [[python.script.packages.list]]
 # name = "requests"
 # version = ">=2.28.0"
+# アプリケーション必須制約をオーバーライド（デフォルト: false）
+# override_application_constraints = false
+# パッケージメタデータ制約をオーバーライド（デフォルト: false）
+# override_package_metadata_constraints = false
+# uv.tomlの明示パス（未指定時はuv設定発見を無効化）
+# uv_config = "uv.toml"
 
 [python.dynamic]
 # 動的設定ワーカー用venvパス（グローバル専用: プロファイルTOMLでは設定不可）
@@ -2368,9 +2377,14 @@ reconnect_max_retries = 20  # リトライ回数上限
 
 [python.dynamic.packages]
 # 動的設定ワーカーvenvへの追加インストールパッケージ（グローバル専用）
-# mode = "append"
 # [[python.dynamic.packages.list]]
 # name = "numpy"
+# アプリケーション必須制約をオーバーライド（デフォルト: false）
+# override_application_constraints = false
+# パッケージメタデータ制約をオーバーライド（デフォルト: false）
+# override_package_metadata_constraints = false
+# uv.tomlの明示パス（グローバル専用。未指定時はuv設定発見を無効化）
+# uv_config = "uv.toml"
 
 [profiles]
 active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.opt.active_profile と同名）
@@ -2521,11 +2535,16 @@ pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
 # venvパス: 未指定時はデータディレクトリ配下 venv-script/（Linux例: ~/.local/share/pokecon/venv-script）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.shutdown_timeout_ms = 2000  # プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
-pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = [
     {"name": "requests", "version": ">=2.28.0"},
     {"name": "numpy"},
 ]
+# アプリケーション必須制約をオーバーライド（デフォルト: False）
+pokecon.opt.python.script.packages.override_application_constraints = False  # True にするとユーザー指定制約が優先
+# パッケージメタデータ制約をオーバーライド（デフォルト: False）
+pokecon.opt.python.script.packages.override_package_metadata_constraints = False
+# uv.tomlの明示パス（未指定時はuv設定発見を無効化）
+pokecon.opt.python.script.packages.uv_config = "uv.toml"  # str | None, デフォルト None。実効Configルート基準
 
 # グローバル専用設定診断の制御（起動後に実行されるプロファイル読み込み/切替にのみ有効）
 # pokecon.opt.config.report_ignored_profile_global_settings = False  # True=ERROR出力（デフォルト）, False=黙って無視
@@ -2569,11 +2588,16 @@ pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_bac
 -- venvパス: 未指定時はデータディレクトリ配下 venv-script/（Linux例: ~/.local/share/pokecon/venv-script）
 pokecon.opt.python.script.venv = "~/.local/share/pokecon/venv-script"
 pokecon.opt.python.script.shutdown_timeout_ms = 2000  -- プロファイル切替時のワーカー停止タイムアウト（ミリ秒）。0=即時強制終了
-pokecon.opt.python.script.packages.mode = "append"
 pokecon.opt.python.script.packages.list = {
     {name = "requests", version = ">=2.28.0"},
     {name = "numpy"}
 }
+-- アプリケーション必須制約をオーバーライド（デフォルト: false）
+pokecon.opt.python.script.packages.override_application_constraints = false
+-- パッケージメタデータ制約をオーバーライド（デフォルト: false）
+pokecon.opt.python.script.packages.override_package_metadata_constraints = false
+-- uv.tomlの明示パス（未指定時はuv設定発見を無効化）
+pokecon.opt.python.script.packages.uv_config = "uv.toml"  -- string | nil, デフォルト nil。実効Configルート基準
 
 -- イベントハンドラ
 pokecon.autocmd.on("CameraOpenPost", {
@@ -3355,10 +3379,15 @@ pokecon.controller.reset()
 | `POKECON_APPNAME` | アプリケーション名セレクター（§11.3「`app_name` — アプリケーション名セレクター」参照）。Neovimの`NVIM_APPNAME`に類似。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される | `"pokecon"` |
 | `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカーのプライマリランタイム選択（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。値: `"python"` / `"lua"` / `"none"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問）。デフォルト: `"lua"`。ブートストラップ環境変数として早期解決される。CLI対応: `--dynamic-config-language`。複数指定時はCLIが優先 | `"lua"` |
 | `POKECON_PYTHON_DYNAMIC_VENV` | 動的設定ワーカー用venvパス（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照）。ブートストラップ環境変数として早期解決される。CLI対応: `--python-dynamic-venv <path>`。複数指定時はCLIが優先。空文字列は無効（起動時エラー） | Data/`venv-dynamic`（§14.1.1 Data） |
-| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問） | `"ask"` |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS` | 動的設定ワーカーのアプリケーション必須制約オーバーライド（§14.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-override-application-constraints`（明示的 `true`/`false`） | `false` |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS` | 動的設定ワーカーのパッケージメタデータ制約オーバーライド（§14.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`） | `false` |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG` | ユーザースクリプトワーカーのuv.toml明示パス（§14.5.2参照）。未指定時はuv設定発見を無効化する。空文字列は無効。指定時は§11.4.1.4に従い解決し、既存の読み取り可能な通常ファイルを要求する。CLI対応: `--python-script-packages-uv-config <path>`。動的設定からも設定可能（profile-capable） | `null`（未指定） |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG` | 動的設定ワーカーのuv.toml明示パス（§14.5.2参照）。ブートストラップ環境変数として早期解決される。未指定時はuv設定発見を無効化する。空文字列は無効。指定時は§11.4.1.4に従い解決し、既存の読み取り可能な通常ファイルを要求する。CLI対応: `--python-dynamic-packages-uv-config <path>`。UI/OpenAPI非公開（再起動が必要） | `null`（未指定） |
+| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"` | `"ask"` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |
+| `POKECON_UV_*`（ワイルドカード） | UV_* 環境変数ブリッジ（§14.5.2「POKECON_UV_* → UV_* 環境変数ブリッジ」参照）。`POKECON_UV_` を接頭辞とする任意の環境変数は、uv 子プロセスに対して当該接頭辞を取り除いた `UV_*` として透過的に継承される。例: `POKECON_UV_INDEX_URL` → 子プロセス `UV_INDEX_URL`。全値は潜在的機密情報として扱われ、ログ・診断・クラッシュダンプに値そのものを出力しない（§11.4.3「機密情報（Secret）の取り扱い」秘匿化規則参照）。空の接尾辞（`POKECON_UV_` のみの設定）は起動時設定エラー | —（未指定時はブリッジ適用なし） |
 
 ---
 
@@ -3471,7 +3500,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 - 期待するバージョンがない場合はデフォルトを使用
 - 既存のPythonが期待するバージョンかチェック
 - ない場合はpython-build-standaloneをダウンロード
-- ユーザースクリプトワーカー用と動的設定ワーカー用の仮想環境を構築し、必須パッケージ + ユーザーパッケージをそれぞれインストール
+- アプリ管理のpinned uv（§14.5.2参照）を使用して、ユーザースクリプトワーカー用と動的設定ワーカー用の仮想環境を構築し、必須パッケージ + ユーザーパッケージをそれぞれインストール
 
 **詳細な実装**: Python管理モジュールを参照。
 
@@ -3480,8 +3509,351 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 - **リポジトリ内`pyproject.toml`**からビルド時に取得
 - **ビルドスクリプトでコード生成**、ソースに埋め込み
 - pyproject.toml変更時に自動再ビルド
+- パッケージ解決とインストールはアプリ管理のpinned uv（§14.5.2参照）が担当する。pipフォールバックは存在しない。
 
-実装詳細はビルドスクリプトを参照。
+#### 14.5.1 パッケージマージ・オーバーライドアルゴリズム
+
+`packages.list`（ユーザースクリプトワーカー、動的設定ワーカーとも）はリスト専用モデルである。`packages.mode`（`"append"` / `"full"`）は存在せず、以下のルールが唯一のマージ動作を規定する。
+
+**パッケージ同一性（PEP 503正規化）**:
+- パッケージの同一性比較には、Python Packaging / PEP 503 セマンティクスに従う**正規化配布名**（normalized distribution name）を使用する。正規化規則:
+  - ASCII大文字小文字を区別しない（`NumPy` = `numpy` = `NUMPY`）
+  - 連続する `-`、`_`、`.` は等価とみなす（`my_pkg` = `my-pkg` = `my.pkg`）
+  - すべての区切り文字列は単一の `-` に正規化される（PEP 503の `re.sub(r"[-_.]+", "-", name).lower()` 相当）
+- この正規化名称はパッケージの同一性判定にのみ使用する。インストールツールへの引き渡しには元の表記を維持する。
+- 重複エントリ（同一正規化名を持つ複数のエントリ）は、重複それ自体だけではエラーとしない。解決順序に従ってマージされる（下記参照）。
+
+**解決順序**:
+
+1. **同一設定ソース内のマージ**: 単一の設定ソース（グローバルTOML、プロファイルTOML、環境変数、動的設定、CLI引数）に含まれる `packages.list` 内の全エントリを、パッケージ認識でマージする。同一ソース内の重複エントリは正規化名をキーとして統合される。
+2. **ソース間マージ**: 上記のソース内マージ結果を、既に解決済みの下位優先ソースの結果にマージする。このマージは設定パイプライン順序（§11.3起動パイプライン）に従い、下位から上位へ逐次行う。
+3. **結果保持**: マージ後は統合結果のみを保持し、マージ前の個別エントリは破棄する。各ソース間マージの完了後、前ステップの個別エントリは一切参照しない。
+
+**設定ソース間の制約マージルール**:
+
+1. **異なる設定ソース間**（例：グローバルTOMLとプロファイルTOML、TOMLとCLI、静的設定と動的設定）:
+   - 互換性のあるバージョン制約はマージ（積集合）する。
+   - 制約が競合する場合、競合するパッケージに限り、後述する比較句単位の最小矛盾集合アルゴリズムで低優先ソースの競合比較句を除去し、高優先ソースの比較句を採用する。他のパッケージおよび低優先ソースの非競合比較句には影響しない。
+
+2. **同一の非動的設定ソース内**（例：一つのTOMLファイルに同じパッケージのエントリが複数存在する場合）:
+   - 互換性のある重複エントリはマージする。
+   - 競合する制約が存在する場合、その設定ソースの構成エラーとして当該ソースの適用を拒否し、競合する正規化配布名・比較句・入力位置を含むERROR診断を必ず出力する。動的設定以外では後勝ちで修復しない。
+
+3. **動的設定（Python/Lua）における同一ソース内の動作**:
+   - 動的設定では、コードの実行タイミングと代入順序が適用順序を決定する。同じ `packages.list` 変数への複数回の代入は、実行順に適用される。
+   - 互換性のある制約は累積的にマージする。
+   - 新たな動的代入が既存の累積制約と競合する場合、新しい代入の比較句を高優先度側、既存の累積比較句を低優先度側として、後述する最小矛盾集合アルゴリズムを適用する。競合しない既存比較句と他のパッケージは維持され、パッケージ全体の制約を完全に置き換えることはない。
+
+**バージョン構文の非制限方針 + 部分PEP 440句解析**:
+
+`packages.list[]` の `version` フィールドの構文をPEP 440のallowlistに制限しない。以下の方針に従う:
+
+- **省略時**: `version` は省略可能（`null`/未指定）であり、その場合は当該パッケージにバージョン制約を課さない（unconstrained）。リゾルバー/インストーラーが最新互換バージョンを自由に選択する。
+
+- **解析済み句（AnalyzedClause）**: バージョン値からPEP 440比較句（specifier clause set）として安全に解析可能な各句を **解析済み句（AnalyzedClause）** として扱う。解析済み句は以下の性質を持つ:
+  - PEP 440に従い正規化して保持する
+  - 通常のソースマージ（§14.5.1「解決順序」「設定ソース間の制約マージルール」）の対象とする
+  - 後述の比較句単位の最小矛盾集合（MUS）アルゴリズムの対象とする
+  - 元の入力順を保持する
+  - ソースの出自（source provenance）を保持する
+
+- **直接ソースバージョン句（DirectSourceVersionClause）**: 以下の形式を **直接ソースバージョン句（DirectSourceVersionClause）** として扱う:
+  - PEP 508形式の `name @ URL`（`pkg @ https://example.org/pkg.tar.gz` 等）
+  - Wheel/SDistの直接URL（`https://example.org/pkg-1.0-py3-none-any.whl` 等）
+  - VCSソース（`git+https://...`、`hg+...`、`svn+...` 等）
+  - ローカルパッケージパス（`file:///path/to/pkg`、`/path/to/pkg` 等）
+
+  `packages.list`では配布名を外側の`name`フィールドで指定する。`version`には`@ URL`、VCS URL、ローカルパスのように取得元部分だけを指定できる。完全な`name @ URL`形式も受理するが、その内側の配布名をPEP 503正規化した結果が外側の`name`と一致しなければ設定エラーとする。uv入力の再構築時は外側の正規化配布名へ直接ソースを関連付け、配布名を二重に連結してはならない。
+
+  直接ソースバージョン句は、原子論的な単一バージョン同一性（atomic single version identity）である。Nixのderivation identityと同様に、ソースURL/パスおよび取得・ビルド方法がバージョン同一性の一部を構成する。メタデータバージョンは報告されうるが、レジストリバージョンと直接ソースバージョンを等価にするものではない。以下の性質を持つ:
+  - 正規化配布名に関連付けられたシングルトンバージョンセレクターとして内部表現に保持する
+  - 正規化配布名ごとに有効な直接ソースバージョン句は高々一つ（シングルトン）
+  - PEP 508として構文解析するが、取得元・ビルド方法を含む同一性を失わないよう、ソース文字列は改変せず損失なく保持する
+  - ソースの出自（source provenance: 元の設定ソースの種類と入力順）を保持する
+  - 元の入力順を保持する
+  - 同一正規化パッケージに対する他のバージョン選択句（別の直接ソースバージョン句または解析済み句の比較子集合）と意味的に競合する（下記「直接ソースバージョン句の順序付き上書きルール」参照）
+  - アーティファクトのメタデータバージョンを検査して比較句との互換性を主張しない。メタデータバージョンを基に `ResolvedDirectVersionClause` を生成したり、メタデータバージョンが範囲を満たすことを理由に直接ソースバージョン句と解析済み句を共存させたりしてはならない
+
+  **パッケージインデックス／リポジトリURLとの区別**: 以下の形式は直接ソースバージョン句ではなく、パッケージインデックス／リゾルバー設定であり、バージョン制約と共存可能である:
+  - `index-url`、`extra-index-url`等のパッケージインデックス指定
+  - PyPI等のパッケージリポジトリURL
+  - プライベートパッケージインデックスURL
+  これらのインデックス設定は `packages.list` の `version` フィールド外で管理される。
+
+  **直接ソースバージョン句の順序付き上書きルール**:
+
+  直接ソースバージョン句は原子論的な単一バージョン同一性であるため、同一正規化パッケージに対して常に高々一つのバージョン選択句（直接ソースバージョン句または解析済み句の比較子集合のいずれか）のみが有効となる。以下の順序付き上書きルールに従い、バージョンセレクター（version-selector）レベルで解決する:
+
+  1. **同一設定ソース内のエントリ順**: 設定リスト／ソース内ではエントリの出現順を保存する。後続のエントリが先行するエントリのバージョン選択句と競合する場合、後続が優先される。
+     a. **通常バージョン指定が先行の直接ソースバージョン句を上書き**: リスト内で、あるエントリが直接ソースバージョン句を持ち、それより後のエントリ（同じ正規化パッケージ）が安全に解析可能な通常バージョン指定（解析済み句）を持つ場合、先行する直接ソースバージョン句のみを除去し、後続の通常バージョン句を解析済み句のMUSルールに従ってマージする。これは同一非動的ソース内における「構成エラー」の明示的な例外であり、この場面では構成エラーとはしない。
+     b. **直接ソースバージョン句が先行の通常バージョン句を上書き**: リスト内で、先行エントリが解析済み句を持ち、後続エントリが直接ソースバージョン句を持つ場合、後続の直接ソースバージョン句が優先される。先行する競合するバージョン選択句（解析済み句の比較子集合全体）を除去し、後続の直接ソースバージョン句を採用する。
+     c. **直接ソースバージョン句同士**: 後続（高優先度）の直接ソースバージョン句が優先される。完全一致する同一直接ソースバージョン句の重複は排除する（dedupe）。
+
+  2. **異なる設定ソース間**: 高優先度ソースのバージョン選択句が低優先度ソースの競合する全バージョン選択句を上書きする。これは句レベル（バージョンセレクターレベル）で適用され、解析済み句の個別比較句レベルではない。互換性のないパッケージのエントリは影響を受けない。すなわち、高優先度ソースが直接ソースバージョン句を持つ場合、低優先度ソースの同一パッケージに関する全解析済み句および全直接ソースバージョン句を除去する。高優先度ソースが解析済み句を持つ場合、低優先度ソースの同一パッケージに関する全直接ソースバージョン句を除去し、解析済み句は通常のMUSルールに従ってマージする。
+
+  3. **動的設定（Python/Lua）**: 後で評価されたバージョン選択句が先行する競合句に勝つ。評価時点で有効なバージョン選択句の種類（直接ソースバージョン句または解析済み句）が、そのパッケージの最終的なバージョン同一性を決定する。非競合の他パッケージ句は維持される。
+
+  4. **アプリケーション制約オーバーライドとの関係（§14.5.1アプリケーション制約オーバーライド参照）**: `override_application_constraints` はアプリケーション必須制約とユーザー指定の競合解決を制御する。`false`（デフォルト）の場合、アプリケーション必須制約が保護され、競合するユーザー指定の直接ソースバージョン句は除去される。`true` の場合、ユーザー指定の直接ソースバージョン句が保護され、競合するアプリケーション必須バージョン比較句が除去される。このboolはソース同一性の選択（直接ソースバージョン句を採用するか否か）を制御するのであって、選択された直接パッケージの依存関係メタデータ制約を制御するのではない。
+
+  5. **パッケージメタデータ制約オーバーライドとの関係（§14.5.1パッケージメタデータ制約オーバーライド参照）**: `override_package_metadata_constraints` は依存関係メタデータの制御に限定される。直接ソースバージョン句は、当該boolが `true` で設定された競合の場合を除き、アーティファクトの依存関係メタデータを消去しない。このboolは、選択された直接パッケージのソース同一性が確定した後に、その依存関係制約の解決にのみ影響する。
+
+  6. **マーカー付き直接要求**: 直接要求にマーカー式（`; python_version >= "3.10"` 等）が付随する場合、マーカー部分は安全に分離・解析可能であれば別途解析し、直接ソースバージョン句とは独立して評価する。安全に分離できないマーカー部分は従来通り不透明断片として保持する。直接ソースバージョン句本体は構造化されたまま維持される。
+
+- **不透明断片（OpaqueFragment）**: 以下の理由によりPEP 440比較句として安全に解析できない構文単位は **不透明断片（OpaqueFragment）** として扱う:
+  - `===` 任意等価構文を含む
+  - マーカー式（`; python_version >= "3.10"` 等）を含み、比較句部分を安全に分離できない
+  - ツール固有の非標準構文（uvの依存関係拡張等）
+  - 未知の将来構文
+  - パーサーが解析を拒否するその他すべての形式
+
+  不透明断片は以下のプロパティを持つ:
+  - 正確な元のテキストを保持する（正規化しない）
+  - ソースの出自（source provenance: 元の設定ソースの種類と入力順）を保持する
+  - 元の入力順を保持する
+  - 互換性解析・正規化・MUSの計算を行わない
+  - 不透明であることを理由に制約なし（unconstrained）とサイレントに解釈しない
+  - 解析不能は構成エラーではない。リゾルバー/インストーラーが後段で受け入れまたは拒否し、そのエラーを通常通り報告する。アプリケーションが解析不能を理由に事前に拒否してはならない
+
+**安全なトークナイザー規則**:
+
+バージョン値のトークン化（PEP 440比較句の抽出と不透明断片の分離）は以下の安全規則に従う:
+
+1. **内部区切り防止**: カンマまたは区切り文字がURL / VCS / ツール固有構文の内部に出現する場合、その構文単位全体を安全に分割不能と判断する。当該構文単位全体を単一の直接ソースバージョン句として扱う（URL/VCS/ローカル形式の場合）か、または単一の不透明断片として扱う（ツール固有構文の場合）。
+2. **部分解析の分離**: 同一バージョン値内で、安全に解析可能な単位のみを抽出して解析済み句とし、安全に分割できない単位だけを不透明断片として保持する。安全な単位と不安全な単位が混在する場合でも、安全な単位の解析を阻害しない。
+3. **エントリ間の独立性**: 当該エントリ全体が安全に解析不能であっても、同一正規化パッケージ名の他のエントリの解析には影響しない。
+
+例: `">=2,<5 @ https://example.org/pkg.tar.gz"` は以下のように分解される:
+- 解析済み句: `>=2`、`<5`（二句）
+- 直接ソースバージョン句: `@ https://example.org/pkg.tar.gz`（一件、直接ソースバージョン句、後述の順序付き上書きルール対象）
+
+例: `">=2,<5; python_version >= \"3.10\""` は以下のように分解される:
+- 解析済み句: `>=2`、`<5`（二句）
+- 不透明断片: `; python_version >= "3.10"`（一件、マーカー式）
+
+**比較句単位の最小矛盾集合（MUS）アルゴリズム**:
+
+- **解析済み句のみ対象**: 本アルゴリズムは解析済み句（AnalyzedClause）のみを操作対象とする。不透明断片（OpaqueFragment）は本アルゴリズムの対象外であり、そのまま保持される。直接ソースバージョン句（DirectSourceVersionClause）も本アルゴリズムの対象外であり、別途定義された直接ソースバージョン句の順序付き上書きルールに従う。例: `">=2,<5,!=3"` の解析済み句は `>=2`、`<5`、`!=3` の三句。
+- **高優先度側の事前検証**: 高優先度側の解析済み句集合だけで論理的に充足不能な場合は、その設定ソース自体を構成エラーとする。動的設定では当該代入を拒否し、代入前の解決済み状態を維持する。後勝ちによって高優先度側内部の矛盾を修復してはならない。
+- **最小矛盾集合**: 高優先度側と低優先度側の解析済み句を結合して充足不能になる場合、それ以上いずれかの解析済み句を一つ取り除いても充足不能ではなくなる包含最小の比較句集合（inclusion-minimal unsatisfiable subset）を全て求める。
+- **除去対象**: 全ての最小矛盾集合に含まれる低優先度側の解析済み句の和集合を除去する。高優先度側の解析済み句は除去しない。どの最小矛盾集合にも含まれない低優先度側の解析済み句は保持する。不透明断片は除去対象の判断から除外する。
+- **除去と不透明断片／直接ソースバージョン句の分離**: MUSアルゴリズムにより解析済み句を除去する際、同一元入力から抽出された不透明断片や直接ソースバージョン句を一緒に除去してはならない。不透明断片は元のソース出自と入力順に従って個別に保持される。直接ソースバージョン句は直接ソースバージョン句の順序付き上書きルールに従って別途解決される。
+- **再検証**: 除去後の解析済み句集合が充足可能であることを検証してから、正規化・簡約した解決済み制約として保持する。充足不能が残る場合は内部解決エラーとし、恣意的な句を追加で選んではならない。
+- **公開済みバージョンの有無との区別**: 本アルゴリズムの「充足可能」はPEP 440比較句の論理的な共通範囲を指す。共通範囲に実際に公開・取得可能な配布物が存在しない場合は、後段のパッケージリゾルバーによる解決エラーであり、比較句競合とは区別する。
+
+例（解析済み句のみ）: 低優先度 `>=2,<5,!=3` と高優先度 `<2` では、最小矛盾集合 `{>=2, <2}` に含まれる低優先度句 `>=2` だけを除去し、`<5`、`!=3`、`<2` を保持する。
+
+複数句の組み合わせでのみ矛盾する例として、低優先度 `>=1,<2` と高優先度 `!=1.*` では、最小矛盾集合 `{>=1, <2, !=1.*}` に含まれる低優先度句 `>=1` と `<2` をともに除去し、高優先度句 `!=1.*` を保持する。複数の最小矛盾集合が存在する場合も、低優先度句の和集合を除去し、一つの矛盾集合だけを恣意的に選択しない。
+
+例（不透明断片の保持）: 低優先度 `>=2,<5; python_version >= "3.10"` と高優先度 `<2` では:
+- 解析済み句: `>=2`、`<5`（低優先度）、`<2`（高優先度）
+- 不透明断片: `; python_version >= "3.10"`（低優先度、一件、カーディナリティ評価対象）
+- MUSにより `>=2` を除去しても、不透明断片 `; python_version >= "3.10"` は保持される
+- 結果（正規化・簡約後の解析済み句）: `<2` + 不透明断片: `; python_version >= "3.10"`
+
+例（直接ソースバージョン句の順序付き上書き — 異種句、異なるソース間）: 低優先度（グローバルTOML）`pkg ==1.0` と高優先度（プロファイルTOML）`pkg @ https://example.org/pkg-2.0.tar.gz` では:
+- 低優先度に解析済み句 `==1.0`、高優先度に直接ソースバージョン句 `@ https://example.org/pkg-2.0.tar.gz`
+- 直接ソースバージョン句はバージョンセレクターレベルで解析済み句と競合する。高優先度の直接ソースバージョン句が勝ち、低優先度の解析済み句は全て除去される
+- 結果: 直接ソースバージョン句 `@ https://example.org/pkg-2.0.tar.gz`（解析済み句なし）
+
+例（直接ソースバージョン句の順序付き上書き — 同種句）: 低優先度 `pkg @ https://old.url/pkg` と高優先度 `pkg @ https://new.url/pkg` では:
+- 両優先度に直接ソースバージョン句が存在する。高優先度の直接ソースバージョン句が勝ち、低優先度の直接ソースバージョン句は除去される
+- 結果: 直接ソースバージョン句 `@ https://new.url/pkg`
+
+例（同一ソース内の順序付き上書き — 通常バージョン指定が直接ソースバージョン句を上書き）: 同一TOMLファイル内に以下のエントリがこの順序で存在する場合:
+```toml
+[[python.script.packages.list]]
+name = "pkg"
+version = "@ https://example.org/pkg-1.0.tar.gz"
+
+[[python.script.packages.list]]
+name = "pkg"
+version = ">=1.0,<3.0"
+```
+- 最初のエントリは直接ソースバージョン句 `@ https://example.org/pkg-1.0.tar.gz`
+- 二番目のエントリは解析済み句 `>=1.0`、`<3.0`
+- 後続の通常バージョン指定が先行の直接ソースバージョン句を順序付き上書きする。直接ソースバージョン句のみが除去され、解析済み句 `>=1.0,<3.0` がMUSルールに従って採用される
+- 結果: 解析済み句 `>=1.0,<3.0`（直接ソースバージョン句なし）
+
+例（同一ソース内の順序付き上書き — 直接ソースバージョン句が通常バージョン句を上書き）: 同一TOMLファイル内に以下のエントリがこの順序で存在する場合:
+```toml
+[[python.script.packages.list]]
+name = "pkg"
+version = ">=1.0,<3.0"
+
+[[python.script.packages.list]]
+name = "pkg"
+version = "@ https://example.org/pkg-2.0.tar.gz"
+```
+- 最初のエントリは解析済み句 `>=1.0`、`<3.0`
+- 二番目のエントリは直接ソースバージョン句 `@ https://example.org/pkg-2.0.tar.gz`
+- 後続の直接ソースバージョン句が先行の解析済み句を順序付き上書きする。解析済み句の比較子集合全体が除去され、直接ソースバージョン句が採用される
+- 結果: 直接ソースバージョン句 `@ https://example.org/pkg-2.0.tar.gz`（解析済み句なし）
+
+**不透明断片のカーディナリティ分類**:
+
+各不透明断片は、その構文種類に応じてリゾルバーアダプターにより以下のカーディナリティに分類される:
+
+| カーディナリティ | 動作 | 該当例 |
+|----------------|------|--------|
+| `single` | 同一値は重複排除する。同一非動的ソース内に異なる値が存在する場合は構成エラーとする。ソース間では高優先度ソースの値のみを保持する。動的評価では後代入が優先する。シングルトン不透明断片の置換は、同一元入力に含まれる非競合の解析済み句を消去しない。 | リゾルバーが単一保証を認識する既知の不透明構文 |
+| `multiple` | 設定ソース・入力順のまま全て保持する。デフォルトのカーディナリティ。 | ツール固有の依存関係拡張（複数指定可能な構文） |
+| `unknown` | 全て保持し、リゾルバーが判断・拒否する。アプリケーションは事前のフィルタリングを行わない。 | 未知の将来構文 |
+
+- `single` 分類は、リゾルバーアダプターが実際のリゾルバー契約上の単一保証を確認できる既知の構文にのみ適用する。網羅的な種類の列挙は行わず、アダプターの能力（capability）に基づく。
+- `multiple` がデフォルトの動作である。明示的に `single` と分類されない不透明断片は `multiple`（安全側）またはリゾルバーアダプターの判断で `unknown` とする。
+- カーディナリティは不透明断片のマージ動作のみを規定する。解析済み句のMUSアルゴリズムには影響しない。
+- 上記の non-dynamic single ルールは、ファイルベースの静的ソース（TOML、環境変数、CLI引数）における同一ソース内の重複に適用する。動的設定（Python/Lua）における単一ソース内の重複は、実行順に従い後代入が優先する。
+
+**Resolverアダプター（uvアダプター）の責務**:
+
+- 本リゾルバーアダプターはuvを対象とする。DirectSourceVersionClause（§14.5.1）をuvが受け入れ可能な直接URL／VCS／ローカル依存関係形式へ損失なく変換する。認識できない直接ソースバージョン句がある場合は明示的なリゾルバーエラーとする。
+- uvアダプターは、既知のシングルトン不透明構文を、実際のuv契約が単一を保証する場合にのみ `single` と分類する。
+- uvアダプターが保持された不透明構文を受け入れられない場合は、明示的なリゾルバーエラーとする。サイレントな変更（無視・削除・改変）を行ってはならない。
+
+**再構築規則**:
+
+リゾルバー入力は、マージ後の解析済み句、直接ソースバージョン句、保持された不透明断片から以下のように再構築する:
+
+1. 直接ソースバージョン句が有効な場合: 順序付き上書き解決後は同一パッケージの解析済みバージョン比較句が残っていてはならない。直接ソースバージョン句をPEP 508形式で損失なくシリアライズし、付随するマーカー／不透明断片があれば別途関連付けてリゾルバーに渡す。ローカル相対パスは§11.4.1.4に従い、CLI由来なら起動cwd、それ以外の設定表面由来なら実効Configルートを基準に解決する。
+2. 解析済み句のみ存在する場合（直接ソースバージョン句なし）: 解析済み句をPEP 440 specifier setとしてシリアライズする。
+3. 解析済み句と不透明断片の両方が存在する場合（直接ソースバージョン句なし）: 両者を元の入力順を考慮して結合する。構文上再構築不能な場合は、不透明断片をリゾルバーアダプターへの別個の入力として渡す。
+4. 解析済み句が存在せず不透明断片のみの場合: 不透明断片の元のテキストをそのままリゾルバーに渡す。
+5. リゾルバーが受け入れ可能な形式に再構築できない場合は、不透明断片を別個のアダプター入力として分離して渡す。
+6. 損失のない再構築を原則とする。解析済み句、直接ソースバージョン句、不透明断片のいずれかをサイレントに欠落させてはならない。
+7. 直接ソースバージョン句または不透明断片を別個の入力として渡す場合でも、同一正規化パッケージ名に対する入力であることがリゾルバーに伝わるよう、アダプターが適切に紐付ける。
+
+**アプリケーション必須パッケージとのマージ**:
+- 最終的なインストール要件は、アプリケーション必須パッケージ（ビルド時生成の組み込みデータ、§14.5冒頭参照）と上記手順で解決された全ユーザー指定要件をマージしたものとする。
+- アプリケーション必須パッケージは、設定パイプラインの最下位ソース（組み込みデフォルト相当）として扱う。
+
+**アプリケーション制約オーバーライド（パッケージ単位 per-worker bool）**:
+
+`packages.list` の解決には、アプリケーション必須パッケージの制約とユーザー指定制約の競合解決を制御するパッケージ単位のbool設定が存在する。
+
+`python.script.packages.override_application_constraints`（ユーザースクリプトワーカー）および `python.dynamic.packages.override_application_constraints`（動的設定ワーカー）は、以下のセマンティクスを持つ独立した bool 設定である。デフォルトは両者とも `false`（安全側）。
+
+| 値 | 動作 |
+|---|------|
+| `false`（安全デフォルト） | アプリケーション必須制約が競合するユーザー指定制約部分に勝つ。競合するユーザー制約部分は当該パッケージ・当該部分に限り無視される。互換性のあるユーザー制約部分は合成される。 |
+| `true` | ユーザー指定制約が競合するアプリケーション必須制約部分に勝つ。互換性のあるアプリケーション制約部分は合成される。 |
+
+この設定は、§14.5.1「異なる設定ソース間」ルールにおけるアプリケーション必須パッケージ（最下位ソース）と上位ソース間の競合解決動作を変化させる。上記アルゴリズムにおいて、最下位ソース（アプリケーション必須パッケージ）とのマージ時のみ、本設定の値に応じて優先方向が切り替わる。他のソース間の競合解決動作（§14.5.1ルール1）には影響しない。
+
+**既存のbool構文との一貫性**:
+- CLI/env: 明示的な `true`/`false`（大文字小文字不問）、bare flag禁止、`--no-` エイリアスなし
+- TOML: ネイティブbool（`true`/`false`）
+- Python/Lua: ネイティブbool（`True`/`False` / `true`/`false`）
+- 型ヒント: `bool`（`Literal` enumではない）
+
+**旧ルールからの変更**: 旧仕様の「ユーザーのバージョン指定子がアプリケーションの必須バージョン制約を完全に置き換える」という無条件ルールは廃止する。ユーザー指定がアプリケーション制約を置き換えるか否かは、上記の `override_application_constraints` 設定に依存する。
+
+**パッケージメタデータ制約オーバーライド（パッケージ単位 per-worker bool）**:
+
+`packages.list` の解決には、パッケージ配布メタデータ／推移的依存関係の制約とユーザー指定制約の競合解決を制御するパッケージ単位のbool設定が存在する。本設定はアプリケーション制約オーバーライド（`override_application_constraints`）とは独立して動作し、それぞれ異なる競合軸を制御する。両設定を混同してはならない。
+
+`python.script.packages.override_package_metadata_constraints` および `python.dynamic.packages.override_package_metadata_constraints` は、以下のセマンティクスを持つ独立した bool 設定である。デフォルトは両者とも `false`（安全側）。
+
+| 値 | 動作 |
+|---|------|
+| `false`（安全デフォルト） | パッケージ配布メタデータ／推移的依存関係の制約が、競合するユーザー指定制約部分に勝つ。競合するユーザー制約部分は当該パッケージ・当該部分に限り無視される。互換性のあるユーザー制約部分は合成される。 |
+| `true` | ユーザー指定制約が競合するメタデータ／推移的依存関係の制約部分を絶対的に上書きする。互換性のあるメタデータ制約部分は合成される。本設定はuvの `--overrides` としてuvアダプターに引き渡される。インストーラーはuvに確定している（§14.5.2参照）。ユーザーは無効・破損した環境、ImportError、ABI/API不一致の可能性を受け入れる。 |
+
+この設定は `override_application_constraints` と独立している。`override_application_constraints` はアプリケーション必須パッケージとユーザー指定の競合を制御し、`override_package_metadata_constraints` はパッケージメタデータ／推移的依存関係とユーザー指定の競合を制御する。両設定を組み合わせた場合、アプリケーション制約解決後（アプリケーションパッケージが確定した後）にメタデータ制約解決が適用される。
+
+bool構文は §11.4.1.2 に従う。型は `bool`。
+
+**§11.3との関係**:
+`packages.list` はパッケージ認識マージの例外対象であり、§11.3の「配列やパッケージ一覧などの複合値は、値全体を1つのキーとして扱い、要素単位のdeep mergeは行わない」という汎用複合値置換ルールの適用外とする。これにより、異なる設定ソース間でのパッケージレベルのマージ（追加・制約結合）が可能となる。
+
+#### 14.5.2 リゾルバー/インストーラー（uv）
+
+アプリケーション管理のpinned uvが、ワーカーvenvの唯一のPythonパッケージリゾルバー兼インストーラーである。pipフォールバックは存在しない。
+
+**uvの提供方法**:
+- **nix環境**: uvはflake/build inputsによりピン留めされる。
+- **非nix環境/Windows**: アプリケーションが検証済みのpinned uvバイナリをバンドルまたはダウンロードし、整合性検証を行う。ホスト環境の任意のuvに依存しない。
+
+**uvの責務**:
+- 対象ワーカーvenvの作成・管理
+- アプリ管理のCPython 3.14をターゲットとした依存関係の解決とインストール
+- uvの該当機能（`--constraint` / `--overrides` 等）へのアルゴリズム出力のマッピング
+- アプリケーションの事前マージ・MUS・直接ソースバージョン句ロジック（§14.5.1）を通過した後の入力をuv向けに変換する
+
+**uvアダプター（Resolverアダプター）**:
+- uvアダプターは、DirectSourceVersionClauseをuvが受け入れ可能な直接URL／VCS／ローカル依存関係形式へ損失なく変換する。
+- uvアダプターはOpaqueFragmentをカーディナリティ分類（§14.5.1）に従ってuvに引き渡す。uvが不透明構文を受け入れられない場合は明示的なエラーとする。
+- uvアダプターは、通常の加法的制約（AnalyzedClauseの比較句）と絶対的オーバーライド（`override_package_metadata_constraints`）を、それぞれuvの `--constraint` / `--overrides` に適切にマッピングする。
+
+**uvキャッシュ**:
+- uvキャッシュは実効Cacheルート（§14.1.1 Cache）配下の `uv/` ディレクトリに配置する。アプリ不変条件（app invariant）として管理する。
+
+**整合性とエラー処理**:
+- 管理対象uvが欠落・破損している場合、またはサポート外の入力が渡された場合は明示的なエラーとする。pipへのサイレントフォールバックは行わない。動作の無警告変更も行わない。
+
+**uv.tomlの取り扱い**:
+
+- デフォルトでは、管理対象uv呼び出し時に設定発見を無効化する。これにより、無関係なcwd/ユーザー/プロジェクト設定（ambientなuv.tomlやpyproject.tomlのuv設定）が解決に影響を与えることを防止する。`POKECON_UV_CONFIG_FILE`は明示的な環境変数ブリッジ入力であるため、このambient設定には含めず、対応する`UV_CONFIG_FILE`として利用を許可する。
+- アプリケーション設定を介して明示的にuv.tomlパスが指定された場合に限り、その正確なファイルをuvの `--config-file` 相当の明示指定として読み込む。パス未指定（`null`/`None`/未設定）の場合は発見無効化のままとする。
+- `uv_config` はワーカー別のオプショナル設定として、ユーザースクリプトワーカーと動的設定ワーカーで独立に指定可能である:
+  - **`python.script.packages.uv_config`**（型 `str | None`、デフォルト `null`）: ユーザースクリプトワーカー用のuv.toml明示パス。動的パス `pokecon.opt.python.script.packages.uv_config` を持つ（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-uv-config <path>`。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG=<path>`。
+  - **`python.dynamic.packages.uv_config`**（型 `str | None`、デフォルト `null`）: 動的設定ワーカー用のuv.toml明示パス。動的パスを持たない（グローバル専用・ブートストラップ専用、循環依存回避のため）。CLI: `--python-dynamic-packages-uv-config <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG=<path>`。グローバルなブートストラップ設定として早期解決され、動的venv構築前に適用される。
+  - 両設定に同一のファイルを指定可能。指定された場合、各ワーカーのuv呼び出し時にそのファイルが読み込まれる。
+- 指定されたパスは §11.4.1.4「パス値の解決規則」に従って解決する:
+  - CLI表面: 起動cwdを基準とした相対パス解決
+  - TOML/環境変数/動的パス表面: 実効Configルートを基準とした相対パス解決
+  - 環境変数展開・チルダ展開を適用
+  - 空文字列は無効とする。既存の読み取り可能な通常ファイルであることを要求する。存在しない場合は起動時エラー（ブートストラップ設定）または設定適用エラー（動的設定）とする。自動作成は行わない。
+- アプリ不変条件（app invariants）は、明示されたuv.tomlより高優先度でuvに引き渡される:
+  - 対象ワーカーvenv/インタープリター（アプリ管理のCPython 3.14固定）
+  - 実効Cacheルート（§14.1.1 Cache配下の `uv/`）
+  - 管理対象uvバイナリ自体のパス
+  - 生成されたrequirements/constraints/overrides（§14.5.1のマージ・MUS・直接ソースバージョン句解決結果）
+  これらの不変条件はuv.tomlによってリダイレクトされてはならない。アプリ不変条件と競合するuv.toml内の設定は無視し、競合した設定キーを示すWARNING診断を出力する。値や資格情報は診断へ含めない。
+- 上記のアプリ不変条件以外のuv設定（インデックスURL、extra-index-url、認証設定、TLS/証明書設定、リゾルバーオプション、ビルドオプション等）は、明示的に指定されたuv.tomlから適用されてもよい。
+- uv.tomlには機密情報（トークン、認証情報等）が含まれる可能性がある。パス文字列自体は秘密としてマークしないが、ファイル内容の診断ログ出力は禁止する。§11.4.3のConfigファイル許可/診断規則に従い、内容・資格情報を決してログに出力してはならない。
+
+**POKECON_UV_* → UV_* 環境変数ブリッジ**:
+
+uv 子プロセス（ユーザースクリプトワーカーおよび動的設定ワーカーにおける uv 呼び出し）で使用される環境変数は、以下の規則で構築される。
+
+1. **Ambient UV_* の完全除去**: uv 子プロセスは、親プロセス（Rust メインプロセス）が持つ `UV_*` 環境変数を直接継承してはならない。子プロセス起動前に、プロセス環境からすべての `UV_*` 変数を完全に除去する。
+
+2. **POKECON_UV_* のマッピング**: 親プロセス環境から、接頭辞 `POKECON_UV_` で始まる変数をすべて列挙する。各変数について:
+   - 接頭辞 `POKECON_UV_` を除去した名前で uv 子プロセスに設定する（例: `POKECON_UV_INDEX_URL` → `UV_INDEX_URL`）。
+   - 接頭辞 `POKECON_UV_` のみで接尾辞が空の場合は起動時設定エラーとする（例: `POKECON_UV_` という名前の変数）。
+   - 値は未変更のまま透過的に渡す。アプリケーションは値のパース・解釈・検証を行わない。uv が既知・未知のセマンティクスを処理する。
+   - 元の `POKECON_UV_*` 名を uv 子プロセスに渡してはならない。マッピング後の `UV_*` 名のみが子プロセス環境に存在する。
+
+3. **将来の uv 環境変数**: 本仕様では個別の `UV_*` 変数（`UV_INDEX_URL`、`UV_EXTRA_INDEX_URL` 等）を列挙しない。本ブリッジは接頭辞除去による汎用マッピングであり、将来の uv が新たな環境変数を追加してもアプリケーションレジストリの更新なしに動作する。これは環境変数ブリッジであり、正準設定レジストリの個別エントリではない。永続的な uv オプションは明示的な `uv_config`（§14.5.2「uv.tomlの取り扱い」参照）を使用する。
+
+4. **機密性（Secret）**: すべての `POKECON_UV_*` 値を潜在的機密情報（potentially secret）として扱う。値そのものをログ出力、コマンドエコー、診断出力、クラッシュダンプに含めてはならない。名前と存在有無のみを、安全な条件下でデバッグ出力してもよい（§11.4.3「機密情報（Secret）の取り扱い」秘匿化規則に従う）。
+
+5. **uv_config との共存**: 明示的な `uv_config`（uv.toml パス指定）と本ブリッジは共存できる。`uv_config` はファイルベースの uv 設定を、本ブリッジは環境変数ベースの uv 設定を提供する。両者の uv 設定が競合する場合の解決は uv に委ねられる（uv の優先順位に従う）。
+
+6. **アプリ不変条件（App Invariants）の優先**: 以下のアプリ不変条件は、POKECON_UV_* ブリッジよりも高優先度で uv 子プロセスに適用される:
+   - 対象ワーカー venv（アプリ管理の CPython 3.14）
+   - 実効 Cache ルート（§14.1.1 Cache 配下の `uv/`）
+   - 管理対象 uv バイナリ自体のパス
+   - 生成された requirements / constraints / overrides（§14.5.1 のマージ・MUS・直接ソースバージョン句解決結果）
+
+   これらの不変条件は uv の対応する CLI 引数または生成されたファイルとして uv に引き渡される。`POKECON_UV_CACHE_DIR` や `POKECON_UV_PYTHON` 等でリダイレクトしようとしても、アプリ不変条件の CLI/generated 入力は常に後勝ち（最後に適用）であり、ブリッジ経由の環境変数より高優先度となる。
+
+   `POKECON_UV_CONFIG_FILE` はブリッジ経由でマッピングされうるが、明示的な `uv_config`（CLI 引数または設定ファイル経由）の指定がある場合、`--config-file` 引数が環境変数 `UV_CONFIG_FILE` より高優先度となる。
+
+7. **一般プロキシ/証明書環境変数の継承**: 親プロセスに存在する`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY`と各小文字表記、および`SSL_CERT_FILE`、`SSL_CERT_DIR`を値を変更せず継承する。これらの値も認証情報を含み得るためログへ出力しない。その他の通信関連環境変数は、`POKECON_UV_*`ブリッジまたは明示`uv_config`を介さない限り自動継承しない。
+
+**uv 子プロセス環境の構築順序（決定論的）**:
+
+uv 子プロセスに設定される最終的な環境変数は、以下の順序で構築する。後続の手順が先行の手順で設定された同名変数を上書きする（後勝ち）。
+
+1. **基本環境の設定**: 空の環境から開始する。OS が子プロセスに常に提供する最低限の変数（`PATH`、`HOME`/`USERPROFILE` 等のプロセス実行に必須の変数）を設定する。これらはプラットフォーム依存である。
+2. **一般プロキシ/証明書環境変数の継承**: 前項で列挙したプロキシ・証明書環境変数だけを親プロセスから値を変更せず継承する。
+3. **Ambient UV_* の除去**: 現時点の環境からすべての `UV_*` 変数を削除する（手順1-2で設定されたものを含め、すべての `UV_*` を確実に除去する）。
+4. **POKECON_UV_* から UV_* へのマッピング**: 親プロセス環境の `POKECON_UV_*` 変数を接頭辞除去で `UV_*` にマッピングし、上書きを許可して環境に追加する。
+5. **uv_config 由来の設定の適用**: 明示的な `uv_config`（uv.toml）が指定されている場合、その内容を `--config-file` 引数として uv に渡す。この引数は環境変数 `UV_CONFIG_FILE`（ブリッジ経由の場合）より高優先度となる。
+6. **アプリ不変条件の適用（CLI/生成ファイル）**: 対象 venv、Cache ルート、管理 uv パス、生成された requirements/constraints/overrides を対応する uv CLI 引数として最後に適用する。これらの CLI 引数は環境変数（手順4で設定されたものを含む）より高優先度である。
+
+この構築順序により、POKECON_UV_* ブリッジ経由の設定はアプリ不変条件より低優先度となり、不変条件を迂回できないことが保証される。
 
 ### 14.6 LSP設定（pyproject.toml）
 

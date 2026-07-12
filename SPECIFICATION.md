@@ -84,7 +84,7 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
 - **nix環境**: nix storeのPythonパスをビルド時に決定し、ワーカープロセス実行に使用する。再現性が保証される。ユーザースクリプトワーカーと動的設定ワーカーで同一のランタイムバイナリを使用できるが、venvは分離される。
 - **非nix環境**: python-build-standaloneが配布するPythonを自動ダウンロードし、ワーカープロセス実行に使用する。これにより、実行環境にシステムPythonがインストールされていなくても動作する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用する。
 - **venv**: いずれの環境でも、ワーカーごとにvenvを作成して使用する。ユーザースクリプトワーカーと動的設定ワーカーで別々のvenvを使用可能。ユーザースクリプトのvenvはプロファイルごとに異なるパスを設定可能であり、プロファイル切替時に対応するvenvを使用する新ユーザースクリプトワーカーが生成される。動的設定ワーカーはプロファイル切替の影響を受けず、アプリケーション全体で単一のワーカーが永続する（§11.5.6.4.3参照）。
-- **ユーザー指定**: `settings.toml`で`[python.script].venv`によりユーザースクリプトワーカーのvenvパスを指定可能。指定がない場合はデータディレクトリ（§14.1.1参照）配下の`venv-script`（デフォルト）を使用する。Linuxで`XDG_DATA_HOME`が未設定の場合は`~/.local/share/pokecon/venv-script`に解決される。`[python.script].packages`で追加インストールするパッケージを指定可能。
+- **ユーザー指定**: `settings.toml`で`[python.script].venv`によりユーザースクリプトワーカーのvenvパスを指定可能。指定がない場合は実効Dataルート（§14.1.1 Data / §11.3参照）配下の`venv-script`（デフォルト）を使用する。`[python.script].packages`で追加インストールするパッケージを指定可能。
 
 **開発ワークフロー**:
 - **nix-first**: 本プロジェクトはnix flakeを使用して開発する。すべての開発タスク（ビルド、テスト、型チェック、フォーマット）は`nix run .#<task>`または`nix develop`内で実行する
@@ -137,7 +137,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
 | **静的設定** | 起動時に読み込まれる設定ファイル（`settings.toml`）。TOML形式で、グローバル設定やプロファイル管理を含む |
 | **Pre/Postフェーズ** | イベントの実行前（Pre）と実行後（Post）の2つのフェーズ。イベント名に`Pre`/`Post`を後置して区別 |
-| **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュ・状態ディレクトリの標準規格。`${XDG_CONFIG_HOME:-$HOME/.config}/pokecon`（設定）、`${XDG_DATA_HOME:-$HOME/.local/share}/pokecon`（データ）、`${XDG_CACHE_HOME:-$HOME/.cache}/pokecon`（キャッシュ）、`${XDG_STATE_HOME:-$HOME/.local/state}/pokecon`（状態）。Windowsでは各々 `%APPDATA%\PokeCon` / `%LOCALAPPDATA%\PokeCon\data` / `%LOCALAPPDATA%\PokeCon\cache` / `%LOCALAPPDATA%\PokeCon\state` にマッピングされる（§14.1.1参照） |
+| **XDG Base Directory** | Linux/Unix系の設定・データ・キャッシュ・状態ディレクトリの標準規格。`${XDG_CONFIG_HOME:-$HOME/.config}/pokecon`（設定）、`${XDG_DATA_HOME:-$HOME/.local/share}/pokecon`（データ）、`${XDG_CACHE_HOME:-$HOME/.cache}/pokecon`（キャッシュ）、`${XDG_STATE_HOME:-$HOME/.local/state}/pokecon`（状態）。Windowsでは各々 `%APPDATA%\\pokecon` / `%LOCALAPPDATA%\\pokecon\\data` / `%LOCALAPPDATA%\\pokecon\\cache` / `%LOCALAPPDATA%\\pokecon\\state` にマッピングされる（§14.1.1参照） |
 | **HandlerId** | イベントハンドラの登録時に返される識別子。ハンドラの解除（`off()`）に使用。型: `int` |
 | **フォールバック** | プライマリ方式が利用できない場合に使用される代替方式。例: WebRTC不可時のWebSocketフォールバック |
 | **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
@@ -1657,7 +1657,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.2 設定ファイル
 
-> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、TOML形式の`settings.toml`に置き換えられます。設定ファイルの形式はTOML、既定の保存場所はプラットフォーム既定の設定ディレクトリ（§14.1.1参照）直下の`settings.toml`（グローバル）および`profiles/<name>/settings.toml`（プロファイル）です。この既定パスはブートストラップセレクター`config.file`（`--config-file` / `POKECON_CONFIG_FILE`）で上書き可能であり、上書き時は選択されたファイルの親ディレクトリが実効Configルートとなる（§11.3参照）。
+> **重要**: `settings.ini` は**廃止**されました。従来のINIベースの設定は、TOML形式の`settings.toml`に置き換えられます。設定ファイルの形式はTOML、既定の保存場所は実効Configルート（§14.1.1 Config / §11.3参照）直下の`settings.toml`（グローバル）および`profiles/<name>/settings.toml`（プロファイル）です。この既定パスおよび全データルートはブートストラップセレクター`app_name`（`--app-name` / `POKECON_APPNAME`）でまとめて選択される（§11.3参照）。
 
 ### 11.3 優先順位と起動時設定評価順序
 
@@ -1666,8 +1666,8 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **起動パイプライン（適用順）**:
 
 1. **組み込みデフォルト値**（アプリケーション内蔵） — 最下位・最初に適用
-2. **グローバル設定**（`settings.toml`、実効Configルート（`config.file` — 本節参照）直下）
-3. **プロファイル設定**（`profiles/<name>/settings.toml`、実効Configルート（`config.file` — 本節参照）配下）
+2. **グローバル設定**（`settings.toml`、実効Configルート（`app_name` — 本節参照）直下）
+3. **プロファイル設定**（`profiles/<name>/settings.toml`、実効Configルート（`app_name` — 本節参照）配下）
 4. **環境変数**（`POKECON_*` 環境変数） — 動的設定より低いが静的TOMLより高い
 5. **動的設定の即時評価**（`init.py`/`init.lua`のトップレベルコード） — 非遅延トップレベル代入に限る
 6. **通常CLI引数**（一般設定オプション） — 最優先・最後に適用
@@ -1681,69 +1681,91 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 上記パイプラインに先立ち、以下の目的に必要な最小限のCLI引数および環境変数のみを事前解析する:
 
-- **設定ソースの探索・選択**: `config.file`（configファイルパス）、`active_profile`（プロファイル）
-- **動的設定実行環境の特定**: `dynamic_config_language`（動的設定のプライマリ言語）
+- **設定ソースの探索・選択**: `app_name`（アプリ名セレクター）、`active_profile`（プロファイル）
+- **動的設定実行環境の特定**: `dynamic_config_language`（動的設定のプライマリ言語）、`python.dynamic.venv`（動的設定ワーカーvenvパス）
 
-このカテゴリには、設定ファイルパス・プロファイル・動的設定言語を選択するCLI引数と対応するブートストラップ環境変数が含まれる。具体名は正準設定レジストリ（§11.4.1.1）で規定する（`config.file`、`active_profile`、`dynamic_config_language`等）。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じセレクターを指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
+このカテゴリには、設定ファイルパス・プロファイル・動的設定言語を選択するCLI引数と対応するブートストラップ環境変数が含まれる。具体名は正準設定レジストリ（§11.4.1.1）で規定する（`app_name`、`active_profile`、`dynamic_config_language`等）。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じセレクターを指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
 
-**`config.file` — 設定ファイルパスセレクター**:
+**`app_name` — アプリケーション名セレクター**:
 
-正準ID `config.file` は、アプリケーションが読み込むメイン設定ファイルのパスを選択するブートストラップセレクターである。
+正準ID `app_name` は、アプリケーションの全4ルート（Config、Data、Cache、State）のサブディレクトリ名を選択するブートストラップセレクターである。Neovimの`NVIM_APPNAME`に類似する概念であり、異なるアプリ名を指定することで完全に分離された設定・データ・キャッシュ・状態環境を提供する。
 
 | 表面 | 値 | 備考 |
 |------|-----|------|
-| **CLI** | `--config-file <path>` | |
-| **環境変数** | `POKECON_CONFIG_FILE=<path>` | |
-| **TOMLパス** | `null` | 循環依存のため（設定ファイルのパスをそのファイル自身の中から選択できない） |
+| **CLI** | `--app-name <name>` | |
+| **環境変数** | `POKECON_APPNAME=<name>` | 正準名。`POKECON_APP_NAME`ではない |
+| **TOMLパス** | `null` | 循環依存のため（アプリ名を設定ファイル自身の中から選択できない） |
 | **動的パス（`pokecon.opt.*`）** | `null` | 同上 |
 | **UI/OpenAPI公開** | なし | 起動時のみ有効、実行時再選択不可 |
-| **デフォルト** | プラットフォーム既定の設定ディレクトリ（§14.1.1 Config）直下の `settings.toml` | |
+| **デフォルト** | `"pokecon"` | 組み込みデフォルト |
 
-**優先順位**: CLI明示指定 > 環境変数 > 組み込みデフォルト。TOML/動的パスの表面が存在しないため、他の優先ソースはない。CLIが省略された場合、CLI段階からデフォルトを注入して環境変数を上書きしてはならない。CLI省略時は環境変数が存在すればその値を使用し、存在しなければ組み込みデフォルトを使用する。
+**優先順位**: 組み込みデフォルト `"pokecon"` < 環境変数 `POKECON_APPNAME` < 明示的CLI `--app-name`。TOML/動的パスの表面が存在しないため、他の優先ソースはない。CLIが省略された場合、CLI段階からデフォルトを注入して環境変数を上書きしてはならない。CLI省略時は環境変数が存在すればその値を使用し、存在しなければ組み込みデフォルトを使用する。
 
-**実効Configルート（effective Config root）**: `config.file` が明示的に指定された場合、選択されたファイルの親ディレクトリが実効Configルートとなる。以下のリソースはこの実効Configルートから解決される:
+**実効ルート選択**: `app_name` は、プラットフォーム既定のベースディレクトリ（§14.1.1）配下のサブディレクトリとして全4ルートを決定する:
+
+- **Config**: Linux `${XDG_CONFIG_HOME:-$HOME/.config}/<app_name>`; Windows `%APPDATA%\\<app_name>`
+- **Data**: Linux `${XDG_DATA_HOME:-$HOME/.local/share}/<app_name>`; Windows `%LOCALAPPDATA%\\<app_name>\\data`
+- **Cache**: Linux `${XDG_CACHE_HOME:-$HOME/.cache}/<app_name>`; Windows `%LOCALAPPDATA%\\<app_name>\\cache`
+- **State**: Linux `${XDG_STATE_HOME:-$HOME/.local/state}/<app_name>`; Windows `%LOCALAPPDATA%\\<app_name>\\state`
+
+実効Configルートは上記のConfigパスとなる。以下のリソースはこの実効Configルートから解決される:
+- `settings.toml`（グローバル設定ファイル）
 - `profiles/` ディレクトリ（プロファイル設定の探索先）
 - `init.py` / `init.lua`（動的設定ファイル）
 - ユーザー編集可能な `pyproject.toml`（Python LSP設定）
 - `.luarc.json`（Lua LSP設定）
 - オプションの `.vscode/settings.json`
 
-`config.file` が指定されなかった場合、実効Configルートはプラットフォーム既定の設定ディレクトリ（§14.1.1 Config）と一致する。Data、Cache、Stateの各ディレクトリは実効Configルートの変更による影響を受けず、常に§14.1.1のプラットフォーム既定パスを使用する。
+Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択される。アプリ名を変更することでvenv、型定義、キャッシュ、ログの共有を防止する（Neovimの`NVIM_APPNAME`と同一の分離モデル）。
 
-**パス正規化**: `config.file` の入力値（CLI `--config-file` または環境変数 `POKECON_CONFIG_FILE`）は、以下の規則で正規化される。この正規化はCLI経由と環境変数経由で同一である。CLI引数がシェルによってすでに展開されている場合、アプリケーションレベルの展開対象となるトークンが残っていない可能性がある（引用符で保護されたリテラルトークン等はそのままアプリケーションに渡される）。
+**自動作成**: 起動時に選択された全4ルートのディレクトリおよび不足する中間ディレクトリが存在しない場合、アプリケーションが自動的に作成する（下記「`app_name` 文法」の自動作成規則に従う）。ファイルの作成は行わない（`settings.toml`等のファイルは、必要に応じて後続の処理で生成される）。
 
-1. **アプリケーション環境変数展開**: アプリケーションはシェルとは独立して環境変数展開を実行する。これはシェルがCLIトークンを引用符の有無に応じて展開するのに対し、アプリケーションはプロセス環境変数の値を再帰的に展開しないためである。
-   - Linux/Unix構文: `$VAR` および `${VAR}`
-   - Windows構文: `%VAR%`
-   - 展開は1パスのみ。展開後の値に含まれる変数参照は再帰展開しない（循環・無限展開を回避）。
-   - 未定義の変数を参照した場合は空文字列とせず、起動時エラーとする。
+**`app_name` 文法 — 安全な相対サブディレクトリ識別子**:
 
-2. **チルダ展開**: パス全体が`~`、または先頭が`~/`もしくは`~\`の場合のみ、カレントユーザーのホームディレクトリに展開する。`~other-user`形式はサポートしない。
+`app_name` は相対アプリケーションサブディレクトリ識別子であり、ファイルパスではない。そのため、§11.4.1.4の汎用パス解決規則の対象外である。Neovimの`NVIM_APPNAME`と同一の分離モデルに従い、本項で規定する固有の文法・検証規則に従う。`app_name` はブートストラップセレクターとしてのみ機能し、起動後に選択することはできない。
 
-3. **相対パス解決**: 上記展開後のパスが相対パス（絶対パスでない）の場合、アプリケーション起動時のカレントワーキングディレクトリ（startup cwd）を基点として解決する。
+**受け入れ規則**:
 
-4. **字句的正規化**: パス中の `.` および `..` を字句的に正規化する。
+1. **OSネイティブパスコンポーネント解析**: 入力値は実行OSのパスコンポーネント解析ルールに従ってセパレータで分割する。Linux/macOSでは`/`をセパレータとして認識する。Windowsでは`\`および`/`の両方をセパレータとして認識する。解析後の各コンポーネントはすべて通常の相対コンポーネントでなければならない。
 
-5. **存在確認**: 字句的正規化後のパスが存在することを確認する。存在しない場合は起動時エラーとする。
+2. **拒否条件**: 以下のいずれかに該当する入力は無効とし、起動時エラーとする:
+   - 空文字列（`""`）
+   - 絶対パス（Linux/macOS: `/`で開始。Windows: ドライブレター`X:\`またはUNC`\\`で開始）
+   - ルート/プレフィックスコンポーネントのみ（例: Linuxの`/`、Windowsの`C:\`）
+   - `.`（カレントディレクトリ）コンポーネントを含む
+   - `..`（親ディレクトリ）コンポーネントを含む
+   - Windowsドライブレター（`C:`等）を含むコンポーネント
+   - Windows UNCプレフィックス（`\\`等）を含む
+   - NUL文字（`\0`）を含む
+   - OSネイティブパス解析後に1つも通常コンポーネントが得られない値
 
-6. **シンボリックリンク解決／正準化**: 存在確認済みのパスを実ファイルシステム上で解決し、シンボリックリンクを展開して正準パス（canonical path）に変換する。リンク切れや解決失敗は起動時エラーとする。
+3. **空白トリム・大文字小文字正規化を行わない**: 入力値はユーザーが指定した綴りをそのまま保持する。先頭・末尾の空白はトリムしない。大文字小文字の正規化は行わない。ファイルシステム上の大文字小文字セマンティクスおよび有効文字セマンティクスはOSネイティブに委ねる。
 
-7. **ファイル種別確認**: 正準化後の実体が通常ファイル（regular file）であることを確認する。ディレクトリまたはその他のファイル種別の場合は起動時エラーとする。
+4. **変数展開・チルダ展開を行わない**: `app_name`は汎用パス設定ではなくアプリケーション識別子である。`~`、Unixの`$VAR`/`${VAR}`、Windowsの`%VAR%`の展開は一切行わない。CLIシェルが展開構文をシェルレベルで解釈した後にアプリケーションに渡された値は、そのままリテラルとして使用される。
 
-8. **実効Configルート確定**: 正準化・存在確認済みのファイルの親ディレクトリを実効Configルートとする（本節「実効Configルート」参照）。
+5. **相対識別子としてベースへ独立追加**: 解析・検証後のコンポーネント列は、各プラットフォームベースディレクトリ（Config、Data、Cache、State、§14.1.1）に対してOSネイティブのパス結合操作で独立して追加される。この結合は起動cwdや既存の実効Configルートに対して解決されることはなく、常にプラットフォームベースの絶対パスを起点とする。ドットコンポーネント（`.`、`..`）は規則2により事前に拒否されるため、ベースディレクトリからのエスケープは発生しない。
 
-**エラー処理**: 以下の場合は起動時エラーとなり、アプリケーションは起動を中止する:
-- 空の入力（`--config-file` に値がない、または `POKECON_CONFIG_FILE` が空文字列）
-- 未定義の環境変数参照
-- 正準化後のパスが存在しない、または通常ファイルでない
+6. **ディレクトリ階層の自動作成**: 規則5の結合結果である各実効ルートのディレクトリおよび不足する中間ディレクトリが存在しない場合、アプリケーションが自動的に作成する（上記「自動作成」規則に従う）。ファイルの作成は行わない。
 
-エラーメッセージは `config.file`（および入力元がCLIか環境変数か）を特定し、欠落している変数名や問題のあるパスを識別する情報を含める。ただし、生の入力値をそのままエコーする必要はない。
+**例**:
 
-**適用順序のまとめ**: アプリケーション環境変数展開（1パス）→ チルダ展開 → 起動cwd基準の相対解決 → `.`/`..` 字句的正規化 → シンボリックリンク解決／正準化 → 既存通常ファイル確認 → 親ディレクトリを実効Configルートとする。
+| 入力値 | Linux 実効Configルート | Windows 実効Configルート | 結果 |
+|--------|----------------------|------------------------|------|
+| `pokecon` | `~/.config/pokecon` | `%APPDATA%\pokecon` | ✅ 単一名 |
+| `testing/camera` | `~/.config/testing/camera` | `%APPDATA%\testing\camera` | ✅ ネスト相対（`/`区切り） |
+| `testing\\camera` | — | `%APPDATA%\testing\camera` | ✅ Windowsの`\`区切り |
+| `" foo"` | `~/.config/ foo` | `%APPDATA%\ foo` | ✅ 先頭空白含む（トリムなし・綴り保存） |
+| `""` | — | — | ❌ 空文字列 |
+| `/abs/path` | — | — | ❌ 絶対パス |
+| `C:\foo` | — | — | ❌ Windowsドライブレター |
+| `../escape` | — | — | ❌ `..`コンポーネント |
+| `./same` | — | — | ❌ `.`コンポーネント |
+| `a/./b` | — | — | ❌ `.`コンポーネントを含む |
+| `a/../b` | — | — | ❌ `..`コンポーネントを含む |
 
-**制約**: `config.file` は実効Configルート外に解決されることを意図的に許容する（閉じ込めなし）。Data/Cache/Stateの各ディレクトリはこの正規化による影響を受けず、常に§14.1.1のプラットフォーム既定パスを使用する。
+**シンボリックリンクポリシー**: `app_name`自体のシンボリックリンクポリシーは本仕様では新たに規定しない。実装はOSのパス解決動作に委ねる。
 
-**備考**: ブートストラップ表面（CLI/env）以外の設定表面が存在しないため、正準レジストリ（§11.4.1.1）では `config.file` のTOMLパスと動的パスを明示的に `null` とし、その理由を「循環依存のため」と記録する。
+**備考**: ブートストラップ表面（CLI/env）以外の設定表面が存在しないため、正準レジストリ（§11.4.1.1）では `app_name` のTOMLパスと動的パスを明示的に `null` とし、その理由を「循環依存のため」と記録する。
 
 **`dynamic_config_language` — 動的設定言語セレクター**:
 
@@ -1766,6 +1788,31 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **グローバル専用**: プロファイルTOMLではオーバーライドできない。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）。
 
+**`python.dynamic.venv` — 動的設定ワーカーvenvパス**:
+
+正準ID `python.dynamic.venv` は、動的設定ワーカーが使用するvenvのパスを指定するブートストラップ設定である。
+
+| 表面 | 値 | 備考 |
+|------|-----|------|
+| **CLI** | `--python-dynamic-venv <path>` | ブートストラップCLI。通常CLI引数より前に解決される |
+| **環境変数** | `POKECON_PYTHON_DYNAMIC_VENV=<path>` | ブートストラップ環境変数として早期解決 |
+| **TOMLパス** | `[python.dynamic].venv` | グローバル `settings.toml` の `[python.dynamic]` セクション |
+| **動的パス（`pokecon.opt.*`）** | `null` | 動的設定ワーカーのvenvパスを動的設定から選択するのは循環依存／ブートストラップ制約のため。`pokecon.opt.python.dynamic.*` の動的パスは存在しない |
+| **UI/OpenAPI公開** | なし | 起動時のみ有効、実行時再構成不可（再起動が必要） |
+| **デフォルト** | アプリ管理のDataディレクトリ（§14.1.1 Data）配下の `venv-dynamic` | |
+
+**型**: `str`（パス文字列）。空の入力は無効とし、起動時エラーとする。
+
+**優先順位**: 組み込みデフォルト（app-managed Data/venv-dynamic） < グローバルTOML `[python.dynamic].venv` < 環境変数 `POKECON_PYTHON_DYNAMIC_VENV` < 明示的CLI `--python-dynamic-venv`。CLI省略時は組み込みデフォルトをCLI段階から注入して環境変数を上書きしてはならない。デフォルトは組み込みデフォルト値としてパイプラインの最初に適用され、その後にグローバルTOML、`POKECON_PYTHON_DYNAMIC_VENV`、明示的 `--python-dynamic-venv` の順で上書きされる。
+
+**解決タイミング**: 上記「ブートストラップCLI/環境変数解析」の一環として、動的設定ワーカーの起動前・通常の設定パイプライン適用よりも先に解決される。`--python-dynamic-venv` はブートストラップCLIであり、通常の設定CLI引数（パイプライン順位6）とは異なる事前解決段階に属する。この解決は通常パイプラインの外で行われ、解決結果は動的設定ワーカーの生成・初期化に使用される。
+
+**インタープリター非対象**: 本設定はvenvパス（パッケージ環境）のみを指定する。動的設定ワーカーのCPythonインタープリター実行ファイルパスは設定対象外であり、アプリ管理のCPython 3.14に固定される。
+
+**グローバル専用**: プロファイルTOMLではオーバーライドできない。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）。
+
+**汎用パス型規則**: 本設定のパス入力値に対する環境変数展開・チルダ展開・ソース認識ベース解決・字句的正規化の共通規則は §11.4.1.4「パス値の解決規則（Path Value Resolution）」に従う。CLI表面（`--python-dynamic-venv`）の相対パスは起動cwd基準、非CLI表面（環境変数 `POKECON_PYTHON_DYNAMIC_VENV` およびグローバルTOML `[python.dynamic].venv`）の相対パスは実効Configルート基準で解決される。存在確認・ファイル種別確認・シンボリックリンク解決のポリシーは本エントリのパスメタデータで規定される（§11.4.1.4「パスメタデータ（レジストリ拡張フィールド）」参照）。自動作成の要否はパスメタデータ `path_auto_create` の値に従うが、本仕様では未決定として保留する。
+
 **`pokecon.opt.*`代入の共通動作**:
 
 `pokecon.opt.*`への代入は、実行タイミング・実行コンテキスト・現在値の由来にかかわらず、常に共通の動作をする:
@@ -1787,7 +1834,10 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **動的設定ワーカーブートストラップ設定のスコープ制限**: 以下の設定はグローバル専用（スコープ`[global]`相当）であり、プロファイルTOMLではオーバーライドできない。これらは動的設定ワーカーの生成・起動方法を決定するブートストラップ設定であり、アプリケーション全体で統一される必要がある:
 - `dynamic_config_language`（動的設定ファイルの言語選択）
 - 動的設定のソース/パスセレクター（`init.py`/`init.lua`の探索パス等）
-- `[python.dynamic]` セクションのすべてのキー（venv、packages.mode、packages.list等）
+- `[python.dynamic]` セクションのすべてのキー:
+  - `python.dynamic.venv`（動的設定ワーカーvenvパス）
+  - `python.dynamic.packages.mode`（パッケージモード）
+  - `python.dynamic.packages.list`（追加パッケージ一覧）
 - 動的ワーカーのブートストラップ環境を指定するその他のセレクター
 
 これらの設定がプロファイルTOMLに存在する場合、無視され、プロファイルの読み込み・切替は中断されない。既存のグローバル値が有効なままとなる。このとき、デフォルトでは無視されたキー/パスを特定するERRORレベルの診断を出力する。診断出力はグローバル設定 `report_ignored_profile_global_settings` で制御される（§11.4.2参照）。`true`（デフォルト）: プロファイル読み込み/切替を継続し、無視されたキーごとにERROR診断を出力。`false`: 診断を出力せずに黙って無視する。
@@ -1796,7 +1846,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ### 11.4 静的設定（settings.toml）
 
-**原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
+**原則**: 静的設定で設定できる項目は、動的設定ワーカー自身のブートストラップ設定（`dynamic_config_language`および`python.dynamic.*`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。ブートストラップ設定は循環依存を避けるため動的パスを持たず、グローバルTOML・環境変数・CLIから設定する。
 
 **注**: `dynamic_config_language` は動的設定ファイル内で設定不可（循環依存を回避するため）。グローバルTOML（`[global].dynamic_config_language`）、環境変数（`POKECON_DYNAMIC_CONFIG_LANGUAGE`）、CLI（`--dynamic-config-language`）のいずれかで設定する（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。
 
@@ -1875,6 +1925,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - **起動時／実行時可変性（startup/runtime mutability）**
 - **機密情報（secret）フラグ**
 - **プロファイル／グローバル／ブートストラップ／運用メタデータ**
+- **パスメタデータ（path metadata）**: 型が `str`（パス文字列）のエントリに必須。§11.4.1.4で規定するパス解決のポリシー（存在要求・自動作成・ファイル種別期待・シンボリックリンク解決）を指定する。非パス型のエントリでは `null` とする
 
 **デフォルト生成名**: 明示的にレジストリでオーバーライドされない限り、CLIフラグ名と環境変数名は正準IDから以下の規則で機械的に決定する:
 - **CLIフラグ**: ドットとアンダースコアをハイフンに置換し、`--` を前置。例: `camera.fps` → `--camera-fps`
@@ -2027,7 +2078,101 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - **Lua動的設定**の型アノテーション（利用可能な場合）には、正準値のみのenum制約を記述する。例: `"python" | "lua" | "none"`。
 - **OpenAPI enumスキーマ**および**UI選択肢**には正準値のみを列挙する。ランタイムのパーサーが大文字小文字を正規化するため、UI/OpenAPIの入力ガイダンスとしては正準値を提示する。
 
-**エラー報告**: 無効なenum値のエラーメッセージは、受け入れ可能な正準値のみを列挙する。大文字小文字のバリアントは列挙しない。例: `"LUA"` が指定された場合のエラー: `invalid value "LUA" for dynamic_config_language — expected one of: "python", "lua", "none"`。
+**エラー報告**: 無効なenum値のエラーメッセージは、受け入れ可能な正準値のみを列挙する。大文字小文字のバリアントは列挙しない。例: `"ruby"` が指定された場合のエラー: `invalid value "ruby" for dynamic_config_language — expected one of: "python", "lua", "none"`。
+
+##### 11.4.1.4 パス値の解決規則（Path Value Resolution）
+
+本項は、正準設定レジストリで型 `str`（パス文字列）として分類され、かつパスメタデータフィールド（§11.4.1.1）が設定された全エントリに適用される、入力の環境変数展開・チルダ展開・ソース認識ベース解決・字句的正規化の共通規則を規定する。閉じた文字列enum（§11.4.1.3）とは異なり、パス値は自由文字列であり大文字小文字の正規化は行わない。
+
+**対象**: 正準レジストリでパスメタデータが設定されたすべてのパス型エントリ。
+例: `python.dynamic.venv`（動的設定ワーカーvenvパス）、`python.script.venv`（ユーザースクリプトワーカーvenvパス）、`serial.port`（シリアルポートパス）。
+
+**非対象**:
+- 閉じた文字列enum（§11.4.1.3）
+- bool値（§11.4.1.2）
+- `app_name`（§11.3 — 全4ルートを決定するブートストラップセレクターのため本項の対象外、独自の解決規則を維持する）
+
+**フェーズ1 — OS固有の環境変数展開（1パス）**:
+
+全入力表面で、アプリケーションはシェルとは独立して以下の環境変数展開を実行する:
+
+| 表面 | 動作 |
+|------|------|
+| **CLI引数** | アプリケーションがプロセス環境変数に対して展開を実行。シェルが既に展開済みの場合、展開対象のトークンが残っていない可能性がある（引用符で保護されたリテラルトークン等） |
+| **環境変数（`POKECON_*`）** | 値文字列に対してアプリケーションが環境変数展開を実行 |
+| **TOML（グローバル／プロファイル）** | TOML値の文字列に対してアプリケーションが環境変数展開を実行 |
+| **Python動的設定（`pokecon.opt.*`）** | Pythonランタイムがユーザーコード実行後に代入された値に対して展開を実行 |
+| **Lua動的設定（`pokecon.opt.*`）** | Luaランタイムがユーザーコード実行後に代入された値に対して展開を実行 |
+| **UI/OpenAPI入力** | 同上 |
+
+- Unix構文: `$VAR` および `${VAR}`
+- Windows構文: `%VAR%`
+- 展開は**1パスのみ**。展開後の値に含まれる変数参照は再帰展開しない（循環・無限展開を回避）。
+- **未定義の変数を参照した場合は空文字列とせず、エラーとする**。CLI/env/TOMLの場合は起動時エラー、動的設定代入時は実行時エラーとする。
+
+**フェーズ2 — チルダ展開**:
+
+環境変数展開後の値に対して、以下のチルダ展開を実行する:
+- パス全体が `~` の場合 → カレントユーザーのホームディレクトリ
+- 先頭が `~/`（Unix）または `~\\`（Windows）の場合 → ホームディレクトリに置換
+- `~other-user` 形式はサポートしない
+- チルダ展開後もパスが絶対パスでない場合は、フェーズ3のベース解決に進む
+
+**フェーズ3 — ソース認識ベース解決（Source-Aware Base Resolution）**:
+
+相対パスのベースディレクトリは、設定値の入力表面（source surface）に依存して決定する。これは設計上の意図的決定（intentional design decision）である:
+
+| 表面 | ベースディレクトリ |
+|------|------------------|
+| **CLI引数**（`--<flag> <path>`） | アプリケーション起動時のカレントワーキングディレクトリ（startup cwd）— シェルにおける一般的なCLI動作と一致 |
+| **環境変数（`POKECON_*`）** | 実効Configルート（§11.3「実効Configルート」参照） |
+| **TOML（グローバル `settings.toml`）** | 実効Configルート |
+| **TOML（プロファイル `settings.toml`）** | 実効Configルート |
+| **Python動的設定（`init.py` の `pokecon.opt.*` 代入）** | 実効Configルート |
+| **Lua動的設定（`init.lua` の `pokecon.opt.*` 代入）** | 実効Configルート |
+| **UI/OpenAPI書き込み入力** | 実効Configルート |
+
+**意図**: CLIはシェル上の一般的なコマンドラインツールとしての動作が期待されるため、起動時のカレントワーキングディレクトリから相対パスを解決する。他のすべての表面（環境変数、設定ファイル、動的設定、UI）はアプリケーションの設定体系（実効Configルート）を基準に解決する。これにより、設定ファイルに記述された相対パスがアプリケーションの起動方法やカレントディレクトリに依存せず一貫して解決される。
+
+**絶対パス**: フェーズ2までの展開結果が絶対パス（Unix: `/` で開始、Windows: ドライブレター `C:\` または `\\` で開始）の場合、フェーズ3のベース解決は行わず絶対パスのまま次フェーズへ進む。
+
+**フェーズ4 — 字句的正規化（Lexical Normalization）**:
+
+ベース解決後のパスに対して、`.`（カレントディレクトリ）および `..`（親ディレクトリ）を字句的に解決し、重複するセパレータを統合する。シンボリックリンクは解決しない（ファイルシステムへのアクセスは行わない）。この正規化は純粋に字句的（lexical）である。
+
+**パスの存在・作成・ファイル種別ポリシー**:
+
+本項の共通規則は、正規化後のパスがファイルシステム上に存在することを要求しない。以下のポリシーは各レジストリエントリのパスメタデータで個別に指定される:
+- **存在要求（must exist）**: 正規化後のパスが存在することを確認する。存在しない場合はエラーとする。
+- **自動作成（auto-create）**: パスの親ディレクトリまたはパス自体が存在しない場合、アプリケーションが自動的に作成する。
+- **ファイル種別期待（expected file type）**: 通常ファイル、ディレクトリ等の期待される種別。実体が異なる場合はエラーとする。
+- **シンボリックリンク解決（symlink resolution）**: 末尾のシンボリックリンクを解決して正準パス（canonical path）に変換するかどうか。
+
+各パスエントリのデフォルトポリシーは「存在不問・自動作成なし・ファイル種別不問・シンボリックリンク解決しない」（lenient policy）とする。厳格な検証が必要なエントリ（ブートストラップ専用パス等）はレジストリで明示的に上書きする。
+
+**パスメタデータ（レジストリ拡張フィールド）**:
+
+各パス型レジストリエントリは、以下の追加メタデータフィールドを持つ:
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `path_policy` | `str` | はい | `"generic"`（通常パス）/ `"url"` / `"secret_path"` / `"directory"` / `"file"` |
+| `path_must_exist` | `bool` | はい | 解決後のパスの存在を要求する |
+| `path_auto_create` | `bool` | はい | 存在しない場合に自動作成する |
+| `path_expected_type` | `str` | はい | `"file"` / `"directory"` / `"any"` / `"symlink"` |
+| `path_resolve_symlink` | `bool` | はい | 末尾のシンボリックリンクを解決して正準パスに変換する |
+| `path_relative_base` | `str?` | いいえ | デフォルトのベース解決をオーバーライドする場合の固定ベースディレクトリ（通常は表面依存のベース解決を使用するため未設定） |
+
+**`app_name` の除外理由**: `app_name`（§11.3）は本項の対象外である。これは全4ルート（Config、Data、Cache、State）を決定するブートストラップセレクターであり、汎用パス型ではない。特に、`app_name` は相対アプリケーションサブディレクトリ識別子であり、通常のファイルパスとして扱われない。本項の一般規則はあくまで「実効ルートが`app_name`によって確定した後」のパス型設定に適用される。
+
+**適用例 — `python.dynamic.venv`**:
+
+`python.dynamic.venv`（§11.3）のパス解決は本項の一般規則に従う:
+- **CLI `--python-dynamic-venv`** の相対パス → 起動cwd基準
+- **環境変数 `POKECON_PYTHON_DYNAMIC_VENV`** の相対パス → 実効Configルート基準
+- **グローバルTOML `[python.dynamic].venv`** の相対パス → 実効Configルート基準
+- 環境変数展開（1パス）→ チルダ展開（カレントユーザーのみ）→ 上記ベース解決 → 字句的正規化
+- 存在確認・ファイル種別確認・シンボリックリンク解決は行わない（lenient policy）。自動作成の要否は本エントリのパスメタデータで規定されるが、本仕様では未決定として保留する（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」のパスメタデータ参照）。
 
 #### 11.4.2 動的設定パス定義一覧
 
@@ -2043,7 +2188,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[global]` | `dynamic_config_language` | — | `str` | グローバル専用・ブートストラップ専用。`"python"` / `"lua"` / `"none"`。正準値は小文字（§11.4.1.3のenum正規化規則に従う）。デフォルト `"lua"`。動的パス `pokecon.opt` 非対応（循環依存のため）。CLI: `--dynamic-config-language <value>`（ブートストラップCLI）。環境変数: `POKECON_DYNAMIC_CONFIG_LANGUAGE=<value>`。UI/OpenAPI非公開（再起動が必要）。§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照 |
 | `[config]` | `report_ignored_profile_global_settings` | `pokecon.opt.config.report_ignored_profile_global_settings` | `bool` | グローバル専用。プロファイルTOMLで無視されたグローバル専用設定の診断出力を制御。デフォルト: `true`（ERROR出力）。プロファイルTOMLに指定された場合は無視され、既に解決済みのグローバル値が使用される（§11.3参照）。環境変数: `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS`。CLI: `--report-ignored-profile-global-settings`（正準IDから生成） |
 | `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | 組み込みデフォルト: `"default"`。CLI: `--profile` / `-p`（メインブランチ／オリジナルExtension互換）、環境変数: `POKECON_PROFILE`（新設）。CLI省略時は環境変数を上書きしない。`--active-profile` / `POKECON_ACTIVE_PROFILE`は公開しない。大文字小文字の正規化は行わない（§11.5.6.4.4のOSネイティブセマンティクスに従う）。プロファイル名の型は閉じたenumではなく`str`のまま。単一パスコンポーネントの安全性検証を全入力表面で行う |
-| — | *ブートストラップ専用* | — | `str` | **`config.file`**: 設定ファイルパスセレクター（§11.3参照）。ユーザー向けCLI: `--config-file <path>`。環境変数: `POKECON_CONFIG_FILE=<path>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: プラットフォーム既定のConfigディレクトリ（§14.1.1）直下の`settings.toml`。上書き時、選択されたファイルの親ディレクトリが実効Configルートとなる。パス正規化の完全な規則は§11.3に定義 |
+| — | *ブートストラップ専用* | — | `str` | **`app_name`**: アプリケーション名セレクター（§11.3参照）。Neovimの`NVIM_APPNAME`に類似。ユーザー向けCLI: `--app-name <name>`。環境変数: `POKECON_APPNAME=<name>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される。入力値は§11.3「`app_name` 文法」で規定する安全な相対サブディレクトリ識別子文法に従い検証される |
 | `[camera]` | `camera_fps` | `pokecon.opt.camera.fps` | `int` | |
 | `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う |
 | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | |
@@ -2059,10 +2204,13 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
 | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-| `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
-| `[python.script]` | `script_shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
-| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"`。§11.4.1.3のenum正規化規則に従う |
-| `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
+| `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | |
+| `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
+| `[python.script.packages]` | `mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"`。§11.4.1.3のenum正規化規則に従う |
+| `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
+| `[python.dynamic]` | `venv` | — | `str` | グローバル専用・ブートストラップ専用。動的設定ワーカー用venvパス。`pokecon.opt.python.dynamic.*` の動的パスは存在しない（循環依存／ブートストラップ制約のため）。デフォルト: アプリ管理のDataディレクトリ（§14.1.1 Data）配下の `venv-dynamic`。CLI: `--python-dynamic-venv <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_VENV=<path>`。空入力は無効（起動時エラー）。UI/OpenAPI非公開（再起動が必要）。§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照 |
+| `[python.dynamic.packages]` | `mode` | — | `str` | グローバル専用・ブートストラップ専用。`"append"` / `"full"`。動的パス非対応（同上）。§11.4.1.3のenum正規化規則に従う。CLI: `--python-dynamic-packages-mode`。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_MODE` |
+| `[python.dynamic.packages]` | `list` | — | `list[{name: str, version?: str}]` | グローバル専用・ブートストラップ専用。動的パス非対応（同上）。CLI: `--python-dynamic-packages-list`（JSON文字列）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_LIST` |
 | — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"`。§11.4.1.3のenum正規化規則に従う |
@@ -2212,8 +2360,10 @@ reconnect_max_retries = 20  # リトライ回数上限
 # version = ">=2.28.0"
 
 [python.dynamic]
-# 動的設定ワーカー用venv（グローバル専用: プロファイルTOMLでは設定不可）
+# 動的設定ワーカー用venvパス（グローバル専用: プロファイルTOMLでは設定不可）
 # インタープリター本体はアプリ管理のCPython 3.14固定であり、設定キーを持たない
+# 未設定時はデータディレクトリ（§14.1.1 Data）配下のvenv-dynamic（app-managed）が使用される
+# 環境変数: POKECON_PYTHON_DYNAMIC_VENV, CLI: --python-dynamic-venv <path>
 # Linux例: venv = "~/.local/share/pokecon/venv-dynamic"
 
 [python.dynamic.packages]
@@ -2756,11 +2906,11 @@ Postイベントおよびキャンセル不可イベントでコールバック�
 
 - **Neovimの`:source`に類似**（適用範囲を限定）: `pokecon.source(path)` は別スクリプトを評価し拡張子で言語を自動判別する点で Neovim の `:source` と類似するが、**相対パスの解決基準は Neovim と異なる**。Neovim がプロセスカレントワーキングディレクトリを基準とするのに対し、本 API は実効Configルートを基準とする
 - **拡張子で自動判別**: `.py` → Python, `.lua` → Lua
-- **相対パスは実効Configルート基準**: 相対パス（`./`、`../`、プレーンなファイル名）は常に実効Configルート（§11.3 `config.file`参照。`config.file`未指定時は§14.1.1 Configと一致）を基点として解決される。プロセスカレントワーキングディレクトリや呼び出し元ファイルのディレクトリは使用しない
+- **相対パスは実効Configルート基準**: 相対パス（`./`、`../`、プレーンなファイル名）は常に実効Configルート（§11.3 `app_name`参照。§14.1.1 Configと一致）を基点として解決される。プロセスカレントワーキングディレクトリや呼び出し元ファイルのディレクトリは使用しない
 - **絶対パス**: 対象OSで絶対パスと判定されるパスは、その絶対パスを使用する
 - **チルダ展開**: Linuxでは `~` が `$HOME` に展開される。チルダ展開解決後も相対パス（先頭が `/` 以外）の場合は実効Configルート基準で解決される
 - **実効Configルート外へのアクセス**: 相対パスは実効Configルートとの結合後に`.`と`..`を字句的に正規化する。字句的な正規化結果、または存在確認後にシンボリックリンクを解決した結果が実効Configルート外を指す場合は読み込みを拒否する。実効Configルート外のファイルを参照するには絶対パスを使用する
-- **ネストされた `source()` の解決**: `source()` で読み込まれたファイル内でさらに相対パスの `source()` を呼び出した場合も、基点は変化しない。常に実効Configルート（§11.3 `config.file`参照。`config.file`未指定時は§14.1.1 Configと一致）を基準として解決される。呼び出し元ファイルのディレクトリは使用しない
+- **ネストされた `source()` の解決**: `source()` で読み込まれたファイル内でさらに相対パスの `source()` を呼び出した場合も、基点は変化しない。常に実効Configルート（§11.3 `app_name`参照。§14.1.1 Configと一致）を基準として解決される。呼び出し元ファイルのディレクトリは使用しない
 - **Python/Lua完全同一**: 上記の解決規則は Python と Lua で完全に同一である
 
 ###### 11.5.6.2.2 API仕様
@@ -2772,7 +2922,7 @@ import pokecon
 # 絶対パス（Linux例）
 # pokecon.source("/home/user/.config/pokecon/extra_settings.py")
 
-# 相対パス（実効Configルート基準: §11.3 config.file からの相対）
+# 相対パス（実効Configルート基準: §11.3 app_name からの相対）
 pokecon.source("./extra_settings.py")  # -> None
 
 # チルダ展開（Linux例）
@@ -2888,7 +3038,7 @@ print(pokecon.state.pending_profile)
 - **`pokecon.opt.active_profile` との関係**: `pokecon.opt.active_profile` のsetterは、内部的に `pokecon.profile.switch(name)` と同じプロファイル切替処理を呼び出す。成功/失敗を戻り値で扱いたい場合は `profile.switch()` を使用する。`pokecon.opt.active_profile` への代入は戻り値を返せないため、Preイベントでキャンセルされた場合（`ProfileSwitchPre`が`False`を返した場合）は現在値を変更せず、代わりにERROR診断を出力する
 - **切替イベント**: `ProfileSwitchPre`（キャンセル可能）、`ProfileSwitchPost`の2フェーズを持つ。Preは動的設定ワーカーで発火し、厳密な`False`でキャンセル可能。PostはPreがキャンセルされず、かつ既存ユーザーワーカーが停止・新設定が適用された後に発火する（§11.5.6.4.3参照）
 - **保留中プロファイル**: 切替処理中は`pokecon.state.pending_profile`にターゲットプロファイル名が設定される。読み取り専用で、切替完了またはキャンセル時に`None`に戻る
-- **作成・削除**: プロファイルの作成・削除はAPIでは行わない。実効Configルート（§11.3 `config.file`参照）配下の `profiles/<name>/` ディレクトリを手動で作成・削除する
+- **作成・削除**: プロファイルの作成・削除はAPIでは行わない。実効Configルート（§11.3 `app_name`参照）配下の `profiles/<name>/` ディレクトリを手動で作成・削除する
 
 ###### 11.5.6.4.2 API仕様
 
@@ -3202,8 +3352,9 @@ pokecon.controller.reset()
 | 変数 | 説明 | デフォルト |
 |----------|-------------|---------|
 | `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `false` |
-| `POKECON_CONFIG_FILE` | 設定ファイルパスのブートストラップセレクター（§11.3参照）。デフォルト: プラットフォーム既定のConfigディレクトリ（§14.1.1）直下の`settings.toml`。上書き時、選択されたファイルの親ディレクトリが実効Configルートとなる | §14.1.1 Config / `settings.toml` |
+| `POKECON_APPNAME` | アプリケーション名セレクター（§11.3「`app_name` — アプリケーション名セレクター」参照）。Neovimの`NVIM_APPNAME`に類似。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される | `"pokecon"` |
 | `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカーのプライマリランタイム選択（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。値: `"python"` / `"lua"` / `"none"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問）。デフォルト: `"lua"`。ブートストラップ環境変数として早期解決される。CLI対応: `--dynamic-config-language`。複数指定時はCLIが優先 | `"lua"` |
+| `POKECON_PYTHON_DYNAMIC_VENV` | 動的設定ワーカー用venvパス（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照）。ブートストラップ環境変数として早期解決される。CLI対応: `--python-dynamic-venv <path>`。複数指定時はCLIが優先。空文字列は無効（起動時エラー） | Data/`venv-dynamic`（§14.1.1 Data） |
 | `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問） | `"ask"` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
@@ -3230,14 +3381,14 @@ UIの一時状態をブラウザメモリに保持することは実装詳細と
 
 #### 14.1.1 プラットフォーム間ベースディレクトリマッピング
 
-アプリケーションが使用するディレクトリは、用途に応じて以下の4種類に分類される。LinuxではXDG Base Directory仕様に従い、Windowsでは対応するKnown Folderを使用する。プラットフォーム間で動作の違いはなく、解決されるパスが異なるのみである。下表およびディレクトリツリーは**プラットフォーム既定のディレクトリ**を示す。`config.file`ブートストラップセレクター（§11.3参照）による上書き時は、実効Configルートが選択されたファイルの親ディレクトリに変更されるが、Data/Cache/Stateの各ディレクトリはプラットフォーム既定パスのまま影響を受けない。
+アプリケーションが使用するディレクトリは、用途に応じて以下の4種類に分類される。LinuxではXDG Base Directory仕様に従い、Windowsでは対応するKnown Folderを使用する。プラットフォーム間で動作の違いはなく、解決されるパスが異なるのみである。下表およびディレクトリツリーは、`app_name`（§11.3参照）の値に応じて解決される**実効ルート**を示す。表中の`<app_name>`は、`app_name`ブートストラップセレクターの解決値を表すプレースホルダーである。デフォルトでは`"pokecon"`に解決される。`app_name`は全4ルート（Config、Data、Cache、State）に影響し、任意のアプリ名を指定することでこれらをまとめて変更できる（§11.3「`app_name` 文法 — 安全な相対サブディレクトリ識別子」参照）。`app_name`の入力値は§11.3で規定する安全な相対サブディレクトリ識別子文法に従い検証され、絶対パス・ドットコンポーネント・空文字列等は起動時エラーとなる。
 
 | 分類 | 内容 | Linux（環境変数フォールバック） | Windows（Known Folderの環境変数表記） |
 |------|------|--------------------------------|------------------------|
-| **Config（設定）** | ユーザーが編集する設定ファイル | `${XDG_CONFIG_HOME:-$HOME/.config}/pokecon` | `%APPDATA%\PokeCon` |
-| **Data（データ）** | アプリが自動生成するデータファイル | `${XDG_DATA_HOME:-$HOME/.local/share}/pokecon` | `%LOCALAPPDATA%\PokeCon\data` |
-| **Cache（キャッシュ）** | 再生成可能なダウンロード・パッケージ・ビルドキャッシュ | `${XDG_CACHE_HOME:-$HOME/.cache}/pokecon` | `%LOCALAPPDATA%\PokeCon\cache` |
-| **State（状態）** | ログ・診断・永続的セッション状態 | `${XDG_STATE_HOME:-$HOME/.local/state}/pokecon` | `%LOCALAPPDATA%\PokeCon\state` |
+| **Config（設定）** | ユーザーが編集する設定ファイル | `${XDG_CONFIG_HOME:-$HOME/.config}/<app_name>` | `%APPDATA%\\<app_name>` |
+| **Data（データ）** | アプリが自動生成するデータファイル | `${XDG_DATA_HOME:-$HOME/.local/share}/<app_name>` | `%LOCALAPPDATA%\\<app_name>\\data` |
+| **Cache（キャッシュ）** | 再生成可能なダウンロード・パッケージ・ビルドキャッシュ | `${XDG_CACHE_HOME:-$HOME/.cache}/<app_name>` | `%LOCALAPPDATA%\\<app_name>\\cache` |
+| **State（状態）** | ログ・診断・永続的セッション状態 | `${XDG_STATE_HOME:-$HOME/.local/state}/<app_name>` | `%LOCALAPPDATA%\\<app_name>\\state` |
 
 Linuxでは、各XDG環境変数が未設定、空文字列、または絶対パスではない場合、その変数を未指定として扱い、表中の`$HOME`配下のデフォルトへフォールバックする。表の`${VAR:-default}`はこの解決規則を示す表記であり、シェルによる展開を実装要件とするものではない。
 
@@ -3249,10 +3400,10 @@ Windowsの`%APPDATA%`と`%LOCALAPPDATA%`は、それぞれRoaming AppDataとLoca
 - **Cache**: 再生成可能なダウンロード・パッケージ・ビルドキャッシュ。認証付きの設定や生成済み型定義はここに置かない。
 - **State**: ログおよび永続的診断・セッション状態。本仕様で別途必要なファイルが指定されていない限り、新たな状態ファイルを発明しない。
 
-以下のディレクトリツリーは、Linuxのデフォルト解決例を示す。Windowsの場合は上記マッピングに従い、`%APPDATA%\PokeCon`（Config）および `%LOCALAPPDATA%\PokeCon\data`（Data）等に読み替える。
+以下のディレクトリツリーは、`app_name`のデフォルト値`"pokecon"`におけるLinuxの解決例を示す。Windowsの場合は上記マッピングに従い、`%APPDATA%\\pokecon`（Config）および `%LOCALAPPDATA%\\pokecon\\data`（Data）等に読み替える。
 
 ```
-~/.config/pokecon/                    # XDG_CONFIG_HOME（Linux） / %APPDATA%\PokeCon（Windows）
+~/.config/pokecon/                    # XDG_CONFIG_HOME（Linux） / %APPDATA%\pokecon（Windows）
 ├── pyproject.toml                    # Python LSP設定（ユーザー編集可）
 ├── .luarc.json                       # Lua LSP設定（lua-language-server & EmmyLua共用、ユーザー編集可）
 ├── .vscode/settings.json             # Pylance用（オプション、ユーザー編集可）
@@ -3264,14 +3415,14 @@ Windowsの`%APPDATA%`と`%LOCALAPPDATA%`は、それぞれRoaming AppDataとLoca
 │       └── settings.toml
 ├── init.py                           # Python動的設定テンプレート
 └── init.lua                          # Lua動的設定テンプレート
-~/.local/share/pokecon/               # XDG_DATA_HOME（Linux） / %LOCALAPPDATA%\PokeCon\data（Windows）— 自動管理
+~/.local/share/pokecon/               # XDG_DATA_HOME（Linux） / %LOCALAPPDATA%\pokecon\data（Windows）— 自動管理
 ├── typings/                          # Python型定義（.pyi、Rust側で自動生成）
 ├── lua-typings/                      # Lua型定義（.d.lua、Rust側で自動生成）
 ├── venv-script/                      # ユーザースクリプトワーカー用仮想環境
 ├── venv-dynamic/                     # 動的設定ワーカー用仮想環境
 └── python/                           # python-build-standalone（非nix環境）
-~/.cache/pokecon/                     # XDG_CACHE_HOME（Linux） / %LOCALAPPDATA%\PokeCon\cache（Windows）— 再生成可能
-~/.local/state/pokecon/               # XDG_STATE_HOME（Linux） / %LOCALAPPDATA%\PokeCon\state（Windows）— ログ等
+~/.cache/pokecon/                     # XDG_CACHE_HOME（Linux） / %LOCALAPPDATA%\pokecon\cache（Windows）— 再生成可能
+~/.local/state/pokecon/               # XDG_STATE_HOME（Linux） / %LOCALAPPDATA%\pokecon\state（Windows）— ログ等
 
 # 開発用（リポジトリ内）
 python/pokecon/typings/               # 型定義の元データ（開発・メンテナンス用）
@@ -3316,7 +3467,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 **実装概要**:
 - データディレクトリ（§14.1.1参照）配下にPythonをセットアップ
 - Linuxで`XDG_DATA_HOME`未設定時の例: `~/.local/share/pokecon/` 配下
-- Windows例: `%LOCALAPPDATA%\PokeCon\data\` 配下
+- Windows例: `%LOCALAPPDATA%\\pokecon\\data\\` 配下
 - 期待するバージョンがない場合はデフォルトを使用
 - 既存のPythonが期待するバージョンかチェック
 - ない場合はpython-build-standaloneをダウンロード

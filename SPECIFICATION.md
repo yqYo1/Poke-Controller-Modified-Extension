@@ -1681,10 +1681,10 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 上記パイプラインに先立ち、以下の目的に必要な最小限のCLI引数および環境変数のみを事前解析する:
 
-- 設定ソースの探索・選択（configファイルパス、プロファイル等）
-- 動的設定実行環境の特定
+- **設定ソースの探索・選択**: `config.file`（configファイルパス）、`active_profile`（プロファイル）
+- **動的設定実行環境の特定**: `dynamic_config_language`（動的設定のプライマリ言語）
 
-このカテゴリには、設定ファイル、プロファイルおよび動的設定実行環境を選択するCLI引数と対応するブートストラップ環境変数が含まれる。具体名は正準設定レジストリ（§11.4.1.1）で規定する。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じセレクターを指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
+このカテゴリには、設定ファイルパス・プロファイル・動的設定言語を選択するCLI引数と対応するブートストラップ環境変数が含まれる。具体名は正準設定レジストリ（§11.4.1.1）で規定する（`config.file`、`active_profile`、`dynamic_config_language`等）。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じセレクターを指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
 
 **`config.file` — 設定ファイルパスセレクター**:
 
@@ -1745,6 +1745,27 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **備考**: ブートストラップ表面（CLI/env）以外の設定表面が存在しないため、正準レジストリ（§11.4.1.1）では `config.file` のTOMLパスと動的パスを明示的に `null` とし、その理由を「循環依存のため」と記録する。
 
+**`dynamic_config_language` — 動的設定言語セレクター**:
+
+正準ID `dynamic_config_language` は、動的設定ワーカーが初期化するプライマリランタイム（Python/Lua）を選択するブートストラップ設定である。
+
+| 表面 | 値 | 備考 |
+|------|-----|------|
+| **CLI** | `--dynamic-config-language <value>` | ブートストラップCLI。通常CLI引数より前に解決される |
+| **環境変数** | `POKECON_DYNAMIC_CONFIG_LANGUAGE=<value>` | |
+| **TOMLパス** | `[global].dynamic_config_language` | グローバル設定ファイルの `[global]` セクション |
+| **動的パス（`pokecon.opt.*`）** | `null` | 循環依存のため（動的設定の言語を動的設定から変更できない） |
+| **UI/OpenAPI公開** | なし | 起動時のみ有効、実行時再構成不可（再起動が必要） |
+| **デフォルト** | `"lua"` | |
+
+**値**: `"python"` / `"lua"` / `"none"`。正準値は小文字（§11.4.1.3のenum正規化規則に従い、全入力表面でASCII大文字小文字を区別せず受け入れ、正準値に正規化する）。
+
+**優先順位**: 組み込みデフォルト < グローバルTOML < 環境変数 < 明示的CLI。CLI省略時は組み込みデフォルト（`"lua"`）をCLI段階から注入して環境変数を上書きしてはならない。`"lua"` は組み込みデフォルト値としてパイプラインの最初に適用され、その後にグローバルTOML、`POKECON_DYNAMIC_CONFIG_LANGUAGE`、明示的 `--dynamic-config-language` の順で上書きされる。
+
+**解決タイミング**: 上記「ブートストラップCLI/環境変数解析」の一環として、動的設定ワーカーの起動前・通常の設定パイプライン適用よりも先に解決される。`--dynamic-config-language` はブートストラップCLIであり、通常の設定CLI引数（パイプライン順位6）とは異なる事前解決段階に属する。この解決は通常パイプラインの外で行われ、解決結果は動的設定ワーカーの生成・初期化に使用される。
+
+**グローバル専用**: プロファイルTOMLではオーバーライドできない。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）。
+
 **`pokecon.opt.*`代入の共通動作**:
 
 `pokecon.opt.*`への代入は、実行タイミング・実行コンテキスト・現在値の由来にかかわらず、常に共通の動作をする:
@@ -1777,7 +1798,7 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 **原則**: 静的設定で設定できる項目は、動的設定ファイルの指定（`dynamic_config_language`）を除き、**すべて動的設定（`init.py`/`init.lua`）からも設定可能**です。
 
-**注**: `dynamic_config_language` は静的設定（`settings.toml`）のみで設定可能。動的設定ファイル内で言語を切り替えることはできない（循環依存を回避するため）。
+**注**: `dynamic_config_language` は動的設定ファイル内で設定不可（循環依存を回避するため）。グローバルTOML（`[global].dynamic_config_language`）、環境変数（`POKECON_DYNAMIC_CONFIG_LANGUAGE`）、CLI（`--dynamic-config-language`）のいずれかで設定する（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。
 
 #### 11.4.1 設定キーと動的設定パスの設計方針
 
@@ -1864,6 +1885,19 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 **TOMLパスと動的パスの独立性**: TOMLパスと動的パスは上記デフォルト生成ルールの対象外であり、§11.4.1の設計方針に従い独立してレジストリフィールドとして明示的に指定される。一方、CLIフラグ名と環境変数名は上記デフォルトルールで正準IDから生成される。これにより、TOMLの平坦キー構造と動的パスの階層構造が独立して設計されるという既存の設計方針と、CLI/envの予測可能な命名を両立する。
 
 **未対応サーフェスの明示義務**: ある設定項目が特定のサーフェスを真にサポートできない場合、該当フィールドに `null` とその非対応理由を明示的に記録する。単に記載がないこと（omission）は理由と見なさない。ユーザー設定可能な設定項目は、実行可能な限りTOML・CLI・環境変数・動的パスの全サーフェスを公開する。ブートストラップ設定は循環依存または起動制約によりTOMLや動的パスを欠く場合があるが、CLIと環境変数は実行可能な限り生成する。
+
+**`dynamic_config_language` のレジストリ投影**: 正準ID `dynamic_config_language`（フラット）は以下の各表面を持つ:
+- **TOMLパス**: `[global].dynamic_config_language`（`[global]` セクションの直下キー）。
+- **動的パス（`pokecon.opt.*`）**: `null`（循環依存のため — 動的設定の言語選択を動的設定から変更できない）。
+- **CLIパス**: `--dynamic-config-language`（正準IDからのデフォルト生成ルールにより自動生成。ブートストラップCLIとして通常CLI引数より前に解決）。
+- **環境変数パス**: `POKECON_DYNAMIC_CONFIG_LANGUAGE`（正準IDからのデフォルト生成ルールにより自動生成。ブートストラップ環境変数として早期解決）。
+- **スコープ**: グローバル専用（プロファイル設定不可）。
+- **起動時／実行時可変性**: 起動時のみ（ブートストラップ）。実行時再構成不可（再起動が必要）。
+- **UI公開**: なし。
+- **OpenAPI公開**: なし（読み取り・書き込みとも不可）。UIドキュメントで再起動が必要な設定として言及することは許容される。
+- **デフォルト**: `"lua"`。
+- **値**: `"python"` / `"lua"` / `"none"`。正準値は小文字。大文字小文字の正規化は§11.4.1.3に従う。
+- **備考**: ブートストラップ専用。`--runtime` や `POKECON_RUNTIME` 等の抽象的なランタイムセレクターは追加しない。CPython 3.14 は固定であり設定変更不可。
 
 **CIによる同期検証**: 正準レジストリと各生成サーフェスの間で以下をCIで検出し、失敗とする:
 - 重複ID・重複生成名
@@ -1952,6 +1986,49 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 - パースエラー時は正準IDおよびエラーの発生した設定表面（CLI／環境変数／TOML／動的パス等）をエラーメッセージに含める。
 - エントリがsecret（§11.4.3）として分類されている場合、またはsecretフィールドを含みうる複合値の一部である場合、生の入力をエラーメッセージに露出してはならない。
 
+##### 11.4.1.3 enum値の正規化規則
+
+本項は、正準設定レジストリで閉じた文字列enum（closed string enum）として型付けされた全エントリに適用される、入力の大文字小文字正規化と型ヒントの規則を規定する。
+
+**対象**: レジストリの「バリアント／範囲／バリデーション」フィールドに有限で列挙可能な文字列値の集合が明示的に定義された全設定。
+例: `language`（`"ja"` / `"en"`）、`serial.data_format`（`"default"` / `"qingpi"` / `"3ds"`）、`ui.desktop.close_behavior`（`"ask"` / `"shutdown"` / `"keep_backend"`）。
+
+**非対象**: 自由文字列（パス、URL、シークレット、コマンド名等）およびプロファイル名。プロファイル名はOS/ファイルシステムの大文字小文字セマンティクスに委ねられ、アプリケーションによる大文字小文字正規化は行わない（§11.5.6.4.4参照）。
+
+**ランタイム入力の大文字小文字正規化**:
+
+すべての閉じた文字列enum値は、全入力表面においてASCII大文字小文字を区別せず受け入れる:
+
+| 表面 | 動作 |
+|------|------|
+| **TOML** | 文字列値としてパース後、ASCII大文字小文字を正規化してから比較 |
+| **CLI引数** | 文字列値としてパース後、ASCII大文字小文字を正規化 |
+| **環境変数** | 同上 |
+| **Python動的設定（`pokecon.opt.*`）** | Pythonの`str`値として代入後、ASCII大文字小文字を正規化 |
+| **Lua動的設定（`pokecon.opt.*`）** | Luaの`string`値として代入後、ASCII大文字小文字を正規化 |
+| **UI/OpenAPI書き込み入力** | UIテキスト入力またはOpenAPI JSON文字列として受け付け後、ASCII大文字小文字を正規化 |
+
+**正規化方法**: ASCIIロケール非依存の大文字小文字比較（ASCII case folding）を使用する。値は正準レジストリに定義された正準値（canonical value）と一致するまで大文字小文字だけを調整する。正規化後の値は常に正準値（原則として小文字snake_case）となる。
+
+**実行例**:
+- `LUA` → `"lua"`、`Python` → `"python"`、`ASK` → `"ask"`、`Keep_Backend` → `"keep_backend"`、`QINGPI` → `"qingpi"`、`DEFAULT` → `"default"`
+- `JA` → `"ja"`、`EN` → `"en"`
+- `TOP` → `"top"`、`BOTTOM` → `"bottom"`、`BOTH` → `"both"`
+- `APPEND` → `"append"`、`FULL` → `"full"`
+
+**制約**:
+- 正規化後も正準値のいずれとも一致しない値は拒否する。値のトリム（空白除去）は行わない。
+- 別名やスペルバリアント（例: `"all"` を `"both"` の別名として扱う等）は、明示的にレジストリに登録されていない限り受け入れない。
+- この規則は閉じた文字列enumにのみ適用される。自由文字列の値（パス、URL、コマンド名等）は正規化しない。
+
+**生成される型ヒント**:
+
+- **Python動的設定**（`pokecon.opt.*`）の型スタブは、閉じたenumには正準値のみの `Literal[...]` を使用する。例: `Literal["python", "lua", "none"]`。大文字・大文字小文字混在のバリアントや `str` への拡張は含めない。
+- **Lua動的設定**の型アノテーション（利用可能な場合）には、正準値のみのenum制約を記述する。例: `"python" | "lua" | "none"`。
+- **OpenAPI enumスキーマ**および**UI選択肢**には正準値のみを列挙する。ランタイムのパーサーが大文字小文字を正規化するため、UI/OpenAPIの入力ガイダンスとしては正準値を提示する。
+
+**エラー報告**: 無効なenum値のエラーメッセージは、受け入れ可能な正準値のみを列挙する。大文字小文字のバリアントは列挙しない。例: `"LUA"` が指定された場合のエラー: `invalid value "LUA" for dynamic_config_language — expected one of: "python", "lua", "none"`。
+
 #### 11.4.2 動的設定パス定義一覧
 
 本仕様書で規定する `settings.toml` と `pokecon.opt` の動的設定パスの対応関係を以下に示す。
@@ -1961,17 +2038,18 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 | TOMLセクション | TOMLキー | `pokecon.opt` 動的パス | 型 | 備考 |
 |--------------|---------|----------------------|---|------|
-| `[global]` | `language` | `pokecon.opt.language` | `str` | `"ja"` / `"en"` |
+| `[global]` | `language` | `pokecon.opt.language` | `str` | `"ja"` / `"en"`。正準値は小文字。§11.4.1.3のenum正規化規則に従う |
 | `[global]` | `auto_reload_config` | `pokecon.opt.auto_reload_config` | `bool` | |
+| `[global]` | `dynamic_config_language` | — | `str` | グローバル専用・ブートストラップ専用。`"python"` / `"lua"` / `"none"`。正準値は小文字（§11.4.1.3のenum正規化規則に従う）。デフォルト `"lua"`。動的パス `pokecon.opt` 非対応（循環依存のため）。CLI: `--dynamic-config-language <value>`（ブートストラップCLI）。環境変数: `POKECON_DYNAMIC_CONFIG_LANGUAGE=<value>`。UI/OpenAPI非公開（再起動が必要）。§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照 |
 | `[config]` | `report_ignored_profile_global_settings` | `pokecon.opt.config.report_ignored_profile_global_settings` | `bool` | グローバル専用。プロファイルTOMLで無視されたグローバル専用設定の診断出力を制御。デフォルト: `true`（ERROR出力）。プロファイルTOMLに指定された場合は無視され、既に解決済みのグローバル値が使用される（§11.3参照）。環境変数: `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS`。CLI: `--report-ignored-profile-global-settings`（正準IDから生成） |
-| `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | 組み込みデフォルト: `"default"`。CLI: `--profile` / `-p`（メインブランチ／オリジナルExtension互換）、環境変数: `POKECON_PROFILE`（新設）。CLI省略時は環境変数を上書きしない。`--active-profile` / `POKECON_ACTIVE_PROFILE`は公開しない |
+| `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | 組み込みデフォルト: `"default"`。CLI: `--profile` / `-p`（メインブランチ／オリジナルExtension互換）、環境変数: `POKECON_PROFILE`（新設）。CLI省略時は環境変数を上書きしない。`--active-profile` / `POKECON_ACTIVE_PROFILE`は公開しない。大文字小文字の正規化は行わない（§11.5.6.4.4のOSネイティブセマンティクスに従う）。プロファイル名の型は閉じたenumではなく`str`のまま。単一パスコンポーネントの安全性検証を全入力表面で行う |
 | — | *ブートストラップ専用* | — | `str` | **`config.file`**: 設定ファイルパスセレクター（§11.3参照）。ユーザー向けCLI: `--config-file <path>`。環境変数: `POKECON_CONFIG_FILE=<path>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: プラットフォーム既定のConfigディレクトリ（§14.1.1）直下の`settings.toml`。上書き時、選択されたファイルの親ディレクトリが実効Configルートとなる。パス正規化の完全な規則は§11.3に定義 |
 | `[camera]` | `camera_fps` | `pokecon.opt.camera.fps` | `int` | |
-| `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"` |
+| `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う |
 | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | |
 | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | |
-| `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"` |
-| `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"` |
+| `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う |
+| `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"`。§11.4.1.3のenum正規化規則に従う |
 | `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
 | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | |
 | `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | |
@@ -1983,16 +2061,16 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
 | `[python.script]` | `script_venv` | `pokecon.opt.python.script.venv` | `str` | |
 | `[python.script]` | `script_shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
-| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"` |
+| `[python.script.packages]` | `script_packages_mode` | `pokecon.opt.python.script.packages.mode` | `str` | `"append"` / `"full"`。§11.4.1.3のenum正規化規則に従う |
 | `[python.script.packages]` | `script_packages_list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str}]` | パッケージ指定 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
 | — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
-| — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"` |
-| — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"` |
-| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
+| — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"`。§11.4.1.3のenum正規化規則に従う |
+| — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"`。§11.4.1.3のenum正規化規則に従う |
+| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
 
 **注**:
-- `dynamic_config_language` は静的設定専用であり `pokecon.opt` 動的パスを持たない（§11.4参照）。
+- `dynamic_config_language` は動的パス `pokecon.opt` を持たず（循環依存のため）、グローバルTOML・環境変数・CLIからのみ設定可能（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。
 - `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 - `report_ignored_profile_global_settings` はグローバル専用の診断制御設定である（§11.3参照）。プロファイルTOMLに指定された場合、その値は無視され、既に解決済みのグローバル値に基づいて診断出力の要否が決定される。
 - `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
@@ -2097,7 +2175,7 @@ secretに分類されていない値は、本節による秘匿化の対象外�
 [global]
 language = "ja"  # 対応言語: "ja"（日本語）, "en"（英語）。将来的に拡張可能
 auto_reload_config = false  # 動的設定ファイルの自動リロード（デフォルト無効）
-dynamic_config_language = "lua"  # "python" | "lua" | "none"。動的設定ファイルの言語を指定。未指定時のデフォルトは "lua"（Neovimと同じ）
+dynamic_config_language = "lua"  # "python" | "lua" | "none"。動的設定ファイルの言語を指定。未指定時のデフォルトは "lua"（Neovimと同じ）。環境変数: POKECON_DYNAMIC_CONFIG_LANGUAGE。CLI: --dynamic-config-language <value>（§11.3参照）
 
 [config]
 # report_ignored_profile_global_settings: プロファイルTOMLに指定されたグローバル専用設定を
@@ -2210,12 +2288,14 @@ ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 
 `init.py` と `init.lua` の両方が存在する場合、**Neovim/Vimと同様に一方のみ**読み込まれます。
 
-| 設定 | 読み込まれるファイル |
+| `dynamic_config_language` の設定値 | 読み込まれるファイル |
 |------|-------------------|
-| `settings.toml` で `dynamic_config_language = "python"` を指定 | `init.py` |
-| `settings.toml` で `dynamic_config_language = "lua"` を指定 | `init.lua` |
-| `settings.toml` で `dynamic_config_language = "none"` を指定 | 動的設定を読み込まない |
+| `"python"` | `init.py` |
+| `"lua"` | `init.lua` |
+| `"none"` | 動的設定を読み込まない |
 | 未指定（デフォルト） | `init.lua` が優先（Neovimと同じ） |
+
+`dynamic_config_language` の値は、グローバルTOML（`[global].dynamic_config_language`）、環境変数（`POKECON_DYNAMIC_CONFIG_LANGUAGE`）、CLI（`--dynamic-config-language`）のいずれかで設定する（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。複数のソースに指定がある場合の優先順位は同セクションに従う。
 
 **両方を使いたい場合**: 一方から `pokecon.source()` で他方を読み込んでください。
 
@@ -2740,9 +2820,9 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `current_command` | `str` | 現在実行中のコマンド名 |
 | `command_candidates` | `list[CommandInfo]` | 読み込み候補コマンド一覧 |
 | `tags` | `list[str]` | 利用可能なタグ一覧 |
-| `active_profile` | `str` | 現在のアクティブプロファイル名 |
+| `active_profile` | `str` | 現在のアクティブプロファイル名。勝ち残った設定表面から供給された綴りをそのまま保持する（§11.5.6.4.4参照）。`profile.list()` が返す実際のディレクトリエントリ名とは大文字小文字の綴りが異なる場合がある（OS/FS依存） |
 | `pending_profile` | `str \| None` | プロファイル切替中の保留中プロファイル名。切替処理中のみ設定され、完了/キャンセルで `None` に戻る。読み取り専用 |
-| `available_profiles` | `list[str]` | 利用可能なプロファイル一覧 |
+| `available_profiles` | `list[str]` | 利用可能なプロファイル一覧。ファイルシステム上の実際のディレクトリエントリ名を列挙する（§11.5.6.4.4参照） |
 | `last_input` | `str \| None` | 最後の入力（キー名またはボタン名） |
 | `holding_buttons` | `list[str]` | 現在保持中のボタン一覧 |
 | `pid` | `int` | アプリケーションのプロセスID |
@@ -2770,9 +2850,9 @@ print(pokecon.state.command_candidates) # 読み込み候補コマンド一覧�
 print(pokecon.state.tags)               # 利用可能なタグ一覧（list[str]）
 
 # プロファイル関連
-print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名
+print(pokecon.state.active_profile)     # 現在のアクティブプロファイル名（設定表面の綴りを保持）
 print(pokecon.state.pending_profile)    # プロファイル切替中の保留中プロファイル名（str | None）
-print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧
+print(pokecon.state.available_profiles) # 利用可能なプロファイル一覧（実際のディレクトリエントリ名）
 
 # 入力関連
 print(pokecon.state.last_input)         # 最後の入力（str | None。キー名またはボタン名）
@@ -2823,7 +2903,7 @@ current = pokecon.profile.current()
 print(f"Current profile: {current}")
 
 # 利用可能なプロファイル一覧
-# 戻り値: list[str]
+# 戻り値: list[str]（ファイルシステム上の実際のディレクトリエントリ名。§11.5.6.4.4参照）
 # pokecon.profile.list() -> list[str]
 profiles = pokecon.profile.list()
 print(f"Available profiles: {profiles}")
@@ -2833,6 +2913,7 @@ print(f"Available profiles: {profiles}")
 # 戻り値: bool（成功: True, 失敗: False）
 # pokecon.profile.switch(name: str) -> bool
 # エラー時: 存在しないプロファイル名を指定した場合はFalseを返し、エラーをログに出力
+# 名前検証: 空文字列、`.`、`..`、絶対パス、パス区切り文字（`/`、`\`）、NULを含む名前は検証エラーとしてFalseを返し、副作用は一切発生しない
 # 戻り値で成功/失敗を扱いたい場合は profile.switch() を使用する。pokecon.opt.active_profile への代入も同じ切替処理を実行する
 success = pokecon.profile.switch("custom")
 if not success:
@@ -2928,6 +3009,38 @@ pokecon.autocmd.on("ProfileSwitchPost", {
 - 上記のトランザクション順序により、旧ワーカー停止より前に新しいプロファイル設定が適用されることはなく、新設定が旧ワーカーの動作に影響を与えることはない
 - `ProfileSwitchPre`のコールバックは引数なし。ペイロードフィールドは追加しない。コールバックは`pokecon.profile.current()`、`pokecon.state.pending_profile`、その他のstateを介して現在/ターゲット情報にアクセスする
 - `ProfileSwitchPost`のコールバックも引数なしで、現在の完全な状態に`pokecon.*`経由でアクセスする
+
+###### 11.5.6.4.4 プロファイル名の大文字小文字セマンティクス
+
+**プロファイル名の大文字小文字はアプリケーションで正規化せず、OS/ファイルシステムのネイティブセマンティクスに委ねる。**
+
+- アプリケーションはASCII大文字小文字の折りたたみ（case folding）、Unicode正規化、その他の大文字小文字正規化を一切行わない。すべての設定表面（TOML、CLI `--profile`/`-p`、`POKECON_PROFILE`環境変数、`pokecon.opt.active_profile`代入、`pokecon.profile.switch(name)`）において、入力された綴りをそのまま受け付け、比較・解決はホストファイルシステムに委ねる。
+- 大文字小文字の解釈は完全にホストOS/ファイルシステムに委ねられる。Linux（case-sensitive FS）では `Foo` と `foo` は異なるプロファイルとして扱われうる。Windows（デフォルトcase-insensitive FS）ではOSが同一と判断する可能性がある。他のファイルシステムはそれぞれのネイティブ動作に従う。
+- アプリケーションは大文字小文字の衝突を検出・拒否しない。衝突の解決はファイルシステムの動作に委ねる。
+- **`pokecon.profile.current()`** および **`pokecon.state.active_profile`** は、勝ち残った設定表面から供給された綴りをそのまま保持する。実際のディレクトリエントリ名とは異なる場合がある（ファイルシステムが大文字小文字を区別しない環境で、設定表面とディレクトリエントリの綴りが一致しないケースなど）。
+- **`pokecon.profile.list()`** および **`pokecon.state.available_profiles`** は、ファイルシステム上の実際のディレクトリエントリ名を列挙する。このため、`current()` が返す値と `list()` に含まれる値の綴りが一致しない可能性がある（例: case-insensitive FSで `list()` は `["Foo"]`、`current()` は `"foo"` を返す）。この差異はアプリケーションでは正規化せず、ファイルシステムのネイティブ動作として許容する。
+
+**単一パスコンポーネントの安全性検証**:
+
+大文字小文字の正規化は行わないが、以下のセキュリティ・シンタックス要件は全入力表面で検証する。
+
+- プロファイル名は**ちょうど一つの通常のパスコンポーネント**でなければならない。
+- 以下は拒否する:
+  - 空文字列
+  - `.`（カレントディレクトリ）
+  - `..`（親ディレクトリ）
+  - 絶対パス（先頭が`/`またはプラットフォーム非依存のパス区切り文字）
+  - いずれかのプラットフォームのパス区切り文字を含むもの: `/`（Unix系区切り）、`\`（Windows系区切り）
+  - NUL文字（`\0`）
+- 値のトリム（前後の空白除去）は行わない。先頭や末尾の空白はパスコンポーネントの一部として扱われる。`profiles/` ディレクトリ配下のディレクトリ名としての解決はホストファイルシステムに委ねる。
+- プロファイルの存在確認・解決はホストファイルシステムを使用する。大文字小文字の違いによる「存在しないプロファイル」の判定はファイルシステムの動作に依存する。
+
+**型**: プロファイル名の型は閉じたenum（`Literal[...]`）ではなく、`str`のままとする。これはプロファイル名が実行時にのみ決定される可変の集合であり、APIサーフェスで列挙可能な閉じた値の集合ではないためである。
+
+**根拠**:
+- 多くのユーザーは単一のOSで運用するため、暗黙の正規化によって設定した値が予期せず書き換わることは不意の動作変更となる。
+- 実装上、アプリケーションが大文字小文字の正規化を行う必要はない。OS/ファイルシステムに委ねることで実装が単純化され、ユーザーにとって透過的な動作となる。
+- 単一パスコンポーネント制約により、ディレクトリトラバーサル等のセキュリティ問題を防止する。
 
 ##### 11.5.6.5 コントローラーAPI（動的設定用）
 
@@ -3090,7 +3203,8 @@ pokecon.controller.reset()
 |----------|-------------|---------|
 | `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `false` |
 | `POKECON_CONFIG_FILE` | 設定ファイルパスのブートストラップセレクター（§11.3参照）。デフォルト: プラットフォーム既定のConfigディレクトリ（§14.1.1）直下の`settings.toml`。上書き時、選択されたファイルの親ディレクトリが実効Configルートとなる | §14.1.1 Config / `settings.toml` |
-| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照） | `"ask"` |
+| `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカーのプライマリランタイム選択（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。値: `"python"` / `"lua"` / `"none"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問）。デフォルト: `"lua"`。ブートストラップ環境変数として早期解決される。CLI対応: `--dynamic-config-language`。複数指定時はCLIが優先 | `"lua"` |
+| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問） | `"ask"` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |

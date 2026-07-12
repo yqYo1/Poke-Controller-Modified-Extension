@@ -1463,34 +1463,43 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - **強制終了（ウィンドウの完全削除等）**: 即座にスクリプトを停止する
 - スクリプト停止に伴い、スクリプト内のすべてのダイアログが自動で閉じられる（上記「スクリプト停止時の挙動」を参照）
 
+**Widgetコンストラクタの型推論**: Widgetクラスはselfアノテーション付きオーバーロードにより、コンストラクタ引数から要素型を静的に推論する。以下のコードブロックは、Python 3.14（PEP 695）向けに生成する`.pyi`相当の公開型定義であり、内部実装のコンストラクタ署名を規定しない。
+
+| コンストラクタ呼び出し | 推論される型 |
+|----------------------|-------------|
+| `Widget("Entry", ...)` | `Widget[str]` |
+| `Widget("Check", ...)` | `Widget[bool]` |
+| `Widget("Combo", ...)` | `Widget[U]`（`U`は`options`/`default`から推論） |
+| `Widget("Spin", ...)` | `Widget[int]` |
+| `Widget("Scale", ...)` | `Widget[float]` |
+| `Widget("Next")` | `Widget[None]` |
+
+上記以外の`widget_type`と引数の組み合わせはLSPエラーとなる。
+
 ```python
 class Widget[T]:
     @overload
-    def __init__(self, widget_type: Literal["Entry"], label: str, default: str) -> None: ...
+    def __init__(self: Widget[str], widget_type: Literal["Entry"], label: str, default: str) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Check"], label: str, default: bool) -> None: ...
+    def __init__(self: Widget[bool], widget_type: Literal["Check"], label: str, default: bool) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Combo"], label: str, options: list[T], default: T) -> None: ...
+    def __init__[U](self: Widget[U], widget_type: Literal["Combo"], label: str, options: list[U], default: U) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
+    def __init__(self: Widget[int], widget_type: Literal["Spin"], label: str, options: list[int], default: int) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
+    def __init__(self: Widget[int], widget_type: Literal["Spin"], label: str, min: int, max: int, default: int) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
+    def __init__(self: Widget[float], widget_type: Literal["Scale"], label: str, min: float, max: float, default: float) -> None: ...
 
     @overload
-    def __init__(self, widget_type: Literal["Next"]) -> None: ...
+    def __init__(self: Widget[None], widget_type: Literal["Next"]) -> None: ...
 
-    def __init__(self, widget_type: str, label: str = "", *args: object, **kwargs: object) -> None:
-        self.widget_type = widget_type
-        self.label = label
-        self.value: T | None = None  # ダイアログ後に結果を格納
-
+    value: T | None  # ダイアログ後に結果を格納
 ```
 
 ```python
@@ -1501,8 +1510,8 @@ check = Widget("Check", "有効", True)  # Widget[bool]
 # ブロッキング（デフォルト）
 dialog_id = self.show_dialog("タイトル", widgets=[entry, check])
 # dialog_id == 0
-print(entry.value)  # str
-print(check.value)  # bool
+print(entry.value)  # str | None
+print(check.value)  # bool | None
 
 # 非ブロッキング
 dialog_id = self.show_dialog("タイトル", widgets=[entry, check], blocking=False)

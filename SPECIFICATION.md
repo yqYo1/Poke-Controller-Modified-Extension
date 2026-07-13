@@ -362,17 +362,150 @@ Commandsタブには3つのサブタブがあります:
 ### 5.5 ウィジェットモード（7種類）
 
 UIは、その他タブのコンボボックスで選択可能な、右側パネルの7つの表示組み合わせをサポートする必要があります。
-設定値（`settings.toml`の `widget_mode`）は以下の文字列をそのまま使用します:
+設定値は以下の正準値（canonical value）を使用し、表示ラベルはUIコンボボックスでのみ使用します。
 
-| モード | 設定値（内部識別子） | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
-|------|--------------------|---------------------|-----------|-----------|-------------|
-| 1 | `ALL (default)` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
-| 2 | `Output#1 + Output#2` | 非表示 | 表示 | 表示 | 出力のみ |
-| 3 | `Output#1 + Software-Controller` | 表示 | 表示 | 非表示 | 出力#1＋コントローラー |
-| 4 | `Output#2 + Software-Controller` | 表示 | 非表示 | 表示 | 出力#2＋コントローラー |
-| 5 | `Output#1 Only` | 非表示 | 表示 | 非表示 | 出力#1のみ |
-| 6 | `Output#2 Only` | 非表示 | 非表示 | 表示 | 出力#2のみ |
-| 7 | `Software-Controller Only` | 表示 | 非表示 | 非表示 | コントローラーのみ |
+**設定表面**:
+- **正準ID**: `ui.widget_mode`
+- **TOML**: `[ui].widget_mode`（例: `widget_mode = "all"`）
+- **動的パス**: `pokecon.opt.ui.widget_mode`
+- **CLI**: `--ui-widget-mode <値>`
+- **環境変数**: `POKECON_UI_WIDGET_MODE=<値>`
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: その他タブのコンボボックス（§6.6.1参照）。書き込みはUIコンボボックスから正準値を送信し、即座に右側パネルのレイアウトを更新する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIコンボボックスからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 閉じたenum値。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
+- デフォルト正準値: `all`。
+
+| # | 正準値（canonical） | 表示ラベル（display label） | ソフトウェアコントローラー | 出力#1 | 出力#2 | 説明 |
+|---|-------------------|---------------------------|---------------------|-----------|-----------|-------------|
+| 1 | `all` | `ALL (default)` | 表示 | 表示 | 表示 | フルパネル（デフォルト） |
+| 2 | `outputs` | `Output#1 + Output#2` | 非表示 | 表示 | 表示 | 出力のみ |
+| 3 | `output_1_controller` | `Output#1 + Software-Controller` | 表示 | 表示 | 非表示 | 出力#1＋コントローラー |
+| 4 | `output_2_controller` | `Output#2 + Software-Controller` | 表示 | 非表示 | 表示 | 出力#2＋コントローラー |
+| 5 | `output_1` | `Output#1 Only` | 非表示 | 表示 | 非表示 | 出力#1のみ |
+| 6 | `output_2` | `Output#2 Only` | 非表示 | 非表示 | 表示 | 出力#2のみ |
+| 7 | `controller` | `Software-Controller Only` | 表示 | 非表示 | 非表示 | コントローラーのみ |
+
+---
+
+### 5.6 ソフトウェアコントローラー位置
+
+ソフトウェアコントローラーは、右パネル内でTOP/BOTTOMの表示位置を選択できます。
+設定値は以下の正準値（canonical value）を使用し、表示ラベルはUIラジオボタンでのみ使用します。
+
+**設定表面**:
+- **正準ID**: `ui.controller_position`
+- **TOML**: `[ui].controller_position`（例: `controller_position = "top"`）
+- **動的パス**: `pokecon.opt.ui.controller_position`
+- **CLI**: `--ui-controller-position <値>`
+- **環境変数**: `POKECON_UI_CONTROLLER_POSITION=<値>`
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: その他タブのTOP/BOTTOMラジオボタン（§6.6.1参照、既存UI §5.3.1）。書き込みはUIラジオボタンから正準値を送信し、即座にソフトウェアコントローラーのレイアウト位置を更新する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIラジオボタンからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 閉じたenum値。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
+- デフォルト正準値: `top`。
+
+| # | 正準値（canonical） | 表示ラベル（display label） | 説明 |
+|---|-------------------|---------------------------|-------------|
+| 1 | `top` | `TOP (default)` | 右パネル上部にソフトウェアコントローラーを表示（デフォルト） |
+| 2 | `bottom` | `BOTTOM` | 右パネル下部にソフトウェアコントローラーを表示 |
+
+---
+
+### 5.7 ダイアログボタン位置
+
+ダイアログボタンは、右パネル内でTOP/BOTTOM/BOTHの表示位置を選択できます。
+設定値は以下の正準値（canonical value）を使用し、表示ラベルはUIラジオボタンでのみ使用します。
+
+**設定表面**:
+- **正準ID**: `ui.dialog_button_position`
+- **TOML**: `[ui].dialog_button_position`（例: `dialog_button_position = "bottom"`）
+- **動的パス**: `pokecon.opt.ui.dialog_button_position`
+- **CLI**: `--ui-dialog-button-position <値>`
+- **環境変数**: `POKECON_UI_DIALOG_BUTTON_POSITION=<値>`
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: その他タブのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）。書き込みはUIラジオボタンから正準値を送信し、即座にダイアログボタンのレイアウト位置を更新する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIラジオボタンからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 閉じたenum値。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
+- デフォルト正準値: `bottom`。
+
+| # | 正準値（canonical） | 表示ラベル（display label） | 説明 |
+|---|-------------------|---------------------------|-------------|
+| 1 | `top` | `TOP` | 右パネル上部にダイアログボタンを表示 |
+| 2 | `bottom` | `BOTTOM (default)` | 右パネル下部にダイアログボタンを表示（デフォルト） |
+| 3 | `both` | `BOTH` | 右パネルの上部と下部の両方にダイアログボタンを表示 |
+
+---
+
+### 5.8 出力分割比率（output_split_ratio）
+
+出力#1と出力#2の幅比率を制御するスライダー。スライダー値は出力#1の割合に線形マッピングされる。
+
+**設定表面**:
+- **正準ID**: `ui.output_split_ratio`
+- **TOML**: `[ui].output_split_ratio`（例: `output_split_ratio = 20`）
+- **動的パス**: `pokecon.opt.ui.output_split_ratio`
+- **CLI**: `--ui-output-split-ratio <値>`（正準IDからのデフォルト生成ルールにより自動生成）
+- **環境変数**: `POKECON_UI_OUTPUT_SPLIT_RATIO=<値>`（正準IDからのデフォルト生成ルールにより自動生成）
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: その他タブのスライダー（§6.6.1参照）。書き込みはUIスライダーから整数値を送信し、即座に出力#1/出力#2の幅比率を更新する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIスライダーからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 型: `int`（レジストリでは整数として保持）
+- 範囲: 0～100（閉区間）
+- デフォルト: `20`（旧 `area_size` の値に相当）
+
+**出力幅計算式**:
+- `output1_percent = 10 + 0.8 * value`（出力#1の割合: 10%〜90%）
+- `output2_percent = 100 - output1_percent`（出力#2の割合: 90%〜10%）
+- value=0 → output1=10%, output2=90%
+- value=50 → output1=50%, output2=50%
+- value=100 → output1=90%, output2=10%
+
+**検証**:
+- 値の範囲チェック（0〜100）は全入力表面で必須。範囲外の値は拒否する
+- 整数以外の値（浮動小数点等）はレジストリの型 `int` により拒否する
+- レジストリのint型で保持するため、UIスライダーからの値は整数に丸めてから設定する
+
+---
+
+### 5.9 stdout出力先（stdout_destination）
+
+stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIはその他タブのラジオボタン。
+
+**設定表面**:
+- **正準ID**: `ui.stdout_destination`
+- **TOML**: `[ui].stdout_destination`（例: `stdout_destination = "output_1"`）
+- **動的パス**: `pokecon.opt.ui.stdout_destination`
+- **CLI**: `--ui-stdout-destination <値>`（正準IDからのデフォルト生成ルールにより自動生成）
+- **環境変数**: `POKECON_UI_STDOUT_DESTINATION=<値>`（正準IDからのデフォルト生成ルールにより自動生成）
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: その他タブの出力#1/出力#2ラジオボタン（§6.6.1参照）。書き込みはUIラジオボタンから正準値を送信し、即座にstdoutの出力先ルーティングを更新する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIラジオボタンからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 閉じたenum。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
+- デフォルト正準値: `output_1`。
+- レガシー格納値 `"1"` / `"2"` は旧API由来の互換用エイリアスであり、正準値ではない。新旧すべての入力表面では正準値（`output_1` / `output_2`）のみを使用し、OpenAPI・永続化・CLI・envでも正準値を用いる。ランタイムはレガシー値 `"1"` / `"2"` を読み取り可能かつ正準値に自動変換するが、書き出し時は常に正準値で行う。
+
+| # | 正準値（canonical） | 表示ラベル（display label） | 説明 |
+|---|-------------------|---------------------------|-------------|
+| 1 | `output_1` | `出力#1 (default)` | stdoutを出力#1へルーティング（デフォルト） |
+| 2 | `output_2` | `出力#2` | stdoutを出力#2へルーティング |
+
+**即時反映**: 設定変更は即座にstdoutの出力先ルーティングに反映される。実行中のユーザースクリプトの出力も、ラジオボタン変更後に到着するログから新しい出力先へルーティングされる。
 
 ---
 
@@ -604,11 +737,31 @@ Commands/
 
 #### 6.5.1 Windows通知
 
+**設定表面**:
+- **正準ID**: `notifications.windows.on_script_start`, `notifications.windows.on_script_end`
+- **TOML**: `[notifications.windows].on_script_start` / `on_script_end`
+- **動的パス**: `pokecon.opt.notifications.windows.on_script_start` / `on_script_end`
+- **CLI**: `--notifications-windows-on-script-start <true|false>` / `--notifications-windows-on-script-end <true|false>`（正準IDからのデフォルト生成ルールにより自動生成）
+- **環境変数**: `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`（正準IDからのデフォルト生成ルールにより自動生成）
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: 既存のスクリプト開始時/終了時チェックボックス（下記参照）。書き込みはUIチェックボックスからブール値を送信し、将来のスクリプト実行の通知動作に即座に反映する
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIチェックボックスからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+- 型: `bool`
+- デフォルト: `false`（両方とも無効）
+- §11.4.1.2のbool値直列化規則に従う
+
+**即時性**: 設定変更は将来のスクリプト実行におけるWindowsネイティブ通知の送信動作に即座に反映される。実行中のスクリプトの開始/終了タイミングには影響しない。既に実行中のスクリプトに対する再評価は行わない。
+
+**プラットフォーム**: Windows上のみネイティブ通知を送信する。非Windows（Linux等）では値は保持・永続化されるが、ネイティブ通知は送出されない。UIコントロールは全プラットフォームで表示される（非Windows環境では無効化表示または通知が送出されない旨の注意書きを表示することを推奨）。Linuxネイティブデスクトップ通知への展開は本バージョンでは行わない。
+
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **スクリプト開始時に通知** | Checkbox | スクリプト実行開始時にWindows通知を送信 |
-| **スクリプト終了時に通知** | Checkbox | スクリプト実行終了時にWindows通知を送信 |
-| **テスト** | Button | 設定を確認するためのテスト通知を送信 |
+| **スクリプト開始時に通知** | Checkbox | スクリプト実行開始時にWindows通知を送信。正準ID: `notifications.windows.on_script_start` |
+| **スクリプト終了時に通知** | Checkbox | スクリプト実行終了時にWindows通知を送信。正準ID: `notifications.windows.on_script_end` |
+| **テスト** | Button | 設定を確認するためのテスト通知を送信（アクション＝非設定） |
 
 #### 6.5.2 Discord通知
 
@@ -630,12 +783,13 @@ Commands/
 
 | セクション | コントロール | 種類 |
 |---------|----------|------|
-| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0～100）。スライダー値は10%～90%の範囲にマッピングされ、最小でも各出力は10%の幅を確保 | Scale/Slider |
-| **stdout出力先** (`stdout_destination`) | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン。値は `"1"`（出力#1）または `"2"`（出力#2） | Radio button |
-| **出力をクリア** | 両方の出力パネルをクリアするボタン | Button |
-| **ウィジェットモード** | 7モードのコンボボックス（§5.5参照） | Combobox |
-| **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン | Radio button |
-| **ダイアログボタンの位置** | ダイアログボタン配置用のtop/bottom/bothラジオボタン | Radio button |
+| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0～100）。スライダー値は§5.8の計算式に従い出力#1の幅10%～90%に線形マッピング。最小でも各出力は10%の幅を確保。正準ID: `ui.output_split_ratio` | Scale/Slider |
+| **stdout出力先** (`stdout_destination`) | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン。正準値: `output_1`（出力#1）/ `output_2`（出力#2）。レガシー値 `"1"` / `"2"` は旧互換用エイリアスであり、UIラジオボタンは正準値のみ送信する。正準ID: `ui.stdout_destination` | Radio button |
+| **出力をクリア** | 両方の出力パネルをクリアするボタン（アクション＝非設定） | Button |
+| **FPS** | UI表示用フレームレート選択コンボボックス。選択肢は `ui.fps_options` のリストから生成され、選択された値は `ui.fps` に即時反映される。正準ID: `ui.fps` | Combobox |
+| **ウィジェットモード** | 7モードのコンボボックス（§5.5参照）。正準ID: `ui.widget_mode` | Combobox |
+| **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン。正準ID: `ui.controller_position` | Radio button |
+| **ダイアログボタンの位置** | ダイアログボタン配置用のtop/bottom/bothラジオボタン（§5.7参照）。正準ID: `ui.dialog_button_position` | Radio button |
 
 ---
 
@@ -1209,7 +1363,7 @@ type GamepadInput = ButtonsList | Buttons
 |--------|-----------|-------------|
 | `print_t1()` | `print_t1(*objects: object, sep: str = ' ', end: str = '\n') -> None` | 上部ログパネルへ出力 |
 | `print_t2()` | `print_t2(*objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログパネルへ出力 |
-| `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination=="1"` の場合は出力#2へ、`stdout_destination=="2"` の場合は出力#1へ |
+| `print_t()` | `print_t(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout出力先設定（`stdout_destination`）に応じて、stdout先として割り当てられていない方のログパネルへ出力。`stdout_destination` の値（正準値）に従い、`output_1` の場合は出力#2へ、`output_2` の場合は出力#1へ |
 | `print_s()` | `print_s(*objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力 |
 | `print_ts()` | `print_ts(*objects: object, sep: str = ' ', end: str = '\n') -> None` | `print_s`と同じ（旧API互換のための別名） |
 | `print_t1b()` | `print_t1b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 上部ログ（モード付き: w=上書き, a=追記, d=削除） |
@@ -1813,7 +1967,28 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 
 **グローバル専用**: プロファイルTOMLではオーバーライドできない。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3「動的設定ワーカーブートストラップ設定のスコープ制限」参照）。
 
-**汎用パス型規則**: 本設定のパス入力値に対する環境変数展開・チルダ展開・ソース認識ベース解決・字句的正規化の共通規則は §11.4.1.4「パス値の解決規則（Path Value Resolution）」に従う。CLI表面（`--python-dynamic-venv`）の相対パスは起動cwd基準、非CLI表面（環境変数 `POKECON_PYTHON_DYNAMIC_VENV` およびグローバルTOML `[python.dynamic].venv`）の相対パスは実効Configルート基準で解決される。存在確認・ファイル種別確認・シンボリックリンク解決のポリシーは本エントリのパスメタデータで規定される（§11.4.1.4「パスメタデータ（レジストリ拡張フィールド）」参照）。自動作成の要否はパスメタデータ `path_auto_create` の値に従うが、本仕様では未決定として保留する。
+**汎用パス型規則**: 本設定のパス入力値に対する環境変数展開・チルダ展開・ソース認識ベース解決・字句的正規化の共通規則は §11.4.1.4「パス値の解決規則（Path Value Resolution）」に従う。CLI表面（`--python-dynamic-venv`）の相対パスは起動cwd基準、非CLI表面（環境変数 `POKECON_PYTHON_DYNAMIC_VENV` およびグローバルTOML `[python.dynamic].venv`）の相対パスは実効Configルート基準で解決される。存在確認・ファイル種別確認・シンボリックリンク解決のポリシーは本エントリのパスメタデータで規定される（§11.4.1.4「パスメタデータ（レジストリ拡張フィールド）」参照）。パスメタデータは以下の通り:
+
+| フィールド | 値 |
+|-----------|-----|
+| `path_policy` | `"directory"` |
+| `path_must_exist` | `false` |
+| `path_auto_create` | `true` |
+| `path_expected_type` | `"directory"` |
+| `path_resolve_symlink` | `true` |
+
+**venv作成・検証セマンティクス**: 本設定の実効パスに対するvenv作成・検証は以下の段階的規則に従う:
+
+1. **パスが存在しない（通常の不在）**: 親ディレクトリおよびパス自体を作成し、アプリ管理のCPython 3.14でvenvを初期化する。
+2. **既存の空ディレクトリ**: そのディレクトリ上でvenvを初期化する。
+3. **既存の有効なvenv（アプリ管理CPython 3.14と同一ビルド/ABI）**: exact-sync（§14.5.2.1）を実行しそのまま使用する。
+4. **ユーザー指定の既存venvでインタープリター/ビルド/ABIが不一致**: 設定/準備エラーとする。ディレクトリ全体の削除・再作成は行わない。
+5. **既存の非空・非venvディレクトリ**: エラーとし、内容を保持する。
+6. **既存の通常ファイル・その他非ディレクトリ**: エラーとし、内容を保持する。
+7. **アプリ管理のデフォルトvenvパス**: アプリ所有パスとして扱い、§14.5.2.1に従い不整合時にアトミックなステージ・再構築を許可する。
+8. **ユーザー指定のシンボリックリンク**: リンク先を解決して正体確認・ロック・検証に使用する。リンクまたはリンク先を自動削除しない。リンクが破損している場合（パスとしては明示的に存在するが論理的に不在）: エラーとし、リンクを保持する。置換しない。
+9. **作成・初期化エラー**: §14.5.3「フェイルソフトポリシー」に従う。
+10. **並行性ロック**: パス解決はロック前、作成/初期化はper-venvロック（§14.5.4）下で実行する。ロック獲得後にパス状態を再検証する。
 
 **`pokecon.opt.*`代入の共通動作**:
 
@@ -2175,7 +2350,32 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 - **環境変数 `POKECON_PYTHON_DYNAMIC_VENV`** の相対パス → 実効Configルート基準
 - **グローバルTOML `[python.dynamic].venv`** の相対パス → 実効Configルート基準
 - 環境変数展開（1パス）→ チルダ展開（カレントユーザーのみ）→ 上記ベース解決 → 字句的正規化
-- 存在確認・ファイル種別確認・シンボリックリンク解決は行わない（lenient policy）。自動作成の要否は本エントリのパスメタデータで規定されるが、本仕様では未決定として保留する（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」のパスメタデータ参照）。
+- 存在確認・ファイル種別確認・シンボリックリンク解決は行わない（lenient policy）。自動作成（`path_auto_create=true`）および検証セマンティクス（10段階の段階的規則）は §11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」のパスメタデータおよびvenv作成・検証セマンティクスに従う。
+
+**適用例 — `python.script.venv`**:
+
+`python.script.venv`（§11.4.2）のパス解決は本項の一般規則に従う:
+- **CLI `--python-script-venv`** の相対パス → 起動cwd基準
+- **環境変数 `POKECON_PYTHON_SCRIPT_VENV`** の相対パス → 実効Configルート基準
+- **グローバルTOML `[python.script].venv`** の相対パス → 実効Configルート基準
+- **プロファイルTOML `[python.script].venv`** の相対パス → 実効Configルート基準
+- **動的設定（`pokecon.opt.python.script.venv` 代入）** の相対パス → 実効Configルート基準
+- 環境変数展開（1パス）→ チルダ展開（カレントユーザーのみ）→ 上記ベース解決 → 字句的正規化
+- 存在確認・ファイル種別確認・シンボリックリンク解決は行わない（lenient policy）。自動作成（`path_auto_create=true`）および検証セマンティクス（10段階の段階的規則）は `python.dynamic.venv`（§11.3）と同一の規則に従う。パスメタデータも同値: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。
+
+##### 11.4.1.5 UI／OpenAPI書き込みの永続化
+
+UIまたはOpenAPIから書き込み可能な設定は、正準設定レジストリの同じ型・検証・スコープ情報を使用して検証し、次の規則でTOMLへ永続化する。
+
+- **書き込み先**: profile-capable設定は現在アクティブなプロファイルの`profiles/<name>/settings.toml`へ書き込む。グローバル専用設定はグローバル`settings.toml`へ書き込む。ブートストラップ専用設定はUI/OpenAPIから書き込めない。
+- **他の設定表面**: 動的設定の`pokecon.opt.*`代入は現在プロセスの実効値だけを変更し、TOMLへ書き戻さない。CLIと環境変数も起動時オーバーライドであり、TOMLへ書き戻さない。
+- **検証順序**: 入力値を正準レジストリで型検証・正規化し、相互依存する設定を含む最終実効値を検証してから書き込む。検証失敗時はファイルと実効値を変更せず、UIへエラーを返して表示値を現在の実効値へ戻す。
+- **変更単位**: 対象のTOMLキーだけを変更する。書き込み直前に対象ファイルの最新内容を再読込し、未知のセクション／キー、コメント、並び順、および変更対象外の値を保持できるTOML編集方式を使用する。ファイルが存在しない場合は必要な親ディレクトリと対象セクションを作成する。
+- **並行制御**: 正準化した対象TOMLパス単位でプロセス内書き込みを直列化し、異なるアプリプロセス間でも同じ対象を保護するOSファイルロックを取得する。ロック取得後にファイルを再読込して検証する。ロックファイルは実効Stateルート配下の`settings-locks/<sha256(正準化TOMLパス)>.lock`に置き、対象TOML自体やその置換前inodeをロック対象にしない。
+- **原子的保存**: 対象ファイルと同じディレクトリに一時ファイルを作成し、Configファイルの権限規則（§11.4.3.3）を適用して完全な内容を書き込み、flush／同期後に原子的置換を行う。利用可能なOSでは親ディレクトリも同期する。一時ファイルや部分書き込みを正式な設定として読み込んではならない。
+- **反映タイミング**: 原子的保存が成功した後にだけ、正準設定サービスの実効値を更新してランタイム副作用を適用し、UI／OpenAPI購読者へ変更を通知する。保存失敗時は実効値を変更しない。保存成功後にランタイム反映が失敗した場合はERROR診断を出し、その設定を利用する機能だけを利用不能として、保存済み値は次回読込時にも維持する。
+- **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。切替処理と同時に発生した旧プロファイルへのUI書き込みを新プロファイルへ誤適用してはならない。
+- **Secret**: Secret設定の書き込みでも同じ原子的保存を使用し、生の値をログ・エラー・変更通知へ含めない（§11.4.3）。
 
 #### 11.4.2 動的設定パス定義一覧
 
@@ -2201,13 +2401,22 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 | `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
 | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | |
 | `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | |
+| `[notifications.windows]` | `on_script_start` | `pokecon.opt.notifications.windows.on_script_start` | `bool` | スクリプト実行開始時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-start` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START`）。OpenAPI R/W |
+| `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
 | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | |
 | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | |
 | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
-| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | |
+| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui.fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
+| `[ui]` | `ui_fps` | `pokecon.opt.ui.fps` | `int` | UI表示用FPS（カメラキャプチャFPS `camera.fps` とは独立）。デフォルト `30`。有効な正の整数かつ最終実効`ui.fps_options`のメンバーでなければならない。既存FPSコンボボックス（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。UIコンボボックスからの変更は即座にUI表示FPSを更新する（カメラキャプチャFPSは変更しない）。CLI: `--ui-fps`。環境変数: `POKECON_UI_FPS`。OpenAPI R/W。TOML: `[ui].ui_fps`。 |
+| `[ui]` | `widget_mode` | `pokecon.opt.ui.widget_mode` | `str` | 閉じたenum。正準値（小文字）: `all`（デフォルト）/ `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§5.5参照）。プロファイル対応（profile-capable）。動的代入は即時反映されUIレイアウトを更新する。CLI: `--ui-widget-mode`。環境変数: `POKECON_UI_WIDGET_MODE`。OpenAPI R/W |
+| `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | 出力#1と出力#2の幅比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの幅比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
+| `[ui]` | `stdout_destination` | `pokecon.opt.ui.stdout_destination` | `str` | 閉じたenum。正準値（小文字）: `output_1`（デフォルト）/ `output_2`。レガシー格納値 `1` / `2` は旧互換用エイリアス。UIラジオボタン（§6.6.1参照）は本設定の必須UI表面、表示ラベル 出力#1/出力#2。プロファイル対応（profile-capable）。変更は即座にstdout出力先ルーティングを更新する。CLI/環境変数は自動生成（`--ui-stdout-destination` / `POKECON_UI_STDOUT_DESTINATION`）。OpenAPI R/W。§5.9参照 |
+| `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
+| `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
+| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-| `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | ユーザースクリプトワーカーvenvパス。未指定時はDataルート配下 `venv-script`（デフォルト）。既存venvパスを指定した場合、アプリケーションはそのvenv内の全パッケージを解決済み閉包と正確に同期し、閉包外の既存パッケージを自動削除する（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること |
+| `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | ユーザースクリプトワーカーvenvパス。未指定時はDataルート配下 `venv-script`（デフォルト）。既存venvパスを指定した場合、アプリケーションはそのvenv内の全パッケージを解決済み閉包と正確に同期し、閉包外の既存パッケージを自動削除する（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること。パスメタデータ: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。venv作成・検証セマンティクスは `python.dynamic.venv`（§11.3）と同一。§11.4.1.4の汎用パス解決規則およびパスメタデータ表参照 |
 | `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
 | `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str, extras?: list[str]}]` | パッケージ指定。動的代入は設定値へ即時反映されるが、環境への効果は次回のパッケージ解決／venv準備／ワーカー生成時に適用する。実行中ワーカーへ即時インストールしない |
 | `[python.script.packages]` | `override_application_constraints` | `pokecon.opt.python.script.packages.override_application_constraints` | `bool` | デフォルト `false`。`true` にするとユーザー指定制約がアプリケーション必須制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
@@ -2220,17 +2429,12 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 | `[python.dynamic.packages]` | `override_package_metadata_constraints` | — | `bool` | グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_package_metadata_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS`。§14.5.1参照 |
 | `[python.dynamic.packages]` | `uv_config` | — | `str \| None` | グローバル専用・ブートストラップ専用。uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.uv_config` は存在しない）。グローバルなブートストラップ設定として早期解決され、動的venv構築前に適用される。CLI: `--python-dynamic-packages-uv-config <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG=<path>`。UI/OpenAPI非公開（再起動が必要）。§14.5.2「uv.tomlの取り扱い」参照 |
 | `[python.dynamic.packages]` | `revalidate_mutable_sources` | — | `bool` | グローバル専用・ブートストラップ専用。可変直接ソースの自動再検証（§14.5.5参照）。デフォルト `false`（安全側デフォルト）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.revalidate_mutable_sources` は存在しない）。CLI: `--python-dynamic-packages-revalidate-mutable-sources`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES`。UI/OpenAPI非公開（再起動が必要）。§14.5.5.1参照 |
-| — | *ランタイムのみ* | `pokecon.opt.ui.fps` | `int` | TOML非対応。UIコンボボックス連動 |
-| — | *ランタイムのみ* | `pokecon.opt.ui.widget_mode` | `str` | UI名前空間。§5.5参照 |
-| — | *ランタイムのみ* | `pokecon.opt.ui.controller_position` | `str` | UI名前空間。`"top"` / `"bottom"`。§11.4.1.3のenum正規化規則に従う |
-| — | *ランタイムのみ* | `pokecon.opt.ui.dialog_button_position` | `str` | UI名前空間。`"top"` / `"bottom"` / `"both"`。§11.4.1.3のenum正規化規則に従う |
-| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
 
 **注**:
 - `dynamic_config_language` は動的パス `pokecon.opt` を持たず（循環依存のため）、グローバルTOML・環境変数・CLIからのみ設定可能（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。
 - `pokecon.opt.python.dynamic.*` の動的パスは存在しない。動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能。プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 - `report_ignored_profile_global_settings` はグローバル専用の診断制御設定である（§11.3参照）。プロファイルTOMLに指定された場合、その値は無視され、既に解決済みのグローバル値に基づいて診断出力の要否が決定される。
-- `[ui]` セクションの `ui_fps_options` は TOML で設定可能。`ui.fps` は TOML に相当するキーがなく、ランタイム（UI操作または動的設定）のみで変更される。
+- `[ui]` セクションの `ui_fps_options` および `ui_fps` は TOML `[ui]` セクションで設定可能。`ui_fps` のデフォルト値は `30`。`ui_fps` は `ui.fps` として動的設定からも設定可能であり、UI FPSコンボボックスからの選択値は即座に反映される。
 - `[shortcuts]` の各キーは、それぞれ `pokecon.opt.shortcuts.button_N` としてアクセス可能。まとめて配列としてアクセスするAPIは提供しない。
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 - ブートストラップ専用エントリ（TOMLセクション列と動的パス列が `—` のもの）は、起動パイプラインに先立つブートストラップ解析でのみ使用される。TOML非対応（循環依存回避のため）および動的パス非対応（同上）であり、CLIと環境変数のみが設定表面となる。該当エントリの実効Configルートへの影響は§11.3参照。
@@ -2424,6 +2628,11 @@ discord_webhook_url = ""  # Discord Webhook URL。未設定時はDiscord通知�
 discord_username = ""  # Discordメッセージのカスタムユーザー名（任意）
 discord_avatar_url = ""  # DiscordメッセージのカスタムアバターURL（任意）
 
+# Windows通知（スクリプト開始時/終了時）
+[notifications.windows]
+on_script_start = false  # スクリプト実行開始時にWindows通知を送信（デフォルト: false）
+on_script_end = false  # スクリプト実行終了時にWindows通知を送信（デフォルト: false）
+
 # ショートカットボタン割り当て（10ボタン）
 [shortcuts]
 button_1 = "Commands.PythonCommands.Samples.RankGlitch.MashA"  # 例: コマンドモジュールパス
@@ -2440,6 +2649,11 @@ button_10 = ""
 # UI表示用FPSの選択肢（カスタマイズ可能）
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
+ui_fps = 30  # UI表示用FPS（デフォルト: 30）。有効な正の整数かつ ui_fps_options のメンバー
+output_split_ratio = 20  # 出力#1と出力#2の幅比率（0～100、デフォルト: 20）。計算式: output1% = 10 + 0.8 * value
+stdout_destination = "output_1"  # stdout出力先（正準値: output_1 / output_2）。レガシー "1"/"2" は保存専用
+widget_mode = "all"  # 正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
+controller_position = "top"  # top（上部、デフォルト）/ bottom（下部）
 
 # デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
 [ui.desktop]
@@ -2526,13 +2740,24 @@ pokecon.opt.notifications.discord.webhook_url = ""  # 未設定。設定時は�
 pokecon.opt.notifications.discord.username = ""  # カスタムユーザー名（secretではない）
 
 # ウィジェットモード（階層: ui名前空間）
-pokecon.opt.ui.widget_mode = "ALL (default)"  # §5.5参照
+pokecon.opt.ui.widget_mode = "all"  # §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 
 # ソフトウェアコントローラー位置（階層: ui名前空間）
-pokecon.opt.ui.controller_position = "top"  # top | bottom
+pokecon.opt.ui.controller_position = "top"  # §5.6参照。top（上部、デフォルト）/ bottom（下部）
 
 # ダイアログボタン位置（階層: ui名前空間）
-pokecon.opt.ui.dialog_button_position = "bottom"  # "top"（上部） / "bottom"（下部、既定） / "both"（上部と下部の両方に配置）
+pokecon.opt.ui.dialog_button_position = "bottom"  # §5.7参照。bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
+
+# 出力分割比率（階層: ui名前空間）
+pokecon.opt.ui.output_split_ratio = 20  # §5.8参照。0～100、デフォルト: 20。計算式: output1% = 10 + 0.8 * value
+
+# stdout出力先（階層: ui名前空間）
+pokecon.opt.ui.stdout_destination = "output_1"  # §5.9参照。正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
+
+# Windows通知設定（階層: notifications.windows名前空間）
+# 非Windows環境では値保持のみ行われ、ネイティブ通知は送出されない
+pokecon.opt.notifications.windows.on_script_start = False  # スクリプト開始時にWindows通知（デフォルト: False）
+pokecon.opt.notifications.windows.on_script_end = False  # スクリプト終了時にWindows通知（デフォルト: False）
 
 # デスクトップ閉じる動作（階層: ui.desktop名前空間。デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
@@ -2587,9 +2812,19 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 pokecon.opt.language = "ja"
 pokecon.opt.camera.fps = 60
 pokecon.opt.ui.fps = 30
-pokecon.opt.ui.widget_mode = "ALL (default)"
-pokecon.opt.ui.controller_position = "top"
-pokecon.opt.ui.dialog_button_position = "bottom"
+pokecon.opt.ui.widget_mode = "all"  -- §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
+pokecon.opt.ui.controller_position = "top"  -- §5.6参照。top（上部、デフォルト）/ bottom（下部）
+pokecon.opt.ui.dialog_button_position = "bottom"  -- §5.7参照。bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
+
+-- 出力分割比率（§5.8参照）
+pokecon.opt.ui.output_split_ratio = 20  -- 0～100、デフォルト: 20。計算式: output1% = 10 + 0.8 * value
+
+-- stdout出力先（§5.9参照）
+pokecon.opt.ui.stdout_destination = "output_1"  -- 正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
+
+-- Windows通知設定（非Windowsでは値保持のみ）
+pokecon.opt.notifications.windows.on_script_start = false  -- スクリプト開始時にWindows通知
+pokecon.opt.notifications.windows.on_script_end = false  -- スクリプト終了時にWindows通知
 
 -- デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_backend"
@@ -3397,6 +3632,14 @@ pokecon.controller.reset()
 | `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG` | 動的設定ワーカーのuv.toml明示パス（§14.5.2参照）。ブートストラップ環境変数として早期解決される。未指定時はuv設定発見を無効化する。空文字列は無効。指定時は§11.4.1.4に従い解決し、既存の読み取り可能な通常ファイルを要求する。CLI対応: `--python-dynamic-packages-uv-config <path>`。UI/OpenAPI非公開（再起動が必要） | `null`（未指定） |
 | `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES` | 動的設定ワーカーの可変直接ソース自動再検証（§14.5.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-revalidate-mutable-sources`（明示的 `true`/`false`）。UI/OpenAPI非公開（再起動が必要） | `false` |
 | `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"` | `"ask"` |
+| `POKECON_UI_WIDGET_MODE` | ウィジェットモード選択（§5.5参照）。値（大文字小文字不問）: `all` / `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。CLI対応: `--ui-widget-mode`。動的設定からも設定可能（profile-capable） | `all` |
+| `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置（§5.6参照）。値（大文字小文字不問）: `top` / `bottom`。CLI対応: `--ui-controller-position`。動的設定からも設定可能（profile-capable） | `top` |
+| `POKECON_UI_DIALOG_BUTTON_POSITION` | ダイアログボタン位置（§5.7参照）。値（大文字小文字不問）: `top` / `bottom` / `both`。CLI対応: `--ui-dialog-button-position`。動的設定からも設定可能（profile-capable） | `bottom` |
+| `POKECON_UI_FPS` | UI表示用FPS（§6.6.1、§11.4.2参照）。正の整数、`ui.fps_options` のメンバーであること。デフォルト: `30`。プロファイル対応（profile-capable）。CLI対応: `--ui-fps` | `30` |
+| `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1と出力#2の幅比率（§5.8参照）。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`。プロファイル対応（profile-capable）。CLI対応: `--ui-output-split-ratio` | `20` |
+| `POKECON_UI_STDOUT_DESTINATION` | stdout出力先（§5.9参照）。値（大文字小文字不問）: `output_1` / `output_2`。デフォルト: `output_1`。プロファイル対応（profile-capable）。CLI対応: `--ui-stdout-destination` | `output_1` |
+| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` | スクリプト実行開始時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-start`（明示的 `true`/`false`） | `false` |
+| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト実行終了時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-end`（明示的 `true`/`false`） | `false` |
 | `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
 | `POKECON_PORT` | HTTPサーバーポート | `8020` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |

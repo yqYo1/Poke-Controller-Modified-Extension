@@ -628,7 +628,50 @@ Commandsタブのサブタブ構造については §5.4 を参照。
 
 - **表示**: 利用可能なコマンドを表示するTreeview（階層構造を持つコマンドリスト）。
 - **タグフィルター**: ラベル/タグでコマンドをフィルタリングするドロップダウンまたはコンボボックス。
+- **タグマッチモード**: タグフィルターに隣接して配置されるコンボボックス。バックエンドのタグマッチング方式を選択する。正準ID: `commands.tag_match_mode`。
 - **列**: コマンド名、タグ、説明（Treeviewの場合）。
+
+**タグマッチモード設定表面**:
+
+- **正準ID**: `commands.tag_match_mode`
+- **TOML**: `[commands].tag_match_mode`（例: `tag_match_mode = "exact"`）
+- **動的パス**: `pokecon.opt.commands.tag_match_mode`
+- **CLI**: `--commands-tag-match-mode <値>`
+- **環境変数**: `POKECON_COMMANDS_TAG_MATCH_MODE=<値>`
+- **OpenAPI**: 読み取り／書き込み対応
+- **UI**: Commandsタブのタグフィルターに隣接するコンボボックス。書き込みはUIコンボボックスから正準値を送信し、即座にバックエンドのタグマッチング動作を更新する。現在選択中のタグと候補リストに対してフィルタリングを再適用する。
+
+**プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIコンボボックスからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
+
+**値**:
+
+- 閉じたenum値。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
+- デフォルト正準値: `exact`。
+
+| # | 正準値（canonical） | 表示ラベル（display label） | 説明 |
+|---|-------------------|---------------------------|-------------|
+| 1 | `exact` | `完全一致 (default)` | 選択されたタグと完全に一致するコマンドのみを表示（デフォルト） |
+| 2 | `partial` | `部分一致` | 選択されたタグがコマンドのタグに部分文字列として含まれる場合に表示 |
+| 3 | `prefix` | `前方一致` | 選択されたタグで始まるタグを持つコマンドを表示 |
+| 4 | `suffix` | `後方一致` | 選択されたタグで終わるタグを持つコマンドを表示 |
+
+**動的カスタムタグマッチ関数**: 動的設定（`init.py`/`init.lua`）でカスタムタグマッチ関数を登録可能（§11.5.4参照）。カスタム関数が登録されている間は `commands.tag_match_mode` の値に優先する。カスタム関数が解除（`off()`）された時点で `commands.tag_match_mode` の値に復帰する。カスタム関数そのものはランタイムのみの動作であり、TOML・CLI・環境変数・OpenAPIに永続化されない。
+
+**TOML設定例**:
+```toml
+[commands]
+tag_match_mode = "prefix"
+```
+
+**Python動的設定例**:
+```python
+pokecon.opt.commands.tag_match_mode = "prefix"
+```
+
+**Lua動的設定例**:
+```lua
+pokecon.opt.commands.tag_match_mode = "prefix"
+```
 
 ##### 6.4.1.2 タグ体系
 
@@ -694,11 +737,10 @@ Commands/
 - 統合後のタグ一覧はユニークなリストとなる
 
 - **フィルター動作**:
-  - デフォルトは完全一致（`selected_tag == tag`）
-  - マッチング方式は設定で切り替え可能:
-    - **静的設定** (`settings.toml`): `exact`（完全一致） / `partial`（部分一致） / `prefix`（前方一致） / `suffix`（後方一致）
-    - **動的設定** (`init.py`/`init.lua`): カスタムマッチ関数を指定可能（§11.5.4参照）
-  - **バックエンド側の責務**: タグフィルターのマッチング（完全一致/部分一致/前方一致/後方一致/カスタム関数）。マッチング結果はコマンドリストの表示/非表示を制御
+  - デフォルトは `commands.tag_match_mode` の値に従う（デフォルト: `exact`、完全一致）
+  - マッチング方式は `commands.tag_match_mode`（§6.4.1.1参照）で切り替え可能
+  - 動的カスタムタグマッチ関数が登録されている間は、`commands.tag_match_mode` に優先する。カスタム関数が解除された時点で `commands.tag_match_mode` の値に復帰する（§11.5.4参照）
+  - **バックエンド側の責務**: タグフィルターのマッチング（`commands.tag_match_mode` による exact/partial/prefix/suffix、または動的カスタム関数）。マッチング結果はコマンドリストの表示/非表示を制御
   - **フロントエンド側の責務**: ファジーファインダーによる絞り込み（`fuse.js` を使用した部分一致スコアリング）。これはUI上の利便性向上のための補助機能であり、バックエンドのマッチング方式とは独立して動作する。フロントエンドの絞り込みはバックエンドのマッチング結果に対してさらにフィルタをかける2段階方式
   - UI上では `@` なしタグが先、`@` 付きタグが後に表示
   - ソート関数は動的設定ファイルで指定可能（§11.5.4参照）
@@ -790,8 +832,83 @@ Commands/
 | **ウィジェットモード** | 7モードのコンボボックス（§5.5参照）。正準ID: `ui.widget_mode` | Combobox |
 | **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン。正準ID: `ui.controller_position` | Radio button |
 | **ダイアログボタンの位置** | ダイアログボタン配置用のtop/bottom/bothラジオボタン（§5.7参照）。正準ID: `ui.dialog_button_position` | Radio button |
+| **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用（startup-only/restart-required）。変更は§11.4.1.5に従いグローバル`settings.toml`へ永続化されるが、次回起動時に反映される。チェックボックス変更後は再起動が必要である旨をUI上に表示する（§15.8参照） | Checkbox |
 
 ---
+
+### 6.7 サーバー設定
+
+#### 6.7.1 静的ファイルディレクトリ（`web_dir`）
+
+| コントロール | 種類 | 説明 |
+|---------|------|-------------|
+| **Web UIディレクトリ** (`server.web_dir`) | ディレクトリピッカー（フォルダ選択ダイアログ／テキスト入力） | axum HTTPサーバーが配信するSPA静的ファイルのルートディレクトリ。正準ID: `server.web_dir`。グローバル専用（startup-only/restart-required）。変更は§11.4.1.5に従いグローバル`settings.toml`へ永続化されるが、次回起動時に反映される。変更後は再起動が必要である旨をUI上に表示する（§15.9参照）。現在のサーバー動作は変更されない。現在の値は参照表示として読み取り専用で表示する |
+
+**設定表面**:
+- **正準ID**: `server.web_dir`
+- **TOML**: `[server].web_dir`（例: `web_dir = "/path/to/web"`）
+- **動的パス**: `pokecon.opt.server.web_dir` は存在しない（axumの静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えが不可能なため。変更は次回起動時に反映）
+- **CLI**: `--web-dir <path>`（明示的ショートフラグ。正準IDからのデフォルト生成ルールの例外として `--server-web-dir` ではなく `--web-dir` を使用）
+- **環境変数**: `POKECON_WEB_DIR=<path>`
+- **OpenAPI**: 読み取り／書き込み対応。書き込みはグローバル `settings.toml` へ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す
+- **UI**: グローバルサーバー設定のディレクトリピッカー（上記参照）
+
+**スコープ**: グローバル専用。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。
+
+**優先順位**: 組み込みデフォルト < グローバルTOML < 環境変数 < CLI。
+
+**組み込みデフォルト**: バンドルされたアプリケーションリソース `web/dist`。アプリケーションリソースルート（実行可能ファイル基準、cwd/Configルートではない）からの相対パスとして解決される。ユーザー指定が一切ない場合にのみ使用される。
+
+**ユーザー指定相対パス解決**:
+- **CLI `--web-dir`**: 起動時のカレントワーキングディレクトリ（cwd）基準（§11.4.1.4の汎用パス解決規則におけるCLI例外に該当 — `server.web_dir`はCLIから指定された相対パスをcwd基準で解決する唯一のグローバル専用パス設定）
+- **TOML（グローバル）** および **環境変数**: 実効Configルート基準（§11.4.1.4の一般規則に従う）
+
+**パスメタデータ**:
+- `path_policy`: `"directory"`
+- `path_must_exist`: `true`
+- `path_auto_create`: `false`
+- `path_expected_type`: `"directory"`
+- `path_resolve_symlink`: `true`
+
+検証は起動時に行われる。指定されたパスが存在しない、ディレクトリでない、ファイルである、または読み取り・走査権限がない場合は起動時エラーとし、アプリケーションは起動に失敗する。明示的な無効オーバーライドが指定された場合、組み込みデフォルトへのフォールバックは行われない。
+
+---
+
+#### 6.7.2 サーバーポート（`server.port`）
+
+| コントロール | 種類 | 説明 |
+|---------|------|-------------|
+| **サーバーポート** (`server.port`) | 数値入力（1～65535） | axum HTTPサーバーがバインドするTCPポート番号。正準ID: `server.port`。グローバル専用（startup-only/restart-required）。変更は§11.4.1.5に従いグローバル`settings.toml`へ永続化されるが、次回起動時に反映される。変更後は再起動が必要である旨をUI上に表示する（§15.10参照）。現在のサーバー動作は変更されない。現在の値は参照表示として読み取り専用で表示する |
+
+**設定表面**:
+- **正準ID**: `server.port`
+- **TOML**: `[server].port`（例: `port = 8080`）
+- **動的パス**: `pokecon.opt.server.port` は存在しない（TCPソケットのバインドは起動時に一度だけ行われ、ランタイム中の安全な差し替えが不可能なため。変更は次回起動時に反映）
+- **CLI**: `--port <port>`（明示的ショートフラグ。正準IDからのデフォルト生成ルールの例外として `--server-port` ではなく `--port` を使用）
+- **環境変数**: `POKECON_PORT=<port>`
+- **OpenAPI**: 読み取り／書き込み対応。書き込みはグローバル `settings.toml` へ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す
+- **UI**: グローバルサーバー設定の数値入力（上記参照）
+
+**スコープ**: グローバル専用。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。
+
+**優先順位**: 組み込みデフォルト < グローバルTOML < 環境変数 < CLI。
+
+**組み込みデフォルト**: `8020`。
+
+**検証**:
+- 型: `int`
+- 有効範囲: 1～65535
+- 検証は起動時のアドレスバインド前に行われる。範囲外の値は明示的な起動時エラーとし、アプリケーションは起動に失敗する
+
+**バインド失敗セマンティクス**:
+- 指定されたポートのバインドに失敗した場合（ポート使用中、権限不足等）、**ポート自動インクリメントやフォールバックポートへのフォールバックは行わない**
+- 明示的な起動時エラーとして、バインド失敗の理由（アドレス・ポート番号・エラー種別）を含む診断メッセージを出力し、アプリケーションは起動に失敗する
+
+**CORS導出**:
+- CORSのデフォルト許可origin `http://localhost:<port>` は実効`server.port`から動的に導出される（`http://localhost:8020` 固定ではない）。§7.4参照
+
+**デスクトップ／Webモード共通**:
+- 同一のポート番号がデスクトップモードとWebモードの両方で使用される。モード間で異なるポートは使用しない
 
 ## 7. 通信プロトコル（Web / ネットワーク）
 
@@ -879,9 +996,10 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
-- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` は `http://localhost:8020` のみ許可（デフォルト）。Tauriデスクトップモードでは `tauri://localhost` も許可。SvelteKit開発サーバー（`http://localhost:5173`）は `web/vite.config.ts` の `/api`・`/ws` proxy 経由で `127.0.0.1:8020` に接続し、バックエンド側のCORS許可originを増やさない
+- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` のデフォルト値は実効`server.port`の値に応じて動的に決定し、`http://localhost:<実効server.port>` のみ許可する（固定 `8020` は使用しない）。Tauriデスクトップモードでは `tauri://localhost` も許可。SvelteKit開発サーバー（`http://localhost:5173`）は `web/vite.config.ts` の `/api`・`/ws` proxy 経由で `127.0.0.1:<実効server.port>` に接続し、バックエンド側のCORS許可originを増やさない。Vite開発プロキシのデフォルトターゲットポートは `8020` であり、`server.port` 変更時は開発者側で `web/vite.config.ts` を明示的に更新する必要がある
 - **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
+- **静的ファイル配信**: axumは `server.web_dir`（§11.4.2、§15.9参照）で指定されたディレクトリからSPA静的ファイル（`index.html`・JS・CSS・画像等）を配信する。デフォルト値はアプリケーションリソースルート基準の `web/dist`（バンドルされたSvelteKit SPAビルド出力）。起動時に静的ファイルルートが決定され、ランタイム中の動的差し替えは行わない。詳細は§15.9参照
 
 **注**: WebSocketイベント名はUIとバックエンド間の内部通信プロトコルとして使用され、ユーザーが直接使用することはありません。命名規則は実装時に統一されます。
 
@@ -1234,7 +1352,7 @@ npx openapi-typescript target/openapi.json -o src/lib/api/openapi.ts
 import { paths, components } from '$lib/api/openapi.ts'
 ```
 
-> **注**: `localhost:8020` のサーバーが起動していなくても、ビルド時に生成されたローカルJSONファイルに対して実行するため、型生成は独立して動作する。これによりサーバーが起動していない状態でも型生成が可能であり、CIでも同様の方法で生成する。
+> **注**: HTTPサーバーが起動していなくても、ビルド時に生成されたローカルJSONファイルに対して実行するため、型生成は独立して動作する。これによりサーバーが起動していない状態でも型生成が可能であり、CIでも同様の方法で生成する。
 
 **自動化**: `package.json`の`generate:api`スクリプトとして登録。CIでは生成済みの型ファイルをgit追跡し、生成失敗時は前回成功時の生成結果をフォールバックとして使用する。
 
@@ -2407,7 +2525,9 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | |
 | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
 | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
-| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui.fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
+| `[server]` | `web_dir` | — | `str` | SPA静的ファイル配信用ディレクトリ。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--web-dir <path>`（明示的ショートフラグ）。環境変数: `POKECON_WEB_DIR`。UI: サーバー設定のディレクトリピッカー（§6.7.1参照）。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。§6.7.1、§15.9参照 |
+| `[server]` | `port` | — | `int` | HTTPサーバーバインドポート番号。デフォルト `8020`。範囲 1～65535。グローバル専用（startup-only/restart-required）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--port <port>`（明示的ショートフラグ）。環境変数: `POKECON_PORT`。UI: サーバー設定の数値入力（§6.7.2参照）。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効`server.port`から動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§6.7.2、§15.10参照 |
+| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui_fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
 | `[ui]` | `ui_fps` | `pokecon.opt.ui.fps` | `int` | UI表示用FPS（カメラキャプチャFPS `camera.fps` とは独立）。デフォルト `30`。有効な正の整数かつ最終実効`ui.fps_options`のメンバーでなければならない。既存FPSコンボボックス（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。UIコンボボックスからの変更は即座にUI表示FPSを更新する（カメラキャプチャFPSは変更しない）。CLI: `--ui-fps`。環境変数: `POKECON_UI_FPS`。OpenAPI R/W。TOML: `[ui].ui_fps`。 |
 | `[ui]` | `widget_mode` | `pokecon.opt.ui.widget_mode` | `str` | 閉じたenum。正準値（小文字）: `all`（デフォルト）/ `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§5.5参照）。プロファイル対応（profile-capable）。動的代入は即時反映されUIレイアウトを更新する。CLI: `--ui-widget-mode`。環境変数: `POKECON_UI_WIDGET_MODE`。OpenAPI R/W |
 | `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | 出力#1と出力#2の幅比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの幅比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
@@ -2415,7 +2535,9 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
 | `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
 | `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
+| `[ui.desktop]` | `disable_compositing` | — | `bool` | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。デフォルト `false`。グローバル専用（startup-only/restart-required）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない — 変更は次回起動時に反映）。CLI: `--disable-compositing`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_DISABLE_COMPOSITING`。UI: デスクトップ設定のチェックボックス（§6.6.1参照）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§15参照。Webモードでは値保持のみ行われ、効果を持たない |
 | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
+| `[commands]` | `tag_match_mode` | `pokecon.opt.commands.tag_match_mode` | `str` | 閉じたenum。正準値（小文字）: `exact`（デフォルト）/ `partial` / `prefix` / `suffix`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§6.4.1.1参照）。プロファイル対応（profile-capable）。動的代入は即時反映されタグフィルターマッチングを更新する。動的カスタムタグマッチ関数が登録されている間は本設定に優先し、解除時に復帰する。CLI: `--commands-tag-match-mode`。環境変数: `POKECON_COMMANDS_TAG_MATCH_MODE`。OpenAPI R/W |
 | `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | ユーザースクリプトワーカーvenvパス。未指定時はDataルート配下 `venv-script`（デフォルト）。既存venvパスを指定した場合、アプリケーションはそのvenv内の全パッケージを解決済み閉包と正確に同期し、閉包外の既存パッケージを自動削除する（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること。パスメタデータ: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。venv作成・検証セマンティクスは `python.dynamic.venv`（§11.3）と同一。§11.4.1.4の汎用パス解決規則およびパスメタデータ表参照 |
 | `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
 | `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str, extras?: list[str]}]` | パッケージ指定。動的代入は設定値へ即時反映されるが、環境への効果は次回のパッケージ解決／venv準備／ワーカー生成時に適用する。実行中ワーカーへ即時インストールしない |
@@ -2439,6 +2561,9 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 - ランタイムのみのパス（TOMLに相当キーがないもの）は、起動後に動的設定またはUI操作でのみ設定可能。起動パイプライン（§11.3）の静的設定段階では初期化されず、組み込みデフォルト値から開始される。
 - ブートストラップ専用エントリ（TOMLセクション列と動的パス列が `—` のもの）は、起動パイプラインに先立つブートストラップ解析でのみ使用される。TOML非対応（循環依存回避のため）および動的パス非対応（同上）であり、CLIと環境変数のみが設定表面となる。該当エントリの実効Configルートへの影響は§11.3参照。
 - 備考欄に `Secret` と明記された行は§11.4.3の機密情報取り扱い規則の適用対象である。
+- `pokecon.opt.ui.desktop.disable_compositing` の動的パスは存在しない。デスクトップモードのコンポジット設定はTauri/WebView初期化前に適用する必要があり、初期化完了後に安全に切り替えられない。そのため、動的設定の例（§11.5.4、§11.5.5）には本設定の代入文を含めず、注釈のみを記載する。
+- `pokecon.opt.server.web_dir` の動的パスは存在しない。axum HTTPサーバーの静的ファイルルートは起動時に確定し、ランタイム中に安全に切り替えられない。変更は次回起動時に反映される。そのため、動的設定の例（§11.5.4、§11.5.5）には本設定の代入文を含めず、注釈のみを記載する（§6.7.1、§15.9参照）。
+- `pokecon.opt.server.port` の動的パスは存在しない。TCPソケットのバインドは起動時に一度だけ行われ、ランタイム中に安全にポートを切り替えられない。変更は次回起動時に反映される。そのため、動的設定の例（§11.5.4、§11.5.5）には本設定の代入文を含めず、注釈のみを記載する（§6.7.2、§15.10参照）。
 
 #### 11.4.3 機密情報（Secret）の取り扱い
 
@@ -2621,6 +2746,18 @@ stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
 [video.fallback]
 jpeg_quality = 85  # JPEG品質（1-100）。デフォルト: 85
 
+# Webサーバー設定（グローバル専用、startup-only/restart-required、§6.7.1、§6.7.2、§15.9、§15.10参照）
+[server]
+# port = 8020  # HTTPサーバーバインドポート。デフォルト: 8020。範囲: 1～65535。
+#                # グローバル専用。プロファイルTOMLに指定された場合は無視される。
+#                # バインド失敗時は自動インクリメントやフォールバックを行わず、起動時エラー。
+#                # CORSデフォルト許可originは実効portから動的に導出（§7.4参照）。
+#                # 変更後は再起動が必要。次回起動時に反映（§15.10参照）。
+# web_dir = "web/dist"  # SPA静的ファイルディレクトリ。デフォルト: アプリケーションリソースルート基準のバンドル web/dist。
+#                        # ユーザー指定相対パスの解決: CLI=cwd基準、TOML/env=実効Configルート基準（§11.4.1.4）。
+#                        # グローバル専用。プロファイルTOMLに指定された場合は無視される。
+#                        # 変更後は再起動が必要。次回起動時に反映（§15.9参照）。
+
 # LINE通知メニュー項目の挙動（旧UI互換メニュー）
 [notifications]
 line_menu_behavior = "message"  # "message"（削除済みメッセージ表示、既定） / "noop"（何もしない）
@@ -2655,9 +2792,10 @@ stdout_destination = "output_1"  # stdout出力先（正準値: output_1 / outpu
 widget_mode = "all"  # 正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 controller_position = "top"  # top（上部、デフォルト）/ bottom（下部）
 
-# デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
+# デスクトップ閉じる動作とコンポジット設定（デスクトップモードのみ、§15参照）
 [ui.desktop]
 # close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
+# disable_compositing = false  # コンポジット無効化（デフォルト: false、再起動後反映。Webモードでは効果なし）
 
 ```
 
@@ -2754,6 +2892,10 @@ pokecon.opt.ui.output_split_ratio = 20  # §5.8参照。0～100、デフォル�
 # stdout出力先（階層: ui名前空間）
 pokecon.opt.ui.stdout_destination = "output_1"  # §5.9参照。正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
 
+# タグマッチモード（階層: commands名前空間）
+# §6.4.1.1参照。正準値: exact（完全一致、デフォルト）/ partial（部分一致）/ prefix（前方一致）/ suffix（後方一致）
+pokecon.opt.commands.tag_match_mode = "exact"
+
 # Windows通知設定（階層: notifications.windows名前空間）
 # 非Windows環境では値保持のみ行われ、ネイティブ通知は送出されない
 pokecon.opt.notifications.windows.on_script_start = False  # スクリプト開始時にWindows通知（デフォルト: False）
@@ -2761,6 +2903,16 @@ pokecon.opt.notifications.windows.on_script_end = False  # スクリプト終了
 
 # デスクトップ閉じる動作（階層: ui.desktop名前空間。デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
+# 注: ui.desktop.disable_compositing（コンポジット無効化）はグローバル専用・startup-onlyのため、
+# 動的パス（pokecon.opt.ui.desktop.disable_compositing）は存在しない。
+# デスクトップ/WebView初期化が既に完了しているためランタイム適用は安全に行えず、
+# 本設定はTOML・CLI・環境変数でのみ設定可能（§11.4.2、§15参照）。
+# 注: server.web_dir（Web UIディレクトリ）もグローバル専用・startup-onlyのため、
+# 動的パス（pokecon.opt.server.web_dir）は存在しない。
+# axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能（§6.7.1、§15.9参照）。
+# 注: server.port（HTTPサーバーポート）もグローバル専用・startup-onlyのため、
+# 動的パス（pokecon.opt.server.port）は存在しない。
+# TCPソケットバインドは起動時に確定し、ランタイム中の安全なポート切替は不可能（§6.7.2、§15.10参照）。
 
 # UI FPS選択肢（階層: ui名前空間）
 pokecon.opt.ui.fps_options = [5, 15, 30, 60]  # ラベルは自動生成
@@ -2822,12 +2974,26 @@ pokecon.opt.ui.output_split_ratio = 20  -- 0～100、デフォルト: 20。計�
 -- stdout出力先（§5.9参照）
 pokecon.opt.ui.stdout_destination = "output_1"  -- 正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
 
+-- タグマッチモード（§6.4.1.1参照）
+-- 正準値: exact（完全一致、デフォルト）/ partial（部分一致）/ prefix（前方一致）/ suffix（後方一致）
+pokecon.opt.commands.tag_match_mode = "exact"
+
 -- Windows通知設定（非Windowsでは値保持のみ）
 pokecon.opt.notifications.windows.on_script_start = false  -- スクリプト開始時にWindows通知
 pokecon.opt.notifications.windows.on_script_end = false  -- スクリプト終了時にWindows通知
 
 -- デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_backend"
+-- 注: ui.desktop.disable_compositing（コンポジット無効化）はグローバル専用・startup-onlyのため、
+-- 動的パス（pokecon.opt.ui.desktop.disable_compositing）は存在しない。
+-- デスクトップ/WebView初期化が既に完了しているためランタイム適用は安全に行えず、
+-- 本設定はTOML・CLI・環境変数でのみ設定可能（§11.4.2、§15参照）。
+-- 注: server.web_dir（Web UIディレクトリ）もグローバル専用・startup-onlyのため、
+-- 動的パス（pokecon.opt.server.web_dir）は存在しない。
+-- axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能（§6.7.1、§15.9参照）。
+-- 注: server.port（HTTPサーバーポート）もグローバル専用・startup-onlyのため、
+-- 動的パス（pokecon.opt.server.port）は存在しない。
+-- TCPソケットバインドは起動時に確定し、ランタイム中の安全なポート切替は不可能（§6.7.2、§15.10参照）。
 
 -- Pythonユーザースクリプト実行環境設定（Luaからも同一パスで設定可能）
 -- venvパス: 未指定時はデータディレクトリ配下 venv-script/（Linux例: ~/.local/share/pokecon/venv-script）
@@ -3621,7 +3787,7 @@ pokecon.controller.reset()
 
 | 変数 | 説明 | デフォルト |
 |----------|-------------|---------|
-| `POKECON_DISABLE_COMPOSITING` | コンポジットモードを無効化（Tauri） | `false` |
+| `POKECON_DISABLE_COMPOSITING` | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。グローバル専用（startup-only/restart-required）。CLI対応: `--disable-compositing`（明示的 `true`/`false`）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない）。TOML: `[ui.desktop].disable_compositing`。Webモードでは値保持のみ行われ、効果を持たない。§15参照 | `false` |
 | `POKECON_APPNAME` | アプリケーション名セレクター（§11.3「`app_name` — アプリケーション名セレクター」参照）。Neovimの`NVIM_APPNAME`に類似。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される | `"pokecon"` |
 | `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカーのプライマリランタイム選択（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。値: `"python"` / `"lua"` / `"none"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問）。デフォルト: `"lua"`。ブートストラップ環境変数として早期解決される。CLI対応: `--dynamic-config-language`。複数指定時はCLIが優先 | `"lua"` |
 | `POKECON_PYTHON_DYNAMIC_VENV` | 動的設定ワーカー用venvパス（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照）。ブートストラップ環境変数として早期解決される。CLI対応: `--python-dynamic-venv <path>`。複数指定時はCLIが優先。空文字列は無効（起動時エラー） | Data/`venv-dynamic`（§14.1.1 Data） |
@@ -3638,10 +3804,11 @@ pokecon.controller.reset()
 | `POKECON_UI_FPS` | UI表示用FPS（§6.6.1、§11.4.2参照）。正の整数、`ui.fps_options` のメンバーであること。デフォルト: `30`。プロファイル対応（profile-capable）。CLI対応: `--ui-fps` | `30` |
 | `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1と出力#2の幅比率（§5.8参照）。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`。プロファイル対応（profile-capable）。CLI対応: `--ui-output-split-ratio` | `20` |
 | `POKECON_UI_STDOUT_DESTINATION` | stdout出力先（§5.9参照）。値（大文字小文字不問）: `output_1` / `output_2`。デフォルト: `output_1`。プロファイル対応（profile-capable）。CLI対応: `--ui-stdout-destination` | `output_1` |
+| `POKECON_COMMANDS_TAG_MATCH_MODE` | Commandsタブのタグフィルターマッチング方式（§6.4.1.1参照）。値（大文字小文字不問）: `exact` / `partial` / `prefix` / `suffix`。デフォルト: `exact`。プロファイル対応（profile-capable）。CLI対応: `--commands-tag-match-mode`。動的設定からも設定可能（profile-capable） | `exact` |
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` | スクリプト実行開始時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-start`（明示的 `true`/`false`） | `false` |
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト実行終了時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-end`（明示的 `true`/`false`） | `false` |
-| `POKECON_WEB_DIR` | 静的ファイルディレクトリ | `web/dist` |
-| `POKECON_PORT` | HTTPサーバーポート | `8020` |
+| `POKECON_WEB_DIR` | SPA静的ファイル配信用ディレクトリ。値: ディレクトリパス（空文字列は無効）。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。CLI対応: `--web-dir <path>`。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能）。TOML: `[server].web_dir`。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。§6.7.1、§15.9参照 | バンドル `web/dist`（アプリケーションリソースルート基準） |
+| `POKECON_PORT` | HTTPサーバーバインドポート番号。値: 整数（1～65535）。デフォルト: `8020`。グローバル専用（startup-only/restart-required）。CLI対応: `--port <port>`（明示的ショートフラグ）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全なポート切替は不可能）。TOML: `[server].port`。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効ポートから動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。§6.7.2、§15.10参照 | `8020` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |
 | `POKECON_UV_*`（ワイルドカード） | UV_* 環境変数ブリッジ（§14.5.2「POKECON_UV_* → UV_* 環境変数ブリッジ」参照）。`POKECON_UV_` を接頭辞とする任意の環境変数は、uv 子プロセスに対して当該接頭辞を取り除いた `UV_*` として透過的に継承される。例: `POKECON_UV_INDEX_URL` → 子プロセス `UV_INDEX_URL`。全値は潜在的機密情報として扱われ、ログ・診断・クラッシュダンプに値そのものを出力しない（§11.4.3「機密情報（Secret）の取り扱い」秘匿化規則参照）。空の接尾辞（`POKECON_UV_` のみの設定）は起動時設定エラー | —（未指定時はブリッジ適用なし） |
 
@@ -4747,6 +4914,141 @@ Lua LSP設定は `.luarc.json` で管理する。
 ### 15.7 Webモードにおける動作
 
 WebモードではTauriウィンドウが存在しないため、`close_behavior` の設定は効果を持たない。SIGTERM/Ctrl+C/OSシャットダウンによる終了は§15.5および§15.6に従い、完全グレースフルシャットダウンを実行する。
+
+### 15.8 コンポジット無効化（`disable_compositing`）
+
+デスクトップモードでは、Tauri/WebViewのウィンドウ合成（デスクトップコンポジット）を無効化する設定 `ui.desktop.disable_compositing`（§11.4.2参照）を提供する。
+
+**動作**: 本設定が `true` の場合、アプリケーション起動時にTauriウィンドウに対してコンポジット無効化を適用する。これにより、特に低遅延が要求されるシーンでウィンドウ合成に起因する入力遅延を低減できる。一部のプラットフォームではGPU合成をバイパスすることでパフォーマンスが向上する場合がある。
+
+**適用タイミング**: 本設定はstartup-only（restart-required）である。Tauri/WebViewの初期化はアプリケーション起動時に一度だけ行われ、その初期化前にコンポジット設定を適用する必要がある。起動後にWebViewが初期化された状態でコンポジット設定を変更することは安全に行えないため、ランタイムでの動的適用は行わない。
+
+**設定経路**:
+1. **TOML**: `settings.toml` の `[ui.desktop]` セクション
+   ```toml
+   [ui.desktop]
+   disable_compositing = true
+   ```
+
+2. **環境変数**:
+   ```text
+   POKECON_DISABLE_COMPOSITING=true
+   ```
+
+3. **CLI引数**:
+   ```text
+   --disable-compositing true
+   ```
+
+4. **OpenAPI**: 読み取り／書き込み対応。書き込みはグローバル `settings.toml` へ永続化されるが、次回起動時に反映される。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す。
+
+**スコープ**: グローバル専用。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。
+
+**優先順位**: 組み込みデフォルト（`false`） < グローバルTOML < 環境変数 < CLI。
+
+**動的パス**: `pokecon.opt.ui.desktop.disable_compositing` は存在しない。動的設定からは設定できない。
+
+**Webモード**: 本設定の値は保持されるが、WebモードではTauri/WebViewが存在しないため効果を持たない。
+
+**UI表面**: デスクトップ設定のチェックボックス（§6.6.1参照）。当該チェックボックスは `settings.toml` のグローバル設定として§11.4.1.5の永続化規則に従い保存される。変更後は再起動が必要である旨をUI上に表示する。
+
+### 15.9 Web UIディレクトリ（`server.web_dir`）
+
+SPA静的ファイル配信用ディレクトリの設定 `server.web_dir`（§6.7.1、§11.4.2参照）を提供する。axum HTTPサーバーはこのディレクトリから `index.html`・JavaScript・CSS・画像等の静的ファイルを配信する。
+
+**動作**: 本設定で指定されたディレクトリをaxumの静的ファイルルートとして使用する。デフォルト値はアプリケーションにバンドルされたSvelteKit SPAビルド出力 `web/dist`（アプリケーションリソースルート基準）である。ユーザーが独自のSPAビルドやカスタム静的ファイルを配置したディレクトリを指定することで、標準のWeb UIをカスタマイズまたは置き換えることができる。
+
+**適用タイミング**: 本設定はstartup-only（restart-required）である。axum HTTPサーバーの静的ファイルルートはアプリケーション起動時に一度だけ決定され、ランタイム中にルートを安全に差し替えることはできない。起動後にファイルが追加・変更された場合、個別ファイルの更新は次回HTTPリクエストから反映される可能性があるが、ルートディレクトリ自体の差し替えは行わない。
+
+**設定経路**:
+1. **TOML**: `settings.toml` の `[server]` セクション
+   ```toml
+   [server]
+   web_dir = "/path/to/custom/web"
+   ```
+
+2. **環境変数**:
+   ```text
+   POKECON_WEB_DIR=/path/to/custom/web
+   ```
+
+3. **CLI引数**:
+   ```text
+   --web-dir /path/to/custom/web
+   ```
+
+4. **OpenAPI**: 読み取り／書き込み対応。書き込みはグローバル `settings.toml` へ永続化されるが、次回起動時に反映される。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す。
+
+**スコープ**: グローバル専用。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。
+
+**優先順位**: 組み込みデフォルト（バンドル `web/dist`） < グローバルTOML < 環境変数 < CLI。
+
+**動的パス**: `pokecon.opt.server.web_dir` は存在しない。動的設定からは設定できない。
+
+**パス検証**:
+- 型: `str`（ディレクトリパス）
+- `path_policy`: `"directory"`
+- `path_must_exist`: `true`（存在しないパスは起動時エラー）
+- `path_auto_create`: `false`（自動生成は行わない）
+- `path_expected_type`: `"directory"`（ファイルやシンボリックリンク先がファイルの場合はエラー）
+- `path_resolve_symlink`: `true`（シンボリックリンクは解決後検証）
+- 読み取り・走査権限が必要（権限不足は起動時エラー）
+- 明示的な無効オーバーライドが指定された場合、組み込みデフォルトへのフォールバックは行わず、起動時エラーとする
+
+**ユーザー指定相対パス解決**:
+- **CLI `--web-dir` 相対パス**: 起動時のカレントワーキングディレクトリ（cwd）基準（§11.4.1.4の汎用パス解決規則におけるCLI例外）
+- **TOML（グローバル） / 環境変数 相対パス**: 実効Configルート基準（§11.4.1.4の一般規則に従う）
+
+**UI表面**: サーバー設定のディレクトリピッカー（§6.7.1参照）。当該ディレクトリピッカーは `settings.toml` のグローバル設定として§11.4.1.5の永続化規則に従い保存される。変更後は再起動が必要である旨をUI上に表示し、現在のサーバー動作は変更されない。現在の値は参照表示として読み取り専用で表示する。
+
+---
+
+### 15.10 サーバーポート（`server.port`）
+
+HTTPサーバーバインドポート番号の設定 `server.port`（§6.7.2、§11.4.2参照）を提供する。axum HTTPサーバーはこのポート番号でTCPソケットにバインドし、HTTPリクエストを受け付ける。
+
+**動作**: 本設定で指定されたポート番号を使用してaxum HTTPサーバーを起動する。デフォルト値は `8020` である。有効範囲は 1～65535 の整数。デスクトップモードとWebモードの両方で同一のポート番号を使用する。
+
+**適用タイミング**: 本設定はstartup-only（restart-required）である。TCPソケットのバインドはアプリケーション起動時に一度だけ行われ、ランタイム中にポートを安全に切り替えることはできない。
+
+**設定経路**:
+1. **TOML**: `settings.toml` の `[server]` セクション
+   ```toml
+   [server]
+   port = 8080
+   ```
+
+2. **環境変数**:
+   ```text
+   POKECON_PORT=8080
+   ```
+
+3. **CLI引数**:
+   ```text
+   --port 8080
+   ```
+
+4. **OpenAPI**: 読み取り／書き込み対応。書き込みはグローバル `settings.toml` へ永続化されるが、次回起動時に反映される。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す。
+
+**スコープ**: グローバル専用。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。
+
+**優先順位**: 組み込みデフォルト（`8020`） < グローバルTOML < 環境変数 < CLI。
+
+**動的パス**: `pokecon.opt.server.port` は存在しない。動的設定からは設定できない。
+
+**検証**:
+- 型: `int`
+- 有効範囲: 1～65535
+- 検証は起動時のアドレスバインド前に行われる。範囲外の値は明示的な起動時エラーとし、アプリケーションは起動に失敗する
+
+**バインド失敗セマンティクス**:
+- 指定されたポートのバインドに失敗した場合（ポート使用中、権限不足等）、**ポート自動インクリメントやフォールバックポートへのフォールバックは行わない**
+- 明示的な起動時エラーとして、バインド失敗の理由（アドレス・ポート番号・エラー種別）を含む診断メッセージを出力し、アプリケーションは起動に失敗する
+
+**CORS導出**:
+- CORSのデフォルト許可origin `http://localhost:<port>` は実効`server.port`から動的に導出される（`http://localhost:8020` 固定ではない）。§7.4参照
+
+**UI表面**: サーバー設定の数値入力（§6.7.2参照）。当該数値入力は `settings.toml` のグローバル設定として§11.4.1.5の永続化規則に従い保存される。変更後は再起動が必要である旨をUI上に表示し、現在のサーバー動作は変更されない。現在の値は参照表示として読み取り専用で表示する。
 
 ---
 

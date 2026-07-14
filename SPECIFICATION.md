@@ -132,8 +132,8 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 
 | 用語 | 定義 |
 |------|------|
-| **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。`pokecon.opt` 名前空間では、意味的に独立した単体の設定のみフラットパスを使用する。例: `pokecon.opt.language`（フラット）vs `pokecon.opt.camera.fps`（階層） |
-| **階層構造（名前空間）** | 意味的に関連する複数の設定値をグループ化するドット区切りの名前空間。`pokecon.opt.camera.fps` のように、サブシステム単位で階層化する。TOMLのセクション構成とは独立した規範的な設計であり、自動変換ルールに依存しない |
+| **フラット構造** | ドット区切りの階層を持たない、単一レベルの属性アクセス方式。`pokecon.opt` 名前空間では、意味的に独立した単体の設定のみフラットパスを使用する。例: `pokecon.opt.language`（フラット）vs `pokecon.opt.camera.capture_fps`（階層） |
+| **階層構造（名前空間）** | 意味的に関連する複数の設定値をグループ化するドット区切りの名前空間。`pokecon.opt.camera.capture_fps` のように、サブシステム単位で階層化する。TOMLのセクション構成とは独立した規範的な設計であり、自動変換ルールに依存しない |
 | **Neovim/Vim風** | Neovim/Vimエディタの設定方式を模した設計。イベント名の`Pre`/`Post`後置（`BufReadPre`/`BufReadPost`に類似）、キー記法の`<C-a>`形式等 |
 | **後勝ち** | 複数の設定ソース間で同じキーが存在する場合、優先順位の高いソースの値を採用する方式。起動時設定はこの優先順位に基づく評価パイプラインとして、各ソースを順次適用する |
 | **動的設定** | 実行時に評価される設定ファイル（`init.py`/`init.lua`）。イベントハンドラ登録やカスタムロジックを含む |
@@ -525,8 +525,20 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
 | **カメラデバイス選択** | コンボボックス | 利用可能なカメラデバイスのドロップダウン |
-| **FPS** | コンボボックス | UI表示用フレームレート（`ui_fps`、選択肢: 5, 15, 30, 60）。バックエンド処理FPS（`camera_fps`）とは独立。選択肢は静的設定でカスタマイズ可 |
+| **UI表示FPS** | コンボボックス | UI表示用フレームレート（`ui.fps`、選択肢は`ui.fps_options`から生成）。カメラ取得FPSとは独立 |
+| **カメラ取得FPS** | 正整数入力／コンボボックス | `camera.capture_fps`。デフォルト60。設定時点でアクティブなカメラへ即時適用 |
+| **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
 | **フリップ** | Checkbox | 水平/垂直フリップ切替 |
+
+**取得設定の即時適用トランザクション**:
+
+1. カメラが閉じている場合は、正準設定サービスの実効値を即時更新し、次回カメラオープン時に使用する。
+2. カメラが開いている場合はフレーム公開をフレーム境界で一時停止し、現在の取得FPS・解像度・共有メモリレイアウトをロールバック用に保持する。
+3. 同じOpenCVキャプチャハンドルへ`CAP_PROP_FPS`、`CAP_PROP_FRAME_WIDTH`、`CAP_PROP_FRAME_HEIGHT`を設定する。設定変更のためにデバイスを自動切断・再接続しない。
+4. 解像度はドライバーから読み戻した幅・高さと取得した有効フレームの寸法が要求値に完全一致することを確認する。FPSはソース実FPSが要求値を下回ることを許容し、その実FPSを実効上限として扱う。
+5. 成功時は必要に応じて共有メモリの3スロットを新しいフレーム寸法で再構築し、公開トークンを原子的に切り替える。WebRTCとMotion JPEGは次に公開されるフレームから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
+6. 適用またはTOML保存に失敗した場合は、保持した取得設定と共有メモリレイアウトへロールバックし、設定値・TOML・UI表示を変更せずエラーを返す。ロールバック後に有効フレームを取得できない場合だけカメラをエラー状態として閉じ、他機能は継続する。
+7. 動的設定からの代入も同じカメラ再設定・検証・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
 
 #### 6.1.3 表示モード切替（チェックボックス）
 
@@ -573,8 +585,20 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 | 設定 | オプション | デフォルト |
 |---------|---------|---------|
-| **ボーレート** | 9600 / 115200 | 9600 |
+| **ボーレート** | 4800 / 9600 / 115200、およびOS／ドライバーが受理する任意の正整数 | 9600 |
 | **データ形式** | デフォルト / Qingpi / 3DS Controller | デフォルト |
+
+**UI連動**: UIでデータ形式を3DS Controllerへ変更した場合は、現在確認済みの対応機器に合わせて、同一の設定書き込みトランザクションで`serial.baud_rate`も`115200`へ変更する。この変更はUI操作の補助動作であり、3DS Controller形式の検証制約ではない。TOML、CLI、環境変数、動的設定、OpenAPIからは`serial.data_format = "3ds"`と任意の正整数`serial.baud_rate`の組み合わせを受理し、値を暗黙に変更しない。UIで3DS Controllerから別形式へ戻した場合も、現在のボーレートを保持し、過去の値を暗黙に復元しない。
+
+**シリアル設定の即時適用トランザクション**:
+
+1. `serial.port`、`serial.baud_rate`、`serial.data_format`はグローバル専用の`runtime_immediate`設定として同じ直列化ロックで更新する。
+2. シリアル未接続時は、検証後に実効値を即時更新する。UI／OpenAPI書き込みではその後にグローバル`settings.toml`へ原子的に保存する。
+3. 接続中は、Rustメインが全ボタン・スティック・タッチ状態を強制解放してから旧接続を閉じ、新しい3設定の組み合わせで同じデバイスまたは指定された新デバイスへ接続する。
+4. 新設定で接続できた場合だけ、UI／OpenAPI書き込み先TOML、正準設定値、UI表示、および送信フォーマッターを新設定へ確定する。
+5. 新設定で接続できない場合は旧3設定で再接続し、変更をTOML・正準設定値・UIへ反映せずエラーを返す。旧設定でも再接続できない場合は未接続状態とし、正準設定値と保存値は旧値のまま維持してERROR診断を出す。他機能は継続する。
+6. UIで3DS Controllerを選択した場合だけ、`serial.data_format = "3ds"`と`serial.baud_rate = 115200`を同一トランザクションへ含める。その他の設定表面では入力された3設定だけを使用し、ボーレートを暗黙変更しない。
+7. 動的設定代入も同じ再接続・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
 
 **デフォルト形式**:
 - ボーレート: 9600
@@ -590,7 +614,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 - ワイヤーフォーマット: バイナリ、11バイト固定長
 
 **3DS Controller形式**:
-- ボーレート: 115200
+- 現在確認済みの対応機器で使用するボーレート: 115200（形式自体の必須制約ではない）
 - ワイヤーフォーマット: バイナリ、6バイト固定長
 
 #### 6.2.3 シリアルモニター
@@ -832,7 +856,10 @@ Commands/
 | **ウィジェットモード** | 7モードのコンボボックス（§5.5参照）。正準ID: `ui.widget_mode` | Combobox |
 | **ソフトウェアコントローラーの位置** | 右パネル内の位置を指定するtop/bottomラジオボタン。正準ID: `ui.controller_position` | Radio button |
 | **ダイアログボタンの位置** | ダイアログボタン配置用のtop/bottom/bothラジオボタン（§5.7参照）。正準ID: `ui.dialog_button_position` | Radio button |
-| **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用（startup-only/restart-required）。変更は§11.4.1.5に従いグローバル`settings.toml`へ永続化されるが、次回起動時に反映される。チェックボックス変更後は再起動が必要である旨をUI上に表示する（§15.8参照） | Checkbox |
+| **動的設定の自動リロード** | グローバル`init.py`／`init.lua`のファイル監視を有効化するチェックボックス。正準ID: `auto_reload_config`。変更は単一のグローバルファイルウォッチャーへ即時反映し、グローバル`settings.toml`へ保存する | Checkbox |
+| **最終ウィンドウを閉じる動作** | 正準値`ask`／`shutdown`／`keep_backend`を選択するコンボボックス。表示ラベルは「毎回確認」／「すべて終了」／「バックエンドを継続」。正準ID: `ui.desktop.close_behavior`。変更は以後のウィンドウ閉じる操作へ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
+| **デスクトップコンポジット無効化** (`disable_compositing`) | デスクトップモード（Tauri/WebView）のウィンドウ合成を無効化するチェックボックス。正準ID: `ui.desktop.disable_compositing`。グローバル専用、再起動必須（startup-only/restart-required）。変更時はチェック状態をグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、「再起動後に反映」する旨をUI上に表示する。Webモードでは値を保持するが効果を持たない | Checkbox |
+| **表示言語** | 日本語／英語を選択するコンボボックス。正準ID: `language`。表示ラベルは「日本語」／「English」、保存値は`ja`／`en`。変更は全UIへ即時反映し、グローバル`settings.toml`へ保存する | Combobox |
 
 ---
 
@@ -910,6 +937,12 @@ Commands/
 **デスクトップ／Webモード共通**:
 - 同一のポート番号がデスクトップモードとWebモードの両方で使用される。モード間で異なるポートは使用しない
 
+#### 6.7.3 WebRTC STUNサーバー
+
+ネットワーク設定UIにSTUN URIのテキスト入力を提供する。正準IDは`stun_server`、表示上の初期値は空文字である。空文字はSTUNを使用しないことを表す。空文字以外は`stun:`または`stuns:` URIとして検証し、不正値は保存しない。
+
+本設定はグローバル専用であり、UI変更はグローバル`settings.toml`へ保存する。変更は以後に開始するWebRTC接続および再接続から使用し、確立済みセッションを暗黙に再ネゴシエーションしない。UI・TOML・動的設定・CLI・環境変数・OpenAPIの全表面から設定できる。
+
 ## 7. 通信プロトコル（Web / ネットワーク）
 
 ### 7.1 スタック概要
@@ -925,7 +958,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
-- **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバーは`settings.toml`で設定可能（デフォルト値あり）。コーデック優先順位: H.264 > VP8 > VP9。
+- **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバーは`settings.toml`等から設定できるが、既定値は空文字でありSTUNを使用しない。コーデック優先順位: H.264 > VP8 > VP9。
 - **自動再接続**: §3.4参照。
 - **フォールバック条件**:
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
@@ -2159,7 +2192,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
-  例: `pokecon.opt.camera.fps`, `pokecon.opt.camera.resolution`（カメラ設定）;
+  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
   `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
@@ -2178,7 +2211,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   動的パスは、意味的結束（semantic cohesion）に基づいて本仕様書が規範的に定義する。
 - `settings.toml` 内のキー名と動的設定パスは**独立して設計される**。
   TOMLキー名の平坦化（プレフィックス付与）と動的パスの階層化は対応関係を持たない。
-  例: TOMLキー `camera_fps` → 動的パス `pokecon.opt.camera.fps`（カメラ名前空間に属し、`camera_` プレフィックスは省略）。
+  例: TOMLキー `capture_fps` → 動的パス `pokecon.opt.camera.capture_fps`（カメラ名前空間に属し、`camera_` プレフィックスは元々不要のためそのままリーフ名として使用）。
 - 動的パスの命名は、`settings.toml` のキー名の意味的構成要素に基づいて階層化する。
   元のキーが接頭辞 + 意味本体で構成されている場合、名前空間で接頭辞を置き換える。
   例: TOMLキー `serial_port`（`serial_` が冗長接頭辞）→ 動的パス `pokecon.opt.serial.port`。
@@ -2208,7 +2241,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 - 設定ドキュメンテーション
 
 各レジストリエントリは以下のフィールドを含む:
-- **正準ID（canonical ID）**: セマンティックなlowercase snake_caseセグメントをドットで結合した識別子。例: `camera.fps`、`serial.baud_rate`、`notifications.discord.webhook_url`、`ui.desktop.close_behavior`、`python.script.shutdown_timeout_ms`
+- **正準ID（canonical ID）**: セマンティックなlowercase snake_caseセグメントをドットで結合した識別子。例: `camera.capture_fps`、`serial.baud_rate`、`notifications.discord.webhook_url`、`ui.desktop.close_behavior`、`python.script.shutdown_timeout_ms`
 - **型（type）**: プリミティブ型（`str`、`int`、`float`、`bool`）または複合型（後述）
 - **バリアント／範囲／バリデーション**
 - **組み込みデフォルト値**
@@ -2219,14 +2252,14 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 - **環境変数パス**: 対応する `POKECON_*` 変数名、または `null`（非対応の理由を明記）
 - **UI公開**: 設定フォームへ公開するか、非公開の場合はその理由。公開する場合は入力コントロールと表示メタデータ
 - **OpenAPI公開**: 読み取り／書き込み可否、または非公開の理由
-- **起動時／実行時可変性（startup/runtime mutability）**
+- **起動時／実行時可変性（startup/runtime mutability）**: `startup_only`（起動時だけ解決）、`runtime_immediate`（設定更新の成功時に現在の機能へ即時反映）、`runtime_deferred`（設定値は実行時に更新するが、次回接続・次回ワーカー生成等の明示した適用契機から反映）のいずれか。`runtime_deferred`では適用契機を必ず記録する
 - **機密情報（secret）フラグ**
 - **プロファイル／グローバル／ブートストラップ／運用メタデータ**
 - **パスメタデータ（path metadata）**: 型が `str`（パス文字列）のエントリに必須。§11.4.1.4で規定するパス解決のポリシー（存在要求・自動作成・ファイル種別期待・シンボリックリンク解決）を指定する。非パス型のエントリでは `null` とする
 
 **デフォルト生成名**: 明示的にレジストリでオーバーライドされない限り、CLIフラグ名と環境変数名は正準IDから以下の規則で機械的に決定する:
-- **CLIフラグ**: ドットとアンダースコアをハイフンに置換し、`--` を前置。例: `camera.fps` → `--camera-fps`
-- **環境変数**: ドットとアンダースコアをアンダースコアに置換し、大文字化し、`POKECON_` を前置。例: `camera.fps` → `POKECON_CAMERA_FPS`
+- **CLIフラグ**: ドットとアンダースコアをハイフンに置換し、`--` を前置。例: `camera.capture_fps` → `--camera-capture-fps`
+- **環境変数**: ドットとアンダースコアをアンダースコアに置換し、大文字化し、`POKECON_` を前置。例: `camera.capture_fps` → `POKECON_CAMERA_CAPTURE_FPS`
 
 エイリアスや略称は、レジストリに明示的に規範指定されている場合のみ生成する。
 
@@ -2492,6 +2525,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 - **並行制御**: 正準化した対象TOMLパス単位でプロセス内書き込みを直列化し、異なるアプリプロセス間でも同じ対象を保護するOSファイルロックを取得する。ロック取得後にファイルを再読込して検証する。ロックファイルは実効Stateルート配下の`settings-locks/<sha256(正準化TOMLパス)>.lock`に置き、対象TOML自体やその置換前inodeをロック対象にしない。
 - **原子的保存**: 対象ファイルと同じディレクトリに一時ファイルを作成し、Configファイルの権限規則（§11.4.3.3）を適用して完全な内容を書き込み、flush／同期後に原子的置換を行う。利用可能なOSでは親ディレクトリも同期する。一時ファイルや部分書き込みを正式な設定として読み込んではならない。
 - **反映タイミング**: 原子的保存が成功した後にだけ、正準設定サービスの実効値を更新してランタイム副作用を適用し、UI／OpenAPI購読者へ変更を通知する。保存失敗時は実効値を変更しない。保存成功後にランタイム反映が失敗した場合はERROR診断を出し、その設定を利用する機能だけを利用不能として、保存済み値は次回読込時にも維持する。
+- **デバイス設定の優先例外**: カメラ取得設定（`camera.capture_fps`、`camera.capture_resolution`、§6.1.2）およびシリアル接続設定（`serial.port`、`serial.baud_rate`、`serial.data_format`、§6.2.2）は、デバイス操作の成否を保存前に検証する必要があるため、上記の一般順序の例外とする。各専用トランザクションでランタイム適用を先に試行し、成功した場合だけTOMLを原子的に保存して正準設定値とUI表示を確定する。保存失敗時は専用トランザクションで旧デバイス状態へロールバックする。本項の一般順序より§6.1.2／§6.2.2の個別規則を優先する。
 - **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。切替処理と同時に発生した旧プロファイルへのUI書き込みを新プロファイルへ誤適用してはならない。
 - **Secret**: Secret設定の書き込みでも同じ原子的保存を使用し、生の値をログ・エラー・変更通知へ含めない（§11.4.3）。
 
@@ -2500,57 +2534,57 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 本仕様書で規定する `settings.toml` と `pokecon.opt` の動的設定パスの対応関係を以下に示す。
 この一覧は規範的（normative）であり、各動的設定パスは明示的に定義される。
 
-この一覧は、前項で定義する正準レジストリの可読性投影（human-readable projection）である。設定項目がすべて列挙された時点で過不足なく網羅し、CIで正準レジストリとの同期を検証する。本一覧の各エントリはレジストリのフィールド値に従い、CLI/env名は各エントリの正準IDから統一生成ルールで導出される。
+この一覧は、前項で定義する正準レジストリの可読性投影（human-readable projection）である。各エントリの正準ID（CID）は左端の列に明示的に記載される。設定項目がすべて列挙された時点で過不足なく網羅し、CIで正準レジストリとの同期を検証する。本一覧の各エントリはレジストリのフィールド値に従い、CLI/env名は各エントリの正準IDから統一生成ルールで導出される（§12に環境変数一覧として列挙）。スコープ・可変性・UI・OpenAPIの各列は非導出フィールドであり、以下に明示的に記載する。
 
-| TOMLセクション | TOMLキー | `pokecon.opt` 動的パス | 型 | 備考 |
-|--------------|---------|----------------------|---|------|
-| `[global]` | `language` | `pokecon.opt.language` | `str` | `"ja"` / `"en"`。正準値は小文字。§11.4.1.3のenum正規化規則に従う |
-| `[global]` | `auto_reload_config` | `pokecon.opt.auto_reload_config` | `bool` | |
-| `[global]` | `dynamic_config_language` | — | `str` | グローバル専用・ブートストラップ専用。`"python"` / `"lua"` / `"none"`。正準値は小文字（§11.4.1.3のenum正規化規則に従う）。デフォルト `"lua"`。動的パス `pokecon.opt` 非対応（循環依存のため）。CLI: `--dynamic-config-language <value>`（ブートストラップCLI）。環境変数: `POKECON_DYNAMIC_CONFIG_LANGUAGE=<value>`。UI/OpenAPI非公開（再起動が必要）。§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照 |
-| `[config]` | `report_ignored_profile_global_settings` | `pokecon.opt.config.report_ignored_profile_global_settings` | `bool` | グローバル専用。プロファイルTOMLで無視されたグローバル専用設定の診断出力を制御。デフォルト: `true`（ERROR出力）。プロファイルTOMLに指定された場合は無視され、既に解決済みのグローバル値が使用される（§11.3参照）。環境変数: `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS`。CLI: `--report-ignored-profile-global-settings`（正準IDから生成） |
-| `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | 組み込みデフォルト: `"default"`。CLI: `--profile` / `-p`（メインブランチ／オリジナルExtension互換）、環境変数: `POKECON_PROFILE`（新設）。CLI省略時は環境変数を上書きしない。`--active-profile` / `POKECON_ACTIVE_PROFILE`は公開しない。大文字小文字の正規化は行わない（§11.5.6.4.4のOSネイティブセマンティクスに従う）。プロファイル名の型は閉じたenumではなく`str`のまま。単一パスコンポーネントの安全性検証を全入力表面で行う |
-| — | *ブートストラップ専用* | — | `str` | **`app_name`**: アプリケーション名セレクター（§11.3参照）。Neovimの`NVIM_APPNAME`に類似。ユーザー向けCLI: `--app-name <name>`。環境変数: `POKECON_APPNAME=<name>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される。入力値は§11.3「`app_name` 文法」で規定する安全な相対サブディレクトリ識別子文法に従い検証される |
-| `[camera]` | `camera_fps` | `pokecon.opt.camera.fps` | `int` | |
-| `[camera]` | `camera_resolution` | `pokecon.opt.camera.resolution` | `str` | `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う |
-| `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | |
-| `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | |
-| `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う |
-| `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | `"message"` / `"noop"`。§11.4.1.3のenum正規化規則に従う |
-| `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
-| `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | |
-| `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | |
-| `[notifications.windows]` | `on_script_start` | `pokecon.opt.notifications.windows.on_script_start` | `bool` | スクリプト実行開始時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-start` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START`）。OpenAPI R/W |
-| `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
-| `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | |
-| `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | |
-| `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | フラット（単体設定） |
-| `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | フラット（単体設定） |
-| `[server]` | `web_dir` | — | `str` | SPA静的ファイル配信用ディレクトリ。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--web-dir <path>`（明示的ショートフラグ）。環境変数: `POKECON_WEB_DIR`。UI: サーバー設定のディレクトリピッカー（§6.7.1参照）。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。§6.7.1、§15.9参照 |
-| `[server]` | `port` | — | `int` | HTTPサーバーバインドポート番号。デフォルト `8020`。範囲 1～65535。グローバル専用（startup-only/restart-required）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--port <port>`（明示的ショートフラグ）。環境変数: `POKECON_PORT`。UI: サーバー設定の数値入力（§6.7.2参照）。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効`server.port`から動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§6.7.2、§15.10参照 |
-| `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui_fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
-| `[ui]` | `ui_fps` | `pokecon.opt.ui.fps` | `int` | UI表示用FPS（カメラキャプチャFPS `camera.fps` とは独立）。デフォルト `30`。有効な正の整数かつ最終実効`ui.fps_options`のメンバーでなければならない。既存FPSコンボボックス（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。UIコンボボックスからの変更は即座にUI表示FPSを更新する（カメラキャプチャFPSは変更しない）。CLI: `--ui-fps`。環境変数: `POKECON_UI_FPS`。OpenAPI R/W。TOML: `[ui].ui_fps`。 |
-| `[ui]` | `widget_mode` | `pokecon.opt.ui.widget_mode` | `str` | 閉じたenum。正準値（小文字）: `all`（デフォルト）/ `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§5.5参照）。プロファイル対応（profile-capable）。動的代入は即時反映されUIレイアウトを更新する。CLI: `--ui-widget-mode`。環境変数: `POKECON_UI_WIDGET_MODE`。OpenAPI R/W |
-| `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | 出力#1と出力#2の幅比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの幅比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
-| `[ui]` | `stdout_destination` | `pokecon.opt.ui.stdout_destination` | `str` | 閉じたenum。正準値（小文字）: `output_1`（デフォルト）/ `output_2`。レガシー格納値 `1` / `2` は旧互換用エイリアス。UIラジオボタン（§6.6.1参照）は本設定の必須UI表面、表示ラベル 出力#1/出力#2。プロファイル対応（profile-capable）。変更は即座にstdout出力先ルーティングを更新する。CLI/環境変数は自動生成（`--ui-stdout-destination` / `POKECON_UI_STDOUT_DESTINATION`）。OpenAPI R/W。§5.9参照 |
-| `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
-| `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
-| `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
-| `[ui.desktop]` | `disable_compositing` | — | `bool` | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。デフォルト `false`。グローバル専用（startup-only/restart-required）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない — 変更は次回起動時に反映）。CLI: `--disable-compositing`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_DISABLE_COMPOSITING`。UI: デスクトップ設定のチェックボックス（§6.6.1参照）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§15参照。Webモードでは値保持のみ行われ、効果を持たない |
-| `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | |
-| `[commands]` | `tag_match_mode` | `pokecon.opt.commands.tag_match_mode` | `str` | 閉じたenum。正準値（小文字）: `exact`（デフォルト）/ `partial` / `prefix` / `suffix`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§6.4.1.1参照）。プロファイル対応（profile-capable）。動的代入は即時反映されタグフィルターマッチングを更新する。動的カスタムタグマッチ関数が登録されている間は本設定に優先し、解除時に復帰する。CLI: `--commands-tag-match-mode`。環境変数: `POKECON_COMMANDS_TAG_MATCH_MODE`。OpenAPI R/W |
-| `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | ユーザースクリプトワーカーvenvパス。未指定時はDataルート配下 `venv-script`（デフォルト）。既存venvパスを指定した場合、アプリケーションはそのvenv内の全パッケージを解決済み閉包と正確に同期し、閉包外の既存パッケージを自動削除する（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること。パスメタデータ: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。venv作成・検証セマンティクスは `python.dynamic.venv`（§11.3）と同一。§11.4.1.4の汎用パス解決規則およびパスメタデータ表参照 |
-| `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
-| `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str, extras?: list[str]}]` | パッケージ指定。動的代入は設定値へ即時反映されるが、環境への効果は次回のパッケージ解決／venv準備／ワーカー生成時に適用する。実行中ワーカーへ即時インストールしない |
-| `[python.script.packages]` | `override_application_constraints` | `pokecon.opt.python.script.packages.override_application_constraints` | `bool` | デフォルト `false`。`true` にするとユーザー指定制約がアプリケーション必須制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
-| `[python.script.packages]` | `override_package_metadata_constraints` | `pokecon.opt.python.script.packages.override_package_metadata_constraints` | `bool` | デフォルト `false`。`true` にするとユーザー指定制約がパッケージ配布メタデータ／推移的依存関係の制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
-| `[python.script.packages]` | `uv_config` | `pokecon.opt.python.script.packages.uv_config` | `str \| None` | uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。動的パス対応（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-uv-config <path>`。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG=<path>`。§14.5.2「uv.tomlの取り扱い」参照 |
-| `[python.script.packages]` | `revalidate_mutable_sources` | `pokecon.opt.python.script.packages.revalidate_mutable_sources` | `bool` | 可変直接ソースの自動再検証（§14.5.5参照）。デフォルト `false`（安全側デフォルト）。`true` にするとper-process初回使用時に可変直接ソース（VCSブランチ/タグ、ハッシュなしURL、ローカルパス）の変更を検出し、必要に応じて再解決・再インストールを実行する。動的パス対応（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-revalidate-mutable-sources`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_REVALIDATE_MUTABLE_SOURCES`。§14.5.5.1参照 |
-| `[python.dynamic]` | `venv` | — | `str` | 動的設定ワーカーvenvパス（グローバル専用・ブートストラップ専用）。未指定時はDataルート配下 `venv-dynamic`（デフォルト）。既存venvパスを指定した場合、解決済み閉包外の既存パッケージは自動削除される（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること |
-| `[python.dynamic.packages]` | `list` | — | `list[{name: str, version?: str, extras?: list[str]}]` | グローバル専用・ブートストラップ専用。動的パス非対応（同上）。CLI: `--python-dynamic-packages-list`（JSON文字列）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_LIST` |
-| `[python.dynamic.packages]` | `override_application_constraints` | — | `bool` | グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_application_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-application-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS`。§14.5.1参照 |
-| `[python.dynamic.packages]` | `override_package_metadata_constraints` | — | `bool` | グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_package_metadata_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS`。§14.5.1参照 |
-| `[python.dynamic.packages]` | `uv_config` | — | `str \| None` | グローバル専用・ブートストラップ専用。uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.uv_config` は存在しない）。グローバルなブートストラップ設定として早期解決され、動的venv構築前に適用される。CLI: `--python-dynamic-packages-uv-config <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG=<path>`。UI/OpenAPI非公開（再起動が必要）。§14.5.2「uv.tomlの取り扱い」参照 |
-| `[python.dynamic.packages]` | `revalidate_mutable_sources` | — | `bool` | グローバル専用・ブートストラップ専用。可変直接ソースの自動再検証（§14.5.5参照）。デフォルト `false`（安全側デフォルト）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.revalidate_mutable_sources` は存在しない）。CLI: `--python-dynamic-packages-revalidate-mutable-sources`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES`。UI/OpenAPI非公開（再起動が必要）。§14.5.5.1参照 |
+| 正準ID | TOMLセクション | TOMLキー | `pokecon.opt` 動的パス | 型 | スコープ | 可変性 | UI | OpenAPI | 備考 |
+|------------------|--------------|---------|----------------------|---|--------|-----------------|----|---------|------|
+| `language` | `[global]` | `language` | `pokecon.opt.language` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"ja"`。閉じたenum `"ja"` / `"en"`。正準値は小文字。§11.4.1.3のenum正規化規則に従う。グローバル専用。UI言語コンボボックスは必須設定表面で、変更を全UIへ即時反映してグローバル`settings.toml`へ永続化する。CLI: `--language`。環境変数: `POKECON_LANGUAGE`。OpenAPI R/W。 |
+| `auto_reload_config` | `[global]` | `auto_reload_config` | `pokecon.opt.auto_reload_config` | `bool` | global | runtime_immediate | R/W | R/W | デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。グローバル専用。アプリケーション全体で単一のグローバル`init.py`／`init.lua`ファイルウォッチャーを制御し、プロファイルTOMLでは変更できない。可変性は`runtime_immediate`。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成。UI/OpenAPI R/W。 |
+| `dynamic_config_language` | `[global]` | `dynamic_config_language` | — | `str` | bootstrap | startup_only | —（循環依存）| —（ブートストラップ専用）| グローバル専用・ブートストラップ専用。`"python"` / `"lua"` / `"none"`。正準値は小文字（§11.4.1.3のenum正規化規則に従う）。デフォルト `"lua"`。動的パス `pokecon.opt` 非対応（循環依存のため）。CLI: `--dynamic-config-language <value>`（ブートストラップCLI）。環境変数: `POKECON_DYNAMIC_CONFIG_LANGUAGE=<value>`。UI/OpenAPI非公開（再起動が必要）。§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照 |
+| `report_ignored_profile_global_settings` | `[config]` | `report_ignored_profile_global_settings` | `pokecon.opt.config.report_ignored_profile_global_settings` | `bool` | global | runtime_immediate | —（診断用）| R/W | グローバル専用。プロファイルTOMLで無視されたグローバル専用設定の診断出力を制御。デフォルト: `true`（ERROR出力）。プロファイルTOMLに指定された場合は無視され、既に解決済みのグローバル値が使用される（§11.3参照）。環境変数: `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS`。CLI: `--report-ignored-profile-global-settings`（正準IDから生成） |
+| `active_profile` | `[profiles]` | `active_profile` | `pokecon.opt.active_profile` | `str` | global | runtime_immediate | R/W | R/W | 組み込みデフォルト: `"default"`。CLI: `--profile` / `-p`（メインブランチ／オリジナルExtension互換）、環境変数: `POKECON_PROFILE`（新設）。CLI省略時は環境変数を上書きしない。`--active-profile` / `POKECON_ACTIVE_PROFILE`は公開しない。大文字小文字の正規化は行わない（§11.5.6.4.4のOSネイティブセマンティクスに従う）。プロファイル名の型は閉じたenumではなく`str`のまま。単一パスコンポーネントの安全性検証を全入力表面で行う |
+| `app_name` | — | *ブートストラップ専用* | — | `str` | bootstrap | startup_only | —（循環依存）| —（ブートストラップ専用）| **`app_name`**: アプリケーション名セレクター（§11.3参照）。Neovimの`NVIM_APPNAME`に類似。ユーザー向けCLI: `--app-name <name>`。環境変数: `POKECON_APPNAME=<name>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される。入力値は§11.3「`app_name` 文法」で規定する安全な相対サブディレクトリ識別子文法に従い検証される |
+| `camera.capture_fps` | `[camera]` | `capture_fps` | `pokecon.opt.camera.capture_fps` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `60`。正の整数。設定値にアプリケーション独自の上限は設けない。カメラソースの実FPSが設定値を下回る場合はソースの実FPSが実効上限となる。UI表示FPS `ui.fps` とは独立する。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映する。 |
+| `camera.capture_resolution` | `[camera]` | `capture_resolution` | `pokecon.opt.camera.capture_resolution` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"1280x720"`。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映し、指定解像度を適用・検証できない場合は暗黙に別解像度へ変更せず更新をロールバックする。 |
+| `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値は`COM3`や`/dev/ttyACM0`等のOSネイティブなデバイス識別文字列であり、ファイルシステムパス型ではない。環境変数展開・チルダ展開・相対パス解決を適用しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
+| `serial.baud_rate` | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `9600`。正の整数。UIは少なくとも`4800` / `9600` / `115200`を候補として提示し、OS／ドライバーが受理するその他の正整数も入力できる。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
+| `serial.data_format` | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"default"`。閉じたenum `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う。`"3ds"`と`115200`の組み合わせは必須制約ではない。UIで`"3ds"`を選択した場合だけ、現在確認済み機器向けの補助動作として`serial.baud_rate`も`115200`へ原子的に同時更新する。その他の設定表面では任意の正整数ボーレートとの組み合わせを受理し、暗黙に変更しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
+| `notifications.line_menu_behavior` | `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | global | runtime_immediate | —（LINE UI削除済み）| R/W | `"message"`（デフォルト）/ `"noop"`。§11.4.1.3のenum正規化規則に従う |
+| `notifications.discord.webhook_url` | `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | global | runtime_immediate | R/W | R（マスク）/W | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
+| `notifications.discord.username` | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（空文字、未設定）。secretに非該当（§11.4.3.1参照） |
+| `notifications.discord.avatar_url` | `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（空文字、未設定）。secretに非該当（§11.4.3.1参照）。設定時は空文字または有効なhttp/httpsURL。長さ制限は仕様で規定しない |
+| `notifications.windows.on_script_start` | `[notifications.windows]` | `on_script_start` | `pokecon.opt.notifications.windows.on_script_start` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行開始時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-start` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START`）。OpenAPI R/W |
+| `notifications.windows.on_script_end` | `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
+| `websocket.reconnect_interval_sec` | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `3`（秒）。§3.4参照。1以上の整数。ランタイム変更は次回の再接続試行から反映 |
+| `websocket.reconnect_max_retries` | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `20`。§3.4参照。0以上の整数。`0`は自動リトライを無効化し、切断時に即座に手動再接続UIを表示する。ランタイム変更は次回の再接続試行から反映 |
+| `stun_server` | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | global | runtime_deferred | R/W | R/W | フラット（単体設定）。デフォルト `""`（STUNを使用しない）。空文字以外は`stun:`または`stuns:` URIとして検証する。グローバル専用。UIのSTUN URI入力は必須設定表面で、変更は以後に開始するWebRTC接続／再接続から使用し、確立済みセッションを暗黙に再ネゴシエーションしない。CLI: `--stun-server`。環境変数: `POKECON_STUN_SERVER`。OpenAPI R/W。§6.7.3参照。 |
+| `jpeg_quality` | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | フラット（単体設定）。デフォルト `85`。範囲 1～100 |
+| `server.web_dir` | `[server]` | `web_dir` | — | `str` | global | startup_only | R/W | R/W | SPA静的ファイル配信用ディレクトリ。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--web-dir <path>`（明示的ショートフラグ）。環境変数: `POKECON_WEB_DIR`。UI: サーバー設定のディレクトリピッカー（§6.7.1参照）。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。§6.7.1、§15.9参照 |
+| `server.port` | `[server]` | `port` | — | `int` | global | startup_only | R/W | R/W | HTTPサーバーバインドポート番号。デフォルト `8020`。範囲 1～65535。グローバル専用（startup-only/restart-required）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--port <port>`（明示的ショートフラグ）。環境変数: `POKECON_PORT`。UI: サーバー設定の数値入力（§6.7.2参照）。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効`server.port`から動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§6.7.2、§15.10参照 |
+| `ui.fps_options` | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | profile | runtime_immediate | —（候補生成用）| R/W | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui_fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
+| `ui.fps` | `[ui]` | `ui_fps` | `pokecon.opt.ui.fps` | `int` | profile | runtime_immediate | R/W | R/W | UI表示用FPS（カメラキャプチャFPS `camera.capture_fps` とは独立）。デフォルト `30`。有効な正の整数かつ最終実効`ui.fps_options`のメンバーでなければならない。既存FPSコンボボックス（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。UIコンボボックスからの変更は即座にUI表示FPSを更新する（カメラキャプチャFPSは変更しない）。CLI: `--ui-fps`。環境変数: `POKECON_UI_FPS`。OpenAPI R/W。TOML: `[ui].ui_fps`。 |
+| `ui.widget_mode` | `[ui]` | `widget_mode` | `pokecon.opt.ui.widget_mode` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `all`（デフォルト）/ `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§5.5参照）。プロファイル対応（profile-capable）。動的代入は即時反映されUIレイアウトを更新する。CLI: `--ui-widget-mode`。環境変数: `POKECON_UI_WIDGET_MODE`。OpenAPI R/W |
+| `ui.output_split_ratio` | `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | profile | runtime_immediate | R/W | R/W | 出力#1と出力#2の幅比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの幅比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
+| `ui.stdout_destination` | `[ui]` | `stdout_destination` | `pokecon.opt.ui.stdout_destination` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `output_1`（デフォルト）/ `output_2`。レガシー格納値 `1` / `2` は旧互換用エイリアス。UIラジオボタン（§6.6.1参照）は本設定の必須UI表面、表示ラベル 出力#1/出力#2。プロファイル対応（profile-capable）。変更は即座にstdout出力先ルーティングを更新する。CLI/環境変数は自動生成（`--ui-stdout-destination` / `POKECON_UI_STDOUT_DESTINATION`）。OpenAPI R/W。§5.9参照 |
+| `ui.controller_position` | `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
+| `ui.dialog_button_position` | `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
+| `ui.desktop.close_behavior` | `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | global | runtime_immediate | R/W | R/W | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
+| `ui.desktop.disable_compositing` | `[ui.desktop]` | `disable_compositing` | — | `bool` | global | startup_only | R/W | R/W | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。デフォルト `false`。グローバル専用（startup-only/restart-required）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない — 変更は次回起動時に反映）。CLI: `--disable-compositing`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_DISABLE_COMPOSITING`。UI: デスクトップ設定のチェックボックス（§6.6.1参照）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§15参照。Webモードでは値保持のみ行われ、効果を持たない |
+| `shortcuts.button_1–shortcuts.button_10` | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | profile | runtime_immediate | R/W | R/W | デフォルト `""`（空文字＝未割り当て）。§6.4.2参照。プロファイル対応（profile-capable）。CLI/環境変数は個別に生成 |
+| `commands.tag_match_mode` | `[commands]` | `tag_match_mode` | `pokecon.opt.commands.tag_match_mode` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `exact`（デフォルト）/ `partial` / `prefix` / `suffix`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§6.4.1.1参照）。プロファイル対応（profile-capable）。動的代入は即時反映されタグフィルターマッチングを更新する。動的カスタムタグマッチ関数が登録されている間は本設定に優先し、解除時に復帰する。CLI: `--commands-tag-match-mode`。環境変数: `POKECON_COMMANDS_TAG_MATCH_MODE`。OpenAPI R/W |
+| `python.script.venv` | `[python.script]` | `venv` | `pokecon.opt.python.script.venv` | `str` | profile | runtime_deferred | —（直接UIなし）| R/W | ユーザースクリプトワーカーvenvパス。未指定時はDataルート配下 `venv-script`（デフォルト）。既存venvパスを指定した場合、アプリケーションはそのvenv内の全パッケージを解決済み閉包と正確に同期し、閉包外の既存パッケージを自動削除する（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること。パスメタデータ: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。venv作成・検証セマンティクスは `python.dynamic.venv`（§11.3）と同一。§11.4.1.4の汎用パス解決規則およびパスメタデータ表参照。ランタイム変更は次回のワーカー生成時に反映する |
+| `python.script.shutdown_timeout_ms` | `[python.script]` | `shutdown_timeout_ms` | `pokecon.opt.python.script.shutdown_timeout_ms` | `int` | profile | runtime_immediate | —（直接UIなし）| R/W | デフォルト `2000`。非負整数。`0` は協調停止要求後即時強制終了（猶予なし）。プロファイル切替時にユーザースクリプトワーカーの正常終了を待機するミリ秒数。ランタイム変更は後続のワーカー停止/置換に影響する |
+| `python.script.packages.list` | `[python.script.packages]` | `list` | `pokecon.opt.python.script.packages.list` | `list[{name: str, version?: str, extras?: list[str]}]` | profile | runtime_deferred | —（直接UIなし）| R/W | 組み込みデフォルト `[]`（ユーザー追加パッケージなし）。パッケージ認識マージ対象（§14.5.1）。動的代入は設定値へ即時反映されるが、環境への効果は次回のパッケージ解決／venv準備／ワーカー生成時に適用する。実行中ワーカーへ即時インストールしない。プロファイル対応（profile-capable） |
+| `python.script.packages.override_application_constraints` | `[python.script.packages]` | `override_application_constraints` | `pokecon.opt.python.script.packages.override_application_constraints` | `bool` | profile | runtime_deferred | —（直接UIなし）| R/W | デフォルト `false`。`true` にするとユーザー指定制約がアプリケーション必須制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
+| `python.script.packages.override_package_metadata_constraints` | `[python.script.packages]` | `override_package_metadata_constraints` | `pokecon.opt.python.script.packages.override_package_metadata_constraints` | `bool` | profile | runtime_deferred | —（直接UIなし）| R/W | デフォルト `false`。`true` にするとユーザー指定制約がパッケージ配布メタデータ／推移的依存関係の制約に優先。§14.5.1参照。動的パス対応（profile-capable）。動的代入は設定値へ即時反映され、次回のパッケージ解決／venv準備／ワーカー生成時から使用する |
+| `python.script.packages.uv_config` | `[python.script.packages]` | `uv_config` | `pokecon.opt.python.script.packages.uv_config` | `str \| None` | profile | runtime_deferred | —（直接UIなし）| R/W | uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。パスメタデータ: `path_policy="file"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="file"`、`path_resolve_symlink=true`。動的パス対応（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-uv-config <path>`。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG=<path>`。§14.5.2「uv.tomlの取り扱い」参照 |
+| `python.script.packages.revalidate_mutable_sources` | `[python.script.packages]` | `revalidate_mutable_sources` | `pokecon.opt.python.script.packages.revalidate_mutable_sources` | `bool` | profile | runtime_deferred | —（直接UIなし）| R/W | 可変直接ソースの自動再検証（§14.5.5参照）。デフォルト `false`（安全側デフォルト）。`true` にするとper-process初回使用時に可変直接ソース（VCSブランチ/タグ、ハッシュなしURL、ローカルパス）の変更を検出し、必要に応じて再解決・再インストールを実行する。動的パス対応（profile-capable）。動的変更は次回のパッケージ解決/venv準備/ワーカー生成時に反映される。CLI: `--python-script-packages-revalidate-mutable-sources`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_SCRIPT_PACKAGES_REVALIDATE_MUTABLE_SOURCES`。§14.5.5.1参照 |
+| `python.dynamic.venv` | `[python.dynamic]` | `venv` | — | `str` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| 動的設定ワーカーvenvパス（グローバル専用・ブートストラップ専用）。未指定時はDataルート配下 `venv-dynamic`（デフォルト）。既存venvパスを指定した場合、解決済み閉包外の既存パッケージは自動削除される（§14.5.2.1「User-specified venv」参照）。破壊的削除を承諾の上で使用すること。パスメタデータ: `path_policy="directory"`、`path_must_exist=false`、`path_auto_create=true`、`path_expected_type="directory"`、`path_resolve_symlink=true`。venv作成・検証セマンティクスは`python.script.venv`と同一。 |
+| `python.dynamic.packages.list` | `[python.dynamic.packages]` | `list` | — | `list[{name: str, version?: str, extras?: list[str]}]` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| 組み込みデフォルト `[]`（ユーザー追加パッケージなし）。グローバル専用・ブートストラップ専用。パッケージ認識マージ対象（§14.5.1）。動的パス非対応（循環依存／ブートストラップ制約のため）。CLI: `--python-dynamic-packages-list`（JSON文字列）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_LIST` |
+| `python.dynamic.packages.override_application_constraints` | `[python.dynamic.packages]` | `override_application_constraints` | — | `bool` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_application_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-application-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS`。§14.5.1参照 |
+| `python.dynamic.packages.override_package_metadata_constraints` | `[python.dynamic.packages]` | `override_package_metadata_constraints` | — | `bool` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| グローバル専用・ブートストラップ専用。デフォルト `false`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.override_package_metadata_constraints` は存在しない）。CLI: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS`。§14.5.1参照 |
+| `python.dynamic.packages.uv_config` | `[python.dynamic.packages]` | `uv_config` | — | `str \| None` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| グローバル専用・ブートストラップ専用。uv.tomlの明示パス（§14.5.2参照）。デフォルト `null`（未指定）。未指定時はuv設定発見を無効化し、ambientなuv.toml/pyproject.toml uv設定を読み込まない。指定時は§11.4.1.4の汎用パス型規則に従い解決し、既存の読み取り可能な通常ファイルを要求（自動作成なし）。パスメタデータ: `path_policy="file"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="file"`、`path_resolve_symlink=true`。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.uv_config` は存在しない）。グローバルなブートストラップ設定として早期解決され、動的venv構築前に適用される。CLI: `--python-dynamic-packages-uv-config <path>`（ブートストラップCLI）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG=<path>`。UI/OpenAPI非公開（再起動が必要）。§14.5.2「uv.tomlの取り扱い」参照 |
+| `python.dynamic.packages.revalidate_mutable_sources` | `[python.dynamic.packages]` | `revalidate_mutable_sources` | — | `bool` | bootstrap | startup_only | —（ブートストラップ専用）| —（ブートストラップ専用）| グローバル専用・ブートストラップ専用。可変直接ソースの自動再検証（§14.5.5参照）。デフォルト `false`（安全側デフォルト）。動的パス非対応（循環依存／ブートストラップ制約のため、`pokecon.opt.python.dynamic.packages.revalidate_mutable_sources` は存在しない）。CLI: `--python-dynamic-packages-revalidate-mutable-sources`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES`。UI/OpenAPI非公開（再起動が必要）。§14.5.5.1参照 |
 
 **注**:
 - `dynamic_config_language` は動的パス `pokecon.opt` を持たず（循環依存のため）、グローバルTOML・環境変数・CLIからのみ設定可能（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。
@@ -2729,18 +2763,18 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 
 # カメラ設定（グローバル）
 [camera]
-camera_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
-camera_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
+capture_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
+capture_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
 
 # シリアル設定（グローバル）
 [serial]
-serial_port = "/dev/ttyUSB0"  # COMポート（環境に応じて変更）
+serial_port = ""  # デフォルトは未選択・未接続。例: "COM3", "/dev/ttyACM0"
 serial_baudrate = 9600  # ボーレート
 serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
 
 # WebRTC設定
 [webrtc]
-stun_server = "stun:stun.l.google.com:19302"  # STUNサーバーURL
+stun_server = ""  # デフォルトはSTUNなし。必要時のみ例: "stun:stun.example.com:3478"
 
 # 映像フォールバック設定（Motion JPEG over WebSocket）
 [video.fallback]
@@ -2861,11 +2895,11 @@ pokecon.opt.auto_reload_config = True
 pokecon.opt.active_profile = "default"
 
 # カメラ設定（階層: 複数の関連設定をcamera名前空間にグループ化）
-# camera.fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
-pokecon.opt.camera.fps = 60
+# camera.capture_fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
+pokecon.opt.camera.capture_fps = 60
 # ui.fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
 pokecon.opt.ui.fps = 30
-pokecon.opt.camera.resolution = "1280x720"
+pokecon.opt.camera.capture_resolution = "1280x720"
 
 # シリアル設定（階層: 複数の関連設定をserial名前空間にグループ化）
 pokecon.opt.serial.port = "COM3"
@@ -2962,7 +2996,7 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 
 -- 設定（Pythonと同じ要素名・同じAPI構造。フラット＋階層も同一）
 pokecon.opt.language = "ja"
-pokecon.opt.camera.fps = 60
+pokecon.opt.camera.capture_fps = 60
 pokecon.opt.ui.fps = 30
 pokecon.opt.ui.widget_mode = "all"  -- §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 pokecon.opt.ui.controller_position = "top"  -- §5.6参照。top（上部、デフォルト）/ bottom（下部）
@@ -3399,7 +3433,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial.baud_rate` または組み込みデフォルト値 |
 | `serial_connected` | `bool` | 接続状態 |
 | `camera_opened` | `bool` | カメラオープン状態 |
-| `camera_fps` | `int` | 現在のFPS（`opt.camera.fps` をデバイス能力で制限した実際の値） |
+| `camera_fps` | `int` | 現在のFPS（`opt.camera.capture_fps` をデバイス能力で制限した実際の値） |
 | `camera_resolution` | `str` | 現在の解像度（例: `"1280x720"`） |
 | `is_running` | `bool` | コマンド実行中 |
 | `command_state` | `CommandState` | コマンド状態 |
@@ -3425,7 +3459,7 @@ print(pokecon.state.serial_connected)   # 接続状態（True/False）
 
 # カメラ関連
 print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
-print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera.fps` をデバイス能力で制限した実際の値）
+print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera.capture_fps` をデバイス能力で制限した実際の値）
 print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
 
 # コマンド関連
@@ -3455,7 +3489,7 @@ print(pokecon.state.pid)                # アプリケーションのプロセ�
 | `opt` | 設定値（書き込み可能） | ユーザーが設定した**設定値**。UIコントロールや動的設定で変更される |
 | `state` | 現在値（原則読み取り、一部書き込み可能） | デバイスやシステムが実際に使用している**現在値**。動的設定からの変更が想定されるもの（タグ等）は書き込み可能。デバイスの能力制限により、`opt` と異なる値を指すことがある |
 
-**例**: `opt.camera.fps = 120` と設定しても、キャプチャデバイスが60fpsまでしか対応しない場合、`state.camera_fps` は `60` となる。
+**例**: `opt.camera.capture_fps = 120` と設定しても、キャプチャデバイスが60fpsまでしか対応しない場合、`state.camera_fps` は `60` となる。
 
 ```lua
 -- Lua設定
@@ -3782,35 +3816,68 @@ pokecon.controller.reset()
 
 ## 12. 環境変数
 
-本節の環境変数一覧は、正準設定レジストリ（§11.4.1.1参照）から生成される。
-現在の一覧は、本仕様書で明示的に指定された運用上および例外上のエントリのみを記載する。完全な環境変数一覧の生成は、全設定項目の正準レジストリへの列挙後に対応する。
+本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
+全56の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
-|----------|-------------|---------|
-| `POKECON_DISABLE_COMPOSITING` | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。グローバル専用（startup-only/restart-required）。CLI対応: `--disable-compositing`（明示的 `true`/`false`）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない）。TOML: `[ui.desktop].disable_compositing`。Webモードでは値保持のみ行われ、効果を持たない。§15参照 | `false` |
-| `POKECON_APPNAME` | アプリケーション名セレクター（§11.3「`app_name` — アプリケーション名セレクター」参照）。Neovimの`NVIM_APPNAME`に類似。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される | `"pokecon"` |
-| `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカーのプライマリランタイム選択（§11.3「`dynamic_config_language` — 動的設定言語セレクター」参照）。値: `"python"` / `"lua"` / `"none"`（正準値は小文字、§11.4.1.3のenum正規化規則に従い大文字小文字不問）。デフォルト: `"lua"`。ブートストラップ環境変数として早期解決される。CLI対応: `--dynamic-config-language`。複数指定時はCLIが優先 | `"lua"` |
-| `POKECON_PYTHON_DYNAMIC_VENV` | 動的設定ワーカー用venvパス（§11.3「`python.dynamic.venv` — 動的設定ワーカーvenvパス」参照）。ブートストラップ環境変数として早期解決される。CLI対応: `--python-dynamic-venv <path>`。複数指定時はCLIが優先。空文字列は無効（起動時エラー） | Data/`venv-dynamic`（§14.1.1 Data） |
-| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS` | 動的設定ワーカーのアプリケーション必須制約オーバーライド（§14.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-override-application-constraints`（明示的 `true`/`false`） | `false` |
-| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS` | 動的設定ワーカーのパッケージメタデータ制約オーバーライド（§14.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-override-package-metadata-constraints`（明示的 `true`/`false`） | `false` |
-| `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG` | ユーザースクリプトワーカーのuv.toml明示パス（§14.5.2参照）。未指定時はuv設定発見を無効化する。空文字列は無効。指定時は§11.4.1.4に従い解決し、既存の読み取り可能な通常ファイルを要求する。CLI対応: `--python-script-packages-uv-config <path>`。動的設定からも設定可能（profile-capable） | `null`（未指定） |
-| `POKECON_PYTHON_SCRIPT_PACKAGES_REVALIDATE_MUTABLE_SOURCES` | ユーザースクリプトワーカーの可変直接ソース自動再検証（§14.5.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-script-packages-revalidate-mutable-sources`（明示的 `true`/`false`）。動的設定からも設定可能（profile-capable） | `false` |
-| `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG` | 動的設定ワーカーのuv.toml明示パス（§14.5.2参照）。ブートストラップ環境変数として早期解決される。未指定時はuv設定発見を無効化する。空文字列は無効。指定時は§11.4.1.4に従い解決し、既存の読み取り可能な通常ファイルを要求する。CLI対応: `--python-dynamic-packages-uv-config <path>`。UI/OpenAPI非公開（再起動が必要） | `null`（未指定） |
-| `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES` | 動的設定ワーカーの可変直接ソース自動再検証（§14.5.5.1参照）。ブートストラップ環境変数として早期解決される。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。CLI対応: `--python-dynamic-packages-revalidate-mutable-sources`（明示的 `true`/`false`）。UI/OpenAPI非公開（再起動が必要） | `false` |
-| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップモードでの最終ウィンドウ閉じる動作（§15参照）。値: `"ask"` / `"shutdown"` / `"keep_backend"` | `"ask"` |
-| `POKECON_UI_WIDGET_MODE` | ウィジェットモード選択（§5.5参照）。値（大文字小文字不問）: `all` / `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。CLI対応: `--ui-widget-mode`。動的設定からも設定可能（profile-capable） | `all` |
-| `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置（§5.6参照）。値（大文字小文字不問）: `top` / `bottom`。CLI対応: `--ui-controller-position`。動的設定からも設定可能（profile-capable） | `top` |
-| `POKECON_UI_DIALOG_BUTTON_POSITION` | ダイアログボタン位置（§5.7参照）。値（大文字小文字不問）: `top` / `bottom` / `both`。CLI対応: `--ui-dialog-button-position`。動的設定からも設定可能（profile-capable） | `bottom` |
-| `POKECON_UI_FPS` | UI表示用FPS（§6.6.1、§11.4.2参照）。正の整数、`ui.fps_options` のメンバーであること。デフォルト: `30`。プロファイル対応（profile-capable）。CLI対応: `--ui-fps` | `30` |
-| `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1と出力#2の幅比率（§5.8参照）。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`。プロファイル対応（profile-capable）。CLI対応: `--ui-output-split-ratio` | `20` |
-| `POKECON_UI_STDOUT_DESTINATION` | stdout出力先（§5.9参照）。値（大文字小文字不問）: `output_1` / `output_2`。デフォルト: `output_1`。プロファイル対応（profile-capable）。CLI対応: `--ui-stdout-destination` | `output_1` |
-| `POKECON_COMMANDS_TAG_MATCH_MODE` | Commandsタブのタグフィルターマッチング方式（§6.4.1.1参照）。値（大文字小文字不問）: `exact` / `partial` / `prefix` / `suffix`。デフォルト: `exact`。プロファイル対応（profile-capable）。CLI対応: `--commands-tag-match-mode`。動的設定からも設定可能（profile-capable） | `exact` |
-| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` | スクリプト実行開始時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-start`（明示的 `true`/`false`） | `false` |
-| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト実行終了時にWindows通知を送信（§6.5.1参照）。値: `true` / `false`（大文字小文字不問、bare flag禁止）。デフォルト: `false`。プロファイル対応（profile-capable）。CLI対応: `--notifications-windows-on-script-end`（明示的 `true`/`false`） | `false` |
-| `POKECON_WEB_DIR` | SPA静的ファイル配信用ディレクトリ。値: ディレクトリパス（空文字列は無効）。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。CLI対応: `--web-dir <path>`。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能）。TOML: `[server].web_dir`。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。§6.7.1、§15.9参照 | バンドル `web/dist`（アプリケーションリソースルート基準） |
-| `POKECON_PORT` | HTTPサーバーバインドポート番号。値: 整数（1～65535）。デフォルト: `8020`。グローバル専用（startup-only/restart-required）。CLI対応: `--port <port>`（明示的ショートフラグ）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全なポート切替は不可能）。TOML: `[server].port`。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効ポートから動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。§6.7.2、§15.10参照 | `8020` |
-| `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL（secret。§11.4.3参照） | — |
-| `POKECON_UV_*`（ワイルドカード） | UV_* 環境変数ブリッジ（§14.5.2「POKECON_UV_* → UV_* 環境変数ブリッジ」参照）。`POKECON_UV_` を接頭辞とする任意の環境変数は、uv 子プロセスに対して当該接頭辞を取り除いた `UV_*` として透過的に継承される。例: `POKECON_UV_INDEX_URL` → 子プロセス `UV_INDEX_URL`。全値は潜在的機密情報として扱われ、ログ・診断・クラッシュダンプに値そのものを出力しない（§11.4.3「機密情報（Secret）の取り扱い」秘匿化規則参照）。空の接尾辞（`POKECON_UV_` のみの設定）は起動時設定エラー | —（未指定時はブリッジ適用なし） |
+|------|------|-----------|
+| `POKECON_LANGUAGE` | UI言語。閉じたenum `"ja"` / `"en"`（小文字正規化）。グローバル専用。CLI: `--language`。§11.4.1.3参照 | `"ja"` |
+| `POKECON_AUTO_RELOAD_CONFIG` | 動的設定ファイル自動リロード。`true` / `false`（明示必須）。グローバル専用。CLI: `--auto-reload-config` | `false` |
+| `POKECON_DYNAMIC_CONFIG_LANGUAGE` | 動的設定ワーカープライマリランタイム。閉じたenum `"python"` / `"lua"` / `"none"`（小文字正規化）。ブートストラップ専用。CLI: `--dynamic-config-language` | `"lua"` |
+| `POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS` | プロファイルTOMLで無視されたグローバル専用設定のERROR診断出力制御。`true` / `false`（明示必須）。グローバル専用。CLI: `--report-ignored-profile-global-settings` | `true` |
+| `POKECON_PROFILE` | アクティブプロファイル名（明示的オーバーライド）。CLI: `--profile` / `-p`（互換、`--active-profile`は非公開）。OSネイティブ大文字小文字セマンティクスに従う | `"default"` |
+| `POKECON_APPNAME` | アプリケーション名セレクター（`NVIM_APPNAME`類似）。全4ルート（Config/Data/Cache/State）のサブディレクトリ名。ブートストラップ専用。CLI: `--app-name` | `"pokecon"` |
+| `POKECON_CAMERA_CAPTURE_FPS` | カメラキャプチャFPS。正の整数。UI表示FPSとは独立。CLI: `--camera-capture-fps` | `60` |
+| `POKECON_CAMERA_CAPTURE_RESOLUTION` | カメラキャプチャ解像度。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`（小文字正規化）。CLI: `--camera-capture-resolution` | `"1280x720"` |
+| `POKECON_SERIAL_PORT` | シリアルデバイス識別文字列（`COM3`、`/dev/ttyACM0`等）。空文字＝未選択。自動選択・自動接続は行わない。CLI: `--serial-port` | `""` |
+| `POKECON_SERIAL_BAUD_RATE` | シリアルボーレート。正の整数。UI候補: 4800/9600/115200。CLI: `--serial-baud-rate` | `9600` |
+| `POKECON_SERIAL_DATA_FORMAT` | シリアルデータフォーマット。閉じたenum `"default"` / `"qingpi"` / `"3ds"`（小文字正規化）。UIで`"3ds"`選択時のみ`baud_rate`を115200へ原子的同時更新。CLI: `--serial-data-format` | `"default"` |
+| `POKECON_NOTIFICATIONS_LINE_MENU_BEHAVIOR` | LINEメニュー動作。閉じたenum `"message"` / `"noop"`（小文字正規化）。CLI: `--notifications-line-menu-behavior` | `"message"` |
+| `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL。**Secret**。空文字＝未設定。CLI対応するが非推奨（プロセスリスト露出）。getterは設定済み時に固定マスク `"********"` を返す。§11.4.3参照 | `""`（未設定） |
+| `POKECON_NOTIFICATIONS_DISCORD_USERNAME` | Discord送信ユーザー名。空文字＝未設定。secret非該当。CLI: `--notifications-discord-username` | `""` |
+| `POKECON_NOTIFICATIONS_DISCORD_AVATAR_URL` | Discord送信アバターURL。空文字または有効なhttp/httpsURL。secret非該当。CLI: `--notifications-discord-avatar-url` | `""` |
+| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` | スクリプト開始時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-start` | `false` |
+| `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト終了時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-end` | `false` |
+| `POKECON_WEBSOCKET_RECONNECT_INTERVAL_SEC` | WebSocket再接続間隔（秒）。1以上の整数。ランタイム変更は次回再接続試行から反映。CLI: `--websocket-reconnect-interval-sec` | `3` |
+| `POKECON_WEBSOCKET_RECONNECT_MAX_RETRIES` | WebSocket再接続最大リトライ回数。0以上の整数。`0`＝自動リトライ無効化。CLI: `--websocket-reconnect-max-retries` | `20` |
+| `POKECON_STUN_SERVER` | STUNサーバーURI。空文字＝STUN不使用。空文字以外は`stun:` / `stuns:` URIとして検証。グローバル専用。CLI: `--stun-server` | `""` |
+| `POKECON_JPEG_QUALITY` | Motion JPEGフォールバック品質。範囲1～100の整数。CLI: `--jpeg-quality` | `85` |
+| `POKECON_WEB_DIR` | SPA静的ファイル配信用ディレクトリ。グローバル専用（startup-only）。CLI: `--web-dir`（明示的ショートフラグ）。パス型: directory/must_exist。詳細は§6.7.1、§15.9参照 | バンドル `web/dist`（アプリケーションリソースルート基準） |
+| `POKECON_PORT` | HTTPサーバーバインドポート番号。範囲1～65535。グローバル専用（startup-only）。CLI: `--port`（明示的ショートフラグ）。バインド失敗時は起動時エラー。§6.7.2、§15.10参照 | `8020` |
+| `POKECON_UI_FPS_OPTIONS` | FPS選択肢一覧。厳密JSON配列 `[5,15,30,60]`。1個以上の重複しない正の整数。現在の`ui.fps`を常に含む必要あり。CLI: `--ui-fps-options` | `[5, 15, 30, 60]` |
+| `POKECON_UI_FPS` | UI表示FPS。`ui.fps_options`の有効メンバーであること。カメラキャプチャFPSとは独立。profile-capable。CLI: `--ui-fps` | `30` |
+| `POKECON_UI_WIDGET_MODE` | ウィジェットモード。閉じたenum `all`(default) / `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`（大文字小文字不問）。profile-capable。CLI: `--ui-widget-mode` | `all` |
+| `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1/#2幅比率。0～100。計算式: output1%=10+0.8×値。profile-capable。CLI: `--ui-output-split-ratio` | `20` |
+| `POKECON_UI_STDOUT_DESTINATION` | stdout出力先。閉じたenum `output_1`(default) / `output_2`。レガシー値 `1`/`2`互換。profile-capable。CLI: `--ui-stdout-destination` | `output_1` |
+| `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置。閉じたenum `top`(default) / `bottom`（大文字小文字不問）。profile-capable。CLI: `--ui-controller-position` | `top` |
+| `POKECON_UI_DIALOG_BUTTON_POSITION` | ダイアログボタン位置。閉じたenum `bottom`(default) / `top` / `both`（大文字小文字不問）。profile-capable。CLI: `--ui-dialog-button-position` | `bottom` |
+| `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップ最終ウィンドウ閉じる動作。閉じたenum `"ask"`(default) / `"shutdown"` / `"keep_backend"`。CLI: `--ui-desktop-close-behavior` | `"ask"` |
+| `POKECON_DISABLE_COMPOSITING` | デスクトップモードウィンドウ合成無効化。`true` / `false`（明示必須）。グローバル専用（startup-only）。CLI: `--disable-compositing`（明示的ショートフラグ、bare禁止）。§15参照 | `false` |
+| `POKECON_SHORTCUTS_BUTTON_1` | ショートカットボタン1割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-1` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_2` | ショートカットボタン2割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-2` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_3` | ショートカットボタン3割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-3` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_4` | ショートカットボタン4割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-4` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_5` | ショートカットボタン5割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-5` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_6` | ショートカットボタン6割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-6` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_7` | ショートカットボタン7割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-7` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_8` | ショートカットボタン8割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-8` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_9` | ショートカットボタン9割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-9` | `""` |
+| `POKECON_SHORTCUTS_BUTTON_10` | ショートカットボタン10割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-10` | `""` |
+| `POKECON_COMMANDS_TAG_MATCH_MODE` | タグフィルターマッチング方式。閉じたenum `exact`(default) / `partial` / `prefix` / `suffix`（大文字小文字不問）。profile-capable。CLI: `--commands-tag-match-mode` | `exact` |
+| `POKECON_PYTHON_SCRIPT_VENV` | ユーザースクリプトワーカーvenvパス。未指定時はData/`venv-script`。既存venv指定時は解決済み閉包外パッケージが自動削除される。CLI: `--python-script-venv` | Data/`venv-script`（§14.1.1 Data） |
+| `POKECON_PYTHON_SCRIPT_SHUTDOWN_TIMEOUT_MS` | ユーザースクリプトワーカーシャットダウンタイムアウト（ミリ秒）。非負整数。`0`＝猶予なし即時強制終了。CLI: `--python-script-shutdown-timeout-ms` | `2000` |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_LIST` | ユーザースクリプトワーカー追加パッケージ。厳密JSON配列 `[{name, version?, extras?}]`。package-awareマージ対象。profile-capable。CLI: `--python-script-packages-list`（JSON文字列） | `[]` |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS` | アプリ必須制約オーバーライド。`true` / `false`（明示必須）。profile-capable。CLI: `--python-script-packages-override-application-constraints` | `false` |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS` | パッケージメタデータ制約オーバーライド。`true` / `false`（明示必須）。profile-capable。CLI: `--python-script-packages-override-package-metadata-constraints` | `false` |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG` | uv.toml明示パス（ユーザースクリプトワーカー用）。未指定時はuv設定発見無効化。指定時は既存読取可能ファイル必須。profile-capable。CLI: `--python-script-packages-uv-config` | `null`（未指定） |
+| `POKECON_PYTHON_SCRIPT_PACKAGES_REVALIDATE_MUTABLE_SOURCES` | 可変直接ソース自動再検証（ユーザースクリプトワーカー用）。`true` / `false`（明示必須）。profile-capable。CLI: `--python-script-packages-revalidate-mutable-sources`。§14.5.5.1参照 | `false` |
+| `POKECON_PYTHON_DYNAMIC_VENV` | 動的設定ワーカーvenvパス。未指定時はData/`venv-dynamic`。ブートストラップ専用。CLI: `--python-dynamic-venv` | Data/`venv-dynamic`（§14.1.1 Data） |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_LIST` | 動的設定ワーカー追加パッケージ。厳密JSON配列 `[{name, version?, extras?}]`。package-awareマージ/ブートストラップ対象。ブートストラップ専用。CLI: `--python-dynamic-packages-list`（JSON文字列） | `[]` |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS` | アプリ必須制約オーバーライド（動的設定ワーカー用）。`true` / `false`（明示必須）。ブートストラップ専用。CLI: `--python-dynamic-packages-override-application-constraints` | `false` |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS` | パッケージメタデータ制約オーバーライド（動的設定ワーカー用）。`true` / `false`（明示必須）。ブートストラップ専用。CLI: `--python-dynamic-packages-override-package-metadata-constraints` | `false` |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG` | uv.toml明示パス（動的設定ワーカー用）。未指定時はuv設定発見無効化。ブートストラップ専用。CLI: `--python-dynamic-packages-uv-config` | `null`（未指定） |
+| `POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES` | 可変直接ソース自動再検証（動的設定ワーカー用）。`true` / `false`（明示必須）。ブートストラップ専用。CLI: `--python-dynamic-packages-revalidate-mutable-sources`。§14.5.5.1参照 | `false` |
+| `POKECON_UV_*`（ワイルドカード） | UV_* 環境変数ブリッジ（§14.5.2参照）。`POKECON_UV_`接頭辞付き変数はuv子プロセスに対し接頭辞を除去した`UV_*`として透過継承。例: `POKECON_UV_INDEX_URL` → 子プロセス`UV_INDEX_URL`。全値は潜在的機密情報として扱われログ出力時に秘匿化。空接尾辞（`POKECON_UV_`のみ）は起動時設定エラー | —（未指定時はブリッジ適用なし） |
 
 ---
 

@@ -28,7 +28,7 @@ Rustコア + Python互換層 + Web/Tauri UI へのリファクタリング版
 
 | 機能 | 説明 |
 |------|------|
-| **ナビゲーション** | NavBarは6タブ（カメラ/シリアル/手動制御/コマンド/通知/その他）。keyconfig/pokemonhomeはダイレクトURLでアクセス可能 |
+| **ナビゲーション** | NavBarは6タブ（カメラ/シリアル/手動制御/コマンド/通知/その他）。keyconfigはダイレクトURLでアクセス可能 |
 | **カメラマウス操作** | ドラッグ=スティック入力、Ctrl+クリック=カラーピッカー、Ctrl+Shift+ドラッグ=範囲スクリーンショット、Ctrl+Alt+ドラッグ=名前付き保存 |
 | **コマンドショートカット** | F5=再読み込み、F6=開始、Shift+F6=一時停止、Escape=停止 |
 | **シリアルRX統合** | WebSocket `serial_data` メッセージをシリアルモニタに表示 |
@@ -215,7 +215,6 @@ Poke-Controller-Modified-Extension/
 │   │   │   │   └── ShortcutButtons.svelte
 │   │   │   ├── keyconfig/+page.svelte      # キーコンフィグ（NavBar非表示・直接URLのみ）
 │   │   │   ├── notification/+page.svelte   # 通知設定
-│   │   │   ├── pokemonhome/+page.svelte    # Pokémon Home連携（NavBar非表示・直接URLのみ）
 │   │   │   └── others/+page.svelte         # プロファイル・テーマ設定
 │   │   ├── lib/
 │   │   │   ├── api/

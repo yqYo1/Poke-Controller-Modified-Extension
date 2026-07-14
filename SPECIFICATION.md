@@ -4001,7 +4001,6 @@ pokecon.controller.reset()
 │   ├── Discord Setting Assignment
 │   ├── Discord Check
 │   ├── Generate Bat File & Profile Directory
-│   ├── Pokemon Home 連携
 │   ├── キーコンフィグ
 │   └── 画面サイズのリセット
 ├── 設定（予約）

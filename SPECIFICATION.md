@@ -145,7 +145,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 | **デッドゾーン** | アナログスティック等の入力デバイスにおいて、中央付近の微小な入力を無視する領域 |
 | **チャタリング** | 機械的な接点のバウンスにより、意図しない短時間の連続入力が発生する現象 |
 | **シグナリング** | WebRTCにおいて、通信相手との接続確立に必要な情報（SDP、ICE candidate等）を交換するプロセス |
-| **holdEndSkip** | ボタンホールド中にShift+クリック（またはShift+タッチ終了）を行うことで、バックエンドに解放シグナルを送信せずに視覚的なボタン状態のみをリセットする操作 |
+| **holdEndSkip** | ボタンホールド中にShift+クリック（またはShift+タッチ終了）を行うことで、バックエンドに解放シグナルを送信せずに視覚的なボタン状態のみをリセットする操作。アプリケーション終了時やプロファイル切替時には、holdEndSkip中のボタンも含めて通常の解放フレームをアクティブなトランスポート経由で送信してから切断し、Rustのオーソリタティブ状態を常にクリアする（トランスポート利用不可の場合は送信をスキップしても状態はクリアする）。shift-release単体では解放シグナルを送信せず、これが意図された設計である。 |
 | **StopThread** | コマンドスレッドを安全に終了させるための例外型。`checkIfAlive()` で `self.alive` が `False` の場合に送出される |
 | **augroup** | Neovimのイベントハンドラグループ機能。`pokecon.autocmd` の `group` パラメータに相当 |
 | **CRF** | Constant Rate Factor（固定品質係数）。H.264/VP9等の動画エンコーダーで品質を固定し可変ビットレートでエンコードする方式 |
@@ -320,7 +320,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 - **入力方法**:
   - **ホールド**: ポインター押下（`mousedown` / タッチ開始）でボタンホールドをトリガー（押下シグナル送信）。
   - **解放**: ポインター解放（`mouseup` / タッチ終了）でボタン解放をトリガー（解放シグナル送信）。
-  - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。用途: ボタンを押したままの状態で別の操作を行いたい場合（例: Aボタン長押し中に別のボタンを短押し）。アプリケーション終了時やプロファイル切替時には、holdEndSkip中のボタンも含めて全てのボタンを強制解放する
+  - **Shift+解放**: `holdEndSkip` をトリガー — バックエンドに解放シグナルを送信せずに視覚的状態のみを切り替え。shift-release単体では解放シグナルを送信せず、これが意図された設計である。アプリケーション終了時やプロファイル切替時には、holdEndSkip中のボタンも含めて通常の解放フレームをアクティブなトランスポート経由で送信してから切断し、Rustのオーソリタティブ状態を常にクリアする（トランスポート利用不可の場合は送信をスキップしても状態はクリアする）。隠れた個別プロトコルは存在しない
   - **ブラウザ対応**: Shift+クリックによるブラウザのデフォルト動作（テキスト選択等）を防ぐため、`event.preventDefault()` を使用する
 - **ボタン**: すべての標準Switchコントローラーボタン:
   - A、B、X、Y
@@ -536,7 +536,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 2. カメラが開いている場合はフレーム公開をフレーム境界で一時停止し、現在の取得FPS・解像度・共有メモリレイアウトをロールバック用に保持する。
 3. 同じOpenCVキャプチャハンドルへ`CAP_PROP_FPS`、`CAP_PROP_FRAME_WIDTH`、`CAP_PROP_FRAME_HEIGHT`を設定する。設定変更のためにデバイスを自動切断・再接続しない。
 4. 解像度はドライバーから読み戻した幅・高さと取得した有効フレームの寸法が要求値に完全一致することを確認する。FPSはソース実FPSが要求値を下回ることを許容し、その実FPSを実効上限として扱う。
-5. 成功時は必要に応じて共有メモリの3スロットを新しいフレーム寸法で再構築し、公開トークンを原子的に切り替える。WebRTCとMotion JPEGは次に公開されるフレームから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
+5. 成功時は各スロットのbyte_length/shape/stridesを新しいフレーム寸法で更新し、公開トークンを原子的に切り替える。共有メモリ領域の割り当て（`slot_byte_size`）はアプリケーション生存期間中、最大対応キャプチャ解像度1920×1080 BGR uint8で固定される。unmap/remap/recreateは行わず、リーダーピン競合も発生しない。MappingDescriptorは初回マップ時およびレイアウトバージョン変更時にのみ送信し、解像度変更ごとには送信しない。WebRTCとMotion JPEGは次に公開されるフレームから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
 6. 適用またはTOML保存に失敗した場合は、保持した取得設定と共有メモリレイアウトへロールバックし、設定値・TOML・UI表示を変更せずエラーを返す。ロールバック後に有効フレームを取得できない場合だけカメラをエラー状態として閉じ、他機能は継続する。
 7. 動的設定からの代入も同じカメラ再設定・検証・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
 
@@ -563,7 +563,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 #### 6.1.5 スクリーンショットキャプチャ
 
-- **保存場所**: `./Captures/` ディレクトリ。
+- **保存場所**: 実効Dataルート（§14.1.1 Data）配下の `Captures/` ディレクトリ（自動作成）。相対ファイル名はここへ解決。絶対ファイル名はそのまま絶対パスとして使用。相対パスによる `Data/Captures` 外へのトラバーサル（`../` 等）は拒否する。UI保存ダイアログは明示的なターゲットパスを指定する。
 - **形式**: PNG/JPEG（選択可能）。
 
 #### 6.1.6 カメラバックエンド
@@ -974,6 +974,10 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | ログ | WebRTC DataChannel | WebSocket |
 | API呼び出し | HTTP REST | なし（HTTP必須） |
 
+**映像解像度変更とWebRTC**:
+
+初期ネゴシエーション時、少なくとも全閉じられたキャプチャ解像度（640x360、1280x720、1920x1080）をカバーするビデオエンベロープをSDPで合意する。その後の解像度変更は同一ビデオトラック/ソース内でエンベロープ範囲内であれば再ネゴシエーションなしで遷移する（`RTCRtpSender.replaceTrack`相当）。送信側/エンドポイントが合意コーデックエンベロープ外またはビットレート制約により変更を拒否した場合、旧トラックを維持したままSDP Offer/Answer再ネゴシエーションを試行し、カメラトランザクションのコミットは成功後にのみ行う。失敗時はロールバックする。Motion JPEGフォールバックは即座に次フレームから新しい寸法で動作する。
+
 ### 7.3 Motion JPEG + WebSocket（フォールバック）
 
 #### 7.3.1 映像フォールバック — Motion JPEG
@@ -1012,6 +1016,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 | イベント | 方向 | ペイロード |
 |-------|-----------|---------|
 | `camera.open` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
+| `camera.close` | サーバー → クライアント | カメラクローズ通知（`{"reason": "user" | "error" | "rollback_failure", "device_id": str}`）。`CameraClosePre`/`CameraClosePost`動的設定イベント（引数なし）とは別 |
 | `command.start` | サーバー → クライアント | コマンド実行開始通知 |
 | `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
 | `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |
@@ -1029,7 +1034,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ドキュメント**: OpenAPI仕様を使用したutoipa v5。
 - **コード生成**: TypeScriptクライアント型用の `openapi-typescript`。生成失敗時は前回成功時の生成結果をフォールバックとして使用（git追跡）。CIでは型生成ジョブが独立して失敗することを許容し、アラートのみ行う
 - **認証**: なし（ローカル/LAN専用）。
-- **セキュリティ**: Originヘッダーの検証または同一発行元ポリシー（Same-Origin）による保護。CORS設定: `Access-Control-Allow-Origin` のデフォルト値は実効`server.port`の値に応じて動的に決定し、`http://localhost:<実効server.port>` のみ許可する（固定 `8020` は使用しない）。Tauriデスクトップモードでは `tauri://localhost` も許可。SvelteKit開発サーバー（`http://localhost:5173`）は `web/vite.config.ts` の `/api`・`/ws` proxy 経由で `127.0.0.1:<実効server.port>` に接続し、バックエンド側のCORS許可originを増やさない。Vite開発プロキシのデフォルトターゲットポートは `8020` であり、`server.port` 変更時は開発者側で `web/vite.config.ts` を明示的に更新する必要がある
+- **CORSポリシー**: HTTP RESTエンドポイントに対するブラウザ同一生成元ポリシー。`Access-Control-Allow-Origin` のデフォルト値は実効`server.port`の値に応じて動的に決定し、`http://localhost:<実効server.port>` のみ許可する（固定 `8020` は使用しない）。Tauriデスクトップモードでは `tauri://localhost` も許可。SvelteKit開発サーバー（`http://localhost:5173`）は `web/vite.config.ts` の `/api`・`/ws` proxy 経由で `127.0.0.1:<実効server.port>` に接続し、バックエンド側のCORS許可originを増やさない。Vite開発プロキシのデフォルトターゲットポートは `8020` であり、`server.port` 変更時は開発者側で `web/vite.config.ts` を明示的に更新する必要がある
+- **WebSocketハンドシェイクOrigin検証**: CORSポリシーとは独立して、WebSocketアップグレード時にOriginヘッダーを検証する。許可originリストはHTTP REST CORS許可originと同じorigin群を使用する。但し、ブラウザOriginがないか許可リストに含まれないOriginからのWSアップグレードは拒否する。Tauri内部/認証済みの信頼できる内部メカニズム（既に指定済み）からのリクエストはこの限りではない。HTTP CORSヘッダーはWebSocketをセキュアにできない。新たな認証機構は追加しない。localhost実効ポート・Tauri・Vite proxyの各セマンティクスは維持する
 - **モジュール**: 複数のモジュールに分かれたREST API。
 - **応答形式**: 一貫した構造のJSON。
 - **静的ファイル配信**: axumは `server.web_dir`（§11.4.2、§15.9参照）で指定されたディレクトリからSPA静的ファイル（`index.html`・JS・CSS・画像等）を配信する。デフォルト値はアプリケーションリソースルート基準の `web/dist`（バンドルされたSvelteKit SPAビルド出力）。起動時に静的ファイルルートが決定され、ランタイム中の動的差し替えは行わない。詳細は§15.9参照
@@ -1149,8 +1155,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 #### 7.8.1 トランスポート
 
-- 親Rustプロセスは各ワーカーを匿名OSパイプで生成する。親プロセスはワーカーの標準入力（stdin）に書き込み、ワーカーの標準出力（stdout）から読み取る。
-- ワーカーの標準エラー出力（stderr）は診断用および起動時致命的エラー用に予約される。通常のプロトコルトラフィックはstderrを経由しない。
+- 親Rustプロセスは各ワーカーを二本の独立した単方向匿名パイプ（stdin用・stdout用）とstderr用OOBパイプで生成する。親プロセスはワーカーの標準入力（stdin）に書き込み、ワーカーの標準出力（stdout）から読み取る。両方向とも非同期/ノンブロッキングのreader+writerタスクを両端に持つ。
+- ワーカーの標準エラー出力（stderr）はプロトコル外のout-of-band診断チャネルとして機能する。通常のプロトコルトラフィックはstderrを経由しない。
 - ワーカー起動後は一切のTCPポート・ループバックソケット・認証トークン・外部接続可能エンドポイントを使用しない。
 
 #### 7.8.2 フレーミング
@@ -1166,6 +1172,10 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - 各フレームは正確に1個のトップレベルMessagePackオブジェクトを含む。
 - 複数タスクからの書き込みは直列化され、フレームがインターリーブしないことを保証する。
 - 各通信側は継続的なリーダーループを実行する。EOFまたはbroken pipeはピア切断として扱われる。
+- 送信方向ごとに有界出力キューとバックプレッシャーを持つ。キューが満杯の場合、送信側は背圧を受ける。
+- 最大MessagePack本文サイズは1 MiB（1,048,576バイト）。超過するペイロードは割り当て前にプロトコルエラーとして拒否する。
+- リーダーが停止した状態で応答を待機してはならない。リーダーループ停止検出時は即座に切断として処理する。
+- XON/XOFFフロー制御は使用しない。
 
 #### 7.8.3 エンベロープ
 
@@ -1194,6 +1204,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 }
 ```
 
+シリアルユーザー切断時はキューイング済みで未開始の全シリアル送信リクエストを直ちに`SerialDisconnected`コードで拒否する（`error` kindとして返す）。既に送信開始済みの直列化フレームは完結するか、コネクションリセットによりインターリーブを防止する。このエラーは公開API上の対応するシリアル通信例外型にプロキシされる（既存の名前付き例外型が存在しない場合は、ドキュメント上「シリアル通信例外」と記述し、新たなユーザー公開API名を発明しない）。
+
 **`event`**: ワーカーまたはメインプロセスからのイベント通知。`id`を持たない。`op`にイベント名、`payload`にイベントデータを含む。
 
 **`log`**: 構造化ログ/標準出力メッセージ。`id`を持たない。`payload`は以下の構造を持つ:
@@ -1204,6 +1216,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
     "target": str,     # 出力先: "stdout", "panel1", "panel2", "log"（空文字可）
 }
 ```
+
+ログレベル`critical`は単独ではアプリケーションを終了させない。終了の要否は発信元操作の定義された障害ポリシー（フェイルソフト、サブシステム利用不可、AppShutdownPreからのグレースフルシャットダウン）が決定する。プロセス完全性が安全でない場合は、`critical`レベルのログ出力後に制御されたAppShutdownPre/シャットダウンを経由する。未定義動作に陥らない。
 
 #### 7.8.5 stdout/ログのインターセプト
 
@@ -1216,6 +1230,13 @@ stderrはプロトコル外のout-of-band診断チャネルとして機能し、
 - 本プロトコルは制御プレーンのみを対象とする。ライブカメラフレーム等の大容量メディアデータを本プロトコルで送信することを要件としない。小規模なスカラー値・文字列・バイト列・APIペイロードは許容する。
 - ライブカメラフレームの転送には§7.9で定義される永続共有メモリ出版機構を使用する。その他の大容量配列（テンプレート画像、ユーザー任意の配列等）はワーカー内でローカルに処理され、本プロトコルを経由しない。
 - 本IPCトランスポートおよびスキーマは内部実装詳細であり、公開API（`Commands.*`, `pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
+
+**ワーカー強制終了セマンティクス**:
+
+ワーカーのEOF検出またはプロセス死亡時、Rustメインは:
+- 当該ワーカーのper-worker世代管理/キャンセルトークンにより、キューイング済みで未開始の全リクエストを即時キャンセルし、対応する応答/エラーを破棄する（発行元は切断として扱う）。
+- 既に開始済みのシリアルフレーム書き込みは直列化されており、常に完全な1アプリケーションフレームが完結する（インターリーブしない）。完了不能なデバイス操作はエラーを記録/返す。OS部分書き込みの取り消しは主張しない。
+- 全ての入力状態を強制解放する。
 
 ### 7.9 ライブカメラフレームの永続共有メモリ出版
 
@@ -1257,7 +1278,7 @@ Rustメインプロセスは、ライブカメラフレームを格納する名�
 
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
-| `published_token` | アトミックuint64 | 単一のアトミック出版トークン。下位2ビットにスロットインデックス（0..2）、上位62ビットにフレームシーケンス番号（単調増加、0..2^62-2でラップアラウンド可）をパックする。エンコード: `token = (seq << 2) \| slot`。デコード: `slot = token & 3`, `seq = token >> 2`。 |
+| `published_token` | アトミックuint64 | 単一のアトミック出版トークン。下位2ビットにスロットインデックス（0..2）、上位62ビットにフレームシーケンス番号（0..2^62-2で循環、2^62-2から0へラップアラウンド、2^62-1は予約）をパックする。フレームシーケンス番号はトークンの変更検出と等価性比較のみに使用し、数値的大きさによる順序付けは行わない。エンコード: `token = (seq << 2) | slot`。デコード: `slot = token & 3`, `seq = token >> 2`。無効値は`UINT64_MAX`（予約済み`seq=2^62-1`かつ無効スロット`3`）とし、初期化時・出版停止時に使用する。`0`は有効な`seq=0, slot=0`なので無効値に使用しない。 |
 
 Rustメイン（writer）はフレーム書き込み完了後に `published_token` を**リリースセマンティクス**で単一のアトミックストアする。ワーカー（reader）は**獲得セマンティクス**でアトミックロードする。単一のトークンにより、スロット選択とフレーム識別が原子的に出版される。
 
@@ -1267,13 +1288,13 @@ Rustメイン（writer）はフレーム書き込み完了後に `published_toke
 |-----------|-----|------|
 | `frame_sequence` | アトミックuint64 | このスロットに最後に書き込まれたフレームのシーケンス番号。shared_header.published_tokenから抽出したframe_sequenceと比較し、読取時の整合性確認に使用 |
 | `state` | アトミックuint32 | スロット状態: 0=空/書込可能, 1=書込中, 2=出版済/読取可能 |
-| `reader_pin_count` | アトミックint32 | 現在このスロットをピン留め中のワーカーリーダー数。Rustメインはこの値が0のスロットのみを書込先として選択可能 |
+| `reader_pin_count` | アトミックint32 | 現在このスロットをピン留め中のワーカーリーダー数。最大値は生存ワーカー数に制限される。インクリメント時はチェックを行い、オーバーフロー時はプロトコルエラーとして該当ワーカーを終了させる（到達不能であるべきだが防御的チェックとして必須） |
 | `byte_length` | uint64 | フレームペイロードのバイト数 |
 | `dtype` | char[8] | データ型記述子（例: `"uint8"`、8文字固定、NUL埋め） |
 | `shape` | uint64[4] | 形状（最大4次元、未使用次元は0） |
 | `strides` | uint64[4] | ストライド（バイト単位、未使用次元は0） |
 
-**MappingDescriptor**（§7.8制御IPC経由で初回マップ時およびレイアウト/解像度変更時に1回のみ送信）:
+**MappingDescriptor**（§7.8制御IPC経由で初回マップ時に送信。将来、互換性のないレイアウトバージョン移行を実装する場合だけ再送）:
 
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
@@ -1340,7 +1361,7 @@ Rustメイン（writer）はフレーム書き込み完了後に `published_toke
   1. 当該ワーカーに割り当てられたリーダーピンを全スロットでリセットする。
   2. 共有メモリ領域のマッピングは**解除しない**。カメラ出版は継続され、後続の代替ワーカーは既存の共有メモリを再利用する。
 - 代替ワーカー起動時、Rustメインは当該ワーカーに既存のMappingDescriptorを送信し、ワーカーは共有メモリ領域を再マップする。
-- 共有メモリ領域のマッピング解除と名前付き共有メモリの解放（unlink）は、カメラ/アプリケーションのシャットダウン時またはレイアウト/解像度変更時の安全な再作成時にのみ行われる。
+- 共有メモリ領域のマッピング解除と名前付き共有メモリの解放（unlink）は、カメラ/アプリケーションのシャットダウン時または将来の互換性のないレイアウトバージョン移行時（安全なプロトコルを要する、現スコープ外）にのみ行われる。
 - ワーカー側の明示的な後処理は不要。
 
 #### 7.9.5 Camera APIとの統合
@@ -1521,18 +1542,18 @@ type GamepadInput = ButtonsList | Buttons
 | `print_t2b()` | `print_t2b(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | 下部ログ（モード付き） |
 | `print_tb()` | `print_tb(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout以外ログ（モード付き） |
 | `print_tbs()` | `print_tbs(mode: Literal["w", "a", "d"], *objects: object, sep: str = ' ', end: str = '\n') -> None` | stdout割り当てパネルへ出力（モード付き: w=上書き, a=追記, d=削除） |
-| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義した変数のみ。フレームワークが注入した `isRunning`, `message_dialogue`, `socket0`, `mqtt0`, `keys`, `thread`, `alive`, `postProcess`, `Line`, `Discord`, `_logger`, `camera`, `gui`, `ImgProc` は除外する。**注**: これらの除外名は互換性/内部フレームワーク名であり、ユーザーAPIとして定義されるものではない。内部実装の詳細であり、リストに依存したスクリプトを書くべきではない |
+| `show_var()` | `show_var() -> None` | 内部変数の一覧をログパネルに表示。一時停止時に自動で呼び出されるほか、ユーザースクリプト内から手動で呼び出し可能。表示対象は `self` に定義したユーザー変数のみ。フレームワークが注入した内部属性は実装所有の述語で除外する。内部属性名の一覧は公開しない |
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` の場合は固定値 `0` を返し、結果は各Widgetの`value`属性から取得。`blocking=False` の場合は固有の正のダイアログIDを返す。単一WidgetまたはWidgetリストを受け付ける |
+| `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` の場合は固定値 `0` を返し、結果は各Widgetの`value`属性から取得。`blocking=False` の場合は固有の正のダイアログIDを返す。単一WidgetまたはWidgetリストを受け付ける。呼び出し時の規範的な戻り値型は§10.6.2の`Literal[True]`／`Literal[False]`オーバーロードに従う |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、戻り値は固定で`0`。結果は各Widgetの`value`属性から取得 |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list] | type[dict] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
-| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type = list) -> list[str] | dict[int | str, str]` | 旧API（他実装との互換性必須）。単純ダイアログ |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
+| `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
 
@@ -1615,7 +1636,7 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 | `flip` (property) | `flip -> bool` | 画像反転の有無 |
 | `flip_mode` (property) | `flip_mode -> int` | 反転モード（`0`: 上下反転, `1`: 左右反転, `-1`: 上下左右反転） |
 | `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。正規値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず受け入れる |
-| `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを `./Captures/` に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを実効Dataルート/Captures/に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
 
 > **注**: `openCamera()`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする
 
@@ -1655,7 +1676,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `isContainTemplate_max()` | `isContainTemplate_max(template_path_list: list[str], threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path_list: list[str | None] | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
 | `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` の互換性維持スタブ。`use_gpu=True` を固定して呼び出すが、本リファクタリングではGPU処理は行わずCPUで実行する |
 | `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
-| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを./Captures/へ保存 |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを実効Dataルート/Captures/へ保存 |
 | `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示。エンコード・処理はワーカー内で行い、UI表示用の圧縮ペイロードのみをRustメイン経由で送信する |
 | `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。返された配列はワーカー内で自由に変更可能 |
 | `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
@@ -1881,6 +1902,31 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 @overload
 def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: Literal[False]) -> int: ...
 ```
+
+**旧APIオーバーロード** (型チェック用投影):
+
+```python
+@overload
+def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
+@overload
+def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+@overload
+def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+@overload
+def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
+@overload
+def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+@overload
+def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+@overload
+def dialogue(self, title: str, message: int | str | list[int | str], desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
+@overload
+def dialogue(self, title: str, message: int | str | list[int | str], desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+@overload
+def dialogue(self, title: str, message: int | str | list[int | str], desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+```
+
+上記オーバーロードは型チェック用の投影であり、ランタイム互換性は既存の全形式を受け付ける。`show_dialog`の`blocking`オーバーロードも同様に、ランタイム動作は変更しない。
 
 - `blocking=True`の場合、ダイアログが閉じられるまでスクリプトの実行を停止
 - 返り値は`0`
@@ -2994,7 +3040,7 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 -- 設定ディレクトリの init.lua
 -- require不要で pokecon.* に直接アクセス
 
--- 設定（Pythonと同じ要素名・同じAPI構造。フラット＋階層も同一）
+-- 設定（Pythonと同じ要素名・同一公開名前空間・同一セマンティクス。フラット＋階層も同一）
 pokecon.opt.language = "ja"
 pokecon.opt.camera.capture_fps = 60
 pokecon.opt.ui.fps = 30
@@ -3058,7 +3104,7 @@ pokecon.autocmd.on("CameraOpenPost", {
 - **真偽値**: `true` / `false`（Pythonの `True` / `False` とは異なる）
 - **コールバック**: Luaでは無名関数 `function() ... end` を使用
 
-**注**: API構造の統一については§11.1を参照。PythonとLuaで設定項目名・API構造は完全に同一。フラットパスと階層パスの区別も両言語で共通。
+**注**: APIの統一については§11.1を参照。PythonとLuaで公開名前空間・設定項目名・動作は完全に同一。フラットパスと階層パスの区別も両言語で共通。ネイティブ呼び出し規約の違い（Pythonキーワード引数 vs Lua optionsテーブル）はAPIセマンティクスの乖離ではなく言語構文の違いである。
 
 ##### 11.5.5.1 Luaランタイム
 
@@ -3112,7 +3158,7 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
   - **Postのみ（入力解放）**: `InputReleasedPost` — 入力解放前にPreコールバックで行える実用的な処理がない
 - **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（型安全のため）
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
-- **Python/Lua両対応**: 両言語で同じAPI構造を使用
+- **Python/Lua両対応**: 両言語で同一の公開名前空間・名前・セマンティクスを提供。ネイティブ呼び出し規約は言語構文に従う（Pythonはキーワード引数、Luaはoptionsテーブル）。これはAPIセマンティクスの乖離ではなく、意図的な言語構文の違いである
 
 ###### 11.5.6.1.2 名前空間設計
 
@@ -3125,19 +3171,26 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 
 ```python
 # Python設定
+from typing import Callable, Literal
+
+type HandlerId = int
+type Callback = Callable[[], Literal[False] | None]
+# Callbackは引数なし。厳密なFalseを返すとイベントをキャンセル。
+# None（return文なしまたはreturn None）は継続。
+# Trueは型エラーとして静的に拒否される。
+# Pre/Post共通。通常のコールバックはNoneを返す。
+
 import pokecon
 
 # 基本的なイベント登録
 # 戻り値: HandlerId（ハンドラ解除用）
-# callback: 引数なし。pokecon.state に直接アクセスして情報を取得
-# ※callbackに引数を渡す設計は現時点では不要（state経由で情報取得可能）。
-#  ただし、将来の拡張性を考慮し、callbackに引数を渡す形への変更が容易な設計とする
-handler_id = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+# callback: 引数なし。戻り値はCallback型に従う。引数は追加しない
+handler_id: HandlerId = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
 
 # 一度だけ実行
 # 発火後の HandlerId は無効になり、off() は何もしない（エラーにはならない）
 # group パラメータも使用可能（発火前にグループ単位で解除する場合）
-handler_id_once = pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"), group="serial_group")
+handler_id_once: HandlerId = pokecon.autocmd.once("SerialConnectPost", callback=lambda: print("Serial connected"), group="serial_group")
 
 # イベントハンドラ解除
 # 引数: HandlerId（on() / once() の戻り値）
@@ -3179,15 +3232,16 @@ pokecon.autocmd.clear("camera_group")
 - ユーザーは予約グループ名を `group` パラメータに指定できない（エラー）
 
 ```lua
--- Lua設定（Neovim風require-less、Pythonと同じAPI構造）
-pokecon.autocmd.on("CameraOpenPost", {
+-- Lua設定（Neovim風require-less、Pythonと同一の公開名前空間・名前・セマンティクス。Lua optionsテーブル構文）
+-- HandlerIdはinteger
+local handler_id = pokecon.autocmd.on("CameraOpenPost", {
     callback = function()
         print("Camera opened")
     end
 })
 
 -- 一度だけ実行
-pokecon.autocmd.once("SerialConnectPost", {
+local handler_id_once = pokecon.autocmd.once("SerialConnectPost", {
     callback = function()
         print("Serial connected")
     end,
@@ -3231,7 +3285,7 @@ print(pokecon.event.list_defined())
 ```
 
 ```lua
--- Lua設定（Pythonと同じAPI構造）
+-- Lua設定（Pythonと同一の公開名前空間・名前・セマンティクス）
 pokecon.event.define("MyCustomEvent")
 pokecon.event.emit("MyCustomEvent")
 print(pokecon.event.list_defined())
@@ -3332,7 +3386,9 @@ type EventName = BuiltinEvent | str
 
 ```python
 # Python例: CommandStartPreで特定コマンドの実行を阻止
-def on_command_start() -> bool | None:
+from typing import Literal
+
+def on_command_start() -> Literal[False] | None:
     if pokecon.state.current_command == "dangerous_script":
         return False  # キャンセル
     # return None  # 継続（明示的なFalse以外は全て継続）
@@ -3352,14 +3408,7 @@ pokecon.autocmd.on("InputPressedPre", {
 })
 ```
 
-**コールバック型注釈**:
-
-```python
-from typing import Callable
-
-# イベントコールバック: 戻り値なし（通常イベント）、または bool | None（Preイベントでキャンセル用）
-type Callback = Callable[[], bool | None]
-```
+**コールバック型注釈**: §11.5.6.1.3で定義する`Callback = Callable[[], Literal[False] | None]`を使用する。コールバックは引数を受け取らない。`True`は静的型エラーとし、キャンセル判定には厳密な`False`だけを使用する。
 
 Postイベントおよびキャンセル不可イベントでコールバックが値を返した場合、その戻り値は無視される。キャンセル判定に使用されるのはPreイベントの厳密な `False` のみ。
 
@@ -3400,7 +3449,7 @@ pokecon.source("./extra_settings.py")  # -> None
 ```
 
 ```lua
--- Lua設定（Pythonと同じAPI構造。相対パスは設定ディレクトリ基準）
+-- Lua設定（Pythonと同一の公開名前空間・名前・セマンティクス。相対パスは設定ディレクトリ基準）
 pokecon.source("./extra_settings.lua")
 -- チルダ展開例: pokecon.source("~/.config/pokecon/extra_settings.lua")
 ```
@@ -3514,6 +3563,8 @@ print(pokecon.state.pending_profile)
 
 ```python
 # Python設定
+from typing import Literal
+
 import pokecon
 
 # 現在のプロファイル取得
@@ -3541,7 +3592,7 @@ if not success:
 
 # プロファイル切替イベントのハンドラ登録例
 # ProfileSwitchPre: 切替前（キャンセル可能）
-def on_profile_switch_pre() -> bool | None:
+def on_profile_switch_pre() -> Literal[False] | None:
     if pokecon.state.pending_profile == "restricted":
         return False  # "restricted"プロファイルへの切替を阻止
     print(f"Switching from {pokecon.profile.current()} to {pokecon.state.pending_profile}")
@@ -3559,7 +3610,7 @@ pokecon.autocmd.on("ProfileSwitchPost", callback=on_profile_switch_post)
 ```
 
 ```lua
--- Lua設定（Pythonと同じAPI構造）
+-- Lua設定（Pythonと同一の公開名前空間・名前・セマンティクス）
 print(pokecon.profile.current())
 print(pokecon.profile.list())
 pokecon.profile.switch("custom")
@@ -3739,7 +3790,7 @@ pokecon.controller.reset()
 ```
 
 ```lua
--- Lua設定（Pythonと同じAPI構造）
+-- Lua設定（Pythonと同一の公開名前空間・名前・セマンティクス）
 
 -- ボタン更新
 pokecon.controller.update({a = true, b = true})
@@ -3808,9 +3859,12 @@ pokecon.controller.reset()
 
 | 機能 | 説明 |
 |------|------|
-| **手動リロード** | 「Reload Dynamic Config」メニューで現在のファイルを再読み込み |
-| **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**） |
+| **手動リロード** | 「Reload Dynamic Config」メニューで現在のファイルを再読み込み。これが明示的なリトライトリガーとなる。Rustはワーカー不在時もファイルウォッチャーとメニューの表示を維持する |
+| **自動リロード** | ファイルウォッチャーによる自動リロード（**デフォルトで無効**）。`auto_reload true`時はファイル変更もリトライトリガーとなる。変更イベントはデバウンス・シングルフライトされる |
+| **アプリ再起動時** | アプリケーション再起動もリトライトリガーとなる |
 | **有効化方法** | `pokecon.opt.auto_reload_config = True` またはUI設定 |
+
+リトライ時も静的設定は継続して使用され、動的設定の準備/起動失敗によって静的設定が変更されることはない。動的設定ワーカーの起動失敗時に新たな管理API（HTTPエンドポイント等）は追加しない。
 
 ---
 
@@ -4970,11 +5024,14 @@ Lua LSP設定は `.luarc.json` で管理する。
 完全グレースフルシャットダウンは以下の順序で実行される。各ステップで失敗を診断ログへ記録し、実行可能な後続ステップを継続する。個別リソースの停止失敗によって終了処理全体を無期限に停止してはならない:
 
 1. **コントローラー安全状態の強制**: 全ボタン・スティック・タッチ入力を即時に強制解放（ニュートラル/リリース安全状態）
-2. **ユーザースクリプトワーカーの協調停止**: 既存の協調停止＋タイムアウト/強制終了ポリシー（`pokecon.opt.python.script.shutdown_timeout_ms`）に従ってユーザースクリプトワーカーを停止する（§11.5.6.4.3、§1.2のポイント9参照）
-3. **動的設定ワーカーの停止**: グローバル動的ワーカーを停止する（`dynamic_config_language="none"`の場合は該当せず）
-4. **リソース解放**: カメラ、共有メモリ、シリアルリソースを順次解放する
-5. **axumのグレースフルシャットダウン**: HTTPサーバーをグレースフルに停止する
-6. **プロセス終了**: Rustメインプロセスを終了する
+2. **カメラキャプチャスレッド停止と出版停止**: カメラキャプチャスレッドを停止し、共有メモリへのフレーム出版を停止する。`published_token`を§7.9.3の無効値`UINT64_MAX`へ変更する
+3. **ユーザースクリプトワーカーの協調停止**: 既存の協調停止＋タイムアウト/強制終了ポリシー（`pokecon.opt.python.script.shutdown_timeout_ms`）に従ってユーザースクリプトワーカーを停止する（§11.5.6.4.3、§1.2のポイント9参照）。ワーカー終了後、当該ワーカーに割り当てられたリーダーピンを全スロットでリセットする（デッドワーカーの残留ピン除去）
+4. **動的設定ワーカーの停止**: グローバル動的ワーカーを停止する（`dynamic_config_language="none"`の場合は該当せず）
+5. **共有メモリ解放**: 共有メモリ領域のマッピングを解除し、名前付き共有メモリをunlinkする。このステップはステップ2の出版停止後かつ全ワーカー終了後に行うため、write-after-unmapは発生しない
+6. **入力強制解放**: 全入力状態を再度強制解放（安全状態確認）
+7. **シリアル切断**: シリアル接続を切断する
+8. **axumのグレースフルシャットダウン**: HTTPサーバーをグレースフルに停止する
+9. **プロセス終了**: Rustメインプロセスを終了する
 
 このシャットダウン手順はプロファイル切替時のワーカー停止（§11.5.6.4.3参照）と同じ文言・ポリシーを使用する。新たなタイムアウト値は導入しない。
 

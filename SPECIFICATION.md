@@ -602,7 +602,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **COMポート選択** | コンボボックス | 利用可能なCOM/シリアルポートのドロップダウン |
+| **COMポート選択** | コンボボックス | 利用可能なシリアルポートのドロップダウン。選択値はOSネイティブ識別文字列（Windows: `COM3`等。Linux: `/dev/ttyACM0`、`/dev/serial/by-id/<device>`、`/dev/serial/by-path/<path>`、カスタムudevシンボリックリンク）。Linuxではリンク追跡後のttyキャラクタデバイスID（デバイス番号）で同一実体を重複排除し、by-id、by-path、直接ttyの順で最も安定した生セレクターを一つ表示する。カスタムシンボリックリンクは自動検出されず手動入力できる。フレンドリーラベルはUI表示専用とし、生セレクター値だけを保持して保存時に正規化・解決しない。設定済み値のデバイスが起動時に不在の場合も、当該セレクターを利用不能アイテムとして表示し、別デバイスを自動選択しない |
 | **更新ボタン** | Button | 利用可能なポートを再スキャン |
 | **接続/切断** | Toggle button | 選択したポートに接続または切断 |
 
@@ -618,12 +618,13 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 **シリアル設定の即時適用トランザクション**:
 
 1. `serial.port`、`serial.baud_rate`、`serial.data_format`はグローバル専用の`runtime_immediate`設定として同じ直列化ロックで更新する。
-2. シリアル未接続時は、検証後に実効値を即時更新する。UI／OpenAPI書き込みではその後にグローバル`settings.toml`へ原子的に保存する。
-3. 接続中は、Rustメインが全ボタン・スティック・タッチ状態を強制解放してから旧接続を閉じ、新しい3設定の組み合わせで同じデバイスまたは指定された新デバイスへ接続する。
-4. 新設定で接続できた場合だけ、UI／OpenAPI書き込み先TOML、正準設定値、UI表示、および送信フォーマッターを新設定へ確定する。
-5. 新設定で接続できない場合は旧3設定で再接続し、変更をTOML・正準設定値・UIへ反映せずエラーを返す。旧設定でも再接続できない場合は未接続状態とし、正準設定値と保存値は旧値のまま維持してERROR診断を出す。他機能は継続する。
+2. シリアル未接続時は、検証後に実効値を即時更新する。UI／OpenAPI書き込みではその後にグローバル`settings.toml`へ原子的に保存する。`serial.port`の生セレクター値は解決・正規化せず、指定された生文字列をそのまま保持する。
+3. 接続中は、Rustメインが全ボタン・スティック・タッチ状態を強制解放してから旧接続を閉じ、ロールバック用に旧`serial.port`の生セレクター値を保持した上で、新しい3設定の組み合わせで指定された新デバイスへ接続する。生セレクター値（`/dev/ttyACM0`、`/dev/serial/by-id/...`、`COM3`等）はそのまま渡し、シンボリックリンクはオープン時のみ追跡する。
+4. 新設定で接続できた場合だけ、UI／OpenAPI書き込み先TOML、正準設定値、UI表示、および送信フォーマッターを新設定へ確定する。新しい`serial.port`生セレクター値をそのまま保存する。
+5. 新設定で接続できない場合は旧3設定で再接続し、変更をTOML・正準設定値・UIへ反映せずエラーを返す。旧設定でも再接続できない場合は未接続状態とし、正準設定値と保存値は旧値のまま維持してERROR診断を出す。他機能は継続する。他のポートへの暗黙フォールバックは行わない。
 6. UIで3DS Controllerを選択した場合だけ、`serial.data_format = "3ds"`と`serial.baud_rate = 115200`を同一トランザクションへ含める。その他の設定表面では入力された3設定だけを使用し、ボーレートを暗黙変更しない。
 7. 動的設定代入も同じ再接続・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
+8. `serial.port`はハードウェアセレクターであり、汎用ファイルシステムパスではない。環境変数展開・チルダ展開・相対パス解決・字句的正規化は適用しない。セレクターのシンボリックリンクはオープン時のみ追跡し、保存・保持する生セレクター値は変更しない。
 
 **デフォルト形式**:
 - ボーレート: 9600
@@ -2502,10 +2503,11 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 本項は、正準設定レジストリで型 `str`（パス文字列）として分類され、かつパスメタデータフィールド（§11.4.1.1）が設定された全エントリに適用される、入力の環境変数展開・チルダ展開・ソース認識ベース解決・字句的正規化の共通規則を規定する。閉じた文字列enum（§11.4.1.3）とは異なり、パス値は自由文字列であり大文字小文字の正規化は行わない。
 
 **対象**: 正準レジストリでパスメタデータが設定されたすべてのパス型エントリ。
-例: `python.dynamic.venv`（動的設定ワーカーvenvパス）、`python.script.venv`（ユーザースクリプトワーカーvenvパス）、`serial.port`（シリアルポートパス）。
+例: `python.dynamic.venv`（動的設定ワーカーvenvパス）、`python.script.venv`（ユーザースクリプトワーカーvenvパス）。
 
 **非対象**:
 - 閉じた文字列enum（§11.4.1.3）
+- ハードウェアセレクター（`camera.device`、`serial.port`） — これらはデバイス識別子であり、環境変数展開・チルダ展開・相対パス解決・字句的正規化を適用しない。パスメタデータフィールドは設定されていない。
 - bool値（§11.4.1.2）
 - `app_name`（§11.3 — 全4ルートを決定するブートストラップセレクターのため本項の対象外、独自の解決規則を維持する）
 
@@ -2685,7 +2687,7 @@ UIカメラキャンバス上でのポインター（マウス/タッチ）位�
 | `camera.device` | `[camera]` | `device` | `pokecon.opt.camera.device` | `int \| str` | global | runtime_immediate | R/W | R/W（oneOf integer/string）| カメラデバイスセレクター。デフォルト `0`（整数）。`int`はOpenCVキャプチャインデックス。`str`はハードウェアセレクター（Linux: V4L2デバイスパス `/dev/videoN`、`/dev/v4l/by-id/*`、`/dev/v4l/by-path/*`、カスタムudevシンボリックリンク。Windows: ネイティブ列挙識別子）。ファイルシステムパス型には分類せず、汎用パス解決・環境変数展開・チルダ展開・相対パス解決・保存値のシンボリックリンク正準化を適用しない。空文字列・NUL・負の整数は拒否。大文字小文字正規化なし。シンボリックリンクはオープン時のみ追跡、生セレクター値は変更しない。TOMLはint/stringをネイティブ保存。CLI: `--camera-device`。環境変数: `POKECON_CAMERA_DEVICE`。CLI/envは非負10進数テキストをint、それ以外をstrとして解釈。起動時に自動オープン、失敗はエラー表示のみで他機能継続。OpenAPI R/W。§6.1.2デバイス切替トランザクション、§6.1.6参照。 |
 | `camera.flip_mode` | `[camera]` | `flip_mode` | `pokecon.opt.camera.flip_mode` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"none"`。閉じたenum `"none"`／`"vertical"`／`"horizontal"`／`"both"`（正準値は小文字）。UI Combobox は None／Vertical／Horizontal／Both の表示ラベルを正準値とは別に表示。変更は即座にライブフレーム処理へ反映。旧 `Camera.set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` 両方へマッピング。§11.4.1.3のenum正規化規則に従う。CLI: `--camera-flip-mode`。環境変数: `POKECON_CAMERA_FLIP_MODE`。 |
 | `camera.screenshot_format` | `[camera]` | `screenshot_format` | `pokecon.opt.camera.screenshot_format` | `str` | profile | runtime_immediate | R/W | R/W | デフォルト `"png"`。閉じたenum `"png"`／`"jpeg"`（正準値は小文字）。プロファイル対応。UI Combobox は PNG／JPEG の表示ラベルを正準値とは別に表示。変更は即座に以降の保存に反映。`jpeg_quality` はJPEG保存時のみ使用、PNGでは無視。§6.1.5参照。§11.4.1.3のenum正規化規則に従う。CLI: `--camera-screenshot-format`。環境変数: `POKECON_CAMERA_SCREENSHOT_FORMAT`。 |
-| `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値は`COM3`や`/dev/ttyACM0`等のOSネイティブなデバイス識別文字列であり、ファイルシステムパス型ではない。環境変数展開・チルダ展開・相対パス解決を適用しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
+| `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値はハードウェアセレクター（Linux: `/dev/tty*`、`/dev/serial/by-id/*`、`/dev/serial/by-path/*`、カスタムudevシンボリックリンク。Windows: `COM3`等のネイティブCOM識別子）。ファイルシステムパス型ではなく、環境変数展開・チルダ展開・相対パス解決・字句的正規化・保存値のシンボリックリンク正準化を適用しない。生セレクター値をそのまま保持し、シンボリックリンクはオープン時だけ追跡する。リンク切れ・非tty・許可不足・オープン失敗は明示的なシリアル接続エラーとし、他のポートへの暗黙フォールバックは行わない。Linux UIではリンク追跡後のttyキャラクタデバイスIDで同一実体を重複排除し、by-id、by-path、直接ttyの順で最も安定した生セレクターを表示する。カスタムシンボリックリンクは自動検出されず、手動で入力できる。設定済み生セレクターが起動時に不在の場合も当該アイテムを利用不能として表示し、別デバイスを自動選択しない。Windows識別子の大文字小文字はアプリケーションで正規化せず、OS／シリアルバックエンドのセマンティクスに従う。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.baud_rate` | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `9600`。正の整数。UIは少なくとも`4800` / `9600` / `115200`を候補として提示し、OS／ドライバーが受理するその他の正整数も入力できる。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.data_format` | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"default"`。閉じたenum `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う。`"3ds"`と`115200`の組み合わせは必須制約ではない。UIで`"3ds"`を選択した場合だけ、現在確認済み機器向けの補助動作として`serial.baud_rate`も`115200`へ原子的に同時更新する。その他の設定表面では任意の正整数ボーレートとの組み合わせを受理し、暗黙に変更しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `input.keyboard_enabled` | `[input]` | `keyboard_enabled` | `pokecon.opt.input.keyboard_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `true`（キーボード/グローバルホットキー入力有効）。`false` 時は全キーボード入力を解除し、キーボード由来のアクティブ入力を強制解放してから無効化。`true` 時に再登録。他の入力経路は不変。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
@@ -2921,7 +2923,7 @@ screenshot_format = "png"  # スクリーンショット形式。閉じたenum: 
 
 # シリアル設定（グローバル）
 [serial]
-serial_port = ""  # デフォルトは未選択・未接続。例: "COM3", "/dev/ttyACM0"
+serial_port = ""  # デフォルトは未選択・未接続。例: "COM3", "/dev/ttyACM0", "/dev/serial/by-id/usb-device-serial-port0"
 serial_baudrate = 9600  # ボーレート
 serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
 
@@ -3079,7 +3081,7 @@ pokecon.opt.ui.fps = 30
 pokecon.opt.camera.capture_resolution = "1280x720"
 
 # シリアル設定（階層: 複数の関連設定をserial名前空間にグループ化）
-pokecon.opt.serial.port = "COM3"
+pokecon.opt.serial.port = "/dev/serial/by-id/usb-device-serial-port0"  # Linux udev安定セレクター。Windowsでは "COM3"
 pokecon.opt.serial.baud_rate = 115200
 pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
 
@@ -3652,7 +3654,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 
 | 属性 | 型 | 説明 |
 |------|-----|------|
-| `serial_port` | `str` | 現在のシリアルポート（例: `"COM3"`）。未設定時は空文字 `""` |
+| `serial_port` | `str` | 現在のシリアルポートの生セレクター値（例: `"COM3"`、`"/dev/serial/by-id/..."`）。未設定時は空文字 `""`。シンボリックリンクの解決先へ置換しない |
 | `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial.baud_rate` または組み込みデフォルト値 |
 | `serial_connected` | `bool` | 接続状態 |
 | `camera_opened` | `bool` | カメラオープン状態 |
@@ -3677,7 +3679,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 import pokecon
 
 # シリアル関連
-print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3"）
+print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3" または "/dev/serial/by-id/..."）
 print(pokecon.state.serial_baudrate)    # 現在のボーレート（例: 115200）
 print(pokecon.state.serial_connected)   # 接続状態（True/False）
 
@@ -4061,7 +4063,7 @@ pokecon.controller.reset()
 | `POKECON_CAMERA_DEVICE` | カメラデバイスセレクター。非負10進数テキストは整数（OpenCVインデックス）、それ以外は文字列（udevデバイスパス/Windows識別子）として解釈。空文字・NUL・負の整数は拒否。CLI: `--camera-device`。起動時自動オープン、失敗はエラー表示のみで他機能継続。§6.1.2、§6.1.6参照 | `0` |
 | `POKECON_CAMERA_FLIP_MODE` | カメラフリップモード。閉じたenum `"none"`(default) / `"vertical"` / `"horizontal"` / `"both"`（大文字小文字不問）。グローバル専用。CLI: `--camera-flip-mode` | `"none"` |
 | `POKECON_CAMERA_SCREENSHOT_FORMAT` | カメラスクリーンショット形式。閉じたenum `"png"`(default) / `"jpeg"`（小文字正規化）。profile-capable。変更は以降の保存に即時反映。JPEG保存時は `jpeg_quality` を使用。CLI: `--camera-screenshot-format` | `"png"` |
-| `POKECON_SERIAL_PORT` | シリアルデバイス識別文字列（`COM3`、`/dev/ttyACM0`等）。空文字＝未選択。自動選択・自動接続は行わない。CLI: `--serial-port` | `""` |
+| `POKECON_SERIAL_PORT` | シリアルポートハードウェアセレクター（Linux: `/dev/tty*`、`/dev/serial/by-id/*`、`/dev/serial/by-path/*`、カスタムudevシンボリックリンク。Windows: `COM3`等のネイティブCOM識別子）。空文字＝未選択。自動選択・自動接続は行わない。生セレクター値をそのまま保持し、保存時に解決・正規化しない。CLI: `--serial-port` | `""` |
 | `POKECON_SERIAL_BAUD_RATE` | シリアルボーレート。正の整数。UI候補: 4800/9600/115200。CLI: `--serial-baud-rate` | `9600` |
 | `POKECON_SERIAL_DATA_FORMAT` | シリアルデータフォーマット。閉じたenum `"default"` / `"qingpi"` / `"3ds"`（小文字正規化）。UIで`"3ds"`選択時のみ`baud_rate`を115200へ原子的同時更新。CLI: `--serial-data-format` | `"default"` |
 | `POKECON_INPUT_KEYBOARD_ENABLED` | キーボード/グローバルホットキー入力有効化。`true` / `false`。profile-capable。CLI: `--input-keyboard-enabled` | `true` |

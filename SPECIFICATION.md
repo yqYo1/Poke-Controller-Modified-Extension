@@ -65,11 +65,14 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
    - `dynamic_config_language = "python"` の場合: ワーカー起動時にCPythonインタープリターを初期化する。LuaJITは `pokecon.source()` で `.lua` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "lua"` の場合: ワーカー起動時にLuaJITランタイムを初期化する。CPythonは `pokecon.source()` で `.py` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "none"` の場合: 動的設定ワーカープロセスを生成しない。
+   - Python/Luaのトップレベル設定評価、`pokecon.source()`、イベントコールバックは、動的設定ワーカー内の単一の専用実行スレッドで実行する。両ランタイムのユーザーコードを同時実行しない。
+   - Rustメインから受信した実行要求は単一の有界FIFO実行キューへ投入する。現在のPython/Luaユーザーコードが完了するまで、後続のイベントコールバックやリロード評価は開始しない。
+   - §7.8のIPC reader/writerはユーザーコード実行スレッドとは独立した非ブロッキングI/Oタスクとして動作し、ユーザーコード実行中も受信・送信・バックプレッシャー処理を継続する。I/OタスクはCPython/LuaJITのネイティブオブジェクトへ直接アクセスしない。
 4. 分離手段としてCPythonサブインタープリターは採用しない。根拠: 単一のCPythonランタイムはただ一つのメインインタープリターを持ち、同一プロセス内に追加で生成できるのはサブインタープリターのみである。サブインタープリターはPyO3およびサードパーティ拡張との互換性が保証されないため、必要な分離を得るために別プロセス方式を採用する。この判断はユーザースクリプトワーカーと動的設定ワーカーの両方に適用される。
 5. プロセス境界により、sys.path、インポート済みモジュール、グローバル状態、Pythonオブジェクトはワーカー間およびRustコアとの間で完全に分離される。Pythonオブジェクトがプロセス境界を越えることはない。LuaJITのグローバル状態も同様に動的設定ワーカープロセス内に隔離される。
 6. 両ワーカーからユーザー向けAPIへのアクセスは、ワーカープロセスがRust管理の内部IPC/API境界（§7.8参照）を経由する。この内部形式は実装詳細であり、公開API（`Commands.*`、`pokecon.*`）の名前と動作を変更しない限りユーザーに露出しない。
-7. PythonとLuaの動的設定APIは公開APIレベルで同一の動作を提供する。両ランタイムは同一ワーカーから同一のIPC境界を通じてRustメインプロセスと通信する。PythonとLuaのランタイムネイティブオブジェクトはランタイム間またはプロセス境界を越えて直接共有されない。共有される設定値・状態・イベントはRust管理のAPI表現を通じてやり取りされる。
-8. 動的設定ワーカーはアプリケーション生存期間中、ただ一つのワーカープロセスが存在する（`dynamic_config_language="none"`の場合、またはアプリケーション終了時を除く；グローバル動的ブートストラップ再構成が必要な場合は、プロファイル切替とは無関係に管理された置換が可能だが、それは本仕様のプロファイル切替の対象外である）。動的ワーカーとそのCPython/LuaJITランタイム状態はプロファイル切替を越えて永続し、再生成・再初期化されない。グローバルな`init.py`/`init.lua`はアプリケーション起動時に一度だけ評価され、アクティブプロファイルの変更によって再評価されることはない。動的設定のコールバック（イベントハンドラ）もプロファイル切替時にクリア・再登録されず、永続する動的ワーカーは`ProfileSwitchPre`/`ProfileSwitchPost`イベントを受信し、`pokecon.profile.current()`、`pokecon.state.pending_profile`、その他のstateを介して適応する。
+7. PythonとLuaの動的設定APIは公開APIレベルで同一の動作を提供する。両ランタイムは同一ワーカーから同一のIPC境界を通じてRustメインプロセスと通信する。PythonとLuaのランタイムネイティブオブジェクトはランタイム間またはプロセス境界を越えて直接共有されず、一方の言語から他方の言語の関数・クロージャ・オブジェクトを直接呼び出すAPIも提供しない。共有される設定値・状態・イベントはRust管理のシリアライズ可能なAPI表現を通じてやり取りされる。
+8. 動的設定ワーカーはアプリケーション生存期間中、ただ一つのワーカープロセスが存在する（`dynamic_config_language="none"`の場合、またはアプリケーション終了時を除く；グローバル動的ブートストラップ再構成が必要な場合は、プロファイル切替とは無関係に管理された置換が可能だが、それは本仕様のプロファイル切替の対象外である）。動的ワーカーとそのCPython/LuaJITランタイム状態はプロファイル切替を越えて永続し、再生成・再初期化されない。グローバルな`init.py`/`init.lua`はアプリケーション起動時に一度だけ評価され、アクティブプロファイルの変更によって再評価されることはない。動的設定のコールバック（イベントハンドラ）もプロファイル切替時にクリア・再登録されず、永続する動的ワーカーは`ProfileSwitchPre`/`ProfileSwitchPost`イベントを受信し、`pokecon.profile.current()`、`pokecon.state.pending_profile`、その他のstateを介して適応する。複数イベントが到着した場合、登録言語にかかわらず受信順に同じFIFO実行キューで処理し、コールバックを並行実行しない。
 9. プロファイル切替が影響するのはユーザースクリプトワーカーのみである。プロファイル切替時は既存のユーザースクリプトワーカーに協調停止要求を送信した後、直ちに（Pythonの応答を待たずに）Rustメインが全ボタン・スティック・タッチ状態を強制解放し（§11.5.6.4.3参照）、次いでワーカーの正常終了を`shutdown_timeout_ms`まで待機する。タイムアウト時はユーザースクリプトワーカープロセスを強制終了する。新しいユーザースクリプトワーカーは最初のコマンド実行要求時まで遅延生成される（§1.2ポイント2参照）。カメラ共有メモリはRustメイン所有のままで中断されず、後続のユーザースクリプトワーカーが遅延生成時にマッピングする。永続する動的設定は`ProfileSwitchPost`に応答して、新しいユーザースクリプトワーカー生成前に`pokecon.opt.python.script.*`を設定することができる。
 10. **フェイルソフトポリシー（§14.5.3）**: uv/venv準備の失敗はアプリケーション全体を中断せず、影響を受けるワーカーに限定する。動的設定ワーカーの起動時失敗時は静的設定で継続し、ユーザースクリプトワーカーの遅延生成失敗時は該当コマンドのみがエラーとなる。既存ワーカーは準備失敗によって強制終了されない。
 
@@ -524,11 +527,13 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **カメラデバイス選択** | コンボボックス | 利用可能なカメラデバイスのドロップダウン |
+| **カメラデバイス選択** | コンボボックス | 利用可能なカメラデバイスのドロップダウン。`camera.device`。選択値は整数（番号）または文字列（udevデバイスパス/Windowsネイティブ識別子）。整数0はデフォルトのカメラ0。変更時は§6.1.2のデバイス切替トランザクションで反映 |
 | **UI表示FPS** | コンボボックス | UI表示用フレームレート（`ui.fps`、選択肢は`ui.fps_options`から生成）。カメラ取得FPSとは独立 |
 | **カメラ取得FPS** | 正整数入力／コンボボックス | `camera.capture_fps`。デフォルト60。設定時点でアクティブなカメラへ即時適用 |
 | **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
 | **フリップ** | Checkbox | 水平/垂直フリップ切替 |
+
+アプリケーション起動時は、設定解決後の`camera.device`（未指定時は整数`0`）を自動オープンする。オープンに失敗しても別デバイスへ暗黙に切り替えず、カメラサブシステムを利用不能としてUIへエラーを表示し、他の機能は継続する。
 
 **取得設定の即時適用トランザクション**:
 
@@ -539,6 +544,17 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 5. 成功時は各スロットのbyte_length/shape/stridesを新しいフレーム寸法で更新し、公開トークンを原子的に切り替える。共有メモリ領域の割り当て（`slot_byte_size`）はアプリケーション生存期間中、最大対応キャプチャ解像度1920×1080 BGR uint8で固定される。unmap/remap/recreateは行わず、リーダーピン競合も発生しない。MappingDescriptorは初回マップ時およびレイアウトバージョン変更時にのみ送信し、解像度変更ごとには送信しない。WebRTCとMotion JPEGは次に公開されるフレームから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
 6. 適用またはTOML保存に失敗した場合は、保持した取得設定と共有メモリレイアウトへロールバックし、設定値・TOML・UI表示を変更せずエラーを返す。ロールバック後に有効フレームを取得できない場合だけカメラをエラー状態として閉じ、他機能は継続する。
 7. 動的設定からの代入も同じカメラ再設定・検証・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
+
+**カメラデバイス切替トランザクション**（デバイス選択変更時）:
+
+1. 現在カメラが開いている場合はフレーム公開をフレーム境界で一時停止し、現在の生セレクター（`camera.device`値）・FPS・解像度をロールバック用に保持する。閉じている場合は「旧デバイスなし」として処理する。
+2. 旧デバイスがある場合だけ、現在のカメラハンドルを閉じる。
+3. 対象デバイス（`camera.device`値 — 整数または文字列）を開く。Linux: 文字列はV4L2デバイスパス（`/dev/videoN`、`/dev/v4l/by-id/...`、`/dev/v4l/by-path/...`、カスタムudevシンボリックリンク）として解決。文字列指定時は`::open(path)`、整数指定時は`::open(int)`を呼ぶ。開いた直後にそのデバイスがV4L2キャラクタデバイスであることを検証し、シンボリックリンクは追跡するが、保持する生セレクター値は変更しない。Windows: 整数はOpenCVバックエンドインデックス、文字列はネイティブ列挙レイヤーで解決される不透明な識別子（OpenCVの文字列オーバーロードには渡さない）。
+4. 現在の取得FPS・解像度を適用し、有効フレームを取得して検証する。
+5. 成功時は固定共有メモリ上のフレーム出版とUI表示を再開し、正準設定値とTOMLを原子的に保存する。TOMLには生セレクター値（整数または文字列）を保存する。解像度が同じ場合にMappingDescriptorを再送しない。
+6. 失敗時、旧デバイスがあった場合は保持した生セレクター・FPS・解像度で再オープンして設定を復元する。旧デバイスがなかった場合はカメラを閉じたままにする。旧デバイスのロールバック再オープンにも失敗した場合はカメラをエラー状態として閉じ、他機能は継続する。
+7. 他のカメラへの暗黙のフォールバックは行わない。
+8. 動的設定からの`pokecon.opt.camera.device`代入も同じトランザクションを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
 
 #### 6.1.3 表示モード切替（チェックボックス）
 
@@ -570,6 +586,10 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 - **バックエンド**: OpenCV。プラットフォームに応じた適切なバックエンドを自動選択。
 - **非同期キャプチャ**: フレームキャプチャはUIスレッドをブロックしない方式で実行。
+- **デバイス選択**: 設定値 `camera.device` は `int | str`。`int`（デフォルト `0`）はOpenCVキャプチャインデックスとして使用。`str` はハードウェアセレクター:
+  - **Linux**: V4L2デバイスパス（`/dev/videoN`、`/dev/v4l/by-id/*`、`/dev/v4l/by-path/*`、カスタムudevシンボリックリンク）として解決。OpenCVの文字列指定時は `::open(path)` を使用。udevシンボリックリンクは追跡するが、保持する生セレクター値は変更しない。環境変数展開・チルダ展開・相対パス解決は適用しない。
+  - **Windows**: 整数はOpenCVバックエンドインデックス。文字列はWindowsカメラ列挙レイヤーで解決される不透明なネイティブ識別子/モニカーとして扱い、OpenCVの文字列オーバーロード（ビデオファイルパス）には渡さない。解決不能時はデバイスオープンエラー。
+  - **マルチプラットフォーム共通**: 空文字列・NUL・負の整数は拒否する。文字列の大文字小文字正規化は行わない。デバイスの可用性検証はオープン時のみ行い、設定読み込み時は値のみを保存する。UI列挙優先順位: by-id、by-path、数値インデックス（Linux）。
 
 ### 6.2 シリアルタブ
 
@@ -959,11 +979,20 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **ビデオ**: ビデオトラックを使用したWebRTC `RTCPeerConnection`。
 - **DataChannel**: コントローラー入力イベントとログストリーミング用。
 - **シグナリング**: WebSocket上のJSONメッセージでSDP Offer/Answer/ICE candidateを交換。STUNサーバーは`settings.toml`等から設定できるが、既定値は空文字でありSTUNを使用しない。コーデック優先順位: H.264 > VP8 > VP9。
-- **自動再接続**: §3.4参照。
+- **WebSocket再接続**: シグナリングWebSocket自体の切断再接続は§3.4に従う。
 - **フォールバック条件**:
   - WebRTC接続が5秒以内に完了しない → WebSocketフォールバック起動
   - 接続確立後、3秒間連続でフレーム/データが受信できない → WebSocketにフォールバック
-  - フォールバック中のWebRTC復旧検出は行わない（手動再接続を促す）
+
+**フォールバック中のWebRTC自動復旧**:
+
+- WebSocketフォールバックの映像・入力・ログ通信を維持したまま、バックグラウンドでWebRTC接続を再確立する。
+- `webrtc.auto_recover`のデフォルトは`true`。`false`の場合は自動復旧プローブを行わず、手動再接続だけを提供する。
+- `webrtc.recovery_probe_interval_sec`のデフォルトは`30`秒。1以上の整数とし、フォールバックが継続する間はこの間隔で無期限に試行する。同時に複数の復旧試行を開始しない。
+- 復旧試行中もMotion JPEGおよびWebSocket DataChannel代替経路を停止しない。WebRTCビデオトラックとDataChannelの両方が利用可能になった場合だけ、プライマリ経路へ原子的に切り替える。
+- 切替成功後はWebSocketのMotion JPEG映像送信を停止する。シグナリングおよび将来の再フォールバックに必要なWebSocket接続は維持する。
+- `auto_recover`を実行時に`false`へ変更した場合、未開始のプローブを取り消す。実行中プローブは安全に完了させるが、成功しても自動昇格せずフォールバックを維持する。`true`への変更は設定適用時から新しい間隔でプローブを開始する。
+- 間隔変更は現在の待機を取り消し、設定適用時を起点として次回プローブを再スケジュールする。
 
 **通信内容**:
 
@@ -1015,8 +1044,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 | イベント | 方向 | ペイロード |
 |-------|-----------|---------|
-| `camera.open` | サーバー → クライアント | カメラオープン通知（`{"device_id": str, "resolution": [int, int]}`） |
-| `camera.close` | サーバー → クライアント | カメラクローズ通知（`{"reason": "user" | "error" | "rollback_failure", "device_id": str}`）。`CameraClosePre`/`CameraClosePost`動的設定イベント（引数なし）とは別 |
+| `camera.open` | サーバー → クライアント | カメラオープン通知（`{"device": int | str, "resolution": [int, int]}`） |
+| `camera.close` | サーバー → クライアント | カメラクローズ通知（`{"reason": "user" | "error" | "rollback_failure", "device": int | str}`）。`CameraClosePre`/`CameraClosePost`動的設定イベント（引数なし）とは別 |
 | `command.start` | サーバー → クライアント | コマンド実行開始通知 |
 | `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
 | `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |
@@ -1638,7 +1667,7 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 | `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。正規値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず受け入れる |
 | `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを実効Dataルート/Captures/に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
 
-> **注**: `openCamera()`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする
+> **注**: `openCamera(cameraId: int | str)`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする。`openCamera` の `cameraId` は整数（OpenCVインデックス）または文字列（udevパス/Windows識別子）を受け付ける。数値動作は従来通り、Linux文字列はV4L2デバイスパスをサポート、Windows文字列はネイティブ列挙レイヤー経由。
 
 > **注（反転状態の対応）**: `set_flip("Vertical")` は `flip=True`, `flip_mode=0`、`set_flip("Horizontal")` は `flip=True`, `flip_mode=1`、`set_flip("Both")` は `flip=True`, `flip_mode=-1` と対応する。`set_flip("None")` は `flip=False` とし、`flip_mode` の値は参照しない。
 
@@ -2238,13 +2267,14 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
-  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`（カメラ設定）;
+  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`, `pokecon.opt.camera.device`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
   `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`,
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
+  `pokecon.opt.webrtc.auto_recover`, `pokecon.opt.webrtc.recovery_probe_interval_sec`（WebRTC復旧設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.list`（パッケージ指定）、`pokecon.opt.python.script.packages.uv_config`（uv.toml明示パス）。
   動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。これらはグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
 
@@ -2571,7 +2601,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 - **並行制御**: 正準化した対象TOMLパス単位でプロセス内書き込みを直列化し、異なるアプリプロセス間でも同じ対象を保護するOSファイルロックを取得する。ロック取得後にファイルを再読込して検証する。ロックファイルは実効Stateルート配下の`settings-locks/<sha256(正準化TOMLパス)>.lock`に置き、対象TOML自体やその置換前inodeをロック対象にしない。
 - **原子的保存**: 対象ファイルと同じディレクトリに一時ファイルを作成し、Configファイルの権限規則（§11.4.3.3）を適用して完全な内容を書き込み、flush／同期後に原子的置換を行う。利用可能なOSでは親ディレクトリも同期する。一時ファイルや部分書き込みを正式な設定として読み込んではならない。
 - **反映タイミング**: 原子的保存が成功した後にだけ、正準設定サービスの実効値を更新してランタイム副作用を適用し、UI／OpenAPI購読者へ変更を通知する。保存失敗時は実効値を変更しない。保存成功後にランタイム反映が失敗した場合はERROR診断を出し、その設定を利用する機能だけを利用不能として、保存済み値は次回読込時にも維持する。
-- **デバイス設定の優先例外**: カメラ取得設定（`camera.capture_fps`、`camera.capture_resolution`、§6.1.2）およびシリアル接続設定（`serial.port`、`serial.baud_rate`、`serial.data_format`、§6.2.2）は、デバイス操作の成否を保存前に検証する必要があるため、上記の一般順序の例外とする。各専用トランザクションでランタイム適用を先に試行し、成功した場合だけTOMLを原子的に保存して正準設定値とUI表示を確定する。保存失敗時は専用トランザクションで旧デバイス状態へロールバックする。本項の一般順序より§6.1.2／§6.2.2の個別規則を優先する。
+- **デバイス設定の優先例外**: カメラ取得設定（`camera.device`、`camera.capture_fps`、`camera.capture_resolution`、§6.1.2）およびシリアル接続設定（`serial.port`、`serial.baud_rate`、`serial.data_format`、§6.2.2）は、デバイス操作の成否を保存前に検証する必要があるため、上記の一般順序の例外とする。各専用トランザクションでランタイム適用を先に試行し、成功した場合だけTOMLを原子的に保存して正準設定値とUI表示を確定する。保存失敗時は専用トランザクションで旧デバイス状態へロールバックする。本項の一般順序より§6.1.2／§6.2.2の個別規則を優先する。
 - **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。切替処理と同時に発生した旧プロファイルへのUI書き込みを新プロファイルへ誤適用してはならない。
 - **Secret**: Secret設定の書き込みでも同じ原子的保存を使用し、生の値をログ・エラー・変更通知へ含めない（§11.4.3）。
 
@@ -2592,6 +2622,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `app_name` | — | *ブートストラップ専用* | — | `str` | bootstrap | startup_only | —（循環依存）| —（ブートストラップ専用）| **`app_name`**: アプリケーション名セレクター（§11.3参照）。Neovimの`NVIM_APPNAME`に類似。ユーザー向けCLI: `--app-name <name>`。環境変数: `POKECON_APPNAME=<name>`。TOML非対応（循環依存のため）。動的パス非対応（同上）。デフォルト: `"pokecon"`。全4ルート（Config、Data、Cache、State）のサブディレクトリ名として使用される。入力値は§11.3「`app_name` 文法」で規定する安全な相対サブディレクトリ識別子文法に従い検証される |
 | `camera.capture_fps` | `[camera]` | `capture_fps` | `pokecon.opt.camera.capture_fps` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `60`。正の整数。設定値にアプリケーション独自の上限は設けない。カメラソースの実FPSが設定値を下回る場合はソースの実FPSが実効上限となる。UI表示FPS `ui.fps` とは独立する。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映する。 |
 | `camera.capture_resolution` | `[camera]` | `capture_resolution` | `pokecon.opt.camera.capture_resolution` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"1280x720"`。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映し、指定解像度を適用・検証できない場合は暗黙に別解像度へ変更せず更新をロールバックする。 |
+| `camera.device` | `[camera]` | `device` | `pokecon.opt.camera.device` | `int \| str` | global | runtime_immediate | R/W | R/W（oneOf integer/string）| カメラデバイスセレクター。デフォルト `0`（整数）。`int`はOpenCVキャプチャインデックス。`str`はハードウェアセレクター（Linux: V4L2デバイスパス `/dev/videoN`、`/dev/v4l/by-id/*`、`/dev/v4l/by-path/*`、カスタムudevシンボリックリンク。Windows: ネイティブ列挙識別子）。ファイルシステムパス型には分類せず、汎用パス解決・環境変数展開・チルダ展開・相対パス解決・保存値のシンボリックリンク正準化を適用しない。空文字列・NUL・負の整数は拒否。大文字小文字正規化なし。シンボリックリンクはオープン時のみ追跡、生セレクター値は変更しない。TOMLはint/stringをネイティブ保存。CLI: `--camera-device`。環境変数: `POKECON_CAMERA_DEVICE`。CLI/envは非負10進数テキストをint、それ以外をstrとして解釈。起動時に自動オープン、失敗はエラー表示のみで他機能継続。OpenAPI R/W。§6.1.2デバイス切替トランザクション、§6.1.6参照。 |
 | `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値は`COM3`や`/dev/ttyACM0`等のOSネイティブなデバイス識別文字列であり、ファイルシステムパス型ではない。環境変数展開・チルダ展開・相対パス解決を適用しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.baud_rate` | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `9600`。正の整数。UIは少なくとも`4800` / `9600` / `115200`を候補として提示し、OS／ドライバーが受理するその他の正整数も入力できる。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.data_format` | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"default"`。閉じたenum `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う。`"3ds"`と`115200`の組み合わせは必須制約ではない。UIで`"3ds"`を選択した場合だけ、現在確認済み機器向けの補助動作として`serial.baud_rate`も`115200`へ原子的に同時更新する。その他の設定表面では任意の正整数ボーレートとの組み合わせを受理し、暗黙に変更しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
@@ -2603,6 +2634,8 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `notifications.windows.on_script_end` | `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
 | `websocket.reconnect_interval_sec` | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `3`（秒）。§3.4参照。1以上の整数。ランタイム変更は次回の再接続試行から反映 |
 | `websocket.reconnect_max_retries` | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `20`。§3.4参照。0以上の整数。`0`は自動リトライを無効化し、切断時に即座に手動再接続UIを表示する。ランタイム変更は次回の再接続試行から反映 |
+| `webrtc.auto_recover` | `[webrtc]` | `auto_recover` | `pokecon.opt.webrtc.auto_recover` | `bool` | global | runtime_immediate | —（直接UIなし）| R/W | WebSocketフォールバック中のWebRTC自動復旧。デフォルト`true`。§11.4.1.2のbool値直列化規則に従う。`false`への変更は未開始プローブを取り消し、実行中プローブからの自動昇格を抑止する。`true`への変更は設定適用時から復旧プローブを開始する。CLI/環境変数は正準IDから自動生成。§7.2参照 |
+| `webrtc.recovery_probe_interval_sec` | `[webrtc]` | `recovery_probe_interval_sec` | `pokecon.opt.webrtc.recovery_probe_interval_sec` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | WebRTC復旧プローブ間隔（秒）。デフォルト`30`。1以上の整数。変更時は現在の待機を取り消し、設定適用時を起点として次回プローブを再スケジュールする。CLI/環境変数は正準IDから自動生成。§7.2参照 |
 | `stun_server` | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | global | runtime_deferred | R/W | R/W | フラット（単体設定）。デフォルト `""`（STUNを使用しない）。空文字以外は`stun:`または`stuns:` URIとして検証する。グローバル専用。UIのSTUN URI入力は必須設定表面で、変更は以後に開始するWebRTC接続／再接続から使用し、確立済みセッションを暗黙に再ネゴシエーションしない。CLI: `--stun-server`。環境変数: `POKECON_STUN_SERVER`。OpenAPI R/W。§6.7.3参照。 |
 | `jpeg_quality` | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | フラット（単体設定）。デフォルト `85`。範囲 1～100 |
 | `server.web_dir` | `[server]` | `web_dir` | — | `str` | global | startup_only | R/W | R/W | SPA静的ファイル配信用ディレクトリ。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--web-dir <path>`（明示的ショートフラグ）。環境変数: `POKECON_WEB_DIR`。UI: サーバー設定のディレクトリピッカー（§6.7.1参照）。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。§6.7.1、§15.9参照 |
@@ -2811,6 +2844,7 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 [camera]
 capture_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 capture_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
+device = 0  # カメラデバイスセレクター。int（OpenCVインデックス）またはstr（udevパス/Windows識別子）
 
 # シリアル設定（グローバル）
 [serial]
@@ -2821,6 +2855,8 @@ serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
 # WebRTC設定
 [webrtc]
 stun_server = ""  # デフォルトはSTUNなし。必要時のみ例: "stun:stun.example.com:3478"
+auto_recover = true  # WebSocketフォールバック中にWebRTCを自動復旧
+recovery_probe_interval_sec = 30  # 復旧プローブ間隔（秒）
 
 # 映像フォールバック設定（Motion JPEG over WebSocket）
 [video.fallback]
@@ -2943,6 +2979,8 @@ pokecon.opt.active_profile = "default"
 # カメラ設定（階層: 複数の関連設定をcamera名前空間にグループ化）
 # camera.capture_fps: バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 pokecon.opt.camera.capture_fps = 60
+# camera.device: カメラデバイスセレクター。int（OpenCVインデックス=0）またはstr（udevパス/Windows識別子）
+pokecon.opt.camera.device = 0
 # ui.fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
 pokecon.opt.ui.fps = 30
 pokecon.opt.camera.capture_resolution = "1280x720"
@@ -2951,6 +2989,10 @@ pokecon.opt.camera.capture_resolution = "1280x720"
 pokecon.opt.serial.port = "COM3"
 pokecon.opt.serial.baud_rate = 115200
 pokecon.opt.serial.data_format = "default"  # default | qingpi | 3ds
+
+# WebRTC復旧設定（階層: webrtc名前空間）
+pokecon.opt.webrtc.auto_recover = True
+pokecon.opt.webrtc.recovery_probe_interval_sec = 30
 
 # 通知設定（階層: 複数の関連設定をnotifications.discord名前空間にグループ化）
 # Discord Webhook URLはsecretのため、動的設定代入ではなく環境変数 POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL での設定を推奨
@@ -3043,7 +3085,11 @@ Pythonの動的設定ファイル読み込み時にエラーが発生しても�
 -- 設定（Pythonと同じ要素名・同一公開名前空間・同一セマンティクス。フラット＋階層も同一）
 pokecon.opt.language = "ja"
 pokecon.opt.camera.capture_fps = 60
+-- camera.device: カメラデバイスセレクター。int（OpenCVインデックス=0）またはstring（udevパス/Windows識別子）
+pokecon.opt.camera.device = 0
 pokecon.opt.ui.fps = 30
+pokecon.opt.webrtc.auto_recover = true
+pokecon.opt.webrtc.recovery_probe_interval_sec = 30
 pokecon.opt.ui.widget_mode = "all"  -- §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 pokecon.opt.ui.controller_position = "top"  -- §5.6参照。top（上部、デフォルト）/ bottom（下部）
 pokecon.opt.ui.dialog_button_position = "bottom"  -- §5.7参照。bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
@@ -3159,6 +3205,7 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 - **フェーズはイベント名に含める**: `phase` 引数ではなく、イベント名自体に `Pre`/`Post` を含める（型安全のため）
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
 - **Python/Lua両対応**: 両言語で同一の公開名前空間・名前・セマンティクスを提供。ネイティブ呼び出し規約は言語構文に従う（Pythonはキーワード引数、Luaはoptionsテーブル）。これはAPIセマンティクスの乖離ではなく、意図的な言語構文の違いである
+- **直列イベント実行**: Python/Luaのイベントコールバックは動的設定ワーカーの単一実行スレッド上で、イベント受信順のFIFOとして直列実行する。実行中のコールバックと後続コールバックを並行実行しない
 
 ###### 11.5.6.1.2 名前空間設計
 
@@ -3431,6 +3478,7 @@ Postイベントおよびキャンセル不可イベントでコールバック�
 - **実効Configルート外へのアクセス**: 相対パスは実効Configルートとの結合後に`.`と`..`を字句的に正規化する。字句的な正規化結果、または存在確認後にシンボリックリンクを解決した結果が実効Configルート外を指す場合は読み込みを拒否する。実効Configルート外のファイルを参照するには絶対パスを使用する
 - **ネストされた `source()` の解決**: `source()` で読み込まれたファイル内でさらに相対パスの `source()` を呼び出した場合も、基点は変化しない。常に実効Configルート（§11.3 `app_name`参照。§14.1.1 Configと一致）を基準として解決される。呼び出し元ファイルのディレクトリは使用しない
 - **Python/Lua完全同一**: 上記の解決規則は Python と Lua で完全に同一である
+- **実行モデル**: `source()`は呼び出し元の動的設定処理を一時停止し、同じ単一実行スレッド上で対象ファイルを同期評価する。拡張子が呼び出し元と異なる場合も、必要なランタイムをオンデマンド初期化して同じ規則で評価し、完了後に呼び出し元へ戻る。言語間で関数・クロージャ・ネイティブオブジェクトを受け渡さず、戻り値は常に`None`とする。循環は§11.5.6.2.3の正規化済みsourceスタックで拒否する
 
 ###### 11.5.6.2.2 API仕様
 
@@ -3484,6 +3532,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | `camera_opened` | `bool` | カメラオープン状態 |
 | `camera_fps` | `int` | 現在のFPS（`opt.camera.capture_fps` をデバイス能力で制限した実際の値） |
 | `camera_resolution` | `str` | 現在の解像度（例: `"1280x720"`） |
+| `camera_device` | `int \| str` | 現在オープンしているカメラの生セレクター値。カメラ未オープン時は次回オープン対象となる`opt.camera.device`の実効値 |
 | `is_running` | `bool` | コマンド実行中 |
 | `command_state` | `CommandState` | コマンド状態 |
 | `current_command` | `str` | 現在実行中のコマンド名 |
@@ -3510,6 +3559,7 @@ print(pokecon.state.serial_connected)   # 接続状態（True/False）
 print(pokecon.state.camera_opened)      # カメラオープン状態（True/False）
 print(pokecon.state.camera_fps)         # 現在のFPS（`opt.camera.capture_fps` をデバイス能力で制限した実際の値）
 print(pokecon.state.camera_resolution)  # 現在の解像度（例: "1280x720"）
+print(pokecon.state.camera_device)      # 現在のカメラデバイスセレクター（int | str。例: 0 または "/dev/v4l/by-id/..."）
 
 # コマンド関連
 print(pokecon.state.is_running)         # コマンド実行中（True/False）
@@ -3871,7 +3921,7 @@ pokecon.controller.reset()
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全56の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全59の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -3883,6 +3933,7 @@ pokecon.controller.reset()
 | `POKECON_APPNAME` | アプリケーション名セレクター（`NVIM_APPNAME`類似）。全4ルート（Config/Data/Cache/State）のサブディレクトリ名。ブートストラップ専用。CLI: `--app-name` | `"pokecon"` |
 | `POKECON_CAMERA_CAPTURE_FPS` | カメラキャプチャFPS。正の整数。UI表示FPSとは独立。CLI: `--camera-capture-fps` | `60` |
 | `POKECON_CAMERA_CAPTURE_RESOLUTION` | カメラキャプチャ解像度。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`（小文字正規化）。CLI: `--camera-capture-resolution` | `"1280x720"` |
+| `POKECON_CAMERA_DEVICE` | カメラデバイスセレクター。非負10進数テキストは整数（OpenCVインデックス）、それ以外は文字列（udevデバイスパス/Windows識別子）として解釈。空文字・NUL・負の整数は拒否。CLI: `--camera-device`。起動時自動オープン、失敗はエラー表示のみで他機能継続。§6.1.2、§6.1.6参照 | `0` |
 | `POKECON_SERIAL_PORT` | シリアルデバイス識別文字列（`COM3`、`/dev/ttyACM0`等）。空文字＝未選択。自動選択・自動接続は行わない。CLI: `--serial-port` | `""` |
 | `POKECON_SERIAL_BAUD_RATE` | シリアルボーレート。正の整数。UI候補: 4800/9600/115200。CLI: `--serial-baud-rate` | `9600` |
 | `POKECON_SERIAL_DATA_FORMAT` | シリアルデータフォーマット。閉じたenum `"default"` / `"qingpi"` / `"3ds"`（小文字正規化）。UIで`"3ds"`選択時のみ`baud_rate`を115200へ原子的同時更新。CLI: `--serial-data-format` | `"default"` |
@@ -3894,6 +3945,8 @@ pokecon.controller.reset()
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト終了時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-end` | `false` |
 | `POKECON_WEBSOCKET_RECONNECT_INTERVAL_SEC` | WebSocket再接続間隔（秒）。1以上の整数。ランタイム変更は次回再接続試行から反映。CLI: `--websocket-reconnect-interval-sec` | `3` |
 | `POKECON_WEBSOCKET_RECONNECT_MAX_RETRIES` | WebSocket再接続最大リトライ回数。0以上の整数。`0`＝自動リトライ無効化。CLI: `--websocket-reconnect-max-retries` | `20` |
+| `POKECON_WEBRTC_AUTO_RECOVER` | WebSocketフォールバック中のWebRTC自動復旧。`true` / `false`（明示必須）。グローバル専用。CLI: `--webrtc-auto-recover` | `true` |
+| `POKECON_WEBRTC_RECOVERY_PROBE_INTERVAL_SEC` | WebRTC復旧プローブ間隔（秒）。1以上の整数。グローバル専用。CLI: `--webrtc-recovery-probe-interval-sec` | `30` |
 | `POKECON_STUN_SERVER` | STUNサーバーURI。空文字＝STUN不使用。空文字以外は`stun:` / `stuns:` URIとして検証。グローバル専用。CLI: `--stun-server` | `""` |
 | `POKECON_JPEG_QUALITY` | Motion JPEGフォールバック品質。範囲1～100の整数。CLI: `--jpeg-quality` | `85` |
 | `POKECON_WEB_DIR` | SPA静的ファイル配信用ディレクトリ。グローバル専用（startup-only）。CLI: `--web-dir`（明示的ショートフラグ）。パス型: directory/must_exist。詳細は§6.7.1、§15.9参照 | バンドル `web/dist`（アプリケーションリソースルート基準） |

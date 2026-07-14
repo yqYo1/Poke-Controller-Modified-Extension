@@ -577,6 +577,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **カラーピッカー** | Ctrl+クリック | クリック位置の色の値を取得 ※ブラウザのコンテキストメニューと競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **範囲スクリーンショット** | Ctrl+Shift+ドラッグ | キャンバス上の選択した矩形領域のスクリーンショットをキャプチャ ※ブラウザのテキスト選択と競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域をファイル保存ダイアログで保存。初期ファイル名は `capture_YYYYMMDD_HHMMSS`（拡張子なし）。保存ダイアログでは実効 `camera.screenshot_format` を初期選択し、PNG/JPEGの一回限り上書きが可能。ダイアログで選択された形式がファイルの拡張子を決定する。§6.1.5参照 ※ブラウザのショートカットと競合する可能性あり（特にLinux/ChromeでOSレベルのウィンドウ移動に使用される場合）。対応例: `event.preventDefault()` の使用、またはユーザー設定で別のキーコンボに変更可能 |
+| **タッチ操作領域選択** | Ctrl+右ドラッグ | キャンバス上の矩形領域を選択して `input.touchscreen_area`（§11.4.2参照）を設定。ドラッグ座標は実際のソース画像コンテンツボックス（レターボックス／ピラーボックスを除外した描画領域）へクランプしてから正規化する。逆方向ドラッグは左上／右下を自動ソートする。ドラッグ結果が退化（幅または高さゼロ）した場合は変更を拒否して旧領域を維持する。変更成功時は即座にアクティブプロファイルTOMLへ永続化する。座標変換は§11.4.1.6参照 |
 
 #### 6.1.5 スクリーンショットキャプチャ
 
@@ -1693,7 +1694,7 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 | `setFps()` | `setFps(fps: str | int) -> None` | UI表示FPSを設定 |
 | `setShowsize()` | `setShowsize(show_height: int, show_width: int) -> None` | UI表示サイズを設定 |
 | `changeRightMouseMode()` | `changeRightMouseMode(mode: str) -> None` | 右クリックモードを変更 |
-| `setTouchscreenArea()` | `setTouchscreenArea(...) -> None` | タッチスクリーン操作領域を設定 |
+| `setTouchscreenArea()` | `setTouchscreenArea(x1: int, y1: int, x2: int, y2: int) -> None` | タッチスクリーン操作領域を設定。入力は現在の `show_size`画像コンテンツ座標系（Switch座標ではなく表示ピクセル）。範囲内へクランプ後、逆方向の隅をソートし、正規化`TouchscreenArea`へ変換して検証する。退化（幅または高さゼロ）時は`ValueError`を送出して旧領域を維持する。本APIはランタイム領域だけを変更し、TOMLへ永続化しない。UI／OpenAPI書き込みは§11.4.1.5に従って永続化し、動的設定代入はランタイムだけを変更する。`show_size`の幅または高さがゼロ以下の場合も`ValueError`を送出し、変更しない |
 | `saveCapture()` | `saveCapture() -> None` | カメラフレームを保存（`camera.saveCapture()` に委譲） |
 | `show_size` (property) | `show_size -> tuple[int, int]` | UI表示サイズ `(height, width)` |
 | `is_show_var` (property) | `is_show_var -> bool` | 映像表示有効フラグ |
@@ -2283,7 +2284,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`,
   `pokecon.opt.ui.camera.live_view_enabled`, `pokecon.opt.ui.camera.pixel_values_visible`, `pokecon.opt.ui.camera.guide_visible`,
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
-  `pokecon.opt.input.keyboard_enabled`, `pokecon.opt.input.left_stick_mouse_enabled`, `pokecon.opt.input.right_stick_mouse_enabled`（入力設定）;
+  `pokecon.opt.input.keyboard_enabled`, `pokecon.opt.input.left_stick_mouse_enabled`, `pokecon.opt.input.right_stick_mouse_enabled`, `pokecon.opt.input.touchscreen_area`（入力設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   `pokecon.opt.webrtc.auto_recover`, `pokecon.opt.webrtc.recovery_probe_interval_sec`（WebRTC復旧設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.list`（パッケージ指定）、`pokecon.opt.python.script.packages.uv_config`（uv.toml明示パス）。
@@ -2616,6 +2617,54 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 - **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。切替処理と同時に発生した旧プロファイルへのUI書き込みを新プロファイルへ誤適用してはならない。
 - **Secret**: Secret設定の書き込みでも同じ原子的保存を使用し、生の値をログ・エラー・変更通知へ含めない（§11.4.3）。
 
+##### 11.4.1.6 TouchscreenArea型定義
+
+`input.touchscreen_area` の型 `TouchscreenArea` は、タッチスクリーン入力ソース領域を正規化ソース画像矩形で指定する構造体型。以下の型定義・検証規則・言語マッピングに従う。
+
+**Python TypedDict**:
+```python
+from typing import TypedDict
+
+class TouchscreenArea(TypedDict):
+    left: float   # 0.0 ≦ left < right ≦ 1.0
+    top: float    # 0.0 ≦ top < bottom ≦ 1.0
+    right: float  # left < right ≦ 1.0
+    bottom: float # top < bottom ≦ 1.0
+```
+- 4フィールドすべて必須。追加フィールド（unknown keys）は拒否する。
+- 値は有限浮動小数点数（`math.isfinite()` が真）。`bool` は `float` として受理しない。
+- 各値の範囲: `0.0 ≦ value ≦ 1.0`。
+- `left < right` かつ `top < bottom` でなければならない。退化（幅または高さゼロ）は拒否する。
+- デフォルト: `{left: 0.0, top: 0.0, right: 1.0, bottom: 1.0}`（ソース画像全面）。
+- 検証失敗時は更新を原子的に拒否し、旧値・UI・TOMLを維持する。
+
+**Luaテーブル**: 同一のキー名（`left`, `top`, `right`, `bottom`）と検証規則。未知キー拒否。
+
+**TOML**: `[input].touchscreen_area = { left = 0.0, top = 0.0, right = 1.0, bottom = 1.0 }`（インラインテーブル）。
+
+**CLI／環境変数**: 既存の複合値規則（§11.4.1.1 JSON文字列）に従い、厳密JSONオブジェクトとして受け渡す。例: `--input-touchscreen-area '{"left":0.0,"top":0.0,"right":1.0,"bottom":1.0}'`。`POKECON_INPUT_TOUCHSCREEN_AREA` も同JSON文字列。
+
+**OpenAPI**: `type: object`とし、`left`／`top`／`right`／`bottom`をすべて必須の有限`number`（最小0.0、最大1.0）として定義する。`additionalProperties: false`とし、フィールド間制約`left < right`および`top < bottom`もサーバー側の正準設定検証で適用する。
+
+**ポインタータッチマッピング（Pointer → TouchscreenArea → Switch座標）**:
+
+UIカメラキャンバス上でのポインター（マウス/タッチ）位置は、以下の手順でSwitchタッチスクリーン座標（0〜319, 0〜239）へ変換される:
+
+1. ポインター位置がキャンバス上の実際のソース画像コンテンツボックス（レターボックス／ピラーボックスを除外した描画領域）の外側にある場合は、タッチプレスを発生させない。通常のタッチ入力では領域内へクランプしない。
+2. コンテンツボックス内の位置だけを正規化ソース画像座標`(u, v)`へ変換する: `u ∈ [0, 1)`, `v ∈ [0, 1)`。
+3. 現在の `input.touchscreen_area` 矩形でクリップ: `left ≦ u < right` かつ `top ≦ v < bottom` の場合のみタッチ有効。範囲外はタッチプレスを発生させない。
+4. 有効な場合、以下の式でSwitch座標へマッピング:
+   ```
+   x = min(319, floor(320 * (u - left) / (right - left)))
+   y = min(239, floor(240 * (v - top) / (bottom - top)))
+   ```
+   出力範囲: `x ∈ {0, …, 319}`, `y ∈ {0, …, 239}`。
+5. リリース（タッチ終了）は常にアクティブタッチをクリアする。`input.touchscreen_area` のランタイム更新時は、現在タッチプレス中なら強制解放してから新しい領域を適用する。
+
+**レガシー互換性**:
+- 旧ベースラインの未正規化表示ピクセル設定は正準ターゲット表現ではない。四つの個別CID（`input.touchscreen_left` 等）は追加しない。
+- レガシー互換API `CaptureArea.setTouchscreenArea(x1, y1, x2, y2)`（§10参照）は、入力表示ピクセルをクランプ・ソート後に正規化TouchscreenAreaへ変換し、同じ検証・ランタイム更新セマンティクスを使用する。このAPIはTOMLへ永続化しない（ランタイム専用）。
+
 #### 11.4.2 動的設定パス定義一覧
 
 本仕様書で規定する `settings.toml` と `pokecon.opt` の動的設定パスの対応関係を以下に示す。
@@ -2642,6 +2691,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `input.keyboard_enabled` | `[input]` | `keyboard_enabled` | `pokecon.opt.input.keyboard_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `true`（キーボード/グローバルホットキー入力有効）。`false` 時は全キーボード入力を解除し、キーボード由来のアクティブ入力を強制解放してから無効化。`true` 時に再登録。他の入力経路は不変。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `input.left_stick_mouse_enabled` | `[input]` | `left_stick_mouse_enabled` | `pokecon.opt.input.left_stick_mouse_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`false` 時は左スティックがマウス駆動中ならニュートラルへ戻しハンドラ無効化。`true` で有効化。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `input.right_stick_mouse_enabled` | `[input]` | `right_stick_mouse_enabled` | `pokecon.opt.input.right_stick_mouse_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。同上（右スティック）。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `input.touchscreen_area` | `[input]` | `touchscreen_area` | `pokecon.opt.input.touchscreen_area` | `TouchscreenArea` | profile | runtime_immediate | R/W | R/W | タッチスクリーン入力ソース領域を正規化ソース画像矩形で指定。型 `TouchscreenArea`（§11.4.1.6参照）。デフォルト `{left: 0.0, top: 0.0, right: 1.0, bottom: 1.0}`（全面）。検証: 有限浮動小数点数、各値0.0〜1.0、`left<right`、`top<bottom`。`bool`はfloatとして受理しない。閉じたオブジェクト（未知キー拒否）。ランタイム変更時はタッチプレス中なら強制解放後に適用。UIカメラキャンバスのCtrl+右ドラッグ（§6.1.4）も本設定へ永続化。CLI: `--input-touchscreen-area`（厳密JSONオブジェクト）。環境変数: `POKECON_INPUT_TOUCHSCREEN_AREA`。§6.1.4、§10 `CaptureArea.setTouchscreenArea()` 参照 |
 | `notifications.line_menu_behavior` | `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | global | runtime_immediate | —（LINE UI削除済み）| R/W | `"message"`（デフォルト）/ `"noop"`。§11.4.1.3のenum正規化規則に従う |
 | `notifications.discord.webhook_url` | `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | global | runtime_immediate | R/W | R（マスク）/W | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
 | `notifications.discord.username` | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（空文字、未設定）。secretに非該当（§11.4.3.1参照） |
@@ -2880,6 +2930,7 @@ serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
 keyboard_enabled = true  # キーボード/グローバルホットキー（デフォルト: true）
 left_stick_mouse_enabled = false  # 左スティックマウス駆動（デフォルト: false）
 right_stick_mouse_enabled = false  # 右スティックマウス駆動（デフォルト: false）
+touchscreen_area = {left = 0.0, top = 0.0, right = 1.0, bottom = 1.0}  # タッチスクリーン操作領域（正規化座標 0.0〜1.0）
 
 # WebRTC設定
 [webrtc]
@@ -3079,6 +3130,7 @@ pokecon.opt.notifications.discord.on_script_end = False  # Discordスクリプ�
 pokecon.opt.input.keyboard_enabled = True  # キーボード/グローバルホットキー（デフォルト: True）
 pokecon.opt.input.left_stick_mouse_enabled = False  # 左スティックマウス駆動（デフォルト: False）
 pokecon.opt.input.right_stick_mouse_enabled = False  # 右スティックマウス駆動（デフォルト: False）
+pokecon.opt.input.touchscreen_area = {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0}  # タッチスクリーン操作領域（正規化座標）
 
 # デスクトップ閉じる動作（階層: ui.desktop名前空間。デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
@@ -3168,6 +3220,7 @@ pokecon.opt.ui.camera.guide_visible = false  -- ガイドオーバーレイ（�
 pokecon.opt.input.keyboard_enabled = true  -- キーボード/グローバルホットキー（デフォルト: true）
 pokecon.opt.input.left_stick_mouse_enabled = false  -- 左スティックマウス駆動（デフォルト: false）
 pokecon.opt.input.right_stick_mouse_enabled = false  -- 右スティックマウス駆動（デフォルト: false）
+pokecon.opt.input.touchscreen_area = {left = 0.0, top = 0.0, right = 1.0, bottom = 1.0}  -- タッチスクリーン操作領域（正規化座標）
 
 -- タグマッチモード（§6.4.1.1参照）
 -- 正準値: exact（完全一致、デフォルト）/ partial（部分一致）/ prefix（前方一致）/ suffix（後方一致）
@@ -3994,7 +4047,7 @@ pokecon.controller.reset()
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全69の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全70の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -4015,6 +4068,7 @@ pokecon.controller.reset()
 | `POKECON_INPUT_KEYBOARD_ENABLED` | キーボード/グローバルホットキー入力有効化。`true` / `false`。profile-capable。CLI: `--input-keyboard-enabled` | `true` |
 | `POKECON_INPUT_LEFT_STICK_MOUSE_ENABLED` | 左スティックマウス駆動有効化。`true` / `false`。profile-capable。CLI: `--input-left-stick-mouse-enabled` | `false` |
 | `POKECON_INPUT_RIGHT_STICK_MOUSE_ENABLED` | 右スティックマウス駆動有効化。`true` / `false`。profile-capable。CLI: `--input-right-stick-mouse-enabled` | `false` |
+| `POKECON_INPUT_TOUCHSCREEN_AREA` | タッチスクリーン入力ソース領域。厳密JSONオブジェクト `{left: float, top: float, right: float, bottom: float}`。各値0.0〜1.0、`left<right`、`top<bottom`。`bool`非受理、閉じたオブジェクト。profile-capable。CLI: `--input-touchscreen-area`（JSON文字列）。§6.1.4、§10 `CaptureArea.setTouchscreenArea()` 参照 | `{left: 0.0, top: 0.0, right: 1.0, bottom: 1.0}` |
 | `POKECON_NOTIFICATIONS_LINE_MENU_BEHAVIOR` | LINEメニュー動作。閉じたenum `"message"` / `"noop"`（小文字正規化）。CLI: `--notifications-line-menu-behavior` | `"message"` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL。**Secret**。空文字＝未設定。CLI対応するが非推奨（プロセスリスト露出）。getterは設定済み時に固定マスク `"********"` を返す。§11.4.3参照 | `""`（未設定） |
 | `POKECON_NOTIFICATIONS_DISCORD_USERNAME` | Discord送信ユーザー名。空文字＝未設定。secret非該当。CLI: `--notifications-discord-username` | `""` |

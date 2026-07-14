@@ -532,6 +532,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **カメラ取得FPS** | 正整数入力／コンボボックス | `camera.capture_fps`。デフォルト60。設定時点でアクティブなカメラへ即時適用 |
 | **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
 | **フリップモード** | Combobox | `camera.flip_mode`。閉じたenum `none`／`vertical`／`horizontal`／`both`。表示ラベルは None／Vertical／Horizontal／Both を正準値とは別に表示。変更時は即座にライブフレーム処理へ反映。旧 `set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` の両方へマッピング |
+| **スクリーンショット形式** | Combobox | `camera.screenshot_format`。閉じたenum `png`（デフォルト）／`jpeg`。UI Combobox は PNG／JPEG の表示ラベルを正準値とは別に表示。現在のプロファイルへ永続化し、変更は即座に以降の保存へ反映する。UI保存ダイアログでの一回限りの上書きとは独立。§6.1.5参照 |
 
 アプリケーション起動時は、設定解決後の`camera.device`（未指定時は整数`0`）を自動オープンする。オープンに失敗しても別デバイスへ暗黙に切り替えず、カメラサブシステムを利用不能としてUIへエラーを表示し、他の機能は継続する。
 
@@ -575,12 +576,15 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **Lスティック/Rスティック制御** | キャンバス上でマウスドラッグ | ドラッグ方向/距離に基づいて左/右アナログスティック移動をエミュレート |
 | **カラーピッカー** | Ctrl+クリック | クリック位置の色の値を取得 ※ブラウザのコンテキストメニューと競合する可能性あり。対応例: `event.preventDefault()` の使用 |
 | **範囲スクリーンショット** | Ctrl+Shift+ドラッグ | キャンバス上の選択した矩形領域のスクリーンショットをキャプチャ ※ブラウザのテキスト選択と競合する可能性あり。対応例: `event.preventDefault()` の使用 |
-| **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域をファイル保存ダイアログで保存。初期ファイル名は `capture_YYYYMMDD_HHMMSS.png` ※ブラウザのショートカットと競合する可能性あり（特にLinux/ChromeでOSレベルのウィンドウ移動に使用される場合）。対応例: `event.preventDefault()` の使用、またはユーザー設定で別のキーコンボに変更可能 |
+| **名前付き保存** | Ctrl+Alt+ドラッグ | 選択した領域をファイル保存ダイアログで保存。初期ファイル名は `capture_YYYYMMDD_HHMMSS`（拡張子なし）。保存ダイアログでは実効 `camera.screenshot_format` を初期選択し、PNG/JPEGの一回限り上書きが可能。ダイアログで選択された形式がファイルの拡張子を決定する。§6.1.5参照 ※ブラウザのショートカットと競合する可能性あり（特にLinux/ChromeでOSレベルのウィンドウ移動に使用される場合）。対応例: `event.preventDefault()` の使用、またはユーザー設定で別のキーコンボに変更可能 |
 
 #### 6.1.5 スクリーンショットキャプチャ
 
 - **保存場所**: 実効Dataルート（§14.1.1 Data）配下の `Captures/` ディレクトリ（自動作成）。相対ファイル名はここへ解決。絶対ファイル名はそのまま絶対パスとして使用。相対パスによる `Data/Captures` 外へのトラバーサル（`../` 等）は拒否する。UI保存ダイアログは明示的なターゲットパスを指定する。
-- **形式**: PNG/JPEG（選択可能）。
+- **形式**: PNG（デフォルト）／JPEG。`camera.screenshot_format`（§11.4.2参照）で永続的なデフォルトを設定する。変更は以降の保存に即時反映され、既存ファイルに影響しない。
+- **拡張子**: 生成されるファイル名の拡張子は実効形式に従う（PNG → `.png`、JPEG → `.jpg`）。
+- **UI保存ダイアログでの一回限り上書き**: 名前を付けて保存ダイアログでは実効 `camera.screenshot_format` を初期選択として表示するが、ユーザーはその保存に限り PNG／JPEG を選択し直せる。この上書きは一時的であり、`camera.screenshot_format`設定やTOMLを変更しない。選択されたファイル種別がエンコード方式を決定する。ファイル名に拡張子がない場合は選択された拡張子を追加する。ファイル名に既に認識済み画像拡張子（`.png`／`.jpg`／`.jpeg`、大文字小文字不問）が含まれる場合は、それを選択された拡張子で置き換える。既存ファイルの上書きは通常の明示的確認に従う。
+- **JPEG品質**: JPEG保存時は既存 `jpeg_quality`（1-100、デフォルト85）を使用する。PNG保存時は `jpeg_quality` を無視する。`jpeg_quality` の設定は Motion JPEGフォールバックの品質も兼ねる。
 
 #### 6.1.6 カメラバックエンド
 
@@ -1017,7 +1021,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 映像フォールバックとして、**Motion JPEG over WebSocket** を採用します。各カメラフレームをJPEGとしてエンコードし、WebSocket経由で個別のバイナリメッセージとして送信します。
 
-- **エンコーダー**: サーバーサイドで各フレームをJPEGにエンコード。品質パラメータは `settings.toml` で設定可能（デフォルト: 85、範囲: 1-100）
+- **エンコーダー**: サーバーサイドで各フレームをJPEGにエンコード。品質パラメータは `settings.toml` で設定可能（デフォルト: 85、範囲: 1-100）。品質はJPEGスクリーンショット保存時にも使用され、`jpeg_quality` 設定を共有する
 - **転送**: WebSocket経由で1フレーム=1バイナリメッセージとして送信。各フレームは自己完結したJPEGであり、フレーム間依存性がない
 - **デコード**: ブラウザ標準のJPEGデコーダを使用（WebCodecs等の特殊API不要）
 - **描画**: デコード結果を Canvas に描画
@@ -1647,6 +1651,7 @@ type GamepadInput = ButtonsList | Buttons
 ```python
 from typing import Literal
 type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
+type ScreenshotFormat = Literal["png", "jpeg"]
 ```
 
 - `crop: list[int] | None` — トリミング座標のリスト。`crop_fmt` に応じた4要素の整数リスト。`None`または空リストの場合はトリミングなし
@@ -1669,7 +1674,7 @@ type CropFmt = Literal["", "1", "2", "3", "4", "11", "12", "13", "14"]
 | `flip` (property) | `flip -> bool` | 画像反転の有無 |
 | `flip_mode` (property) | `flip_mode -> int` | 反転モード（`0`: 上下反転, `1`: 左右反転, `-1`: 上下左右反転） |
 | `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] | str) -> None` | 反転設定。正規値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず受け入れる |
-| `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None) -> None` | カメラフレームを実効Dataルート/Captures/に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`） |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop: int | Literal["1"] | Literal["2"] | None = None, crop_ax: list[int] | None = None, img: MatLike | None = None, format: ScreenshotFormat | None = None) -> None` | カメラフレームを実効Dataルート/Captures/に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`）。`format` が `None` の場合は実効 `camera.screenshot_format` を使用。明示指定時はこの呼び出しに限り指定形式で保存 |
 
 > **注**: `openCamera(cameraId: int | str)`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする。`openCamera` の `cameraId` は整数（OpenCVインデックス）または文字列（udevパス/Windows識別子）を受け付ける。数値動作は従来通り、Linux文字列はV4L2デバイスパスをサポート、Windows文字列はネイティブ列挙レイヤー経由。
 
@@ -1709,7 +1714,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `isContainTemplate_max()` | `isContainTemplate_max(template_path_list: list[str], threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path_list: list[str | None] | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> tuple[int, list[float], list[bool]]` | マルチテンプレートマッチング |
 | `isContainTemplateGPU()` | `isContainTemplateGPU(template_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | `isContainTemplate()` の互換性維持スタブ。`use_gpu=True` を固定して呼び出すが、本リファクタリングではGPU処理は行わずCPUで実行する |
 | `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
-| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True) -> None` | カメラフレームを実効Dataルート/Captures/へ保存 |
+| `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True, format: ScreenshotFormat | None = None) -> None` | カメラフレームを実効Dataルート/Captures/へ保存。`crop_fmt` と `crop` でトリミング指定。`format` が `None` の場合は実効 `camera.screenshot_format` を使用。明示指定時はこの呼び出しに限り指定形式で保存 |
 | `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示。エンコード・処理はワーカー内で行い、UI表示用の圧縮ペイロードのみをRustメイン経由で送信する |
 | `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。返された配列はワーカー内で自由に変更可能 |
 | `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
@@ -1718,7 +1723,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `displayRectangle()` | `displayRectangle(max_loc: list[int] | Sequence[int], width: int, height: int, tag: str | None = None, ms: float = 2000, color: list[str] | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None) -> None` | カメラ映像に矩形をオーバーレイ描画（UI座標・色などの制御データのみをRustメインに送信） |
 | `displayText()` | `displayText(position: Sequence[int], txt: str, tag: str | None = None, ms: float = 2000, font: str = "UD デジタル 教科書体 NP-B", fontsize: int = 20, color: str = "black") -> None` | カメラ映像にテキストをオーバーレイ描画（テキスト・位置・フォント等の制御データのみをRustメインに送信） |
 
-> **注（`saveCapture()` の層差）**: `self.saveCapture()`（`ImageProcPythonCommand` 継承時）は画像処理APIであり、`crop_fmt` と `crop` を使用する。`self.camera.saveCapture()` は注入された `Camera` APIであり、`crop` と `crop_ax` を使用する。両者は互換性維持のため同名だが、属するレイヤーと引数構造が異なる。
+> **注（`saveCapture()` の層差）**: `self.saveCapture()`（`ImageProcPythonCommand` 継承時）は画像処理APIであり、`crop_fmt` と `crop` を使用する。`self.camera.saveCapture()` は注入された `Camera` APIであり、`crop` と `crop_ax` を使用する。両者は互換性維持のため同名だが、属するレイヤーと引数構造が異なる。両者とも末尾に `format: ScreenshotFormat | None = None` を持ち、`None` の場合は実効 `camera.screenshot_format`、明示値はこの呼び出しに限り指定形式で保存する。
 
 **例**（典型的な使用パターン）:
 
@@ -2271,7 +2276,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
-  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`, `pokecon.opt.camera.device`, `pokecon.opt.camera.flip_mode`（カメラ設定）;
+  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`, `pokecon.opt.camera.device`, `pokecon.opt.camera.flip_mode`, `pokecon.opt.camera.screenshot_format`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
   `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`, `pokecon.opt.notifications.discord.on_script_start`, `pokecon.opt.notifications.discord.on_script_end`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
@@ -2630,6 +2635,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `camera.capture_resolution` | `[camera]` | `capture_resolution` | `pokecon.opt.camera.capture_resolution` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"1280x720"`。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映し、指定解像度を適用・検証できない場合は暗黙に別解像度へ変更せず更新をロールバックする。 |
 | `camera.device` | `[camera]` | `device` | `pokecon.opt.camera.device` | `int \| str` | global | runtime_immediate | R/W | R/W（oneOf integer/string）| カメラデバイスセレクター。デフォルト `0`（整数）。`int`はOpenCVキャプチャインデックス。`str`はハードウェアセレクター（Linux: V4L2デバイスパス `/dev/videoN`、`/dev/v4l/by-id/*`、`/dev/v4l/by-path/*`、カスタムudevシンボリックリンク。Windows: ネイティブ列挙識別子）。ファイルシステムパス型には分類せず、汎用パス解決・環境変数展開・チルダ展開・相対パス解決・保存値のシンボリックリンク正準化を適用しない。空文字列・NUL・負の整数は拒否。大文字小文字正規化なし。シンボリックリンクはオープン時のみ追跡、生セレクター値は変更しない。TOMLはint/stringをネイティブ保存。CLI: `--camera-device`。環境変数: `POKECON_CAMERA_DEVICE`。CLI/envは非負10進数テキストをint、それ以外をstrとして解釈。起動時に自動オープン、失敗はエラー表示のみで他機能継続。OpenAPI R/W。§6.1.2デバイス切替トランザクション、§6.1.6参照。 |
 | `camera.flip_mode` | `[camera]` | `flip_mode` | `pokecon.opt.camera.flip_mode` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"none"`。閉じたenum `"none"`／`"vertical"`／`"horizontal"`／`"both"`（正準値は小文字）。UI Combobox は None／Vertical／Horizontal／Both の表示ラベルを正準値とは別に表示。変更は即座にライブフレーム処理へ反映。旧 `Camera.set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` 両方へマッピング。§11.4.1.3のenum正規化規則に従う。CLI: `--camera-flip-mode`。環境変数: `POKECON_CAMERA_FLIP_MODE`。 |
+| `camera.screenshot_format` | `[camera]` | `screenshot_format` | `pokecon.opt.camera.screenshot_format` | `str` | profile | runtime_immediate | R/W | R/W | デフォルト `"png"`。閉じたenum `"png"`／`"jpeg"`（正準値は小文字）。プロファイル対応。UI Combobox は PNG／JPEG の表示ラベルを正準値とは別に表示。変更は即座に以降の保存に反映。`jpeg_quality` はJPEG保存時のみ使用、PNGでは無視。§6.1.5参照。§11.4.1.3のenum正規化規則に従う。CLI: `--camera-screenshot-format`。環境変数: `POKECON_CAMERA_SCREENSHOT_FORMAT`。 |
 | `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値は`COM3`や`/dev/ttyACM0`等のOSネイティブなデバイス識別文字列であり、ファイルシステムパス型ではない。環境変数展開・チルダ展開・相対パス解決を適用しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.baud_rate` | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `9600`。正の整数。UIは少なくとも`4800` / `9600` / `115200`を候補として提示し、OS／ドライバーが受理するその他の正整数も入力できる。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.data_format` | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"default"`。閉じたenum `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う。`"3ds"`と`115200`の組み合わせは必須制約ではない。UIで`"3ds"`を選択した場合だけ、現在確認済み機器向けの補助動作として`serial.baud_rate`も`115200`へ原子的に同時更新する。その他の設定表面では任意の正整数ボーレートとの組み合わせを受理し、暗黙に変更しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
@@ -2649,7 +2655,7 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `webrtc.auto_recover` | `[webrtc]` | `auto_recover` | `pokecon.opt.webrtc.auto_recover` | `bool` | global | runtime_immediate | —（直接UIなし）| R/W | WebSocketフォールバック中のWebRTC自動復旧。デフォルト`true`。§11.4.1.2のbool値直列化規則に従う。`false`への変更は未開始プローブを取り消し、実行中プローブからの自動昇格を抑止する。`true`への変更は設定適用時から復旧プローブを開始する。CLI/環境変数は正準IDから自動生成。§7.2参照 |
 | `webrtc.recovery_probe_interval_sec` | `[webrtc]` | `recovery_probe_interval_sec` | `pokecon.opt.webrtc.recovery_probe_interval_sec` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | WebRTC復旧プローブ間隔（秒）。デフォルト`30`。1以上の整数。変更時は現在の待機を取り消し、設定適用時を起点として次回プローブを再スケジュールする。CLI/環境変数は正準IDから自動生成。§7.2参照 |
 | `stun_server` | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | global | runtime_deferred | R/W | R/W | フラット（単体設定）。デフォルト `""`（STUNを使用しない）。空文字以外は`stun:`または`stuns:` URIとして検証する。グローバル専用。UIのSTUN URI入力は必須設定表面で、変更は以後に開始するWebRTC接続／再接続から使用し、確立済みセッションを暗黙に再ネゴシエーションしない。CLI: `--stun-server`。環境変数: `POKECON_STUN_SERVER`。OpenAPI R/W。§6.7.3参照。 |
-| `jpeg_quality` | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | フラット（単体設定）。デフォルト `85`。範囲 1～100 |
+| `jpeg_quality` | `[video.fallback]` | `jpeg_quality` | `pokecon.opt.jpeg_quality` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | フラット（単体設定）。デフォルト `85`。範囲 1～100。Motion JPEGフォールバックの品質とJPEGスクリーンショットの画質を兼ねる。PNGスクリーンショットでは無視される |
 | `server.web_dir` | `[server]` | `web_dir` | — | `str` | global | startup_only | R/W | R/W | SPA静的ファイル配信用ディレクトリ。デフォルト: バンドルアプリケーションリソース `web/dist`（アプリケーションリソースルート基準）。グローバル専用（startup-only/restart-required）。動的パス非対応（axum静的ファイルルートは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--web-dir <path>`（明示的ショートフラグ）。環境変数: `POKECON_WEB_DIR`。UI: サーバー設定のディレクトリピッカー（§6.7.1参照）。パス型（§11.4.1.4）: `path_policy="directory"`、`path_must_exist=true`、`path_auto_create=false`、`path_expected_type="directory"`、`path_resolve_symlink=true`。明示的無効オーバーライド時に組み込みデフォルトへのフォールバックは行わず、起動時エラーとする。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。§6.7.1、§15.9参照 |
 | `server.port` | `[server]` | `port` | — | `int` | global | startup_only | R/W | R/W | HTTPサーバーバインドポート番号。デフォルト `8020`。範囲 1～65535。グローバル専用（startup-only/restart-required）。動的パス非対応（TCPソケットバインドは起動時に確定し、ランタイム中の安全な差し替えは不可能 — 変更は次回起動時に反映）。CLI: `--port <port>`（明示的ショートフラグ）。環境変数: `POKECON_PORT`。UI: サーバー設定の数値入力（§6.7.2参照）。検証: 範囲内整数。バインド失敗時はポート自動インクリメントやフォールバックを行わず、起動時エラーとする。CORSデフォルト許可originは実効`server.port`から動的に導出（§7.4参照）。デスクトップ／Webモードで同一ポートを使用。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§6.7.2、§15.10参照 |
 | `ui.fps_options` | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | profile | runtime_immediate | —（候補生成用）| R/W | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui_fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
@@ -2861,6 +2867,7 @@ capture_fps = 60  # バックエンド処理FPS（上限なし。ソースの実
 capture_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
 device = 0  # カメラデバイスセレクター。int（OpenCVインデックス）またはstr（udevパス/Windows識別子）
 flip_mode = "none"  # フリップモード。閉じたenum: "none"(default) / "vertical" / "horizontal" / "both"
+screenshot_format = "png"  # スクリーンショット形式。閉じたenum: "png"(default) / "jpeg"。§6.1.5参照
 
 # シリアル設定（グローバル）
 [serial]
@@ -3014,6 +3021,8 @@ pokecon.opt.camera.capture_fps = 60
 pokecon.opt.camera.device = 0
 # camera.flip_mode: フリップモード。閉じたenum none/vertical/horizontal/both
 pokecon.opt.camera.flip_mode = "none"
+# camera.screenshot_format: スクリーンショット形式。閉じたenum png/jpeg
+pokecon.opt.camera.screenshot_format = "png"
 # ui.fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
 pokecon.opt.ui.fps = 30
 pokecon.opt.camera.capture_resolution = "1280x720"
@@ -3136,6 +3145,7 @@ pokecon.opt.camera.capture_fps = 60
 -- camera.device: カメラデバイスセレクター。int（OpenCVインデックス=0）またはstring（udevパス/Windows識別子）
 pokecon.opt.camera.device = 0
 pokecon.opt.camera.flip_mode = "none"  -- フリップモード。閉じたenum none/vertical/horizontal/both
+pokecon.opt.camera.screenshot_format = "png"  -- スクリーンショット形式。閉じたenum png/jpeg
 pokecon.opt.ui.fps = 30
 pokecon.opt.webrtc.auto_recover = true
 pokecon.opt.webrtc.recovery_probe_interval_sec = 30
@@ -3984,7 +3994,7 @@ pokecon.controller.reset()
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全68の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全69の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -3998,6 +4008,7 @@ pokecon.controller.reset()
 | `POKECON_CAMERA_CAPTURE_RESOLUTION` | カメラキャプチャ解像度。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`（小文字正規化）。CLI: `--camera-capture-resolution` | `"1280x720"` |
 | `POKECON_CAMERA_DEVICE` | カメラデバイスセレクター。非負10進数テキストは整数（OpenCVインデックス）、それ以外は文字列（udevデバイスパス/Windows識別子）として解釈。空文字・NUL・負の整数は拒否。CLI: `--camera-device`。起動時自動オープン、失敗はエラー表示のみで他機能継続。§6.1.2、§6.1.6参照 | `0` |
 | `POKECON_CAMERA_FLIP_MODE` | カメラフリップモード。閉じたenum `"none"`(default) / `"vertical"` / `"horizontal"` / `"both"`（大文字小文字不問）。グローバル専用。CLI: `--camera-flip-mode` | `"none"` |
+| `POKECON_CAMERA_SCREENSHOT_FORMAT` | カメラスクリーンショット形式。閉じたenum `"png"`(default) / `"jpeg"`（小文字正規化）。profile-capable。変更は以降の保存に即時反映。JPEG保存時は `jpeg_quality` を使用。CLI: `--camera-screenshot-format` | `"png"` |
 | `POKECON_SERIAL_PORT` | シリアルデバイス識別文字列（`COM3`、`/dev/ttyACM0`等）。空文字＝未選択。自動選択・自動接続は行わない。CLI: `--serial-port` | `""` |
 | `POKECON_SERIAL_BAUD_RATE` | シリアルボーレート。正の整数。UI候補: 4800/9600/115200。CLI: `--serial-baud-rate` | `9600` |
 | `POKECON_SERIAL_DATA_FORMAT` | シリアルデータフォーマット。閉じたenum `"default"` / `"qingpi"` / `"3ds"`（小文字正規化）。UIで`"3ds"`選択時のみ`baud_rate`を115200へ原子的同時更新。CLI: `--serial-data-format` | `"default"` |

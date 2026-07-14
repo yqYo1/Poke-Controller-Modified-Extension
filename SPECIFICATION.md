@@ -531,7 +531,7 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 | **UI表示FPS** | コンボボックス | UI表示用フレームレート（`ui.fps`、選択肢は`ui.fps_options`から生成）。カメラ取得FPSとは独立 |
 | **カメラ取得FPS** | 正整数入力／コンボボックス | `camera.capture_fps`。デフォルト60。設定時点でアクティブなカメラへ即時適用 |
 | **カメラ取得解像度** | コンボボックス | `camera.capture_resolution`。640x360／1280x720／1920x1080。設定時点でアクティブなカメラへ即時適用 |
-| **フリップ** | Checkbox | 水平/垂直フリップ切替 |
+| **フリップモード** | Combobox | `camera.flip_mode`。閉じたenum `none`／`vertical`／`horizontal`／`both`。表示ラベルは None／Vertical／Horizontal／Both を正準値とは別に表示。変更時は即座にライブフレーム処理へ反映。旧 `set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` の両方へマッピング |
 
 アプリケーション起動時は、設定解決後の`camera.device`（未指定時は整数`0`）を自動オープンする。オープンに失敗しても別デバイスへ暗黙に切り替えず、カメラサブシステムを利用不能としてUIへエラーを表示し、他の機能は継続する。
 
@@ -558,13 +558,13 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 #### 6.1.3 表示モード切替（チェックボックス）
 
-| モード | 説明 |
-|------|-------------|
-| **リアルタイム** | ライブ映像表示 |
-| **ピクセル値** | カーソル位置のピクセル値（RGB/HSV/座標）をオーバーレイ表示 |
-| **ガイド** | 構図用グリッド線やテンプレートマッチングの基準線をオーバーレイ表示 |
+設定は現在のプロファイルの `settings.toml` へ永続化される（§11.4.1.1の正準設定サービス経由）。
 
-これらは表示オーバーレイ切替用のチェックボックスです。
+| モード | 種類 | 説明 |
+|------|------|-------------|
+| **ライブビュー表示** | Checkbox | `ui.camera.live_view_enabled`。デフォルト `true`。`false` 時はフレームレンダリングを停止し、最後に表示されたフレームを保持する。キャプチャ/公開は継続、次に `true` へ戻した時点で最新フレームを再開 |
+| **ピクセル値表示** | Checkbox | `ui.camera.pixel_values_visible`。デフォルト `false`。カーソル位置のピクセル値（RGB/HSV/座標）をオーバーレイ表示 |
+| **ガイド表示** | Checkbox | `ui.camera.guide_visible`。デフォルト `false`。構図用グリッド線やテンプレートマッチングの基準線をオーバーレイ表示 |
 
 #### 6.1.4 キャンバス上のマウス操作
 
@@ -646,11 +646,13 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 
 #### 6.3.1 ソフトウェア制御セクション
 
+各設定は現在のプロファイルの `settings.toml` へ永続化される（§11.4.1.1の正準設定サービス経由）。
+
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **キーボード** | Checkbox | キーボードベースのコントローラー入力を有効化（グローバルホットキー） |
-| **Lスティックマウス** | Checkbox | キャンバス上の左アナログスティックのマウスエミュレーションを有効化 |
-| **Rスティックマウス** | Checkbox | キャンバス上の右アナログスティックのマウスエミュレーションを有効化 |
+| **キーボード** | Checkbox | `input.keyboard_enabled`。デフォルト `true`。`false` にするとキーボード/グローバルホットキー入力を全て解除し、キーボード由来のアクティブ入力を強制解放してから無効化する。`true` に戻した時点で再登録。他の入力経路は変更しない |
+| **Lスティックマウス** | Checkbox | `input.left_stick_mouse_enabled`。デフォルト `false`。`false` にすると左スティックがマウス駆動中の場合にニュートラルへ戻しハンドラを無効化。`true` で有効化 |
+| **Rスティックマウス** | Checkbox | `input.right_stick_mouse_enabled`。デフォルト `false`。同上（右スティック） |
 
 #### 6.3.2 ハードウェア制御セクション
 
@@ -856,6 +858,8 @@ Commands/
 | **Webhook URL** | Text input | Discord Webhook URL。バックエンドで `https://discord.com/api/webhooks/<id>/<token>` 形式を検証する |
 | **ユーザー名** | Text input | Discordメッセージのカスタムユーザー名（オプション） |
 | **アバターURL** | Text input | Discordメッセージのカスタムアバター画像URL（オプション） |
+| **スクリプト開始時に通知** | Checkbox | `notifications.discord.on_script_start`。デフォルト `false`。`true` かつWebhook URL設定済みの場合、スクリプト開始時にDiscordメッセージを送信。URL未設定時は送信をスキップし、当該開始イベントにつき最大1回のWARNING診断を出力する。設定変更は即座に次回スクリプト開始へ反映 |
+| **スクリプト終了時に通知** | Checkbox | `notifications.discord.on_script_end`。同上（スクリプト終了時） |
 | **テスト** | Button | 設定を確認するためのテスト通知を送信 |
 
 #### 6.5.3 LINE通知
@@ -2267,12 +2271,14 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.stun_server`, `pokecon.opt.jpeg_quality`。
 
 - **階層パス（名前空間）**: 複数の関連設定を持ち、意味のある名前空間が存在するサブシステムは階層化する。
-  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`, `pokecon.opt.camera.device`（カメラ設定）;
+  例: `pokecon.opt.camera.capture_fps`, `pokecon.opt.camera.capture_resolution`, `pokecon.opt.camera.device`, `pokecon.opt.camera.flip_mode`（カメラ設定）;
   `pokecon.opt.serial.port`, `pokecon.opt.serial.baud_rate`, `pokecon.opt.serial.data_format`（シリアル設定）;
-  `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`（通知設定）;
+  `pokecon.opt.notifications.line_menu_behavior`, `pokecon.opt.notifications.discord.webhook_url`, `pokecon.opt.notifications.discord.on_script_start`, `pokecon.opt.notifications.discord.on_script_end`（通知設定）;
   `pokecon.opt.ui.fps`, `pokecon.opt.ui.fps_options`, `pokecon.opt.ui.widget_mode`,
   `pokecon.opt.ui.controller_position`, `pokecon.opt.ui.dialog_button_position`,
+  `pokecon.opt.ui.camera.live_view_enabled`, `pokecon.opt.ui.camera.pixel_values_visible`, `pokecon.opt.ui.camera.guide_visible`,
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
+  `pokecon.opt.input.keyboard_enabled`, `pokecon.opt.input.left_stick_mouse_enabled`, `pokecon.opt.input.right_stick_mouse_enabled`（入力設定）;
   `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
   `pokecon.opt.webrtc.auto_recover`, `pokecon.opt.webrtc.recovery_probe_interval_sec`（WebRTC復旧設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.list`（パッケージ指定）、`pokecon.opt.python.script.packages.uv_config`（uv.toml明示パス）。
@@ -2623,13 +2629,19 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `camera.capture_fps` | `[camera]` | `capture_fps` | `pokecon.opt.camera.capture_fps` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `60`。正の整数。設定値にアプリケーション独自の上限は設けない。カメラソースの実FPSが設定値を下回る場合はソースの実FPSが実効上限となる。UI表示FPS `ui.fps` とは独立する。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映する。 |
 | `camera.capture_resolution` | `[camera]` | `capture_resolution` | `pokecon.opt.camera.capture_resolution` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"1280x720"`。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`。§11.4.1.3のenum正規化規則に従う。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。アクティブなカメラには§6.1.2の即時適用トランザクションで反映し、指定解像度を適用・検証できない場合は暗黙に別解像度へ変更せず更新をロールバックする。 |
 | `camera.device` | `[camera]` | `device` | `pokecon.opt.camera.device` | `int \| str` | global | runtime_immediate | R/W | R/W（oneOf integer/string）| カメラデバイスセレクター。デフォルト `0`（整数）。`int`はOpenCVキャプチャインデックス。`str`はハードウェアセレクター（Linux: V4L2デバイスパス `/dev/videoN`、`/dev/v4l/by-id/*`、`/dev/v4l/by-path/*`、カスタムudevシンボリックリンク。Windows: ネイティブ列挙識別子）。ファイルシステムパス型には分類せず、汎用パス解決・環境変数展開・チルダ展開・相対パス解決・保存値のシンボリックリンク正準化を適用しない。空文字列・NUL・負の整数は拒否。大文字小文字正規化なし。シンボリックリンクはオープン時のみ追跡、生セレクター値は変更しない。TOMLはint/stringをネイティブ保存。CLI: `--camera-device`。環境変数: `POKECON_CAMERA_DEVICE`。CLI/envは非負10進数テキストをint、それ以外をstrとして解釈。起動時に自動オープン、失敗はエラー表示のみで他機能継続。OpenAPI R/W。§6.1.2デバイス切替トランザクション、§6.1.6参照。 |
+| `camera.flip_mode` | `[camera]` | `flip_mode` | `pokecon.opt.camera.flip_mode` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"none"`。閉じたenum `"none"`／`"vertical"`／`"horizontal"`／`"both"`（正準値は小文字）。UI Combobox は None／Vertical／Horizontal／Both の表示ラベルを正準値とは別に表示。変更は即座にライブフレーム処理へ反映。旧 `Camera.set_flip()` は大文字小文字不問の文字列を受け付け、`flip`／`flip_mode` 両方へマッピング。§11.4.1.3のenum正規化規則に従う。CLI: `--camera-flip-mode`。環境変数: `POKECON_CAMERA_FLIP_MODE`。 |
 | `serial.port` | `[serial]` | `serial_port` | `pokecon.opt.serial.port` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（シリアルデバイス未選択・未接続）。起動時に利用可能なデバイス一覧を検出するが、自動選択・自動接続は行わない。空文字のまま接続操作を要求した場合はデバイス選択を求めるUIエラーを返し、アプリケーションの他機能は継続する。値は`COM3`や`/dev/ttyACM0`等のOSネイティブなデバイス識別文字列であり、ファイルシステムパス型ではない。環境変数展開・チルダ展開・相対パス解決を適用しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.baud_rate` | `[serial]` | `serial_baudrate` | `pokecon.opt.serial.baud_rate` | `int` | global | runtime_immediate | R/W | R/W | デフォルト `9600`。正の整数。UIは少なくとも`4800` / `9600` / `115200`を候補として提示し、OS／ドライバーが受理するその他の正整数も入力できる。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
 | `serial.data_format` | `[serial]` | `serial_data_format` | `pokecon.opt.serial.data_format` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `"default"`。閉じたenum `"default"` / `"qingpi"` / `"3ds"`。§11.4.1.3のenum正規化規則に従う。`"3ds"`と`115200`の組み合わせは必須制約ではない。UIで`"3ds"`を選択した場合だけ、現在確認済み機器向けの補助動作として`serial.baud_rate`も`115200`へ原子的に同時更新する。その他の設定表面では任意の正整数ボーレートとの組み合わせを受理し、暗黙に変更しない。グローバル専用、可変性`runtime_immediate`、UI/OpenAPI R/W。接続中は§6.2.2の再接続トランザクションで反映する。 |
+| `input.keyboard_enabled` | `[input]` | `keyboard_enabled` | `pokecon.opt.input.keyboard_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `true`（キーボード/グローバルホットキー入力有効）。`false` 時は全キーボード入力を解除し、キーボード由来のアクティブ入力を強制解放してから無効化。`true` 時に再登録。他の入力経路は不変。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `input.left_stick_mouse_enabled` | `[input]` | `left_stick_mouse_enabled` | `pokecon.opt.input.left_stick_mouse_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`false` 時は左スティックがマウス駆動中ならニュートラルへ戻しハンドラ無効化。`true` で有効化。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `input.right_stick_mouse_enabled` | `[input]` | `right_stick_mouse_enabled` | `pokecon.opt.input.right_stick_mouse_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。同上（右スティック）。§6.3.1参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `notifications.line_menu_behavior` | `[notifications]` | `line_menu_behavior` | `pokecon.opt.notifications.line_menu_behavior` | `str` | global | runtime_immediate | —（LINE UI削除済み）| R/W | `"message"`（デフォルト）/ `"noop"`。§11.4.1.3のenum正規化規則に従う |
 | `notifications.discord.webhook_url` | `[notifications]` | `discord_webhook_url` | `pokecon.opt.notifications.discord.webhook_url` | `str` | global | runtime_immediate | R/W | R（マスク）/W | **Secret**。環境変数: `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL`。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。未設定時は空文字。getterは設定済みの場合に固定マスク文字列 `"********"` を返す（§11.4.3参照） |
 | `notifications.discord.username` | `[notifications]` | `discord_username` | `pokecon.opt.notifications.discord.username` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（空文字、未設定）。secretに非該当（§11.4.3.1参照） |
 | `notifications.discord.avatar_url` | `[notifications]` | `discord_avatar_url` | `pokecon.opt.notifications.discord.avatar_url` | `str` | global | runtime_immediate | R/W | R/W | デフォルト `""`（空文字、未設定）。secretに非該当（§11.4.3.1参照）。設定時は空文字または有効なhttp/httpsURL。長さ制限は仕様で規定しない |
+| `notifications.discord.on_script_start` | `[notifications]` | `discord_on_script_start` | `pokecon.opt.notifications.discord.on_script_start` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`true` かつWebhook URL設定済みの場合、スクリプト開始時にDiscordメッセージを送信。URL未設定時は送信をスキップし、当該開始イベントにつき最大1回のWARNING診断を出力する。既存Discord APIは変更しない。§6.5.2参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `notifications.discord.on_script_end` | `[notifications]` | `discord_on_script_end` | `pokecon.opt.notifications.discord.on_script_end` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。同上（スクリプト終了時）。§6.5.2参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `notifications.windows.on_script_start` | `[notifications.windows]` | `on_script_start` | `pokecon.opt.notifications.windows.on_script_start` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行開始時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-start` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START`）。OpenAPI R/W |
 | `notifications.windows.on_script_end` | `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
 | `websocket.reconnect_interval_sec` | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `3`（秒）。§3.4参照。1以上の整数。ランタイム変更は次回の再接続試行から反映 |
@@ -2647,6 +2659,9 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 | `ui.stdout_destination` | `[ui]` | `stdout_destination` | `pokecon.opt.ui.stdout_destination` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `output_1`（デフォルト）/ `output_2`。レガシー格納値 `1` / `2` は旧互換用エイリアス。UIラジオボタン（§6.6.1参照）は本設定の必須UI表面、表示ラベル 出力#1/出力#2。プロファイル対応（profile-capable）。変更は即座にstdout出力先ルーティングを更新する。CLI/環境変数は自動生成（`--ui-stdout-destination` / `POKECON_UI_STDOUT_DESTINATION`）。OpenAPI R/W。§5.9参照 |
 | `ui.controller_position` | `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
 | `ui.dialog_button_position` | `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
+| `ui.camera.live_view_enabled` | `[ui.camera]` | `live_view_enabled` | `pokecon.opt.ui.camera.live_view_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `true`。`false` 時はライブフレームレンダリングを停止、最後に表示されたフレームを保持。キャプチャ/公開は継続。`true` に戻した時点で最新フレームを再開。§6.1.3参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `ui.camera.pixel_values_visible` | `[ui.camera]` | `pixel_values_visible` | `pokecon.opt.ui.camera.pixel_values_visible` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`true` でカーソル位置のピクセルRGB/HSV/座標オーバーレイを表示。§6.1.3参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
+| `ui.camera.guide_visible` | `[ui.camera]` | `guide_visible` | `pokecon.opt.ui.camera.guide_visible` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`true` でグリッド/テンプレートガイドオーバーレイを表示。§6.1.3参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `ui.desktop.close_behavior` | `[ui.desktop]` | `close_behavior` | `pokecon.opt.ui.desktop.close_behavior` | `str` | global | runtime_immediate | R/W | R/W | デスクトップモードでの最終ウィンドウ閉じる動作。`"ask"`（デフォルト）/ `"shutdown"` / `"keep_backend"`。§11.4.1.3のenum正規化規則に従う。§15参照。環境変数: `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR`。CLI: `--ui-desktop-close-behavior` |
 | `ui.desktop.disable_compositing` | `[ui.desktop]` | `disable_compositing` | — | `bool` | global | startup_only | R/W | R/W | デスクトップモード（Tauri/WebView）のウィンドウ合成（コンポジット）を無効化する。デフォルト `false`。グローバル専用（startup-only/restart-required）。動的パス非対応（desktop/WebView初期化が既に完了しており、ランタイム適用は安全に行えない — 変更は次回起動時に反映）。CLI: `--disable-compositing`（明示的 `true`/`false`、bare flag禁止）。環境変数: `POKECON_DISABLE_COMPOSITING`。UI: デスクトップ設定のチェックボックス（§6.6.1参照）。OpenAPI R/W（書き込みはグローバルsettings.tomlへ永続化されるが、次回起動時に反映。レスポンスは `restart_required=true` を返し、現在の実効値は変更されないことを示す）。プロファイルTOMLに指定された場合、無視され既存のグローバル値が使用される（§11.3の診断ポリシーに従う）。§15参照。Webモードでは値保持のみ行われ、効果を持たない |
 | `shortcuts.button_1–shortcuts.button_10` | `[shortcuts]` | `button_1` – `button_10` | `pokecon.opt.shortcuts.button_1` – `button_10` | `str` | profile | runtime_immediate | R/W | R/W | デフォルト `""`（空文字＝未割り当て）。§6.4.2参照。プロファイル対応（profile-capable）。CLI/環境変数は個別に生成 |
@@ -2845,12 +2860,19 @@ active_profile = "default"  # TOMLキー: active_profile（Python API: pokecon.o
 capture_fps = 60  # バックエンド処理FPS（上限なし。ソースの実FPSより高い場合はソースの上限で表示）
 capture_resolution = "1280x720"  # カメラ解像度。選択肢: "640x360", "1280x720", "1920x1080"
 device = 0  # カメラデバイスセレクター。int（OpenCVインデックス）またはstr（udevパス/Windows識別子）
+flip_mode = "none"  # フリップモード。閉じたenum: "none"(default) / "vertical" / "horizontal" / "both"
 
 # シリアル設定（グローバル）
 [serial]
 serial_port = ""  # デフォルトは未選択・未接続。例: "COM3", "/dev/ttyACM0"
 serial_baudrate = 9600  # ボーレート
 serial_data_format = "default"  # データ形式: "default", "qingpi", "3ds"
+
+# 入力設定（プロファイル対応）
+[input]
+keyboard_enabled = true  # キーボード/グローバルホットキー（デフォルト: true）
+left_stick_mouse_enabled = false  # 左スティックマウス駆動（デフォルト: false）
+right_stick_mouse_enabled = false  # 右スティックマウス駆動（デフォルト: false）
 
 # WebRTC設定
 [webrtc]
@@ -2880,6 +2902,8 @@ line_menu_behavior = "message"  # "message"（削除済みメッセージ表示�
 discord_webhook_url = ""  # Discord Webhook URL。未設定時はDiscord通知を送信しない
 discord_username = ""  # Discordメッセージのカスタムユーザー名（任意）
 discord_avatar_url = ""  # DiscordメッセージのカスタムアバターURL（任意）
+discord_on_script_start = false  # スクリプト開始時にDiscord通知を送信（デフォルト: false、Webhook URL要）
+discord_on_script_end = false  # スクリプト終了時にDiscord通知を送信（デフォルト: false、Webhook URL要）
 
 # Windows通知（スクリプト開始時/終了時）
 [notifications.windows]
@@ -2907,6 +2931,13 @@ output_split_ratio = 20  # 出力#1と出力#2の幅比率（0～100、デフォ
 stdout_destination = "output_1"  # stdout出力先（正準値: output_1 / output_2）。レガシー "1"/"2" は保存専用
 widget_mode = "all"  # 正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 controller_position = "top"  # top（上部、デフォルト）/ bottom（下部）
+dialog_button_position = "bottom"  # bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
+
+# カメラ表示設定（プロファイル対応）
+[ui.camera]
+live_view_enabled = true  # ライブビュー表示（デフォルト: true）
+pixel_values_visible = false  # ピクセル値オーバーレイ（デフォルト: false）
+guide_visible = false  # ガイドオーバーレイ（デフォルト: false）
 
 # デスクトップ閉じる動作とコンポジット設定（デスクトップモードのみ、§15参照）
 [ui.desktop]
@@ -2981,6 +3012,8 @@ pokecon.opt.active_profile = "default"
 pokecon.opt.camera.capture_fps = 60
 # camera.device: カメラデバイスセレクター。int（OpenCVインデックス=0）またはstr（udevパス/Windows識別子）
 pokecon.opt.camera.device = 0
+# camera.flip_mode: フリップモード。閉じたenum none/vertical/horizontal/both
+pokecon.opt.camera.flip_mode = "none"
 # ui.fps: UI表示用FPS（getter/setterでUIのコンボボックスと連動）
 pokecon.opt.ui.fps = 30
 pokecon.opt.camera.capture_resolution = "1280x720"
@@ -3014,6 +3047,11 @@ pokecon.opt.ui.output_split_ratio = 20  # §5.8参照。0～100、デフォル�
 # stdout出力先（階層: ui名前空間）
 pokecon.opt.ui.stdout_destination = "output_1"  # §5.9参照。正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
 
+# カメラ表示設定（階層: ui.camera名前空間、§6.1.3参照）
+pokecon.opt.ui.camera.live_view_enabled = True  # ライブビュー表示（デフォルト: True）
+pokecon.opt.ui.camera.pixel_values_visible = False  # ピクセル値オーバーレイ（デフォルト: False）
+pokecon.opt.ui.camera.guide_visible = False  # ガイドオーバーレイ（デフォルト: False）
+
 # タグマッチモード（階層: commands名前空間）
 # §6.4.1.1参照。正準値: exact（完全一致、デフォルト）/ partial（部分一致）/ prefix（前方一致）/ suffix（後方一致）
 pokecon.opt.commands.tag_match_mode = "exact"
@@ -3022,6 +3060,16 @@ pokecon.opt.commands.tag_match_mode = "exact"
 # 非Windows環境では値保持のみ行われ、ネイティブ通知は送出されない
 pokecon.opt.notifications.windows.on_script_start = False  # スクリプト開始時にWindows通知（デフォルト: False）
 pokecon.opt.notifications.windows.on_script_end = False  # スクリプト終了時にWindows通知（デフォルト: False）
+
+# Discord通知設定（スクリプト開始時/終了時、§6.5.2参照）
+# Webhook URL設定済みの場合のみ通知送信。未設定時はスキップ
+pokecon.opt.notifications.discord.on_script_start = False  # Discordスクリプト開始通知（デフォルト: False）
+pokecon.opt.notifications.discord.on_script_end = False  # Discordスクリプト終了通知（デフォルト: False）
+
+# 入力設定（§6.3.1参照）
+pokecon.opt.input.keyboard_enabled = True  # キーボード/グローバルホットキー（デフォルト: True）
+pokecon.opt.input.left_stick_mouse_enabled = False  # 左スティックマウス駆動（デフォルト: False）
+pokecon.opt.input.right_stick_mouse_enabled = False  # 右スティックマウス駆動（デフォルト: False）
 
 # デスクトップ閉じる動作（階層: ui.desktop名前空間。デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  # "ask"（確認）/ "shutdown"（全部終了）/ "keep_backend"（バックエンド継続）
@@ -3087,6 +3135,7 @@ pokecon.opt.language = "ja"
 pokecon.opt.camera.capture_fps = 60
 -- camera.device: カメラデバイスセレクター。int（OpenCVインデックス=0）またはstring（udevパス/Windows識別子）
 pokecon.opt.camera.device = 0
+pokecon.opt.camera.flip_mode = "none"  -- フリップモード。閉じたenum none/vertical/horizontal/both
 pokecon.opt.ui.fps = 30
 pokecon.opt.webrtc.auto_recover = true
 pokecon.opt.webrtc.recovery_probe_interval_sec = 30
@@ -3100,6 +3149,16 @@ pokecon.opt.ui.output_split_ratio = 20  -- 0～100、デフォルト: 20。計�
 -- stdout出力先（§5.9参照）
 pokecon.opt.ui.stdout_destination = "output_1"  -- 正準値: output_1（出力#1、デフォルト）/ output_2（出力#2）
 
+-- カメラ表示設定（§6.1.3参照）
+pokecon.opt.ui.camera.live_view_enabled = true  -- ライブビュー表示（デフォルト: true）
+pokecon.opt.ui.camera.pixel_values_visible = false  -- ピクセル値オーバーレイ（デフォルト: false）
+pokecon.opt.ui.camera.guide_visible = false  -- ガイドオーバーレイ（デフォルト: false）
+
+-- 入力設定（§6.3.1参照）
+pokecon.opt.input.keyboard_enabled = true  -- キーボード/グローバルホットキー（デフォルト: true）
+pokecon.opt.input.left_stick_mouse_enabled = false  -- 左スティックマウス駆動（デフォルト: false）
+pokecon.opt.input.right_stick_mouse_enabled = false  -- 右スティックマウス駆動（デフォルト: false）
+
 -- タグマッチモード（§6.4.1.1参照）
 -- 正準値: exact（完全一致、デフォルト）/ partial（部分一致）/ prefix（前方一致）/ suffix（後方一致）
 pokecon.opt.commands.tag_match_mode = "exact"
@@ -3107,6 +3166,10 @@ pokecon.opt.commands.tag_match_mode = "exact"
 -- Windows通知設定（非Windowsでは値保持のみ）
 pokecon.opt.notifications.windows.on_script_start = false  -- スクリプト開始時にWindows通知
 pokecon.opt.notifications.windows.on_script_end = false  -- スクリプト終了時にWindows通知
+
+-- Discord通知設定（§6.5.2参照）
+pokecon.opt.notifications.discord.on_script_start = false  -- Discordスクリプト開始通知（デフォルト: false）
+pokecon.opt.notifications.discord.on_script_end = false  -- Discordスクリプト終了通知（デフォルト: false）
 
 -- デスクトップ閉じる動作（デスクトップモードのみ、§15参照）
 pokecon.opt.ui.desktop.close_behavior = "ask"  -- "ask" / "shutdown" / "keep_backend"
@@ -3921,7 +3984,7 @@ pokecon.controller.reset()
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全59の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全68の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -3934,13 +3997,19 @@ pokecon.controller.reset()
 | `POKECON_CAMERA_CAPTURE_FPS` | カメラキャプチャFPS。正の整数。UI表示FPSとは独立。CLI: `--camera-capture-fps` | `60` |
 | `POKECON_CAMERA_CAPTURE_RESOLUTION` | カメラキャプチャ解像度。閉じたenum `"640x360"` / `"1280x720"` / `"1920x1080"`（小文字正規化）。CLI: `--camera-capture-resolution` | `"1280x720"` |
 | `POKECON_CAMERA_DEVICE` | カメラデバイスセレクター。非負10進数テキストは整数（OpenCVインデックス）、それ以外は文字列（udevデバイスパス/Windows識別子）として解釈。空文字・NUL・負の整数は拒否。CLI: `--camera-device`。起動時自動オープン、失敗はエラー表示のみで他機能継続。§6.1.2、§6.1.6参照 | `0` |
+| `POKECON_CAMERA_FLIP_MODE` | カメラフリップモード。閉じたenum `"none"`(default) / `"vertical"` / `"horizontal"` / `"both"`（大文字小文字不問）。グローバル専用。CLI: `--camera-flip-mode` | `"none"` |
 | `POKECON_SERIAL_PORT` | シリアルデバイス識別文字列（`COM3`、`/dev/ttyACM0`等）。空文字＝未選択。自動選択・自動接続は行わない。CLI: `--serial-port` | `""` |
 | `POKECON_SERIAL_BAUD_RATE` | シリアルボーレート。正の整数。UI候補: 4800/9600/115200。CLI: `--serial-baud-rate` | `9600` |
 | `POKECON_SERIAL_DATA_FORMAT` | シリアルデータフォーマット。閉じたenum `"default"` / `"qingpi"` / `"3ds"`（小文字正規化）。UIで`"3ds"`選択時のみ`baud_rate`を115200へ原子的同時更新。CLI: `--serial-data-format` | `"default"` |
+| `POKECON_INPUT_KEYBOARD_ENABLED` | キーボード/グローバルホットキー入力有効化。`true` / `false`。profile-capable。CLI: `--input-keyboard-enabled` | `true` |
+| `POKECON_INPUT_LEFT_STICK_MOUSE_ENABLED` | 左スティックマウス駆動有効化。`true` / `false`。profile-capable。CLI: `--input-left-stick-mouse-enabled` | `false` |
+| `POKECON_INPUT_RIGHT_STICK_MOUSE_ENABLED` | 右スティックマウス駆動有効化。`true` / `false`。profile-capable。CLI: `--input-right-stick-mouse-enabled` | `false` |
 | `POKECON_NOTIFICATIONS_LINE_MENU_BEHAVIOR` | LINEメニュー動作。閉じたenum `"message"` / `"noop"`（小文字正規化）。CLI: `--notifications-line-menu-behavior` | `"message"` |
 | `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL。**Secret**。空文字＝未設定。CLI対応するが非推奨（プロセスリスト露出）。getterは設定済み時に固定マスク `"********"` を返す。§11.4.3参照 | `""`（未設定） |
 | `POKECON_NOTIFICATIONS_DISCORD_USERNAME` | Discord送信ユーザー名。空文字＝未設定。secret非該当。CLI: `--notifications-discord-username` | `""` |
 | `POKECON_NOTIFICATIONS_DISCORD_AVATAR_URL` | Discord送信アバターURL。空文字または有効なhttp/httpsURL。secret非該当。CLI: `--notifications-discord-avatar-url` | `""` |
+| `POKECON_NOTIFICATIONS_DISCORD_ON_SCRIPT_START` | スクリプト開始時Discord通知。`true` / `false`。profile-capable。Webhook URL設定済みの場合のみ送信。CLI: `--notifications-discord-on-script-start` | `false` |
+| `POKECON_NOTIFICATIONS_DISCORD_ON_SCRIPT_END` | スクリプト終了時Discord通知。`true` / `false`。profile-capable。CLI: `--notifications-discord-on-script-end` | `false` |
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START` | スクリプト開始時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-start` | `false` |
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト終了時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-end` | `false` |
 | `POKECON_WEBSOCKET_RECONNECT_INTERVAL_SEC` | WebSocket再接続間隔（秒）。1以上の整数。ランタイム変更は次回再接続試行から反映。CLI: `--websocket-reconnect-interval-sec` | `3` |
@@ -3958,6 +4027,9 @@ pokecon.controller.reset()
 | `POKECON_UI_STDOUT_DESTINATION` | stdout出力先。閉じたenum `output_1`(default) / `output_2`。レガシー値 `1`/`2`互換。profile-capable。CLI: `--ui-stdout-destination` | `output_1` |
 | `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置。閉じたenum `top`(default) / `bottom`（大文字小文字不問）。profile-capable。CLI: `--ui-controller-position` | `top` |
 | `POKECON_UI_DIALOG_BUTTON_POSITION` | ダイアログボタン位置。閉じたenum `bottom`(default) / `top` / `both`（大文字小文字不問）。profile-capable。CLI: `--ui-dialog-button-position` | `bottom` |
+| `POKECON_UI_CAMERA_LIVE_VIEW_ENABLED` | カメラライブビュー表示。`true` / `false`。profile-capable。CLI: `--ui-camera-live-view-enabled` | `true` |
+| `POKECON_UI_CAMERA_PIXEL_VALUES_VISIBLE` | ピクセル値オーバーレイ表示。`true` / `false`。profile-capable。CLI: `--ui-camera-pixel-values-visible` | `false` |
+| `POKECON_UI_CAMERA_GUIDE_VISIBLE` | ガイドオーバーレイ表示。`true` / `false`。profile-capable。CLI: `--ui-camera-guide-visible` | `false` |
 | `POKECON_UI_DESKTOP_CLOSE_BEHAVIOR` | デスクトップ最終ウィンドウ閉じる動作。閉じたenum `"ask"`(default) / `"shutdown"` / `"keep_backend"`。CLI: `--ui-desktop-close-behavior` | `"ask"` |
 | `POKECON_DISABLE_COMPOSITING` | デスクトップモードウィンドウ合成無効化。`true` / `false`（明示必須）。グローバル専用（startup-only）。CLI: `--disable-compositing`（明示的ショートフラグ、bare禁止）。§15参照 | `false` |
 | `POKECON_SHORTCUTS_BUTTON_1` | ショートカットボタン1割り当て。空文字＝未割り当て。profile-capable。CLI: `--shortcuts-button-1` | `""` |

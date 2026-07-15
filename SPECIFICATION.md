@@ -729,14 +729,26 @@ pokecon.opt.commands.tag_match_mode = "prefix"
 
 タグはコマンドの分類・フィルタリングに使用されるメタデータです。
 
-**CommandInfo構造体**（Python側の型定義。実際の実装はユーザースクリプトワーカーのIPCプロキシで行われる）:
+**CommandInfo構造型**（Python／Luaで同じ4フィールドを公開し、実際の値はユーザースクリプトワーカーのIPCプロキシから供給される）:
 ```python
-class CommandInfo:
+from typing import TypedDict
+
+class CommandInfo(TypedDict):
     name: str           # コマンド名（NAME属性）
     module_path: str    # モジュールファイルパス
     class_name: str     # クラス名
     tags: list[str]     # 統合後のタグ一覧（自動+手動+動的）
 ```
+
+```lua
+---@class CommandInfo
+---@field name string           コマンド名（NAME属性）
+---@field module_path string    モジュールファイルパス
+---@field class_name string     クラス名
+---@field tags string[]         統合後のタグ一覧（自動+手動+動的）
+```
+
+4フィールドはすべて必須であり、Pythonの生成型ヒントとLua Language Server向け型定義の双方に同じ構造を出力する。
 
 **自動タグ（ディレクトリ由来）**:
 - Pythonモジュールのパスから自動生成（中間ディレクトリ名を `@` プレフィックス付きで抽出）
@@ -1305,7 +1317,7 @@ Rustメインプロセスは、ライブカメラフレームを格納する名�
 2. §7.9.4の選択規則に従い、書き込み可能なスロット（現在の出版対象スロットでなく、ワーカーによりピン留めされていないスロット）を選択する。カメラバックエンドが共有メモリへの直接キャプチャをサポートする場合はそれを優先し、サポートしない場合はキャプチャバッファから選択スロットへの1回のメモリコピーを行う。
 3. フレームのバイト列とメタデータ（フレームシーケンス番号、形状、ストライド、データ型）を選択スロットに完全に書き込む。
 4. Rustメインは共有ヘッダ（§7.9.3 SharedHeader）の `published_token` を**リリースセマンティクス**で単一のアトミックストアし、当該フレームを読取可能として出版する。`published_token` はスロットインデックス（下位2ビット）とフレームシーケンス番号（残りビット）をパックした単一のatomic uint64であり、一回のリリースストアで両方を原子的に公開する。
-5. ワーカーは共有ヘッダを必要なタイミングで**獲得セマンティクス**で読み取り、`published_token` から `(slot_index, frame_sequence)` 組をデコードする（ワーカーは§7.8制御IPC経由のフレーム通知を個別に受信しない）。
+5. ワーカーは共有ヘッダを必要なタイミングで**獲得セマンティクス**で読み取る。`published_token == UINT64_MAX`の場合はスロットをデコード・参照せず、実効`camera.capture_resolution`と同じ幅・高さの全ゼロBGR uint8フレームをワーカーのプライベートメモリ上に生成して返す。それ以外の場合だけ`published_token`から`(slot_index, frame_sequence)`組をデコードする（ワーカーは§7.8制御IPC経由のフレーム通知を個別に受信しない）。
 6. ワーカーは該当スロットのデータを自身のプライベートmutable NumPy ndarrayにコピーする。コピー完了後、即座に該当スロットのリーダーピンを解放する。
 7. 以降の画像処理操作（テンプレートマッチング、トリミング、変換等）はすべてワーカー内のプライベートndarray上で実行される。Rustメインとの追加のデータ転送は発生しない。
 
@@ -1319,7 +1331,7 @@ Rustメインプロセスは、ライブカメラフレームを格納する名�
 |-----------|-----|------|
 | `published_token` | アトミックuint64 | 単一のアトミック出版トークン。下位2ビットにスロットインデックス（0..2）、上位62ビットにフレームシーケンス番号（0..2^62-2で循環、2^62-2から0へラップアラウンド、2^62-1は予約）をパックする。フレームシーケンス番号はトークンの変更検出と等価性比較のみに使用し、数値的大きさによる順序付けは行わない。エンコード: `token = (seq << 2) | slot`。デコード: `slot = token & 3`, `seq = token >> 2`。無効値は`UINT64_MAX`（予約済み`seq=2^62-1`かつ無効スロット`3`）とし、初期化時・出版停止時に使用する。`0`は有効な`seq=0, slot=0`なので無効値に使用しない。 |
 
-Rustメイン（writer）はフレーム書き込み完了後に `published_token` を**リリースセマンティクス**で単一のアトミックストアする。ワーカー（reader）は**獲得セマンティクス**でアトミックロードする。単一のトークンにより、スロット選択とフレーム識別が原子的に出版される。
+Rustメイン（writer）はフレーム書き込み完了後に `published_token` を**リリースセマンティクス**で単一のアトミックストアする。ワーカー（reader）は**獲得セマンティクス**でアトミックロードし、`UINT64_MAX`かどうかをスロットデコードより先に検査する。無効値をスロット`3`として参照してはならない。単一のトークンにより、スロット選択とフレーム識別が原子的に出版される。
 
 **SlotHeader**（各スロットの先頭、3スロット分）:
 
@@ -1372,14 +1384,15 @@ Rustメイン（writer）はフレーム書き込み完了後に `published_toke
 
 ##### 読取手順（reader / ワーカー）
 
-1. Camera API呼び出し時、SharedHeaderの `published_token` を**獲得セマンティクス**でアトミックロードし、`(slot_index, frame_sequence)` をデコードする。
-2. 該当スロットの `reader_pin_count` をインクリメントする。
-3. SharedHeaderの `published_token` を再ロードし、デコードした `(slot_index, frame_sequence)` が変化していないことを確認する。
-4. 変化していた場合（レース敗北）、ピンを解放し手順1から再試行する。
-5. 該当スロットのSlotHeader.frame_sequenceが期待値と一致することを確認する。
-6. 安定したスロットからワーカー内プライベートmutable ndarrayへコピーする。
-7. コピー完了後、直ちに `reader_pin_count` をデクリメントする。
-8. 呼出元に返されるndarrayはワーカープライベートメモリ上の独立コピーであり、共有スロットをピン留めしない。
+1. Camera API呼び出し時、SharedHeaderの`published_token`を**獲得セマンティクス**でアトミックロードする。
+2. トークンが`UINT64_MAX`の場合はスロットをデコードせず、実効`camera.capture_resolution`と同じ幅・高さの全ゼロBGR uint8フレームをワーカー内のプライベートmutable ndarrayとして生成し、そのまま返す。共有スロットのピン操作は行わない。
+3. 有効なトークンの場合だけ`(slot_index, frame_sequence)`をデコードし、該当スロットの`reader_pin_count`をインクリメントする。
+4. SharedHeaderの`published_token`を再ロードし、デコードした`(slot_index, frame_sequence)`が変化していないことを確認する。
+5. 変化していた場合（レース敗北）、ピンを解放し手順1から再試行する。
+6. 該当スロットのSlotHeader.frame_sequenceが期待値と一致することを確認する。
+7. 安定したスロットからワーカー内プライベートmutable ndarrayへコピーする。
+8. コピー完了後、直ちに`reader_pin_count`をデクリメントする。
+9. 呼出元に返されるndarrayはワーカープライベートメモリ上の独立コピーであり、共有スロットをピン留めしない。
 
 ##### 出版済スロットの再利用
 
@@ -1392,7 +1405,7 @@ Rustメイン（writer）はフレーム書き込み完了後に `published_toke
 
 - これは**最新フレーム（latest-frame）**出版であり、FIFOキューではない。
 - ワーカーが前フレームの取得処理中に新フレームが到着した場合、ワーカーは前フレームのコピーを完了した後、次の取得時に最新フレームを取得する。中間フレームがスキップされても問題ない。
-- Camera API（`image_bgr`, `readFrame()`, `getCameraImage()`）は、取得時点で利用可能な最新の完全出版済フレームを返す。
+- Camera API（`image_bgr`, `readFrame()`, `getCameraImage()`）は、取得時点で利用可能な最新の完全出版済フレームを返す。初回出版前または出版停止中は§7.9.4の全ゼロBGRフレームを返し、`None`や無効スロットを返さない。
 
 ##### ワーカークラッシュ/切断
 
@@ -1585,13 +1598,21 @@ type GamepadInput = ButtonsList | Buttons
 
 **ダイアログメソッド**（ブロッキングWebポップアップ）:
 
+旧Python APIの型投影では、次の型エイリアスを`Commands.PythonCommandBase`から公開する。可変な内側リストとの互換性を維持しながら、`Any`は使用しない。
+
+```python
+type DialogueEntryItem = str | bool | int | float | list[str]
+type DialogueEntry = list[DialogueEntryItem]
+type DialogueList = list[DialogueEntry]
+```
+
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `show_dialog()` | `show_dialog(title: str, widgets: list[Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None]] | Widget[str] | Widget[int] | Widget[float] | Widget[bool] | Widget[None], blocking: bool = True) -> int` | 新API（推奨）。ブロッキングWebポップアップダイアログ。`blocking=True` の場合は固定値 `0` を返し、結果は各Widgetの`value`属性から取得。`blocking=False` の場合は固有の正のダイアログIDを返す。単一WidgetまたはWidgetリストを受け付ける。呼び出し時の規範的な戻り値型は§10.6.2の`Literal[True]`／`Literal[False]`オーバーロードに従う |
 | `is_dialog_closed()` | `is_dialog_closed(dialog_id: int) -> bool` | 非ブロッキングダイアログの終了確認 |
 | `wait_dialog()` | `wait_dialog(dialog_id: int) -> Literal[0]` | 非ブロッキングダイアログの結果待機。ブロッキング待機後、戻り値は固定で`0`。結果は各Widgetの`value`属性から取得 |
-| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list` は各ウィジェット定義のリスト。各要素は `[widget_type, label, ...]` の形式 |
-| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list` の形式は `dialogue6widget()` と同じ |
+| `dialogue6widget()` | `dialogue6widget(title: str, dialogue_list: DialogueList, desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。マルチウィジェットダイアログ。`dialogue_list`は各ウィジェット定義の可変リスト。各要素は`[widget_type, label, ...]`の形式 |
+| `dialogue6widget_select_settings()` | `dialogue6widget_select_settings(title: str, dialogue_list: DialogueList, dirname: str, desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（互換性維持）。設定選択付きダイアログ。`dialogue_list`の形式は`dialogue6widget()`と同じ |
 | `dialogue()` | `dialogue(title: str, message: int | str | list[int | str], desc: str | None = None, need: type[list[object]] | type[dict[object, object]] = list) -> list[str] | dict[int | str, str]` | 旧API（他実装との互換性必須）。単純ダイアログ |
 
 **注**: 旧APIは互換性のために保持される。後方互換性を維持するため、旧APIも新APIと同等の完成度・品質でメンテナンスされる。一般ユーザーには新API（`show_dialog`）の使用を推奨するが、開発時の扱いは新APIと変わらない。
@@ -1668,8 +1689,8 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 
 | メソッド/プロパティ | シグネチャ | 説明 |
 |---------------------|-----------|------|
-| `image_bgr` (property) | `image_bgr -> MatLike` | 現在のカメラフレーム（BGR形式）の変更可能な独立コピーを取得。永続共有メモリ上の最新ライブフレーム領域からワーカー内のプライベートndarrayへ1回コピーされる。このndarrayはワーカー内で自由に変更可能であり、戻り値の変更はライブソースや他呼び出しに影響しない |
-| `readFrame()` | `readFrame() -> MatLike` | `image_bgr` プロパティのエイリアス。現在のフレームの変更可能な独立コピーを返す（永続共有メモリ上のライブフレーム出版機構を経由） |
+| `image_bgr` (property) | `image_bgr -> MatLike` | 現在のカメラフレーム（BGR形式）の変更可能な独立コピーを取得。永続共有メモリ上の最新ライブフレーム領域からワーカー内のプライベートndarrayへ1回コピーされる。初回出版前または出版停止中は、実効キャプチャ解像度と同じ形状の全ゼロBGR uint8フレームを返す。このndarrayはワーカー内で自由に変更可能であり、戻り値の変更はライブソースや他呼び出しに影響しない |
+| `readFrame()` | `readFrame() -> MatLike` | `image_bgr`プロパティのエイリアス。現在のフレーム、または出版無効時の全ゼロBGRフレームの変更可能な独立コピーを返す（§7.9.4） |
 | `isOpened()` | `isOpened() -> bool` | カメラがオープンされているか |
 | `fps` (property) | `fps -> int` | カメラFPS（取得・設定可能） |
 | `capture_size` (property) | `capture_size -> tuple[int, int]` | キャプチャ解像度 `(width, height)`。UI表示サイズとの比率計算に使用される |
@@ -1718,7 +1739,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] | None = None, mask_path: str | None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int | tuple[int, int, int]] | None = None, threshold_binary: int | None = None, crop_template: list[int] | None = None, show_image: bool = False, color: list[str] | None = None) -> bool` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename: str | None = None, crop_fmt: CropFmt = "", crop: list[int] | None = None, mode: bool = True, format: ScreenshotFormat | None = None) -> None` | カメラフレームを実効Dataルート/Captures/へ保存。`crop_fmt` と `crop` でトリミング指定。`format` が `None` の場合は実効 `camera.screenshot_format` を使用。明示指定時はこの呼び出しに限り指定形式で保存 |
 | `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] | None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示。エンコード・処理はワーカー内で行い、UI表示用の圧縮ペイロードのみをRustメイン経由で送信する |
-| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。返された配列はワーカー内で自由に変更可能 |
+| `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] | None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。初回出版前または出版停止中は§7.9.4の全ゼロBGRフレームへ同じcrop処理を適用して返す。返された配列はワーカー内で自由に変更可能 |
 | `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike | None` | 画像ファイルを読み込み |
 | `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |
 | `get_filespec()` | `get_filespec(filename: str, mode: str = "t") -> str` | 相対ファイル名をフルパスに解決 |
@@ -1947,17 +1968,17 @@ def show_dialog(self, title: str, widgets: list[Widget[str] | Widget[int] | Widg
 
 ```python
 @overload
-def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
+def dialogue6widget(self, title: str, dialogue_list: DialogueList, desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
 @overload
-def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+def dialogue6widget(self, title: str, dialogue_list: DialogueList, desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
 @overload
-def dialogue6widget(self, title: str, dialogue_list: list[list[Any]], desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+def dialogue6widget(self, title: str, dialogue_list: DialogueList, desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
 @overload
-def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
+def dialogue6widget_select_settings(self, title: str, dialogue_list: DialogueList, dirname: str, desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
 @overload
-def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+def dialogue6widget_select_settings(self, title: str, dialogue_list: DialogueList, dirname: str, desc: str | None = None, *, need: type[dict[object, object]]) -> dict[int | str, str]: ...
 @overload
-def dialogue6widget_select_settings(self, title: str, dialogue_list: list[list[Any]], dirname: str, desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
+def dialogue6widget_select_settings(self, title: str, dialogue_list: DialogueList, dirname: str, desc: str | None, need: type[dict[object, object]]) -> dict[int | str, str]: ...
 @overload
 def dialogue(self, title: str, message: int | str | list[int | str], desc: str | None = None, need: type[list[object]] = list) -> list[str]: ...
 @overload
@@ -3655,7 +3676,7 @@ type CommandState = Literal["running", "paused", "stopped", "error"]
 | 属性 | 型 | 説明 |
 |------|-----|------|
 | `serial_port` | `str` | 現在のシリアルポートの生セレクター値（例: `"COM3"`、`"/dev/serial/by-id/..."`）。未設定時は空文字 `""`。シンボリックリンクの解決先へ置換しない |
-| `serial_baudrate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial.baud_rate` または組み込みデフォルト値 |
+| `serial_baud_rate` | `int` | 現在のボーレート（例: `115200`）。未設定時は `opt.serial.baud_rate` または組み込みデフォルト値 |
 | `serial_connected` | `bool` | 接続状態 |
 | `camera_opened` | `bool` | カメラオープン状態 |
 | `camera_fps` | `int` | 現在のFPS（`opt.camera.capture_fps` をデバイス能力で制限した実際の値） |
@@ -3680,7 +3701,7 @@ import pokecon
 
 # シリアル関連
 print(pokecon.state.serial_port)        # 現在のシリアルポート（例: "COM3" または "/dev/serial/by-id/..."）
-print(pokecon.state.serial_baudrate)    # 現在のボーレート（例: 115200）
+print(pokecon.state.serial_baud_rate)   # 現在のボーレート（例: 115200）
 print(pokecon.state.serial_connected)   # 接続状態（True/False）
 
 # カメラ関連

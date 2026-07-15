@@ -3355,6 +3355,8 @@ Luaの動的設定ファイル読み込み時にエラーが発生しても、�
 - **require不要**: Lua設定では `require` なしで `pokecon.*` にアクセス可能。グローバル名前空間に `pokecon` が注入される
 - **Python/Lua両対応**: 両言語で同一の公開名前空間・名前・セマンティクスを提供。ネイティブ呼び出し規約は言語構文に従う（Pythonはキーワード引数、Luaはoptionsテーブル）。これはAPIセマンティクスの乖離ではなく、意図的な言語構文の違いである
 - **直列イベント実行**: Python/Luaのイベントコールバックは動的設定ワーカーの単一実行スレッド上で、イベント受信順のFIFOとして直列実行する。実行中のコールバックと後続コールバックを並行実行しない
+- **未定義イベントへの事前登録**: `on()`／`once()`は、まだ`pokecon.event.define()`されていない任意のイベント名も受理する。実質的なプラグイン間でイベント消費側を生産側より先に読み込めることを必須とし、イベント定義順への依存を作らない
+- **イベント名の型ヒント**: イベント引数は`BuiltinEvent | str`とする。`BuiltinEvent`の文字列リテラル列挙はIDE補完を提供するためであり、未知の文字列を静的または実行時に拒否する閉じたenumではない。存在しないイベント名へのハンドラ登録は意図した有効な使用法である
 
 ###### 11.5.6.1.2 名前空間設計
 
@@ -3376,12 +3378,27 @@ type Callback = Callable[[], Literal[False] | None]
 # Trueは型エラーとして静的に拒否される。
 # Pre/Post共通。通常のコールバックはNoneを返す。
 
+# pokecon.autocmd名前空間の規範的なPythonシグネチャ
+def on(event: EventName, *, callback: Callback, group: str | None = None) -> HandlerId: ...
+def once(event: EventName, *, callback: Callback, group: str | None = None) -> HandlerId: ...
+def off(handler_id: HandlerId) -> None: ...
+def clear(target: str) -> None: ...
+
+# Luaは同じ引数をoptionsテーブルで渡す。
+# pokecon.autocmd.on(event: EventName, { callback: Callback, group: string? }) -> HandlerId
+# pokecon.autocmd.once(event: EventName, { callback: Callback, group: string? }) -> HandlerId
+# pokecon.autocmd.off(handler_id: HandlerId) -> nil
+# pokecon.autocmd.clear(target: string) -> nil
+
 import pokecon
 
 # 基本的なイベント登録
 # 戻り値: HandlerId（ハンドラ解除用）
 # callback: 引数なし。戻り値はCallback型に従う。引数は追加しない
 handler_id: HandlerId = pokecon.autocmd.on("CameraOpenPost", callback=lambda: print("Camera opened"))
+
+# 生産側プラグインがまだ読み込まれていないカスタムイベントにも事前登録できる
+pending_handler_id: HandlerId = pokecon.autocmd.on("PluginReadyPost", callback=lambda: print("Plugin ready"))
 
 # 一度だけ実行
 # 発火後の HandlerId は無効になり、off() は何もしない（エラーにはならない）
@@ -3436,6 +3453,13 @@ local handler_id = pokecon.autocmd.on("CameraOpenPost", {
     end
 })
 
+-- 生産側プラグインがまだ読み込まれていないカスタムイベントにも事前登録できる
+local pending_handler_id = pokecon.autocmd.on("PluginReadyPost", {
+    callback = function()
+        print("Plugin ready")
+    end
+})
+
 -- 一度だけ実行
 local handler_id_once = pokecon.autocmd.once("SerialConnectPost", {
     callback = function()
@@ -3467,12 +3491,12 @@ pokecon.autocmd.clear("my_group")
 # ユーザー定義イベント
 # pokecon.event.define(event: str) -> None
 # 戻り値: None
-pokecon.event.define("MyCustomEvent")
+pokecon.event.define("PluginReadyPost")
 
 # イベント発火
-# pokecon.event.emit(event: str) -> None
+# pokecon.event.emit(event: BuiltinEvent | str) -> None
 # 戻り値: None
-pokecon.event.emit("MyCustomEvent")
+pokecon.event.emit("PluginReadyPost")
 
 # 定義済みイベント一覧
 # pokecon.event.list_defined() -> list[str]
@@ -3482,10 +3506,19 @@ print(pokecon.event.list_defined())
 
 ```lua
 -- Lua設定（Pythonと同一の公開名前空間・名前・セマンティクス）
-pokecon.event.define("MyCustomEvent")
-pokecon.event.emit("MyCustomEvent")
+pokecon.event.define("PluginReadyPost")
+pokecon.event.emit("PluginReadyPost")
 print(pokecon.event.list_defined())
 ```
+
+**未定義イベントとプラグイン読込順**:
+
+- `on()`／`once()`はイベント名が未定義でも`HandlerId`を返してハンドラを保留登録する。保留登録は`off()`および`clear()`の対象に含まれる
+- 後から同名イベントを`define()`すると、保留ハンドラは登録順を維持したまま通常のハンドラとして有効になる。`once()`のハンドラは、定義時ではなく最初の発火完了後に解除される
+- `define()`は同じ名前に対して冪等とし、既に定義済みの組み込みイベントまたはユーザー定義イベントを再度指定しても何もしない
+- `emit()`は定義済みイベントだけを発火できる。未定義名を指定した場合はイベントを暗黙に定義せず、未定義イベントエラーを返す。保留ハンドラは削除しない
+- `list_defined()`は組み込みイベントと明示的に定義済みのユーザーイベントだけを返し、保留ハンドラしか存在しない未定義名は含めない
+- イベント名は空でないNULを含まない文字列とし、大文字小文字を区別する
 
 ###### 11.5.6.1.5 組み込みイベント一覧
 
@@ -3563,8 +3596,40 @@ type BuiltinEvent = Literal[
 ]
 
 # 組み込みイベント + ユーザー定義イベント
+# BuiltinEventはIDE補完用の候補であり、EventNameは意図的に開いた文字列型。
+# 未定義のカスタムイベント名もon()/once()へ事前登録できる。
 type EventName = BuiltinEvent | str
 ```
+
+```lua
+---@alias BuiltinEvent
+---| "AppStartupPost"
+---| "AppShutdownPre"
+---| "SerialConnectPost"
+---| "SerialDisconnectPre"
+---| "SerialDisconnectPost"
+---| "CameraOpenPost"
+---| "CameraClosePre"
+---| "CameraClosePost"
+---| "CommandStartPre"
+---| "CommandStartPost"
+---| "CommandStopPre"
+---| "CommandStopPost"
+---| "CommandErrorPre"
+---| "CommandErrorPost"
+---| "ScriptLoadPre"
+---| "ScriptLoadPost"
+---| "ConfigReloadPre"
+---| "ConfigReloadPost"
+---| "InputPressedPre"
+---| "InputReleasedPost"
+---| "ProfileSwitchPre"
+---| "ProfileSwitchPost"
+
+---@alias EventName BuiltinEvent|string
+```
+
+Python／Luaともに`BuiltinEvent`はIDE補完候補であり、`EventName`は開いた文字列型である。未知の文字列を型エラーまたは登録時エラーにしてはならない。
 
 ###### 11.5.6.1.7 エラーハンドリングとPreイベントのキャンセル
 

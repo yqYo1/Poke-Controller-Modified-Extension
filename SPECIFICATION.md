@@ -1,8 +1,8 @@
 # Poke-Controller Modified Extension — 仕様書
 
-> **バージョン**: 2.1.0
+> **バージョン**: 2.2.0
 > **ブランチ**: `refactor/rust-core`
-> **日付**: 2026-07-15
+> **日付**: 2026-07-17
 > **ソース**: セッション議事録から抽出した過去のユーザー要件（現在のコードベースではない）
 
 ---
@@ -65,7 +65,7 @@ Rustコアは二つの独立したワーカープロセスを管理する。ユ�
    - `dynamic_config_language = "python"` の場合: ワーカー起動時にCPythonインタープリターを初期化する。LuaJITは `pokecon.source()` で `.lua` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "lua"` の場合: ワーカー起動時にLuaJITランタイムを初期化する。CPythonは `pokecon.source()` で `.py` ファイルが読み込まれた場合にオンデマンドで初期化する。
    - `dynamic_config_language = "none"` の場合: 動的設定ワーカープロセスを生成しない。
-   - Python/Luaのトップレベル設定評価、`pokecon.source()`、設定リロードは動的設定ワーカー内の単一コーディネーターで直列実行する。登録済みコールバックはコーディネーターとは分離した有界並行エグゼキューターへ投入し、異なる登録IDを並行実行できる。
+   - Python/Luaのトップレベル設定評価、`pokecon.source()`、設定リロードは動的設定ワーカー内の単一コーディネーターで直列実行する。登録済みコールバックはコーディネーターとは分離した有界並行エグゼキューターへ投入し、異なる登録IDを並行実行できる。コーディネーター操作中に新規登録されたcallbackと、その操作中に受け付けたイベントによるcallback呼び出しは、当該トップレベル評価／`source()`／リロードの確定またはロールバックが完了するまで開始しない。完了後に確定済み登録集合と状態スナップショットを用いて通常のpriority・受付順規則へ投入し、callbackから部分適用中の状態を観測させない。
    - 同じ登録IDのコールバック呼び出しは専用lane内で受付順に直列実行し、同一クロージャを再入させない。異なる登録ID間にグローバルFIFO順序を設けない。実行待ちタスクは登録時`priority`の降順、同値ならイベント受付順、同一イベント内では登録順で安定選択する。優先度は待機中タスクの開始順だけに作用し、実行中タスクをプリエンプトしない。
    - 同時に開始済みかつ実終了していないcallback数は実効`dynamic.callback_max_concurrency`までとする。ソフト猶予終了によるイベント側の論理完了では実行枠を解放しない。上限変更時に既存callbackを停止せず、実行数が新上限未満になるまで新規開始を保留する。設定値は正整数で、アプリケーション独自の上限を設けない。過大値によるOOMその他の資源枯渇は設定者の責任とする。
    - 未開始callbackは容量`dynamic.callback_queue_capacity`の単一優先度付き待機キューで管理し、同じ登録IDの待機列も総数へ含める。満杯時、新規呼び出しが待機中の最低優先度より高い場合は最低優先度内の最古呼び出しを除外して新規を受理し、それ以外は新規を除外する。除外は戻り値なしの論理完了としてWARNING診断を出し、後続処理を停止しない。`once()`はcallback実行開始時に原子的に解除し、キューから除外された場合は登録を維持する。
@@ -113,7 +113,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 | Webブラウザ | スタンドアロンSvelteKit SPA | Tauriウィンドウなし、axumのみ |
 | モバイル（将来） | レスポンシブSPA | 同一コードベース、アダプティブレイアウト |
 
-**注**: macOSは現時点では対象外。TauriのWebKit/GTK依存によるCI問題（AGENTS.md参照）により、macOS対応は現在のスコープ外とし、将来のバージョンでの判断とする。
+**注**: macOSは現時点では対象外。macOS向けビルド成果物・実機検証・互換保証は現在のスコープに含めず、将来のバージョンで対応可否を判断する。
 
 **プロセス構成**（デスクトップモード）:
 
@@ -203,6 +203,7 @@ Tauri（デスクトップUI）とaxum（HTTPサーバー）は同一のRustメ�
 - 接続断時に、自動的に再接続を試行します。
 - 再接続間隔、リトライ回数上限は設定で変更可能（§11.4参照）。
 - デフォルト値: 3秒ごとに試行、リトライ回数上限20回。上限到達後は接続状態・最後の秘匿化済みエラー・試行回数と「再接続」ボタンを持つ非モーダルUIを表示する。ボタン押下は即座に1回の接続試行を開始し、成功時は表示を閉じて通常状態へ戻る。失敗時は表示を維持し、次の明示押下まで自動試行を再開しない。`reconnect_max_retries=0`の場合も切断時に同じUIを直ちに表示する
+- **無応答検出**: アプリケーションレベルの`ping`／`pong`（§7.3.2）を使用する。サーバーは接続ごとに`websocket.ping_interval_sec`間隔で一意の`nonce`を持つ`ping`を送信し、クライアントは受信後直ちに同じ`nonce`の`pong`を返す。サーバーが送信後`websocket.pong_timeout_sec`以内に対応する`pong`を受信しない場合は当該接続を切断状態へ遷移させる。クライアントも最後の`ping`受信から両設定値の合計秒を超えた場合は接続を能動的に閉じ、上記の再接続を開始する。通常メッセージの送受信はheartbeatを代替せず、タイマーは単調時計で計測する。両設定は1以上の整数、`pong_timeout_sec <= ping_interval_sec`を要求し、変更時は現在のheartbeat待機を取り消して設定適用時から新しい値で再スケジュールする
 
 ---
 
@@ -547,11 +548,11 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 **取得設定の即時適用トランザクション**:
 
 1. カメラが閉じている場合は、正準設定サービスの実効値を即時更新し、次回カメラオープン時に使用する。
-2. カメラが開いている場合はフレーム公開をフレーム境界で一時停止し、現在の取得FPS・解像度・共有メモリレイアウトをロールバック用に保持する。
+2. カメラが開いている場合はフレーム公開をフレーム境界で一時停止し、現在の取得FPS・解像度・共有メモリレイアウトをロールバック用に保持する。一時停止中も`published_token`は最後の有効な旧寸法フレームを指し、`Camera.image_bgr`／`readFrame()`は新しい完全フレームの出版までその変更可能な独立コピーを返す。正準設定値とUIレイアウトも成功確定までは旧寸法を維持し、部分適用中の新寸法と旧フレームを組み合わせない。
 3. 同じOpenCVキャプチャハンドルへ`CAP_PROP_FPS`、`CAP_PROP_FRAME_WIDTH`、`CAP_PROP_FRAME_HEIGHT`を設定する。設定変更のためにデバイスを自動切断・再接続しない。
 4. 解像度はドライバーから読み戻した幅・高さと取得した有効フレームの寸法が要求値に完全一致することを確認する。FPSはソース実FPSが要求値を下回ることを許容し、その実FPSを実効上限として扱う。
-5. 成功時は各スロットのbyte_length/shape/stridesを新しいフレーム寸法で更新し、公開トークンを原子的に切り替える。共有メモリ領域の割り当て（`slot_byte_size`）はアプリケーション生存期間中、最大対応キャプチャ解像度1920×1080 BGR uint8で固定される。unmap/remap/recreateは行わず、リーダーピン競合も発生しない。MappingDescriptorは初回マップ時およびレイアウトバージョン変更時にのみ送信し、解像度変更ごとには送信しない。WebRTCとMotion JPEGは次に公開されるフレームから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
-6. 適用またはTOML保存に失敗した場合は、保持した取得設定と共有メモリレイアウトへロールバックし、設定値・TOML・UI表示を変更せずエラーを返す。ロールバック後に有効フレームを取得できない場合だけカメラをエラー状態として閉じ、他機能は継続する。
+5. 成功時は§7.9.4の通常writer選択規則で未ピンの非カレントスロットを1つCAS取得し、新しい寸法の最初の完全フレームと当該スロットのbyte_length/shape/strides/frame_sequenceだけを書き込んでから、公開トークンを原子的に切り替える。現在の出版スロットおよび`reader_pin_count > 0`のスロットのデータ・メタデータは変更しない。旧寸法の非カレントスロットは、後続フレームでwriterが未ピン状態を確認してCAS取得した時に新しい寸法へ遅延更新する。共有メモリ領域の割り当て（`slot_byte_size`）はアプリケーション生存期間中、最大対応キャプチャ解像度1920×1080 BGR uint8で固定される。unmap/remap/recreateは行わない。MappingDescriptorは初回マップ時およびレイアウトバージョン変更時にのみ送信し、解像度変更ごとには送信しない。WebRTCとMotion JPEGは新しい公開トークンから新しい寸法を使用し、接続を暗黙に切断しない。その後にUI／OpenAPI書き込み先TOMLを原子的に保存し、正準設定値とUI表示を確定する。
+6. 新しい公開トークンの確定前に適用が失敗した場合は、旧トークンと旧スロットを変更せず取得設定を復元する。確定後のTOML保存に失敗した場合は、保持した旧取得設定を再適用し、同じ未ピン非カレントスロット規則で旧寸法の完全フレームを新たに出版してから設定値・UI表示を旧値へ戻す。ピン中スロットをロールバックのために書き換えてはならない。ロールバック後に有効フレームを取得できない場合だけカメラをエラー状態として閉じ、他機能は継続する。
 7. 動的設定からの代入も同じカメラ再設定・検証・ロールバックを使用するが、§11.4.1.5どおりTOMLへは書き戻さない。
 
 **カメラデバイス切替トランザクション**（デバイス選択変更時）:
@@ -592,6 +593,8 @@ stdout出力（`print()`、`print_s()`等）の出力先を選択する。UIは�
 - **保存場所**: 実効Dataルート（§14.1.1 Data）配下の `Captures/` ディレクトリ（自動作成）。相対ファイル名はここへ解決。絶対ファイル名はそのまま絶対パスとして使用。相対パスによる `Data/Captures` 外へのトラバーサル（`../` 等）は拒否する。UI保存ダイアログは明示的なターゲットパスを指定する。
 - **形式**: PNG（デフォルト）／JPEG。`camera.screenshot_format`（§11.4.2参照）で永続的なデフォルトを設定する。変更は以降の保存に即時反映され、既存ファイルに影響しない。
 - **拡張子**: 生成されるファイル名の拡張子は実効形式に従う（PNG → `.png`、JPEG → `.jpg`）。
+- **既定ファイル名**: `filename`が`None`または空文字の場合、固定ベースライン互換のローカル時刻`YYYY-MM-DD_HH-MM-SS`をベース名とし、実効形式の拡張子を付ける。同一秒の同名ファイルが既に存在する場合は上書きせず、`_1`、`_2`、...の最小未使用接尾辞を付け、排他的createで同時保存間の競合を防ぐ。タイムゾーンは実行ホストのローカルタイムゾーンとし、時刻取得失敗時は保存を失敗させて固定名へフォールバックしない。
+- **上書き**: UI／RESTは既存ファイルを既定で上書きしない。明示名の保存先が存在する場合は`409 Conflict`とし、UIが対象パスを表示してユーザー確認を得た後の要求だけが`overwrite=true`を送信できる。`overwrite=true`でもシンボリックリンク・非通常ファイル・閉じ込め外パスは拒否する。固定ベースラインのユーザースクリプト`saveCapture()`はローカルコード実行権限を持つ互換APIとして、明示された既存通常ファイルを従来どおり置換できるが、`filename=None`／空文字の自動名は上記の非上書き接尾辞規則を使用する。
 - **UI保存ダイアログでの一回限り上書き**: 名前を付けて保存ダイアログでは実効 `camera.screenshot_format` を初期選択として表示するが、ユーザーはその保存に限り PNG／JPEG を選択し直せる。この上書きは一時的であり、`camera.screenshot_format`設定やTOMLを変更しない。選択されたファイル種別がエンコード方式を決定する。ファイル名に拡張子がない場合は選択された拡張子を追加する。ファイル名に既に認識済み画像拡張子（`.png`／`.jpg`／`.jpeg`、大文字小文字不問）が含まれる場合は、それを選択された拡張子で置き換える。既存ファイルの上書きは通常の明示的確認に従う。
 - **JPEG品質**: JPEG保存時は既存 `jpeg_quality`（1-100、デフォルト85）を使用する。PNG保存時は `jpeg_quality` を無視する。`jpeg_quality` の設定は Motion JPEGフォールバックの品質も兼ねる。
 
@@ -1001,7 +1004,7 @@ Commands/
 
 | コントロール | 種類 | 説明 |
 |---------|------|-------------|
-| **バインドアドレス** (`server.bind_address`) | IPアドレス入力 | axum HTTPサーバーが待ち受けるIPアドレス。デフォルトはローカルホスト`127.0.0.1`。LAN公開する場合だけ、そのホストに実在する具体的なLAN IPアドレスを明示する。グローバル専用（startup-only/restart-required）。変更はグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、再起動後に反映する（§15.11参照） |
+| **バインドアドレス** (`server.bind_address`) | IPアドレス入力 | axum HTTPサーバーが待ち受けるIPアドレス。デフォルトはローカルホスト`127.0.0.1`。LAN公開する場合だけ、そのホストに実在する具体的なLAN IPアドレスを明示する。非ループバック値は、動的設定の保存・読込・再読込によるサーバーホスト上のPython／Luaコード実行を含む全REST／WebSocket操作をLANクライアントへ公開する完全信頼の選択である。グローバル専用（startup-only/restart-required）。変更はグローバル`settings.toml`へ保存するが現在のプロセスには適用せず、再起動後に反映する（§15.11参照） |
 
 **設定表面**:
 - **正準ID**: `server.bind_address`
@@ -1111,22 +1114,47 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - **エンドポイント**: `/ws`。
 - **メッセージ**: JSON形式。
 - **自動再接続**: §3.4参照。
-- **イベント**:
+- **イベント／メッセージunion**:
 
-| イベント | 方向 | ペイロード |
-|-------|-----------|---------|
-| `camera.open` | サーバー → クライアント | カメラオープン通知（`{"device": int \| str, "resolution": [int, int]}`） |
-| `camera.close` | サーバー → クライアント | カメラクローズ通知（`{"reason": "user" \| "error" \| "rollback_failure", "device": int \| str}`）。`CameraClosePre`/`CameraClosePost`動的設定イベント（引数なし）とは別 |
-| `command.start` | サーバー → クライアント | コマンド実行開始通知 |
-| `command.stop` | サーバー → クライアント | コマンド実行停止通知 |
-| `command.error` | サーバー → クライアント | コマンド実行エラー詳細 |
-| `serial.data` | サーバー → クライアント | シリアルポート受信データ |
-| `ping` | 双方向 | キープアライブping |
-| `pong` | 双方向 | キープアライブpong応答 |
+  | `type` | 方向 | `revision` | `data` |
+  |--------|------|------------|--------|
+  | `ui.state.changed` | サーバー → クライアント | 必須 | UI可視状態の原子的変更通知。下記`UiStateChange` |
+  | `serial.data` | サーバー → クライアント | なし | `{"encoding":"base64","data":string,"byte_length":int}`。`data`は受信した生バイト列の標準Base64 |
+  | `log` | サーバー → クライアント | なし | `{"level":"debug"|"info"|"warning"|"error"|"critical","message":string,"target":"stdout"|"panel1"|"panel2"|"log"}` |
+  | `webrtc.offer` | 双方向 | なし | `{"sdp":string}` |
+  | `webrtc.answer` | 双方向 | なし | `{"sdp":string}` |
+  | `webrtc.ice_candidate` | 双方向 | なし | `{"candidate":string,"sdp_mid":string|null,"sdp_mline_index":int|null,"username_fragment":string|null}` |
+  | `input.generation` | サーバー → クライアント | なし | `{"generation":string}`。制御経路確立・切替時にサーバーが割り当てる不透明な非空ASCII識別子 |
+  | `input.snapshot` | クライアント → サーバー | なし | 現在のボタン・キー・両スティック・タッチ全状態、`generation`、`sequence` |
+  | `input.snapshot.applied` | サーバー → クライアント | なし | `{"generation":string,"sequence":string}`。指定スナップショットの原子的適用完了確認 |
+  | `ping` | サーバー → クライアント | なし | `{"nonce":string}` |
+  | `pong` | クライアント → サーバー | なし | 対応する`{"nonce":string}` |
 
-> **注（ペイロード詳細の意図的な除外）**: 上記イベントのうち、`camera.open` 以外のペイロード詳細（JSONフィールド構造、エラーコード体系、シリアルデータのエンコード方式等）は**意図的に仕様書から除外**しています。これらはフロントエンド（TypeScript）とバックエンド（Rust）間の内部通信プロトコルであり、ユーザーが直接参照・操作するものではありません。実装時に両レイヤー間で合意形成し、安定した仕様として維持します。`camera.open` のみ、UI側でカメラ解像度等を知るためにユーザーが間接的に依存する情報を含むため、ペイロード構造を公開しています。
+**共通JSON外形**:
 
-**注**: WebSocketイベントは**バックエンドとフロントエンドSPA間の内部通信プロトコル**です。ユーザー（スクリプト作者や動的設定ファイルの作者）に露出しません。動的設定イベント（§11.5.6.1）のみがユーザーが使用できるイベントシステムです。
+- JSONメッセージは`type`を判別子とするOpenAPI componentのdiscriminated unionとして定義し、各variantは上表のフィールドだけを許可して`additionalProperties=false`とする。§7.5〜§7.7のキーボード／マウス／ゲームパッド入力variantも同じ生成unionへ含める
+- `ui.state.changed`は`{"type":"ui.state.changed","revision":"<非負10進整数>","data":<UiStateChange>}`、その他は`{"type":"...","data":...}`とし、revisionを持たないvariantへ`revision`を追加しない
+- `UiStateChange`は`cause`、`state`、`settings`を持つ。`cause`は`"settings"`／`"camera"`／`"serial"`／`"command"`／`"profile"`／`"dynamic_config"`／`"commands"`／`"shutdown"`／`"other"`の閉じたenum。`state`は`GET /api/state`の`data`から`revision`を除いた各プロパティをoptionalにした`additionalProperties=false`の疎な`StatePatch`。変更のないプロパティを含めない。`settings`は設定変更がない場合`null`、ある場合は正準IDをoptionalプロパティとする疎な`values`、`pending_restart_values`、`restart_required`、`apply_failures`を持ち、secretは§11.4.3.5のマスク済み表現だけを使用する
+- UI可視状態を変更する1つの原子的トランザクションにつき、revisionを1回だけ増加させ、同じrevisionの`ui.state.changed`を正確に1件送信する。1トランザクションで設定・状態・コマンド表示一覧が同時に変化する場合も同じ`data`内へ両方の疎な差分を含め、同revisionの複数イベントへ分割しない
+- `command_display_lists`、`command_candidates`、`tags`のいずれかが変わる場合、`state`には三つを同じ完成世代の完全値としてまとめて含める。未完成世代や異なる世代の組合せを送信しない
+- `command.error`等の従来の個別WebSocket通知名は設けず、`cause="command"`の`ui.state.changed`と`StatePatch.command_state`／`current_command`で表す。診断詳細は共通RESTエラーまたは`log` variantで通知する。動的設定イベント名との対応関係は持たない
+
+**入力variantの共通外形**:
+
+- §7.5〜§7.7の全入力メッセージも`{"type":"...","data":{...}}`外形を使用し、`data`には各節固有のフィールドに加えて`generation: string`と`sequence: string`を必須とする。`sequence`は同一generation内で0から開始する単調増加の非負10進整数文字列であり、JavaScript整数精度へ依存しない
+- 経路確立・切替時、サーバーは新しい`input.generation`を発行する。クライアントはそのgenerationと`sequence="0"`を持つ`input.snapshot`を送信し、サーバーが全入力状態を原子的に置換した確認を返した後にだけ`sequence="1"`以降の増分入力を送信する。古いgeneration、重複sequence、現在値以下のsequenceは副作用なしで無視する
+- `input.snapshot.data`は`generation: string`、`sequence: "0"`、`keyboard_keys: list[str]`、`mouse_buttons: {left:bool,right:bool,middle:bool}`、`buttons: {a:bool,b:bool,x:bool,y:bool,l:bool,r:bool,zl:bool,zr:bool,lclick:bool,rclick:bool,plus:bool,minus:bool,home:bool,capture:bool}`、`hat: "up"|"down"|"left"|"right"|"up_right"|"up_left"|"down_right"|"down_left"|"neutral"`、`left_stick: {x:int,y:int}`、`right_stick: {x:int,y:int}`、`touch: {x:int,y:int,pressed:true}|null`をすべて必須で持ち、各objectは`additionalProperties=false`とする。スティックは0〜255、touchはx=0〜319／y=0〜239。押下中touchがない場合だけ`touch=null`とする
+- `keyboard_input`は`key:string`と`state:"pressed"|"released"`、`mouse_stick_input`は`stick:"LSTICK"|"RSTICK"`と0〜255の`x`／`y`、`mouse_input`は`button:"left"|"right"|"middle"`、`state:"pressed"|"released"`、非負の描画領域ピクセル`x`／`y`を持つ。`gamepad_input`は`kind`を第二判別子とし、`button`は`button`＋`state`、`stick`は`stick`＋`x`＋`y`、`hat`は`hat`、`touch`は`touch`だけを許可する。各形は他の形のフィールドを同時に含めず、`additionalProperties=false`とする
+
+**初期化・再接続のrevision整合**:
+
+1. SPAは最初にWebSocketへ接続し、`ui.state.changed`を一時保持する
+2. 接続後に`GET /api/settings`と`GET /api/state`を並行取得し、それぞれのスナップショットrevisionを記録する
+3. 保持イベントをrevision順に処理し、`settings`差分は設定スナップショットrevisionより新しい場合だけ、`state`差分は状態スナップショットrevisionより新しい場合だけ適用する。片方だけ新しい場合はその領域だけ適用する
+4. 保持イベントのrevisionに欠落がある、同revisionが複数ある、または差分を型検証できない場合は推測せず、両GETを再実行して新しい基準を作る
+5. WebSocket再接続時も同じ手順を使用する。`serial.data`、`log`、シグナリング等のrevisionなしメッセージはスナップショット再生対象にしない
+
+上記全variantをutoipaのOpenAPI componentへ登録し、`openapi-typescript`でRustと同じ判別unionを生成する。WebSocketが内部通信であることは、型契約を実装時の口頭合意へ委ねる理由にはならない。
 
 ### 7.4 HTTP REST API
 
@@ -1146,19 +1174,23 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   | `GET` | `/api/settings` | 正準設定レジストリでOpenAPI読み取り対象となる現在の実効設定を一括取得する |
   | `PATCH` | `/api/settings` | 正準設定IDをキーとする疎な設定集合を一括更新する |
 
-  - `PATCH`のJSON要求は`{"values": {"camera.capture_fps": 60, "ui.fps": 30}}`形式とし、指定されていない設定は変更しない
+  - `PATCH`のJSON要求は`{"expected_revision":"42","values":{"serial.baud_rate":115200,"serial.data_format":"3ds"}}`形式とし、指定されていない設定は変更しない。`expected_revision`はoptionalな非負10進整数文字列で、省略時は従来どおり最終書き込み勝ちとする。全UI可視状態の確定を直列化する単一のrevisionトランザクションゲートを使用し、各設定クラスの事前検証後、確定直前にこのゲートを取得して`expected_revision`を比較する。不一致ならデバイスの事前適用を含む当該クラスのロールバックを実行し、設定・TOML・revisionを変更せず現在の`revision`を含む`409 Conflict`を返す。一致時だけゲート保持中に設定スナップショットを確定してrevisionを1回増加させる。公式SPAは直前に取得・適用したrevisionを常に指定し、プロファイル切替後を含む他クライアントとの競合を検出する
   - OpenAPIでは`values`を`Record<string, ...>`や単一の巨大な値unionにせず、OpenAPI対象の各正準IDをリテラルなプロパティ名、その設定固有の型をプロパティ型として列挙した生成スキーマにする。`GET`用は全読み取り対象プロパティを必須、`PATCH`用は全書き込み対象プロパティをoptional、双方とも`additionalProperties=false`とし、正準IDと値型の不正な組み合わせをTypeScript LSPで検出可能にする
-  - 要求内の全設定を型、値域、相互制約、書き込み可否について先に検証し、すべて有効な場合だけ1トランザクションとして反映・永続化する。1件でも無効なら変更を一切適用せず、設定IDごとの診断を含む`422 Unprocessable Entity`を返す
-  - 未知の正準ID、OpenAPI書き込み対象外、bootstrap-onlyの設定を`PATCH`へ含めた場合も`422`とする
+  - 要求内の全設定を型、値域、相互制約、書き込み可否、保存先、下記の要求クラスについて先に検証する。1件でも無効なら変更を一切適用せず、設定IDごとの診断を含む`422 Unprocessable Entity`を返す
+  - 1要求は次のいずれか一つのクラスだけに属さなければならない: (A) `active_profile`単独、(B) カメラ取得トランザクション集合`camera.device`／`camera.capture_fps`／`camera.capture_resolution`の任意の部分集合、(C) シリアルトランザクション集合`serial.port`／`serial.baud_rate`／`serial.data_format`の任意の部分集合、(D) A〜Cを含まない通常設定集合。同じ要求でクラスを混在させた場合は`422`とする
+  - クラスDの全設定は同じ永続化先に属さなければならない。グローバル`settings.toml`向けと現在のプロファイル`settings.toml`向けを同じ要求に混在させた場合は`422`とし、呼び出し側が保存先ごとに分割する。これにより複数ファイルをまたぐ擬似的な原子性を主張しない
+  - クラスAは§11.5.6.4.3のプロファイル切替トランザクションだけを実行する。クラスB／Cは対応する専用デバイストランザクションを1回実行し、ランタイム適用とTOML保存の両方が成功した場合だけ設定値を確定する。適用・保存失敗時は当該専用ロールバックを実行し、設定値・対象TOML・revisionを変更せず`409 Conflict`を返す。ロールバック自体に失敗した場合も設定値は旧値のままとし、該当サブシステムを利用不能として秘匿化済み診断を返す
+  - クラスDは対象TOMLパスの設定ロック下で最新内容を1回読み、全変更を1つの一時ファイルへ反映して1回の原子的置換で保存する。保存成功後、正準設定サービスの全値を1つの新しいスナップショットへ同時に切り替える。通常の`runtime_immediate`適用ハンドラは事前検証後に失敗しない設計とする。予期しない適用失敗が発生した場合も設定スナップショットの一部だけを旧値へ戻さず、保存・確定済みの新値を維持して該当機能だけを利用不能とする。設定UI／`GET`／`PATCH /api/settings`は利用可能なまま維持し、ユーザーは後続PATCHで値を修正できる。次回起動時は保存値の適用を再試行して同じ失敗を診断し、設定者の値を暗黙に既定値へ置換しない
+  - 未知の正準ID、OpenAPI書き込み対象外、scopeが`bootstrap`の`app_name`、`dynamic_config_language`、`python.dynamic.venv`、`python.dynamic.packages.*`を`PATCH`へ含めた場合も`422`とする。mutabilityが`startup_only`でもscopeが`global`／`profile`の設定とは区別する
   - startup-only設定は更新・永続化を受理するが、現在のプロセスへは適用せず、応答の`pending_restart_values`と`restart_required`へ該当IDを含める
-  - secret設定の読み取り値と更新後応答は§11.4.3.5のマスク規則に従い、平文を返さない
-  - `GET`応答`data`は`revision`、全読み取り対象の現在実効値を持つ`values`、現在プロセスでは未適用のstartup-only保存値だけを持つ疎な`pending_restart_values`、その正準ID一覧`restart_required`を返す。`PATCH`成功応答も同じ形を返し、正規化後の値と再起動要否を呼び出し側が推測せず確認できるようにする
+  - secret設定の読み取り値と更新後応答は§11.4.3.5のマスク規則に従い、平文を返さない。`PATCH`で現在設定済みsecretの固定マスク文字列`"********"`を受け取った場合は、そのIDを変更集合から除外して既存値を維持する。空文字は明示的な消去、それ以外の有効値は置換とする。マスクだけを含む要求は成功するno-opであり、revisionを増加させない
+  - `GET`応答`data`は`revision`、全読み取り対象の現在実効値を持つ`values`、現在プロセスでは未適用のstartup-only保存値だけを持つ疎な`pending_restart_values`、その正準ID一覧`restart_required`を返す。`PATCH`成功応答も同じ形を返し、正規化後の値と再起動要否を呼び出し側が推測せず確認できるようにする。さらにクラスDで予期しないランタイム適用失敗が発生した場合だけ、正準IDをキー、秘匿化済み診断を値とする疎な`apply_failures`を返す。通常時と`GET`では`apply_failures`は空オブジェクトとする
   - `GET`は現在のアクティブプロファイルを反映した実効値を返す。API独自のscope指定は設けない
-  - `PATCH`は正準設定レジストリのscopeに従い、グローバル専用設定をグローバル`settings.toml`へ、プロファイル対応設定を現在のプロファイル`settings.toml`へ保存する
-  - `active_profile`とプロファイル対応設定を同じ`PATCH`要求へ含めると書き込み先が切替前後で曖昧になるため、要求全体を`422`で拒否する。呼び出し側は`active_profile`の更新完了後に別の`PATCH`でプロファイル対応設定を更新する
-  - `GET`応答と`PATCH`成功応答はUI可視状態と共通の`revision`を含む。設定変更時は同じrevisionを持つ設定変更WebSocketイベントを全クライアントへ通知し、受信側は必要な場合に`GET /api/settings`を再取得する
+  - `PATCH`は正準設定レジストリのscopeに従い、グローバル専用設定をグローバル`settings.toml`へ、プロファイル対応設定を現在のプロファイル`settings.toml`へ保存する。上記の同一保存先規則により、1要求が両方へ書き込むことはない
+  - `active_profile`は常に単独の`PATCH`要求とし、他のグローバル専用設定を含めても要求全体を`422`で拒否する。呼び出し側は切替完了後の`revision`と設定・状態を再取得してから、別の`PATCH`で後続設定を更新する
+  - `GET`応答と`PATCH`成功応答はUI可視状態と共通の`revision`を含む。設定変更時は同じrevisionを持つ`ui.state.changed`を全クライアントへ通知し、`data.settings`に当該トランザクションの疎な設定差分を含める
   - 設定ごとの専用RESTエンドポイントおよび`/api/settings/{id}`形式は設けない
-- **操作トランスポート**: コマンド制御、通知テスト、デバイス再スキャン等のバックエンド処理を伴う非ストリーミング離散UI操作はHTTP RESTへ統一する。クライアント表示だけを変える操作はREST化しない。WebRTC DataChannel／WebSocketはコントローラー入力、映像・ログ等のストリーミング、状態・イベント通知に使用し、離散操作の要求APIを重複定義しない。REST操作で状態が変化した場合はHTTP応答を返すとともに、該当する既存WebSocketイベントで接続中の全クライアントへ変更を通知する
+- **操作トランスポート**: コマンド制御、通知テスト、デバイス再スキャン等のバックエンド処理を伴う非ストリーミング離散UI操作はHTTP RESTへ統一する。クライアント表示だけを変える操作はREST化しない。WebRTC DataChannel／WebSocketはコントローラー入力、映像・ログ等のストリーミング、状態・イベント通知に使用し、離散操作の要求APIを重複定義しない。REST操作でUI可視状態が変化した場合はHTTP応答を返すとともに、同じrevisionの`ui.state.changed`を接続中の全クライアントへ通知する
 - **コマンド操作API**:
 
   | メソッド | パス | 動作 |
@@ -1182,9 +1214,9 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   - 応答`data`は`revision`に加え、§11.5.6.3と同名・同型の`serial_port`、`serial_baud_rate`、`serial_connected`、`camera_opened`、`camera_fps`、`camera_resolution`、`camera_device`、`is_running`、`command_state`、`current_command`、`command_candidates`、`tags`、`active_profile`、`pending_profile`、`available_profiles`、`last_input`、`holding_buttons`、`pid`を必須フィールドとして持つ。さらに`command_display_lists: dict[str, list[CommandDisplayItem]]`と`command_display_cache_loading: bool`を持つ。`command_display_lists`のキーは`"-"`および確定済み全タグである
   - 表示一覧キャッシュの`CommandDisplayItem` OpenAPI wire型は`kind`を判別子とするunionとし、コマンド行は`{"kind":"command","command":<CommandInfo>}`、セパレーター行は`{"kind":"separator","label":string|null}`で表す。このwire表現はHTTP／WebSocket境界専用であり、動的設定callbackの`CommandInfo | CommandSeparator`インターフェースへラッパーを要求しない
   - 設定レジストリの値は重複して完全収録せず`GET /api/settings`から取得する。上記状態フィールドは§11.5.6.3と同じ値契約を使用する
-  - 取得後の状態変化は対応するWebSocketイベントで通知し、クライアントが状態全体を再取得する必要がある場合だけ`GET /api/state`を再実行する
-  - `GET /api/settings`、`PATCH /api/settings`、`GET /api/state`の応答、および設定変更・状態変更WebSocketイベントは、UI可視状態の変更ごとに増加する単一のグローバル`revision`カウンターを共有する。JavaScriptの安全整数範囲に依存しないよう、JSON/OpenAPI上は非負10進整数文字列として表現する
-  - SPAは先にWebSocketへ接続して状態イベントを一時保持してから`GET /api/state`を取得し、スナップショット適用後にその`revision`より新しい保持イベントだけを順番に適用する。イベントrevisionに欠落を検出した場合は差分を推測せず`GET /api/state`を再取得する。WebSocket再接続時も同じ手順を使用する
+  - 取得後のUI可視状態変化は`ui.state.changed`で通知し、`data.state`に当該トランザクションの疎な`StatePatch`を含める。全体再取得は§7.3.2の初期化・再接続手順に従う
+  - `GET /api/settings`、`PATCH /api/settings`、`GET /api/state`の応答、および`ui.state.changed`は、UI可視状態の原子的トランザクションごとに1回増加する単一のプロセス内グローバル`revision`カウンターを共有する。サーバープロセス起動時に`0`から開始し、同一プロセス内では減少・再利用・周回させない。JSON/OpenAPI上は非負10進整数文字列として表現し、クライアントは10進整数として比較する。文字列の辞書順比較やJavaScript `Number`の安全整数範囲へ依存せず、`BigInt`または桁数＋同桁辞書順等の正確な整数比較を使用する
+  - SPAの初期化・WebSocket再接続・revision欠落時の再取得と差分再生は§7.3.2の規範手順だけを使用し、本節で別の順序を定義しない
 - **デバイスAPI**:
 
   | メソッド | パス | 動作 |
@@ -1205,9 +1237,9 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   | `POST` | `/api/camera/screenshot` | 現在の公開カメラフレームの全体または指定矩形をPNG／JPEGで保存または返却する |
 
   - 要求は共通の`region`（省略時は全体、指定時は§11.4.1.6と同じ0.0～1.0の正規化矩形）と、`destination`を判別子とするunionを持つ
-  - `{"destination":"captures","filename":string|null,"format":"png|jpeg"|null}`は実効Dataルートの`Captures/`へ保存し、`format=null`では実効`camera.screenshot_format`を使用する。相対名、拡張子、トラバーサル、上書き規則は§6.1.5に従い、成功応答は保存先の表示用パスと実効形式を返す
-  - `{"destination":"path","path":"...","format":"png|jpeg"}`はTauriデスクトップのネイティブ保存ダイアログでユーザーが明示選択したサーバーホスト上の絶対パスだけを受理する。Webモードからは受理せず`409`とする
-  - `{"destination":"download","filename":string|null,"format":"png|jpeg"}`はWebモード用とし、成功時だけ共通JSON外形の例外として画像バイト列を該当`Content-Type`と`Content-Disposition: attachment`付きで返す。サーバーファイルシステムへ保存しない。Tauriでも使用可能とする
+  - `{"destination":"captures","filename":string|null,"format":"png|jpeg"|null,"overwrite":bool}`は実効Dataルートの`Captures/`へ保存し、`overwrite`の既定は`false`、`format=null`では実効`camera.screenshot_format`を使用する。`filename`は`null`／空文字または相対パスだけを受理し、絶対パス、ドライブ／UNCプレフィックス、正規化後またはシンボリックリンク解決後に`Captures/`外となる値を`422`で拒否する。絶対保存は次の`path` variantだけを使用する。成功応答は保存先の表示用相対パスと実効形式を返し、サーバーホストの絶対Dataパスを公開しない
+  - `{"destination":"path","path":"...","format":"png|jpeg","overwrite":bool}`はTauriデスクトップのネイティブ保存ダイアログでユーザーが明示選択したサーバーホスト上の絶対パスだけを受理し、`overwrite`の既定は`false`とする。既存対象へ`overwrite=true`を送るのはネイティブダイアログで上書き確認が完了した場合だけとする。Webモードからは受理せず`409`とする
+  - `{"destination":"download","filename":string|null,"format":"png|jpeg"}`はWebモード用とし、成功時だけ共通JSON外形の例外として画像バイト列を該当`Content-Type`と`Content-Disposition: attachment`付きで返す。サーバーファイルシステムへ保存しない。`filename=null`／空文字は§6.1.5の既定ベース名を使用する。明示名は単一のベース名だけを受理し、パス区切り、制御文字、CR／LF、NULを含む値を`422`で拒否する。`Content-Disposition`は引用符とRFC 5987 `filename*`を安全にエンコードし、入力文字列をヘッダーへ未加工で連結しない。Tauriでも使用可能とする
   - カメラ未オープンまたは有効な公開フレームがない場合は`409`、退化矩形は`422`とし、別デバイスや全体画像へ暗黙にフォールバックしない
 - **通知テストAPI**:
 
@@ -1227,6 +1259,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   - `load_content`はWebブラウザがローカルパスを公開できない場合の経路とする。バックエンドは`language`に応じて実効Configルートの`init.py`または`init.lua`へ内容を原子的に保存してから読み込む。既存ファイルがある場合はUIで明示的な上書き確認を得た要求だけを送る
   - `reload`は最後に成功した`load_path`の解決済みパス、または`load_content`／起動時読込の正準initファイルを再評価する。現在ファイルがない場合は`409`とする
   - 応答は現在ファイルの秘匿化済み表示パス、言語、読み込み成否を返す。読み込み失敗時は前回の有効な動的設定を維持する既存フォールバック規則に従う
+  - 非ループバックの`server.bind_address`でLAN公開している場合も、`load_path`／`load_content`／`reload`を接続元IPやクライアント種別で制限しない。認証を追加せず、§15.11の完全信頼境界としてLANクライアントによるサーバーホスト上のPython／Luaコード保存・評価を許可する
   - 「Open Config Directory」はデスクトップモードではTauriのローカル機能で実効ConfigルートをOSファイルマネージャーに開く。Webモードでは実効Configルート文字列とコピーボタンを表示し、LANクライアントからサーバーホストのファイルマネージャーを起動するREST APIは設けない
 - **プロファイルランチャー／更新確認API**:
 
@@ -1248,7 +1281,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   - JSON構文不正は`400 Bad Request`、型・値・相互制約違反は`422 Unprocessable Entity`、現在状態との競合は`409 Conflict`、対象不存在は`404 Not Found`、予期しない内部失敗は`500 Internal Server Error`を基本とする。各操作でより具体的な状態コードを定義した場合はその定義を優先する
 - **静的ファイル配信**: axumは `server.web_dir`（§11.4.2、§15.9参照）で指定されたディレクトリからSPA静的ファイル（`index.html`・JS・CSS・画像等）を配信する。デフォルト値はアプリケーションリソースルート基準の `web/dist`（バンドルされたSvelteKit SPAビルド出力）。起動時に静的ファイルルートが決定され、ランタイム中の動的差し替えは行わない。詳細は§15.9参照
 
-**注**: WebSocketイベント名はUIとバックエンド間の内部通信プロトコルとして使用され、ユーザーが直接使用することはありません。命名規則は実装時に統一されます。
+**注**: WebSocket／DataChannelメッセージ名はUIとバックエンド間の内部通信プロトコルであり、ユーザーAPIではない。wire名・判別子・型は§7.3.2および本節で確定しており、実装時に別名へ変更しない。
 
 ### 7.5 キーボード入力API
 
@@ -1264,8 +1297,12 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 ```json
 {
   "type": "keyboard_input",
-  "key": "F5",
-  "state": "pressed"
+  "data": {
+    "generation": "connection-42",
+    "sequence": "1",
+    "key": "F5",
+    "state": "pressed"
+  }
 }
 ```
 
@@ -1283,19 +1320,27 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 ```json
 {
   "type": "mouse_stick_input",
-  "stick": "LSTICK",
-  "x": 128,
-  "y": 128
+  "data": {
+    "generation": "connection-42",
+    "sequence": "2",
+    "stick": "LSTICK",
+    "x": 128,
+    "y": 128
+  }
 }
 ```
 
 ```json
 {
   "type": "mouse_input",
-  "button": "left",
-  "state": "pressed",
-  "x": 100,
-  "y": 200
+  "data": {
+    "generation": "connection-42",
+    "sequence": "3",
+    "button": "left",
+    "state": "pressed",
+    "x": 100,
+    "y": 200
+  }
 }
 ```
 
@@ -1315,27 +1360,42 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 ```json
 {
   "type": "gamepad_input",
-  "button": "A",
-  "state": "pressed"
+  "data": {
+    "generation": "connection-42",
+    "sequence": "4",
+    "kind": "button",
+    "button": "A",
+    "state": "pressed"
+  }
 }
 ```
 
 ```json
 {
   "type": "gamepad_input",
-  "stick": "LSTICK",
-  "x": 128,
-  "y": 128
+  "data": {
+    "generation": "connection-42",
+    "sequence": "5",
+    "kind": "stick",
+    "stick": "LSTICK",
+    "x": 128,
+    "y": 128
+  }
 }
 ```
 
 ```json
 {
   "type": "gamepad_input",
-  "touch": {
-    "x": 160,
-    "y": 120,
-    "pressed": true
+  "data": {
+    "generation": "connection-42",
+    "sequence": "6",
+    "kind": "touch",
+    "touch": {
+      "x": 160,
+      "y": 120,
+      "pressed": true
+    }
   }
 }
 ```
@@ -1373,6 +1433,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - 送信方向ごとに有界出力キューとバックプレッシャーを持つ。キューが満杯の場合、送信側は背圧を受ける。
 - 最大MessagePack本文サイズは1 MiB（1,048,576バイト）。超過するペイロードは割り当て前にプロトコルエラーとして拒否する。
 - リーダーが停止した状態で応答を待機してはならない。リーダーループはEOF、I/Oエラー、タスクキャンセル、panic相当を含む全終了経路でトランスポートを原子的に切断状態へ遷移させ、未応答リクエスト表に残る全waiterを内部`ReaderTerminated`相当の切断エラーで即座に完了させる。有界出力キュー内の未送信フレームも破棄し、発行元を永久待機させない。この終了処理はreaderタスクのfinally／Drop相当ガードとして必須とする。
+- writerループもI/Oエラー、broken pipe、タスクキャンセル、panic相当を含む全終了経路で同じトランスポート切断遷移を実行する。writer終了時は有界出力キュー内の未送信フレームを破棄し、キュー容量待ちの全producerと未応答リクエスト表の全waiterを内部`WriterTerminated`相当の切断エラーで即座に完了させる。readerとwriterが同時に終了しても切断遷移とwaiter完了は一度だけ実行され、二重完了してはならない。この終了処理もfinally／Drop相当ガードとして必須とする。
 - XON/XOFFフロー制御は使用しない。
 
 #### 7.8.3 エンベロープ
@@ -1394,13 +1455,16 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 **`response`**: 成功応答。対応するリクエストの`id`を含む。`op`は省略可。`payload`に成功データを含む。
 
-**`error`**: エラー応答。対応するリクエストの`id`を含む。`payload`は以下の構造を推奨する:
+**`error`**: エラー応答。対応するリクエストの`id`を含む。`payload`は次の閉じた`IpcErrorPayload`とし、両キーを必須、未知キーを禁止する。
 ```python
-{
-    "code": str,       # エラーコード（例: "NotFound", "SerialError"）
-    "message": str,    # 人間可読なエラーメッセージ
-}
+from typing import TypedDict
+
+class IpcErrorPayload(TypedDict):
+    code: str       # 安定した機械可読エラーコード（例: "NotFound", "SerialError"）
+    message: str    # secretを含まない人間可読メッセージ
 ```
+
+`code`は空でないASCII識別子、`message`はUTF-8文字列とする。公開APIプロキシは`code`で例外種別へ写像し、`message`の文面解析へ依存しない。
 
 シリアルユーザー切断時はキューイング済みで未開始の全シリアル送信リクエストを直ちに`SerialDisconnected`コードで拒否する（`error` kindとして返す）。既に送信開始済みの直列化フレームは完結するか、コネクションリセットによりインターリーブを防止する。このエラーは公開API上の対応するシリアル通信例外型にプロキシされる（既存の名前付き例外型が存在しない場合は、ドキュメント上「シリアル通信例外」と記述し、新たなユーザー公開API名を発明しない）。
 
@@ -1649,7 +1713,8 @@ import { paths, components } from '$lib/api/openapi.ts'
 | **ユーザースクリプト** | 自動化スクリプトを作成・実行する一般ユーザー | `Commands/PythonCommands/` 以下のスクリプト | `PythonCommand` クラスのメソッド、モジュールレベルの関数 |
 
 **重要**:
-- ユーザースクリプト向けAPIは動的設定（`init.py`/`init.lua`）からも使用可能
+- 本章の`Commands.*`互換APIはユーザースクリプトワーカーだけで提供する。動的設定（`init.py`／`init.lua`）は別ワーカー上の`pokecon.*` APIを使用し、本章のPythonクラス・モジュールを直接公開しない
+- 動的設定ワーカーの`sys.path`／Lua探索パスへユーザースクリプトワーカーの`Commands`パッケージを追加しない。`init.py`から`import Commands`またはその子モジュールを試みた場合は`ModuleNotFoundError`、`init.lua`から同名モジュールを要求した場合は通常のmodule-not-foundエラーとし、互換プロキシ・暗黙転送・共有モジュールキャッシュを生成しない
 - 内部実装の名前空間は本仕様で規定するものではない。ユーザーがアクセスできるAPI名のみを規定する
 
 ### 10.2 設計方針
@@ -1666,9 +1731,18 @@ import { paths, components } from '$lib/api/openapi.ts'
 
 | モジュール | 内容 | ユーザースクリプトでのインポート例 |
 |-----------|------|------------------------------|
-| `dialogue` | ダイアログ関数 | `from Commands import dialogue` |
-| `image_proc` | 画像処理（ユーザースクリプトワーカー内実装）。詳細は §10.4.3 ImageProcPythonCommand 参照 | `from Commands import image_proc` |
-| `net` | Socket、MQTT、HTTPクライアント。`from Commands import net` でインポート可能な関数群。`PythonCommand` のメソッド（`self.socket_connect()` 等）と同じ機能を提供するが、クラス外から使用可能。詳細は §10.4.2 PythonCommand（Socketメソッド）参照 | `from Commands import net` |
+| `dialogue` | §10.6のWidgetとダイアログ関数 | `from Commands import dialogue` |
+| `image_proc` | §10.4.3の画像処理メソッドを関数として投影 | `from Commands import image_proc` |
+| `net` | §10.4.2のSocket／MQTTメソッドを関数として投影 | `from Commands import net` |
+
+**モジュール関数の状態所有**:
+
+- 三モジュールはユーザースクリプトワーカー内で常にimport可能とする。関数呼び出しは、その呼び出しを行った実行コンテキストに束縛された現在のコマンドインスタンスへ委譲する。状態はモジュールグローバルで全コマンド間共有せず、コマンドインスタンス・世代ごとに分離する
+- import時、クラス定義時、または実行中コマンドのない別スレッド／タスクから関数を呼んだ場合は、暗黙にコマンドを生成・選択せず`RuntimeError`を送出する。停止済み世代へ遅着した呼び出しは§7.8の切断エラーとして失敗する
+- 各モジュール関数のシグネチャ、既定値、戻り値、例外、secret秘匿化は、下記の対応するクラスメソッドから`self`だけを除いたものと完全に同一とする。生成型定義には各関数を個別の実名・完全シグネチャで記載し、`Callable[..., object]`、`Any`、動的`__getattr__`で代替しない
+- `dialogue`は`Widget`、`show_dialog`、`is_dialog_closed`、`wait_dialog`、`dialogue6widget`、`dialogue6widget_save_settings`、`dialogue6widget_select_settings`、`dialogue`を公開する。各関数は§10.4.2および§10.6の同名APIへ委譲する
+- `net`は`socket_connect`、`socket_disconnect`、`socket_transmit_message`、`socket_receive_message`、`socket_receive_message2`、`socket_change_ipaddr`、`socket_change_port`、`socket_change_alive`、`mqtt_transmit_message`、`mqtt_receive_message`、`mqtt_receive_message2`、`mqtt_change_broker_address`、`mqtt_change_id`、`mqtt_change_clientId`、`mqtt_change_pub_token`、`mqtt_change_sub_token`を公開する。未定義のHTTP関数は公開しない
+- `image_proc`は`isContainTemplate`、`isContainTemplate_max`、`isContainTemplateGPU`、`isContainedImage`、`saveCapture`、`popupImage`、`getCameraImage`、`openImage`、`setTemplateDir`、`get_filespec`、`displayRectangle`、`displayText`を公開する。現在のコマンドが`ImageProcPythonCommand`でない場合はカメラやUIプロキシを推測せず`RuntimeError`を送出する
 
 **注**: イベントシステム（`pokecon.autocmd`, `pokecon.event`）は§11で定義される。
 
@@ -1853,8 +1927,10 @@ type ScreenshotFormat = Literal["png", "jpeg"]
 | `capture_size` (property) | `capture_size -> tuple[int, int]` | キャプチャ解像度 `(width, height)`。UI表示サイズとの比率計算に使用される |
 | `flip` (property) | `flip -> bool` | 画像反転の有無 |
 | `flip_mode` (property) | `flip_mode -> int` | 反転モード（`0`: 上下反転, `1`: 左右反転, `-1`: 上下左右反転） |
-| `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"] \| str) -> None` | 反転設定。正規値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず受け入れる |
+| `set_flip()` | `set_flip(value: Literal["None", "Vertical", "Horizontal", "Both"]) -> None` | 反転設定。型ヒントの正準値は `"None"` / `"Vertical"` / `"Horizontal"` / `"Both"`。互換性のため、実行時は大文字小文字を区別せず同じ4値へ正規化して受け入れるが、その他の文字列は拒否する |
 | `saveCapture()` | `saveCapture(filename: str \| None = None, crop: int \| Literal["1"] \| Literal["2"] \| None = None, crop_ax: list[int] \| None = None, img: MatLike \| None = None, format: ScreenshotFormat \| None = None) -> None` | カメラフレームを実効Dataルート/Captures/に保存。`crop` でトリミング指定（`1`: `[x1,y1,x2,y2]`, `2`: `[x,y,w,h]`）。`format` が `None` の場合は実効 `camera.screenshot_format` を使用。明示指定時はこの呼び出しに限り指定形式で保存 |
+
+`Camera.set_flip()`のtitlecase正準値は固定ベースラインのユーザースクリプトAPI名を維持する。一方、正準設定`camera.flip_mode`は設定enumの全体規則に従ってlowercaseを使用する。両者は同じ意味へ変換されるが、各公開表面の型ヒントはそれぞれの正準綴りだけを列挙し、大小文字違いの実行時互換入力を`| str`で静的に開放しない。
 
 > **注**: `openCamera(cameraId: int | str)`, `destroy()`, `camera_thread_start()`, `camera_thread_stop()`, `camera_update()` はフレームワークが管理する内部メソッド。ユーザースクリプトから直接呼び出すことを想定しないが、互換性のため `self.camera.*` 経由でアクセス可能とする。`openCamera` の `cameraId` は整数（OpenCVインデックス）または文字列（udevパス/Windows識別子）を受け付ける。数値動作は従来通り、Linux文字列はV4L2デバイスパスをサポート、Windows文字列はネイティブ列挙レイヤー経由。
 
@@ -2289,9 +2365,9 @@ def dialogue(self, title: str, message: int | str | list[int | str], desc: str |
 上記パイプラインに先立ち、以下の目的に必要な最小限のCLI引数および環境変数のみを事前解析する:
 
 - **設定ソースの探索・選択**: `app_name`（アプリ名セレクター）、`active_profile`（プロファイル）
-- **動的設定実行環境の特定**: `dynamic_config_language`（動的設定のプライマリ言語）、`python.dynamic.venv`（動的設定ワーカーvenvパス）
+- **動的設定実行環境の特定**: `dynamic_config_language`（動的設定のプライマリ言語）、`python.dynamic.venv`（動的設定ワーカーvenvパス）、`python.dynamic.packages.list`、`python.dynamic.packages.override_application_constraints`、`python.dynamic.packages.override_package_metadata_constraints`、`python.dynamic.packages.uv_config`、`python.dynamic.packages.revalidate_mutable_sources`（動的設定ワーカーの解決・exact-sync入力）
 
-このカテゴリには、設定ファイルパス・プロファイル・動的設定言語を選択するCLI引数と対応するブートストラップ環境変数が含まれる。具体名は正準設定レジストリ（§11.4.1.1）で規定する（`app_name`、`active_profile`、`dynamic_config_language`等）。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じセレクターを指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
+このカテゴリには、設定ファイルパス・プロファイル・動的設定言語を選択するセレクターと、動的設定ワーカーを生成する前にvenvを完全準備するための`python.dynamic.*`設定が含まれる。最初に`app_name`のCLI／環境変数を解決して実効Configルートを確定し、次にグローバルTOMLを読み込んだ上で、上記のブートストラップ設定すべてを組み込みデフォルト < グローバルTOML < 環境変数 < 明示的CLIの順に解決する。`active_profile`の解決後にプロファイルTOMLを読み込むが、`python.dynamic.*`はグローバル専用でありプロファイルTOMLから変更しない。動的設定ワーカーのvenv解決・exact-sync・ワーカー生成は、このブートストラップ解決がすべて完了した後にだけ開始する。これらを通常CLI段階（動的設定評価後）まで遅延してはならない。具体名は正準設定レジストリ（§11.4.1.1）で規定する（`app_name`、`active_profile`、`dynamic_config_language`等）。プロファイル選択はメインブランチおよびオリジナルExtensionの既存CLIとの互換性を維持し、`--profile <name>`と短縮形`-p <name>`を使用する。既存実装にはプロファイル指定用環境変数がないため、環境変数経路として`POKECON_PROFILE`を新設する。正準IDは`active_profile`のまま維持するが、この項目では互換CLI名と新設環境変数名を明示的にレジストリへ記録し、自動生成名`--active-profile`および`POKECON_ACTIVE_PROFILE`は公開しない。プロファイルCLI引数が省略された場合、CLI段階から`default`を注入して環境変数を上書きしてはならない。`default`は組み込みデフォルト値としてパイプラインの最初に適用し、その後にグローバルTOML、`POKECON_PROFILE`、明示指定された`--profile`／`-p`の順で上書きする。ブートストラップ解析で得られた値は、設定パイプライン全体の起点として使用される—後続のパイプライン適用より優先されるわけではなく、「何を読み込むか／どの動的ワーカー環境を準備するか」を決定するための事前処理である。ブートストラップCLI引数とブートストラップ環境変数の両方が同じ設定を指定する場合、CLI引数が優先される（後勝ちの一貫性に従う）。
 
 **`app_name` — アプリケーション名セレクター**:
 
@@ -2500,7 +2576,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
   `pokecon.opt.ui.camera.live_view_enabled`, `pokecon.opt.ui.camera.pixel_values_visible`, `pokecon.opt.ui.camera.guide_visible`,
   `pokecon.opt.ui.desktop.close_behavior`（UI表示設定）;
   `pokecon.opt.input.keyboard_enabled`, `pokecon.opt.input.left_stick_mouse_enabled`, `pokecon.opt.input.right_stick_mouse_enabled`, `pokecon.opt.input.touchscreen_area`（入力設定）;
-  `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`（WebSocket設定）;
+  `pokecon.opt.websocket.reconnect_interval_sec`, `pokecon.opt.websocket.reconnect_max_retries`, `pokecon.opt.websocket.ping_interval_sec`, `pokecon.opt.websocket.pong_timeout_sec`（WebSocket設定）;
   `pokecon.opt.webrtc.auto_recover`, `pokecon.opt.webrtc.recovery_probe_interval_sec`（WebRTC復旧設定）;
   Pythonユーザースクリプト環境: `pokecon.opt.python.script.venv`（仮想環境パス）、`pokecon.opt.python.script.shutdown_timeout_ms`（ワーカー停止タイムアウト）、`pokecon.opt.python.script.packages.list`（パッケージ指定）、`pokecon.opt.python.script.packages.uv_config`（uv.toml明示パス）。
   動的設定ワーカーのvenvと追加パッケージはブートストラップ専用（グローバル専用、§11.3参照）であり、`pokecon.opt.python.dynamic.*` の動的パスは存在しない。これらはグローバル静的TOML `[python.dynamic]`、環境変数、CLI引数でのみ設定可能であり、プロファイルTOMLでオーバーライドできない。インタープリター本体は設定対象ではない。
@@ -2789,7 +2865,7 @@ Data、Cache、Stateの各ルートも同様にアプリ名に基づいて選択
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
-| `path_policy` | `str` | はい | `"generic"`（通常パス）/ `"url"` / `"secret_path"` / `"directory"` / `"file"` |
+| `path_policy` | `str` | はい | `"generic"`（通常パス）/ `"url"` / `"directory"` / `"file"` |
 | `path_must_exist` | `bool` | はい | 解決後のパスの存在を要求する |
 | `path_auto_create` | `bool` | はい | 存在しない場合に自動作成する |
 | `path_expected_type` | `str` | はい | `"file"` / `"directory"` / `"any"` / `"symlink"` |
@@ -2827,10 +2903,12 @@ UIまたはOpenAPIから書き込み可能な設定は、正準設定レジス�
 - **検証順序**: 入力値を正準レジストリで型検証・正規化し、相互依存する設定を含む最終実効値を検証してから書き込む。検証失敗時はファイルと実効値を変更せず、UIへエラーを返して表示値を現在の実効値へ戻す。
 - **変更単位**: 対象のTOMLキーだけを変更する。書き込み直前に対象ファイルの最新内容を再読込し、未知のセクション／キー、コメント、並び順、および変更対象外の値を保持できるTOML編集方式を使用する。ファイルが存在しない場合は必要な親ディレクトリと対象セクションを作成する。
 - **並行制御**: 正準化した対象TOMLパス単位でプロセス内書き込みを直列化し、異なるアプリプロセス間でも同じ対象を保護するOSファイルロックを取得する。ロック取得後にファイルを再読込して検証する。ロックファイルは実効Stateルート配下の`settings-locks/<sha256(正準化TOMLパス)>.lock`に置き、対象TOML自体やその置換前inodeをロック対象にしない。`settings-lock`保持中に`venv-lock`を取得してはならず、設定保存を完了してロックを解放した後にだけ別フェーズとしてvenv準備を開始する。逆に`venv-lock`保持中の設定保存も禁止し、両ロックをネストしない。
+- Rust内部で一方のロック保持中に他方が必要になった場合は、待機・再試行・逆順取得を行わずプログラミングエラーとして当該内部操作を失敗させる。ユーザー入力で通常到達する回復経路にはせず、ロック取得前にフェーズを分離する。
 - **原子的保存**: 対象ファイルと同じディレクトリに一時ファイルを作成し、Configファイルの権限規則（§11.4.3.3）を適用して完全な内容を書き込み、flush／同期後に原子的置換を行う。利用可能なOSでは親ディレクトリも同期する。一時ファイルや部分書き込みを正式な設定として読み込んではならない。
 - **反映タイミング**: 原子的保存が成功した後にだけ、正準設定サービスの実効値を更新してランタイム副作用を適用し、UI／OpenAPI購読者へ変更を通知する。保存失敗時は実効値を変更しない。保存成功後にランタイム反映が失敗した場合はERROR診断を出し、その設定を利用する機能だけを利用不能として、保存済み値は次回読込時にも維持する。
 - **デバイス設定の優先例外**: カメラ取得設定（`camera.device`、`camera.capture_fps`、`camera.capture_resolution`、§6.1.2）およびシリアル接続設定（`serial.port`、`serial.baud_rate`、`serial.data_format`、§6.2.2）は、デバイス操作の成否を保存前に検証する必要があるため、上記の一般順序の例外とする。各専用トランザクションでランタイム適用を先に試行し、成功した場合だけTOMLを原子的に保存して正準設定値とUI表示を確定する。保存失敗時は専用トランザクションで旧デバイス状態へロールバックする。本項の一般順序より§6.1.2／§6.2.2の個別規則を優先する。
-- **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。切替処理と同時に発生した旧プロファイルへのUI書き込みを新プロファイルへ誤適用してはならない。
+- UI／OpenAPIの一括更新では、上記デバイス設定を§7.4のクラスB／C以外の設定と同じ`PATCH`へ混在させない。専用トランザクションと通常設定保存を一つの擬似トランザクションへ結合してはならない。
+- **プロファイル切替**: 切替後は切替先プロファイルから解決した実効値を全UI設定コントロールへ反映する。プロファイル切替ゲートの保持中は、UI／OpenAPIからのprofile-capable設定書き込みを開始せず`409 Conflict`で拒否し、応答に現在の`active_profile`、`pending_profile`、共通`revision`を含める。クライアントは切替完了後の状態を再取得して明示的に再試行する。要求を暗黙にキューイングしたり、旧プロファイル向けの値を新プロファイルへ適用したりしてはならない。グローバル専用設定の独立した書き込みは切替ゲートの対象外だが、同じPATCHにprofile-capable設定を含む場合は要求全体を拒否する。`ProfileSwitchPost`内の`pokecon.opt.python.script.*`等の動的代入はUI／OpenAPI書き込みではないため本拒否の対象外とし、切替先のインメモリ値へ適用できる。
 - **Secret**: Secret設定の書き込みでも同じ原子的保存を使用し、生の値をログ・エラー・変更通知へ含めない（§11.4.3）。
 
 ##### 11.4.1.6 TouchscreenArea型定義
@@ -2923,6 +3001,8 @@ UIカメラキャンバス上でのポインター（マウス/タッチ）位�
 | `notifications.windows.on_script_end` | `[notifications.windows]` | `on_script_end` | `pokecon.opt.notifications.windows.on_script_end` | `bool` | profile | runtime_immediate | R/W | R/W | スクリプト実行終了時にWindowsネイティブ通知を送信するか否か。デフォルト `false`。§11.4.1.2のbool値直列化規則に従う。プロファイル対応（profile-capable）。UIチェックボックス（§6.5.1参照）は本設定の必須UI表面。変更は将来のスクリプト実行に即座に反映。Windows上のみ通知送信、非Windowsでは値保持のみ。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--notifications-windows-on-script-end` / `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END`）。OpenAPI R/W |
 | `websocket.reconnect_interval_sec` | `[websocket]` | `reconnect_interval_sec` | `pokecon.opt.websocket.reconnect_interval_sec` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `3`（秒）。§3.4参照。1以上の整数。ランタイム変更は次回の再接続試行から反映 |
 | `websocket.reconnect_max_retries` | `[websocket]` | `reconnect_max_retries` | `pokecon.opt.websocket.reconnect_max_retries` | `int` | global | runtime_deferred | —（直接UIなし）| R/W | デフォルト `20`。§3.4参照。0以上の整数。`0`は自動リトライを無効化し、切断時に即座に手動再接続UIを表示する。ランタイム変更は次回の再接続試行から反映 |
+| `websocket.ping_interval_sec` | `[websocket]` | `ping_interval_sec` | `pokecon.opt.websocket.ping_interval_sec` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | heartbeat ping送信間隔。デフォルト`15`秒。1以上の整数。`websocket.pong_timeout_sec`以上でなければならない。変更時は現在のheartbeat待機を取り消し、設定適用時から再スケジュールする。CLI／環境変数は正準IDから自動生成。§3.4参照 |
+| `websocket.pong_timeout_sec` | `[websocket]` | `pong_timeout_sec` | `pokecon.opt.websocket.pong_timeout_sec` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | 対応pongの待機期限。デフォルト`10`秒。1以上かつ`websocket.ping_interval_sec`以下の整数。変更時は進行中の待機期限を新しい値で再計算する。CLI／環境変数は正準IDから自動生成。§3.4参照 |
 | `webrtc.auto_recover` | `[webrtc]` | `auto_recover` | `pokecon.opt.webrtc.auto_recover` | `bool` | global | runtime_immediate | —（直接UIなし）| R/W | WebSocketフォールバック中のWebRTC自動復旧。デフォルト`true`。§11.4.1.2のbool値直列化規則に従う。`false`への変更は未開始プローブを取り消し、実行中プローブからの自動昇格を抑止する。`true`への変更は設定適用時から復旧プローブを開始する。CLI/環境変数は正準IDから自動生成。§7.2参照 |
 | `webrtc.recovery_probe_interval_sec` | `[webrtc]` | `recovery_probe_interval_sec` | `pokecon.opt.webrtc.recovery_probe_interval_sec` | `int` | global | runtime_immediate | —（直接UIなし）| R/W | WebRTC復旧プローブ間隔（秒）。デフォルト`30`。1以上の整数。変更時は現在の待機を取り消し、設定適用時を起点として次回プローブを再スケジュールする。CLI/環境変数は正準IDから自動生成。§7.2参照 |
 | `stun_server` | `[webrtc]` | `stun_server` | `pokecon.opt.stun_server` | `str` | global | runtime_deferred | R/W | R/W | フラット（単体設定）。デフォルト `""`（STUNを使用しない）。空文字以外は`stun:`または`stuns:` URIとして検証する。グローバル専用。UIのSTUN URI入力は必須設定表面で、変更は以後に開始するWebRTC接続／再接続から使用し、確立済みセッションを暗黙に再ネゴシエーションしない。CLI: `--stun-server`。環境変数: `POKECON_STUN_SERVER`。OpenAPI R/W。§6.7.4参照。 |
@@ -3021,7 +3101,7 @@ UIカメラキャンバス上でのポインター（マウス/タッチ）位�
 `pokecon.opt.notifications.discord.webhook_url` の動的パスは型 `str` を維持する。getter/setterのセマンティクスは以下の通り:
 
 - **Getter（読み取り）**: 未設定時は空文字 `""` を返す。設定済み（空文字以外の値が設定されている）場合、実際の値を返さず固定マスク文字列 `"********"` を返す。
-- **Setter（書き込み）**: 実際の `str` 値を受け付ける。代入 `""`（空文字）は設定をクリアする（未設定状態に戻す）。
+- **Setter（書き込み）**: 実際の `str` 値を受け付ける。代入 `""`（空文字）は設定をクリアする（未設定状態に戻す）。現在値が設定済みの状態で固定マスク文字列`"********"`を代入した場合は、getter結果の安全な往復として成功するno-opとし、既存secretを維持する。マスク文字列を実値として保存しない。
 - **動的パスの型は `str` のまま変更しない**: マスクはgetterの動作であり、型宣言 `str` に影響を与えない。
 
 Python/Lua両言語で同一のセマンティクスを提供する。
@@ -3086,6 +3166,8 @@ callback_queue_capacity = 1024  # 未開始callbackの総待機容量。正整�
 [websocket]
 reconnect_interval_sec = 3  # 再接続間隔（秒）
 reconnect_max_retries = 20  # リトライ回数上限
+ping_interval_sec = 15      # heartbeat ping間隔（秒）
+pong_timeout_sec = 10       # pong待機期限（秒、ping間隔以下）
 
 # Python実行環境設定
 # [python.script]（ユーザースクリプトワーカー）はプロファイルごとに設定可能。
@@ -3867,15 +3949,11 @@ print(pokecon.event.list_defined())
 - **名前空間なし**: ドット区切りの名前空間は使用しない
 - **動詞に限定しない**: 名詞・形容詞も可
 
-**注**: 動的設定用イベントシステム（§11.5.6.1）とWebSocketイベント（§7.3.2）は**別々のシステム**です。両者は対応関係を持ちません。
-- **動的設定イベント**: `CameraOpenPost`（PascalCase + Pre/Post後置）— 動的設定ファイル（`init.py`/`init.lua`）で使用
-- **WebSocketイベント**: `camera.open`（lowercase + ドット区切り）— UIとバックエンド間の通信プロトコル。詳細は§7.3.2を参照
+**注**: 動的設定用イベントシステム（§11.5.6.1）とWebSocketの`ui.state.changed`通知（§7.3.2）は**別々のシステム**であり、イベント名の対応関係を持たない。
+- **動的設定イベント**: `CameraOpenPost`等のPascalCase + Pre/Post名をユーザーの`init.py`／`init.lua`へ公開し、callback発火順序・キャンセル可否を本節で規定する
+- **WebSocket通知**: UI可視状態の原子的差分を単一の`ui.state.changed`と`cause`／`StatePatch`でSPAへ配送する内部プロトコルであり、動的設定イベント名をwire上へ投影しない
 
-**命名規則の違い**:
-- 動的設定イベント: イベント名に `Pre`/`Post` を含む（例: `CameraOpenPost`）
-- WebSocketイベント: 動詞原形を使用（例: `camera.open`）
-
-両者は同じタイミングで発火する場合もありますが、別々のシステムとして独立して動作します。ユーザーが両者の対応関係を意識する必要はありません。
+同じバックエンド操作が両方を発生させる場合も、それぞれの順序・失敗・配送規則に従って独立して動作する。WebSocket側の`cause`はUI差分の分類であり、動的設定イベントのPre／Postフェーズを表さない。
 
 ###### 11.5.6.1.6 型注釈
 
@@ -3995,7 +4073,7 @@ Postイベントおよびキャンセル不可イベントでコールバック�
 | エラー種類 | 挙動 | ログ出力 |
 |-----------|------|---------|
 | コールバック内の例外 | 当該ハンドラのみ停止、他は継続 | ERRORレベル |
-| 存在しないイベントへのemit | 無視（ハンドラがないだけ） | WARNINGレベル |
+| 存在しないイベントへのemit | 呼び出しを拒否し、未定義イベント例外を送出する。イベントを暗黙に定義せず、保留ハンドラも変更しない | ERRORレベル |
 | ハンドラ登録時の無効なイベント名 | 登録拒否、例外を送出 | ERRORレベル |
 | 循環参照（イベント発火中に同じイベントを発火） | 検出して無視（同一イベントの直接再入のみ検出。間接循環 A→B→A は検出対象外） | ERRORレベル |
 
@@ -4224,7 +4302,7 @@ pokecon.autocmd.on("ProfileSwitchPost", {
 
 **トランザクション順序**:
 
-0. **内部ゲート獲得**: プロファイル切替用の内部直列化/コマンド開始防止ゲートを獲得し、トランザクション期間中は新規ユーザーコマンドの開始だけを防止する。既に実行中の旧ワーカーからのIPCはこの時点では遮断せず、Preキャンセル時に既存コマンドへ副作用を与えない。このゲートは後続の成功・キャンセル・失敗の全パスで解放される
+0. **内部ゲート獲得**: プロファイル切替用の非再帰・内部直列化/コマンド開始防止ゲートを獲得し、トランザクション期間中は新規ユーザーコマンドの開始だけを防止する。既に実行中の旧ワーカーからのIPCはこの時点では遮断せず、Preキャンセル時に既存コマンドへ副作用を与えない。このゲートは後続の成功・キャンセル・失敗の全パスで解放される。ゲート保持中に`pokecon.profile.switch()`、`pokecon.opt.active_profile`代入、UI／OpenAPIの`active_profile`更新が再入した場合は待機・キューイング・再帰獲得を行わず即座に拒否する。`switch()`は`False`を返し、代入は現在値を変更せずERROR診断、RESTは`409 Conflict`を返す。これは`ProfileSwitchPre`／`ProfileSwitchPost` callback内からの再入にも適用する
 
 1. **検証（副作用なし）**: ターゲットプロファイルの存在確認・名前検証を行い、ターゲットのTOMLを完全にパース・検証する。この段階ではアクティブな状態を一切変更しない。プロファイルTOML内のグローバル専用キーは既存の設定可能ポリシーに従って無視・診断されるが、致命的エラーとはしない。検証/パース失敗時はPre/Postイベントは発火せず、副作用は一切発生しない。`pending_profile`は`None`のまま、`switch()`は`False`を返しエラーをログ出力する
 
@@ -4311,12 +4389,16 @@ pokecon.autocmd.on("ProfileSwitchPost", {
 ```python
 from typing import TypedDict, NotRequired, Literal
 
-# スティック入力（x,y絶対値 または 角度+強度）
-class StickInput(TypedDict):
-    x: NotRequired[int]       # 0 ~ 255（絶対値指定時）。中心=128、デッドゾーン=103~153
-    y: NotRequired[int]       # 0 ~ 255（絶対値指定時）。中心=128、デッドゾーン=103~153
-    angle: NotRequired[float] # 0.0 ~ 360.0（角度+強度指定時）
-    strength: NotRequired[float] # 0.0 ~ 1.0（角度+強度指定時）
+# スティック入力（完全なx,y絶対値 または 完全な角度+強度のどちらか）
+class StickXY(TypedDict):
+    x: int  # 0 ~ 255。中心=128、デッドゾーン=103~153
+    y: int  # 0 ~ 255。中心=128、デッドゾーン=103~153
+
+class StickPolar(TypedDict):
+    angle: float     # 0.0 ~ 360.0
+    strength: float  # 0.0 ~ 1.0
+
+type StickInput = StickXY | StickPolar
 
 # タッチスクリーン入力（3DS対応）
 class TouchInput(TypedDict):
@@ -4345,6 +4427,45 @@ class ControllerUpdate(TypedDict):
     hat: NotRequired[Literal["up", "down", "left", "right", "up_right", "up_left", "down_right", "down_left", "neutral"]]
     touch: NotRequired[TouchInput]
 ```
+
+```lua
+---@class StickXY
+---@field x integer  # 0..255
+---@field y integer  # 0..255
+
+---@class StickPolar
+---@field angle number     # 0.0..360.0
+---@field strength number  # 0.0..1.0
+
+---@alias StickInput StickXY|StickPolar
+
+---@class TouchInput
+---@field x integer
+---@field y integer
+---@field pressed boolean|nil
+
+---@class ControllerUpdate
+---@field a boolean|nil
+---@field b boolean|nil
+---@field x boolean|nil
+---@field y boolean|nil
+---@field l boolean|nil
+---@field r boolean|nil
+---@field zl boolean|nil
+---@field zr boolean|nil
+---@field lclick boolean|nil
+---@field rclick boolean|nil
+---@field plus boolean|nil
+---@field minus boolean|nil
+---@field home boolean|nil
+---@field capture boolean|nil
+---@field left_stick StickInput|nil
+---@field right_stick StickInput|nil
+---@field hat "up"|"down"|"left"|"right"|"up_right"|"up_left"|"down_right"|"down_left"|"neutral"|nil
+---@field touch TouchInput|nil
+```
+
+`left_stick`／`right_stick`は`StickXY`または`StickPolar`のどちらか一方の完全な形だけを受理する。空オブジェクト、片方だけの座標、片方だけの角度／強度、二形式のフィールド混在、未知フィールド、範囲外値はPython／Luaの両ランタイム境界で副作用なしに拒否する。Pythonの生成型は不完全形・混在形・未知フィールドを静的に拒否する。LuaLSは`type.checkTableShape=true`で必須フィールド欠落を診断するが、Luaの構造的テーブル型ではunionの余剰フィールドを完全には拒否できないため、混在形・未知フィールドの拒否はランタイム検証を規範とする。空の`ControllerUpdate`は有効なno-opとする。
 
 ###### 11.5.6.5.3 API仕様
 
@@ -4522,7 +4643,7 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 - **自動判別**: 拡張子で言語を自動判別
   - `.py` → Python動的設定ファイル
   - `.lua` → Lua動的設定ファイル
-- **手動指定**: 拡張子が不明な場合はユーザーに選択を促す
+- **不明拡張子**: `.py`／`.lua`以外は言語を推測・手動指定・改名せず、ファイル選択を副作用なしで拒否して対応拡張子を示す。これは§7.4の`load_path`における`422`契約と同一とする
 
 ##### 11.5.7.3 リロード種別
 
@@ -4540,7 +4661,7 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全70の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全78の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -4577,6 +4698,8 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 | `POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END` | スクリプト終了時Windows通知。`true` / `false`（明示必須）。profile-capable。CLI: `--notifications-windows-on-script-end` | `false` |
 | `POKECON_WEBSOCKET_RECONNECT_INTERVAL_SEC` | WebSocket再接続間隔（秒）。1以上の整数。ランタイム変更は次回再接続試行から反映。CLI: `--websocket-reconnect-interval-sec` | `3` |
 | `POKECON_WEBSOCKET_RECONNECT_MAX_RETRIES` | WebSocket再接続最大リトライ回数。0以上の整数。`0`＝自動リトライ無効化。CLI: `--websocket-reconnect-max-retries` | `20` |
+| `POKECON_WEBSOCKET_PING_INTERVAL_SEC` | heartbeat ping送信間隔（秒）。1以上でpong待機期限以上の整数。CLI: `--websocket-ping-interval-sec` | `15` |
+| `POKECON_WEBSOCKET_PONG_TIMEOUT_SEC` | heartbeat pong待機期限（秒）。1以上でping間隔以下の整数。CLI: `--websocket-pong-timeout-sec` | `10` |
 | `POKECON_WEBRTC_AUTO_RECOVER` | WebSocketフォールバック中のWebRTC自動復旧。`true` / `false`（明示必須）。グローバル専用。CLI: `--webrtc-auto-recover` | `true` |
 | `POKECON_WEBRTC_RECOVERY_PROBE_INTERVAL_SEC` | WebRTC復旧プローブ間隔（秒）。1以上の整数。グローバル専用。CLI: `--webrtc-recovery-probe-interval-sec` | `30` |
 | `POKECON_STUN_SERVER` | STUNサーバーURI。空文字＝STUN不使用。空文字以外は`stun:` / `stuns:` URIとして検証。グローバル専用。CLI: `--stun-server` | `""` |
@@ -5437,7 +5560,7 @@ uv 子プロセスに設定される最終的な環境変数は、以下の順�
 
 上記入力フィンガープリントのうち、秘密情報を含みうる項目（`uv_config` 内容、`POKECON_UV_*` 環境変数値）は、HMAC-SHA-256を使用した鍵付きダイジェストとしてマニフェストに記録する。非秘密データは正準決定論的ダイジェスト（SHA-256）を使用してよい。
 
-- HMAC鍵はアプリ管理のper-installランダム鍵とし、実効Dataルートの `venv-manifests/` 配下に `.hmac-key`（固定名）として、Linuxでは `0600`、Windowsではユーザー専用ACLで原子的に作成して保存する。既存の鍵が存在する場合は再利用し、新規作成時のみアトミックに書き込む。
+- HMAC鍵はアプリ管理のper-installランダム鍵とし、実効Dataルートの `venv-manifests/` 配下に `.hmac-key`（固定名）として、Linuxでは `0600`、Windowsではユーザー専用ACLで保存する。初回作成は一時ファイルへの排他的create（既存パスを置換しない`O_EXCL`／`CREATE_NEW`相当）と原子的確定を使用する。複数プロセスが同時に候補鍵を生成した場合、1プロセスだけが勝者として確定し、敗者は自身の候補鍵を破棄して確定済み`.hmac-key`を再読込する。既存鍵の置換、最後の書込み勝ち、プロセスごとに異なる鍵を使ったマニフェスト生成を禁止する。確定後の鍵が読み取り不能・長さ不正・破損している場合は新しい鍵で上書きせず、下記の安全側不一致規則に従う
 - 鍵付きダイジェストには、秘密のHMAC鍵と入力値から計算したHMAC-SHA-256値（16進数64文字）を使用する。
 - 生の秘密（生のuv_configファイル内容、生のPOKECON_UV_*環境変数値）を決してマニフェストに保存しない。
 - ダイジェストを元の値の代理としてログ・診断・エラーメッセージに出力してはならない。
@@ -5595,15 +5718,16 @@ LSP（Language Server Protocol）設定は `pyproject.toml` で管理する。�
 
 対応LSP: basedpyright, pyright, mypy, pylsp, pyrefly, ty, ruff
 
-**詳細な設定例**: リポジトリ内の `pyproject.toml` または開発者ドキュメントを参照。
+**詳細な設定**: 実効Configルートのユーザー編集可能な `pyproject.toml` に記述する。アプリケーションが生成する初期内容は本節の検索パス・仮想環境要件を満たし、ユーザーによる追記・変更を上書きしない。
 
 ### 14.7 Lua LSP設定（.luarc.json）
 
 Lua LSP設定は `.luarc.json` で管理する。
 
 - **型定義ライブラリ**: データディレクトリ配下の `lua-typings`（Linux例: `~/.local/share/pokecon/lua-typings`）をワークスペースライブラリに追加
+- **厳格テーブル形状検査**: 生成する初期設定で`type.checkTableShape = true`を有効にし、公開`---@class`の必須フィールド欠落をLuaLS診断へ反映する。ユーザーが明示変更した値は上書きしない
 
-**詳細な設定例**: リポジトリ内の `.luarc.json` または開発者ドキュメントを参照。
+**詳細な設定**: 実効Configルートのユーザー編集可能な `.luarc.json` に記述する。アプリケーションが生成する初期内容は本節の型定義ライブラリ要件を満たし、ユーザーによる追記・変更を上書きしない。
 
 ---
 
@@ -5717,20 +5841,20 @@ Lua LSP設定は `.luarc.json` で管理する。
 
 ### 15.6 完全グレースフルシャットダウンの手順
 
-完全グレースフルシャットダウンは以下の順序で実行される。各ステップで失敗を診断ログへ記録し、実行可能な後続ステップを継続する。個別リソースの停止失敗によって終了処理全体を無期限に停止してはならない:
+完全グレースフルシャットダウンは以下の順序で実行される。各ステップで失敗を診断ログへ記録し、依存前提を満たす後続ステップだけを継続する。個別リソースの停止失敗によって終了処理全体を無期限に停止してはならない。ユーザースクリプトワーカーは設定済み`python.script.shutdown_timeout_ms`を使用し、それ以外のカメラwriter、動的設定ワーカー、シリアル、axumの各停止ステップは固定2,000msの内部期限を使用する。この内部期限は終了安全性の上限であり、新しいユーザー設定項目ではない:
 
-0. **`AppShutdownPre`発火**: 動的設定ワーカーが存在する場合、カメラ・シリアル・状態API等のリソースを停止する前に`AppShutdownPre`を発火する。コールバックは終了前の保存・ログ・通知に利用できるが、`False`を含む戻り値で終了をキャンセルできない。コールバック例外は記録して残りのハンドラと終了処理を継続する。コールバックまたはイベント配送が応答しない場合も終了処理を無期限に停止せず、動的設定ワーカー停止へ進める
+0. **`AppShutdownPre`発火**: 動的設定ワーカーが存在する場合、カメラ・シリアル・状態API等のリソースを停止する前に`AppShutdownPre`を発火する。コールバックは終了前の保存・ログ・通知に利用できるが、`False`を含む戻り値で終了をキャンセルできない。コールバック例外は記録して残りのハンドラと終了処理を継続する。発火開始から固定2,000msの内部期限を適用し、期限時点で未開始ハンドラを開始せず、実行中callbackの論理完了を待たない。全ハンドラ完了または期限到達のどちらでも、ステップ1の直前に動的設定ワーカー世代を`stopping`へ遷移させ、以後のcontroller・設定変更・リソース操作IPCを切断エラーで拒否し、診断ログだけを許可する。その後ステップ1へ進み、残留callback自体はステップ4の動的設定ワーカー停止・必要時強制終了で終了させる
 1. **コントローラー安全状態の強制**: 全ボタン・スティック・タッチ入力を即時に強制解放（ニュートラル/リリース安全状態）
-2. **カメラキャプチャスレッド停止と出版停止**: 新規キャプチャをキャンセルし、進行中のカメラキャプチャ／writerスレッドをjoinして完全終了させる。全スロットに`state=1`（書込中）が存在しないことを確認した後にだけ、`published_token`を§7.9.3の無効値`UINT64_MAX`へリリースストアする。writer終了前に無効値をストアして後続の出版ストアで上書きされる順序を禁止する
+2. **カメラキャプチャスレッド停止と出版停止**: 新規キャプチャをキャンセルし、進行中のカメラキャプチャ／writerスレッドを内部期限までjoinする。writer終了を確認できた場合、残留する`state=1`は今後誰も書き込まない非カレントの未完成スロットとしてERROR診断後に`state=0`へ戻し、全スロットに`state=1`がないことを確認してから`published_token`を§7.9.3の無効値`UINT64_MAX`へリリースストアする。writer終了前に無効値をストアして後続の出版ストアで上書きされる順序を禁止する。内部期限までにwriter終了を確認できない場合はcritical診断と`camera_writer_unstopped`内部フラグを記録し、`published_token`、スロット状態、共有マッピングを変更せずステップ3へ進む
 3. **ユーザースクリプトワーカーの協調停止**: 既存の協調停止＋タイムアウト/強制終了ポリシー（`pokecon.opt.python.script.shutdown_timeout_ms`）に従ってユーザースクリプトワーカーを停止する（§11.5.6.4.3、§1.2のポイント9参照）。OSプロセス終了確認後、§7.9.4の単一reader不変条件に従い全スロットの`reader_pin_count`を`0`へリセットする（デッドワーカーの残留ピン除去）
-4. **動的設定ワーカーの停止**: グローバル動的ワーカーを停止する（`dynamic_config_language="none"`の場合は該当せず）
-5. **共有メモリ解放**: 共有メモリ領域のマッピングを解除し、名前付き共有メモリをunlinkする。このステップはステップ2の出版停止後かつ全ワーカー終了後に行うため、write-after-unmapは発生しない
+4. **動的設定ワーカーの停止**: グローバル動的ワーカーへ協調停止を要求し、内部期限までOSプロセス終了を待つ（`dynamic_config_language="none"`の場合は該当せず）。期限までに終了しない場合は、通常運用中の「終了・再生成しない」不変条件に対するアプリケーション終了時だけの例外として当該動的設定ワーカープロセスを強制終了し、終了確認後に進む。callbackのfinally／Lua後処理は強制終了経路では保証しない
+5. **共有メモリ解放**: `camera_writer_unstopped`が偽で、ステップ2の出版停止と全ワーカーのOSプロセス終了を確認できた場合だけ、共有メモリ領域のマッピングを解除して名前付き共有メモリをunlinkする。`camera_writer_unstopped`が真の場合はwrite-after-unmapを避けるためRustメインのマッピングを解除しない。POSIXでは新規マップを防ぐため名前だけをunlinkして既存マッピングをプロセス終了まで保持し、Windowsでは新規ワーカーを生成せず既存マッピングハンドルをプロセス終了まで保持する。この退避経路では通常のunmap完了を主張しない
 6. **入力強制解放**: 全入力状態を再度強制解放（安全状態確認）
-7. **シリアル切断**: シリアル接続を切断する
-8. **axumのグレースフルシャットダウン**: HTTPサーバーをグレースフルに停止する
-9. **プロセス終了**: Rustメインプロセスを終了する
+7. **シリアル切断**: シリアル接続へ切断を要求して内部期限まで待つ。期限超過または失敗時は診断を記録して後続へ進み、OSプロセス終了によるハンドル回収へ委ねる
+8. **axumのグレースフルシャットダウン**: HTTPサーバーへグレースフル停止を要求して内部期限まで待つ。期限超過時は残存HTTP／WebSocketタスクをキャンセルし、新規接続を受理せず後続へ進む
+9. **プロセス終了**: Rustメインプロセスを終了する。`camera_writer_unstopped`が真、または安全に停止できない内部スレッドが残存する場合は、共有メモリをunmapせずログの有限なflushだけを試みた後、OSプロセス終了によって全スレッド・マッピング・ハンドルを回収する。停止不能スレッドのjoinやデストラクタを再度無期限に待ってはならない
 
-このシャットダウン手順はプロファイル切替時のワーカー停止（§11.5.6.4.3参照）と同じ文言・ポリシーを使用する。新たなタイムアウト値は導入しない。
+ユーザースクリプトワーカー停止はプロファイル切替時（§11.5.6.4.3参照）と同じ設定値・ポリシーを使用する。その他の終了専用内部期限は本節の固定値だけを使用し、設定レジストリへ新たなタイムアウト項目を導入しない。
 
 ### 15.7 Webモードにおける動作
 
@@ -5816,6 +5940,8 @@ SPA静的ファイル配信用ディレクトリの設定 `server.web_dir`（§6
 - 読み取り・走査権限が必要（権限不足は起動時エラー）
 - 明示的な無効オーバーライドが指定された場合、組み込みデフォルトへのフォールバックは行わず、起動時エラーとする
 
+**HTTP要求パスの閉じ込め**: 静的ファイルハンドラは、各要求パスをURLデコード後にOSネイティブ区切りへ正規化し、空バイト、絶対パス、`.`／`..`コンポーネント、Windowsドライブ／UNCプレフィックスを拒否する。候補を`server.web_dir`へ結合した後、既存パスのシンボリックリンクを解決した正準絶対パスが、正準化済み`server.web_dir`自身またはその子孫である場合だけ配信する。外部を指すシンボリックリンク、二重エンコードによる遡行、正規化後にルート外となる要求は`403 Forbidden`とし、ファイル内容・正準ホストパスを応答へ含めない。存在しない安全なパスだけを`404 Not Found`とする
+
 **ユーザー指定相対パス解決**:
 - **CLI `--web-dir` 相対パス**: 起動時のカレントワーキングディレクトリ（cwd）基準（§11.4.1.4の汎用パス解決規則におけるCLI例外）
 - **TOML（グローバル） / 環境変数 相対パス**: 実効Configルート基準（§11.4.1.4の一般規則に従う）
@@ -5899,7 +6025,7 @@ HTTPサーバー待受IPの設定`server.bind_address`（§6.7.3、§11.4.2参�
 - 値を暗黙に別アドレスへ正規化・置換しない。IPv6のOrigin／Host表現で必要な角括弧はHTTP層で付加し、保存値には含めない
 - バインド失敗時はローカルホストや別インターフェースへフォールバックせず、アドレス・実効ポート・OSエラー種別を含む起動時エラーとする
 
-**LAN公開**: 非ループバック値は認証なしHTTP／WebSocketを当該LANインターフェースへ公開する明示的オプトインである。UIは保存時と再起動要求表示時にこの事実を明示する。別の許可Origin設定は設けず、Host／Origin検証は§7.4の自動導出規則に従う。
+**LAN公開と信頼境界**: 非ループバック値は認証なしHTTP／WebSocketを当該LANインターフェースへ公開する明示的オプトインであり、そのLANへ接続できるクライアントを完全に信頼する。`POST /api/dynamic-config/control`の`load_content`／`load_path`／`reload`を接続元IP、loopback、Tauri、ブラウザ／非ブラウザで制限せず、他の状態変更APIと同じHost／Origin／Content-Type／固定ヘッダー検証だけで受理する。これらの操作はサーバーホスト上でPython／Luaコードを保存・評価し、任意コード実行権限に相当する。Host／Origin／固定ヘッダー検証はCSRF・DNS rebinding対策であってクライアント認証ではない。UIは非ループバック値の保存時と再起動要求表示時に、LAN接続者へこの権限を与えることを明示する。別の認証、許可Origin、peer-IP制限、Tauri専用バイパスは設けない。
 
 **UI表面**: サーバー設定のIPアドレス入力（§6.7.3）。保存後も現在の実効値と再起動後の保存値を区別して表示する。
 

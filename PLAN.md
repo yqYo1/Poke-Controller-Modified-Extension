@@ -149,18 +149,19 @@
 
 1. `app_name`で分離されたConfig、Data、State、Cacheの4ルートをLinux／Windowsで解決する。
 2. bootstrap preparseを実装し、worker構築前に`app_name`、`dynamic_config_language`、`python.dynamic.*`を解決する。
-3. 正準設定レジストリからdefault、型、scope、mutability、secret、CLI、環境変数、TOML、動的path、UI、OpenAPI metadataを投影する。
-4. TOMLの未知キー・コメント・並び順を保持する原子的編集、権限設定、親directory同期を実装する。
-5. settings lock、venv lock、HMAC鍵の排他生成、manifest署名、secret maskingを実装する。
-6. profile-capableとglobal専用の保存先を分離し、bootstrap／startup-only／runtime設定の適用時点を実装する。
-7. 設定PATCHのクラスA〜D、`expected_revision`、rollback、`pending_restart_values`、`apply_failures`をservice層で実装する。
-8. CLI、環境変数、TOMLの優先順位と、相対path基準、enum正規化、bool／JSON直列化を実装する。
-9. `server.port`、`server.bind_address`、`server.web_dir`等のstartup-only値を保存値と現在値に分ける。
-10. 相対pathはCLIだけをcurrent working directory基準、TOML／環境変数／動的設定を実効Config基準とする。閉じたenumはruntimeで大小文字不問に正規化し、生成型は正準値だけを列挙する。
-11. profileは`--profile`／`-p`、`POKECON_PROFILE`、TOMLの全経路で解決し、名前の大小文字同一性をOS／filesystemの規則に従わせる。
-12. managed uvをDataルートへ準備し、正準pyprojectのdependencies／dependency groups／extras、application constraint、package metadata constraint、`uv_config`を統合したexact syncとmutable source再検証を実装する。
-13. dynamic worker用venvとprofile別user worker用venvを分離し、manifest、HMAC、single-flight、cross-process lock、破損時再構築を実装する。
-14. generated Python／Lua typingsをDataへ、user-editable pyproject／init／profile設定をConfigへ置くpath契約を実装する。
+3. `app_name`とprofile名を安全な単一相対componentとして検証し、空文字、`.`、`..`、path区切り、絶対path、Windows drive／UNC、NUL、通常componentを持たない値を全入力表面で拒否する。綴りのtrimや大小文字正規化は行わない。
+4. 正準設定レジストリからdefault、型、scope、mutability、secret、CLI、環境変数、TOML、動的path、UI、OpenAPI metadataを投影する。
+5. TOMLの未知キー・コメント・並び順を保持する原子的編集、権限設定、親directory同期を実装する。
+6. settings lock、venv lock、HMAC鍵の排他生成、manifest署名、secret maskingを実装する。
+7. profile-capableとglobal専用の保存先を分離し、bootstrap／startup-only／runtime設定の適用時点を実装する。
+8. 設定PATCHのクラスA〜D、`expected_revision`、rollback、`pending_restart_values`、`apply_failures`をservice層で実装する。
+9. CLI、環境変数、TOMLの優先順位と、相対path基準、enum正規化、bool／JSON直列化を実装する。
+10. `server.port`、`server.bind_address`、`server.web_dir`等のstartup-only値を保存値と現在値に分ける。
+11. 相対pathはCLIだけをcurrent working directory基準、TOML／環境変数／動的設定を実効Config基準とする。閉じたenumはruntimeで大小文字不問に正規化し、生成型は正準値だけを列挙する。
+12. profileは`--profile`／`-p`、`POKECON_PROFILE`、TOMLの全経路で解決し、名前の大小文字同一性をOS／filesystemの規則に従わせる。
+13. managed uvをDataルートへ準備し、正準pyprojectのdependencies／dependency groups／extras、application constraint、package metadata constraint、`uv_config`を統合する。PEP 440解析済み句は比較句単位の最小矛盾集合で解決し、直接source句、source priority、`override_application_constraints`の規則を適用してからexact syncとmutable source再検証を行う。
+14. dynamic worker用venvとprofile別user worker用venvを分離し、manifest、HMAC、single-flight、cross-process lock、破損時再構築を実装する。
+15. generated Python／Lua typingsをDataへ、user-editable pyproject／init／profile設定をConfigへ置くpath契約を実装する。
 
 ### 8.2 成果物
 
@@ -175,12 +176,14 @@
 ### 8.3 完了条件
 
 - 正準CID78件と環境変数78件に重複・欠落がない。
+- `app_name`／profile名の全拒否形が4ルート外へpathを生成せず、OS固有の大小文字セマンティクスを維持する。
 - 各設定の全表面がregistry metadataと一致する。
 - 複数processから同じTOMLとHMAC鍵へ競合しても破損しない。
 - profile切替中のprofile-capable書込みが`409`となり、誤ったprofileへ保存されない。
 - startup-only値は保存されるが現processへ適用されず、restart情報へ現れる。
 - secret平文がログ、REST応答、WebSocket、manifestへ出ない。
 - 同じvenv pathへの同時準備が1処理へ集約され、別processとの競合後も同じmanifestへ収束する。
+- 依存制約の競合解決が非競合句を保持し、入力順・source provenance・優先順位から同じ有効制約を再現する。
 
 ## 9. フェーズ4 — IPC・ワーカー監督
 

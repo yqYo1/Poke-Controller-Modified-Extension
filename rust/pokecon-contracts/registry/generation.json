@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "generate_command": "nix run .#generate-contracts",
+  "drift_check_command": "nix run .#contract-check",
+  "artifacts": [
+    {
+      "name": "settings_json_schema",
+      "sources": ["settings.json"],
+      "output": "generated/settings.schema.json",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 3
+    },
+    {
+      "name": "settings_ui_metadata",
+      "sources": ["settings.json"],
+      "output": "generated/settings-ui.json",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 11
+    },
+    {
+      "name": "openapi",
+      "sources": ["settings.json", "protocol.json", "Rust server schema types"],
+      "output": "target/openapi.json",
+      "generate_command": "nix run .#build-rust",
+      "tracked": false,
+      "phase": 10
+    },
+    {
+      "name": "typescript_api",
+      "sources": ["target/openapi.json"],
+      "output": "web/src/lib/api/openapi.ts",
+      "generate_command": "nix run .#generate-api-types",
+      "tracked": true,
+      "phase": 10
+    },
+    {
+      "name": "dynamic_python_typings",
+      "sources": ["settings.json", "protocol.json"],
+      "output": "python/pokecon/typings/__init__.pyi",
+      "runtime_destination": "<Data>/typings/__init__.pyi",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 7
+    },
+    {
+      "name": "commands_python_typings",
+      "sources": ["protocol.json", "compatibility/fixed-manifest.json"],
+      "output": "python/pokecon/typings/commands.pyi",
+      "runtime_destination": "<Data>/typings/commands.pyi",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 8
+    },
+    {
+      "name": "dynamic_lua_typings",
+      "sources": ["settings.json", "protocol.json"],
+      "output": "generated/lua/pokecon.d.lua",
+      "runtime_destination": "<Data>/lua-typings/pokecon.d.lua",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 7
+    }
+  ],
+  "policy": {
+    "manual_edits": "forbidden",
+    "failed_generation_fallback": "forbidden",
+    "tracked_output_drift_is_error_when_sources_exist": true,
+    "untracked_outputs_are_rebuilt_not_reused": true,
+    "not_applicable_requires_missing_source_and_reason": true
+  }
+}

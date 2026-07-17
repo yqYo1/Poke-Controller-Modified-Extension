@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "specification_version": "2.2.0",
+  "test_categories": [
+    {
+      "id": "unit",
+      "purpose": "one module or pure component without process or network boundaries",
+      "entrypoint_patterns": [
+        "rust/*/src/**/*.rs #[cfg(test)]",
+        "python/**/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/unit/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "contract",
+      "purpose": "machine-readable public surface and specification drift",
+      "entrypoint_patterns": [
+        "rust/*/tests/contract_*.rs",
+        "tests/contract/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/contract/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "integration",
+      "purpose": "multiple in-process or child-process components with virtual adapters",
+      "entrypoint_patterns": [
+        "rust/*/tests/integration_*.rs",
+        "tests/integration/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/integration/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "fault_injection",
+      "purpose": "timeouts, malformed data, crashes, disconnects, and resource exhaustion",
+      "entrypoint_patterns": [
+        "rust/*/tests/fault_*.rs",
+        "tests/fault_injection/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/fault_injection/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "hardware",
+      "purpose": "explicitly gated physical camera, serial, controller, and notification verification",
+      "entrypoint_patterns": ["tests/hardware/test_*.py"],
+      "fixture_pattern": "tests/fixtures/hardware/<capability>/<case>.<ext>",
+      "hardware_allowed": true,
+      "required_record_pattern": "artifacts/hardware/<platform>/<capability>/<utc-timestamp>.json"
+    },
+    {
+      "id": "compatibility",
+      "purpose": "unchanged fixed and promoted user scripts plus API-surface comparison",
+      "entrypoint_patterns": [
+        "rust/*/tests/compatibility_*.rs",
+        "tests/compatibility/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/compatibility/<baseline>/<case>.<ext>",
+      "hardware_allowed": false,
+      "hardware_exception": "a case may be an explicit hardware gate only when no deterministic adapter exists"
+    }
+  ],
+  "fixture_naming": {
+    "root": "tests/fixtures",
+    "segment_regex": "^[a-z][a-z0-9_]*$",
+    "case_path_template": "<category>/<capability>/<case>.<ext>",
+    "expected_path_template": "<category>/<capability>/<case>.expected.<ext>",
+    "binary_hash_sidecar_template": "<category>/<capability>/<case>.<ext>.sha256",
+    "mutable_shared_fixtures": "forbidden",
+    "wall_clock_or_random_defaults": "forbidden",
+    "platform_specific_suffixes": ["linux", "windows"]
+  },
+  "path_audit": [
+    {
+      "id": "rust_workspace",
+      "paths": ["Cargo.toml", "rust/*/Cargo.toml", "rust/*/src"],
+      "observed_in": ["Cargo.toml", "flake.nix", ".github/workflows/rust-ci.yml"],
+      "status": "canonical",
+      "phase": 2,
+      "resolution": "add responsibility-oriented crates to the root workspace"
+    },
+    {
+      "id": "python_package",
+      "paths": ["python/pokecon", "rust/pokecon-pybindings/Cargo.toml"],
+      "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/basedpyright.yml"],
+      "status": "planned",
+      "phase": 2,
+      "resolution": "create the package, generated typing sources, and PyO3 boundary"
+    },
+    {
+      "id": "web_package",
+      "paths": ["web/package.json", "web/package-lock.json", "web/src"],
+      "observed_in": ["flake.nix", ".github/workflows/lint.yml"],
+      "status": "planned",
+      "phase": 11,
+      "resolution": "create the Svelte application and enable guarded jobs"
+    },
+    {
+      "id": "python_tests",
+      "paths": ["tests/test_*.py", "tests/**/*_test.py"],
+      "observed_in": ["flake.nix", ".github/workflows/pytest.yml"],
+      "status": "planned",
+      "phase": 2,
+      "resolution": "add guard fixtures first, then component and integration suites"
+    },
+    {
+      "id": "legacy_src_server",
+      "paths": ["src-server/Cargo.toml", "src-server/Cargo.lock", "src-server/src/main.rs"],
+      "observed_in": [
+        "flake.nix",
+        "scripts/check-server-lock.sh",
+        ".github/workflows/remote-flake.yml",
+        ".github/workflows/spa-404-check.yml",
+        ".github/workflows/nix-source-filter-check.yml"
+      ],
+      "status": "obsolete",
+      "phase": 2,
+      "resolution": "replace src-server assumptions with the root Rust workspace server and Tauri crates"
+    },
+    {
+      "id": "legacy_typescript_output",
+      "paths": ["src/lib/api/types.ts"],
+      "observed_in": ["flake.nix"],
+      "status": "obsolete",
+      "phase": 10,
+      "resolution": "generate the specification-defined web/src/lib/api/openapi.ts from target/openapi.json"
+    },
+    {
+      "id": "legacy_release_crates",
+      "paths": [
+        "pokecon-events",
+        "pokecon-serial",
+        "pokecon-cv",
+        "pokecon-notify",
+        "pokecon-net",
+        "pokecon-lua",
+        "pokecon-core"
+      ],
+      "observed_in": [".github/workflows/release.yml"],
+      "status": "obsolete",
+      "phase": 13,
+      "resolution": "derive release artifacts from the implemented workspace and run build verification through Nix"
+    },
+    {
+      "id": "generated_contracts",
+      "paths": [
+        "generated/settings.schema.json",
+        "generated/settings-ui.json",
+        "generated/lua/pokecon.d.lua",
+        "python/pokecon/typings",
+        "web/src/lib/api/openapi.ts"
+      ],
+      "observed_in": ["rust/pokecon-contracts/registry/generation.json"],
+      "status": "planned",
+      "phase": 3,
+      "resolution": "enable each artifact at its declared phase and reject drift once its source exists"
+    }
+  ],
+  "audit_policy": {
+    "obsolete_reference_is_success": false,
+    "obsolete_reference_requires_phase_and_resolution": true,
+    "planned_path_missing_is_not_applicable_until_phase": true,
+    "implemented_path_missing_is_error": true
+  }
+}

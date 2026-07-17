@@ -7,6 +7,16 @@ on:
     branches: [main, master]
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate canonical contracts and specification drift
+        run: nix run .#contract-check
+
   nix-fmt:
     runs-on: ubuntu-latest
     steps:

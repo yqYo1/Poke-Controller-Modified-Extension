@@ -1,4 +1,11 @@
-include = ["SerialController/**/*.py"]
+include = [
+  "SerialController/**/*.py",
+  "python/**/*.py",
+  "python/**/*.pyi",
+  "scripts/**/*.py",
+  "tests/**/*.py",
+  "tests/**/*.pyi",
+]
 # Same as Black.
 line-length = 88
 indent-width = 4
@@ -41,6 +48,7 @@ ignore = [
   "UP009",
   "S107",
   "G004",
+  "COM812",  # formatterと競合する末尾カンマ規則
   "E501",  # formatはline-lengthを越える事がある
   "E731",
   "PLR0911",

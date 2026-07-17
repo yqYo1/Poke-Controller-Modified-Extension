@@ -216,6 +216,7 @@
                   || pkgs.lib.hasSuffix ".rs" p
                   || pkgs.lib.hasSuffix ".toml" p
                   || pkgs.lib.hasSuffix ".json" p
+                  || pkgs.lib.hasSuffix ".jsonl" p
                   || pkgs.lib.hasSuffix ".html" p
                   || pkgs.lib.hasSuffix ".css" p
                   || pkgs.lib.hasSuffix ".svelte" p
@@ -227,6 +228,7 @@
                   || pkgs.lib.hasSuffix ".lock" p
                   || pkgs.lib.hasSuffix ".md" p
                   || pkgs.lib.hasSuffix ".py" p
+                  || pkgs.lib.hasSuffix ".sh" p
                   || pkgs.lib.hasSuffix ".nix" p
                   || pkgs.lib.hasSuffix ".conf" p
                   || pkgs.lib.hasSuffix ".yml" p
@@ -412,7 +414,7 @@
                 runtimeInputs = [ rustEnv ];
                 text = ''
                   ${setupWorkdir}
-                  cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
+                  cargo clippy --workspace --all-targets --all-features -- -D warnings
                 '';
               }
             }/bin/clippy";
@@ -421,11 +423,30 @@
             ruff-check = mkApp "${
               pkgs.writeShellApplication {
                 name = "ruff-check";
-                runtimeInputs = [ pythonEnv ];
+                runtimeInputs = [
+                  pythonEnv
+                  pkgs.ripgrep
+                ];
                 text = ''
-                  cd "${self}"
-                  export PYTHONPATH="${self}/python''${PYTHONPATH:+:$PYTHONPATH}"
-                  ruff check --no-cache --select E,W,F --ignore E402,E501,E722,E741,F821,F841 .
+                  ${setupWorkdir}
+                  source_roots=()
+                  for root in python scripts tests SerialController; do
+                    if [ -d "$root" ]; then
+                      source_roots+=("$root")
+                    fi
+                  done
+                  python_files=()
+                  if [ "''${#source_roots[@]}" -gt 0 ]; then
+                    mapfile -t python_files < <(
+                      rg --files "''${source_roots[@]}" -g '*.py' -g '*.pyi'
+                    )
+                  fi
+                  if [ "''${#python_files[@]}" -eq 0 ]; then
+                    echo "Python lint not applicable: no tracked .py or .pyi source"
+                    exit 0
+                  fi
+                  export PYTHONPATH="$PWD/python''${PYTHONPATH:+:$PYTHONPATH}"
+                  ruff check --no-cache --select E,W,F,I --ignore E402,E501,E722,E741,F821,F841 "''${python_files[@]}"
                 '';
               }
             }/bin/ruff-check";
@@ -434,10 +455,28 @@
             ruff-format = mkApp "${
               pkgs.writeShellApplication {
                 name = "ruff-format";
-                runtimeInputs = [ pythonEnv ];
+                runtimeInputs = [
+                  pythonEnv
+                  pkgs.ripgrep
+                ];
                 text = ''
-                  cd "${self}"
-                  ruff format .
+                  source_roots=()
+                  for root in python scripts tests SerialController; do
+                    if [ -d "$root" ]; then
+                      source_roots+=("$root")
+                    fi
+                  done
+                  python_files=()
+                  if [ "''${#source_roots[@]}" -gt 0 ]; then
+                    mapfile -t python_files < <(
+                      rg --files "''${source_roots[@]}" -g '*.py' -g '*.pyi'
+                    )
+                  fi
+                  if [ "''${#python_files[@]}" -eq 0 ]; then
+                    echo "Python formatting not applicable: no tracked .py or .pyi source"
+                    exit 0
+                  fi
+                  ruff format "''${python_files[@]}"
                 '';
               }
             }/bin/ruff-format";
@@ -446,10 +485,29 @@
             ruff-format-check = mkApp "${
               pkgs.writeShellApplication {
                 name = "ruff-format-check";
-                runtimeInputs = [ pythonEnv ];
+                runtimeInputs = [
+                  pythonEnv
+                  pkgs.ripgrep
+                ];
                 text = ''
-                  cd "${self}"
-                  ruff format --no-cache --check .
+                  ${setupWorkdir}
+                  source_roots=()
+                  for root in python scripts tests SerialController; do
+                    if [ -d "$root" ]; then
+                      source_roots+=("$root")
+                    fi
+                  done
+                  python_files=()
+                  if [ "''${#source_roots[@]}" -gt 0 ]; then
+                    mapfile -t python_files < <(
+                      rg --files "''${source_roots[@]}" -g '*.py' -g '*.pyi'
+                    )
+                  fi
+                  if [ "''${#python_files[@]}" -eq 0 ]; then
+                    echo "Python formatting check not applicable: no tracked .py or .pyi source"
+                    exit 0
+                  fi
+                  ruff format --no-cache --check "''${python_files[@]}"
                 '';
               }
             }/bin/ruff-format-check";
@@ -515,38 +573,60 @@
             }/bin/build-rust";
 
             # nix run .#cargo-test  — run Rust tests
-            cargo-test =
-              let
-                cargoTestScript = pkgs.writeShellApplication {
-                  name = "cargo-test";
-                  runtimeInputs = [
-                    rustEnv
-                    pkgs.libclang
-                  ];
-                  text = ''
-                    ${setupWorkdir}
+            cargo-test = mkApp "${
+              pkgs.writeShellApplication {
+                name = "cargo-test";
+                runtimeInputs = [
+                  rustEnv
+                  pkgs.libclang
+                  pkgs.pkg-config
+                  pkgs.stdenv.cc
+                ];
+                text = ''
+                  ${setupWorkdir}
 
-                    # libclang is required for v4l2-sys-mit (bindgen)
-                    export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
+                  # libclang is required for v4l2-sys-mit (bindgen)
+                  export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
 
-                    echo "=== Running cargo test ==="
-                    cargo test --workspace --all-features --exclude pokecon-pybindings
-                  '';
-                };
-              in
-              mkApp "${
-                pkgs.buildFHSEnv {
-                  name = "cargo-test-fhs";
-                  targetPkgs = pkgs: [
-                    rustEnv
-                    pkgs.libclang
-                    pkgs.gcc
-                    pkgs.linuxHeaders
-                    pkgs.glibc.dev
-                  ];
-                  runScript = "${cargoTestScript}/bin/cargo-test";
-                }
-              }/bin/cargo-test-fhs";
+                  echo "=== Running cargo test ==="
+                  cargo test --workspace --all-features
+                '';
+              }
+            }/bin/cargo-test";
+
+            # nix run .#contract-check — validate canonical registries and spec drift
+            contract-check = mkApp "${
+              pkgs.writeShellApplication {
+                name = "contract-check";
+                runtimeInputs = [
+                  rustEnv
+                  pythonEnv
+                  pkgs.basedpyright
+                  pkgs.shellcheck
+                ];
+                text = ''
+                  ${setupWorkdir}
+                  cargo test --package pokecon-contracts --test contract_sync
+                  basedpyright scripts/compatibility_inventory.py
+                  shellcheck scripts/*.sh
+                '';
+              }
+            }/bin/contract-check";
+
+            # nix run .#compatibility-inventory — reacquire fixed SHAs and check inventory drift
+            compatibility-inventory = mkApp "${
+              pkgs.writeShellApplication {
+                name = "compatibility-inventory";
+                runtimeInputs = [
+                  pythonEnv
+                  pkgs.git
+                ];
+                text = ''
+                  cd "${self}"
+                  exec python scripts/compatibility_inventory.py --check "$@"
+                '';
+              }
+            }/bin/compatibility-inventory";
 
             # nix run .#typos  — run spell checker
             typos = mkApp "${
@@ -576,10 +656,21 @@
             markdownlint = mkApp "${
               pkgs.writeShellApplication {
                 name = "markdownlint";
-                runtimeInputs = [ pkgs.markdownlint-cli ];
+                runtimeInputs = [
+                  pkgs.markdownlint-cli
+                  pkgs.ripgrep
+                ];
                 text = ''
                   cd "${self}"
-                  exec markdownlint --config .markdownlint.json "$@"
+                  markdown_files=("$@")
+                  if [ "''${#markdown_files[@]}" -eq 0 ]; then
+                    mapfile -t markdown_files < <(rg --files -g '*.md')
+                  fi
+                  if [ "''${#markdown_files[@]}" -eq 0 ]; then
+                    echo "Markdown lint not applicable: no tracked .md source"
+                    exit 0
+                  fi
+                  exec markdownlint --config .markdownlint.json "''${markdown_files[@]}"
                 '';
               }
             }/bin/markdownlint";
@@ -588,10 +679,21 @@
             markdownlint-check = mkApp "${
               pkgs.writeShellApplication {
                 name = "markdownlint-check";
-                runtimeInputs = [ pkgs.markdownlint-cli ];
+                runtimeInputs = [
+                  pkgs.markdownlint-cli
+                  pkgs.ripgrep
+                ];
                 text = ''
                   cd "${self}"
-                  exec markdownlint --config .markdownlint.json "$@"
+                  markdown_files=("$@")
+                  if [ "''${#markdown_files[@]}" -eq 0 ]; then
+                    mapfile -t markdown_files < <(rg --files -g '*.md')
+                  fi
+                  if [ "''${#markdown_files[@]}" -eq 0 ]; then
+                    echo "Markdown lint not applicable: no tracked .md source"
+                    exit 0
+                  fi
+                  exec markdownlint --config .markdownlint.json "''${markdown_files[@]}"
                 '';
               }
             }/bin/markdownlint-check";
@@ -600,10 +702,23 @@
             textlint = mkApp "${
               pkgs.writeShellApplication {
                 name = "textlint";
-                runtimeInputs = [ pkgs.textlint ];
+                runtimeInputs = [
+                  pkgs.textlint
+                  pkgs.textlint-rule-no-start-duplicated-conjunction
+                  pkgs.ripgrep
+                ];
                 text = ''
                   cd "${self}"
-                  exec textlint --config .textlintrc.json "$@"
+                  export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules''${NODE_PATH:+:$NODE_PATH}"
+                  text_files=("$@")
+                  if [ "''${#text_files[@]}" -eq 0 ]; then
+                    mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
+                  fi
+                  if [ "''${#text_files[@]}" -eq 0 ]; then
+                    echo "Text lint not applicable: no tracked .md or .txt source"
+                    exit 0
+                  fi
+                  exec textlint --config .textlintrc.json "''${text_files[@]}"
                 '';
               }
             }/bin/textlint";
@@ -612,10 +727,23 @@
             textlint-check = mkApp "${
               pkgs.writeShellApplication {
                 name = "textlint-check";
-                runtimeInputs = [ pkgs.textlint ];
+                runtimeInputs = [
+                  pkgs.textlint
+                  pkgs.textlint-rule-no-start-duplicated-conjunction
+                  pkgs.ripgrep
+                ];
                 text = ''
                   cd "${self}"
-                  exec textlint --config .textlintrc.json "$@"
+                  export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules''${NODE_PATH:+:$NODE_PATH}"
+                  text_files=("$@")
+                  if [ "''${#text_files[@]}" -eq 0 ]; then
+                    mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
+                  fi
+                  if [ "''${#text_files[@]}" -eq 0 ]; then
+                    echo "Text lint not applicable: no tracked .md or .txt source"
+                    exit 0
+                  fi
+                  exec textlint --config .textlintrc.json "''${text_files[@]}"
                 '';
               }
             }/bin/textlint-check";
@@ -871,12 +999,12 @@
                     echo "═══════════════════════════════════════════"
                     echo "  clippy"
                     echo "═══════════════════════════════════════════"
-                    cargo clippy --workspace --all-targets --all-features --exclude pokecon-pybindings -- -D warnings
+                    cargo clippy --workspace --all-targets --all-features -- -D warnings
                     echo ""
                     echo "═══════════════════════════════════════════"
                     echo "  cargo test"
                     echo "═══════════════════════════════════════════"
-                    cargo test --workspace --all-features --exclude pokecon-pybindings
+                    cargo test --workspace --all-features
                     echo ""
                     echo "═══════════════════════════════════════════"
                     echo "  ruff check"
@@ -1219,6 +1347,7 @@
                   rust-analyzer
                   clippy
                   rustfmt
+                  shellcheck
 
                   python314
 
@@ -1246,6 +1375,7 @@
                   curl
                   wget
                   git
+                  gh
                   openssh
                   just
 
@@ -1271,7 +1401,10 @@
               );
 
             shellHook = ''
-              export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
+              # git-hooks.nix also supplies nixpkgs cargo; keep the pinned overlay
+              # toolchain first so cargo and rustc cannot come from different releases.
+              export PATH="${rustToolchain}/bin:$PATH"
+              export RUST_SRC_PATH="${rustToolchain}/lib/rustlib/src/rust/library"
               export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
               # LIBCLANG_PATH must be set for v4l2-sys-mit (bindgen)
               export LIBCLANG_PATH="${pkgs.libclang.lib}/lib"
@@ -1317,6 +1450,8 @@
               echo "  build             - build Rust + Python"
               echo "  build-rust        - build Rust workspace only"
               echo "  cargo-test        - run Rust tests"
+              echo "  contract-check    - validate canonical contracts and specification drift"
+              echo "  compatibility-inventory - reacquire fixed SHAs and verify corpus inventory"
               echo "  maturin-develop   - dev-install Python bindings"
               echo "  tauri-dev         - run Tauri dev server"
               echo "  typos             - run spell checker"

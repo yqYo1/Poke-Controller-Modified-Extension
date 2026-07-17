@@ -30,6 +30,8 @@
 !/pyrightconfig.json
 !/pyproject.toml
 !/ruff.toml
+!/.markdownlint.json
+!/.textlintrc.json
 !/requirements.txt
 !/requirements-nuitka.txt
 !/renovate.json
@@ -37,6 +39,12 @@
 !/scripts/
 /scripts/*
 !/scripts/*.sh
+!/scripts/*.py
+
+!/compatibility/
+/compatibility/*
+!/compatibility/*.json
+!/compatibility/*.jsonl
 
 
 !/DirectShowLib/
@@ -138,6 +146,12 @@ result-*
 /rust/pokecon-*/src/*
 !/rust/pokecon-*/src/*.rs
 !/rust/pokecon-*/src/**/*.rs
+!/rust/pokecon-*/registry/
+/rust/pokecon-*/registry/*
+!/rust/pokecon-*/registry/*.json
+!/rust/pokecon-*/tests/
+/rust/pokecon-*/tests/*
+!/rust/pokecon-*/tests/*.rs
 !/rust/pokecon-*/benches/
 /rust/pokecon-*/benches/*
 !/rust/pokecon-*/benches/*.rs

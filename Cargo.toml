@@ -1,14 +1,12 @@
 [workspace]
 resolver = "2"
-members = [
-    "rust/pokecon-core",
-    "rust/pokecon-pybindings",
-    # "src-server",  # Server app — built separately via nix run .#tauri-build
-]
+members = ["rust/pokecon-contracts"]
+default-members = ["rust/pokecon-contracts"]
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.95"
 license = "MIT"
 authors = ["yqYo1"]
 repository = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
@@ -28,4 +26,14 @@ parking_lot = "0.12"
 pyo3 = { version = "0.25", features = ["extension-module", "py-clone"] }
 mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
 toml = "0.8"
+regex = "1"
+sha2 = "0.10"
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

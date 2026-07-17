@@ -1,0 +1,23 @@
+[package]
+name = "pokecon-contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Canonical machine-readable contracts for Poke-Controller Modified Extension"
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

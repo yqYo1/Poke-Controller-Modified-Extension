@@ -4,6 +4,9 @@ on:
     branches: [main, master, refactor/rust-core]
     paths:
       - 'rust/**'
+      - 'compatibility/**'
+      - 'scripts/compatibility_inventory.py'
+      - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'flake.nix'
@@ -12,6 +15,9 @@ on:
     branches: [main, master]
     paths:
       - 'rust/**'
+      - 'compatibility/**'
+      - 'scripts/compatibility_inventory.py'
+      - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'flake.nix'
@@ -44,9 +50,4 @@ jobs:
         run: nix run .#build-rust
       - name: Run tests
         if: steps.rust-check.outputs.skip != 'true'
-        run: |
-          # GitHub Actions doesn't support bwrap (AppArmor restriction)
-          # Use cargo test directly with libclang from nix
-          LIBCLANG_PATH="$(nix build --no-link --print-out-paths .#packages.x86_64-linux.libclang 2>/dev/null || echo /nix/store/*-clang-*/lib)/lib"
-          export LIBCLANG_PATH
-          nix develop --command cargo test --workspace --all-features --exclude pokecon-pybindings
+        run: nix run .#cargo-test

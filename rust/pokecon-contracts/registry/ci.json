@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "jobs": [
+    {
+      "name": "basedpyright/type-check",
+      "workflow": "basedpyright",
+      "job": "type-check",
+      "command": "nix run .#basedpyright",
+      "applicable_when": "tracked python/**/*.py or python/**/*.pyi exists",
+      "not_applicable": "notice naming the absent Python source/type patterns",
+      "phase": 2
+    },
+    {
+      "name": "lint/contracts",
+      "workflow": "lint",
+      "job": "contracts",
+      "command": "nix run .#contract-check",
+      "applicable_when": "always after phase 1",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
+      "name": "lint/nix-fmt",
+      "workflow": "lint",
+      "job": "nix-fmt",
+      "command": "nix fmt -- --ci",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
+      "name": "lint/rust-lint",
+      "workflow": "lint",
+      "job": "rust-lint",
+      "command": "nix run .#clippy",
+      "applicable_when": "at least one tracked rust/**/src/**/*.rs exists",
+      "not_applicable": "notice naming the absent Rust source pattern",
+      "phase": 1
+    },
+    {
+      "name": "lint/python-lint",
+      "workflow": "lint",
+      "job": "python-lint",
+      "command": "nix run .#ruff-check && nix run .#ruff-format-check",
+      "applicable_when": "at least one tracked .py file exists",
+      "not_applicable": "notice naming the absent Python source pattern",
+      "phase": 1
+    },
+    {
+      "name": "lint/typos",
+      "workflow": "lint",
+      "job": "typos",
+      "command": "nix run .#typos",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
+      "name": "lint/web-check",
+      "workflow": "lint",
+      "job": "web-check",
+      "command": "nix run .#web-check",
+      "applicable_when": "web/package.json, lockfile, and tracked web/src source exist",
+      "not_applicable": "notice naming each absent Web prerequisite",
+      "phase": 11
+    },
+    {
+      "name": "lint/markdownlint",
+      "workflow": "lint",
+      "job": "markdownlint",
+      "command": "nix run .#markdownlint-check",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
+      "name": "lint/textlint",
+      "workflow": "lint",
+      "job": "textlint",
+      "command": "nix run .#textlint-check",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
+      "name": "nix-source-filter-check/check-source-filter",
+      "workflow": "nix-source-filter-check",
+      "job": "check-source-filter",
+      "command": "nix run .#source-filter-check",
+      "applicable_when": "always; an empty future source directory set is a valid checked state",
+      "not_applicable": "forbidden",
+      "phase": 2,
+      "implementation_status": "planned Nix app; current workflow has an inline check"
+    },
+    {
+      "name": "pytest/test-linux",
+      "workflow": "pytest",
+      "job": "test-linux",
+      "command": "nix run .#test",
+      "applicable_when": "tracked tests/test_*.py or tests/**/*_test.py exists",
+      "not_applicable": "notice naming both absent pytest collection patterns",
+      "phase": 2
+    },
+    {
+      "name": "release/rust-publish",
+      "workflow": "release",
+      "job": "rust-publish",
+      "command": "nix run .#release-check -- --component rust",
+      "applicable_when": "a v* tag is pushed and every declared publishable Rust artifact exists",
+      "not_applicable": "workflow is not triggered outside v* tags; missing declared artifacts on a tag is an error",
+      "phase": 13,
+      "implementation_status": "obsolete crate list recorded in foundation path audit"
+    },
+    {
+      "name": "release/python-publish",
+      "workflow": "release",
+      "job": "python-publish",
+      "command": "nix run .#release-check -- --component python",
+      "applicable_when": "a v* tag is pushed, Rust publication succeeds, and the PyO3 package exists",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 13,
+      "implementation_status": "planned replacement of direct host toolchain actions"
+    },
+    {
+      "name": "release/github-release",
+      "workflow": "release",
+      "job": "github-release",
+      "command": "nix run .#release-check -- --component github",
+      "applicable_when": "a v* tag is pushed and all package jobs and signed artifact checks succeed",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15,
+      "implementation_status": "planned release-gate replacement"
+    },
+    {
+      "name": "remote-flake/remote-flake-run",
+      "workflow": "remote-flake",
+      "job": "remote-flake-run",
+      "command": "nix flake metadata --refresh github:yqYo1/Poke-Controller-Modified-Extension/<sha>",
+      "applicable_when": "metadata always; app execution after server and Web sources exist",
+      "not_applicable": "app substeps emit a notice naming absent server/Web sources; metadata is never skipped",
+      "phase": 1
+    },
+    {
+      "name": "remote-flake/local-flake-run",
+      "workflow": "remote-flake",
+      "job": "local-flake-run",
+      "command": "nix flake check --no-build",
+      "applicable_when": "flake evaluation always; app execution after server and Web sources exist",
+      "not_applicable": "app substeps emit a notice naming absent server/Web sources; evaluation must remain applicable",
+      "phase": 1,
+      "implementation_status": "phase 2 must move evaluation outside the legacy source guard"
+    },
+    {
+      "name": "ruff/ruff",
+      "workflow": "ruff",
+      "job": "ruff",
+      "command": "nix run .#ruff-check && nix run .#ruff-format-check",
+      "applicable_when": "at least one tracked .py file exists",
+      "not_applicable": "notice naming the absent Python source pattern",
+      "phase": 1
+    },
+    {
+      "name": "rust-ci/build",
+      "workflow": "rust-ci",
+      "job": "build",
+      "command": "nix run .#clippy && nix run .#build-rust && nix run .#cargo-test",
+      "applicable_when": "at least one tracked rust/**/src/**/*.rs exists",
+      "not_applicable": "notice naming the absent Rust source pattern",
+      "phase": 1
+    },
+    {
+      "name": "spa-404-check/spa-404-check",
+      "workflow": "spa-404-check",
+      "job": "spa-404-check",
+      "command": "nix run .#spa-smoke-test",
+      "applicable_when": "server main, Web package, lockfile, and tracked web/src source exist",
+      "not_applicable": "notice naming each absent server/Web prerequisite",
+      "phase": 11,
+      "implementation_status": "planned Nix app; current workflow uses obsolete src-server paths"
+    }
+  ]
+}

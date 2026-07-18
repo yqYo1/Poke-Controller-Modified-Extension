@@ -6,22 +6,28 @@ on:
       - 'rust/**'
       - 'compatibility/**'
       - 'scripts/compatibility_inventory.py'
+      - 'scripts/source_filter.py'
+      - 'scripts/source_guard.py'
       - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'flake.nix'
       - 'flake.lock'
+      - '.github/workflows/rust-ci.yml'
   pull_request:
     branches: [main, master]
     paths:
       - 'rust/**'
       - 'compatibility/**'
       - 'scripts/compatibility_inventory.py'
+      - 'scripts/source_filter.py'
+      - 'scripts/source_guard.py'
       - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'flake.nix'
       - 'flake.lock'
+      - '.github/workflows/rust-ci.yml'
 jobs:
   build:
     name: Build and test (Rust)
@@ -33,21 +39,29 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Check formatting
         run: nix fmt -- --ci
-      - name: Check Rust source files exist
+      - name: Evaluate Rust source guard
         id: rust-check
-        run: |
-          if find rust -path '*/src/*.rs' -type f 2>/dev/null | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Rust crate source files (rust/**/src/**/*.rs) absent — Rust CI steps skipped (not applicable)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: nix run .#source-guard -- rust --github-output "$GITHUB_OUTPUT"
       - name: Clippy
-        if: steps.rust-check.outputs.skip != 'true'
+        if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#clippy
       - name: Build all crates
-        if: steps.rust-check.outputs.skip != 'true'
+        if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#build-rust
       - name: Run tests
-        if: steps.rust-check.outputs.skip != 'true'
+        if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#cargo-test
+
+  build-windows:
+    name: Build workspace (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95.0'
+      - name: Check all Windows targets and features
+        run: cargo check --locked --workspace --all-targets --all-features

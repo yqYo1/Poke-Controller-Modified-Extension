@@ -34,17 +34,11 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check Rust source files exist
+      - name: Evaluate Rust source guard
         id: rust-check
-        run: |
-          if find rust -path '*/src/*.rs' -type f 2>/dev/null | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Rust crate source files (rust/**/src/**/*.rs) absent — rust-lint skipped (not applicable)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: nix run .#source-guard -- rust --github-output "$GITHUB_OUTPUT"
       - name: Run cargo clippy
-        if: steps.rust-check.outputs.skip != 'true'
+        if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#clippy
 
   python-lint:
@@ -76,18 +70,11 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check web source files exist
+      - name: Evaluate Web source guard
         id: web-check-guard
-        run: |
-          if [ -f web/package.json ] && [ -f web/package-lock.json ] && \
-             find web/src -type f \( -name '*.svelte' -o -name '*.ts' -o -name '*.js' -o -name '*.tsx' -o -name '*.jsx' \) 2>/dev/null | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Web source files (web/package.json + web/package-lock.json + web/src/**/*.{svelte,ts,js,tsx,jsx}) absent — web-check skipped (not applicable)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: nix run .#source-guard -- web --github-output "$GITHUB_OUTPUT"
       - name: Run web checks (eslint + svelte-check + vitest)
-        if: steps.web-check-guard.outputs.skip != 'true'
+        if: steps.web-check-guard.outputs.applicable == 'true'
         run: nix run .#web-check
 
   markdownlint:

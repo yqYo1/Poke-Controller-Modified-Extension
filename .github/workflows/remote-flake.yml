@@ -1,12 +1,5 @@
 name: Remote Flake Test
 
-# Tests that the flake can be executed remotely without relying on local paths.
-# This verifies that all paths in flake.nix use nix store references
-# rather than local file system paths.
-#
-# App-level tests are skipped when server/web source files are absent
-# (the refactor branch intentionally removes them).
-
 on:
   push:
     branches: [main, master, refactor/rust-core]
@@ -22,27 +15,17 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v6
-      - name: Check server/web sources exist for app tests
-        id: source-check
-        run: |
-          if [ -f src-server/src/main.rs ] && [ -f web/package.json ] && [ -f web/package-lock.json ] && \
-             find web/src -type f \( -name '*.svelte' -o -name '*.ts' -o -name '*.js' -o -name '*.tsx' -o -name '*.jsx' \) 2>/dev/null | grep -q .; then
-            echo "apps_available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Server/web source files absent — remote flake app tests skipped (not applicable)"
-            echo "apps_available=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Evaluate application source guard
+        id: app-check
+        run: nix run .#source-guard -- app --github-output "$GITHUB_OUTPUT"
       - name: Validate remote flake metadata
-        run: |
-          nix flake metadata --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}
-      - name: Run default app from remote
-        if: steps.source-check.outputs.apps_available == 'true'
-        run: |
-          nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }} -- --help
-      - name: Run check app from remote
-        if: steps.source-check.outputs.apps_available == 'true'
-        run: |
-          nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check -- --help
+        run: nix flake metadata --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}
+      - name: Run default app help from remote
+        if: steps.app-check.outputs.applicable == 'true'
+        run: nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }} -- --help
+      - name: Run check app help from remote
+        if: steps.app-check.outputs.applicable == 'true'
+        run: nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check -- --help
 
   local-flake-run:
     name: Run flake from local checkout
@@ -52,25 +35,14 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check server/web sources exist
-        id: local-source-check
-        run: |
-          if [ -f src-server/src/main.rs ] && [ -f web/package.json ] && [ -f web/package-lock.json ] && \
-             find web/src -type f \( -name '*.svelte' -o -name '*.ts' -o -name '*.js' -o -name '*.tsx' -o -name '*.jsx' \) 2>/dev/null | grep -q .; then
-            echo "default_app=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Server/web source files absent — default app test skipped (not applicable)"
-            echo "default_app=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Run default app locally
-        if: steps.local-source-check.outputs.default_app == 'true'
-        run: |
-          nix run . -- --help
-      - name: Run check app locally
-        if: steps.local-source-check.outputs.default_app == 'true'
-        run: |
-          nix run .#check -- --help
-      - name: Evaluate flake
-        if: steps.local-source-check.outputs.default_app == 'true'
-        run: |
-          nix flake check --no-build
+      - name: Evaluate application source guard
+        id: app-check
+        run: nix run .#source-guard -- app --github-output "$GITHUB_OUTPUT"
+      - name: Run default app help locally
+        if: steps.app-check.outputs.applicable == 'true'
+        run: nix run . -- --help
+      - name: Run check app help locally
+        if: steps.app-check.outputs.applicable == 'true'
+        run: nix run .#check -- --help
+      - name: Evaluate all local flake outputs
+        run: nix flake check --no-build

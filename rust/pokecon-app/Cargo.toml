@@ -1,0 +1,30 @@
+[package]
+name = "pokecon-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pokecon"
+path = "src/main.rs"
+
+[features]
+default = []
+tauri-shell = ["pokecon-desktop/tauri-shell"]
+
+[dependencies]
+clap.workspace = true
+pokecon-core = { path = "../pokecon-core" }
+pokecon-desktop = { path = "../pokecon-desktop" }
+pokecon-server = { path = "../pokecon-server" }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+nix.workspace = true
+
+[lints]
+workspace = true

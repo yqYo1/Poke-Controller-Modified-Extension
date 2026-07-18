@@ -1,10 +1,5 @@
 name: Nix Source Filter Check
 
-# Detects missing file extensions in flake.nix source filter.
-# If a source file exists in web/ or src-server/ but its extension is not
-# listed in the filter, the nix build will silently exclude it — causing
-# issues like the SPA 404 incident where .svelte files were missing.
-
 on:
   push:
     branches: [main, master, refactor/rust-core]
@@ -13,74 +8,12 @@ on:
 
 jobs:
   check-source-filter:
-    name: Verify nix source filter coverage
+    name: Verify Nix source filter coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Extract filter extensions from flake.nix
-        id: filter
-        run: |
-          # Extract all hasSuffix patterns from the filter function
-          perl -nle 'print $1 while /hasSuffix "\.(\w+)"/g' flake.nix | sort -u > /tmp/filter_exts.txt
-          echo "=== Extensions in flake.nix filter ==="
-          cat /tmp/filter_exts.txt
-
-      - name: Find source file extensions
-        id: source
-        run: |
-          # Find all file extensions in directories that are part of the nix build
-          # Exclude node_modules, dist, .svelte-kit, etc.
-          find web/src web/static src-server/src src-server/icons \
-            -type f \
-            ! -path '*/node_modules/*' \
-            ! -path '*/dist/*' \
-            ! -path '*/.svelte-kit/*' \
-            ! -path '*/target/*' 2>/dev/null \
-            | sed 's/.*\.//' \
-            | sort -u > /tmp/source_exts.txt
-
-          echo "=== Extensions in source directories ==="
-          cat /tmp/source_exts.txt
-
-      - name: Compare and report missing extensions
-        run: |
-          echo "=== Checking for missing extensions ==="
-          missing=$(comm -23 /tmp/source_exts.txt /tmp/filter_exts.txt)
-          
-          if [ -n "$missing" ]; then
-            echo "❌ MISSING: The following extensions are used in source but not in flake.nix filter:"
-            echo "$missing" | while read -r ext; do
-              echo "  .$ext"
-              # Show example files with this extension
-              find web/src web/static src-server/src src-server/icons \
-                -type f -name "*.$ext" \
-                ! -path '*/node_modules/*' \
-                ! -path '*/dist/*' \
-                ! -path '*/.svelte-kit/*' \
-                ! -path '*/target/*' 2>/dev/null \
-                | head -3 \
-                | sed 's/^/    /'
-            done
-            echo ""
-            echo "FAIL: Add the missing extensions to the 'filter' function in flake.nix"
-            exit 1
-          else
-            echo "✅ All source extensions are covered by flake.nix filter"
-          fi
-
-      - name: Check for unused filter extensions
-        run: |
-          echo "=== Checking for unused filter extensions ==="
-          unused=0
-          while read -r ext; do
-            if ! grep -qx "$ext" /tmp/source_exts.txt; then
-              echo "⚠️  UNUSED: .$ext is in flake.nix filter but not found in source directories"
-              unused=1
-            fi
-          done < /tmp/filter_exts.txt
-
-          if [ "$unused" -eq 1 ]; then
-            echo ""
-            echo "NOTE: Some filter extensions may be unused (this is a warning, not an error)"
-          fi
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compare build-source extensions with flake.nix
+        run: nix run .#source-filter-check

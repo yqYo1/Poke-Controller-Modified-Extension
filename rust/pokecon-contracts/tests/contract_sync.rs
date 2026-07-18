@@ -337,7 +337,12 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
     assert_eq!(names, workflow_job_names());
     assert!(names.contains("lint/contracts"));
     for job in jobs {
-        assert!(string_at(job, "command").starts_with("nix "));
+        let command = string_at(job, "command");
+        let windows_native = job["execution_environment"] == "windows-native";
+        assert!(
+            command.starts_with("nix ") || (windows_native && command.starts_with("cargo ")),
+            "CI commands must use Nix except for the explicit Windows-native build: {command}"
+        );
         assert!(!string_at(job, "applicable_when").is_empty());
         assert!(!string_at(job, "not_applicable").is_empty());
         assert!(
@@ -422,6 +427,20 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
             assert!(
                 legacy_sources.contains(path),
                 "obsolete path marker {path} is not present in an observed manifest/workflow"
+            );
+        }
+    }
+    for entry in audit.iter().filter(|entry| entry["status"] == "resolved") {
+        assert!(entry["phase"].as_u64().is_some());
+        assert!(!string_at(entry, "resolution").is_empty());
+        for path in entry["paths"]
+            .as_array()
+            .expect("audited paths must be an array")
+        {
+            let path = path.as_str().expect("audited path must be a string");
+            assert!(
+                !legacy_sources.contains(path),
+                "resolved path marker {path} remains in an active manifest or workflow"
             );
         }
     }

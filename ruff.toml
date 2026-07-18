@@ -63,6 +63,15 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
+[lint.per-file-ignores]
+"scripts/compatibility_inventory.py" = [
+  "EM101",  # 検証失敗の動的な文脈を例外メッセージへ保持する
+  "EM102",
+  "S603",  # 引数配列で固定git実行ファイルを呼ぶ互換コーパス取得器
+  "S607",
+]
+"tests/**/*.py" = ["S101"]
+
 [format]
 quote-style = "double"
 indent-style = "space"

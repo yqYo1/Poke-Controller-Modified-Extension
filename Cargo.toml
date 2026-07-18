@@ -1,7 +1,22 @@
 [workspace]
 resolver = "2"
-members = ["rust/pokecon-contracts"]
-default-members = ["rust/pokecon-contracts"]
+members = [
+    "rust/pokecon-app",
+    "rust/pokecon-contracts",
+    "rust/pokecon-core",
+    "rust/pokecon-desktop",
+    "rust/pokecon-pybindings",
+    "rust/pokecon-server",
+    "rust/pokecon-worker",
+]
+default-members = [
+    "rust/pokecon-app",
+    "rust/pokecon-contracts",
+    "rust/pokecon-core",
+    "rust/pokecon-desktop",
+    "rust/pokecon-server",
+    "rust/pokecon-worker",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -15,16 +30,21 @@ keywords = ["pokemon", "automation", "switch", "3ds", "controller", "serial"]
 categories = ["games", "hardware-support", "embedded"]
 
 [workspace.dependencies]
+axum = "0.8.9"
+clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 anyhow = "1"
 parking_lot = "0.12"
-pyo3 = { version = "0.25", features = ["extension-module", "py-clone"] }
+pyo3 = { version = "0.29", features = ["abi3-py314", "extension-module"] }
+tauri = { version = "2.11.5", default-features = false }
 mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
+nix = { version = "0.30", features = ["process", "signal"] }
 toml = "0.8"
 regex = "1"
 sha2 = "0.10"

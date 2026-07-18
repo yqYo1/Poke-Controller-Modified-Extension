@@ -1,6 +1,8 @@
 {
   "include": [
-    "SerialController"
+    "python",
+    "scripts",
+    "tests"
   ],
   "exclude": [
     "**/__pycache__"

@@ -90,7 +90,7 @@
       "applicable_when": "always; an empty future source directory set is a valid checked state",
       "not_applicable": "forbidden",
       "phase": 2,
-      "implementation_status": "planned Nix app; current workflow has an inline check"
+      "implementation_status": "implemented by scripts/source_filter.py with covered and uncovered fixture branches"
     },
     {
       "name": "pytest/test-linux",
@@ -136,19 +136,20 @@
       "workflow": "remote-flake",
       "job": "remote-flake-run",
       "command": "nix flake metadata --refresh github:yqYo1/Poke-Controller-Modified-Extension/<sha>",
-      "applicable_when": "metadata always; app execution after server and Web sources exist",
-      "not_applicable": "app substeps emit a notice naming absent server/Web sources; metadata is never skipped",
-      "phase": 1
+      "applicable_when": "metadata always; app help execution after the Rust application entry point exists",
+      "not_applicable": "app substeps use the canonical app guard; metadata is never skipped",
+      "phase": 1,
+      "implementation_status": "canonical app guard and remote help probes implemented in phase 2"
     },
     {
       "name": "remote-flake/local-flake-run",
       "workflow": "remote-flake",
       "job": "local-flake-run",
       "command": "nix flake check --no-build",
-      "applicable_when": "flake evaluation always; app execution after server and Web sources exist",
-      "not_applicable": "app substeps emit a notice naming absent server/Web sources; evaluation must remain applicable",
+      "applicable_when": "flake evaluation always; app help execution after the Rust application entry point exists",
+      "not_applicable": "app substeps use the canonical app guard; evaluation remains applicable",
       "phase": 1,
-      "implementation_status": "phase 2 must move evaluation outside the legacy source guard"
+      "implementation_status": "flake evaluation is unconditional and app help probes use the canonical guard"
     },
     {
       "name": "ruff/ruff",
@@ -169,6 +170,17 @@
       "phase": 1
     },
     {
+      "name": "rust-ci/build-windows",
+      "workflow": "rust-ci",
+      "job": "build-windows",
+      "command": "cargo check --locked --workspace --all-targets --all-features",
+      "applicable_when": "Rust workspace source exists on the Windows runner",
+      "not_applicable": "workflow path filters distinguish an absent Rust change; a triggered missing workspace is an error",
+      "phase": 2,
+      "execution_environment": "windows-native",
+      "implementation_status": "Windows has no supported native Nix runner, so the pinned rust-toolchain and Python 3.14 are installed explicitly"
+    },
+    {
       "name": "spa-404-check/spa-404-check",
       "workflow": "spa-404-check",
       "job": "spa-404-check",
@@ -176,7 +188,7 @@
       "applicable_when": "server main, Web package, lockfile, and tracked web/src source exist",
       "not_applicable": "notice naming each absent server/Web prerequisite",
       "phase": 11,
-      "implementation_status": "planned Nix app; current workflow uses obsolete src-server paths"
+      "implementation_status": "canonical SPA guard and root pokecon package path implemented; full smoke test activates with phase 11 Web source"
     }
   ]
 }

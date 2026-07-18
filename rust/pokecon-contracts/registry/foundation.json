@@ -77,17 +77,17 @@
       "id": "rust_workspace",
       "paths": ["Cargo.toml", "rust/*/Cargo.toml", "rust/*/src"],
       "observed_in": ["Cargo.toml", "flake.nix", ".github/workflows/rust-ci.yml"],
-      "status": "canonical",
+      "status": "implemented",
       "phase": 2,
-      "resolution": "add responsibility-oriented crates to the root workspace"
+      "resolution": "responsibility-oriented app, core, contracts, desktop, PyO3, server, and worker crates are root workspace members"
     },
     {
       "id": "python_package",
       "paths": ["python/pokecon", "rust/pokecon-pybindings/Cargo.toml"],
       "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/basedpyright.yml"],
-      "status": "planned",
+      "status": "implemented",
       "phase": 2,
-      "resolution": "create the package, generated typing sources, and PyO3 boundary"
+      "resolution": "typed Python package and pokecon._native PyO3 boundary are buildable through maturin"
     },
     {
       "id": "web_package",
@@ -101,31 +101,25 @@
       "id": "python_tests",
       "paths": ["tests/test_*.py", "tests/**/*_test.py"],
       "observed_in": ["flake.nix", ".github/workflows/pytest.yml"],
-      "status": "planned",
+      "status": "implemented",
       "phase": 2,
-      "resolution": "add guard fixtures first, then component and integration suites"
+      "resolution": "pytest fixtures exercise present and absent source-guard branches; subsystem suites expand in later phases"
     },
     {
       "id": "legacy_src_server",
       "paths": ["src-server/Cargo.toml", "src-server/Cargo.lock", "src-server/src/main.rs"],
-      "observed_in": [
-        "flake.nix",
-        "scripts/check-server-lock.sh",
-        ".github/workflows/remote-flake.yml",
-        ".github/workflows/spa-404-check.yml",
-        ".github/workflows/nix-source-filter-check.yml"
-      ],
-      "status": "obsolete",
+      "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
+      "status": "resolved",
       "phase": 2,
-      "resolution": "replace src-server assumptions with the root Rust workspace server and Tauri crates"
+      "resolution": "all active manifests, hooks, and workflows use the root workspace app, server, and desktop crates"
     },
     {
       "id": "legacy_typescript_output",
       "paths": ["src/lib/api/types.ts"],
-      "observed_in": ["flake.nix"],
-      "status": "obsolete",
-      "phase": 10,
-      "resolution": "generate the specification-defined web/src/lib/api/openapi.ts from target/openapi.json"
+      "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
+      "status": "resolved",
+      "phase": 2,
+      "resolution": "the stale output was removed; phase 10 will generate web/src/lib/api/openapi.ts from target/openapi.json"
     },
     {
       "id": "legacy_release_crates",
@@ -161,6 +155,7 @@
   "audit_policy": {
     "obsolete_reference_is_success": false,
     "obsolete_reference_requires_phase_and_resolution": true,
+    "resolved_reference_must_be_absent": true,
     "planned_path_missing_is_not_applicable_until_phase": true,
     "implemented_path_missing_is_error": true
   }

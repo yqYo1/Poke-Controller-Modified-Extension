@@ -8,18 +8,12 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check Python source files exist
+      - name: Evaluate Python lint source guard
         id: py-check
-        run: |
-          if find . -type d -name node_modules -prune -o -name '*.py' -type f -print 2>/dev/null | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No Python source files (.py) found — ruff skipped (not applicable)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: nix run .#source-guard -- python-lint --github-output "$GITHUB_OUTPUT"
       - name: Run ruff check
-        if: steps.py-check.outputs.skip != 'true'
+        if: steps.py-check.outputs.applicable == 'true'
         run: nix run .#ruff-check
       - name: Run ruff format check
-        if: steps.py-check.outputs.skip != 'true'
+        if: steps.py-check.outputs.applicable == 'true'
         run: nix run .#ruff-format-check

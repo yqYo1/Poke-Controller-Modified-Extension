@@ -1,0 +1,21 @@
+[package]
+name = "pokecon-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+tauri-shell = ["dep:tauri"]
+
+[dependencies]
+pokecon-core = { path = "../pokecon-core" }
+tauri = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

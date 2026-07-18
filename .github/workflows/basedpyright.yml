@@ -2,7 +2,7 @@ name: Basedpyright
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, refactor/rust-core]
   pull_request:
     branches: [main, master]
 
@@ -17,16 +17,10 @@ jobs:
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Python source files exist (basedpyright checks python/)
+      - name: Evaluate Python source guard
         id: py-check
-        run: |
-          if [ -d python ] && find python -type f \( -name '*.py' -o -name '*.pyi' \) 2>/dev/null | grep -q .; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Python source/type files (python/**/*.{py,pyi}) absent — basedpyright skipped (not applicable)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: nix run .#source-guard -- python --github-output "$GITHUB_OUTPUT"
 
       - name: Run Basedpyright
-        if: steps.py-check.outputs.skip != 'true'
+        if: steps.py-check.outputs.applicable == 'true'
         run: nix run .#basedpyright

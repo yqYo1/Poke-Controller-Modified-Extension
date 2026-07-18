@@ -62,13 +62,6 @@
 /Docs/*
 !/Docs/*.md
 
-!/src-server/
-!/src-server/Cargo.lock
-!/src-server/Cargo.toml
-!/src-server/tauri.conf.json
-!/src-server/icons/
-!/src-server/src/
-!/src-server/build.rs
 !/web/
 /web/*
 !/web/package.json
@@ -145,6 +138,7 @@ result-*
 !/rust/pokecon-*/src/
 /rust/pokecon-*/src/*
 !/rust/pokecon-*/src/*.rs
+!/rust/pokecon-*/src/**/
 !/rust/pokecon-*/src/**/*.rs
 !/rust/pokecon-*/registry/
 /rust/pokecon-*/registry/*
@@ -169,20 +163,6 @@ result-*
 !/tests/
 /tests/*
 !/tests/*.py
-
-# Tauri v2 app skeleton
-!/src-server/
-/src-server/*
-!/src-server/Cargo.toml
-!/src-server/build.rs
-!/src-server/src/
-/src-server/src/*
-!/src-server/src/*.rs
-!/src-server/tauri.conf.json
-!/src-server/capabilities/
-/src-server/capabilities/*
-!/src-server/capabilities/default.json
-!/src-server/icons/
 
 # Web frontend
 !/web/

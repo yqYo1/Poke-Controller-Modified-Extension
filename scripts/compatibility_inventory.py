@@ -101,8 +101,7 @@ def run_git(repository: Path, arguments: Sequence[str]) -> bytes:
     process = subprocess.run(
         ["git", "-C", str(repository), *arguments],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     if process.returncode != 0:
         diagnostic = process.stderr.decode("utf-8", errors="replace").strip()
@@ -176,20 +175,18 @@ def analyze_script(path: str, content: bytes) -> dict[str, object]:
             imports.add((module, names))
         elif isinstance(node, ast.Call):
             name = attribute_name(node.func)
-            if name is not None and (
-                name.startswith("self.") or name.startswith("Commands.")
-            ):
+            if name is not None and name.startswith(("self.", "Commands.")):
                 references.add(name)
 
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef):
-            classes.append(
-                {
-                    "name": node.name,
-                    "bases": [ast.unparse(base) for base in node.bases],
-                    "line": node.lineno,
-                }
-            )
+    classes.extend(
+        {
+            "name": node.name,
+            "bases": [ast.unparse(base) for base in node.bases],
+            "line": node.lineno,
+        }
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+    )
 
     import_rows = [
         {"module": module, "names": list(names)} for module, names in sorted(imports)

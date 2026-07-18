@@ -80,7 +80,18 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
         .expect("cooperative stop succeeds");
     assert!(report.cooperative_acknowledged);
     assert!(!report.forced);
-    assert!(report.exit.success);
+    if !report.exit.success {
+        let mut failure_diagnostics = Vec::new();
+        while let Ok(Some(diagnostic)) =
+            tokio::time::timeout(Duration::from_millis(100), diagnostics.recv()).await
+        {
+            failure_diagnostics.extend_from_slice(&diagnostic.bytes);
+        }
+        panic!(
+            "unexpected stop report: {report:?}; stderr: {}",
+            String::from_utf8_lossy(&failure_diagnostics)
+        );
+    }
     safety.assert_neutral_once();
 }
 

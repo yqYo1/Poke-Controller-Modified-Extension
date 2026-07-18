@@ -124,8 +124,12 @@ async fn run_protocol(
                     .await?;
             }
             "worker.shutdown" => {
-                connection.respond(id, Some(op), IpcValue::Nil).await?;
+                let response = connection.respond(id, Some(op), IpcValue::Nil).await;
                 shutdown.request(ShutdownReason::WorkerStop);
+                return match response {
+                    Ok(()) | Err(ConnectionError::Disconnected(_)) => Ok(()),
+                    Err(error) => Err(error.into()),
+                };
             }
             _ => {
                 connection

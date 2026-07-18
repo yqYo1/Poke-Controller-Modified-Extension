@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::io;
+#[cfg(target_os = "linux")]
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};

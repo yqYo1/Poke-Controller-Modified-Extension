@@ -163,13 +163,12 @@ struct Registry {
     defined: BTreeSet<String>,
     custom: BTreeSet<String>,
     registrations: BTreeMap<HandlerId, Registration>,
-    next_handler: u64,
     next_registration_order: u64,
     settings: CallbackSettings,
 }
 
 impl Registry {
-    fn new(settings: CallbackSettings, first_handler_id: u64) -> Self {
+    fn new(settings: CallbackSettings) -> Self {
         Self {
             defined: BUILTIN_EVENTS
                 .iter()
@@ -177,7 +176,6 @@ impl Registry {
                 .collect(),
             custom: BTreeSet::new(),
             registrations: BTreeMap::new(),
-            next_handler: first_handler_id,
             next_registration_order: 0,
             settings,
         }
@@ -201,6 +199,8 @@ pub enum EventError {
     UndefinedEvent(String),
     #[error("autocmd group name is reserved: {0}")]
     ReservedGroup(String),
+    #[error("handler ID is already registered: {0:?}")]
+    DuplicateHandler(HandlerId),
     #[error("direct recursive event emission was ignored: {0}")]
     DirectRecursion(String),
     #[error(transparent)]
@@ -214,6 +214,7 @@ pub struct EventBus {
     executor: CallbackExecutor,
     diagnostics: Arc<dyn DiagnosticSink>,
     next_event_sequence: Arc<AtomicU64>,
+    next_handler: Arc<AtomicU64>,
 }
 
 impl std::fmt::Debug for EventBus {
@@ -238,10 +239,11 @@ impl EventBus {
     ) -> Self {
         let executor = CallbackExecutor::new(settings, diagnostics.clone());
         Self {
-            registry: Arc::new(Mutex::new(Registry::new(settings, first_handler_id))),
+            registry: Arc::new(Mutex::new(Registry::new(settings))),
             executor,
             diagnostics,
             next_event_sequence: Arc::new(AtomicU64::new(0)),
+            next_handler: Arc::new(AtomicU64::new(first_handler_id)),
         }
     }
 
@@ -257,7 +259,9 @@ impl EventBus {
         callback: Arc<dyn Callback>,
         options: RegistrationOptions,
     ) -> Result<HandlerId, EventError> {
-        self.register(event, callback, options, false)
+        let handler_id = self.reserve_handler_id();
+        self.install(handler_id, event, callback, options, false)?;
+        Ok(handler_id)
     }
 
     /// Registers a callback removed atomically when its first invocation
@@ -272,11 +276,28 @@ impl EventBus {
         callback: Arc<dyn Callback>,
         options: RegistrationOptions,
     ) -> Result<HandlerId, EventError> {
-        self.register(event, callback, options, true)
+        let handler_id = self.reserve_handler_id();
+        self.install(handler_id, event, callback, options, true)?;
+        Ok(handler_id)
     }
 
-    fn register(
+    /// Reserves one globally unique handler ID for a staged evaluation. A
+    /// rolled-back evaluation intentionally leaves a gap rather than allowing a
+    /// previously observed ID to be reused.
+    #[must_use]
+    pub fn reserve_handler_id(&self) -> HandlerId {
+        HandlerId(self.next_handler.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Installs a previously reserved handler during evaluation commit.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid event names, duplicate IDs, reserved groups, and invalid
+    /// timeout combinations.
+    pub fn install(
         &self,
+        id: HandlerId,
         event: &str,
         callback: Arc<dyn Callback>,
         options: RegistrationOptions,
@@ -284,6 +305,9 @@ impl EventBus {
     ) -> Result<HandlerId, EventError> {
         validate_event_name(event)?;
         let mut registry = self.registry.lock();
+        if registry.registrations.contains_key(&id) {
+            return Err(EventError::DuplicateHandler(id));
+        }
         options.limits.resolve(registry.settings)?;
         if let Some(group) = &options.group
             && (group == "all"
@@ -295,8 +319,6 @@ impl EventBus {
         {
             return Err(EventError::ReservedGroup(group.clone()));
         }
-        let id = HandlerId(registry.next_handler);
-        registry.next_handler = registry.next_handler.wrapping_add(1);
         let order = registry.next_registration_order;
         registry.next_registration_order = registry.next_registration_order.wrapping_add(1);
         registry.registrations.insert(

@@ -2597,9 +2597,14 @@ name = "pokecon-dynamic"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "atomic-write-file",
  "parking_lot",
+ "pokecon-contracts",
+ "pokecon-device",
+ "pokecon-settings",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

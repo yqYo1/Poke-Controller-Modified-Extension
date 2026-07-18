@@ -5,13 +5,21 @@
 //! lane, queue, and timeout rules directly testable without either interpreter.
 
 pub mod callback;
+pub mod control;
 pub mod event;
+pub mod host;
+pub mod source;
+pub mod transaction;
 
 pub use callback::{
     Callback, CallbackError, CallbackErrorKind, CallbackExecutor, CallbackLimits, CallbackOutcome,
     CallbackReturn, CallbackSettings, DeadlineSignal, Diagnostic, DiagnosticLevel, DiagnosticSink,
     Invocation, InvocationContext, NoopDiagnosticSink, TimeoutStage,
 };
+pub use control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult, DynamicSource};
 pub use event::{
     BUILTIN_EVENTS, BuiltinEvent, EventBus, EventError, EventResult, HandlerId, RegistrationOptions,
 };
+pub use host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry, InMemoryDynamicHost};
+pub use source::{ResolvedSource, SourceError, SourceStore};
+pub use transaction::{EvaluationTransaction, StagedEventOperation, TransactionError};

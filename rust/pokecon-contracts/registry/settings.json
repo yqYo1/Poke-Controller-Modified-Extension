@@ -1175,7 +1175,7 @@
       "id": "notifications.discord.webhook_url",
       "value": {
         "kind": "string",
-        "format": "free"
+        "format": "discord_webhook_or_empty"
       },
       "default": {
         "kind": "literal",

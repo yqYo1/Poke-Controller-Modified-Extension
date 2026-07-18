@@ -7,6 +7,7 @@ members = [
     "rust/pokecon-desktop",
     "rust/pokecon-pybindings",
     "rust/pokecon-server",
+    "rust/pokecon-settings",
     "rust/pokecon-worker",
 ]
 default-members = [
@@ -15,6 +16,7 @@ default-members = [
     "rust/pokecon-core",
     "rust/pokecon-desktop",
     "rust/pokecon-server",
+    "rust/pokecon-settings",
     "rust/pokecon-worker",
 ]
 
@@ -40,14 +42,26 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 anyhow = "1"
+async-trait = "0.1"
+atomic-write-file = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+fs4 = "1"
+getrandom = "0.4"
+hex = "0.4"
+hmac = "0.12"
 parking_lot = "0.12"
+pep440_rs = { version = "0.7", features = ["version-ranges"] }
 pyo3 = { version = "0.29", features = ["abi3-py314", "extension-module"] }
 tauri = { version = "2.11.5", default-features = false }
 mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
 nix = { version = "0.30", features = ["process", "signal"] }
 toml = "0.8"
+toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"
 sha2 = "0.10"
+tempfile = "3"
+url = "2"
+version-ranges = "0.1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

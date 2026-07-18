@@ -19,27 +19,7 @@ classifiers = [
     "Programming Language :: Rust",
     "Topic :: Games/Entertainment",
 ]
-dependencies = [
-  "gitpython>=3.1.45",
-  "imagehash>=4.3.2",
-  "numba>=0.61.2",
-  "numpy>=2.2.6",
-  "opencv-python>=4.12.0.88",
-  "paho-mqtt>=2.1.0",
-  "pandas>=2.3.1",
-  "pillow>=11.3.0",
-  "plyer>=2.1.0",
-  # "pygame>=2.6.1",  # Requires SDL dev libs; install separately
-  "pygubu>=0.38.2",
-  "pynput>=1.8.1",
-  "pyocr>=0.8.5",
-  "pyserial>=3.5",
-  "pythonnet>=3.0.5",
-  "requests>=2.32.4",
-  "scipy>=1.16.1",
-  "setuptools>=80.9.0",
-  "windows-capture-device-list>=1.1.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 torch = [
@@ -56,6 +36,22 @@ Repository = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
 Documentation = "https://github.com/yqYo1/Poke-Controller-Modified-Extension"
 
 [dependency-groups]
+worker-script = [
+  "icecream>=2.1.4",
+  "loguru>=0.7.3",
+  "numpy>=2.2.6",
+  "opencv-python>=4.12.0.88",
+  "pandas>=2.3.1",
+  "pillow>=11.3.0",
+  "pyaudio==0.2.14",
+  "pygubu>=0.38.2",
+  "pynput>=1.8.1",
+  "pyserial>=3.5",
+  "pythonnet>=3.0.5",
+  "requests>=2.32.4",
+  "scipy>=1.16.1",
+]
+worker-dynamic = []
 dev = [
   "basedpyright>=1.31.4",
   "pytest>=8.4.0",

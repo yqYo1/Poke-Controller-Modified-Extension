@@ -116,6 +116,8 @@
             }/bin/${name}";
 
           setupWorkdir = ''
+            export POKECON_BUILD_UV_PATH="${pkgs.uv}/bin/uv"
+            export POKECON_BUILD_UV_VERSION="${pkgs.uv.version}"
             caller_dir="$PWD"
             if [ -w "$caller_dir" ]; then
               export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-$caller_dir/target/nix-tasks}"
@@ -139,6 +141,7 @@
             pkgs.harfbuzz
             pkgs.libsoup_3
             pkgs.pango
+            pkgs.portaudio
             pkgs.webkitgtk_4_1
             pkgs.zlib
           ];
@@ -168,6 +171,8 @@
               "pokecon-app"
             ];
             doCheck = true;
+            POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
+            POKECON_BUILD_UV_VERSION = pkgs.uv.version;
           };
         in
         {
@@ -653,8 +658,11 @@
               pkgs.textlint
               pkgs.textlint-rule-no-start-duplicated-conjunction
               pkgs.typos
+              pkgs.uv
             ];
             PYO3_PYTHON = "${pythonEnv}/bin/python";
+            POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
+            POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
             shellHook = config.pre-commit.shellHook + ''
               echo "PokeCon Nix development shell: Rust $(rustc --version), Python $(python --version)"

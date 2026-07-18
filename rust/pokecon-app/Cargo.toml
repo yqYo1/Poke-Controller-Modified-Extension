@@ -19,9 +19,13 @@ clap.workspace = true
 pokecon-core = { path = "../pokecon-core" }
 pokecon-desktop = { path = "../pokecon-desktop" }
 pokecon-server = { path = "../pokecon-server" }
+pokecon-settings = { path = "../pokecon-settings" }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true

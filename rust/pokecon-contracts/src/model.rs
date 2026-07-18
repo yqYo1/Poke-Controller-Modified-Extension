@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsRegistry {
     pub schema_version: u32,
@@ -12,7 +12,7 @@ pub struct SettingsRegistry {
     pub settings: Vec<Setting>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Setting {
     pub id: String,
@@ -30,7 +30,7 @@ pub struct Setting {
     pub spec_refs: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ValueSchema {
     Null,
@@ -78,14 +78,14 @@ pub enum ValueSchema {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObjectProperty {
     pub schema: Box<ValueSchema>,
     pub required: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DefaultValue {
     Literal { value: Value },
@@ -93,7 +93,7 @@ pub enum DefaultValue {
     ResourcePath { relative: String },
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     Global,
@@ -101,7 +101,7 @@ pub enum Scope {
     Bootstrap,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mutability {
     StartupOnly,
@@ -109,7 +109,7 @@ pub enum Mutability {
     RuntimeDeferred,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Surfaces {
     pub toml: OptionalNamedSurface,
@@ -120,7 +120,7 @@ pub struct Surfaces {
     pub openapi: OpenApiSurface,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OptionalNamedSurface {
     #[serde(default)]
@@ -129,14 +129,14 @@ pub struct OptionalNamedSurface {
     pub unsupported_reason: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WireEncoding {
     Scalar,
     StrictJson,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CliSurface {
     pub flags: Vec<String>,
@@ -145,14 +145,14 @@ pub struct CliSurface {
     pub discouraged: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvSurface {
     pub name: String,
     pub encoding: WireEncoding,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Access {
     None,
@@ -161,7 +161,7 @@ pub enum Access {
     ReadWrite,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct UiSurface {
     pub access: Access,
@@ -171,7 +171,7 @@ pub struct UiSurface {
     pub unsupported_reason: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OpenApiSurface {
     pub access: Access,
@@ -181,7 +181,7 @@ pub struct OpenApiSurface {
     pub unsupported_reason: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PathMetadata {
     pub policy: PathKind,
@@ -191,7 +191,7 @@ pub struct PathMetadata {
     pub resolve_symlink: bool,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PathKind {
     File,

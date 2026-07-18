@@ -189,6 +189,15 @@ fn validate_optional_surface(
 }
 
 impl ValueSchema {
+    /// Validates a JSON value against this canonical schema.
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe description of the schema violation.
+    pub fn validate(&self, value: &Value) -> Result<(), String> {
+        self.validate_value(value)
+    }
+
     fn validate_value(&self, value: &Value) -> Result<(), String> {
         match self {
             Self::Null => value.is_null().then_some(()).ok_or("expected null".into()),
@@ -296,33 +305,21 @@ fn validate_string_format(value: &str, format: Option<&str>) -> Result<(), Strin
         Some("non_empty_no_nul") => (!value.is_empty() && !value.contains('\0'))
             .then_some(())
             .ok_or("value must be non-empty and contain no NUL".into()),
-        Some("profile_name") => (!value.is_empty()
+        Some("profile_name" | "app_name") => (!value.is_empty()
             && value != "."
             && value != ".."
-            && !value.contains(['/', '\\', '\0'])
-            && !value.contains(':'))
+            && !value.contains(['/', '\\', '\0', ':']))
         .then_some(())
-        .ok_or("value is not a safe path component".into()),
-        Some("app_name") => {
-            let components = value.split(['/', '\\']).collect::<Vec<_>>();
-            (!components.is_empty()
-                && components.iter().all(|component| {
-                    !component.is_empty() && *component != "." && *component != ".."
-                })
-                && !value.contains(['\0', ':']))
+        .ok_or("value is not a safe single path component".into()),
+        Some("http_url_or_empty") => (value.is_empty() || is_http_url(value))
             .then_some(())
-            .ok_or("value is not a safe relative application identifier".into())
-        }
-        Some("http_url_or_empty") => {
-            (value.is_empty() || value.starts_with("http://") || value.starts_with("https://"))
-                .then_some(())
-                .ok_or("value must be empty or an HTTP(S) URL".into())
-        }
-        Some("stun_uri_or_empty") => {
-            (value.is_empty() || value.starts_with("stun:") || value.starts_with("stuns:"))
-                .then_some(())
-                .ok_or("value must be empty or a STUN URI".into())
-        }
+            .ok_or("value must be empty or an HTTP(S) URL".into()),
+        Some("discord_webhook_or_empty") => (value.is_empty() || is_discord_webhook(value))
+            .then_some(())
+            .ok_or("value must be empty or a Discord webhook URL".into()),
+        Some("stun_uri_or_empty") => (value.is_empty() || is_stun_uri(value))
+            .then_some(())
+            .ok_or("value must be empty or a STUN URI".into()),
         Some("ip_literal_non_wildcard") => {
             let address = value
                 .parse::<std::net::IpAddr>()
@@ -333,6 +330,104 @@ fn validate_string_format(value: &str, format: Option<&str>) -> Result<(), Strin
         }
         Some(unknown) => Err(format!("unknown string format {unknown:?}")),
     }
+}
+
+fn is_http_url(value: &str) -> bool {
+    (value.starts_with("http://") || value.starts_with("https://"))
+        && url::Url::parse(value).is_ok_and(|parsed| {
+            matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
+        })
+}
+
+fn is_discord_webhook(value: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(value) else {
+        return false;
+    };
+    if parsed.scheme() != "https"
+        || parsed.host_str() != Some("discord.com")
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return false;
+    }
+
+    let Some(mut segments) = parsed.path_segments() else {
+        return false;
+    };
+    let (Some("api"), Some("webhooks"), Some(id), Some(token), None) = (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) else {
+        return false;
+    };
+
+    !id.is_empty()
+        && id.bytes().all(|byte| byte.is_ascii_digit())
+        && !token.is_empty()
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+}
+
+fn is_stun_uri(value: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(value) else {
+        return false;
+    };
+    if !matches!(parsed.scheme(), "stun" | "stuns")
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return false;
+    }
+
+    let target = parsed.path();
+    if target.is_empty()
+        || target.starts_with("//")
+        || target.contains(['/', '@'])
+        || target.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+
+    if let Some(rest) = target.strip_prefix('[') {
+        let Some((address, suffix)) = rest.split_once(']') else {
+            return false;
+        };
+        if address.parse::<std::net::Ipv6Addr>().is_err()
+            || (!suffix.is_empty() && !valid_stun_port(suffix.strip_prefix(':')))
+        {
+            return false;
+        }
+    } else if let Some((host, port)) = target.split_once(':')
+        && (host.is_empty() || host.contains(':') || !valid_stun_port(Some(port)))
+    {
+        return false;
+    }
+
+    let Ok(authority) = url::Url::parse(&format!("http://{target}")) else {
+        return false;
+    };
+    authority.host_str().is_some()
+        && authority.username().is_empty()
+        && authority.password().is_none()
+        && authority.path() == "/"
+        && authority.query().is_none()
+        && authority.fragment().is_none()
+        && authority.port().is_none_or(|port| port != 0)
+}
+
+fn valid_stun_port(port: Option<&str>) -> bool {
+    port.is_some_and(|port| {
+        !port.is_empty()
+            && port.bytes().all(|byte| byte.is_ascii_digit())
+            && port.parse::<u16>().is_ok_and(|port| port != 0)
+    })
 }
 
 fn validate_object_constraints(
@@ -395,4 +490,66 @@ fn insert_unique<'a>(
 
 fn invariant(message: impl Into<String>) -> ContractError {
     ContractError::Invariant(message.into())
+}
+
+#[cfg(test)]
+mod string_format_tests {
+    use super::validate_string_format;
+
+    #[test]
+    fn validates_http_urls_structurally() {
+        for valid in ["", "http://example.com", "https://example.com/avatar.png"] {
+            assert!(validate_string_format(valid, Some("http_url_or_empty")).is_ok());
+        }
+        for invalid in [
+            "ftp://example.com/avatar.png",
+            "https://",
+            "https:not-an-authority",
+        ] {
+            assert!(validate_string_format(invalid, Some("http_url_or_empty")).is_err());
+        }
+    }
+
+    #[test]
+    fn accepts_only_canonical_discord_webhook_urls() {
+        for valid in [
+            "",
+            "https://discord.com/api/webhooks/1234567890/token_A-b.c",
+        ] {
+            assert!(validate_string_format(valid, Some("discord_webhook_or_empty")).is_ok());
+        }
+        for invalid in [
+            "http://discord.com/api/webhooks/123/token",
+            "https://discordapp.com/api/webhooks/123/token",
+            "https://discord.com/api/webhooks/not-a-number/token",
+            "https://discord.com/api/webhooks/123/token/extra",
+            "https://discord.com/api/webhooks/123/token?wait=true",
+        ] {
+            assert!(validate_string_format(invalid, Some("discord_webhook_or_empty")).is_err());
+        }
+    }
+
+    #[test]
+    fn validates_stun_uri_authorities() {
+        for valid in [
+            "",
+            "stun:stun.example.com",
+            "stun:stun.example.com:3478",
+            "stuns:[2001:db8::1]:5349",
+        ] {
+            assert!(validate_string_format(valid, Some("stun_uri_or_empty")).is_ok());
+        }
+        for invalid in [
+            "http:stun.example.com",
+            "stun:",
+            "stun://stun.example.com",
+            "stun:user@stun.example.com",
+            "stun:stun.example.com/path",
+            "stun:stun.example.com:",
+            "stun:stun.example.com:0",
+            "stun:stun.example.com:65536",
+        ] {
+            assert!(validate_string_format(invalid, Some("stun_uri_or_empty")).is_err());
+        }
+    }
 }

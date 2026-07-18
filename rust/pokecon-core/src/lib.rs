@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 pub use diagnostics::{
     APP_STARTING, APP_STOPPED, SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED, TracingInitError,
-    init_tracing,
+    init_tracing, init_tracing_to_stderr,
 };
 pub use shutdown::{OsSignal, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder};
 

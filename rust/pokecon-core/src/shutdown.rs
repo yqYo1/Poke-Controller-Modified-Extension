@@ -28,6 +28,8 @@ pub enum ShutdownReason {
     DesktopExit,
     /// A startup probe requested an immediate clean exit.
     StartupProbe,
+    /// The parent process requested cooperative worker termination over IPC.
+    WorkerStop,
     /// An unrecoverable process error requested shutdown.
     FatalError(String),
 }

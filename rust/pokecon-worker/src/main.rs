@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
-use pokecon_core::{TracingInitError, init_tracing};
-use pokecon_worker::{WorkerKind, run};
+use pokecon_core::{TracingInitError, init_tracing_to_stderr};
+use pokecon_worker::{WorkerError, WorkerKind, run};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -34,13 +34,13 @@ enum MainError {
     #[error(transparent)]
     Tracing(#[from] TracingInitError),
     #[error(transparent)]
-    Task(#[from] tokio::task::JoinError),
+    Worker(#[from] WorkerError),
 }
 
 #[tokio::main]
 async fn main() -> Result<(), MainError> {
     let cli = Cli::parse();
-    init_tracing("info")?;
+    init_tracing_to_stderr("info")?;
     run(cli.kind.into(), cli.exit_after_startup).await?;
     Ok(())
 }

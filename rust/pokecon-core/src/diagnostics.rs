@@ -33,3 +33,25 @@ pub fn init_tracing(default_filter: &str) -> Result<(), TracingInitError> {
         .try_init()
         .map_err(TracingInitError)
 }
+
+/// Installs structured JSON logging on stderr.
+///
+/// Worker stdout is reserved for the framed IPC protocol, so managed worker
+/// processes must use this initializer instead of [`init_tracing`].
+///
+/// # Errors
+///
+/// Returns an error when another global tracing subscriber was already installed.
+pub fn init_tracing_to_stderr(default_filter: &str) -> Result<(), TracingInitError> {
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter));
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(std::io::stderr),
+        )
+        .try_init()
+        .map_err(TracingInitError)
+}

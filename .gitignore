@@ -146,6 +146,8 @@ result-*
 !/rust/pokecon-*/tests/
 /rust/pokecon-*/tests/*
 !/rust/pokecon-*/tests/*.rs
+!/rust/pokecon-*/tests/**/
+!/rust/pokecon-*/tests/**/*.rs
 !/rust/pokecon-*/benches/
 /rust/pokecon-*/benches/*
 !/rust/pokecon-*/benches/*.rs

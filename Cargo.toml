@@ -58,6 +58,7 @@ nix = { version = "0.30", features = ["process", "signal"] }
 toml = "0.8"
 toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"
+rmp-serde = "1"
 sha2 = "0.10"
 tempfile = "3"
 url = "2"

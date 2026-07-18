@@ -10,12 +10,20 @@ repository.workspace = true
 name = "pokecon-worker"
 path = "src/main.rs"
 
+[[bin]]
+name = "pokecon-worker-fault-fixture"
+path = "tests/fixtures/fault_worker.rs"
+test = false
+bench = false
+
 [dependencies]
 clap.workspace = true
 pokecon-core = { path = "../pokecon-core" }
+rmp-serde.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 
 [lints]

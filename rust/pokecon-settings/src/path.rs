@@ -385,12 +385,16 @@ pub enum PathError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::fs;
     use std::path::Path;
 
+    #[cfg(unix)]
     use tempfile::TempDir;
 
-    use super::{ExpansionStyle, canonical_identity, expand_environment, lexical_normalize};
+    #[cfg(unix)]
+    use super::canonical_identity;
+    use super::{ExpansionStyle, expand_environment, lexical_normalize};
     use crate::roots::RootEnvironment;
 
     #[test]

@@ -281,12 +281,16 @@ impl ManifestStore {
             source,
         })?;
         let path = self.path_for(venv)?;
-        let mut options = OpenOptions::new();
         #[cfg(unix)]
-        {
+        let options = {
             use std::os::unix::fs::OpenOptionsExt;
+
+            let mut options = OpenOptions::new();
             options.mode(0o600);
-        }
+            options
+        };
+        #[cfg(not(unix))]
+        let options = OpenOptions::new();
         let mut file = options.open(&path).map_err(|source| ManifestError::Io {
             path: path.clone(),
             source,

@@ -83,12 +83,16 @@ impl ManagedUv {
             path: parent.to_path_buf(),
             source,
         })?;
-        let mut options = OpenOptions::new();
         #[cfg(unix)]
-        {
+        let options = {
             use std::os::unix::fs::OpenOptionsExt;
+
+            let mut options = OpenOptions::new();
             options.mode(0o755);
-        }
+            options
+        };
+        #[cfg(not(unix))]
+        let options = OpenOptions::new();
         let mut output = options.open(&destination).map_err(|source| UvError::Io {
             path: destination.clone(),
             source,

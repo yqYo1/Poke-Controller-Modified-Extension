@@ -231,16 +231,19 @@ fn write_document(path: &Path, document: &DocumentMut) -> Result<(), Persistence
         path: parent.to_path_buf(),
         source,
     })?;
-    let existed = path.exists();
-    let mut options = OpenOptions::new();
     #[cfg(unix)]
-    {
+    let options = {
         use atomic_write_file::unix::OpenOptionsExt as AtomicOpenOptionsExt;
         use std::os::unix::fs::OpenOptionsExt as StdOpenOptionsExt;
 
+        let existed = path.exists();
+        let mut options = OpenOptions::new();
         options.mode(0o600);
         options.preserve_mode(existed);
-    }
+        options
+    };
+    #[cfg(not(unix))]
+    let options = OpenOptions::new();
     let mut file = options.open(path).map_err(|source| PersistenceError::Io {
         path: path.to_path_buf(),
         source,

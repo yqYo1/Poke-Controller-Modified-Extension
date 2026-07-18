@@ -10,6 +10,6 @@ impl PlatformAdapter for LinuxAdapter {
     }
 
     fn supports_native_notifications(&self) -> bool {
-        true
+        false
     }
 }

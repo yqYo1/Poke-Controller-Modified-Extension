@@ -68,8 +68,14 @@ mod tests {
     fn native_adapter_matches_the_build_target() {
         let adapter = native_adapter();
         #[cfg(target_os = "linux")]
-        assert_eq!(adapter.kind(), PlatformKind::Linux);
+        {
+            assert_eq!(adapter.kind(), PlatformKind::Linux);
+            assert!(!adapter.supports_native_notifications());
+        }
         #[cfg(target_os = "windows")]
-        assert_eq!(adapter.kind(), PlatformKind::Windows);
+        {
+            assert_eq!(adapter.kind(), PlatformKind::Windows);
+            assert!(adapter.supports_native_notifications());
+        }
     }
 }

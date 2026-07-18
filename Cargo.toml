@@ -4,6 +4,7 @@ members = [
     "rust/pokecon-app",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
+    "rust/pokecon-device",
     "rust/pokecon-desktop",
     "rust/pokecon-pybindings",
     "rust/pokecon-server",
@@ -14,6 +15,7 @@ default-members = [
     "rust/pokecon-app",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
+    "rust/pokecon-device",
     "rust/pokecon-desktop",
     "rust/pokecon-server",
     "rust/pokecon-settings",
@@ -59,6 +61,10 @@ toml = "0.8"
 toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"
 rmp-serde = "1"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls-no-provider"] }
+rustls = { version = "0.23.42", default-features = false, features = ["ring", "std"] }
+tokio-serial = { version = "5.5.0", features = ["libudev"] }
+gilrs = { version = "0.11.2", default-features = false, features = ["xinput"] }
 sha2 = "0.10"
 tempfile = "3"
 url = "2"

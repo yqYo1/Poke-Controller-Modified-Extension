@@ -100,7 +100,7 @@ impl EffectiveCameraConfig {
 
 /// One open capture handle. Reconfiguration must operate on this same handle;
 /// device replacement is owned by the manager transaction.
-pub trait CameraSession: Send {
+pub trait CameraSession {
     #[must_use]
     fn effective_config(&self) -> &EffectiveCameraConfig;
 

@@ -219,7 +219,6 @@ mod platform {
     use nokhwa::pixel_format::RgbFormat;
     use nokhwa::utils::{
         ApiBackend, CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType,
-        Resolution,
     };
     use nokhwa::{Buffer, Camera};
 
@@ -243,6 +242,7 @@ mod platform {
         let size = config.resolution().size();
         let mut camera = None;
         for format in FORMAT_PREFERENCE {
+            let formats = [format];
             let requested = RequestedFormat::with_formats(
                 RequestedFormatType::Closest(CameraFormat::new_from(
                     size.width(),
@@ -250,7 +250,7 @@ mod platform {
                     format,
                     config.requested_fps(),
                 )),
-                &[format],
+                &formats,
             );
             if let Ok(candidate) =
                 Camera::with_backend(index.clone(), requested, ApiBackend::MediaFoundation)

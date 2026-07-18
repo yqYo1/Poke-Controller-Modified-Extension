@@ -130,18 +130,20 @@ impl CameraManager {
         let writer_status = status.clone();
         let writer_flip = flip.clone();
         let writer_frames = frames.clone();
-        let writer = WriterState {
-            backend: writer_backend,
-            ring: writer_ring,
-            status: writer_status,
-            flip: writer_flip,
-            frames: writer_frames,
-            desired: config,
-            session: None,
-        };
         let join = std::thread::Builder::new()
             .name("pokecon-camera-writer".to_owned())
             .spawn(move || {
+                // Some native capture handles are thread-affine. Construct the
+                // state in the writer so no session ever crosses a thread.
+                let writer = WriterState {
+                    backend: writer_backend,
+                    ring: writer_ring,
+                    status: writer_status,
+                    flip: writer_flip,
+                    frames: writer_frames,
+                    desired: config,
+                    session: None,
+                };
                 writer_main(writer, &command_receiver, &startup_sender);
                 let _ = stopped_sender.send(());
             })

@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+#[cfg(target_os = "linux")]
 use std::io;
 #[cfg(target_os = "linux")]
 use std::path::Path;

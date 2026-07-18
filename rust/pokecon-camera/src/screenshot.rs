@@ -958,6 +958,9 @@ mod tests {
             );
         }
 
+        #[cfg(not(unix))]
+        drop(data);
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::symlink;

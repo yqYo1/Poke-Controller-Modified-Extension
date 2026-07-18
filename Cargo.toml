@@ -4,6 +4,7 @@ members = [
     "rust/pokecon-app",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
+    "rust/pokecon-camera",
     "rust/pokecon-device",
     "rust/pokecon-desktop",
     "rust/pokecon-pybindings",
@@ -15,6 +16,7 @@ default-members = [
     "rust/pokecon-app",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
+    "rust/pokecon-camera",
     "rust/pokecon-device",
     "rust/pokecon-desktop",
     "rust/pokecon-server",
@@ -51,12 +53,14 @@ fs4 = "1"
 getrandom = "0.4"
 hex = "0.4"
 hmac = "0.12"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 parking_lot = "0.12"
 pep440_rs = { version = "0.7", features = ["version-ranges"] }
 pyo3 = { version = "0.29", features = ["abi3-py314", "extension-module"] }
 tauri = { version = "2.11.5", default-features = false }
 mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
 nix = { version = "0.30", features = ["process", "signal"] }
+nokhwa = { version = "0.10.11", default-features = false }
 toml = "0.8"
 toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"
@@ -66,8 +70,10 @@ rustls = { version = "0.23.42", default-features = false, features = ["ring", "s
 tokio-serial = { version = "5.5.0", features = ["libudev"] }
 gilrs = { version = "0.11.2", default-features = false, features = ["xinput"] }
 sha2 = "0.10"
+shared_memory = "0.12.4"
 tempfile = "3"
 url = "2"
+v4l = "0.14"
 version-ranges = "0.1"
 
 [workspace.lints.rust]

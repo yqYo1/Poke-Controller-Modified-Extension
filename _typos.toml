@@ -25,6 +25,8 @@ extend-ignore-identifiers-re = [
     "bf_show_informations",
     "controllButtons",
     "sendWinNotfication",
+    # nokhwa 0.10 exposes this misspelled public API on Windows.
+    "set_camera_requset",
     "cros-libva",
     "cros-codecs",
 ]

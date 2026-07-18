@@ -150,9 +150,17 @@
             rustToolchain
             pkgs.pkg-config
           ]
+          ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ]
           ++ linuxDesktopPackages;
           desktopEnvironment = lib.optionalString pkgs.stdenv.isLinux ''
             export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
+            export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
+            export LD_LIBRARY_PATH="${
+              lib.makeLibraryPath [
+                pkgs.stdenv.cc.cc.lib
+                pkgs.llvmPackages.libclang.lib
+              ]
+            }''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           '';
 
           pokeconPackage = rustPlatform.buildRustPackage {
@@ -665,6 +673,13 @@
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+            LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
+            LD_LIBRARY_PATH = lib.optionalString pkgs.stdenv.isLinux (
+              lib.makeLibraryPath [
+                pkgs.stdenv.cc.cc.lib
+                pkgs.llvmPackages.libclang.lib
+              ]
+            );
             shellHook = config.pre-commit.shellHook + ''
               echo "PokeCon Nix development shell: Rust $(rustc --version), Python $(python --version)"
             '';

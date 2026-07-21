@@ -1,4 +1,8 @@
-//! Minimal axum lifecycle used before the public API is implemented.
+//! Axum lifecycle and generated public API contracts.
+
+pub mod api;
+pub mod openapi;
+pub mod paths;
 
 use std::io;
 use std::net::SocketAddr;

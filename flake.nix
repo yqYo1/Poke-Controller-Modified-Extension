@@ -309,6 +309,7 @@
               name = "contract-check";
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.basedpyright
+                pkgs.nodejs_20
                 pkgs.shellcheck
               ];
               text = ''
@@ -318,6 +319,7 @@
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
+                scripts/generate-api-types.sh --check
                 basedpyright
                 shellcheck scripts/*.sh
                 python scripts/source_filter.py
@@ -580,8 +582,10 @@
 
             generate-api-types = mkTask {
               name = "generate-api-types";
+              runtimeInputs = rustTaskInputs ++ [ pkgs.nodejs_20 ];
               text = ''
-                echo "generate-api-types not applicable: OpenAPI and Web sources arrive in phases ten and eleven"
+                ${desktopEnvironment}
+                exec scripts/generate-api-types.sh "$@"
               '';
             };
 
@@ -590,6 +594,7 @@
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.basedpyright
                 pkgs.markdownlint-cli
+                pkgs.nodejs_20
                 pkgs.ripgrep
                 pkgs.shellcheck
                 pkgs.textlint
@@ -609,6 +614,7 @@
                 python scripts/source_filter.py
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
+                scripts/generate-api-types.sh --check
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features
                 cargo build --locked --workspace --all-features

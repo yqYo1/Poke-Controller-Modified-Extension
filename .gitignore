@@ -41,6 +41,13 @@
 !/scripts/*.sh
 !/scripts/*.py
 
+!/api/
+/api/*
+!/api/package.json
+!/api/package-lock.json
+!/api/openapi.json
+!/api/generated.ts
+
 !/compatibility/
 /compatibility/*
 !/compatibility/*.json

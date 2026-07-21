@@ -74,6 +74,7 @@ sha2 = "0.10"
 shared_memory = "0.12.4"
 tempfile = "3"
 url = "2"
+utoipa = { version = "5.5.0", features = ["axum_extras", "preserve_order"] }
 v4l = "0.14"
 version-ranges = "0.1"
 

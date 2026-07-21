@@ -8,8 +8,14 @@ repository.workspace = true
 
 [dependencies]
 axum.workspace = true
+clap.workspace = true
+pokecon-contracts = { path = "../pokecon-contracts" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+utoipa.workspace = true
 
 [lints]
 workspace = true

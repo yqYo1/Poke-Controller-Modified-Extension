@@ -61,11 +61,16 @@ pub enum AppError {
 pub async fn run(options: AppOptions) -> Result<RunSummary, AppError> {
     let context = RuntimeContext::native();
     let shutdown = context.shutdown().clone();
-    let server = BoundServer::bind(options.listen_address)
-        .await
-        .map_err(AppError::Bind)?;
-    let listen_address = server.local_addr();
     let signal_task = install_os_signal_forwarder(shutdown.clone()).await;
+    let server = match BoundServer::bind(options.listen_address).await {
+        Ok(server) => server,
+        Err(error) => {
+            signal_task.abort();
+            let _aborted = signal_task.await;
+            return Err(AppError::Bind(error));
+        }
+    };
+    let listen_address = server.local_addr();
     let server_task = tokio::spawn(server.serve(shutdown.cancellation_token()));
 
     let _desktop_lifecycle =

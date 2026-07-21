@@ -111,6 +111,21 @@ async fn run_protocol(
             _reason = shutdown.cancelled() => return Ok(()),
             envelope = connection.recv() => envelope?,
         };
+        if let Envelope::Event { op, payload } = &envelope {
+            if ScriptWorkerRuntime::handles_event(op)
+                && let Some(runtime) = &script
+                && let Err(error) = runtime.handle_event(op, payload)
+            {
+                tracing::warn!(
+                    diagnostic_id = "SCRIPT_EVENT_REJECTED",
+                    event = %op,
+                    code = %error.code,
+                    message = %error.message,
+                    "script worker rejected an event"
+                );
+            }
+            continue;
+        }
         let Envelope::Request { id, op, payload } = envelope else {
             continue;
         };

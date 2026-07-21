@@ -19,6 +19,7 @@ bench = false
 [dependencies]
 clap.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
+pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-dynamic = { path = "../pokecon-dynamic" }
 pyo3.workspace = true

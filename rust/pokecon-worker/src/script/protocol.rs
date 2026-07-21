@@ -2,6 +2,9 @@
 
 use std::path::PathBuf;
 
+use pokecon_camera::{
+    CameraSelector, CaptureResolution, FlipMode, MappingDescriptor, ScreenshotFormat,
+};
 use serde::{Deserialize, Serialize};
 
 pub const INITIALIZE: &str = "script.initialize";
@@ -23,6 +26,16 @@ pub const HOST_DIALOG_STATUS: &str = "script.host.dialog_status";
 pub const HOST_DIALOG_CLOSE_ALL: &str = "script.host.dialog_close_all";
 pub const HOST_NETWORK: &str = "script.host.network";
 pub const HOST_NOTIFICATION: &str = "script.host.notification";
+pub const HOST_CAMERA_INITIALIZE: &str = "script.host.camera_initialize";
+pub const HOST_CAMERA_CONTROL: &str = "script.host.camera_control";
+pub const HOST_OVERLAY: &str = "script.host.overlay";
+pub const HOST_POPUP_IMAGE: &str = "script.host.popup_image";
+pub const HOST_TK: &str = "script.host.tk";
+pub const TK_EVENT: &str = "script.tk.event";
+
+/// Leaves room for the `MessagePack` envelope and typed request fields below
+/// the protocol-wide one-MiB frame limit.
+pub const MAX_POPUP_IMAGE_BYTES: usize = 262_144;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -163,6 +176,193 @@ pub struct HostSerialWriteRequest {
 #[serde(deny_unknown_fields)]
 pub struct HostSerialWriteRowRequest {
     pub row: String,
+}
+
+/// Rust-main camera state observed by the compatibility proxy.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostCameraState {
+    pub opened: bool,
+    pub fps: u32,
+    pub capture_resolution: CaptureResolution,
+    pub flip_mode: FlipMode,
+    pub screenshot_format: ScreenshotFormat,
+}
+
+/// One-time persistent shared-frame mapping plus its initial state.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostCameraInitializeResult {
+    pub mapping: Option<MappingDescriptor>,
+    pub state: HostCameraState,
+}
+
+/// Closed camera lifecycle and runtime-setting operations.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "operation")]
+pub enum HostCameraControlRequest {
+    State,
+    SetFps { fps: u32 },
+    SetFlip { mode: FlipMode },
+    Open { selector: CameraSelector },
+    Destroy,
+    ThreadStart,
+    ThreadStop,
+    Update,
+}
+
+/// UI-independent camera-overlay and capture-area control operations.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "operation")]
+pub enum HostOverlayRequest {
+    Rectangle {
+        x1: i64,
+        y1: i64,
+        x2: i64,
+        y2: i64,
+        outline: String,
+        tag: String,
+        expires_ms: Option<u64>,
+    },
+    Text {
+        x: i64,
+        y: i64,
+        text: String,
+        tag: String,
+        expires_ms: Option<u64>,
+        font: String,
+        font_size: u32,
+        color: String,
+    },
+    DeleteRectangle {
+        tag: String,
+    },
+    DeleteText {
+        tag: String,
+    },
+    SetFps {
+        fps: u32,
+    },
+    SetShowSize {
+        height: u32,
+        width: u32,
+    },
+    SetRightMouseMode {
+        mode: String,
+    },
+    SetTouchscreenArea {
+        left: f64,
+        top: f64,
+        right: f64,
+        bottom: f64,
+    },
+    SetBinding {
+        button: ScriptPointerButton,
+        enabled: bool,
+    },
+    Update,
+    Cleanup,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptPointerButton {
+    Left,
+    Right,
+}
+
+/// Compressed worker-local image prepared for a UI popup.
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostPopupImageRequest {
+    pub title: String,
+    pub content_type: String,
+    pub encoded: Vec<u8>,
+}
+
+impl std::fmt::Debug for HostPopupImageRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("HostPopupImageRequest")
+            .field("title", &self.title)
+            .field("content_type", &self.content_type)
+            .field("encoded_len", &self.encoded.len())
+            .finish()
+    }
+}
+
+/// Fixed, deliberately small Tkinter-to-Web compatibility operation set.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "operation")]
+pub enum HostTkRequest {
+    CreateToplevel {
+        window_id: u64,
+    },
+    SetTitle {
+        window_id: u64,
+        title: String,
+    },
+    SetGeometry {
+        window_id: u64,
+        geometry: String,
+    },
+    CreateScale {
+        window_id: u64,
+        widget_id: u64,
+        from_value: f64,
+        to_value: f64,
+        orient: String,
+        label: Option<String>,
+    },
+    CreateButton {
+        window_id: u64,
+        widget_id: u64,
+        text: String,
+    },
+    CreateLabel {
+        window_id: u64,
+        widget_id: u64,
+        text: String,
+        width: Option<i64>,
+        height: Option<i64>,
+        relief: Option<String>,
+        background: Option<String>,
+    },
+    Pack {
+        widget_id: u64,
+        pady: Option<i64>,
+    },
+    SetScale {
+        widget_id: u64,
+        value: f64,
+    },
+    GetScale {
+        widget_id: u64,
+    },
+    ConfigureLabel {
+        widget_id: u64,
+        text: Option<String>,
+        background: Option<String>,
+    },
+    DestroyWindow {
+        window_id: u64,
+    },
+    Cleanup,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostTkResult {
+    pub value: Option<f64>,
+}
+
+/// UI-originated Tk bridge callback delivered to the worker callback queue.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "event")]
+pub enum ScriptTkEvent {
+    ScaleChanged { widget_id: u64, value: f64 },
+    ButtonInvoked { widget_id: u64 },
+    WindowClosed { window_id: u64 },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -3,13 +3,16 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use pokecon_camera::{BgrFrame, CaptureResolution, FlipMode, ScreenshotFormat, SharedFrameRing};
 use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{
+    self, HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
-    HostNotificationRequest, HostOutputRequest, ScriptDialogState, ScriptExecuteRequest,
-    ScriptExecutionOutcome, ScriptInitializeRequest, ScriptWorkerStatus,
+    HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
+    HostTkRequest, HostTkResult, ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
+    ScriptInitializeRequest, ScriptTkEvent, ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -30,6 +33,12 @@ struct RecordingScriptHost {
     network_requests: Mutex<Vec<HostNetworkRequest>>,
     notification_requests: Mutex<Vec<HostNotificationRequest>>,
     fail_notifications: AtomicBool,
+    camera_ring: Mutex<Option<SharedFrameRing>>,
+    camera_state: Mutex<Option<HostCameraState>>,
+    overlay_requests: Mutex<Vec<HostOverlayRequest>>,
+    popup_requests: Mutex<Vec<HostPopupImageRequest>>,
+    tk_requests: Mutex<Vec<HostTkRequest>>,
+    tk_scales: Mutex<BTreeMap<u64, f64>>,
 }
 
 impl ScriptHost for RecordingScriptHost {
@@ -120,6 +129,97 @@ impl ScriptHost for RecordingScriptHost {
         }
         Ok(())
     }
+
+    fn camera_initialize(&self) -> Result<HostCameraInitializeResult, ScriptHostError> {
+        Ok(HostCameraInitializeResult {
+            mapping: self
+                .camera_ring
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(SharedFrameRing::descriptor),
+            state: self.current_camera_state(),
+        })
+    }
+
+    fn camera_control(
+        &self,
+        request: HostCameraControlRequest,
+    ) -> Result<HostCameraState, ScriptHostError> {
+        let mut state = self.camera_state.lock().unwrap();
+        let state = state.get_or_insert_with(default_camera_state);
+        match request {
+            HostCameraControlRequest::State | HostCameraControlRequest::Update => {}
+            HostCameraControlRequest::SetFps { fps } => state.fps = fps,
+            HostCameraControlRequest::SetFlip { mode } => state.flip_mode = mode,
+            HostCameraControlRequest::Open { .. } | HostCameraControlRequest::ThreadStart => {
+                state.opened = true;
+            }
+            HostCameraControlRequest::Destroy | HostCameraControlRequest::ThreadStop => {
+                state.opened = false;
+            }
+        }
+        Ok(*state)
+    }
+
+    fn overlay(&self, request: HostOverlayRequest) -> Result<(), ScriptHostError> {
+        self.overlay_requests.lock().unwrap().push(request);
+        Ok(())
+    }
+
+    fn popup_image(&self, request: HostPopupImageRequest) -> Result<(), ScriptHostError> {
+        self.popup_requests.lock().unwrap().push(request);
+        Ok(())
+    }
+
+    fn tk(&self, request: HostTkRequest) -> Result<HostTkResult, ScriptHostError> {
+        let result = match &request {
+            HostTkRequest::CreateScale {
+                widget_id,
+                from_value,
+                ..
+            } => {
+                self.tk_scales
+                    .lock()
+                    .unwrap()
+                    .insert(*widget_id, *from_value);
+                HostTkResult::default()
+            }
+            HostTkRequest::SetScale { widget_id, value } => {
+                self.tk_scales.lock().unwrap().insert(*widget_id, *value);
+                HostTkResult::default()
+            }
+            HostTkRequest::GetScale { widget_id } => HostTkResult {
+                value: self.tk_scales.lock().unwrap().get(widget_id).copied(),
+            },
+            HostTkRequest::Cleanup => {
+                self.tk_scales.lock().unwrap().clear();
+                HostTkResult::default()
+            }
+            _ => HostTkResult::default(),
+        };
+        self.tk_requests.lock().unwrap().push(request);
+        Ok(result)
+    }
+}
+
+impl RecordingScriptHost {
+    fn current_camera_state(&self) -> HostCameraState {
+        self.camera_state
+            .lock()
+            .unwrap()
+            .unwrap_or_else(default_camera_state)
+    }
+}
+
+const fn default_camera_state() -> HostCameraState {
+    HostCameraState {
+        opened: false,
+        fps: 45,
+        capture_resolution: CaptureResolution::R1280x720,
+        flip_mode: FlipMode::None,
+        screenshot_format: ScreenshotFormat::Png,
+    }
 }
 
 impl ResourceSafety for RecordingScriptHost {
@@ -141,12 +241,14 @@ async fn spawn_client(
     host: Arc<RecordingScriptHost>,
 ) -> (Arc<ManagedWorker>, Arc<ScriptWorkerClient>) {
     let supervisor = WorkerSupervisor::new();
+    let mut launch =
+        WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Script)
+            .clear_environment();
+    if let Some(site_packages) = std::env::var_os(protocol::PYTHON_SITE_PACKAGES_ENV) {
+        launch = launch.environment(protocol::PYTHON_SITE_PACKAGES_ENV, site_packages);
+    }
     let worker = supervisor
-        .spawn(
-            WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Script)
-                .clear_environment(),
-            host.clone(),
-        )
+        .spawn(launch, host.clone())
         .await
         .expect("script worker starts");
     let client =
@@ -507,6 +609,390 @@ class NetworkAndNotifications(ImageProcPythonCommand):
             assert!(!debug.contains("private"));
         }
     }
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn script_camera_images_are_private_and_image_processing_stays_worker_local() {
+    const SOURCE: &str = r#"
+import os
+
+import cv2
+import numpy as np
+
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class Images(ImageProcPythonCommand):
+    def do(self):
+        assert self.camera.isOpened()
+        assert self.camera.fps == 30
+        assert self.camera.capture_size == (640, 360)
+        assert self.camera.flip is False
+
+        first = self.camera.image_bgr
+        assert first.shape == (360, 640, 3)
+        assert first.dtype == np.uint8 and first.flags["W"]
+        original = first[50, 60].copy()
+        first[50, 60] = (0, 0, 0)
+        second = self.camera.readFrame()
+        assert np.array_equal(second[50, 60], original)
+
+        crop_cases = [
+            ("1", [60, 50, 90, 70]),
+            ("2", [60, 50, 30, 20]),
+            ("3", [60, 90, 50, 70]),
+            ("4", [60, 30, 50, 20]),
+            ("11", [50, 60, 70, 90]),
+            ("12", [50, 60, 20, 30]),
+            ("13", [50, 70, 60, 90]),
+            ("14", [50, 20, 60, 30]),
+        ]
+        for crop_fmt, crop in crop_cases:
+            cropped = self.getCameraImage(crop_fmt, crop)
+            assert cropped.shape == (20, 30, 3)
+            assert cropped.flags["W"]
+            assert np.array_equal(cropped[0, 0], original)
+
+        os.makedirs(self.template_path_name, exist_ok=True)
+        template_path = self.get_filespec("template.png")
+        mask_path = self.get_filespec("mask.png")
+        scene_path = self.get_filespec("scene.png")
+        assert cv2.imwrite(template_path, second[50:70, 60:90])
+        assert cv2.imwrite(mask_path, np.full((20, 30), 255, dtype=np.uint8))
+        assert cv2.imwrite(scene_path, second)
+        loaded = self.openImage("template.png")
+        assert loaded is not None and loaded.shape == (20, 30, 3)
+
+        assert self.isContainTemplate(
+            "template.png",
+            threshold=0.99,
+            mask_path="mask.png",
+            show_position=True,
+        )
+        assert self.isContainTemplateGPU(
+            "template.png", threshold=0.99, show_position=False
+        )
+        best, scores, matches = self.isContainTemplate_max(
+            ["template.png", "template.png"],
+            threshold=0.99,
+            mask_path_list=[None, "mask.png"],
+            show_position=False,
+        )
+        assert best in (0, 1)
+        assert len(scores) == 2 and matches == [True, True]
+        assert self.isContainedImage(
+            "scene.png",
+            threshold=0.99,
+            crop_fmt="1",
+            crop_template=[60, 50, 90, 70],
+            show_position=False,
+        )
+
+        self.camera.saveCapture(
+            "camera-layer", crop=1, crop_ax=[60, 50, 90, 70]
+        )
+        self.saveCapture(
+            "image-layer", crop_fmt="2", crop=[60, 50, 30, 20]
+        )
+        self.camera.saveCapture(
+            "custom-layer",
+            img=np.zeros((5, 7, 3), dtype=np.uint8),
+            format="jpeg",
+        )
+        self.popupImage("1", [60, 50, 90, 70], "worker popup")
+
+        self.displayText((10, 12), "ready", ms=25, color="green")
+        self.gui.ImgRect(1, 2, 3, 4, "red", 99, 25)
+        self.gui.setFps("24")
+        self.gui.setShowsize(180, 320)
+        self.gui.setTouchscreenArea(-5, 10, 400, 200)
+        assert self.gui.touchscreen_area == (0.0, 10 / 180, 1.0, 1.0)
+        self.gui.changeRightMouseMode("Qingpi")
+        self.gui.BindLeftClick()
+        self.gui.UnbindLeftClick()
+        self.gui.update()
+
+        self.camera.fps = 60
+        self.camera.set_flip("vErTiCaL")
+        assert self.camera.flip and self.camera.flip_mode == 0
+        self.camera.set_flip("Horizontal")
+        assert self.camera.flip_mode == 1
+        self.camera.set_flip("Both")
+        assert self.camera.flip_mode == -1
+        self.camera.set_flip("None")
+        assert not self.camera.flip
+        self.camera.openCamera("/dev/video-test")
+        self.camera.camera_thread_stop()
+        self.camera.camera_thread_start()
+        self.camera.camera_update()
+        self.camera.destroy()
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("images.py"), SOURCE).expect("image script is written");
+
+    let ring =
+        SharedFrameRing::create(CaptureResolution::R640x360).expect("test frame ring is created");
+    let mut pixels = Vec::with_capacity(640 * 360 * 3);
+    for y in 0_u32..360 {
+        for x in 0_u32..640 {
+            pixels.extend_from_slice(&[
+                u8::try_from((x * 3 + y) % 251).unwrap(),
+                u8::try_from((x + y * 5) % 253).unwrap(),
+                u8::try_from((x * 7 + y * 11) % 255).unwrap(),
+            ]);
+        }
+    }
+    let frame = BgrFrame::new(640, 360, pixels).expect("test frame is valid");
+    ring.publish(&frame).expect("test frame is published");
+
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.camera_ring.lock().unwrap() = Some(ring);
+    *host.camera_state.lock().unwrap() = Some(HostCameraState {
+        opened: true,
+        fps: 30,
+        capture_resolution: CaptureResolution::R640x360,
+        flip_mode: FlipMode::None,
+        screenshot_format: ScreenshotFormat::Png,
+    });
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "images.py".into(),
+            class_name: "Images".to_owned(),
+        })
+        .await
+        .expect("image script execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    let captures = data_root.join("Captures");
+    assert!(captures.join("camera-layer.png").is_file());
+    assert!(captures.join("image-layer.png").is_file());
+    assert!(captures.join("custom-layer.jpg").is_file());
+    assert_eq!(host.popup_requests.lock().unwrap().len(), 1);
+    assert!(
+        host.popup_requests.lock().unwrap()[0].encoded.len() <= protocol::MAX_POPUP_IMAGE_BYTES
+    );
+    {
+        let overlays = host.overlay_requests.lock().unwrap();
+        assert!(
+            overlays
+                .iter()
+                .any(|request| matches!(request, HostOverlayRequest::Rectangle { .. }))
+        );
+        assert!(
+            overlays
+                .iter()
+                .any(|request| matches!(request, HostOverlayRequest::Text { .. }))
+        );
+        assert_eq!(overlays.last(), Some(&HostOverlayRequest::Cleanup));
+    }
+    assert_eq!(host.current_camera_state().fps, 60);
+    assert!(!host.current_camera_state().opened);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn fixed_tk_bridge_runs_ui_callbacks_on_one_fifo_thread() {
+    const SOURCE: &str = r##"
+import threading
+import tkinter as tk
+from tkinter import filedialog
+
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class TkBridge(ImageProcPythonCommand):
+    def changed(self, value=None):
+        self.scale_value = self.scales[0].get()
+        self.order.append("scale")
+        self.callback_threads.append(threading.current_thread().name)
+        self.label.config(bg="#112233")
+
+    def clicked(self):
+        self.order.append("button")
+        self.callback_threads.append(threading.current_thread().name)
+        self.print_t1("button callback")
+
+    def do(self):
+        try:
+            tk.Tk()
+        except NotImplementedError as error:
+            assert "tkinter.Tk" in str(error)
+        else:
+            raise AssertionError("native Tk roots must never be created")
+        try:
+            filedialog.askopenfilename()
+        except NotImplementedError:
+            pass
+        else:
+            raise AssertionError("unsupported filedialog must fail explicitly")
+
+        self.order = []
+        self.callback_threads = []
+        self.scale_value = None
+        self.window = tk.Toplevel(self.gui)
+        self.window.title("HSV Thresholds")
+        self.window.geometry("400x500")
+        labels = [
+            "Target Hue",
+            "Target Sat",
+            "Target Val",
+            "Hue Error",
+            "Sat Error",
+            "Val Error",
+        ]
+        values = [250, 200, 120, 10, 105, 128]
+        self.scales = []
+        for label, value in zip(labels, values, strict=True):
+            scale = tk.Scale(
+                self.window,
+                from_=0,
+                to=360 if label == "Target Hue" else 255,
+                orient=tk.HORIZONTAL,
+                label=label,
+                command=self.changed,
+            )
+            scale.set(value)
+            scale.pack()
+            self.scales.append(scale)
+        self.button = tk.Button(self.window, text="Run", command=self.clicked)
+        self.button.pack(pady=20)
+        self.label = tk.Label(
+            self.window,
+            text="Detected",
+            width=20,
+            height=2,
+            relief=tk.SOLID,
+            bg="white",
+        )
+        self.label.pack(pady=10)
+
+        while len(self.order) < 2:
+            self.wait(0.01)
+        assert self.order == ["scale", "button"]
+        assert self.scale_value == 123
+        assert self.callback_threads == [
+            "pokecon-tk-callback",
+            "pokecon-tk-callback",
+        ]
+        self.wait(0.2)
+        assert self.window._destroyed
+"##;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("tk_bridge.py"), SOURCE).expect("Tk bridge script is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "tk_bridge.py".into(),
+                class_name: "TkBridge".to_owned(),
+            })
+            .await
+    });
+
+    let (window_id, scale_id, button_id) = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let (window_id, scale_id, button_id) = {
+                let requests = host.tk_requests.lock().unwrap();
+                let window_id = requests.iter().find_map(|request| match request {
+                    HostTkRequest::CreateToplevel { window_id } => Some(*window_id),
+                    _ => None,
+                });
+                let scale_id = requests.iter().find_map(|request| match request {
+                    HostTkRequest::CreateScale {
+                        widget_id,
+                        label: Some(label),
+                        ..
+                    } if label == "Target Hue" => Some(*widget_id),
+                    _ => None,
+                });
+                let button_id = requests.iter().find_map(|request| match request {
+                    HostTkRequest::CreateButton {
+                        widget_id, text, ..
+                    } if text == "Run" => Some(*widget_id),
+                    _ => None,
+                });
+                (window_id, scale_id, button_id)
+            };
+            if let (Some(window_id), Some(scale_id), Some(button_id)) =
+                (window_id, scale_id, button_id)
+            {
+                break (window_id, scale_id, button_id);
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("fixed Tk widgets are projected to the host");
+
+    host.tk_scales.lock().unwrap().insert(scale_id, 123.0);
+    client
+        .tk_event(&ScriptTkEvent::ScaleChanged {
+            widget_id: scale_id,
+            value: 123.0,
+        })
+        .await
+        .expect("scale callback event is queued");
+    client
+        .tk_event(&ScriptTkEvent::ButtonInvoked {
+            widget_id: button_id,
+        })
+        .await
+        .expect("button callback event is queued");
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let configured = host.tk_requests.lock().unwrap().iter().any(|request| {
+                matches!(
+                    request,
+                    HostTkRequest::ConfigureLabel {
+                        background: Some(background),
+                        ..
+                    } if background == "#112233"
+                )
+            });
+            let button_ran = host
+                .outputs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|output| output.message == "button callback\n");
+            if configured && button_ran {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("FIFO Tk callbacks run while the command thread remains active");
+
+    client
+        .tk_event(&ScriptTkEvent::WindowClosed { window_id })
+        .await
+        .expect("window close event is queued");
+    let result = tokio::time::timeout(Duration::from_secs(5), execution)
+        .await
+        .expect("Tk bridge command completes")
+        .expect("Tk bridge execution task joins")
+        .expect("Tk bridge execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert_eq!(
+        host.tk_requests.lock().unwrap().last(),
+        Some(&HostTkRequest::Cleanup)
+    );
 
     stop_worker(&worker).await;
 }

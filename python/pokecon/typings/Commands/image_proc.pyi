@@ -2,7 +2,7 @@
 # fmt: off
 from collections.abc import Sequence
 
-from cv2.typing import MatLike  # pyright: ignore[reportUnknownVariableType]
+from cv2.typing import MatLike
 
 from .PythonCommandBase import BgrRange, CropFmt, ScreenshotFormat
 

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from logging import Logger
 from typing import Literal, overload
 
-from cv2.typing import MatLike  # pyright: ignore[reportUnknownVariableType]
+from cv2.typing import MatLike
 
 from .Keys import GamepadInput, KeyPress
 from .dialogue import DialogueList, DialogueWidgets

@@ -51,6 +51,8 @@
           };
           pythonEnv = pkgs.python314.withPackages (
             pythonPackages: with pythonPackages; [
+              numpy
+              opencv4
               pytest
               ruff
             ]
@@ -118,6 +120,7 @@
           setupWorkdir = ''
             export POKECON_BUILD_UV_PATH="${pkgs.uv}/bin/uv"
             export POKECON_BUILD_UV_VERSION="${pkgs.uv.version}"
+            export POKECON_INTERNAL_SCRIPT_SITE_PACKAGES="${pythonEnv}/${pkgs.python314.sitePackages}"
             export PYO3_PYTHON="${pythonEnv}/bin/python"
             caller_dir="$PWD"
             if [ -w "$caller_dir" ]; then
@@ -192,6 +195,7 @@
             doCheck = true;
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
+            POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
             PYO3_PYTHON = "${pythonEnv}/bin/python";
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
           };
@@ -690,6 +694,7 @@
             PYO3_PYTHON = "${pythonEnv}/bin/python";
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
+            POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
             RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
             shellHook = config.pre-commit.shellHook + ''

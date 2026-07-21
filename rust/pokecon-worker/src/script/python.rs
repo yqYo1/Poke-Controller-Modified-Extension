@@ -1,24 +1,31 @@
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
+use std::str::FromStr as _;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread::JoinHandle;
 
+use pokecon_camera::{
+    BgrFrame, CaptureResolution, LatestFrameSource, RingReader, ScreenshotFormat, ScreenshotMode,
+    ScreenshotRuntimeSettings, ScreenshotService, SharedFrameRing,
+};
 use pokecon_contracts::PROTOCOL_REGISTRY_JSON;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyModule, PyModuleMethods};
+use pyo3::types::{PyBytes, PyModule, PyModuleMethods};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 
 use crate::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_value};
 
 use super::protocol::{
-    self, HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
+    self, HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,
+    HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
-    HostNotificationRequest, HostOutputRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
-    ScriptControl, ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction,
-    ScriptOutputMode, ScriptOutputTarget, ScriptWorkerStatus,
+    HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
+    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptControl,
+    ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction, ScriptOutputMode,
+    ScriptOutputTarget, ScriptTkEvent, ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -235,6 +242,24 @@ impl PythonActor {
         self.state.request_stop()
     }
 
+    pub(super) fn tk_event(&self, event: &ScriptTkEvent) -> Result<(), PythonActorError> {
+        if self.commands.is_none() {
+            return Err(PythonActorError::new(
+                "ScriptThreadStopped",
+                "script execution thread is unavailable",
+            ));
+        }
+        let encoded = serde_json::to_string(event)
+            .map_err(|error| PythonActorError::new("TkEventError", error.to_string()))?;
+        Python::attach(|py| -> PyResult<()> {
+            py.import("_pokecon_script")?
+                .getattr("_tk_event")?
+                .call1((encoded,))?;
+            Ok(())
+        })
+        .map_err(|error| PythonActorError::new("TkEventError", error.to_string()))
+    }
+
     pub(super) async fn shutdown(&mut self) {
         self.state.request_stop();
         if let Some(commands) = self.commands.take() {
@@ -292,17 +317,47 @@ impl PythonThread {
                 }
                 ActorCommand::Shutdown(response) => {
                     let _result = response.send(());
-                    return;
+                    break;
                 }
             }
         }
+        shutdown_python();
     }
+}
+
+fn shutdown_python() {
+    Python::attach(|py| {
+        if let Ok(module) = py.import("_pokecon_script") {
+            let _result = module
+                .getattr("_shutdown_tk")
+                .and_then(|function| function.call0());
+        }
+    });
 }
 
 fn initialize_python(
     config: &PythonActorConfig,
     state: Arc<ExecutionState>,
 ) -> Result<(), PythonActorError> {
+    let camera = request_host::<_, HostCameraInitializeResult>(
+        &config.connection,
+        &config.runtime_handle,
+        protocol::HOST_CAMERA_INITIALIZE,
+        &(),
+    )
+    .map_err(|error| PythonActorError::new("CameraInitializeError", error))?;
+    let camera_reader = camera
+        .mapping
+        .map(SharedFrameRing::open)
+        .transpose()
+        .map_err(|error| PythonActorError::new("CameraMappingError", error.to_string()))?
+        .map(RingReader::new);
+    let screenshot = ScreenshotService::new(
+        LatestFrameSource::default(),
+        &config.data_root,
+        ScreenshotMode::Web,
+        ScreenshotRuntimeSettings::default(),
+    );
     Python::initialize();
     Python::attach(|py| -> PyResult<()> {
         add_python_paths(py, &config.command_root)?;
@@ -316,7 +371,10 @@ fn initialize_python(
                     runtime_handle: config.runtime_handle.clone(),
                     state,
                     profile: config.profile.clone(),
+                    command_root: config.command_root.clone(),
                     data_root: config.data_root.clone(),
+                    camera_reader,
+                    screenshot,
                 },
             )?,
         )?;
@@ -386,6 +444,13 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
             }
         }),
     };
+    Python::attach(|py| {
+        if let Ok(module) = py.import("_pokecon_script") {
+            let _result = module
+                .getattr("_reset_tk")
+                .and_then(|function| function.call0());
+        }
+    });
     if let Err(error) = request_host::<_, ()>(
         &config.connection,
         &config.runtime_handle,
@@ -397,6 +462,17 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
             message: format!("dialog cleanup failed: {error}"),
         };
     }
+    if let Err(error) = request_host::<_, HostTkResult>(
+        &config.connection,
+        &config.runtime_handle,
+        protocol::HOST_TK,
+        &HostTkRequest::Cleanup,
+    ) && matches!(outcome, ScriptExecutionOutcome::Completed)
+    {
+        outcome = ScriptExecutionOutcome::Failed {
+            message: format!("Tk compatibility cleanup failed: {error}"),
+        };
+    }
     if let Err(error) = request_host::<_, HostNetworkResult>(
         &config.connection,
         &config.runtime_handle,
@@ -406,6 +482,17 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
     {
         outcome = ScriptExecutionOutcome::Failed {
             message: format!("network cleanup failed: {error}"),
+        };
+    }
+    if let Err(error) = request_host::<_, ()>(
+        &config.connection,
+        &config.runtime_handle,
+        protocol::HOST_OVERLAY,
+        &HostOverlayRequest::Cleanup,
+    ) && matches!(outcome, ScriptExecutionOutcome::Completed)
+    {
+        outcome = ScriptExecutionOutcome::Failed {
+            message: format!("overlay cleanup failed: {error}"),
         };
     }
     if let Err(error) = request_host::<_, ()>(
@@ -512,7 +599,10 @@ struct PyApi {
     runtime_handle: Handle,
     state: Arc<ExecutionState>,
     profile: String,
+    command_root: PathBuf,
     data_root: PathBuf,
+    camera_reader: Option<RingReader>,
+    screenshot: ScreenshotService,
 }
 
 impl PyApi {
@@ -554,6 +644,88 @@ impl PyApi {
 
     fn data_root(&self) -> String {
         self.data_root.to_string_lossy().into_owned()
+    }
+
+    fn command_root(&self) -> String {
+        self.command_root.to_string_lossy().into_owned()
+    }
+
+    fn camera_state(&self) -> PyResult<String> {
+        let state = self.request::<_, HostCameraState>(
+            protocol::HOST_CAMERA_CONTROL,
+            &HostCameraControlRequest::State,
+        )?;
+        serde_json::to_string(&state).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn camera_control(&self, request_json: &str) -> PyResult<String> {
+        let request = serde_json::from_str::<HostCameraControlRequest>(request_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let state = self.request::<_, HostCameraState>(protocol::HOST_CAMERA_CONTROL, &request)?;
+        serde_json::to_string(&state).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn camera_frame(&self, py: Python<'_>, resolution: &str) -> PyResult<(u32, u32, Py<PyBytes>)> {
+        let resolution = CaptureResolution::from_str(resolution)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let frame = self.camera_reader.as_ref().map_or_else(
+            || Ok(BgrFrame::zero(resolution)),
+            |reader| reader.read(resolution),
+        );
+        let frame = frame.map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let size = frame.size();
+        Ok((
+            size.width(),
+            size.height(),
+            PyBytes::new(py, frame.pixels()).unbind(),
+        ))
+    }
+
+    fn save_image(
+        &self,
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        filename: Option<&str>,
+        format: &str,
+    ) -> PyResult<String> {
+        let frame = BgrFrame::new(width, height, pixels)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let format = ScreenshotFormat::from_str(format)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        self.screenshot
+            .save_compatibility_frame(&frame, filename, Some(format))
+            .map(|saved| saved.display_path)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn overlay(&self, request_json: &str) -> PyResult<()> {
+        let request = serde_json::from_str::<HostOverlayRequest>(request_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        self.request(protocol::HOST_OVERLAY, &request)
+    }
+
+    fn popup_image(&self, title: String, content_type: String, encoded: Vec<u8>) -> PyResult<()> {
+        if encoded.len() > protocol::MAX_POPUP_IMAGE_BYTES {
+            return Err(PyValueError::new_err(
+                "compressed popup image exceeds the bounded payload limit",
+            ));
+        }
+        self.request(
+            protocol::HOST_POPUP_IMAGE,
+            &HostPopupImageRequest {
+                title,
+                content_type,
+                encoded,
+            },
+        )
+    }
+
+    fn tk(&self, request_json: &str) -> PyResult<String> {
+        let request = serde_json::from_str::<HostTkRequest>(request_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let result = self.request::<_, HostTkResult>(protocol::HOST_TK, &request)?;
+        serde_json::to_string(&result).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     fn controller_input(
@@ -712,9 +884,11 @@ import json as _json
 import logging as _logging
 import math as _math
 import os as _os
+import queue as _queue
 import sys as _sys
 import threading as _threading
 import time as _time
+import traceback as _traceback
 import types as _types
 
 
@@ -1650,79 +1824,270 @@ class PythonCommand:
             self._logger.warning("discord_text delivery failed")
 
 
+_CROP_FORMATS = {"", "1", "2", "3", "4", "11", "12", "13", "14"}
+_POPUP_TARGET_BYTES = 240_000
+
+
+def _json_request(operation, **values):
+    return _json.dumps({"operation": operation, **values}, separators=(",", ":"))
+
+
+def _require_int(value, name):
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be int")
+    return value
+
+
+def _convert_crop(crop_fmt="", crop=None):
+    normalized = str(crop_fmt)
+    if normalized not in _CROP_FORMATS:
+        raise ValueError(f"unsupported crop format {crop_fmt!r}")
+    if normalized == "" or crop is None or crop == []:
+        return None, None
+    if not isinstance(crop, (list, tuple)) or len(crop) != 4:
+        raise ValueError("crop must contain exactly four integers")
+    values = [_require_int(value, "crop coordinate") for value in crop]
+    if normalized == "1":
+        x1, y1, x2, y2 = values
+    elif normalized == "2":
+        x1, y1, width, height = values
+        x2, y2 = x1 + width, y1 + height
+    elif normalized == "3":
+        x1, x2, y1, y2 = values
+    elif normalized == "4":
+        x1, width, y1, height = values
+        x2, y2 = x1 + width, y1 + height
+    elif normalized == "11":
+        y1, x1, y2, x2 = values
+    elif normalized == "12":
+        y1, x1, height, width = values
+        y2, x2 = y1 + height, x1 + width
+    elif normalized == "13":
+        y1, y2, x1, x2 = values
+    else:
+        y1, height, x1, width = values
+        y2, x2 = y1 + height, x1 + width
+    return (y1, y2, x1, x2), (x1, y1, x2, y2)
+
+
+def _crop_image(image, crop_fmt="", crop=None):
+    import numpy as np
+
+    bounds, _ = _convert_crop(crop_fmt, crop)
+    if bounds is None:
+        return np.ascontiguousarray(image).copy()
+    y1, y2, x1, x2 = bounds
+    return np.ascontiguousarray(image[y1:y2, x1:x2]).copy()
+
+
+def _validate_bgr(image):
+    import numpy as np
+
+    array = np.asarray(image)
+    if array.dtype != np.uint8:
+        raise TypeError("image dtype must be uint8")
+    if array.ndim != 3 or array.shape[2] != 3:
+        raise ValueError("image must have shape (height, width, 3)")
+    if array.shape[0] == 0 or array.shape[1] == 0:
+        raise ValueError("image must be non-empty")
+    return np.ascontiguousarray(array).copy()
+
+
+def _encode_popup(image):
+    import cv2
+    import numpy as np
+
+    frame = np.ascontiguousarray(image)
+    if frame.ndim == 2:
+        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    quality = 85
+    while True:
+        ok, encoded = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality]
+        )
+        if not ok:
+            raise RuntimeError("OpenCV could not encode popup image")
+        payload = encoded.tobytes()
+        if len(payload) <= _POPUP_TARGET_BYTES:
+            return payload
+        if frame.shape[0] <= 64 or frame.shape[1] <= 64:
+            if quality > 35:
+                quality -= 10
+                continue
+            raise ValueError("popup image cannot fit the bounded IPC payload")
+        frame = cv2.resize(
+            frame,
+            (
+                max(64, int(frame.shape[1] * 0.75)),
+                max(64, int(frame.shape[0] * 0.75)),
+            ),
+            interpolation=cv2.INTER_AREA,
+        )
+
+
+def _popup_array(image, title):
+    _api.popup_image(str(title), "image/jpeg", _encode_popup(image))
+
+
 class Camera:
     def __init__(self, fps=45):
-        self._fps = int(fps)
+        _require_int(fps, "fps")
+        self._fps = fps
         self._capture_size = (1280, 720)
+        self._capture_resolution = "1280x720"
         self._flip = False
         self._flip_mode = 0
         self._opened = False
+        self._screenshot_format = "png"
+        self._refresh()
+
+    def _apply_state(self, encoded):
+        state = _json.loads(encoded)
+        resolution = state["capture_resolution"]
+        width, height = (int(value) for value in resolution.split("x", 1))
+        mode = state["flip_mode"]
+        modes = {
+            "none": (False, self._flip_mode),
+            "vertical": (True, 0),
+            "horizontal": (True, 1),
+            "both": (True, -1),
+        }
+        self._opened = bool(state["opened"])
+        self._fps = int(state["fps"])
+        self._capture_size = (width, height)
+        self._capture_resolution = resolution
+        self._flip, self._flip_mode = modes[mode]
+        self._screenshot_format = state["screenshot_format"]
+        return self
+
+    def _refresh(self):
+        return self._apply_state(_api.camera_state())
+
+    def _control(self, operation, **values):
+        return self._apply_state(
+            _api.camera_control(_json_request(operation, **values))
+        )
 
     @property
     def image_bgr(self):
         import numpy as np
 
-        width, height = self._capture_size
-        return np.zeros((height, width, 3), dtype=np.uint8)
+        self._refresh()
+        width, height, pixels = _api.camera_frame(self._capture_resolution)
+        return (
+            np.frombuffer(pixels, dtype=np.uint8)
+            .reshape((height, width, 3))
+            .copy()
+        )
 
     def readFrame(self):
         return self.image_bgr
 
     def isOpened(self):
+        self._refresh()
         return self._opened
 
     @property
     def fps(self):
+        self._refresh()
         return self._fps
 
     @fps.setter
     def fps(self, value):
-        self._fps = int(value)
+        value = _require_int(value, "fps")
+        if value <= 0:
+            raise ValueError("fps must be positive")
+        self._control("set_fps", fps=value)
 
     @property
     def capture_size(self):
+        self._refresh()
         return self._capture_size
 
     @property
     def flip(self):
+        self._refresh()
         return self._flip
 
     @property
     def flip_mode(self):
+        self._refresh()
         return self._flip_mode
 
     def set_flip(self, value):
-        normalized = str(value).casefold()
-        values = {"none": (False, self._flip_mode), "vertical": (True, 0), "horizontal": (True, 1), "both": (True, -1)}
-        if normalized not in values:
+        if not isinstance(value, str):
+            raise TypeError("flip must be str")
+        normalized = value.casefold()
+        if normalized not in {"none", "vertical", "horizontal", "both"}:
             raise ValueError("flip must be None, Vertical, Horizontal, or Both")
-        self._flip, self._flip_mode = values[normalized]
+        self._control("set_flip", mode=normalized)
 
-    def saveCapture(self, *args, **kwargs):
-        return _not_implemented("Camera.saveCapture")
+    def saveCapture(
+        self, filename=None, crop=None, crop_ax=None, img=None, format=None
+    ):
+        source = self.readFrame() if img is None else _validate_bgr(img)
+        if crop_ax is None:
+            crop_ax = [0, 0, source.shape[1], source.shape[0]]
+        if crop is None:
+            image = source
+        elif crop in {1, "1"}:
+            image = _crop_image(source, "1", crop_ax)
+        elif crop in {2, "2"}:
+            image = _crop_image(source, "2", crop_ax)
+        else:
+            raise ValueError("camera crop must be None, 1, or 2")
+        if filename is not None and not isinstance(filename, str):
+            raise TypeError("filename must be str or None")
+        if format is None:
+            self._refresh()
+            format = self._screenshot_format
+        normalized_format = str(format).casefold()
+        if normalized_format not in {"png", "jpeg"}:
+            raise ValueError("format must be png or jpeg")
+        image = _validate_bgr(image)
+        saved = _api.save_image(
+            image.shape[1],
+            image.shape[0],
+            image.tobytes(),
+            filename or None,
+            normalized_format,
+        )
+        print(f"capture succeeded: {saved}")
 
     def openCamera(self, cameraId):
-        self._opened = True
+        if isinstance(cameraId, bool) or not isinstance(cameraId, (int, str)):
+            raise TypeError("cameraId must be int or str")
+        if isinstance(cameraId, int) and cameraId < 0:
+            raise ValueError("camera index must be non-negative")
+        if isinstance(cameraId, str) and not cameraId:
+            raise ValueError("camera selector must be non-empty")
+        self._control("open", selector=cameraId)
 
     def destroy(self):
-        self._opened = False
+        self._control("destroy")
 
     def camera_thread_start(self):
-        self._opened = True
+        self._control("thread_start")
 
     def camera_thread_stop(self):
-        self._opened = False
+        self._control("thread_stop")
 
     def camera_update(self):
-        return None
+        self._control("update")
 
 
 class CaptureArea:
-    def __init__(self):
+    def __init__(self, camera=None):
+        self.camera = camera if camera is not None else Camera()
         self._show_size = (720, 1280)
         self._is_show_var = True
         self._rectangles = {}
         self._texts = {}
+        self._fps = 45
+        self.right_mouse_mode = "Default"
+        self.touchscreen_area = (0.0, 0.0, 1.0, 1.0)
+        self._range_start = None
+        self._range_end = None
 
     @property
     def show_size(self):
@@ -1733,51 +2098,144 @@ class CaptureArea:
         return self._is_show_var
 
     def ImgRect(self, x1, y1, x2, y2, outline, tag, ms, flag=True):
-        self._rectangles[tag] = (x1, y1, x2, y2, outline, ms, flag)
+        values = [_require_int(value, "rectangle coordinate") for value in (x1, y1, x2, y2)]
+        duration = _require_int(ms, "ms")
+        if duration < 0:
+            raise ValueError("ms must be non-negative")
+        request = {
+            "operation": "rectangle",
+            "x1": values[0],
+            "y1": values[1],
+            "x2": values[2],
+            "y2": values[3],
+            "outline": str(outline),
+            "tag": str(tag),
+            "expires_ms": duration if bool(flag) else None,
+        }
+        _api.overlay(_json.dumps(request, separators=(",", ":")))
+        self._rectangles[str(tag)] = request
 
-    def ImgText(self, x1, y1, txt, tag, ms, ft=("UD デジタル 教科書体 NP-B", 20), color="black", flag=True):
-        self._texts[tag] = (x1, y1, txt, ms, ft, color, flag)
+    def ImgText(
+        self,
+        x1,
+        y1,
+        txt,
+        tag,
+        ms,
+        ft=("UD デジタル 教科書体 NP-B", 20),
+        color="black",
+        flag=True,
+    ):
+        x1 = _require_int(x1, "text x")
+        y1 = _require_int(y1, "text y")
+        duration = _require_int(ms, "ms")
+        if duration < 0:
+            raise ValueError("ms must be non-negative")
+        if not isinstance(ft, tuple) or len(ft) != 2:
+            raise TypeError("font must be a (name, size) tuple")
+        font_size = _require_int(ft[1], "font size")
+        if font_size <= 0:
+            raise ValueError("font size must be positive")
+        request = {
+            "operation": "text",
+            "x": x1,
+            "y": y1,
+            "text": str(txt),
+            "tag": str(tag),
+            "expires_ms": duration if bool(flag) else None,
+            "font": str(ft[0]),
+            "font_size": font_size,
+            "color": str(color),
+        }
+        _api.overlay(_json.dumps(request, separators=(",", ":")))
+        self._texts[str(tag)] = request
 
     def deleteImageRect(self, tag):
-        self._rectangles.pop(tag, None)
+        _api.overlay(_json_request("delete_rectangle", tag=str(tag)))
+        self._rectangles.pop(str(tag), None)
 
     def deleteImageText(self, tag):
-        self._texts.pop(tag, None)
+        _api.overlay(_json_request("delete_text", tag=str(tag)))
+        self._texts.pop(str(tag), None)
 
     def setFps(self, fps):
-        self.fps = int(fps)
+        if isinstance(fps, bool) or not isinstance(fps, (str, int)):
+            raise TypeError("fps must be str or int")
+        try:
+            value = int(fps)
+        except ValueError as error:
+            raise ValueError("fps must be an integer") from error
+        if value <= 0:
+            raise ValueError("fps must be positive")
+        _api.overlay(_json_request("set_fps", fps=value))
+        self._fps = value
 
     def setShowsize(self, show_height, show_width):
-        self._show_size = (int(show_height), int(show_width))
+        height = _require_int(show_height, "show_height")
+        width = _require_int(show_width, "show_width")
+        if height <= 0 or width <= 0:
+            raise ValueError("show size must be positive")
+        _api.overlay(_json_request("set_show_size", height=height, width=width))
+        self._show_size = (height, width)
 
     def changeRightMouseMode(self, mode):
-        self.right_mouse_mode = str(mode)
+        if not isinstance(mode, str):
+            raise TypeError("right mouse mode must be str")
+        _api.overlay(_json_request("set_right_mouse_mode", mode=mode))
+        self.right_mouse_mode = mode
 
     def setTouchscreenArea(self, x1, y1, x2, y2):
-        if self._show_size[0] <= 0 or self._show_size[1] <= 0 or x1 == x2 or y1 == y2:
+        values = [_require_int(value, "touchscreen coordinate") for value in (x1, y1, x2, y2)]
+        height, width = self._show_size
+        if height <= 0 or width <= 0:
+            raise ValueError("show size must be positive")
+        left, right = sorted((max(0, min(width, values[0])), max(0, min(width, values[2]))))
+        top, bottom = sorted((max(0, min(height, values[1])), max(0, min(height, values[3]))))
+        if left == right or top == bottom:
             raise ValueError("touchscreen area must be non-degenerate")
-        self.touchscreen_area = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+        normalized = (left / width, top / height, right / width, bottom / height)
+        _api.overlay(
+            _json_request(
+                "set_touchscreen_area",
+                left=normalized[0],
+                top=normalized[1],
+                right=normalized[2],
+                bottom=normalized[3],
+            )
+        )
+        self.touchscreen_area = normalized
 
     def saveCapture(self):
-        return _not_implemented("CaptureArea.saveCapture")
+        self.camera.saveCapture()
 
     def update(self):
-        return None
+        _api.overlay(_json_request("update"))
+
+    def _binding(self, button, enabled):
+        _api.overlay(
+            _json_request("set_binding", button=button, enabled=bool(enabled))
+        )
 
     def BindLeftClick(self):
-        return None
+        self._binding("left", True)
 
     def BindRightClick(self):
-        return None
+        self._binding("right", True)
 
     def UnbindLeftClick(self):
-        return None
+        self._binding("left", False)
 
     def UnbindRightClick(self):
-        return None
+        self._binding("right", False)
 
     def mouseCtrlLeftPress(self, event):
-        return None
+        x, y = _require_int(event.x, "event.x"), _require_int(event.y, "event.y")
+        height, width = self._show_size
+        capture_width, capture_height = self.camera.capture_size
+        source_x = max(0, min(capture_width - 1, int(x * capture_width / width)))
+        source_y = max(0, min(capture_height - 1, int(y * capture_height / height)))
+        b, g, r = self.camera.image_bgr[source_y, source_x]
+        print(f"Color [R: {int(r)}, G: {int(g)}, B: {int(b)}]")
 
     def mouseLeftPress(self, event, keys_):
         return None
@@ -1792,13 +2250,493 @@ class CaptureArea:
         return None
 
     def StartRangeSS(self, event):
-        return None
+        self._range_start = (_require_int(event.x, "event.x"), _require_int(event.y, "event.y"))
+        self._range_end = self._range_start
 
     def MotionRangeSS(self, event):
-        return None
+        height, width = self._show_size
+        self._range_end = (
+            max(0, min(width, _require_int(event.x, "event.x"))),
+            max(0, min(height, _require_int(event.y, "event.y"))),
+        )
 
     def ReleaseRangeSS(self, event):
-        return None
+        self.MotionRangeSS(event)
+        if self._range_start is None or self._range_end is None:
+            raise RuntimeError("range screenshot has not started")
+        height, width = self._show_size
+        capture_width, capture_height = self.camera.capture_size
+        left, right = sorted((self._range_start[0], self._range_end[0]))
+        top, bottom = sorted((self._range_start[1], self._range_end[1]))
+        if left == right or top == bottom:
+            raise ValueError("screenshot range must be non-degenerate")
+        self.camera.saveCapture(
+            crop=1,
+            crop_ax=[
+                int(left * capture_width / width),
+                int(top * capture_height / height),
+                int(right * capture_width / width),
+                int(bottom * capture_height / height),
+            ],
+        )
+
+
+_tk_id_lock = _threading.Lock()
+_tk_next_id = 1
+_tk_objects = {}
+_tk_windows = {}
+_tk_callback_queue = _queue.Queue()
+_tk_callback_generation = 0
+_tk_callback_shutdown = False
+
+
+def _tk_id():
+    global _tk_next_id
+    with _tk_id_lock:
+        value = _tk_next_id
+        _tk_next_id += 1
+    return value
+
+
+def _tk_request(operation, **values):
+    response = _api.tk(_json_request(operation, **values))
+    return _json.loads(response)
+
+
+def _tk_reject_options(owner, options):
+    if options:
+        name = sorted(options)[0]
+        raise NotImplementedError(f"tkinter.{owner} option {name!r} is not implemented")
+
+
+def _tk_require_window(master):
+    if not isinstance(master, _TkToplevel) or master._destroyed:
+        raise TypeError("Tk widget parent must be a live tkinter.Toplevel")
+    return master
+
+
+def _tk_callback_main():
+    while True:
+        item = _tk_callback_queue.get()
+        if item is None:
+            return
+        generation, callback, arguments = item
+        if generation != _tk_callback_generation:
+            continue
+        try:
+            callback(*arguments)
+        except BaseException:
+            _traceback.print_exc(file=_sys.stderr)
+
+
+_tk_callback_thread = _threading.Thread(
+    target=_tk_callback_main,
+    name="pokecon-tk-callback",
+    daemon=True,
+)
+_tk_callback_thread.start()
+
+
+def _tk_queue_callback(callback, *arguments):
+    if callback is None or _tk_callback_shutdown:
+        return
+    _tk_callback_queue.put((_tk_callback_generation, callback, arguments))
+
+
+class _TkObject:
+    def __init__(self, master):
+        self.master = _tk_require_window(master)
+        self._id = _tk_id()
+        self._destroyed = False
+        self._packed = False
+        _tk_objects[self._id] = self
+        self.master._children.add(self._id)
+
+    def _ensure_live(self):
+        if self._destroyed or self.master._destroyed:
+            raise RuntimeError("Tk compatibility object has been destroyed")
+
+    def pack(self, **options):
+        self._ensure_live()
+        _tk_reject_options(type(self).__name__.removeprefix("_Tk"), set(options) - {"pady"})
+        pady = options.get("pady")
+        if pady is not None:
+            pady = _require_int(pady, "pack pady")
+        _tk_request("pack", widget_id=self._id, pady=pady)
+        self._packed = True
+
+    def __getattr__(self, name):
+        raise NotImplementedError(
+            f"tkinter.{type(self).__name__.removeprefix('_Tk')}.{name} is not implemented"
+        )
+
+
+class _TkToplevel:
+    def __init__(self, master=None, **options):
+        _tk_reject_options("Toplevel", options)
+        if not isinstance(master, CaptureArea):
+            raise TypeError("tkinter.Toplevel parent must be CaptureArea")
+        self.master = master
+        self._id = _tk_id()
+        self._destroyed = False
+        self._children = set()
+        _tk_windows[self._id] = self
+        _tk_request("create_toplevel", window_id=self._id)
+
+    def _ensure_live(self):
+        if self._destroyed:
+            raise RuntimeError("Tk compatibility window has been destroyed")
+
+    def title(self, value):
+        self._ensure_live()
+        if not isinstance(value, str):
+            raise TypeError("Toplevel title must be str")
+        _tk_request("set_title", window_id=self._id, title=value)
+
+    def geometry(self, value):
+        self._ensure_live()
+        if not isinstance(value, str):
+            raise TypeError("Toplevel geometry must be str")
+        _tk_request("set_geometry", window_id=self._id, geometry=value)
+
+    def destroy(self):
+        if self._destroyed:
+            return
+        _tk_request("destroy_window", window_id=self._id)
+        _tk_destroy_window(self._id)
+
+    def __getattr__(self, name):
+        raise NotImplementedError(f"tkinter.Toplevel.{name} is not implemented")
+
+
+class _TkScale(_TkObject):
+    def __init__(
+        self,
+        master,
+        from_=0,
+        to=100,
+        orient="vertical",
+        label=None,
+        command=None,
+        **options,
+    ):
+        _tk_reject_options("Scale", options)
+        super().__init__(master)
+        if isinstance(from_, bool) or not isinstance(from_, (int, float)):
+            raise TypeError("Scale from_ must be numeric")
+        if isinstance(to, bool) or not isinstance(to, (int, float)):
+            raise TypeError("Scale to must be numeric")
+        if orient not in {"horizontal", "vertical"}:
+            raise ValueError("Scale orient must be horizontal or vertical")
+        if label is not None and not isinstance(label, str):
+            raise TypeError("Scale label must be str or None")
+        if command is not None and not callable(command):
+            raise TypeError("Scale command must be callable or None")
+        self._from = float(from_)
+        self._to = float(to)
+        self._value = self._from
+        self._command = command
+        _tk_request(
+            "create_scale",
+            window_id=self.master._id,
+            widget_id=self._id,
+            from_value=self._from,
+            to_value=self._to,
+            orient=orient,
+            label=label,
+        )
+
+    def _normalize(self, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError("Scale value must be numeric")
+        low, high = sorted((self._from, self._to))
+        return max(low, min(high, float(value)))
+
+    def set(self, value):
+        self._ensure_live()
+        self._value = self._normalize(value)
+        _tk_request("set_scale", widget_id=self._id, value=self._value)
+
+    def get(self):
+        self._ensure_live()
+        result = _tk_request("get_scale", widget_id=self._id)
+        if result["value"] is None:
+            raise RuntimeError("Tk host returned no Scale value")
+        self._value = self._normalize(result["value"])
+        return self._value
+
+
+class _TkButton(_TkObject):
+    def __init__(self, master, text="", command=None, **options):
+        _tk_reject_options("Button", options)
+        super().__init__(master)
+        if not isinstance(text, str):
+            raise TypeError("Button text must be str")
+        if command is not None and not callable(command):
+            raise TypeError("Button command must be callable or None")
+        self._command = command
+        _tk_request(
+            "create_button",
+            window_id=self.master._id,
+            widget_id=self._id,
+            text=text,
+        )
+
+    def invoke(self):
+        self._ensure_live()
+        _tk_queue_callback(self._command)
+
+
+class _TkLabel(_TkObject):
+    def __init__(
+        self,
+        master,
+        text="",
+        width=None,
+        height=None,
+        relief=None,
+        bg=None,
+        **options,
+    ):
+        _tk_reject_options("Label", options)
+        super().__init__(master)
+        if not isinstance(text, str):
+            raise TypeError("Label text must be str")
+        width = None if width is None else _require_int(width, "Label width")
+        height = None if height is None else _require_int(height, "Label height")
+        if relief is not None and not isinstance(relief, str):
+            raise TypeError("Label relief must be str or None")
+        if bg is not None and not isinstance(bg, str):
+            raise TypeError("Label bg must be str or None")
+        self._text = text
+        self._background = bg
+        _tk_request(
+            "create_label",
+            window_id=self.master._id,
+            widget_id=self._id,
+            text=text,
+            width=width,
+            height=height,
+            relief=relief,
+            background=bg,
+        )
+
+    def config(self, **options):
+        self._ensure_live()
+        _tk_reject_options("Label.config", set(options) - {"text", "bg", "background"})
+        if "bg" in options and "background" in options:
+            raise TypeError("Label background was provided twice")
+        text = options.get("text")
+        background = options.get("bg", options.get("background"))
+        if text is not None and not isinstance(text, str):
+            raise TypeError("Label text must be str")
+        if background is not None and not isinstance(background, str):
+            raise TypeError("Label background must be str")
+        _tk_request(
+            "configure_label",
+            widget_id=self._id,
+            text=text,
+            background=background,
+        )
+        if text is not None:
+            self._text = text
+        if background is not None:
+            self._background = background
+
+    configure = config
+
+
+def _tk_destroy_window(window_id):
+    window = _tk_windows.pop(window_id, None)
+    if window is None:
+        return
+    window._destroyed = True
+    for widget_id in tuple(window._children):
+        widget = _tk_objects.pop(widget_id, None)
+        if widget is not None:
+            widget._destroyed = True
+    window._children.clear()
+
+
+def _tk_event(encoded):
+    event = _json.loads(encoded)
+    kind = event["event"]
+    if kind == "window_closed":
+        _tk_destroy_window(event["window_id"])
+        return
+    widget = _tk_objects.get(event["widget_id"])
+    if widget is None or widget._destroyed:
+        return
+    if kind == "scale_changed" and isinstance(widget, _TkScale):
+        widget._value = widget._normalize(event["value"])
+        _tk_queue_callback(widget._command, str(widget._value))
+    elif kind == "button_invoked" and isinstance(widget, _TkButton):
+        _tk_queue_callback(widget._command)
+
+
+def _reset_tk():
+    global _tk_callback_generation
+    _tk_callback_generation += 1
+    for window_id in tuple(_tk_windows):
+        _tk_destroy_window(window_id)
+    while True:
+        try:
+            _tk_callback_queue.get_nowait()
+        except _queue.Empty:
+            break
+
+
+def _shutdown_tk():
+    global _tk_callback_shutdown
+    if _tk_callback_shutdown:
+        return
+    _tk_callback_shutdown = True
+    _reset_tk()
+    _tk_callback_queue.put(None)
+    _tk_callback_thread.join(timeout=1.0)
+
+
+def _unsupported_tk(name):
+    def construct(*args, **kwargs):
+        raise NotImplementedError(f"tkinter.{name} is not implemented")
+
+    return construct
+
+
+tkinter_module = _types.ModuleType("tkinter")
+tkinter_module.__path__ = []
+tkinter_module.__all__ = [
+    "Toplevel",
+    "Scale",
+    "Button",
+    "Label",
+    "HORIZONTAL",
+    "VERTICAL",
+]
+tkinter_module.Toplevel = _TkToplevel
+tkinter_module.Scale = _TkScale
+tkinter_module.Button = _TkButton
+tkinter_module.Label = _TkLabel
+tkinter_module.Tk = _unsupported_tk("Tk")
+tkinter_module.HORIZONTAL = "horizontal"
+tkinter_module.VERTICAL = "vertical"
+tkinter_module.SOLID = "solid"
+
+
+def _tk_module_missing(name):
+    raise NotImplementedError(f"tkinter.{name} is not implemented")
+
+
+tkinter_module.__getattr__ = _tk_module_missing
+filedialog_module = _types.ModuleType("tkinter.filedialog")
+
+
+def _unsupported_filedialog(*args, **kwargs):
+    raise NotImplementedError("tkinter.filedialog is not implemented")
+
+
+filedialog_module.asksaveasfilename = _unsupported_filedialog
+filedialog_module.askopenfilename = _unsupported_filedialog
+tkinter_module.filedialog = filedialog_module
+_sys.modules["tkinter"] = tkinter_module
+_sys.modules["tkinter.filedialog"] = filedialog_module
+
+
+def _load_image(value, binary=False):
+    import cv2
+    import numpy as np
+
+    if isinstance(value, np.ndarray):
+        return np.ascontiguousarray(value).copy()
+    if not isinstance(value, str):
+        raise TypeError("image path must be str or ndarray")
+    mode = cv2.IMREAD_GRAYSCALE if binary else cv2.IMREAD_COLOR
+    image = cv2.imread(value, mode)
+    return None if image is None else np.ascontiguousarray(image).copy()
+
+
+def _preprocess(image, use_gray, crop_fmt, crop, bgr_range, threshold_binary):
+    import cv2
+    import numpy as np
+
+    processed = _crop_image(image, crop_fmt, crop)
+    if processed.size == 0:
+        raise ValueError("crop produced an empty image")
+    if use_gray and processed.ndim == 3:
+        processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
+    elif bgr_range is not None:
+        if not isinstance(bgr_range, dict) or set(bgr_range) != {"lower", "upper"}:
+            raise ValueError("BGR_range must contain only lower and upper")
+        processed = cv2.inRange(
+            processed,
+            np.asarray(bgr_range["lower"], dtype=np.uint8),
+            np.asarray(bgr_range["upper"], dtype=np.uint8),
+        )
+    if threshold_binary is not None:
+        threshold_binary = _require_int(threshold_binary, "threshold_binary")
+        if not 0 <= threshold_binary <= 255:
+            raise ValueError("threshold_binary must be between 0 and 255")
+        _, processed = cv2.threshold(
+            processed, threshold_binary, 255, cv2.THRESH_BINARY
+        )
+    return np.ascontiguousarray(processed)
+
+
+def _match_template(
+    source,
+    template,
+    *,
+    threshold,
+    use_gray,
+    crop_fmt,
+    crop,
+    mask,
+    bgr_range,
+    threshold_binary,
+    crop_template,
+    show_image,
+):
+    import cv2
+    import math
+
+    source = _preprocess(
+        source, use_gray, crop_fmt, crop, bgr_range, threshold_binary
+    )
+    template = _preprocess(
+        template,
+        use_gray,
+        crop_fmt,
+        crop_template,
+        bgr_range,
+        threshold_binary,
+    )
+    if source.shape[0] < template.shape[0] or source.shape[1] < template.shape[1]:
+        raise ValueError("template must not be larger than the search image")
+    prepared_mask = None
+    if mask is not None:
+        prepared_mask = _crop_image(mask, crop_fmt, crop_template)
+        if prepared_mask.ndim == 3:
+            prepared_mask = cv2.cvtColor(prepared_mask, cv2.COLOR_BGR2GRAY)
+        if prepared_mask.shape[:2] != template.shape[:2]:
+            raise ValueError("mask dimensions must match the template")
+    method = (
+        cv2.TM_CCORR_NORMED
+        if prepared_mask is not None
+        else cv2.TM_CCOEFF_NORMED
+    )
+    result = cv2.matchTemplate(source, template, method, mask=prepared_mask)
+    _, score, _, location = cv2.minMaxLoc(result)
+    if not math.isfinite(score):
+        score = float("-inf")
+    if show_image:
+        _popup_array(source, "template matching source")
+    return (
+        score > float(threshold),
+        tuple(int(value) for value in location),
+        int(template.shape[1]),
+        int(template.shape[0]),
+        float(score),
+    )
 
 
 class ImageProcPythonCommand(PythonCommand):
@@ -1809,12 +2747,18 @@ class ImageProcPythonCommand(PythonCommand):
 
     def __init__(self, cam, gui=None):
         super().__init__()
+        if not isinstance(cam, Camera):
+            raise TypeError("cam must be Camera")
         self.camera = cam
         self.cam = cam
-        self.gui = gui if gui is not None else CaptureArea()
+        self.gui = gui if gui is not None else CaptureArea(cam)
         self.canvas = self.gui
+        self.template_path_name = _os.path.join(_api.command_root(), "Template")
+        self.isSimilarity = False
+        self.isGuide = False
 
     def discord_image(self, content="", index=0, crop_fmt="", crop=None, keys="DISCORD_WEBHOOK"):
+        _convert_crop(crop_fmt, crop)
         if index != 0:
             settings_keys = [f"DISCORD_WEBHOOK{index}"]
         elif isinstance(keys, str):
@@ -1823,7 +2767,7 @@ class ImageProcPythonCommand(PythonCommand):
             settings_keys = list(keys)
         else:
             raise TypeError("discord_image keys must be str or list[str]")
-        normalized_crop = None if crop is None else [int(value) for value in crop]
+        normalized_crop = None if crop is None else [_require_int(value, "crop coordinate") for value in crop]
         try:
             _notification(
                 {
@@ -1840,46 +2784,326 @@ class ImageProcPythonCommand(PythonCommand):
     def LINE_image(self, txt, crop_fmt="", crop=None, token=""):
         self._logger.warning("LINE_image is unavailable because LINE Notify has ended")
 
-    def isContainTemplate(self, *args, **kwargs):
-        return _not_implemented("isContainTemplate")
+    def _template_image(self, value, binary=False):
+        path = value if not isinstance(value, str) else self.get_filespec(value, "t")
+        image = _load_image(path, binary=binary)
+        if image is None:
+            raise ValueError(f"image could not be loaded from {value!r}")
+        return image
 
-    def isContainTemplate_max(self, *args, **kwargs):
-        return _not_implemented("isContainTemplate_max")
+    def _display_match(
+        self,
+        matched,
+        location,
+        width,
+        height,
+        *,
+        show_position,
+        show_only_true_rect,
+        ms,
+        color,
+        crop_fmt,
+        crop,
+    ):
+        if not show_position or (not matched and show_only_true_rect):
+            return
+        colors = ["blue", "red", "orange"] if color is None else color
+        if not isinstance(colors, list) or len(colors) < 2:
+            raise ValueError("color must contain at least two entries")
+        _, pillow = _convert_crop(crop_fmt, crop)
+        x, y = location
+        if pillow is not None:
+            x += pillow[0]
+            y += pillow[1]
+        outline = colors[0] if matched else colors[1]
+        self.displayRectangle(
+            (x, y),
+            width,
+            height,
+            ms=ms,
+            color=[outline, colors[-1]],
+        )
 
-    def isContainTemplateGPU(self, *args, **kwargs):
-        return _not_implemented("isContainTemplateGPU")
+    def isContainTemplate(
+        self,
+        template_path,
+        threshold=0.7,
+        use_gray=True,
+        show_value=False,
+        show_position=True,
+        show_only_true_rect=True,
+        ms=2000,
+        crop_fmt="",
+        crop=None,
+        mask_path=None,
+        use_gpu=False,
+        BGR_range=None,
+        threshold_binary=None,
+        crop_template=None,
+        show_image=False,
+        color=None,
+    ):
+        template = self._template_image(template_path)
+        mask = None if mask_path is None else self._template_image(mask_path, binary=True)
+        matched, location, width, height, score = _match_template(
+            self.camera.readFrame(),
+            template,
+            threshold=threshold,
+            use_gray=bool(use_gray),
+            crop_fmt=crop_fmt,
+            crop=crop,
+            mask=mask,
+            bgr_range=BGR_range,
+            threshold_binary=threshold_binary,
+            crop_template=crop_template,
+            show_image=bool(show_image),
+        )
+        if show_value or self.isSimilarity:
+            mode = "NCC" if mask is not None else "ZNCC"
+            print(f"{template_path} {mode} value: {score}")
+        self._display_match(
+            matched,
+            location,
+            width,
+            height,
+            show_position=bool(show_position),
+            show_only_true_rect=bool(show_only_true_rect),
+            ms=ms,
+            color=color,
+            crop_fmt=crop_fmt,
+            crop=crop,
+        )
+        return matched
 
-    def isContainedImage(self, *args, **kwargs):
-        return _not_implemented("isContainedImage")
+    def isContainTemplate_max(
+        self,
+        template_path_list,
+        threshold=0.7,
+        use_gray=True,
+        show_value=False,
+        show_position=True,
+        show_only_true_rect=True,
+        ms=2000,
+        crop_fmt="",
+        crop=None,
+        mask_path_list=None,
+        BGR_range=None,
+        threshold_binary=None,
+        crop_template=None,
+        show_image=False,
+        color=None,
+    ):
+        if not isinstance(template_path_list, list) or not template_path_list:
+            raise ValueError("template_path_list must be a non-empty list")
+        if mask_path_list is None or mask_path_list == []:
+            masks = [None] * len(template_path_list)
+        elif not isinstance(mask_path_list, list) or len(mask_path_list) != len(template_path_list):
+            return -1, [], []
+        else:
+            masks = [
+                None if value is None else self._template_image(value, binary=True)
+                for value in mask_path_list
+            ]
+        source = self.camera.readFrame()
+        matches = []
+        for template_path, mask in zip(template_path_list, masks, strict=True):
+            result = _match_template(
+                source,
+                self._template_image(template_path),
+                threshold=threshold,
+                use_gray=bool(use_gray),
+                crop_fmt=crop_fmt,
+                crop=crop,
+                mask=mask,
+                bgr_range=BGR_range,
+                threshold_binary=threshold_binary,
+                crop_template=crop_template,
+                show_image=bool(show_image),
+            )
+            matches.append(result)
+        scores = [result[4] for result in matches]
+        best = max(range(len(scores)), key=scores.__getitem__)
+        judgments = [result[0] for result in matches]
+        if show_value or self.isSimilarity:
+            for path, score in zip(template_path_list, scores, strict=True):
+                print(f"{path} template value: {score}")
+        matched, location, width, height, _ = matches[best]
+        self._display_match(
+            matched or any(judgments),
+            location,
+            width,
+            height,
+            show_position=bool(show_position),
+            show_only_true_rect=bool(show_only_true_rect),
+            ms=ms,
+            color=color,
+            crop_fmt=crop_fmt,
+            crop=crop,
+        )
+        return best, scores, judgments
 
-    def saveCapture(self, *args, **kwargs):
-        return _not_implemented("ImageProcPythonCommand.saveCapture")
+    def isContainTemplateGPU(
+        self,
+        template_path,
+        threshold=0.7,
+        use_gray=True,
+        show_value=False,
+        show_position=True,
+        show_only_true_rect=True,
+        ms=2000,
+        crop_fmt="",
+        crop=None,
+        mask_path=None,
+        BGR_range=None,
+        threshold_binary=None,
+        crop_template=None,
+        show_image=False,
+        color=None,
+    ):
+        return self.isContainTemplate(
+            template_path,
+            threshold,
+            use_gray,
+            show_value,
+            show_position,
+            show_only_true_rect,
+            ms,
+            crop_fmt,
+            crop,
+            mask_path,
+            True,
+            BGR_range,
+            threshold_binary,
+            crop_template,
+            show_image,
+            color,
+        )
 
-    def popupImage(self, *args, **kwargs):
-        return _not_implemented("popupImage")
+    def isContainedImage(
+        self,
+        image_path,
+        threshold=0.7,
+        use_gray=True,
+        show_value=False,
+        show_position=True,
+        show_only_true_rect=True,
+        ms=2000,
+        crop_fmt="",
+        crop=None,
+        mask_path=None,
+        use_gpu=False,
+        BGR_range=None,
+        threshold_binary=None,
+        crop_template=None,
+        show_image=False,
+        color=None,
+    ):
+        image = self._template_image(image_path)
+        mask = None if mask_path is None else self._template_image(mask_path, binary=True)
+        matched, location, width, height, score = _match_template(
+            image,
+            self.camera.readFrame(),
+            threshold=threshold,
+            use_gray=bool(use_gray),
+            crop_fmt=crop_fmt,
+            crop=crop,
+            mask=mask,
+            bgr_range=BGR_range,
+            threshold_binary=threshold_binary,
+            crop_template=crop_template,
+            show_image=bool(show_image),
+        )
+        if show_value or self.isSimilarity:
+            print(f"capture_image template value: {score}")
+        self._display_match(
+            matched,
+            location,
+            width,
+            height,
+            show_position=bool(show_position),
+            show_only_true_rect=bool(show_only_true_rect),
+            ms=ms,
+            color=color,
+            crop_fmt=crop_fmt,
+            crop=crop,
+        )
+        return matched
+
+    def saveCapture(self, filename=None, crop_fmt="", crop=None, mode=True, format=None):
+        image = self.getCameraImage(crop_fmt, crop)
+        self.camera.saveCapture(filename=filename, img=image, format=format)
+
+    def popupImage(self, crop_fmt="", crop=None, title="image"):
+        _popup_array(self.getCameraImage(crop_fmt, crop), title)
 
     def getCameraImage(self, crop_fmt="", crop=None):
-        return self.camera.image_bgr
+        return _crop_image(self.camera.image_bgr, crop_fmt, crop)
 
     def openImage(self, filename, mode="t"):
-        import cv2
-
-        return cv2.imread(self.get_filespec(filename, mode))
+        if not isinstance(filename, str):
+            raise TypeError("filename must be str")
+        return _load_image(self.get_filespec(filename, mode))
 
     def setTemplateDir(self, path):
-        self.template_path_name = str(path)
+        if not isinstance(path, str):
+            raise TypeError("template path must be str")
+        self.template_path_name = (
+            path if _os.path.isabs(path) else _os.path.abspath(_os.path.join(_api.command_root(), path))
+        )
 
     def get_filespec(self, filename, mode="t"):
-        base = getattr(self, "template_path_name", "./Template/") if mode == "t" else ""
+        if not isinstance(filename, str):
+            raise TypeError("filename must be str")
+        if _os.path.isabs(filename):
+            return filename
+        if mode == "t":
+            base = self.template_path_name
+        elif mode == "c":
+            base = _os.path.join(_api.data_root(), "Captures")
+        else:
+            base = _api.command_root()
         return _os.path.abspath(_os.path.join(base, filename))
 
     def displayRectangle(self, max_loc, width, height, tag=None, ms=2000, color=None, crop_fmt="", crop=None):
-        tag = tag or f"rect-{id(max_loc)}"
-        outline = (color or ["blue"])[0]
-        self.gui.ImgRect(max_loc[0], max_loc[1], max_loc[0] + width, max_loc[1] + height, outline, tag, int(ms), True)
+        if not isinstance(max_loc, (list, tuple)) or len(max_loc) != 2:
+            raise ValueError("max_loc must contain two coordinates")
+        x = _require_int(max_loc[0], "max_loc x")
+        y = _require_int(max_loc[1], "max_loc y")
+        width = _require_int(width, "width")
+        height = _require_int(height, "height")
+        if width <= 0 or height <= 0:
+            raise ValueError("rectangle size must be positive")
+        colors = ["blue", "orange"] if color is None else color
+        if not isinstance(colors, list) or not colors:
+            raise ValueError("color must be a non-empty list")
+        tag = tag or f"rect-{_time.time_ns()}-{id(max_loc)}"
+        _, pillow = _convert_crop(crop_fmt, crop)
+        if pillow is not None and len(colors) > 1:
+            self.gui.ImgRect(*pillow, str(colors[1]), tag, int(ms), False)
+        self.gui.ImgRect(
+            x,
+            y,
+            x + width + 1,
+            y + height + 1,
+            str(colors[0]),
+            tag,
+            int(ms),
+            True,
+        )
 
     def displayText(self, position, txt, tag=None, ms=2000, font="UD デジタル 教科書体 NP-B", fontsize=20, color="black"):
-        self.gui.ImgText(position[0], position[1], txt, tag or f"text-{id(position)}", int(ms), (font, fontsize), color, True)
+        if not isinstance(position, (list, tuple)) or len(position) != 2:
+            raise ValueError("position must contain two coordinates")
+        self.gui.ImgText(
+            _require_int(position[0], "position x"),
+            _require_int(position[1], "position y"),
+            str(txt),
+            tag or f"text-{_time.time_ns()}-{id(position)}",
+            int(ms),
+            (str(font), _require_int(fontsize, "fontsize")),
+            str(color),
+            True,
+        )
 
 
 class McuCommand:
@@ -2080,7 +3304,8 @@ def _run_source(source, path, class_name):
     if not isinstance(command_type, type) or not issubclass(command_type, PythonCommand):
         raise TypeError(f"{class_name!r} is not a PythonCommand subclass")
     if issubclass(command_type, ImageProcPythonCommand):
-        command = command_type(Camera(), CaptureArea())
+        camera = Camera()
+        command = command_type(camera, CaptureArea(camera))
     else:
         command = command_type()
     _current.command = command

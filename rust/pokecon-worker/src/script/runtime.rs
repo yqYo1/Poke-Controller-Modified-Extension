@@ -9,7 +9,7 @@ use crate::ipc::{
 
 use super::protocol::{
     self, ScriptExecuteRequest, ScriptInitializeRequest, ScriptInitializeResult, ScriptStopResult,
-    ScriptWorkerStatus,
+    ScriptTkEvent, ScriptWorkerStatus,
 };
 use super::python::{PythonActor, PythonActorConfig, PythonActorError};
 
@@ -62,6 +62,32 @@ impl ScriptWorkerRuntime {
             operation,
             protocol::INITIALIZE | protocol::STATUS | protocol::EXECUTE | protocol::STOP
         )
+    }
+
+    pub(crate) fn handles_event(operation: &str) -> bool {
+        operation == protocol::TK_EVENT
+    }
+
+    pub(crate) fn handle_event(
+        &self,
+        operation: &str,
+        payload: &IpcValue,
+    ) -> Result<(), IpcErrorPayload> {
+        if operation != protocol::TK_EVENT {
+            return Err(DispatchError::new(
+                "NotFound",
+                format!("unknown script event `{operation}`"),
+            )
+            .payload());
+        }
+        let event = deserialize_value::<ScriptTkEvent>(payload)
+            .map_err(|error| DispatchError::invalid_payload(&error).payload())?;
+        let actor = self.actor.as_ref().ok_or_else(|| {
+            DispatchError::new("NotInitialized", "script worker is not initialized").payload()
+        })?;
+        actor
+            .tk_event(&event)
+            .map_err(|error| DispatchError::actor(error).payload())
     }
 
     pub(crate) async fn handle(

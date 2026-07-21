@@ -19,11 +19,13 @@ use crate::ipc::{
 use crate::supervisor::{ManagedWorker, WorkerRequestError};
 
 use self::protocol::{
+    HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
-    HostNotificationRequest, HostOutputRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
+    HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
+    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
     ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult,
-    ScriptStopResult, ScriptWorkerStatus,
+    ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
 };
 pub(crate) use self::runtime::ScriptWorkerRuntime;
 
@@ -131,6 +133,44 @@ pub trait ScriptHost: Send + Sync + 'static {
     ///
     /// Returns a stable host error for the Python compatibility layer to suppress.
     fn notification(&self, request: HostNotificationRequest) -> Result<(), ScriptHostError>;
+
+    /// Returns the lifetime-fixed shared-frame mapping for this sole reader.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when camera state cannot be initialized.
+    fn camera_initialize(&self) -> Result<HostCameraInitializeResult, ScriptHostError>;
+
+    /// Applies or observes one closed camera control operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the operation cannot be applied.
+    fn camera_control(
+        &self,
+        request: HostCameraControlRequest,
+    ) -> Result<HostCameraState, ScriptHostError>;
+
+    /// Updates Rust-owned overlay or capture-area state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the control data is invalid.
+    fn overlay(&self, request: HostOverlayRequest) -> Result<(), ScriptHostError>;
+
+    /// Publishes one bounded compressed popup image to the UI service.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the image cannot be accepted.
+    fn popup_image(&self, request: HostPopupImageRequest) -> Result<(), ScriptHostError>;
+
+    /// Applies one operation from the fixed Tkinter-to-Web bridge.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when an object or property is invalid.
+    fn tk(&self, request: HostTkRequest) -> Result<HostTkResult, ScriptHostError>;
 }
 
 /// Parent-side user-script client or dispatcher failure.
@@ -140,6 +180,8 @@ pub enum ScriptClientError {
     WrongWorkerKind,
     #[error(transparent)]
     Worker(#[from] WorkerRequestError),
+    #[error(transparent)]
+    Connection(#[from] crate::ipc::ConnectionError),
     #[error(transparent)]
     Payload(#[from] ValueCodecError),
 }
@@ -242,6 +284,20 @@ impl ScriptWorkerClient {
     pub async fn stop(&self) -> Result<ScriptStopResult, ScriptClientError> {
         self.request(OperationClass::MutatingResource, protocol::STOP, &())
             .await
+    }
+
+    /// Queues one UI-originated fixed Tk compatibility callback.
+    ///
+    /// # Errors
+    ///
+    /// Returns a payload or transport error when the event cannot be queued.
+    pub async fn tk_event(&self, event: &ScriptTkEvent) -> Result<(), ScriptClientError> {
+        let payload = serialize_value(event)?;
+        self.worker
+            .connection()
+            .send_event(protocol::TK_EVENT, payload)
+            .await?;
+        Ok(())
     }
 
     #[must_use]
@@ -373,6 +429,32 @@ fn dispatch_host_call(
         protocol::HOST_NOTIFICATION => {
             let request = decode_host::<HostNotificationRequest>(payload)?;
             serialize_host(host.notification(request))
+        }
+        protocol::HOST_CAMERA_INITIALIZE => {
+            decode_host::<()>(payload)?;
+            serialize_host_value(host.camera_initialize())
+        }
+        protocol::HOST_CAMERA_CONTROL => {
+            let request = decode_host::<HostCameraControlRequest>(payload)?;
+            serialize_host_value(host.camera_control(request))
+        }
+        protocol::HOST_OVERLAY => {
+            let request = decode_host::<HostOverlayRequest>(payload)?;
+            serialize_host(host.overlay(request))
+        }
+        protocol::HOST_POPUP_IMAGE => {
+            let request = decode_host::<HostPopupImageRequest>(payload)?;
+            if request.encoded.len() > protocol::MAX_POPUP_IMAGE_BYTES {
+                return Err(ScriptHostError::new(
+                    "PayloadTooLarge",
+                    "script popup image exceeds the bounded compressed payload limit",
+                ));
+            }
+            serialize_host(host.popup_image(request))
+        }
+        protocol::HOST_TK => {
+            let request = decode_host::<HostTkRequest>(payload)?;
+            serialize_host_value(host.tk(request))
         }
         _ => Err(ScriptHostError::new(
             "NotFound",

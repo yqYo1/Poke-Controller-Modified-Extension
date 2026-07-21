@@ -19,7 +19,8 @@ use crate::ipc::{
 use crate::supervisor::{ManagedWorker, WorkerRequestError};
 
 use self::protocol::{
-    HostControllerInputRequest, HostOutputRequest, HostSerialWriteRequest,
+    HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
+    HostDialogStatusRequest, HostDialogStatusResult, HostOutputRequest, HostSerialWriteRequest,
     HostSerialWriteRowRequest, ScriptExecuteRequest, ScriptExecutionResult,
     ScriptInitializeRequest, ScriptInitializeResult, ScriptStopResult, ScriptWorkerStatus,
 };
@@ -88,6 +89,33 @@ pub trait ScriptHost: Send + Sync + 'static {
     ///
     /// Returns a stable host error when the output cannot be accepted.
     fn output(&self, request: HostOutputRequest) -> Result<(), ScriptHostError>;
+
+    /// Opens one Rust-owned script dialog and returns its generation-local ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the dialog cannot be created.
+    fn dialog_open(
+        &self,
+        request: HostDialogOpenRequest,
+    ) -> Result<HostDialogOpenResult, ScriptHostError>;
+
+    /// Reads one script dialog's authoritative completion state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the state cannot be read.
+    fn dialog_status(
+        &self,
+        request: HostDialogStatusRequest,
+    ) -> Result<HostDialogStatusResult, ScriptHostError>;
+
+    /// Closes every dialog owned by the stopping script generation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when cleanup cannot be requested.
+    fn dialog_close_all(&self) -> Result<(), ScriptHostError>;
 }
 
 /// Parent-side user-script client or dispatcher failure.
@@ -311,6 +339,18 @@ fn dispatch_host_call(
             let request = decode_host::<HostOutputRequest>(payload)?;
             serialize_host(host.output(request))
         }
+        protocol::HOST_DIALOG_OPEN => {
+            let request = decode_host::<HostDialogOpenRequest>(payload)?;
+            serialize_host_value(host.dialog_open(request))
+        }
+        protocol::HOST_DIALOG_STATUS => {
+            let request = decode_host::<HostDialogStatusRequest>(payload)?;
+            serialize_host_value(host.dialog_status(request))
+        }
+        protocol::HOST_DIALOG_CLOSE_ALL => {
+            decode_host::<()>(payload)?;
+            serialize_host(host.dialog_close_all())
+        }
         _ => Err(ScriptHostError::new(
             "NotFound",
             format!("unknown script host operation `{operation}`"),
@@ -326,4 +366,12 @@ fn decode_host<T: serde::de::DeserializeOwned>(payload: &IpcValue) -> Result<T, 
 fn serialize_host(result: Result<(), ScriptHostError>) -> Result<IpcValue, ScriptHostError> {
     result?;
     serialize_value(&()).map_err(|error| ScriptHostError::new("IpcEncodeError", error.to_string()))
+}
+
+fn serialize_host_value<T: serde::Serialize>(
+    result: Result<T, ScriptHostError>,
+) -> Result<IpcValue, ScriptHostError> {
+    let value = result?;
+    serialize_value(&value)
+        .map_err(|error| ScriptHostError::new("IpcEncodeError", error.to_string()))
 }

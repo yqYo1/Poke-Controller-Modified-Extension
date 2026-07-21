@@ -14,7 +14,8 @@ use tokio::sync::oneshot;
 use crate::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_value};
 
 use super::protocol::{
-    self, HostControllerInputRequest, HostOutputRequest, HostSerialWriteRequest,
+    self, HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
+    HostDialogStatusRequest, HostDialogStatusResult, HostOutputRequest, HostSerialWriteRequest,
     HostSerialWriteRowRequest, ScriptControl, ScriptExecutionOutcome, ScriptExecutionResult,
     ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptWorkerStatus,
 };
@@ -387,6 +388,17 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
     if let Err(error) = request_host::<_, ()>(
         &config.connection,
         &config.runtime_handle,
+        protocol::HOST_DIALOG_CLOSE_ALL,
+        &(),
+    ) && matches!(outcome, ScriptExecutionOutcome::Completed)
+    {
+        outcome = ScriptExecutionOutcome::Failed {
+            message: format!("dialog cleanup failed: {error}"),
+        };
+    }
+    if let Err(error) = request_host::<_, ()>(
+        &config.connection,
+        &config.runtime_handle,
         protocol::HOST_CONTROLLER_NEUTRAL,
         &(),
     ) && matches!(outcome, ScriptExecutionOutcome::Completed)
@@ -520,6 +532,10 @@ impl PyApi {
         self.state.request_finish();
     }
 
+    fn abort(&self) {
+        self.state.request_stop();
+    }
+
     fn profile_name(&self) -> &str {
         &self.profile
     }
@@ -598,6 +614,42 @@ impl PyApi {
                 message,
             },
         )
+    }
+
+    fn dialog_open(
+        &self,
+        title: String,
+        description: Option<String>,
+        widgets_json: &str,
+    ) -> PyResult<u64> {
+        let widgets = serde_json::from_str(widgets_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let result = self.request::<_, HostDialogOpenResult>(
+            protocol::HOST_DIALOG_OPEN,
+            &HostDialogOpenRequest {
+                title,
+                description,
+                widgets,
+            },
+        )?;
+        if result.dialog_id == 0 {
+            return Err(PyRuntimeError::new_err(
+                "script dialog host returned reserved dialog ID zero",
+            ));
+        }
+        Ok(result.dialog_id)
+    }
+
+    fn dialog_status(&self, dialog_id: u64) -> PyResult<String> {
+        let result = self.request::<_, HostDialogStatusResult>(
+            protocol::HOST_DIALOG_STATUS,
+            &HostDialogStatusRequest { dialog_id },
+        )?;
+        serde_json::to_string(&result).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn dialog_close_all(&self) -> PyResult<()> {
+        self.request(protocol::HOST_DIALOG_CLOSE_ALL, &())
     }
 }
 
@@ -928,25 +980,316 @@ class Widget:
     value = None
 
     def __init__(self, widget_type, *args, **kwargs):
-        supported = {"Entry", "Check", "Combo", "Spin", "Scale", "Next"}
-        if widget_type not in supported:
+        kinds = {
+            "entry": "Entry",
+            "check": "Check",
+            "combo": "Combo",
+            "radio": "Radio",
+            "spin": "Spin",
+            "scale": "Scale",
+            "next": "Next",
+        }
+        normalized = str(widget_type).casefold()
+        if normalized not in kinds:
             raise ValueError(f"unsupported widget type {widget_type!r}")
-        self.widget_type = widget_type
-        self.args = args
-        self.kwargs = kwargs
+        self.widget_type = kinds[normalized]
         self._has_result = False
-        if widget_type == "Next":
+        self._active_dialog = None
+        self.label = None
+        self.options = []
+        self.minimum = None
+        self.maximum = None
+        self.precision = None
+        if self.widget_type == "Next":
+            if args or kwargs:
+                raise TypeError("Next widget accepts no additional arguments")
             self.value = None
-        elif "default" in kwargs:
-            self.value = kwargs["default"]
-        elif args:
-            self.value = args[-1]
+        elif self.widget_type in {"Entry", "Check"}:
+            self.label = _widget_argument(args, kwargs, 0, "label")
+            self.value = _widget_argument(args, kwargs, 1, "default")
+            _reject_widget_arguments(args, kwargs, 2, {"label", "default"})
+        elif self.widget_type in {"Combo", "Radio"}:
+            self.label = _widget_argument(args, kwargs, 0, "label")
+            self.options = list(_widget_argument(args, kwargs, 1, "options"))
+            self.value = _widget_argument(args, kwargs, 2, "default")
+            _reject_widget_arguments(
+                args, kwargs, 3, {"label", "options", "default"}
+            )
+            if self.value not in self.options:
+                raise ValueError("widget default must be present in options")
+        elif self.widget_type == "Spin" and (
+            "options" in kwargs or (len(args) == 3 and "min" not in kwargs)
+        ):
+            self.label = _widget_argument(args, kwargs, 0, "label")
+            self.options = list(_widget_argument(args, kwargs, 1, "options"))
+            self.value = _widget_argument(args, kwargs, 2, "default")
+            _reject_widget_arguments(
+                args, kwargs, 3, {"label", "options", "default"}
+            )
+            if self.value not in self.options:
+                raise ValueError("widget default must be present in options")
         else:
-            raise TypeError(f"{widget_type} widget requires a default")
+            self.label = _widget_argument(args, kwargs, 0, "label")
+            self.minimum = float(_widget_argument(args, kwargs, 1, "min"))
+            self.maximum = float(_widget_argument(args, kwargs, 2, "max"))
+            self.value = _widget_argument(args, kwargs, 3, "default")
+            self.precision = int(kwargs.pop("precision", kwargs.pop("digit", 0)))
+            _reject_widget_arguments(
+                args, kwargs, 4, {"label", "min", "max", "default"}
+            )
+            if self.minimum > self.maximum:
+                raise ValueError("widget minimum must not exceed maximum")
+            numeric = float(self.value)
+            if not self.minimum <= numeric <= self.maximum:
+                raise ValueError("widget default is outside its range")
+        if self.label is not None and not isinstance(self.label, str):
+            raise TypeError("widget label must be str")
+        _encode_dialog_value(self.value)
+        for option in self.options:
+            _encode_dialog_value(option)
 
     @property
     def has_result(self):
         return self._has_result
+
+    def _payload(self):
+        return {
+            "kind": self.widget_type.casefold(),
+            "label": self.label,
+            "value": _encode_dialog_value(self.value),
+            "options": [_encode_dialog_value(value) for value in self.options],
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "precision": self.precision,
+        }
+
+
+def _widget_argument(args, kwargs, index, name):
+    if index < len(args):
+        if name in kwargs:
+            raise TypeError(f"multiple values for widget argument {name!r}")
+        return args[index]
+    if name in kwargs:
+        return kwargs.pop(name)
+    raise TypeError(f"missing required widget argument {name!r}")
+
+
+def _reject_widget_arguments(args, kwargs, positional, allowed):
+    if len(args) > positional:
+        raise TypeError("too many positional widget arguments")
+    unknown = set(kwargs) - allowed
+    if unknown:
+        name = sorted(unknown)[0]
+        raise TypeError(f"unexpected widget argument {name!r}")
+
+
+def _encode_dialog_value(value):
+    if value is None:
+        return {"type": "none"}
+    if isinstance(value, bool):
+        return {"type": "bool", "value": value}
+    if isinstance(value, int):
+        if not -(2**63) <= value < 2**63:
+            raise OverflowError("dialog integer must fit signed 64 bits")
+        return {"type": "integer", "value": value}
+    if isinstance(value, float):
+        if not _math.isfinite(value):
+            raise ValueError("dialog float must be finite")
+        return {"type": "float", "value": value}
+    if isinstance(value, str):
+        return {"type": "string", "value": value}
+    raise TypeError(f"unsupported dialog value {type(value).__name__}")
+
+
+def _decode_dialog_value(encoded):
+    kind = encoded.get("type")
+    if kind == "none":
+        return None
+    if kind in {"string", "bool", "integer", "float"}:
+        return encoded["value"]
+    raise RuntimeError(f"dialog host returned unknown value type {kind!r}")
+
+
+_dialogs = {}
+_closed_dialogs = set()
+
+
+def _reset_dialogs():
+    for widgets in _dialogs.values():
+        for widget in widgets:
+            widget._active_dialog = None
+    _dialogs.clear()
+    _closed_dialogs.clear()
+
+
+def _poll_dialog(dialog_id):
+    if dialog_id in _closed_dialogs:
+        return True
+    widgets = _dialogs.get(dialog_id)
+    if widgets is None:
+        return False
+    response = _json.loads(_api.dialog_status(dialog_id))
+    state = response["state"]
+    if state["state"] == "open":
+        return False
+    if state["state"] == "aborted":
+        for widget in widgets:
+            widget._active_dialog = None
+        del _dialogs[dialog_id]
+        _api.abort()
+        raise StopThread()
+    values = state["values"]
+    if len(values) != len(widgets):
+        raise RuntimeError("dialog result count differs from widget count")
+    for widget, value in zip(widgets, values, strict=True):
+        decoded = _decode_dialog_value(value)
+        if widget.widget_type == "Next" and decoded is not None:
+            raise RuntimeError("Next dialog widget returned a value")
+        widget.value = decoded
+        widget._has_result = True
+        widget._active_dialog = None
+    del _dialogs[dialog_id]
+    _closed_dialogs.add(dialog_id)
+    return True
+
+
+def _show_dialog(command, title, widgets, blocking=True, description=None):
+    if isinstance(widgets, Widget):
+        widgets = [widgets]
+    elif isinstance(widgets, list):
+        widgets = list(widgets)
+    else:
+        raise TypeError("widgets must be a Widget or list[Widget]")
+    if not widgets or any(not isinstance(widget, Widget) for widget in widgets):
+        raise TypeError("dialog requires one or more Widget instances")
+    if len({id(widget) for widget in widgets}) != len(widgets):
+        raise ValueError("the same Widget cannot occur twice in one dialog")
+    for widget in widgets:
+        if widget._active_dialog is not None:
+            raise RuntimeError("Widget already belongs to an open dialog")
+        widget._has_result = False
+    payload = _json.dumps(
+        [widget._payload() for widget in widgets],
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    dialog_id = _api.dialog_open(str(title), description, payload)
+    if dialog_id in _dialogs or dialog_id in _closed_dialogs:
+        _api.dialog_close_all()
+        raise RuntimeError("dialog host reused an active dialog ID")
+    for widget in widgets:
+        widget._active_dialog = dialog_id
+    _dialogs[dialog_id] = widgets
+    if not bool(blocking):
+        return dialog_id
+    _wait_dialog(command, dialog_id)
+    return 0
+
+
+def _wait_dialog(command, dialog_id):
+    while not _poll_dialog(dialog_id):
+        command.checkIfAlive()
+        _time.sleep(0.02)
+    return 0
+
+
+def _legacy_widgets(dialogue_list):
+    if not isinstance(dialogue_list, list):
+        raise TypeError("dialogue_list must be list")
+    widgets = []
+    labels = set()
+    for definition in dialogue_list:
+        if not isinstance(definition, list) or not definition:
+            raise TypeError("each legacy dialog widget must be a non-empty list")
+        kind = str(definition[0]).casefold()
+        if kind == "next":
+            if len(definition) != 1:
+                raise TypeError("Next legacy widget accepts no other values")
+            widgets.append(Widget("Next"))
+            continue
+        if len(definition) < 3:
+            raise TypeError("legacy dialog widget is missing required values")
+        label = definition[1]
+        if label in labels:
+            raise ValueError("legacy dialog widget names must be unique")
+        labels.add(label)
+        shown_label = str(label)
+        if kind == "entry":
+            widget = Widget("Entry", shown_label, str(definition[2]))
+        elif kind == "check":
+            default = definition[2]
+            if isinstance(default, str):
+                default = default.casefold() in {"true", "1", "yes", "on"}
+            widget = Widget("Check", shown_label, bool(default))
+        elif kind in {"combo", "radio", "spin"}:
+            if len(definition) < 4:
+                raise TypeError("legacy selection widget is missing its default")
+            widget = Widget(
+                kind.title(), shown_label, list(definition[2]), definition[3]
+            )
+        elif kind == "scale":
+            if len(definition) < 5:
+                raise TypeError("legacy Scale widget is missing range values")
+            precision = int(definition[5]) if len(definition) > 5 else 0
+            widget = Widget(
+                "Scale",
+                shown_label,
+                definition[2],
+                definition[3],
+                definition[4],
+                precision=precision,
+            )
+        else:
+            raise ValueError(f"unsupported legacy widget type {definition[0]!r}")
+        widget._legacy_label = label
+        widgets.append(widget)
+    return widgets
+
+
+def _legacy_result(widgets, need):
+    values = [widget for widget in widgets if widget.widget_type != "Next"]
+    if need is dict:
+        return {
+            getattr(widget, "_legacy_label", widget.label): widget.value
+            for widget in values
+        }
+    return [widget.value for widget in values]
+
+
+def _load_legacy_settings(filename):
+    try:
+        with open(filename, encoding="utf-8") as settings_file:
+            value = _json.load(settings_file)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_legacy_settings(filename, values):
+    parent = _os.path.dirname(_os.path.abspath(filename))
+    _os.makedirs(parent, exist_ok=True)
+    temporary = f"{filename}.tmp-{_os.getpid()}-{_threading.get_ident()}"
+    try:
+        with open(temporary, "w", encoding="utf-8") as settings_file:
+            _json.dump(values, settings_file, indent=4, ensure_ascii=False)
+            settings_file.flush()
+            _os.fsync(settings_file.fileno())
+        _os.replace(temporary, filename)
+    finally:
+        try:
+            _os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
+def _apply_legacy_settings(widgets, settings):
+    for widget in widgets:
+        label = getattr(widget, "_legacy_label", None)
+        if label in settings and widget.widget_type != "Next":
+            value = settings[label]
+            _encode_dialog_value(value)
+            widget.value = value
 
 
 def _not_implemented(name):
@@ -1056,29 +1399,78 @@ class PythonCommand:
         self.print_s(values)
 
     def show_dialog(self, title, widgets, blocking=True):
-        return _not_implemented("show_dialog")
+        return _show_dialog(self, title, widgets, blocking)
 
     def is_dialog_closed(self, dialog_id):
-        return _not_implemented("is_dialog_closed")
+        return _poll_dialog(int(dialog_id))
 
     def wait_dialog(self, dialog_id):
-        return _not_implemented("wait_dialog")
+        return _wait_dialog(self, int(dialog_id))
 
     def dialogue6widget(self, title, dialogue_list, desc=None, need=list):
-        return _not_implemented("dialogue6widget")
+        widgets = _legacy_widgets(dialogue_list)
+        _show_dialog(self, title, widgets, True, desc)
+        return _legacy_result(widgets, need)
 
     def dialogue6widget_save_settings(
         self, title, dialogue_list, filename, desc=None, need=list
     ):
-        return _not_implemented("dialogue6widget_save_settings")
+        widgets = _legacy_widgets(dialogue_list)
+        _apply_legacy_settings(widgets, _load_legacy_settings(filename))
+        _show_dialog(self, title, widgets, True, desc)
+        result = _legacy_result(widgets, need)
+        _save_legacy_settings(
+            filename, _legacy_result(widgets, dict)
+        )
+        return result
 
     def dialogue6widget_select_settings(
         self, title, dialogue_list, dirname, desc=None, need=list
     ):
-        return _not_implemented("dialogue6widget_select_settings")
+        _os.makedirs(dirname, exist_ok=True)
+        choices = []
+        for root, _directories, files in _os.walk(dirname):
+            for filename in files:
+                if filename.endswith(".json") and not filename.startswith("_"):
+                    relative = _os.path.relpath(
+                        _os.path.join(root, filename), dirname
+                    )
+                    choices.append(relative[:-5])
+        choices.sort()
+        selection = self.dialogue6widget(
+            "Select Preset",
+            [["Combo", "---設定ファイル選択---", choices + ["(選択して下さい)"], "(選択して下さい)"]],
+        )[0]
+        selected = _os.path.join(dirname, f"{selection}.json")
+        widgets = _legacy_widgets(dialogue_list)
+        if _os.path.isfile(selected):
+            _apply_legacy_settings(widgets, _load_legacy_settings(selected))
+        preset_name = Widget("Entry", "[PokeCon]設定ファイル名", "")
+        preset_name._legacy_label = "[PokeCon]設定ファイル名"
+        save_preset = Widget("Check", "[PokeCon]設定を保存", False)
+        save_preset._legacy_label = "[PokeCon]設定を保存"
+        complete = widgets + [preset_name, save_preset]
+        _show_dialog(self, title, complete, True, desc)
+        if save_preset.value and preset_name.value:
+            _save_legacy_settings(
+                _os.path.join(dirname, f"{preset_name.value}.json"),
+                _legacy_result(widgets, dict),
+            )
+        _save_legacy_settings(
+            _os.path.join(dirname, "前回の設定.json"),
+            _legacy_result(widgets, dict),
+        )
+        return _legacy_result(widgets, need)
 
     def dialogue(self, title, message, desc=None, need=list):
-        return _not_implemented("dialogue")
+        messages = message if isinstance(message, list) else [message]
+        widgets = []
+        for label in messages:
+            widget = Widget("Entry", str(label), "")
+            widget._legacy_label = label
+            widgets.append(widget)
+        _show_dialog(self, title, widgets, True, desc)
+        return _legacy_result(widgets, need)
 
     def socket_connect(self):
         return _not_implemented("socket_connect")
@@ -1552,5 +1944,6 @@ def _run_source(source, path, class_name):
     try:
         command.do()
     finally:
+        _reset_dialogs()
         _current.command = None
 "#;

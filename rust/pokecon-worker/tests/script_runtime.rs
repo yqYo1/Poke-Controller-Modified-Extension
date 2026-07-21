@@ -7,8 +7,9 @@ use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
-    HostDialogStatusRequest, HostDialogStatusResult, HostOutputRequest, ScriptDialogState,
-    ScriptExecuteRequest, ScriptExecutionOutcome, ScriptInitializeRequest, ScriptWorkerStatus,
+    HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
+    HostNotificationRequest, HostOutputRequest, ScriptDialogState, ScriptExecuteRequest,
+    ScriptExecutionOutcome, ScriptInitializeRequest, ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -26,6 +27,9 @@ struct RecordingScriptHost {
     dialogs: Mutex<BTreeMap<u64, HostDialogOpenRequest>>,
     abort_dialogs: AtomicBool,
     dialog_cleanups: AtomicUsize,
+    network_requests: Mutex<Vec<HostNetworkRequest>>,
+    notification_requests: Mutex<Vec<HostNotificationRequest>>,
+    fail_notifications: AtomicBool,
 }
 
 impl ScriptHost for RecordingScriptHost {
@@ -93,6 +97,27 @@ impl ScriptHost for RecordingScriptHost {
     fn dialog_close_all(&self) -> Result<(), ScriptHostError> {
         self.dialogs.lock().unwrap().clear();
         self.dialog_cleanups.fetch_add(1, Ordering::AcqRel);
+        Ok(())
+    }
+
+    fn network(&self, request: HostNetworkRequest) -> Result<HostNetworkResult, ScriptHostError> {
+        let message = match &request {
+            HostNetworkRequest::SocketReceive { .. } => Some("socket-response".to_owned()),
+            HostNetworkRequest::MqttReceive { .. } => Some("mqtt-response".to_owned()),
+            _ => None,
+        };
+        self.network_requests.lock().unwrap().push(request);
+        Ok(HostNetworkResult { message })
+    }
+
+    fn notification(&self, request: HostNotificationRequest) -> Result<(), ScriptHostError> {
+        self.notification_requests.lock().unwrap().push(request);
+        if self.fail_notifications.load(Ordering::Acquire) {
+            return Err(ScriptHostError::new(
+                "NotificationFailed",
+                "deliberate notification failure",
+            ));
+        }
         Ok(())
     }
 }
@@ -384,6 +409,104 @@ class AbortedDialog(PythonCommand):
     assert_eq!(host.dialog_cleanups.load(Ordering::Acquire), 1);
     assert!(host.dialogs.lock().unwrap().is_empty());
     assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_network_and_notifications_use_closed_fail_soft_proxies() {
+    const SOURCE: &str = r#"
+from Commands import net
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class NetworkAndNotifications(ImageProcPythonCommand):
+    def do(self):
+        self.socket_change_ipaddr("127.0.0.1")
+        self.socket_change_port(4242)
+        self.socket_change_alive(True)
+        self.socket_connect()
+        self.socket_transmit_message("outbound")
+        assert self.socket_receive_message("one") == "socket-response"
+        assert self.socket_receive_message2(["two", "three"], True) == "socket-response"
+        self.socket_disconnect()
+        net.socket_connect()
+        net.socket_disconnect()
+
+        self.mqtt_change_broker_address("broker.invalid")
+        self.mqtt_change_id("account")
+        self.mqtt_change_clientId("client")
+        self.mqtt_change_pub_token("super-secret-publish")
+        self.mqtt_change_sub_token("super-secret-subscribe")
+        self.mqtt_transmit_message("room", "outbound")
+        assert self.mqtt_receive_message("room", "one") == "mqtt-response"
+        assert self.mqtt_receive_message2("room", ["two"], True) == "mqtt-response"
+
+        self.discord_text("private-content", index=2, keys="ignored")
+        self.discord_image(
+            "private-image-content",
+            crop_fmt="1",
+            crop=[0, 0, 10, 10],
+            keys=["HOOK_A", "HOOK_B"],
+        )
+        self.LINE_text("ignored")
+        self.LINE_image("ignored")
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("network.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    host.fail_notifications.store(true, Ordering::Release);
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "network.py".into(),
+            class_name: "NetworkAndNotifications".to_owned(),
+        })
+        .await
+        .expect("network script execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    {
+        let requests = host.network_requests.lock().unwrap();
+        assert!(
+            requests.iter().any(|request| matches!(
+                request,
+                HostNetworkRequest::SocketChangePort { port: 4242 }
+            ))
+        );
+        assert!(requests.iter().any(|request| matches!(
+            request,
+            HostNetworkRequest::MqttReceive { headers, .. } if headers == &["two"]
+        )));
+        for request in requests.iter() {
+            let debug = format!("{request:?}");
+            assert!(!debug.contains("super-secret"));
+            assert!(!debug.contains("private-content"));
+        }
+    }
+
+    {
+        let notifications = host.notification_requests.lock().unwrap();
+        assert_eq!(notifications.len(), 2);
+        assert!(matches!(
+            &notifications[0],
+            HostNotificationRequest::DiscordText { settings_key, .. }
+                if settings_key == "DISCORD_WEBHOOK2"
+        ));
+        assert!(matches!(
+            &notifications[1],
+            HostNotificationRequest::DiscordImage { settings_keys, crop, .. }
+                if settings_keys == &["HOOK_A", "HOOK_B"]
+                    && crop.as_deref() == Some(&[0, 0, 10, 10][..])
+        ));
+        for request in notifications.iter() {
+            let debug = format!("{request:?}");
+            assert!(!debug.contains("private"));
+        }
+    }
 
     stop_worker(&worker).await;
 }

@@ -20,9 +20,10 @@ use crate::supervisor::{ManagedWorker, WorkerRequestError};
 
 use self::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
-    HostDialogStatusRequest, HostDialogStatusResult, HostOutputRequest, HostSerialWriteRequest,
-    HostSerialWriteRowRequest, ScriptExecuteRequest, ScriptExecutionResult,
-    ScriptInitializeRequest, ScriptInitializeResult, ScriptStopResult, ScriptWorkerStatus,
+    HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
+    HostNotificationRequest, HostOutputRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
+    ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult,
+    ScriptStopResult, ScriptWorkerStatus,
 };
 pub(crate) use self::runtime::ScriptWorkerRuntime;
 
@@ -116,6 +117,20 @@ pub trait ScriptHost: Send + Sync + 'static {
     ///
     /// Returns a stable host error when cleanup cannot be requested.
     fn dialog_close_all(&self) -> Result<(), ScriptHostError>;
+
+    /// Performs one closed socket or MQTT compatibility operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error when the transport operation fails.
+    fn network(&self, request: HostNetworkRequest) -> Result<HostNetworkResult, ScriptHostError>;
+
+    /// Sends one fail-soft user-script notification through the Rust service.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable host error for the Python compatibility layer to suppress.
+    fn notification(&self, request: HostNotificationRequest) -> Result<(), ScriptHostError>;
 }
 
 /// Parent-side user-script client or dispatcher failure.
@@ -350,6 +365,14 @@ fn dispatch_host_call(
         protocol::HOST_DIALOG_CLOSE_ALL => {
             decode_host::<()>(payload)?;
             serialize_host(host.dialog_close_all())
+        }
+        protocol::HOST_NETWORK => {
+            let request = decode_host::<HostNetworkRequest>(payload)?;
+            serialize_host_value(host.network(request))
+        }
+        protocol::HOST_NOTIFICATION => {
+            let request = decode_host::<HostNotificationRequest>(payload)?;
+            serialize_host(host.notification(request))
         }
         _ => Err(ScriptHostError::new(
             "NotFound",

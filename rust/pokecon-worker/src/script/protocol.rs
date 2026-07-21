@@ -21,6 +21,8 @@ pub const HOST_OUTPUT: &str = "script.host.output";
 pub const HOST_DIALOG_OPEN: &str = "script.host.dialog_open";
 pub const HOST_DIALOG_STATUS: &str = "script.host.dialog_status";
 pub const HOST_DIALOG_CLOSE_ALL: &str = "script.host.dialog_close_all";
+pub const HOST_NETWORK: &str = "script.host.network";
+pub const HOST_NOTIFICATION: &str = "script.host.notification";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -257,4 +259,112 @@ pub enum ScriptDialogState {
 #[serde(deny_unknown_fields)]
 pub struct HostDialogStatusResult {
     pub state: ScriptDialogState,
+}
+
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "operation")]
+pub enum HostNetworkRequest {
+    Cleanup,
+    SocketConnect,
+    SocketDisconnect,
+    SocketTransmit {
+        message: String,
+    },
+    SocketReceive {
+        headers: Vec<String>,
+        show_message: bool,
+    },
+    SocketChangeAddress {
+        address: String,
+    },
+    SocketChangePort {
+        port: u16,
+    },
+    SocketChangeAlive {
+        alive: bool,
+    },
+    MqttTransmit {
+        room_id: String,
+        message: String,
+    },
+    MqttReceive {
+        room_id: String,
+        headers: Vec<String>,
+        show_message: bool,
+    },
+    MqttChangeBrokerAddress {
+        broker_address: String,
+    },
+    MqttChangeId {
+        mqtt_id: String,
+    },
+    MqttChangeClientId {
+        client_id: String,
+    },
+    MqttChangePublishToken {
+        token: String,
+    },
+    MqttChangeSubscribeToken {
+        token: String,
+    },
+}
+
+impl std::fmt::Debug for HostNetworkRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let operation = match self {
+            Self::Cleanup => "cleanup",
+            Self::SocketConnect => "socket_connect",
+            Self::SocketDisconnect => "socket_disconnect",
+            Self::SocketTransmit { .. } => "socket_transmit",
+            Self::SocketReceive { .. } => "socket_receive",
+            Self::SocketChangeAddress { .. } => "socket_change_address",
+            Self::SocketChangePort { .. } => "socket_change_port",
+            Self::SocketChangeAlive { .. } => "socket_change_alive",
+            Self::MqttTransmit { .. } => "mqtt_transmit",
+            Self::MqttReceive { .. } => "mqtt_receive",
+            Self::MqttChangeBrokerAddress { .. } => "mqtt_change_broker_address",
+            Self::MqttChangeId { .. } => "mqtt_change_id",
+            Self::MqttChangeClientId { .. } => "mqtt_change_client_id",
+            Self::MqttChangePublishToken { .. } => "mqtt_change_publish_token",
+            Self::MqttChangeSubscribeToken { .. } => "mqtt_change_subscribe_token",
+        };
+        formatter
+            .debug_struct("HostNetworkRequest")
+            .field("operation", &operation)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostNetworkResult {
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "kind")]
+pub enum HostNotificationRequest {
+    DiscordText {
+        content: String,
+        settings_key: String,
+    },
+    DiscordImage {
+        content: String,
+        settings_keys: Vec<String>,
+        crop_format: String,
+        crop: Option<Vec<i64>>,
+    },
+}
+
+impl std::fmt::Debug for HostNotificationRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let kind = match self {
+            Self::DiscordText { .. } => "discord_text",
+            Self::DiscordImage { .. } => "discord_image",
+        };
+        formatter
+            .debug_struct("HostNotificationRequest")
+            .field("kind", &kind)
+            .finish_non_exhaustive()
+    }
 }

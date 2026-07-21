@@ -15,9 +15,10 @@ use crate::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_va
 
 use super::protocol::{
     self, HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
-    HostDialogStatusRequest, HostDialogStatusResult, HostOutputRequest, HostSerialWriteRequest,
-    HostSerialWriteRowRequest, ScriptControl, ScriptExecutionOutcome, ScriptExecutionResult,
-    ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptWorkerStatus,
+    HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
+    HostNotificationRequest, HostOutputRequest, HostSerialWriteRequest, HostSerialWriteRowRequest,
+    ScriptControl, ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction,
+    ScriptOutputMode, ScriptOutputTarget, ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -396,6 +397,17 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
             message: format!("dialog cleanup failed: {error}"),
         };
     }
+    if let Err(error) = request_host::<_, HostNetworkResult>(
+        &config.connection,
+        &config.runtime_handle,
+        protocol::HOST_NETWORK,
+        &HostNetworkRequest::Cleanup,
+    ) && matches!(outcome, ScriptExecutionOutcome::Completed)
+    {
+        outcome = ScriptExecutionOutcome::Failed {
+            message: format!("network cleanup failed: {error}"),
+        };
+    }
     if let Err(error) = request_host::<_, ()>(
         &config.connection,
         &config.runtime_handle,
@@ -650,6 +662,19 @@ impl PyApi {
 
     fn dialog_close_all(&self) -> PyResult<()> {
         self.request(protocol::HOST_DIALOG_CLOSE_ALL, &())
+    }
+
+    fn network(&self, request_json: &str) -> PyResult<String> {
+        let request = serde_json::from_str::<HostNetworkRequest>(request_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let result = self.request::<_, HostNetworkResult>(protocol::HOST_NETWORK, &request)?;
+        serde_json::to_string(&result).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn notification(&self, request_json: &str) -> PyResult<()> {
+        let request = serde_json::from_str::<HostNotificationRequest>(request_json)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        self.request(protocol::HOST_NOTIFICATION, &request)
     }
 }
 
@@ -1296,6 +1321,32 @@ def _not_implemented(name):
     raise NotImplementedError(f"{name} is not available in this compatibility layer yet")
 
 
+def _network(operation, **values):
+    request = {"operation": operation, **values}
+    response = _json.loads(
+        _api.network(
+            _json.dumps(
+                request,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+    )
+    return response["message"]
+
+
+def _notification(request):
+    _api.notification(
+        _json.dumps(
+            request,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    )
+
+
 class PythonCommand:
     _logger = None
     keys = None
@@ -1473,58 +1524,130 @@ class PythonCommand:
         return _legacy_result(widgets, need)
 
     def socket_connect(self):
-        return _not_implemented("socket_connect")
+        _network("socket_connect")
 
     def socket_disconnect(self):
-        return _not_implemented("socket_disconnect")
+        _network("socket_disconnect")
 
     def socket_transmit_message(self, message):
-        return _not_implemented("socket_transmit_message")
+        if not isinstance(message, str):
+            raise TypeError("socket message must be str")
+        _network("socket_transmit", message=message)
+        self.checkIfAlive()
 
     def socket_receive_message(self, header, show_msg=False):
-        return _not_implemented("socket_receive_message")
+        result = _network(
+            "socket_receive",
+            headers=[str(header)],
+            show_message=bool(show_msg),
+        )
+        self.checkIfAlive()
+        return result
 
     def socket_receive_message2(self, headerlist, show_msg=False):
-        return _not_implemented("socket_receive_message2")
+        if not isinstance(headerlist, list) or any(
+            not isinstance(header, str) for header in headerlist
+        ):
+            raise TypeError("socket headers must be list[str]")
+        result = _network(
+            "socket_receive",
+            headers=headerlist,
+            show_message=bool(show_msg),
+        )
+        self.checkIfAlive()
+        return result
 
     def socket_change_ipaddr(self, addr):
-        return _not_implemented("socket_change_ipaddr")
+        if not isinstance(addr, str):
+            raise TypeError("socket address must be str")
+        _network("socket_change_address", address=addr)
 
     def socket_change_port(self, port):
-        return _not_implemented("socket_change_port")
+        if isinstance(port, bool) or not isinstance(port, int):
+            raise TypeError("socket port must be int")
+        if not 0 <= port <= 65535:
+            raise ValueError("socket port must be between 0 and 65535")
+        _network("socket_change_port", port=port)
 
     def socket_change_alive(self, flag):
-        return _not_implemented("socket_change_alive")
+        if not isinstance(flag, bool):
+            raise TypeError("socket alive flag must be bool")
+        _network("socket_change_alive", alive=flag)
 
     def mqtt_transmit_message(self, roomid, message):
-        return _not_implemented("mqtt_transmit_message")
+        if not isinstance(roomid, str) or not isinstance(message, str):
+            raise TypeError("MQTT room ID and message must be str")
+        _network("mqtt_transmit", room_id=roomid, message=message)
+        self.checkIfAlive()
 
     def mqtt_receive_message(self, roomid, header, show_msg=False):
-        return _not_implemented("mqtt_receive_message")
+        if not isinstance(roomid, str) or not isinstance(header, str):
+            raise TypeError("MQTT room ID and header must be str")
+        result = _network(
+            "mqtt_receive",
+            room_id=roomid,
+            headers=[header],
+            show_message=bool(show_msg),
+        )
+        self.checkIfAlive()
+        return result
 
     def mqtt_receive_message2(self, roomid, headerlist, show_msg=False):
-        return _not_implemented("mqtt_receive_message2")
+        if not isinstance(roomid, str):
+            raise TypeError("MQTT room ID must be str")
+        if not isinstance(headerlist, list) or any(
+            not isinstance(header, str) for header in headerlist
+        ):
+            raise TypeError("MQTT headers must be list[str]")
+        result = _network(
+            "mqtt_receive",
+            room_id=roomid,
+            headers=headerlist,
+            show_message=bool(show_msg),
+        )
+        self.checkIfAlive()
+        return result
 
     def mqtt_change_broker_address(self, broker_address):
-        return _not_implemented("mqtt_change_broker_address")
+        if not isinstance(broker_address, str):
+            raise TypeError("MQTT broker address must be str")
+        _network("mqtt_change_broker_address", broker_address=broker_address)
 
     def mqtt_change_id(self, mqtt_id):
-        return _not_implemented("mqtt_change_id")
+        if not isinstance(mqtt_id, str):
+            raise TypeError("MQTT ID must be str")
+        _network("mqtt_change_id", mqtt_id=mqtt_id)
 
     def mqtt_change_clientId(self, clientId):
-        return _not_implemented("mqtt_change_clientId")
+        if not isinstance(clientId, str):
+            raise TypeError("MQTT client ID must be str")
+        _network("mqtt_change_client_id", client_id=clientId)
 
     def mqtt_change_pub_token(self, pub_token):
-        return _not_implemented("mqtt_change_pub_token")
+        if not isinstance(pub_token, str):
+            raise TypeError("MQTT publish token must be str")
+        _network("mqtt_change_publish_token", token=pub_token)
 
     def mqtt_change_sub_token(self, sub_token):
-        return _not_implemented("mqtt_change_sub_token")
+        if not isinstance(sub_token, str):
+            raise TypeError("MQTT subscribe token must be str")
+        _network("mqtt_change_subscribe_token", token=sub_token)
 
     def LINE_text(self, txt, token=""):
         self._logger.warning("LINE_text is unavailable because LINE Notify has ended")
 
     def discord_text(self, content="", index=0, keys="DISCORD_WEBHOOK"):
-        self._logger.warning("discord_text transport is not configured")
+        settings_key = f"DISCORD_WEBHOOK{index}" if index != 0 else str(keys)
+        try:
+            _notification(
+                {
+                    "kind": "discord_text",
+                    "content": str(content),
+                    "settings_key": settings_key,
+                }
+            )
+        except Exception:
+            self._logger.warning("discord_text delivery failed")
 
 
 class Camera:
@@ -1692,7 +1815,27 @@ class ImageProcPythonCommand(PythonCommand):
         self.canvas = self.gui
 
     def discord_image(self, content="", index=0, crop_fmt="", crop=None, keys="DISCORD_WEBHOOK"):
-        self._logger.warning("discord_image transport is not configured")
+        if index != 0:
+            settings_keys = [f"DISCORD_WEBHOOK{index}"]
+        elif isinstance(keys, str):
+            settings_keys = [keys]
+        elif isinstance(keys, list) and all(isinstance(key, str) for key in keys):
+            settings_keys = list(keys)
+        else:
+            raise TypeError("discord_image keys must be str or list[str]")
+        normalized_crop = None if crop is None else [int(value) for value in crop]
+        try:
+            _notification(
+                {
+                    "kind": "discord_image",
+                    "content": str(content),
+                    "settings_keys": settings_keys,
+                    "crop_format": str(crop_fmt),
+                    "crop": normalized_crop,
+                }
+            )
+        except Exception:
+            self._logger.warning("discord_image delivery failed")
 
     def LINE_image(self, txt, crop_fmt="", crop=None, token=""):
         self._logger.warning("LINE_image is unavailable because LINE Notify has ended")

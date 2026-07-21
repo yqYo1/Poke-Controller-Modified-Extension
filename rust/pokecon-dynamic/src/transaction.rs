@@ -10,6 +10,7 @@ use crate::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
 
 /// Event mutation staged until a complete top-level/source/reload evaluation
 /// commits.
+#[derive(Clone)]
 pub enum StagedEventOperation {
     Install {
         handler_id: HandlerId,
@@ -63,6 +64,7 @@ pub enum TransactionError {
 
 /// One atomic dynamic evaluation. Host settings and callback/event mutations
 /// remain invisible until `commit`; dropping this value is rollback.
+#[derive(Clone)]
 pub struct EvaluationTransaction {
     settings_registry: Arc<DynamicSettingsRegistry>,
     baseline_settings: BTreeMap<String, Value>,
@@ -141,6 +143,12 @@ impl EvaluationTransaction {
         Ok(self
             .settings_registry
             .public_dynamic_value(&setting.id, &value))
+    }
+
+    /// Returns the prospective global callback settings for validating staged
+    /// command callback overrides in the same evaluation.
+    pub(crate) fn callback_settings(&self) -> Result<CallbackSettings, TransactionError> {
+        Ok(callback_settings(&self.prospective_settings)?)
     }
 
     /// Validates and stages one setting assignment without host side effects.

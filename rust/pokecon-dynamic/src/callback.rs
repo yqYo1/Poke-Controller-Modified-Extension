@@ -168,7 +168,7 @@ pub struct InvocationContext {
 }
 
 /// Closed callback return representation shared by both languages.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CallbackReturn {
     None,
     Boolean(bool),
@@ -246,31 +246,13 @@ pub trait Callback: Send + Sync {
 /// the scheduler deliberately retains the lane and slot until actual return.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CallbackOutcome {
-    Returned(CallbackReturnKey),
+    Returned(CallbackReturn),
     Failed(CallbackError),
     TimedOut(TimeoutStage),
     Evicted,
-}
-
-/// Equality-friendly event return subset. Arbitrary command callback values are
-/// represented as `Other` because event cancellation only needs exact `false`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CallbackReturnKey {
-    None,
-    False,
-    True,
-    Other,
-}
-
-impl From<&CallbackReturn> for CallbackReturnKey {
-    fn from(value: &CallbackReturn) -> Self {
-        match value {
-            CallbackReturn::None => Self::None,
-            CallbackReturn::Boolean(false) => Self::False,
-            CallbackReturn::Boolean(true) => Self::True,
-            CallbackReturn::Value(_) => Self::Other,
-        }
-    }
+    /// The caller requested immediate fallback while this handler's actual
+    /// execution lane was still occupied by an earlier invocation.
+    LaneBusy,
 }
 
 /// Diagnostic severity emitted by the scheduler and event bus.
@@ -312,6 +294,8 @@ pub struct Invocation {
     pub limits: CallbackLimits,
     pub callback: Arc<dyn Callback>,
     pub on_start: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub reject_if_lane_busy: bool,
+    pub on_late_return: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl std::fmt::Debug for Invocation {
@@ -363,9 +347,9 @@ struct QueuedInvocation {
     logical: oneshot::Sender<CallbackOutcome>,
 }
 
-#[derive(Clone, Copy, Debug)]
 struct ActualCompletion {
     handler_id: HandlerId,
+    on_late_return: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// Cloneable handle to the one global bounded callback scheduler.
@@ -492,6 +476,12 @@ async fn run_scheduler(
                         for invocation in invocations {
                             let (logical, receiver) = oneshot::channel();
                             handles.push(InvocationHandle { receiver });
+                            if invocation.reject_if_lane_busy
+                                && busy_lanes.contains(&invocation.handler_id)
+                            {
+                                let _result = logical.send(CallbackOutcome::LaneBusy);
+                                continue;
+                            }
                             let queued = QueuedInvocation {
                                 invocation,
                                 insertion_order,
@@ -543,6 +533,9 @@ fn finish_actual(
 ) {
     busy_lanes.remove(&completion.handler_id);
     *active = active.saturating_sub(1);
+    if let Some(on_late_return) = completion.on_late_return {
+        on_late_return();
+    }
 }
 
 fn admit(
@@ -645,8 +638,11 @@ fn dispatch_ready(
         let completion_sender = completion_sender.clone();
         let diagnostics = diagnostics.clone();
         tokio::spawn(async move {
-            run_invocation(queued, settings, diagnostics).await;
-            let _result = completion_sender.send(ActualCompletion { handler_id });
+            let on_late_return = run_invocation(queued, settings, diagnostics).await;
+            let _result = completion_sender.send(ActualCompletion {
+                handler_id,
+                on_late_return,
+            });
         });
     }
 }
@@ -683,12 +679,12 @@ async fn run_invocation(
     queued: QueuedInvocation,
     settings: CallbackSettings,
     diagnostics: Arc<dyn DiagnosticSink>,
-) {
+) -> Option<Arc<dyn Fn() + Send + Sync>> {
     let limits = match queued.invocation.limits.resolve(settings) {
         Ok(limits) => limits,
         Err(error) => {
             let _result = queued.logical.send(CallbackOutcome::Failed(error));
-            return;
+            return None;
         }
     };
     let started_at = Instant::now();
@@ -711,6 +707,7 @@ async fn run_invocation(
     let mut logical_soft_applied = false;
     let mut hard_applied = false;
     let mut logical = Some(queued.logical);
+    let on_late_return = queued.invocation.on_late_return;
 
     loop {
         tokio::select! {
@@ -720,25 +717,30 @@ async fn run_invocation(
                 if hard_at.is_some_and(|deadline_at| now >= deadline_at) {
                     deadline.enter_hard();
                     send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Hard));
+                    return on_late_return;
                 } else if logical_soft_at.is_some_and(|deadline_at| now >= deadline_at) {
                     send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Soft));
-                } else {
-                    let outcome = match result {
-                        Ok(Ok(value)) => CallbackOutcome::Returned((&value).into()),
-                        Ok(Err(error)) if error.kind == CallbackErrorKind::SoftTimeout => {
-                            CallbackOutcome::TimedOut(TimeoutStage::Soft)
-                        }
-                        Ok(Err(error)) if error.kind == CallbackErrorKind::HardTimeout => {
-                            CallbackOutcome::TimedOut(TimeoutStage::Hard)
-                        }
-                        Ok(Err(error)) => CallbackOutcome::Failed(error),
-                        Err(error) => CallbackOutcome::Failed(CallbackError::internal(
-                            format!("callback task failed: {error}"),
-                        )),
-                    };
-                    send_logical(&mut logical, outcome);
+                    return on_late_return;
                 }
-                return;
+                let returned_after_logical_completion = logical.is_none();
+                let outcome = match result {
+                    Ok(Ok(value)) => CallbackOutcome::Returned(value),
+                    Ok(Err(error)) if error.kind == CallbackErrorKind::SoftTimeout => {
+                        CallbackOutcome::TimedOut(TimeoutStage::Soft)
+                    }
+                    Ok(Err(error)) if error.kind == CallbackErrorKind::HardTimeout => {
+                        CallbackOutcome::TimedOut(TimeoutStage::Hard)
+                    }
+                    Ok(Err(error)) => CallbackOutcome::Failed(error),
+                    Err(error) => CallbackOutcome::Failed(CallbackError::internal(format!(
+                        "callback task failed: {error}"
+                    ))),
+                };
+                send_logical(&mut logical, outcome);
+                if returned_after_logical_completion {
+                    return on_late_return;
+                }
+                return None;
             }
             () = sleep_optional(soft_at), if !soft_applied => {
                 soft_applied = true;
@@ -846,6 +848,8 @@ mod tests {
             limits: CallbackLimits::default(),
             callback,
             on_start: None,
+            reject_if_lane_busy: false,
+            on_late_return: None,
         }
     }
 
@@ -899,7 +903,7 @@ mod tests {
         for handle in handles {
             assert_eq!(
                 handle.outcome().await,
-                CallbackOutcome::Returned(CallbackReturnKey::None)
+                CallbackOutcome::Returned(CallbackReturn::None)
             );
         }
     }
@@ -907,6 +911,41 @@ mod tests {
     struct LateCallback {
         actual_ended: Arc<AtomicBool>,
         release: Arc<Notify>,
+    }
+
+    struct ImmediateCallback(CallbackReturn);
+
+    #[async_trait]
+    impl Callback for ImmediateCallback {
+        async fn invoke(
+            &self,
+            _context: InvocationContext,
+        ) -> Result<CallbackReturn, CallbackError> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn arbitrary_callback_return_is_preserved() {
+        let executor = CallbackExecutor::new(
+            CallbackSettings::default(),
+            Arc::new(RecordingDiagnostics::default()),
+        );
+        let expected = CallbackReturn::Value(serde_json::json!({
+            "items": [1, true, null]
+        }));
+        let mut handles = executor
+            .submit_batch(vec![invocation(
+                1,
+                0,
+                Arc::new(ImmediateCallback(expected.clone())),
+            )])
+            .await
+            .unwrap();
+        assert_eq!(
+            handles.remove(0).outcome().await,
+            CallbackOutcome::Returned(expected)
+        );
     }
 
     #[async_trait]
@@ -973,8 +1012,58 @@ mod tests {
         second_release.notify_one();
         assert_eq!(
             handles.remove(0).outcome().await,
-            CallbackOutcome::Returned(CallbackReturnKey::None)
+            CallbackOutcome::Returned(CallbackReturn::None)
         );
+    }
+
+    #[tokio::test]
+    async fn occupied_lane_rejects_new_work_and_notifies_after_late_return() {
+        let executor = CallbackExecutor::new(
+            CallbackSettings {
+                soft_timeout_ms: 1,
+                soft_timeout_grace_ms: 1,
+                hard_timeout_ms: 0,
+                max_concurrency: 1,
+                queue_capacity: 8,
+            },
+            Arc::new(RecordingDiagnostics::default()),
+        );
+        let ended = Arc::new(AtomicBool::new(false));
+        let release = Arc::new(Notify::new());
+        let callback: Arc<dyn Callback> = Arc::new(LateCallback {
+            actual_ended: ended.clone(),
+            release: release.clone(),
+        });
+        let late_returns = Arc::new(AtomicUsize::new(0));
+        let mut first = invocation(1, 0, callback.clone());
+        first.reject_if_lane_busy = true;
+        let late_returns_for_hook = late_returns.clone();
+        first.on_late_return = Some(Arc::new(move || {
+            late_returns_for_hook.fetch_add(1, Ordering::AcqRel);
+        }));
+        let mut handles = executor.submit_batch(vec![first]).await.unwrap();
+        assert_eq!(
+            timeout(Duration::from_secs(1), handles.remove(0).outcome())
+                .await
+                .unwrap(),
+            CallbackOutcome::TimedOut(TimeoutStage::Soft)
+        );
+
+        let mut second = invocation(1, 0, callback);
+        second.reject_if_lane_busy = true;
+        let mut handles = executor.submit_batch(vec![second]).await.unwrap();
+        assert_eq!(handles.remove(0).outcome().await, CallbackOutcome::LaneBusy);
+
+        release.notify_one();
+        timeout(Duration::from_secs(1), async {
+            while late_returns.load(Ordering::Acquire) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(ended.load(Ordering::Acquire));
+        assert_eq!(late_returns.load(Ordering::Acquire), 1);
     }
 
     #[tokio::test]
@@ -1018,7 +1107,7 @@ mod tests {
         release.notify_waiters();
         assert_eq!(
             first.remove(0).outcome().await,
-            CallbackOutcome::Returned(CallbackReturnKey::None)
+            CallbackOutcome::Returned(CallbackReturn::None)
         );
         release.notify_waiters();
         release.notify_waiters();

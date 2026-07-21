@@ -82,6 +82,9 @@ pub trait DynamicHost: Send + Sync {
     fn controller_reset(&self) -> Result<(), DynamicHostError>;
 
     fn record_diagnostic(&self, diagnostic: Diagnostic);
+
+    /// Requests one coalesced rebuild of all command display-list snapshots.
+    fn request_command_recompute(&self) {}
 }
 
 /// Canonical lookup and validation projection for `pokecon.opt.*`.
@@ -221,6 +224,7 @@ struct InMemoryState {
     profiles: Vec<String>,
     controller: ControllerState,
     diagnostics: Vec<Diagnostic>,
+    command_recompute_requests: u64,
 }
 
 /// Deterministic host used by cross-language conformance and transaction tests.
@@ -267,6 +271,7 @@ impl InMemoryDynamicHost {
                 profiles,
                 controller: ControllerState::NEUTRAL,
                 diagnostics: Vec::new(),
+                command_recompute_requests: 0,
             }),
         })
     }
@@ -279,6 +284,11 @@ impl InMemoryDynamicHost {
     #[must_use]
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.inner.lock().diagnostics.clone()
+    }
+
+    #[must_use]
+    pub fn command_recompute_requests(&self) -> u64 {
+        self.inner.lock().command_recompute_requests
     }
 }
 
@@ -361,6 +371,10 @@ impl DynamicHost for InMemoryDynamicHost {
 
     fn record_diagnostic(&self, diagnostic: Diagnostic) {
         self.inner.lock().diagnostics.push(diagnostic);
+    }
+
+    fn request_command_recompute(&self) {
+        self.inner.lock().command_recompute_requests += 1;
     }
 }
 

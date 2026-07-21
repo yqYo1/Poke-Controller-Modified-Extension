@@ -8,6 +8,7 @@ use mlua::{
 use serde_json::Value;
 
 use crate::callback::{Callback, CallbackError, CallbackLimits, CallbackReturn, InvocationContext};
+use crate::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
 use crate::engine::{
     DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
 };
@@ -128,19 +129,68 @@ function errors.is_callback_soft_timeout(error)
     ) or api.is_callback_soft_timeout(error)
 end
 
-local function command_options()
-    return {
-        callback = nil,
-        priority = 0,
-        soft_timeout_ms = nil,
-        soft_timeout_grace_ms = nil,
-        hard_timeout_ms = nil,
+local function command_options(name)
+    local callbacks = {}
+    local timeout_fields = {
+        soft_timeout_ms = true,
+        soft_timeout_grace_ms = true,
+        hard_timeout_ms = true,
     }
+    return setmetatable({}, {
+        __index = function(_, field)
+            if field == "callback" then
+                local revision = api.command_callback_revision(name)
+                if revision == nil then
+                    return nil
+                end
+                return callbacks[revision]
+            end
+            if field == "priority" then
+                return api.command_priority(name)
+            end
+            if timeout_fields[field] then
+                return api.command_timeout(name, field)
+            end
+            error("unknown command callback option: " .. tostring(field), 2)
+        end,
+        __newindex = function(_, field, value)
+            if field == "callback" then
+                if value ~= nil and type(value) ~= "function" then
+                    error("command callback must be function or nil", 2)
+                end
+                local revision = api.set_command_callback(name, value)
+                if revision ~= nil then
+                    callbacks[revision] = value
+                end
+                return
+            end
+            if field == "priority" then
+                if type(value) ~= "number" or value % 1 ~= 0 then
+                    error("command callback priority must be an integer", 2)
+                end
+                api.set_command_priority(name, value)
+                return
+            end
+            if timeout_fields[field] then
+                if value ~= nil and (
+                    type(value) ~= "number" or value % 1 ~= 0
+                ) then
+                    error(field .. " must be an integer or nil", 2)
+                end
+                if value ~= nil and value < 0 then
+                    error(field .. " must be non-negative", 2)
+                end
+                api.set_command_timeout(name, field, value)
+                return
+            end
+            error("unknown command callback option: " .. tostring(field), 2)
+        end,
+    })
 end
 
 local commands = {
-    sort = command_options(),
-    tag_match = command_options(),
+    sort = command_options("sort"),
+    tag_match = command_options("tag_match"),
 }
 function commands.separator(label)
     if label ~= nil and type(label) ~= "string" then
@@ -195,6 +245,20 @@ fn non_negative_timeout(value: Option<i64>, name: &str) -> mlua::Result<Option<u
                 .map_err(|_| LuaError::runtime(format!("{name} must be non-negative")))
         })
         .transpose()
+}
+
+fn command_kind(name: &str) -> mlua::Result<CommandCallbackKind> {
+    CommandCallbackKind::try_from(name).map_err(|error| LuaError::runtime(error.to_string()))
+}
+
+fn command_timeout_field(name: &str) -> mlua::Result<CommandOptionField> {
+    let field =
+        CommandOptionField::try_from(name).map_err(|error| LuaError::runtime(error.to_string()))?;
+    if field == CommandOptionField::Priority {
+        Err(LuaError::runtime("priority is not a timeout field"))
+    } else {
+        Ok(field)
+    }
 }
 
 fn registration_options(
@@ -275,6 +339,7 @@ fn install_event_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua
             let callback: Arc<dyn Callback> = Arc::new(LuaCallback {
                 lua: callback_lua.clone(),
                 callback,
+                return_mode: LuaReturnMode::Any,
             });
             engine_from_weak(&weak)?
                 .register(&event, callback, options, once)
@@ -421,6 +486,132 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
     Ok(())
 }
 
+fn install_command_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua::Result<()> {
+    install_command_read_api(lua, api, engine)?;
+    install_command_write_api(lua, api, engine)
+}
+
+fn install_command_read_api(
+    lua: &Lua,
+    api: &Table,
+    engine: &Weak<EngineInner>,
+) -> mlua::Result<()> {
+    let weak = engine.clone();
+    api.set(
+        "command_callback_revision",
+        lua.create_function(move |_, name: String| {
+            engine_from_weak(&weak)?
+                .command_callback_revision(command_kind(&name)?)
+                .map(|revision| revision.map(|revision| revision.to_string()))
+                .map_err(|error| lua_error(&error))
+        })?,
+    )?;
+
+    let weak = engine.clone();
+    api.set(
+        "command_priority",
+        lua.create_function(move |_, name: String| {
+            let value = engine_from_weak(&weak)?
+                .command_option(command_kind(&name)?, CommandOptionField::Priority)
+                .map_err(|error| lua_error(&error))?;
+            let CommandOptionValue::Priority(value) = value else {
+                unreachable!("priority getter returns a priority value");
+            };
+            Ok(value)
+        })?,
+    )?;
+
+    let weak = engine.clone();
+    api.set(
+        "command_timeout",
+        lua.create_function(move |_, (name, field): (String, String)| {
+            let value = engine_from_weak(&weak)?
+                .command_option(command_kind(&name)?, command_timeout_field(&field)?)
+                .map_err(|error| lua_error(&error))?;
+            let CommandOptionValue::Timeout(value) = value else {
+                unreachable!("timeout getter returns a timeout value");
+            };
+            Ok(value)
+        })?,
+    )?;
+    Ok(())
+}
+
+fn install_command_write_api(
+    lua: &Lua,
+    api: &Table,
+    engine: &Weak<EngineInner>,
+) -> mlua::Result<()> {
+    let weak = engine.clone();
+    api.set(
+        "set_command_priority",
+        lua.create_function(move |_, (name, value): (String, i64)| {
+            let value = i32::try_from(value)
+                .map_err(|_| LuaError::runtime("priority must fit signed 32-bit integer"))?;
+            engine_from_weak(&weak)?
+                .set_command_option(
+                    command_kind(&name)?,
+                    CommandOptionField::Priority,
+                    CommandOptionValue::Priority(value),
+                )
+                .map_err(|error| lua_error(&error))
+        })?,
+    )?;
+
+    let weak = engine.clone();
+    api.set(
+        "set_command_timeout",
+        lua.create_function(
+            move |_, (name, field, value): (String, String, Option<i64>)| {
+                let value = non_negative_timeout(value, &field)?;
+                engine_from_weak(&weak)?
+                    .set_command_option(
+                        command_kind(&name)?,
+                        command_timeout_field(&field)?,
+                        CommandOptionValue::Timeout(value),
+                    )
+                    .map_err(|error| lua_error(&error))
+            },
+        )?,
+    )?;
+
+    let weak = engine.clone();
+    let callback_lua = lua.clone();
+    api.set(
+        "set_command_callback",
+        lua.create_function(move |lua, (name, value): (String, LuaValue)| {
+            let kind = command_kind(&name)?;
+            let callback: Option<Arc<dyn Callback>> = match value {
+                LuaValue::Nil => None,
+                LuaValue::Function(callback) => {
+                    if let Ok(jit) = lua.globals().get::<Table>("jit") {
+                        let off: Function = jit.get("off")?;
+                        off.call::<()>((callback.clone(), true))?;
+                    }
+                    Some(Arc::new(LuaCallback {
+                        lua: callback_lua.clone(),
+                        callback,
+                        return_mode: match kind {
+                            CommandCallbackKind::Sort => LuaReturnMode::SortList,
+                            CommandCallbackKind::TagMatch => LuaReturnMode::Any,
+                        },
+                    }))
+                }
+                _ => {
+                    return Err(LuaError::runtime(
+                        "command callback must be function or nil",
+                    ));
+                }
+            };
+            engine_from_weak(&weak)?
+                .set_command_callback(kind, callback)
+                .map(|revision| revision.map(|revision| revision.to_string()))
+                .map_err(|error| lua_error(&error))
+        })?,
+    )?;
+    Ok(())
+}
+
 fn install_timeout_api(lua: &Lua, api: &Table) -> mlua::Result<()> {
     api.set(
         "callback_soft_timeout_fields",
@@ -458,6 +649,7 @@ fn install_api(lua: &Lua, engine: &Weak<EngineInner>) -> mlua::Result<()> {
     install_setting_api(lua, &api, engine)?;
     install_event_api(lua, &api, engine)?;
     install_host_api(lua, &api, engine)?;
+    install_command_api(lua, &api, engine)?;
     install_timeout_api(lua, &api)?;
     lua.globals().set("_pokecon_api", api)?;
     Ok(())
@@ -507,9 +699,16 @@ impl LuaRuntime {
     }
 }
 
+#[derive(Clone, Copy)]
+enum LuaReturnMode {
+    Any,
+    SortList,
+}
+
 struct LuaCallback {
     lua: Lua,
     callback: Function,
+    return_mode: LuaReturnMode,
 }
 
 #[async_trait]
@@ -517,6 +716,7 @@ impl Callback for LuaCallback {
     async fn invoke(&self, context: InvocationContext) -> Result<CallbackReturn, CallbackError> {
         let lua = self.lua.clone();
         let callback = self.callback.clone();
+        let return_mode = self.return_mode;
         tokio::task::spawn_blocking(move || {
             let _scope = InvocationScope::enter(context.clone());
             let arguments = context
@@ -525,12 +725,54 @@ impl Callback for LuaCallback {
                 .map(|argument| lua.to_value(argument))
                 .collect::<mlua::Result<Vec<_>>>()?;
             let value = callback.call::<LuaValue>(MultiValue::from_vec(arguments))?;
-            callback_return_from_lua(&lua, value)
+            match return_mode {
+                LuaReturnMode::Any => callback_return_from_lua(&lua, value),
+                LuaReturnMode::SortList => command_sort_return_from_lua(&lua, value),
+            }
         })
         .await
         .map_err(|error| CallbackError::internal(format!("Lua callback task failed: {error}")))?
         .map_err(|error| classify_lua_callback_error(&error))
     }
+}
+
+fn command_sort_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<CallbackReturn> {
+    let LuaValue::Table(table) = value else {
+        return Err(LuaError::runtime(
+            "command sort callback must return an array table",
+        ));
+    };
+    let length = table.raw_len();
+    let mut entry_count = 0_usize;
+    for pair in table.clone().pairs::<LuaValue, LuaValue>() {
+        let (key, _value) = pair?;
+        let index = match key {
+            LuaValue::Integer(index) => usize::try_from(index).ok(),
+            _ => None,
+        };
+        if !index.is_some_and(|index| (1..=length).contains(&index)) {
+            return Err(LuaError::runtime(
+                "command sort callback must return a contiguous array table",
+            ));
+        }
+        entry_count += 1;
+    }
+    if entry_count != length {
+        return Err(LuaError::runtime(
+            "command sort callback must return a contiguous array table",
+        ));
+    }
+    let mut values = Vec::with_capacity(length);
+    for index in 1..=length {
+        let value = table.raw_get::<LuaValue>(index)?;
+        if matches!(value, LuaValue::Nil) {
+            return Err(LuaError::runtime(
+                "command sort callback must return a contiguous array table",
+            ));
+        }
+        values.push(lua.from_value(value)?);
+    }
+    Ok(CallbackReturn::Value(Value::Array(values)))
 }
 
 fn callback_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<CallbackReturn> {

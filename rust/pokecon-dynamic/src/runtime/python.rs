@@ -12,6 +12,7 @@ use serde_json::{Map, Number, Value};
 
 use crate::callback::CallbackLimits;
 use crate::callback::{Callback, CallbackError, CallbackReturn, InvocationContext};
+use crate::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
 use crate::engine::{
     DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
 };
@@ -173,16 +174,66 @@ class CommandSeparator:
 
 
 class _CommandOptions:
-    callback = None
-    priority = 0
-    soft_timeout_ms = None
-    soft_timeout_grace_ms = None
-    hard_timeout_ms = None
+    __slots__ = ("_name", "_callbacks")
+
+    def __init__(self, name):
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_callbacks", {})
+
+    @property
+    def callback(self):
+        revision = _api.command_callback_revision(self._name)
+        if revision is None:
+            return None
+        return self._callbacks.get(revision)
+
+    @callback.setter
+    def callback(self, value):
+        if value is not None and not callable(value):
+            raise TypeError("command callback must be callable or None")
+        revision = _api.set_command_callback(self._name, value)
+        if revision is not None:
+            self._callbacks[revision] = value
+
+    @property
+    def priority(self):
+        return _api.command_priority(self._name)
+
+    @priority.setter
+    def priority(self, value):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError("command callback priority must be int")
+        _api.set_command_priority(self._name, value)
+
+    def _get_timeout(self, field):
+        return _api.command_timeout(self._name, field)
+
+    def _set_timeout(self, field, value):
+        if value is not None and (
+            not isinstance(value, int) or isinstance(value, bool)
+        ):
+            raise TypeError(f"{field} must be int or None")
+        if value is not None and value < 0:
+            raise ValueError(f"{field} must be non-negative")
+        _api.set_command_timeout(self._name, field, value)
+
+    soft_timeout_ms = property(
+        lambda self: self._get_timeout("soft_timeout_ms"),
+        lambda self, value: self._set_timeout("soft_timeout_ms", value),
+    )
+    soft_timeout_grace_ms = property(
+        lambda self: self._get_timeout("soft_timeout_grace_ms"),
+        lambda self, value: self._set_timeout("soft_timeout_grace_ms", value),
+    )
+    hard_timeout_ms = property(
+        lambda self: self._get_timeout("hard_timeout_ms"),
+        lambda self, value: self._set_timeout("hard_timeout_ms", value),
+    )
 
 
 class _Commands:
-    sort = _CommandOptions()
-    tag_match = _CommandOptions()
+    sort = _CommandOptions("sort")
+    tag_match = _CommandOptions("tag_match")
 
     @staticmethod
     def separator(label=None):
@@ -217,6 +268,20 @@ fn non_negative_timeout(value: Option<i64>, name: &str) -> PyResult<Option<u64>>
                 .map_err(|_| PyValueError::new_err(format!("{name} must be non-negative")))
         })
         .transpose()
+}
+
+fn command_kind(name: &str) -> PyResult<CommandCallbackKind> {
+    CommandCallbackKind::try_from(name).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+fn command_timeout_field(name: &str) -> PyResult<CommandOptionField> {
+    let field = CommandOptionField::try_from(name)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    if field == CommandOptionField::Priority {
+        Err(PyValueError::new_err("priority is not a timeout field"))
+    } else {
+        Ok(field)
+    }
 }
 
 #[pyclass(frozen)]
@@ -285,7 +350,10 @@ impl PyApi {
             },
         };
         let engine = engine_from_weak(&self.engine)?;
-        let callback: Arc<dyn Callback> = Arc::new(PythonCallback { callback });
+        let callback: Arc<dyn Callback> = Arc::new(PythonCallback {
+            callback,
+            return_mode: PythonReturnMode::Any,
+        });
         engine
             .register(event, callback, options, once)
             .map(HandlerId::get)
@@ -371,6 +439,83 @@ impl PyApi {
             .map_err(|error| python_error(&error))
     }
 
+    fn command_callback_revision(&self, name: &str) -> PyResult<Option<u64>> {
+        engine_from_weak(&self.engine)?
+            .command_callback_revision(command_kind(name)?)
+            .map_err(|error| python_error(&error))
+    }
+
+    fn command_priority(&self, name: &str) -> PyResult<i32> {
+        let value = engine_from_weak(&self.engine)?
+            .command_option(command_kind(name)?, CommandOptionField::Priority)
+            .map_err(|error| python_error(&error))?;
+        let CommandOptionValue::Priority(value) = value else {
+            unreachable!("priority getter returns a priority value");
+        };
+        Ok(value)
+    }
+
+    fn command_timeout(&self, name: &str, field: &str) -> PyResult<Option<u64>> {
+        let value = engine_from_weak(&self.engine)?
+            .command_option(command_kind(name)?, command_timeout_field(field)?)
+            .map_err(|error| python_error(&error))?;
+        let CommandOptionValue::Timeout(value) = value else {
+            unreachable!("timeout getter returns a timeout value");
+        };
+        Ok(value)
+    }
+
+    fn set_command_priority(&self, name: &str, value: i64) -> PyResult<()> {
+        let value = i32::try_from(value)
+            .map_err(|_| PyOverflowError::new_err("priority must fit signed 32-bit integer"))?;
+        engine_from_weak(&self.engine)?
+            .set_command_option(
+                command_kind(name)?,
+                CommandOptionField::Priority,
+                CommandOptionValue::Priority(value),
+            )
+            .map_err(|error| python_error(&error))
+    }
+
+    fn set_command_timeout(&self, name: &str, field: &str, value: Option<i64>) -> PyResult<()> {
+        let value = non_negative_timeout(value, field)?;
+        engine_from_weak(&self.engine)?
+            .set_command_option(
+                command_kind(name)?,
+                command_timeout_field(field)?,
+                CommandOptionValue::Timeout(value),
+            )
+            .map_err(|error| python_error(&error))
+    }
+
+    fn set_command_callback(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        callback: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<u64>> {
+        let kind = command_kind(name)?;
+        let callback: Option<Arc<dyn Callback>> = if callback.is_none() {
+            None
+        } else {
+            if !callback.is_callable() {
+                return Err(PyTypeError::new_err(
+                    "command callback must be callable or None",
+                ));
+            }
+            Some(Arc::new(PythonCallback {
+                callback: callback.clone().unbind().clone_ref(py),
+                return_mode: match kind {
+                    CommandCallbackKind::Sort => PythonReturnMode::SortList,
+                    CommandCallbackKind::TagMatch => PythonReturnMode::Any,
+                },
+            }))
+        };
+        engine_from_weak(&self.engine)?
+            .set_command_callback(kind, callback)
+            .map_err(|error| python_error(&error))
+    }
+
     fn deadline_checkpoint(&self) -> Option<(&'static str, u64, u64, u64)> {
         let _engine = engine_from_weak(&self.engine).ok()?;
         match deadline_checkpoint()? {
@@ -432,14 +577,22 @@ impl PythonRuntime {
     }
 }
 
+#[derive(Clone, Copy)]
+enum PythonReturnMode {
+    Any,
+    SortList,
+}
+
 struct PythonCallback {
     callback: Py<PyAny>,
+    return_mode: PythonReturnMode,
 }
 
 #[async_trait]
 impl Callback for PythonCallback {
     async fn invoke(&self, context: InvocationContext) -> Result<CallbackReturn, CallbackError> {
         let callback = Python::attach(|py| self.callback.clone_ref(py));
+        let return_mode = self.return_mode;
         tokio::task::spawn_blocking(move || {
             Python::attach(|py| -> PyResult<CallbackReturn> {
                 let _scope = InvocationScope::enter(context.clone());
@@ -450,6 +603,13 @@ impl Callback for PythonCallback {
                     .collect::<PyResult<Vec<_>>>()?;
                 let arguments = PyTuple::new(py, arguments)?;
                 let value = callback.bind(py).call(arguments, None)?;
+                if matches!(return_mode, PythonReturnMode::SortList)
+                    && !value.is_instance_of::<PyList>()
+                {
+                    return Err(PyTypeError::new_err(
+                        "command sort callback must return list",
+                    ));
+                }
                 callback_return_from_python(&value)
             })
             .map_err(|error| classify_python_callback_error(&error))

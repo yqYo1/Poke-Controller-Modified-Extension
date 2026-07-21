@@ -11,6 +11,10 @@ use tokio::sync::Mutex as AsyncMutex;
 use crate::callback::{
     Callback, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext, TimeoutStage,
 };
+use crate::command::{
+    CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo, CommandOptionField,
+    CommandOptionValue, CommandRegistry, CommandState,
+};
 use crate::control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult};
 use crate::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
 use crate::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
@@ -39,6 +43,8 @@ pub enum DynamicEngineError {
     Host(#[from] DynamicHostError),
     #[error(transparent)]
     Event(#[from] EventError),
+    #[error(transparent)]
+    Command(#[from] CommandError),
     #[error("Python dynamic runtime failed: {0}")]
     Python(String),
     #[error("Lua dynamic runtime failed: {0}")]
@@ -52,33 +58,58 @@ pub enum DynamicEngineError {
 }
 
 #[derive(Debug)]
+struct EvaluationState {
+    transaction: Option<EvaluationTransaction>,
+    commands: CommandState,
+}
+
+#[derive(Debug)]
 struct EvaluationSession {
-    transaction: Mutex<Option<EvaluationTransaction>>,
+    state: Mutex<EvaluationState>,
 }
 
 impl EvaluationSession {
-    fn new(transaction: EvaluationTransaction) -> Self {
+    fn new(transaction: EvaluationTransaction, commands: CommandState) -> Self {
         Self {
-            transaction: Mutex::new(Some(transaction)),
+            state: Mutex::new(EvaluationState {
+                transaction: Some(transaction),
+                commands,
+            }),
         }
+    }
+
+    fn with_state<T>(
+        &self,
+        operation: impl FnOnce(
+            &mut EvaluationTransaction,
+            &mut CommandState,
+        ) -> Result<T, DynamicEngineError>,
+    ) -> Result<T, DynamicEngineError> {
+        let mut state = self.state.lock();
+        let EvaluationState {
+            transaction,
+            commands,
+        } = &mut *state;
+        let transaction = transaction
+            .as_mut()
+            .ok_or(DynamicEngineError::NoActiveEvaluation)?;
+        operation(transaction, commands)
     }
 
     fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&mut EvaluationTransaction) -> Result<T, DynamicEngineError>,
     ) -> Result<T, DynamicEngineError> {
-        let mut transaction = self.transaction.lock();
-        let transaction = transaction
-            .as_mut()
-            .ok_or(DynamicEngineError::NoActiveEvaluation)?;
-        operation(transaction)
+        self.with_state(|transaction, _commands| operation(transaction))
     }
 
-    fn take_transaction(&self) -> Result<EvaluationTransaction, DynamicEngineError> {
-        self.transaction
-            .lock()
+    fn take(&self) -> Result<(EvaluationTransaction, CommandState), DynamicEngineError> {
+        let mut state = self.state.lock();
+        let transaction = state
+            .transaction
             .take()
-            .ok_or(DynamicEngineError::NoActiveEvaluation)
+            .ok_or(DynamicEngineError::NoActiveEvaluation)?;
+        Ok((transaction, std::mem::take(&mut state.commands)))
     }
 }
 
@@ -197,6 +228,7 @@ pub(crate) struct EngineInner {
     settings_registry: Arc<DynamicSettingsRegistry>,
     source_store: SourceStore,
     event_bus: EventBus,
+    command_registry: CommandRegistry,
     coordinator: AsyncMutex<()>,
     runtimes: Mutex<RuntimeSet>,
     runtime_handle: Handle,
@@ -245,11 +277,13 @@ impl DynamicEngine {
         let diagnostics: Arc<dyn DiagnosticSink> =
             Arc::new(HostDiagnosticSink { host: host.clone() });
         let event_bus = EventBus::new(callback_settings, FIRST_PUBLIC_HANDLER_ID, diagnostics);
+        let command_registry = CommandRegistry::new(event_bus.clone(), host.clone());
         let inner = Arc::new_cyclic(|weak_self| EngineInner {
             host,
             settings_registry,
             source_store,
             event_bus,
+            command_registry,
             coordinator: AsyncMutex::new(()),
             runtimes: Mutex::new(RuntimeSet::default()),
             runtime_handle,
@@ -315,6 +349,38 @@ impl DynamicEngine {
     pub async fn emit(&self, event: &str) -> Result<EventResult, DynamicEngineError> {
         self.0.emit(event).await
     }
+
+    /// Applies the current shared sort callback under the evaluation barrier.
+    ///
+    /// # Errors
+    ///
+    /// Returns a scheduler transport failure.
+    pub async fn sort_commands(
+        &self,
+        candidates: Vec<CommandInfo>,
+    ) -> Result<Vec<CommandDisplayItem>, DynamicEngineError> {
+        let _coordinator = self.0.coordinator.lock().await;
+        Ok(self.0.command_registry.sort(candidates).await?)
+    }
+
+    /// Applies the current custom or built-in tag matcher under the evaluation
+    /// barrier.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host snapshot or scheduler transport failure.
+    pub async fn tag_matches(
+        &self,
+        selected_tag: &str,
+        command: &CommandInfo,
+    ) -> Result<bool, DynamicEngineError> {
+        let _coordinator = self.0.coordinator.lock().await;
+        Ok(self
+            .0
+            .command_registry
+            .tag_matches(selected_tag, command)
+            .await?)
+    }
 }
 
 impl EngineInner {
@@ -373,19 +439,45 @@ impl EngineInner {
         if replace_generation {
             transaction.clear("all");
         }
-        let session = Arc::new(EvaluationSession::new(transaction));
+        let commands = if replace_generation {
+            CommandState::default()
+        } else {
+            self.command_registry.state_snapshot()
+        };
+        let session = Arc::new(EvaluationSession::new(transaction, commands));
         let evaluation = {
             let _scope = EvaluationScope::enter(session.clone());
             self.evaluate_source(&source)
         };
         let pending_emits = match evaluation {
             Ok(()) => {
-                let transaction = session.take_transaction()?;
+                let (transaction, commands) = session.take()?;
+                let command_validation = transaction
+                    .callback_settings()
+                    .map_err(DynamicEngineError::from)
+                    .and_then(|settings| {
+                        commands
+                            .validate(settings)
+                            .map_err(DynamicEngineError::from)
+                    });
+                if let Err(error) = command_validation {
+                    let diagnostic = error.to_string();
+                    self.record_evaluation_failure(&diagnostic);
+                    return Ok(DynamicLoadResult {
+                        display_path: source.display_path,
+                        language: source.language,
+                        loaded: false,
+                        diagnostic: Some(diagnostic),
+                    });
+                }
                 match transaction
                     .commit_staged(self.host.as_ref(), &self.event_bus)
                     .await
                 {
-                    Ok(events) => events,
+                    Ok(events) => {
+                        self.command_registry.commit_state(commands);
+                        events
+                    }
                     Err(error) => {
                         let diagnostic = error.to_string();
                         self.record_evaluation_failure(&diagnostic);
@@ -483,8 +575,13 @@ impl EngineInner {
         value: Value,
     ) -> Result<(), DynamicEngineError> {
         if let Some(session) = current_evaluation() {
-            return session.with_transaction(|transaction| {
+            return session.with_state(|transaction, commands| {
+                let previous = transaction.clone();
                 transaction.set_setting(path, value)?;
+                if let Err(error) = commands.validate(transaction.callback_settings()?) {
+                    *transaction = previous;
+                    return Err(error.into());
+                }
                 Ok(())
             });
         }
@@ -494,12 +591,15 @@ impl EngineInner {
             &self.event_bus,
         )?;
         transaction.set_setting(path, value)?;
+        let commands = self.command_registry.state_snapshot();
+        commands.validate(transaction.callback_settings()?)?;
         self.runtime_handle.block_on(async {
             transaction
                 .commit_staged(self.host.as_ref(), &self.event_bus)
                 .await
                 .map(|_| ())
         })?;
+        self.host.request_command_recompute();
         Ok(())
     }
 
@@ -652,6 +752,58 @@ impl EngineInner {
     pub(crate) fn controller_reset(&self) -> Result<(), DynamicEngineError> {
         Ok(self.host.controller_reset()?)
     }
+
+    pub(crate) fn command_callback_revision(
+        &self,
+        kind: CommandCallbackKind,
+    ) -> Result<Option<u64>, DynamicEngineError> {
+        if let Some(session) = current_evaluation() {
+            return session
+                .with_state(|_transaction, commands| Ok(commands.callback_revision(kind)));
+        }
+        Ok(self.command_registry.callback_revision(kind))
+    }
+
+    pub(crate) fn command_option(
+        &self,
+        kind: CommandCallbackKind,
+        field: CommandOptionField,
+    ) -> Result<CommandOptionValue, DynamicEngineError> {
+        if let Some(session) = current_evaluation() {
+            return session.with_state(|_transaction, commands| Ok(commands.option(kind, field)));
+        }
+        Ok(self.command_registry.option(kind, field))
+    }
+
+    pub(crate) fn set_command_callback(
+        &self,
+        kind: CommandCallbackKind,
+        callback: Option<Arc<dyn Callback>>,
+    ) -> Result<Option<u64>, DynamicEngineError> {
+        if let Some(session) = current_evaluation() {
+            return session.with_state(|_transaction, commands| {
+                Ok(self
+                    .command_registry
+                    .replace_callback(commands, kind, callback))
+            });
+        }
+        Ok(self.command_registry.set_callback(kind, callback))
+    }
+
+    pub(crate) fn set_command_option(
+        &self,
+        kind: CommandCallbackKind,
+        field: CommandOptionField,
+        value: CommandOptionValue,
+    ) -> Result<(), DynamicEngineError> {
+        if let Some(session) = current_evaluation() {
+            return session.with_state(|transaction, commands| {
+                commands.set_option(kind, field, value, transaction.callback_settings()?)?;
+                Ok(())
+            });
+        }
+        Ok(self.command_registry.set_option(kind, field, value)?)
+    }
 }
 
 #[cfg(test)]
@@ -668,6 +820,7 @@ mod tests {
     fn initial_settings() -> BTreeMap<String, Value> {
         BTreeMap::from([
             ("language".to_owned(), json!("ja")),
+            ("commands.tag_match_mode".to_owned(), json!("exact")),
             ("dynamic.callback_soft_timeout_ms".to_owned(), json!(2000)),
             (
                 "dynamic.callback_soft_timeout_grace_ms".to_owned(),
@@ -679,7 +832,43 @@ mod tests {
         ])
     }
 
+    fn command(name: &str, tags: &[&str]) -> CommandInfo {
+        CommandInfo {
+            name: name.to_owned(),
+            module_path: format!("Commands.{name}"),
+            class_name: name.to_owned(),
+            tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
+        }
+    }
+
+    fn expected_python_sort(first: &CommandInfo, second: &CommandInfo) -> Vec<CommandDisplayItem> {
+        vec![
+            CommandDisplayItem::Command {
+                command: second.clone(),
+            },
+            CommandDisplayItem::Separator {
+                label: Some("Python".to_owned()),
+            },
+            CommandDisplayItem::Command {
+                command: first.clone(),
+            },
+            CommandDisplayItem::Command {
+                command: first.clone(),
+            },
+        ]
+    }
+
     const LUA_TIMEOUT_SOURCE: &str = r#"pokecon.opt.language = "EN"
+local function sort_commands(commands)
+    assert(#commands == 1)
+    if commands[1].name == "Empty" then
+        return {}
+    end
+    return {pokecon.commands.separator(), commands[1]}
+end
+pokecon.commands.sort.priority = 5
+pokecon.commands.sort.callback = sort_commands
+assert(pokecon.commands.sort.callback == sort_commands)
 pokecon.autocmd.on("AppShutdownPre", {
     callback = function()
         local ok, error = pcall(function()
@@ -727,10 +916,45 @@ pokecon.autocmd.on(
     soft_timeout_grace_ms=100,
     hard_timeout_ms=200,
 )
+
+def sort_commands(commands):
+    assert len(commands) == 2
+    return [
+        commands[1],
+        pokecon.commands.separator("Python"),
+        commands[0],
+        commands[0],
+    ]
+
+pokecon.commands.sort.priority = 11
+pokecon.commands.sort.soft_timeout_ms = 0
+pokecon.commands.sort.callback = sort_commands
+
+def inspect_commands():
+    pokecon.state.tags = [
+        pokecon.commands.sort.callback is sort_commands,
+        pokecon.commands.sort.priority,
+        pokecon.commands.sort.soft_timeout_ms,
+        pokecon.commands.sort.hard_timeout_ms,
+        pokecon.commands.tag_match.callback is None,
+    ]
+
+pokecon.autocmd.on("CameraClosePost", callback=inspect_commands)
 pokecon.source("./extra.lua")
+assert pokecon.commands.sort.callback is sort_commands
+assert pokecon.commands.tag_match.callback is None
+assert pokecon.commands.sort.hard_timeout_ms == 0
 "#;
 
     const LUA_CROSS_SOURCE: &str = r##"pokecon.opt.ui.fps = 60
+assert(pokecon.commands.sort.callback == nil)
+assert(pokecon.commands.sort.priority == 11)
+assert(pokecon.commands.sort.soft_timeout_ms == 0)
+pokecon.commands.sort.hard_timeout_ms = 0
+pokecon.commands.tag_match.priority = -4
+pokecon.commands.tag_match.callback = function(selected_tag, command)
+    return selected_tag == "sample" and command.tags[1] == "sample-fast"
+end
 pokecon.autocmd.on("AppStartupPost", {
     callback = function(...)
         assert(select("#", ...) == 0)
@@ -747,6 +971,9 @@ pokecon.autocmd.on("AppStartupPost", {
     const FAILED_RELOAD_SOURCE: &str = r#"import pokecon
 pokecon.opt.language = "JA"
 pokecon.autocmd.clear("all")
+pokecon.commands.sort.priority = 99
+pokecon.commands.sort.callback = lambda commands: []
+pokecon.commands.tag_match.callback = lambda selected_tag, command: False
 raise RuntimeError("reload sentinel")
 "#;
 
@@ -783,6 +1010,26 @@ raise RuntimeError("reload sentinel")
         assert!(result.loaded, "{:?}", result.diagnostic);
         assert_eq!(host.settings_snapshot().unwrap()["language"], json!("en"));
         assert_eq!(engine.generation(), 1);
+        let empty = CommandInfo {
+            name: "Empty".to_owned(),
+            module_path: "Commands.Empty".to_owned(),
+            class_name: "Empty".to_owned(),
+            tags: Vec::new(),
+        };
+        assert!(engine.sort_commands(vec![empty]).await.unwrap().is_empty());
+        let example = CommandInfo {
+            name: "Example".to_owned(),
+            module_path: "Commands.Example".to_owned(),
+            class_name: "Example".to_owned(),
+            tags: Vec::new(),
+        };
+        assert_eq!(
+            engine.sort_commands(vec![example.clone()]).await.unwrap(),
+            vec![
+                CommandDisplayItem::Separator { label: None },
+                CommandDisplayItem::Command { command: example },
+            ]
+        );
         let event = engine.emit("AppShutdownPre").await.unwrap();
         assert_eq!(event.outcomes.len(), 1);
         let timeout = &host.state_snapshot().unwrap()["tags"];
@@ -829,6 +1076,20 @@ raise RuntimeError("reload sentinel")
             vec![DynamicConfigLanguage::Python, DynamicConfigLanguage::Lua]
         );
         assert_eq!(engine.generation(), 1);
+        assert_eq!(host.command_recompute_requests(), 1);
+
+        let first = command("First", &["sample-fast"]);
+        let second = command("Second", &["other"]);
+        assert_eq!(
+            engine
+                .sort_commands(vec![first.clone(), second.clone()])
+                .await
+                .unwrap(),
+            expected_python_sort(&first, &second)
+        );
+        assert!(engine.tag_matches("sample", &first).await.unwrap());
+        assert!(!engine.tag_matches("sample", &second).await.unwrap());
+        assert!(engine.tag_matches("-", &second).await.unwrap());
 
         let event = engine.emit("AppStartupPost").await.unwrap();
         assert_eq!(event.outcomes.len(), 2);
@@ -861,6 +1122,21 @@ raise RuntimeError("reload sentinel")
         );
         assert_eq!(engine.generation(), 1);
         assert_eq!(host.settings_snapshot().unwrap()["language"], json!("en"));
+        assert_eq!(host.command_recompute_requests(), 1);
+        assert_eq!(
+            engine
+                .sort_commands(vec![first.clone(), second.clone()])
+                .await
+                .unwrap(),
+            expected_python_sort(&first, &second)
+        );
+        assert!(engine.tag_matches("sample", &first).await.unwrap());
+
+        engine.emit("CameraClosePost").await.unwrap();
+        assert_eq!(
+            host.state_snapshot().unwrap()["tags"],
+            json!([true, 11, 0, 0, true])
+        );
 
         host.set_state_value("tags", json!([])).unwrap();
         host.set_state_value("command_candidates", json!([]))

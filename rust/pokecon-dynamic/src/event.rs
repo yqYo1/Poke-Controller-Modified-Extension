@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use parking_lot::Mutex;
 
 use crate::callback::{
-    Callback, CallbackError, CallbackExecutor, CallbackLimits, CallbackOutcome, CallbackReturnKey,
+    Callback, CallbackError, CallbackExecutor, CallbackLimits, CallbackOutcome, CallbackReturn,
     CallbackSettings, Diagnostic, DiagnosticLevel, DiagnosticSink, Invocation,
 };
 
@@ -452,6 +452,8 @@ impl EventBus {
                     limits: registration.limits,
                     callback: registration.callback.clone(),
                     on_start,
+                    reject_if_lane_busy: false,
+                    on_late_return: None,
                 }
             })
             .collect::<Vec<_>>();
@@ -460,7 +462,7 @@ impl EventBus {
         let mut cancelled = false;
         for (registration, handle) in registrations.into_iter().zip(handles) {
             let outcome = handle.outcome().await;
-            if cancellable && outcome == CallbackOutcome::Returned(CallbackReturnKey::False) {
+            if cancellable && outcome == CallbackOutcome::Returned(CallbackReturn::Boolean(false)) {
                 cancelled = true;
             }
             if let CallbackOutcome::Failed(error) = &outcome {
@@ -478,6 +480,39 @@ impl EventBus {
             cancelled,
             outcomes,
         })
+    }
+
+    /// Runs one stable internal callback ID through the same global executor
+    /// used by public events.
+    pub(crate) async fn invoke_internal(
+        &self,
+        handler_id: HandlerId,
+        priority: i32,
+        arguments: Vec<serde_json::Value>,
+        limits: CallbackLimits,
+        callback: Arc<dyn Callback>,
+        on_late_return: Option<Arc<dyn Fn() + Send + Sync>>,
+    ) -> Result<CallbackOutcome, EventError> {
+        let sequence = self.next_event_sequence.fetch_add(1, Ordering::Relaxed);
+        let invocation = Invocation {
+            handler_id,
+            priority,
+            event_sequence: sequence,
+            registration_order: handler_id.get(),
+            event: None,
+            arguments,
+            limits,
+            callback,
+            on_start: None,
+            reject_if_lane_busy: true,
+            on_late_return,
+        };
+        let mut handles = self.executor.submit_batch(vec![invocation]).await?;
+        Ok(handles
+            .pop()
+            .expect("one internal invocation produces one handle")
+            .outcome()
+            .await)
     }
 }
 

@@ -7,6 +7,9 @@
   "exclude": [
     "**/__pycache__"
   ],
+  "extraPaths": [
+    "python/pokecon/typings"
+  ],
   "defineConstant": {
     "DEBUG": true
   },

@@ -4,10 +4,12 @@
 //! deliberately free of application/runtime dependencies so generators, CI,
 //! workers, the server, and the UI build can all consume the same contracts.
 
+pub mod commands_typings;
 pub mod dynamic_typings;
 pub mod model;
 mod validate;
 
+pub use commands_typings::{PythonTypingFile, commands_python_typings};
 pub use dynamic_typings::{dynamic_lua_typings, dynamic_python_typings};
 pub use model::{Access, DefaultValue, Mutability, Scope, Setting, SettingsRegistry, ValueSchema};
 pub use validate::{ContractError, ValidatedSettingsRegistry};
@@ -20,6 +22,10 @@ pub const PROTOCOL_REGISTRY_JSON: &str = include_str!("../registry/protocol.json
 
 /// Raw immutable compatibility-baseline registry.
 pub const COMPATIBILITY_REGISTRY_JSON: &str = include_str!("../registry/compatibility.json");
+
+/// Raw immutable fixed-script inventory used by the compatibility projection.
+pub const COMPATIBILITY_FIXED_MANIFEST_JSON: &str =
+    include_str!("../../../compatibility/fixed-manifest.json");
 
 /// Raw generated-artifact and drift-check registry.
 pub const GENERATION_REGISTRY_JSON: &str = include_str!("../registry/generation.json");

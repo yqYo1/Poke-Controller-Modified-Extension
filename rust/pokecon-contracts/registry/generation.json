@@ -54,6 +54,15 @@
       "phase": 8
     },
     {
+      "name": "commands_python_package_typings",
+      "sources": ["protocol.json", "compatibility/fixed-manifest.json"],
+      "output": "python/pokecon/typings/Commands/",
+      "runtime_destination": "<Data>/typings/Commands/",
+      "generate_command": "nix run .#generate-contracts",
+      "tracked": true,
+      "phase": 8
+    },
+    {
       "name": "dynamic_lua_typings",
       "sources": ["settings.json", "protocol.json"],
       "output": "generated/lua/pokecon.d.lua",

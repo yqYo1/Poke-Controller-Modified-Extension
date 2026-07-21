@@ -325,6 +325,14 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
         artifact_for_name(artifacts, "dynamic_python_typings")["output"],
         "python/pokecon/typings/__init__.pyi"
     );
+    assert_eq!(
+        artifact_for_name(artifacts, "commands_python_typings")["output"],
+        "python/pokecon/typings/commands.pyi"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "commands_python_package_typings")["output"],
+        "python/pokecon/typings/Commands/"
+    );
     assert_eq!(artifact_for_name(artifacts, "openapi")["tracked"], false);
 
     let ci = parse_json(CI_REGISTRY_JSON);

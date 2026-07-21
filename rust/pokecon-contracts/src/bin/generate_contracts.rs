@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pokecon_contracts::{dynamic_lua_typings, dynamic_python_typings};
+use pokecon_contracts::{commands_python_typings, dynamic_lua_typings, dynamic_python_typings};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let check = match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    let outputs = [
+    let mut outputs = vec![
         (
             PathBuf::from("python/pokecon/typings/__init__.pyi"),
             dynamic_python_typings()?,
@@ -35,6 +35,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             dynamic_lua_typings()?,
         ),
     ];
+    outputs.extend(commands_python_typings()?.into_iter().map(|typing| {
+        (
+            PathBuf::from("python/pokecon/typings").join(typing.relative_path()),
+            typing.source().to_owned(),
+        )
+    }));
     for (relative, source) in outputs {
         let path = root.join(&relative);
         if check {

@@ -3,7 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use atomic_write_file::AtomicWriteFile;
-use pokecon_contracts::{ContractError, dynamic_lua_typings, dynamic_python_typings};
+use pokecon_contracts::{
+    ContractError, commands_python_typings, dynamic_lua_typings, dynamic_python_typings,
+};
 use thiserror::Error;
 
 use crate::roots::{EffectiveRoots, RootError, SafeComponent};
@@ -66,6 +68,14 @@ impl ScaffoldManager {
         let lua_typings = self.roots.data.join("lua-typings/pokecon.d.lua");
         write_generated(&python_typings, &dynamic_python_typings()?)?;
         write_generated(&lua_typings, &dynamic_lua_typings()?)?;
+        let command_typings = commands_python_typings()?
+            .into_iter()
+            .map(|typing| {
+                let path = self.roots.data.join("typings").join(typing.relative_path());
+                write_generated(&path, typing.source())?;
+                Ok(path)
+            })
+            .collect::<Result<Vec<_>, ScaffoldError>>()?;
         Ok(ScaffoldPaths {
             global_settings,
             profile_settings,
@@ -75,6 +85,7 @@ impl ScaffoldManager {
             luarc,
             python_typings,
             lua_typings,
+            command_typings,
         })
     }
 }
@@ -90,6 +101,7 @@ pub struct ScaffoldPaths {
     pub luarc: PathBuf,
     pub python_typings: PathBuf,
     pub lua_typings: PathBuf,
+    pub command_typings: Vec<PathBuf>,
 }
 
 fn create_protected_directory(path: &Path) -> Result<(), ScaffoldError> {
@@ -246,6 +258,17 @@ mod tests {
         assert!(paths.profile_settings.starts_with(&roots.config));
         assert!(paths.python_typings.starts_with(&roots.data));
         assert!(paths.lua_typings.starts_with(&roots.data));
+        assert!(
+            paths
+                .command_typings
+                .iter()
+                .all(|path| path.starts_with(roots.data.join("typings")))
+        );
+        assert!(paths.command_typings.iter().any(|path| {
+            path.ends_with("Commands/PythonCommandBase.pyi")
+                && fs::read_to_string(path)
+                    .is_ok_and(|source| source.contains("class ImageProcPythonCommand"))
+        }));
         fs::write(&paths.init_python, "# user edit\n").expect("edit must succeed");
         manager
             .ensure("Profile")

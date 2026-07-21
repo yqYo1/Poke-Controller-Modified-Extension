@@ -35,6 +35,25 @@ pub enum CommandDisplayItem {
     Separator { label: Option<String> },
 }
 
+/// One complete finite-tag display cache. Callers publish this value only as a
+/// whole, so no partially computed tag can become UI-visible.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandDisplayCache {
+    pub generation: u64,
+    pub candidates: Vec<CommandInfo>,
+    pub tags: Vec<String>,
+    pub display_lists: BTreeMap<String, Vec<CommandDisplayItem>>,
+}
+
+/// Result of one sequential cache-generation attempt.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "status")]
+pub enum CommandCacheBuildResult {
+    Complete { cache: CommandDisplayCache },
+    Superseded { generation: u64 },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommandCallbackKind {
     Sort,
@@ -236,6 +255,31 @@ struct CommandRegistryInner {
     next_callback_revision: AtomicU64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CommandSlotConfiguration {
+    callback_revision: Option<u64>,
+    priority: i32,
+    limits: CallbackLimits,
+}
+
+impl From<&CommandSlot> for CommandSlotConfiguration {
+    fn from(slot: &CommandSlot) -> Self {
+        Self {
+            callback_revision: slot.callback_revision,
+            priority: slot.priority,
+            limits: slot.limits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CommandConfiguration {
+    sort: CommandSlotConfiguration,
+    tag_match: CommandSlotConfiguration,
+    global: CallbackSettings,
+    tag_match_mode: String,
+}
+
 /// One language-neutral registry for sort and tag-match callbacks.
 #[derive(Clone)]
 pub struct CommandRegistry(Arc<CommandRegistryInner>);
@@ -327,6 +371,88 @@ impl CommandRegistry {
         field: CommandOptionField,
     ) -> CommandOptionValue {
         self.0.state.lock().option(kind, field)
+    }
+
+    /// Computes `"-"` and every finite tag strictly sequentially. The
+    /// returned generation is complete or explicitly superseded; partial
+    /// display lists are never returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns a settings snapshot, callback scheduler, or serialization
+    /// failure. The caller must retain its previous completed cache on error.
+    pub async fn build_display_cache(
+        &self,
+        generation: u64,
+        candidates: Vec<CommandInfo>,
+    ) -> Result<CommandCacheBuildResult, CommandError> {
+        let candidates = self.canonical_candidates(candidates);
+        let configuration = self.configuration()?;
+        let tags = ordered_tags(&candidates);
+        let mut display_lists = BTreeMap::new();
+        for tag in &tags {
+            if !self.configuration_is_current(&configuration)? {
+                return Ok(CommandCacheBuildResult::Superseded { generation });
+            }
+            let mut matched = Vec::new();
+            if tag == "-" {
+                matched.clone_from(&candidates);
+            } else {
+                for command in &candidates {
+                    if !self.configuration_is_current(&configuration)? {
+                        return Ok(CommandCacheBuildResult::Superseded { generation });
+                    }
+                    if self.tag_matches(tag, command).await? {
+                        matched.push(command.clone());
+                    }
+                }
+            }
+            if !self.configuration_is_current(&configuration)? {
+                return Ok(CommandCacheBuildResult::Superseded { generation });
+            }
+            let display = self.sort(matched).await?;
+            if !self.configuration_is_current(&configuration)? {
+                return Ok(CommandCacheBuildResult::Superseded { generation });
+            }
+            display_lists.insert(tag.clone(), display);
+        }
+        Ok(CommandCacheBuildResult::Complete {
+            cache: CommandDisplayCache {
+                generation,
+                candidates,
+                tags,
+                display_lists,
+            },
+        })
+    }
+
+    fn configuration(&self) -> Result<CommandConfiguration, CommandError> {
+        let settings = self.0.host.settings_snapshot()?;
+        let global = callback_settings(&settings)?;
+        let tag_match_mode = settings
+            .get("commands.tag_match_mode")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                DynamicHostError::new(
+                    "MissingSetting",
+                    "setting snapshot is missing commands.tag_match_mode",
+                )
+            })?
+            .to_owned();
+        let state = self.0.state.lock();
+        Ok(CommandConfiguration {
+            sort: (&state.sort).into(),
+            tag_match: (&state.tag_match).into(),
+            global,
+            tag_match_mode,
+        })
+    }
+
+    fn configuration_is_current(
+        &self,
+        configuration: &CommandConfiguration,
+    ) -> Result<bool, CommandError> {
+        Ok(self.configuration()? == *configuration)
     }
 
     /// Applies the configured sort callback or returns canonical discovery
@@ -557,6 +683,21 @@ impl CommandRegistry {
     }
 }
 
+fn ordered_tags(candidates: &[CommandInfo]) -> Vec<String> {
+    let mut tags = vec!["-".to_owned()];
+    let mut seen = BTreeSet::from(["-".to_owned()]);
+    for automatic in [false, true] {
+        for command in candidates {
+            for tag in &command.tags {
+                if tag.starts_with('@') == automatic && seen.insert(tag.clone()) {
+                    tags.push(tag.clone());
+                }
+            }
+        }
+    }
+    tags
+}
+
 fn separator_from_value(value: &Value) -> Option<Result<Option<String>, ()>> {
     let object = value.as_object()?;
     if object.get("__pokecon_separator__") != Some(&Value::Bool(true)) {
@@ -784,5 +925,90 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(host.command_recompute_requests(), baseline_requests + 1);
+    }
+
+    #[tokio::test]
+    async fn display_cache_is_complete_and_orders_manual_tags_before_automatic_tags() {
+        let (registry, _host) = registry();
+        let mut first = command("First", "Commands.First", "First");
+        first.tags = vec!["z".to_owned(), "@Auto".to_owned(), "a".to_owned()];
+        let mut second = command("Second", "Commands.Second", "Second");
+        second.tags = vec!["@Auto".to_owned(), "b".to_owned()];
+
+        let result = registry
+            .build_display_cache(17, vec![first.clone(), second.clone()])
+            .await
+            .unwrap();
+        let CommandCacheBuildResult::Complete { cache } = result else {
+            panic!("unchanged configuration must produce a complete cache");
+        };
+        assert_eq!(cache.generation, 17);
+        assert_eq!(cache.candidates, [first.clone(), second.clone()]);
+        assert_eq!(cache.tags, ["-", "z", "a", "b", "@Auto"]);
+        assert_eq!(
+            cache.display_lists["-"],
+            [
+                CommandDisplayItem::Command {
+                    command: first.clone()
+                },
+                CommandDisplayItem::Command {
+                    command: second.clone()
+                }
+            ]
+        );
+        assert_eq!(
+            cache.display_lists["z"],
+            [CommandDisplayItem::Command { command: first }]
+        );
+        assert_eq!(
+            cache.display_lists["b"],
+            [CommandDisplayItem::Command { command: second }]
+        );
+    }
+
+    #[tokio::test]
+    async fn display_cache_discards_a_generation_changed_during_callback_execution() {
+        let (registry, _host) = registry();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new(Notify::new());
+        registry.set_callback(
+            CommandCallbackKind::Sort,
+            Some(Arc::new(BlockingCallback {
+                calls: calls.clone(),
+                release: release.clone(),
+            })),
+        );
+        let building = {
+            let registry = registry.clone();
+            tokio::spawn(async move {
+                registry
+                    .build_display_cache(23, vec![command("First", "Commands.First", "First")])
+                    .await
+            })
+        };
+        timeout(Duration::from_secs(1), async {
+            while calls.load(Ordering::Acquire) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        registry
+            .set_option(
+                CommandCallbackKind::Sort,
+                CommandOptionField::Priority,
+                CommandOptionValue::Priority(9),
+            )
+            .unwrap();
+        release.notify_one();
+
+        assert_eq!(
+            timeout(Duration::from_secs(1), building)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            CommandCacheBuildResult::Superseded { generation: 23 }
+        );
     }
 }

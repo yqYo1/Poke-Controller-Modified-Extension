@@ -11,8 +11,8 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
-    ScriptInitializeRequest, ScriptTkEvent, ScriptWorkerStatus,
+    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptDialogState, ScriptExecuteRequest,
+    ScriptExecutionOutcome, ScriptInitializeRequest, ScriptTkEvent, ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -289,6 +289,168 @@ async fn stop_worker(worker: &ManagedWorker) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn discovery_preserves_declaration_order_and_separates_tag_layers() {
+    const SOURCE: &str = r#"
+from Commands.McuCommandBase import McuCommand
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Abstract(PythonCommand):
+    pass
+
+
+class Second(PythonCommand):
+    NAME = "Display second"
+    TAGS = ["manual", "manual"]
+
+    def do(self):
+        print(self.__class__.TAGS)
+
+
+class First(PythonCommand):
+    TAGS = None
+
+    def do(self):
+        pass
+
+
+firmware = McuCommand("firmware-sync")
+firmware.NAME = "Firmware"
+firmware.TAGS = ["mcu"]
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    let directory = command_root.join("Samples/Rank");
+    std::fs::create_dir_all(&directory).expect("nested command directory is created");
+    std::fs::write(directory.join("commands.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let discovered = client.discover().await.expect("command discovery succeeds");
+    assert_eq!(discovered.commands.len(), 3);
+    assert_eq!(
+        discovered
+            .commands
+            .iter()
+            .map(|entry| entry.command.class_name.as_str())
+            .collect::<Vec<_>>(),
+        ["Second", "First", "firmware"]
+    );
+    assert_eq!(discovered.commands[0].command.name, "Display second");
+    assert_eq!(
+        discovered.commands[0].command.module_path,
+        "Commands.PythonCommands.Samples.Rank.commands"
+    );
+    assert_eq!(discovered.commands[0].command.tags, ["@Samples", "@Rank"]);
+    assert_eq!(discovered.commands[0].manual_tags, ["manual", "manual"]);
+    assert_eq!(discovered.commands[0].kind, ScriptCommandKind::Python);
+    assert_eq!(discovered.commands[2].kind, ScriptCommandKind::Mcu);
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: discovered.commands[0].relative_path.clone(),
+            class_name: "Second".to_owned(),
+            tags: vec![
+                "@Samples".to_owned(),
+                "manual".to_owned(),
+                "dynamic".to_owned(),
+            ],
+        })
+        .await
+        .expect("discovered command executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert!(
+        host.outputs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|output| { output.message.contains("['@Samples', 'manual', 'dynamic']") })
+    );
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pause_and_resume_are_idempotent_and_stop_wakes_a_paused_command() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Pausable(PythonCommand):
+    def do(self):
+        while True:
+            pass
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("pausable.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            client
+                .execute(&ScriptExecuteRequest {
+                    path: "pausable.py".into(),
+                    class_name: "Pausable".to_owned(),
+                    tags: Vec::new(),
+                })
+                .await
+        })
+    };
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !client.status().await.expect("status succeeds").running {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("command starts");
+
+    assert!(client.pause().await.expect("pause succeeds").changed);
+    assert!(
+        !client
+            .pause()
+            .await
+            .expect("repeated pause succeeds")
+            .changed
+    );
+    assert!(
+        client
+            .status()
+            .await
+            .expect("paused status succeeds")
+            .paused
+    );
+    assert!(client.resume().await.expect("resume succeeds").changed);
+    assert!(
+        !client
+            .resume()
+            .await
+            .expect("repeated resume succeeds")
+            .changed
+    );
+    assert!(
+        !client
+            .status()
+            .await
+            .expect("running status succeeds")
+            .paused
+    );
+    assert!(client.pause().await.expect("second pause succeeds").changed);
+    assert!(client.stop().await.expect("stop succeeds").stop_requested);
+
+    let result = tokio::time::timeout(Duration::from_secs(2), execution)
+        .await
+        .expect("paused command stops")
+        .expect("execution task joins")
+        .expect("execution response succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn script_worker_executes_controller_serial_and_output_proxies() {
     const SOURCE: &str = r#"
 from Commands.PythonCommandBase import PythonCommand
@@ -317,6 +479,7 @@ class Exercise(PythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "exercise.py".into(),
             class_name: "Exercise".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("script execution request succeeds");
@@ -541,6 +704,7 @@ class Contracts(PythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "contracts.py".into(),
             class_name: "Contracts".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("contract script executes");
@@ -577,6 +741,7 @@ class Cooperative(PythonCommand):
             .execute(&ScriptExecuteRequest {
                 path: "cooperative.py".into(),
                 class_name: "Cooperative".to_owned(),
+                tags: Vec::new(),
             })
             .await
     });
@@ -642,6 +807,7 @@ class Finisher(PythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "finisher.py".into(),
             class_name: "Finisher".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("finisher executes");
@@ -679,6 +845,7 @@ class Busy(PythonCommand):
             .execute(&ScriptExecuteRequest {
                 path: "busy.py".into(),
                 class_name: "Busy".to_owned(),
+                tags: Vec::new(),
             })
             .await
     });
@@ -785,6 +952,7 @@ class Dialogs(PythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "dialogs.py".into(),
             class_name: "Dialogs".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("dialog script execution succeeds");
@@ -821,6 +989,7 @@ class AbortedDialog(PythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "aborted_dialog.py".into(),
             class_name: "AbortedDialog".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("aborted dialog uses a typed execution outcome");
@@ -883,6 +1052,7 @@ class NetworkAndNotifications(ImageProcPythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "network.py".into(),
             class_name: "NetworkAndNotifications".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("network script execution succeeds");
@@ -1082,6 +1252,7 @@ class Images(ImageProcPythonCommand):
         .execute(&ScriptExecuteRequest {
             path: "images.py".into(),
             class_name: "Images".to_owned(),
+            tags: Vec::new(),
         })
         .await
         .expect("image script execution succeeds");
@@ -1216,6 +1387,7 @@ class TkBridge(ImageProcPythonCommand):
             .execute(&ScriptExecuteRequest {
                 path: "tk_bridge.py".into(),
                 class_name: "TkBridge".to_owned(),
+                tags: Vec::new(),
             })
             .await
     });

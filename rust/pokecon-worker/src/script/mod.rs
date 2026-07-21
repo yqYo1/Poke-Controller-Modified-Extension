@@ -24,8 +24,8 @@ use self::protocol::{
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
     HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
-    ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest, ScriptInitializeResult,
-    ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
+    ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest,
+    ScriptInitializeResult, ScriptPauseResult, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
 };
 pub(crate) use self::runtime::ScriptWorkerRuntime;
 
@@ -260,6 +260,17 @@ impl ScriptWorkerClient {
             .await
     }
 
+    /// Discovers concrete Python commands and MCU command instances in raw
+    /// filesystem traversal and class declaration order.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, source-evaluation, or payload error.
+    pub async fn discover(&self) -> Result<ScriptDiscoveryResult, ScriptClientError> {
+        self.request(OperationClass::MutatingResource, protocol::DISCOVER, &())
+            .await
+    }
+
     /// Runs one command class on the worker's dedicated user thread.
     ///
     /// The request remains correlated while the IPC dispatcher continues to
@@ -273,6 +284,26 @@ impl ScriptWorkerClient {
         request: &ScriptExecuteRequest,
     ) -> Result<ScriptExecutionResult, ScriptClientError> {
         self.request(OperationClass::MutatingResource, protocol::EXECUTE, request)
+            .await
+    }
+
+    /// Pauses the active command at its next Python instruction checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, or payload error.
+    pub async fn pause(&self) -> Result<ScriptPauseResult, ScriptClientError> {
+        self.request(OperationClass::MutatingResource, protocol::PAUSE, &())
+            .await
+    }
+
+    /// Resumes a command suspended at an instruction checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, or payload error.
+    pub async fn resume(&self) -> Result<ScriptPauseResult, ScriptClientError> {
+        self.request(OperationClass::MutatingResource, protocol::RESUME, &())
             .await
     }
 

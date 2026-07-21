@@ -8,7 +8,9 @@ use pokecon_device::controller::ControllerUpdate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{CommandInfo, Diagnostic, DynamicConfigLanguage, DynamicLoadResult};
+use crate::{
+    CommandCacheBuildResult, CommandInfo, Diagnostic, DynamicConfigLanguage, DynamicLoadResult,
+};
 
 pub const INITIALIZE: &str = "dynamic.initialize";
 pub const STATUS: &str = "dynamic.status";
@@ -16,6 +18,7 @@ pub const CONTROL: &str = "dynamic.control";
 pub const EMIT: &str = "dynamic.emit";
 pub const SORT_COMMANDS: &str = "dynamic.sort_commands";
 pub const TAG_MATCHES: &str = "dynamic.tag_matches";
+pub const BUILD_COMMAND_CACHE: &str = "dynamic.build_command_cache";
 
 /// Private worker environment bridge used to add the exact synchronized venv
 /// to embedded `CPython` without accepting ambient `PYTHONPATH` entries.
@@ -86,6 +89,15 @@ pub struct DynamicTagMatchRequest {
     pub selected_tag: String,
     pub command: CommandInfo,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicCommandCacheRequest {
+    pub generation: u64,
+    pub candidates: Vec<CommandInfo>,
+}
+
+pub type DynamicCommandCacheResult = CommandCacheBuildResult;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

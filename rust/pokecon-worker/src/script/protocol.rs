@@ -5,11 +5,15 @@ use std::path::PathBuf;
 use pokecon_camera::{
     CameraSelector, CaptureResolution, FlipMode, MappingDescriptor, ScreenshotFormat,
 };
+use pokecon_dynamic::CommandInfo;
 use serde::{Deserialize, Serialize};
 
 pub const INITIALIZE: &str = "script.initialize";
 pub const STATUS: &str = "script.status";
+pub const DISCOVER: &str = "script.discover";
 pub const EXECUTE: &str = "script.execute";
+pub const PAUSE: &str = "script.pause";
+pub const RESUME: &str = "script.resume";
 pub const STOP: &str = "script.stop";
 
 /// Private worker environment bridge for the exact synchronized script venv.
@@ -57,6 +61,7 @@ pub struct ScriptWorkerStatus {
     pub initialized: bool,
     pub profile: Option<String>,
     pub running: bool,
+    pub paused: bool,
     pub execution_id: Option<u64>,
 }
 
@@ -67,9 +72,38 @@ impl ScriptWorkerStatus {
             initialized: false,
             profile: None,
             running: false,
+            paused: false,
             execution_id: None,
         }
     }
+}
+
+/// Kind of executable discovered below the initialized command root.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptCommandKind {
+    Python,
+    Mcu,
+}
+
+/// Worker-authenticated metadata for one executable command class.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptDiscoveredCommand {
+    /// Metadata containing directory-derived tags only. Manual tags are kept
+    /// separate until `ScriptLoadPre` has completed.
+    pub command: CommandInfo,
+    /// Canonical path relative to the initialized command root.
+    pub relative_path: PathBuf,
+    /// Class-level `TAGS` in declaration order.
+    pub manual_tags: Vec<String>,
+    pub kind: ScriptCommandKind,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptDiscoveryResult {
+    pub commands: Vec<ScriptDiscoveredCommand>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -77,6 +111,16 @@ impl ScriptWorkerStatus {
 pub struct ScriptExecuteRequest {
     pub path: PathBuf,
     pub class_name: String,
+    /// Final automatic, manual, and dynamic tags written back onto the class
+    /// before its instance is created.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPauseResult {
+    pub changed: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

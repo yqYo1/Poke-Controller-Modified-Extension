@@ -12,8 +12,8 @@ use crate::callback::{
     Callback, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext, TimeoutStage,
 };
 use crate::command::{
-    CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo, CommandOptionField,
-    CommandOptionValue, CommandRegistry, CommandState,
+    CommandCacheBuildResult, CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo,
+    CommandOptionField, CommandOptionValue, CommandRegistry, CommandState,
 };
 use crate::control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult};
 use crate::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
@@ -384,6 +384,26 @@ impl DynamicEngine {
             .0
             .command_registry
             .tag_matches(selected_tag, command)
+            .await?)
+    }
+
+    /// Builds every finite-tag display list sequentially under one immutable
+    /// command-configuration fingerprint.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host snapshot, scheduler transport, or serialization failure.
+    pub async fn build_command_cache(
+        &self,
+        generation: u64,
+        candidates: Vec<CommandInfo>,
+    ) -> Result<CommandCacheBuildResult, DynamicEngineError> {
+        let coordinator = self.0.coordinator.lock().await;
+        drop(coordinator);
+        Ok(self
+            .0
+            .command_registry
+            .build_display_cache(generation, candidates)
             .await?)
     }
 }

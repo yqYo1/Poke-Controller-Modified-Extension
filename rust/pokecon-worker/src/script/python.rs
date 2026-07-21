@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, mpsc};
 use std::thread::JoinHandle;
 
 use pokecon_camera::{
@@ -23,9 +23,10 @@ use super::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult, ScriptControl,
-    ScriptExecutionOutcome, ScriptExecutionResult, ScriptInputAction, ScriptOutputMode,
-    ScriptOutputTarget, ScriptTkEvent, ScriptWorkerStatus,
+    HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
+    ScriptCommandKind, ScriptControl, ScriptDiscoveredCommand, ScriptExecutionOutcome,
+    ScriptExecutionResult, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -76,6 +77,8 @@ struct ExecutionState {
     active_id: AtomicU64,
     alive: AtomicBool,
     stop_cause: AtomicU8,
+    paused: Mutex<bool>,
+    resumed: Condvar,
 }
 
 impl ExecutionState {
@@ -85,7 +88,15 @@ impl ExecutionState {
             active_id: AtomicU64::new(0),
             alive: AtomicBool::new(false),
             stop_cause: AtomicU8::new(StopCause::None as u8),
+            paused: Mutex::new(false),
+            resumed: Condvar::new(),
         }
+    }
+
+    fn lock_paused(&self) -> MutexGuard<'_, bool> {
+        self.paused
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn begin(&self) -> Result<u64, PythonActorError> {
@@ -106,6 +117,7 @@ impl ExecutionState {
             })?;
         self.stop_cause
             .store(StopCause::None as u8, Ordering::Release);
+        *self.lock_paused() = false;
         self.alive.store(true, Ordering::Release);
         Ok(id)
     }
@@ -117,6 +129,8 @@ impl ExecutionState {
             .compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire);
         self.stop_cause
             .store(StopCause::None as u8, Ordering::Release);
+        *self.lock_paused() = false;
+        self.resumed.notify_all();
     }
 
     fn request_stop(&self) -> bool {
@@ -130,6 +144,8 @@ impl ExecutionState {
             Ordering::Acquire,
         );
         self.alive.store(false, Ordering::Release);
+        *self.lock_paused() = false;
+        self.resumed.notify_all();
         true
     }
 
@@ -138,7 +154,38 @@ impl ExecutionState {
             self.stop_cause
                 .store(StopCause::Finish as u8, Ordering::Release);
             self.alive.store(false, Ordering::Release);
+            *self.lock_paused() = false;
+            self.resumed.notify_all();
         }
+    }
+
+    fn pause(&self) -> bool {
+        if self.active_id.load(Ordering::Acquire) == 0 {
+            return false;
+        }
+        let mut paused = self.lock_paused();
+        let changed = !*paused;
+        *paused = true;
+        changed
+    }
+
+    fn resume(&self) -> bool {
+        let mut paused = self.lock_paused();
+        let changed = *paused;
+        *paused = false;
+        self.resumed.notify_all();
+        changed
+    }
+
+    fn checkpoint(&self) -> bool {
+        let mut paused = self.lock_paused();
+        while *paused && self.alive.load(Ordering::Acquire) {
+            paused = self
+                .resumed
+                .wait(paused)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        self.alive.load(Ordering::Acquire)
     }
 
     fn status(&self, profile: &str) -> ScriptWorkerStatus {
@@ -147,6 +194,7 @@ impl ExecutionState {
             initialized: true,
             profile: Some(profile.to_owned()),
             running: active != 0,
+            paused: active != 0 && *self.lock_paused(),
             execution_id: (active != 0).then_some(active),
         }
     }
@@ -160,10 +208,25 @@ struct ExecuteCommand {
     id: u64,
     path: PathBuf,
     class_name: String,
+    tags: Vec<String>,
     response: oneshot::Sender<ScriptExecutionResult>,
 }
 
+#[derive(Debug)]
+pub(super) struct DiscoverSource {
+    pub(super) path: PathBuf,
+    pub(super) relative_path: PathBuf,
+    pub(super) module_path: String,
+    pub(super) automatic_tags: Vec<String>,
+}
+
+struct DiscoverCommand {
+    sources: Vec<DiscoverSource>,
+    response: oneshot::Sender<Result<Vec<ScriptDiscoveredCommand>, PythonActorError>>,
+}
+
 enum ActorCommand {
+    Discover(DiscoverCommand),
     Execute(ExecuteCommand),
     Shutdown(oneshot::Sender<()>),
 }
@@ -215,6 +278,7 @@ impl PythonActor {
         &self,
         path: PathBuf,
         class_name: String,
+        tags: Vec<String>,
     ) -> Result<(u64, oneshot::Receiver<ScriptExecutionResult>), PythonActorError> {
         let id = self.state.begin()?;
         let (response_sender, response_receiver) = oneshot::channel();
@@ -222,6 +286,7 @@ impl PythonActor {
             id,
             path,
             class_name,
+            tags,
             response: response_sender,
         });
         if self
@@ -236,6 +301,48 @@ impl PythonActor {
             ));
         }
         Ok((id, response_receiver))
+    }
+
+    pub(super) async fn discover(
+        &self,
+        sources: Vec<DiscoverSource>,
+    ) -> Result<Vec<ScriptDiscoveredCommand>, PythonActorError> {
+        if self.state.active_id.load(Ordering::Acquire) != 0 {
+            return Err(PythonActorError::new(
+                "ScriptBusy",
+                "commands cannot be discovered while a script is running",
+            ));
+        }
+        let (response, result) = oneshot::channel();
+        self.commands
+            .as_ref()
+            .ok_or_else(|| {
+                PythonActorError::new(
+                    "ScriptThreadStopped",
+                    "script execution thread is unavailable",
+                )
+            })?
+            .send(ActorCommand::Discover(DiscoverCommand {
+                sources,
+                response,
+            }))
+            .map_err(|_| {
+                PythonActorError::new(
+                    "ScriptThreadStopped",
+                    "script execution thread is unavailable",
+                )
+            })?;
+        result
+            .await
+            .map_err(|error| PythonActorError::new("ScriptThreadStopped", error.to_string()))?
+    }
+
+    pub(super) fn pause(&self) -> bool {
+        self.state.pause()
+    }
+
+    pub(super) fn resume(&self) -> bool {
+        self.state.resume()
     }
 
     pub(super) fn request_stop(&self) -> bool {
@@ -312,6 +419,10 @@ impl PythonThread {
         }
         while let Ok(command) = self.commands.recv() {
             match command {
+                ActorCommand::Discover(command) => {
+                    let result = discover_commands(&command.sources);
+                    let _result = command.response.send(result);
+                }
                 ActorCommand::Execute(command) => {
                     execute_command(&self.config, &self.state, command);
                 }
@@ -412,20 +523,7 @@ fn add_python_paths(py: Python<'_>, command_root: &Path) -> PyResult<()> {
 }
 
 fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: ExecuteCommand) {
-    let source = std::fs::read_to_string(&command.path)
-        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-        .and_then(|source| {
-            Python::attach(|py| {
-                let module = py.import("_pokecon_script")?;
-                module.getattr("_run_source")?.call1((
-                    source,
-                    command.path.to_string_lossy().as_ref(),
-                    &command.class_name,
-                ))?;
-                Ok(())
-            })
-        });
-    let mut outcome = match source {
+    let mut outcome = match invoke_command(&command) {
         Ok(()) => ScriptExecutionOutcome::Completed,
         Err(error) => Python::attach(|py| {
             let stopped = py
@@ -511,6 +609,70 @@ fn execute_command(config: &PythonActorConfig, state: &ExecutionState, command: 
         execution_id: command.id,
         outcome,
     });
+}
+
+fn invoke_command(command: &ExecuteCommand) -> PyResult<()> {
+    let source = std::fs::read_to_string(&command.path)
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    Python::attach(|py| {
+        let module = py.import("_pokecon_script")?;
+        module.getattr("_run_source")?.call1((
+            source,
+            command.path.to_string_lossy().as_ref(),
+            &command.class_name,
+            serde_json::to_string(&command.tags)
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        ))?;
+        Ok(())
+    })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PythonDiscoveredClass {
+    name: String,
+    class_name: String,
+    manual_tags: Vec<String>,
+    kind: ScriptCommandKind,
+}
+
+fn discover_commands(
+    sources: &[DiscoverSource],
+) -> Result<Vec<ScriptDiscoveredCommand>, PythonActorError> {
+    let mut commands = Vec::new();
+    for source in sources {
+        let content = std::fs::read_to_string(&source.path)
+            .map_err(|error| PythonActorError::new("ScriptReadError", error.to_string()))?;
+        let encoded = Python::attach(|py| -> PyResult<String> {
+            py.import("_pokecon_script")?
+                .getattr("_discover_source")?
+                .call1((
+                    content,
+                    source.path.to_string_lossy().as_ref(),
+                    &source.module_path,
+                ))?
+                .extract()
+        })
+        .map_err(|error| PythonActorError::new("ScriptDiscoveryError", error.to_string()))?;
+        let discovered = serde_json::from_str::<Vec<PythonDiscoveredClass>>(&encoded)
+            .map_err(|error| PythonActorError::new("ScriptDiscoveryError", error.to_string()))?;
+        commands.extend(
+            discovered
+                .into_iter()
+                .map(|discovered| ScriptDiscoveredCommand {
+                    command: pokecon_dynamic::CommandInfo {
+                        name: discovered.name,
+                        module_path: source.module_path.clone(),
+                        class_name: discovered.class_name,
+                        tags: source.automatic_tags.clone(),
+                    },
+                    relative_path: source.relative_path.clone(),
+                    manual_tags: discovered.manual_tags,
+                    kind: discovered.kind,
+                }),
+        );
+    }
+    Ok(commands)
 }
 
 fn validate_runtime_surface(py: Python<'_>) -> PyResult<()> {
@@ -630,6 +792,10 @@ impl PyApi {
 
     fn is_alive(&self) -> bool {
         self.state.alive.load(Ordering::Acquire)
+    }
+
+    fn execution_checkpoint(&self, py: Python<'_>) -> bool {
+        py.detach(|| self.state.checkpoint())
     }
 
     fn finish(&self) {
@@ -928,11 +1094,13 @@ class Command(metaclass=CommandMeta):
 
 
 def _monitor_stop(_code, _offset):
-    if _api.is_executing() and not _api.is_alive():
+    if _api.is_executing() and not _api.execution_checkpoint():
         current = globals().get("_current")
         command = None if current is None else getattr(current, "command", None)
         if command is not None:
-            command._stop_cleanup()
+            cleanup = getattr(command, "_stop_cleanup", None)
+            if cleanup is not None:
+                cleanup()
         raise StopThread()
 
 
@@ -3386,7 +3554,63 @@ python_commands.bridge_functions = bridge_package
 bridge_package.bridge_functions = bridge_module
 
 
-def _run_source(source, path, class_name):
+def _manual_tags(command):
+    tags = getattr(command, "TAGS", None)
+    if tags is None:
+        return []
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        raise TypeError("command TAGS must be list[str] or None")
+    return tags.copy()
+
+
+def _discover_source(source, path, module_path):
+    namespace = {
+        "__name__": module_path,
+        "__file__": path,
+        "__package__": module_path.rpartition(".")[0],
+        "__builtins__": __builtins__,
+    }
+    exec(compile(source, path, "exec"), namespace, namespace)
+    commands = []
+    for symbol, value in namespace.items():
+        if (
+            isinstance(value, type)
+            and value.__module__ == module_path
+            and issubclass(value, PythonCommand)
+        ):
+            implementation = _inspect.getattr_static(value, "do", None)
+            if isinstance(implementation, (classmethod, staticmethod)):
+                implementation = implementation.__func__
+            if implementation is None or getattr(
+                implementation, "__pokecon_abstract_command_method__", False
+            ):
+                continue
+            name = getattr(value, "NAME", symbol)
+            kind = "python"
+        elif isinstance(value, McuCommand):
+            name = getattr(value, "NAME", value.sync_name)
+            kind = "mcu"
+        else:
+            continue
+        if not isinstance(name, str):
+            raise TypeError("command NAME must be str")
+        commands.append(
+            {
+                "name": name,
+                "class_name": symbol,
+                "manual_tags": _manual_tags(value),
+                "kind": kind,
+            }
+        )
+    return _json.dumps(
+        commands,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+
+def _run_source(source, path, class_name, tags_json):
     namespace = {
         "__name__": f"__pokecon_user_{class_name}",
         "__file__": path,
@@ -3394,19 +3618,36 @@ def _run_source(source, path, class_name):
     }
     exec(compile(source, path, "exec"), namespace, namespace)
     command_type = namespace.get(class_name)
-    if not isinstance(command_type, type) or not issubclass(command_type, PythonCommand):
-        raise TypeError(f"{class_name!r} is not a PythonCommand subclass")
-    if issubclass(command_type, ImageProcPythonCommand):
-        camera = Camera()
-        command = command_type(camera, CaptureArea(camera))
+    tags = _json.loads(tags_json)
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        raise TypeError("command tags must be list[str]")
+    if isinstance(command_type, McuCommand):
+        command = command_type
+        command.TAGS = tags.copy()
+        sender = Sender()
+        command.start(sender, None)
+        _current.command = command
+        try:
+            while _api.execution_checkpoint():
+                _time.sleep(0.02)
+        finally:
+            command.end(sender)
+            _current.command = None
     else:
-        command = command_type()
-    command.isRunning = True
-    _current.command = command
-    try:
-        command.do()
-    finally:
-        command.isRunning = False
-        _reset_dialogs()
-        _current.command = None
+        if not isinstance(command_type, type) or not issubclass(command_type, PythonCommand):
+            raise TypeError(f"{class_name!r} is not a PythonCommand subclass")
+        command_type.TAGS = tags.copy()
+        if issubclass(command_type, ImageProcPythonCommand):
+            camera = Camera()
+            command = command_type(camera, CaptureArea(camera))
+        else:
+            command = command_type()
+        command.isRunning = True
+        _current.command = command
+        try:
+            command.do()
+        finally:
+            command.isRunning = False
+            _reset_dialogs()
+            _current.command = None
 "#;

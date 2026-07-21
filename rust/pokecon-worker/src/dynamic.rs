@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use pokecon_dynamic::protocol::{
-    self, DynamicDiagnostic, DynamicEmitRequest, DynamicEmitResult, DynamicInitializeRequest,
-    DynamicInitializeResult, DynamicTagMatchRequest, DynamicWorkerStatus, HostControllerUpdate,
-    HostProfileSwitchRequest, HostSetStateValueRequest, HostSettings, HostSettingsChanges,
-    HostState,
+    self, DynamicCommandCacheRequest, DynamicCommandCacheResult, DynamicDiagnostic,
+    DynamicEmitRequest, DynamicEmitResult, DynamicInitializeRequest, DynamicInitializeResult,
+    DynamicTagMatchRequest, DynamicWorkerStatus, HostControllerUpdate, HostProfileSwitchRequest,
+    HostSetStateValueRequest, HostSettings, HostSettingsChanges, HostState,
 };
 use pokecon_dynamic::{
     CommandDisplayItem, CommandInfo, Diagnostic, DynamicConfigControl, DynamicEngine,
@@ -113,6 +113,7 @@ impl DynamicWorkerRuntime {
                 | protocol::EMIT
                 | protocol::SORT_COMMANDS
                 | protocol::TAG_MATCHES
+                | protocol::BUILD_COMMAND_CACHE
         )
     }
 
@@ -183,6 +184,18 @@ impl DynamicWorkerRuntime {
                 let result = self
                     .run_engine(move |engine, handle| {
                         handle.block_on(engine.tag_matches(&request.selected_tag, &request.command))
+                    })
+                    .await?;
+                serialize_dispatch(&result)
+            }
+            protocol::BUILD_COMMAND_CACHE => {
+                let request = deserialize_value::<DynamicCommandCacheRequest>(payload)
+                    .map_err(|error| DispatchError::invalid_payload(&error))?;
+                let result = self
+                    .run_engine(move |engine, handle| {
+                        handle.block_on(
+                            engine.build_command_cache(request.generation, request.candidates),
+                        )
                     })
                     .await?;
                 serialize_dispatch(&result)
@@ -548,6 +561,28 @@ impl DynamicWorkerClient {
             &DynamicTagMatchRequest {
                 selected_tag: selected_tag.to_owned(),
                 command: command.clone(),
+            },
+        )
+        .await
+    }
+
+    /// Builds all finite tag lists sequentially and returns only a complete or
+    /// explicitly superseded generation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, remote-engine, or payload failure.
+    pub async fn build_command_cache(
+        &self,
+        generation: u64,
+        candidates: &[CommandInfo],
+    ) -> Result<DynamicCommandCacheResult, DynamicClientError> {
+        self.request(
+            OperationClass::MutatingResource,
+            protocol::BUILD_COMMAND_CACHE,
+            &DynamicCommandCacheRequest {
+                generation,
+                candidates: candidates.to_vec(),
             },
         )
         .await

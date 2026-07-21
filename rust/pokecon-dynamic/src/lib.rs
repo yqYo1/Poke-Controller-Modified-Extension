@@ -21,8 +21,9 @@ pub use callback::{
     Invocation, InvocationContext, NoopDiagnosticSink, TimeoutStage,
 };
 pub use command::{
-    CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo, CommandOptionField,
-    CommandOptionValue, CommandRegistry, SORT_HANDLER_ID, TAG_MATCH_HANDLER_ID,
+    CommandCacheBuildResult, CommandCallbackKind, CommandDisplayCache, CommandDisplayItem,
+    CommandError, CommandInfo, CommandOptionField, CommandOptionValue, CommandRegistry,
+    SORT_HANDLER_ID, TAG_MATCH_HANDLER_ID,
 };
 pub use control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult, DynamicSource};
 pub use engine::{DynamicEngine, DynamicEngineError};

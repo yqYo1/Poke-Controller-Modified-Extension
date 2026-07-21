@@ -3,6 +3,7 @@
 pub mod api;
 pub mod openapi;
 pub mod paths;
+pub mod state;
 
 use std::io;
 use std::net::SocketAddr;

@@ -118,6 +118,7 @@
           setupWorkdir = ''
             export POKECON_BUILD_UV_PATH="${pkgs.uv}/bin/uv"
             export POKECON_BUILD_UV_VERSION="${pkgs.uv.version}"
+            export PYO3_PYTHON="${pythonEnv}/bin/python"
             caller_dir="$PWD"
             if [ -w "$caller_dir" ]; then
               export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-$caller_dir/target/nix-tasks}"
@@ -148,6 +149,7 @@
           ];
           rustTaskInputs = [
             rustToolchain
+            pythonEnv
             pkgs.pkg-config
             pkgs.stdenv.cc
           ]
@@ -269,7 +271,6 @@
             build = mkTask {
               name = "build";
               runtimeInputs = rustTaskInputs ++ [
-                pythonEnv
                 pkgs.maturin
               ];
               text = ''
@@ -284,7 +285,6 @@
             contract-check = mkTask {
               name = "contract-check";
               runtimeInputs = rustTaskInputs ++ [
-                pythonEnv
                 pkgs.basedpyright
                 pkgs.shellcheck
               ];
@@ -404,7 +404,6 @@
             maturin-develop = mkTask {
               name = "maturin-develop";
               runtimeInputs = rustTaskInputs ++ [
-                pythonEnv
                 pkgs.maturin
               ];
               text = ''
@@ -556,7 +555,6 @@
             check = mkTask {
               name = "check";
               runtimeInputs = rustTaskInputs ++ [
-                pythonEnv
                 pkgs.basedpyright
                 pkgs.markdownlint-cli
                 pkgs.ripgrep
@@ -646,7 +644,6 @@
 
           devShells.default = pkgs.mkShell {
             packages = rustTaskInputs ++ [
-              pythonEnv
               config.treefmt.build.wrapper
               pkgs.basedpyright
               pkgs.cargo-tauri

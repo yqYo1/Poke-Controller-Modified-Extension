@@ -3,6 +3,7 @@
 pub mod dynamic;
 pub mod generation;
 pub mod ipc;
+pub mod script;
 pub mod supervisor;
 
 use std::collections::BTreeMap;
@@ -17,6 +18,7 @@ use crate::dynamic::DynamicWorkerRuntime;
 use crate::ipc::{
     ConnectionConfig, ConnectionError, Envelope, IpcConnection, IpcErrorPayload, IpcValue,
 };
+use crate::script::ScriptWorkerRuntime;
 
 /// Worker roles isolated by the process model in the specification.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -101,6 +103,8 @@ async fn run_protocol(
 ) -> Result<(), WorkerError> {
     let mut dynamic =
         (kind == WorkerKind::Dynamic).then(|| DynamicWorkerRuntime::new(connection.clone()));
+    let mut script =
+        (kind == WorkerKind::Script).then(|| ScriptWorkerRuntime::new(connection.clone()));
     loop {
         let envelope = tokio::select! {
             biased;
@@ -110,6 +114,12 @@ async fn run_protocol(
         let Envelope::Request { id, op, payload } = envelope else {
             continue;
         };
+        if ScriptWorkerRuntime::handles(&op)
+            && let Some(runtime) = &mut script
+        {
+            runtime.handle(id, op, payload).await?;
+            continue;
+        }
         if DynamicWorkerRuntime::handles(&op)
             && let Some(runtime) = &mut dynamic
         {
@@ -134,6 +144,9 @@ async fn run_protocol(
                     .await?;
             }
             "worker.shutdown" => {
+                if let Some(runtime) = &mut script {
+                    runtime.shutdown().await;
+                }
                 let response = connection.respond(id, Some(op), IpcValue::Nil).await;
                 shutdown.request(ShutdownReason::WorkerStop);
                 return match response {

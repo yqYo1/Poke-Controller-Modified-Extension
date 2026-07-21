@@ -2741,8 +2741,10 @@ name = "pokecon-worker"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "pokecon-contracts",
  "pokecon-core",
  "pokecon-dynamic",
+ "pyo3",
  "rmp-serde",
  "serde",
  "serde_json",

@@ -25,11 +25,70 @@ fn rust_main_starts_and_exits_cleanly_in_both_modes() {
         let mut command = Command::new(env!("CARGO_BIN_EXE_pokecon"));
         isolate_std_command(&mut command, &roots);
         let status = command
-            .args(["--ui", ui_mode, "--port", &port, "--exit-after-startup"])
+            .args([
+                "--ui",
+                ui_mode,
+                "--port",
+                &port,
+                "--dynamic-config-language",
+                "none",
+                "--exit-after-startup",
+            ])
             .status()
             .expect("PokeCon process must start");
         assert!(status.success(), "{ui_mode} startup probe failed");
     }
+}
+
+#[test]
+fn dynamic_events_run_at_application_lifecycle_boundaries() {
+    let roots = TempDir::new().expect("isolated roots must exist");
+    let config_root = roots.path().join("config").join("pokecon");
+    std::fs::create_dir_all(&config_root).expect("isolated config root must exist");
+    std::fs::write(
+        config_root.join("init.lua"),
+        r#"
+pokecon.autocmd.on("AppStartupPost", {
+    callback = function()
+        print("dynamic-startup-event")
+    end,
+})
+pokecon.autocmd.on("AppShutdownPre", {
+    callback = function()
+        print("dynamic-shutdown-event")
+    end,
+})
+"#,
+    )
+    .expect("dynamic fixture must be written");
+
+    let port = unused_local_port().to_string();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_pokecon"));
+    isolate_std_command(&mut command, &roots);
+    let output = command
+        .args([
+            "--port",
+            &port,
+            "--dynamic-config-language",
+            "lua",
+            "--exit-after-startup",
+        ])
+        .output()
+        .expect("PokeCon dynamic startup probe must run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "dynamic startup probe failed: stdout={stdout}; stderr={stderr}"
+    );
+    assert!(
+        stdout.contains("dynamic-startup-event"),
+        "startup event output is missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("dynamic-shutdown-event"),
+        "shutdown event output is missing: {stdout}"
+    );
 }
 
 #[cfg(unix)]
@@ -42,7 +101,12 @@ async fn operating_system_signals_use_the_clean_shutdown_path() {
         let mut command = TokioCommand::new(env!("CARGO_BIN_EXE_pokecon"));
         isolate_tokio_command(&mut command, &roots);
         let mut child = command
-            .args(["--port", &port_argument])
+            .args([
+                "--port",
+                &port_argument,
+                "--dynamic-config-language",
+                "none",
+            ])
             .spawn()
             .expect("PokeCon process must start");
         wait_until_listening(&mut child, port).await;
@@ -99,6 +163,7 @@ fn isolate_std_command(command: &mut Command, roots: &TempDir) {
         command.env(name, value);
     }
     command.env("LOCALAPPDATA", roots.path().join("localappdata"));
+    command.env("RUST_LOG", "info");
 }
 
 #[cfg(unix)]
@@ -107,6 +172,7 @@ fn isolate_tokio_command(command: &mut TokioCommand, roots: &TempDir) {
         command.env(name, value);
     }
     command.env("LOCALAPPDATA", roots.path().join("localappdata"));
+    command.env("RUST_LOG", "info");
 }
 
 #[cfg(unix)]

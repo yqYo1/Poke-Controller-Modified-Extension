@@ -28,6 +28,7 @@ pokecon-worker = { path = "../pokecon-worker" }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

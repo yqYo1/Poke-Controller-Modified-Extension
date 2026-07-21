@@ -2,12 +2,12 @@ use std::net::{AddrParseError, IpAddr, SocketAddr};
 use std::num::TryFromIntError;
 
 use clap::{Parser, ValueEnum};
-use pokecon_app::{AppError, AppOptions, UiMode, run};
+use pokecon_app::dynamic_runtime::bootstrap_dynamic;
+use pokecon_app::{AppError, AppOptions, UiMode, run_with_dynamic};
 use pokecon_core::{TracingInitError, init_tracing};
 use pokecon_settings::pipeline::{PipelineError, PipelineRequest, SettingsPipeline};
 use pokecon_settings::scaffold::{ScaffoldError, ScaffoldManager};
 use pokecon_settings::service::{NoopSettingsApplier, SettingsService};
-use pokecon_settings::uv::{ManagedUv, ManagedUvSource, UvError};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -46,10 +46,6 @@ enum MainError {
     Settings(#[from] PipelineError),
     #[error(transparent)]
     Scaffold(#[from] ScaffoldError),
-    #[error(transparent)]
-    Uv(#[from] UvError),
-    #[error("packaged application is missing its pinned managed uv executable")]
-    MissingManagedUv,
     #[error("canonical server.bind_address is not a numeric IP literal")]
     BindAddress(#[from] AddrParseError),
     #[error("canonical server.port is outside the u16 range")]
@@ -58,23 +54,34 @@ enum MainError {
 
 #[tokio::main]
 async fn main() -> Result<(), MainError> {
-    let loaded = SettingsPipeline::new(PipelineRequest::current()?).load()?;
-    ScaffoldManager::new(loaded.roots.clone()).ensure(loaded.active_profile.as_str())?;
-    let managed_uv_source = ManagedUvSource::bundled()?.ok_or(MainError::MissingManagedUv)?;
-    let _managed_uv = ManagedUv::prepare(&loaded.roots, &managed_uv_source)?;
-    let cli = Cli::parse_from(&loaded.remaining_arguments);
+    let request = PipelineRequest::current()?;
+    let before_dynamic = SettingsPipeline::new(request.clone()).load_before_dynamic()?;
+    let cli = Cli::parse_from(&before_dynamic.remaining_arguments);
+    init_tracing("info")?;
+    ScaffoldManager::new(before_dynamic.roots.clone())
+        .ensure(before_dynamic.active_profile.as_str())?;
+    let bootstrap = bootstrap_dynamic(request, before_dynamic).await?;
+    if let Some(error) = bootstrap.startup_failure.as_ref() {
+        tracing::error!(
+            error = %error,
+            "dynamic configuration is unavailable; continuing with static settings"
+        );
+    }
+    let loaded = bootstrap.loaded;
     let bind_address = loaded
         .settings
         .string("server.bind_address")?
         .parse::<IpAddr>()?;
     let port = u16::try_from(loaded.settings.integer("server.port")?)?;
     let _settings_service = SettingsService::new(loaded, Box::<NoopSettingsApplier>::default());
-    init_tracing("info")?;
-    run(AppOptions {
-        listen_address: SocketAddr::new(bind_address, port),
-        ui_mode: cli.ui.into(),
-        exit_after_startup: cli.exit_after_startup,
-    })
+    run_with_dynamic(
+        AppOptions {
+            listen_address: SocketAddr::new(bind_address, port),
+            ui_mode: cli.ui.into(),
+            exit_after_startup: cli.exit_after_startup,
+        },
+        bootstrap.runtime,
+    )
     .await?;
     Ok(())
 }

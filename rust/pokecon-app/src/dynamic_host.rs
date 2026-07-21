@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use parking_lot::Mutex;
 use pokecon_contracts::model::Scope;
@@ -32,6 +32,7 @@ pub struct DynamicControllerSafety {
     source: InputSourceId,
     generation: InputGeneration,
     sequence: AtomicU64,
+    accepting: AtomicBool,
 }
 
 impl DynamicControllerSafety {
@@ -48,10 +49,15 @@ impl DynamicControllerSafety {
             source,
             generation,
             sequence: AtomicU64::new(0),
+            accepting: AtomicBool::new(true),
         }
     }
 
     fn update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
+        let mut arbiter = self.arbiter.lock();
+        if !self.accepting.load(Ordering::Acquire) {
+            return Err(host_stopping());
+        }
         let sequence = self
             .sequence
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
@@ -64,9 +70,7 @@ impl DynamicControllerSafety {
                 )
             })?
             .saturating_add(1);
-        let result = self
-            .arbiter
-            .lock()
+        let result = arbiter
             .apply_event(
                 &self.source,
                 &self.generation,
@@ -85,6 +89,9 @@ impl DynamicControllerSafety {
 
     fn reset(&self) -> Result<(), DynamicHostError> {
         let mut arbiter = self.arbiter.lock();
+        if !self.accepting.load(Ordering::Acquire) {
+            return Err(host_stopping());
+        }
         initialize_dynamic_source(&mut arbiter, &self.source, &self.generation)
             .map_err(|error| input_error(&error))?;
         self.sequence.store(0, Ordering::Release);
@@ -100,6 +107,7 @@ impl DynamicControllerSafety {
 
 impl ResourceSafety for DynamicControllerSafety {
     fn force_release(&self) {
+        self.accepting.store(false, Ordering::Release);
         self.arbiter.lock().disconnect_source(&self.source);
     }
 }
@@ -151,6 +159,7 @@ struct StartupHostState {
     outputs: Vec<String>,
     command_recompute_requests: u64,
     startup_complete: bool,
+    stopping: bool,
 }
 
 /// Dynamic host used from worker creation through top-level config commit.
@@ -185,6 +194,7 @@ impl StartupDynamicHost {
                 outputs: Vec::new(),
                 command_recompute_requests: 0,
                 startup_complete: false,
+                stopping: false,
             }),
             controller: Arc::new(DynamicControllerSafety::new()),
         })
@@ -198,12 +208,13 @@ impl StartupDynamicHost {
     /// Returns a canonical final-pipeline or state projection error.
     pub fn finish_startup(&self) -> Result<LoadedSettings, DynamicHostError> {
         let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
         let mut request = inner.request.clone();
         request.dynamic_values.clone_from(&inner.dynamic_values);
         let loaded = SettingsPipeline::new(request)
             .load()
             .map_err(|error| pipeline_error(&error))?;
-        let public_state = startup_state(&loaded)?;
+        let public_state = refreshed_state(&loaded, Some(&inner.public_state))?;
         inner.loaded = loaded.clone();
         inner.public_state = public_state;
         inner.startup_complete = true;
@@ -238,6 +249,13 @@ impl StartupDynamicHost {
         self.inner.lock().command_recompute_requests
     }
 
+    /// Closes every mutating host boundary and immediately releases dynamic
+    /// controller ownership before worker shutdown begins.
+    pub fn begin_stopping(&self) {
+        self.inner.lock().stopping = true;
+        self.controller.force_release();
+    }
+
     fn current_settings(inner: &StartupHostState) -> BTreeMap<String, Value> {
         inner
             .loaded
@@ -253,6 +271,7 @@ impl StartupDynamicHost {
         changes: &BTreeMap<String, Value>,
     ) -> Result<BTreeMap<String, Value>, DynamicHostError> {
         let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
         if inner.startup_complete {
             return Self::apply_runtime_settings(&mut inner, changes);
         }
@@ -269,7 +288,7 @@ impl StartupDynamicHost {
         let loaded = SettingsPipeline::new(request)
             .load_through_dynamic()
             .map_err(|error| pipeline_error(&error))?;
-        let public_state = startup_state(&loaded)?;
+        let public_state = refreshed_state(&loaded, Some(&inner.public_state))?;
         inner.dynamic_values = dynamic_values;
         inner.loaded = loaded;
         inner.public_state = public_state;
@@ -316,7 +335,7 @@ impl StartupDynamicHost {
             runtime_dynamic_values.extend(changes.clone());
             (loaded, runtime_dynamic_values)
         };
-        let public_state = startup_state(&loaded)?;
+        let public_state = refreshed_state(&loaded, Some(&inner.public_state))?;
         inner.loaded = loaded;
         inner.runtime_dynamic_values = runtime_dynamic_values;
         inner.public_state = public_state;
@@ -374,10 +393,9 @@ impl DynamicHost for StartupDynamicHost {
                 ));
             }
         };
-        self.inner
-            .lock()
-            .public_state
-            .insert(name.to_owned(), value);
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        inner.public_state.insert(name.to_owned(), value);
         Ok(())
     }
 
@@ -392,6 +410,7 @@ impl DynamicHost for StartupDynamicHost {
     fn profile_switch(&self, name: &str) -> Result<bool, DynamicHostError> {
         {
             let inner = self.inner.lock();
+            ensure_running(&inner)?;
             if validate_existing_profile(&inner.loaded, name).is_err() {
                 return Ok(false);
             }
@@ -404,10 +423,12 @@ impl DynamicHost for StartupDynamicHost {
     }
 
     fn controller_update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
+        ensure_running(&self.inner.lock())?;
         self.controller.update(update)
     }
 
     fn controller_reset(&self) -> Result<(), DynamicHostError> {
+        ensure_running(&self.inner.lock())?;
         self.controller.reset()
     }
 
@@ -438,8 +459,25 @@ impl DynamicHost for StartupDynamicHost {
 
     fn request_command_recompute(&self) {
         let mut inner = self.inner.lock();
-        inner.command_recompute_requests = inner.command_recompute_requests.saturating_add(1);
+        if !inner.stopping {
+            inner.command_recompute_requests = inner.command_recompute_requests.saturating_add(1);
+        }
     }
+}
+
+fn ensure_running(inner: &StartupHostState) -> Result<(), DynamicHostError> {
+    if inner.stopping {
+        Err(host_stopping())
+    } else {
+        Ok(())
+    }
+}
+
+fn host_stopping() -> DynamicHostError {
+    DynamicHostError::new(
+        "HostStopping",
+        "dynamic host no longer accepts mutating operations",
+    )
 }
 
 fn pipeline_error(error: &PipelineError) -> DynamicHostError {
@@ -543,6 +581,31 @@ fn startup_state(loaded: &LoadedSettings) -> Result<BTreeMap<String, Value>, Dyn
         ("holding_buttons".to_owned(), Value::Array(Vec::new())),
         ("pid".to_owned(), Value::from(std::process::id())),
     ]))
+}
+
+fn refreshed_state(
+    loaded: &LoadedSettings,
+    previous: Option<&BTreeMap<String, Value>>,
+) -> Result<BTreeMap<String, Value>, DynamicHostError> {
+    let mut state = startup_state(loaded)?;
+    if let Some(previous) = previous {
+        for name in [
+            "serial_connected",
+            "camera_opened",
+            "is_running",
+            "command_state",
+            "current_command",
+            "command_candidates",
+            "tags",
+            "pending_profile",
+            "last_input",
+        ] {
+            if let Some(value) = previous.get(name) {
+                state.insert(name.to_owned(), value.clone());
+            }
+        }
+    }
+    Ok(state)
 }
 
 fn holding_buttons(state: ControllerState) -> Value {
@@ -664,6 +727,23 @@ mod tests {
         assert_eq!(
             host.set_state_value("pid", json!(1)).unwrap_err().code,
             "ReadOnlyState"
+        );
+        host.apply_settings(&BTreeMap::from([("language".to_owned(), json!("en"))]))
+            .expect("settings refresh must succeed");
+        assert_eq!(
+            host.state_snapshot().unwrap()["tags"],
+            json!(["same", "different"])
+        );
+        host.begin_stopping();
+        assert_eq!(
+            host.set_state_value("tags", json!([])).unwrap_err().code,
+            "HostStopping"
+        );
+        assert_eq!(
+            host.controller_update(ControllerUpdate::default())
+                .unwrap_err()
+                .code,
+            "HostStopping"
         );
     }
 }

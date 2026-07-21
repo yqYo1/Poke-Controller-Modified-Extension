@@ -43,6 +43,7 @@ struct BootstrapResolution {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResolutionStage {
     BeforeDynamic,
+    ThroughDynamic,
     Complete,
 }
 
@@ -194,6 +195,39 @@ impl ResolvedSettings {
             .and_then(|resolved| resolved.value.as_bool())
             .ok_or_else(|| PipelineError::TypedLookup(id.to_owned()))
     }
+
+    fn with_dynamic_changes(
+        &self,
+        changes: &BTreeMap<String, Value>,
+        roots: &EffectiveRoots,
+        request: &PipelineRequest,
+    ) -> Result<Self, PipelineError> {
+        let mut values = self.values.clone();
+        let mut package_sources = self.package_sources.clone();
+        for (id, raw) in changes {
+            let setting = setting_by_id(&self.registry, id)?;
+            if setting.scope == Scope::Bootstrap || setting.surfaces.dynamic.name.is_none() {
+                return Err(PipelineError::UnsupportedDynamic(id.clone()));
+            }
+            let value =
+                normalize_value(setting, raw.clone(), SettingSource::Dynamic, roots, request)?;
+            insert_resolved(
+                setting,
+                value,
+                SettingSource::Dynamic,
+                roots,
+                request,
+                &mut values,
+                Some(&mut package_sources),
+            )?;
+        }
+        validate_snapshot(&values)?;
+        Ok(Self {
+            registry: self.registry.clone(),
+            values,
+            package_sources,
+        })
+    }
 }
 
 /// All deterministic inputs to settings resolution.
@@ -261,6 +295,59 @@ pub struct LoadedSettings {
     pub(crate) recipe: ResolutionRecipe,
 }
 
+impl LoadedSettings {
+    /// Applies post-startup dynamic assignments after the completed CLI layer
+    /// without persisting them.
+    ///
+    /// # Errors
+    ///
+    /// Returns a canonical dynamic-surface, normalization, package, or
+    /// cross-setting validation error without changing this snapshot.
+    pub fn with_runtime_dynamic_changes(
+        &self,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<Self, PipelineError> {
+        let mut next = self.clone();
+        next.settings =
+            self.settings
+                .with_dynamic_changes(changes, &self.roots, &self.recipe.request)?;
+        Ok(next)
+    }
+
+    /// Resolves an existing profile in memory without updating global TOML.
+    /// Startup dynamic values and ordinary CLI values are reapplied before the
+    /// runtime profile selection is forced as the current value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a safe-component, missing-directory, persistence, or canonical
+    /// resolution error.
+    pub fn switch_profile_in_memory(&self, profile_name: &str) -> Result<Self, PipelineError> {
+        let profile_name = SafeComponent::new(profile_name)?;
+        let profile_directory = self
+            .roots
+            .config
+            .join("profiles")
+            .join(profile_name.as_str());
+        if !profile_directory.is_dir() {
+            return Err(PipelineError::ProfileNotFound);
+        }
+        let mut settings = self.recipe.resolve_profile(profile_name.as_str())?;
+        settings.values.insert(
+            "active_profile".to_owned(),
+            ResolvedValue {
+                value: Value::String(profile_name.as_str().to_owned()),
+                source: SettingSource::Dynamic,
+            },
+        );
+        let mut next = self.clone();
+        next.settings = settings;
+        next.active_profile = profile_name;
+        next.profile_settings_path = next.roots.profile_settings(next.active_profile.as_str())?;
+        Ok(next)
+    }
+}
+
 impl fmt::Debug for LoadedSettings {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -315,6 +402,19 @@ impl SettingsPipeline {
     /// TOML, path, type, scope, or cross-setting validation failures.
     pub fn load_before_dynamic(self) -> Result<LoadedSettings, PipelineError> {
         self.load_stage(ResolutionStage::BeforeDynamic)
+    }
+
+    /// Resolves through dynamic top-level assignments while keeping ordinary
+    /// CLI settings deferred. Bootstrap CLI values remain available as the
+    /// worker-construction baseline and may not themselves be changed by the
+    /// dynamic surface.
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe error for registry, bootstrap, environment,
+    /// dynamic, TOML, path, type, scope, or cross-setting validation failures.
+    pub fn load_through_dynamic(self) -> Result<LoadedSettings, PipelineError> {
+        self.load_stage(ResolutionStage::ThroughDynamic)
     }
 
     fn load_stage(self, stage: ResolutionStage) -> Result<LoadedSettings, PipelineError> {
@@ -720,7 +820,7 @@ fn resolve_layers(
         Some(&mut package_sources),
     )?;
     match stage {
-        ResolutionStage::BeforeDynamic => apply_cli(
+        ResolutionStage::BeforeDynamic | ResolutionStage::ThroughDynamic => apply_cli(
             registry,
             &parsed_cli.assignments,
             true,
@@ -748,6 +848,16 @@ fn resolve_layers(
                 Some(&mut package_sources),
             )?;
         }
+    }
+    if stage == ResolutionStage::ThroughDynamic {
+        apply_dynamic(
+            registry,
+            &request.dynamic_values,
+            roots,
+            request,
+            &mut values,
+            Some(&mut package_sources),
+        )?;
     }
     Ok(LayerResolution {
         values,
@@ -1179,6 +1289,8 @@ pub enum PipelineError {
     CrossSetting(String),
     #[error("canonical setting {0} has an unexpected resolved type")]
     TypedLookup(String),
+    #[error("profile directory does not exist")]
+    ProfileNotFound,
     #[error("startup current directory is unavailable: {0}")]
     CurrentDirectory(std::io::Error),
     #[error("current executable is unavailable: {0}")]
@@ -1273,9 +1385,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pre_dynamic_snapshot_applies_only_bootstrap_cli_settings() {
-        let temp = TempDir::new().expect("temporary directory must exist");
+    fn staged_request(temp: &TempDir) -> PipelineRequest {
         let profile = temp.path().join("config/pokecon/profiles/CliProfile");
         fs::create_dir_all(&profile).expect("fixture dirs must exist");
         fs::write(
@@ -1283,8 +1393,15 @@ mod tests {
             "[ui]\nui_fps = 60\nui_fps_options = [15, 30, 60]\n",
         )
         .expect("profile fixture must be writable");
-        let pipeline_request = request(
-            &temp,
+        let dynamic_profile = temp.path().join("config/pokecon/profiles/DynamicProfile");
+        fs::create_dir_all(&dynamic_profile).expect("dynamic profile must exist");
+        fs::write(
+            dynamic_profile.join("settings.toml"),
+            "[ui]\nui_fps = 15\nui_fps_options = [15, 30, 60]\n",
+        )
+        .expect("dynamic profile fixture must be writable");
+        let mut pipeline_request = request(
+            temp,
             &[
                 "pokecon",
                 "--profile",
@@ -1293,11 +1410,26 @@ mod tests {
                 "python",
                 "--python-dynamic-packages-list",
                 r#"[{"name":"startup-only","version":">=1"}]"#,
+                "--language",
+                "en",
                 "--port",
                 "9000",
             ],
             &[("POKECON_PORT", "8123")],
         );
+        pipeline_request
+            .dynamic_values
+            .insert("active_profile".to_owned(), json!("DynamicProfile"));
+        pipeline_request
+            .dynamic_values
+            .insert("language".to_owned(), json!("ja"));
+        pipeline_request
+    }
+
+    #[test]
+    fn pre_dynamic_snapshot_applies_only_bootstrap_cli_settings() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let pipeline_request = staged_request(&temp);
 
         let before_dynamic = SettingsPipeline::new(pipeline_request.clone())
             .load_before_dynamic()
@@ -1339,9 +1471,36 @@ mod tests {
         assert_eq!(dynamic_packages.len(), 1);
         assert_eq!(dynamic_packages[0].kind, PackageSourceKind::CommandLine);
 
+        let through_dynamic = SettingsPipeline::new(pipeline_request.clone())
+            .load_through_dynamic()
+            .expect("dynamic settings must resolve before ordinary CLI");
+        assert_eq!(through_dynamic.active_profile.as_str(), "DynamicProfile");
+        assert_eq!(
+            through_dynamic
+                .settings
+                .string("language")
+                .expect("language must exist"),
+            "ja"
+        );
+        assert_eq!(
+            through_dynamic
+                .settings
+                .get("language")
+                .expect("language must exist")
+                .source,
+            SettingSource::Dynamic
+        );
         let complete = SettingsPipeline::new(pipeline_request)
             .load()
             .expect("complete settings must resolve");
+        assert_eq!(complete.active_profile.as_str(), "CliProfile");
+        assert_eq!(
+            complete
+                .settings
+                .string("language")
+                .expect("language must exist"),
+            "en"
+        );
         assert_eq!(
             complete
                 .settings
@@ -1356,6 +1515,31 @@ mod tests {
                 .expect("port must exist")
                 .source,
             SettingSource::CommandLine
+        );
+    }
+
+    #[test]
+    fn runtime_dynamic_overlay_follows_cli_and_switches_profile_in_memory() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let complete = SettingsPipeline::new(staged_request(&temp))
+            .load()
+            .expect("complete settings must resolve");
+        let runtime = complete
+            .with_runtime_dynamic_changes(&BTreeMap::from([("language".to_owned(), json!("ja"))]))
+            .expect("runtime dynamic value must follow CLI");
+        assert_eq!(runtime.settings.string("language").unwrap(), "ja");
+        assert_eq!(
+            runtime.settings.get("language").unwrap().source,
+            SettingSource::Dynamic
+        );
+        let switched = runtime
+            .switch_profile_in_memory("DynamicProfile")
+            .expect("runtime profile switch must be memory-only");
+        assert_eq!(switched.active_profile.as_str(), "DynamicProfile");
+        assert_eq!(switched.settings.integer("ui.fps").unwrap(), 15);
+        assert_eq!(
+            switched.settings.get("active_profile").unwrap().source,
+            SettingSource::Dynamic
         );
     }
 

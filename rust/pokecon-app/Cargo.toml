@@ -16,10 +16,16 @@ tauri-shell = ["pokecon-desktop/tauri-shell"]
 
 [dependencies]
 clap.workspace = true
+parking_lot.workspace = true
+pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-desktop = { path = "../pokecon-desktop" }
+pokecon-device = { path = "../pokecon-device" }
+pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-server = { path = "../pokecon-server" }
 pokecon-settings = { path = "../pokecon-settings" }
+pokecon-worker = { path = "../pokecon-worker" }
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

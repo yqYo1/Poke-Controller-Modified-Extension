@@ -1,5 +1,7 @@
 //! Top-level process orchestration for web and desktop modes.
 
+pub mod dynamic_host;
+
 use std::io;
 use std::net::SocketAddr;
 

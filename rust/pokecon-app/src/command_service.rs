@@ -713,6 +713,11 @@ impl CommandService {
         epoch: u64,
         result: Result<ScriptExecutionResult, CommandBackendError>,
     ) {
+        // Completion races with pause/resume/stop responses on a separate task.
+        // Keep the response transition and its completion observation in the
+        // same lifecycle lane so a successful stop cannot become
+        // `CommandNotRunning` or lose its `CommandStopPost` event.
+        let _lifecycle = self.lifecycle.lock().await;
         let (status, current_name, stop_post) = {
             let mut inner = self.inner.lock().await;
             if inner.execution_epoch != epoch {

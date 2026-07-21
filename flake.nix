@@ -143,6 +143,7 @@
             pkgs.glib
             pkgs.gtk3
             pkgs.harfbuzz
+            pkgs.linuxHeaders
             pkgs.libsoup_3
             pkgs.pango
             pkgs.portaudio
@@ -158,7 +159,9 @@
           ]
           ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ]
           ++ linuxDesktopPackages;
+          linuxBindgenArgs = lib.optionalString pkgs.stdenv.isLinux "-I${pkgs.stdenv.cc.libc.dev}/include -I${pkgs.linuxHeaders}/include";
           desktopEnvironment = lib.optionalString pkgs.stdenv.isLinux ''
+            export BINDGEN_EXTRA_CLANG_ARGS="${linuxBindgenArgs}"
             export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
@@ -197,6 +200,7 @@
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
             PYO3_PYTHON = "${pythonEnv}/bin/python";
+            BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
           };
         in

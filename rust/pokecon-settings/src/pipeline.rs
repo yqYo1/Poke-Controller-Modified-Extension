@@ -40,6 +40,12 @@ struct BootstrapResolution {
     active_profile: SafeComponent,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ResolutionStage {
+    BeforeDynamic,
+    Complete,
+}
+
 /// Provenance of one winning setting value.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -293,6 +299,25 @@ impl SettingsPipeline {
     /// Returns a secret-safe error for registry, CLI, environment, TOML, path,
     /// type, scope, or cross-setting validation failures.
     pub fn load(self) -> Result<LoadedSettings, PipelineError> {
+        self.load_stage(ResolutionStage::Complete)
+    }
+
+    /// Resolves the startup snapshot visible to the dynamic configuration
+    /// worker before `init.py`/`init.lua` is evaluated.
+    ///
+    /// Bootstrap CLI selectors are already applied because they choose the
+    /// profile and worker environment. Ordinary CLI settings remain excluded
+    /// until [`Self::load`] performs the final, highest-priority layer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe error for registry, bootstrap, environment,
+    /// TOML, path, type, scope, or cross-setting validation failures.
+    pub fn load_before_dynamic(self) -> Result<LoadedSettings, PipelineError> {
+        self.load_stage(ResolutionStage::BeforeDynamic)
+    }
+
+    fn load_stage(self, stage: ResolutionStage) -> Result<LoadedSettings, PipelineError> {
         let validated = settings_registry()?;
         let registry = validated.registry().clone();
         let parsed_cli = ParsedCli::parse(&registry, &self.request.arguments)?;
@@ -303,7 +328,8 @@ impl SettingsPipeline {
                 .roots
                 .profile_settings(bootstrap.active_profile.as_str())?,
         )?;
-        let mut resolution = resolve_full_layers(
+        let mut resolution = resolve_layers(
+            stage,
             &registry,
             &bootstrap.global,
             &profile,
@@ -321,7 +347,8 @@ impl SettingsPipeline {
         if active_profile != bootstrap.active_profile {
             let final_profile =
                 store.read(&bootstrap.roots.profile_settings(active_profile.as_str())?)?;
-            resolution = resolve_full_layers(
+            resolution = resolve_layers(
+                stage,
                 &registry,
                 &bootstrap.global,
                 &final_profile,
@@ -639,6 +666,26 @@ fn resolve_full_layers(
     request: &PipelineRequest,
     parsed_cli: &ParsedCli,
 ) -> Result<LayerResolution, PipelineError> {
+    resolve_layers(
+        ResolutionStage::Complete,
+        registry,
+        global,
+        profile,
+        roots,
+        request,
+        parsed_cli,
+    )
+}
+
+fn resolve_layers(
+    stage: ResolutionStage,
+    registry: &SettingsRegistry,
+    global: &SettingsDocument,
+    profile: &SettingsDocument,
+    roots: &EffectiveRoots,
+    request: &PipelineRequest,
+    parsed_cli: &ParsedCli,
+) -> Result<LayerResolution, PipelineError> {
     let mut values = defaults(registry, roots, &request.resource_root)?;
     let mut package_sources = PackageSources::new();
     let mut ignored = Vec::new();
@@ -672,23 +719,36 @@ fn resolve_full_layers(
         &mut values,
         Some(&mut package_sources),
     )?;
-    apply_dynamic(
-        registry,
-        &request.dynamic_values,
-        roots,
-        request,
-        &mut values,
-        Some(&mut package_sources),
-    )?;
-    apply_cli(
-        registry,
-        &parsed_cli.assignments,
-        false,
-        roots,
-        request,
-        &mut values,
-        Some(&mut package_sources),
-    )?;
+    match stage {
+        ResolutionStage::BeforeDynamic => apply_cli(
+            registry,
+            &parsed_cli.assignments,
+            true,
+            roots,
+            request,
+            &mut values,
+            Some(&mut package_sources),
+        )?,
+        ResolutionStage::Complete => {
+            apply_dynamic(
+                registry,
+                &request.dynamic_values,
+                roots,
+                request,
+                &mut values,
+                Some(&mut package_sources),
+            )?;
+            apply_cli(
+                registry,
+                &parsed_cli.assignments,
+                false,
+                roots,
+                request,
+                &mut values,
+                Some(&mut package_sources),
+            )?;
+        }
+    }
     Ok(LayerResolution {
         values,
         package_sources,
@@ -1138,7 +1198,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
-    use crate::package::{PythonWorker, VersionSelector};
+    use crate::package::{PackageSourceKind, PythonWorker, VersionSelector};
     use crate::roots::{BaseDirectories, RootEnvironment};
 
     fn request(
@@ -1210,6 +1270,92 @@ mod tests {
             loaded
                 .ignored_profile_global_settings
                 .contains(&"language".to_owned())
+        );
+    }
+
+    #[test]
+    fn pre_dynamic_snapshot_applies_only_bootstrap_cli_settings() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let profile = temp.path().join("config/pokecon/profiles/CliProfile");
+        fs::create_dir_all(&profile).expect("fixture dirs must exist");
+        fs::write(
+            profile.join("settings.toml"),
+            "[ui]\nui_fps = 60\nui_fps_options = [15, 30, 60]\n",
+        )
+        .expect("profile fixture must be writable");
+        let pipeline_request = request(
+            &temp,
+            &[
+                "pokecon",
+                "--profile",
+                "CliProfile",
+                "--dynamic-config-language",
+                "python",
+                "--python-dynamic-packages-list",
+                r#"[{"name":"startup-only","version":">=1"}]"#,
+                "--port",
+                "9000",
+            ],
+            &[("POKECON_PORT", "8123")],
+        );
+
+        let before_dynamic = SettingsPipeline::new(pipeline_request.clone())
+            .load_before_dynamic()
+            .expect("pre-dynamic settings must resolve");
+        assert_eq!(before_dynamic.active_profile.as_str(), "CliProfile");
+        assert_eq!(
+            before_dynamic
+                .settings
+                .string("dynamic_config_language")
+                .expect("language must exist"),
+            "python"
+        );
+        assert_eq!(
+            before_dynamic
+                .settings
+                .get("dynamic_config_language")
+                .expect("language must exist")
+                .source,
+            SettingSource::CommandLine
+        );
+        assert_eq!(
+            before_dynamic
+                .settings
+                .integer("server.port")
+                .expect("port must exist"),
+            8123
+        );
+        assert_eq!(
+            before_dynamic
+                .settings
+                .get("server.port")
+                .expect("port must exist")
+                .source,
+            SettingSource::Environment
+        );
+        let dynamic_packages = before_dynamic
+            .settings
+            .package_sources("python.dynamic.packages.list");
+        assert_eq!(dynamic_packages.len(), 1);
+        assert_eq!(dynamic_packages[0].kind, PackageSourceKind::CommandLine);
+
+        let complete = SettingsPipeline::new(pipeline_request)
+            .load()
+            .expect("complete settings must resolve");
+        assert_eq!(
+            complete
+                .settings
+                .integer("server.port")
+                .expect("port must exist"),
+            9000
+        );
+        assert_eq!(
+            complete
+                .settings
+                .get("server.port")
+                .expect("port must exist")
+                .source,
+            SettingSource::CommandLine
         );
     }
 

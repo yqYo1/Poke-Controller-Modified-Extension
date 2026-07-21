@@ -17,7 +17,15 @@ use crate::event::{HandlerId, RegistrationOptions};
 const LUA_BOOTSTRAP: &str = r##"
 local api = _pokecon_api
 local raw_pcall = pcall
+local raw_require = require
 local unpack_values = table.unpack or unpack
+
+function require(name)
+    if name == "Commands" or string.sub(name, 1, 9) == "Commands." then
+        error("module '" .. name .. "' not found", 2)
+    end
+    return raw_require(name)
+end
 
 local CallbackSoftTimeoutError = {
     __name = "CallbackSoftTimeoutError",
@@ -52,6 +60,14 @@ function pcall(...)
         result[2] = normalize_soft_timeout(result[2])
     end
     return unpack_values(result, 1, result.n)
+end
+
+function print(...)
+    local values = {}
+    for index = 1, select("#", ...) do
+        values[index] = tostring(select(index, ...))
+    end
+    api.record_output(table.concat(values, "\t"))
 end
 
 local function setting_namespace(prefix)
@@ -481,6 +497,15 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
             engine_from_weak(&weak)?
                 .controller_reset()
                 .map_err(|error| lua_error(&error))
+        })?,
+    )?;
+
+    let weak = engine.clone();
+    api.set(
+        "record_output",
+        lua.create_function(move |_, message: String| {
+            engine_from_weak(&weak)?.record_output(&message);
+            Ok(())
         })?,
     )?;
     Ok(())

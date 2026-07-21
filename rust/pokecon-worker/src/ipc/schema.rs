@@ -1,10 +1,41 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use serde::de::DeserializeOwned;
 use serde::de::{self, Error as _, MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
+
+/// Converts a typed payload into the same closed value union used by the wire
+/// envelope, preserving Serde's unknown-field validation at both ends.
+///
+/// # Errors
+///
+/// Returns an encoding or closed-value conversion error.
+pub fn serialize_value<T: Serialize>(value: &T) -> Result<IpcValue, ValueCodecError> {
+    let bytes = rmp_serde::to_vec_named(value)?;
+    Ok(rmp_serde::from_slice(&bytes)?)
+}
+
+/// Decodes a closed wire value into one typed operation payload.
+///
+/// # Errors
+///
+/// Returns an encoding or typed-payload validation error.
+pub fn deserialize_value<T: DeserializeOwned>(value: &IpcValue) -> Result<T, ValueCodecError> {
+    let bytes = rmp_serde::to_vec_named(value)?;
+    Ok(rmp_serde::from_slice(&bytes)?)
+}
+
+/// In-memory typed payload conversion failure.
+#[derive(Debug, Error)]
+pub enum ValueCodecError {
+    #[error("failed to encode typed IPC value: {0}")]
+    Encode(#[from] rmp_serde::encode::Error),
+    #[error("failed to decode typed IPC value: {0}")]
+    Decode(#[from] rmp_serde::decode::Error),
+}
 
 /// Closed recursive value union accepted by the control-plane protocol.
 ///
@@ -403,6 +434,8 @@ pub enum SchemaError {
 
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
+
     use super::{Envelope, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget};
 
     #[test]
@@ -445,5 +478,28 @@ mod tests {
             },
         ];
         assert!(messages.iter().all(|message| message.validate().is_ok()));
+    }
+
+    #[test]
+    fn typed_value_conversion_retains_closed_payload_validation() {
+        #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+        #[serde(deny_unknown_fields)]
+        struct Payload {
+            name: String,
+        }
+
+        let payload = Payload {
+            name: "dynamic".to_owned(),
+        };
+        let value = super::serialize_value(&payload).unwrap();
+        assert_eq!(
+            super::deserialize_value::<Payload>(&value).unwrap(),
+            payload
+        );
+        let IpcValue::Map(mut invalid) = value else {
+            panic!("struct payload must encode as a map");
+        };
+        invalid.insert("extra".to_owned(), IpcValue::Bool(true));
+        assert!(super::deserialize_value::<Payload>(&IpcValue::Map(invalid)).is_err());
     }
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
 use crate::callback::{
     Callback, CallbackError, CallbackExecutor, CallbackLimits, CallbackOutcome, CallbackReturn,
@@ -10,7 +11,8 @@ use crate::callback::{
 };
 
 /// Stable identity shared by event and command callbacks.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
 pub struct HandlerId(u64);
 
 impl HandlerId {
@@ -468,7 +470,7 @@ impl EventBus {
             if let CallbackOutcome::Failed(error) = &outcome {
                 self.diagnostics.record(Diagnostic {
                     level: DiagnosticLevel::Error,
-                    code: "dynamic_callback_failed",
+                    code: "dynamic_callback_failed".to_owned(),
                     message: error.message.clone(),
                     handler_id: Some(registration.id),
                     event: Some(event.to_owned()),

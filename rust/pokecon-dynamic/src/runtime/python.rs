@@ -22,6 +22,17 @@ const PYTHON_BOOTSTRAP: &str = r#"
 import sys as _sys
 
 
+class _BlockCommandsImport:
+    @staticmethod
+    def find_spec(fullname, _path, _target=None):
+        if fullname == "Commands" or fullname.startswith("Commands."):
+            raise ModuleNotFoundError(f"No module named '{fullname}'", name=fullname)
+        return None
+
+
+_sys.meta_path.insert(0, _BlockCommandsImport())
+
+
 class CallbackSoftTimeoutError(TimeoutError):
     def __init__(self, handler_id, elapsed_ms, soft_timeout_ms):
         self.handler_id = handler_id
@@ -35,6 +46,27 @@ class CallbackSoftTimeoutError(TimeoutError):
 
 class _CallbackHardTimeoutError(BaseException):
     pass
+
+
+class _PokeconStdout:
+    def __init__(self):
+        self._buffer = ""
+
+    def write(self, text):
+        text = str(text)
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            _api.record_output(line)
+        return len(text)
+
+    def flush(self):
+        if self._buffer:
+            _api.record_output(self._buffer)
+            self._buffer = ""
+
+    def isatty(self):
+        return False
 
 
 def _deadline_monitor(_code, _offset):
@@ -249,6 +281,7 @@ profile = _Profile()
 controller = _Controller()
 commands = _Commands()
 source = _api.source
+_sys.stdout = _PokeconStdout()
 "#;
 
 fn python_error(error: &DynamicEngineError) -> PyErr {
@@ -525,6 +558,12 @@ impl PyApi {
                 soft_timeout_ms,
             } => Some(("soft", handler_id.get(), elapsed_ms, soft_timeout_ms)),
             DeadlineCheckpoint::Hard => Some(("hard", 0, 0, 0)),
+        }
+    }
+
+    fn record_output(&self, message: &str) {
+        if let Some(engine) = self.engine.upgrade() {
+            engine.record_output(message);
         }
     }
 }

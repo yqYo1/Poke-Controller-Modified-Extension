@@ -15,15 +15,15 @@ use crate::callback::Diagnostic;
 #[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]
 #[error("{message}")]
 pub struct DynamicHostError {
-    pub code: &'static str,
+    pub code: String,
     pub message: String,
 }
 
 impl DynamicHostError {
     #[must_use]
-    pub fn new(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
-            code,
+            code: code.into(),
             message: message.into(),
         }
     }
@@ -82,6 +82,10 @@ pub trait DynamicHost: Send + Sync {
     fn controller_reset(&self) -> Result<(), DynamicHostError>;
 
     fn record_diagnostic(&self, diagnostic: Diagnostic);
+
+    /// Records one complete line written by dynamic user code. The worker IPC
+    /// adapter maps this to a structured `log` envelope instead of raw stdout.
+    fn record_output(&self, _message: &str) {}
 
     /// Requests one coalesced rebuild of all command display-list snapshots.
     fn request_command_recompute(&self) {}
@@ -224,6 +228,7 @@ struct InMemoryState {
     profiles: Vec<String>,
     controller: ControllerState,
     diagnostics: Vec<Diagnostic>,
+    outputs: Vec<String>,
     command_recompute_requests: u64,
 }
 
@@ -271,6 +276,7 @@ impl InMemoryDynamicHost {
                 profiles,
                 controller: ControllerState::NEUTRAL,
                 diagnostics: Vec::new(),
+                outputs: Vec::new(),
                 command_recompute_requests: 0,
             }),
         })
@@ -284,6 +290,11 @@ impl InMemoryDynamicHost {
     #[must_use]
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.inner.lock().diagnostics.clone()
+    }
+
+    #[must_use]
+    pub fn outputs(&self) -> Vec<String> {
+        self.inner.lock().outputs.clone()
     }
 
     #[must_use]
@@ -371,6 +382,10 @@ impl DynamicHost for InMemoryDynamicHost {
 
     fn record_diagnostic(&self, diagnostic: Diagnostic) {
         self.inner.lock().diagnostics.push(diagnostic);
+    }
+
+    fn record_output(&self, message: &str) {
+        self.inner.lock().outputs.push(message.to_owned());
     }
 
     fn request_command_recompute(&self) {

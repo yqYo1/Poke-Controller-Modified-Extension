@@ -330,6 +330,7 @@ impl DynamicEngine {
         &self,
         operation: DynamicConfigControl,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
+        let coordinator = self.0.coordinator.lock().await;
         let source = match operation {
             DynamicConfigControl::LoadPath { path } => self.0.source_store.resolve(&path)?,
             DynamicConfigControl::LoadContent { language, content } => {
@@ -337,7 +338,9 @@ impl DynamicEngine {
             }
             DynamicConfigControl::Reload {} => self.0.source_store.reload_source()?,
         };
-        self.0.load_resolved(source, true, true).await
+        self.0
+            .load_resolved_locked(source, true, true, coordinator)
+            .await
     }
 
     /// Emits an external canonical event after waiting for any in-flight
@@ -359,7 +362,8 @@ impl DynamicEngine {
         &self,
         candidates: Vec<CommandInfo>,
     ) -> Result<Vec<CommandDisplayItem>, DynamicEngineError> {
-        let _coordinator = self.0.coordinator.lock().await;
+        let coordinator = self.0.coordinator.lock().await;
+        drop(coordinator);
         Ok(self.0.command_registry.sort(candidates).await?)
     }
 
@@ -374,7 +378,8 @@ impl DynamicEngine {
         selected_tag: &str,
         command: &CommandInfo,
     ) -> Result<bool, DynamicEngineError> {
-        let _coordinator = self.0.coordinator.lock().await;
+        let coordinator = self.0.coordinator.lock().await;
+        drop(coordinator);
         Ok(self
             .0
             .command_registry
@@ -431,6 +436,17 @@ impl EngineInner {
         mark_current: bool,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
         let coordinator = self.coordinator.lock().await;
+        self.load_resolved_locked(source, replace_generation, mark_current, coordinator)
+            .await
+    }
+
+    async fn load_resolved_locked(
+        self: &Arc<Self>,
+        source: ResolvedSource,
+        replace_generation: bool,
+        mark_current: bool,
+        coordinator: tokio::sync::MutexGuard<'_, ()>,
+    ) -> Result<DynamicLoadResult, DynamicEngineError> {
         let mut transaction = EvaluationTransaction::begin(
             self.host.as_ref(),
             self.settings_registry.clone(),
@@ -523,18 +539,23 @@ impl EngineInner {
     }
 
     async fn emit(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
-        let _coordinator = self.coordinator.lock().await;
+        let coordinator = self.coordinator.lock().await;
+        drop(coordinator);
         Ok(self.event_bus.emit(event).await?)
     }
 
     fn record_evaluation_failure(&self, message: &str) {
         self.host.record_diagnostic(Diagnostic {
             level: DiagnosticLevel::Error,
-            code: "dynamic_config_evaluation_failed",
+            code: "dynamic_config_evaluation_failed".to_owned(),
             message: message.to_owned(),
             handler_id: None,
             event: None,
         });
+    }
+
+    pub(crate) fn record_output(&self, message: &str) {
+        self.host.record_output(message);
     }
 
     pub(crate) fn setting_kind(&self, path: &str) -> Option<&'static str> {
@@ -585,19 +606,21 @@ impl EngineInner {
                 Ok(())
             });
         }
-        let mut transaction = EvaluationTransaction::begin(
-            self.host.as_ref(),
-            self.settings_registry.clone(),
-            &self.event_bus,
-        )?;
-        transaction.set_setting(path, value)?;
-        let commands = self.command_registry.state_snapshot();
-        commands.validate(transaction.callback_settings()?)?;
         self.runtime_handle.block_on(async {
+            let _coordinator = self.coordinator.lock().await;
+            let mut transaction = EvaluationTransaction::begin(
+                self.host.as_ref(),
+                self.settings_registry.clone(),
+                &self.event_bus,
+            )?;
+            transaction.set_setting(path, value)?;
+            let commands = self.command_registry.state_snapshot();
+            commands.validate(transaction.callback_settings()?)?;
             transaction
                 .commit_staged(self.host.as_ref(), &self.event_bus)
                 .await
                 .map(|_| ())
+                .map_err(DynamicEngineError::from)
         })?;
         self.host.request_command_recompute();
         Ok(())
@@ -668,7 +691,7 @@ impl EngineInner {
         if current_event().as_deref() == Some(event) {
             self.host.record_diagnostic(Diagnostic {
                 level: DiagnosticLevel::Error,
-                code: "dynamic_event_direct_recursion",
+                code: "dynamic_event_direct_recursion".to_owned(),
                 message: format!("direct recursive event emission was ignored: {event}"),
                 handler_id: None,
                 event: Some(event.to_owned()),
@@ -810,6 +833,7 @@ impl EngineInner {
 mod tests {
     use std::collections::BTreeMap;
     use std::fs;
+    use std::time::Duration;
 
     use serde_json::json;
     use tempfile::TempDir;
@@ -1146,5 +1170,63 @@ raise RuntimeError("reload sentinel")
         let state = host.state_snapshot().unwrap();
         assert_eq!(state["tags"], json!(["python"]));
         assert_eq!(state["command_candidates"][0]["name"], json!("Example"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn callback_can_source_another_language_after_evaluation_barrier() {
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("callback.lua"),
+            r#"pokecon.opt.language = "EN"
+pokecon.state.tags = {"callback-source"}
+"#,
+        )
+        .unwrap();
+        let host = Arc::new(
+            InMemoryDynamicHost::new(
+                initial_settings(),
+                BTreeMap::from([("tags".to_owned(), json!([]))]),
+            )
+            .unwrap(),
+        );
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Lua),
+            host.clone(),
+        )
+        .unwrap();
+        let loaded = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Lua,
+                content: r#"pokecon.autocmd.on("CameraOpenPost", {
+    callback = function()
+        pokecon.source("./callback.lua")
+    end,
+})
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+
+        let emitted = tokio::time::timeout(Duration::from_secs(2), engine.emit("CameraOpenPost"))
+            .await
+            .expect("callback source does not deadlock on the evaluation barrier")
+            .unwrap();
+        assert_eq!(emitted.outcomes.len(), 1);
+        assert_eq!(host.settings_snapshot().unwrap()["language"], json!("en"));
+        assert_eq!(
+            host.state_snapshot().unwrap()["tags"],
+            json!(["callback-source"])
+        );
+        assert_eq!(
+            engine.initialized_languages(),
+            vec![DynamicConfigLanguage::Lua]
+        );
+        assert_eq!(engine.generation(), 2);
     }
 }

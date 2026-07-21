@@ -1,5 +1,6 @@
 //! Managed worker IPC, generation gates, and operating-system supervision.
 
+pub mod dynamic;
 pub mod generation;
 pub mod ipc;
 pub mod supervisor;
@@ -12,6 +13,7 @@ use pokecon_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::dynamic::DynamicWorkerRuntime;
 use crate::ipc::{
     ConnectionConfig, ConnectionError, Envelope, IpcConnection, IpcErrorPayload, IpcValue,
 };
@@ -97,15 +99,23 @@ async fn run_protocol(
     connection: &IpcConnection,
     shutdown: &pokecon_core::ShutdownCoordinator,
 ) -> Result<(), WorkerError> {
+    let mut dynamic =
+        (kind == WorkerKind::Dynamic).then(|| DynamicWorkerRuntime::new(connection.clone()));
     loop {
         let envelope = tokio::select! {
             biased;
             _reason = shutdown.cancelled() => return Ok(()),
             envelope = connection.recv() => envelope?,
         };
-        let Envelope::Request { id, op, payload: _ } = envelope else {
+        let Envelope::Request { id, op, payload } = envelope else {
             continue;
         };
+        if DynamicWorkerRuntime::handles(&op)
+            && let Some(runtime) = &mut dynamic
+        {
+            runtime.handle(id, op, payload).await?;
+            continue;
+        }
         match op.as_str() {
             "worker.ping" => {
                 let mut response = BTreeMap::new();

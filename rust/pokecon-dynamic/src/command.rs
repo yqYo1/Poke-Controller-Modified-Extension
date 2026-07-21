@@ -536,7 +536,7 @@ impl CommandRegistry {
         };
         self.0.host.record_diagnostic(Diagnostic {
             level: DiagnosticLevel::Warning,
-            code: "dynamic_command_callback_fallback",
+            code: "dynamic_command_callback_fallback".to_owned(),
             message: format!(
                 "{} callback used its local built-in fallback after {reason}",
                 kind.name()
@@ -549,7 +549,7 @@ impl CommandRegistry {
     fn record_item_warning(&self, code: &'static str, message: &'static str) {
         self.0.host.record_diagnostic(Diagnostic {
             level: DiagnosticLevel::Warning,
-            code,
+            code: code.to_owned(),
             message: message.to_owned(),
             handler_id: Some(SORT_HANDLER_ID),
             event: None,

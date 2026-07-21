@@ -10,4 +10,7 @@ pub use codec::{
 pub use connection::{
     ConnectionConfig, ConnectionError, DisconnectReason, IpcConnection, ResourceSafety,
 };
-pub use schema::{Envelope, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget};
+pub use schema::{
+    Envelope, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget, ValueCodecError,
+    deserialize_value, serialize_value,
+};

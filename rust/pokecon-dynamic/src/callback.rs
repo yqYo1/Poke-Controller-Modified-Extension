@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU8, Ordering as AtomicOrdering};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, sleep_until};
@@ -256,17 +257,19 @@ pub enum CallbackOutcome {
 }
 
 /// Diagnostic severity emitted by the scheduler and event bus.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DiagnosticLevel {
     Warning,
     Error,
 }
 
 /// Structured, secret-safe dynamic-runtime diagnostic.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Diagnostic {
     pub level: DiagnosticLevel,
-    pub code: &'static str,
+    pub code: String,
     pub message: String,
     pub handler_id: Option<HandlerId>,
     pub event: Option<String>,
@@ -349,7 +352,13 @@ struct QueuedInvocation {
 
 struct ActualCompletion {
     handler_id: HandlerId,
+    logical: Option<LogicalCompletion>,
     on_late_return: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+struct LogicalCompletion {
+    sender: oneshot::Sender<CallbackOutcome>,
+    outcome: CallbackOutcome,
 }
 
 /// Cloneable handle to the one global bounded callback scheduler.
@@ -533,6 +542,9 @@ fn finish_actual(
 ) {
     busy_lanes.remove(&completion.handler_id);
     *active = active.saturating_sub(1);
+    if let Some(logical) = completion.logical {
+        let _result = logical.sender.send(logical.outcome);
+    }
     if let Some(on_late_return) = completion.on_late_return {
         on_late_return();
     }
@@ -608,7 +620,7 @@ fn eviction_order(left: &QueuedInvocation, right: &QueuedInvocation) -> Ordering
 fn evict(queued: QueuedInvocation, diagnostics: &dyn DiagnosticSink, message: &'static str) {
     diagnostics.record(Diagnostic {
         level: DiagnosticLevel::Warning,
-        code: "dynamic_callback_queue_evicted",
+        code: "dynamic_callback_queue_evicted".to_owned(),
         message: message.to_owned(),
         handler_id: Some(queued.invocation.handler_id),
         event: queued.invocation.event.clone(),
@@ -638,11 +650,8 @@ fn dispatch_ready(
         let completion_sender = completion_sender.clone();
         let diagnostics = diagnostics.clone();
         tokio::spawn(async move {
-            let on_late_return = run_invocation(queued, settings, diagnostics).await;
-            let _result = completion_sender.send(ActualCompletion {
-                handler_id,
-                on_late_return,
-            });
+            let completion = run_invocation(queued, settings, diagnostics).await;
+            let _result = completion_sender.send(completion);
         });
     }
 }
@@ -679,19 +688,26 @@ async fn run_invocation(
     queued: QueuedInvocation,
     settings: CallbackSettings,
     diagnostics: Arc<dyn DiagnosticSink>,
-) -> Option<Arc<dyn Fn() + Send + Sync>> {
+) -> ActualCompletion {
+    let handler_id = queued.invocation.handler_id;
+    let mut logical = Some(queued.logical);
     let limits = match queued.invocation.limits.resolve(settings) {
         Ok(limits) => limits,
         Err(error) => {
-            let _result = queued.logical.send(CallbackOutcome::Failed(error));
-            return None;
+            return complete_actual(
+                handler_id,
+                &mut logical,
+                CallbackOutcome::Failed(error),
+                None,
+            );
         }
     };
     let started_at = Instant::now();
     let deadline = Arc::new(DeadlineSignal::default());
+    let event = queued.invocation.event.clone();
     let context = InvocationContext {
         handler_id: queued.invocation.handler_id,
-        event: queued.invocation.event.clone(),
+        event: event.clone(),
         arguments: queued.invocation.arguments,
         limits,
         started_at,
@@ -706,7 +722,6 @@ async fn run_invocation(
     let mut soft_applied = false;
     let mut logical_soft_applied = false;
     let mut hard_applied = false;
-    let mut logical = Some(queued.logical);
     let on_late_return = queued.invocation.on_late_return;
 
     loop {
@@ -716,31 +731,26 @@ async fn run_invocation(
                 let now = Instant::now();
                 if hard_at.is_some_and(|deadline_at| now >= deadline_at) {
                     deadline.enter_hard();
-                    send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Hard));
-                    return on_late_return;
+                    return complete_actual(
+                        handler_id,
+                        &mut logical,
+                        CallbackOutcome::TimedOut(TimeoutStage::Hard),
+                        on_late_return,
+                    );
                 } else if logical_soft_at.is_some_and(|deadline_at| now >= deadline_at) {
-                    send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Soft));
-                    return on_late_return;
+                    return complete_actual(
+                        handler_id,
+                        &mut logical,
+                        CallbackOutcome::TimedOut(TimeoutStage::Soft),
+                        on_late_return,
+                    );
                 }
                 let returned_after_logical_completion = logical.is_none();
-                let outcome = match result {
-                    Ok(Ok(value)) => CallbackOutcome::Returned(value),
-                    Ok(Err(error)) if error.kind == CallbackErrorKind::SoftTimeout => {
-                        CallbackOutcome::TimedOut(TimeoutStage::Soft)
-                    }
-                    Ok(Err(error)) if error.kind == CallbackErrorKind::HardTimeout => {
-                        CallbackOutcome::TimedOut(TimeoutStage::Hard)
-                    }
-                    Ok(Err(error)) => CallbackOutcome::Failed(error),
-                    Err(error) => CallbackOutcome::Failed(CallbackError::internal(format!(
-                        "callback task failed: {error}"
-                    ))),
-                };
-                send_logical(&mut logical, outcome);
-                if returned_after_logical_completion {
-                    return on_late_return;
-                }
-                return None;
+                let outcome = callback_outcome(result);
+                let late_return = returned_after_logical_completion
+                    .then_some(on_late_return)
+                    .flatten();
+                return complete_actual(handler_id, &mut logical, outcome, late_return);
             }
             () = sleep_optional(soft_at), if !soft_applied => {
                 soft_applied = true;
@@ -749,13 +759,12 @@ async fn run_invocation(
             () = sleep_optional(logical_soft_at), if !logical_soft_applied => {
                 logical_soft_applied = true;
                 if logical.is_some() {
-                    diagnostics.record(Diagnostic {
-                        level: DiagnosticLevel::Warning,
-                        code: "dynamic_callback_soft_timeout",
-                        message: "callback exceeded its soft timeout grace period".to_owned(),
-                        handler_id: Some(queued.invocation.handler_id),
-                        event: queued.invocation.event.clone(),
-                    });
+                    record_timeout_diagnostic(
+                        diagnostics.as_ref(),
+                        handler_id,
+                        event.as_ref(),
+                        TimeoutStage::Soft,
+                    );
                 }
                 send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Soft));
             }
@@ -763,13 +772,12 @@ async fn run_invocation(
                 hard_applied = true;
                 deadline.enter_hard();
                 if logical.is_some() {
-                    diagnostics.record(Diagnostic {
-                        level: DiagnosticLevel::Error,
-                        code: "dynamic_callback_hard_timeout",
-                        message: "callback exceeded its hard timeout".to_owned(),
-                        handler_id: Some(queued.invocation.handler_id),
-                        event: queued.invocation.event.clone(),
-                    });
+                    record_timeout_diagnostic(
+                        diagnostics.as_ref(),
+                        handler_id,
+                        event.as_ref(),
+                        TimeoutStage::Hard,
+                    );
                 }
                 send_logical(&mut logical, CallbackOutcome::TimedOut(TimeoutStage::Hard));
             }
@@ -793,6 +801,74 @@ fn send_logical(sender: &mut Option<oneshot::Sender<CallbackOutcome>>, outcome: 
     if let Some(sender) = sender.take() {
         let _result = sender.send(outcome);
     }
+}
+
+fn take_logical(
+    sender: &mut Option<oneshot::Sender<CallbackOutcome>>,
+    outcome: CallbackOutcome,
+) -> Option<LogicalCompletion> {
+    sender
+        .take()
+        .map(|sender| LogicalCompletion { sender, outcome })
+}
+
+fn complete_actual(
+    handler_id: HandlerId,
+    logical: &mut Option<oneshot::Sender<CallbackOutcome>>,
+    outcome: CallbackOutcome,
+    on_late_return: Option<Arc<dyn Fn() + Send + Sync>>,
+) -> ActualCompletion {
+    ActualCompletion {
+        handler_id,
+        logical: take_logical(logical, outcome),
+        on_late_return,
+    }
+}
+
+fn callback_outcome(
+    result: Result<Result<CallbackReturn, CallbackError>, tokio::task::JoinError>,
+) -> CallbackOutcome {
+    match result {
+        Ok(Ok(value)) => CallbackOutcome::Returned(value),
+        Ok(Err(error)) if error.kind == CallbackErrorKind::SoftTimeout => {
+            CallbackOutcome::TimedOut(TimeoutStage::Soft)
+        }
+        Ok(Err(error)) if error.kind == CallbackErrorKind::HardTimeout => {
+            CallbackOutcome::TimedOut(TimeoutStage::Hard)
+        }
+        Ok(Err(error)) => CallbackOutcome::Failed(error),
+        Err(error) => CallbackOutcome::Failed(CallbackError::internal(format!(
+            "callback task failed: {error}"
+        ))),
+    }
+}
+
+fn record_timeout_diagnostic(
+    diagnostics: &dyn DiagnosticSink,
+    handler_id: HandlerId,
+    event: Option<&String>,
+    stage: TimeoutStage,
+) {
+    let (level, code, message) = match stage {
+        TimeoutStage::Running => return,
+        TimeoutStage::Soft => (
+            DiagnosticLevel::Warning,
+            "dynamic_callback_soft_timeout",
+            "callback exceeded its soft timeout grace period",
+        ),
+        TimeoutStage::Hard => (
+            DiagnosticLevel::Error,
+            "dynamic_callback_hard_timeout",
+            "callback exceeded its hard timeout",
+        ),
+    };
+    diagnostics.record(Diagnostic {
+        level,
+        code: code.to_owned(),
+        message: message.to_owned(),
+        handler_id: Some(handler_id),
+        event: event.cloned(),
+    });
 }
 
 #[cfg(test)]
@@ -946,6 +1022,24 @@ mod tests {
             handles.remove(0).outcome().await,
             CallbackOutcome::Returned(expected)
         );
+    }
+
+    #[tokio::test]
+    async fn normal_completion_releases_lane_before_observable_outcome() {
+        let executor = CallbackExecutor::new(
+            CallbackSettings::default(),
+            Arc::new(RecordingDiagnostics::default()),
+        );
+        let callback: Arc<dyn Callback> = Arc::new(ImmediateCallback(CallbackReturn::None));
+        for _ in 0..100 {
+            let mut next = invocation(1, 0, callback.clone());
+            next.reject_if_lane_busy = true;
+            let mut handles = executor.submit_batch(vec![next]).await.unwrap();
+            assert_eq!(
+                handles.remove(0).outcome().await,
+                CallbackOutcome::Returned(CallbackReturn::None)
+            );
+        }
     }
 
     #[async_trait]

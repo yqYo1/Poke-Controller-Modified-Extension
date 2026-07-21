@@ -10,6 +10,7 @@ pub mod control;
 pub mod engine;
 pub mod event;
 pub mod host;
+pub mod protocol;
 mod runtime;
 pub mod source;
 pub mod transaction;
@@ -24,6 +25,7 @@ pub use command::{
     CommandOptionValue, CommandRegistry, SORT_HANDLER_ID, TAG_MATCH_HANDLER_ID,
 };
 pub use control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult, DynamicSource};
+pub use engine::{DynamicEngine, DynamicEngineError};
 pub use event::{
     BUILTIN_EVENTS, BuiltinEvent, EventBus, EventError, EventResult, HandlerId, RegistrationOptions,
 };

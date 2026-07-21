@@ -3,12 +3,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use pokecon_dynamic::protocol::DynamicProfileSwitchResult;
 use pokecon_dynamic::{
-    CommandCacheBuildResult, CommandDisplayCache, CommandDisplayItem, CommandInfo,
+    CommandCacheBuildResult, CommandDisplayCache, CommandDisplayItem, CommandInfo, DynamicHost,
 };
 use pokecon_settings::pipeline::LoadedSettings;
 use pokecon_worker::dynamic::DynamicWorkerClient;
@@ -135,6 +136,12 @@ pub trait UserScriptSession: Send + Sync {
 
     async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError>;
 
+    /// Flushes the profile-switch cooperative stop request without waiting for
+    /// the Python command thread to exit.
+    async fn request_profile_stop(&self) -> Result<(), CommandBackendError> {
+        self.stop_command().await.map(|_result| ())
+    }
+
     /// Atomically rejects new mutating IPC and releases Rust-owned resources.
     fn begin_stopping(&self);
 
@@ -156,6 +163,11 @@ pub trait UserScriptFactory: Send + Sync {
 pub trait DynamicCommandBridge: Send + Sync {
     async fn emit(&self, event: &'static str) -> Result<bool, CommandBackendError>;
 
+    async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<DynamicProfileSwitchResult, CommandBackendError>;
+
     async fn build_cache(
         &self,
         generation: u64,
@@ -169,6 +181,15 @@ impl DynamicCommandBridge for DynamicWorkerClient {
         DynamicWorkerClient::emit(self, event)
             .await
             .map(|result| result.cancelled)
+            .map_err(|error| dynamic_client_error(&error))
+    }
+
+    async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<DynamicProfileSwitchResult, CommandBackendError> {
+        DynamicWorkerClient::switch_profile(self, name)
+            .await
             .map_err(|error| dynamic_client_error(&error))
     }
 
@@ -198,6 +219,8 @@ pub enum CommandServiceError {
     CommandNotRunning,
     #[error("command identity was not discovered")]
     CommandNotFound,
+    #[error("command generation changed during a lifecycle callback")]
+    CommandGenerationChanged,
     #[error("shortcut index must be between 1 and 10")]
     InvalidShortcut,
     #[error("shortcut is not assigned to a discovered command")]
@@ -242,7 +265,6 @@ pub struct CommandService {
     dynamic: Arc<dyn DynamicCommandBridge>,
     inner: AsyncMutex<CommandServiceState>,
     lifecycle: AsyncMutex<()>,
-    profile_switching: AtomicBool,
     cache_generation: AtomicU64,
 }
 
@@ -250,10 +272,7 @@ impl std::fmt::Debug for CommandService {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("CommandService")
-            .field(
-                "profile_switching",
-                &self.profile_switching.load(Ordering::Acquire),
-            )
+            .field("profile_switching", &self.host.profile_switch_in_progress())
             .field(
                 "cache_generation",
                 &self.cache_generation.load(Ordering::Acquire),
@@ -275,7 +294,6 @@ impl CommandService {
             dynamic,
             inner: AsyncMutex::new(CommandServiceState::default()),
             lifecycle: AsyncMutex::new(()),
-            profile_switching: AtomicBool::new(false),
             cache_generation: AtomicU64::new(1),
         }
     }
@@ -411,6 +429,14 @@ impl CommandService {
 
         {
             let mut inner = self.inner.lock().await;
+            if inner.execution_epoch != epoch
+                || inner
+                    .session
+                    .as_ref()
+                    .is_none_or(|active| !Arc::ptr_eq(active, &session))
+            {
+                return Err(CommandServiceError::CommandGenerationChanged);
+            }
             inner.status = CommandStatus::Running;
             inner.current = Some(identity.clone());
             inner.stop_post_pending = false;
@@ -418,6 +444,12 @@ impl CommandService {
         self.host
             .set_command_status(CommandStatus::Running.as_str(), &command.info.name)?;
         let _cancelled = self.dynamic.emit("CommandStartPost").await?;
+        {
+            let inner = self.inner.lock().await;
+            if inner.execution_epoch != epoch || inner.status != CommandStatus::Running {
+                return Err(CommandServiceError::CommandGenerationChanged);
+            }
+        }
 
         let service = Arc::clone(self);
         tokio::spawn(async move {
@@ -516,6 +548,14 @@ impl CommandService {
         if self.dynamic.emit("CommandStopPre").await? {
             return Ok(CommandActionResult::Cancelled);
         }
+        {
+            let inner = self.inner.lock().await;
+            if inner.execution_epoch != epoch
+                || !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused)
+            {
+                return Err(CommandServiceError::CommandGenerationChanged);
+            }
+        }
         let result = session.stop_command().await?;
         let mut inner = self.inner.lock().await;
         if inner.execution_epoch != epoch
@@ -538,9 +578,8 @@ impl CommandService {
     ///
     /// Returns [`CommandServiceError::ProfileSwitchInProgress`] when held.
     pub fn try_begin_profile_switch(&self) -> Result<(), CommandServiceError> {
-        self.profile_switching
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map(|_| ())
+        self.host
+            .try_begin_profile_switch_gate()
             .map_err(|_| CommandServiceError::ProfileSwitchInProgress)
     }
 
@@ -554,10 +593,9 @@ impl CommandService {
         &self,
         deadline: Duration,
     ) -> Result<Option<ScriptSessionStop>, CommandServiceError> {
-        if !self.profile_switching.load(Ordering::Acquire) {
+        if !self.host.profile_switch_in_progress() {
             return Err(CommandServiceError::ProfileSwitchGateNotHeld);
         }
-        let _lifecycle = self.lifecycle.lock().await;
         let session = {
             let mut inner = self.inner.lock().await;
             inner.execution_epoch = inner.execution_epoch.wrapping_add(1);
@@ -572,7 +610,7 @@ impl CommandService {
             self.host.clear_command_generation()?;
             return Ok(None);
         };
-        let _cooperative = session.stop_command().await;
+        let _cooperative = session.request_profile_stop().await;
         session.begin_stopping();
         self.host.clear_command_generation()?;
         Ok(Some(session.shutdown(deadline).await?))
@@ -580,7 +618,7 @@ impl CommandService {
 
     /// Releases the profile gate on success, cancellation, or rollback.
     pub fn finish_profile_switch(&self) {
-        self.profile_switching.store(false, Ordering::Release);
+        self.host.finish_profile_switch_gate();
     }
 
     /// Stops the current user worker for complete application shutdown.
@@ -592,7 +630,7 @@ impl CommandService {
         &self,
         deadline: Duration,
     ) -> Result<Option<ScriptSessionStop>, CommandServiceError> {
-        self.profile_switching.store(true, Ordering::Release);
+        self.host.hold_profile_switch_gate();
         self.stop_for_profile_switch(deadline).await
     }
 
@@ -769,7 +807,7 @@ impl CommandService {
     }
 
     fn ensure_command_start_allowed(&self) -> Result<(), CommandServiceError> {
-        if self.profile_switching.load(Ordering::Acquire) {
+        if self.host.profile_switch_in_progress() {
             Err(CommandServiceError::ProfileSwitchInProgress)
         } else {
             Ok(())
@@ -795,6 +833,35 @@ impl StaticCommandBridge {
 impl DynamicCommandBridge for StaticCommandBridge {
     async fn emit(&self, _event: &'static str) -> Result<bool, CommandBackendError> {
         Ok(false)
+    }
+
+    async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<DynamicProfileSwitchResult, CommandBackendError> {
+        if let Err(error) = self.host.profile_switch_begin(name, &BTreeMap::new()).await {
+            return Ok(DynamicProfileSwitchResult::Rejected {
+                code: error.code,
+                message: error.message,
+            });
+        }
+        let committed = match self.host.profile_switch_commit().await {
+            Ok(committed) => committed,
+            Err(error) => {
+                let _abort = self.host.profile_switch_abort().await;
+                return Ok(DynamicProfileSwitchResult::Rejected {
+                    code: error.code,
+                    message: error.message,
+                });
+            }
+        };
+        self.host
+            .profile_switch_end()
+            .await
+            .map_err(|error| CommandBackendError::new(error.code, error.message))?;
+        Ok(DynamicProfileSwitchResult::Switched {
+            forced_worker_stop: committed.forced_worker_stop,
+        })
     }
 
     async fn build_cache(
@@ -1106,6 +1173,7 @@ mod tests {
         events: Mutex<Vec<&'static str>>,
         builds: AtomicUsize,
         supersede_first: AtomicBool,
+        profile_switch_event: Mutex<Option<&'static str>>,
     }
 
     #[async_trait]
@@ -1130,7 +1198,42 @@ mod tests {
                     )
                     .map_err(|error| CommandBackendError::new(error.code, error.message))?;
             }
+            let switch_profile = {
+                let mut configured = self.profile_switch_event.lock().unwrap();
+                if configured
+                    .as_ref()
+                    .is_some_and(|configured| *configured == event)
+                {
+                    configured.take()
+                } else {
+                    None
+                }
+            };
+            if switch_profile.is_some() {
+                self.host
+                    .profile_switch_begin("Other", &BTreeMap::new())
+                    .await
+                    .map_err(|error| CommandBackendError::new(error.code, error.message))?;
+                if let Err(error) = self.host.profile_switch_commit().await {
+                    let _abort = self.host.profile_switch_abort().await;
+                    return Err(CommandBackendError::new(error.code, error.message));
+                }
+                self.host
+                    .profile_switch_end()
+                    .await
+                    .map_err(|error| CommandBackendError::new(error.code, error.message))?;
+            }
             Ok(false)
+        }
+
+        async fn switch_profile(
+            &self,
+            _name: &str,
+        ) -> Result<DynamicProfileSwitchResult, CommandBackendError> {
+            Ok(DynamicProfileSwitchResult::Rejected {
+                code: "UnsupportedTestOperation".to_owned(),
+                message: "this command-service fixture does not switch profiles".to_owned(),
+            })
         }
 
         async fn build_cache(
@@ -1182,6 +1285,7 @@ mod tests {
         .unwrap();
         let config = base.join("config/pokecon");
         std::fs::create_dir_all(config.join("profiles/default")).unwrap();
+        std::fs::create_dir_all(config.join("profiles/Other")).unwrap();
         std::fs::write(
             config.join("profiles/default/settings.toml"),
             "[shortcuts]\nbutton_1 = \"Commands.PythonCommands.samples.first\"\n",
@@ -1211,12 +1315,14 @@ mod tests {
             events: Mutex::new(Vec::new()),
             builds: AtomicUsize::new(0),
             supersede_first: AtomicBool::new(true),
+            profile_switch_event: Mutex::new(None),
         });
         let service = Arc::new(CommandService::new(
             host.clone(),
             factory.clone(),
             dynamic.clone(),
         ));
+        host.bind_command_service(&service);
         Fixture {
             _temporary: temporary,
             host,
@@ -1360,6 +1466,61 @@ mod tests {
         fixture.service.finish_profile_switch();
         fixture.service.reload().await.unwrap();
         assert_eq!(fixture.factory.spawns.load(Ordering::Acquire), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_during_command_start_callbacks_never_starts_the_old_generation() {
+        for event in ["CommandStartPre", "CommandStartPost"] {
+            let fixture = fixture();
+            fixture.service.reload().await.unwrap();
+            *fixture.dynamic.profile_switch_event.lock().unwrap() = Some(event);
+            let command = fixture.service.commands().await[0].info.clone();
+            let result = tokio::time::timeout(
+                Duration::from_secs(2),
+                fixture.service.start(&CommandIdentity::from(&command)),
+            )
+            .await
+            .expect("profile switch inside a start callback must not deadlock");
+            assert!(matches!(
+                result,
+                Err(CommandServiceError::CommandGenerationChanged)
+            ));
+            assert_eq!(fixture.session.executions.load(Ordering::Acquire), 0);
+            assert!(fixture.session.stopping.load(Ordering::Acquire));
+            assert_eq!(fixture.host.profile_current().unwrap(), "Other");
+            assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+            fixture.service.try_begin_profile_switch().unwrap();
+            fixture.service.finish_profile_switch();
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_during_command_stop_pre_invalidates_the_late_stop_response() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        let command = fixture.service.commands().await[0].info.clone();
+        assert_eq!(
+            fixture
+                .service
+                .start(&CommandIdentity::from(&command))
+                .await
+                .unwrap(),
+            CommandActionResult::Applied
+        );
+        fixture.session.started.notified().await;
+        *fixture.dynamic.profile_switch_event.lock().unwrap() = Some("CommandStopPre");
+        let result = tokio::time::timeout(Duration::from_secs(2), fixture.service.stop())
+            .await
+            .expect("profile switch inside CommandStopPre must not deadlock");
+        assert!(matches!(
+            result,
+            Err(CommandServiceError::CommandGenerationChanged)
+        ));
+        assert!(fixture.session.stopping.load(Ordering::Acquire));
+        assert_eq!(fixture.host.profile_current().unwrap(), "Other");
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+        fixture.service.try_begin_profile_switch().unwrap();
+        fixture.service.finish_profile_switch();
     }
 
     async fn wait_for_status(service: &CommandService, expected: CommandStatus) {

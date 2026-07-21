@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
@@ -18,11 +19,13 @@ use crate::command::{
 use crate::control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult};
 use crate::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
 use crate::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
+use crate::protocol::DynamicProfileSwitchResult;
 use crate::runtime::lua::LuaRuntime;
 use crate::runtime::python::PythonRuntime;
 use crate::source::{ResolvedSource, SourceError, SourceStore};
 use crate::transaction::{
-    EvaluationTransaction, TransactionError, callback_settings, controller_update_from_value,
+    EvaluationTransaction, StagedProfileSwitch, TransactionError, callback_settings,
+    controller_update_from_value,
 };
 
 const FIRST_PUBLIC_HANDLER_ID: u64 = 3;
@@ -66,6 +69,16 @@ struct EvaluationState {
 #[derive(Debug)]
 struct EvaluationSession {
     state: Mutex<EvaluationState>,
+}
+
+struct EvaluationCommit {
+    pending_emits: Vec<String>,
+    profile_committed: bool,
+}
+
+enum EvaluationCommitOutcome {
+    Committed(EvaluationCommit),
+    Rejected(String),
 }
 
 impl EvaluationSession {
@@ -406,6 +419,19 @@ impl DynamicEngine {
             .build_display_cache(generation, candidates)
             .await?)
     }
+
+    /// Runs the canonical profile transaction with dynamic Pre/Post events.
+    ///
+    /// # Errors
+    ///
+    /// Returns callback scheduling or host transport failures. Expected
+    /// validation, cancellation, and worker-stop failures are closed results.
+    pub async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<DynamicProfileSwitchResult, DynamicEngineError> {
+        self.0.switch_profile(name, &BTreeMap::new()).await
+    }
 }
 
 impl EngineInner {
@@ -460,13 +486,14 @@ impl EngineInner {
             .await
     }
 
-    async fn load_resolved_locked(
-        self: &Arc<Self>,
+    async fn load_resolved_locked<'a>(
+        self: &'a Arc<Self>,
         source: ResolvedSource,
         replace_generation: bool,
         mark_current: bool,
-        coordinator: tokio::sync::MutexGuard<'_, ()>,
+        coordinator: tokio::sync::MutexGuard<'a, ()>,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
+        let mut coordinator = Some(coordinator);
         let mut transaction = EvaluationTransaction::begin(
             self.host.as_ref(),
             self.settings_registry.clone(),
@@ -485,64 +512,33 @@ impl EngineInner {
             let _scope = EvaluationScope::enter(session.clone());
             self.evaluate_source(&source)
         };
-        let pending_emits = match evaluation {
-            Ok(()) => {
-                let (transaction, commands) = session.take()?;
-                let command_validation = transaction
-                    .callback_settings()
-                    .map_err(DynamicEngineError::from)
-                    .and_then(|settings| {
-                        commands
-                            .validate(settings)
-                            .map_err(DynamicEngineError::from)
-                    });
-                if let Err(error) = command_validation {
-                    let diagnostic = error.to_string();
-                    self.record_evaluation_failure(&diagnostic);
-                    return Ok(DynamicLoadResult {
-                        display_path: source.display_path,
-                        language: source.language,
-                        loaded: false,
-                        diagnostic: Some(diagnostic),
-                    });
-                }
-                match transaction
-                    .commit_staged(self.host.as_ref(), &self.event_bus)
-                    .await
-                {
-                    Ok(events) => {
-                        self.command_registry.commit_state(commands);
-                        events
-                    }
-                    Err(error) => {
-                        let diagnostic = error.to_string();
-                        self.record_evaluation_failure(&diagnostic);
-                        return Ok(DynamicLoadResult {
-                            display_path: source.display_path,
-                            language: source.language,
-                            loaded: false,
-                            diagnostic: Some(diagnostic),
-                        });
-                    }
-                }
-            }
-            Err(error) => {
-                let diagnostic = error.to_string();
-                self.record_evaluation_failure(&diagnostic);
-                return Ok(DynamicLoadResult {
-                    display_path: source.display_path,
-                    language: source.language,
-                    loaded: false,
-                    diagnostic: Some(diagnostic),
-                });
+        if let Err(error) = evaluation {
+            return Ok(self.rejected_load(&source, error.to_string()));
+        }
+        let (transaction, commands) = session.take()?;
+        let committed = match self
+            .commit_evaluation(transaction, commands, &mut coordinator)
+            .await?
+        {
+            EvaluationCommitOutcome::Committed(committed) => committed,
+            EvaluationCommitOutcome::Rejected(diagnostic) => {
+                return Ok(self.rejected_load(&source, diagnostic));
             }
         };
         if mark_current {
             self.source_store.mark_success(&source);
         }
         self.generation.fetch_add(1, Ordering::AcqRel);
-        drop(coordinator);
-        for event in pending_emits {
+        drop(coordinator.take());
+        if committed.profile_committed {
+            if let Err(error) = self.event_bus.emit("ProfileSwitchPost").await {
+                self.record_evaluation_failure(&error.to_string());
+            }
+            if let Err(error) = self.host.profile_switch_end().await {
+                self.record_evaluation_failure(&error.to_string());
+            }
+        }
+        for event in committed.pending_emits {
             let engine = self.clone();
             self.runtime_handle.spawn(async move {
                 if let Err(error) = engine.emit(&event).await {
@@ -556,6 +552,130 @@ impl EngineInner {
             loaded: true,
             diagnostic: None,
         })
+    }
+
+    async fn commit_evaluation<'a>(
+        self: &'a Arc<Self>,
+        transaction: EvaluationTransaction,
+        commands: CommandState,
+        coordinator: &mut Option<tokio::sync::MutexGuard<'a, ()>>,
+    ) -> Result<EvaluationCommitOutcome, DynamicEngineError> {
+        if let Some(profile_switch) = transaction.staged_profile_switch()? {
+            return self
+                .commit_profile_evaluation(transaction, commands, profile_switch, coordinator)
+                .await;
+        }
+        let callback_settings = match transaction.callback_settings() {
+            Ok(settings) => settings,
+            Err(error) => return Ok(EvaluationCommitOutcome::Rejected(error.to_string())),
+        };
+        if let Err(error) = commands.validate(callback_settings) {
+            return Ok(EvaluationCommitOutcome::Rejected(error.to_string()));
+        }
+        match transaction
+            .commit_staged(self.host.as_ref(), &self.event_bus)
+            .await
+        {
+            Ok(pending_emits) => {
+                self.command_registry.commit_state(commands);
+                Ok(EvaluationCommitOutcome::Committed(EvaluationCommit {
+                    pending_emits,
+                    profile_committed: false,
+                }))
+            }
+            Err(error) => Ok(EvaluationCommitOutcome::Rejected(error.to_string())),
+        }
+    }
+
+    async fn commit_profile_evaluation<'a>(
+        self: &'a Arc<Self>,
+        transaction: EvaluationTransaction,
+        commands: CommandState,
+        profile_switch: StagedProfileSwitch,
+        coordinator: &mut Option<tokio::sync::MutexGuard<'a, ()>>,
+    ) -> Result<EvaluationCommitOutcome, DynamicEngineError> {
+        let generation = self.generation.load(Ordering::Acquire);
+        let prepared = match self
+            .host
+            .profile_switch_begin(&profile_switch.target, &profile_switch.changes)
+            .await
+        {
+            Ok(prepared) => prepared,
+            Err(error) => return Ok(EvaluationCommitOutcome::Rejected(error.to_string())),
+        };
+        let callback_settings = transaction
+            .callback_settings_for(&prepared.settings)
+            .map_err(DynamicEngineError::from)
+            .and_then(|settings| {
+                self.event_bus
+                    .validate_settings(settings)
+                    .map_err(DynamicEngineError::from)?;
+                commands
+                    .validate(settings)
+                    .map_err(DynamicEngineError::from)?;
+                Ok(settings)
+            });
+        if let Err(error) = callback_settings {
+            let _abort = self.host.profile_switch_abort().await;
+            return Ok(EvaluationCommitOutcome::Rejected(error.to_string()));
+        }
+
+        drop(coordinator.take());
+        let pre = match self.event_bus.emit("ProfileSwitchPre").await {
+            Ok(pre) => pre,
+            Err(error) => {
+                let _abort = self.host.profile_switch_abort().await;
+                return Err(error.into());
+            }
+        };
+        if pre.cancelled {
+            self.host.profile_switch_abort().await?;
+            return Ok(EvaluationCommitOutcome::Rejected(
+                "profile switch was cancelled during dynamic evaluation".to_owned(),
+            ));
+        }
+
+        *coordinator = Some(self.coordinator.lock().await);
+        if self.generation.load(Ordering::Acquire) != generation {
+            self.host.profile_switch_abort().await?;
+            return Ok(EvaluationCommitOutcome::Rejected(
+                "dynamic generation changed during ProfileSwitchPre".to_owned(),
+            ));
+        }
+        if let Err(error) = self.host.profile_switch_commit().await {
+            let _abort = self.host.profile_switch_abort().await;
+            return Ok(EvaluationCommitOutcome::Rejected(error.to_string()));
+        }
+        match transaction
+            .commit_staged_after_profile_switch(
+                self.host.as_ref(),
+                &self.event_bus,
+                &prepared.settings,
+            )
+            .await
+        {
+            Ok(pending_emits) => {
+                self.command_registry.commit_state(commands);
+                Ok(EvaluationCommitOutcome::Committed(EvaluationCommit {
+                    pending_emits,
+                    profile_committed: true,
+                }))
+            }
+            Err(error) => {
+                let _end = self.host.profile_switch_end().await;
+                Ok(EvaluationCommitOutcome::Rejected(error.to_string()))
+            }
+        }
+    }
+
+    fn rejected_load(&self, source: &ResolvedSource, diagnostic: String) -> DynamicLoadResult {
+        self.record_evaluation_failure(&diagnostic);
+        DynamicLoadResult {
+            display_path: source.display_path.clone(),
+            language: source.language,
+            loaded: false,
+            diagnostic: Some(diagnostic),
+        }
     }
 
     async fn emit(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
@@ -625,6 +745,30 @@ impl EngineInner {
                 }
                 Ok(())
             });
+        }
+        if self
+            .settings_registry
+            .setting(path)
+            .is_some_and(|setting| setting.id == "active_profile")
+        {
+            let (_id, value) = self.settings_registry.normalize(path, value)?;
+            let target = value.as_str().ok_or_else(|| {
+                DynamicHostError::new("InvalidProfile", "active profile must be a string")
+            })?;
+            let result = self
+                .runtime_handle
+                .block_on(self.switch_profile(target, &BTreeMap::new()))?;
+            if !matches!(result, DynamicProfileSwitchResult::Switched { .. }) {
+                self.host.record_diagnostic(Diagnostic {
+                    level: DiagnosticLevel::Error,
+                    code: "active_profile_assignment_rejected".to_owned(),
+                    message: "active_profile assignment did not change the current profile"
+                        .to_owned(),
+                    handler_id: None,
+                    event: None,
+                });
+            }
+            return Ok(());
         }
         self.runtime_handle.block_on(async {
             let _coordinator = self.coordinator.lock().await;
@@ -791,8 +935,108 @@ impl EngineInner {
         Ok(self.host.profile_list()?)
     }
 
-    pub(crate) fn profile_switch(&self, name: &str) -> Result<bool, DynamicEngineError> {
-        Ok(self.host.profile_switch(name)?)
+    pub(crate) fn profile_switch(self: &Arc<Self>, name: &str) -> Result<bool, DynamicEngineError> {
+        if let Some(session) = current_evaluation() {
+            return session.with_transaction(|transaction| {
+                transaction
+                    .set_setting("pokecon.opt.active_profile", Value::String(name.to_owned()))?;
+                Ok(true)
+            });
+        }
+        let result = self
+            .runtime_handle
+            .block_on(self.switch_profile(name, &BTreeMap::new()))?;
+        Ok(matches!(
+            result,
+            DynamicProfileSwitchResult::Switched { .. }
+        ))
+    }
+
+    async fn switch_profile(
+        self: &Arc<Self>,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<DynamicProfileSwitchResult, DynamicEngineError> {
+        let prepared = match self.host.profile_switch_begin(name, changes).await {
+            Ok(prepared) => prepared,
+            Err(error) => return Ok(self.profile_switch_rejected(error)),
+        };
+        let next_callback_settings = match callback_settings(&prepared.settings) {
+            Ok(settings) => settings,
+            Err(error) => {
+                let _abort = self.host.profile_switch_abort().await;
+                return Ok(self.profile_switch_rejected(error));
+            }
+        };
+        if let Err(error) = self.event_bus.validate_settings(next_callback_settings) {
+            let _abort = self.host.profile_switch_abort().await;
+            return Ok(self.profile_switch_rejected(DynamicHostError::new(
+                "InvalidCallbackPolicy",
+                error.to_string(),
+            )));
+        }
+        if let Err(error) = self
+            .command_registry
+            .state_snapshot()
+            .validate(next_callback_settings)
+        {
+            let _abort = self.host.profile_switch_abort().await;
+            return Ok(self.profile_switch_rejected(DynamicHostError::new(
+                "InvalidCommandCallbackPolicy",
+                error.to_string(),
+            )));
+        }
+        let coordinator = self.coordinator.lock().await;
+        drop(coordinator);
+
+        let pre = match self.event_bus.emit("ProfileSwitchPre").await {
+            Ok(pre) => pre,
+            Err(error) => {
+                let _abort = self.host.profile_switch_abort().await;
+                return Err(error.into());
+            }
+        };
+        if pre.cancelled {
+            self.host.profile_switch_abort().await?;
+            return Ok(DynamicProfileSwitchResult::Cancelled);
+        }
+
+        let committed = match self.host.profile_switch_commit().await {
+            Ok(committed) => committed,
+            Err(error) => {
+                let _abort = self.host.profile_switch_abort().await;
+                return Ok(self.profile_switch_rejected(error));
+            }
+        };
+        if let Err(error) = self.event_bus.update_settings(next_callback_settings).await {
+            self.record_evaluation_failure(&error.to_string());
+        }
+        if let Err(error) = self.event_bus.emit("ProfileSwitchPost").await {
+            self.record_evaluation_failure(&error.to_string());
+        }
+        if let Err(error) = self.host.profile_switch_end().await {
+            self.record_evaluation_failure(&error.to_string());
+        }
+        Ok(DynamicProfileSwitchResult::Switched {
+            forced_worker_stop: committed.forced_worker_stop,
+        })
+    }
+
+    fn profile_switch_rejected(&self, error: DynamicHostError) -> DynamicProfileSwitchResult {
+        self.host.record_diagnostic(Diagnostic {
+            level: DiagnosticLevel::Error,
+            code: "profile_switch_rejected".to_owned(),
+            message: format!(
+                "profile switch was rejected ({}): {}",
+                error.code, error.message
+            ),
+            handler_id: None,
+            event: None,
+        });
+        DynamicProfileSwitchResult::Rejected {
+            code: error.code,
+            message: error.message,
+        }
     }
 
     pub(crate) fn controller_update(&self, value: Value) -> Result<(), DynamicEngineError> {
@@ -862,6 +1106,7 @@ impl EngineInner {
 mod tests {
     use std::collections::BTreeMap;
     use std::fs;
+    use std::sync::OnceLock;
     use std::time::Duration;
 
     use serde_json::json;
@@ -870,8 +1115,14 @@ mod tests {
     use super::*;
     use crate::host::InMemoryDynamicHost;
 
+    fn runtime_test_lock() -> &'static tokio::sync::Mutex<()> {
+        static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+    }
+
     fn initial_settings() -> BTreeMap<String, Value> {
         BTreeMap::from([
+            ("active_profile".to_owned(), json!("default")),
             ("language".to_owned(), json!("ja")),
             ("commands.tag_match_mode".to_owned(), json!("exact")),
             ("dynamic.callback_soft_timeout_ms".to_owned(), json!(2000)),
@@ -882,6 +1133,16 @@ mod tests {
             ("dynamic.callback_hard_timeout_ms".to_owned(), json!(5000)),
             ("dynamic.callback_max_concurrency".to_owned(), json!(8)),
             ("dynamic.callback_queue_capacity".to_owned(), json!(1024)),
+        ])
+    }
+
+    fn profile_state() -> BTreeMap<String, Value> {
+        BTreeMap::from([
+            ("active_profile".to_owned(), json!("default")),
+            ("pending_profile".to_owned(), Value::Null),
+            ("available_profiles".to_owned(), json!(["default", "Other"])),
+            ("command_candidates".to_owned(), json!([])),
+            ("tags".to_owned(), json!([])),
         ])
     }
 
@@ -1053,6 +1314,7 @@ raise RuntimeError("reload sentinel")
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn embedded_luajit_commits_one_complete_generation() {
+        let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();
         let config = temporary.path().join("config");
         fs::create_dir_all(&config).unwrap();
@@ -1161,6 +1423,7 @@ raise RuntimeError("reload sentinel")
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cross_language_source_events_and_failed_reload_preserve_generation() {
+        let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();
         let config = temporary.path().join("config");
         fs::create_dir_all(&config).unwrap();
@@ -1268,6 +1531,7 @@ raise RuntimeError("reload sentinel")
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn callback_can_source_another_language_after_evaluation_barrier() {
+        let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();
         let config = temporary.path().join("config");
         fs::create_dir_all(&config).unwrap();
@@ -1322,5 +1586,253 @@ pokecon.state.tags = {"callback-source"}
             vec![DynamicConfigLanguage::Lua]
         );
         assert_eq!(engine.generation(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_exposes_exact_pre_post_state_and_rejects_reentry() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let loaded = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Python,
+                content: r#"import pokecon
+
+def on_pre():
+    assert pokecon.profile.current() == "default"
+    assert pokecon.state.active_profile == "default"
+    assert pokecon.state.pending_profile == "Other"
+    assert pokecon.profile.switch("default") is False
+    pokecon.state.tags.append("pre")
+
+def on_post():
+    assert pokecon.profile.current() == "Other"
+    assert pokecon.state.active_profile == "Other"
+    assert pokecon.state.pending_profile is None
+    assert pokecon.profile.switch("default") is False
+    pokecon.state.tags.append("post")
+
+pokecon.autocmd.on("ProfileSwitchPre", callback=on_pre)
+pokecon.autocmd.on("ProfileSwitchPost", callback=on_post)
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+
+        assert_eq!(
+            engine.switch_profile("Other").await.unwrap(),
+            DynamicProfileSwitchResult::Switched {
+                forced_worker_stop: false,
+            }
+        );
+        assert_eq!(host.profile_current().unwrap(), "Other");
+        let state = host.state_snapshot().unwrap();
+        assert_eq!(state["pending_profile"], Value::Null);
+        assert_eq!(
+            state["tags"],
+            json!(["pre", "post"]),
+            "{:?}",
+            host.diagnostics()
+        );
+        assert_eq!(
+            host.diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.code == "profile_switch_rejected")
+                .count(),
+            2
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancelled_top_level_profile_assignment_retains_the_old_generation() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Lua),
+            host.clone(),
+        )
+        .unwrap();
+        let initial = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Lua,
+                content: r#"pokecon.autocmd.on("ProfileSwitchPre", {
+    callback = function()
+        assert(pokecon.profile.current() == "default")
+        assert(pokecon.state.pending_profile == "Other")
+        local tags = pokecon.state.tags
+        tags[#tags + 1] = "cancelled"
+        return false
+    end,
+})
+pokecon.autocmd.on("ProfileSwitchPost", {
+    callback = function()
+        error("Post must not run after cancellation")
+    end,
+})
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(initial.loaded, "{:?}", initial.diagnostic);
+        assert_eq!(engine.generation(), 1);
+
+        let cancelled = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Python,
+                content: r#"import pokecon
+pokecon.opt.active_profile = "Other"
+pokecon.opt.language = "EN"
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(
+            !cancelled.loaded,
+            "unexpected successful load: {cancelled:?}; state={:?}; settings={:?}; diagnostics={:?}",
+            host.state_snapshot().unwrap(),
+            host.settings_snapshot().unwrap(),
+            host.diagnostics(),
+        );
+        assert_eq!(engine.generation(), 1);
+        assert_eq!(host.profile_current().unwrap(), "default");
+        assert_eq!(host.settings_snapshot().unwrap()["language"], json!("ja"));
+        let state = host.state_snapshot().unwrap();
+        assert_eq!(state["pending_profile"], Value::Null);
+        assert_eq!(state["tags"], json!(["cancelled"]));
+
+        let replacement = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Python,
+                content: "import pokecon\npokecon.opt.language = 'EN'\n".to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(replacement.loaded, "{:?}", replacement.diagnostic);
+        assert_eq!(engine.generation(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn successful_top_level_profile_assignment_commits_target_policy_before_post() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let loaded = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Python,
+                content: r#"import pokecon
+
+pokecon.opt.active_profile = "Other"
+pokecon.opt.dynamic.callback_soft_timeout_ms = 25
+
+def on_post():
+    assert pokecon.profile.current() == "Other"
+    assert pokecon.state.pending_profile is None
+    pokecon.state.tags.append("new-generation-post")
+
+pokecon.autocmd.on("ProfileSwitchPost", callback=on_post)
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+        assert_eq!(engine.generation(), 1);
+        assert_eq!(host.profile_current().unwrap(), "Other");
+        let settings = host.settings_snapshot().unwrap();
+        assert_eq!(settings["active_profile"], json!("Other"));
+        assert_eq!(settings["dynamic.callback_soft_timeout_ms"], json!(25));
+        assert_eq!(
+            host.state_snapshot().unwrap()["tags"],
+            json!(["new-generation-post"]),
+            "{:?}",
+            host.diagnostics()
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn direct_profile_switch_validates_and_publishes_target_callback_policy() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let loaded = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Python,
+                content: r#"import pokecon
+
+pokecon.autocmd.on(
+    "CameraOpenPost",
+    callback=lambda: None,
+    soft_timeout_ms=4000,
+)
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+
+        host.set_profile_settings(
+            "Other",
+            BTreeMap::from([("dynamic.callback_hard_timeout_ms".to_owned(), json!(4500))]),
+        );
+        assert_eq!(
+            engine.switch_profile("Other").await.unwrap(),
+            DynamicProfileSwitchResult::Rejected {
+                code: "InvalidCallbackPolicy".to_owned(),
+                message: "callback hard timeout must be at least soft timeout plus grace"
+                    .to_owned(),
+            }
+        );
+        assert_eq!(host.profile_current().unwrap(), "default");
+        assert_eq!(
+            host.state_snapshot().unwrap()["pending_profile"],
+            Value::Null
+        );
+
+        host.set_profile_settings(
+            "Other",
+            BTreeMap::from([("dynamic.callback_hard_timeout_ms".to_owned(), json!(6000))]),
+        );
+        assert!(matches!(
+            engine.switch_profile("Other").await.unwrap(),
+            DynamicProfileSwitchResult::Switched { .. }
+        ));
+        assert_eq!(engine.event_bus().settings().hard_timeout_ms, 6000);
     }
 }

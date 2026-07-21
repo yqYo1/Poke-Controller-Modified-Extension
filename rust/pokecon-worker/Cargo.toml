@@ -17,6 +17,7 @@ test = false
 bench = false
 
 [dependencies]
+async-trait.workspace = true
 clap.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }

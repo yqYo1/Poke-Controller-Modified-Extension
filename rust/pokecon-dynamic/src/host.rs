@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use pokecon_contracts::model::{Setting, ValueSchema};
 use pokecon_contracts::{ContractError, settings_registry};
@@ -9,6 +10,7 @@ use pokecon_settings::pipeline::SECRET_MASK;
 use serde_json::Value;
 
 use crate::callback::Diagnostic;
+use crate::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
 
 /// Host-operation failure exposed to both language bindings with identical
 /// code and message semantics.
@@ -32,6 +34,7 @@ impl DynamicHostError {
 /// Rust-main operations available to the isolated dynamic worker. Methods are
 /// synchronous because Python and Lua expose synchronous public APIs; the IPC
 /// adapter keeps transport I/O on independent Tokio tasks.
+#[async_trait]
 pub trait DynamicHost: Send + Sync {
     /// # Errors
     ///
@@ -83,8 +86,41 @@ pub trait DynamicHost: Send + Sync {
 
     /// # Errors
     ///
-    /// Returns a profile validation, persistence, or host transport failure.
-    fn profile_switch(&self, name: &str) -> Result<bool, DynamicHostError>;
+    /// Acquires the non-recursive switch gate, validates the complete target,
+    /// and publishes only `pending_profile`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a busy, validation, persistence, or host transport failure.
+    async fn profile_switch_begin(
+        &self,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<HostProfileSwitchBeginResult, DynamicHostError>;
+
+    /// Stops and reaps the old user worker before atomically committing the
+    /// prepared profile. The switch gate remains held for Post callbacks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a worker, settings commit, or host transport failure.
+    async fn profile_switch_commit(
+        &self,
+    ) -> Result<HostProfileSwitchCommitResult, DynamicHostError>;
+
+    /// Clears a prepared target and releases the switch gate.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host transport failure.
+    async fn profile_switch_abort(&self) -> Result<(), DynamicHostError>;
+
+    /// Releases the switch gate after Post callbacks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host transport failure.
+    async fn profile_switch_end(&self) -> Result<(), DynamicHostError>;
 
     /// # Errors
     ///
@@ -385,6 +421,9 @@ struct InMemoryState {
     state: BTreeMap<String, Value>,
     active_profile: String,
     profiles: Vec<String>,
+    profile_settings: BTreeMap<String, BTreeMap<String, Value>>,
+    prepared_profile: Option<(String, BTreeMap<String, Value>)>,
+    profile_switching: bool,
     controller: ControllerState,
     diagnostics: Vec<Diagnostic>,
     outputs: Vec<String>,
@@ -433,6 +472,9 @@ impl InMemoryDynamicHost {
                 state,
                 active_profile,
                 profiles,
+                profile_settings: BTreeMap::new(),
+                prepared_profile: None,
+                profile_switching: false,
                 controller: ControllerState::NEUTRAL,
                 diagnostics: Vec::new(),
                 outputs: Vec::new(),
@@ -460,8 +502,18 @@ impl InMemoryDynamicHost {
     pub fn command_recompute_requests(&self) -> u64 {
         self.inner.lock().command_recompute_requests
     }
+
+    /// Installs a deterministic per-profile settings overlay for conformance
+    /// tests that need target values to differ from the active snapshot.
+    pub fn set_profile_settings(&self, profile: &str, settings: BTreeMap<String, Value>) {
+        self.inner
+            .lock()
+            .profile_settings
+            .insert(profile.to_owned(), settings);
+    }
 }
 
+#[async_trait]
 impl DynamicHost for InMemoryDynamicHost {
     fn settings_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
         Ok(self.inner.lock().settings.clone())
@@ -534,17 +586,97 @@ impl DynamicHost for InMemoryDynamicHost {
         Ok(self.inner.lock().profiles.clone())
     }
 
-    fn profile_switch(&self, name: &str) -> Result<bool, DynamicHostError> {
+    async fn profile_switch_begin(
+        &self,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<HostProfileSwitchBeginResult, DynamicHostError> {
         validate_profile_name(name)?;
         let mut inner = self.inner.lock();
-        if !inner.profiles.iter().any(|profile| profile == name) {
-            return Ok(false);
+        if inner.profile_switching {
+            return Err(DynamicHostError::new(
+                "ProfileSwitchBusy",
+                "another profile switch is already in progress",
+            ));
         }
-        name.clone_into(&mut inner.active_profile);
+        if !inner.profiles.iter().any(|profile| profile == name) {
+            return Err(DynamicHostError::new(
+                "ProfileNotFound",
+                "profile does not exist",
+            ));
+        }
+        let mut prospective = inner.settings.clone();
+        if let Some(profile_settings) = inner.profile_settings.get(name) {
+            for (id, value) in profile_settings {
+                let setting = self.registry.setting_by_id(id).ok_or_else(|| {
+                    DynamicHostError::new("UnknownSetting", format!("unknown setting: {id}"))
+                })?;
+                setting.value.validate(value).map_err(|reason| {
+                    DynamicHostError::new(
+                        "InvalidSetting",
+                        format!("invalid value for {id}: {reason}"),
+                    )
+                })?;
+                prospective.insert(id.clone(), value.clone());
+            }
+        }
+        for (id, value) in changes {
+            let setting = self.registry.setting_by_id(id).ok_or_else(|| {
+                DynamicHostError::new("UnknownSetting", format!("unknown setting: {id}"))
+            })?;
+            setting.value.validate(value).map_err(|reason| {
+                DynamicHostError::new(
+                    "InvalidSetting",
+                    format!("invalid value for {id}: {reason}"),
+                )
+            })?;
+            prospective.insert(id.clone(), value.clone());
+        }
+        prospective.insert("active_profile".to_owned(), Value::String(name.to_owned()));
+        validate_known_cross_constraints(&prospective)?;
+        inner.profile_switching = true;
         inner
             .state
-            .insert("active_profile".to_owned(), Value::String(name.to_owned()));
-        Ok(true)
+            .insert("pending_profile".to_owned(), Value::String(name.to_owned()));
+        inner.prepared_profile = Some((name.to_owned(), prospective.clone()));
+        Ok(HostProfileSwitchBeginResult {
+            settings: prospective,
+        })
+    }
+
+    async fn profile_switch_commit(
+        &self,
+    ) -> Result<HostProfileSwitchCommitResult, DynamicHostError> {
+        let mut inner = self.inner.lock();
+        let (name, settings) = inner.prepared_profile.take().ok_or_else(|| {
+            DynamicHostError::new("NoProfileSwitch", "no profile switch is prepared")
+        })?;
+        name.clone_into(&mut inner.active_profile);
+        inner.settings = settings;
+        inner
+            .state
+            .insert("active_profile".to_owned(), Value::String(name));
+        inner
+            .state
+            .insert("pending_profile".to_owned(), Value::Null);
+        Ok(HostProfileSwitchCommitResult {
+            forced_worker_stop: false,
+        })
+    }
+
+    async fn profile_switch_abort(&self) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        inner.prepared_profile = None;
+        inner.profile_switching = false;
+        inner
+            .state
+            .insert("pending_profile".to_owned(), Value::Null);
+        Ok(())
+    }
+
+    async fn profile_switch_end(&self) -> Result<(), DynamicHostError> {
+        self.inner.lock().profile_switching = false;
+        Ok(())
     }
 
     fn controller_update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
@@ -643,8 +775,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn controller_validation_and_profile_names_have_no_partial_side_effects() {
+    #[tokio::test]
+    async fn controller_validation_and_profile_names_have_no_partial_side_effects() {
         let host = InMemoryDynamicHost::new(
             BTreeMap::new(),
             BTreeMap::from([
@@ -659,7 +791,11 @@ mod tests {
         }));
         assert!(invalid.is_err());
         assert_eq!(host.controller_state(), ControllerState::NEUTRAL);
-        assert!(host.profile_switch("../escape").is_err());
+        assert!(
+            host.profile_switch_begin("../escape", &BTreeMap::new())
+                .await
+                .is_err()
+        );
         assert_eq!(host.profile_current().unwrap(), "default");
     }
 

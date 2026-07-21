@@ -6,12 +6,14 @@ use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use pokecon_dynamic::protocol::{
     self, DynamicCommandCacheRequest, DynamicCommandCacheResult, DynamicDiagnostic,
     DynamicEmitRequest, DynamicEmitResult, DynamicInitializeRequest, DynamicInitializeResult,
-    DynamicTagMatchRequest, DynamicWorkerStatus, HostControllerUpdate, HostMergeStateValueRequest,
-    HostProfileSwitchRequest, HostSetStateValueRequest, HostSettings, HostSettingsChanges,
-    HostState,
+    DynamicProfileSwitchRequest, DynamicProfileSwitchResult, DynamicTagMatchRequest,
+    DynamicWorkerStatus, HostControllerUpdate, HostMergeStateValueRequest,
+    HostProfileSwitchBeginRequest, HostProfileSwitchBeginResult, HostProfileSwitchCommitResult,
+    HostSetStateValueRequest, HostSettings, HostSettingsChanges, HostState,
 };
 use pokecon_dynamic::{
     CommandDisplayItem, CommandInfo, Diagnostic, DynamicConfigControl, DynamicEngine,
@@ -115,6 +117,7 @@ impl DynamicWorkerRuntime {
                 | protocol::SORT_COMMANDS
                 | protocol::TAG_MATCHES
                 | protocol::BUILD_COMMAND_CACHE
+                | protocol::SWITCH_PROFILE
         )
     }
 
@@ -197,6 +200,16 @@ impl DynamicWorkerRuntime {
                         handle.block_on(
                             engine.build_command_cache(request.generation, request.candidates),
                         )
+                    })
+                    .await?;
+                serialize_dispatch(&result)
+            }
+            protocol::SWITCH_PROFILE => {
+                let request = deserialize_value::<DynamicProfileSwitchRequest>(payload)
+                    .map_err(|error| DispatchError::invalid_payload(&error))?;
+                let result = self
+                    .run_engine(move |engine, handle| {
+                        handle.block_on(engine.switch_profile(&request.name))
                     })
                     .await?;
                 serialize_dispatch(&result)
@@ -338,6 +351,7 @@ fn connection_host_error(error: ConnectionError) -> DynamicHostError {
     }
 }
 
+#[async_trait]
 impl DynamicHost for IpcDynamicHost {
     fn settings_snapshot(&self) -> Result<HostSettings, DynamicHostError> {
         self.request(protocol::HOST_SETTINGS_SNAPSHOT, &())
@@ -392,13 +406,32 @@ impl DynamicHost for IpcDynamicHost {
         self.request(protocol::HOST_PROFILE_LIST, &())
     }
 
-    fn profile_switch(&self, name: &str) -> Result<bool, DynamicHostError> {
+    async fn profile_switch_begin(
+        &self,
+        name: &str,
+        changes: &HostSettingsChanges,
+    ) -> Result<HostProfileSwitchBeginResult, DynamicHostError> {
         self.request(
-            protocol::HOST_PROFILE_SWITCH,
-            &HostProfileSwitchRequest {
+            protocol::HOST_PROFILE_SWITCH_BEGIN,
+            &HostProfileSwitchBeginRequest {
                 name: name.to_owned(),
+                changes: changes.clone(),
             },
         )
+    }
+
+    async fn profile_switch_commit(
+        &self,
+    ) -> Result<HostProfileSwitchCommitResult, DynamicHostError> {
+        self.request(protocol::HOST_PROFILE_SWITCH_COMMIT, &())
+    }
+
+    async fn profile_switch_abort(&self) -> Result<(), DynamicHostError> {
+        self.request(protocol::HOST_PROFILE_SWITCH_ABORT, &())
+    }
+
+    async fn profile_switch_end(&self) -> Result<(), DynamicHostError> {
+        self.request(protocol::HOST_PROFILE_SWITCH_END, &())
     }
 
     fn controller_update(&self, update: HostControllerUpdate) -> Result<(), DynamicHostError> {
@@ -605,6 +638,26 @@ impl DynamicWorkerClient {
         .await
     }
 
+    /// Runs the complete dynamic Pre/Post profile transaction in the child
+    /// engine while Rust-main owns validation, worker reaping, and commit.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, transport, remote-engine, or payload failure.
+    pub async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<DynamicProfileSwitchResult, DynamicClientError> {
+        self.request(
+            OperationClass::MutatingResource,
+            protocol::SWITCH_PROFILE,
+            &DynamicProfileSwitchRequest {
+                name: name.to_owned(),
+            },
+        )
+        .await
+    }
+
     #[must_use]
     pub fn take_logs(&self) -> Option<mpsc::Receiver<LogPayload>> {
         self.logs
@@ -676,7 +729,7 @@ async fn respond_to_host_call(
     operation: String,
     payload: &IpcValue,
 ) {
-    let response = dispatch_host_call(host, &operation, payload);
+    let response = dispatch_host_call(host, &operation, payload).await;
     match response {
         Ok(payload) => {
             let _result = connection.respond(id, Some(operation), payload).await;
@@ -689,7 +742,7 @@ async fn respond_to_host_call(
     }
 }
 
-fn dispatch_host_call(
+async fn dispatch_host_call(
     host: &dyn DynamicHost,
     operation: &str,
     payload: &IpcValue,
@@ -723,9 +776,24 @@ fn dispatch_host_call(
             decode_empty(payload)?;
             serialize_host(host.profile_list())
         }
-        protocol::HOST_PROFILE_SWITCH => {
-            let request = decode_host::<HostProfileSwitchRequest>(payload)?;
-            serialize_host(host.profile_switch(&request.name))
+        protocol::HOST_PROFILE_SWITCH_BEGIN => {
+            let request = decode_host::<HostProfileSwitchBeginRequest>(payload)?;
+            serialize_host(
+                host.profile_switch_begin(&request.name, &request.changes)
+                    .await,
+            )
+        }
+        protocol::HOST_PROFILE_SWITCH_COMMIT => {
+            decode_empty(payload)?;
+            serialize_host(host.profile_switch_commit().await)
+        }
+        protocol::HOST_PROFILE_SWITCH_ABORT => {
+            decode_empty(payload)?;
+            serialize_host(host.profile_switch_abort().await)
+        }
+        protocol::HOST_PROFILE_SWITCH_END => {
+            decode_empty(payload)?;
+            serialize_host(host.profile_switch_end().await)
         }
         protocol::HOST_CONTROLLER_UPDATE => {
             let update = decode_host::<HostControllerUpdate>(payload)?;

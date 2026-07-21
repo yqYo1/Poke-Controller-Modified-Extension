@@ -387,6 +387,13 @@ impl EventBus {
         self.registry.lock().defined.iter().cloned().collect()
     }
 
+    /// Returns the callback policy currently published to registrations and
+    /// the executor.
+    #[must_use]
+    pub fn settings(&self) -> CallbackSettings {
+        self.registry.lock().settings
+    }
+
     /// Validates every registration and then atomically updates global timeout
     /// and capacity settings.
     ///
@@ -395,15 +402,24 @@ impl EventBus {
     /// Rejects invalid global settings or a registration whose inherited
     /// effective timeout combination would become invalid.
     pub async fn update_settings(&self, settings: CallbackSettings) -> Result<(), EventError> {
-        settings.validate()?;
-        {
-            let registry = self.registry.lock();
-            for registration in registry.registrations.values() {
-                registration.limits.resolve(settings)?;
-            }
-        }
+        self.validate_settings(settings)?;
         self.executor.update_settings(settings).await?;
         self.registry.lock().settings = settings;
+        Ok(())
+    }
+
+    /// Validates a prospective global callback policy against every installed
+    /// registration without changing the executor or registry.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid global settings or an incompatible inherited override.
+    pub fn validate_settings(&self, settings: CallbackSettings) -> Result<(), EventError> {
+        settings.validate()?;
+        let registry = self.registry.lock();
+        for registration in registry.registrations.values() {
+            registration.limits.resolve(settings)?;
+        }
         Ok(())
     }
 

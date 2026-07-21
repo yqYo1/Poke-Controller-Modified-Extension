@@ -24,6 +24,12 @@ pub enum StagedEventOperation {
     Define(String),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct StagedProfileSwitch {
+    pub target: String,
+    pub changes: BTreeMap<String, Value>,
+}
+
 impl std::fmt::Debug for StagedEventOperation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -149,6 +155,45 @@ impl EvaluationTransaction {
     /// command callback overrides in the same evaluation.
     pub(crate) fn callback_settings(&self) -> Result<CallbackSettings, TransactionError> {
         Ok(callback_settings(&self.prospective_settings)?)
+    }
+
+    /// Resolves the callback policy and validates every staged registration
+    /// against a host-prepared profile snapshot before any switch event runs.
+    pub(crate) fn callback_settings_for(
+        &self,
+        settings: &BTreeMap<String, Value>,
+    ) -> Result<CallbackSettings, TransactionError> {
+        let callback_settings = callback_settings(settings)?;
+        for operation in &self.event_operations {
+            if let StagedEventOperation::Install { options, .. } = operation {
+                options.limits.resolve(callback_settings)?;
+            }
+        }
+        Ok(callback_settings)
+    }
+
+    /// Extracts the profile target and the complete accompanying dynamic
+    /// overlay without mutating the staged transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host-style validation error if the normalized profile value
+    /// is unexpectedly not a string.
+    pub(crate) fn staged_profile_switch(
+        &self,
+    ) -> Result<Option<StagedProfileSwitch>, TransactionError> {
+        let Some(target) = self.changes.get("active_profile") else {
+            return Ok(None);
+        };
+        let target = target.as_str().ok_or_else(|| {
+            DynamicHostError::new("InvalidProfile", "active profile must be a string")
+        })?;
+        let mut changes = self.changes.clone();
+        changes.remove("active_profile");
+        Ok(Some(StagedProfileSwitch {
+            target: target.to_owned(),
+            changes,
+        }))
     }
 
     /// Validates and stages one setting assignment without host side effects.
@@ -293,13 +338,32 @@ impl EvaluationTransaction {
         host: &dyn DynamicHost,
         event_bus: &EventBus,
     ) -> Result<Vec<String>, TransactionError> {
-        let next_callback_settings = callback_settings(&self.prospective_settings)?;
-        for operation in &self.event_operations {
-            if let StagedEventOperation::Install { options, .. } = operation {
-                options.limits.resolve(next_callback_settings)?;
-            }
-        }
-        if !self.changes.is_empty() {
+        self.commit_staged_inner(host, event_bus, true, None).await
+    }
+
+    /// Commits callbacks and command options after the profile host already
+    /// atomically applied the staged settings at profile step 8.
+    pub(crate) async fn commit_staged_after_profile_switch(
+        self,
+        host: &dyn DynamicHost,
+        event_bus: &EventBus,
+        settings: &BTreeMap<String, Value>,
+    ) -> Result<Vec<String>, TransactionError> {
+        self.commit_staged_inner(host, event_bus, false, Some(settings))
+            .await
+    }
+
+    async fn commit_staged_inner(
+        self,
+        host: &dyn DynamicHost,
+        event_bus: &EventBus,
+        apply_settings: bool,
+        effective_settings: Option<&BTreeMap<String, Value>>,
+    ) -> Result<Vec<String>, TransactionError> {
+        let next_callback_settings =
+            self.callback_settings_for(effective_settings.unwrap_or(&self.prospective_settings))?;
+        event_bus.validate_settings(next_callback_settings)?;
+        if apply_settings && !self.changes.is_empty() {
             host.apply_settings(&self.changes)?;
         }
         event_bus.update_settings(next_callback_settings).await?;

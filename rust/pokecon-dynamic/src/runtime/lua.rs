@@ -18,6 +18,7 @@ const LUA_CALLBACK_INVOKER_REGISTRY_KEY: &str = "pokecon.callback_invoker";
 
 const LUA_BOOTSTRAP: &str = r##"
 local api = _pokecon_api
+local array_metatable = api.array_metatable
 local raw_pcall = pcall
 local raw_require = require
 local unpack_values = table.unpack or unpack
@@ -109,6 +110,9 @@ local function deep_copy(value, copies)
     local metatable = debug and debug.getmetatable(value) or getmetatable(value)
     if type(metatable) == "table" then
         return setmetatable(copied, metatable)
+    end
+    if metatable == false then
+        return setmetatable(copied, array_metatable)
     end
     return copied
 end
@@ -778,6 +782,7 @@ fn install_timeout_api(lua: &Lua, api: &Table) -> mlua::Result<()> {
 
 fn install_api(lua: &Lua, engine: &Weak<EngineInner>) -> mlua::Result<()> {
     let api = lua.create_table()?;
+    api.set("array_metatable", lua.array_metatable())?;
     install_setting_api(lua, &api, engine)?;
     install_event_api(lua, &api, engine)?;
     install_host_api(lua, &api, engine)?;

@@ -317,6 +317,25 @@ impl ScriptWorkerClient {
             .await
     }
 
+    /// Flushes an unacknowledged cooperative-stop event before Rust-main
+    /// closes the generation gate and releases its resources.
+    ///
+    /// # Errors
+    ///
+    /// Returns a generation, payload, queue, or transport failure.
+    pub async fn request_profile_stop(&self) -> Result<(), ScriptClientError> {
+        self.worker
+            .generation()
+            .permit(OperationClass::MutatingResource)
+            .map_err(WorkerRequestError::from)?;
+        let payload = serialize_value(&())?;
+        self.worker
+            .connection()
+            .send_event(protocol::STOP, payload)
+            .await?;
+        Ok(())
+    }
+
     /// Queues one UI-originated fixed Tk compatibility callback.
     ///
     /// # Errors

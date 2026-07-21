@@ -72,7 +72,7 @@ impl ScriptWorkerRuntime {
     }
 
     pub(crate) fn handles_event(operation: &str) -> bool {
-        operation == protocol::TK_EVENT
+        matches!(operation, protocol::TK_EVENT | protocol::STOP)
     }
 
     pub(crate) fn handle_event(
@@ -80,6 +80,14 @@ impl ScriptWorkerRuntime {
         operation: &str,
         payload: &IpcValue,
     ) -> Result<(), IpcErrorPayload> {
+        if operation == protocol::STOP {
+            deserialize_value::<()>(payload)
+                .map_err(|error| DispatchError::invalid_payload(&error).payload())?;
+            if let Some(actor) = &self.actor {
+                actor.request_stop();
+            }
+            return Ok(());
+        }
         if operation != protocol::TK_EVENT {
             return Err(DispatchError::new(
                 "NotFound",

@@ -3,9 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, Weak};
+use std::time::Duration;
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use pokecon_contracts::model::Scope;
 use pokecon_device::controller::{ControllerState, ControllerUpdate};
@@ -13,6 +15,7 @@ use pokecon_device::input::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
 };
+use pokecon_dynamic::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
 use pokecon_dynamic::{
     CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
     merge_state_change,
@@ -24,6 +27,8 @@ use pokecon_settings::roots::SafeComponent;
 use pokecon_worker::ipc::ResourceSafety;
 use serde_json::Value;
 use tokio::sync::watch;
+
+use crate::command_service::{CommandService, CommandServiceError};
 
 const DYNAMIC_SOURCE: &str = "dynamic-config";
 const DYNAMIC_GENERATION: &str = "dynamic-1";
@@ -191,8 +196,15 @@ struct ScriptLoadStage {
 struct PreparedProfileSwitch {
     target: String,
     loaded: LoadedSettings,
+    dynamic_values: Option<BTreeMap<String, Value>>,
     runtime_dynamic_values: BTreeMap<String, Value>,
     public_state: BTreeMap<String, Value>,
+}
+
+struct ResolvedPreparedProfile {
+    loaded: LoadedSettings,
+    dynamic_values: Option<BTreeMap<String, Value>>,
+    runtime_dynamic_values: BTreeMap<String, Value>,
 }
 
 /// Dynamic host used from worker creation through top-level config commit.
@@ -205,6 +217,8 @@ pub struct StartupDynamicHost {
     inner: Mutex<StartupHostState>,
     controller: Arc<DynamicControllerSafety>,
     command_recompute: watch::Sender<u64>,
+    profile_switching: AtomicBool,
+    command_service: OnceLock<Weak<CommandService>>,
 }
 
 impl StartupDynamicHost {
@@ -235,6 +249,8 @@ impl StartupDynamicHost {
             }),
             controller: Arc::new(DynamicControllerSafety::new()),
             command_recompute,
+            profile_switching: AtomicBool::new(false),
+            command_service: OnceLock::new(),
         })
     }
 
@@ -495,7 +511,11 @@ impl StartupDynamicHost {
     ///
     /// Rejects unsafe/missing profiles, invalid target TOML, overlapping
     /// preparations, or a stopping host.
-    pub fn prepare_profile_switch(&self, name: &str) -> Result<(), DynamicHostError> {
+    pub fn prepare_profile_switch(
+        &self,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<BTreeMap<String, Value>, DynamicHostError> {
         let mut inner = self.inner.lock();
         ensure_running(&inner)?;
         if inner.prepared_profile.is_some() {
@@ -505,18 +525,30 @@ impl StartupDynamicHost {
             ));
         }
         validate_existing_profile(&inner.loaded, name)?;
-        let (loaded, runtime_dynamic_values) = resolve_runtime_profile(&inner, name)?;
+        if changes.contains_key("active_profile") {
+            return Err(DynamicHostError::new(
+                "InvalidProfileSwitch",
+                "profile switch changes must not contain active_profile",
+            ));
+        }
+        let ResolvedPreparedProfile {
+            loaded,
+            dynamic_values,
+            runtime_dynamic_values,
+        } = resolve_prepared_profile(&inner, name, changes)?;
         let public_state = refreshed_state(&loaded, Some(&inner.public_state))?;
         inner
             .public_state
             .insert("pending_profile".to_owned(), Value::String(name.to_owned()));
+        let settings = loaded_settings_values(&loaded);
         inner.prepared_profile = Some(PreparedProfileSwitch {
             target: name.to_owned(),
             loaded,
+            dynamic_values,
             runtime_dynamic_values,
             public_state,
         });
-        Ok(())
+        Ok(settings)
     }
 
     /// Discards a prepared target and clears `pending_profile` while leaving
@@ -550,6 +582,9 @@ impl StartupDynamicHost {
         public_state.insert("active_profile".to_owned(), Value::String(prepared.target));
         public_state.insert("pending_profile".to_owned(), Value::Null);
         inner.loaded = prepared.loaded;
+        if let Some(dynamic_values) = prepared.dynamic_values {
+            inner.dynamic_values = dynamic_values;
+        }
         inner.runtime_dynamic_values = prepared.runtime_dynamic_values;
         inner.public_state = public_state;
         Ok(inner.loaded.clone())
@@ -558,18 +593,47 @@ impl StartupDynamicHost {
     /// Closes every mutating host boundary and immediately releases dynamic
     /// controller ownership before worker shutdown begins.
     pub fn begin_stopping(&self) {
-        self.inner.lock().stopping = true;
+        let mut inner = self.inner.lock();
+        inner.stopping = true;
+        inner.prepared_profile = None;
+        inner
+            .public_state
+            .insert("pending_profile".to_owned(), Value::Null);
+        drop(inner);
+        self.finish_profile_switch_gate();
         self.controller.force_release();
     }
 
+    pub(crate) fn try_begin_profile_switch_gate(&self) -> Result<(), DynamicHostError> {
+        self.profile_switching
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| ())
+            .map_err(|_| {
+                DynamicHostError::new(
+                    "ProfileSwitchBusy",
+                    "another profile switch is already in progress",
+                )
+            })
+    }
+
+    pub(crate) fn profile_switch_in_progress(&self) -> bool {
+        self.profile_switching.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn finish_profile_switch_gate(&self) {
+        self.profile_switching.store(false, Ordering::Release);
+    }
+
+    pub(crate) fn hold_profile_switch_gate(&self) {
+        self.profile_switching.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn bind_command_service(&self, commands: &Arc<CommandService>) {
+        let _already_bound = self.command_service.set(Arc::downgrade(commands));
+    }
+
     fn current_settings(inner: &StartupHostState) -> BTreeMap<String, Value> {
-        inner
-            .loaded
-            .settings
-            .values()
-            .iter()
-            .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
-            .collect()
+        loaded_settings_values(&inner.loaded)
     }
 
     fn apply_startup_settings(
@@ -633,6 +697,16 @@ impl StartupDynamicHost {
     }
 }
 
+fn loaded_settings_values(loaded: &LoadedSettings) -> BTreeMap<String, Value> {
+    loaded
+        .settings
+        .values()
+        .iter()
+        .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
+        .collect()
+}
+
+#[async_trait]
 impl DynamicHost for StartupDynamicHost {
     fn settings_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
         Ok(Self::current_settings(&self.inner.lock()))
@@ -699,19 +773,53 @@ impl DynamicHost for StartupDynamicHost {
         list_profiles(&self.inner.lock().loaded)
     }
 
-    fn profile_switch(&self, name: &str) -> Result<bool, DynamicHostError> {
-        {
-            let inner = self.inner.lock();
-            ensure_running(&inner)?;
-            if validate_existing_profile(&inner.loaded, name).is_err() {
-                return Ok(false);
+    async fn profile_switch_begin(
+        &self,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<HostProfileSwitchBeginResult, DynamicHostError> {
+        self.try_begin_profile_switch_gate()?;
+        match self.prepare_profile_switch(name, changes) {
+            Ok(settings) => Ok(HostProfileSwitchBeginResult { settings }),
+            Err(error) => {
+                self.finish_profile_switch_gate();
+                Err(error)
             }
         }
-        self.apply_startup_settings(&BTreeMap::from([(
-            "active_profile".to_owned(),
-            Value::String(name.to_owned()),
-        )]))?;
-        Ok(true)
+    }
+
+    async fn profile_switch_commit(
+        &self,
+    ) -> Result<HostProfileSwitchCommitResult, DynamicHostError> {
+        let stop = if let Some(commands) = self
+            .command_service
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+        {
+            let timeout = profile_shutdown_timeout(self)?;
+            commands
+                .stop_for_profile_switch(timeout)
+                .await
+                .map_err(profile_command_error)?
+        } else {
+            self.clear_command_generation()?;
+            None
+        };
+        self.commit_profile_switch()?;
+        Ok(HostProfileSwitchCommitResult {
+            forced_worker_stop: stop.is_some_and(|stop| stop.forced),
+        })
+    }
+
+    async fn profile_switch_abort(&self) -> Result<(), DynamicHostError> {
+        self.cancel_profile_switch();
+        self.finish_profile_switch_gate();
+        Ok(())
+    }
+
+    async fn profile_switch_end(&self) -> Result<(), DynamicHostError> {
+        self.finish_profile_switch_gate();
+        Ok(())
     }
 
     fn controller_update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
@@ -860,6 +968,65 @@ fn host_stopping() -> DynamicHostError {
 
 fn pipeline_error(error: &PipelineError) -> DynamicHostError {
     DynamicHostError::new("InvalidSetting", error.to_string())
+}
+
+fn profile_shutdown_timeout(host: &StartupDynamicHost) -> Result<Duration, DynamicHostError> {
+    let timeout = host
+        .loaded_settings()
+        .settings
+        .integer("python.script.shutdown_timeout_ms")
+        .map_err(|error| pipeline_error(&error))?;
+    let milliseconds = u64::try_from(timeout).map_err(|_| {
+        DynamicHostError::new(
+            "InvalidSetting",
+            "python.script.shutdown_timeout_ms is outside the u64 range",
+        )
+    })?;
+    Ok(Duration::from_millis(milliseconds))
+}
+
+fn profile_command_error(error: CommandServiceError) -> DynamicHostError {
+    match error {
+        CommandServiceError::Backend(error) => DynamicHostError::new(error.code, error.message),
+        CommandServiceError::Host(error) => error,
+        error => DynamicHostError::new("UserWorkerStopFailed", error.to_string()),
+    }
+}
+
+fn resolve_prepared_profile(
+    inner: &StartupHostState,
+    target: &str,
+    changes: &BTreeMap<String, Value>,
+) -> Result<ResolvedPreparedProfile, DynamicHostError> {
+    if inner.startup_complete {
+        let (mut loaded, mut runtime_dynamic_values) = resolve_runtime_profile(inner, target)?;
+        runtime_dynamic_values.extend(changes.clone());
+        loaded = loaded
+            .with_runtime_dynamic_changes(&runtime_dynamic_values)
+            .map_err(|error| pipeline_error(&error))?;
+        return Ok(ResolvedPreparedProfile {
+            loaded,
+            dynamic_values: None,
+            runtime_dynamic_values,
+        });
+    }
+
+    let mut dynamic_values = inner.dynamic_values.clone();
+    dynamic_values.extend(changes.clone());
+    dynamic_values.insert(
+        "active_profile".to_owned(),
+        Value::String(target.to_owned()),
+    );
+    let mut request = inner.request.clone();
+    request.dynamic_values.clone_from(&dynamic_values);
+    let loaded = SettingsPipeline::new(request)
+        .load_through_dynamic()
+        .map_err(|error| pipeline_error(&error))?;
+    Ok(ResolvedPreparedProfile {
+        loaded,
+        dynamic_values: Some(dynamic_values),
+        runtime_dynamic_values: inner.runtime_dynamic_values.clone(),
+    })
 }
 
 fn resolve_runtime_profile(
@@ -1102,15 +1269,23 @@ mod tests {
         assert!(!global_settings.exists());
     }
 
-    #[test]
-    fn profile_state_and_controller_are_rust_owned() {
+    #[tokio::test]
+    async fn profile_state_and_controller_are_rust_owned() {
         let (_temporary, request, loaded) = fixture();
         let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
         assert_eq!(host.profile_list().unwrap(), ["Other", "default"]);
         host.finish_startup().expect("startup must finalize");
-        assert!(host.profile_switch("Other").unwrap());
+        host.profile_switch_begin("Other", &BTreeMap::new())
+            .await
+            .unwrap();
+        host.profile_switch_commit().await.unwrap();
+        host.profile_switch_end().await.unwrap();
         assert_eq!(host.profile_current().unwrap(), "Other");
-        assert!(!host.profile_switch("Missing").unwrap());
+        assert!(
+            host.profile_switch_begin("Missing", &BTreeMap::new())
+                .await
+                .is_err()
+        );
 
         host.controller_update(ControllerUpdate {
             a: Some(true),

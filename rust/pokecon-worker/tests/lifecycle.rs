@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use pokecon_dynamic::protocol::DynamicInitializeRequest;
 use pokecon_dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
+use pokecon_dynamic::protocol::{DynamicInitializeRequest, DynamicProfileSwitchResult};
 use pokecon_dynamic::{
     CommandDisplayItem, CommandInfo, DynamicConfigControl, DynamicConfigLanguage, DynamicHost,
     InMemoryDynamicHost,
@@ -99,12 +99,31 @@ assert(not commands_available)
 print("lua-frame-safe")
 pokecon.opt.language = "EN"
 pokecon.controller.update({a = true})
+local profile_handlers_registered = false
 pokecon.autocmd.on("CommandStartPre", {
     callback = function()
         assert(pokecon.profile.current() == "default")
         assert(#pokecon.profile.list() == 2)
         assert(pokecon.state.active_profile == "default")
         assert(pokecon.profile.switch("Other"))
+        if not profile_handlers_registered then
+            profile_handlers_registered = true
+            pokecon.autocmd.on("ProfileSwitchPre", {
+                callback = function()
+                    local current = pokecon.profile.current()
+                    local pending = pokecon.state.pending_profile
+                    assert(current == "Other" and pending == "default")
+                    assert(not pokecon.profile.switch(current))
+                end,
+            })
+            pokecon.autocmd.on("ProfileSwitchPost", {
+                callback = function()
+                    assert(pokecon.profile.current() == "default")
+                    assert(pokecon.state.pending_profile == nil)
+                    assert(not pokecon.profile.switch("Other"))
+                end,
+            })
+        end
         pokecon.state.tags = {"worker-ipc"}
         return false
     end,
@@ -178,18 +197,30 @@ async fn verify_lua_runtime(
     );
     assert!(host.controller_state().buttons.a);
     assert_stdout_log(logs, "lua-frame-safe").await;
+    let command_start = client
+        .emit("CommandStartPre")
+        .await
+        .expect("event crosses worker IPC");
     assert!(
-        client
-            .emit("CommandStartPre")
-            .await
-            .expect("event crosses worker IPC")
-            .cancelled
+        command_start.cancelled,
+        "profile callback diagnostics: {:?}",
+        host.diagnostics()
     );
     assert_eq!(host.profile_current().unwrap(), "Other");
     assert_eq!(
         host.state_snapshot().unwrap()["tags"],
         json!(["worker-ipc"])
     );
+    assert_eq!(
+        client
+            .switch_profile("default")
+            .await
+            .expect("explicit profile operation crosses worker IPC"),
+        DynamicProfileSwitchResult::Switched {
+            forced_worker_stop: false,
+        }
+    );
+    assert_eq!(host.profile_current().unwrap(), "default");
 
     let command = CommandInfo {
         name: "Example".to_owned(),

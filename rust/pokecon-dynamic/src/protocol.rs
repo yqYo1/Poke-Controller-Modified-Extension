@@ -19,6 +19,7 @@ pub const EMIT: &str = "dynamic.emit";
 pub const SORT_COMMANDS: &str = "dynamic.sort_commands";
 pub const TAG_MATCHES: &str = "dynamic.tag_matches";
 pub const BUILD_COMMAND_CACHE: &str = "dynamic.build_command_cache";
+pub const SWITCH_PROFILE: &str = "dynamic.switch_profile";
 
 /// Private worker environment bridge used to add the exact synchronized venv
 /// to embedded `CPython` without accepting ambient `PYTHONPATH` entries.
@@ -31,7 +32,10 @@ pub const HOST_SET_STATE_VALUE: &str = "dynamic.host.set_state_value";
 pub const HOST_MERGE_STATE_VALUE: &str = "dynamic.host.merge_state_value";
 pub const HOST_PROFILE_CURRENT: &str = "dynamic.host.profile_current";
 pub const HOST_PROFILE_LIST: &str = "dynamic.host.profile_list";
-pub const HOST_PROFILE_SWITCH: &str = "dynamic.host.profile_switch";
+pub const HOST_PROFILE_SWITCH_BEGIN: &str = "dynamic.host.profile_switch_begin";
+pub const HOST_PROFILE_SWITCH_COMMIT: &str = "dynamic.host.profile_switch_commit";
+pub const HOST_PROFILE_SWITCH_ABORT: &str = "dynamic.host.profile_switch_abort";
+pub const HOST_PROFILE_SWITCH_END: &str = "dynamic.host.profile_switch_end";
 pub const HOST_CONTROLLER_UPDATE: &str = "dynamic.host.controller_update";
 pub const HOST_CONTROLLER_RESET: &str = "dynamic.host.controller_reset";
 
@@ -98,6 +102,20 @@ pub struct DynamicCommandCacheRequest {
     pub candidates: Vec<CommandInfo>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DynamicProfileSwitchRequest {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum DynamicProfileSwitchResult {
+    Switched { forced_worker_stop: bool },
+    Cancelled,
+    Rejected { code: String, message: String },
+}
+
 pub type DynamicCommandCacheResult = CommandCacheBuildResult;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -117,8 +135,21 @@ pub struct HostMergeStateValueRequest {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct HostProfileSwitchRequest {
+pub struct HostProfileSwitchBeginRequest {
     pub name: String,
+    pub changes: BTreeMap<String, Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostProfileSwitchBeginResult {
+    pub settings: HostSettings,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostProfileSwitchCommitResult {
+    pub forced_worker_stop: bool,
 }
 
 pub type HostSettings = BTreeMap<String, Value>;

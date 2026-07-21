@@ -1,13 +1,11 @@
 //! Exact, non-reentrant profile switching transaction.
 
 use std::sync::Arc;
-use std::time::Duration;
 
+use pokecon_dynamic::protocol::DynamicProfileSwitchResult;
 use thiserror::Error;
 
-use crate::command_service::{
-    CommandBackendError, CommandService, CommandServiceError, DynamicCommandBridge,
-};
+use crate::command_service::{CommandBackendError, CommandService, DynamicCommandBridge};
 use crate::dynamic_host::StartupDynamicHost;
 
 /// Successful or explicitly cancelled transaction result.
@@ -22,13 +20,7 @@ pub enum ProfileSwitchResult {
 #[derive(Debug, Error)]
 pub enum ProfileSwitchError {
     #[error(transparent)]
-    Command(#[from] CommandServiceError),
-    #[error(transparent)]
-    Host(#[from] pokecon_dynamic::DynamicHostError),
-    #[error(transparent)]
     Dynamic(#[from] CommandBackendError),
-    #[error("python.script.shutdown_timeout_ms is outside the u64 range")]
-    InvalidShutdownTimeout,
 }
 
 /// Coordinates settings, dynamic events, and the profile-scoped worker in the
@@ -51,11 +43,12 @@ impl std::fmt::Debug for ProfileService {
 
 impl ProfileService {
     #[must_use]
-    pub const fn new(
+    pub fn new(
         host: Arc<StartupDynamicHost>,
         commands: Arc<CommandService>,
         dynamic: Arc<dyn DynamicCommandBridge>,
     ) -> Self {
+        host.bind_command_service(&commands);
         Self {
             host,
             commands,
@@ -71,41 +64,16 @@ impl ProfileService {
     /// Rejects reentry, invalid target settings, event transport failure, or a
     /// worker that cannot be reaped. Every error releases the internal gate.
     pub async fn switch(&self, name: &str) -> Result<ProfileSwitchResult, ProfileSwitchError> {
-        self.commands.try_begin_profile_switch()?;
-        let mut guard = ProfileTransactionGuard::new(&self.host, &self.commands);
-
-        self.host.prepare_profile_switch(name)?;
-        guard.prepared = true;
-        if self.dynamic.emit("ProfileSwitchPre").await? {
-            return Ok(ProfileSwitchResult::Cancelled);
+        match self.dynamic.switch_profile(name).await? {
+            DynamicProfileSwitchResult::Switched { forced_worker_stop } => {
+                Ok(ProfileSwitchResult::Switched { forced_worker_stop })
+            }
+            DynamicProfileSwitchResult::Cancelled => Ok(ProfileSwitchResult::Cancelled),
+            DynamicProfileSwitchResult::Rejected { code, message } => {
+                Err(CommandBackendError::new(code, message).into())
+            }
         }
-
-        let timeout = shutdown_timeout(&self.host)?;
-        let stop = self.commands.stop_for_profile_switch(timeout).await?;
-        self.host.commit_profile_switch()?;
-        guard.committed = true;
-
-        if let Err(error) = self.dynamic.emit("ProfileSwitchPost").await {
-            tracing::error!(
-                event = "ProfileSwitchPost",
-                error = %error,
-                "profile switched but its non-cancellable Post event failed"
-            );
-        }
-        Ok(ProfileSwitchResult::Switched {
-            forced_worker_stop: stop.is_some_and(|stop| stop.forced),
-        })
     }
-}
-
-fn shutdown_timeout(host: &StartupDynamicHost) -> Result<Duration, ProfileSwitchError> {
-    let timeout = host
-        .loaded_settings()
-        .settings
-        .integer("python.script.shutdown_timeout_ms")?;
-    let milliseconds =
-        u64::try_from(timeout).map_err(|_error| ProfileSwitchError::InvalidShutdownTimeout)?;
-    Ok(Duration::from_millis(milliseconds))
 }
 
 impl From<pokecon_settings::pipeline::PipelineError> for ProfileSwitchError {
@@ -117,39 +85,13 @@ impl From<pokecon_settings::pipeline::PipelineError> for ProfileSwitchError {
     }
 }
 
-struct ProfileTransactionGuard<'a> {
-    host: &'a StartupDynamicHost,
-    commands: &'a CommandService,
-    prepared: bool,
-    committed: bool,
-}
-
-impl<'a> ProfileTransactionGuard<'a> {
-    const fn new(host: &'a StartupDynamicHost, commands: &'a CommandService) -> Self {
-        Self {
-            host,
-            commands,
-            prepared: false,
-            committed: false,
-        }
-    }
-}
-
-impl Drop for ProfileTransactionGuard<'_> {
-    fn drop(&mut self) {
-        if self.prepared && !self.committed {
-            self.host.cancel_profile_switch();
-        }
-        self.commands.finish_profile_switch();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
     use std::ffi::OsString;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::Duration;
 
     use async_trait::async_trait;
     use pokecon_dynamic::{CommandCacheBuildResult, CommandInfo, DynamicHost};
@@ -164,8 +106,8 @@ mod tests {
 
     use super::*;
     use crate::command_service::{
-        ScriptSessionStop, StaticCommandBridge, UserScriptFactory, UserScriptSession,
-        builtin_display_cache,
+        CommandServiceError, ScriptSessionStop, StaticCommandBridge, UserScriptFactory,
+        UserScriptSession, builtin_display_cache,
     };
 
     #[derive(Default)]
@@ -173,6 +115,7 @@ mod tests {
         stopping: AtomicBool,
         shutdowns: AtomicUsize,
         fail_shutdown: AtomicBool,
+        force_shutdown: AtomicBool,
     }
 
     #[async_trait]
@@ -219,7 +162,9 @@ mod tests {
                     "worker could not be reaped",
                 ))
             } else {
-                Ok(ScriptSessionStop { forced: false })
+                Ok(ScriptSessionStop {
+                    forced: self.force_shutdown.load(Ordering::Acquire),
+                })
             }
         }
     }
@@ -267,6 +212,45 @@ mod tests {
                 );
             }
             Ok(event == "ProfileSwitchPre" && self.cancel_pre.load(Ordering::Acquire))
+        }
+
+        async fn switch_profile(
+            &self,
+            name: &str,
+        ) -> Result<DynamicProfileSwitchResult, CommandBackendError> {
+            if let Err(error) = self.host.profile_switch_begin(name, &BTreeMap::new()).await {
+                return Ok(DynamicProfileSwitchResult::Rejected {
+                    code: error.code,
+                    message: error.message,
+                });
+            }
+            if self.emit("ProfileSwitchPre").await? {
+                self.host
+                    .profile_switch_abort()
+                    .await
+                    .map_err(|error| CommandBackendError::new(error.code, error.message))?;
+                return Ok(DynamicProfileSwitchResult::Cancelled);
+            }
+            let committed = match self.host.profile_switch_commit().await {
+                Ok(committed) => committed,
+                Err(error) => {
+                    let _abort = self.host.profile_switch_abort().await;
+                    return Ok(DynamicProfileSwitchResult::Rejected {
+                        code: error.code,
+                        message: error.message,
+                    });
+                }
+            };
+            if let Err(error) = self.emit("ProfileSwitchPost").await {
+                tracing::error!(error = %error, "test profile Post event failed");
+            }
+            self.host
+                .profile_switch_end()
+                .await
+                .map_err(|error| CommandBackendError::new(error.code, error.message))?;
+            Ok(DynamicProfileSwitchResult::Switched {
+                forced_worker_stop: committed.forced_worker_stop,
+            })
         }
 
         async fn build_cache(
@@ -425,6 +409,28 @@ mod tests {
         );
         fixture.commands.try_begin_profile_switch().unwrap();
         fixture.commands.finish_profile_switch();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn forced_old_worker_reap_is_reported_but_commits_the_target_profile() {
+        let fixture = fixture();
+        fixture.commands.reload().await.unwrap();
+        fixture
+            .session
+            .force_shutdown
+            .store(true, Ordering::Release);
+        assert_eq!(
+            fixture.profiles.switch("Other").await.unwrap(),
+            ProfileSwitchResult::Switched {
+                forced_worker_stop: true,
+            }
+        );
+        assert_eq!(fixture.host.profile_current().unwrap(), "Other");
+        assert_eq!(
+            fixture.host.state_snapshot().unwrap()["pending_profile"],
+            json!(null)
+        );
+        assert_eq!(fixture.session.shutdowns.load(Ordering::Acquire), 1);
     }
 
     #[test]

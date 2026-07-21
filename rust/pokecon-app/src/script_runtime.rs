@@ -303,6 +303,13 @@ impl UserScriptSession for ManagedUserScriptSession {
         self.client.stop().await.map_err(runtime_environment_error)
     }
 
+    async fn request_profile_stop(&self) -> Result<(), CommandBackendError> {
+        self.client
+            .request_profile_stop()
+            .await
+            .map_err(runtime_environment_error)
+    }
+
     fn begin_stopping(&self) {
         self.worker.generation().begin_stopping();
         self.worker.connection().force_release_resources();

@@ -164,6 +164,11 @@
             pname = "pokecon";
             version = workspaceVersion;
             src = source;
+            nativeBuildInputs = [
+              pkgs.pkg-config
+            ]
+            ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ];
+            buildInputs = [ pythonEnv ] ++ linuxDesktopPackages;
             cargoLock = {
               lockFile = ./Cargo.lock;
               allowBuiltinFetchGit = true;
@@ -179,6 +184,8 @@
             doCheck = true;
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
+            PYO3_PYTHON = "${pythonEnv}/bin/python";
+            LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
           };
         in
         {

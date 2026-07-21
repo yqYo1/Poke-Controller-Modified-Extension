@@ -265,6 +265,26 @@ impl EvaluationTransaction {
         host: &dyn DynamicHost,
         event_bus: &EventBus,
     ) -> Result<(), TransactionError> {
+        let pending_emits = self.commit_staged(host, event_bus).await?;
+        for event in pending_emits {
+            event_bus.emit(&event).await?;
+        }
+        Ok(())
+    }
+
+    /// Commits state and registry mutations without starting callbacks for
+    /// buffered events. This lets the engine release its evaluation barrier
+    /// only after a complete generation is visible.
+    ///
+    /// # Errors
+    ///
+    /// Returns a host or event failure. Validation completes before host
+    /// mutation; a scheduler disconnect is terminal for the worker.
+    pub async fn commit_staged(
+        self,
+        host: &dyn DynamicHost,
+        event_bus: &EventBus,
+    ) -> Result<Vec<String>, TransactionError> {
         let next_callback_settings = callback_settings(&self.prospective_settings)?;
         for operation in &self.event_operations {
             if let StagedEventOperation::Install { options, .. } = operation {
@@ -291,14 +311,11 @@ impl EvaluationTransaction {
                 StagedEventOperation::Define(event) => event_bus.define(&event)?,
             }
         }
-        for event in self.pending_emits {
-            event_bus.emit(&event).await?;
-        }
-        Ok(())
+        Ok(self.pending_emits)
     }
 }
 
-fn callback_settings(
+pub(crate) fn callback_settings(
     values: &BTreeMap<String, Value>,
 ) -> Result<CallbackSettings, DynamicHostError> {
     let u64_value = |id: &str| {

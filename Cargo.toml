@@ -57,9 +57,9 @@ hmac = "0.12"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 parking_lot = "0.12"
 pep440_rs = { version = "0.7", features = ["version-ranges"] }
-pyo3 = { version = "0.29", features = ["abi3-py314", "extension-module"] }
+pyo3 = { version = "0.29", features = ["abi3-py314"] }
 tauri = { version = "2.11.5", default-features = false }
-mlua = { version = "0.10", features = ["lua54", "vendored", "async"] }
+mlua = { version = "0.10", features = ["luajit", "vendored", "async", "send", "serialize"] }
 nix = { version = "0.30", features = ["process", "signal"] }
 nokhwa = { version = "0.10.11", default-features = false }
 toml = "0.8"

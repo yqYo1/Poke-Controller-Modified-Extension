@@ -21,7 +21,9 @@ use crate::event::{HandlerId, RegistrationOptions};
 use crate::protocol::PYTHON_SITE_PACKAGES_ENV;
 
 const PYTHON_BOOTSTRAP: &str = r#"
+import copy as _copy
 import sys as _sys
+import threading as _threading
 
 
 class _BlockCommandsImport:
@@ -123,12 +125,61 @@ class _SettingNamespace:
         _api.set_setting(f"{self._prefix}.{name}", value)
 
 
+_state_context = _threading.local()
+
+
+def _active_state_cache():
+    stack = getattr(_state_context, "stack", None)
+    if not stack:
+        return None
+    return stack[-1]
+
+
+def _flush_state_cache(cache):
+    for name, (before, value) in cache.items():
+        if value != before:
+            _api.merge_state(name, before, value)
+
+
+def _invoke_callback(callback, arguments):
+    stack = getattr(_state_context, "stack", None)
+    if stack is None:
+        stack = []
+        _state_context.stack = stack
+    cache = {}
+    stack.append(cache)
+    try:
+        try:
+            value = callback(*arguments)
+        except BaseException as error:
+            try:
+                _flush_state_cache(cache)
+            except Exception as flush_error:
+                error.add_note(f"state mutation flush failed: {flush_error}")
+            raise
+        _flush_state_cache(cache)
+        return value
+    finally:
+        stack.pop()
+        if not stack:
+            del _state_context.stack
+
+
 class _State:
     def __getattr__(self, name):
-        return _api.get_state(name)
+        cache = _active_state_cache()
+        if cache is None:
+            return _api.get_state(name)
+        if name not in cache:
+            value = _api.get_state(name)
+            cache[name] = (_copy.deepcopy(value), value)
+        return cache[name][1]
 
     def __setattr__(self, name, value):
         _api.set_state(name, value)
+        cache = _active_state_cache()
+        if cache is not None:
+            cache.pop(name, None)
 
 
 class _Autocmd:
@@ -444,6 +495,17 @@ impl PyApi {
             .map_err(|error| python_error(&error))
     }
 
+    fn merge_state(
+        &self,
+        name: &str,
+        before: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        engine_from_weak(&self.engine)?
+            .merge_state(name, python_to_json(before)?, python_to_json(value)?)
+            .map_err(|error| python_error(&error))
+    }
+
     fn profile_current(&self) -> PyResult<String> {
         engine_from_weak(&self.engine)?
             .profile_current()
@@ -658,7 +720,10 @@ impl Callback for PythonCallback {
                     .map(|argument| json_to_python(py, argument))
                     .collect::<PyResult<Vec<_>>>()?;
                 let arguments = PyTuple::new(py, arguments)?;
-                let value = callback.bind(py).call(arguments, None)?;
+                let value = py
+                    .import("pokecon")?
+                    .getattr("_invoke_callback")?
+                    .call1((callback.bind(py), arguments))?;
                 if matches!(return_mode, PythonReturnMode::SortList)
                     && !value.is_instance_of::<PyList>()
                 {

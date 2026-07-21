@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 use pokecon_dynamic::protocol::{
     self, DynamicCommandCacheRequest, DynamicCommandCacheResult, DynamicDiagnostic,
     DynamicEmitRequest, DynamicEmitResult, DynamicInitializeRequest, DynamicInitializeResult,
-    DynamicTagMatchRequest, DynamicWorkerStatus, HostControllerUpdate, HostProfileSwitchRequest,
-    HostSetStateValueRequest, HostSettings, HostSettingsChanges, HostState,
+    DynamicTagMatchRequest, DynamicWorkerStatus, HostControllerUpdate, HostMergeStateValueRequest,
+    HostProfileSwitchRequest, HostSetStateValueRequest, HostSettings, HostSettingsChanges,
+    HostState,
 };
 use pokecon_dynamic::{
     CommandDisplayItem, CommandInfo, Diagnostic, DynamicConfigControl, DynamicEngine,
@@ -367,6 +368,22 @@ impl DynamicHost for IpcDynamicHost {
         )
     }
 
+    fn merge_state_value(
+        &self,
+        name: &str,
+        before: serde_json::Value,
+        value: serde_json::Value,
+    ) -> Result<(), DynamicHostError> {
+        self.request(
+            protocol::HOST_MERGE_STATE_VALUE,
+            &HostMergeStateValueRequest {
+                name: name.to_owned(),
+                before,
+                value,
+            },
+        )
+    }
+
     fn profile_current(&self) -> Result<String, DynamicHostError> {
         self.request(protocol::HOST_PROFILE_CURRENT, &())
     }
@@ -693,6 +710,10 @@ fn dispatch_host_call(
         protocol::HOST_SET_STATE_VALUE => {
             let request = decode_host::<HostSetStateValueRequest>(payload)?;
             serialize_host(host.set_state_value(&request.name, request.value))
+        }
+        protocol::HOST_MERGE_STATE_VALUE => {
+            let request = decode_host::<HostMergeStateValueRequest>(payload)?;
+            serialize_host(host.merge_state_value(&request.name, request.before, request.value))
         }
         protocol::HOST_PROFILE_CURRENT => {
             decode_empty(payload)?;

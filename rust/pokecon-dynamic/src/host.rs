@@ -56,6 +56,21 @@ pub trait DynamicHost: Send + Sync {
     /// Returns a validation, persistence, or host transport failure.
     fn set_state_value(&self, name: &str, value: Value) -> Result<(), DynamicHostError>;
 
+    /// Atomically merges one callback-local state edit with the latest host
+    /// value. `before` is the value observed by the callback and `value` is
+    /// that callback's edited value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a validation, concurrent-update conflict, or host transport
+    /// failure.
+    fn merge_state_value(
+        &self,
+        name: &str,
+        before: Value,
+        value: Value,
+    ) -> Result<(), DynamicHostError>;
+
     /// # Errors
     ///
     /// Returns a host transport or profile lookup failure.
@@ -89,6 +104,150 @@ pub trait DynamicHost: Send + Sync {
 
     /// Requests one coalesced rebuild of all command display-list snapshots.
     fn request_command_recompute(&self) {}
+}
+
+/// Applies the changes between `before` and `value` to `current` without
+/// discarding independent concurrent edits. Arrays are index-merged and
+/// callback-local suffixes are appended after suffixes committed earlier.
+///
+/// # Errors
+///
+/// Returns `StateConflict` when both writers incompatibly changed the same
+/// scalar, object entry, or removed array entry.
+pub fn merge_state_change(
+    before: &Value,
+    current: &Value,
+    value: &Value,
+) -> Result<Value, DynamicHostError> {
+    merge_state_change_at(before, current, value, "$")
+}
+
+fn merge_state_change_at(
+    before: &Value,
+    current: &Value,
+    value: &Value,
+    path: &str,
+) -> Result<Value, DynamicHostError> {
+    if value == before || current == value {
+        return Ok(current.clone());
+    }
+    if current == before {
+        return Ok(value.clone());
+    }
+
+    match (before, current, value) {
+        (Value::Object(before), Value::Object(current), Value::Object(value)) => {
+            let mut merged = current.clone();
+            for (key, before_value) in before {
+                let child_path = format!("{path}.{}", display_state_key(key));
+                match value.get(key) {
+                    Some(value_value) if value_value != before_value => {
+                        let current_value = current.get(key).ok_or_else(|| {
+                            state_conflict(&child_path, "the current value was removed")
+                        })?;
+                        merged.insert(
+                            key.clone(),
+                            merge_state_change_at(
+                                before_value,
+                                current_value,
+                                value_value,
+                                &child_path,
+                            )?,
+                        );
+                    }
+                    Some(_) => {}
+                    None => match current.get(key) {
+                        None => {}
+                        Some(current_value) if current_value == before_value => {
+                            merged.remove(key);
+                        }
+                        Some(_) => {
+                            return Err(state_conflict(
+                                &child_path,
+                                "the current value changed before removal",
+                            ));
+                        }
+                    },
+                }
+            }
+            for (key, value_value) in value {
+                if before.contains_key(key) {
+                    continue;
+                }
+                let child_path = format!("{path}.{}", display_state_key(key));
+                match current.get(key) {
+                    None => {
+                        merged.insert(key.clone(), value_value.clone());
+                    }
+                    Some(current_value) if current_value == value_value => {}
+                    Some(_) => {
+                        return Err(state_conflict(
+                            &child_path,
+                            "both callbacks added different values",
+                        ));
+                    }
+                }
+            }
+            Ok(Value::Object(merged))
+        }
+        (Value::Array(before), Value::Array(current), Value::Array(value)) => {
+            if current.len() < before.len() {
+                return Err(state_conflict(
+                    path,
+                    "the current array was shortened concurrently",
+                ));
+            }
+
+            let retained = before.len().min(value.len());
+            let mut merged = current.clone();
+            for index in 0..retained {
+                let child_path = format!("{path}[{index}]");
+                merged[index] = merge_state_change_at(
+                    &before[index],
+                    &current[index],
+                    &value[index],
+                    &child_path,
+                )?;
+            }
+
+            if value.len() < before.len() {
+                for index in value.len()..before.len() {
+                    if current[index] != before[index] {
+                        return Err(state_conflict(
+                            &format!("{path}[{index}]"),
+                            "the removed entry changed concurrently",
+                        ));
+                    }
+                }
+                merged.drain(value.len()..before.len());
+            } else {
+                merged.extend(value[before.len()..].iter().cloned());
+            }
+            Ok(Value::Array(merged))
+        }
+        _ => Err(state_conflict(
+            path,
+            "both callbacks changed the same value",
+        )),
+    }
+}
+
+fn display_state_key(key: &str) -> String {
+    if key
+        .chars()
+        .all(|character| character == '_' || character.is_ascii_alphanumeric())
+    {
+        key.to_owned()
+    } else {
+        format!("[{key:?}]")
+    }
+}
+
+fn state_conflict(path: &str, reason: &str) -> DynamicHostError {
+    DynamicHostError::new(
+        "StateConflict",
+        format!("concurrent state mutation conflicts at {path}: {reason}"),
+    )
 }
 
 /// Canonical lookup and validation projection for `pokecon.opt.*`.
@@ -346,6 +505,27 @@ impl DynamicHost for InMemoryDynamicHost {
         Ok(())
     }
 
+    fn merge_state_value(
+        &self,
+        name: &str,
+        before: Value,
+        value: Value,
+    ) -> Result<(), DynamicHostError> {
+        if !matches!(name, "command_candidates" | "tags") {
+            return Err(DynamicHostError::new(
+                "ReadOnlyState",
+                format!("state property is read-only: {name}"),
+            ));
+        }
+        let mut inner = self.inner.lock();
+        let current = inner.state.get(name).ok_or_else(|| {
+            DynamicHostError::new("UnknownState", format!("unknown state property: {name}"))
+        })?;
+        let merged = merge_state_change(&before, current, &value)?;
+        inner.state.insert(name.to_owned(), merged);
+        Ok(())
+    }
+
     fn profile_current(&self) -> Result<String, DynamicHostError> {
         Ok(self.inner.lock().active_profile.clone())
     }
@@ -481,5 +661,50 @@ mod tests {
         assert_eq!(host.controller_state(), ControllerState::NEUTRAL);
         assert!(host.profile_switch("../escape").is_err());
         assert_eq!(host.profile_current().unwrap(), "default");
+    }
+
+    #[test]
+    fn state_merge_preserves_independent_nested_appends() {
+        let before = json!([{
+            "name": "Auto",
+            "module_path": "Commands.Auto",
+            "class_name": "Auto",
+            "tags": ["base"],
+        }]);
+        let current = json!([{
+            "name": "Auto",
+            "module_path": "Commands.Auto",
+            "class_name": "Auto",
+            "tags": ["base", "@Python"],
+        }]);
+        let value = json!([{
+            "name": "Auto",
+            "module_path": "Commands.Auto",
+            "class_name": "Auto",
+            "tags": ["base", "@Lua"],
+        }]);
+
+        assert_eq!(
+            merge_state_change(&before, &current, &value).unwrap(),
+            json!([{
+                "name": "Auto",
+                "module_path": "Commands.Auto",
+                "class_name": "Auto",
+                "tags": ["base", "@Python", "@Lua"],
+            }])
+        );
+    }
+
+    #[test]
+    fn state_merge_reports_same_leaf_conflicts() {
+        let error = merge_state_change(
+            &json!({"name": "before"}),
+            &json!({"name": "first"}),
+            &json!({"name": "second"}),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, "StateConflict");
+        assert!(error.message.contains("$.name"));
     }
 }

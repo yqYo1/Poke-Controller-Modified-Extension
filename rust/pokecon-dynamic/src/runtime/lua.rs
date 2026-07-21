@@ -14,6 +14,8 @@ use crate::engine::{
 };
 use crate::event::{HandlerId, RegistrationOptions};
 
+const LUA_CALLBACK_INVOKER_REGISTRY_KEY: &str = "pokecon.callback_invoker";
+
 const LUA_BOOTSTRAP: &str = r##"
 local api = _pokecon_api
 local raw_pcall = pcall
@@ -89,12 +91,103 @@ local function setting_namespace(prefix)
     })
 end
 
+local state_context_stack = {}
+
+local function deep_copy(value, copies)
+    if type(value) ~= "table" then
+        return value
+    end
+    copies = copies or {}
+    if copies[value] ~= nil then
+        return copies[value]
+    end
+    local copied = {}
+    copies[value] = copied
+    for key, item in pairs(value) do
+        copied[deep_copy(key, copies)] = deep_copy(item, copies)
+    end
+    local metatable = debug and debug.getmetatable(value) or getmetatable(value)
+    if type(metatable) == "table" then
+        return setmetatable(copied, metatable)
+    end
+    return copied
+end
+
+local function deep_equal(left, right, seen)
+    if rawequal(left, right) then
+        return true
+    end
+    if type(left) ~= type(right) then
+        return false
+    end
+    if type(left) ~= "table" then
+        return false
+    end
+    seen = seen or {}
+    if seen[left] ~= nil then
+        return seen[left] == right
+    end
+    seen[left] = right
+    for key, value in pairs(left) do
+        if not deep_equal(value, right[key], seen) then
+            return false
+        end
+    end
+    for key in pairs(right) do
+        if left[key] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+local function active_state_cache()
+    return state_context_stack[#state_context_stack]
+end
+
+local function flush_state_cache(cache)
+    for name, entry in pairs(cache) do
+        if not deep_equal(entry.before, entry.value) then
+            api.merge_state(name, entry.before, entry.value)
+        end
+    end
+end
+
+local function invoke_callback(callback, ...)
+    local cache = {}
+    state_context_stack[#state_context_stack + 1] = cache
+    local result = pack(raw_pcall(callback, ...))
+    state_context_stack[#state_context_stack] = nil
+    local flush_result = pack(raw_pcall(flush_state_cache, cache))
+    if not result[1] then
+        error(result[2], 0)
+    end
+    if not flush_result[1] then
+        error(flush_result[2], 0)
+    end
+    return unpack_values(result, 2, result.n)
+end
+
+_pokecon_invoke_callback = invoke_callback
+
 local state = setmetatable({}, {
     __index = function(_, name)
-        return api.get_state(name)
+        local cache = active_state_cache()
+        if cache == nil then
+            return api.get_state(name)
+        end
+        if cache[name] == nil then
+            local value = api.get_state(name)
+            cache[name] = {before = deep_copy(value), value = value}
+        end
+        return cache[name].value
     end,
     __newindex = function(_, name, value)
         api.set_state(name, value)
+        local cache = active_state_cache()
+        if cache ~= nil then
+            cache[name] = nil
+        end
     end,
 })
 
@@ -451,6 +544,20 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
 
     let weak = engine.clone();
     api.set(
+        "merge_state",
+        lua.create_function(
+            move |lua, (name, before, value): (String, LuaValue, LuaValue)| {
+                let before = lua.from_value::<Value>(before)?;
+                let value = lua.from_value::<Value>(value)?;
+                engine_from_weak(&weak)?
+                    .merge_state(&name, before, value)
+                    .map_err(|error| lua_error(&error))
+            },
+        )?,
+    )?;
+
+    let weak = engine.clone();
+    api.set(
         "profile_current",
         lua.create_function(move |_, ()| {
             engine_from_weak(&weak)?
@@ -708,6 +815,15 @@ impl LuaRuntime {
             .set_name("@pokecon-bootstrap")
             .exec()
             .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        let callback_invoker = lua
+            .globals()
+            .get::<Function>("_pokecon_invoke_callback")
+            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        lua.set_named_registry_value(LUA_CALLBACK_INVOKER_REGISTRY_KEY, callback_invoker)
+            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        lua.globals()
+            .set("_pokecon_invoke_callback", LuaValue::Nil)
+            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
         Ok(Self { lua })
     }
 
@@ -749,7 +865,12 @@ impl Callback for LuaCallback {
                 .iter()
                 .map(|argument| lua.to_value(argument))
                 .collect::<mlua::Result<Vec<_>>>()?;
-            let value = callback.call::<LuaValue>(MultiValue::from_vec(arguments))?;
+            let mut invocation = Vec::with_capacity(arguments.len() + 1);
+            invocation.push(LuaValue::Function(callback));
+            invocation.extend(arguments);
+            let callback_invoker: Function =
+                lua.named_registry_value(LUA_CALLBACK_INVOKER_REGISTRY_KEY)?;
+            let value = callback_invoker.call::<LuaValue>(MultiValue::from_vec(invocation))?;
             match return_mode {
                 LuaReturnMode::Any => callback_return_from_lua(&lua, value),
                 LuaReturnMode::SortList => command_sort_return_from_lua(&lua, value),

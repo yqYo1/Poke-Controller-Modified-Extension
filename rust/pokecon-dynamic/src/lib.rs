@@ -30,6 +30,8 @@ pub use engine::{DynamicEngine, DynamicEngineError};
 pub use event::{
     BUILTIN_EVENTS, BuiltinEvent, EventBus, EventError, EventResult, HandlerId, RegistrationOptions,
 };
-pub use host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry, InMemoryDynamicHost};
+pub use host::{
+    DynamicHost, DynamicHostError, DynamicSettingsRegistry, InMemoryDynamicHost, merge_state_change,
+};
 pub use source::{ResolvedSource, SourceError, SourceStore};
 pub use transaction::{EvaluationTransaction, StagedEventOperation, TransactionError};

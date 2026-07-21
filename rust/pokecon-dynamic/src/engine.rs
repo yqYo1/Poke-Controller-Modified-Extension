@@ -774,6 +774,15 @@ impl EngineInner {
         Ok(self.host.set_state_value(name, value)?)
     }
 
+    pub(crate) fn merge_state(
+        &self,
+        name: &str,
+        before: Value,
+        value: Value,
+    ) -> Result<(), DynamicEngineError> {
+        Ok(self.host.merge_state_value(name, before, value)?)
+    }
+
     pub(crate) fn profile_current(&self) -> Result<String, DynamicEngineError> {
         Ok(self.host.profile_current()?)
     }
@@ -942,6 +951,16 @@ def on_ready():
 
 pokecon.autocmd.on("AppStartupPost", callback=on_ready)
 
+def add_python_tags():
+    candidates = pokecon.state.command_candidates
+    assert pokecon.state.command_candidates is candidates
+    candidates[0]["tags"].append("@Python")
+    tags = pokecon.state.tags
+    assert pokecon.state.tags is tags
+    tags.append("python-mutable")
+
+pokecon.autocmd.on("ScriptLoadPre", callback=add_python_tags)
+
 def on_timeout():
     try:
         while True:
@@ -1008,6 +1027,17 @@ pokecon.autocmd.on("AppStartupPost", {
             class_name = "Example",
             tags = {"sample"},
         }}
+    end,
+})
+pokecon.autocmd.on("ScriptLoadPre", {
+    callback = function()
+        local candidates = pokecon.state.command_candidates
+        assert(pokecon.state.command_candidates == candidates)
+        local command_tags = candidates[1].tags
+        command_tags[#command_tags + 1] = "@Lua"
+        local tags = pokecon.state.tags
+        assert(pokecon.state.tags == tags)
+        tags[#tags + 1] = "lua-mutable"
     end,
 })
 "##;
@@ -1082,6 +1112,53 @@ raise RuntimeError("reload sentinel")
         assert_eq!(timeout[2], json!(1));
     }
 
+    async fn assert_cross_language_nested_state_mutations(
+        engine: &DynamicEngine,
+        host: &InMemoryDynamicHost,
+    ) {
+        let event = engine.emit("ScriptLoadPre").await.unwrap();
+        assert_eq!(event.outcomes.len(), 2);
+        assert!(
+            event.outcomes.iter().all(|(_, outcome)| matches!(
+                outcome,
+                crate::callback::CallbackOutcome::Returned(_)
+            )),
+            "{:?}",
+            event.outcomes
+        );
+        let state = host.state_snapshot().unwrap();
+        let mut tags = state["tags"].as_array().unwrap().clone();
+        tags.sort_by_key(ToString::to_string);
+        assert_eq!(
+            tags,
+            vec![
+                json!("lua-mutable"),
+                json!("python"),
+                json!("python-mutable")
+            ]
+        );
+        let mut command_tags = state["command_candidates"][0]["tags"]
+            .as_array()
+            .unwrap()
+            .clone();
+        command_tags.sort_by_key(ToString::to_string);
+        assert_eq!(
+            command_tags,
+            vec![json!("@Lua"), json!("@Python"), json!("sample")]
+        );
+    }
+
+    async fn assert_cross_language_startup_state(
+        engine: &DynamicEngine,
+        host: &InMemoryDynamicHost,
+    ) {
+        let event = engine.emit("AppStartupPost").await.unwrap();
+        assert_eq!(event.outcomes.len(), 2);
+        let state = host.state_snapshot().unwrap();
+        assert_eq!(state["tags"], json!(["python"]));
+        assert_eq!(state["command_candidates"][0]["name"], json!("Example"));
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cross_language_source_events_and_failed_reload_preserve_generation() {
         let temporary = TempDir::new().unwrap();
@@ -1135,11 +1212,8 @@ raise RuntimeError("reload sentinel")
         assert!(!engine.tag_matches("sample", &second).await.unwrap());
         assert!(engine.tag_matches("-", &second).await.unwrap());
 
-        let event = engine.emit("AppStartupPost").await.unwrap();
-        assert_eq!(event.outcomes.len(), 2);
-        let state = host.state_snapshot().unwrap();
-        assert_eq!(state["tags"], json!(["python"]));
-        assert_eq!(state["command_candidates"][0]["name"], json!("Example"));
+        assert_cross_language_startup_state(&engine, host.as_ref()).await;
+        assert_cross_language_nested_state_mutations(&engine, host.as_ref()).await;
 
         let timeout_event = engine.emit("AppShutdownPre").await.unwrap();
         assert_eq!(timeout_event.outcomes.len(), 1);

@@ -15,6 +15,7 @@ use pokecon_device::input::{
 };
 use pokecon_dynamic::{
     CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
+    merge_state_change,
 };
 use pokecon_settings::pipeline::{
     LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline,
@@ -667,55 +668,26 @@ impl DynamicHost for StartupDynamicHost {
     }
 
     fn set_state_value(&self, name: &str, value: Value) -> Result<(), DynamicHostError> {
-        let value = match name {
-            "command_candidates" => {
-                serde_json::from_value::<Vec<CommandInfo>>(value.clone()).map_err(|_| {
-                    DynamicHostError::new(
-                        "InvalidState",
-                        "command_candidates must be a list of CommandInfo objects",
-                    )
-                })?;
-                value
-            }
-            "tags" => {
-                let mut tags = serde_json::from_value::<Vec<String>>(value).map_err(|_| {
-                    DynamicHostError::new("InvalidState", "tags must be a list of strings")
-                })?;
-                let mut retained = BTreeSet::new();
-                tags.retain(|tag| retained.insert(tag.clone()));
-                serde_json::to_value(tags).map_err(|_| {
-                    DynamicHostError::new("StateEncodingFailed", "tags cannot be encoded")
-                })?
-            }
-            _ => {
-                return Err(DynamicHostError::new(
-                    "ReadOnlyState",
-                    format!("state property is read-only: {name}"),
-                ));
-            }
-        };
+        let value = normalize_writable_state(name, value)?;
         let mut inner = self.inner.lock();
         ensure_running(&inner)?;
-        if let Some(stage) = inner.script_load.as_mut() {
-            match name {
-                "command_candidates" => {
-                    stage.command_candidates = serde_json::from_value(value).map_err(|_| {
-                        DynamicHostError::new(
-                            "InvalidState",
-                            "command_candidates must be a list of CommandInfo objects",
-                        )
-                    })?;
-                }
-                "tags" => {
-                    stage.tags = serde_json::from_value(value).map_err(|_| {
-                        DynamicHostError::new("InvalidState", "tags must be a list of strings")
-                    })?;
-                }
-                _ => unreachable!("writable state names were validated above"),
-            }
-        } else {
-            inner.public_state.insert(name.to_owned(), value);
-        }
+        store_writable_state(&mut inner, name, value)?;
+        Ok(())
+    }
+
+    fn merge_state_value(
+        &self,
+        name: &str,
+        before: Value,
+        value: Value,
+    ) -> Result<(), DynamicHostError> {
+        ensure_writable_state_name(name)?;
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        let current = writable_state_value(&inner, name)?;
+        let merged = merge_state_change(&before, &current, &value)?;
+        let merged = normalize_writable_state(name, merged)?;
+        store_writable_state(&mut inner, name, merged)?;
         Ok(())
     }
 
@@ -785,6 +757,90 @@ impl DynamicHost for StartupDynamicHost {
                 .send_replace(inner.command_recompute_requests);
         }
     }
+}
+
+fn ensure_writable_state_name(name: &str) -> Result<(), DynamicHostError> {
+    if matches!(name, "command_candidates" | "tags") {
+        Ok(())
+    } else {
+        Err(DynamicHostError::new(
+            "ReadOnlyState",
+            format!("state property is read-only: {name}"),
+        ))
+    }
+}
+
+fn normalize_writable_state(name: &str, value: Value) -> Result<Value, DynamicHostError> {
+    match name {
+        "command_candidates" => {
+            serde_json::from_value::<Vec<CommandInfo>>(value.clone()).map_err(|_| {
+                DynamicHostError::new(
+                    "InvalidState",
+                    "command_candidates must be a list of CommandInfo objects",
+                )
+            })?;
+            Ok(value)
+        }
+        "tags" => {
+            let mut tags = serde_json::from_value::<Vec<String>>(value).map_err(|_| {
+                DynamicHostError::new("InvalidState", "tags must be a list of strings")
+            })?;
+            let mut retained = BTreeSet::new();
+            tags.retain(|tag| retained.insert(tag.clone()));
+            serde_json::to_value(tags)
+                .map_err(|_| DynamicHostError::new("StateEncodingFailed", "tags cannot be encoded"))
+        }
+        _ => {
+            ensure_writable_state_name(name)?;
+            unreachable!("writable state names are exhausted")
+        }
+    }
+}
+
+fn writable_state_value(inner: &StartupHostState, name: &str) -> Result<Value, DynamicHostError> {
+    ensure_writable_state_name(name)?;
+    if let Some(stage) = &inner.script_load {
+        return match name {
+            "command_candidates" => serde_json::to_value(&stage.command_candidates)
+                .map_err(|_| state_encoding_failed("command candidates")),
+            "tags" => {
+                serde_json::to_value(&stage.tags).map_err(|_| state_encoding_failed("command tags"))
+            }
+            _ => unreachable!("writable state names were validated above"),
+        };
+    }
+    inner.public_state.get(name).cloned().ok_or_else(|| {
+        DynamicHostError::new("UnknownState", format!("unknown state property: {name}"))
+    })
+}
+
+fn store_writable_state(
+    inner: &mut StartupHostState,
+    name: &str,
+    value: Value,
+) -> Result<(), DynamicHostError> {
+    ensure_writable_state_name(name)?;
+    if let Some(stage) = inner.script_load.as_mut() {
+        match name {
+            "command_candidates" => {
+                stage.command_candidates = serde_json::from_value(value).map_err(|_| {
+                    DynamicHostError::new(
+                        "InvalidState",
+                        "command_candidates must be a list of CommandInfo objects",
+                    )
+                })?;
+            }
+            "tags" => {
+                stage.tags = serde_json::from_value(value).map_err(|_| {
+                    DynamicHostError::new("InvalidState", "tags must be a list of strings")
+                })?;
+            }
+            _ => unreachable!("writable state names were validated above"),
+        }
+    } else {
+        inner.public_state.insert(name.to_owned(), value);
+    }
+    Ok(())
 }
 
 fn ensure_running(inner: &StartupHostState) -> Result<(), DynamicHostError> {
@@ -1087,6 +1143,19 @@ mod tests {
             host.state_snapshot().unwrap()["tags"],
             json!(["same", "different"])
         );
+        let before = json!(["same", "different"]);
+        host.merge_state_value(
+            "tags",
+            before.clone(),
+            json!(["same", "different", "python"]),
+        )
+        .expect("the first callback append must apply");
+        host.merge_state_value("tags", before, json!(["same", "different", "lua"]))
+            .expect("an independent callback append must merge");
+        assert_eq!(
+            host.state_snapshot().unwrap()["tags"],
+            json!(["same", "different", "python", "lua"])
+        );
         assert_eq!(
             host.set_state_value("pid", json!(1)).unwrap_err().code,
             "ReadOnlyState"
@@ -1095,7 +1164,7 @@ mod tests {
             .expect("settings refresh must succeed");
         assert_eq!(
             host.state_snapshot().unwrap()["tags"],
-            json!(["same", "different"])
+            json!(["same", "different", "python", "lua"])
         );
         host.begin_stopping();
         assert_eq!(

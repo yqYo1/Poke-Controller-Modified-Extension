@@ -114,6 +114,15 @@ pokecon.commands.sort.callback = function(commands)
 end
 "#;
 
+const LUA_IPC_MUTABLE_SOURCE: &str = r#"
+pokecon.autocmd.on("ScriptLoadPre", {
+    callback = function()
+        local candidates = pokecon.state.command_candidates
+        candidates[1].tags[#candidates[1].tags + 1] = "@Lua"
+    end,
+})
+"#;
+
 const PYTHON_DYNAMIC_SOURCE: &str = r#"
 import pokecon
 import os
@@ -131,6 +140,12 @@ print("python-frame-safe")
 pokecon.opt.language = "JA"
 pokecon.controller.reset()
 pokecon.controller.update({"a": True})
+
+def add_python_tag():
+    pokecon.state.command_candidates[0]["tags"].append("@Python")
+
+pokecon.autocmd.on("ScriptLoadPre", callback=add_python_tag)
+pokecon.source("./ipc-mutable.lua")
 "#;
 
 async fn assert_stdout_log(logs: &mut tokio::sync::mpsc::Receiver<LogPayload>, expected: &str) {
@@ -229,6 +244,32 @@ async fn verify_python_runtime(
         json!("ja")
     );
     assert_stdout_log(logs, "python-frame-safe").await;
+    host.set_state_value(
+        "command_candidates",
+        json!([{
+            "name": "Mutable",
+            "module_path": "Commands.Mutable",
+            "class_name": "Mutable",
+            "tags": ["base"],
+        }]),
+    )
+    .expect("command candidate fixture is writable");
+    let event = client
+        .emit("ScriptLoadPre")
+        .await
+        .expect("nested state mutations cross worker IPC");
+    assert!(!event.cancelled);
+    let mut tags = host.state_snapshot().unwrap()["command_candidates"][0]["tags"]
+        .as_array()
+        .unwrap()
+        .clone();
+    tags.sort_by_key(ToString::to_string);
+    assert_eq!(
+        tags,
+        vec![json!("@Lua"), json!("@Python"), json!("base")],
+        "{:?}",
+        host.diagnostics()
+    );
 
     let failed_generation = client
         .status()
@@ -316,6 +357,11 @@ async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
         "VALUE = \"venv-only\"\n",
     )
     .expect("site-packages fixture is written");
+    std::fs::write(
+        temporary.path().join("ipc-mutable.lua"),
+        LUA_IPC_MUTABLE_SOURCE,
+    )
+    .expect("cross-language mutable-state fixture is written");
     let host = Arc::new(
         InMemoryDynamicHost::new(
             dynamic_settings(),

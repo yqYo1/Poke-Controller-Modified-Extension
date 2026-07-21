@@ -28,6 +28,7 @@ pub const HOST_SETTINGS_SNAPSHOT: &str = "dynamic.host.settings_snapshot";
 pub const HOST_APPLY_SETTINGS: &str = "dynamic.host.apply_settings";
 pub const HOST_STATE_SNAPSHOT: &str = "dynamic.host.state_snapshot";
 pub const HOST_SET_STATE_VALUE: &str = "dynamic.host.set_state_value";
+pub const HOST_MERGE_STATE_VALUE: &str = "dynamic.host.merge_state_value";
 pub const HOST_PROFILE_CURRENT: &str = "dynamic.host.profile_current";
 pub const HOST_PROFILE_LIST: &str = "dynamic.host.profile_list";
 pub const HOST_PROFILE_SWITCH: &str = "dynamic.host.profile_switch";
@@ -103,6 +104,14 @@ pub type DynamicCommandCacheResult = CommandCacheBuildResult;
 #[serde(deny_unknown_fields)]
 pub struct HostSetStateValueRequest {
     pub name: String,
+    pub value: Value,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostMergeStateValueRequest {
+    pub name: String,
+    pub before: Value,
     pub value: Value,
 }
 

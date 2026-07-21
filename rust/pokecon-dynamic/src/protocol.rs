@@ -17,6 +17,10 @@ pub const EMIT: &str = "dynamic.emit";
 pub const SORT_COMMANDS: &str = "dynamic.sort_commands";
 pub const TAG_MATCHES: &str = "dynamic.tag_matches";
 
+/// Private worker environment bridge used to add the exact synchronized venv
+/// to embedded `CPython` without accepting ambient `PYTHONPATH` entries.
+pub const PYTHON_SITE_PACKAGES_ENV: &str = "POKECON_INTERNAL_DYNAMIC_SITE_PACKAGES";
+
 pub const HOST_SETTINGS_SNAPSHOT: &str = "dynamic.host.settings_snapshot";
 pub const HOST_APPLY_SETTINGS: &str = "dynamic.host.apply_settings";
 pub const HOST_STATE_SNAPSHOT: &str = "dynamic.host.state_snapshot";

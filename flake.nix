@@ -176,10 +176,18 @@
             cargoBuildFlags = [
               "--package"
               "pokecon-app"
+              "--package"
+              "pokecon-worker"
+              "--bin"
+              "pokecon"
+              "--bin"
+              "pokecon-worker"
             ];
             cargoTestFlags = [
               "--package"
               "pokecon-app"
+              "--package"
+              "pokecon-worker"
             ];
             doCheck = true;
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";

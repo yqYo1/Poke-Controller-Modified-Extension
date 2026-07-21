@@ -39,6 +39,7 @@ pub struct WorkerLaunch {
     program: PathBuf,
     arguments: Vec<OsString>,
     environment: Vec<(OsString, OsString)>,
+    clear_environment: bool,
     current_directory: Option<PathBuf>,
 }
 
@@ -50,6 +51,7 @@ impl std::fmt::Debug for WorkerLaunch {
             .field("program", &self.program)
             .field("argument_count", &self.arguments.len())
             .field("environment_key_count", &self.environment.len())
+            .field("clear_environment", &self.clear_environment)
             .field("current_directory", &self.current_directory)
             .finish()
     }
@@ -68,6 +70,7 @@ impl WorkerLaunch {
             program: program.into(),
             arguments: vec!["--kind".into(), kind_name.into()],
             environment: Vec::new(),
+            clear_environment: false,
             current_directory: None,
         }
     }
@@ -80,6 +83,7 @@ impl WorkerLaunch {
             program: program.into(),
             arguments: Vec::new(),
             environment: Vec::new(),
+            clear_environment: false,
             current_directory: None,
         }
     }
@@ -96,6 +100,14 @@ impl WorkerLaunch {
     pub fn environment(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
         self.environment
             .push((key.as_ref().to_owned(), value.as_ref().to_owned()));
+        self
+    }
+
+    /// Starts the child from an empty environment. Callers must explicitly
+    /// restore every safe variable required by the worker role.
+    #[must_use]
+    pub const fn clear_environment(mut self) -> Self {
+        self.clear_environment = true;
         self
     }
 
@@ -496,6 +508,9 @@ impl WorkerSupervisor {
 
 fn build_command(launch: &WorkerLaunch) -> Command {
     let mut command = Command::new(&launch.program);
+    if launch.clear_environment {
+        command.env_clear();
+    }
     command
         .args(&launch.arguments)
         .envs(launch.environment.iter().cloned())

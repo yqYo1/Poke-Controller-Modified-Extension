@@ -1,4 +1,5 @@
 use std::ffi::CString;
+use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
@@ -17,6 +18,7 @@ use crate::engine::{
     DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
 };
 use crate::event::{HandlerId, RegistrationOptions};
+use crate::protocol::PYTHON_SITE_PACKAGES_ENV;
 
 const PYTHON_BOOTSTRAP: &str = r#"
 import sys as _sys
@@ -577,6 +579,7 @@ impl PythonRuntime {
         let module_name = "pokecon";
         Python::initialize();
         Python::attach(|py| -> PyResult<()> {
+            add_worker_site_packages(py)?;
             let module = PyModule::new(py, module_name)?;
             module.add("_api", Py::new(py, PyApi { engine })?)?;
             let bootstrap = CString::new(PYTHON_BOOTSTRAP)
@@ -614,6 +617,20 @@ impl PythonRuntime {
         })
         .map_err(|error| DynamicEngineError::Python(error.to_string()))
     }
+}
+
+fn add_worker_site_packages(py: Python<'_>) -> PyResult<()> {
+    let Some(path) = std::env::var_os(PYTHON_SITE_PACKAGES_ENV).map(PathBuf::from) else {
+        return Ok(());
+    };
+    if !path.is_absolute() || !path.is_dir() {
+        return Err(PyRuntimeError::new_err(
+            "dynamic worker site-packages path is unavailable",
+        ));
+    }
+    py.import("site")?
+        .call_method1("addsitedir", (path.to_string_lossy().as_ref(),))?;
+    Ok(())
 }
 
 #[derive(Clone, Copy)]

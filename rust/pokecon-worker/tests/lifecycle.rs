@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use pokecon_dynamic::protocol::DynamicInitializeRequest;
+use pokecon_dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
 use pokecon_dynamic::{
     CommandDisplayItem, CommandInfo, DynamicConfigControl, DynamicConfigLanguage, DynamicHost,
     InMemoryDynamicHost,
@@ -115,6 +116,11 @@ end
 
 const PYTHON_DYNAMIC_SOURCE: &str = r#"
 import pokecon
+import os
+import worker_site_fixture
+assert worker_site_fixture.VALUE == "venv-only"
+assert "PATH" not in os.environ
+assert os.environ["POKECON_WORKER_TEST_SENTINEL"] == "retained"
 try:
     import Commands
 except ModuleNotFoundError:
@@ -266,6 +272,7 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
     let mut diagnostics = worker
         .take_diagnostics()
         .expect("stderr diagnostic receiver is available once");
+    assert!(worker.take_diagnostics().is_none());
     let response = worker
         .connection()
         .request("worker.ping", IpcValue::Nil)
@@ -278,12 +285,6 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
         response.get("kind"),
         Some(&IpcValue::String("script".to_owned()))
     );
-    let diagnostic = tokio::time::timeout(Duration::from_secs(2), diagnostics.recv())
-        .await
-        .expect("worker emitted OOB startup diagnostic")
-        .expect("diagnostic pipe remains open");
-    assert!(!diagnostic.bytes.is_empty());
-
     let report = worker
         .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(2))
         .await
@@ -308,6 +309,13 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
     let temporary = TempDir::new().expect("temporary config root is created");
+    let site_packages = temporary.path().join("site-packages");
+    std::fs::create_dir(&site_packages).expect("site-packages fixture is created");
+    std::fs::write(
+        site_packages.join("worker_site_fixture.py"),
+        "VALUE = \"venv-only\"\n",
+    )
+    .expect("site-packages fixture is written");
     let host = Arc::new(
         InMemoryDynamicHost::new(
             dynamic_settings(),
@@ -325,7 +333,10 @@ async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
     let supervisor = WorkerSupervisor::new();
     let worker = supervisor
         .spawn(
-            WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Dynamic),
+            WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Dynamic)
+                .clear_environment()
+                .environment(PYTHON_SITE_PACKAGES_ENV, &site_packages)
+                .environment("POKECON_WORKER_TEST_SENTINEL", "retained"),
             safety.clone(),
         )
         .await
@@ -395,7 +406,16 @@ async fn crash_and_malformed_frames_release_rust_owned_resources() {
             )
             .await
             .expect("fault fixture starts");
+        let mut diagnostics =
+            (mode == "crash").then(|| worker.take_diagnostics().expect("stderr is available"));
         let _exit = worker.wait().await.expect("fault fixture is reaped");
+        if let Some(diagnostics) = diagnostics.as_mut() {
+            let diagnostic = tokio::time::timeout(Duration::from_secs(2), diagnostics.recv())
+                .await
+                .expect("explicit fixture stderr arrives")
+                .expect("explicit fixture diagnostic is retained");
+            assert!(String::from_utf8_lossy(&diagnostic.bytes).contains("deliberate worker crash"));
+        }
         let reason = worker
             .connection()
             .disconnect_reason()

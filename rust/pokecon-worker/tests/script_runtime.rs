@@ -339,6 +339,323 @@ class Exercise(PythonCommand):
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn runtime_signatures_match_generated_typings_and_command_meta_is_enforced() {
+    let typings_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../python/pokecon/typings/Commands");
+    let typings_root = serde_json::to_string(&typings_root.to_string_lossy())
+        .expect("typing root is representable as a Python string");
+    let source = format!(
+        r#"
+import ast
+import importlib
+import inspect
+import pathlib
+
+from Commands._meta import CommandMeta
+from Commands.CommandBase import Command
+from Commands.McuCommandBase import McuCommand
+from Commands.PythonCommandBase import ImageProcPythonCommand, PythonCommand
+
+
+_TYPINGS_ROOT = pathlib.Path({typings_root})
+
+
+def _ast_default(node):
+    if node is None:
+        return ("required",)
+    if isinstance(node, ast.Constant):
+        return ("literal", node.value)
+    if isinstance(node, ast.Name) and node.id in {{"dict", "list"}}:
+        return ("type", node.id)
+    if isinstance(node, ast.Tuple):
+        return ("tuple", tuple(_ast_default(item) for item in node.elts))
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+    ):
+        return ("literal", -node.operand.value)
+    return ("source", ast.unparse(node))
+
+
+def _runtime_default(value):
+    if value is inspect.Parameter.empty:
+        return ("required",)
+    if value in (dict, list):
+        return ("type", value.__name__)
+    if isinstance(value, tuple):
+        return ("tuple", tuple(_runtime_default(item) for item in value))
+    if value is None or isinstance(value, (bool, float, int, str)):
+        return ("literal", value)
+    return ("runtime", repr(value))
+
+
+def _ast_shape(function):
+    arguments = function.args
+    positional = [
+        *((argument, "POSITIONAL_ONLY") for argument in arguments.posonlyargs),
+        *((argument, "POSITIONAL_OR_KEYWORD") for argument in arguments.args),
+    ]
+    defaults = [None] * (len(positional) - len(arguments.defaults)) + list(
+        arguments.defaults
+    )
+    shape = [
+        (argument.arg, kind, _ast_default(default))
+        for (argument, kind), default in zip(positional, defaults, strict=True)
+    ]
+    if arguments.vararg is not None:
+        shape.append((arguments.vararg.arg, "VAR_POSITIONAL", ("required",)))
+    shape.extend(
+        (
+            argument.arg,
+            "KEYWORD_ONLY",
+            _ast_default(default),
+        )
+        for argument, default in zip(
+            arguments.kwonlyargs, arguments.kw_defaults, strict=True
+        )
+    )
+    if arguments.kwarg is not None:
+        shape.append((arguments.kwarg.arg, "VAR_KEYWORD", ("required",)))
+    return tuple(shape)
+
+
+def _runtime_shape(callable_object):
+    return tuple(
+        (parameter.name, parameter.kind.name, _runtime_default(parameter.default))
+        for parameter in inspect.signature(callable_object).parameters.values()
+    )
+
+
+def _is_property(function):
+    return any(
+        (isinstance(decorator, ast.Name) and decorator.id == "property")
+        or (
+            isinstance(decorator, ast.Attribute)
+            and decorator.attr in {{"deleter", "getter", "setter"}}
+        )
+        for decorator in function.decorator_list
+    )
+
+
+def _assert_signature(callable_object, declarations, label):
+    actual = _runtime_shape(callable_object)
+    expected = tuple(_ast_shape(declaration) for declaration in declarations)
+    assert actual in expected, f"{{label}} signature {{actual!r}} not in {{expected!r}}"
+
+
+def _check_stub(filename, module_name):
+    tree = ast.parse((_TYPINGS_ROOT / filename).read_text(encoding="utf-8"))
+    module = importlib.import_module(module_name)
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            declarations = [
+                candidate
+                for candidate in tree.body
+                if isinstance(candidate, type(node)) and candidate.name == node.name
+            ]
+            if declarations[0] is not node:
+                continue
+            _assert_signature(
+                getattr(module, node.name), declarations, f"{{module_name}}.{{node.name}}"
+            )
+        if not isinstance(node, ast.ClassDef):
+            continue
+        runtime_class = getattr(module, node.name)
+        methods = {{}}
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                methods.setdefault(item.name, []).append(item)
+        for name, declarations in methods.items():
+            if node.name == "Widget" and name == "__init__":
+                continue
+            member = inspect.getattr_static(runtime_class, name)
+            if any(_is_property(declaration) for declaration in declarations):
+                assert isinstance(member, property), f"{{module_name}}.{{node.name}}.{{name}}"
+                continue
+            if isinstance(member, (classmethod, staticmethod)):
+                member = member.__func__
+            _assert_signature(
+                member, declarations, f"{{module_name}}.{{node.name}}.{{name}}"
+            )
+
+
+class Contracts(PythonCommand):
+    def do(self):
+        for filename, module_name in (
+            ("_meta.pyi", "Commands._meta"),
+            ("CommandBase.pyi", "Commands.CommandBase"),
+            ("Sender.pyi", "Commands.Sender"),
+            ("Keys.pyi", "Commands.Keys"),
+            ("dialogue.pyi", "Commands.dialogue"),
+            ("net.pyi", "Commands.net"),
+            ("PythonCommandBase.pyi", "Commands.PythonCommandBase"),
+            ("image_proc.pyi", "Commands.image_proc"),
+            ("McuCommandBase.pyi", "Commands.McuCommandBase"),
+            (
+                "PythonCommands/bridge_functions/bridge_functions.pyi",
+                "Commands.PythonCommands.bridge_functions.bridge_functions",
+            ),
+        ):
+            _check_stub(filename, module_name)
+
+        assert isinstance(Command, CommandMeta)
+        assert isinstance(PythonCommand, CommandMeta)
+        assert isinstance(ImageProcPythonCommand, CommandMeta)
+        assert isinstance(McuCommand, CommandMeta)
+        assert isinstance(self, Command)
+        assert self.alive is True
+        assert self.isRunning is True
+        assert self.postProcess is None
+
+        class MissingDo(PythonCommand):
+            pass
+
+        class Concrete(PythonCommand):
+            def do(self):
+                return None
+
+        class DerivedConcrete(Concrete):
+            pass
+
+        for abstract in (PythonCommand, ImageProcPythonCommand, MissingDo):
+            try:
+                abstract()
+            except TypeError as error:
+                assert "without implementing do()" in str(error)
+            else:
+                raise AssertionError(f"{{abstract.__name__}} must be abstract")
+        assert isinstance(Concrete(), Command)
+        assert isinstance(DerivedConcrete(), Command)
+"#
+    );
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("contracts.py"), source).expect("contract fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "contracts.py".into(),
+            class_name: "Contracts".to_owned(),
+        })
+        .await
+        .expect("contract script executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cooperative_stop_observes_alive_and_runs_cleanup_once() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Cooperative(PythonCommand):
+    def do(self):
+        assert self.alive is True
+        self.postProcess = lambda: self.keys.ser.writeRow("post-process")
+        self.keys.ser.writeRow("ready")
+        while self.alive:
+            pass
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("cooperative.py"), SOURCE)
+        .expect("cooperative fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "cooperative.py".into(),
+                class_name: "Cooperative".to_owned(),
+            })
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !client.status().await.expect("status succeeds").running {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cooperative script starts");
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if host
+                .serial_rows
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|row| row == "ready")
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("cooperative script installs its cleanup callback");
+
+    assert!(client.stop().await.expect("stop succeeds").stop_requested);
+    let result = tokio::time::timeout(Duration::from_secs(3), execution)
+        .await
+        .expect("cooperative script observes stop")
+        .expect("execution task joins")
+        .expect("execution response succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
+    assert_eq!(
+        *host.serial_rows.lock().unwrap(),
+        vec!["ready", "end", "post-process"]
+    );
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn finish_reports_normal_outcome_and_runs_cleanup_once() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+
+
+class Finisher(PythonCommand):
+    def do(self):
+        self.postProcess = lambda: self.keys.ser.writeRow("post-process")
+        self.finish()
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("finisher.py"), SOURCE).expect("finisher fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "finisher.py".into(),
+            class_name: "Finisher".to_owned(),
+        })
+        .await
+        .expect("finisher executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Finished);
+    assert_eq!(
+        *host.serial_rows.lock().unwrap(),
+        vec!["end", "post-process"]
+    );
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn script_stop_interrupts_busy_python_without_blocking_ipc() {
     const SOURCE: &str = r"
 from Commands.PythonCommandBase import PythonCommand

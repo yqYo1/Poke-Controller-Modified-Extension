@@ -546,6 +546,8 @@ fn validate_runtime_surface(py: Python<'_>) -> PyResult<()> {
     }
 
     let class_modules = [
+        ("CommandMeta", "Commands._meta"),
+        ("Command", "Commands.CommandBase"),
         ("PythonCommand", "Commands.PythonCommandBase"),
         ("ImageProcPythonCommand", "Commands.PythonCommandBase"),
         ("Camera", "Commands.PythonCommandBase"),
@@ -880,6 +882,7 @@ fn connection_error(error: ConnectionError) -> String {
 
 const PYTHON_BOOTSTRAP: &str = r#"
 import enum as _enum
+import inspect as _inspect
 import json as _json
 import logging as _logging
 import math as _math
@@ -896,8 +899,40 @@ class StopThread(Exception):
     pass
 
 
+def _abstract_command_method(function):
+    function.__pokecon_abstract_command_method__ = True
+    return function
+
+
+class CommandMeta(type):
+    def __call__(cls, *args, **kwargs):
+        if getattr(cls, "__requires_do__", False):
+            implementation = _inspect.getattr_static(cls, "do", None)
+            if isinstance(implementation, (classmethod, staticmethod)):
+                implementation = implementation.__func__
+            if implementation is None or getattr(
+                implementation, "__pokecon_abstract_command_method__", False
+            ):
+                raise TypeError(
+                    f"cannot instantiate abstract command {cls.__name__!r} "
+                    "without implementing do()"
+                )
+        return super().__call__(*args, **kwargs)
+
+
+class Command(metaclass=CommandMeta):
+    isRunning = False
+
+    def __init__(self):
+        self.isRunning = False
+
+
 def _monitor_stop(_code, _offset):
     if _api.is_executing() and not _api.is_alive():
+        current = globals().get("_current")
+        command = None if current is None else getattr(current, "command", None)
+        if command is not None:
+            command._stop_cleanup()
         raise StopThread()
 
 
@@ -1521,25 +1556,54 @@ def _notification(request):
     )
 
 
-class PythonCommand:
+class PythonCommand(Command):
+    __requires_do__ = True
     _logger = None
     keys = None
+    postProcess = None
 
     def __init__(self):
+        super().__init__()
         self._logger = _make_logger()
         self.keys = KeyPress(Sender())
+        self.postProcess = None
+        self._stop_cleanup_done = False
 
+    @property
+    def alive(self):
+        return _api.is_alive()
+
+    @_abstract_command_method
     def do(self):
         raise NotImplementedError("PythonCommand.do() must be overridden")
 
     def finish(self):
         _api.finish()
+        self._stop_cleanup()
         raise StopThread()
 
     def checkIfAlive(self):
-        if not _api.is_alive():
+        if not self.alive:
+            self._stop_cleanup()
             raise StopThread()
         return True
+
+    def _stop_cleanup(self):
+        if self._stop_cleanup_done:
+            return
+        self._stop_cleanup_done = True
+        self.isRunning = False
+        try:
+            self.keys.end()
+        except Exception:
+            self._logger.exception("failed to release command keys during stop")
+        post_process = self.postProcess
+        self.postProcess = None
+        if post_process is not None:
+            try:
+                post_process()
+            except Exception:
+                self._logger.exception("command postProcess callback failed")
 
     def press(self, buttons, duration=0.1, wait=0.1):
         self.keys.input(buttons)
@@ -1615,7 +1679,13 @@ class PythonCommand:
         self._print("stdout", mode, objects, sep, end)
 
     def show_var(self):
-        internal = {"_logger", "keys"}
+        internal = {
+            "_logger",
+            "_stop_cleanup_done",
+            "isRunning",
+            "keys",
+            "postProcess",
+        }
         values = {
             name: value
             for name, value in vars(self).items()
@@ -3106,8 +3176,9 @@ class ImageProcPythonCommand(PythonCommand):
         )
 
 
-class McuCommand:
+class McuCommand(Command):
     def __init__(self, sync_name):
+        super().__init__()
         self.sync_name = sync_name
         self.postProcess = None
         self.isRunning = False
@@ -3174,6 +3245,19 @@ class BridgeFunctions:
         self.commands.print_s(name, developer, contributor or "", description or "")
 
 
+for _bridge_name, _command_name in {
+    "bf_isContainTemplate": "isContainTemplate",
+    "bf_isContainTemplate_max": "isContainTemplate_max",
+    "bf_dialogue": "dialogue",
+    "bf_dialogue6widget": "dialogue6widget",
+    "bf_dialogue6widget_save_settings": "dialogue6widget_save_settings",
+    "bf_dialogue6widget_select_settings": "dialogue6widget_select_settings",
+}.items():
+    getattr(BridgeFunctions, _bridge_name).__signature__ = _inspect.signature(
+        getattr(ImageProcPythonCommand, _command_name)
+    )
+
+
 _current = _threading.local()
 
 
@@ -3197,6 +3281,9 @@ def _forward(name, image=False):
         return getattr(command, name)(*args, **kwargs)
 
     call.__name__ = name
+    method = getattr(ImageProcPythonCommand if image else PythonCommand, name)
+    parameters = tuple(_inspect.signature(method).parameters.values())[1:]
+    call.__signature__ = _inspect.Signature(parameters)
     return call
 
 
@@ -3209,6 +3296,8 @@ def _module(name, package=False):
 
 
 Commands = _module("Commands", True)
+meta_module = _module("Commands._meta")
+command_module = _module("Commands.CommandBase")
 keys_module = _module("Commands.Keys")
 sender_module = _module("Commands.Sender")
 python_module = _module("Commands.PythonCommandBase")
@@ -3220,6 +3309,8 @@ python_commands = _module("Commands.PythonCommands", True)
 bridge_package = _module("Commands.PythonCommands.bridge_functions", True)
 bridge_module = _module("Commands.PythonCommands.bridge_functions.bridge_functions")
 
+meta_module.CommandMeta = CommandMeta
+command_module.Command = Command
 for value in (Button, Hat, Stick, Direction, Touchscreen, KeyPress):
     setattr(keys_module, value.__name__, value)
 sender_module.Sender = Sender
@@ -3284,6 +3375,8 @@ for name in (
 Commands.dialogue = dialogue_module
 Commands.net = net_module
 Commands.image_proc = image_module
+Commands._meta = meta_module
+Commands.CommandBase = command_module
 Commands.Keys = keys_module
 Commands.Sender = sender_module
 Commands.PythonCommandBase = python_module
@@ -3308,10 +3401,12 @@ def _run_source(source, path, class_name):
         command = command_type(camera, CaptureArea(camera))
     else:
         command = command_type()
+    command.isRunning = True
     _current.command = command
     try:
         command.do()
     finally:
+        command.isRunning = False
         _reset_dialogs()
         _current.command = None
 "#;

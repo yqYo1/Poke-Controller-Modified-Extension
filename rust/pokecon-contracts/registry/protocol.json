@@ -93,6 +93,8 @@
       "worker": "user_script",
       "languages": ["python"],
       "namespaces": [
+        "Commands._meta",
+        "Commands.CommandBase",
         "Commands.PythonCommandBase",
         "Commands.McuCommandBase",
         "Commands.Keys",
@@ -102,6 +104,8 @@
         "Commands.PythonCommands.bridge_functions.bridge_functions"
       ],
       "required_imports": [
+        { "module": "Commands._meta", "symbols": ["CommandMeta"] },
+        { "module": "Commands.CommandBase", "symbols": ["Command"] },
         {
           "module": "Commands.PythonCommandBase",
           "symbols": ["PythonCommand", "ImageProcPythonCommand"]
@@ -118,9 +122,13 @@
         }
       ],
       "class_members": {
+        "CommandMeta": [],
+        "Command": ["isRunning"],
         "PythonCommand": [
           "_logger",
           "keys",
+          "alive",
+          "postProcess",
           "do",
           "finish",
           "checkIfAlive",

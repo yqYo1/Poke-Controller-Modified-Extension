@@ -13,16 +13,32 @@ use pokecon_device::input::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
 };
-use pokecon_dynamic::{CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError};
+use pokecon_dynamic::{
+    CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
+};
 use pokecon_settings::pipeline::{
     LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline,
 };
 use pokecon_settings::roots::SafeComponent;
 use pokecon_worker::ipc::ResourceSafety;
 use serde_json::Value;
+use tokio::sync::watch;
 
 const DYNAMIC_SOURCE: &str = "dynamic-config";
 const DYNAMIC_GENERATION: &str = "dynamic-1";
+const RUNTIME_STATE_FIELDS: &[&str] = &[
+    "serial_connected",
+    "camera_opened",
+    "is_running",
+    "command_state",
+    "current_command",
+    "command_candidates",
+    "tags",
+    "command_display_lists",
+    "command_display_cache_loading",
+    "pending_profile",
+    "last_input",
+];
 
 /// Controller ownership for the dynamic worker. The same object is passed to
 /// the IPC connection as its transport-loss safety boundary.
@@ -158,8 +174,24 @@ struct StartupHostState {
     diagnostics: Vec<Diagnostic>,
     outputs: Vec<String>,
     command_recompute_requests: u64,
+    script_load: Option<ScriptLoadStage>,
+    prepared_profile: Option<PreparedProfileSwitch>,
     startup_complete: bool,
     stopping: bool,
+}
+
+#[derive(Clone, Debug)]
+struct ScriptLoadStage {
+    command_candidates: Vec<CommandInfo>,
+    tags: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedProfileSwitch {
+    target: String,
+    loaded: LoadedSettings,
+    runtime_dynamic_values: BTreeMap<String, Value>,
+    public_state: BTreeMap<String, Value>,
 }
 
 /// Dynamic host used from worker creation through top-level config commit.
@@ -171,6 +203,7 @@ struct StartupHostState {
 pub struct StartupDynamicHost {
     inner: Mutex<StartupHostState>,
     controller: Arc<DynamicControllerSafety>,
+    command_recompute: watch::Sender<u64>,
 }
 
 impl StartupDynamicHost {
@@ -183,6 +216,7 @@ impl StartupDynamicHost {
     /// required canonical startup value is missing.
     pub fn new(request: PipelineRequest, loaded: LoadedSettings) -> Result<Self, DynamicHostError> {
         let public_state = startup_state(&loaded)?;
+        let (command_recompute, _receiver) = watch::channel(0);
         Ok(Self {
             inner: Mutex::new(StartupHostState {
                 dynamic_values: request.dynamic_values.clone(),
@@ -193,10 +227,13 @@ impl StartupDynamicHost {
                 diagnostics: Vec::new(),
                 outputs: Vec::new(),
                 command_recompute_requests: 0,
+                script_load: None,
+                prepared_profile: None,
                 startup_complete: false,
                 stopping: false,
             }),
             controller: Arc::new(DynamicControllerSafety::new()),
+            command_recompute,
         })
     }
 
@@ -228,6 +265,13 @@ impl StartupDynamicHost {
         self.inner.lock().dynamic_values.clone()
     }
 
+    /// Returns the current immutable settings snapshot used to prepare a
+    /// profile-scoped user-script worker.
+    #[must_use]
+    pub fn loaded_settings(&self) -> LoadedSettings {
+        self.inner.lock().loaded.clone()
+    }
+
     /// Returns the transport-loss safety object for `WorkerSupervisor::spawn`.
     #[must_use]
     pub fn controller_safety(&self) -> Arc<DynamicControllerSafety> {
@@ -247,6 +291,267 @@ impl StartupDynamicHost {
     #[must_use]
     pub fn command_recompute_requests(&self) -> u64 {
         self.inner.lock().command_recompute_requests
+    }
+
+    /// Subscribes to coalesced command-cache invalidations requested by the
+    /// persistent dynamic worker.
+    #[must_use]
+    pub fn subscribe_command_recompute(&self) -> watch::Receiver<u64> {
+        self.command_recompute.subscribe()
+    }
+
+    /// Starts an isolated `ScriptLoadPre` staging generation. Dynamic state
+    /// reads and writes see this generation while the last completed UI cache
+    /// remains unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Rejects overlapping loads or a stopping host.
+    pub fn begin_script_load(&self, candidates: Vec<CommandInfo>) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        if inner.script_load.is_some() {
+            return Err(DynamicHostError::new(
+                "ScriptLoadBusy",
+                "another command load generation is already active",
+            ));
+        }
+        let initial_load = inner
+            .public_state
+            .get("command_display_lists")
+            .and_then(Value::as_object)
+            .is_none_or(serde_json::Map::is_empty);
+        inner.public_state.insert(
+            "command_display_cache_loading".to_owned(),
+            Value::Bool(initial_load),
+        );
+        inner.script_load = Some(ScriptLoadStage {
+            command_candidates: candidates,
+            tags: Vec::new(),
+        });
+        Ok(())
+    }
+
+    /// Returns the mutable command metadata produced by `ScriptLoadPre`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error outside an active script-load generation.
+    pub fn staged_script_load(&self) -> Result<(Vec<CommandInfo>, Vec<String>), DynamicHostError> {
+        let inner = self.inner.lock();
+        let stage = inner.script_load.as_ref().ok_or_else(|| {
+            DynamicHostError::new("NoScriptLoad", "no command load generation is active")
+        })?;
+        Ok((stage.command_candidates.clone(), stage.tags.clone()))
+    }
+
+    /// Replaces the staged metadata after automatic, manual, and dynamic tags
+    /// have been reconciled and before `ScriptLoadPost` is emitted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error outside an active script-load generation.
+    pub fn set_staged_script_load(
+        &self,
+        command_candidates: Vec<CommandInfo>,
+        tags: Vec<String>,
+    ) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        let stage = inner.script_load.as_mut().ok_or_else(|| {
+            DynamicHostError::new("NoScriptLoad", "no command load generation is active")
+        })?;
+        stage.command_candidates = command_candidates;
+        stage.tags = unique_strings(tags);
+        Ok(())
+    }
+
+    /// Discards an unfinished script-load generation and restores the previous
+    /// completed cache without exposing staged values.
+    pub fn cancel_script_load(&self) {
+        let mut inner = self.inner.lock();
+        inner.script_load = None;
+        inner.public_state.insert(
+            "command_display_cache_loading".to_owned(),
+            Value::Bool(false),
+        );
+    }
+
+    /// Atomically publishes all command-visible fields from one completed
+    /// cache generation.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a cache that does not correspond to the active staged metadata.
+    pub fn publish_command_cache(
+        &self,
+        cache: &CommandDisplayCache,
+    ) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        let stage = inner.script_load.as_ref().ok_or_else(|| {
+            DynamicHostError::new("NoScriptLoad", "no command load generation is active")
+        })?;
+        if stage.command_candidates != cache.candidates || stage.tags != cache.tags {
+            return Err(DynamicHostError::new(
+                "CommandCacheGenerationMismatch",
+                "completed command cache does not match its staged generation",
+            ));
+        }
+        let candidates = serde_json::to_value(&cache.candidates)
+            .map_err(|_| state_encoding_failed("command candidates"))?;
+        let tags =
+            serde_json::to_value(&cache.tags).map_err(|_| state_encoding_failed("command tags"))?;
+        let display_lists = serde_json::to_value(&cache.display_lists)
+            .map_err(|_| state_encoding_failed("command display lists"))?;
+        inner
+            .public_state
+            .insert("command_candidates".to_owned(), candidates);
+        inner.public_state.insert("tags".to_owned(), tags);
+        inner
+            .public_state
+            .insert("command_display_lists".to_owned(), display_lists);
+        inner.public_state.insert(
+            "command_display_cache_loading".to_owned(),
+            Value::Bool(false),
+        );
+        inner.script_load = None;
+        Ok(())
+    }
+
+    /// Commits one command execution-state transition.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unknown state names or a stopping host.
+    pub fn set_command_status(
+        &self,
+        state: &str,
+        current_command: &str,
+    ) -> Result<(), DynamicHostError> {
+        if !matches!(state, "running" | "paused" | "stopped" | "error") {
+            return Err(DynamicHostError::new(
+                "InvalidCommandState",
+                "command state must be running, paused, stopped, or error",
+            ));
+        }
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        inner.public_state.insert(
+            "is_running".to_owned(),
+            Value::Bool(matches!(state, "running" | "paused")),
+        );
+        inner
+            .public_state
+            .insert("command_state".to_owned(), Value::String(state.to_owned()));
+        inner.public_state.insert(
+            "current_command".to_owned(),
+            Value::String(current_command.to_owned()),
+        );
+        Ok(())
+    }
+
+    /// Removes every profile-sensitive command value after the old worker has
+    /// entered stopping. The operation is one host-state commit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the host is already stopping for application exit.
+    pub fn clear_command_generation(&self) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        inner.script_load = None;
+        inner
+            .public_state
+            .insert("is_running".to_owned(), Value::Bool(false));
+        inner.public_state.insert(
+            "command_state".to_owned(),
+            Value::String("stopped".to_owned()),
+        );
+        inner
+            .public_state
+            .insert("current_command".to_owned(), Value::String(String::new()));
+        inner
+            .public_state
+            .insert("command_candidates".to_owned(), Value::Array(Vec::new()));
+        inner
+            .public_state
+            .insert("tags".to_owned(), Value::Array(Vec::new()));
+        inner.public_state.insert(
+            "command_display_lists".to_owned(),
+            Value::Object(serde_json::Map::new()),
+        );
+        inner.public_state.insert(
+            "command_display_cache_loading".to_owned(),
+            Value::Bool(false),
+        );
+        Ok(())
+    }
+
+    /// Fully resolves one target profile without changing active settings,
+    /// then exposes only `pending_profile` for the Pre-event phase.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unsafe/missing profiles, invalid target TOML, overlapping
+    /// preparations, or a stopping host.
+    pub fn prepare_profile_switch(&self, name: &str) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        if inner.prepared_profile.is_some() {
+            return Err(DynamicHostError::new(
+                "ProfileSwitchBusy",
+                "another profile switch is already prepared",
+            ));
+        }
+        validate_existing_profile(&inner.loaded, name)?;
+        let (loaded, runtime_dynamic_values) = resolve_runtime_profile(&inner, name)?;
+        let public_state = refreshed_state(&loaded, Some(&inner.public_state))?;
+        inner
+            .public_state
+            .insert("pending_profile".to_owned(), Value::String(name.to_owned()));
+        inner.prepared_profile = Some(PreparedProfileSwitch {
+            target: name.to_owned(),
+            loaded,
+            runtime_dynamic_values,
+            public_state,
+        });
+        Ok(())
+    }
+
+    /// Discards a prepared target and clears `pending_profile` while leaving
+    /// the active settings snapshot unchanged.
+    pub fn cancel_profile_switch(&self) {
+        let mut inner = self.inner.lock();
+        inner.prepared_profile = None;
+        inner
+            .public_state
+            .insert("pending_profile".to_owned(), Value::Null);
+    }
+
+    /// Commits a previously validated target after the old worker has been
+    /// reaped. The commit itself performs no filesystem parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no target is prepared or the host is stopping.
+    pub fn commit_profile_switch(&self) -> Result<LoadedSettings, DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        let prepared = inner.prepared_profile.take().ok_or_else(|| {
+            DynamicHostError::new("NoProfileSwitch", "no profile switch is prepared")
+        })?;
+        let mut public_state = prepared.public_state;
+        for name in RUNTIME_STATE_FIELDS {
+            if let Some(value) = inner.public_state.get(*name) {
+                public_state.insert((*name).to_owned(), value.clone());
+            }
+        }
+        public_state.insert("active_profile".to_owned(), Value::String(prepared.target));
+        public_state.insert("pending_profile".to_owned(), Value::Null);
+        inner.loaded = prepared.loaded;
+        inner.runtime_dynamic_values = prepared.runtime_dynamic_values;
+        inner.public_state = public_state;
+        Ok(inner.loaded.clone())
     }
 
     /// Closes every mutating host boundary and immediately releases dynamic
@@ -304,25 +609,9 @@ impl StartupDynamicHost {
             .and_then(Value::as_str)
             .filter(|target| *target != inner.loaded.active_profile.as_str());
         let (loaded, runtime_dynamic_values) = if let Some(target) = target_profile {
-            validate_existing_profile(&inner.loaded, target)?;
-            let mut retained = inner.runtime_dynamic_values.clone();
-            retained.retain(|id, _value| {
-                id != "active_profile"
-                    && inner
-                        .loaded
-                        .settings
-                        .registry()
-                        .settings
-                        .iter()
-                        .find(|setting| setting.id == *id)
-                        .is_some_and(|setting| setting.scope == Scope::Global)
-            });
+            let (mut loaded, mut retained) = resolve_runtime_profile(inner, target)?;
             retained.extend(changes.clone());
-            let switched = inner
-                .loaded
-                .switch_profile_in_memory(target)
-                .map_err(|error| pipeline_error(&error))?;
-            let loaded = switched
+            loaded = loaded
                 .with_runtime_dynamic_changes(&retained)
                 .map_err(|error| pipeline_error(&error))?;
             (loaded, retained)
@@ -358,6 +647,18 @@ impl DynamicHost for StartupDynamicHost {
     fn state_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
         let inner = self.inner.lock();
         let mut snapshot = inner.public_state.clone();
+        if let Some(stage) = &inner.script_load {
+            snapshot.insert(
+                "command_candidates".to_owned(),
+                serde_json::to_value(&stage.command_candidates)
+                    .map_err(|_| state_encoding_failed("command candidates"))?,
+            );
+            snapshot.insert(
+                "tags".to_owned(),
+                serde_json::to_value(&stage.tags)
+                    .map_err(|_| state_encoding_failed("command tags"))?,
+            );
+        }
         snapshot.insert(
             "holding_buttons".to_owned(),
             holding_buttons(self.controller.state()),
@@ -395,7 +696,26 @@ impl DynamicHost for StartupDynamicHost {
         };
         let mut inner = self.inner.lock();
         ensure_running(&inner)?;
-        inner.public_state.insert(name.to_owned(), value);
+        if let Some(stage) = inner.script_load.as_mut() {
+            match name {
+                "command_candidates" => {
+                    stage.command_candidates = serde_json::from_value(value).map_err(|_| {
+                        DynamicHostError::new(
+                            "InvalidState",
+                            "command_candidates must be a list of CommandInfo objects",
+                        )
+                    })?;
+                }
+                "tags" => {
+                    stage.tags = serde_json::from_value(value).map_err(|_| {
+                        DynamicHostError::new("InvalidState", "tags must be a list of strings")
+                    })?;
+                }
+                _ => unreachable!("writable state names were validated above"),
+            }
+        } else {
+            inner.public_state.insert(name.to_owned(), value);
+        }
         Ok(())
     }
 
@@ -461,6 +781,8 @@ impl DynamicHost for StartupDynamicHost {
         let mut inner = self.inner.lock();
         if !inner.stopping {
             inner.command_recompute_requests = inner.command_recompute_requests.saturating_add(1);
+            self.command_recompute
+                .send_replace(inner.command_recompute_requests);
         }
     }
 }
@@ -482,6 +804,49 @@ fn host_stopping() -> DynamicHostError {
 
 fn pipeline_error(error: &PipelineError) -> DynamicHostError {
     DynamicHostError::new("InvalidSetting", error.to_string())
+}
+
+fn resolve_runtime_profile(
+    inner: &StartupHostState,
+    target: &str,
+) -> Result<(LoadedSettings, BTreeMap<String, Value>), DynamicHostError> {
+    let mut retained = inner.runtime_dynamic_values.clone();
+    retained.retain(|id, _value| {
+        id != "active_profile"
+            && inner
+                .loaded
+                .settings
+                .registry()
+                .settings
+                .iter()
+                .find(|setting| setting.id == *id)
+                .is_some_and(|setting| setting.scope == Scope::Global)
+    });
+    retained.insert(
+        "active_profile".to_owned(),
+        Value::String(target.to_owned()),
+    );
+    let switched = inner
+        .loaded
+        .switch_profile_in_memory(target)
+        .map_err(|error| pipeline_error(&error))?;
+    let loaded = switched
+        .with_runtime_dynamic_changes(&retained)
+        .map_err(|error| pipeline_error(&error))?;
+    Ok((loaded, retained))
+}
+
+fn state_encoding_failed(subject: &str) -> DynamicHostError {
+    DynamicHostError::new(
+        "StateEncodingFailed",
+        format!("{subject} cannot be encoded"),
+    )
+}
+
+fn unique_strings(mut values: Vec<String>) -> Vec<String> {
+    let mut retained = BTreeSet::new();
+    values.retain(|value| retained.insert(value.clone()));
+    values
 }
 
 fn validate_existing_profile(loaded: &LoadedSettings, name: &str) -> Result<(), DynamicHostError> {
@@ -567,6 +932,14 @@ fn startup_state(loaded: &LoadedSettings) -> Result<BTreeMap<String, Value>, Dyn
         ("command_candidates".to_owned(), Value::Array(Vec::new())),
         ("tags".to_owned(), Value::Array(Vec::new())),
         (
+            "command_display_lists".to_owned(),
+            Value::Object(serde_json::Map::new()),
+        ),
+        (
+            "command_display_cache_loading".to_owned(),
+            Value::Bool(false),
+        ),
+        (
             "active_profile".to_owned(),
             Value::String(loaded.active_profile.as_str().to_owned()),
         ),
@@ -589,19 +962,9 @@ fn refreshed_state(
 ) -> Result<BTreeMap<String, Value>, DynamicHostError> {
     let mut state = startup_state(loaded)?;
     if let Some(previous) = previous {
-        for name in [
-            "serial_connected",
-            "camera_opened",
-            "is_running",
-            "command_state",
-            "current_command",
-            "command_candidates",
-            "tags",
-            "pending_profile",
-            "last_input",
-        ] {
-            if let Some(value) = previous.get(name) {
-                state.insert(name.to_owned(), value.clone());
+        for name in RUNTIME_STATE_FIELDS {
+            if let Some(value) = previous.get(*name) {
+                state.insert((*name).to_owned(), value.clone());
             }
         }
     }
@@ -617,7 +980,7 @@ mod tests {
     use std::ffi::OsString;
 
     use pokecon_device::controller::ControllerUpdate;
-    use pokecon_dynamic::DynamicHost;
+    use pokecon_dynamic::{CommandDisplayItem, DynamicHost};
     use pokecon_settings::pipeline::{PipelineRequest, SettingsPipeline};
     use pokecon_settings::roots::{BaseDirectories, RootEnvironment};
     use serde_json::json;
@@ -745,5 +1108,102 @@ mod tests {
                 .code,
             "HostStopping"
         );
+    }
+
+    #[test]
+    fn script_load_staging_never_exposes_a_partial_display_generation() {
+        let (_temporary, request, loaded) = fixture();
+        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
+        let initial = CommandInfo {
+            name: "Initial".to_owned(),
+            module_path: "Commands.PythonCommands.initial".to_owned(),
+            class_name: "Initial".to_owned(),
+            tags: vec!["@Samples".to_owned()],
+        };
+        host.begin_script_load(vec![initial.clone()])
+            .expect("initial load must begin");
+        assert_eq!(
+            host.state_snapshot().unwrap()["command_candidates"],
+            json!([initial])
+        );
+        assert_eq!(
+            host.state_snapshot().unwrap()["command_display_lists"],
+            json!({})
+        );
+        assert_eq!(
+            host.state_snapshot().unwrap()["command_display_cache_loading"],
+            json!(true)
+        );
+
+        host.set_state_value(
+            "command_candidates",
+            json!([{
+                "name": "Initial",
+                "module_path": "Commands.PythonCommands.initial",
+                "class_name": "Initial",
+                "tags": ["@Samples", "dynamic"]
+            }]),
+        )
+        .expect("ScriptLoadPre mutation must be staged");
+        let (candidates, _tags) = host.staged_script_load().unwrap();
+        host.set_staged_script_load(candidates.clone(), vec!["-".into(), "dynamic".into()])
+            .expect("final tags must be staged");
+        let cache = CommandDisplayCache {
+            generation: 1,
+            candidates: candidates.clone(),
+            tags: vec!["-".into(), "dynamic".into()],
+            display_lists: BTreeMap::from([
+                (
+                    "-".to_owned(),
+                    vec![CommandDisplayItem::Command {
+                        command: candidates[0].clone(),
+                    }],
+                ),
+                (
+                    "dynamic".to_owned(),
+                    vec![CommandDisplayItem::Command {
+                        command: candidates[0].clone(),
+                    }],
+                ),
+            ]),
+        };
+        host.publish_command_cache(&cache)
+            .expect("complete generation must publish");
+        let published = host.state_snapshot().unwrap();
+        assert_eq!(published["command_candidates"], json!(candidates));
+        assert_eq!(published["tags"], json!(["-", "dynamic"]));
+        assert_eq!(published["command_display_cache_loading"], json!(false));
+
+        let replacement = CommandInfo {
+            name: "Replacement".to_owned(),
+            module_path: "Commands.PythonCommands.replacement".to_owned(),
+            class_name: "Replacement".to_owned(),
+            tags: Vec::new(),
+        };
+        host.begin_script_load(vec![replacement.clone()])
+            .expect("recomputation must stage");
+        let recomputing = host.state_snapshot().unwrap();
+        assert_eq!(recomputing["command_candidates"], json!([replacement]));
+        assert_eq!(
+            recomputing["command_display_lists"],
+            published["command_display_lists"]
+        );
+        assert_eq!(recomputing["command_display_cache_loading"], json!(false));
+        host.cancel_script_load();
+        assert_eq!(
+            host.state_snapshot().unwrap()["command_candidates"],
+            published["command_candidates"]
+        );
+    }
+
+    #[test]
+    fn command_recompute_notifications_are_monotonic_and_coalesced() {
+        let (_temporary, request, loaded) = fixture();
+        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
+        let receiver = host.subscribe_command_recompute();
+        host.request_command_recompute();
+        host.request_command_recompute();
+        assert_eq!(*receiver.borrow(), 2);
+        assert_eq!(host.command_recompute_requests(), 2);
     }
 }

@@ -15,6 +15,7 @@ default = []
 tauri-shell = ["pokecon-desktop/tauri-shell"]
 
 [dependencies]
+async-trait.workspace = true
 clap.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }

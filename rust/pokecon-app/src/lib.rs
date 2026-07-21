@@ -1,7 +1,10 @@
 //! Top-level process orchestration for web and desktop modes.
 
+pub mod command_service;
 pub mod dynamic_host;
 pub mod dynamic_runtime;
+pub mod profile_service;
+pub mod script_runtime;
 
 use std::io;
 use std::net::SocketAddr;

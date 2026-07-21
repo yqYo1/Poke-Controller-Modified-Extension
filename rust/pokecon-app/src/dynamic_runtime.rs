@@ -10,9 +10,7 @@ use std::time::Duration;
 use pokecon_dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
 use pokecon_dynamic::{DynamicConfigLanguage, DynamicHostError};
 use pokecon_settings::package::PythonWorker;
-use pokecon_settings::pipeline::{
-    LoadedSettings, PipelineError, PipelineRequest, SettingSource, SettingsPipeline,
-};
+use pokecon_settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
 use pokecon_settings::roots::RootEnvironment;
 use pokecon_settings::uv::{ManagedUv, ManagedUvSource, UvChildEnvironment, UvError};
 use pokecon_settings::venv::{
@@ -33,9 +31,9 @@ use crate::dynamic_host::StartupDynamicHost;
 const DYNAMIC_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 const DYNAMIC_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const RECEIVER_DRAIN_TIMEOUT: Duration = Duration::from_millis(100);
-const PYTHON_VERSION: &str = "3.14";
+pub(crate) const PYTHON_VERSION: &str = "3.14";
 
-const SAFE_WORKER_ENVIRONMENT: &[&str] = &[
+pub(crate) const SAFE_WORKER_ENVIRONMENT: &[&str] = &[
     "PATH",
     "HOME",
     "USERPROFILE",
@@ -59,6 +57,7 @@ const SAFE_WORKER_ENVIRONMENT: &[&str] = &[
 #[derive(Debug)]
 pub struct DynamicBootstrap {
     pub loaded: LoadedSettings,
+    pub host: Arc<StartupDynamicHost>,
     pub runtime: Option<DynamicRuntime>,
     pub startup_failure: Option<DynamicStartupError>,
 }
@@ -98,7 +97,7 @@ pub struct DynamicRuntime {
     _supervisor: Arc<WorkerSupervisor>,
     worker: Arc<ManagedWorker>,
     host: Arc<StartupDynamicHost>,
-    client: Option<DynamicWorkerClient>,
+    client: Option<Arc<DynamicWorkerClient>>,
     log_task: Option<JoinHandle<()>>,
     diagnostic_task: Option<JoinHandle<()>>,
 }
@@ -114,6 +113,19 @@ impl std::fmt::Debug for DynamicRuntime {
 }
 
 impl DynamicRuntime {
+    /// Returns the Rust-owned state/settings host shared with command and
+    /// profile services.
+    #[must_use]
+    pub fn host(&self) -> Arc<StartupDynamicHost> {
+        Arc::clone(&self.host)
+    }
+
+    /// Returns the persistent worker as the command callback/event bridge.
+    #[must_use]
+    pub fn command_bridge(&self) -> Option<Arc<DynamicWorkerClient>> {
+        self.client.clone()
+    }
+
     /// Emits the non-cancellable event after the server and desktop boundaries
     /// are ready.
     ///
@@ -187,25 +199,54 @@ pub async fn bootstrap_dynamic(
     before_dynamic: LoadedSettings,
 ) -> Result<DynamicBootstrap, PipelineError> {
     let Some(primary) = selected_language(&before_dynamic)? else {
+        let host = Arc::new(
+            StartupDynamicHost::new(request, before_dynamic)
+                .map_err(|error| host_pipeline_error(&error))?,
+        );
+        let loaded = host
+            .finish_startup()
+            .map_err(|error| host_pipeline_error(&error))?;
         return Ok(DynamicBootstrap {
-            loaded: SettingsPipeline::new(request).load()?,
+            loaded,
+            host,
             runtime: None,
             startup_failure: None,
         });
     };
 
-    match start_dynamic(request.clone(), before_dynamic, primary).await {
-        Ok((loaded, runtime)) => Ok(DynamicBootstrap {
-            loaded,
-            runtime: Some(runtime),
-            startup_failure: None,
-        }),
-        Err(error) => Ok(DynamicBootstrap {
-            loaded: SettingsPipeline::new(request).load()?,
-            runtime: None,
-            startup_failure: Some(error),
-        }),
+    match start_dynamic(request.clone(), before_dynamic.clone(), primary).await {
+        Ok((loaded, runtime)) => {
+            let host = runtime.host();
+            Ok(DynamicBootstrap {
+                loaded,
+                host,
+                runtime: Some(runtime),
+                startup_failure: None,
+            })
+        }
+        Err(error) => {
+            let host = Arc::new(
+                StartupDynamicHost::new(request, before_dynamic)
+                    .map_err(|error| host_pipeline_error(&error))?,
+            );
+            let loaded = host
+                .finish_startup()
+                .map_err(|error| host_pipeline_error(&error))?;
+            Ok(DynamicBootstrap {
+                loaded,
+                host,
+                runtime: None,
+                startup_failure: Some(error),
+            })
+        }
     }
+}
+
+fn host_pipeline_error(error: &DynamicHostError) -> PipelineError {
+    PipelineError::CrossSetting(format!(
+        "runtime host initialization failed ({})",
+        error.code
+    ))
 }
 
 fn selected_language(
@@ -236,17 +277,19 @@ async fn start_dynamic(
         before_dynamic.clone(),
     )?);
     let supervisor = Arc::new(WorkerSupervisor::new());
-    let launch = dynamic_worker_launch(
+    let launch = python_worker_launch(
         prepared.worker_program,
+        WorkerKind::Dynamic,
         &request.environment,
         &before_dynamic.roots.config,
         &prepared.venv,
         &prepared.site_packages,
+        PYTHON_SITE_PACKAGES_ENV,
     );
     let worker = supervisor.spawn(launch, host.controller_safety()).await?;
     let diagnostic_task = worker.take_diagnostics().map(spawn_diagnostic_receiver);
     let client = match DynamicWorkerClient::attach(worker.clone(), host.clone()) {
-        Ok(client) => client,
+        Ok(client) => Arc::new(client),
         Err(error) => {
             stop_failed_startup(&worker, &host, None, None, diagnostic_task).await;
             return Err(error.into());
@@ -358,7 +401,7 @@ async fn prepare_dynamic_environment(
         "dynamic Python environment is synchronized"
     );
 
-    let site_packages = dynamic_site_packages(&venv);
+    let site_packages = python_site_packages(&venv);
     if !site_packages.is_dir() {
         return Err(DynamicStartupError::MissingSitePackages(site_packages));
     }
@@ -370,7 +413,7 @@ async fn prepare_dynamic_environment(
     })
 }
 
-fn packaged_python() -> Result<PathBuf, DynamicStartupError> {
+pub(crate) fn packaged_python() -> Result<PathBuf, DynamicStartupError> {
     let path = option_env!("PYO3_PYTHON")
         .filter(|value| !value.is_empty())
         .map_or_else(PathBuf::new, PathBuf::from);
@@ -381,7 +424,7 @@ fn packaged_python() -> Result<PathBuf, DynamicStartupError> {
     }
 }
 
-fn packaged_worker() -> Result<PathBuf, DynamicStartupError> {
+pub(crate) fn packaged_worker() -> Result<PathBuf, DynamicStartupError> {
     let executable = std::env::current_exe().map_err(DynamicStartupError::CurrentExecutable)?;
     let directory = executable
         .parent()
@@ -394,7 +437,7 @@ fn packaged_worker() -> Result<PathBuf, DynamicStartupError> {
     }
 }
 
-fn optional_path_setting(
+pub(crate) fn optional_path_setting(
     loaded: &LoadedSettings,
     id: &str,
 ) -> Result<Option<PathBuf>, PipelineError> {
@@ -410,7 +453,7 @@ fn optional_path_setting(
     }
 }
 
-fn dynamic_site_packages(venv: &Path) -> PathBuf {
+pub(crate) fn python_site_packages(venv: &Path) -> PathBuf {
     if cfg!(windows) {
         venv.join("Lib").join("site-packages")
     } else {
@@ -429,20 +472,22 @@ fn dynamic_home(environment: &RootEnvironment) -> Option<PathBuf> {
     })
 }
 
-fn dynamic_worker_launch(
+pub(crate) fn python_worker_launch(
     worker_program: PathBuf,
+    kind: WorkerKind,
     environment: &RootEnvironment,
-    config_root: &Path,
+    working_directory: &Path,
     venv: &Path,
     site_packages: &Path,
+    site_packages_environment: &str,
 ) -> WorkerLaunch {
-    let mut launch = WorkerLaunch::managed(worker_program, WorkerKind::Dynamic)
+    let mut launch = WorkerLaunch::managed(worker_program, kind)
         .clear_environment()
-        .current_directory(config_root)
+        .current_directory(working_directory)
         .environment("VIRTUAL_ENV", venv)
         .environment("PYTHONNOUSERSITE", "1")
         .environment("PYTHONUTF8", "1")
-        .environment(PYTHON_SITE_PACKAGES_ENV, site_packages);
+        .environment(site_packages_environment, site_packages);
     for name in SAFE_WORKER_ENVIRONMENT {
         if let Some(value) = environment.get(name) {
             launch = launch.environment(OsStr::new(name), value);
@@ -505,7 +550,7 @@ fn spawn_diagnostic_receiver(
 async fn stop_failed_startup(
     worker: &Arc<ManagedWorker>,
     host: &StartupDynamicHost,
-    client: Option<DynamicWorkerClient>,
+    client: Option<Arc<DynamicWorkerClient>>,
     log_task: Option<JoinHandle<()>>,
     diagnostic_task: Option<JoinHandle<()>>,
 ) {
@@ -544,13 +589,13 @@ fn log_stop_result(result: Result<pokecon_worker::supervisor::StopReport, Superv
 
 async fn finish_worker_receivers(
     worker: &ManagedWorker,
-    client: Option<DynamicWorkerClient>,
+    client: Option<Arc<DynamicWorkerClient>>,
     log_task: Option<JoinHandle<()>>,
     diagnostic_task: Option<JoinHandle<()>>,
 ) {
     let dropped_logs = client
         .as_ref()
-        .map_or(0, DynamicWorkerClient::dropped_log_count);
+        .map_or(0, |client| client.dropped_log_count());
     let dropped_diagnostics = worker.dropped_diagnostic_count();
     drop(client);
     finish_receiver_task(log_task).await;

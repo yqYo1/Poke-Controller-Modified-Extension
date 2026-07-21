@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, mpsc};
+use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::JoinHandle;
 
 use pokecon_camera::{
@@ -77,7 +77,8 @@ struct ExecutionState {
     active_id: AtomicU64,
     alive: AtomicBool,
     stop_cause: AtomicU8,
-    paused: Mutex<bool>,
+    paused: AtomicBool,
+    pause_gate: Mutex<()>,
     resumed: Condvar,
 }
 
@@ -88,15 +89,22 @@ impl ExecutionState {
             active_id: AtomicU64::new(0),
             alive: AtomicBool::new(false),
             stop_cause: AtomicU8::new(StopCause::None as u8),
-            paused: Mutex::new(false),
+            paused: AtomicBool::new(false),
+            pause_gate: Mutex::new(()),
             resumed: Condvar::new(),
         }
     }
 
-    fn lock_paused(&self) -> MutexGuard<'_, bool> {
-        self.paused
+    fn lock_pause_gate(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.pause_gate
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn clear_pause(&self) {
+        let _gate = self.lock_pause_gate();
+        self.paused.store(false, Ordering::Release);
+        self.resumed.notify_all();
     }
 
     fn begin(&self) -> Result<u64, PythonActorError> {
@@ -117,7 +125,7 @@ impl ExecutionState {
             })?;
         self.stop_cause
             .store(StopCause::None as u8, Ordering::Release);
-        *self.lock_paused() = false;
+        self.clear_pause();
         self.alive.store(true, Ordering::Release);
         Ok(id)
     }
@@ -129,8 +137,7 @@ impl ExecutionState {
             .compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire);
         self.stop_cause
             .store(StopCause::None as u8, Ordering::Release);
-        *self.lock_paused() = false;
-        self.resumed.notify_all();
+        self.clear_pause();
     }
 
     fn request_stop(&self) -> bool {
@@ -144,8 +151,7 @@ impl ExecutionState {
             Ordering::Acquire,
         );
         self.alive.store(false, Ordering::Release);
-        *self.lock_paused() = false;
-        self.resumed.notify_all();
+        self.clear_pause();
         true
     }
 
@@ -154,8 +160,7 @@ impl ExecutionState {
             self.stop_cause
                 .store(StopCause::Finish as u8, Ordering::Release);
             self.alive.store(false, Ordering::Release);
-            *self.lock_paused() = false;
-            self.resumed.notify_all();
+            self.clear_pause();
         }
     }
 
@@ -163,26 +168,28 @@ impl ExecutionState {
         if self.active_id.load(Ordering::Acquire) == 0 {
             return false;
         }
-        let mut paused = self.lock_paused();
-        let changed = !*paused;
-        *paused = true;
-        changed
+        let _gate = self.lock_pause_gate();
+        !self.paused.swap(true, Ordering::AcqRel)
     }
 
     fn resume(&self) -> bool {
-        let mut paused = self.lock_paused();
-        let changed = *paused;
-        *paused = false;
-        self.resumed.notify_all();
+        let _gate = self.lock_pause_gate();
+        let changed = self.paused.swap(false, Ordering::AcqRel);
+        if changed {
+            self.resumed.notify_all();
+        }
         changed
     }
 
     fn checkpoint(&self) -> bool {
-        let mut paused = self.lock_paused();
-        while *paused && self.alive.load(Ordering::Acquire) {
-            paused = self
+        if !self.paused.load(Ordering::Acquire) {
+            return self.alive.load(Ordering::Acquire);
+        }
+        let mut gate = self.lock_pause_gate();
+        while self.paused.load(Ordering::Acquire) && self.alive.load(Ordering::Acquire) {
+            gate = self
                 .resumed
-                .wait(paused)
+                .wait(gate)
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
         }
         self.alive.load(Ordering::Acquire)
@@ -194,7 +201,7 @@ impl ExecutionState {
             initialized: true,
             profile: Some(profile.to_owned()),
             running: active != 0,
-            paused: active != 0 && *self.lock_paused(),
+            paused: active != 0 && self.paused.load(Ordering::Acquire),
             execution_id: (active != 0).then_some(active),
         }
     }
@@ -795,7 +802,11 @@ impl PyApi {
     }
 
     fn execution_checkpoint(&self, py: Python<'_>) -> bool {
-        py.detach(|| self.state.checkpoint())
+        if self.state.paused.load(Ordering::Acquire) {
+            py.detach(|| self.state.checkpoint())
+        } else {
+            self.state.alive.load(Ordering::Acquire)
+        }
     }
 
     fn finish(&self) {

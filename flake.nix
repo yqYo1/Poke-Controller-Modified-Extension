@@ -293,10 +293,20 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
+                cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 basedpyright
                 shellcheck scripts/*.sh
                 python scripts/source_filter.py
+              '';
+            };
+
+            generate-contracts = mkTask {
+              name = "generate-contracts";
+              runtimeInputs = rustTaskInputs;
+              text = ''
+                export PYO3_PYTHON="${pythonEnv}/bin/python"
+                exec cargo run --locked --package pokecon-contracts --bin generate_contracts -- "$@"
               '';
             };
 
@@ -574,6 +584,7 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 python scripts/source_filter.py
+                cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features

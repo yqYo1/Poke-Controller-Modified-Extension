@@ -4,9 +4,11 @@
 //! deliberately free of application/runtime dependencies so generators, CI,
 //! workers, the server, and the UI build can all consume the same contracts.
 
+pub mod dynamic_typings;
 pub mod model;
 mod validate;
 
+pub use dynamic_typings::{dynamic_lua_typings, dynamic_python_typings};
 pub use model::{Access, DefaultValue, Mutability, Scope, Setting, SettingsRegistry, ValueSchema};
 pub use validate::{ContractError, ValidatedSettingsRegistry};
 

@@ -39,7 +39,7 @@
       "name": "dynamic_python_typings",
       "sources": ["settings.json", "protocol.json"],
       "output": "python/pokecon/typings/__init__.pyi",
-      "runtime_destination": "<Data>/typings/__init__.pyi",
+      "runtime_destination": "<Data>/typings/pokecon/__init__.pyi",
       "generate_command": "nix run .#generate-contracts",
       "tracked": true,
       "phase": 7

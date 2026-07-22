@@ -90,7 +90,6 @@ pub(crate) struct ApplicationBackend {
     mutation_gate: Mutex<()>,
     commands: OnceLock<Arc<CommandService>>,
     profiles: OnceLock<Arc<ProfileService>>,
-    update_client: reqwest::Client,
 }
 
 impl std::fmt::Debug for ApplicationBackend {
@@ -105,13 +104,9 @@ impl std::fmt::Debug for ApplicationBackend {
 }
 
 impl ApplicationBackend {
-    pub(crate) fn new(parts: ApplicationBackendParts) -> Result<Self, String> {
+    pub(crate) fn new(parts: ApplicationBackendParts) -> Self {
         let arbiter = parts.host.controller_safety().arbiter();
-        let update_client = reqwest::Client::builder()
-            .user_agent(concat!("pokecon/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .map_err(|_error| "update client initialization failed".to_owned())?;
-        Ok(Self {
+        Self {
             hub: parts.hub,
             settings: Mutex::new(parts.settings),
             host: parts.host,
@@ -127,8 +122,7 @@ impl ApplicationBackend {
             mutation_gate: Mutex::new(()),
             commands: OnceLock::new(),
             profiles: OnceLock::new(),
-            update_client,
-        })
+        }
     }
 
     pub(crate) fn install_command_services(
@@ -725,8 +719,11 @@ impl RestBackend for ApplicationBackend {
             html_url: String,
         }
 
-        let release = self
-            .update_client
+        let client = reqwest::Client::builder()
+            .user_agent(concat!("pokecon/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|_error| backend_unavailable("update check is unavailable"))?;
+        let release = client
             .get(LATEST_RELEASE_URL)
             .send()
             .await

@@ -194,6 +194,25 @@ impl DiscordTransport for ReqwestDiscordTransport {
     }
 }
 
+/// Fail-soft transport used when the process cannot initialize its TLS trust
+/// store. Notification attempts still produce the normal non-fatal failed
+/// outcome without preventing the application from starting.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableDiscordTransport;
+
+#[async_trait]
+impl DiscordTransport for UnavailableDiscordTransport {
+    async fn send(
+        &self,
+        _webhook: &DiscordWebhookUrl,
+        _content: &str,
+        _username: Option<&str>,
+        _avatar_url: Option<&Url>,
+    ) -> Result<(), NotificationError> {
+        Err(NotificationError::DeliveryFailed)
+    }
+}
+
 /// Native notification platform boundary.
 #[async_trait]
 pub trait NativeNotificationTransport: Send + Sync {

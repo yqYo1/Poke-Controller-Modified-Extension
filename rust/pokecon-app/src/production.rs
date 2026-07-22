@@ -13,7 +13,8 @@ use pokecon_camera::{
 };
 use pokecon_device::controller::ControllerState;
 use pokecon_device::notification::{
-    NotificationService, ReqwestDiscordTransport, WindowsNativeNotificationTransport,
+    DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
+    WindowsNativeNotificationTransport,
 };
 use pokecon_device::serial::{
     ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager, SerialSettingsApplier,
@@ -126,12 +127,22 @@ impl ProductionRuntime {
                 .map_err(|_error| "serial runtime initialization failed".to_owned())?;
         }
 
-        let notification_transport = ReqwestDiscordTransport::new()
-            .map_err(|_error| "notification runtime initialization failed".to_owned())?;
+        let notification_transport: Arc<dyn DiscordTransport> = match ReqwestDiscordTransport::new()
+        {
+            Ok(transport) => Arc::new(transport),
+            Err(error) => {
+                tracing::warn!(
+                    diagnostic_id = "NOTIFICATION_TRANSPORT_UNAVAILABLE",
+                    %error,
+                    "Discord notifications are unavailable for this process"
+                );
+                Arc::new(UnavailableDiscordTransport)
+            }
+        };
         let initial_notification_config = notification_config(&raw_values(&loaded))?;
         let notifications = Arc::new(NotificationService::new(
             initial_notification_config,
-            Arc::new(notification_transport),
+            notification_transport,
             Arc::new(WindowsNativeNotificationTransport),
         ));
 
@@ -190,7 +201,7 @@ impl ProductionRuntime {
             realtime,
             motion_jpeg: Some(motion_jpeg),
             screenshot_mode,
-        })?);
+        }));
         let websocket_backend: Arc<dyn WebSocketBackend> = backend.clone();
         let websocket = WebSocketTransport::new(websocket_backend, WebSocketConfig::default())
             .map_err(|_error| "WebSocket transport initialization failed".to_owned())?;

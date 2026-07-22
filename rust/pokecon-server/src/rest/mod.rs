@@ -5,6 +5,7 @@ mod devices;
 mod dynamic_config;
 mod notifications;
 mod profiles;
+mod script_ui;
 mod settings;
 mod state;
 mod update;
@@ -40,6 +41,7 @@ pub fn router(backend: Arc<dyn RestBackend>) -> Router {
         .merge(notifications::router())
         .merge(dynamic_config::router())
         .merge(profiles::router())
+        .merge(script_ui::router())
         .merge(state::router())
         .merge(update::router())
         .route("/api", any(not_found))

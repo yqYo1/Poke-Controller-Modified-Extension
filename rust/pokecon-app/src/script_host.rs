@@ -1,12 +1,13 @@
 //! Rust-main resource adapters for one profile-scoped user-script generation.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::{Read as _, Write as _};
 use std::net::{Shutdown, TcpStream, ToSocketAddrs as _};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 
+use base64::Engine as _;
 use parking_lot::Mutex as ParkingMutex;
 use pokecon_camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
 use pokecon_device::controller::{
@@ -18,7 +19,7 @@ use pokecon_device::input::{
 };
 use pokecon_device::notification::{NotificationOutcome, NotificationService};
 use pokecon_device::serial::{SerialError, SerialManager};
-use pokecon_server::api::{LogData, LogLevel, LogTarget};
+use pokecon_server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
 use pokecon_server::websocket::WebSocketBroker;
 use pokecon_settings::pipeline::LoadedSettings;
 use pokecon_worker::ipc::ResourceSafety;
@@ -28,8 +29,9 @@ use pokecon_worker::script::protocol::{
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
     HostTkRequest, HostTkResult, MAX_POPUP_IMAGE_BYTES, ScriptButton, ScriptControl,
-    ScriptDialogState, ScriptHat, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
-    ScriptStick,
+    ScriptDialogState, ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind, ScriptHat,
+    ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptPointerButton, ScriptStick,
+    ScriptTkEvent,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError};
 use tokio::runtime::{Handle, RuntimeFlavor};
@@ -41,6 +43,155 @@ use crate::script_runtime::{ScriptGenerationHostFactory, ScriptGenerationResourc
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_SOCKET_RESPONSE_BYTES: usize = 64 * 1024;
 
+/// Process-wide bridge between the active profile-scoped script generation
+/// and the typed browser transport.
+#[derive(Clone, Default)]
+pub(crate) struct ScriptUiCoordinator {
+    inner: Arc<ScriptUiCoordinatorInner>,
+}
+
+#[derive(Default)]
+struct ScriptUiCoordinatorInner {
+    active: Mutex<Option<ActiveScriptUi>>,
+    broker: OnceLock<WebSocketBroker>,
+}
+
+struct ActiveScriptUi {
+    generation: String,
+    id: u64,
+    resources: Weak<GenerationResources>,
+}
+
+pub(crate) struct ScriptUiActionOutcome {
+    pub(crate) abort_command: bool,
+    pub(crate) tk_event: Option<ScriptTkEvent>,
+}
+
+impl ScriptUiCoordinator {
+    #[must_use]
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn install_broker(&self, broker: WebSocketBroker) -> Result<(), String> {
+        self.inner
+            .broker
+            .set(broker)
+            .map_err(|_broker| "script UI broker was already installed".to_owned())?;
+        if let Some(resources) = self.active_resources() {
+            self.publish(&resources);
+        }
+        Ok(())
+    }
+
+    fn broker(&self) -> Option<WebSocketBroker> {
+        self.inner.broker.get().cloned()
+    }
+
+    fn activate(&self, resources: &Arc<GenerationResources>) {
+        let generation = resources.generation.as_str().to_owned();
+        *self
+            .inner
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ActiveScriptUi {
+            generation,
+            id: resources.id,
+            resources: Arc::downgrade(resources),
+        });
+        self.publish(resources);
+    }
+
+    fn deactivate(&self, generation: u64) {
+        let removed = {
+            let mut active = self
+                .inner
+                .active
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if active
+                .as_ref()
+                .is_some_and(|active| active.id == generation)
+            {
+                active.take();
+                true
+            } else {
+                false
+            }
+        };
+        if removed && let Some(broker) = self.broker() {
+            broker.publish_script_ui(wire::ScriptUiSnapshot::default());
+        }
+    }
+
+    fn active_resources(&self) -> Option<Arc<GenerationResources>> {
+        self.inner
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .and_then(|active| active.resources.upgrade())
+    }
+
+    fn publish(&self, resources: &GenerationResources) {
+        let generation = {
+            let active = self
+                .inner
+                .active
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(active) = active.as_ref().filter(|active| active.id == resources.id) else {
+                return;
+            };
+            active.generation.clone()
+        };
+        let snapshot = resources.ui_snapshot(generation);
+        if let Some(broker) = self.broker() {
+            broker.publish_script_ui(snapshot);
+        }
+    }
+
+    pub(crate) fn apply_action(
+        &self,
+        request: wire::ScriptUiAction,
+    ) -> Result<ScriptUiActionOutcome, ScriptHostError> {
+        let requested_generation = action_generation(&request);
+        let resources = {
+            let active = self
+                .inner
+                .active
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let active = active
+                .as_ref()
+                .filter(|active| active.generation == requested_generation)
+                .ok_or_else(stale_script_ui)?;
+            active.resources.upgrade().ok_or_else(stale_script_ui)?
+        };
+        let outcome = resources.apply_ui_action(request)?;
+        self.publish(&resources);
+        Ok(outcome)
+    }
+}
+
+fn action_generation(action: &wire::ScriptUiAction) -> &str {
+    match action {
+        wire::ScriptUiAction::DialogConfirm { generation, .. }
+        | wire::ScriptUiAction::DialogAbort { generation, .. }
+        | wire::ScriptUiAction::TkScaleChanged { generation, .. }
+        | wire::ScriptUiAction::TkButtonInvoked { generation, .. }
+        | wire::ScriptUiAction::TkWindowClosed { generation, .. }
+        | wire::ScriptUiAction::PopupClosed { generation, .. } => generation,
+    }
+}
+
+fn stale_script_ui() -> ScriptHostError {
+    host_error(
+        "StaleScriptUiGeneration",
+        "script UI generation is no longer active",
+    )
+}
+
 /// Creates isolated ownership domains over process-wide camera, serial, and
 /// controller services.
 pub(crate) struct ProductionScriptHostFactory {
@@ -51,7 +202,7 @@ pub(crate) struct ProductionScriptHostFactory {
     camera: CameraManager,
     screenshots: ScreenshotRuntimeSettings,
     notifications: Arc<NotificationService>,
-    broker: WebSocketBroker,
+    script_ui: ScriptUiCoordinator,
     next_generation: AtomicU64,
 }
 
@@ -74,7 +225,7 @@ impl ProductionScriptHostFactory {
         camera: CameraManager,
         screenshots: ScreenshotRuntimeSettings,
         notifications: Arc<NotificationService>,
-        broker: WebSocketBroker,
+        script_ui: ScriptUiCoordinator,
     ) -> Self {
         Self {
             runtime,
@@ -84,7 +235,7 @@ impl ProductionScriptHostFactory {
             camera,
             screenshots,
             notifications,
-            broker,
+            script_ui,
             next_generation: AtomicU64::new(0),
         }
     }
@@ -114,6 +265,7 @@ impl ScriptGenerationHostFactory for ProductionScriptHostFactory {
         initialize_source(&self.arbiter, &source, &generation)
             .map_err(|error| script_resource_error(&error))?;
         let shared = Arc::new(GenerationResources {
+            id,
             runtime: self.runtime.clone(),
             host: Arc::clone(&self.host),
             arbiter: Arc::clone(&self.arbiter),
@@ -122,16 +274,21 @@ impl ScriptGenerationHostFactory for ProductionScriptHostFactory {
             generation,
             sequence: AtomicU64::new(0),
             accepting: AtomicBool::new(true),
-            dialogs: Mutex::new(DialogStore::default()),
-            tk: Mutex::new(TkStore::default()),
-            overlays: Mutex::new(Vec::new()),
+            ui: Mutex::new(GenerationUiState::default()),
+            script_ui: self.script_ui.clone(),
         });
+        self.script_ui.activate(&shared);
         let host = Arc::new(ProductionScriptHost {
             shared: Arc::clone(&shared),
             camera: self.camera.clone(),
             screenshots: self.screenshots.clone(),
             notifications: Arc::clone(&self.notifications),
-            broker: self.broker.clone(),
+            broker: self.script_ui.broker().ok_or_else(|| {
+                CommandBackendError::new(
+                    "ScriptUiUnavailable",
+                    "script UI transport is unavailable",
+                )
+            })?,
             alternate_panel: AtomicBool::new(false),
             network: Mutex::new(NetworkState::default()),
         });
@@ -141,6 +298,7 @@ impl ScriptGenerationHostFactory for ProductionScriptHostFactory {
 }
 
 struct GenerationResources {
+    id: u64,
     runtime: Handle,
     host: Arc<StartupDynamicHost>,
     arbiter: Arc<ParkingMutex<InputArbiter>>,
@@ -149,9 +307,8 @@ struct GenerationResources {
     generation: InputGeneration,
     sequence: AtomicU64,
     accepting: AtomicBool,
-    dialogs: Mutex<DialogStore>,
-    tk: Mutex<TkStore>,
-    overlays: Mutex<Vec<HostOverlayRequest>>,
+    ui: Mutex<GenerationUiState>,
+    script_ui: ScriptUiCoordinator,
 }
 
 impl GenerationResources {
@@ -203,24 +360,38 @@ impl GenerationResources {
         self.publish_output()
     }
 
-    fn close_ui(&self) {
-        let mut dialogs = self
-            .dialogs
+    fn clear_ui(&self) {
+        let mut ui = self
+            .ui
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for state in dialogs.states.values_mut() {
+        for state in ui.dialogs.states.values_mut() {
             if matches!(state, ScriptDialogState::Open) {
                 *state = ScriptDialogState::Aborted;
             }
         }
-        self.tk
+        ui.tk.clear();
+        ui.overlay.clear();
+        ui.popups.clear();
+        drop(ui);
+        self.script_ui.publish(self);
+    }
+
+    fn deactivate_ui(&self) {
+        let mut ui = self
+            .ui
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        self.overlays
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for state in ui.dialogs.states.values_mut() {
+            if matches!(state, ScriptDialogState::Open) {
+                *state = ScriptDialogState::Aborted;
+            }
+        }
+        ui.tk.clear();
+        ui.overlay.clear();
+        ui.popups.clear();
+        drop(ui);
+        self.script_ui.deactivate(self.id);
     }
 }
 
@@ -234,7 +405,7 @@ impl ResourceSafety for GenerationResources {
             arbiter.disconnect_source(&self.source);
             arbiter.output()
         };
-        self.close_ui();
+        self.deactivate_ui();
         self.host.notify_controller_change();
         let serial = self.serial.clone();
         self.runtime.spawn(async move {
@@ -324,14 +495,16 @@ impl ScriptHost for ProductionScriptHost {
                 }
             }
         };
-        let message = match request.mode.unwrap_or(ScriptOutputMode::Append) {
-            ScriptOutputMode::Write | ScriptOutputMode::Append => request.message,
-            ScriptOutputMode::Delete => String::new(),
+        let (message, operation) = match request.mode.unwrap_or(ScriptOutputMode::Append) {
+            ScriptOutputMode::Write => (request.message, LogOperation::Replace),
+            ScriptOutputMode::Append => (request.message, LogOperation::Append),
+            ScriptOutputMode::Delete => (String::new(), LogOperation::Clear),
         };
         self.broker.publish_log(LogData {
             level: LogLevel::Info,
             message,
             target,
+            operation,
         });
         Ok(())
     }
@@ -347,18 +520,20 @@ impl ScriptHost for ProductionScriptHost {
                 "dialog requires at least one widget",
             ));
         }
-        let mut dialogs = self
+        let mut ui = self
             .shared
-            .dialogs
+            .ui
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let dialog_id = dialogs
-            .next_id
-            .checked_add(1)
-            .ok_or_else(|| host_error("DialogIdExhausted", "dialog identifiers are exhausted"))?;
-        dialogs.next_id = dialog_id;
-        dialogs.requests.insert(dialog_id, request);
-        dialogs.states.insert(dialog_id, ScriptDialogState::Open);
+        let dialog_id =
+            ui.dialogs.next_id.checked_add(1).ok_or_else(|| {
+                host_error("DialogIdExhausted", "dialog identifiers are exhausted")
+            })?;
+        ui.dialogs.next_id = dialog_id;
+        ui.dialogs.requests.insert(dialog_id, request);
+        ui.dialogs.states.insert(dialog_id, ScriptDialogState::Open);
+        drop(ui);
+        self.shared.script_ui.publish(&self.shared);
         Ok(HostDialogOpenResult { dialog_id })
     }
 
@@ -366,12 +541,13 @@ impl ScriptHost for ProductionScriptHost {
         &self,
         request: HostDialogStatusRequest,
     ) -> Result<HostDialogStatusResult, ScriptHostError> {
-        let dialogs = self
+        let ui = self
             .shared
-            .dialogs
+            .ui
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let state = dialogs
+        let state = ui
+            .dialogs
             .states
             .get(&request.dialog_id)
             .cloned()
@@ -385,7 +561,7 @@ impl ScriptHost for ProductionScriptHost {
     }
 
     fn dialog_close_all(&self) -> Result<(), ScriptHostError> {
-        self.shared.close_ui();
+        self.shared.clear_ui();
         Ok(())
     }
 
@@ -475,15 +651,20 @@ impl ScriptHost for ProductionScriptHost {
     fn overlay(&self, request: HostOverlayRequest) -> Result<(), ScriptHostError> {
         self.shared.ensure_accepting()?;
         validate_overlay(&request)?;
-        let mut overlays = self
+        let expiry = self
             .shared
-            .overlays
+            .ui
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if matches!(request, HostOverlayRequest::Cleanup) {
-            overlays.clear();
-        } else {
-            overlays.push(request);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .overlay
+            .apply(request)?;
+        self.shared.script_ui.publish(&self.shared);
+        if let Some(expiry) = expiry {
+            let shared = Arc::clone(&self.shared);
+            self.shared.runtime.spawn(async move {
+                tokio::time::sleep(expiry.duration).await;
+                shared.expire_overlay(expiry.id);
+            });
         }
         Ok(())
     }
@@ -496,25 +677,27 @@ impl ScriptHost for ProductionScriptHost {
         {
             return Err(host_error("InvalidPopupImage", "popup image is invalid"));
         }
-        self.broker.publish_log(LogData {
-            level: LogLevel::Info,
-            message: format!(
-                "popup image ready: {} ({} bytes)",
-                request.title,
-                request.encoded.len()
-            ),
-            target: LogTarget::Log,
-        });
+        self.shared
+            .ui
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .popups
+            .insert(request)?;
+        self.shared.script_ui.publish(&self.shared);
         Ok(())
     }
 
     fn tk(&self, request: HostTkRequest) -> Result<HostTkResult, ScriptHostError> {
         self.shared.ensure_accepting()?;
-        self.shared
-            .tk
+        let result = self
+            .shared
+            .ui
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .apply(&request)
+            .tk
+            .apply(&request);
+        self.shared.script_ui.publish(&self.shared);
+        result
     }
 }
 
@@ -526,105 +709,840 @@ struct DialogStore {
 }
 
 #[derive(Default)]
+struct GenerationUiState {
+    dialogs: DialogStore,
+    tk: TkStore,
+    overlay: OverlayStore,
+    popups: PopupStore,
+}
+
+#[derive(Default)]
 struct TkStore {
-    windows: BTreeSet<u64>,
-    widgets: BTreeMap<u64, u64>,
-    scales: BTreeMap<u64, f64>,
+    windows: BTreeMap<u64, TkWindowState>,
+    widgets: BTreeMap<u64, TkWidgetState>,
+}
+
+#[derive(Default)]
+struct TkWindowState {
+    title: String,
+    geometry: Option<String>,
+    widget_order: Vec<u64>,
+}
+
+enum TkWidgetState {
+    Scale {
+        owner: u64,
+        from_value: f64,
+        to_value: f64,
+        orient: String,
+        label: Option<String>,
+        value: f64,
+        pady: Option<i64>,
+    },
+    Button {
+        owner: u64,
+        text: String,
+        pady: Option<i64>,
+    },
+    Label {
+        owner: u64,
+        text: String,
+        width: Option<i64>,
+        height: Option<i64>,
+        relief: Option<String>,
+        background: Option<String>,
+        pady: Option<i64>,
+    },
 }
 
 impl TkStore {
     fn apply(&mut self, request: &HostTkRequest) -> Result<HostTkResult, ScriptHostError> {
         match request {
             HostTkRequest::CreateToplevel { window_id } => {
-                if !self.windows.insert(*window_id) {
+                if self
+                    .windows
+                    .insert(*window_id, TkWindowState::default())
+                    .is_some()
+                {
                     return Err(host_error("TkObjectExists", "Tk window already exists"));
                 }
             }
-            HostTkRequest::SetTitle { window_id, .. }
-            | HostTkRequest::SetGeometry { window_id, .. } => self.require_window(*window_id)?,
+            HostTkRequest::SetTitle { window_id, title } => {
+                self.window_mut(*window_id)?.title.clone_from(title);
+            }
+            HostTkRequest::SetGeometry {
+                window_id,
+                geometry,
+            } => {
+                self.window_mut(*window_id)?.geometry = Some(geometry.clone());
+            }
             HostTkRequest::CreateScale {
                 window_id,
                 widget_id,
                 from_value,
                 to_value,
-                ..
-            } => {
-                self.require_window(*window_id)?;
-                if !from_value.is_finite() || !to_value.is_finite() || from_value > to_value {
-                    return Err(host_error("InvalidTkValue", "Tk scale bounds are invalid"));
-                }
-                self.insert_widget(*window_id, *widget_id)?;
-                self.scales.insert(*widget_id, *from_value);
-            }
+                orient,
+                label,
+            } => self.create_scale(
+                *window_id,
+                *widget_id,
+                *from_value,
+                *to_value,
+                orient,
+                label.as_deref(),
+            )?,
             HostTkRequest::CreateButton {
                 window_id,
                 widget_id,
-                ..
-            }
-            | HostTkRequest::CreateLabel {
+                text,
+            } => self.insert_widget(
+                *window_id,
+                *widget_id,
+                TkWidgetState::Button {
+                    owner: *window_id,
+                    text: text.clone(),
+                    pady: None,
+                },
+            )?,
+            HostTkRequest::CreateLabel {
                 window_id,
                 widget_id,
-                ..
-            } => {
-                self.require_window(*window_id)?;
-                self.insert_widget(*window_id, *widget_id)?;
+                text,
+                width,
+                height,
+                relief,
+                background,
+            } => self.insert_widget(
+                *window_id,
+                *widget_id,
+                TkWidgetState::Label {
+                    owner: *window_id,
+                    text: text.clone(),
+                    width: *width,
+                    height: *height,
+                    relief: relief.clone(),
+                    background: background.clone(),
+                    pady: None,
+                },
+            )?,
+            HostTkRequest::Pack { widget_id, pady } => {
+                self.require_widget_mut(*widget_id)?.set_pady(*pady);
             }
-            HostTkRequest::Pack { widget_id, .. }
-            | HostTkRequest::ConfigureLabel { widget_id, .. } => self.require_widget(*widget_id)?,
+            HostTkRequest::ConfigureLabel {
+                widget_id,
+                text,
+                background,
+            } => self.configure_label(*widget_id, text.as_deref(), background.as_deref())?,
             HostTkRequest::SetScale { widget_id, value } => {
-                if !value.is_finite() || !self.scales.contains_key(widget_id) {
-                    return Err(host_error("TkObjectNotFound", "Tk scale does not exist"));
-                }
-                self.scales.insert(*widget_id, *value);
+                self.set_scale(*widget_id, *value)?;
             }
             HostTkRequest::GetScale { widget_id } => {
-                let value = self
-                    .scales
-                    .get(widget_id)
-                    .copied()
-                    .ok_or_else(|| host_error("TkObjectNotFound", "Tk scale does not exist"))?;
-                return Ok(HostTkResult { value: Some(value) });
+                let TkWidgetState::Scale { value, .. } = self.require_widget(*widget_id)? else {
+                    return Err(host_error("TkObjectNotFound", "Tk scale does not exist"));
+                };
+                return Ok(HostTkResult {
+                    value: Some(*value),
+                });
             }
             HostTkRequest::DestroyWindow { window_id } => {
                 self.require_window(*window_id)?;
-                self.windows.remove(window_id);
-                self.widgets.retain(|_, owner| owner != window_id);
-                self.scales
-                    .retain(|widget_id, _| self.widgets.contains_key(widget_id));
+                self.remove_window(*window_id);
             }
             HostTkRequest::Cleanup => self.clear(),
         }
         Ok(HostTkResult { value: None })
     }
 
-    fn insert_widget(&mut self, window_id: u64, widget_id: u64) -> Result<(), ScriptHostError> {
-        if self.widgets.insert(widget_id, window_id).is_some() {
-            Err(host_error("TkObjectExists", "Tk widget already exists"))
-        } else {
-            Ok(())
+    fn create_scale(
+        &mut self,
+        window_id: u64,
+        widget_id: u64,
+        from_value: f64,
+        to_value: f64,
+        orient: &str,
+        label: Option<&str>,
+    ) -> Result<(), ScriptHostError> {
+        self.require_window(window_id)?;
+        if !from_value.is_finite() || !to_value.is_finite() || from_value > to_value {
+            return Err(host_error("InvalidTkValue", "Tk scale bounds are invalid"));
         }
+        self.insert_widget(
+            window_id,
+            widget_id,
+            TkWidgetState::Scale {
+                owner: window_id,
+                from_value,
+                to_value,
+                orient: orient.to_owned(),
+                label: label.map(str::to_owned),
+                value: from_value,
+                pady: None,
+            },
+        )
+    }
+
+    fn configure_label(
+        &mut self,
+        widget_id: u64,
+        text: Option<&str>,
+        background: Option<&str>,
+    ) -> Result<(), ScriptHostError> {
+        let TkWidgetState::Label {
+            text: current_text,
+            background: current_background,
+            ..
+        } = self.require_widget_mut(widget_id)?
+        else {
+            return Err(host_error("TkObjectNotFound", "Tk label does not exist"));
+        };
+        if let Some(text) = text {
+            text.clone_into(current_text);
+        }
+        if let Some(background) = background {
+            *current_background = Some(background.to_owned());
+        }
+        Ok(())
+    }
+
+    fn set_scale(&mut self, widget_id: u64, value: f64) -> Result<(), ScriptHostError> {
+        let TkWidgetState::Scale {
+            from_value,
+            to_value,
+            value: current,
+            ..
+        } = self.require_widget_mut(widget_id)?
+        else {
+            return Err(host_error("TkObjectNotFound", "Tk scale does not exist"));
+        };
+        if !value.is_finite() || value < *from_value || value > *to_value {
+            return Err(host_error("InvalidTkValue", "Tk scale value is invalid"));
+        }
+        *current = value;
+        Ok(())
+    }
+
+    fn insert_widget(
+        &mut self,
+        window_id: u64,
+        widget_id: u64,
+        widget: TkWidgetState,
+    ) -> Result<(), ScriptHostError> {
+        self.require_window(window_id)?;
+        if self.widgets.contains_key(&widget_id) {
+            return Err(host_error("TkObjectExists", "Tk widget already exists"));
+        }
+        self.widgets.insert(widget_id, widget);
+        self.window_mut(window_id)?.widget_order.push(widget_id);
+        Ok(())
     }
 
     fn require_window(&self, window_id: u64) -> Result<(), ScriptHostError> {
-        if self.windows.contains(&window_id) {
+        if self.windows.contains_key(&window_id) {
             Ok(())
         } else {
             Err(host_error("TkObjectNotFound", "Tk window does not exist"))
         }
     }
 
-    fn require_widget(&self, widget_id: u64) -> Result<(), ScriptHostError> {
-        if self.widgets.contains_key(&widget_id) {
+    fn window_mut(&mut self, window_id: u64) -> Result<&mut TkWindowState, ScriptHostError> {
+        self.windows
+            .get_mut(&window_id)
+            .ok_or_else(|| host_error("TkObjectNotFound", "Tk window does not exist"))
+    }
+
+    fn require_widget(&self, widget_id: u64) -> Result<&TkWidgetState, ScriptHostError> {
+        self.widgets
+            .get(&widget_id)
+            .ok_or_else(|| host_error("TkObjectNotFound", "Tk widget does not exist"))
+    }
+
+    fn require_widget_mut(
+        &mut self,
+        widget_id: u64,
+    ) -> Result<&mut TkWidgetState, ScriptHostError> {
+        self.widgets
+            .get_mut(&widget_id)
+            .ok_or_else(|| host_error("TkObjectNotFound", "Tk widget does not exist"))
+    }
+
+    fn scale_changed(&mut self, widget_id: u64, value: f64) -> Result<(), ScriptHostError> {
+        self.apply(&HostTkRequest::SetScale { widget_id, value })
+            .map(|_result| ())
+    }
+
+    fn button_exists(&self, widget_id: u64) -> Result<(), ScriptHostError> {
+        if matches!(
+            self.require_widget(widget_id)?,
+            TkWidgetState::Button { .. }
+        ) {
             Ok(())
         } else {
-            Err(host_error("TkObjectNotFound", "Tk widget does not exist"))
+            Err(host_error("TkObjectNotFound", "Tk button does not exist"))
         }
+    }
+
+    fn remove_window(&mut self, window_id: u64) {
+        self.windows.remove(&window_id);
+        self.widgets.retain(|_, widget| widget.owner() != window_id);
     }
 
     fn clear(&mut self) {
         self.windows.clear();
         self.widgets.clear();
-        self.scales.clear();
+    }
+
+    fn snapshot(&self) -> Vec<wire::ScriptTkWindow> {
+        self.windows
+            .iter()
+            .map(|(window_id, window)| wire::ScriptTkWindow {
+                id: wire::DecimalString::from_u64(*window_id),
+                title: window.title.clone(),
+                geometry: window.geometry.clone(),
+                widgets: window
+                    .widget_order
+                    .iter()
+                    .filter_map(|widget_id| {
+                        self.widgets
+                            .get(widget_id)
+                            .map(|widget| widget.snapshot(*widget_id))
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+}
+
+impl TkWidgetState {
+    const fn owner(&self) -> u64 {
+        match self {
+            Self::Scale { owner, .. } | Self::Button { owner, .. } | Self::Label { owner, .. } => {
+                *owner
+            }
+        }
+    }
+
+    fn set_pady(&mut self, value: Option<i64>) {
+        match self {
+            Self::Scale { pady, .. } | Self::Button { pady, .. } | Self::Label { pady, .. } => {
+                *pady = value;
+            }
+        }
+    }
+
+    fn snapshot(&self, id: u64) -> wire::ScriptTkWidget {
+        let id = wire::DecimalString::from_u64(id);
+        match self {
+            Self::Scale {
+                from_value,
+                to_value,
+                orient,
+                label,
+                value,
+                pady,
+                ..
+            } => wire::ScriptTkWidget::Scale(wire::ScriptTkScale {
+                id,
+                from_value: *from_value,
+                to_value: *to_value,
+                orient: orient.clone(),
+                label: label.clone(),
+                value: *value,
+                pady: *pady,
+            }),
+            Self::Button { text, pady, .. } => wire::ScriptTkWidget::Button(wire::ScriptTkButton {
+                id,
+                text: text.clone(),
+                pady: *pady,
+            }),
+            Self::Label {
+                text,
+                width,
+                height,
+                relief,
+                background,
+                pady,
+                ..
+            } => wire::ScriptTkWidget::Label(wire::ScriptTkLabel {
+                id,
+                text: text.clone(),
+                width: *width,
+                height: *height,
+                relief: relief.clone(),
+                background: background.clone(),
+                pady: *pady,
+            }),
+        }
+    }
+}
+
+#[derive(Clone)]
+enum OverlayShapeState {
+    Rectangle(wire::ScriptOverlayRectangle),
+    Text(wire::ScriptOverlayText),
+}
+
+struct OverlayEntry {
+    id: u64,
+    shape: OverlayShapeState,
+}
+
+struct OverlayExpiry {
+    duration: Duration,
+    id: u64,
+}
+
+struct OverlayStore {
+    next_id: u64,
+    fps: u32,
+    show_width: u32,
+    show_height: u32,
+    right_mouse_mode: String,
+    touchscreen_area: wire::NormalizedRegion,
+    bindings: wire::ScriptPointerBindings,
+    shapes: Vec<OverlayEntry>,
+}
+
+impl Default for OverlayStore {
+    fn default() -> Self {
+        Self {
+            next_id: 0,
+            fps: 30,
+            show_width: 1280,
+            show_height: 720,
+            right_mouse_mode: "Default".to_owned(),
+            touchscreen_area: wire::NormalizedRegion {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            bindings: wire::ScriptPointerBindings::default(),
+            shapes: Vec::new(),
+        }
+    }
+}
+
+impl OverlayStore {
+    fn apply(
+        &mut self,
+        request: HostOverlayRequest,
+    ) -> Result<Option<OverlayExpiry>, ScriptHostError> {
+        let (shape, expires_ms) = match request {
+            HostOverlayRequest::Rectangle {
+                x1,
+                y1,
+                x2,
+                y2,
+                outline,
+                tag,
+                expires_ms,
+            } => (
+                Some(OverlayShapeState::Rectangle(wire::ScriptOverlayRectangle {
+                    tag,
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    outline,
+                })),
+                expires_ms,
+            ),
+            HostOverlayRequest::Text {
+                x,
+                y,
+                text,
+                tag,
+                expires_ms,
+                font,
+                font_size,
+                color,
+            } => (
+                Some(OverlayShapeState::Text(wire::ScriptOverlayText {
+                    tag,
+                    x,
+                    y,
+                    text,
+                    font,
+                    font_size,
+                    color,
+                })),
+                expires_ms,
+            ),
+            HostOverlayRequest::DeleteRectangle { tag } => {
+                self.shapes.retain(|entry| {
+                    !matches!(&entry.shape, OverlayShapeState::Rectangle(shape) if shape.tag == tag)
+                });
+                (None, None)
+            }
+            HostOverlayRequest::DeleteText { tag } => {
+                self.shapes.retain(|entry| {
+                    !matches!(&entry.shape, OverlayShapeState::Text(shape) if shape.tag == tag)
+                });
+                (None, None)
+            }
+            HostOverlayRequest::SetFps { fps } => {
+                self.fps = fps;
+                (None, None)
+            }
+            HostOverlayRequest::SetShowSize { height, width } => {
+                self.show_height = height;
+                self.show_width = width;
+                (None, None)
+            }
+            HostOverlayRequest::SetRightMouseMode { mode } => {
+                self.right_mouse_mode = mode;
+                (None, None)
+            }
+            HostOverlayRequest::SetTouchscreenArea {
+                left,
+                top,
+                right,
+                bottom,
+            } => {
+                self.touchscreen_area = wire::NormalizedRegion {
+                    x: left,
+                    y: top,
+                    width: right - left,
+                    height: bottom - top,
+                };
+                (None, None)
+            }
+            HostOverlayRequest::SetBinding { button, enabled } => {
+                match button {
+                    ScriptPointerButton::Left => self.bindings.left = enabled,
+                    ScriptPointerButton::Right => self.bindings.right = enabled,
+                }
+                (None, None)
+            }
+            HostOverlayRequest::Update => (None, None),
+            HostOverlayRequest::Cleanup => {
+                self.clear();
+                (None, None)
+            }
+        };
+        let Some(shape) = shape else {
+            return Ok(None);
+        };
+        self.insert(shape, expires_ms)
+    }
+
+    fn insert(
+        &mut self,
+        shape: OverlayShapeState,
+        expires_ms: Option<u64>,
+    ) -> Result<Option<OverlayExpiry>, ScriptHostError> {
+        let id = self
+            .next_id
+            .checked_add(1)
+            .ok_or_else(|| host_error("OverlayIdExhausted", "overlay identifiers are exhausted"))?;
+        self.next_id = id;
+        self.shapes.push(OverlayEntry { id, shape });
+        Ok(expires_ms.map(|expires_ms| OverlayExpiry {
+            duration: Duration::from_millis(expires_ms),
+            id,
+        }))
+    }
+
+    fn expire(&mut self, id: u64) -> bool {
+        let before = self.shapes.len();
+        self.shapes.retain(|entry| entry.id != id);
+        self.shapes.len() != before
+    }
+
+    fn clear(&mut self) {
+        let next_id = self.next_id;
+        *self = Self::default();
+        self.next_id = next_id;
+    }
+
+    fn snapshot(&self) -> wire::ScriptOverlaySnapshot {
+        wire::ScriptOverlaySnapshot {
+            fps: self.fps,
+            show_width: self.show_width,
+            show_height: self.show_height,
+            right_mouse_mode: self.right_mouse_mode.clone(),
+            touchscreen_area: self.touchscreen_area,
+            bindings: self.bindings,
+            shapes: self
+                .shapes
+                .iter()
+                .map(|entry| match &entry.shape {
+                    OverlayShapeState::Rectangle(shape) => {
+                        wire::ScriptOverlayShape::Rectangle(shape.clone())
+                    }
+                    OverlayShapeState::Text(shape) => wire::ScriptOverlayShape::Text(shape.clone()),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Default)]
+struct PopupStore {
+    next_id: u64,
+    values: BTreeMap<u64, wire::ScriptPopupImage>,
+}
+
+impl PopupStore {
+    fn insert(&mut self, request: HostPopupImageRequest) -> Result<(), ScriptHostError> {
+        let id = self
+            .next_id
+            .checked_add(1)
+            .ok_or_else(|| host_error("PopupIdExhausted", "popup identifiers are exhausted"))?;
+        self.next_id = id;
+        self.values.insert(
+            id,
+            wire::ScriptPopupImage {
+                id: wire::DecimalString::from_u64(id),
+                title: request.title,
+                content_type: request.content_type,
+                encoded_base64: base64::engine::general_purpose::STANDARD.encode(request.encoded),
+            },
+        );
+        Ok(())
+    }
+
+    fn remove(&mut self, id: u64) -> Result<(), ScriptHostError> {
+        self.values
+            .remove(&id)
+            .map(|_value| ())
+            .ok_or_else(|| host_error("ScriptUiObjectNotFound", "popup image does not exist"))
+    }
+
+    fn clear(&mut self) {
+        self.values.clear();
+    }
+}
+
+impl GenerationResources {
+    fn ui_snapshot(&self, generation: String) -> wire::ScriptUiSnapshot {
+        let ui = self
+            .ui
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let dialogs = ui
+            .dialogs
+            .states
+            .iter()
+            .filter_map(|(dialog_id, state)| {
+                matches!(state, ScriptDialogState::Open)
+                    .then(|| ui.dialogs.requests.get(dialog_id))
+                    .flatten()
+                    .map(|request| wire::ScriptDialog {
+                        id: wire::DecimalString::from_u64(*dialog_id),
+                        title: request.title.clone(),
+                        description: request.description.clone(),
+                        widgets: request.widgets.iter().map(wire_dialog_widget).collect(),
+                    })
+            })
+            .collect();
+        wire::ScriptUiSnapshot {
+            generation: Some(generation),
+            dialogs,
+            tk_windows: ui.tk.snapshot(),
+            overlay: ui.overlay.snapshot(),
+            popup_images: ui.popups.values.values().cloned().collect(),
+        }
+    }
+
+    fn apply_ui_action(
+        &self,
+        action: wire::ScriptUiAction,
+    ) -> Result<ScriptUiActionOutcome, ScriptHostError> {
+        self.ensure_accepting()?;
+        let mut ui = self
+            .ui
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut abort_command = false;
+        let mut tk_event = None;
+        match action {
+            wire::ScriptUiAction::DialogConfirm {
+                dialog_id, values, ..
+            } => {
+                let dialog_id = decimal_id(&dialog_id)?;
+                let request = ui
+                    .dialogs
+                    .requests
+                    .get(&dialog_id)
+                    .ok_or_else(script_ui_object_not_found)?;
+                if !matches!(
+                    ui.dialogs.states.get(&dialog_id),
+                    Some(ScriptDialogState::Open)
+                ) {
+                    return Err(script_ui_object_not_found());
+                }
+                let values = validated_dialog_values(&request.widgets, values)?;
+                ui.dialogs
+                    .states
+                    .insert(dialog_id, ScriptDialogState::Confirmed { values });
+            }
+            wire::ScriptUiAction::DialogAbort { dialog_id, .. } => {
+                let dialog_id = decimal_id(&dialog_id)?;
+                let state = ui
+                    .dialogs
+                    .states
+                    .get_mut(&dialog_id)
+                    .filter(|state| matches!(state, ScriptDialogState::Open))
+                    .ok_or_else(script_ui_object_not_found)?;
+                *state = ScriptDialogState::Aborted;
+                abort_command = true;
+            }
+            wire::ScriptUiAction::TkScaleChanged {
+                widget_id, value, ..
+            } => {
+                let widget_id = decimal_id(&widget_id)?;
+                ui.tk.scale_changed(widget_id, value)?;
+                tk_event = Some(ScriptTkEvent::ScaleChanged { widget_id, value });
+            }
+            wire::ScriptUiAction::TkButtonInvoked { widget_id, .. } => {
+                let widget_id = decimal_id(&widget_id)?;
+                ui.tk.button_exists(widget_id)?;
+                tk_event = Some(ScriptTkEvent::ButtonInvoked { widget_id });
+            }
+            wire::ScriptUiAction::TkWindowClosed { window_id, .. } => {
+                let window_id = decimal_id(&window_id)?;
+                ui.tk.require_window(window_id)?;
+                ui.tk.remove_window(window_id);
+                tk_event = Some(ScriptTkEvent::WindowClosed { window_id });
+            }
+            wire::ScriptUiAction::PopupClosed { popup_id, .. } => {
+                ui.popups.remove(decimal_id(&popup_id)?)?;
+            }
+        }
+        Ok(ScriptUiActionOutcome {
+            abort_command,
+            tk_event,
+        })
+    }
+
+    fn expire_overlay(&self, id: u64) {
+        let changed = self
+            .ui
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .overlay
+            .expire(id);
+        if changed {
+            self.script_ui.publish(self);
+        }
+    }
+}
+
+fn decimal_id(id: &wire::DecimalString) -> Result<u64, ScriptHostError> {
+    id.as_str()
+        .parse()
+        .map_err(|_error| host_error("InvalidScriptUiAction", "script UI identifier is invalid"))
+}
+
+fn script_ui_object_not_found() -> ScriptHostError {
+    host_error(
+        "ScriptUiObjectNotFound",
+        "script UI object is no longer available",
+    )
+}
+
+fn wire_dialog_widget(widget: &ScriptDialogWidget) -> wire::ScriptDialogWidget {
+    wire::ScriptDialogWidget {
+        kind: match widget.kind {
+            ScriptDialogWidgetKind::Entry => wire::ScriptDialogWidgetKind::Entry,
+            ScriptDialogWidgetKind::Check => wire::ScriptDialogWidgetKind::Check,
+            ScriptDialogWidgetKind::Combo => wire::ScriptDialogWidgetKind::Combo,
+            ScriptDialogWidgetKind::Radio => wire::ScriptDialogWidgetKind::Radio,
+            ScriptDialogWidgetKind::Spin => wire::ScriptDialogWidgetKind::Spin,
+            ScriptDialogWidgetKind::Scale => wire::ScriptDialogWidgetKind::Scale,
+            ScriptDialogWidgetKind::Next => wire::ScriptDialogWidgetKind::Next,
+        },
+        label: widget.label.clone(),
+        value: wire_dialog_value(&widget.value),
+        options: widget.options.iter().map(wire_dialog_value).collect(),
+        minimum: widget.minimum,
+        maximum: widget.maximum,
+        precision: widget.precision,
+    }
+}
+
+fn wire_dialog_value(value: &ScriptDialogValue) -> wire::ScriptDialogValue {
+    match value {
+        ScriptDialogValue::None => wire::ScriptDialogValue::None,
+        ScriptDialogValue::String(value) => wire::ScriptDialogValue::String(value.clone()),
+        ScriptDialogValue::Bool(value) => wire::ScriptDialogValue::Bool(*value),
+        ScriptDialogValue::Integer(value) => wire::ScriptDialogValue::Integer(*value),
+        ScriptDialogValue::Float(value) => wire::ScriptDialogValue::Float(*value),
+    }
+}
+
+fn host_dialog_value(value: wire::ScriptDialogValue) -> ScriptDialogValue {
+    match value {
+        wire::ScriptDialogValue::None => ScriptDialogValue::None,
+        wire::ScriptDialogValue::String(value) => ScriptDialogValue::String(value),
+        wire::ScriptDialogValue::Bool(value) => ScriptDialogValue::Bool(value),
+        wire::ScriptDialogValue::Integer(value) => ScriptDialogValue::Integer(value),
+        wire::ScriptDialogValue::Float(value) => ScriptDialogValue::Float(value),
+    }
+}
+
+fn validated_dialog_values(
+    widgets: &[ScriptDialogWidget],
+    values: Vec<wire::ScriptDialogValue>,
+) -> Result<Vec<ScriptDialogValue>, ScriptHostError> {
+    if values.len() != widgets.len() {
+        return Err(host_error(
+            "InvalidScriptUiAction",
+            "dialog result count does not match its widgets",
+        ));
+    }
+    widgets
+        .iter()
+        .zip(values)
+        .map(|(widget, value)| {
+            let value = host_dialog_value(value);
+            validate_dialog_value(widget, &value)?;
+            Ok(value)
+        })
+        .collect()
+}
+
+// Dialog numeric bounds and browser number inputs are represented as f64;
+// conversion here intentionally applies that wire-level comparison semantics.
+#[allow(clippy::cast_precision_loss)]
+fn validate_dialog_value(
+    widget: &ScriptDialogWidget,
+    value: &ScriptDialogValue,
+) -> Result<(), ScriptHostError> {
+    let type_matches = matches!(
+        (&widget.kind, value),
+        (ScriptDialogWidgetKind::Entry, ScriptDialogValue::String(_))
+            | (ScriptDialogWidgetKind::Check, ScriptDialogValue::Bool(_))
+            | (
+                ScriptDialogWidgetKind::Combo | ScriptDialogWidgetKind::Radio,
+                _
+            )
+            | (ScriptDialogWidgetKind::Spin, ScriptDialogValue::Integer(_))
+            | (ScriptDialogWidgetKind::Scale, ScriptDialogValue::Float(_))
+            | (ScriptDialogWidgetKind::Next, ScriptDialogValue::None)
+    );
+    let finite = !matches!(value, ScriptDialogValue::Float(value) if !value.is_finite());
+    let option_matches = !matches!(
+        widget.kind,
+        ScriptDialogWidgetKind::Combo | ScriptDialogWidgetKind::Radio
+    ) || widget.options.contains(value);
+    let numeric = match value {
+        ScriptDialogValue::Integer(value) => Some(*value as f64),
+        ScriptDialogValue::Float(value) => Some(*value),
+        _ => None,
+    };
+    let in_range = numeric.is_none_or(|value| {
+        widget.minimum.is_none_or(|minimum| value >= minimum)
+            && widget.maximum.is_none_or(|maximum| value <= maximum)
+    });
+    if type_matches && finite && option_matches && in_range {
+        Ok(())
+    } else {
+        Err(host_error(
+            "InvalidScriptUiAction",
+            "dialog result does not satisfy its widget contract",
+        ))
     }
 }
 
@@ -983,5 +1901,101 @@ mod tests {
                 pressed: false,
             })
         );
+    }
+
+    #[test]
+    fn tk_store_reconstructs_windows_and_validates_scale_updates() {
+        let mut store = TkStore::default();
+        store
+            .apply(&HostTkRequest::CreateToplevel { window_id: 2 })
+            .expect("window");
+        store
+            .apply(&HostTkRequest::SetTitle {
+                window_id: 2,
+                title: "Detector".to_owned(),
+            })
+            .expect("title");
+        store
+            .apply(&HostTkRequest::CreateScale {
+                window_id: 2,
+                widget_id: 5,
+                from_value: 0.0,
+                to_value: 255.0,
+                orient: "horizontal".to_owned(),
+                label: Some("Hue".to_owned()),
+            })
+            .expect("scale");
+        store
+            .apply(&HostTkRequest::SetScale {
+                widget_id: 5,
+                value: 42.0,
+            })
+            .expect("scale value");
+
+        let snapshot = store.snapshot();
+        assert_eq!(snapshot[0].title, "Detector");
+        let wire::ScriptTkWidget::Scale(scale) = &snapshot[0].widgets[0] else {
+            panic!("scale snapshot");
+        };
+        assert!((scale.value - 42.0).abs() < f64::EPSILON);
+        assert!(
+            store
+                .apply(&HostTkRequest::SetScale {
+                    widget_id: 5,
+                    value: 256.0,
+                })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn dialog_results_preserve_types_and_reject_unlisted_options() {
+        let widgets = vec![ScriptDialogWidget {
+            kind: ScriptDialogWidgetKind::Combo,
+            label: Some("Mode".to_owned()),
+            value: ScriptDialogValue::String("safe".to_owned()),
+            options: vec![
+                ScriptDialogValue::String("safe".to_owned()),
+                ScriptDialogValue::String("fast".to_owned()),
+            ],
+            minimum: None,
+            maximum: None,
+            precision: None,
+        }];
+        assert_eq!(
+            validated_dialog_values(
+                &widgets,
+                vec![wire::ScriptDialogValue::String("fast".to_owned())]
+            )
+            .expect("listed option"),
+            vec![ScriptDialogValue::String("fast".to_owned())]
+        );
+        assert!(
+            validated_dialog_values(
+                &widgets,
+                vec![wire::ScriptDialogValue::String("unknown".to_owned())]
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn overlay_expiry_removes_only_the_inserted_shape() {
+        let mut overlay = OverlayStore::default();
+        let expiry = overlay
+            .apply(HostOverlayRequest::Rectangle {
+                x1: 1,
+                y1: 2,
+                x2: 3,
+                y2: 4,
+                outline: "red".to_owned(),
+                tag: "match".to_owned(),
+                expires_ms: Some(10),
+            })
+            .expect("overlay")
+            .expect("expiry");
+        assert_eq!(overlay.snapshot().shapes.len(), 1);
+        assert!(overlay.expire(expiry.id));
+        assert!(overlay.snapshot().shapes.is_empty());
     }
 }

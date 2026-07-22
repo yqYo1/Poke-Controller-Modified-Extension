@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/script-ui/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["script_ui_action"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/serial/control": {
         parameters: {
             query?: never;
@@ -477,10 +493,17 @@ export interface components {
         LogData: {
             level: components["schemas"]["LogLevel"];
             message: string;
+            operation: components["schemas"]["LogOperation"];
             target: components["schemas"]["LogTarget"];
         };
         /** @enum {string} */
         LogLevel: "debug" | "info" | "warning" | "error" | "critical";
+        /**
+         * @description Mutation semantics for one output-panel message. Ordinary diagnostics
+         *     append, while the compatibility print APIs may replace or clear a panel.
+         * @enum {string}
+         */
+        LogOperation: "append" | "replace" | "clear";
         /** @enum {string} */
         LogTarget: "stdout" | "panel1" | "panel2" | "log";
         MessageData_GamepadInput: {
@@ -544,6 +567,7 @@ export interface components {
             data: {
                 level: components["schemas"]["LogLevel"];
                 message: string;
+                operation: components["schemas"]["LogOperation"];
                 target: components["schemas"]["LogTarget"];
             };
         };
@@ -573,6 +597,20 @@ export interface components {
         MessageData_Nonce: {
             data: {
                 nonce: string;
+            };
+        };
+        MessageData_ScriptUiSnapshot: {
+            /**
+             * @description Latest complete profile-scoped script UI state. The broker replays this
+             *     snapshot to every newly connected client, so browser reconnects never need
+             *     to infer missed dialog or Tk mutations.
+             */
+            data: {
+                dialogs: components["schemas"]["ScriptDialog"][];
+                generation: string | null;
+                overlay: components["schemas"]["ScriptOverlaySnapshot"];
+                popup_images: components["schemas"]["ScriptPopupImage"][];
+                tk_windows: components["schemas"]["ScriptTkWindow"][];
             };
         };
         MessageData_SerialData: {
@@ -677,6 +715,202 @@ export interface components {
             /** @enum {string} */
             destination: "download";
         });
+        ScriptDialog: {
+            description: string | null;
+            id: components["schemas"]["DecimalString"];
+            title: string;
+            widgets: components["schemas"]["ScriptDialogWidget"][];
+        };
+        /** @enum {string} */
+        ScriptDialogAbortReason: "close" | "escape" | "destroy";
+        /** @description Script-dialog value kept type-safe across Python, Rust, and the browser. */
+        ScriptDialogValue: {
+            /** @enum {string} */
+            type: "none";
+        } | {
+            /** @enum {string} */
+            type: "string";
+            value: string;
+        } | {
+            /** @enum {string} */
+            type: "bool";
+            value: boolean;
+        } | {
+            /** @enum {string} */
+            type: "integer";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            type: "float";
+            /** Format: double */
+            value: number;
+        };
+        ScriptDialogWidget: {
+            kind: components["schemas"]["ScriptDialogWidgetKind"];
+            label: string | null;
+            /** Format: double */
+            maximum: number | null;
+            /** Format: double */
+            minimum: number | null;
+            options: components["schemas"]["ScriptDialogValue"][];
+            /** Format: int32 */
+            precision: number | null;
+            value: components["schemas"]["ScriptDialogValue"];
+        };
+        /** @enum {string} */
+        ScriptDialogWidgetKind: "entry" | "check" | "combo" | "radio" | "spin" | "scale" | "next";
+        ScriptOverlayRectangle: {
+            outline: string;
+            tag: string;
+            /** Format: int64 */
+            x1: number;
+            /** Format: int64 */
+            x2: number;
+            /** Format: int64 */
+            y1: number;
+            /** Format: int64 */
+            y2: number;
+        };
+        ScriptOverlayShape: (components["schemas"]["ScriptOverlayRectangle"] & {
+            /** @enum {string} */
+            kind: "rectangle";
+        }) | (components["schemas"]["ScriptOverlayText"] & {
+            /** @enum {string} */
+            kind: "text";
+        });
+        ScriptOverlaySnapshot: {
+            bindings: components["schemas"]["ScriptPointerBindings"];
+            /** Format: int32 */
+            fps: number;
+            right_mouse_mode: string;
+            shapes: components["schemas"]["ScriptOverlayShape"][];
+            /** Format: int32 */
+            show_height: number;
+            /** Format: int32 */
+            show_width: number;
+            touchscreen_area: components["schemas"]["NormalizedRegion"];
+        };
+        ScriptOverlayText: {
+            color: string;
+            font: string;
+            /** Format: int32 */
+            font_size: number;
+            tag: string;
+            text: string;
+            /** Format: int64 */
+            x: number;
+            /** Format: int64 */
+            y: number;
+        };
+        ScriptPointerBindings: {
+            left: boolean;
+            right: boolean;
+        };
+        ScriptPopupImage: {
+            content_type: string;
+            encoded_base64: string;
+            id: components["schemas"]["DecimalString"];
+            title: string;
+        };
+        ScriptTkButton: {
+            id: components["schemas"]["DecimalString"];
+            /** Format: int64 */
+            pady: number | null;
+            text: string;
+        };
+        ScriptTkLabel: {
+            background: string | null;
+            /** Format: int64 */
+            height: number | null;
+            id: components["schemas"]["DecimalString"];
+            /** Format: int64 */
+            pady: number | null;
+            relief: string | null;
+            text: string;
+            /** Format: int64 */
+            width: number | null;
+        };
+        ScriptTkScale: {
+            /** Format: double */
+            from_value: number;
+            id: components["schemas"]["DecimalString"];
+            label: string | null;
+            orient: string;
+            /** Format: int64 */
+            pady: number | null;
+            /** Format: double */
+            to_value: number;
+            /** Format: double */
+            value: number;
+        };
+        ScriptTkWidget: (components["schemas"]["ScriptTkScale"] & {
+            /** @enum {string} */
+            kind: "scale";
+        }) | (components["schemas"]["ScriptTkButton"] & {
+            /** @enum {string} */
+            kind: "button";
+        }) | (components["schemas"]["ScriptTkLabel"] & {
+            /** @enum {string} */
+            kind: "label";
+        });
+        ScriptTkWindow: {
+            geometry: string | null;
+            id: components["schemas"]["DecimalString"];
+            title: string;
+            widgets: components["schemas"]["ScriptTkWidget"][];
+        };
+        /** @description Browser-originated, generation-checked interaction with script-owned UI. */
+        ScriptUiAction: {
+            /** @enum {string} */
+            action: "dialog_confirm";
+            dialog_id: components["schemas"]["DecimalString"];
+            generation: string;
+            values: components["schemas"]["ScriptDialogValue"][];
+        } | {
+            /** @enum {string} */
+            action: "dialog_abort";
+            dialog_id: components["schemas"]["DecimalString"];
+            generation: string;
+            reason: components["schemas"]["ScriptDialogAbortReason"];
+        } | {
+            /** @enum {string} */
+            action: "tk_scale_changed";
+            generation: string;
+            /** Format: double */
+            value: number;
+            widget_id: components["schemas"]["DecimalString"];
+        } | {
+            /** @enum {string} */
+            action: "tk_button_invoked";
+            generation: string;
+            widget_id: components["schemas"]["DecimalString"];
+        } | {
+            /** @enum {string} */
+            action: "tk_window_closed";
+            generation: string;
+            window_id: components["schemas"]["DecimalString"];
+        } | {
+            /** @enum {string} */
+            action: "popup_closed";
+            generation: string;
+            popup_id: components["schemas"]["DecimalString"];
+        };
+        ScriptUiActionResult: {
+            accepted: boolean;
+        };
+        /**
+         * @description Latest complete profile-scoped script UI state. The broker replays this
+         *     snapshot to every newly connected client, so browser reconnects never need
+         *     to infer missed dialog or Tk mutations.
+         */
+        ScriptUiSnapshot: {
+            dialogs: components["schemas"]["ScriptDialog"][];
+            generation: string | null;
+            overlay: components["schemas"]["ScriptOverlaySnapshot"];
+            popup_images: components["schemas"]["ScriptPopupImage"][];
+            tk_windows: components["schemas"]["ScriptTkWindow"][];
+        };
         SerialControlRequest: {
             /** @enum {string} */
             action: "connect";
@@ -709,6 +943,9 @@ export interface components {
         }) | (components["schemas"]["MessageData_LogData"] & {
             /** @enum {string} */
             type: "log";
+        }) | (components["schemas"]["MessageData_ScriptUiSnapshot"] & {
+            /** @enum {string} */
+            type: "script.ui";
         }) | (components["schemas"]["MessageData_SessionDescription"] & {
             /** @enum {string} */
             type: "webrtc.offer";
@@ -1114,6 +1351,12 @@ export interface components {
             data: {
                 display_path: string;
                 format: components["schemas"]["ImageFormat"];
+            };
+        };
+        /** @description Common successful JSON envelope. */
+        Success_ScriptUiActionResult: {
+            data: {
+                accepted: boolean;
             };
         };
         /** @description Common successful JSON envelope. */
@@ -1615,6 +1858,57 @@ export interface operations {
                 };
             };
             /** @description Profile or launcher write failure */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    script_ui_action: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptUiAction"];
+            };
+        };
+        responses: {
+            /** @description Script UI interaction accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Success_ScriptUiActionResult"];
+                };
+            };
+            /** @description Stale generation or completed UI object */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Invalid dialog value or Tk interaction */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Script worker interaction failed */
             500: {
                 headers: {
                     [name: string]: unknown;

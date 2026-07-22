@@ -15,6 +15,7 @@ type GamepadButton = components['schemas']['GamepadButton'];
 type GamepadHat = components['schemas']['GamepadHat'];
 type LogLevel = components['schemas']['LogLevel'];
 type LogTarget = components['schemas']['LogTarget'];
+type ScriptUiSnapshot = components['schemas']['ScriptUiSnapshot'];
 type StickName = components['schemas']['StickName'];
 type TouchPoint = components['schemas']['TouchPoint'];
 
@@ -46,6 +47,7 @@ export interface RuntimeView {
   readonly realtime: RealtimeView;
   readonly serial: readonly SerialLine[];
   readonly settings: SettingsSnapshot | null;
+  readonly scriptUi: ScriptUiSnapshot;
   readonly state: StateSnapshot | null;
 }
 
@@ -141,6 +143,22 @@ const idleInputView: InputView = {
   }
 };
 
+const idleScriptUi: ScriptUiSnapshot = {
+  dialogs: [],
+  generation: null,
+  overlay: {
+    bindings: { left: false, right: false },
+    fps: 30,
+    right_mouse_mode: 'Default',
+    shapes: [],
+    show_height: 720,
+    show_width: 1280,
+    touchscreen_area: { height: 1, width: 1, x: 0, y: 0 }
+  },
+  popup_images: [],
+  tk_windows: []
+};
+
 function createDefaultBundle(): RuntimeBundle {
   const realtime = new RealtimeClient();
   const media = MediaTransport.fromRealtimeClient(realtime);
@@ -188,6 +206,7 @@ export class ApplicationRuntime {
     realtime: idleRealtimeView,
     serial: [],
     settings: null,
+    scriptUi: idleScriptUi,
     state: null
   };
 
@@ -336,6 +355,8 @@ export class ApplicationRuntime {
   private handleMessage(route: InputRoute, message: ServerMessage): void {
     if (message.type === 'log') {
       this.appendOutput(route, message.data);
+    } else if (message.type === 'script.ui') {
+      this.updateView({ scriptUi: message.data });
     } else if (message.type === 'serial.data') {
       try {
         const serial: SerialLine = {
@@ -365,8 +386,13 @@ export class ApplicationRuntime {
       (data.target === 'stdout' && stdoutDestination === 'output_2')
         ? 'output2'
         : 'output1';
+    if (data.operation === 'clear') {
+      this.updateView({ [output]: [] });
+      return;
+    }
+    const previous = data.operation === 'replace' ? [] : this.view[output];
     this.updateView({
-      [output]: boundedAppend(this.view[output], line, MAX_OUTPUT_LINES)
+      [output]: boundedAppend(previous, line, MAX_OUTPUT_LINES)
     });
   }
 

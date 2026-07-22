@@ -1263,6 +1263,9 @@
           "message": {
             "type": "string"
           },
+          "operation": {
+            "$ref": "#/components/schemas/LogOperation"
+          },
           "target": {
             "$ref": "#/components/schemas/LogTarget"
           }
@@ -1270,7 +1273,8 @@
         "required": [
           "level",
           "message",
-          "target"
+          "target",
+          "operation"
         ],
         "type": "object"
       },
@@ -1281,6 +1285,15 @@
           "warning",
           "error",
           "critical"
+        ],
+        "type": "string"
+      },
+      "LogOperation": {
+        "description": "Mutation semantics for one output-panel message. Ordinary diagnostics\nappend, while the compatibility print APIs may replace or clear a panel.",
+        "enum": [
+          "append",
+          "replace",
+          "clear"
         ],
         "type": "string"
       },
@@ -1603,6 +1616,9 @@
               "message": {
                 "type": "string"
               },
+              "operation": {
+                "$ref": "#/components/schemas/LogOperation"
+              },
               "target": {
                 "$ref": "#/components/schemas/LogTarget"
               }
@@ -1610,7 +1626,8 @@
             "required": [
               "level",
               "message",
-              "target"
+              "target",
+              "operation"
             ],
             "type": "object"
           }
@@ -1724,6 +1741,56 @@
             },
             "required": [
               "nonce"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "MessageData_ScriptUiSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "description": "Latest complete profile-scoped script UI state. The broker replays this\nsnapshot to every newly connected client, so browser reconnects never need\nto infer missed dialog or Tk mutations.",
+            "properties": {
+              "dialogs": {
+                "items": {
+                  "$ref": "#/components/schemas/ScriptDialog"
+                },
+                "type": "array"
+              },
+              "generation": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "overlay": {
+                "$ref": "#/components/schemas/ScriptOverlaySnapshot"
+              },
+              "popup_images": {
+                "items": {
+                  "$ref": "#/components/schemas/ScriptPopupImage"
+                },
+                "type": "array"
+              },
+              "tk_windows": {
+                "items": {
+                  "$ref": "#/components/schemas/ScriptTkWindow"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "generation",
+              "dialogs",
+              "tk_windows",
+              "overlay",
+              "popup_images"
             ],
             "type": "object"
           }
@@ -2203,6 +2270,863 @@
           }
         ]
       },
+      "ScriptDialog": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialogWidget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "widgets"
+        ],
+        "type": "object"
+      },
+      "ScriptDialogAbortReason": {
+        "enum": [
+          "close",
+          "escape",
+          "destroy"
+        ],
+        "type": "string"
+      },
+      "ScriptDialogValue": {
+        "description": "Script-dialog value kept type-safe across Python, Rust, and the browser.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "none"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "string"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "bool"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "value",
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "integer"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "value",
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "float"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "value",
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ScriptDialogWidget": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ScriptDialogWidgetKind"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maximum": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "minimum": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialogValue"
+            },
+            "type": "array"
+          },
+          "precision": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/ScriptDialogValue"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "value",
+          "options",
+          "minimum",
+          "maximum",
+          "precision"
+        ],
+        "type": "object"
+      },
+      "ScriptDialogWidgetKind": {
+        "enum": [
+          "entry",
+          "check",
+          "combo",
+          "radio",
+          "spin",
+          "scale",
+          "next"
+        ],
+        "type": "string"
+      },
+      "ScriptOverlayRectangle": {
+        "additionalProperties": false,
+        "properties": {
+          "outline": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "x1": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "x2": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "y1": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "y2": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "x1",
+          "y1",
+          "x2",
+          "y2",
+          "outline"
+        ],
+        "type": "object"
+      },
+      "ScriptOverlayShape": {
+        "discriminator": {
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptOverlayRectangle"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "rectangle"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptOverlayText"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "text"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "ScriptOverlaySnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "bindings": {
+            "$ref": "#/components/schemas/ScriptPointerBindings"
+          },
+          "fps": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "right_mouse_mode": {
+            "type": "string"
+          },
+          "shapes": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptOverlayShape"
+            },
+            "type": "array"
+          },
+          "show_height": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "show_width": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "touchscreen_area": {
+            "$ref": "#/components/schemas/NormalizedRegion"
+          }
+        },
+        "required": [
+          "fps",
+          "show_width",
+          "show_height",
+          "right_mouse_mode",
+          "touchscreen_area",
+          "bindings",
+          "shapes"
+        ],
+        "type": "object"
+      },
+      "ScriptOverlayText": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "font": {
+            "type": "string"
+          },
+          "font_size": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "x": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "y": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "x",
+          "y",
+          "text",
+          "font",
+          "font_size",
+          "color"
+        ],
+        "type": "object"
+      },
+      "ScriptPointerBindings": {
+        "additionalProperties": false,
+        "properties": {
+          "left": {
+            "type": "boolean"
+          },
+          "right": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "left",
+          "right"
+        ],
+        "type": "object"
+      },
+      "ScriptPopupImage": {
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "encoded_base64": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "content_type",
+          "encoded_base64"
+        ],
+        "type": "object"
+      },
+      "ScriptTkButton": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "pady": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "pady"
+        ],
+        "type": "object"
+      },
+      "ScriptTkLabel": {
+        "additionalProperties": false,
+        "properties": {
+          "background": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "pady": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relief": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "width": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "width",
+          "height",
+          "relief",
+          "background",
+          "pady"
+        ],
+        "type": "object"
+      },
+      "ScriptTkScale": {
+        "additionalProperties": false,
+        "properties": {
+          "from_value": {
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orient": {
+            "type": "string"
+          },
+          "pady": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to_value": {
+            "format": "double",
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "from_value",
+          "to_value",
+          "orient",
+          "label",
+          "value",
+          "pady"
+        ],
+        "type": "object"
+      },
+      "ScriptTkWidget": {
+        "discriminator": {
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkScale"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "scale"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkButton"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "button"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkLabel"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "label"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      },
+      "ScriptTkWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "geometry": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptTkWidget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "geometry",
+          "widgets"
+        ],
+        "type": "object"
+      },
+      "ScriptUiAction": {
+        "description": "Browser-originated, generation-checked interaction with script-owned UI.",
+        "discriminator": {
+          "propertyName": "action"
+        },
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "dialog_confirm"
+                ],
+                "type": "string"
+              },
+              "dialog_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "values": {
+                "items": {
+                  "$ref": "#/components/schemas/ScriptDialogValue"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "generation",
+              "dialog_id",
+              "values",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "dialog_abort"
+                ],
+                "type": "string"
+              },
+              "dialog_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ScriptDialogAbortReason"
+              }
+            },
+            "required": [
+              "generation",
+              "dialog_id",
+              "reason",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "tk_scale_changed"
+                ],
+                "type": "string"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "value": {
+                "format": "double",
+                "type": "number"
+              },
+              "widget_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "generation",
+              "widget_id",
+              "value",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "tk_button_invoked"
+                ],
+                "type": "string"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "widget_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "generation",
+              "widget_id",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "tk_window_closed"
+                ],
+                "type": "string"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "window_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "generation",
+              "window_id",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "popup_closed"
+                ],
+                "type": "string"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "popup_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "generation",
+              "popup_id",
+              "action"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ScriptUiActionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "type": "object"
+      },
+      "ScriptUiSnapshot": {
+        "additionalProperties": false,
+        "description": "Latest complete profile-scoped script UI state. The broker replays this\nsnapshot to every newly connected client, so browser reconnects never need\nto infer missed dialog or Tk mutations.",
+        "properties": {
+          "dialogs": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialog"
+            },
+            "type": "array"
+          },
+          "generation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overlay": {
+            "$ref": "#/components/schemas/ScriptOverlaySnapshot"
+          },
+          "popup_images": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptPopupImage"
+            },
+            "type": "array"
+          },
+          "tk_windows": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptTkWindow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "generation",
+          "dialogs",
+          "tk_windows",
+          "overlay",
+          "popup_images"
+        ],
+        "type": "object"
+      },
       "SerialControlRequest": {
         "discriminator": {
           "propertyName": "action"
@@ -2348,6 +3272,28 @@
                   "type": {
                     "enum": [
                       "log"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_ScriptUiSnapshot"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "script.ui"
                     ],
                     "type": "string"
                   }
@@ -3978,6 +4924,28 @@
         ],
         "type": "object"
       },
+      "Success_ScriptUiActionResult": {
+        "additionalProperties": false,
+        "description": "Common successful JSON envelope.",
+        "properties": {
+          "data": {
+            "additionalProperties": false,
+            "properties": {
+              "accepted": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "accepted"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "Success_SettingsSnapshot": {
         "additionalProperties": false,
         "description": "Common successful JSON envelope.",
@@ -4874,6 +5842,66 @@
         ]
       }
     },
+    "/api/script-ui/action": {
+      "post": {
+        "operationId": "script_ui_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptUiAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_ScriptUiActionResult"
+                }
+              }
+            },
+            "description": "Script UI interaction accepted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Stale generation or completed UI object"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid dialog value or Tk interaction"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Script worker interaction failed"
+          }
+        },
+        "tags": [
+          "script_ui"
+        ]
+      }
+    },
     "/api/serial/control": {
       "post": {
         "operationId": "control_serial",
@@ -5162,6 +6190,10 @@
     {
       "description": "Camera and serial devices",
       "name": "devices"
+    },
+    {
+      "description": "Profile-scoped script dialogs and compatibility UI",
+      "name": "script_ui"
     }
   ]
 }

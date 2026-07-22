@@ -160,6 +160,20 @@ pub fn test_notification() {}
 
 #[utoipa::path(
     post,
+    path = "/api/script-ui/action",
+    tag = "script_ui",
+    request_body(content = crate::api::ScriptUiAction, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Script UI interaction accepted", body = Success<crate::api::ScriptUiActionResult>),
+        (status = 409, description = "Stale generation or completed UI object", body = ErrorEnvelope),
+        (status = 422, description = "Invalid dialog value or Tk interaction", body = ErrorEnvelope),
+        (status = 500, description = "Script worker interaction failed", body = ErrorEnvelope)
+    )
+)]
+pub fn script_ui_action() {}
+
+#[utoipa::path(
+    post,
     path = "/api/dynamic-config/control",
     tag = "dynamic_config",
     request_body(content = DynamicConfigControlRequest, content_type = "application/json"),

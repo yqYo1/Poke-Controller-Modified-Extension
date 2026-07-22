@@ -723,6 +723,16 @@ pub enum LogTarget {
     Log,
 }
 
+/// Mutation semantics for one output-panel message. Ordinary diagnostics
+/// append, while the compatibility print APIs may replace or clear a panel.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LogOperation {
+    Append,
+    Replace,
+    Clear,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SerialData {
@@ -743,6 +753,267 @@ pub struct LogData {
     pub level: LogLevel,
     pub message: String,
     pub target: LogTarget,
+    pub operation: LogOperation,
+}
+
+/// Script-dialog value kept type-safe across Python, Rust, and the browser.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case", tag = "type", content = "value")]
+pub enum ScriptDialogValue {
+    None,
+    String(String),
+    Bool(bool),
+    Integer(i64),
+    Float(f64),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptDialogWidgetKind {
+    Entry,
+    Check,
+    Combo,
+    Radio,
+    Spin,
+    Scale,
+    Next,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptDialogWidget {
+    pub kind: ScriptDialogWidgetKind,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub label: Option<String>,
+    pub value: ScriptDialogValue,
+    pub options: Vec<ScriptDialogValue>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub minimum: Option<f64>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub maximum: Option<f64>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub precision: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptDialog {
+    pub id: DecimalString,
+    pub title: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub description: Option<String>,
+    pub widgets: Vec<ScriptDialogWidget>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptTkScale {
+    pub id: DecimalString,
+    pub from_value: f64,
+    pub to_value: f64,
+    pub orient: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub label: Option<String>,
+    pub value: f64,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub pady: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptTkButton {
+    pub id: DecimalString,
+    pub text: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub pady: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptTkLabel {
+    pub id: DecimalString,
+    pub text: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub width: Option<i64>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub height: Option<i64>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub relief: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub background: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub pady: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum ScriptTkWidget {
+    Scale(ScriptTkScale),
+    Button(ScriptTkButton),
+    Label(ScriptTkLabel),
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptTkWindow {
+    pub id: DecimalString,
+    pub title: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub geometry: Option<String>,
+    pub widgets: Vec<ScriptTkWidget>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptOverlayRectangle {
+    pub tag: String,
+    pub x1: i64,
+    pub y1: i64,
+    pub x2: i64,
+    pub y2: i64,
+    pub outline: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptOverlayText {
+    pub tag: String,
+    pub x: i64,
+    pub y: i64,
+    pub text: String,
+    pub font: String,
+    pub font_size: u32,
+    pub color: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum ScriptOverlayShape {
+    Rectangle(ScriptOverlayRectangle),
+    Text(ScriptOverlayText),
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPointerBindings {
+    pub left: bool,
+    pub right: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptOverlaySnapshot {
+    pub fps: u32,
+    pub show_width: u32,
+    pub show_height: u32,
+    pub right_mouse_mode: String,
+    pub touchscreen_area: NormalizedRegion,
+    pub bindings: ScriptPointerBindings,
+    pub shapes: Vec<ScriptOverlayShape>,
+}
+
+impl Default for ScriptOverlaySnapshot {
+    fn default() -> Self {
+        Self {
+            fps: 30,
+            show_width: 1280,
+            show_height: 720,
+            right_mouse_mode: "Default".to_owned(),
+            touchscreen_area: NormalizedRegion {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            bindings: ScriptPointerBindings::default(),
+            shapes: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPopupImage {
+    pub id: DecimalString,
+    pub title: String,
+    pub content_type: String,
+    pub encoded_base64: String,
+}
+
+/// Latest complete profile-scoped script UI state. The broker replays this
+/// snapshot to every newly connected client, so browser reconnects never need
+/// to infer missed dialog or Tk mutations.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptUiSnapshot {
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
+    pub generation: Option<String>,
+    pub dialogs: Vec<ScriptDialog>,
+    pub tk_windows: Vec<ScriptTkWindow>,
+    pub overlay: ScriptOverlaySnapshot,
+    pub popup_images: Vec<ScriptPopupImage>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptDialogAbortReason {
+    Close,
+    Escape,
+    Destroy,
+}
+
+/// Browser-originated, generation-checked interaction with script-owned UI.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "action")]
+pub enum ScriptUiAction {
+    DialogConfirm {
+        generation: String,
+        dialog_id: DecimalString,
+        values: Vec<ScriptDialogValue>,
+    },
+    DialogAbort {
+        generation: String,
+        dialog_id: DecimalString,
+        reason: ScriptDialogAbortReason,
+    },
+    TkScaleChanged {
+        generation: String,
+        widget_id: DecimalString,
+        value: f64,
+    },
+    TkButtonInvoked {
+        generation: String,
+        widget_id: DecimalString,
+    },
+    TkWindowClosed {
+        generation: String,
+        window_id: DecimalString,
+    },
+    PopupClosed {
+        generation: String,
+        popup_id: DecimalString,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptUiActionResult {
+    pub accepted: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
@@ -1056,6 +1327,8 @@ pub enum ServerMessage {
     SerialData(MessageData<SerialData>),
     #[serde(rename = "log")]
     Log(MessageData<LogData>),
+    #[serde(rename = "script.ui")]
+    ScriptUi(MessageData<ScriptUiSnapshot>),
     #[serde(rename = "webrtc.offer")]
     WebRtcOffer(MessageData<SessionDescription>),
     #[serde(rename = "webrtc.answer")]

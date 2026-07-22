@@ -296,7 +296,7 @@ function acknowledgement(value = 'generation-1', sequence = '0'): ServerMessage 
 }
 
 function logMessage(message = 'ready'): ServerMessage {
-  return { data: { level: 'info', message, target: 'log' }, type: 'log' };
+  return { data: { level: 'info', message, operation: 'append', target: 'log' }, type: 'log' };
 }
 
 async function beginNegotiation(harness: MediaHarness): Promise<FakePeer> {

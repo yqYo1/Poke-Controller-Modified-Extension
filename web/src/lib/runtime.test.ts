@@ -147,16 +147,34 @@ describe('ApplicationRuntime', () => {
     expect(view.state?.revision).toBe('3');
 
     fake.emitMessage('websocket', {
-      data: { level: 'info', message: 'stdout\n', target: 'stdout' },
+      data: { level: 'info', message: 'stdout\n', operation: 'append', target: 'stdout' },
       type: 'log'
     });
     fake.emitMessage('webrtc', {
-      data: { level: 'warning', message: 'panel one\n', target: 'panel1' },
+      data: { level: 'warning', message: 'panel one\n', operation: 'append', target: 'panel1' },
       type: 'log'
     });
     fake.emitMessage('websocket', {
       data: { byte_length: 2, data: 'aGk=', encoding: 'base64' },
       type: 'serial.data'
+    });
+    fake.emitMessage('websocket', {
+      data: {
+        dialogs: [],
+        generation: 'user-script-3',
+        overlay: {
+          bindings: { left: false, right: false },
+          fps: 30,
+          right_mouse_mode: 'Default',
+          shapes: [],
+          show_height: 720,
+          show_width: 1280,
+          touchscreen_area: { height: 1, width: 1, x: 0, y: 0 }
+        },
+        popup_images: [],
+        tk_windows: []
+      },
+      type: 'script.ui'
     });
     const frame = new ArrayBuffer(4);
     fake.emitFrame(frame);
@@ -164,12 +182,41 @@ describe('ApplicationRuntime', () => {
     expect(view.output1.map((line) => line.message)).toEqual(['panel one\n']);
     expect(view.output2.map((line) => line.message)).toEqual(['stdout\n']);
     expect(view.serial[0]).toMatchObject({ byteLength: 2, text: 'hi' });
+    expect(view.scriptUi.generation).toBe('user-script-3');
     expect(frames).toEqual([frame]);
 
     fake.emitRealtime(connectedView({ status: 'waiting' }));
     expect(fake.inputDisconnected).toHaveBeenCalledOnce();
     runtime.stop();
     expect(fake.lifecycle.slice(-3)).toEqual(['input.stop', 'media.stop', 'realtime.stop']);
+  });
+
+  it('applies append, replace, and clear output operations', () => {
+    const fake = fakeBundle();
+    const runtime = new ApplicationRuntime(fake.bundle);
+    let view!: RuntimeView;
+    runtime.subscribe((next) => {
+      view = next;
+    });
+    runtime.start();
+
+    for (const [operation, message] of [
+      ['append', 'first'],
+      ['append', 'second'],
+      ['replace', 'replacement']
+    ] as const) {
+      fake.emitMessage('websocket', {
+        data: { level: 'info', message, operation, target: 'panel1' },
+        type: 'log'
+      });
+    }
+    expect(view.output1.map((line) => line.message)).toEqual(['replacement']);
+
+    fake.emitMessage('websocket', {
+      data: { level: 'info', message: '', operation: 'clear', target: 'panel1' },
+      type: 'log'
+    });
+    expect(view.output1).toEqual([]);
   });
 
   it('bounds output history and reports malformed serial envelopes', () => {
@@ -183,7 +230,7 @@ describe('ApplicationRuntime', () => {
 
     for (let index = 0; index < 2_001; index += 1) {
       fake.emitMessage('websocket', {
-        data: { level: 'debug', message: String(index), target: 'panel1' },
+        data: { level: 'debug', message: String(index), operation: 'append', target: 'panel1' },
         type: 'log'
       });
     }

@@ -14,6 +14,7 @@
   import OtherTab from '$lib/components/OtherTab.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
   import SerialTab from '$lib/components/SerialTab.svelte';
+  import ScriptUiLayer from '$lib/components/ScriptUiLayer.svelte';
   import WorkspaceMenu from '$lib/components/WorkspaceMenu.svelte';
   import { ApplicationRuntime, type RuntimeView } from '$lib/runtime';
 
@@ -152,4 +153,5 @@
       <RightPanel runtime={runtime} view={view} />
     </div>
   </main>
+  <ScriptUiLayer {actions} {view} />
 {/if}

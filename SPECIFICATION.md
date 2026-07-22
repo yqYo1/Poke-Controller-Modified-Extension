@@ -1120,7 +1120,8 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   |--------|------|------------|--------|
   | `ui.state.changed` | サーバー → クライアント | 必須 | UI可視状態の原子的変更通知。下記`UiStateChange` |
   | `serial.data` | サーバー → クライアント | なし | `{"encoding":"base64","data":string,"byte_length":int}`。`data`は受信した生バイト列の標準Base64 |
-  | `log` | サーバー → クライアント | なし | `{"level":"debug"|"info"|"warning"|"error"|"critical","message":string,"target":"stdout"|"panel1"|"panel2"|"log"}` |
+  | `log` | サーバー → クライアント | なし | `{"level":"debug"|"info"|"warning"|"error"|"critical","message":string,"target":"stdout"|"panel1"|"panel2"|"log","operation":"append"|"replace"|"clear"}`。`clear`では`message`を空文字とする |
+  | `script.ui` | サーバー → クライアント | なし | アクティブなユーザースクリプト世代が所有するダイアログ、Tk互換ウィンドウ、描画オーバーレイ、画像ポップアップの完全スナップショット。非アクティブ時は`generation=null` |
   | `webrtc.offer` | 双方向 | なし | `{"sdp":string}` |
   | `webrtc.answer` | 双方向 | なし | `{"sdp":string}` |
   | `webrtc.ice_candidate` | 双方向 | なし | `{"candidate":string,"sdp_mid":string|null,"sdp_mline_index":int|null,"username_fragment":string|null}` |
@@ -1138,6 +1139,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 - UI可視状態を変更する1つの原子的トランザクションにつき、revisionを1回だけ増加させ、同じrevisionの`ui.state.changed`を正確に1件送信する。1トランザクションで設定・状態・コマンド表示一覧が同時に変化する場合も同じ`data`内へ両方の疎な差分を含め、同revisionの複数イベントへ分割しない
 - `command_display_lists`、`command_candidates`、`tags`のいずれかが変わる場合、`state`には三つを同じ完成世代の完全値としてまとめて含める。未完成世代や異なる世代の組合せを送信しない
 - `command.error`等の従来の個別WebSocket通知名は設けず、`cause="command"`の`ui.state.changed`と`StatePatch.command_state`／`current_command`で表す。診断詳細は共通RESTエラーまたは`log` variantで通知する。動的設定イベント名との対応関係は持たない
+- `script.ui.data`は`generation:string|null`、`dialogs`、`tk_windows`、`overlay`、`popup_images`をすべて必須で持つ、世代内の最新完全値である。部分差分を送らず、ブラウザは受信ごとに直前のスクリプトUI投影を原子的に置換する。サーバーはアクティブ世代の最新値を接続ごとに即時再送し、ワーカー停止・プロファイル切替後は`generation=null`の空値を送る。クライアントは過去世代のREST操作を再送せず、世代不一致応答を破棄して最新スナップショットを待つ
 
 **入力variantの共通外形**:
 
@@ -1152,7 +1154,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 2. 接続後に`GET /api/settings`と`GET /api/state`を並行取得し、それぞれのスナップショットrevisionを記録する
 3. 保持イベントをrevision順に処理し、`settings`差分は設定スナップショットrevisionより新しい場合だけ、`state`差分は状態スナップショットrevisionより新しい場合だけ適用する。片方だけ新しい場合はその領域だけ適用する
 4. 保持イベントのrevisionに欠落がある、同revisionが複数ある、または差分を型検証できない場合は推測せず、両GETを再実行して新しい基準を作る
-5. WebSocket再接続時も同じ手順を使用する。`serial.data`、`log`、シグナリング等のrevisionなしメッセージはスナップショット再生対象にしない
+5. WebSocket再接続時も同じ手順を使用する。`serial.data`、`log`、シグナリング等のrevisionなしイベントはスナップショット再生対象にしない。`script.ui`だけはイベントではなく最新完全値であるため、上記の独立した世代付きスナップショットを再送する
 
 上記全variantをutoipaのOpenAPI componentへ登録し、`openapi-typescript`でRustと同じ判別unionを生成する。WebSocketが内部通信であることは、型契約を実装時の口頭合意へ委ねる理由にはならない。
 
@@ -1205,6 +1207,15 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   - `pause`は`running`から`paused`への遷移とし、すでに`paused`の場合は成功するno-op、その他の状態では`409`とする
   - `resume`は`paused`から`running`への遷移とし、すでに`running`の場合は成功するno-op、その他の状態では`409`とする
   - `/api/commands/reload`要求本文は空JSONオブジェクト`{}`とする
+- **スクリプトUI操作API**:
+
+  | メソッド | パス | 動作 |
+  |----------|------|------|
+  | `POST` | `/api/script-ui/action` | 現在のユーザースクリプト世代が所有するダイアログ、Tk互換ウィンドウ、画像ポップアップへの離散操作を適用する |
+
+  - 要求は`action`を判別子とする閉じたOpenAPI unionとし、`dialog_confirm`、`dialog_abort`、`tk_scale_changed`、`tk_button_invoked`、`tk_window_closed`、`popup_closed`だけを受理する。全variantで直前の`script.ui.data.generation`を必須とし、世代不一致または既に消滅したUIオブジェクトは副作用なしの`409 Conflict`とする
+  - `dialog_confirm`はWidget数、型、選択肢、数値範囲をRust側で再検証してから確定する。×／Escによる`dialog_abort`は当該ダイアログを中断し、キャンセル可能な`CommandStopPre`を経由せず異常停止としてコマンド世代を必ず解放する
+  - Tk互換のScale／Button／window close操作は型付きIPCイベントとして所有ワーカーへ配送する。画像ポップアップcloseは表示資源だけを破棄し、コマンドを停止しない。各成功後は更新済み完全`script.ui`スナップショットを全接続へ通知する
 - **状態API**:
 
   | メソッド | パス | 動作 |

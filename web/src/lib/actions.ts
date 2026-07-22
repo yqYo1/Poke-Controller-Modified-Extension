@@ -12,6 +12,8 @@ export type NotificationTestResult = components['schemas']['NotificationTestResu
 export type OperationResult = components['schemas']['OperationResult'];
 export type SavedScreenshot = components['schemas']['SavedScreenshot'];
 export type ScreenshotRequest = components['schemas']['ScreenshotRequest'];
+export type ScriptUiAction = components['schemas']['ScriptUiAction'];
+export type ScriptUiActionResult = components['schemas']['ScriptUiActionResult'];
 export type SerialControlRequest = components['schemas']['SerialControlRequest'];
 export type SerialPort = components['schemas']['SerialPort'];
 export type UpdateCheckResult = components['schemas']['UpdateCheckResult'];
@@ -118,6 +120,13 @@ export class BackendActions {
     return unwrap(
       await this.client.POST('/api/notifications/test', { body: request }),
       'notification test failed'
+    );
+  }
+
+  async scriptUiAction(request: ScriptUiAction): Promise<ScriptUiActionResult> {
+    return unwrap(
+      await this.client.POST('/api/script-ui/action', { body: request }),
+      'script UI interaction failed'
     );
   }
 

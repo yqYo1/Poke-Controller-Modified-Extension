@@ -345,6 +345,38 @@
       onpointermove={pointerMove}
       onpointerup={finish}
     ></canvas>
+    {#if view.scriptUi.generation !== null}
+      <svg
+        class="pointer-events-none absolute inset-0 size-full"
+        viewBox={`0 0 ${String(Math.max(1, view.scriptUi.overlay.show_width))} ${String(Math.max(1, view.scriptUi.overlay.show_height))}`}
+        preserveAspectRatio="none"
+        aria-label="Script drawing overlay"
+      >
+        {#each view.scriptUi.overlay.shapes as shape (`${shape.kind}-${shape.tag}`)}
+          {#if shape.kind === 'rectangle'}
+            <rect
+              x={Math.min(shape.x1, shape.x2)}
+              y={Math.min(shape.y1, shape.y2)}
+              width={Math.abs(shape.x2 - shape.x1)}
+              height={Math.abs(shape.y2 - shape.y1)}
+              fill="none"
+              stroke={shape.outline}
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            ></rect>
+          {:else}
+            <text
+              x={shape.x}
+              y={shape.y}
+              fill={shape.color}
+              font-family={shape.font}
+              font-size={shape.font_size}
+              dominant-baseline="hanging"
+            >{shape.text}</text>
+          {/if}
+        {/each}
+      </svg>
+    {/if}
     {#if guideVisible}
       <div class="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent_33%,rgba(255,255,255,.15)_33.2%,transparent_33.4%,transparent_66%,rgba(255,255,255,.15)_66.2%,transparent_66.4%),linear-gradient(0deg,transparent_33%,rgba(255,255,255,.15)_33.2%,transparent_33.4%,transparent_66%,rgba(255,255,255,.15)_66.2%,transparent_66.4%)]" aria-hidden="true"></div>
     {/if}

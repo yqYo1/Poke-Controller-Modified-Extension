@@ -23,8 +23,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::api::{
     ApiError, ApiErrorCode, ClientMessage, ErrorEnvelope, IceCandidate, InputApplied,
-    InputGeneration, LogData, MessageData, Nonce, RevisionedStateChange, SerialData, ServerMessage,
-    SessionDescription,
+    InputGeneration, LogData, MessageData, Nonce, RevisionedStateChange, ScriptUiSnapshot,
+    SerialData, ServerMessage, SessionDescription,
 };
 use crate::backend::{ApiFailure, ApiResult};
 use crate::realtime_connection::{
@@ -231,6 +231,7 @@ enum BroadcastEvent {
 #[derive(Clone, Debug)]
 pub struct WebSocketBroker {
     sender: broadcast::Sender<Arc<BroadcastEvent>>,
+    script_ui: watch::Sender<ScriptUiSnapshot>,
 }
 
 impl WebSocketBroker {
@@ -242,12 +243,23 @@ impl WebSocketBroker {
         self.publish(BroadcastEvent::Log(data))
     }
 
+    /// Atomically replaces the generation-local script UI snapshot. Every
+    /// connection receives the current value immediately and then each newer
+    /// complete value, so reconnect never relies on ephemeral replay.
+    pub fn publish_script_ui(&self, snapshot: ScriptUiSnapshot) {
+        let _previous = self.script_ui.send_replace(snapshot);
+    }
+
     fn publish(&self, event: BroadcastEvent) -> usize {
         self.sender.send(Arc::new(event)).unwrap_or_default()
     }
 
     fn subscribe(&self) -> broadcast::Receiver<Arc<BroadcastEvent>> {
         self.sender.subscribe()
+    }
+
+    fn subscribe_script_ui(&self) -> watch::Receiver<ScriptUiSnapshot> {
+        self.script_ui.subscribe()
     }
 }
 
@@ -306,10 +318,11 @@ impl WebSocketTransport {
             return Err(WebSocketBuildError::ZeroCapacity);
         }
         let (sender, _receiver) = broadcast::channel(config.broadcast_capacity);
+        let (script_ui, _receiver) = watch::channel(ScriptUiSnapshot::default());
         Ok(Self {
             state: WebSocketState {
                 backend,
-                broker: WebSocketBroker { sender },
+                broker: WebSocketBroker { sender, script_ui },
                 config,
                 next_connection: Arc::new(AtomicU64::new(0)),
             },
@@ -390,6 +403,7 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
 
     let state_events = state.backend.state_hub().subscribe();
     let broadcast_events = state.broker.subscribe();
+    let script_ui = state.broker.subscribe_script_ui();
     let cancellation = CancellationToken::new();
     let (high_sender, high_receiver) = mpsc::channel(state.config.state_queue_capacity);
     let (low_sender, low_receiver) = mpsc::channel(state.config.ephemeral_queue_capacity);
@@ -435,6 +449,11 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
         broadcast_events,
         low_sender.clone(),
         realtime.logs,
+        cancellation.clone(),
+    ));
+    tasks.spawn(forward_script_ui(
+        script_ui,
+        high_sender.clone(),
         cancellation.clone(),
     ));
     tasks.spawn(heartbeat(
@@ -806,6 +825,41 @@ async fn forward_broadcasts(
             }
             Err(broadcast::error::RecvError::Lagged(_missed)) => {}
             Err(broadcast::error::RecvError::Closed) => return,
+        }
+    }
+}
+
+async fn forward_script_ui(
+    mut snapshots: watch::Receiver<ScriptUiSnapshot>,
+    outgoing: mpsc::Sender<Outgoing>,
+    cancellation: CancellationToken,
+) {
+    let mut initial = true;
+    loop {
+        let was_initial = initial;
+        if was_initial {
+            initial = false;
+        } else {
+            let changed = tokio::select! {
+                () = cancellation.cancelled() => return,
+                changed = snapshots.changed() => changed,
+            };
+            if changed.is_err() {
+                return;
+            }
+        }
+        let snapshot = snapshots.borrow_and_update().clone();
+        if was_initial && snapshot.generation.is_none() {
+            continue;
+        }
+        if outgoing
+            .try_send(Outgoing::Json(ServerMessage::ScriptUi(MessageData {
+                data: snapshot,
+            })))
+            .is_err()
+        {
+            cancellation.cancel();
+            return;
         }
     }
 }
@@ -1567,6 +1621,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "realtime-log".to_owned(),
                 target: LogTarget::Log,
+                operation: crate::api::LogOperation::Append,
             }),
             1
         );
@@ -1750,6 +1805,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "first".to_owned(),
                 target: LogTarget::Panel1,
+                operation: crate::api::LogOperation::Append,
             }),
             1
         );
@@ -1758,6 +1814,7 @@ mod tests {
                 level: LogLevel::Warning,
                 message: "second".to_owned(),
                 target: LogTarget::Panel1,
+                operation: crate::api::LogOperation::Append,
             }),
             1
         );
@@ -1771,6 +1828,38 @@ mod tests {
         socket.close(None).await.expect("close");
         backend.wait_for_disconnect().await;
         assert_eq!(backend.disconnected.load(Ordering::Acquire), 1);
+        stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    async fn script_ui_snapshot_replays_to_reconnecting_clients() {
+        let backend = Arc::new(TestBackend::new());
+        let transport = WebSocketTransport::new(backend.clone(), test_config()).expect("transport");
+        let expected = ScriptUiSnapshot {
+            generation: Some("user-script-7".to_owned()),
+            dialogs: vec![crate::api::ScriptDialog {
+                id: DecimalString::from_u64(3),
+                title: "Confirm".to_owned(),
+                description: None,
+                widgets: Vec::new(),
+            }],
+            ..ScriptUiSnapshot::default()
+        };
+        transport.broker().publish_script_ui(expected.clone());
+        let (address, cancellation, task) = start_server(&transport).await;
+
+        for _attempt in 0..2 {
+            let mut socket = connect(address).await;
+            let _generation = initial_generation(&mut socket).await;
+            let ServerMessage::ScriptUi(MessageData { data }) = receive_server(&mut socket).await
+            else {
+                panic!("active script UI snapshot");
+            };
+            assert_eq!(data, expected);
+            socket.close(None).await.expect("close");
+            backend.wait_for_disconnect().await;
+        }
+
         stop_server(cancellation, task).await;
     }
 

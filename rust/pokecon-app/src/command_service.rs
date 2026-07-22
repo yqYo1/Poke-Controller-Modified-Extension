@@ -16,6 +16,7 @@ use pokecon_worker::dynamic::DynamicWorkerClient;
 use pokecon_worker::script::protocol::{
     ScriptCommandKind, ScriptDiscoveredCommand, ScriptDiscoveryResult, ScriptExecuteRequest,
     ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseResult, ScriptStopResult,
+    ScriptTkEvent,
 };
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
@@ -135,6 +136,13 @@ pub trait UserScriptSession: Send + Sync {
     async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError>;
 
     async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError>;
+
+    async fn tk_event(&self, _event: &ScriptTkEvent) -> Result<(), CommandBackendError> {
+        Err(CommandBackendError::new(
+            "TkEventUnavailable",
+            "script session does not support Tk compatibility events",
+        ))
+    }
 
     /// Flushes the profile-switch cooperative stop request without waiting for
     /// the Python command thread to exit.
@@ -562,6 +570,68 @@ impl CommandService {
             || !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused)
         {
             return Err(CommandServiceError::CommandNotRunning);
+        }
+        if result.stop_requested {
+            inner.stop_post_pending = true;
+            Ok(CommandActionResult::Applied)
+        } else {
+            Ok(CommandActionResult::AlreadyInState)
+        }
+    }
+
+    /// Delivers one fixed Tk compatibility callback to the active worker.
+    /// UI state remains Rust-owned; the worker receives only the callback
+    /// event needed by the compatibility script.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no command generation is active or the worker
+    /// rejects the callback event.
+    pub async fn dispatch_tk_event(
+        &self,
+        event: &ScriptTkEvent,
+    ) -> Result<(), CommandServiceError> {
+        let session = {
+            let inner = self.inner.lock().await;
+            if !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused) {
+                return Err(CommandServiceError::CommandNotRunning);
+            }
+            inner
+                .session
+                .clone()
+                .ok_or(CommandServiceError::CommandNotRunning)?
+        };
+        session.tk_event(event).await?;
+        Ok(())
+    }
+
+    /// Stops a command after an abnormal script-dialog close. This mandatory
+    /// safety path is not cancellable by `CommandStopPre`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the active worker cannot be stopped cleanly.
+    pub async fn abort_from_script_ui(&self) -> Result<CommandActionResult, CommandServiceError> {
+        let _lifecycle = self.lifecycle.lock().await;
+        let (session, epoch) = {
+            let inner = self.inner.lock().await;
+            if !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused) {
+                return Ok(CommandActionResult::AlreadyInState);
+            }
+            (
+                inner
+                    .session
+                    .clone()
+                    .ok_or(CommandServiceError::CommandNotRunning)?,
+                inner.execution_epoch,
+            )
+        };
+        let result = session.stop_command().await?;
+        let mut inner = self.inner.lock().await;
+        if inner.execution_epoch != epoch
+            || !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused)
+        {
+            return Ok(CommandActionResult::AlreadyInState);
         }
         if result.stop_requested {
             inner.stop_post_pending = true;

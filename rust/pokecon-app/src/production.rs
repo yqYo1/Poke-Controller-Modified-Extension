@@ -43,7 +43,7 @@ use crate::application_backend::{
 use crate::command_service::{CommandService, DynamicCommandBridge, StaticCommandBridge};
 use crate::dynamic_host::StartupDynamicHost;
 use crate::profile_service::ProfileService;
-use crate::script_host::ProductionScriptHostFactory;
+use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
 use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
     CompositeSettingsApplier, HostSettingsApplier, NotificationSettingsApplier,
@@ -189,6 +189,7 @@ impl ProductionRuntime {
         let hub = StateHub::new(settings_snapshot, state_snapshot, STATE_HISTORY_CAPACITY)
             .map_err(|_error| "application state initialization failed".to_owned())?;
 
+        let script_ui = ScriptUiCoordinator::new();
         let backend = Arc::new(ApplicationBackend::new(ApplicationBackendParts {
             hub,
             settings,
@@ -201,11 +202,13 @@ impl ProductionRuntime {
             realtime,
             motion_jpeg: Some(motion_jpeg),
             screenshot_mode,
+            script_ui: script_ui.clone(),
         }));
         let websocket_backend: Arc<dyn WebSocketBackend> = backend.clone();
         let websocket = WebSocketTransport::new(websocket_backend, WebSocketConfig::default())
             .map_err(|_error| "WebSocket transport initialization failed".to_owned())?;
         let broker = websocket.broker();
+        script_ui.install_broker(broker.clone())?;
 
         let hosts = Arc::new(ProductionScriptHostFactory::new(
             tokio::runtime::Handle::current(),
@@ -214,7 +217,7 @@ impl ProductionRuntime {
             camera.clone(),
             screenshot_settings,
             notifications,
-            broker.clone(),
+            script_ui,
         ));
         let command_root = loaded.roots.data.join("Commands");
         std::fs::create_dir_all(&command_root)

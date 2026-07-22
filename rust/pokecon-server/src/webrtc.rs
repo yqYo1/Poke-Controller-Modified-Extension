@@ -1162,6 +1162,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "log-loopback".to_owned(),
                 target: LogTarget::Log,
+                operation: crate::api::LogOperation::Append,
             })
             .await
             .expect("server log send");

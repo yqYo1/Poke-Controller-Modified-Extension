@@ -25,9 +25,10 @@ use pokecon_server::api::{
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
-    NotificationTestResult, OperationResult, SerialControlRequest, SerialPort, SettingsChange,
-    SettingsPatchRequest, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
-    StateChangeCause, StatePatch, StateSnapshot, UpdateCheckResult,
+    NotificationTestResult, OperationResult, ScriptUiAction, ScriptUiActionResult,
+    SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest, SettingsReadValues,
+    SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot,
+    UpdateCheckResult,
 };
 use pokecon_server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -53,6 +54,7 @@ use crate::command_service::{
 };
 use crate::dynamic_host::StartupDynamicHost;
 use crate::profile_service::{ProfileService, ProfileSwitchResult};
+use crate::script_host::ScriptUiCoordinator;
 
 const RELEASES_URL: &str = "https://github.com/yqYo1/Poke-Controller-Modified-Extension/releases";
 const LATEST_RELEASE_URL: &str =
@@ -71,6 +73,7 @@ pub(crate) struct ApplicationBackendParts {
     pub realtime: Option<RealtimeConnectionConfig>,
     pub motion_jpeg: Option<MotionJpegFeed>,
     pub screenshot_mode: ScreenshotMode,
+    pub script_ui: ScriptUiCoordinator,
 }
 
 /// Concrete backend shared by the REST and WebSocket transports.
@@ -86,6 +89,7 @@ pub(crate) struct ApplicationBackend {
     realtime: Option<RealtimeConnectionConfig>,
     motion_jpeg: Option<MotionJpegFeed>,
     screenshot_mode: ScreenshotMode,
+    script_ui: ScriptUiCoordinator,
     arbiter: Arc<ParkingMutex<InputArbiter>>,
     mutation_gate: Mutex<()>,
     commands: OnceLock<Arc<CommandService>>,
@@ -118,6 +122,7 @@ impl ApplicationBackend {
             realtime: parts.realtime,
             motion_jpeg: parts.motion_jpeg,
             screenshot_mode: parts.screenshot_mode,
+            script_ui: parts.script_ui,
             arbiter,
             mutation_gate: Mutex::new(()),
             commands: OnceLock::new(),
@@ -539,6 +544,29 @@ impl RestBackend for ApplicationBackend {
                 "notification channel is unsupported on this platform",
             )),
         }
+    }
+
+    async fn script_ui_action(&self, request: ScriptUiAction) -> ApiResult<ScriptUiActionResult> {
+        let _gate = self.mutation_gate.lock().await;
+        let outcome = self
+            .script_ui
+            .apply_action(request)
+            .map_err(|error| script_ui_failure(&error))?;
+        if let Some(event) = outcome.tk_event {
+            self.commands()?
+                .dispatch_tk_event(&event)
+                .await
+                .map_err(|error| command_failure(&error))?;
+        }
+        if outcome.abort_command {
+            self.commands()?
+                .abort_from_script_ui()
+                .await
+                .map_err(|error| command_failure(&error))?;
+            self.commit_projection(StateChangeCause::Command, false, None)
+                .await?;
+        }
+        Ok(ScriptUiActionResult { accepted: true })
     }
 
     async fn control_dynamic_config(
@@ -1257,6 +1285,24 @@ fn command_failure(error: &CommandServiceError) -> ApiFailure {
         | CommandServiceError::ProfileSwitchGateNotHeld => profile_failure(),
         _ => backend_unavailable("command service operation failed"),
     }
+}
+
+fn script_ui_failure(error: &pokecon_worker::script::ScriptHostError) -> ApiFailure {
+    let (status, code) = match error.code.as_str() {
+        "StaleScriptUiGeneration" | "ScriptUiObjectNotFound" | "WorkerStopping" => (
+            ApiFailureStatus::Conflict,
+            ApiErrorCode::CommandStateConflict,
+        ),
+        "InvalidScriptUiAction" | "InvalidTkValue" => (
+            ApiFailureStatus::UnprocessableEntity,
+            ApiErrorCode::InvalidRequest,
+        ),
+        _ => (
+            ApiFailureStatus::InternalServerError,
+            ApiErrorCode::BackendUnavailable,
+        ),
+    };
+    ApiFailure::new(status, code, error.message.clone())
 }
 
 fn state_failure(error: pokecon_server::state::StateTransactionError) -> ApiFailure {

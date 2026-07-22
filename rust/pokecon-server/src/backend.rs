@@ -8,8 +8,8 @@ use crate::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
     DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
     NotificationTestRequest, NotificationTestResult, OperationResult, SavedScreenshot,
-    ScreenshotRequest, SerialControlRequest, SerialPort, SettingsPatchRequest, SettingsSnapshot,
-    UpdateCheckResult,
+    ScreenshotRequest, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
+    SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
 use crate::state::StateHub;
 
@@ -174,6 +174,14 @@ pub trait RestBackend: Send + Sync + 'static {
         &self,
         request: NotificationTestRequest,
     ) -> ApiResult<NotificationTestResult>;
+
+    async fn script_ui_action(&self, _request: ScriptUiAction) -> ApiResult<ScriptUiActionResult> {
+        Err(ApiFailure::new(
+            ApiFailureStatus::Conflict,
+            ApiErrorCode::BackendUnavailable,
+            "script UI is unavailable",
+        ))
+    }
 
     async fn control_dynamic_config(
         &self,

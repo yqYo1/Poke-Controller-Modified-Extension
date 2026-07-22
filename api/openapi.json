@@ -28,7 +28,8 @@
         },
         "required": [
           "code",
-          "message"
+          "message",
+          "fields"
         ],
         "type": "object"
       },
@@ -529,6 +530,9 @@
             ]
           }
         },
+        "required": [
+          "label"
+        ],
         "type": "object"
       },
       "CommandIdentity": {
@@ -746,13 +750,32 @@
         ],
         "type": "object"
       },
+      "GamepadButton": {
+        "enum": [
+          "A",
+          "B",
+          "X",
+          "Y",
+          "L",
+          "R",
+          "ZL",
+          "ZR",
+          "MINUS",
+          "PLUS",
+          "HOME",
+          "CAPTURE"
+        ],
+        "type": "string"
+      },
       "GamepadButtonInput": {
         "additionalProperties": false,
         "properties": {
           "button": {
-            "type": "string"
+            "$ref": "#/components/schemas/GamepadButton"
           },
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -770,14 +793,30 @@
         ],
         "type": "object"
       },
+      "GamepadHat": {
+        "enum": [
+          "UP",
+          "DOWN",
+          "LEFT",
+          "RIGHT",
+          "TOP_RIGHT",
+          "BTM_RIGHT",
+          "BTM_LEFT",
+          "TOP_LEFT",
+          "CENTER"
+        ],
+        "type": "string"
+      },
       "GamepadHatInput": {
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "hat": {
-            "type": "string"
+            "$ref": "#/components/schemas/GamepadHat"
           },
           "sequence": {
             "$ref": "#/components/schemas/DecimalString"
@@ -889,6 +928,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -921,6 +962,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -939,7 +982,8 @@
         },
         "required": [
           "generation",
-          "sequence"
+          "sequence",
+          "touch"
         ],
         "type": "object"
       },
@@ -1025,7 +1069,10 @@
           }
         },
         "required": [
-          "candidate"
+          "candidate",
+          "sdp_mid",
+          "sdp_mline_index",
+          "username_fragment"
         ],
         "type": "object"
       },
@@ -1040,6 +1087,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -1056,6 +1105,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           }
         },
@@ -1071,6 +1122,8 @@
             "$ref": "#/components/schemas/ButtonState"
           },
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "hat": {
@@ -1092,7 +1145,10 @@
             "$ref": "#/components/schemas/StickPosition"
           },
           "sequence": {
-            "$ref": "#/components/schemas/DecimalString"
+            "enum": [
+              "0"
+            ],
+            "type": "string"
           },
           "touch": {
             "oneOf": [
@@ -1113,7 +1169,8 @@
           "buttons",
           "hat",
           "left_stick",
-          "right_stick"
+          "right_stick",
+          "touch"
         ],
         "type": "object"
       },
@@ -1121,6 +1178,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "key": {
@@ -1202,6 +1261,9 @@
             ]
           }
         },
+        "required": [
+          "filename"
+        ],
         "type": "object"
       },
       "LauncherPath": {
@@ -1387,7 +1449,10 @@
               }
             },
             "required": [
-              "candidate"
+              "candidate",
+              "sdp_mid",
+              "sdp_mline_index",
+              "username_fragment"
             ],
             "type": "object"
           }
@@ -1404,6 +1469,8 @@
             "additionalProperties": false,
             "properties": {
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               },
               "sequence": {
@@ -1429,6 +1496,8 @@
             "additionalProperties": false,
             "properties": {
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               }
             },
@@ -1453,6 +1522,8 @@
                 "$ref": "#/components/schemas/ButtonState"
               },
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               },
               "hat": {
@@ -1474,7 +1545,10 @@
                 "$ref": "#/components/schemas/StickPosition"
               },
               "sequence": {
-                "$ref": "#/components/schemas/DecimalString"
+                "enum": [
+                  "0"
+                ],
+                "type": "string"
               },
               "touch": {
                 "oneOf": [
@@ -1495,7 +1569,8 @@
               "buttons",
               "hat",
               "left_stick",
-              "right_stick"
+              "right_stick",
+              "touch"
             ],
             "type": "object"
           }
@@ -1512,6 +1587,8 @@
             "additionalProperties": false,
             "properties": {
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               },
               "key": {
@@ -1577,6 +1654,8 @@
                 "$ref": "#/components/schemas/MouseButton"
               },
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               },
               "sequence": {
@@ -1619,6 +1698,8 @@
             "additionalProperties": false,
             "properties": {
               "generation": {
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$",
                 "type": "string"
               },
               "sequence": {
@@ -1760,6 +1841,8 @@
             "$ref": "#/components/schemas/MouseButton"
           },
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -1793,6 +1876,8 @@
         "additionalProperties": false,
         "properties": {
           "generation": {
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$",
             "type": "string"
           },
           "sequence": {
@@ -3755,6 +3840,7 @@
         },
         "required": [
           "revision",
+          "serial_port",
           "serial_baud_rate",
           "serial_connected",
           "camera_opened",
@@ -3763,10 +3849,13 @@
           "camera_device",
           "is_running",
           "command_state",
+          "current_command",
           "command_candidates",
           "tags",
           "active_profile",
+          "pending_profile",
           "available_profiles",
+          "last_input",
           "holding_buttons",
           "pid",
           "command_display_lists",
@@ -4093,6 +4182,7 @@
             },
             "required": [
               "revision",
+              "serial_port",
               "serial_baud_rate",
               "serial_connected",
               "camera_opened",
@@ -4101,10 +4191,13 @@
               "camera_device",
               "is_running",
               "command_state",
+              "current_command",
               "command_candidates",
               "tags",
               "active_profile",
+              "pending_profile",
               "available_profiles",
+              "last_input",
               "holding_buttons",
               "pid",
               "command_display_lists",
@@ -4222,6 +4315,9 @@
         "additionalProperties": false,
         "properties": {
           "pressed": {
+            "enum": [
+              true
+            ],
             "type": "boolean"
           },
           "x": {
@@ -4266,7 +4362,8 @@
         },
         "required": [
           "cause",
-          "state"
+          "state",
+          "settings"
         ],
         "type": "object"
       },
@@ -5058,6 +5155,16 @@
           "101": {
             "description": "WebSocket upgrade"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid WebSocket upgrade"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5067,6 +5174,16 @@
               }
             },
             "description": "Host or Origin rejected"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Connection identifier exhausted"
           }
         },
         "tags": [

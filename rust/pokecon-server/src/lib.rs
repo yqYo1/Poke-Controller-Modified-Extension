@@ -9,6 +9,7 @@ pub mod router;
 pub mod security;
 pub mod state;
 pub mod static_files;
+pub mod websocket;
 
 use std::io;
 use std::net::SocketAddr;

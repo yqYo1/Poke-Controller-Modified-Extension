@@ -234,7 +234,7 @@ export interface components {
     schemas: {
         ApiError: {
             code: components["schemas"]["ApiErrorCode"];
-            fields?: {
+            fields: {
                 [key: string]: string[];
             } | null;
             message: string;
@@ -321,7 +321,7 @@ export interface components {
             kind: "separator";
         });
         CommandDisplaySeparator: {
-            label?: string | null;
+            label: string | null;
         };
         CommandIdentity: {
             class_name: string;
@@ -373,15 +373,19 @@ export interface components {
         ErrorEnvelope: {
             error: components["schemas"]["ApiError"];
         };
+        /** @enum {string} */
+        GamepadButton: "A" | "B" | "X" | "Y" | "L" | "R" | "ZL" | "ZR" | "MINUS" | "PLUS" | "HOME" | "CAPTURE";
         GamepadButtonInput: {
-            button: string;
+            button: components["schemas"]["GamepadButton"];
             generation: string;
             sequence: components["schemas"]["DecimalString"];
             state: components["schemas"]["PressState"];
         };
+        /** @enum {string} */
+        GamepadHat: "UP" | "DOWN" | "LEFT" | "RIGHT" | "TOP_RIGHT" | "BTM_RIGHT" | "BTM_LEFT" | "TOP_LEFT" | "CENTER";
         GamepadHatInput: {
             generation: string;
-            hat: string;
+            hat: components["schemas"]["GamepadHat"];
             sequence: components["schemas"]["DecimalString"];
         };
         GamepadInput: (components["schemas"]["GamepadButtonInput"] & {
@@ -409,7 +413,7 @@ export interface components {
         GamepadTouchInput: {
             generation: string;
             sequence: components["schemas"]["DecimalString"];
-            touch?: null | components["schemas"]["TouchPoint"];
+            touch: null | components["schemas"]["TouchPoint"];
         };
         GenerateLauncherRequest: {
             copy_current: boolean;
@@ -425,10 +429,10 @@ export interface components {
         Hat: "up" | "down" | "left" | "right" | "up_right" | "up_left" | "down_right" | "down_left" | "neutral";
         IceCandidate: {
             candidate: string;
-            sdp_mid?: string | null;
+            sdp_mid: string | null;
             /** Format: int32 */
-            sdp_mline_index?: number | null;
-            username_fragment?: string | null;
+            sdp_mline_index: number | null;
+            username_fragment: string | null;
         };
         /** @enum {string} */
         ImageFormat: "png" | "jpeg";
@@ -447,8 +451,9 @@ export interface components {
             left_stick: components["schemas"]["StickPosition"];
             mouse_buttons: components["schemas"]["MouseButtons"];
             right_stick: components["schemas"]["StickPosition"];
-            sequence: components["schemas"]["DecimalString"];
-            touch?: null | components["schemas"]["TouchPoint"];
+            /** @enum {string} */
+            sequence: "0";
+            touch: null | components["schemas"]["TouchPoint"];
         };
         KeyboardInput: {
             generation: string;
@@ -464,7 +469,7 @@ export interface components {
             kind: "download";
         });
         LauncherDownload: {
-            filename?: string | null;
+            filename: string | null;
         };
         LauncherPath: {
             path: string;
@@ -496,10 +501,10 @@ export interface components {
         MessageData_IceCandidate: {
             data: {
                 candidate: string;
-                sdp_mid?: string | null;
+                sdp_mid: string | null;
                 /** Format: int32 */
-                sdp_mline_index?: number | null;
-                username_fragment?: string | null;
+                sdp_mline_index: number | null;
+                username_fragment: string | null;
             };
         };
         MessageData_InputApplied: {
@@ -522,8 +527,9 @@ export interface components {
                 left_stick: components["schemas"]["StickPosition"];
                 mouse_buttons: components["schemas"]["MouseButtons"];
                 right_stick: components["schemas"]["StickPosition"];
-                sequence: components["schemas"]["DecimalString"];
-                touch?: null | components["schemas"]["TouchPoint"];
+                /** @enum {string} */
+                sequence: "0";
+                touch: null | components["schemas"]["TouchPoint"];
             };
         };
         MessageData_KeyboardInput: {
@@ -1052,18 +1058,18 @@ export interface components {
                 [key: string]: components["schemas"]["CommandDisplayItem"][];
             };
             command_state: components["schemas"]["CommandState"];
-            current_command?: string | null;
+            current_command: string | null;
             holding_buttons: string[];
             is_running: boolean;
-            last_input?: string | null;
-            pending_profile?: string | null;
+            last_input: string | null;
+            pending_profile: string | null;
             /** Format: int32 */
             pid: number;
             revision: components["schemas"]["DecimalString"];
             /** Format: int32 */
             serial_baud_rate: number;
             serial_connected: boolean;
-            serial_port?: string | null;
+            serial_port: string | null;
             tags: string[];
         };
         /** @enum {string} */
@@ -1138,18 +1144,18 @@ export interface components {
                     [key: string]: components["schemas"]["CommandDisplayItem"][];
                 };
                 command_state: components["schemas"]["CommandState"];
-                current_command?: string | null;
+                current_command: string | null;
                 holding_buttons: string[];
                 is_running: boolean;
-                last_input?: string | null;
-                pending_profile?: string | null;
+                last_input: string | null;
+                pending_profile: string | null;
                 /** Format: int32 */
                 pid: number;
                 revision: components["schemas"]["DecimalString"];
                 /** Format: int32 */
                 serial_baud_rate: number;
                 serial_connected: boolean;
-                serial_port?: string | null;
+                serial_port: string | null;
                 tags: string[];
             };
         };
@@ -1179,7 +1185,8 @@ export interface components {
             }[];
         };
         TouchPoint: {
-            pressed: boolean;
+            /** @enum {boolean} */
+            pressed: true;
             /** Format: int32 */
             x: number;
             /** Format: int32 */
@@ -1187,7 +1194,7 @@ export interface components {
         };
         UiStateChange: {
             cause: components["schemas"]["StateChangeCause"];
-            settings?: null | components["schemas"]["SettingsChange"];
+            settings: null | components["schemas"]["SettingsChange"];
             state: components["schemas"]["StatePatch"];
         };
         UpdateCheckResult: {
@@ -1836,8 +1843,26 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Invalid WebSocket upgrade */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             /** @description Host or Origin rejected */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Connection identifier exhausted */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

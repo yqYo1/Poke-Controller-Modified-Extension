@@ -9,15 +9,16 @@ use crate::api::{
     ApiError, ApiErrorCode, ButtonState, CameraDevice, CameraSelector, ClientMessage,
     CommandControlRequest, CommandDisplayItem, CommandIdentity, CommandInfo, CommandState,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, EmptyRequest,
-    ErrorEnvelope, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult, Hat,
-    IceCandidate, ImageFormat, InputApplied, InputGeneration, InputSnapshot, KeyboardInput,
-    LauncherDestination, LogData, LogLevel, LogTarget, MessageData, MouseButton, MouseButtons,
-    MouseInput, MouseStickInput, Nonce, NormalizedRegion, NotificationTestRequest,
-    NotificationTestResult, OperationResult, PressState, RevisionedStateChange, SavedScreenshot,
-    ScreenshotRequest, SerialControlRequest, SerialData, SerialEncoding, SerialPort, ServerMessage,
-    SessionDescription, SettingsChange, SettingsPatchRequest, SettingsReadValues, SettingsSnapshot,
-    SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition,
-    Success, TouchPoint, UiStateChange, UpdateCheckResult,
+    ErrorEnvelope, GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest,
+    GenerateLauncherResult, Hat, IceCandidate, ImageFormat, InputApplied, InputGeneration,
+    InputSnapshot, KeyboardInput, LauncherDestination, LogData, LogLevel, LogTarget, MessageData,
+    MouseButton, MouseButtons, MouseInput, MouseStickInput, Nonce, NormalizedRegion,
+    NotificationTestRequest, NotificationTestResult, OperationResult, PressState,
+    RevisionedStateChange, SavedScreenshot, ScreenshotRequest, SerialControlRequest, SerialData,
+    SerialEncoding, SerialPort, ServerMessage, SessionDescription, SettingsChange,
+    SettingsPatchRequest, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
+    StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition, Success, TouchPoint,
+    UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -45,6 +46,8 @@ use crate::api::{
         DynamicLanguage,
         EmptyRequest,
         ErrorEnvelope,
+        GamepadButton,
+        GamepadHat,
         GamepadInput,
         GenerateLauncherRequest,
         GenerateLauncherResult,
@@ -431,5 +434,51 @@ mod tests {
                 Some(&property.into())
             );
         }
+    }
+
+    #[test]
+    fn required_nullable_and_literal_input_contracts_are_preserved() {
+        let document = document().unwrap();
+        for (schema, fields) in [
+            ("ApiError", &["fields"][..]),
+            ("CommandDisplaySeparator", &["label"][..]),
+            (
+                "StateSnapshot",
+                &[
+                    "serial_port",
+                    "current_command",
+                    "pending_profile",
+                    "last_input",
+                ][..],
+            ),
+            ("UiStateChange", &["settings"][..]),
+            ("LauncherDownload", &["filename"][..]),
+            (
+                "IceCandidate",
+                &["sdp_mid", "sdp_mline_index", "username_fragment"][..],
+            ),
+            ("InputSnapshot", &["touch"][..]),
+            ("GamepadTouchInput", &["touch"][..]),
+        ] {
+            let required = document
+                .pointer(&format!("/components/schemas/{schema}/required"))
+                .and_then(serde_json::Value::as_array)
+                .unwrap();
+            for field in fields {
+                assert!(
+                    required.iter().any(|value| value == field),
+                    "{schema}.{field}"
+                );
+            }
+        }
+
+        assert_eq!(
+            document.pointer("/components/schemas/InputSnapshot/properties/sequence/enum"),
+            Some(&serde_json::json!(["0"]))
+        );
+        assert_eq!(
+            document.pointer("/components/schemas/TouchPoint/properties/pressed/enum"),
+            Some(&serde_json::json!([true]))
+        );
     }
 }

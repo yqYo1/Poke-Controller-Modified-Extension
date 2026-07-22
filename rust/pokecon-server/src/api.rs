@@ -76,6 +76,89 @@ impl<'de> Deserialize<'de> for DecimalString {
 #[error("value must be a canonical non-negative decimal string")]
 pub struct DecimalStringError;
 
+fn deserialize_input_generation<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let generation = String::deserialize(deserializer)?;
+    if generation.is_empty() || !generation.is_ascii() {
+        return Err(D::Error::custom(
+            "input generation must be a non-empty ASCII string",
+        ));
+    }
+    Ok(generation)
+}
+
+fn deserialize_required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
+}
+
+fn deserialize_zero_sequence<'de, D>(deserializer: D) -> Result<DecimalString, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let sequence = DecimalString::deserialize(deserializer)?;
+    if sequence != DecimalString::zero() {
+        return Err(D::Error::custom(
+            "initial input snapshot sequence must be zero",
+        ));
+    }
+    Ok(sequence)
+}
+
+fn deserialize_pressed_touch<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let pressed = bool::deserialize(deserializer)?;
+    if !pressed {
+        return Err(D::Error::custom(
+            "a present touch point must be pressed; use null to release",
+        ));
+    }
+    Ok(pressed)
+}
+
+fn deserialize_touch_x<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let x = u16::deserialize(deserializer)?;
+    if x > 319 {
+        return Err(D::Error::custom("touch x must be between 0 and 319"));
+    }
+    Ok(x)
+}
+
+fn deserialize_touch_y<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let y = u16::deserialize(deserializer)?;
+    if y > 239 {
+        return Err(D::Error::custom("touch y must be between 0 and 239"));
+    }
+    Ok(y)
+}
+
+fn pressed_touch_schema() -> utoipa::openapi::schema::Object {
+    utoipa::openapi::schema::ObjectBuilder::new()
+        .schema_type(utoipa::openapi::schema::Type::Boolean)
+        .enum_values(Some([true]))
+        .build()
+}
+
+fn zero_sequence_schema() -> utoipa::openapi::schema::Object {
+    utoipa::openapi::schema::ObjectBuilder::new()
+        .schema_type(utoipa::openapi::schema::Type::String)
+        .enum_values(Some(["0"]))
+        .build()
+}
+
 /// Common successful JSON envelope.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -124,6 +207,8 @@ pub enum ApiErrorCode {
 pub struct ApiError {
     pub code: ApiErrorCode,
     pub message: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub fields: Option<BTreeMap<String, Vec<String>>>,
 }
 
@@ -189,6 +274,8 @@ pub struct CommandDisplayCommand {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CommandDisplaySeparator {
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub label: Option<String>,
 }
 
@@ -232,6 +319,8 @@ pub struct OperationResult {
 #[allow(clippy::struct_excessive_bools)] // The state wire contract has explicit booleans.
 pub struct StateSnapshot {
     pub revision: DecimalString,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub serial_port: Option<String>,
     pub serial_baud_rate: u32,
     pub serial_connected: bool,
@@ -241,12 +330,18 @@ pub struct StateSnapshot {
     pub camera_device: CameraSelector,
     pub is_running: bool,
     pub command_state: CommandState,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub current_command: Option<String>,
     pub command_candidates: Vec<CommandInfo>,
     pub tags: Vec<String>,
     pub active_profile: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub pending_profile: Option<String>,
     pub available_profiles: Vec<String>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub last_input: Option<String>,
     pub holding_buttons: Vec<String>,
     pub pid: u32,
@@ -328,6 +423,8 @@ pub enum StateChangeCause {
 pub struct UiStateChange {
     pub cause: StateChangeCause,
     pub state: StatePatch,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub settings: Option<SettingsChange>,
 }
 
@@ -495,6 +592,8 @@ pub struct LauncherPath {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LauncherDownload {
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub filename: Option<String>,
 }
 
@@ -574,8 +673,14 @@ pub struct SessionDescription {
 #[serde(deny_unknown_fields)]
 pub struct IceCandidate {
     pub candidate: String,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub sdp_mid: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub sdp_mline_index: Option<u16>,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub username_fragment: Option<String>,
 }
 
@@ -588,12 +693,16 @@ pub struct Nonce {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InputGeneration {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InputApplied {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
 }
@@ -650,17 +759,25 @@ pub struct StickPosition {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TouchPoint {
+    #[serde(deserialize_with = "deserialize_touch_x")]
     #[schema(maximum = 319)]
     pub x: u16,
+    #[serde(deserialize_with = "deserialize_touch_y")]
     #[schema(maximum = 239)]
     pub y: u16,
+    #[serde(deserialize_with = "deserialize_pressed_touch")]
+    #[schema(schema_with = pressed_touch_schema)]
     pub pressed: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InputSnapshot {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
+    #[serde(deserialize_with = "deserialize_zero_sequence")]
+    #[schema(schema_with = zero_sequence_schema)]
     pub sequence: DecimalString,
     pub keyboard_keys: Vec<String>,
     pub mouse_buttons: MouseButtons,
@@ -668,6 +785,8 @@ pub struct InputSnapshot {
     pub hat: Hat,
     pub left_stick: StickPosition,
     pub right_stick: StickPosition,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub touch: Option<TouchPoint>,
 }
 
@@ -689,6 +808,8 @@ pub enum StickName {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct KeyboardInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
     pub key: String,
@@ -698,6 +819,8 @@ pub struct KeyboardInput {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MouseStickInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
     pub stick: StickName,
@@ -716,6 +839,8 @@ pub enum MouseButton {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MouseInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
     pub button: MouseButton,
@@ -733,18 +858,39 @@ pub enum GamepadInput {
     Touch(GamepadTouchInput),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum GamepadButton {
+    A,
+    B,
+    X,
+    Y,
+    L,
+    R,
+    Zl,
+    Zr,
+    Minus,
+    Plus,
+    Home,
+    Capture,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GamepadButtonInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
-    pub button: String,
+    pub button: GamepadButton,
     pub state: PressState,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GamepadStickInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
     pub stick: StickName,
@@ -752,19 +898,47 @@ pub struct GamepadStickInput {
     pub y: u8,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+pub enum GamepadHat {
+    #[serde(rename = "UP")]
+    Up,
+    #[serde(rename = "DOWN")]
+    Down,
+    #[serde(rename = "LEFT")]
+    Left,
+    #[serde(rename = "RIGHT")]
+    Right,
+    #[serde(rename = "TOP_RIGHT")]
+    TopRight,
+    #[serde(rename = "BTM_RIGHT")]
+    BottomRight,
+    #[serde(rename = "BTM_LEFT")]
+    BottomLeft,
+    #[serde(rename = "TOP_LEFT")]
+    TopLeft,
+    #[serde(rename = "CENTER")]
+    Center,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GamepadHatInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
-    pub hat: String,
+    pub hat: GamepadHat,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GamepadTouchInput {
+    #[serde(deserialize_with = "deserialize_input_generation")]
+    #[schema(min_length = 1, pattern = r"^[\x00-\x7F]+$")]
     pub generation: String,
     pub sequence: DecimalString,
+    #[serde(deserialize_with = "deserialize_required_option")]
+    #[schema(required = true)]
     pub touch: Option<TouchPoint>,
 }
 
@@ -832,7 +1006,7 @@ pub enum ClientMessage {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::{
         ClientMessage, CommandControlRequest, DecimalString, DynamicConfigControlRequest,
@@ -909,6 +1083,79 @@ mod tests {
 
         let invalid = json!({"type": "ping", "data": {"nonce": "n"}, "revision": "1"});
         assert!(serde_json::from_value::<ServerMessage>(invalid).is_err());
+
+        let invalid = json!({
+            "type": "gamepad_input",
+            "data": {
+                "kind": "button",
+                "generation": "g",
+                "sequence": "1",
+                "button": "LCLICK",
+                "state": "pressed"
+            }
+        });
+        assert!(serde_json::from_value::<ClientMessage>(invalid).is_err());
+    }
+
+    #[test]
+    fn input_wire_constraints_are_enforced_before_dispatch() {
+        let snapshot = |generation: &str, sequence: &str, touch: serde_json::Value| {
+            json!({
+                "type": "input.snapshot",
+                "data": {
+                    "generation": generation,
+                    "sequence": sequence,
+                    "keyboard_keys": [],
+                    "mouse_buttons": {"left": false, "right": false, "middle": false},
+                    "buttons": {
+                        "a": false, "b": false, "x": false, "y": false,
+                        "l": false, "r": false, "zl": false, "zr": false,
+                        "lclick": false, "rclick": false, "plus": false, "minus": false,
+                        "home": false, "capture": false
+                    },
+                    "hat": "neutral",
+                    "left_stick": {"x": 128, "y": 128},
+                    "right_stick": {"x": 128, "y": 128},
+                    "touch": touch
+                }
+            })
+        };
+
+        assert!(
+            serde_json::from_value::<ClientMessage>(snapshot("generation-1", "0", Value::Null))
+                .is_ok()
+        );
+        assert!(serde_json::from_value::<ClientMessage>(snapshot("", "0", Value::Null)).is_err());
+        assert!(
+            serde_json::from_value::<ClientMessage>(snapshot("世代", "0", Value::Null)).is_err()
+        );
+        assert!(
+            serde_json::from_value::<ClientMessage>(snapshot("generation-1", "1", Value::Null))
+                .is_err()
+        );
+        let mut missing_touch = snapshot("generation-1", "0", Value::Null);
+        missing_touch["data"]
+            .as_object_mut()
+            .expect("snapshot data")
+            .remove("touch");
+        assert!(serde_json::from_value::<ClientMessage>(missing_touch).is_err());
+        assert!(
+            serde_json::from_value::<ClientMessage>(snapshot(
+                "generation-1",
+                "0",
+                json!({"x": 0, "y": 0, "pressed": false})
+            ))
+            .is_err()
+        );
+        for touch in [
+            json!({"x": 320, "y": 0, "pressed": true}),
+            json!({"x": 0, "y": 240, "pressed": true}),
+        ] {
+            assert!(
+                serde_json::from_value::<ClientMessage>(snapshot("generation-1", "0", touch))
+                    .is_err()
+            );
+        }
     }
 
     #[test]

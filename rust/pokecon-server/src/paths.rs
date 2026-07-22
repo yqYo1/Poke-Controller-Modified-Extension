@@ -212,7 +212,9 @@ pub fn check_update() {}
     tag = "websocket",
     responses(
         (status = 101, description = "WebSocket upgrade"),
-        (status = 403, description = "Host or Origin rejected", body = ErrorEnvelope)
+        (status = 400, description = "Invalid WebSocket upgrade", body = ErrorEnvelope),
+        (status = 403, description = "Host or Origin rejected", body = ErrorEnvelope),
+        (status = 500, description = "Connection identifier exhausted", body = ErrorEnvelope)
     )
 )]
 pub fn websocket() {}

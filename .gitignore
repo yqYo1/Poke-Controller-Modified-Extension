@@ -200,6 +200,7 @@ result-*
 !/web/src/lib/
 !/web/src/lib/generated/
 !/web/src/lib/generated/*.ts
+!/web/src/lib/generated/*.json
 !/web/src/lib/**/*.ts
 !/web/src/lib/**/*.svelte
 !/web/src/lib/**/*.svelte.ts

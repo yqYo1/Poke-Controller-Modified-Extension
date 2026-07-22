@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 axum.workspace = true
 clap.workspace = true
+mime_guess.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 serde.workspace = true
 serde_json.workspace = true
@@ -16,6 +17,10 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 utoipa.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tower.workspace = true
 
 [lints]
 workspace = true

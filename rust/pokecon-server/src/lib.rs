@@ -3,7 +3,10 @@
 pub mod api;
 pub mod openapi;
 pub mod paths;
+pub mod router;
+pub mod security;
 pub mod state;
+pub mod static_files;
 
 use std::io;
 use std::net::SocketAddr;
@@ -17,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 pub struct BoundServer {
     listener: TcpListener,
     local_addr: SocketAddr,
+    router: Router,
 }
 
 impl BoundServer {
@@ -26,11 +30,21 @@ impl BoundServer {
     ///
     /// Returns an I/O error when the requested address cannot be bound.
     pub async fn bind(address: SocketAddr) -> io::Result<Self> {
+        Self::bind_with_router(address, Router::new()).await
+    }
+
+    /// Binds a fully constructed router without beginning to serve it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the requested address cannot be bound.
+    pub async fn bind_with_router(address: SocketAddr, router: Router) -> io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
         Ok(Self {
             listener,
             local_addr,
+            router,
         })
     }
 
@@ -40,13 +54,13 @@ impl BoundServer {
         self.local_addr
     }
 
-    /// Serves the empty phase-two router until cancellation.
+    /// Serves the configured router until cancellation.
     ///
     /// # Errors
     ///
     /// Returns an I/O error if axum cannot serve the bound listener.
     pub async fn serve(self, shutdown: CancellationToken) -> io::Result<()> {
-        axum::serve(self.listener, Router::new())
+        axum::serve(self.listener, self.router)
             .with_graceful_shutdown(shutdown.cancelled_owned())
             .await
     }

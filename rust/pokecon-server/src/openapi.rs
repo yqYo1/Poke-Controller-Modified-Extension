@@ -480,5 +480,17 @@ mod tests {
             document.pointer("/components/schemas/TouchPoint/properties/pressed/enum"),
             Some(&serde_json::json!([true]))
         );
+        for pointer in [
+            "/components/schemas/StickPosition/properties/x/maximum",
+            "/components/schemas/StickPosition/properties/y/maximum",
+            "/components/schemas/MouseStickInput/properties/x/maximum",
+            "/components/schemas/MouseStickInput/properties/y/maximum",
+            "/components/schemas/GamepadStickInput/properties/x/maximum",
+            "/components/schemas/GamepadStickInput/properties/y/maximum",
+            "/components/schemas/MessageData_MouseStickInput/properties/data/properties/x/maximum",
+            "/components/schemas/MessageData_MouseStickInput/properties/data/properties/y/maximum",
+        ] {
+            assert_eq!(document.pointer(pointer), Some(&serde_json::json!(255)));
+        }
     }
 }

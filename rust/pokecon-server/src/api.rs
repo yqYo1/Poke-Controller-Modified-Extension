@@ -752,7 +752,9 @@ pub enum Hat {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StickPosition {
+    #[schema(maximum = 255)]
     pub x: u8,
+    #[schema(maximum = 255)]
     pub y: u8,
 }
 
@@ -824,7 +826,9 @@ pub struct MouseStickInput {
     pub generation: String,
     pub sequence: DecimalString,
     pub stick: StickName,
+    #[schema(maximum = 255)]
     pub x: u8,
+    #[schema(maximum = 255)]
     pub y: u8,
 }
 
@@ -894,7 +898,9 @@ pub struct GamepadStickInput {
     pub generation: String,
     pub sequence: DecimalString,
     pub stick: StickName,
+    #[schema(maximum = 255)]
     pub x: u8,
+    #[schema(maximum = 255)]
     pub y: u8,
 }
 

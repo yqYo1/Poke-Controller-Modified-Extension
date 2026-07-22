@@ -940,11 +940,13 @@
           },
           "x": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           },
           "y": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           }
@@ -1710,11 +1712,13 @@
               },
               "x": {
                 "format": "int32",
+                "maximum": 255,
                 "minimum": 0,
                 "type": "integer"
               },
               "y": {
                 "format": "int32",
+                "maximum": 255,
                 "minimum": 0,
                 "type": "integer"
               }
@@ -1888,11 +1892,13 @@
           },
           "x": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           },
           "y": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           }
@@ -3875,11 +3881,13 @@
         "properties": {
           "x": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           },
           "y": {
             "format": "int32",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           }

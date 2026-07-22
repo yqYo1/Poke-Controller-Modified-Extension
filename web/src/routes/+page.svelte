@@ -8,6 +8,7 @@
 
   import { BackendActions } from '$lib/actions';
   import CameraTab from '$lib/components/CameraTab.svelte';
+  import ManualTab from '$lib/components/ManualTab.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
   import SerialTab from '$lib/components/SerialTab.svelte';
   import { ApplicationRuntime, type RuntimeView } from '$lib/runtime';
@@ -126,9 +127,7 @@
         {:else if activeTab === 'serial'}
           <SerialTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
         {:else if activeTab === 'manual'}
-          <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Manual Control</p>
-          <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Input control' : '入力制御'}</h2>
-          <p class="mt-4 text-slate-400">{view.input.ready ? `${view.input.route ?? 'unknown'} / ${view.input.generation ?? ''}` : language === 'en' ? 'Waiting for an input generation' : '入力世代を待機中'}</p>
+          <ManualTab {runtime} {view} />
         {:else if activeTab === 'commands'}
           <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Commands</p>
           <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Command workspace' : 'コマンドワークスペース'}</h2>

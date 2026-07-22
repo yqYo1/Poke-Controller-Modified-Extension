@@ -273,6 +273,10 @@ export class ApplicationRuntime {
     this.updateView({ output1: [], output2: [] });
   }
 
+  clearOutput(output: 1 | 2): void {
+    this.updateView(output === 1 ? { output1: [] } : { output2: [] });
+  }
+
   clearSerial(): void {
     this.updateView({ serial: [] });
   }

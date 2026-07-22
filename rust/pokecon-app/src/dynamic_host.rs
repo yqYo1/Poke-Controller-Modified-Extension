@@ -20,6 +20,8 @@ use pokecon_dynamic::{
     CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
     merge_state_change,
 };
+use pokecon_settings::lock::LockManager;
+use pokecon_settings::persistence::TomlStore;
 use pokecon_settings::pipeline::{
     LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline,
 };
@@ -217,6 +219,7 @@ pub struct StartupDynamicHost {
     inner: Mutex<StartupHostState>,
     controller: Arc<DynamicControllerSafety>,
     command_recompute: watch::Sender<u64>,
+    runtime_changes: watch::Sender<u64>,
     profile_switching: AtomicBool,
     command_service: OnceLock<Weak<CommandService>>,
 }
@@ -232,6 +235,7 @@ impl StartupDynamicHost {
     pub fn new(request: PipelineRequest, loaded: LoadedSettings) -> Result<Self, DynamicHostError> {
         let public_state = startup_state(&loaded)?;
         let (command_recompute, _receiver) = watch::channel(0);
+        let (runtime_changes, _receiver) = watch::channel(0);
         Ok(Self {
             inner: Mutex::new(StartupHostState {
                 dynamic_values: request.dynamic_values.clone(),
@@ -249,6 +253,7 @@ impl StartupDynamicHost {
             }),
             controller: Arc::new(DynamicControllerSafety::new()),
             command_recompute,
+            runtime_changes,
             profile_switching: AtomicBool::new(false),
             command_service: OnceLock::new(),
         })
@@ -272,6 +277,8 @@ impl StartupDynamicHost {
         inner.loaded = loaded.clone();
         inner.public_state = public_state;
         inner.startup_complete = true;
+        drop(inner);
+        self.notify_runtime_change();
         Ok(loaded)
     }
 
@@ -317,6 +324,34 @@ impl StartupDynamicHost {
         self.command_recompute.subscribe()
     }
 
+    /// Subscribes to coalesced changes of the committed settings/state view.
+    /// Staged command-cache values are deliberately excluded.
+    #[must_use]
+    pub fn subscribe_runtime_changes(&self) -> watch::Receiver<u64> {
+        self.runtime_changes.subscribe()
+    }
+
+    /// Returns only the committed UI-visible state. Dynamic callback staging
+    /// remains private until a complete command-cache generation is published.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fixed encoding error if controller ownership cannot be
+    /// projected into the public state map.
+    pub fn public_state_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
+        let mut snapshot = self.inner.lock().public_state.clone();
+        snapshot.insert(
+            "holding_buttons".to_owned(),
+            holding_buttons(self.controller.state()),
+        );
+        Ok(snapshot)
+    }
+
+    fn notify_runtime_change(&self) {
+        self.runtime_changes
+            .send_modify(|generation| *generation = generation.saturating_add(1));
+    }
+
     /// Starts an isolated `ScriptLoadPre` staging generation. Dynamic state
     /// reads and writes see this generation while the last completed UI cache
     /// remains unchanged.
@@ -346,6 +381,8 @@ impl StartupDynamicHost {
             command_candidates: candidates,
             tags: Vec::new(),
         });
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -391,6 +428,8 @@ impl StartupDynamicHost {
             "command_display_cache_loading".to_owned(),
             Value::Bool(false),
         );
+        drop(inner);
+        self.notify_runtime_change();
     }
 
     /// Atomically publishes all command-visible fields from one completed
@@ -432,6 +471,8 @@ impl StartupDynamicHost {
             Value::Bool(false),
         );
         inner.script_load = None;
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -464,6 +505,8 @@ impl StartupDynamicHost {
             "current_command".to_owned(),
             Value::String(current_command.to_owned()),
         );
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -501,6 +544,8 @@ impl StartupDynamicHost {
             "command_display_cache_loading".to_owned(),
             Value::Bool(false),
         );
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -548,6 +593,8 @@ impl StartupDynamicHost {
             runtime_dynamic_values,
             public_state,
         });
+        drop(inner);
+        self.notify_runtime_change();
         Ok(settings)
     }
 
@@ -559,6 +606,8 @@ impl StartupDynamicHost {
         inner
             .public_state
             .insert("pending_profile".to_owned(), Value::Null);
+        drop(inner);
+        self.notify_runtime_change();
     }
 
     /// Commits a previously validated target after the old worker has been
@@ -573,6 +622,7 @@ impl StartupDynamicHost {
         let prepared = inner.prepared_profile.take().ok_or_else(|| {
             DynamicHostError::new("NoProfileSwitch", "no profile switch is prepared")
         })?;
+        persist_active_profile(&inner.loaded, &prepared.target)?;
         let mut public_state = prepared.public_state;
         for name in RUNTIME_STATE_FIELDS {
             if let Some(value) = inner.public_state.get(*name) {
@@ -587,7 +637,10 @@ impl StartupDynamicHost {
         }
         inner.runtime_dynamic_values = prepared.runtime_dynamic_values;
         inner.public_state = public_state;
-        Ok(inner.loaded.clone())
+        let loaded = inner.loaded.clone();
+        drop(inner);
+        self.notify_runtime_change();
+        Ok(loaded)
     }
 
     /// Closes every mutating host boundary and immediately releases dynamic
@@ -602,6 +655,7 @@ impl StartupDynamicHost {
         drop(inner);
         self.finish_profile_switch_gate();
         self.controller.force_release();
+        self.notify_runtime_change();
     }
 
     pub(crate) fn try_begin_profile_switch_gate(&self) -> Result<(), DynamicHostError> {
@@ -716,7 +770,9 @@ impl DynamicHost for StartupDynamicHost {
         &self,
         changes: &BTreeMap<String, Value>,
     ) -> Result<BTreeMap<String, Value>, DynamicHostError> {
-        self.apply_startup_settings(changes)
+        let settings = self.apply_startup_settings(changes)?;
+        self.notify_runtime_change();
+        Ok(settings)
     }
 
     fn state_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
@@ -746,6 +802,8 @@ impl DynamicHost for StartupDynamicHost {
         let mut inner = self.inner.lock();
         ensure_running(&inner)?;
         store_writable_state(&mut inner, name, value)?;
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -762,6 +820,8 @@ impl DynamicHost for StartupDynamicHost {
         let merged = merge_state_change(&before, &current, &value)?;
         let merged = normalize_writable_state(name, merged)?;
         store_writable_state(&mut inner, name, merged)?;
+        drop(inner);
+        self.notify_runtime_change();
         Ok(())
     }
 
@@ -824,12 +884,16 @@ impl DynamicHost for StartupDynamicHost {
 
     fn controller_update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
         ensure_running(&self.inner.lock())?;
-        self.controller.update(update)
+        self.controller.update(update)?;
+        self.notify_runtime_change();
+        Ok(())
     }
 
     fn controller_reset(&self) -> Result<(), DynamicHostError> {
         ensure_running(&self.inner.lock())?;
-        self.controller.reset()
+        self.controller.reset()?;
+        self.notify_runtime_change();
+        Ok(())
     }
 
     fn record_diagnostic(&self, diagnostic: Diagnostic) {
@@ -1085,6 +1149,39 @@ fn validate_existing_profile(loaded: &LoadedSettings, name: &str) -> Result<(), 
     Ok(())
 }
 
+fn persist_active_profile(loaded: &LoadedSettings, target: &str) -> Result<(), DynamicHostError> {
+    let setting = loaded
+        .settings
+        .registry()
+        .settings
+        .iter()
+        .find(|setting| setting.id == "active_profile")
+        .ok_or_else(|| {
+            DynamicHostError::new(
+                "MissingSetting",
+                "active_profile is missing from the canonical registry",
+            )
+        })?;
+    let toml_path = setting.surfaces.toml.name.clone().ok_or_else(|| {
+        DynamicHostError::new(
+            "ProfilePersistenceFailed",
+            "active_profile has no global TOML projection",
+        )
+    })?;
+    TomlStore::new(LockManager::new(&loaded.roots))
+        .update(
+            &loaded.global_settings_path,
+            &[(toml_path, Value::String(target.to_owned()))],
+        )
+        .map(|_document| ())
+        .map_err(|_| {
+            DynamicHostError::new(
+                "ProfilePersistenceFailed",
+                "active profile could not be saved",
+            )
+        })
+}
+
 fn list_profiles(loaded: &LoadedSettings) -> Result<Vec<String>, DynamicHostError> {
     let directory = loaded.roots.config.join("profiles");
     let entries = fs::read_dir(&directory).map_err(|error| {
@@ -1272,7 +1369,9 @@ mod tests {
     #[tokio::test]
     async fn profile_state_and_controller_are_rust_owned() {
         let (_temporary, request, loaded) = fixture();
+        let global_settings = loaded.global_settings_path.clone();
         let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
+        let mut runtime_changes = host.subscribe_runtime_changes();
         assert_eq!(host.profile_list().unwrap(), ["Other", "default"]);
         host.finish_startup().expect("startup must finalize");
         host.profile_switch_begin("Other", &BTreeMap::new())
@@ -1281,6 +1380,15 @@ mod tests {
         host.profile_switch_commit().await.unwrap();
         host.profile_switch_end().await.unwrap();
         assert_eq!(host.profile_current().unwrap(), "Other");
+        assert!(
+            std::fs::read_to_string(global_settings)
+                .expect("active profile must be persisted")
+                .contains("active_profile = \"Other\"")
+        );
+        runtime_changes
+            .changed()
+            .await
+            .expect("committed runtime changes must be observable");
         assert!(
             host.profile_switch_begin("Missing", &BTreeMap::new())
                 .await
@@ -1389,6 +1497,10 @@ mod tests {
             }]),
         )
         .expect("ScriptLoadPre mutation must be staged");
+        assert_eq!(
+            host.public_state_snapshot().unwrap()["command_candidates"],
+            json!([])
+        );
         let (candidates, _tags) = host.staged_script_load().unwrap();
         host.set_staged_script_load(candidates.clone(), vec!["-".into(), "dynamic".into()])
             .expect("final tags must be staged");

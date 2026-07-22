@@ -151,6 +151,38 @@ impl SettingsService {
         public_snapshot(&self.loaded.settings, &self.current)
     }
 
+    /// Returns the complete REST-safe snapshot represented by this service.
+    ///
+    /// The revision is local to the settings service. Application composition
+    /// layers that share a process-wide revision with other state domains must
+    /// replace it with the revision produced by their common transaction gate.
+    #[must_use]
+    pub fn public_response(&self) -> PatchResponse {
+        self.response(BTreeMap::new())
+    }
+
+    /// Adopts a profile or dynamic-runtime snapshot that was committed by the
+    /// application host outside the `OpenAPI` PATCH path.
+    ///
+    /// Startup-only values retain the process-start value while all other
+    /// current and saved values switch atomically to the supplied generation.
+    pub fn adopt_loaded(&mut self, loaded: LoadedSettings) {
+        let previous_current = self.current.clone();
+        let saved = loaded.settings.values().clone();
+        let mut current = saved.clone();
+        for setting in &loaded.settings.registry().settings {
+            if setting.mutability == Mutability::StartupOnly
+                && let Some(previous) = previous_current.get(&setting.id)
+            {
+                current.insert(setting.id.clone(), previous.clone());
+            }
+        }
+        self.loaded = loaded;
+        self.saved = saved;
+        self.current = current;
+        self.bump_revision();
+    }
+
     /// Acquires the non-recursive profile-switch gate for an external switch
     /// transaction. The guard is useful to reject concurrent UI/OpenAPI writes
     /// rather than queueing them against the wrong profile.
@@ -738,6 +770,30 @@ mod tests {
         assert_eq!(response.pending_restart_values["server.port"], json!(9000));
         assert!(response.restart_required);
         assert_eq!(service.revision(), 2);
+    }
+
+    #[test]
+    fn externally_committed_profile_snapshot_preserves_process_start_values() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let mut service = service(&temp, RecordingApplier::default());
+        patch(
+            &mut service,
+            BTreeMap::from([("server.port".to_owned(), json!(9000))]),
+        );
+        std::fs::create_dir_all(service.loaded.roots.config.join("profiles/Second"))
+            .expect("target profile must exist");
+        let loaded = service
+            .loaded
+            .switch_profile_in_memory("Second")
+            .expect("target profile must resolve");
+
+        service.adopt_loaded(loaded);
+
+        let response = service.public_response();
+        assert_eq!(service.active_profile(), "Second");
+        assert_eq!(response.values["active_profile"], json!("Second"));
+        assert_eq!(response.values["server.port"], json!(9000));
+        assert_eq!(response.pending_restart_values["server.port"], json!(9000));
     }
 
     #[test]

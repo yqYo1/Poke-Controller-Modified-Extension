@@ -10,6 +10,8 @@
   import CameraTab from '$lib/components/CameraTab.svelte';
   import CommandsTab from '$lib/components/CommandsTab.svelte';
   import ManualTab from '$lib/components/ManualTab.svelte';
+  import NotificationsTab from '$lib/components/NotificationsTab.svelte';
+  import OtherTab from '$lib/components/OtherTab.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
   import SerialTab from '$lib/components/SerialTab.svelte';
   import { ApplicationRuntime, type RuntimeView } from '$lib/runtime';
@@ -132,12 +134,9 @@
         {:else if activeTab === 'commands'}
           <CommandsTab {actions} {runtime} {view} />
         {:else if activeTab === 'notifications'}
-          <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Notifications</p>
-          <h2 class="mt-2 text-2xl font-semibold text-white">Windows / Discord</h2>
+          <NotificationsTab {actions} {runtime} {view} />
         {:else}
-          <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Other</p>
-          <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Application settings' : 'アプリケーション設定'}</h2>
-          <p class="mt-4 text-slate-400">Revision {view.settings?.revision ?? '—'} · Profile {view.state?.active_profile ?? '—'}</p>
+          <OtherTab {runtime} {view} />
         {/if}
       </div>
 

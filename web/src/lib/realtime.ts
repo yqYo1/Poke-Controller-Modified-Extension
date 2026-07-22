@@ -74,7 +74,7 @@ export interface RealtimeDependencies {
 }
 
 type ViewSubscriber = (view: RealtimeView) => void;
-type MessageSubscriber = (message: Exclude<ServerMessage, RevisionedStateChange>) => void;
+type MessageSubscriber = (message: ServerMessage) => void;
 type FrameSubscriber = (frame: ArrayBuffer | Blob) => void;
 
 const DEFAULT_RECONNECT_INTERVAL_SECONDS = 3;

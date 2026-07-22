@@ -94,6 +94,7 @@
               || lib.hasSuffix ".svg" sourcePath
               || lib.hasSuffix ".png" sourcePath
               || lib.hasSuffix ".ico" sourcePath
+              || lib.hasSuffix ".icns" sourcePath
               || lib.hasSuffix ".woff" sourcePath
               || lib.hasSuffix ".woff2" sourcePath
               || lib.hasSuffix ".ttf" sourcePath

@@ -164,6 +164,8 @@ result-*
 /rust/pokecon-desktop/icons/*
 !/rust/pokecon-desktop/icons/*.png
 !/rust/pokecon-desktop/icons/*.svg
+!/rust/pokecon-desktop/icons/*.ico
+!/rust/pokecon-desktop/icons/*.icns
 
 !/python/
 /python/*

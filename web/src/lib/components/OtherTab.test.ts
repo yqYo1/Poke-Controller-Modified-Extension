@@ -59,4 +59,41 @@ describe('OtherTab', () => {
       }).checked
     ).toBe(true);
   });
+
+  it('writes server settings and warns for a saved LAN bind address', async () => {
+    const base = settingsSnapshot('4');
+    const { runtime, view } = runtimeView({
+      ...base,
+      pending_restart_values: {
+        'server.bind_address': '192.168.1.50',
+        'server.port': 9000,
+        'server.web_dir': '/srv/pokecon'
+      },
+      restart_required: ['server.bind_address', 'server.port', 'server.web_dir']
+    });
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: base
+    });
+    render(OtherTab, { runtime, view });
+
+    expect(screen.getByRole('alert').textContent).toContain('認証なし');
+    const port = screen.getByRole<HTMLInputElement>('spinbutton', {
+      name: /保存するサーバーポート/
+    });
+    expect(port.value).toBe('9000');
+    await fireEvent.change(port, {
+      target: { value: '9001' }
+    });
+    await fireEvent.change(screen.getByLabelText(/WebRTC STUN URI/), {
+      target: { value: 'stun:stun.example.com:3478' }
+    });
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({ 'server.port': 9001 });
+      expect(writeSettings).toHaveBeenCalledWith({
+        stun_server: 'stun:stun.example.com:3478'
+      });
+    });
+  });
 });

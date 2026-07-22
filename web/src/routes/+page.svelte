@@ -14,6 +14,7 @@
   import OtherTab from '$lib/components/OtherTab.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
   import SerialTab from '$lib/components/SerialTab.svelte';
+  import WorkspaceMenu from '$lib/components/WorkspaceMenu.svelte';
   import { ApplicationRuntime, type RuntimeView } from '$lib/runtime';
 
   type TabId = 'camera' | 'serial' | 'manual' | 'commands' | 'notifications' | 'other';
@@ -63,6 +64,11 @@
     buttons?.[next]?.focus();
   }
 
+  function resetView(): void {
+    activeTab = 'camera';
+    window.scrollTo({ behavior: 'smooth', left: 0, top: 0 });
+  }
+
   onMount(() => {
     if (import.meta.env.MODE === 'test') return;
     runtime.start();
@@ -87,14 +93,17 @@
           <h1 class="text-lg font-semibold text-white">Controller workspace</h1>
         </div>
       </div>
-      <div class="flex flex-wrap items-center justify-end gap-2 text-xs" aria-live="polite">
-        <span class={`size-2 rounded-full ${view.realtime.status === 'connected' ? 'bg-lime-300' : view.realtime.status === 'exhausted' ? 'bg-red-400' : 'bg-amber-300'}`}></span>
-        <span class="text-slate-300">{view.realtime.status}</span>
-        <span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">Media: {view.media.mode}</span>
-        {#if view.state !== null}<span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">PID {view.state.pid}</span>{/if}
-        {#if view.realtime.status === 'exhausted'}
-          <button type="button" class="rounded-md bg-cyan-300/15 px-2 py-1 text-cyan-200" onclick={() => runtime.reconnectWebSocket()}>Reconnect</button>
-        {/if}
+      <div class="flex flex-wrap items-center justify-end gap-3">
+        <div class="flex flex-wrap items-center justify-end gap-2 text-xs" aria-live="polite">
+          <span class={`size-2 rounded-full ${view.realtime.status === 'connected' ? 'bg-lime-300' : view.realtime.status === 'exhausted' ? 'bg-red-400' : 'bg-amber-300'}`}></span>
+          <span class="text-slate-300">{view.realtime.status}</span>
+          <span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">Media: {view.media.mode}</span>
+          {#if view.state !== null}<span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">PID {view.state.pid}</span>{/if}
+          {#if view.realtime.status === 'exhausted'}
+            <button type="button" class="rounded-md bg-cyan-300/15 px-2 py-1 text-cyan-200" onclick={() => runtime.reconnectWebSocket()}>Reconnect</button>
+          {/if}
+        </div>
+        <WorkspaceMenu {actions} onresetview={resetView} {runtime} {view} />
       </div>
     </header>
 

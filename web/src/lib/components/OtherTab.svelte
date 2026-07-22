@@ -20,6 +20,7 @@
 
   let { runtime, view }: Props = $props();
   let busy = $state(false);
+  let copied = $state<string | null>(null);
   let error = $state<string | null>(null);
 
   const values = $derived(view.settings?.values);
@@ -33,6 +34,20 @@
   const compositingRestart = $derived(
     view.settings?.restart_required.includes('ui.desktop.disable_compositing') ?? false
   );
+  const savedWebDirectory = $derived(
+    view.settings?.pending_restart_values['server.web_dir'] ??
+      values?.['server.web_dir'] ??
+      ''
+  );
+  const savedPort = $derived(
+    view.settings?.pending_restart_values['server.port'] ?? values?.['server.port'] ?? 8020
+  );
+  const savedBindAddress = $derived(
+    view.settings?.pending_restart_values['server.bind_address'] ??
+      values?.['server.bind_address'] ??
+      '127.0.0.1'
+  );
+  const lanExposed = $derived(!isLoopback(savedBindAddress));
 
   const widgetModes = [
     ['all', 'All', 'すべて'],
@@ -105,6 +120,40 @@
       return;
     }
     await write({ 'ui.output_split_ratio': ratio });
+  }
+
+  async function changeServerText(
+    event: Event,
+    setting: 'server.web_dir' | 'server.bind_address' | 'stun_server'
+  ): Promise<void> {
+    const value = (event.currentTarget as HTMLInputElement).value;
+    await write({ [setting]: value });
+  }
+
+  async function changePort(event: Event): Promise<void> {
+    const port = Number((event.currentTarget as HTMLInputElement).value);
+    if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+      error = 'Server port must be an integer between 1 and 65535.';
+      return;
+    }
+    await write({ 'server.port': port });
+  }
+
+  function isLoopback(address: string): boolean {
+    if (address === '::1') return true;
+    const first = Number(address.split('.')[0]);
+    return Number.isSafeInteger(first) && first === 127;
+  }
+
+  async function copyValue(label: string, value: string): Promise<void> {
+    error = null;
+    copied = null;
+    try {
+      await navigator.clipboard.writeText(value);
+      copied = label;
+    } catch (reason: unknown) {
+      error = errorMessage(reason);
+    }
   }
 </script>
 
@@ -303,6 +352,93 @@
             {t('Restart required', '再起動後に反映')}
           </span>
         {/if}
+      </span>
+    </label>
+  </fieldset>
+
+  <fieldset class="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4" disabled={busy}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+      {t('Server and network', 'サーバーとネットワーク')}
+    </legend>
+    <p class="text-xs text-slate-400">
+      {t(
+        'Server root, port, and bind address are saved now and applied after restart.',
+        'Web UI ディレクトリ、ポート、待受アドレスは保存後、再起動時に反映されます。'
+      )}
+    </p>
+
+    <label class="block">
+      <span class="text-xs font-medium text-slate-300">{t('Saved Web UI directory', '保存する Web UI ディレクトリ')}</span>
+      <input
+        type="text"
+        value={savedWebDirectory}
+        class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+        onchange={(event) => void changeServerText(event, 'server.web_dir')}
+      />
+      <span class="mt-2 flex flex-wrap items-center gap-2 text-[0.7rem] text-slate-500">
+        <span class="min-w-0 break-all">{t('Current', '現在')}: {values?.['server.web_dir'] ?? '—'}</span>
+        <button
+          type="button"
+          class="rounded bg-white/5 px-2 py-1 text-slate-300"
+          onclick={() => void copyValue('server.web_dir', values?.['server.web_dir'] ?? '')}
+        >{copied === 'server.web_dir' ? t('Copied', 'コピー済み') : t('Copy', 'コピー')}</button>
+      </span>
+    </label>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label>
+        <span class="text-xs font-medium text-slate-300">{t('Saved server port', '保存するサーバーポート')}</span>
+        <input
+          type="number"
+          min="1"
+          max="65535"
+          step="1"
+          value={savedPort}
+          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
+          onchange={(event) => void changePort(event)}
+        />
+        <span class="mt-1 block text-[0.7rem] text-slate-500">
+          {t('Current', '現在')}: {values?.['server.port'] ?? '—'}
+        </span>
+      </label>
+      <label>
+        <span class="text-xs font-medium text-slate-300">{t('Saved bind address', '保存するバインドアドレス')}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          value={savedBindAddress}
+          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+          onchange={(event) => void changeServerText(event, 'server.bind_address')}
+        />
+        <span class="mt-1 block text-[0.7rem] text-slate-500">
+          {t('Current', '現在')}: {values?.['server.bind_address'] ?? '—'}
+        </span>
+      </label>
+    </div>
+
+    {#if lanExposed}
+      <div class="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-100" role="alert">
+        {t(
+          'This address exposes every REST and WebSocket operation to trusted LAN clients without authentication, including dynamic Python/Lua loading.',
+          'このアドレスは、動的 Python/Lua 読み込みを含む全 REST／WebSocket 操作を、認証なしで信頼済み LAN クライアントへ公開します。'
+        )}
+      </div>
+    {/if}
+
+    <label class="block">
+      <span class="text-xs font-medium text-slate-300">{t('WebRTC STUN URI', 'WebRTC STUN URI')}</span>
+      <input
+        type="text"
+        placeholder="stun:stun.example.com:3478"
+        value={values?.stun_server ?? ''}
+        class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+        onchange={(event) => void changeServerText(event, 'stun_server')}
+      />
+      <span class="mt-1 block text-[0.7rem] text-slate-500">
+        {t(
+          'Empty disables STUN. Changes affect future WebRTC connections.',
+          '空文字で無効。変更は以後の WebRTC 接続から使用されます。'
+        )}
       </span>
     </label>
   </fieldset>

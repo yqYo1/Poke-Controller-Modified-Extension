@@ -1,6 +1,6 @@
 import createClient from 'openapi-fetch';
 
-import type { paths } from './generated/api';
+import type { components, paths } from './generated/api';
 import {
   parseSettingsSnapshot,
   parseStateSnapshot,
@@ -19,6 +19,10 @@ export const api = createClient<paths>({
 
 export type StateEnvelope =
   paths['/api/state']['get']['responses'][200]['content']['application/json'];
+export type ApiErrorCode = components['schemas']['ApiErrorCode'];
+export type ApiErrorFields = components['schemas']['ApiError']['fields'];
+export type SettingsPatchRequest = components['schemas']['SettingsPatchRequest'];
+export type SettingsWriteValues = components['schemas']['SettingsWriteValues'];
 
 export interface VisibleSnapshots {
   readonly settings: SettingsSnapshot;
@@ -26,13 +30,27 @@ export interface VisibleSnapshots {
 }
 
 export class ApiRequestError extends Error {
-  constructor(message: string) {
+  readonly code: ApiErrorCode | null;
+  readonly fields: ApiErrorFields;
+  readonly status: number;
+
+  constructor(
+    message: string,
+    options: {
+      readonly code?: ApiErrorCode | null;
+      readonly fields?: ApiErrorFields;
+      readonly status?: number;
+    } = {}
+  ) {
     super(message);
     this.name = 'ApiRequestError';
+    this.code = options.code ?? null;
+    this.fields = options.fields ?? null;
+    this.status = options.status ?? 0;
   }
 }
 
-function responseErrorMessage(error: unknown, fallback: string): string {
+function responseError(error: unknown, status: number, fallback: string): ApiRequestError {
   if (
     typeof error === 'object' &&
     error !== null &&
@@ -42,30 +60,48 @@ function responseErrorMessage(error: unknown, fallback: string): string {
     'message' in error.error &&
     typeof error.error.message === 'string'
   ) {
-    return error.error.message;
+    const code =
+      'code' in error.error && typeof error.error.code === 'string'
+        ? (error.error.code as ApiErrorCode)
+        : null;
+    const fields =
+      'fields' in error.error &&
+      (error.error.fields === null || typeof error.error.fields === 'object')
+        ? (error.error.fields as ApiErrorFields)
+        : null;
+    return new ApiRequestError(error.error.message, { code, fields, status });
   }
-  return fallback;
+  return new ApiRequestError(fallback, { status });
+}
+
+export async function loadSettingsSnapshot(): Promise<SettingsSnapshot> {
+  const response = await api.GET('/api/settings');
+  if (response.data === undefined) {
+    throw responseError(response.error, response.response.status, 'settings snapshot request failed');
+  }
+  return parseSettingsSnapshot(response.data.data);
+}
+
+export async function patchSettingsSnapshot(
+  request: SettingsPatchRequest
+): Promise<SettingsSnapshot> {
+  const response = await api.PATCH('/api/settings', { body: request });
+  if (response.data === undefined) {
+    throw responseError(response.error, response.response.status, 'settings update failed');
+  }
+  return parseSettingsSnapshot(response.data.data);
+}
+
+export async function loadStateSnapshot(): Promise<StateSnapshot> {
+  const response = await api.GET('/api/state');
+  if (response.data === undefined) {
+    throw responseError(response.error, response.response.status, 'state snapshot request failed');
+  }
+  return parseStateSnapshot(response.data.data);
 }
 
 export async function loadVisibleSnapshots(): Promise<VisibleSnapshots> {
-  const [settingsResponse, stateResponse] = await Promise.all([
-    api.GET('/api/settings'),
-    api.GET('/api/state')
-  ]);
+  const [settings, state] = await Promise.all([loadSettingsSnapshot(), loadStateSnapshot()]);
 
-  if (settingsResponse.data === undefined) {
-    throw new ApiRequestError(
-      responseErrorMessage(settingsResponse.error, 'settings snapshot request failed')
-    );
-  }
-  if (stateResponse.data === undefined) {
-    throw new ApiRequestError(
-      responseErrorMessage(stateResponse.error, 'state snapshot request failed')
-    );
-  }
-
-  return {
-    settings: parseSettingsSnapshot(settingsResponse.data.data),
-    state: parseStateSnapshot(stateResponse.data.data)
-  };
+  return { settings, state };
 }

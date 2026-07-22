@@ -305,7 +305,7 @@ export class RealtimeClient {
 
   send(message: ClientMessage): boolean {
     const socket = this.socket;
-    if (socket?.readyState !== SOCKET_OPEN || this.view.status !== 'connected') {
+    if (socket?.readyState !== SOCKET_OPEN) {
       return false;
     }
     socket.send(serializeClientMessage(message));

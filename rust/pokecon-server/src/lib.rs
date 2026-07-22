@@ -4,6 +4,7 @@ pub mod api;
 pub mod backend;
 pub mod openapi;
 pub mod paths;
+pub mod realtime;
 pub mod rest;
 pub mod router;
 pub mod security;

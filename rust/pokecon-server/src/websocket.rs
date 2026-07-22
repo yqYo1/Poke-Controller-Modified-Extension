@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, close_code};
@@ -15,7 +16,7 @@ use axum::routing::any;
 use axum::{Json, Router};
 use futures_util::{Sink, SinkExt as _, Stream, StreamExt as _};
 use thiserror::Error;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, watch};
 use tokio::task::JoinSet;
 use tokio::time::{self, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
@@ -39,6 +40,72 @@ impl ConnectionId {
     pub const fn get(self) -> u64 {
         self.0
     }
+}
+
+/// Latest-only Motion JPEG source shared with one or more WebSocket writers.
+/// A `watch` slot is intentional: publishing a newer frame replaces the sole
+/// unsent frame for every slow client.
+#[derive(Clone, Debug)]
+pub struct MotionJpegFeed {
+    sender: watch::Sender<Option<Bytes>>,
+}
+
+impl MotionJpegFeed {
+    #[must_use]
+    pub fn new() -> Self {
+        let (sender, _receiver) = watch::channel(None);
+        Self { sender }
+    }
+
+    /// Replaces the previous unsent JPEG with one complete encoded frame.
+    pub fn publish(&self, frame: impl Into<Bytes>) {
+        let _previous = self.sender.send_replace(Some(frame.into()));
+    }
+
+    /// Stops binary fallback delivery without closing signaling `WebSockets`.
+    pub fn suspend(&self) {
+        let _previous = self.sender.send_replace(None);
+    }
+
+    #[must_use]
+    pub fn subscribe(&self) -> MotionJpegStream {
+        MotionJpegStream {
+            receiver: self.sender.subscribe(),
+            initial_pending: true,
+        }
+    }
+}
+
+impl Default for MotionJpegFeed {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Per-client view of a latest-only Motion JPEG source.
+#[derive(Debug)]
+pub struct MotionJpegStream {
+    receiver: watch::Receiver<Option<Bytes>>,
+    initial_pending: bool,
+}
+
+impl MotionJpegStream {
+    async fn next(&mut self) -> MotionJpegEvent {
+        if self.initial_pending {
+            self.initial_pending = false;
+            return MotionJpegEvent::Value(self.receiver.borrow_and_update().clone());
+        }
+        if self.receiver.changed().await.is_err() {
+            return MotionJpegEvent::Closed;
+        }
+        MotionJpegEvent::Value(self.receiver.borrow_and_update().clone())
+    }
+}
+
+#[derive(Debug)]
+enum MotionJpegEvent {
+    Value(Option<Bytes>),
+    Closed,
 }
 
 /// Direct responses that a backend may send only to the originating client.
@@ -85,6 +152,12 @@ pub trait WebSocketBackend: Send + Sync + 'static {
         connection: ConnectionId,
         message: ClientMessage,
     ) -> ApiResult<Vec<WebSocketReply>>;
+
+    /// Supplies a connection-specific fallback stream when camera media is
+    /// available. `None` leaves the JSON-only WebSocket behavior unchanged.
+    fn motion_jpeg(&self, _connection: ConnectionId) -> Option<MotionJpegStream> {
+        None
+    }
 
     /// Releases all connection-owned input and signaling resources. This is
     /// called exactly once after a successful or partially successful connect.
@@ -337,11 +410,13 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     }
 
     let (socket_sender, socket_receiver) = socket.split();
+    let motion_jpeg = state.backend.motion_jpeg(connection);
     let mut tasks = JoinSet::new();
     tasks.spawn(write_messages(
         socket_sender,
         high_receiver,
         low_receiver,
+        motion_jpeg,
         cancellation.clone(),
     ));
     tasks.spawn(read_messages(
@@ -382,36 +457,58 @@ async fn write_messages<S>(
     mut socket: S,
     mut high: mpsc::Receiver<Outgoing>,
     mut low: mpsc::Receiver<Outgoing>,
+    mut motion_jpeg: Option<MotionJpegStream>,
     cancellation: CancellationToken,
 ) where
     S: Sink<Message, Error = axum::Error> + Unpin,
 {
     loop {
-        let outgoing = tokio::select! {
+        let next = tokio::select! {
             biased;
-            message = high.recv() => message,
-            () = cancellation.cancelled() => {
-                let _result = socket.send(Message::Close(None)).await;
-                return;
-            }
-            message = low.recv() => message,
+            message = high.recv() => NextWrite::Queued(message),
+            () = cancellation.cancelled() => NextWrite::Cancelled,
+            event = next_motion_jpeg(&mut motion_jpeg) => NextWrite::MotionJpeg(event),
+            message = low.recv() => NextWrite::Queued(message),
         };
-        let Some(outgoing) = outgoing else {
-            return;
-        };
-        let (message, closes) = match outgoing {
-            Outgoing::Json(message) => {
+        let (message, closes) = match next {
+            NextWrite::Queued(Some(Outgoing::Json(message))) => {
                 let Ok(encoded) = serde_json::to_string(&message) else {
                     return;
                 };
                 (Message::Text(encoded.into()), false)
             }
-            Outgoing::Close(frame) => (Message::Close(Some(frame)), true),
+            NextWrite::Queued(Some(Outgoing::Close(frame))) => (Message::Close(Some(frame)), true),
+            NextWrite::Queued(None) => return,
+            NextWrite::Cancelled => {
+                let _result = socket.send(Message::Close(None)).await;
+                return;
+            }
+            NextWrite::MotionJpeg(MotionJpegEvent::Value(Some(frame))) => {
+                (Message::Binary(frame), false)
+            }
+            NextWrite::MotionJpeg(MotionJpegEvent::Value(None)) => continue,
+            NextWrite::MotionJpeg(MotionJpegEvent::Closed) => {
+                motion_jpeg = None;
+                continue;
+            }
         };
         if socket.send(message).await.is_err() || closes {
             return;
         }
     }
+}
+
+enum NextWrite {
+    Queued(Option<Outgoing>),
+    MotionJpeg(MotionJpegEvent),
+    Cancelled,
+}
+
+async fn next_motion_jpeg(stream: &mut Option<MotionJpegStream>) -> MotionJpegEvent {
+    let Some(stream) = stream else {
+        return std::future::pending().await;
+    };
+    stream.next().await
 }
 
 async fn read_messages<R>(
@@ -649,16 +746,22 @@ mod tests {
         hub: StateHub,
         generations: Mutex<BTreeMap<ConnectionId, String>>,
         received: Mutex<Vec<ClientMessage>>,
+        motion_jpeg: Option<MotionJpegFeed>,
         disconnected: AtomicUsize,
         disconnect_notify: Notify,
     }
 
     impl TestBackend {
         fn new() -> Self {
+            Self::with_motion_jpeg(None)
+        }
+
+        fn with_motion_jpeg(motion_jpeg: Option<MotionJpegFeed>) -> Self {
             Self {
                 hub: test_hub(),
                 generations: Mutex::new(BTreeMap::new()),
                 received: Mutex::new(Vec::new()),
+                motion_jpeg,
                 disconnected: AtomicUsize::new(0),
                 disconnect_notify: Notify::new(),
             }
@@ -714,6 +817,10 @@ mod tests {
                 }
                 _other => Ok(Vec::new()),
             }
+        }
+
+        fn motion_jpeg(&self, _connection: ConnectionId) -> Option<MotionJpegStream> {
+            self.motion_jpeg.as_ref().map(MotionJpegFeed::subscribe)
         }
 
         async fn disconnected(&self, _connection: ConnectionId) {
@@ -901,6 +1008,48 @@ mod tests {
             WebSocketTransport::new(backend, config),
             Err(WebSocketBuildError::PongTimeoutExceedsInterval)
         ));
+    }
+
+    #[tokio::test]
+    async fn motion_jpeg_stream_coalesces_to_the_latest_unsent_frame() {
+        let feed = MotionJpegFeed::new();
+        let mut stream = feed.subscribe();
+        assert!(matches!(stream.next().await, MotionJpegEvent::Value(None)));
+
+        feed.publish(vec![1_u8]);
+        feed.publish(vec![2_u8]);
+        feed.publish(vec![3_u8]);
+        let MotionJpegEvent::Value(Some(frame)) = stream.next().await else {
+            panic!("latest frame");
+        };
+        assert_eq!(frame.as_ref(), [3]);
+    }
+
+    #[tokio::test]
+    async fn motion_jpeg_uses_one_binary_websocket_message_per_frame() {
+        let feed = MotionJpegFeed::new();
+        let backend = Arc::new(TestBackend::with_motion_jpeg(Some(feed.clone())));
+        let transport = WebSocketTransport::new(backend.clone(), test_config()).expect("transport");
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        let _generation = initial_generation(&mut socket).await;
+
+        let jpeg = [0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9];
+        feed.publish(jpeg.to_vec());
+        let frame = timeout(Duration::from_secs(1), socket.next())
+            .await
+            .expect("binary frame deadline")
+            .expect("connection remains open")
+            .expect("valid frame");
+        let ClientFrame::Binary(bytes) = frame else {
+            panic!("expected Motion JPEG binary frame, got {frame:?}");
+        };
+        assert_eq!(bytes.as_ref(), jpeg);
+
+        feed.suspend();
+        socket.close(None).await.expect("close");
+        backend.wait_for_disconnect().await;
+        stop_server(cancellation, task).await;
     }
 
     #[tokio::test]

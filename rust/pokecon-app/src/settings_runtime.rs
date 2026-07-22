@@ -5,6 +5,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use pokecon_desktop::{CloseBehavior, DesktopRuntimeSettings};
 use pokecon_device::notification::{
     DiscordNotificationConfig, DiscordWebhookUrl, NotificationConfig, NotificationService,
     WindowsNotificationConfig,
@@ -109,6 +110,65 @@ impl RuntimeSettingsApplier for HostSettingsApplier {
             );
         }
     }
+}
+
+pub(crate) struct DesktopSettingsApplier {
+    settings: DesktopRuntimeSettings,
+}
+
+impl DesktopSettingsApplier {
+    pub(crate) const fn new(settings: DesktopRuntimeSettings) -> Self {
+        Self { settings }
+    }
+}
+
+impl RuntimeSettingsApplier for DesktopSettingsApplier {
+    fn apply(
+        &mut self,
+        class: PatchClass,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if class != PatchClass::Ordinary {
+            return Ok(());
+        }
+        if let Some(value) = changes.get("ui.desktop.close_behavior") {
+            self.settings
+                .set_close_behavior(parse_close_behavior(value)?);
+        }
+        Ok(())
+    }
+
+    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
+        if class != PatchClass::Ordinary {
+            return;
+        }
+        if let Some(behavior) = previous
+            .get("ui.desktop.close_behavior")
+            .and_then(|value| parse_close_behavior(value).ok())
+        {
+            self.settings.set_close_behavior(behavior);
+        }
+    }
+}
+
+pub(crate) fn reconcile_desktop_settings(
+    settings: &DesktopRuntimeSettings,
+    loaded: &LoadedSettings,
+) -> Result<(), String> {
+    let value = loaded
+        .settings
+        .get("ui.desktop.close_behavior")
+        .ok_or_else(|| "desktop close setting is missing".to_owned())?;
+    settings.set_close_behavior(parse_close_behavior(&value.value)?);
+    Ok(())
+}
+
+fn parse_close_behavior(value: &Value) -> Result<CloseBehavior, String> {
+    value
+        .as_str()
+        .ok_or_else(|| "desktop close setting has an invalid type".to_owned())?
+        .parse()
+        .map_err(|_error| "desktop close setting has an invalid value".to_owned())
 }
 
 pub(crate) struct NotificationSettingsApplier {
@@ -371,5 +431,30 @@ mod tests {
                 .recovery_probe_interval(),
             Duration::from_secs(30)
         );
+    }
+
+    #[test]
+    fn desktop_close_policy_is_applied_and_rolled_back_immediately() {
+        let settings = DesktopRuntimeSettings::new(CloseBehavior::Ask);
+        let mut applier = DesktopSettingsApplier::new(settings.clone());
+        applier
+            .apply(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "ui.desktop.close_behavior".to_owned(),
+                    Value::String("keep_backend".to_owned()),
+                )]),
+            )
+            .unwrap();
+        assert_eq!(settings.close_behavior(), CloseBehavior::KeepBackend);
+
+        applier.rollback(
+            PatchClass::Ordinary,
+            &BTreeMap::from([(
+                "ui.desktop.close_behavior".to_owned(),
+                Value::String("ask".to_owned()),
+            )]),
+        );
+        assert_eq!(settings.close_behavior(), CloseBehavior::Ask);
     }
 }

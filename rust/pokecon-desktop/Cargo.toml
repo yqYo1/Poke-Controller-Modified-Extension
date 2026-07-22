@@ -8,11 +8,23 @@ repository.workspace = true
 
 [features]
 default = []
-tauri-shell = ["dep:tauri"]
+tauri-shell = [
+    "dep:opener",
+    "dep:rfd",
+    "dep:tauri",
+    "dep:tauri-plugin-single-instance",
+]
 
 [dependencies]
 pokecon-core = { path = "../pokecon-core" }
+opener = { workspace = true, optional = true }
+rfd = { workspace = true, optional = true }
 tauri = { workspace = true, optional = true }
+tauri-plugin-single-instance = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[build-dependencies]
+tauri-build = "2.5.4"
 
 [dev-dependencies]
 tokio.workspace = true

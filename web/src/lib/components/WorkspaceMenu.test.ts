@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
 import { settingsSnapshot, stateSnapshot } from '../test-fixtures';
 import WorkspaceMenu from './WorkspaceMenu.svelte';
+
+afterEach(() => {
+  Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+});
 
 function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
   const runtime = new ApplicationRuntime();
@@ -42,6 +46,11 @@ function menuActions() {
     downloadLauncher: vi.fn().mockResolvedValue({
       blob: new Blob(['launcher']),
       contentDisposition: 'attachment; filename="profile.bat"'
+    }),
+    generateLauncher: vi.fn().mockResolvedValue({
+      launcher_created: true,
+      profile_created: false,
+      revision: '2'
     })
   };
 }
@@ -129,5 +138,35 @@ describe('WorkspaceMenu', () => {
       expect(actions.checkUpdate).toHaveBeenCalledOnce();
       expect(screen.getByText('0.1.0 → 0.2.0')).toBeTruthy();
     });
+  });
+
+  it('opens native config and saves a launcher to a native desktop path', async () => {
+    const invoke = vi.fn((command: string) =>
+      Promise.resolve(
+        command === 'choose_save_path' ? 'C:\\Launchers\\default.bat' : undefined
+      )
+    );
+    Reflect.set(window, '__TAURI_INTERNALS__', { invoke });
+    const { runtime, view } = runtimeView();
+    const actions = menuActions();
+    render(WorkspaceMenu, { actions, runtime, view, windows: true });
+
+    await fireEvent.click(screen.getByText('メニュー'));
+    await fireEvent.click(screen.getByRole('button', { name: 'ディレクトリを開く' }));
+    await fireEvent.click(screen.getByRole('button', { name: '.bat を保存' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('open_config_directory');
+      expect(invoke).toHaveBeenCalledWith('choose_save_path', {
+        extension: 'bat',
+        suggestedName: 'default.bat'
+      });
+      expect(actions.generateLauncher).toHaveBeenCalledWith({
+        copy_current: false,
+        destination: { kind: 'path', path: 'C:\\Launchers\\default.bat' },
+        profile: 'default'
+      });
+    });
+    expect(actions.downloadLauncher).not.toHaveBeenCalled();
   });
 });

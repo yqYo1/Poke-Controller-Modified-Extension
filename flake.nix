@@ -197,6 +197,8 @@
               allowBuiltinFetchGit = true;
             };
             cargoBuildFlags = [
+              "--features"
+              "tauri-shell"
               "--package"
               "pokecon-app"
               "--package"
@@ -207,6 +209,8 @@
               "pokecon-worker"
             ];
             cargoTestFlags = [
+              "--features"
+              "tauri-shell"
               "--package"
               "pokecon-app"
               "--package"
@@ -481,7 +485,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                cargo build --locked --package pokecon-desktop --features tauri-shell
+                cargo build --locked --package pokecon-app --features tauri-shell --bin pokecon
               '';
             };
 

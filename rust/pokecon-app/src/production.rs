@@ -11,6 +11,7 @@ use pokecon_camera::{
     NativeCameraBackend, ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings,
     ScreenshotService,
 };
+use pokecon_desktop::DesktopRuntimeSettings;
 use pokecon_device::controller::ControllerState;
 use pokecon_device::notification::{
     DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
@@ -46,8 +47,9 @@ use crate::profile_service::ProfileService;
 use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
 use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
-    CompositeSettingsApplier, HostSettingsApplier, NotificationSettingsApplier,
-    RealtimeSettingsApplier, notification_config,
+    CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
+    NotificationSettingsApplier, RealtimeSettingsApplier, notification_config,
+    reconcile_desktop_settings,
 };
 
 const STATE_HISTORY_CAPACITY: usize = 256;
@@ -87,6 +89,7 @@ impl ProductionRuntime {
         host: Arc<StartupDynamicHost>,
         dynamic: Option<Arc<DynamicWorkerClient>>,
         ui_mode: UiMode,
+        desktop_settings: Option<DesktopRuntimeSettings>,
     ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::current();
         let camera_config = camera_config(&loaded)?;
@@ -156,6 +159,9 @@ impl ProductionRuntime {
 
         let mut applier = CompositeSettingsApplier::new(&loaded);
         applier.push(HostSettingsApplier::new(Arc::clone(&host)));
+        if let Some(settings) = desktop_settings.clone() {
+            applier.push(DesktopSettingsApplier::new(settings));
+        }
         applier.push(
             CameraSettingsApplier::new(
                 camera.clone(),
@@ -254,6 +260,7 @@ impl ProductionRuntime {
         tasks.push(spawn_runtime_reconciler(
             Arc::clone(&backend),
             host.subscribe_runtime_changes(),
+            desktop_settings,
         ));
         tasks.push(spawn_command_recompute(
             Arc::clone(&backend),
@@ -437,9 +444,16 @@ fn spawn_serial_events(
 fn spawn_runtime_reconciler(
     backend: Arc<ApplicationBackend>,
     mut changes: tokio::sync::watch::Receiver<u64>,
+    desktop_settings: Option<DesktopRuntimeSettings>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         while changes.changed().await.is_ok() {
+            if let Some(settings) = desktop_settings.as_ref()
+                && let Err(error) =
+                    reconcile_desktop_settings(settings, &backend.host().loaded_settings())
+            {
+                tracing::error!(%error, "desktop settings reconciliation failed");
+            }
             if let Err(error) = backend
                 .reconcile_host(StateChangeCause::DynamicConfig)
                 .await

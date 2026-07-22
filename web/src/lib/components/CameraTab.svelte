@@ -9,13 +9,14 @@
     ScreenshotRequest
   } from '../actions';
   import type { SettingsWriteValues } from '../api';
+  import { chooseNativeSavePath, isDesktopShell } from '../desktop';
   import { triggerDownload } from '../download';
   import type { components } from '../generated/api';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
   import CameraViewport from './CameraViewport.svelte';
 
-  type CapturesRequest = Extract<ScreenshotRequest, { destination: 'captures' }>;
   type DownloadRequest = Extract<ScreenshotRequest, { destination: 'download' }>;
+  type SavedRequest = Exclude<ScreenshotRequest, DownloadRequest>;
   type ImageFormat = components['schemas']['ImageFormat'];
   type NormalizedRegion = components['schemas']['NormalizedRegion'];
   type TouchscreenArea = NonNullable<SettingsWriteValues['input.touchscreen_area']>;
@@ -24,7 +25,7 @@
     cameras(): Promise<readonly CameraDevice[]>;
     downloadScreenshot(request: DownloadRequest): Promise<DownloadResult>;
     retryCamera(): Promise<OperationResult>;
-    saveScreenshot(request: CapturesRequest): Promise<SavedScreenshot>;
+    saveScreenshot(request: SavedRequest): Promise<SavedScreenshot>;
   }
 
   interface Props {
@@ -43,6 +44,7 @@
   let devices = $state<readonly CameraDevice[]>([]);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
+  const desktopMode = isDesktopShell();
 
   const values = $derived(view.settings?.values);
   const currentDevice = $derived(values?.['camera.device'] ?? 0);
@@ -186,6 +188,22 @@
     const format = values?.['camera.screenshot_format'] ?? 'png';
     const filename = timestampName(format);
     try {
+      if (desktopMode) {
+        const path = await chooseNativeSavePath(filename, format);
+        if (path === null) {
+          notice = 'Save cancelled.';
+          return;
+        }
+        const saved = await actions.saveScreenshot({
+          destination: 'path',
+          format,
+          overwrite: true,
+          path,
+          region
+        });
+        notice = `Saved: ${saved.display_path}`;
+        return;
+      }
       const result = await actions.downloadScreenshot({
         destination: 'download',
         filename,
@@ -313,7 +331,7 @@
 
     <div class="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-3">
       <button type="button" class="rounded-lg bg-lime-300/15 px-4 py-2 text-sm font-medium text-lime-200" onclick={() => void saveCapture(null)}>Save to Captures</button>
-      <button type="button" class="rounded-lg bg-cyan-300/15 px-4 py-2 text-sm font-medium text-cyan-200" onclick={() => void downloadCapture(null)}>Download</button>
+      <button type="button" class="rounded-lg bg-cyan-300/15 px-4 py-2 text-sm font-medium text-cyan-200" onclick={() => void downloadCapture(null)}>{desktopMode ? 'Save as…' : 'Download'}</button>
       <button type="button" class="rounded-lg bg-white/5 px-4 py-2 text-sm text-slate-300" onclick={() => void retry()}>Retry camera</button>
     </div>
   </fieldset>

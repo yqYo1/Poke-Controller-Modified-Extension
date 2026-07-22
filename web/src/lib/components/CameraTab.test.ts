@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
 import { settingsSnapshot, stateSnapshot } from '../test-fixtures';
 import CameraTab from './CameraTab.svelte';
+
+afterEach(() => {
+  Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+});
 
 function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
   const runtime = new ApplicationRuntime();
@@ -77,5 +81,34 @@ describe('CameraTab', () => {
       });
     });
     expect(await screen.findByText('Saved: /data/Captures/capture.png')).toBeTruthy();
+  });
+
+  it('uses the native path destination in the desktop shell', async () => {
+    const invoke = vi
+      .fn<
+        (command: string, arguments_?: Record<string, unknown>) => Promise<string>
+      >()
+      .mockResolvedValue('C:\\Captures\\capture.png');
+    Reflect.set(window, '__TAURI_INTERNALS__', { invoke });
+    const { runtime, view } = runtimeView();
+    const actions = cameraActions();
+    render(CameraTab, { actions, autoLoad: false, runtime, view });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save as…' }));
+
+    await waitFor(() => {
+      const invocation = invoke.mock.calls[0];
+      expect(invocation?.[0]).toBe('choose_save_path');
+      expect(invocation?.[1]?.extension).toBe('png');
+      expect(invocation?.[1]?.suggestedName).toMatch(/^capture_\d{8}_\d{6}\.png$/u);
+      expect(actions.saveScreenshot).toHaveBeenCalledWith({
+        destination: 'path',
+        format: 'png',
+        overwrite: true,
+        path: 'C:\\Captures\\capture.png',
+        region: null
+      });
+    });
+    expect(actions.downloadScreenshot).not.toHaveBeenCalled();
   });
 });

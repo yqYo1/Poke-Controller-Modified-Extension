@@ -64,7 +64,10 @@ openh264 = "0.9.7"
 parking_lot = "0.12"
 pep440_rs = { version = "0.7", features = ["version-ranges"] }
 pyo3 = { version = "0.29", features = ["abi3-py314"] }
-tauri = { version = "2.11.5", default-features = false }
+tauri = { version = "2.11.5", default-features = false, features = ["dynamic-acl", "image-png", "tray-icon", "wry"] }
+tauri-plugin-single-instance = "2.3.6"
+rfd = { version = "0.15.4", default-features = false, features = ["gtk3"] }
+opener = "0.8.3"
 mlua = { version = "0.10", features = ["luajit", "vendored", "async", "send", "serialize"] }
 nix = { version = "0.30", features = ["process", "signal"] }
 nokhwa = { version = "0.10.11", default-features = false }

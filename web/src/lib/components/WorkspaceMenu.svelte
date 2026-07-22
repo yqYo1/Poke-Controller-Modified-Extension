@@ -6,8 +6,14 @@
     DynamicConfigControlRequest,
     DynamicConfigResult,
     GenerateLauncherRequest,
+    GenerateLauncherResult,
     UpdateCheckResult
   } from '../actions';
+  import {
+    chooseNativeSavePath,
+    isDesktopShell,
+    openNativeConfigDirectory
+  } from '../desktop';
   import { triggerDownload } from '../download';
   import openapi from '../generated/openapi.json';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
@@ -15,12 +21,16 @@
   type DownloadLauncherRequest = GenerateLauncherRequest & {
     destination: { kind: 'download'; filename: string | null };
   };
+  type PathLauncherRequest = GenerateLauncherRequest & {
+    destination: { kind: 'path'; path: string };
+  };
   type BusyAction = 'dynamic' | 'launcher' | 'profile' | 'update';
 
   interface MenuActions {
     checkUpdate(): Promise<UpdateCheckResult>;
     controlDynamicConfig(request: DynamicConfigControlRequest): Promise<DynamicConfigResult>;
     downloadLauncher(request: DownloadLauncherRequest): Promise<DownloadResult>;
+    generateLauncher(request: PathLauncherRequest): Promise<GenerateLauncherResult>;
   }
 
   interface ClipboardWriter {
@@ -38,6 +48,7 @@
 
   const detectedWindows =
     browser && /Windows|Win32|Win64/iu.test(`${navigator.platform} ${navigator.userAgent}`);
+  const desktopMode = isDesktopShell();
   let {
     actions,
     confirmOverwrite = (message: string) => browser && window.confirm(message),
@@ -201,6 +212,22 @@
     }
   }
 
+  async function accessConfigDirectory(): Promise<void> {
+    if (!desktopMode) {
+      await copyConfigDirectory();
+      return;
+    }
+    begin('dynamic');
+    try {
+      await openNativeConfigDirectory();
+      notice = t('Opened the config directory.', '設定ディレクトリを開きました。');
+    } catch (reason: unknown) {
+      error = errorMessage(reason);
+    } finally {
+      busy = null;
+    }
+  }
+
   async function generateLauncher(): Promise<void> {
     const profile = launcherProfile.trim();
     if (profile.length === 0) {
@@ -209,6 +236,22 @@
     }
     begin('launcher');
     try {
+      if (desktopMode) {
+        const path = await chooseNativeSavePath(`${profile}.bat`, 'bat');
+        if (path === null) {
+          notice = t('Launcher generation cancelled.', 'ランチャー作成をキャンセルしました。');
+          return;
+        }
+        const result = await actions.generateLauncher({
+          copy_current: copyCurrent,
+          destination: { kind: 'path', path },
+          profile
+        });
+        notice = result.launcher_created
+          ? t(`Launcher created for ${profile}.`, `${profile} のランチャーを作成しました。`)
+          : t(`Launcher already exists for ${profile}.`, `${profile} のランチャーは既に存在します。`);
+        return;
+      }
       const result = await actions.downloadLauncher({
         copy_current: copyCurrent,
         destination: { filename: `${profile}.bat`, kind: 'download' },
@@ -325,15 +368,22 @@
           >{t('Reload', '再読み込み')}</button>
         </div>
         <div class="mt-3 rounded-lg bg-black/15 p-3 text-xs text-slate-400">
-          <p class="font-medium text-slate-300">{t('Config directory (Web mode)', '設定ディレクトリ（Web モード）')}</p>
-          {#if configDirectory === null}
+          <p class="font-medium text-slate-300">{desktopMode ? t('Config directory', '設定ディレクトリ') : t('Config directory (Web mode)', '設定ディレクトリ（Web モード）')}</p>
+          {#if desktopMode}
+            <button
+              type="button"
+              class="mt-2 rounded bg-white/5 px-2 py-1 text-slate-200"
+              disabled={busy !== null}
+              onclick={() => void accessConfigDirectory()}
+            >{t('Open directory', 'ディレクトリを開く')}</button>
+          {:else if configDirectory === null}
             <p class="mt-1">{t('Load or reload a config to resolve its display path.', '読み込みまたは再読み込み後に表示パスを確認できます。')}</p>
           {:else}
             <p class="mt-1 break-all font-mono">{configDirectory}</p>
             <button
               type="button"
               class="mt-2 rounded bg-white/5 px-2 py-1 text-slate-200"
-              onclick={() => void copyConfigDirectory()}
+              onclick={() => void accessConfigDirectory()}
             >{copied ? t('Copied', 'コピー済み') : t('Copy path', 'パスをコピー')}</button>
           {/if}
         </div>
@@ -358,7 +408,7 @@
             class="rounded-lg bg-cyan-300/15 px-3 py-2 text-xs font-medium text-cyan-200 disabled:opacity-40"
             disabled={!windows || busy !== null}
             onclick={() => void generateLauncher()}
-          >{busy === 'launcher' ? t('Generating…', '作成中…') : t('Download .bat', '.bat をダウンロード')}</button>
+          >{busy === 'launcher' ? t('Generating…', '作成中…') : desktopMode ? t('Save .bat', '.bat を保存') : t('Download .bat', '.bat をダウンロード')}</button>
         </div>
         <label class="mt-2 flex items-center gap-2 text-xs text-slate-300">
           <input type="checkbox" class="accent-cyan-300" bind:checked={copyCurrent} disabled={!windows || busy !== null} />

@@ -159,6 +159,12 @@ result-*
 /rust/pokecon-*/benches/*
 !/rust/pokecon-*/benches/*.rs
 
+!/rust/pokecon-desktop/tauri.conf.json
+!/rust/pokecon-desktop/icons/
+/rust/pokecon-desktop/icons/*
+!/rust/pokecon-desktop/icons/*.png
+!/rust/pokecon-desktop/icons/*.svg
+
 !/python/
 /python/*
 !/python/pokecon/

@@ -13,13 +13,15 @@ mod settings_runtime;
 use std::io;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
 use axum::Router;
 use pokecon_core::{
-    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownReason, install_os_signal_forwarder,
+    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownCoordinator, ShutdownReason,
+    install_os_signal_forwarder,
 };
-use pokecon_desktop::DesktopLifecycle;
+use pokecon_desktop::{DesktopLifecycle, DesktopRuntimeSettings};
 use pokecon_server::BoundServer;
 use pokecon_server::router::public_router;
 use pokecon_server::security::RequestSecurity;
@@ -56,6 +58,40 @@ pub struct AppOptions {
     pub web_root: PathBuf,
     /// Request a clean exit immediately after all startup boundaries are ready.
     pub exit_after_startup: bool,
+}
+
+/// Process-wide controls supplied by the native shell or a headless caller.
+#[derive(Debug)]
+pub struct RunControl {
+    shutdown: ShutdownCoordinator,
+    ready: Option<SyncSender<SocketAddr>>,
+    desktop_settings: Option<DesktopRuntimeSettings>,
+}
+
+impl RunControl {
+    /// Creates controls that share the supplied first-writer-wins shutdown path.
+    #[must_use]
+    pub const fn new(shutdown: ShutdownCoordinator) -> Self {
+        Self {
+            shutdown,
+            ready: None,
+            desktop_settings: None,
+        }
+    }
+
+    /// Publishes the actual listener address after all production services are ready.
+    #[must_use]
+    pub fn with_ready_sender(mut self, ready: SyncSender<SocketAddr>) -> Self {
+        self.ready = Some(ready);
+        self
+    }
+
+    /// Connects runtime-immediate desktop settings to the settings transaction path.
+    #[must_use]
+    pub fn with_desktop_settings(mut self, settings: DesktopRuntimeSettings) -> Self {
+        self.desktop_settings = Some(settings);
+        self
+    }
 }
 
 /// Observable result of a clean application run.
@@ -193,8 +229,41 @@ pub async fn run_configured(
     request: PipelineRequest,
     loaded: LoadedSettings,
     host: std::sync::Arc<StartupDynamicHost>,
-    mut dynamic: Option<DynamicRuntime>,
+    dynamic: Option<DynamicRuntime>,
 ) -> Result<RunSummary, AppError> {
+    let shutdown = RuntimeContext::native().shutdown().clone();
+    run_configured_controlled(
+        options,
+        request,
+        loaded,
+        host,
+        dynamic,
+        RunControl::new(shutdown),
+    )
+    .await
+}
+
+/// Starts the production runtime with controls owned by the colocated desktop
+/// shell. This keeps Tauri, operating-system signals, and backend failures on
+/// one shutdown coordinator.
+///
+/// # Errors
+///
+/// Returns an error if service construction, binding, serving, or bounded task
+/// shutdown fails.
+pub async fn run_configured_controlled(
+    options: AppOptions,
+    request: PipelineRequest,
+    loaded: LoadedSettings,
+    host: std::sync::Arc<StartupDynamicHost>,
+    mut dynamic: Option<DynamicRuntime>,
+    control: RunControl,
+) -> Result<RunSummary, AppError> {
+    let RunControl {
+        shutdown,
+        ready,
+        desktop_settings,
+    } = control;
     let static_files = match StaticFiles::new(&options.web_root) {
         Ok(static_files) => static_files,
         Err(error) => {
@@ -211,6 +280,7 @@ pub async fn run_configured(
         host,
         dynamic_client,
         options.ui_mode,
+        desktop_settings,
     )
     .await
     {
@@ -223,7 +293,6 @@ pub async fn run_configured(
         }
     };
     let context = RuntimeContext::native();
-    let shutdown = context.shutdown().clone();
     let signal_task = install_os_signal_forwarder(shutdown.clone()).await;
     let server = match BoundServer::bind(options.listen_address).await {
         Ok(server) => server,
@@ -240,8 +309,6 @@ pub async fn run_configured(
     let server_shutdown = CancellationToken::new();
     let server_task = tokio::spawn(server.serve(server_shutdown.clone()));
 
-    let _desktop_lifecycle =
-        (options.ui_mode == UiMode::Desktop).then(|| DesktopLifecycle::new(shutdown.clone()));
     if let Some(runtime) = dynamic.as_ref()
         && let Err(error) = runtime.emit_startup_post().await
     {
@@ -258,6 +325,13 @@ pub async fn run_configured(
         platform = ?context.platform().kind(),
         "PokeCon production runtime is ready"
     );
+    if let Some(ready) = ready
+        && ready.send(listen_address).is_err()
+    {
+        shutdown.request(ShutdownReason::FatalError(
+            "desktop shell stopped before backend readiness".to_owned(),
+        ));
+    }
 
     if options.exit_after_startup {
         shutdown.request(ShutdownReason::StartupProbe);

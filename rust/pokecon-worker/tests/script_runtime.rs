@@ -17,6 +17,7 @@ use pokecon_worker::script::protocol::{
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
 use tempfile::TempDir;
+use tokio::sync::Notify;
 
 #[derive(Debug, Default)]
 struct RecordingScriptHost {
@@ -39,6 +40,7 @@ struct RecordingScriptHost {
     popup_requests: Mutex<Vec<HostPopupImageRequest>>,
     tk_requests: Mutex<Vec<HostTkRequest>>,
     tk_scales: Mutex<BTreeMap<u64, f64>>,
+    activity: Notify,
 }
 
 impl ScriptHost for RecordingScriptHost {
@@ -69,6 +71,7 @@ impl ScriptHost for RecordingScriptHost {
 
     fn output(&self, request: HostOutputRequest) -> Result<(), ScriptHostError> {
         self.outputs.lock().unwrap().push(request);
+        self.activity.notify_one();
         Ok(())
     }
 
@@ -199,6 +202,7 @@ impl ScriptHost for RecordingScriptHost {
             _ => HostTkResult::default(),
         };
         self.tk_requests.lock().unwrap().push(request);
+        self.activity.notify_one();
         Ok(result)
     }
 }
@@ -1289,6 +1293,7 @@ class Images(ImageProcPythonCommand):
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[allow(clippy::too_many_lines)]
 async fn fixed_tk_bridge_runs_ui_callbacks_on_one_fifo_thread() {
+    const EVENT_TIMEOUT: Duration = Duration::from_secs(10);
     const SOURCE: &str = r##"
 import threading
 import tkinter as tk
@@ -1392,8 +1397,9 @@ class TkBridge(ImageProcPythonCommand):
             .await
     });
 
-    let (window_id, scale_id, button_id) = tokio::time::timeout(Duration::from_secs(5), async {
+    let (window_id, scale_id, button_id) = tokio::time::timeout(EVENT_TIMEOUT, async {
         loop {
+            let activity = host.activity.notified();
             let (window_id, scale_id, button_id) = {
                 let requests = host.tk_requests.lock().unwrap();
                 let window_id = requests.iter().find_map(|request| match request {
@@ -1421,7 +1427,7 @@ class TkBridge(ImageProcPythonCommand):
             {
                 break (window_id, scale_id, button_id);
             }
-            tokio::task::yield_now().await;
+            activity.await;
         }
     })
     .await
@@ -1442,8 +1448,9 @@ class TkBridge(ImageProcPythonCommand):
         .await
         .expect("button callback event is queued");
 
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(EVENT_TIMEOUT, async {
         loop {
+            let activity = host.activity.notified();
             let configured = host.tk_requests.lock().unwrap().iter().any(|request| {
                 matches!(
                     request,
@@ -1462,7 +1469,7 @@ class TkBridge(ImageProcPythonCommand):
             if configured && button_ran {
                 break;
             }
-            tokio::task::yield_now().await;
+            activity.await;
         }
     })
     .await
@@ -1472,7 +1479,7 @@ class TkBridge(ImageProcPythonCommand):
         .tk_event(&ScriptTkEvent::WindowClosed { window_id })
         .await
         .expect("window close event is queued");
-    let result = tokio::time::timeout(Duration::from_secs(5), execution)
+    let result = tokio::time::timeout(EVENT_TIMEOUT, execution)
         .await
         .expect("Tk bridge command completes")
         .expect("Tk bridge execution task joins")

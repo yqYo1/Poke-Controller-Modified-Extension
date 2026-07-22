@@ -10,12 +10,21 @@ import {
 
 export const REQUEST_MARKER = '1';
 
-export const api = createClient<paths>({
-  baseUrl: '',
-  headers: {
-    'X-Pokecon-Request': REQUEST_MARKER
-  }
-});
+export function createPokeconApi(
+  request?: (input: Request) => Promise<Response>,
+  baseUrl = ''
+): ReturnType<typeof createClient<paths>> {
+  return createClient<paths>({
+    baseUrl,
+    ...(request === undefined ? {} : { fetch: request }),
+    headers: {
+      'X-Pokecon-Request': REQUEST_MARKER
+    }
+  });
+}
+
+export const api = createPokeconApi();
+export type ApiClient = typeof api;
 
 export type StateEnvelope =
   paths['/api/state']['get']['responses'][200]['content']['application/json'];
@@ -50,7 +59,11 @@ export class ApiRequestError extends Error {
   }
 }
 
-function responseError(error: unknown, status: number, fallback: string): ApiRequestError {
+export function responseError(
+  error: unknown,
+  status: number,
+  fallback: string
+): ApiRequestError {
   if (
     typeof error === 'object' &&
     error !== null &&

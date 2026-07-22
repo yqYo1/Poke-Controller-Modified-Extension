@@ -1,5 +1,6 @@
 use std::net::{AddrParseError, IpAddr, SocketAddr};
 use std::num::TryFromIntError;
+use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use pokecon_app::dynamic_runtime::bootstrap_dynamic;
@@ -73,11 +74,13 @@ async fn main() -> Result<(), MainError> {
         .string("server.bind_address")?
         .parse::<IpAddr>()?;
     let port = u16::try_from(loaded.settings.integer("server.port")?)?;
+    let web_root = PathBuf::from(loaded.settings.string("server.web_dir")?);
     let _settings_service = SettingsService::new(loaded, Box::<NoopSettingsApplier>::default());
     run_with_dynamic(
         AppOptions {
             listen_address: SocketAddr::new(bind_address, port),
             ui_mode: cli.ui.into(),
+            web_root,
             exit_after_startup: cli.exit_after_startup,
         },
         bootstrap.runtime,

@@ -167,6 +167,21 @@
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
 
+          buildNpmPackage = pkgs.buildNpmPackage.override { nodejs = pkgs.nodejs_20; };
+          webPackage = buildNpmPackage {
+            pname = "pokecon-web";
+            version = workspaceVersion;
+            src = source;
+            sourceRoot = "pokecon-source/web";
+            npmDepsHash = "sha256-NusGE4vYdO6CwHZ2ADlsZ/jeuQ51x201taI53eKJ2RE=";
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -R dist/. "$out/"
+              runHook postInstall
+            '';
+          };
+
           pokeconPackage = rustPlatform.buildRustPackage {
             pname = "pokecon";
             version = workspaceVersion;
@@ -204,6 +219,11 @@
             PYO3_PYTHON = "${pythonEnv}/bin/python";
             BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
+            postInstall = ''
+              mkdir -p "$out/web/dist"
+              cp -R "${webPackage}/." "$out/web/dist/"
+              ln -s ../web "$out/bin/web"
+            '';
           };
         in
         {
@@ -225,6 +245,9 @@
                 "node_modules/**"
                 "result*"
                 "target/**"
+                "web/.svelte-kit/**"
+                "web/dist/**"
+                "web/node_modules/**"
               ];
               formatter = {
                 rustfmt.includes = [ "*.rs" ];
@@ -255,9 +278,11 @@
           packages = {
             default = pokeconPackage;
             pokecon = pokeconPackage;
+            web = webPackage;
           };
 
           checks.pokecon = pokeconPackage;
+          checks.web = webPackage;
 
           apps = {
             default = mkApp "${self'.packages.pokecon}/bin/pokecon";
@@ -567,10 +592,11 @@
                   cp -R web/. "$workdir/"
                   chmod -R u+w "$workdir"
                   cd "$workdir"
-                  npm ci
+                  npm ci --no-audit --no-fund
                   npm run lint
                   npm run svelte-check
                   npm test
+                  npm run build
                 else
                   guard_status=$?
                   if [ "$guard_status" -eq 3 ]; then
@@ -617,6 +643,11 @@
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 scripts/generate-api-types.sh --check
+                npm --prefix web ci --no-audit --no-fund
+                npm --prefix web run lint
+                npm --prefix web run svelte-check
+                npm --prefix web test
+                npm --prefix web run build
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features
                 cargo build --locked --workspace --all-features

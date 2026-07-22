@@ -11,6 +11,8 @@ use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 use tempfile::TempDir;
 #[cfg(unix)]
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+#[cfg(unix)]
 use tokio::net::TcpStream;
 #[cfg(unix)]
 use tokio::process::Command as TokioCommand;
@@ -110,6 +112,7 @@ async fn operating_system_signals_use_the_clean_shutdown_path() {
             .spawn()
             .expect("PokeCon process must start");
         wait_until_listening(&mut child, port).await;
+        assert_ui_is_served(port).await;
 
         kill(
             Pid::from_raw(
@@ -159,20 +162,35 @@ fn isolated_environment(roots: &TempDir) -> [(&'static str, std::path::PathBuf);
 }
 
 fn isolate_std_command(command: &mut Command, roots: &TempDir) {
+    let web_root = prepare_web_fixture(roots);
     for (name, value) in isolated_environment(roots) {
         command.env(name, value);
     }
     command.env("LOCALAPPDATA", roots.path().join("localappdata"));
+    command.env("POKECON_WEB_DIR", web_root);
     command.env("RUST_LOG", "info");
 }
 
 #[cfg(unix)]
 fn isolate_tokio_command(command: &mut TokioCommand, roots: &TempDir) {
+    let web_root = prepare_web_fixture(roots);
     for (name, value) in isolated_environment(roots) {
         command.env(name, value);
     }
     command.env("LOCALAPPDATA", roots.path().join("localappdata"));
+    command.env("POKECON_WEB_DIR", web_root);
     command.env("RUST_LOG", "info");
+}
+
+fn prepare_web_fixture(roots: &TempDir) -> std::path::PathBuf {
+    let web_root = roots.path().join("web").join("dist");
+    std::fs::create_dir_all(&web_root).expect("isolated web root must exist");
+    std::fs::write(
+        web_root.join("index.html"),
+        "<!doctype html><title>PokeCon</title><p>pokecon-startup-fixture</p>",
+    )
+    .expect("isolated SPA document must be written");
+    web_root
 }
 
 #[cfg(unix)]
@@ -201,4 +219,24 @@ async fn wait_until_listening(child: &mut tokio::process::Child, port: u16) {
         }
         sleep(Duration::from_millis(20)).await;
     }
+}
+
+#[cfg(unix)]
+async fn assert_ui_is_served(port: u16) {
+    let mut stream = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))
+        .await
+        .expect("ready server must accept an HTTP request");
+    let request =
+        format!("GET /ui/ HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .expect("UI request must be written");
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .await
+        .expect("UI response must be readable");
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    assert!(response.contains("pokecon-startup-fixture"), "{response}");
 }

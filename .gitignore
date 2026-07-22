@@ -187,6 +187,7 @@ result-*
 !/web/eslint.config.js
 !/web/svelte.config.js
 !/web/vitest.config.ts
+!/web/vitest.setup.ts
 !/web/tailwind.config.js
 !/web/postcss.config.js
 !/web/src/
@@ -195,7 +196,10 @@ result-*
 !/web/src/*.ts
 !/web/src/*.svelte
 !/web/src/*.css
+!/web/src/*.html
 !/web/src/lib/
+!/web/src/lib/generated/
+!/web/src/lib/generated/*.ts
 !/web/src/lib/**/*.ts
 !/web/src/lib/**/*.svelte
 !/web/src/lib/**/*.svelte.ts

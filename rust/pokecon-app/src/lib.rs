@@ -8,13 +8,18 @@ pub mod script_runtime;
 
 use std::io;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 
+use axum::Router;
 use pokecon_core::{
     APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownReason, install_os_signal_forwarder,
 };
 use pokecon_desktop::DesktopLifecycle;
 use pokecon_server::BoundServer;
+use pokecon_server::router::public_router;
+use pokecon_server::security::RequestSecurity;
+use pokecon_server::static_files::{StaticFiles, StaticRootError};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -34,12 +39,14 @@ pub enum UiMode {
 }
 
 /// Startup values required by the phase-two process skeleton.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppOptions {
     /// HTTP listener address.
     pub listen_address: SocketAddr,
     /// Web or desktop lifecycle mode.
     pub ui_mode: UiMode,
+    /// Canonical startup-only directory containing the static SPA bundle.
+    pub web_root: PathBuf,
     /// Request a clean exit immediately after all startup boundaries are ready.
     pub exit_after_startup: bool,
 }
@@ -56,6 +63,9 @@ pub struct RunSummary {
 /// Failure while binding, serving, or joining the main process tasks.
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// The configured static SPA root could not be opened safely.
+    #[error("failed to open the static SPA root: {0}")]
+    Static(#[from] StaticRootError),
     /// The axum listener could not be bound.
     #[error("failed to bind the axum listener: {0}")]
     Bind(#[source] io::Error),
@@ -90,6 +100,15 @@ pub async fn run_with_dynamic(
     options: AppOptions,
     mut dynamic: Option<DynamicRuntime>,
 ) -> Result<RunSummary, AppError> {
+    let static_files = match StaticFiles::new(&options.web_root) {
+        Ok(static_files) => static_files,
+        Err(error) => {
+            if let Some(runtime) = dynamic.take() {
+                runtime.shutdown().await;
+            }
+            return Err(AppError::Static(error));
+        }
+    };
     let context = RuntimeContext::native();
     let shutdown = context.shutdown().clone();
     let signal_task = install_os_signal_forwarder(shutdown.clone()).await;
@@ -105,6 +124,8 @@ pub async fn run_with_dynamic(
         }
     };
     let listen_address = server.local_addr();
+    let security = RequestSecurity::new(listen_address, options.ui_mode == UiMode::Desktop);
+    let server = server.with_router(public_router(Router::new(), static_files, security));
     let server_shutdown = CancellationToken::new();
     let server_task = tokio::spawn(server.serve(server_shutdown.clone()));
 

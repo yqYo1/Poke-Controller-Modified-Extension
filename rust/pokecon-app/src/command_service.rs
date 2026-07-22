@@ -701,7 +701,24 @@ impl CommandService {
         deadline: Duration,
     ) -> Result<Option<ScriptSessionStop>, CommandServiceError> {
         self.host.hold_profile_switch_gate();
-        self.stop_for_profile_switch(deadline).await
+        let session = {
+            let mut inner = self.inner.lock().await;
+            inner.execution_epoch = inner.execution_epoch.wrapping_add(1);
+            inner.status = CommandStatus::Stopped;
+            inner.current = None;
+            inner.stop_post_pending = false;
+            inner.commands.clear();
+            inner.session_profile = None;
+            inner.session.take()
+        };
+        let Some(session) = session else {
+            self.host.clear_command_generation_for_shutdown();
+            return Ok(None);
+        };
+        let _cooperative = session.request_profile_stop().await;
+        session.begin_stopping();
+        self.host.clear_command_generation_for_shutdown();
+        Ok(Some(session.shutdown(deadline).await?))
     }
 
     #[must_use]
@@ -1474,6 +1491,29 @@ mod tests {
 
         fixture.service.reload().await.unwrap();
         assert_eq!(fixture.factory.spawns.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn application_shutdown_reaps_scripts_after_dynamic_mutations_close() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        fixture.host.begin_stopping();
+
+        let stopped = fixture
+            .service
+            .shutdown(Duration::from_millis(20))
+            .await
+            .expect("application shutdown uses its internal cleanup path")
+            .expect("the initialized script session is reaped");
+
+        assert!(!stopped.forced);
+        assert!(fixture.session.stopping.load(Ordering::Acquire));
+        assert_eq!(fixture.session.shutdowns.load(Ordering::Acquire), 1);
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+        let state = fixture.host.state_snapshot().unwrap();
+        assert_eq!(state["command_state"], json!("stopped"));
+        assert_eq!(state["command_candidates"], json!([]));
+        assert_eq!(state["command_display_lists"], json!({"-": []}));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

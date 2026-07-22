@@ -552,35 +552,19 @@ impl StartupDynamicHost {
     pub fn clear_command_generation(&self) -> Result<(), DynamicHostError> {
         let mut inner = self.inner.lock();
         ensure_running(&inner)?;
-        inner.script_load = None;
-        inner
-            .public_state
-            .insert("is_running".to_owned(), Value::Bool(false));
-        inner.public_state.insert(
-            "command_state".to_owned(),
-            Value::String("stopped".to_owned()),
-        );
-        inner
-            .public_state
-            .insert("current_command".to_owned(), Value::String(String::new()));
-        inner
-            .public_state
-            .insert("command_candidates".to_owned(), Value::Array(Vec::new()));
-        inner
-            .public_state
-            .insert("tags".to_owned(), Value::Array(Vec::new()));
-        inner.public_state.insert(
-            "command_display_lists".to_owned(),
-            serde_json::json!({"-": []}),
-        );
-        inner.command_cache_published = false;
-        inner.public_state.insert(
-            "command_display_cache_loading".to_owned(),
-            Value::Bool(false),
-        );
+        clear_command_generation_state(&mut inner);
         drop(inner);
         self.notify_runtime_change();
         Ok(())
+    }
+
+    /// Removes Rust-owned command state during application shutdown after the
+    /// dynamic host has intentionally closed every external mutation boundary.
+    pub(crate) fn clear_command_generation_for_shutdown(&self) {
+        let mut inner = self.inner.lock();
+        clear_command_generation_state(&mut inner);
+        drop(inner);
+        self.notify_runtime_change();
     }
 
     /// Fully resolves one target profile without changing active settings,
@@ -1047,6 +1031,35 @@ fn store_writable_state(
         inner.public_state.insert(name.to_owned(), value);
     }
     Ok(())
+}
+
+fn clear_command_generation_state(inner: &mut StartupHostState) {
+    inner.script_load = None;
+    inner
+        .public_state
+        .insert("is_running".to_owned(), Value::Bool(false));
+    inner.public_state.insert(
+        "command_state".to_owned(),
+        Value::String("stopped".to_owned()),
+    );
+    inner
+        .public_state
+        .insert("current_command".to_owned(), Value::String(String::new()));
+    inner
+        .public_state
+        .insert("command_candidates".to_owned(), Value::Array(Vec::new()));
+    inner
+        .public_state
+        .insert("tags".to_owned(), Value::Array(Vec::new()));
+    inner.public_state.insert(
+        "command_display_lists".to_owned(),
+        serde_json::json!({"-": []}),
+    );
+    inner.command_cache_published = false;
+    inner.public_state.insert(
+        "command_display_cache_loading".to_owned(),
+        Value::Bool(false),
+    );
 }
 
 fn ensure_running(inner: &StartupHostState) -> Result<(), DynamicHostError> {

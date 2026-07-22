@@ -279,13 +279,13 @@ pub struct CommandDisplaySeparator {
     pub label: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum CommandControlRequest {
     Start(CommandStartFields),
-    Stop(EmptyRequest),
-    Pause(EmptyRequest),
-    Resume(EmptyRequest),
+    Stop {},
+    Pause {},
+    Resume {},
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
@@ -297,6 +297,29 @@ pub struct CommandStartFields {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EmptyRequest {}
+
+impl<'de> Deserialize<'de> for CommandControlRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, tag = "action", rename_all = "snake_case")]
+        enum WireRequest {
+            Start(CommandStartFields),
+            Stop(EmptyRequest),
+            Pause(EmptyRequest),
+            Resume(EmptyRequest),
+        }
+
+        Ok(match WireRequest::deserialize(deserializer)? {
+            WireRequest::Start(fields) => Self::Start(fields),
+            WireRequest::Stop(_) => Self::Stop {},
+            WireRequest::Pause(_) => Self::Pause {},
+            WireRequest::Resume(_) => Self::Resume {},
+        })
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -451,11 +474,30 @@ pub struct SerialPort {
     pub available: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum SerialControlRequest {
-    Connect(EmptyRequest),
-    Disconnect(EmptyRequest),
+    Connect {},
+    Disconnect {},
+}
+
+impl<'de> Deserialize<'de> for SerialControlRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, tag = "action", rename_all = "snake_case")]
+        enum WireRequest {
+            Connect(EmptyRequest),
+            Disconnect(EmptyRequest),
+        }
+
+        Ok(match WireRequest::deserialize(deserializer)? {
+            WireRequest::Connect(_) => Self::Connect {},
+            WireRequest::Disconnect(_) => Self::Disconnect {},
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
@@ -527,11 +569,30 @@ pub struct SavedScreenshot {
     pub format: ImageFormat,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "channel", rename_all = "lowercase")]
 pub enum NotificationTestRequest {
-    Windows(EmptyRequest),
-    Discord(EmptyRequest),
+    Windows {},
+    Discord {},
+}
+
+impl<'de> Deserialize<'de> for NotificationTestRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, tag = "channel", rename_all = "lowercase")]
+        enum WireRequest {
+            Windows(EmptyRequest),
+            Discord(EmptyRequest),
+        }
+
+        Ok(match WireRequest::deserialize(deserializer)? {
+            WireRequest::Windows(_) => Self::Windows {},
+            WireRequest::Discord(_) => Self::Discord {},
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
@@ -547,12 +608,33 @@ pub enum DynamicLanguage {
     Lua,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DynamicConfigControlRequest {
     LoadPath(DynamicLoadPath),
     LoadContent(DynamicLoadContent),
-    Reload(EmptyRequest),
+    Reload {},
+}
+
+impl<'de> Deserialize<'de> for DynamicConfigControlRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields, tag = "action", rename_all = "snake_case")]
+        enum WireRequest {
+            LoadPath(DynamicLoadPath),
+            LoadContent(DynamicLoadContent),
+            Reload(EmptyRequest),
+        }
+
+        Ok(match WireRequest::deserialize(deserializer)? {
+            WireRequest::LoadPath(fields) => Self::LoadPath(fields),
+            WireRequest::LoadContent(fields) => Self::LoadContent(fields),
+            WireRequest::Reload(_) => Self::Reload {},
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]

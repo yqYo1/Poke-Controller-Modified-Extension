@@ -300,16 +300,16 @@ export interface components {
         CommandControlRequest: (components["schemas"]["CommandStartFields"] & {
             /** @enum {string} */
             action: "start";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        }) | {
             /** @enum {string} */
             action: "stop";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        } | {
             /** @enum {string} */
             action: "pause";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        } | {
             /** @enum {string} */
             action: "resume";
-        });
+        };
         CommandDisplayCommand: {
             command: components["schemas"]["CommandInfo"];
         };
@@ -350,10 +350,10 @@ export interface components {
         }) | (components["schemas"]["DynamicLoadContent"] & {
             /** @enum {string} */
             action: "load_content";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        }) | {
             /** @enum {string} */
             action: "reload";
-        });
+        };
         DynamicConfigResult: {
             display_path: string;
             language: components["schemas"]["DynamicLanguage"];
@@ -626,13 +626,13 @@ export interface components {
             /** Format: double */
             y: number;
         };
-        NotificationTestRequest: (components["schemas"]["EmptyRequest"] & {
+        NotificationTestRequest: {
             /** @enum {string} */
             channel: "windows";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        } | {
             /** @enum {string} */
             channel: "discord";
-        });
+        };
         NotificationTestResult: {
             delivered: boolean;
         };
@@ -677,13 +677,13 @@ export interface components {
             /** @enum {string} */
             destination: "download";
         });
-        SerialControlRequest: (components["schemas"]["EmptyRequest"] & {
+        SerialControlRequest: {
             /** @enum {string} */
             action: "connect";
-        }) | (components["schemas"]["EmptyRequest"] & {
+        } | {
             /** @enum {string} */
             action: "disconnect";
-        });
+        };
         SerialData: {
             byte_length: number;
             data: string;

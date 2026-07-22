@@ -390,70 +390,49 @@
             ]
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "stop"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "stop"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "pause"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "pause"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "resume"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "resume"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           }
         ]
       },
@@ -655,26 +634,19 @@
             ]
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "reload"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "reload"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           }
         ]
       },
@@ -1968,48 +1940,34 @@
         },
         "oneOf": [
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "channel": {
-                    "enum": [
-                      "windows"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "channel"
+            "additionalProperties": false,
+            "properties": {
+              "channel": {
+                "enum": [
+                  "windows"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "channel"
+            ],
+            "type": "object"
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "channel": {
-                    "enum": [
-                      "discord"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "channel"
+            "additionalProperties": false,
+            "properties": {
+              "channel": {
+                "enum": [
+                  "discord"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "channel"
+            ],
+            "type": "object"
           }
         ]
       },
@@ -2251,48 +2209,34 @@
         },
         "oneOf": [
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "connect"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "connect"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           },
           {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmptyRequest"
-              },
-              {
-                "additionalProperties": false,
-                "properties": {
-                  "action": {
-                    "enum": [
-                      "disconnect"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "action"
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "disconnect"
                 ],
-                "type": "object"
+                "type": "string"
               }
-            ]
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
           }
         ]
       },

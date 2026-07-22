@@ -173,7 +173,7 @@
             version = workspaceVersion;
             src = source;
             sourceRoot = "pokecon-source/web";
-            npmDepsHash = "sha256-ZibPH4TqfYUukYOh2VeXTJIZCp8eTL54KUrMxFRysB0=";
+            npmDepsHash = "sha256-4YUu0CTgj8cEBMhAU+MU6jUVcqijpefiDMMAvye+zco=";
             installPhase = ''
               runHook preInstall
               mkdir -p "$out"

@@ -183,6 +183,27 @@ impl RealtimeTransportController {
         self.next_recovery_probe
     }
 
+    /// Returns the earliest monotonic instant at which [`Self::tick`] can
+    /// produce a transition.
+    #[must_use]
+    pub fn next_wakeup(&self) -> Option<Instant> {
+        let attempt_deadline = self.attempt.map(|attempt| attempt.deadline);
+        let inactivity_deadline = (self.route == RealtimeRoute::WebRtc)
+            .then(|| {
+                self.last_primary_activity
+                    .map(|activity| deadline(activity, self.config.inactivity_timeout))
+            })
+            .flatten();
+        [
+            attempt_deadline,
+            inactivity_deadline,
+            self.next_recovery_probe,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+    }
+
     /// Drains all ordered side effects produced by previous transitions.
     pub fn take_actions(&mut self) -> Vec<RealtimeAction> {
         self.actions.drain(..).collect()
@@ -380,12 +401,19 @@ impl RealtimeTransportController {
         let Some(attempt) = self.attempt.take() else {
             return;
         };
+        let input_handoff_started = attempt.promotion == PromotionState::Requested;
         self.actions.push_back(RealtimeAction::StopWebRtcAttempt {
             attempt: attempt.id,
         });
         if attempt.kind == WebRtcAttemptKind::Initial {
-            self.enter_fallback(now, false);
+            self.enter_fallback(now, input_handoff_started);
         } else {
+            if input_handoff_started {
+                self.actions.push_back(RealtimeAction::BeginInputHandoff {
+                    route: RealtimeRoute::WebSocketFallback,
+                    attempt: None,
+                });
+            }
             self.schedule_recovery(now);
         }
     }
@@ -505,6 +533,31 @@ mod tests {
     }
 
     #[test]
+    fn failed_initial_peer_restores_websocket_input_after_handoff_started() {
+        let now = Instant::now();
+        let mut controller =
+            RealtimeTransportController::new(RealtimeTransportConfig::default(), now);
+        let _initial = actions(&mut controller);
+        controller.peer_readiness(1, true, true, now + Duration::from_secs(1));
+        let _handoff = actions(&mut controller);
+
+        controller.peer_failed(1, now + Duration::from_secs(2));
+
+        assert_eq!(controller.route(), RealtimeRoute::WebSocketFallback);
+        assert_eq!(
+            actions(&mut controller),
+            [
+                RealtimeAction::StopWebRtcAttempt { attempt: 1 },
+                RealtimeAction::EnableMotionJpeg,
+                RealtimeAction::BeginInputHandoff {
+                    route: RealtimeRoute::WebSocketFallback,
+                    attempt: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn three_seconds_without_primary_activity_releases_route_to_fallback() {
         let now = Instant::now();
         let mut controller =
@@ -560,6 +613,57 @@ mod tests {
         assert_eq!(
             controller.next_recovery_probe(),
             Some(now + Duration::from_secs(66))
+        );
+    }
+
+    #[test]
+    fn failed_recovery_peer_restores_websocket_input_after_handoff_started() {
+        let now = Instant::now();
+        let mut controller =
+            RealtimeTransportController::new(RealtimeTransportConfig::default(), now);
+        let _initial = actions(&mut controller);
+        controller.tick(now + Duration::from_secs(5));
+        let _fallback = actions(&mut controller);
+        controller.tick(now + Duration::from_secs(35));
+        let _probe = actions(&mut controller);
+        controller.peer_readiness(2, true, true, now + Duration::from_secs(36));
+        let _handoff = actions(&mut controller);
+
+        controller.peer_failed(2, now + Duration::from_secs(37));
+
+        assert_eq!(controller.route(), RealtimeRoute::WebSocketFallback);
+        assert_eq!(
+            actions(&mut controller),
+            [
+                RealtimeAction::StopWebRtcAttempt { attempt: 2 },
+                RealtimeAction::BeginInputHandoff {
+                    route: RealtimeRoute::WebSocketFallback,
+                    attempt: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn next_wakeup_tracks_attempt_activity_and_recovery_deadlines() {
+        let now = Instant::now();
+        let mut controller =
+            RealtimeTransportController::new(RealtimeTransportConfig::default(), now);
+        assert_eq!(controller.next_wakeup(), Some(now + Duration::from_secs(5)));
+        let _initial = actions(&mut controller);
+
+        controller.peer_readiness(1, true, true, now + Duration::from_secs(1));
+        let _handoff = actions(&mut controller);
+        controller.primary_input_applied(1, now + Duration::from_secs(2));
+        assert_eq!(controller.next_wakeup(), Some(now + Duration::from_secs(5)));
+        let _activation = actions(&mut controller);
+
+        controller.primary_activity(1, now + Duration::from_secs(3));
+        assert_eq!(controller.next_wakeup(), Some(now + Duration::from_secs(6)));
+        controller.tick(now + Duration::from_secs(6));
+        assert_eq!(
+            controller.next_wakeup(),
+            Some(now + Duration::from_secs(36))
         );
     }
 

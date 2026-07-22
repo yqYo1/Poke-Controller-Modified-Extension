@@ -3329,6 +3329,7 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
+ "url",
  "utoipa",
  "webrtc",
 ]

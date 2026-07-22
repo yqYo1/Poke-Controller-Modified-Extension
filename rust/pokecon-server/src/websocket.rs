@@ -27,6 +27,9 @@ use crate::api::{
     SessionDescription,
 };
 use crate::backend::{ApiFailure, ApiResult};
+use crate::realtime_connection::{
+    RealtimeConnectionConfig, RealtimeConnectionIo, run_realtime_connection,
+};
 use crate::state::StateHub;
 
 const DEFAULT_MESSAGE_BYTES: usize = 1024 * 1024;
@@ -145,6 +148,8 @@ impl From<WebSocketReply> for ServerMessage {
 pub trait WebSocketBackend: Send + Sync + 'static {
     fn state_hub(&self) -> &StateHub;
 
+    /// Installs or atomically replaces the input generation owned by this
+    /// connection. Realtime route handoffs may call this more than once.
     async fn connected(
         &self,
         connection: ConnectionId,
@@ -160,6 +165,12 @@ pub trait WebSocketBackend: Send + Sync + 'static {
     /// Supplies a connection-specific fallback stream when camera media is
     /// available. `None` leaves the JSON-only WebSocket behavior unchanged.
     fn motion_jpeg(&self, _connection: ConnectionId) -> Option<MotionJpegStream> {
+        None
+    }
+
+    /// Enables native WebRTC orchestration for this connection. Backends that
+    /// return `None` retain the JSON/Motion JPEG-only behavior.
+    fn realtime(&self, _connection: ConnectionId) -> Option<RealtimeConnectionConfig> {
         None
     }
 
@@ -179,6 +190,7 @@ pub struct WebSocketConfig {
     pub state_queue_capacity: usize,
     pub ephemeral_queue_capacity: usize,
     pub heartbeat_queue_capacity: usize,
+    pub realtime_queue_capacity: usize,
     pub broadcast_capacity: usize,
 }
 
@@ -192,6 +204,7 @@ impl Default for WebSocketConfig {
             state_queue_capacity: 64,
             ephemeral_queue_capacity: 128,
             heartbeat_queue_capacity: 8,
+            realtime_queue_capacity: 128,
             broadcast_capacity: 256,
         }
     }
@@ -287,6 +300,7 @@ impl WebSocketTransport {
             || config.state_queue_capacity == 0
             || config.ephemeral_queue_capacity == 0
             || config.heartbeat_queue_capacity == 0
+            || config.realtime_queue_capacity == 0
             || config.broadcast_capacity == 0
         {
             return Err(WebSocketBuildError::ZeroCapacity);
@@ -355,7 +369,7 @@ fn http_error(status: StatusCode, code: ApiErrorCode, message: &str) -> Response
 }
 
 #[derive(Debug)]
-enum Outgoing {
+pub(crate) enum Outgoing {
     Json(ServerMessage),
     Close(CloseFrame),
 }
@@ -364,14 +378,107 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     let generation = InputGeneration {
         generation: format!("ws-{}", connection.get()),
     };
+    if !initialize_backend(&state, connection, &generation).await {
+        let _result = socket
+            .send(Message::Close(Some(protocol_close(
+                "connection initialization failed",
+            ))))
+            .await;
+        state.backend.disconnected(connection).await;
+        return;
+    }
+
     let state_events = state.backend.state_hub().subscribe();
     let broadcast_events = state.broker.subscribe();
-    let connected = time::timeout(
+    let cancellation = CancellationToken::new();
+    let (high_sender, high_receiver) = mpsc::channel(state.config.state_queue_capacity);
+    let (low_sender, low_receiver) = mpsc::channel(state.config.ephemeral_queue_capacity);
+    let (pong_sender, pong_receiver) = mpsc::channel(state.config.heartbeat_queue_capacity);
+    if high_sender
+        .try_send(Outgoing::Json(ServerMessage::InputGeneration(
+            MessageData { data: generation },
+        )))
+        .is_err()
+    {
+        state.backend.disconnected(connection).await;
+        return;
+    }
+
+    let realtime = setup_realtime(&state, connection);
+    let (socket_sender, socket_receiver) = socket.split();
+    let mut tasks = JoinSet::new();
+    tasks.spawn(write_messages(
+        socket_sender,
+        high_receiver,
+        low_receiver,
+        realtime.motion_jpeg,
+        cancellation.clone(),
+    ));
+    tasks.spawn(read_messages(
+        socket_receiver,
+        ReadMessageContext {
+            backend: Arc::clone(&state.backend),
+            connection,
+            outgoing: high_sender.clone(),
+            pong: pong_sender,
+            backend_timeout: state.config.backend_timeout,
+            realtime: realtime.messages,
+            cancellation: cancellation.clone(),
+        },
+    ));
+    tasks.spawn(forward_state_changes(
+        state_events,
+        high_sender.clone(),
+        cancellation.clone(),
+    ));
+    tasks.spawn(forward_broadcasts(
+        broadcast_events,
+        low_sender.clone(),
+        realtime.logs,
+        cancellation.clone(),
+    ));
+    tasks.spawn(heartbeat(
+        connection,
+        high_sender.clone(),
+        pong_receiver,
+        state.config.heartbeat_interval,
+        state.config.pong_timeout,
+        cancellation.clone(),
+    ));
+    if let Some((config, messages, logs, motion_jpeg_enabled)) = realtime.task {
+        tasks.spawn(run_realtime_connection(
+            config,
+            RealtimeConnectionIo {
+                backend: Arc::clone(&state.backend),
+                connection,
+                outgoing_high: high_sender,
+                outgoing_low: low_sender,
+                messages,
+                logs,
+                motion_jpeg_enabled,
+                backend_timeout: state.config.backend_timeout,
+                cancellation: cancellation.clone(),
+            },
+        ));
+    }
+
+    let _first_finished = tasks.join_next().await;
+    cancellation.cancel();
+    while tasks.join_next().await.is_some() {}
+    state.backend.disconnected(connection).await;
+}
+
+async fn initialize_backend(
+    state: &WebSocketState,
+    connection: ConnectionId,
+    generation: &InputGeneration,
+) -> bool {
+    match time::timeout(
         state.config.backend_timeout,
-        state.backend.connected(connection, &generation),
+        state.backend.connected(connection, generation),
     )
-    .await;
-    let initialized = match connected {
+    .await
+    {
         Ok(Ok(())) => true,
         Ok(Err(error)) => {
             tracing::warn!(
@@ -388,80 +495,52 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
             );
             false
         }
+    }
+}
+
+type RealtimeTask = (
+    RealtimeConnectionConfig,
+    mpsc::Receiver<ClientMessage>,
+    mpsc::Receiver<LogData>,
+    watch::Sender<bool>,
+);
+
+struct RealtimeSetup {
+    motion_jpeg: MotionJpegDelivery,
+    messages: Option<mpsc::Sender<ClientMessage>>,
+    logs: Option<mpsc::Sender<LogData>>,
+    task: Option<RealtimeTask>,
+}
+
+fn setup_realtime(state: &WebSocketState, connection: ConnectionId) -> RealtimeSetup {
+    let Some(config) = state.backend.realtime(connection) else {
+        return RealtimeSetup {
+            motion_jpeg: MotionJpegDelivery::from_stream(state.backend.motion_jpeg(connection)),
+            messages: None,
+            logs: None,
+            task: None,
+        };
     };
-    if !initialized {
-        let _result = socket
-            .send(Message::Close(Some(protocol_close(
-                "connection initialization failed",
-            ))))
-            .await;
-        state.backend.disconnected(connection).await;
-        return;
+    let (command_sender, command_receiver) = mpsc::channel(state.config.realtime_queue_capacity);
+    let (event_sender, event_receiver) = mpsc::channel(state.config.realtime_queue_capacity);
+    let (motion_enabled, motion_receiver) = watch::channel(false);
+    RealtimeSetup {
+        motion_jpeg: MotionJpegDelivery::Switched {
+            feed: config.motion_jpeg(),
+            enabled: motion_receiver,
+            stream: None,
+        },
+        messages: Some(command_sender),
+        logs: Some(event_sender),
+        task: Some((config, command_receiver, event_receiver, motion_enabled)),
     }
-
-    let cancellation = CancellationToken::new();
-    let (high_sender, high_receiver) = mpsc::channel(state.config.state_queue_capacity);
-    let (low_sender, low_receiver) = mpsc::channel(state.config.ephemeral_queue_capacity);
-    let (pong_sender, pong_receiver) = mpsc::channel(state.config.heartbeat_queue_capacity);
-    if high_sender
-        .try_send(Outgoing::Json(ServerMessage::InputGeneration(
-            MessageData { data: generation },
-        )))
-        .is_err()
-    {
-        state.backend.disconnected(connection).await;
-        return;
-    }
-
-    let (socket_sender, socket_receiver) = socket.split();
-    let motion_jpeg = state.backend.motion_jpeg(connection);
-    let mut tasks = JoinSet::new();
-    tasks.spawn(write_messages(
-        socket_sender,
-        high_receiver,
-        low_receiver,
-        motion_jpeg,
-        cancellation.clone(),
-    ));
-    tasks.spawn(read_messages(
-        socket_receiver,
-        Arc::clone(&state.backend),
-        connection,
-        high_sender.clone(),
-        pong_sender,
-        state.config.backend_timeout,
-        cancellation.clone(),
-    ));
-    tasks.spawn(forward_state_changes(
-        state_events,
-        high_sender.clone(),
-        cancellation.clone(),
-    ));
-    tasks.spawn(forward_broadcasts(
-        broadcast_events,
-        low_sender,
-        cancellation.clone(),
-    ));
-    tasks.spawn(heartbeat(
-        connection,
-        high_sender,
-        pong_receiver,
-        state.config.heartbeat_interval,
-        state.config.pong_timeout,
-        cancellation.clone(),
-    ));
-
-    let _first_finished = tasks.join_next().await;
-    cancellation.cancel();
-    while tasks.join_next().await.is_some() {}
-    state.backend.disconnected(connection).await;
 }
 
 async fn write_messages<S>(
     mut socket: S,
     mut high: mpsc::Receiver<Outgoing>,
     mut low: mpsc::Receiver<Outgoing>,
-    mut motion_jpeg: Option<MotionJpegStream>,
+    mut motion_jpeg: MotionJpegDelivery,
     cancellation: CancellationToken,
 ) where
     S: Sink<Message, Error = axum::Error> + Unpin,
@@ -492,7 +571,7 @@ async fn write_messages<S>(
             }
             NextWrite::MotionJpeg(MotionJpegEvent::Value(None)) => continue,
             NextWrite::MotionJpeg(MotionJpegEvent::Closed) => {
-                motion_jpeg = None;
+                motion_jpeg = MotionJpegDelivery::Disabled;
                 continue;
             }
         };
@@ -508,27 +587,76 @@ enum NextWrite {
     Cancelled,
 }
 
-async fn next_motion_jpeg(stream: &mut Option<MotionJpegStream>) -> MotionJpegEvent {
-    let Some(stream) = stream else {
-        return std::future::pending().await;
-    };
-    stream.next().await
+#[derive(Debug)]
+enum MotionJpegDelivery {
+    Disabled,
+    Always(MotionJpegStream),
+    Switched {
+        feed: MotionJpegFeed,
+        enabled: watch::Receiver<bool>,
+        stream: Option<MotionJpegStream>,
+    },
 }
 
-async fn read_messages<R>(
-    mut socket: R,
+impl MotionJpegDelivery {
+    fn from_stream(stream: Option<MotionJpegStream>) -> Self {
+        stream.map_or(Self::Disabled, Self::Always)
+    }
+
+    async fn next(&mut self) -> MotionJpegEvent {
+        loop {
+            match self {
+                Self::Disabled => return std::future::pending().await,
+                Self::Always(stream) => return stream.next().await,
+                Self::Switched {
+                    feed,
+                    enabled,
+                    stream,
+                } => {
+                    if !*enabled.borrow_and_update() {
+                        *stream = None;
+                        if enabled.changed().await.is_err() {
+                            return MotionJpegEvent::Closed;
+                        }
+                        continue;
+                    }
+                    let active = stream.get_or_insert_with(|| feed.subscribe());
+                    tokio::select! {
+                        biased;
+                        changed = enabled.changed() => {
+                            if changed.is_err() {
+                                return MotionJpegEvent::Closed;
+                            }
+                        }
+                        event = active.next() => return event,
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn next_motion_jpeg(delivery: &mut MotionJpegDelivery) -> MotionJpegEvent {
+    delivery.next().await
+}
+
+struct ReadMessageContext {
     backend: Arc<dyn WebSocketBackend>,
     connection: ConnectionId,
     outgoing: mpsc::Sender<Outgoing>,
     pong: mpsc::Sender<String>,
     backend_timeout: Duration,
+    realtime: Option<mpsc::Sender<ClientMessage>>,
     cancellation: CancellationToken,
-) where
+}
+
+async fn read_messages<R>(mut socket: R, context: ReadMessageContext)
+where
     R: Stream<Item = Result<Message, axum::Error>> + Unpin,
 {
     loop {
         let next = tokio::select! {
-            () = cancellation.cancelled() => return,
+            () = context.cancellation.cancelled() => return,
             next = socket.next() => next,
         };
         let Some(Ok(message)) = next else {
@@ -541,49 +669,64 @@ async fn read_messages<R>(
             if matches!(message, Message::Ping(_) | Message::Pong(_)) {
                 continue;
             }
-            close_for_protocol(&outgoing, "client messages must be JSON text");
-            cancellation.cancel();
+            close_for_protocol(&context.outgoing, "client messages must be JSON text");
+            context.cancellation.cancel();
             return;
         };
         let Ok(message) = serde_json::from_str::<ClientMessage>(text.as_str()) else {
-            close_for_protocol(&outgoing, "invalid client message");
-            cancellation.cancel();
+            close_for_protocol(&context.outgoing, "invalid client message");
+            context.cancellation.cancel();
             return;
         };
         if let ClientMessage::Pong(MessageData { data }) = message {
-            if pong.try_send(data.nonce).is_err() {
-                cancellation.cancel();
+            if context.pong.try_send(data.nonce).is_err() {
+                context.cancellation.cancel();
                 return;
             }
             continue;
         }
-        let replies =
-            match time::timeout(backend_timeout, backend.message(connection, message)).await {
-                Ok(Ok(replies)) => replies,
-                Ok(Err(error)) => {
-                    log_backend_failure(connection, &error);
-                    cancellation.cancel();
-                    return;
-                }
-                Err(_elapsed) => {
-                    tracing::warn!(
-                        connection_id = connection.get(),
-                        "WebSocket backend operation timed out"
-                    );
-                    cancellation.cancel();
-                    return;
-                }
-            };
+        if let Some(realtime) = &context.realtime {
+            if realtime.try_send(message).is_err() {
+                context.cancellation.cancel();
+                return;
+            }
+            continue;
+        }
+        let replies = match time::timeout(
+            context.backend_timeout,
+            context.backend.message(context.connection, message),
+        )
+        .await
+        {
+            Ok(Ok(replies)) => replies,
+            Ok(Err(error)) => {
+                log_backend_failure(context.connection, &error);
+                context.cancellation.cancel();
+                return;
+            }
+            Err(_elapsed) => {
+                tracing::warn!(
+                    connection_id = context.connection.get(),
+                    "WebSocket backend operation timed out"
+                );
+                context.cancellation.cancel();
+                return;
+            }
+        };
         for reply in replies {
-            if outgoing.try_send(Outgoing::Json(reply.into())).is_err() {
-                cancellation.cancel();
+            if context
+                .outgoing
+                .try_send(Outgoing::Json(reply.into()))
+                .is_err()
+            {
+                context.cancellation.cancel();
                 return;
             }
         }
     }
 }
 
-fn log_backend_failure(connection: ConnectionId, error: &ApiFailure) {
+pub(crate) fn log_backend_failure(connection: ConnectionId, error: &ApiFailure) {
     tracing::warn!(
         connection_id = connection.get(),
         error_code = ?error.error().code,
@@ -632,6 +775,7 @@ async fn forward_state_changes(
 async fn forward_broadcasts(
     mut events: broadcast::Receiver<Arc<BroadcastEvent>>,
     outgoing: mpsc::Sender<Outgoing>,
+    realtime_logs: Option<mpsc::Sender<LogData>>,
     cancellation: CancellationToken,
 ) {
     loop {
@@ -643,13 +787,22 @@ async fn forward_broadcasts(
             Ok(event) => {
                 let message = match event.as_ref() {
                     BroadcastEvent::SerialData(data) => {
-                        ServerMessage::SerialData(MessageData { data: data.clone() })
+                        Some(ServerMessage::SerialData(MessageData {
+                            data: data.clone(),
+                        }))
                     }
                     BroadcastEvent::Log(data) => {
-                        ServerMessage::Log(MessageData { data: data.clone() })
+                        if let Some(realtime_logs) = &realtime_logs {
+                            let _dropped_if_slow = realtime_logs.try_send(data.clone());
+                            None
+                        } else {
+                            Some(ServerMessage::Log(MessageData { data: data.clone() }))
+                        }
                     }
                 };
-                let _dropped_if_slow = outgoing.try_send(Outgoing::Json(message));
+                if let Some(message) = message {
+                    let _dropped_if_slow = outgoing.try_send(Outgoing::Json(message));
+                }
             }
             Err(broadcast::error::RecvError::Lagged(_missed)) => {}
             Err(broadcast::error::RecvError::Closed) => return,
@@ -722,7 +875,10 @@ mod tests {
 
     use axum::http::StatusCode;
     use futures_util::{SinkExt as _, StreamExt as _};
-    use tokio::sync::Notify;
+    use pokecon_camera::{
+        BgrFrame, CaptureResolution, LatestFrameSource, ScreenshotRuntimeSettings,
+    };
+    use tokio::sync::{Notify, mpsc};
     use tokio::time::timeout;
     use tokio_tungstenite::MaybeTlsStream;
     use tokio_tungstenite::WebSocketStream;
@@ -730,6 +886,11 @@ mod tests {
     use tokio_tungstenite::tungstenite::Message as ClientFrame;
     use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
     use tokio_tungstenite::tungstenite::http::HeaderValue;
+    use webrtc::data_channel::RTCDataChannel;
+    use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
+    use webrtc::peer_connection::RTCPeerConnection;
+    use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+    use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
     use super::*;
     use crate::BoundServer;
@@ -739,18 +900,101 @@ mod tests {
         UiStateChange,
     };
     use crate::api::{SettingsReadValues, SettingsSnapshot, SettingsWriteValues};
+    use crate::realtime::RealtimeTransportConfig;
+    use crate::realtime_connection::RealtimeConnectionConfig;
     use crate::router::public_router;
     use crate::security::RequestSecurity;
     use crate::state::StateTransaction;
     use crate::static_files::StaticFiles;
+    use crate::webrtc::{
+        CONTROL_DATA_CHANNEL, LOG_DATA_CHANNEL, WebRtcMedia, WebRtcMediaConfig, WebRtcPeerConfig,
+        create_peer_connection,
+    };
 
     type ClientSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+
+    struct RealtimeClient {
+        peer: Arc<RTCPeerConnection>,
+        connected: mpsc::Receiver<()>,
+        candidates: mpsc::Receiver<RTCIceCandidateInit>,
+        channels: mpsc::Receiver<(String, Arc<RTCDataChannel>)>,
+        messages: mpsc::Receiver<(String, String)>,
+        video: mpsc::Receiver<usize>,
+    }
+
+    async fn realtime_client() -> RealtimeClient {
+        let peer = Arc::new(
+            create_peer_connection(&WebRtcPeerConfig::default())
+                .await
+                .expect("client peer"),
+        );
+        let (connected, connected_receiver) = mpsc::channel(1);
+        peer.on_peer_connection_state_change(Box::new(move |state| {
+            let connected = connected.clone();
+            Box::pin(async move {
+                if state == RTCPeerConnectionState::Connected {
+                    let _sent = connected.try_send(());
+                }
+            })
+        }));
+        let (candidates, candidate_receiver) = mpsc::channel(16);
+        peer.on_ice_candidate(Box::new(move |candidate| {
+            let candidates = candidates.clone();
+            Box::pin(async move {
+                if let Some(candidate) = candidate
+                    && let Ok(candidate) = candidate.to_json()
+                {
+                    let _sent = candidates.send(candidate).await;
+                }
+            })
+        }));
+        let (channels, channel_receiver) = mpsc::channel(2);
+        let (messages, message_receiver) = mpsc::channel(16);
+        peer.on_data_channel(Box::new(move |channel| {
+            let channels = channels.clone();
+            let label = channel.label().to_owned();
+            let message_label = label.clone();
+            let messages = messages.clone();
+            channel.on_message(Box::new(move |message| {
+                let messages = messages.clone();
+                let label = message_label.clone();
+                Box::pin(async move {
+                    let text = String::from_utf8(message.data.to_vec())
+                        .expect("server DataChannel messages are UTF-8");
+                    let _sent = messages.send((label, text)).await;
+                })
+            }));
+            Box::pin(async move {
+                let _sent = channels.send((label, channel)).await;
+            })
+        }));
+        let (video, video_receiver) = mpsc::channel(1);
+        peer.on_track(Box::new(move |track, _, _| {
+            let video = video.clone();
+            Box::pin(async move {
+                tokio::spawn(async move {
+                    if let Ok((packet, _attributes)) = track.read_rtp().await {
+                        let _sent = video.send(packet.payload.len()).await;
+                    }
+                });
+            })
+        }));
+        RealtimeClient {
+            peer,
+            connected: connected_receiver,
+            candidates: candidate_receiver,
+            channels: channel_receiver,
+            messages: message_receiver,
+            video: video_receiver,
+        }
+    }
 
     struct TestBackend {
         hub: StateHub,
         generations: Mutex<BTreeMap<ConnectionId, String>>,
         received: Mutex<Vec<ClientMessage>>,
         motion_jpeg: Option<MotionJpegFeed>,
+        realtime: Option<RealtimeConnectionConfig>,
         disconnected: AtomicUsize,
         disconnect_notify: Notify,
     }
@@ -766,6 +1010,19 @@ mod tests {
                 generations: Mutex::new(BTreeMap::new()),
                 received: Mutex::new(Vec::new()),
                 motion_jpeg,
+                realtime: None,
+                disconnected: AtomicUsize::new(0),
+                disconnect_notify: Notify::new(),
+            }
+        }
+
+        fn with_realtime(realtime: RealtimeConnectionConfig) -> Self {
+            Self {
+                hub: test_hub(),
+                generations: Mutex::new(BTreeMap::new()),
+                received: Mutex::new(Vec::new()),
+                motion_jpeg: None,
+                realtime: Some(realtime),
                 disconnected: AtomicUsize::new(0),
                 disconnect_notify: Notify::new(),
             }
@@ -827,6 +1084,10 @@ mod tests {
             self.motion_jpeg.as_ref().map(MotionJpegFeed::subscribe)
         }
 
+        fn realtime(&self, _connection: ConnectionId) -> Option<RealtimeConnectionConfig> {
+            self.realtime.clone()
+        }
+
         async fn disconnected(&self, _connection: ConnectionId) {
             self.disconnected.fetch_add(1, Ordering::AcqRel);
             self.disconnect_notify.notify_one();
@@ -876,6 +1137,7 @@ mod tests {
             state_queue_capacity: 8,
             ephemeral_queue_capacity: 8,
             heartbeat_queue_capacity: 4,
+            realtime_queue_capacity: 8,
             broadcast_capacity: 8,
         }
     }
@@ -921,7 +1183,11 @@ mod tests {
     }
 
     async fn receive_server(socket: &mut ClientSocket) -> ServerMessage {
-        let frame = timeout(Duration::from_secs(1), socket.next())
+        receive_server_within(socket, Duration::from_secs(1)).await
+    }
+
+    async fn receive_server_within(socket: &mut ClientSocket, duration: Duration) -> ServerMessage {
+        let frame = timeout(duration, socket.next())
             .await
             .expect("server message deadline")
             .expect("connection remains open")
@@ -939,6 +1205,223 @@ mod tests {
             ))
             .await
             .expect("send client message");
+    }
+
+    async fn signal_realtime(socket: &mut ClientSocket, client: &mut RealtimeClient) {
+        let ServerMessage::WebRtcOffer(MessageData { data: offer }) =
+            receive_server_within(socket, Duration::from_secs(10)).await
+        else {
+            panic!("first realtime message must be a WebRTC offer");
+        };
+        client
+            .peer
+            .set_remote_description(
+                RTCSessionDescription::offer(offer.sdp).expect("valid server offer"),
+            )
+            .await
+            .expect("client accepts offer");
+        let answer = client
+            .peer
+            .create_answer(None)
+            .await
+            .expect("client answer");
+        client
+            .peer
+            .set_local_description(answer)
+            .await
+            .expect("client installs answer");
+        let answer = client
+            .peer
+            .local_description()
+            .await
+            .expect("client local description");
+        send_client(
+            socket,
+            &ClientMessage::WebRtcAnswer(MessageData {
+                data: SessionDescription { sdp: answer.sdp },
+            }),
+        )
+        .await;
+
+        timeout(Duration::from_secs(10), async {
+            loop {
+                tokio::select! {
+                    connected = client.connected.recv() => {
+                        connected.expect("connection state channel");
+                        break;
+                    }
+                    candidate = client.candidates.recv() => {
+                        let candidate = candidate.expect("client ICE candidate channel");
+                        send_client(
+                            socket,
+                            &ClientMessage::WebRtcIceCandidate(MessageData {
+                                data: IceCandidate {
+                                    candidate: candidate.candidate,
+                                    sdp_mid: candidate.sdp_mid,
+                                    sdp_mline_index: candidate.sdp_mline_index,
+                                    username_fragment: candidate.username_fragment,
+                                },
+                            }),
+                        )
+                        .await;
+                    }
+                    message = receive_server_within(socket, Duration::from_secs(10)) => {
+                        let ServerMessage::WebRtcIceCandidate(MessageData { data }) = message else {
+                            panic!("unexpected signaling message: {message:?}");
+                        };
+                        client
+                            .peer
+                            .add_ice_candidate(RTCIceCandidateInit {
+                                candidate: data.candidate,
+                                sdp_mid: data.sdp_mid,
+                                sdp_mline_index: data.sdp_mline_index,
+                                username_fragment: data.username_fragment,
+                            })
+                            .await
+                            .expect("client accepts server ICE candidate");
+                    }
+                }
+            }
+        })
+        .await
+        .expect("WebRTC signaling deadline");
+    }
+
+    async fn realtime_channels(
+        receiver: &mut mpsc::Receiver<(String, Arc<RTCDataChannel>)>,
+    ) -> BTreeMap<String, Arc<RTCDataChannel>> {
+        let mut channels = BTreeMap::new();
+        timeout(Duration::from_secs(5), async {
+            while channels.len() < 2 {
+                let (label, channel) = receiver.recv().await.expect("remote DataChannel");
+                channels.insert(label, channel);
+            }
+        })
+        .await
+        .expect("DataChannel deadline");
+        channels
+    }
+
+    async fn receive_data_channel_message(
+        receiver: &mut mpsc::Receiver<(String, String)>,
+    ) -> (String, ServerMessage) {
+        let (label, message) = timeout(Duration::from_secs(5), receiver.recv())
+            .await
+            .expect("DataChannel message deadline")
+            .expect("DataChannel message");
+        (
+            label,
+            serde_json::from_str(&message).expect("typed DataChannel server message"),
+        )
+    }
+
+    async fn wait_for_fallback_generation(socket: &mut ClientSocket) -> String {
+        timeout(Duration::from_secs(5), async {
+            loop {
+                match receive_server_within(socket, Duration::from_secs(5)).await {
+                    ServerMessage::InputGeneration(MessageData { data })
+                        if data.generation.starts_with("ws-") =>
+                    {
+                        break data.generation;
+                    }
+                    ServerMessage::WebRtcIceCandidate(_) => {}
+                    other => panic!("unexpected message before fallback: {other:?}"),
+                }
+            }
+        })
+        .await
+        .expect("fallback generation deadline")
+    }
+
+    async fn receive_motion_jpeg(socket: &mut ClientSocket) -> Bytes {
+        timeout(Duration::from_secs(5), async {
+            loop {
+                let frame = socket
+                    .next()
+                    .await
+                    .expect("connection remains open")
+                    .expect("valid fallback frame");
+                match frame {
+                    ClientFrame::Binary(bytes) => break bytes,
+                    ClientFrame::Text(text) => {
+                        let message: ServerMessage =
+                            serde_json::from_str(text.as_str()).expect("typed server message");
+                        assert!(matches!(message, ServerMessage::WebRtcIceCandidate(_)));
+                    }
+                    other => panic!("unexpected fallback frame: {other:?}"),
+                }
+            }
+        })
+        .await
+        .expect("Motion JPEG deadline")
+    }
+
+    async fn realtime_test_config(
+        source: &LatestFrameSource,
+    ) -> (RealtimeConnectionConfig, MotionJpegFeed) {
+        let media = WebRtcMedia::new(
+            source.webrtc(),
+            source.motion_jpeg(ScreenshotRuntimeSettings::default()),
+            WebRtcMediaConfig::default(),
+        )
+        .await
+        .expect("media pipeline");
+        let motion_jpeg = media.motion_jpeg();
+        let transport = RealtimeTransportConfig::new(
+            Duration::from_secs(10),
+            Duration::from_secs(30),
+            true,
+            Duration::from_secs(2),
+        )
+        .expect("realtime timers");
+        (
+            RealtimeConnectionConfig::new(media, WebRtcPeerConfig::default(), transport)
+                .expect("realtime connection config"),
+            motion_jpeg,
+        )
+    }
+
+    fn neutral_snapshot(generation: String) -> ClientMessage {
+        ClientMessage::InputSnapshot(MessageData {
+            data: InputSnapshot {
+                generation,
+                sequence: DecimalString::zero(),
+                keyboard_keys: Vec::new(),
+                mouse_buttons: MouseButtons::default(),
+                buttons: ButtonState::default(),
+                hat: Hat::Neutral,
+                left_stick: StickPosition { x: 128, y: 128 },
+                right_stick: StickPosition { x: 128, y: 128 },
+                touch: None,
+            },
+        })
+    }
+
+    async fn acknowledge_rtc_generation(
+        client: &mut RealtimeClient,
+        channels: &BTreeMap<String, Arc<RTCDataChannel>>,
+        expected_generation: &str,
+    ) {
+        let (label, generation_message) = receive_data_channel_message(&mut client.messages).await;
+        assert_eq!(label, CONTROL_DATA_CHANNEL);
+        let ServerMessage::InputGeneration(MessageData { data: generation }) = generation_message
+        else {
+            panic!("RTC control channel must receive an input generation");
+        };
+        assert_eq!(generation.generation, expected_generation);
+        let snapshot = neutral_snapshot(generation.generation.clone());
+        channels[CONTROL_DATA_CHANNEL]
+            .send_text(serde_json::to_string(&snapshot).expect("snapshot JSON"))
+            .await
+            .expect("RTC snapshot send");
+        let (label, applied_message) = receive_data_channel_message(&mut client.messages).await;
+        assert_eq!(label, CONTROL_DATA_CHANNEL);
+        let ServerMessage::InputSnapshotApplied(MessageData { data: applied }) = applied_message
+        else {
+            panic!("RTC snapshot must be acknowledged on the control channel");
+        };
+        assert_eq!(applied.generation, expected_generation);
+        assert_eq!(applied.sequence, DecimalString::zero());
     }
 
     async fn stop_server(
@@ -1052,6 +1535,102 @@ mod tests {
 
         feed.suspend();
         socket.close(None).await.expect("close");
+        backend.wait_for_disconnect().await;
+        stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    async fn realtime_connection_promotes_atomically_and_falls_back_without_closing_signaling() {
+        let source = LatestFrameSource::new();
+        let (realtime, motion_jpeg) = realtime_test_config(&source).await;
+        let backend = Arc::new(TestBackend::with_realtime(realtime));
+        let mut config = test_config();
+        config.heartbeat_interval = Duration::from_mins(1);
+        config.pong_timeout = Duration::from_secs(10);
+        let transport = WebSocketTransport::new(backend.clone(), config).expect("transport");
+        let broker = transport.broker();
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        assert_eq!(initial_generation(&mut socket).await, "ws-1");
+
+        let mut client = realtime_client().await;
+        signal_realtime(&mut socket, &mut client).await;
+        let channels = realtime_channels(&mut client.channels).await;
+        assert_eq!(
+            channels.keys().map(String::as_str).collect::<Vec<_>>(),
+            [CONTROL_DATA_CHANNEL, LOG_DATA_CHANNEL]
+        );
+        acknowledge_rtc_generation(&mut client, &channels, "rtc-1-1").await;
+
+        assert_eq!(
+            broker.publish_log(LogData {
+                level: LogLevel::Info,
+                message: "realtime-log".to_owned(),
+                target: LogTarget::Log,
+            }),
+            1
+        );
+        let (label, log_message) = receive_data_channel_message(&mut client.messages).await;
+        assert_eq!(label, LOG_DATA_CHANNEL);
+        assert!(matches!(log_message, ServerMessage::Log(_)));
+
+        source.publish(
+            100,
+            BgrFrame::solid(CaptureResolution::R640x360, [20, 40, 60]),
+        );
+        let payload_bytes = timeout(Duration::from_secs(5), client.video.recv())
+            .await
+            .expect("RTP deadline")
+            .expect("RTP payload");
+        assert_ne!(payload_bytes, 0);
+        assert_eq!(motion_jpeg.subscriber_count(), 0);
+
+        client.peer.close().await.expect("client peer close");
+        let fallback_generation = wait_for_fallback_generation(&mut socket).await;
+        assert_eq!(fallback_generation, "ws-1-1");
+        timeout(Duration::from_secs(1), async {
+            while motion_jpeg.subscriber_count() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Motion JPEG subscription");
+        source.publish(
+            101,
+            BgrFrame::solid(CaptureResolution::R640x360, [60, 40, 20]),
+        );
+        let jpeg = receive_motion_jpeg(&mut socket).await;
+        assert!(jpeg.starts_with(&[0xff, 0xd8]));
+        assert!(jpeg.ends_with(&[0xff, 0xd9]));
+        assert_eq!(
+            backend
+                .generations
+                .lock()
+                .expect("generations")
+                .get(&ConnectionId(1))
+                .map(String::as_str),
+            Some(fallback_generation.as_str())
+        );
+
+        let mut recovered_client = realtime_client().await;
+        signal_realtime(&mut socket, &mut recovered_client).await;
+        let recovered_channels = realtime_channels(&mut recovered_client.channels).await;
+        assert_ne!(motion_jpeg.subscriber_count(), 0);
+        acknowledge_rtc_generation(&mut recovered_client, &recovered_channels, "rtc-1-2").await;
+        timeout(Duration::from_secs(1), async {
+            while motion_jpeg.subscriber_count() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Motion JPEG suspension after recovery");
+
+        socket.close(None).await.expect("close");
+        recovered_client
+            .peer
+            .close()
+            .await
+            .expect("recovered client close");
         backend.wait_for_disconnect().await;
         stop_server(cancellation, task).await;
     }

@@ -5,6 +5,7 @@ pub mod backend;
 pub mod openapi;
 pub mod paths;
 pub mod realtime;
+pub mod realtime_connection;
 pub mod rest;
 pub mod router;
 pub mod security;

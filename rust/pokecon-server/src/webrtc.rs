@@ -673,7 +673,7 @@ impl WebRtcPeer {
     }
 }
 
-async fn create_peer_connection(
+pub(crate) async fn create_peer_connection(
     config: &WebRtcPeerConfig,
 ) -> Result<RTCPeerConnection, WebRtcError> {
     let mut media_engine = MediaEngine::default();

@@ -139,6 +139,8 @@ describe('InputManager generation handoff', () => {
     manager.setKeyboardKey('Space', true);
     manager.setMouseButton('left', true, 10, 20);
     manager.setGamepadButton('ZR', true);
+    manager.setGamepadButton('LCLICK', true);
+    manager.setGamepadButton('RCLICK', true);
     manager.setGamepadHat('TOP_RIGHT');
     manager.setGamepadStick('RSTICK', 200, 40);
     manager.setGamepadTouch({ pressed: true, x: 319, y: 239 });
@@ -152,15 +154,19 @@ describe('InputManager generation handoff', () => {
       'gamepad_input',
       'gamepad_input',
       'gamepad_input',
+      'gamepad_input',
+      'gamepad_input',
       'gamepad_input'
     ]);
     expect(releases.map(({ message }) => messageSequence(message))).toEqual([
-      '7',
-      '8',
       '9',
       '10',
       '11',
-      '12'
+      '12',
+      '13',
+      '14',
+      '15',
+      '16'
     ]);
   });
 

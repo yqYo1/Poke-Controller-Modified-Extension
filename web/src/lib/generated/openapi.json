@@ -760,6 +760,8 @@
           "R",
           "ZL",
           "ZR",
+          "LCLICK",
+          "RCLICK",
           "MINUS",
           "PLUS",
           "HOME",

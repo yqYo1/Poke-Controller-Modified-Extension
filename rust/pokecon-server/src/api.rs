@@ -873,6 +873,8 @@ pub enum GamepadButton {
     R,
     Zl,
     Zr,
+    Lclick,
+    Rclick,
     Minus,
     Plus,
     Home,
@@ -1090,13 +1092,27 @@ mod tests {
         let invalid = json!({"type": "ping", "data": {"nonce": "n"}, "revision": "1"});
         assert!(serde_json::from_value::<ServerMessage>(invalid).is_err());
 
+        for button in ["LCLICK", "RCLICK"] {
+            let valid = json!({
+                "type": "gamepad_input",
+                "data": {
+                    "kind": "button",
+                    "generation": "g",
+                    "sequence": "1",
+                    "button": button,
+                    "state": "pressed"
+                }
+            });
+            assert!(serde_json::from_value::<ClientMessage>(valid).is_ok());
+        }
+
         let invalid = json!({
             "type": "gamepad_input",
             "data": {
                 "kind": "button",
                 "generation": "g",
                 "sequence": "1",
-                "button": "LCLICK",
+                "button": "STICKCLICK",
                 "state": "pressed"
             }
         });

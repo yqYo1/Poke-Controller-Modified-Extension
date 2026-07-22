@@ -1402,7 +1402,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 **設定取得/変更**: 本節は正規化済みゲームパッド入力イベントの転送だけを規定し、ゲームパッドタイプ設定や専用RESTエンドポイントを提供しない。ProController／Xinputを選択するハードウェア制御は初期バージョンでは非表示の将来機能であり、§6.3.2に従う。
 
-- **対応ボタン**: A、B、X、Y、L、R、ZL、ZR、MINUS、PLUS、HOME、CAPTURE。
+- **対応ボタン**: A、B、X、Y、L、R、ZL、ZR、LCLICK、RCLICK、MINUS、PLUS、HOME、CAPTURE。
 - **十字キー（Hat）**: UP、DOWN、LEFT、RIGHT、TOP_RIGHT、BTM_RIGHT、BTM_LEFT、TOP_LEFT、CENTER。
 - **アナログスティック**: 両軸とも0～255の範囲。
 - **タッチスクリーン**: `{x: 0–319, y: 0–239}` 座標（0-based）。

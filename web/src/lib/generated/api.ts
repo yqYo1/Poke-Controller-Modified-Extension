@@ -374,7 +374,7 @@ export interface components {
             error: components["schemas"]["ApiError"];
         };
         /** @enum {string} */
-        GamepadButton: "A" | "B" | "X" | "Y" | "L" | "R" | "ZL" | "ZR" | "MINUS" | "PLUS" | "HOME" | "CAPTURE";
+        GamepadButton: "A" | "B" | "X" | "Y" | "L" | "R" | "ZL" | "ZR" | "LCLICK" | "RCLICK" | "MINUS" | "PLUS" | "HOME" | "CAPTURE";
         GamepadButtonInput: {
             button: components["schemas"]["GamepadButton"];
             generation: string;

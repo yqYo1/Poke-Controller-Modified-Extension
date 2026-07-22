@@ -127,7 +127,16 @@ pub fn retry_camera() {}
     tag = "devices",
     request_body(content = ScreenshotRequest, content_type = "application/json"),
     responses(
-        (status = 200, description = "Saved screenshot metadata or downloaded image bytes", body = Success<SavedScreenshot>),
+        (status = 200, description = "Saved screenshot metadata or downloaded image bytes",
+            content(
+                (Success<SavedScreenshot> = "application/json"),
+                ([u8] = "image/png"),
+                ([u8] = "image/jpeg")
+            ),
+            headers(
+                ("Content-Disposition" = String, description = "Present for attachment responses")
+            )
+        ),
         (status = 409, description = "No frame or incompatible UI mode", body = ErrorEnvelope),
         (status = 422, description = "Invalid crop, name, path, or format", body = ErrorEnvelope),
         (status = 500, description = "Screenshot failure", body = ErrorEnvelope)
@@ -169,7 +178,15 @@ pub fn control_dynamic_config() {}
     tag = "profiles",
     request_body(content = GenerateLauncherRequest, content_type = "application/json"),
     responses(
-        (status = 200, description = "Profile and launcher result", body = Success<GenerateLauncherResult>),
+        (status = 200, description = "Profile and launcher result or downloaded Windows batch bytes",
+            content(
+                (Success<GenerateLauncherResult> = "application/json"),
+                ([u8] = "application/x-bat")
+            ),
+            headers(
+                ("Content-Disposition" = String, description = "Present for attachment responses")
+            )
+        ),
         (status = 409, description = "Unsupported platform or UI mode", body = ErrorEnvelope),
         (status = 422, description = "Invalid profile or destination", body = ErrorEnvelope),
         (status = 500, description = "Profile or launcher write failure", body = ErrorEnvelope)

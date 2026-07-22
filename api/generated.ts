@@ -233,12 +233,19 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         ApiError: {
-            code: string;
+            code: components["schemas"]["ApiErrorCode"];
             fields?: {
                 [key: string]: string[];
             } | null;
             message: string;
         };
+        /**
+         * @description Closed, stable machine-readable failure codes shared by every public HTTP
+         *     response. Endpoint response declarations constrain which subset is
+         *     applicable, while the runtime wire type cannot emit an unregistered code.
+         * @enum {string}
+         */
+        ApiErrorCode: "request_forbidden" | "unsupported_media_type" | "payload_too_large" | "malformed_json" | "invalid_request" | "resource_not_found" | "method_not_allowed" | "revision_conflict" | "command_not_found" | "command_state_conflict" | "profile_switch_conflict" | "serial_connection_failed" | "camera_unavailable" | "screenshot_unavailable" | "destination_conflict" | "notification_unsupported" | "dynamic_config_unavailable" | "unsupported_platform" | "persistence_failed" | "backend_unavailable" | "internal_error";
         ButtonState: {
             a: boolean;
             b: boolean;
@@ -1256,10 +1263,14 @@ export interface operations {
             /** @description Saved screenshot metadata or downloaded image bytes */
             200: {
                 headers: {
+                    /** @description Present for attachment responses */
+                    "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Success_SavedScreenshot"];
+                    "image/jpeg": number[];
+                    "image/png": number[];
                 };
             };
             /** @description No frame or incompatible UI mode */
@@ -1566,13 +1577,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Profile and launcher result */
+            /** @description Profile and launcher result or downloaded Windows batch bytes */
             200: {
                 headers: {
+                    /** @description Present for attachment responses */
+                    "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Success_GenerateLauncherResult"];
+                    "application/x-bat": number[];
                 };
             };
             /** @description Unsupported platform or UI mode */

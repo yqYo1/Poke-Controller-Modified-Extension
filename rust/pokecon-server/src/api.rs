@@ -90,10 +90,39 @@ pub struct ErrorEnvelope {
     pub error: ApiError,
 }
 
+/// Closed, stable machine-readable failure codes shared by every public HTTP
+/// response. Endpoint response declarations constrain which subset is
+/// applicable, while the runtime wire type cannot emit an unregistered code.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiErrorCode {
+    RequestForbidden,
+    UnsupportedMediaType,
+    PayloadTooLarge,
+    MalformedJson,
+    InvalidRequest,
+    ResourceNotFound,
+    MethodNotAllowed,
+    RevisionConflict,
+    CommandNotFound,
+    CommandStateConflict,
+    ProfileSwitchConflict,
+    SerialConnectionFailed,
+    CameraUnavailable,
+    ScreenshotUnavailable,
+    DestinationConflict,
+    NotificationUnsupported,
+    DynamicConfigUnavailable,
+    UnsupportedPlatform,
+    PersistenceFailed,
+    BackendUnavailable,
+    InternalError,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ApiError {
-    pub code: String,
+    pub code: ApiErrorCode,
     pub message: String,
     pub fields: Option<BTreeMap<String, Vec<String>>>,
 }

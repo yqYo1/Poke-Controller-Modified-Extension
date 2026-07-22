@@ -37,6 +37,7 @@ keywords = ["pokemon", "automation", "switch", "3ds", "controller", "serial"]
 categories = ["games", "hardware-support", "embedded"]
 
 [workspace.dependencies]
+async-trait = "0.1"
 axum = "0.8.9"
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
@@ -48,7 +49,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2"
 anyhow = "1"
-async-trait = "0.1"
 atomic-write-file = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 fs4 = "1"

@@ -6,18 +6,18 @@ use thiserror::Error;
 use utoipa::OpenApi;
 
 use crate::api::{
-    ApiError, ButtonState, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
-    CommandDisplayItem, CommandIdentity, CommandInfo, CommandState, DecimalString,
-    DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, EmptyRequest, ErrorEnvelope,
-    GamepadInput, GenerateLauncherRequest, GenerateLauncherResult, Hat, IceCandidate, ImageFormat,
-    InputApplied, InputGeneration, InputSnapshot, KeyboardInput, LauncherDestination, LogData,
-    LogLevel, LogTarget, MessageData, MouseButton, MouseButtons, MouseInput, MouseStickInput,
-    Nonce, NormalizedRegion, NotificationTestRequest, NotificationTestResult, OperationResult,
-    PressState, RevisionedStateChange, SavedScreenshot, ScreenshotRequest, SerialControlRequest,
-    SerialData, SerialEncoding, SerialPort, ServerMessage, SessionDescription, SettingsChange,
-    SettingsPatchRequest, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
-    StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition, Success, TouchPoint,
-    UiStateChange, UpdateCheckResult,
+    ApiError, ApiErrorCode, ButtonState, CameraDevice, CameraSelector, ClientMessage,
+    CommandControlRequest, CommandDisplayItem, CommandIdentity, CommandInfo, CommandState,
+    DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, EmptyRequest,
+    ErrorEnvelope, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult, Hat,
+    IceCandidate, ImageFormat, InputApplied, InputGeneration, InputSnapshot, KeyboardInput,
+    LauncherDestination, LogData, LogLevel, LogTarget, MessageData, MouseButton, MouseButtons,
+    MouseInput, MouseStickInput, Nonce, NormalizedRegion, NotificationTestRequest,
+    NotificationTestResult, OperationResult, PressState, RevisionedStateChange, SavedScreenshot,
+    ScreenshotRequest, SerialControlRequest, SerialData, SerialEncoding, SerialPort, ServerMessage,
+    SessionDescription, SettingsChange, SettingsPatchRequest, SettingsReadValues, SettingsSnapshot,
+    SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition,
+    Success, TouchPoint, UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -29,6 +29,7 @@ use crate::api::{
     ),
     components(schemas(
         ApiError,
+        ApiErrorCode,
         ButtonState,
         CameraDevice,
         CameraSelector,

@@ -14,7 +14,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 
-use crate::api::{ApiError, ErrorEnvelope};
+use crate::api::{ApiError, ApiErrorCode, ErrorEnvelope};
 
 const REQUEST_MARKER: HeaderName = HeaderName::from_static("x-pokecon-request");
 const ALLOWED_METHODS: &str = "GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS";
@@ -91,7 +91,8 @@ impl RequestSecurity {
             return Err(SecurityError::Forbidden);
         }
         if is_mutating(method) {
-            let content_type = required_header(headers, &CONTENT_TYPE)?;
+            let content_type = optional_header(headers, &CONTENT_TYPE)?
+                .ok_or(SecurityError::UnsupportedMediaType)?;
             let content_type = content_type
                 .to_str()
                 .map_err(|_error| SecurityError::UnsupportedMediaType)?;
@@ -128,12 +129,12 @@ impl IntoResponse for SecurityError {
         let (status, code, message) = match self {
             Self::Forbidden => (
                 StatusCode::FORBIDDEN,
-                "request_forbidden",
+                ApiErrorCode::RequestForbidden,
                 "request validation failed",
             ),
             Self::UnsupportedMediaType => (
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                "unsupported_media_type",
+                ApiErrorCode::UnsupportedMediaType,
                 "Content-Type must be application/json",
             ),
         };
@@ -141,7 +142,7 @@ impl IntoResponse for SecurityError {
             status,
             Json(ErrorEnvelope {
                 error: ApiError {
-                    code: code.to_owned(),
+                    code,
                     message: message.to_owned(),
                     fields: None,
                 },
@@ -385,6 +386,18 @@ mod tests {
             .oneshot(
                 request("POST", "/api/action")
                     .header(CONTENT_TYPE, "text/plain")
+                    .header("x-pokecon-request", "1")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+
+        let response = app
+            .clone()
+            .oneshot(
+                request("POST", "/api/action")
                     .header("x-pokecon-request", "1")
                     .body(Body::empty())
                     .expect("request"),

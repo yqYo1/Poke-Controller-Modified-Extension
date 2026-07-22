@@ -5,7 +5,7 @@
         "additionalProperties": false,
         "properties": {
           "code": {
-            "type": "string"
+            "$ref": "#/components/schemas/ApiErrorCode"
           },
           "fields": {
             "additionalProperties": {
@@ -31,6 +31,33 @@
           "message"
         ],
         "type": "object"
+      },
+      "ApiErrorCode": {
+        "description": "Closed, stable machine-readable failure codes shared by every public HTTP\nresponse. Endpoint response declarations constrain which subset is\napplicable, while the runtime wire type cannot emit an unregistered code.",
+        "enum": [
+          "request_forbidden",
+          "unsupported_media_type",
+          "payload_too_large",
+          "malformed_json",
+          "invalid_request",
+          "resource_not_found",
+          "method_not_allowed",
+          "revision_conflict",
+          "command_not_found",
+          "command_state_conflict",
+          "profile_switch_conflict",
+          "serial_connection_failed",
+          "camera_unavailable",
+          "screenshot_unavailable",
+          "destination_conflict",
+          "notification_unsupported",
+          "dynamic_config_unavailable",
+          "unsupported_platform",
+          "persistence_failed",
+          "backend_unavailable",
+          "internal_error"
+        ],
+        "type": "string"
       },
       "ButtonState": {
         "additionalProperties": false,
@@ -4350,9 +4377,37 @@
                 "schema": {
                   "$ref": "#/components/schemas/Success_SavedScreenshot"
                 }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "items": {
+                    "format": "int32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "items": {
+                    "format": "int32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                }
               }
             },
-            "description": "Saved screenshot metadata or downloaded image bytes"
+            "description": "Saved screenshot metadata or downloaded image bytes",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Present for attachment responses",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
             "content": {
@@ -4710,9 +4765,27 @@
                 "schema": {
                   "$ref": "#/components/schemas/Success_GenerateLauncherResult"
                 }
+              },
+              "application/x-bat": {
+                "schema": {
+                  "items": {
+                    "format": "int32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": "array"
+                }
               }
             },
-            "description": "Profile and launcher result"
+            "description": "Profile and launcher result or downloaded Windows batch bytes",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Present for attachment responses",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
             "content": {

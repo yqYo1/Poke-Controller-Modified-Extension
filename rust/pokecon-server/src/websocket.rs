@@ -74,6 +74,10 @@ impl MotionJpegFeed {
             initial_pending: true,
         }
     }
+
+    pub(crate) fn subscriber_count(&self) -> usize {
+        self.sender.receiver_count()
+    }
 }
 
 impl Default for MotionJpegFeed {

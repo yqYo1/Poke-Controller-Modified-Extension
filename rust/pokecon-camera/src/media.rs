@@ -102,6 +102,29 @@ pub struct MotionJpegSource {
 }
 
 impl MotionJpegSource {
+    /// Waits for the next raw source change without encoding on the async
+    /// executor. Callers may hand the returned frame to a blocking encoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the owning camera source has been dropped.
+    pub async fn changed(&mut self) -> Result<Option<Arc<MediaFrame>>, MediaSourceError> {
+        self.receiver
+            .changed()
+            .await
+            .map_err(|_| MediaSourceError::Closed)?;
+        Ok(self.receiver.borrow_and_update().clone())
+    }
+
+    /// Encodes a specific source snapshot using the current shared quality.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fixed encoding or quality failure.
+    pub fn encode_jpeg(&self, snapshot: &MediaFrame) -> Result<EncodedMotionJpeg, ScreenshotError> {
+        encode_motion_jpeg(snapshot, self.settings.jpeg_quality())
+    }
+
     /// Encodes the latest frame using the current shared JPEG quality.
     ///
     /// # Errors
@@ -113,7 +136,7 @@ impl MotionJpegSource {
             .borrow()
             .clone()
             .ok_or(ScreenshotError::NoPublishedFrame)?;
-        encode_motion_jpeg(&snapshot, self.settings.jpeg_quality())
+        self.encode_jpeg(&snapshot)
     }
 
     /// Waits for the next source change and encodes it when still valid.
@@ -122,16 +145,8 @@ impl MotionJpegSource {
     ///
     /// Returns a closed, no-frame, or encoding failure.
     pub async fn changed_jpeg(&mut self) -> Result<EncodedMotionJpeg, MediaSourceError> {
-        self.receiver
-            .changed()
-            .await
-            .map_err(|_| MediaSourceError::Closed)?;
-        let snapshot = self
-            .receiver
-            .borrow_and_update()
-            .clone()
-            .ok_or(MediaSourceError::NoFrame)?;
-        encode_motion_jpeg(&snapshot, self.settings.jpeg_quality())
+        let snapshot = self.changed().await?.ok_or(MediaSourceError::NoFrame)?;
+        self.encode_jpeg(&snapshot)
             .map_err(|_| MediaSourceError::EncodingFailed)
     }
 }

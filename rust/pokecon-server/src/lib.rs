@@ -10,6 +10,7 @@ pub mod router;
 pub mod security;
 pub mod state;
 pub mod static_files;
+pub mod webrtc;
 pub mod websocket;
 
 use std::io;

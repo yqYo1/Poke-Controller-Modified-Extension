@@ -155,6 +155,7 @@
             rustToolchain
             pythonEnv
             pkgs.pkg-config
+            pkgs.nasm
             pkgs.stdenv.cc
           ]
           ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ]
@@ -171,6 +172,7 @@
             version = workspaceVersion;
             src = source;
             nativeBuildInputs = [
+              pkgs.nasm
               pkgs.pkg-config
             ]
             ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ];

@@ -59,6 +59,7 @@ hex = "0.4"
 hmac = "0.12"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 mime_guess = "2.0.5"
+openh264 = "0.9.7"
 parking_lot = "0.12"
 pep440_rs = { version = "0.7", features = ["version-ranges"] }
 pyo3 = { version = "0.29", features = ["abi3-py314"] }
@@ -81,6 +82,7 @@ url = "2"
 utoipa = { version = "5.5.0", features = ["axum_extras", "preserve_order"] }
 v4l = "0.14"
 version-ranges = "0.1"
+webrtc = "0.14.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

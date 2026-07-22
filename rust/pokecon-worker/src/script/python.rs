@@ -783,11 +783,13 @@ impl PyApi {
         request: &Request,
     ) -> PyResult<Response>
     where
-        Request: serde::Serialize,
-        Response: serde::de::DeserializeOwned,
+        Request: serde::Serialize + Sync,
+        Response: serde::de::DeserializeOwned + Send,
     {
-        request_host(&self.connection, &self.runtime_handle, operation, request)
-            .map_err(PyRuntimeError::new_err)
+        Python::attach(|py| {
+            py.detach(|| request_host(&self.connection, &self.runtime_handle, operation, request))
+        })
+        .map_err(PyRuntimeError::new_err)
     }
 }
 

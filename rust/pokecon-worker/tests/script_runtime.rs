@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use pokecon_camera::{BgrFrame, CaptureResolution, FlipMode, ScreenshotFormat, SharedFrameRing};
@@ -40,6 +40,10 @@ struct RecordingScriptHost {
     popup_requests: Mutex<Vec<HostPopupImageRequest>>,
     tk_requests: Mutex<Vec<HostTkRequest>>,
     tk_scales: Mutex<BTreeMap<u64, f64>>,
+    block_tk_title: AtomicBool,
+    tk_title_blocked: AtomicBool,
+    tk_title_released: Mutex<bool>,
+    tk_title_release: Condvar,
     activity: Notify,
 }
 
@@ -176,6 +180,17 @@ impl ScriptHost for RecordingScriptHost {
     }
 
     fn tk(&self, request: HostTkRequest) -> Result<HostTkResult, ScriptHostError> {
+        if self.block_tk_title.load(Ordering::Acquire)
+            && matches!(&request, HostTkRequest::SetTitle { .. })
+        {
+            self.tk_title_blocked.store(true, Ordering::Release);
+            self.activity.notify_one();
+            let released = self.tk_title_released.lock().unwrap();
+            let _wait_result = self
+                .tk_title_release
+                .wait_timeout_while(released, Duration::from_secs(5), |released| !*released)
+                .unwrap();
+        }
         let result = match &request {
             HostTkRequest::CreateScale {
                 widget_id,
@@ -213,6 +228,11 @@ impl RecordingScriptHost {
             .lock()
             .unwrap()
             .unwrap_or_else(default_camera_state)
+    }
+
+    fn release_tk_title(&self) {
+        *self.tk_title_released.lock().unwrap() = true;
+        self.tk_title_release.notify_all();
     }
 }
 
@@ -1400,7 +1420,7 @@ class TkBridge(ImageProcPythonCommand):
     let (window_id, scale_id, button_id) = tokio::time::timeout(EVENT_TIMEOUT, async {
         loop {
             let activity = host.activity.notified();
-            let (window_id, scale_id, button_id) = {
+            let (window_id, scale_id, button_id, label_packed) = {
                 let requests = host.tk_requests.lock().unwrap();
                 let window_id = requests.iter().find_map(|request| match request {
                     HostTkRequest::CreateToplevel { window_id } => Some(*window_id),
@@ -1420,10 +1440,24 @@ class TkBridge(ImageProcPythonCommand):
                     } if text == "Run" => Some(*widget_id),
                     _ => None,
                 });
-                (window_id, scale_id, button_id)
+                let label_id = requests.iter().find_map(|request| match request {
+                    HostTkRequest::CreateLabel {
+                        widget_id, text, ..
+                    } if text == "Detected" => Some(*widget_id),
+                    _ => None,
+                });
+                let label_packed = label_id.is_some_and(|label_id| {
+                    requests.iter().any(|request| {
+                        matches!(
+                            request,
+                            HostTkRequest::Pack { widget_id, .. } if *widget_id == label_id
+                        )
+                    })
+                });
+                (window_id, scale_id, button_id, label_packed)
             };
-            if let (Some(window_id), Some(scale_id), Some(button_id)) =
-                (window_id, scale_id, button_id)
+            if let (Some(window_id), Some(scale_id), Some(button_id), true) =
+                (window_id, scale_id, button_id, label_packed)
             {
                 break (window_id, scale_id, button_id);
             }
@@ -1489,6 +1523,96 @@ class TkBridge(ImageProcPythonCommand):
         host.tk_requests.lock().unwrap().last(),
         Some(&HostTkRequest::Cleanup)
     );
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn blocking_host_ipc_releases_the_gil_for_tk_event_dispatch() {
+    const EVENT_TIMEOUT: Duration = Duration::from_secs(2);
+    const SOURCE: &str = r#"
+import threading
+import tkinter as tk
+
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class TkGilBridge(ImageProcPythonCommand):
+    def clicked(self):
+        self.callback_completed.set()
+
+    def do(self):
+        self.callback_completed = threading.Event()
+        self.window = tk.Toplevel(self.gui)
+        self.button = tk.Button(self.window, text="Release GIL", command=self.clicked)
+        self.button.pack()
+        self.window.title("Blocking host request")
+        assert self.callback_completed.wait(1.0)
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("tk_gil_bridge.py"), SOURCE)
+        .expect("Tk GIL bridge script is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    host.block_tk_title.store(true, Ordering::Release);
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "tk_gil_bridge.py".into(),
+                class_name: "TkGilBridge".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+
+    let button_id = tokio::time::timeout(EVENT_TIMEOUT, async {
+        loop {
+            let activity = host.activity.notified();
+            let button_id =
+                host.tk_requests
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .find_map(|request| match request {
+                        HostTkRequest::CreateButton {
+                            widget_id, text, ..
+                        } if text == "Release GIL" => Some(*widget_id),
+                        _ => None,
+                    });
+            if host.tk_title_blocked.load(Ordering::Acquire)
+                && let Some(button_id) = button_id
+            {
+                break button_id;
+            }
+            activity.await;
+        }
+    })
+    .await
+    .expect("the command blocks inside the host request after creating its button");
+
+    let event_result = tokio::time::timeout(
+        EVENT_TIMEOUT,
+        client.tk_event(&ScriptTkEvent::ButtonInvoked {
+            widget_id: button_id,
+        }),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    host.release_tk_title();
+    event_result
+        .expect("Tk events acquire the GIL while another Python thread waits on host IPC")
+        .expect("button callback event is queued");
+
+    let result = tokio::time::timeout(EVENT_TIMEOUT, execution)
+        .await
+        .expect("Tk GIL bridge command completes")
+        .expect("Tk GIL bridge execution task joins")
+        .expect("Tk GIL bridge execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
 
     stop_worker(&worker).await;
 }

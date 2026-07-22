@@ -147,9 +147,8 @@ impl DynamicRuntime {
     }
 
     /// Runs the shutdown-pre event while application services remain alive,
-    /// closes host mutations, releases controller ownership, and reaps the
-    /// worker by a fixed deadline.
-    pub async fn shutdown(mut self) {
+    /// then closes host mutations and releases dynamic controller ownership.
+    pub async fn prepare_shutdown(&self) {
         if let Some(client) = self.client.as_ref() {
             match timeout(DYNAMIC_EVENT_TIMEOUT, client.emit("AppShutdownPre")).await {
                 Ok(Ok(result)) if result.cancelled => tracing::warn!(
@@ -171,6 +170,10 @@ impl DynamicRuntime {
         }
 
         self.host.begin_stopping();
+    }
+
+    /// Reaps the already-stopping dynamic worker by the fixed deadline.
+    pub async fn shutdown_worker(mut self) {
         log_stop_result(
             self.worker
                 .stop(StopPurpose::ApplicationShutdown, DYNAMIC_STOP_TIMEOUT)
@@ -183,6 +186,12 @@ impl DynamicRuntime {
             self.diagnostic_task.take(),
         )
         .await;
+    }
+
+    /// Performs both shutdown phases for startup-failure and legacy callers.
+    pub async fn shutdown(self) {
+        self.prepare_shutdown().await;
+        self.shutdown_worker().await;
     }
 }
 

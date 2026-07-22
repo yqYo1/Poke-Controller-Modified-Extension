@@ -17,9 +17,11 @@ tauri-shell = ["pokecon-desktop/tauri-shell"]
 [dependencies]
 async-trait.workspace = true
 axum.workspace = true
+base64.workspace = true
 clap.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
+pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-desktop = { path = "../pokecon-desktop" }
 pokecon-device = { path = "../pokecon-device" }
@@ -27,11 +29,15 @@ pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-server = { path = "../pokecon-server" }
 pokecon-settings = { path = "../pokecon-settings" }
 pokecon-worker = { path = "../pokecon-worker" }
+reqwest.workspace = true
+semver.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -113,6 +113,7 @@ async fn operating_system_signals_use_the_clean_shutdown_path() {
             .expect("PokeCon process must start");
         wait_until_listening(&mut child, port).await;
         assert_ui_is_served(port).await;
+        assert_api_is_served(port).await;
 
         kill(
             Pid::from_raw(
@@ -239,4 +240,31 @@ async fn assert_ui_is_served(port: u16) {
         .expect("UI response must be readable");
     assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
     assert!(response.contains("pokecon-startup-fixture"), "{response}");
+}
+
+#[cfg(unix)]
+async fn assert_api_is_served(port: u16) {
+    for (path, required) in [
+        ("/api/settings", "pending_restart_values"),
+        ("/api/state", "command_display_lists"),
+        ("/api/devices/cameras", "data"),
+        ("/api/devices/serial-ports", "data"),
+    ] {
+        let mut stream = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))
+            .await
+            .expect("ready server must accept an API request");
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n");
+        stream
+            .write_all(request.as_bytes())
+            .await
+            .expect("API request must be written");
+        let mut response = String::new();
+        stream
+            .read_to_string(&mut response)
+            .await
+            .expect("API response must be readable");
+        assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+        assert!(response.contains(required), "{path}: {response}");
+    }
 }

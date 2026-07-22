@@ -183,6 +183,32 @@ impl SettingsService {
         self.bump_revision();
     }
 
+    /// Adopts non-persistent dynamic/runtime values while retaining the saved
+    /// TOML projection and any startup-only restart request.
+    pub fn adopt_runtime_loaded(&mut self, loaded: LoadedSettings) {
+        let mut changed = self.loaded.active_profile != loaded.active_profile;
+        for setting in &loaded.settings.registry().settings {
+            if setting.mutability == Mutability::StartupOnly {
+                continue;
+            }
+            let Some(next) = loaded.settings.values().get(&setting.id) else {
+                continue;
+            };
+            if self
+                .current
+                .get(&setting.id)
+                .is_none_or(|current| current.value != next.value)
+            {
+                self.current.insert(setting.id.clone(), next.clone());
+                changed = true;
+            }
+        }
+        self.loaded = loaded;
+        if changed {
+            self.bump_revision();
+        }
+    }
+
     /// Acquires the non-recursive profile-switch gate for an external switch
     /// transaction. The guard is useful to reject concurrent UI/OpenAPI writes
     /// rather than queueing them against the wrong profile.
@@ -192,6 +218,44 @@ impl SettingsService {
     /// Returns [`PatchError::ProfileSwitchInProgress`] if already held.
     pub fn begin_profile_switch(&self) -> Result<ProfileSwitchGuard, PatchError> {
         acquire_switch_gate(&self.switch_gate)
+    }
+
+    /// Validates a complete PATCH without persistence or runtime side effects.
+    /// This is used by the application-wide revision gate before a profile
+    /// switch delegates to its worker-aware transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same validation and local-revision errors as [`Self::patch`].
+    pub fn validate_patch(&self, request: &PatchRequest) -> Result<PatchClass, PatchError> {
+        let expected_revision = request
+            .expected_revision
+            .as_deref()
+            .map(str::parse::<u64>)
+            .transpose()
+            .map_err(|_| PatchError::InvalidRevision)?;
+        let class = self.classify_and_validate_ids(request.values.keys())?;
+        let normalized = self.normalize_changes(&request.values)?;
+        let mut prospective = self.saved.clone();
+        for (id, value) in normalized {
+            prospective.insert(
+                id,
+                ResolvedValue {
+                    value,
+                    source: SettingSource::OpenApi,
+                },
+            );
+        }
+        validate_snapshot(&prospective)?;
+        if let Some(expected) = expected_revision
+            && expected != self.revision
+        {
+            return Err(PatchError::RevisionMismatch {
+                expected,
+                actual: self.revision,
+            });
+        }
+        Ok(class)
     }
 
     /// Validates, persists, applies, and revisions one normative PATCH.
@@ -455,16 +519,7 @@ impl SettingsService {
             let setting = self.setting(id)?;
             match setting.mutability {
                 Mutability::StartupOnly => {}
-                Mutability::RuntimeDeferred => {
-                    self.current.insert(
-                        id.clone(),
-                        ResolvedValue {
-                            value: value.clone(),
-                            source: SettingSource::OpenApi,
-                        },
-                    );
-                }
-                Mutability::RuntimeImmediate => {
+                Mutability::RuntimeDeferred | Mutability::RuntimeImmediate => {
                     let one = BTreeMap::from([(id.clone(), value.clone())]);
                     if self.applier.apply(PatchClass::Ordinary, &one).is_err() {
                         failures.insert(id.clone(), "runtime apply failed".to_owned());
@@ -551,7 +606,7 @@ impl SettingsService {
             .collect::<BTreeMap<_, _>>();
         PatchResponse {
             revision: self.revision.to_string(),
-            values: public_snapshot(&self.loaded.settings, &self.saved),
+            values: public_snapshot(&self.loaded.settings, &self.current),
             restart_required: !pending_restart_values.is_empty(),
             pending_restart_values,
             apply_failures,
@@ -748,7 +803,7 @@ mod tests {
             &mut service,
             BTreeMap::from([("server.port".to_owned(), json!(9000))]),
         );
-        assert_eq!(response.values["server.port"], json!(9000));
+        assert_eq!(response.values["server.port"], json!(8020));
         assert_eq!(response.pending_restart_values["server.port"], json!(9000));
         assert!(response.restart_required);
         assert_eq!(service.revision(), 1);
@@ -792,7 +847,7 @@ mod tests {
         let response = service.public_response();
         assert_eq!(service.active_profile(), "Second");
         assert_eq!(response.values["active_profile"], json!("Second"));
-        assert_eq!(response.values["server.port"], json!(9000));
+        assert_eq!(response.values["server.port"], json!(8020));
         assert_eq!(response.pending_restart_values["server.port"], json!(9000));
     }
 

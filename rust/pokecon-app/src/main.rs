@@ -4,11 +4,10 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use pokecon_app::dynamic_runtime::bootstrap_dynamic;
-use pokecon_app::{AppError, AppOptions, UiMode, run_with_dynamic};
+use pokecon_app::{AppError, AppOptions, UiMode, run_configured};
 use pokecon_core::{TracingInitError, init_tracing};
 use pokecon_settings::pipeline::{PipelineError, PipelineRequest, SettingsPipeline};
 use pokecon_settings::scaffold::{ScaffoldError, ScaffoldManager};
-use pokecon_settings::service::{NoopSettingsApplier, SettingsService};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -61,7 +60,7 @@ async fn main() -> Result<(), MainError> {
     init_tracing("info")?;
     ScaffoldManager::new(before_dynamic.roots.clone())
         .ensure(before_dynamic.active_profile.as_str())?;
-    let bootstrap = bootstrap_dynamic(request, before_dynamic).await?;
+    let bootstrap = bootstrap_dynamic(request.clone(), before_dynamic).await?;
     if let Some(error) = bootstrap.startup_failure.as_ref() {
         tracing::error!(
             error = %error,
@@ -75,14 +74,16 @@ async fn main() -> Result<(), MainError> {
         .parse::<IpAddr>()?;
     let port = u16::try_from(loaded.settings.integer("server.port")?)?;
     let web_root = PathBuf::from(loaded.settings.string("server.web_dir")?);
-    let _settings_service = SettingsService::new(loaded, Box::<NoopSettingsApplier>::default());
-    run_with_dynamic(
+    run_configured(
         AppOptions {
             listen_address: SocketAddr::new(bind_address, port),
             ui_mode: cli.ui.into(),
             web_root,
             exit_after_startup: cli.exit_after_startup,
         },
+        request,
+        loaded,
+        bootstrap.host,
         bootstrap.runtime,
     )
     .await?;

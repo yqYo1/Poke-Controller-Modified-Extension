@@ -55,6 +55,9 @@ enum WriterCommand {
     Retry {
         response: SyncSender<Result<(), CameraError>>,
     },
+    Close {
+        response: SyncSender<Result<(), CameraError>>,
+    },
     Shutdown,
 }
 
@@ -218,6 +221,16 @@ impl CameraManager {
     /// Returns the exact selector's open or first-frame failure.
     pub fn retry(&self) -> Result<(), CameraError> {
         self.request(|response| WriterCommand::Retry { response })
+    }
+
+    /// Closes the active capture session while retaining the desired selector
+    /// and lifetime-fixed shared mapping for a later explicit retry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fixed command-channel failure if the writer has stopped.
+    pub fn close(&self) -> Result<(), CameraError> {
+        self.request(|response| WriterCommand::Close { response })
     }
 
     /// Updates live flip processing for the next complete frame.
@@ -411,6 +424,14 @@ impl WriterState {
         }
     }
 
+    fn close(&mut self) {
+        if let Some(mut session) = self.session.take() {
+            session.close();
+        }
+        self.invalidate_publication();
+        self.set_status(CameraRuntimeStatus::closed(&self.desired));
+    }
+
     fn switch_device(&mut self, replacement: CameraConfig) -> Result<(), CameraError> {
         let previous = self.desired.clone();
         if let Some(mut old_session) = self.session.take() {
@@ -529,11 +550,7 @@ impl WriterState {
     }
 
     fn shutdown(&mut self) {
-        if let Some(mut session) = self.session.take() {
-            session.close();
-        }
-        self.invalidate_publication();
-        self.set_status(CameraRuntimeStatus::closed(&self.desired));
+        self.close();
     }
 
     fn invalidate_publication(&self) {
@@ -587,6 +604,10 @@ fn writer_main(
                 }
                 WriterCommand::Retry { response } => {
                     let _ = response.send(writer.retry());
+                }
+                WriterCommand::Close { response } => {
+                    writer.close();
+                    let _ = response.send(Ok(()));
                 }
                 WriterCommand::Shutdown => {
                     writer.shutdown();

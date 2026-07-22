@@ -1,10 +1,14 @@
 //! Top-level process orchestration for web and desktop modes.
 
+mod application_backend;
 pub mod command_service;
 pub mod dynamic_host;
 pub mod dynamic_runtime;
+mod production;
 pub mod profile_service;
+mod script_host;
 pub mod script_runtime;
+mod settings_runtime;
 
 use std::io;
 use std::net::SocketAddr;
@@ -20,12 +24,15 @@ use pokecon_server::BoundServer;
 use pokecon_server::router::public_router;
 use pokecon_server::security::RequestSecurity;
 use pokecon_server::static_files::{StaticFiles, StaticRootError};
+use pokecon_settings::pipeline::{LoadedSettings, PipelineRequest};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::dynamic_host::StartupDynamicHost;
 use crate::dynamic_runtime::DynamicRuntime;
+use crate::production::ProductionRuntime;
 
 const SERVER_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -75,6 +82,9 @@ pub enum AppError {
     /// A managed Tokio task panicked or was cancelled unexpectedly.
     #[error("managed runtime task failed: {0}")]
     Task(#[from] tokio::task::JoinError),
+    /// Production service composition failed before the listener became ready.
+    #[error("application runtime initialization failed: {0}")]
+    Runtime(String),
 }
 
 /// Starts the common runtime and exits through the shutdown coordinator.
@@ -169,6 +179,114 @@ pub async fn run_with_dynamic(
         listen_address,
         shutdown_reason,
     })
+}
+
+/// Starts the fully connected production runtime from the final canonical
+/// settings and dynamic-worker bootstrap result.
+///
+/// # Errors
+///
+/// Returns an error if service construction, binding, serving, or bounded task
+/// shutdown fails.
+pub async fn run_configured(
+    options: AppOptions,
+    request: PipelineRequest,
+    loaded: LoadedSettings,
+    host: std::sync::Arc<StartupDynamicHost>,
+    mut dynamic: Option<DynamicRuntime>,
+) -> Result<RunSummary, AppError> {
+    let static_files = match StaticFiles::new(&options.web_root) {
+        Ok(static_files) => static_files,
+        Err(error) => {
+            if let Some(runtime) = dynamic.take() {
+                runtime.shutdown().await;
+            }
+            return Err(AppError::Static(error));
+        }
+    };
+    let dynamic_client = dynamic.as_ref().and_then(DynamicRuntime::command_bridge);
+    let mut production = match ProductionRuntime::build(
+        request,
+        loaded,
+        host,
+        dynamic_client,
+        options.ui_mode,
+    )
+    .await
+    {
+        Ok(production) => production,
+        Err(error) => {
+            if let Some(runtime) = dynamic.take() {
+                runtime.shutdown().await;
+            }
+            return Err(AppError::Runtime(error));
+        }
+    };
+    let context = RuntimeContext::native();
+    let shutdown = context.shutdown().clone();
+    let signal_task = install_os_signal_forwarder(shutdown.clone()).await;
+    let server = match BoundServer::bind(options.listen_address).await {
+        Ok(server) => server,
+        Err(error) => {
+            signal_task.abort();
+            let _aborted = signal_task.await;
+            shutdown_production(&mut production, dynamic.take()).await;
+            return Err(AppError::Bind(error));
+        }
+    };
+    let listen_address = server.local_addr();
+    let security = RequestSecurity::new(listen_address, options.ui_mode == UiMode::Desktop);
+    let server = server.with_router(public_router(production.router(), static_files, security));
+    let server_shutdown = CancellationToken::new();
+    let server_task = tokio::spawn(server.serve(server_shutdown.clone()));
+
+    let _desktop_lifecycle =
+        (options.ui_mode == UiMode::Desktop).then(|| DesktopLifecycle::new(shutdown.clone()));
+    if let Some(runtime) = dynamic.as_ref()
+        && let Err(error) = runtime.emit_startup_post().await
+    {
+        tracing::error!(
+            event = "AppStartupPost",
+            error = %error,
+            "dynamic startup-post event failed"
+        );
+    }
+    tracing::info!(
+        diagnostic_id = APP_STARTING,
+        ?listen_address,
+        ui_mode = ?options.ui_mode,
+        platform = ?context.platform().kind(),
+        "PokeCon production runtime is ready"
+    );
+
+    if options.exit_after_startup {
+        shutdown.request(ShutdownReason::StartupProbe);
+    }
+    let shutdown_reason = shutdown.cancelled().await;
+    shutdown_production(&mut production, dynamic.take()).await;
+    server_shutdown.cancel();
+    finish_server_task(server_task).await?;
+    signal_task.await?;
+    tracing::info!(
+        diagnostic_id = APP_STOPPED,
+        ?shutdown_reason,
+        "PokeCon stopped cleanly"
+    );
+    Ok(RunSummary {
+        listen_address,
+        shutdown_reason,
+    })
+}
+
+async fn shutdown_production(production: &mut ProductionRuntime, dynamic: Option<DynamicRuntime>) {
+    if let Some(runtime) = dynamic.as_ref() {
+        runtime.prepare_shutdown().await;
+    }
+    production.stop_inputs_camera_and_scripts().await;
+    if let Some(runtime) = dynamic {
+        runtime.shutdown_worker().await;
+    }
+    production.stop_serial().await;
 }
 
 async fn finish_server_task(mut task: JoinHandle<io::Result<()>>) -> Result<(), AppError> {

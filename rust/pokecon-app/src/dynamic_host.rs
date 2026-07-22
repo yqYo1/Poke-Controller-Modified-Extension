@@ -52,7 +52,7 @@ const RUNTIME_STATE_FIELDS: &[&str] = &[
 /// the IPC connection as its transport-loss safety boundary.
 #[derive(Debug)]
 pub struct DynamicControllerSafety {
-    arbiter: Mutex<InputArbiter>,
+    arbiter: Arc<Mutex<InputArbiter>>,
     source: InputSourceId,
     generation: InputGeneration,
     sequence: AtomicU64,
@@ -69,7 +69,7 @@ impl DynamicControllerSafety {
         initialize_dynamic_source(&mut arbiter, &source, &generation)
             .expect("the static neutral snapshot is valid");
         Self {
-            arbiter: Mutex::new(arbiter),
+            arbiter: Arc::new(Mutex::new(arbiter)),
             source,
             generation,
             sequence: AtomicU64::new(0),
@@ -127,6 +127,14 @@ impl DynamicControllerSafety {
     pub fn state(&self) -> ControllerState {
         self.arbiter.lock().output()
     }
+
+    /// Returns the one process-wide input arbiter. Browser, hardware,
+    /// user-script, and dynamic-config sources must all register here so
+    /// ownership union and continuous-input priorities are evaluated once.
+    #[must_use]
+    pub fn arbiter(&self) -> Arc<Mutex<InputArbiter>> {
+        Arc::clone(&self.arbiter)
+    }
 }
 
 impl ResourceSafety for DynamicControllerSafety {
@@ -183,6 +191,7 @@ struct StartupHostState {
     outputs: Vec<String>,
     command_recompute_requests: u64,
     script_load: Option<ScriptLoadStage>,
+    command_cache_published: bool,
     prepared_profile: Option<PreparedProfileSwitch>,
     startup_complete: bool,
     stopping: bool,
@@ -247,6 +256,7 @@ impl StartupDynamicHost {
                 outputs: Vec::new(),
                 command_recompute_requests: 0,
                 script_load: None,
+                command_cache_published: false,
                 prepared_profile: None,
                 startup_complete: false,
                 stopping: false,
@@ -302,6 +312,12 @@ impl StartupDynamicHost {
         Arc::clone(&self.controller)
     }
 
+    /// Publishes a controller change made by another source registered in the
+    /// shared arbiter.
+    pub fn notify_controller_change(&self) {
+        self.notify_runtime_change();
+    }
+
     #[must_use]
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         self.inner.lock().diagnostics.clone()
@@ -347,6 +363,26 @@ impl StartupDynamicHost {
         Ok(snapshot)
     }
 
+    /// Re-enumerates profile directories and publishes the resulting list to
+    /// the committed runtime state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the effective profile directory cannot be read.
+    pub fn refresh_available_profiles(&self) -> Result<(), DynamicHostError> {
+        let mut inner = self.inner.lock();
+        ensure_running(&inner)?;
+        let profiles = serde_json::to_value(list_profiles(&inner.loaded)?).map_err(|_| {
+            DynamicHostError::new("StateEncodingFailed", "profile list cannot be encoded")
+        })?;
+        inner
+            .public_state
+            .insert("available_profiles".to_owned(), profiles);
+        drop(inner);
+        self.notify_runtime_change();
+        Ok(())
+    }
+
     fn notify_runtime_change(&self) {
         self.runtime_changes
             .send_modify(|generation| *generation = generation.saturating_add(1));
@@ -368,11 +404,7 @@ impl StartupDynamicHost {
                 "another command load generation is already active",
             ));
         }
-        let initial_load = inner
-            .public_state
-            .get("command_display_lists")
-            .and_then(Value::as_object)
-            .is_none_or(serde_json::Map::is_empty);
+        let initial_load = !inner.command_cache_published;
         inner.public_state.insert(
             "command_display_cache_loading".to_owned(),
             Value::Bool(initial_load),
@@ -466,6 +498,7 @@ impl StartupDynamicHost {
         inner
             .public_state
             .insert("command_display_lists".to_owned(), display_lists);
+        inner.command_cache_published = true;
         inner.public_state.insert(
             "command_display_cache_loading".to_owned(),
             Value::Bool(false),
@@ -538,8 +571,9 @@ impl StartupDynamicHost {
             .insert("tags".to_owned(), Value::Array(Vec::new()));
         inner.public_state.insert(
             "command_display_lists".to_owned(),
-            Value::Object(serde_json::Map::new()),
+            serde_json::json!({"-": []}),
         );
+        inner.command_cache_published = false;
         inner.public_state.insert(
             "command_display_cache_loading".to_owned(),
             Value::Bool(false),
@@ -1253,7 +1287,7 @@ fn startup_state(loaded: &LoadedSettings) -> Result<BTreeMap<String, Value>, Dyn
         ("tags".to_owned(), Value::Array(Vec::new())),
         (
             "command_display_lists".to_owned(),
-            Value::Object(serde_json::Map::new()),
+            serde_json::json!({"-": []}),
         ),
         (
             "command_display_cache_loading".to_owned(),
@@ -1373,6 +1407,14 @@ mod tests {
         let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
         let mut runtime_changes = host.subscribe_runtime_changes();
         assert_eq!(host.profile_list().unwrap(), ["Other", "default"]);
+        fs::create_dir(host.loaded_settings().roots.config.join("profiles/New"))
+            .expect("new profile must be created");
+        host.refresh_available_profiles()
+            .expect("profile state must refresh");
+        assert_eq!(
+            host.public_state_snapshot().unwrap()["available_profiles"],
+            json!(["New", "Other", "default"])
+        );
         host.finish_startup().expect("startup must finalize");
         host.profile_switch_begin("Other", &BTreeMap::new())
             .await
@@ -1401,13 +1443,50 @@ mod tests {
         })
         .expect("controller update must apply");
         assert!(host.controller_safety().state().buttons.a);
+        let external_source = InputSourceId::new("test-browser").unwrap();
+        let external_generation = InputGeneration::new("test-generation").unwrap();
+        let arbiter = host.controller_safety().arbiter();
+        let mut arbiter = arbiter.lock();
+        arbiter.begin_generation(
+            external_source.clone(),
+            InputSourceKind::BrowserGamepad,
+            InputPriority::BROWSER_GAMEPAD,
+            external_generation.clone(),
+        );
+        let mut external = ControllerState::NEUTRAL;
+        external.buttons.b = true;
+        let (applied, acknowledgement) = arbiter
+            .apply_snapshot(
+                &external_source,
+                InputSnapshot {
+                    generation: external_generation,
+                    sequence: InputSequence::zero(),
+                    keyboard_keys: Vec::new(),
+                    mouse_buttons: MouseButtons::default(),
+                    buttons: external.buttons,
+                    hat: external.hat,
+                    left_stick: external.left_stick,
+                    right_stick: external.right_stick,
+                    touch: external.touch,
+                },
+            )
+            .unwrap();
+        assert_eq!(applied, ApplyResult::Applied);
+        assert!(acknowledgement.is_some());
+        drop(arbiter);
+        assert!(host.controller_safety().state().buttons.a);
+        assert!(host.controller_safety().state().buttons.b);
         assert_eq!(
             host.state_snapshot().unwrap()["holding_buttons"],
-            json!(["A"])
+            json!(["A", "B"])
         );
         host.controller_safety().force_release();
-        assert_eq!(host.controller_safety().state(), ControllerState::NEUTRAL);
-        assert_eq!(host.state_snapshot().unwrap()["holding_buttons"], json!([]));
+        assert!(!host.controller_safety().state().buttons.a);
+        assert!(host.controller_safety().state().buttons.b);
+        assert_eq!(
+            host.state_snapshot().unwrap()["holding_buttons"],
+            json!(["B"])
+        );
     }
 
     #[test]
@@ -1480,7 +1559,7 @@ mod tests {
         );
         assert_eq!(
             host.state_snapshot().unwrap()["command_display_lists"],
-            json!({})
+            json!({"-": []})
         );
         assert_eq!(
             host.state_snapshot().unwrap()["command_display_cache_loading"],

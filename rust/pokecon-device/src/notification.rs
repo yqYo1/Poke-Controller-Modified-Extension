@@ -310,6 +310,13 @@ impl NotificationService {
         }
     }
 
+    /// Delivers script-originated Discord text through the currently effective
+    /// canonical webhook without exposing the secret to the worker.
+    pub async fn send_script_discord(&self, content: &str) -> NotificationOutcome {
+        let config = self.config.read().await.clone();
+        self.deliver_discord(&config.discord, content).await
+    }
+
     async fn notify_lifecycle(
         &self,
         event: ScriptNotificationEvent,

@@ -6,11 +6,16 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
 
+  import { BackendActions } from '$lib/actions';
+  import CameraTab from '$lib/components/CameraTab.svelte';
   import RightPanel from '$lib/components/RightPanel.svelte';
+  import SerialTab from '$lib/components/SerialTab.svelte';
   import { ApplicationRuntime, type RuntimeView } from '$lib/runtime';
 
   type TabId = 'camera' | 'serial' | 'manual' | 'commands' | 'notifications' | 'other';
 
+  const actions = new BackendActions();
+  const autoLoadDevices = import.meta.env.MODE !== 'test';
   const runtime = new ApplicationRuntime();
   const tabs: readonly { id: TabId; en: string; ja: string }[] = [
     { en: 'Camera', id: 'camera', ja: 'カメラ' },
@@ -117,17 +122,9 @@
     <div class="mt-4 grid flex-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(28rem,44rem)]">
       <div id={`panel-${activeTab}`} class="min-h-[34rem] rounded-2xl border border-white/10 bg-ink-900/80 p-4 shadow-2xl shadow-black/20" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
         {#if activeTab === 'camera'}
-          <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Camera</p>
-          <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Live capture' : 'ライブキャプチャ'}</h2>
-          <dl class="mt-6 grid gap-3 sm:grid-cols-3">
-            <div class="rounded-xl bg-white/5 p-4"><dt class="text-xs text-slate-500">Device</dt><dd class="mt-1 text-sm text-slate-200">{view.state?.camera_device ?? '—'}</dd></div>
-            <div class="rounded-xl bg-white/5 p-4"><dt class="text-xs text-slate-500">Resolution</dt><dd class="mt-1 text-sm text-slate-200">{view.state?.camera_resolution ?? '—'}</dd></div>
-            <div class="rounded-xl bg-white/5 p-4"><dt class="text-xs text-slate-500">FPS</dt><dd class="mt-1 text-sm text-slate-200">{view.state?.camera_fps ?? 0}</dd></div>
-          </dl>
+          <CameraTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
         {:else if activeTab === 'serial'}
-          <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Serial</p>
-          <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Serial monitor' : 'シリアルモニター'}</h2>
-          <p class="mt-4 text-slate-400">{view.state?.serial_connected ? `${view.state.serial_port ?? ''} @ ${String(view.state.serial_baud_rate)}` : language === 'en' ? 'Disconnected' : '未接続'}</p>
+          <SerialTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
         {:else if activeTab === 'manual'}
           <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Manual Control</p>
           <h2 class="mt-2 text-2xl font-semibold text-white">{language === 'en' ? 'Input control' : '入力制御'}</h2>

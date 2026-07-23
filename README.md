@@ -1,87 +1,89 @@
 # Poke-Controller Modified Extension
 
-Poke-Controller Modified Extensionを、Rustコア、Python互換層、動的設定ワーカー、Web／Tauri UIで再構築するプロジェクトです。
+Poke-Controller Modified Extensionは、ゲーム機コントローラー自動化をRust中心の実行系へ再構築したローカルファーストのアプリケーションです。LinuxではWeb UIまたはTauriデスクトップ、WindowsではTauriデスクトップとして動作します。ユーザースクリプトにはPython 3.14互換APIを提供します。
 
-## 現在の状態
+## 実装状況
 
-このブランチは**再実装前の仕様確定段階**です。旧実装コードはクリーンな再実装に備えて削除されており、現時点では実行可能なアプリケーションを提供していません。
+Rustメインプロセス、SvelteKit UI、Tauriシェル、Python／Lua動的設定、プロファイル単位のPython workerを接続済みです。主な境界は次のとおりです。
 
-- 実装の唯一の規範は[`SPECIFICATION.md`](SPECIFICATION.md)です。
-- Rustクレートには`Cargo.toml`だけがあり、`src/`はまだありません。
-- Web UI、サーバー、Python互換層、テストの実装ソースはまだありません。
-- `nix run .`、ビルド、アプリケーション起動、実装テストは、再実装が進むまで利用できません。
-- CIは対象ソースが存在しない検査を明示的にスキップし、文書・Nix・ソースフィルター等の適用可能な検査だけを実行します。
+- Rustがシリアル、カメラ、コントローラー入力、設定、HTTP、WebSocket、WebRTCを所有します。
+- Pythonユーザースクリプトは分離workerで実行し、ハードウェア操作を型付きIPC経由で依頼します。
+- 動的Python／Lua設定は永続workerで評価し、同じ公開APIと設定レジストリを使います。
+- Web UIとTauri UIは同じaxumバックエンド、OpenAPI、イベント系列を利用します。
+- 固定3リポジトリの103スクリプトを、指定commitのままmanaged workerへ読み込む互換性ゲートを備えます。
 
-## 目標
+詳細な規範は[SPECIFICATION.md](SPECIFICATION.md)、実装順序と受け入れ条件は[PLAN.md](PLAN.md)にあります。
 
-定義書では、次のアーキテクチャと互換性を規定しています。
+## 起動
 
-- シリアル、カメラ、入力、HTTPを管理するRustメインプロセス
-- SvelteKit 2、Svelte 5、Tailwind CSS v4によるレスポンシブUI
-- TauriデスクトップモードとスタンドアロンWebモード
-- PythonとLuaに同一の動的設定APIを提供するグローバル動的設定ワーカー
-- プロファイルごとのCPythonユーザースクリプトワーカー
-- 共有メモリによる低遅延カメラフレーム共有
-- WebRTCを主経路とし、WebSocketへ自動フォールバック・復旧する通信
-- 固定3ベースラインと自動追補コーパスに対するPythonユーザースクリプト互換性
-- CLI、環境変数、TOML、動的設定、UI、OpenAPIを正準設定レジストリから一貫して公開する設定システム
-
-PWAは将来機能です。macOSは現時点の対象外です。現在の対象デスクトップOSはWindowsとLinuxです。
-
-## 開発環境
-
-Nix開発環境は利用できます。
+Nixが利用できるLinux環境では、次のコマンドで起動できます。
 
 ```bash
-# 初回のみ
-# direnv allow
+# Web UI。既定では http://127.0.0.1:8020/ui/
+nix run . -- --ui web
 
-# 開発シェル
-nix develop
+# Tauriデスクトップ
+nix run .#tauri
 
-# 文書・設定を含む整形
-nix fmt
-
-# 文書のtypo検査
-nix develop --command typos SPECIFICATION.md README.md
+# ポートとプロファイルを指定
+nix run . -- --ui web --port 8080 --profile example
 ```
 
-実装ソースが追加された後は、`flake.nix`に定義済みのビルド、テスト、リント用appを同じNix環境から使用します。ソースが存在しない現段階で、これらのappがアプリケーションの動作を保証することはありません。
+`--bind-address`にはワイルドカードではない数値IPだけを指定できます。初回起動時に設定とプロファイルの雛形を作成します。既存のユーザー編集ファイルは上書きしません。
 
-## リポジトリ構造
+インストーラ、アップグレード、オフライン導入は[インストールガイド](docs/INSTALL.md)、旧実装からの移行は[移行ガイド](docs/MIGRATION.md)を参照してください。
 
-現在の主要な追跡対象は次のとおりです。
+## 開発と検証
+
+開発コマンドはNix devShell内で実行します。`.envrc`は`use flake`を設定済みです。
+
+```bash
+direnv allow        # 初回のみ
+nix develop
+nix fmt
+nix run .#check
+```
+
+個別の再現可能タスクもflake appとして公開しています。
+
+```bash
+nix run .#clippy
+nix run .#cargo-test
+nix run .#web-check
+nix run .#compatibility
+nix run .#tauri-check
+nix run .#tauri-build -- --bundles deb
+nix run .#package-smoke -- dist/tauri/*.deb
+nix run .#package-install-smoke -- dist/tauri/*.deb
+nix build .#pokecon-server
+```
+
+`nix run .#compatibility`は固定commitと昇格済みcommitを取得し、全スクリプトの内容hash、Python 3.14構文、import、クラス検出をmanaged workerで検証します。追跡済みの固定結果は[compatibility/fixed-results.json](compatibility/fixed-results.json)です。週次workflowは3 upstreamのdefault branchをimmutable SHAとして収集し、完全保証チェーン、runtime evidence、公開API契約が通った候補だけをhash chain付き履歴へ昇格します。失敗または未完了の実機gateは理由付きで隔離し、署名付きcommitのreview PRとして提出します。
+
+Package CIはUbuntu 24.04へのクリーンインストール、完全オフラインのmanaged worker起動、upgrade／uninstall時のユーザーデータ保持、Linux成果物の2回buildによるバイト単位の再現性、Windows NSISのsilent install／startup／upgrade／uninstallを検証します。
+
+## 構成
 
 ```text
-.
-├── SPECIFICATION.md                 # 再実装の規範となる定義書
-├── README.md                        # 現在状態と目標の概要
-├── AGENTS.md                        # 開発時のプロジェクト指示
-├── flake.nix / flake.lock           # Nix開発環境・CIタスク
-├── Cargo.toml / Cargo.lock          # Rustワークスペース骨格
-├── pyproject.toml                   # Python 3.14向け設定
-├── rust/
-│   ├── pokecon-core/Cargo.toml
-│   └── pokecon-pybindings/Cargo.toml
-├── docs/                            # 旧文書・移行時の参考資料
-├── .github/workflows/               # CIワークフロー
-└── src-server/icons/                # デスクトップアイコン
+rust/                         RustワークスペースとTauriアプリ
+web/                          SvelteKit 2 / Svelte 5 UI
+python/pokecon/               Python bindingと型情報
+api/                          OpenAPIと生成TypeScript
+compatibility/                固定コーパス、実行結果、昇格履歴
+scripts/                      Nix/CIから呼ぶ検証・配布タスク
+docs/                         導入、移行、トラブルシュート
 ```
 
-`docs/`配下の文書は旧実装や過去の計画を含む参考資料です。再実装時のAPI・挙動・構成は`SPECIFICATION.md`を優先してください。
+公開契約はRustレジストリからOpenAPI、TypeScript、Python/Lua typingsへ生成します。生成物を手編集せず、`nix run .#contract-check`でdriftを検出してください。
 
-## 実装時の方針
+## 対象範囲
 
-- 先に定義書を更新し、その後に実装します。
-- 開発・検証は直接コマンドではなくNix flake appを使用します。
-- PythonとLuaの公開APIは名前・名前空間・セマンティクスを揃えます。
-- 既存スクリプト互換性は定義書の固定ベースラインと昇格規則で検証します。
-- PWAやmacOSなど将来機能を、実装済みとしてREADMEへ記載しません。
+対象OSはWindowsとLinuxです。PWAとmacOSは将来機能であり、現行リリースの対象ではありません。実機シリアル、カメラ、音声、外部通知には、決定的fixtureに加えて環境ごとの明示的hardware gateが必要です。
 
-## ライセンス
+問題の切り分けは[トラブルシュート](docs/TROUBLESHOOTING.md)、変更点は[CHANGELOG.md](CHANGELOG.md)にあります。
 
-[MIT License](LICENSE)
+## ライセンスと謝辞
 
-## 謝辞
+[MIT License](LICENSE)で提供します。
 
-[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)の開発者であるKawaSwitch氏、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)の開発者であるmoi_poke氏に感謝します。
+[Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)のKawaSwitch氏と、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)のmoi_poke氏をはじめ、既存実装とスクリプト作者の皆様に感謝します。

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import TYPE_CHECKING
 
-from scripts.stage_release import stage_resources
+from scripts.stage_release import bundle_resource_map, stage_resources
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,3 +69,17 @@ def test_release_staging_is_deterministic_and_complete(tmp_path: Path) -> None:
     ] == {f"{first_output.resolve()}/": ""}
     assert (first_output / "resource-manifest.json").stat().st_mtime == 0
     assert (second_output / "resource-manifest.json").stat().st_mtime == 0
+
+
+def test_windows_bundle_map_makes_root_destinations_explicit(tmp_path: Path) -> None:
+    output = tmp_path / "bundle-resources"
+    (output / "python").mkdir(parents=True)
+    (output / "python/python.exe").write_bytes(b"python")
+    (output / "pokecon-worker.exe").write_bytes(b"worker")
+    (output / "resource-manifest.json").write_text("{}\n", encoding="utf-8")
+
+    assert bundle_resource_map(output, windows=True) == {
+        f"{(output / 'python').resolve()}{os.sep}": "python",
+        str((output / "pokecon-worker.exe").resolve()): "pokecon-worker.exe",
+        str((output / "resource-manifest.json").resolve()): ("resource-manifest.json"),
+    }

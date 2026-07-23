@@ -41,7 +41,25 @@ function Invoke-StartupProbe {
         throw "Installed application is missing: $application"
     }
     if (-not (Test-Path -LiteralPath $resourceManifest -PathType Leaf)) {
-        throw "Installed resource manifest is missing: $resourceManifest"
+        $topLevelEntries = @(
+            Get-ChildItem -LiteralPath $installRoot -Force |
+                Sort-Object -Property Name |
+                ForEach-Object { $_.Name }
+        ) -join ', '
+        $nestedManifests = @(
+            Get-ChildItem `
+                -LiteralPath $installRoot `
+                -Filter 'resource-manifest.json' `
+                -File `
+                -Recurse `
+                -ErrorAction SilentlyContinue |
+                ForEach-Object { $_.FullName }
+        ) -join ', '
+        throw (
+            "Installed resource manifest is missing: $resourceManifest; " +
+            "top-level entries: [$topLevelEntries]; " +
+            "nested manifests: [$nestedManifests]"
+        )
     }
     Invoke-CheckedProcess `
         -FilePath $application `

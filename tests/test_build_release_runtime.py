@@ -233,10 +233,14 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     assert "--config $env:POKECON_BUNDLE_CONFIG" in workflow
 
 
-def test_nix_release_task_declares_native_build_paths() -> None:
+def test_nix_release_task_declares_reproducible_native_build_paths() -> None:
     root = Path(__file__).resolve().parents[1]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
 
     assert 'CFLAGS="-I${pkgs.portaudio}/include' in flake
     assert 'LDFLAGS="-L${pkgs.portaudio}/lib' in flake
-    assert 'RUSTFLAGS="-Lnative=$release_python/lib' in flake
+    assert 'export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
+    assert 'export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
+    assert 'RUSTFLAGS="--remap-path-prefix=$workdir=/build/pokecon' in flake
+    assert "--remap-path-prefix=$release_python=/build/python" in flake
+    assert "-Lnative=$release_python/lib" in flake

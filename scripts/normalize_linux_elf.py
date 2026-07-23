@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 from pathlib import Path
@@ -15,6 +16,14 @@ if TYPE_CHECKING:
 SYSTEM_INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
 MAXIMUM_GLIBC = (2, 39)
 GLIBC_PATTERN = re.compile(r"GLIBC_(\d+)\.(\d+)")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while block := source.read(64 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def run(arguments: Sequence[str | Path], *, capture: bool = False) -> str:
@@ -85,6 +94,8 @@ def normalize_binary(
         raise ValueError(message)
     return {
         "path": str(binary),
+        "sha256": sha256_file(binary),
+        "size": binary.stat().st_size,
         "interpreter": interpreter,
         "rpath": actual_rpath,
         "needed": needed,

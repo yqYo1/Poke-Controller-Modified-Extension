@@ -111,6 +111,21 @@ def python_executable(root: Path, windows: bool) -> Path:
     return executable
 
 
+def bundle_resource_map(output: Path, *, windows: bool) -> dict[str, str]:
+    """Map staged resources to the runtime resource root."""
+    resolved = output.resolve()
+    if not windows:
+        return {f"{resolved}{os.sep}": ""}
+
+    resources: dict[str, str] = {}
+    for path in sorted(resolved.iterdir()):
+        if not path.is_file() and not path.is_dir():
+            invalid_value(f"unsupported staged resource entry: {path}")
+        source = f"{path}{os.sep}" if path.is_dir() else str(path)
+        resources[source] = path.name
+    return resources
+
+
 def stage_resources(
     web: Path,
     worker: Path,
@@ -167,7 +182,7 @@ def stage_resources(
     os.utime(manifest_path, (0, 0))
 
     config_output.parent.mkdir(parents=True, exist_ok=True)
-    config = {"bundle": {"resources": {f"{output.resolve()}/": ""}}}
+    config = {"bundle": {"resources": bundle_resource_map(output, windows=windows)}}
     config_output.write_text(
         json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

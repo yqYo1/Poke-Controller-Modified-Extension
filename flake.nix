@@ -602,7 +602,9 @@
                   --strip "${pkgs.binutils}/bin/strip" \
                   --runtime-library-path "${pkgs.portaudio}/lib"
                 export PYO3_PYTHON="$release_python/bin/python3.14"
-                export RUSTFLAGS="-Lnative=$release_python/lib''${RUSTFLAGS:+ $RUSTFLAGS}"
+                export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CFLAGS:+ $CFLAGS}"
+                export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CXXFLAGS:+ $CXXFLAGS}"
+                export RUSTFLAGS="--remap-path-prefix=$workdir=/build/pokecon --remap-path-prefix=$release_python=/build/python -Lnative=$release_python/lib''${RUSTFLAGS:+ $RUSTFLAGS}"
                 export POKECON_BUILD_UV_PATH="${portableUvBinary}"
                 export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
                 unset POKECON_BUILD_PYTHON

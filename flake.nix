@@ -591,7 +591,9 @@
                 npm --prefix web run build
                 release_python="$workdir/release-python"
                 release_wheelhouse="$workdir/release-wheelhouse"
-                python -m scripts.build_release_runtime \
+                CFLAGS="-I${pkgs.portaudio}/include''${CFLAGS:+ $CFLAGS}" \
+                LDFLAGS="-L${pkgs.portaudio}/lib''${LDFLAGS:+ $LDFLAGS}" \
+                  python -m scripts.build_release_runtime \
                   --project "$workdir" \
                   --uv "${portableUvBinary}" \
                   --runtime-output "$release_python" \
@@ -600,6 +602,7 @@
                   --strip "${pkgs.binutils}/bin/strip" \
                   --runtime-library-path "${pkgs.portaudio}/lib"
                 export PYO3_PYTHON="$release_python/bin/python3.14"
+                export NIX_LDFLAGS="-L$release_python/lib''${NIX_LDFLAGS:+ $NIX_LDFLAGS}"
                 export POKECON_BUILD_UV_PATH="${portableUvBinary}"
                 export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
                 unset POKECON_BUILD_PYTHON

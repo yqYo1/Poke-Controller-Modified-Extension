@@ -122,13 +122,18 @@ jobs:
         run: |
           $uv = (Get-Command uv).Source
           $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
+          $releaseRoot = Join-Path $env:RUNNER_TEMP "pokecon-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $releasePython = Join-Path $releaseRoot "python"
+          $releaseWheelhouse = Join-Path $releaseRoot "wheelhouse"
+          $bundleResources = Join-Path $releaseRoot "bundle-resources"
+          $bundleConfig = Join-Path $releaseRoot "tauri.bundle.json"
           python -m scripts.build_release_runtime `
             --project . `
             --uv $uv `
-            --runtime-output target/release-python `
-            --wheelhouse-output target/release-wheelhouse `
+            --runtime-output $releasePython `
+            --wheelhouse-output $releaseWheelhouse `
             --vcpkg-path $vcpkg
-          $runtimePython = (Resolve-Path target/release-python/python.exe).Path
+          $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
           cargo build --locked --release --package pokecon-worker --bin pokecon-worker
@@ -136,16 +141,17 @@ jobs:
             --web web/dist `
             --worker target/release/pokecon-worker.exe `
             --uv $uv `
-            --wheelhouse target/release-wheelhouse `
-            --python target/release-python `
-            --output target/bundle-resources `
-            --config-output target/tauri.bundle.json
+            --wheelhouse $releaseWheelhouse `
+            --python $releasePython `
+            --output $bundleResources `
+            --config-output $bundleConfig
+          "POKECON_BUNDLE_CONFIG=$bundleConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build offline NSIS installer
         shell: pwsh
         working-directory: rust/pokecon-app
         run: >-
           cargo tauri build --ci --bundles nsis
-          --config ../../target/tauri.bundle.json
+          --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
       - name: Verify clean install, startup, upgrade, and uninstall
         shell: pwsh

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import shlex
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -7,6 +10,8 @@ import pytest
 from scripts.build_release_runtime import (
     PORTABLE_BUILD_PREFIX,
     normalize_python_sysconfig,
+    normalize_wheel,
+    wheel_build_environment,
 )
 
 
@@ -38,6 +43,49 @@ def test_normalize_python_sysconfig_rejects_unrelated_prefix(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="does not contain its install prefix"):
         normalize_python_sysconfig(runtime, tmp_path / "temporary/python-install")
+
+
+def test_wheel_build_environment_maps_the_portable_python_prefix(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "portable python"
+    environment = wheel_build_environment(runtime, None, {"CFLAGS": "-O2"})
+
+    assert environment["SOURCE_DATE_EPOCH"] == "0"
+    if os.name == "nt":
+        assert (
+            f"/pathmap:{runtime.resolve()}={PORTABLE_BUILD_PREFIX}" in environment["CL"]
+        )
+    else:
+        assert shlex.split(environment["CFLAGS"]) == [
+            "-O2",
+            f"-ffile-prefix-map={runtime.resolve()}={PORTABLE_BUILD_PREFIX}",
+        ]
+        assert environment["LDFLAGS"] == "-Wl,--build-id=none"
+
+
+def test_normalize_wheel_repacks_unchanged_members_deterministically(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.whl"
+    second = tmp_path / "second.whl"
+    members = {
+        "example/__init__.py": b"VALUE = 1\n",
+        "example-1.0.dist-info/RECORD": b"",
+    }
+    for wheel, date_time, names in [
+        (first, (2025, 1, 2, 3, 4, 6), list(members)),
+        (second, (2026, 7, 8, 9, 10, 12), list(reversed(members))),
+    ]:
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name in names:
+                info = zipfile.ZipInfo(name, date_time=date_time)
+                archive.writestr(info, members[name])
+
+    normalize_wheel(first, None, None)
+    normalize_wheel(second, None, None)
+
+    assert first.read_bytes() == second.read_bytes()
 
 
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])

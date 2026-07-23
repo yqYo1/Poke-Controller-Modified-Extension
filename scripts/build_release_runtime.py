@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -297,7 +298,11 @@ def repack_wheel(root: Path, output: Path) -> None:
     temporary.replace(output)
 
 
-def normalize_wheel(wheel: Path, patchelf: Path, strip: Path) -> None:
+def normalize_wheel(
+    wheel: Path,
+    patchelf: Path | None,
+    strip: Path | None,
+) -> None:
     with tempfile.TemporaryDirectory(prefix="pokecon-wheel-") as directory:
         root = Path(directory)
         with zipfile.ZipFile(wheel) as archive:
@@ -306,6 +311,9 @@ def normalize_wheel(wheel: Path, patchelf: Path, strip: Path) -> None:
         for binary in sorted(path for path in root.rglob("*") if path.is_file()):
             if not is_elf(binary):
                 continue
+            if patchelf is None or strip is None:
+                message = f"native wheel normalization requires ELF tools: {wheel.name}"
+                raise ValueError(message)
             rpath = run([patchelf, "--print-rpath", binary], capture=True)
             unsafe = any(
                 entry and not entry.startswith(("$ORIGIN", "${ORIGIN}"))
@@ -325,7 +333,42 @@ def normalize_wheel(wheel: Path, patchelf: Path, strip: Path) -> None:
             changed = True
         if changed:
             wheel_record(root)
-            repack_wheel(root, wheel)
+        repack_wheel(root, wheel)
+
+
+def wheel_build_environment(
+    runtime_root: Path,
+    vcpkg_path: Path | None,
+    base: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    environment = dict(os.environ if base is None else base)
+    environment["SOURCE_DATE_EPOCH"] = "0"
+    environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    environment["PIP_NO_CACHE_DIR"] = "1"
+    resolved_runtime = runtime_root.resolve()
+    if os.name == "nt":
+        prefix_map = subprocess.list2cmdline(
+            [f"/pathmap:{resolved_runtime}={PORTABLE_BUILD_PREFIX}"]
+        )
+        compiler_flags = environment.get("CL", "").strip()
+        environment["CL"] = " ".join(
+            flag for flag in (compiler_flags, prefix_map) if flag
+        )
+    else:
+        prefix_map = shlex.quote(
+            f"-ffile-prefix-map={resolved_runtime}={PORTABLE_BUILD_PREFIX}"
+        )
+        compiler_flags = environment.get("CFLAGS", "").strip()
+        environment["CFLAGS"] = " ".join(
+            flag for flag in (compiler_flags, prefix_map) if flag
+        )
+        linker_flags = environment.get("LDFLAGS", "").strip()
+        environment["LDFLAGS"] = " ".join(
+            flag for flag in (linker_flags, "-Wl,--build-id=none") if flag
+        )
+    if vcpkg_path is not None:
+        environment["VCPKG_PATH"] = str(vcpkg_path)
+    return environment
 
 
 def build_wheels(
@@ -333,6 +376,7 @@ def build_wheels(
     python: Path,
     requirements: Path,
     output: Path,
+    runtime_root: Path,
     workspace: Path,
     patchelf: Path | None,
     strip: Path | None,
@@ -354,17 +398,7 @@ def build_wheels(
             f"wheel=={WHEEL_VERSION}",
         ]
     )
-    environment = dict(os.environ)
-    environment["SOURCE_DATE_EPOCH"] = "0"
-    environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
-    environment["PIP_NO_CACHE_DIR"] = "1"
-    if os.name != "nt":
-        linker_flags = environment.get("LDFLAGS", "").strip()
-        environment["LDFLAGS"] = " ".join(
-            flag for flag in (linker_flags, "-Wl,--build-id=none") if flag
-        )
-    if vcpkg_path is not None:
-        environment["VCPKG_PATH"] = str(vcpkg_path)
+    environment = wheel_build_environment(runtime_root, vcpkg_path)
     run(
         [
             build_python,
@@ -388,9 +422,8 @@ def build_wheels(
     if (patchelf is None) != (strip is None):
         message = "--patchelf and --strip must be provided together"
         raise ValueError(message)
-    if patchelf is not None and strip is not None:
-        for wheel in wheels:
-            normalize_wheel(wheel, patchelf, strip)
+    for wheel in wheels:
+        normalize_wheel(wheel, patchelf, strip)
 
 
 def verify_wheelhouse(
@@ -497,6 +530,7 @@ def build_release_runtime(
             python,
             requirements,
             wheelhouse_output,
+            runtime_output,
             workspace,
             patchelf,
             strip,

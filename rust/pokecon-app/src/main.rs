@@ -84,11 +84,15 @@ enum MainError {
 
 #[tokio::main]
 async fn main() -> Result<(), MainError> {
-    let mut request = PipelineRequest::current()?;
+    let request = PipelineRequest::current()?;
     #[cfg(feature = "tauri-shell")]
-    if let Some(resource_root) = packaged_resource_root() {
-        request.resource_root = resource_root;
-    }
+    let request = {
+        let mut request = request;
+        if let Some(resource_root) = packaged_resource_root() {
+            request.resource_root = resource_root;
+        }
+        request
+    };
     let before_dynamic = SettingsPipeline::new(request.clone()).load_before_dynamic()?;
     let cli = Cli::parse_from(&before_dynamic.remaining_arguments);
 

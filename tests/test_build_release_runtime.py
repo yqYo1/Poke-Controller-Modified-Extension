@@ -239,8 +239,16 @@ def test_nix_release_task_declares_reproducible_native_build_paths() -> None:
 
     assert 'CFLAGS="-I${pkgs.portaudio}/include' in flake
     assert 'LDFLAGS="-L${pkgs.portaudio}/lib' in flake
+    assert 'cp -a "${source}/." "$workdir/"' in flake
+    assert 'release_workdir="$CARGO_TARGET_DIR/pokecon-release-workdir"' in flake
     assert 'export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
     assert 'export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
-    assert 'RUSTFLAGS="--remap-path-prefix=$workdir=/build/pokecon' in flake
-    assert "--remap-path-prefix=$release_python=/build/python" in flake
-    assert "-Lnative=$release_python/lib" in flake
+    assert 'export POKECON_RUST_REMAP_SOURCE="$workdir"' in flake
+    assert 'export POKECON_RUST_REMAP_PYTHON="$release_python"' in flake
+    assert 'export RUSTC_WRAPPER="${reproducibleRustcWrapper}"' in flake
+    assert "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" in flake
+    assert "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" in flake
+    assert "-Lnative=$POKECON_RUST_REMAP_PYTHON/lib" in flake
+    assert '--application "$normalized_application"' in flake
+    assert '--worker "$normalized_worker"' in flake
+    assert 'cp -p "$application_backup" "$application"' in flake

@@ -118,11 +118,12 @@ def bundle_resource_map(output: Path, *, windows: bool) -> dict[str, str]:
         return {f"{resolved}{os.sep}": ""}
 
     resources: dict[str, str] = {}
-    for path in sorted(resolved.iterdir()):
-        if not path.is_file() and not path.is_dir():
+    for path in sorted(resolved.rglob("*")):
+        if path.is_dir():
+            continue
+        if not path.is_file():
             invalid_value(f"unsupported staged resource entry: {path}")
-        source = f"{path}{os.sep}" if path.is_dir() else str(path)
-        resources[source] = path.name
+        resources[str(path)] = path.relative_to(resolved).as_posix()
     return resources
 
 

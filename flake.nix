@@ -73,6 +73,18 @@
             else
               pkgs.uv;
           portableUvBinary = if system == "x86_64-linux" then "${portableUv}/uv" else "${pkgs.uv}/bin/uv";
+          reproducibleRustcWrapper = pkgs.writeShellScript "pokecon-reproducible-rustc-wrapper" ''
+            set -o errexit -o nounset -o pipefail
+            rustc="$1"
+            shift
+            : "''${POKECON_RUST_REMAP_SOURCE:?POKECON_RUST_REMAP_SOURCE is required}"
+            : "''${POKECON_RUST_REMAP_PYTHON:?POKECON_RUST_REMAP_PYTHON is required}"
+            exec "$rustc" \
+              "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" \
+              "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" \
+              "-Lnative=$POKECON_RUST_REMAP_PYTHON/lib" \
+              "$@"
+          '';
 
           source = builtins.path {
             path = inputs.self.outPath;
@@ -151,7 +163,7 @@
             ln -sfn "${pkgs.uv}/bin/uv" "$CARGO_TARGET_DIR/release/uv/uv"
             workdir="$(mktemp -d)"
             trap 'rm -rf "$workdir"' EXIT
-            cp -R "${source}/." "$workdir/"
+            cp -a "${source}/." "$workdir/"
             chmod -R u+w "$workdir"
             cd "$workdir"
           '';
@@ -584,6 +596,11 @@
               ];
               text = ''
                 ${setupWorkdir}
+                release_workdir="$CARGO_TARGET_DIR/pokecon-release-workdir"
+                rm -rf -- "$release_workdir"
+                mv "$workdir" "$release_workdir"
+                workdir="$release_workdir"
+                cd "$workdir"
                 ${desktopEnvironment}
                 export POKECON_WEB_VERSION="${workspaceVersion}"
                 export SOURCE_DATE_EPOCH=0
@@ -604,18 +621,32 @@
                 export PYO3_PYTHON="$release_python/bin/python3.14"
                 export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CFLAGS:+ $CFLAGS}"
                 export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CXXFLAGS:+ $CXXFLAGS}"
-                export RUSTFLAGS="--remap-path-prefix=$workdir=/build/pokecon --remap-path-prefix=$release_python=/build/python -Lnative=$release_python/lib''${RUSTFLAGS:+ $RUSTFLAGS}"
+                export POKECON_RUST_REMAP_SOURCE="$workdir"
+                export POKECON_RUST_REMAP_PYTHON="$release_python"
+                export RUSTC_WRAPPER="${reproducibleRustcWrapper}"
                 export POKECON_BUILD_UV_PATH="${portableUvBinary}"
                 export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
                 unset POKECON_BUILD_PYTHON
                 cargo build --locked --release --package pokecon-worker --bin pokecon-worker
-                (
-                  cd rust/pokecon-app
-                  cargo tauri build --ci --no-bundle -- --locked
-                )
+                cargo build \
+                  --locked \
+                  --release \
+                  --package pokecon-app \
+                  --bin pokecon \
+                  --features tauri-shell
+                normalized_bin="$workdir/normalized-bin"
+                application="$CARGO_TARGET_DIR/release/pokecon"
+                worker="$CARGO_TARGET_DIR/release/pokecon-worker"
+                normalized_application="$normalized_bin/pokecon"
+                normalized_worker="$normalized_bin/pokecon-worker"
+                application_backup="$normalized_bin/pokecon.raw"
+                mkdir -p "$normalized_bin"
+                cp -p "$application" "$application_backup"
+                cp -p "$application" "$normalized_application"
+                cp -p "$worker" "$normalized_worker"
                 python -m scripts.normalize_linux_elf \
-                  --application "$CARGO_TARGET_DIR/release/pokecon" \
-                  --worker "$CARGO_TARGET_DIR/release/pokecon-worker" \
+                  --application "$normalized_application" \
+                  --worker "$normalized_worker" \
                   --python-root "$release_python" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --strip "${pkgs.binutils}/bin/strip" \
@@ -624,7 +655,7 @@
                 bundle_config="$workdir/tauri.bundle.json"
                 python -m scripts.stage_release \
                   --web "$workdir/web/dist" \
-                  --worker "$CARGO_TARGET_DIR/release/pokecon-worker" \
+                  --worker "$normalized_worker" \
                   --uv "${portableUvBinary}" \
                   --wheelhouse "$release_wheelhouse" \
                   --python "$release_python" \
@@ -634,10 +665,16 @@
                 if [ "''${#bundle_args[@]}" -eq 0 ]; then
                   bundle_args=(--bundles deb)
                 fi
+                restore_release_application() {
+                  cp -p "$application_backup" "$application"
+                }
+                trap 'restore_release_application; rm -rf "$workdir"' EXIT
+                cp -p "$normalized_application" "$application"
                 (
                   cd rust/pokecon-app
                   cargo tauri bundle --ci --config "$bundle_config" "''${bundle_args[@]}"
                 )
+                restore_release_application
                 while IFS= read -r -d "" package; do
                   python -m scripts.normalize_debian_package \
                     --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \

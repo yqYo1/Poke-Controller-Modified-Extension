@@ -678,7 +678,12 @@ fn discover_commands(
                 ))?
                 .extract()
         })
-        .map_err(|error| PythonActorError::new("ScriptDiscoveryError", error.to_string()))?;
+        .map_err(|error| {
+            PythonActorError::new(
+                "ScriptDiscoveryError",
+                format!("{}: {error}", source.relative_path.display()),
+            )
+        })?;
         let discovered = serde_json::from_str::<Vec<PythonDiscoveredClass>>(&encoded)
             .map_err(|error| PythonActorError::new("ScriptDiscoveryError", error.to_string()))?;
         commands.extend(
@@ -3000,8 +3005,49 @@ def _unsupported_filedialog(*args, **kwargs):
 filedialog_module.asksaveasfilename = _unsupported_filedialog
 filedialog_module.askopenfilename = _unsupported_filedialog
 tkinter_module.filedialog = filedialog_module
+messagebox_module = _types.ModuleType("tkinter.messagebox")
+
+
+def _messagebox_show(kind, title=None, message=None, **options):
+    unknown = set(options) - {"detail", "icon", "parent"}
+    if unknown:
+        name = sorted(unknown)[0]
+        raise NotImplementedError(
+            f"tkinter.messagebox option {name!r} is not implemented"
+        )
+    detail = options.get("detail")
+    description = "" if message is None else str(message)
+    if detail is not None:
+        description += f"\n\n{detail}"
+    command = _command()
+    _show_dialog(
+        command,
+        str(title or kind.title()),
+        [],
+        True,
+        description,
+    )
+    return "ok"
+
+
+def _messagebox_function(kind):
+    def show(title=None, message=None, **options):
+        return _messagebox_show(kind, title, message, **options)
+
+    show.__name__ = kind
+    return show
+
+
+for _messagebox_name in ("showinfo", "showwarning", "showerror"):
+    setattr(
+        messagebox_module,
+        _messagebox_name,
+        _messagebox_function(_messagebox_name),
+    )
+tkinter_module.messagebox = messagebox_module
 _sys.modules["tkinter"] = tkinter_module
 _sys.modules["tkinter.filedialog"] = filedialog_module
+_sys.modules["tkinter.messagebox"] = messagebox_module
 
 
 def _load_image(value, binary=False):

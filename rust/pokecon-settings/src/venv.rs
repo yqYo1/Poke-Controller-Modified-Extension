@@ -45,6 +45,10 @@ pub enum VenvPreparationState {
 
 /// Complete, immutable inputs for one exact-sync transaction.
 #[derive(Clone, Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the specification defines these four package-resolution policies independently"
+)]
 pub struct VenvPreparationRequest {
     pub worker: PythonWorker,
     pub venv: PathBuf,
@@ -56,6 +60,9 @@ pub struct VenvPreparationRequest {
     pub override_application_constraints: bool,
     pub override_package_metadata_constraints: bool,
     pub uv_config: Option<PathBuf>,
+    pub find_links: Option<PathBuf>,
+    pub no_index: bool,
+    pub package_source_build_id: Option<String>,
     pub uv_environment: UvChildEnvironment,
     pub revalidate_mutable_sources: bool,
     pub application_build_id: String,
@@ -110,6 +117,8 @@ impl UvExecutor for CommandUvExecutor {
             constraints: constraints_path,
             overrides: overrides_path,
             uv_config: context.request.uv_config.clone(),
+            find_links: context.request.find_links.clone(),
+            no_index: context.request.no_index,
             environment: context.request.uv_environment.clone(),
         });
         run_invocation(&plan.compile, VenvStage::Resolve).await?;
@@ -153,6 +162,8 @@ impl UvExecutor for CommandUvExecutor {
             constraints: None,
             overrides: None,
             uv_config: context.request.uv_config.clone(),
+            find_links: context.request.find_links.clone(),
+            no_index: context.request.no_index,
             environment: context.request.uv_environment.clone(),
         });
         run_invocation(&plan.check, VenvStage::Check).await?;
@@ -185,6 +196,8 @@ impl UvExecutor for CommandUvExecutor {
             constraints: write_optional_lines(&constraints, &context.request.packages.constraints)?,
             overrides: write_optional_lines(&overrides, &context.request.packages.overrides)?,
             uv_config: context.request.uv_config.clone(),
+            find_links: context.request.find_links.clone(),
+            no_index: context.request.no_index,
             environment: context.request.uv_environment.clone(),
         });
         run_invocation(&plan.compile, VenvStage::Revalidate).await?;
@@ -468,6 +481,7 @@ fn fingerprint(
             .request
             .override_package_metadata_constraints,
         application_build_id: context.request.application_build_id.clone(),
+        package_source_build_id: context.request.package_source_build_id.clone(),
         canonical_venv_path: context.canonical_venv.to_string_lossy().into_owned(),
         revalidate_mutable_sources: context.request.revalidate_mutable_sources,
         normalized_extras,
@@ -847,6 +861,9 @@ mod tests {
             override_application_constraints: false,
             override_package_metadata_constraints: false,
             uv_config: None,
+            find_links: None,
+            no_index: false,
+            package_source_build_id: None,
             uv_environment: UvChildEnvironment::build(&RootEnvironment::from_values([(
                 "PATH", "/bin",
             )]))

@@ -78,8 +78,14 @@
   },
   "inventory": {
     "fixed_manifest": "compatibility/fixed-manifest.json",
+    "fixed_results": "compatibility/fixed-results.json",
+    "rolling_results": "compatibility/results/<candidate-id>.json",
     "content_hash": "sha256",
     "extract": "nix run .#compatibility-inventory",
-    "verify": "nix run .#contract-check"
+    "execute": "nix run .#compatibility",
+    "verify": "nix run .#compatibility -- --check",
+    "promotion_check": "python -m scripts.compatibility_promote --check",
+    "rolling_evaluate": "nix run .#compatibility-roll",
+    "rolling_monitor": ".github/workflows/compatibility-roll.yml"
   }
 }

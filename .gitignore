@@ -9,8 +9,10 @@
 /.github/workflows/*
 !/.github/workflows/ruff.yml
 !/.github/workflows/basedpyright.yml
+!/.github/workflows/compatibility-roll.yml
 !/.github/workflows/lint.yml
 !/.github/workflows/pytest.yml
+!/.github/workflows/package.yml
 !/.github/workflows/release.yml
 !/.github/workflows/rust-ci.yml
 !/.github/workflows/remote-flake.yml
@@ -18,6 +20,7 @@
 # not ignore
 !/.gitignore
 !/flake.lock
+!/uv.lock
 !/AGENTS.md
 !/PLAN.md
 !/SPECIFICATION.md
@@ -25,6 +28,7 @@
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE
 !/README.md
+!/CHANGELOG.md
 !/UpdatePokeConModified-Extension.bat
 !/changelog.txt
 !/pyrightconfig.json
@@ -40,6 +44,7 @@
 /scripts/*
 !/scripts/*.sh
 !/scripts/*.py
+!/scripts/*.ps1
 
 !/api/
 /api/*
@@ -68,6 +73,10 @@
 !/Docs/
 /Docs/*
 !/Docs/*.md
+
+!/docs/
+/docs/*
+!/docs/*.md
 
 !/web/
 /web/*
@@ -159,7 +168,11 @@ result-*
 /rust/pokecon-*/benches/*
 !/rust/pokecon-*/benches/*.rs
 
-!/rust/pokecon-desktop/tauri.conf.json
+!/rust/pokecon-app/tauri.conf.json
+!/rust/pokecon-app/linux/
+/rust/pokecon-app/linux/*
+!/rust/pokecon-app/linux/*.rules
+!/rust/pokecon-app/linux/*.sh
 !/rust/pokecon-desktop/icons/
 /rust/pokecon-desktop/icons/*
 !/rust/pokecon-desktop/icons/*.png

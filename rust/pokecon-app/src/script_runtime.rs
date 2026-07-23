@@ -8,7 +8,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use pokecon_settings::package::PythonWorker;
 use pokecon_settings::pipeline::{LoadedSettings, PipelineRequest, SettingSource};
-use pokecon_settings::uv::{ManagedUv, ManagedUvSource, UvChildEnvironment};
+use pokecon_settings::python::{ManagedPython, prepare_managed_python};
+use pokecon_settings::uv::{
+    ManagedUv, ManagedUvSource, PackagedWheelhouse, UvChildEnvironment, packaged_wheelhouse,
+};
 use pokecon_settings::venv::{
     CommandUvExecutor, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
@@ -28,7 +31,7 @@ use crate::command_service::{
     CommandBackendError, ScriptSessionStop, UserScriptFactory, UserScriptSession,
 };
 use crate::dynamic_runtime::{
-    PYTHON_VERSION, optional_path_setting, packaged_python, packaged_worker, python_site_packages,
+    build_python, optional_path_setting, packaged_worker, python_site_packages,
     python_worker_launch,
 };
 
@@ -114,9 +117,9 @@ impl ManagedUserScriptFactory {
                 "user command root is not a directory",
             ));
         }
-        let python = packaged_python().map_err(runtime_environment_error)?;
-        let worker_program = packaged_worker().map_err(runtime_environment_error)?;
-        let managed_uv_source = ManagedUvSource::bundled()
+        let worker_program =
+            packaged_worker(&self.request.resource_root).map_err(runtime_environment_error)?;
+        let managed_uv_source = ManagedUvSource::bundled_at(&self.request.resource_root)
             .map_err(runtime_environment_error)?
             .ok_or_else(|| {
                 CommandBackendError::new(
@@ -126,54 +129,26 @@ impl ManagedUserScriptFactory {
             })?;
         let managed_uv = ManagedUv::prepare(&settings.roots, &managed_uv_source)
             .map_err(runtime_environment_error)?;
-        let venv = PathBuf::from(
-            settings
-                .settings
-                .string("python.script.venv")
-                .map_err(runtime_environment_error)?,
-        );
-        let ownership = match settings
-            .settings
-            .get("python.script.venv")
-            .ok_or_else(|| {
-                CommandBackendError::new("InvalidSetting", "python.script.venv is missing")
-            })?
-            .source
-        {
-            SettingSource::Default => VenvOwnership::AppManaged,
-            _ => VenvOwnership::UserSpecified,
-        };
-        let packages = settings
-            .settings
-            .resolve_packages(PythonWorker::Script)
+        let base_uv_environment = UvChildEnvironment::build(&self.request.environment)
             .map_err(runtime_environment_error)?;
-        let preparation = VenvPreparationRequest {
-            worker: PythonWorker::Script,
-            venv: venv.clone(),
-            ownership,
+        let managed_python = prepare_managed_python(
+            &self.request.resource_root,
+            &settings.roots,
+            &managed_uv,
+            &base_uv_environment,
+            build_python().as_deref(),
+        )
+        .await
+        .map_err(runtime_environment_error)?;
+        let wheelhouse =
+            packaged_wheelhouse(&self.request.resource_root).map_err(runtime_environment_error)?;
+        let (venv, preparation) = script_venv_preparation(
+            settings,
             managed_uv,
-            python: python.clone(),
-            python_build_id: format!("cpython-{PYTHON_VERSION}:{}", python.display()),
-            packages,
-            override_application_constraints: setting_bool(
-                settings,
-                "python.script.packages.override_application_constraints",
-            )?,
-            override_package_metadata_constraints: setting_bool(
-                settings,
-                "python.script.packages.override_package_metadata_constraints",
-            )?,
-            uv_config: optional_path_setting(settings, "python.script.packages.uv_config")
-                .map_err(runtime_environment_error)?,
-            uv_environment: UvChildEnvironment::build(&self.request.environment)
-                .map_err(runtime_environment_error)?,
-            revalidate_mutable_sources: setting_bool(
-                settings,
-                "python.script.packages.revalidate_mutable_sources",
-            )?,
-            application_build_id: format!("pokecon-{}", env!("CARGO_PKG_VERSION")),
-            kernel_id: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
-        };
+            managed_python,
+            wheelhouse,
+            base_uv_environment,
+        )?;
         let result = self
             .venvs
             .prepare(preparation)
@@ -198,6 +173,69 @@ impl ManagedUserScriptFactory {
             site_packages,
         })
     }
+}
+
+fn script_venv_preparation(
+    settings: &LoadedSettings,
+    managed_uv: ManagedUv,
+    managed_python: ManagedPython,
+    wheelhouse: Option<PackagedWheelhouse>,
+    base_uv_environment: UvChildEnvironment,
+) -> Result<(PathBuf, VenvPreparationRequest), CommandBackendError> {
+    let venv = PathBuf::from(
+        settings
+            .settings
+            .string("python.script.venv")
+            .map_err(runtime_environment_error)?,
+    );
+    let ownership = match settings
+        .settings
+        .get("python.script.venv")
+        .ok_or_else(|| CommandBackendError::new("InvalidSetting", "python.script.venv is missing"))?
+        .source
+    {
+        SettingSource::Default => VenvOwnership::AppManaged,
+        _ => VenvOwnership::UserSpecified,
+    };
+    let packages = settings
+        .settings
+        .resolve_packages(PythonWorker::Script)
+        .map_err(runtime_environment_error)?;
+    let package_defaults_only = settings
+        .settings
+        .package_sources("python.script.packages.list")
+        .is_empty();
+    let offline_wheelhouse = wheelhouse.is_some() && package_defaults_only;
+    let preparation = VenvPreparationRequest {
+        worker: PythonWorker::Script,
+        venv: venv.clone(),
+        ownership,
+        managed_uv,
+        python: managed_python.path,
+        python_build_id: managed_python.build_id,
+        packages,
+        override_application_constraints: setting_bool(
+            settings,
+            "python.script.packages.override_application_constraints",
+        )?,
+        override_package_metadata_constraints: setting_bool(
+            settings,
+            "python.script.packages.override_package_metadata_constraints",
+        )?,
+        uv_config: optional_path_setting(settings, "python.script.packages.uv_config")
+            .map_err(runtime_environment_error)?,
+        find_links: wheelhouse.as_ref().map(|source| source.path.clone()),
+        no_index: offline_wheelhouse,
+        package_source_build_id: wheelhouse.map(|source| source.content_sha256),
+        uv_environment: base_uv_environment.with_offline_default(offline_wheelhouse),
+        revalidate_mutable_sources: setting_bool(
+            settings,
+            "python.script.packages.revalidate_mutable_sources",
+        )?,
+        application_build_id: format!("pokecon-{}", env!("CARGO_PKG_VERSION")),
+        kernel_id: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+    };
+    Ok((venv, preparation))
 }
 
 #[async_trait]

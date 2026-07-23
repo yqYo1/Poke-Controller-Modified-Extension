@@ -11,6 +11,7 @@ pub mod package;
 pub mod path;
 pub mod persistence;
 pub mod pipeline;
+pub mod python;
 pub mod roots;
 pub mod scaffold;
 pub mod service;

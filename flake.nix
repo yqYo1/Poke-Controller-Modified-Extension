@@ -51,14 +51,28 @@
           };
           pythonEnv = pkgs.python314.withPackages (
             pythonPackages: with pythonPackages; [
+              icecream
+              loguru
               numpy
               opencv4
+              pyaudio
               pytest
               ruff
+              scipy
             ]
           );
           workspaceManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
           workspaceVersion = workspaceManifest.workspace.package.version;
+          portableUvVersion = "0.11.8";
+          portableUv =
+            if system == "x86_64-linux" then
+              pkgs.fetchzip {
+                url = "https://github.com/astral-sh/uv/releases/download/${portableUvVersion}/uv-x86_64-unknown-linux-gnu.tar.gz";
+                hash = "sha256-LWnCnwmLdeJIV4ytqFqWwwFPlTs+FlODuPJSTgTFngY=";
+              }
+            else
+              pkgs.uv;
+          portableUvBinary = if system == "x86_64-linux" then "${portableUv}/uv" else "${pkgs.uv}/bin/uv";
 
           source = builtins.path {
             path = inputs.self.outPath;
@@ -77,6 +91,8 @@
               || lib.hasSuffix ".jsonl" sourcePath
               || lib.hasSuffix ".py" sourcePath
               || lib.hasSuffix ".pyi" sourcePath
+              || lib.hasSuffix ".ps1" sourcePath
+              || lib.hasSuffix ".rules" sourcePath
               || lib.hasSuffix ".sh" sourcePath
               || lib.hasSuffix ".nix" sourcePath
               || lib.hasSuffix ".md" sourcePath
@@ -123,6 +139,7 @@
             export POKECON_BUILD_UV_VERSION="${pkgs.uv.version}"
             export POKECON_INTERNAL_SCRIPT_SITE_PACKAGES="${pythonEnv}/${pkgs.python314.sitePackages}"
             export PYO3_PYTHON="${pythonEnv}/bin/python"
+            export POKECON_BUILD_PYTHON="${pythonEnv}/bin/python"
             caller_dir="$PWD"
             if [ -w "$caller_dir" ]; then
               export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-$caller_dir/target/nix-tasks}"
@@ -222,12 +239,15 @@
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
             PYO3_PYTHON = "${pythonEnv}/bin/python";
+            POKECON_BUILD_PYTHON = "${pythonEnv}/bin/python";
             BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
             postInstall = ''
               mkdir -p "$out/web/dist"
               cp -R "${webPackage}/." "$out/web/dist/"
               ln -s ../web "$out/bin/web"
+              mkdir -p "$out/bin/uv"
+              cp "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"
             '';
           };
         in
@@ -283,6 +303,7 @@
           packages = {
             default = pokeconPackage;
             pokecon = pokeconPackage;
+            pokecon-server = pokeconPackage;
             web = webPackage;
           };
 
@@ -292,6 +313,18 @@
           apps = {
             default = mkApp "${self'.packages.pokecon}/bin/pokecon";
             fmt = mkApp "${config.treefmt.build.wrapper}/bin/treefmt";
+
+            actionlint = mkTask {
+              name = "actionlint";
+              runtimeInputs = [ pkgs.actionlint ];
+              text = ''
+                cd "${source}"
+                if [ "$#" -eq 0 ]; then
+                  exec actionlint .github/workflows/*.yml
+                fi
+                exec actionlint "$@"
+              '';
+            };
 
             clippy = mkTask {
               name = "clippy";
@@ -334,12 +367,15 @@
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
                 cargo build --locked --workspace --all-features
                 maturin build --locked --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist
+                mkdir -p "$caller_dir/dist"
+                cp dist/*.whl "$caller_dir/dist/"
               '';
             };
 
             contract-check = mkTask {
               name = "contract-check";
               runtimeInputs = rustTaskInputs ++ [
+                pkgs.actionlint
                 pkgs.basedpyright
                 pkgs.nodejs_20
                 pkgs.shellcheck
@@ -379,6 +415,46 @@
               '';
             };
 
+            compatibility = mkTask {
+              name = "compatibility";
+              runtimeInputs = rustTaskInputs ++ [ pkgs.git ];
+              text = ''
+                ${setupWorkdir}
+                ${desktopEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTHONPATH="$PWD''${PYTHONPATH:+:$PYTHONPATH}"
+                cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
+                python -m scripts.compatibility_promote --check
+                exec python -m scripts.compatibility_runner \
+                  --check \
+                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}" \
+                  "$@"
+              '';
+            };
+
+            compatibility-roll = mkTask {
+              name = "compatibility-roll";
+              runtimeInputs = rustTaskInputs ++ [ pkgs.git ];
+              text = ''
+                ${desktopEnvironment}
+                export POKECON_BUILD_UV_PATH="${pkgs.uv}/bin/uv"
+                export POKECON_BUILD_UV_VERSION="${pkgs.uv.version}"
+                export POKECON_INTERNAL_SCRIPT_SITE_PACKAGES="${pythonEnv}/${pkgs.python314.sitePackages}"
+                export PYO3_PYTHON="${pythonEnv}/bin/python"
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTHONPATH="$PWD''${PYTHONPATH:+:$PYTHONPATH}"
+                export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-$PWD/target/nix-tasks}"
+                cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
+                exec python -m scripts.compatibility_roll \
+                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}" \
+                  "$@"
+              '';
+            };
+
             source-guard = mkTask {
               name = "source-guard";
               runtimeInputs = [ pythonEnv ];
@@ -394,6 +470,15 @@
               text = ''
                 cd "${source}"
                 exec python scripts/source_filter.py "$@"
+              '';
+            };
+
+            release-check = mkTask {
+              name = "release-check";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                cd "${source}"
+                exec python -m scripts.release_gate "$@"
               '';
             };
 
@@ -482,11 +567,118 @@
 
             tauri-build = mkTask {
               name = "tauri-build";
-              runtimeInputs = rustTaskInputs;
+              runtimeInputs = rustTaskInputs ++ [
+                pkgs.binutils
+                pkgs.cargo-tauri
+                pkgs.dpkg
+                pkgs.nodejs_20
+                pkgs.patchelf
+                pkgs.uv
+              ];
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                cargo build --locked --package pokecon-app --features tauri-shell --bin pokecon
+                export POKECON_WEB_VERSION="${workspaceVersion}"
+                export SOURCE_DATE_EPOCH=0
+                npm --prefix web ci --no-audit --no-fund
+                npm --prefix web run build
+                release_python="$workdir/release-python"
+                release_wheelhouse="$workdir/release-wheelhouse"
+                python -m scripts.build_release_runtime \
+                  --project "$workdir" \
+                  --uv "${portableUvBinary}" \
+                  --runtime-output "$release_python" \
+                  --wheelhouse-output "$release_wheelhouse" \
+                  --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                  --strip "${pkgs.binutils}/bin/strip" \
+                  --runtime-library-path "${pkgs.portaudio}/lib"
+                export PYO3_PYTHON="$release_python/bin/python3.14"
+                export POKECON_BUILD_UV_PATH="${portableUvBinary}"
+                export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
+                unset POKECON_BUILD_PYTHON
+                cargo build --locked --release --package pokecon-worker --bin pokecon-worker
+                (
+                  cd rust/pokecon-app
+                  cargo tauri build --ci --no-bundle -- --locked
+                )
+                python -m scripts.normalize_linux_elf \
+                  --application "$CARGO_TARGET_DIR/release/pokecon" \
+                  --worker "$CARGO_TARGET_DIR/release/pokecon-worker" \
+                  --python-root "$release_python" \
+                  --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                  --strip "${pkgs.binutils}/bin/strip" \
+                  --objdump "${pkgs.binutils}/bin/objdump"
+                bundle_root="$workdir/bundle-resources"
+                bundle_config="$workdir/tauri.bundle.json"
+                python -m scripts.stage_release \
+                  --web "$workdir/web/dist" \
+                  --worker "$CARGO_TARGET_DIR/release/pokecon-worker" \
+                  --uv "${portableUvBinary}" \
+                  --wheelhouse "$release_wheelhouse" \
+                  --python "$release_python" \
+                  --output "$bundle_root" \
+                  --config-output "$bundle_config"
+                bundle_args=("$@")
+                if [ "''${#bundle_args[@]}" -eq 0 ]; then
+                  bundle_args=(--bundles deb)
+                fi
+                (
+                  cd rust/pokecon-app
+                  cargo tauri bundle --ci --config "$bundle_config" "''${bundle_args[@]}"
+                )
+                while IFS= read -r -d "" package; do
+                  python -m scripts.normalize_debian_package \
+                    --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
+                    "$package"
+                done < <(find "$CARGO_TARGET_DIR/release/bundle" -type f -name '*.deb' -print0)
+                artifact_dir="$caller_dir/dist/tauri"
+                mkdir -p "$artifact_dir"
+                find "$CARGO_TARGET_DIR/release/bundle" -type f \
+                  \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) \
+                  -exec cp {} "$artifact_dir/" \;
+              '';
+            };
+
+            package-smoke = mkTask {
+              name = "package-smoke";
+              runtimeInputs = [
+                pythonEnv
+                pkgs.binutils
+                pkgs.dpkg
+                pkgs.patchelf
+                pkgs.portaudio
+              ];
+              text = ''
+                export PYTHONPATH="${source}''${PYTHONPATH:+:$PYTHONPATH}"
+                exec python -m scripts.package_smoke \
+                  --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
+                  --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                  --objdump "${pkgs.binutils}/bin/objdump" \
+                  --runtime-library-path "${pkgs.portaudio}/lib" \
+                  "$@"
+              '';
+            };
+
+            package-install-smoke = mkTask {
+              name = "package-install-smoke";
+              runtimeInputs = [
+                pkgs.coreutils
+                pkgs.docker-client
+              ];
+              text = ''
+                export POKECON_DOCKER="${pkgs.docker-client}/bin/docker"
+                exec "${pkgs.bash}/bin/bash" "${source}/scripts/debian_install_smoke.sh" "$@"
+              '';
+            };
+
+            tauri-check = mkTask {
+              name = "tauri-check";
+              runtimeInputs = rustTaskInputs ++ [ pkgs.cargo-tauri ];
+              text = ''
+                ${setupWorkdir}
+                ${desktopEnvironment}
+                cd rust/pokecon-app
+                exec cargo tauri build --debug --no-bundle --ci -- --locked
               '';
             };
 
@@ -645,6 +837,8 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 python scripts/source_filter.py
+                actionlint .github/workflows/*.yml
+                python -m scripts.release_gate
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 scripts/generate-api-types.sh --check
@@ -656,13 +850,19 @@
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features
                 cargo build --locked --workspace --all-features
+                python -m scripts.compatibility_promote --check
+                python -m scripts.compatibility_runner \
+                  --check \
+                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
                 ruff check --config ruff.toml --no-cache python scripts tests
                 ruff format --config ruff.toml --no-cache --check python scripts tests
                 basedpyright
                 python -m pytest -p no:cacheprovider tests -v --tb=short
                 shellcheck scripts/*.sh
-                markdownlint --config .markdownlint.json ./*.md
-                textlint --config .textlintrc.json ./*.md ./*.txt
+                markdownlint --config .markdownlint.json ./*.md docs/*.md
+                textlint --config .textlintrc.json ./*.md docs/*.md ./*.txt
                 typos
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
               '';
@@ -740,6 +940,7 @@
               pkgs.uv
             ];
             PYO3_PYTHON = "${pythonEnv}/bin/python";
+            POKECON_BUILD_PYTHON = "${pythonEnv}/bin/python";
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";

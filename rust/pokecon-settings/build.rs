@@ -120,8 +120,13 @@ fn main() {
                 path.is_file(),
                 "POKECON_BUILD_UV_PATH must be a regular file"
             );
+            let executable_name = if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+                "uv.exe"
+            } else {
+                "uv"
+            };
             Some(EmbeddedUvSource {
-                path: path.to_string_lossy().into_owned(),
+                path: format!("uv/{executable_name}"),
                 version,
                 sha256: digest_file(&path),
             })

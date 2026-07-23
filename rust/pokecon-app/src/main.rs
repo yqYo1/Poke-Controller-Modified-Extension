@@ -84,7 +84,11 @@ enum MainError {
 
 #[tokio::main]
 async fn main() -> Result<(), MainError> {
-    let request = PipelineRequest::current()?;
+    let mut request = PipelineRequest::current()?;
+    #[cfg(feature = "tauri-shell")]
+    if let Some(resource_root) = packaged_resource_root() {
+        request.resource_root = resource_root;
+    }
     let before_dynamic = SettingsPipeline::new(request.clone()).load_before_dynamic()?;
     let cli = Cli::parse_from(&before_dynamic.remaining_arguments);
 
@@ -113,6 +117,18 @@ async fn main() -> Result<(), MainError> {
         None,
     )
     .await
+}
+
+#[cfg(feature = "tauri-shell")]
+fn packaged_resource_root() -> Option<PathBuf> {
+    let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+    let resource_root =
+        tauri::utils::platform::resource_dir(context.package_info(), &tauri::utils::Env::default())
+            .ok()?;
+    resource_root
+        .join("resource-manifest.json")
+        .is_file()
+        .then_some(resource_root)
 }
 
 async fn run_backend(
@@ -200,38 +216,48 @@ async fn run_desktop(
         .with_desktop_settings(runtime_settings.clone());
 
     let shell_result = tokio::task::block_in_place(|| {
-        run_tauri_shell(shell_config, &lifecycle, move || {
-            let failure_shutdown = task_shutdown.clone();
-            let task = runtime.spawn(async move {
-                let result = run_backend(
-                    request,
-                    before_dynamic,
-                    UiMode::Desktop,
-                    false,
-                    control,
-                    Some(runtime_settings),
-                )
-                .await;
-                if let Err(error) = result.as_ref() {
-                    failure_shutdown.request(ShutdownReason::FatalError(error.to_string()));
+        run_tauri_shell(
+            tauri::generate_context!(),
+            shell_config,
+            &lifecycle,
+            move |resource_root| {
+                let mut request = request;
+                request.resource_root = resource_root;
+                let before_dynamic = SettingsPipeline::new(request.clone())
+                    .load_before_dynamic()
+                    .map_err(|error| DesktopError::BackendStartup(error.to_string()))?;
+                let failure_shutdown = task_shutdown.clone();
+                let task = runtime.spawn(async move {
+                    let result = run_backend(
+                        request,
+                        before_dynamic,
+                        UiMode::Desktop,
+                        false,
+                        control,
+                        Some(runtime_settings),
+                    )
+                    .await;
+                    if let Err(error) = result.as_ref() {
+                        failure_shutdown.request(ShutdownReason::FatalError(error.to_string()));
+                    }
+                    result
+                });
+                task_sender.send(task).map_err(|_error| {
+                    DesktopError::BackendStartup("backend task receiver was dropped".to_owned())
+                })?;
+                let actual_address = ready_receiver.recv().map_err(|_error| {
+                    DesktopError::BackendStartup(
+                        "backend stopped before publishing its listener".to_owned(),
+                    )
+                })?;
+                if actual_address != configured_address {
+                    return Err(DesktopError::BackendStartup(
+                        "backend listener did not match canonical startup settings".to_owned(),
+                    ));
                 }
-                result
-            });
-            task_sender.send(task).map_err(|_error| {
-                DesktopError::BackendStartup("backend task receiver was dropped".to_owned())
-            })?;
-            let actual_address = ready_receiver.recv().map_err(|_error| {
-                DesktopError::BackendStartup(
-                    "backend stopped before publishing its listener".to_owned(),
-                )
-            })?;
-            if actual_address != configured_address {
-                return Err(DesktopError::BackendStartup(
-                    "backend listener did not match canonical startup settings".to_owned(),
-                ));
-            }
-            Ok(())
-        })
+                Ok(())
+            },
+        )
     });
 
     if let Err(error) = shell_result.as_ref() {

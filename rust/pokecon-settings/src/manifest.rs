@@ -30,6 +30,7 @@ pub struct FingerprintInput {
     pub override_application_constraints: bool,
     pub override_package_metadata_constraints: bool,
     pub application_build_id: String,
+    pub package_source_build_id: Option<String>,
     pub canonical_venv_path: String,
     pub revalidate_mutable_sources: bool,
     pub normalized_extras: BTreeMap<String, Vec<String>>,
@@ -58,6 +59,7 @@ impl fmt::Debug for FingerprintInput {
                 &self.override_package_metadata_constraints,
             )
             .field("application_build_id", &self.application_build_id)
+            .field("package_source_build_id", &self.package_source_build_id)
             .field("canonical_venv_path", &self.canonical_venv_path)
             .field(
                 "revalidate_mutable_sources",
@@ -409,6 +411,7 @@ mod tests {
             override_application_constraints: false,
             override_package_metadata_constraints: false,
             application_build_id: "app-test".to_owned(),
+            package_source_build_id: None,
             canonical_venv_path: "/test/venv".to_owned(),
             revalidate_mutable_sources: false,
             normalized_extras: BTreeMap::new(),

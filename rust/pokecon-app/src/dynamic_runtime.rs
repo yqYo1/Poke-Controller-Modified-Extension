@@ -2,7 +2,6 @@
 //! worker.
 
 use std::ffi::OsStr;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,8 +10,11 @@ use pokecon_dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_E
 use pokecon_dynamic::{DynamicConfigLanguage, DynamicHostError};
 use pokecon_settings::package::PythonWorker;
 use pokecon_settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
+use pokecon_settings::python::{PythonError, prepare_managed_python};
 use pokecon_settings::roots::RootEnvironment;
-use pokecon_settings::uv::{ManagedUv, ManagedUvSource, UvChildEnvironment, UvError};
+use pokecon_settings::uv::{
+    ManagedUv, ManagedUvSource, UvChildEnvironment, UvError, packaged_wheelhouse,
+};
 use pokecon_settings::venv::{
     CommandUvExecutor, VenvError, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
@@ -68,20 +70,16 @@ pub struct DynamicBootstrap {
 pub enum DynamicStartupError {
     #[error("packaged application is missing its pinned managed uv executable")]
     MissingManagedUv,
-    #[error("packaged application is missing its CPython executable: {0}")]
-    MissingPython(PathBuf),
     #[error("packaged application is missing its dynamic worker executable: {0}")]
     MissingWorker(PathBuf),
     #[error("prepared dynamic Python environment has no site-packages directory: {0}")]
     MissingSitePackages(PathBuf),
-    #[error("current executable is unavailable: {0}")]
-    CurrentExecutable(#[source] io::Error),
-    #[error("current executable has no parent directory")]
-    MissingExecutableParent,
     #[error(transparent)]
     Settings(#[from] PipelineError),
     #[error(transparent)]
     Uv(#[from] UvError),
+    #[error(transparent)]
+    Python(#[from] PythonError),
     #[error(transparent)]
     Venv(#[from] VenvError),
     #[error(transparent)]
@@ -360,11 +358,21 @@ async fn prepare_dynamic_environment(
     request: &PipelineRequest,
     before_dynamic: &LoadedSettings,
 ) -> Result<PreparedDynamicEnvironment, DynamicStartupError> {
-    let python = packaged_python()?;
-    let worker_program = packaged_worker()?;
-    let managed_uv_source =
-        ManagedUvSource::bundled()?.ok_or(DynamicStartupError::MissingManagedUv)?;
+    let worker_program = packaged_worker(&request.resource_root)?;
+    let managed_uv_source = ManagedUvSource::bundled_at(&request.resource_root)?
+        .ok_or(DynamicStartupError::MissingManagedUv)?;
     let managed_uv = ManagedUv::prepare(&before_dynamic.roots, &managed_uv_source)?;
+    let base_uv_environment = UvChildEnvironment::build(&request.environment)?;
+    let managed_python = prepare_managed_python(
+        &request.resource_root,
+        &before_dynamic.roots,
+        &managed_uv,
+        &base_uv_environment,
+        build_python().as_deref(),
+    )
+    .await?;
+    let python = managed_python.path;
+    let wheelhouse = packaged_wheelhouse(&request.resource_root)?;
     let venv = PathBuf::from(before_dynamic.settings.string("python.dynamic.venv")?);
     let ownership = match before_dynamic
         .settings
@@ -379,14 +387,19 @@ async fn prepare_dynamic_environment(
     let packages = before_dynamic
         .settings
         .resolve_packages(PythonWorker::Dynamic)?;
-    let uv_environment = UvChildEnvironment::build(&request.environment)?;
+    let package_defaults_only = before_dynamic
+        .settings
+        .package_sources("python.dynamic.packages.list")
+        .is_empty();
+    let offline_wheelhouse = wheelhouse.is_some() && package_defaults_only;
+    let uv_environment = base_uv_environment.with_offline_default(offline_wheelhouse);
     let preparation = VenvPreparationRequest {
         worker: PythonWorker::Dynamic,
         venv: venv.clone(),
         ownership,
         managed_uv,
         python: python.clone(),
-        python_build_id: format!("cpython-{PYTHON_VERSION}:{}", python.display()),
+        python_build_id: managed_python.build_id,
         packages,
         override_application_constraints: before_dynamic
             .settings
@@ -395,6 +408,9 @@ async fn prepare_dynamic_environment(
             .settings
             .boolean("python.dynamic.packages.override_package_metadata_constraints")?,
         uv_config,
+        find_links: wheelhouse.as_ref().map(|source| source.path.clone()),
+        no_index: offline_wheelhouse,
+        package_source_build_id: wheelhouse.map(|source| source.content_sha256),
         uv_environment,
         revalidate_mutable_sources: before_dynamic
             .settings
@@ -422,23 +438,14 @@ async fn prepare_dynamic_environment(
     })
 }
 
-pub(crate) fn packaged_python() -> Result<PathBuf, DynamicStartupError> {
-    let path = option_env!("PYO3_PYTHON")
+pub(crate) fn build_python() -> Option<PathBuf> {
+    option_env!("POKECON_BUILD_PYTHON")
         .filter(|value| !value.is_empty())
-        .map_or_else(PathBuf::new, PathBuf::from);
-    if path.is_file() {
-        Ok(path)
-    } else {
-        Err(DynamicStartupError::MissingPython(path))
-    }
+        .map(PathBuf::from)
 }
 
-pub(crate) fn packaged_worker() -> Result<PathBuf, DynamicStartupError> {
-    let executable = std::env::current_exe().map_err(DynamicStartupError::CurrentExecutable)?;
-    let directory = executable
-        .parent()
-        .ok_or(DynamicStartupError::MissingExecutableParent)?;
-    let worker = directory.join(format!("pokecon-worker{}", std::env::consts::EXE_SUFFIX));
+pub(crate) fn packaged_worker(resource_root: &Path) -> Result<PathBuf, DynamicStartupError> {
+    let worker = resource_root.join(format!("pokecon-worker{}", std::env::consts::EXE_SUFFIX));
     if worker.is_file() {
         Ok(worker)
     } else {

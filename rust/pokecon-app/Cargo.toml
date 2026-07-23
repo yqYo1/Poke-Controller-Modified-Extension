@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [features]
 default = []
-tauri-shell = ["pokecon-desktop/tauri-shell"]
+tauri-shell = ["dep:tauri", "pokecon-desktop/tauri-shell"]
 
 [dependencies]
 async-trait.workspace = true
@@ -36,10 +36,14 @@ semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tauri = { workspace = true, optional = true }
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 url.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.5.4", features = [] }
 
 [dev-dependencies]
 tempfile.workspace = true

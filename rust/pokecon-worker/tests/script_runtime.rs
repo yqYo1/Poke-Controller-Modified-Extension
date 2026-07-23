@@ -916,6 +916,7 @@ async fn script_dialogs_preserve_widget_lifecycle_and_legacy_forms() {
     const SOURCE: &str = r#"
 import json
 import os
+import tkinter.messagebox as messagebox
 
 from Commands import dialogue as dialogue_api
 from Commands.PythonCommandBase import PythonCommand
@@ -946,6 +947,7 @@ class Dialogs(PythonCommand):
         assert dialogue_api.wait_dialog(dialog_id) == 0
 
         assert self.dialogue("entry", ["first", "second"]) == ["", ""]
+        assert messagebox.showinfo("legacy", "message") == "ok"
         legacy = [
             ["Check", "check", "True"],
             ["Next"],
@@ -983,7 +985,7 @@ class Dialogs(PythonCommand):
         .await
         .expect("dialog script execution succeeds");
     assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
-    assert_eq!(host.next_dialog_id.load(Ordering::Acquire), 6);
+    assert_eq!(host.next_dialog_id.load(Ordering::Acquire), 7);
     assert_eq!(host.dialog_cleanups.load(Ordering::Acquire), 1);
     assert!(host.dialogs.lock().unwrap().is_empty());
 

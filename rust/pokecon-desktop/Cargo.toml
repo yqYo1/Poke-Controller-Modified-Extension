@@ -23,9 +23,6 @@ tauri = { workspace = true, optional = true }
 tauri-plugin-single-instance = { workspace = true, optional = true }
 thiserror.workspace = true
 
-[build-dependencies]
-tauri-build = "2.5.4"
-
 [dev-dependencies]
 tokio.workspace = true
 

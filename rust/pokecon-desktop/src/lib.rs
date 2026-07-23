@@ -155,6 +155,7 @@ pub const fn close_decision(
 
 #[cfg(feature = "tauri-shell")]
 mod shell {
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -284,12 +285,13 @@ mod shell {
 
     /// Runs the native `WebView` and tray event loop on the calling thread.
     pub(super) fn run<F>(
+        context: tauri::Context<tauri::Wry>,
         config: DesktopShellConfig,
         lifecycle: &DesktopLifecycle,
         on_primary_instance: F,
     ) -> Result<(), DesktopError>
     where
-        F: FnOnce() -> Result<(), DesktopError> + Send + 'static,
+        F: FnOnce(PathBuf) -> Result<(), DesktopError> + Send + 'static,
     {
         tauri::Url::parse(&config.app_url)
             .map_err(|_error| DesktopError::InvalidAppUrl(config.app_url.clone()))?;
@@ -327,7 +329,7 @@ mod shell {
                         .permission("allow-choose-save-path")
                         .permission("allow-open-config-directory"),
                 )?;
-                on_primary_instance()?;
+                on_primary_instance(app.path().resource_dir()?)?;
                 open_main_window(app.handle())?;
                 let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -390,7 +392,7 @@ mod shell {
                 }
             });
 
-        let app = builder.build(tauri::generate_context!())?;
+        let app = builder.build(context)?;
         run_event_loop(app, state);
         Ok(())
     }
@@ -420,14 +422,15 @@ mod shell {
 /// its event loop, window, menu, or tray.
 #[cfg(feature = "tauri-shell")]
 pub fn run_tauri_shell<F>(
+    context: tauri::Context<tauri::Wry>,
     config: DesktopShellConfig,
     lifecycle: &DesktopLifecycle,
     on_primary_instance: F,
 ) -> Result<(), DesktopError>
 where
-    F: FnOnce() -> Result<(), DesktopError> + Send + 'static,
+    F: FnOnce(PathBuf) -> Result<(), DesktopError> + Send + 'static,
 {
-    shell::run(config, lifecycle, on_primary_instance)
+    shell::run(context, config, lifecycle, on_primary_instance)
 }
 
 #[cfg(test)]

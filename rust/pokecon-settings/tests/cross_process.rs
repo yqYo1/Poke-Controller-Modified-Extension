@@ -232,6 +232,9 @@ fn venv_request(roots: &EffectiveRoots) -> VenvPreparationRequest {
         override_application_constraints: false,
         override_package_metadata_constraints: false,
         uv_config: None,
+        find_links: None,
+        no_index: false,
+        package_source_build_id: None,
         uv_environment: UvChildEnvironment::build(&RootEnvironment::from_values([(
             "PATH",
             "test-path",

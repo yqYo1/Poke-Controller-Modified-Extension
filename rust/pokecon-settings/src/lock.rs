@@ -11,8 +11,9 @@ use crate::roots::EffectiveRoots;
 /// Domain-separated settings and venv lock paths.
 #[derive(Clone, Debug)]
 pub struct LockManager {
-    settings_directory: PathBuf,
-    venv_directory: PathBuf,
+    settings: PathBuf,
+    venvs: PathBuf,
+    runtime: PathBuf,
 }
 
 impl LockManager {
@@ -20,8 +21,9 @@ impl LockManager {
     #[must_use]
     pub fn new(roots: &EffectiveRoots) -> Self {
         Self {
-            settings_directory: roots.state.join("settings-locks"),
-            venv_directory: roots.state.join("venv-locks"),
+            settings: roots.state.join("settings-locks"),
+            venvs: roots.state.join("venv-locks"),
+            runtime: roots.state.join("runtime-locks"),
         }
     }
 
@@ -31,7 +33,7 @@ impl LockManager {
     ///
     /// Returns an error when the lock identity or OS lock cannot be created.
     pub fn settings(&self, target: &Path) -> Result<FileLockGuard, LockError> {
-        Self::acquire(&self.settings_directory, "settings::", target)
+        Self::acquire(&self.settings, "settings::", target)
     }
 
     /// Acquires the canonical per-venv lock.
@@ -40,7 +42,16 @@ impl LockManager {
     ///
     /// Returns an error when the lock identity or OS lock cannot be created.
     pub fn venv(&self, target: &Path) -> Result<FileLockGuard, LockError> {
-        Self::acquire(&self.venv_directory, "venv::", target)
+        Self::acquire(&self.venvs, "venv::", target)
+    }
+
+    /// Acquires the canonical app-managed runtime installation lock.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the lock identity or OS lock cannot be created.
+    pub fn runtime(&self, target: &Path) -> Result<FileLockGuard, LockError> {
+        Self::acquire(&self.runtime, "runtime::", target)
     }
 
     /// Returns the non-reversible per-venv lock filename without acquiring it.

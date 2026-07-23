@@ -26,6 +26,7 @@ PYTHON_VERSION = "3.14.3"
 SETUPTOOLS_VERSION = "82.0.1"
 WHEEL_VERSION = "0.46.3"
 PORTABLE_BUILD_PREFIX = "/install"
+REPRODUCIBLE_ZIP_EPOCH = 315_532_800
 WORKER_RUNTIME_SMOKE = """\
 import cv2, numpy, pandas, PIL, pyaudio, scipy
 
@@ -364,7 +365,7 @@ def wheel_build_environment(
     base: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     environment = dict(os.environ if base is None else base)
-    environment["SOURCE_DATE_EPOCH"] = "0"
+    environment["SOURCE_DATE_EPOCH"] = str(REPRODUCIBLE_ZIP_EPOCH)
     environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
     environment["PIP_NO_CACHE_DIR"] = "1"
     resolved_runtime = runtime_root.resolve()
@@ -405,9 +406,16 @@ def build_wheels(
     vcpkg_path: Path | None,
 ) -> None:
     build_venv = workspace / "build-venv"
-    run([uv, "--no-config", "venv", build_venv, "--python", python])
+    environment = wheel_build_environment(runtime_root, vcpkg_path)
+    run(
+        [uv, "--no-config", "venv", build_venv, "--python", python],
+        environment=environment,
+    )
     build_python = python_executable(build_venv)
-    run([build_python, "-m", "ensurepip", "--upgrade"])
+    run(
+        [build_python, "-m", "ensurepip", "--upgrade"],
+        environment=environment,
+    )
     run(
         [
             uv,
@@ -418,9 +426,9 @@ def build_wheels(
             build_python,
             f"setuptools=={SETUPTOOLS_VERSION}",
             f"wheel=={WHEEL_VERSION}",
-        ]
+        ],
+        environment=environment,
     )
-    environment = wheel_build_environment(runtime_root, vcpkg_path)
     run(
         [
             build_python,

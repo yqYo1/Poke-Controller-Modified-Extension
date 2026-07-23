@@ -11,6 +11,7 @@ import pytest
 import scripts.build_release_runtime as release_runtime
 from scripts.build_release_runtime import (
     PORTABLE_BUILD_PREFIX,
+    REPRODUCIBLE_ZIP_EPOCH,
     install_python,
     normalize_python_sysconfig,
     normalize_wheel,
@@ -122,7 +123,7 @@ def test_wheel_build_environment_maps_the_portable_python_prefix(
     runtime = tmp_path / "portable python"
     environment = wheel_build_environment(runtime, None, {"CFLAGS": "-O2"})
 
-    assert environment["SOURCE_DATE_EPOCH"] == "0"
+    assert environment["SOURCE_DATE_EPOCH"] == str(REPRODUCIBLE_ZIP_EPOCH)
     if os.name == "nt":
         assert (
             f"/pathmap:{runtime.resolve()}={PORTABLE_BUILD_PREFIX}" in environment["CL"]
@@ -133,6 +134,65 @@ def test_wheel_build_environment_maps_the_portable_python_prefix(
             f"-ffile-prefix-map={runtime.resolve()}={PORTABLE_BUILD_PREFIX}",
         ]
         assert environment["LDFLAGS"] == "-Wl,--build-id=none"
+
+
+def test_wheel_bootstrap_uses_a_zip_compatible_reproducible_epoch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output = tmp_path / "wheelhouse"
+    output.mkdir()
+    environments: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        _ = capture
+        command = [str(argument) for argument in arguments]
+        assert environment is not None
+        environments.append((command, dict(environment)))
+        if "venv" in command:
+            venv = Path(command[command.index("venv") + 1])
+            executable = (
+                venv / "Scripts/python.exe"
+                if os.name == "nt"
+                else venv / "bin/python3.14"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"fixture")
+        if "wheel" in command:
+            (output / "fixture-1.0-py3-none-any.whl").write_bytes(b"fixture")
+        return ""
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+
+    def ignore_normalize_wheel(
+        _wheel: Path, _patchelf: Path | None, _strip: Path | None
+    ) -> None:
+        return
+
+    monkeypatch.setattr(release_runtime, "normalize_wheel", ignore_normalize_wheel)
+
+    release_runtime.build_wheels(
+        Path("uv"),
+        Path("python"),
+        tmp_path / "requirements.lock",
+        output,
+        tmp_path / "runtime",
+        workspace,
+        None,
+        None,
+        None,
+    )
+
+    ensurepip_environment = next(
+        environment for command, environment in environments if "ensurepip" in command
+    )
+    assert ensurepip_environment["SOURCE_DATE_EPOCH"] == str(REPRODUCIBLE_ZIP_EPOCH)
 
 
 def test_normalize_wheel_repacks_unchanged_members_deterministically(

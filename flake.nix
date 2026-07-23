@@ -237,6 +237,11 @@
               "pokecon-worker"
             ];
             doCheck = true;
+            preCheck = ''
+              runtimeRoot="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/$cargoCheckType"
+              mkdir -p "$runtimeRoot/uv"
+              ln -sfn "${pkgs.uv}/bin/uv" "$runtimeRoot/uv/uv"
+            '';
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";

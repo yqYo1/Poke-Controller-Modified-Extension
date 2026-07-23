@@ -36,10 +36,14 @@ pub const HOST_OVERLAY: &str = "script.host.overlay";
 pub const HOST_POPUP_IMAGE: &str = "script.host.popup_image";
 pub const HOST_TK: &str = "script.host.tk";
 pub const TK_EVENT: &str = "script.tk.event";
+pub const POINTER_EVENT: &str = "script.pointer.event";
 
 /// Leaves room for the `MessagePack` envelope and typed request fields below
 /// the protocol-wide one-MiB frame limit.
 pub const MAX_POPUP_IMAGE_BYTES: usize = 262_144;
+/// Leaves room for the notification envelope below the same one-MiB frame
+/// limit while allowing a useful Discord preview.
+pub const MAX_NOTIFICATION_IMAGE_BYTES: usize = 262_144;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -313,6 +317,25 @@ pub enum HostOverlayRequest {
 pub enum ScriptPointerButton {
     Left,
     Right,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptPointerPhase {
+    Pressed,
+    Moved,
+    Released,
+}
+
+/// Browser-originated overlay pointer callback delivered to the compatibility
+/// callback queue after Rust-main validates its generation and binding.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptPointerEvent {
+    pub button: ScriptPointerButton,
+    pub phase: ScriptPointerPhase,
+    pub x: u32,
+    pub y: u32,
 }
 
 /// Compressed worker-local image prepared for a UI popup.
@@ -597,6 +620,8 @@ pub enum HostNotificationRequest {
         settings_keys: Vec<String>,
         crop_format: String,
         crop: Option<Vec<i64>>,
+        content_type: String,
+        encoded: Vec<u8>,
     },
 }
 

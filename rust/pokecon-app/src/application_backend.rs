@@ -558,6 +558,12 @@ impl RestBackend for ApplicationBackend {
                 .await
                 .map_err(|error| command_failure(&error))?;
         }
+        if let Some(event) = outcome.pointer_event {
+            self.commands()?
+                .dispatch_pointer_event(&event)
+                .await
+                .map_err(|error| command_failure(&error))?;
+        }
         if outcome.abort_command {
             self.commands()?
                 .abort_from_script_ui()

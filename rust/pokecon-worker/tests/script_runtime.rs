@@ -11,8 +11,10 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptDialogState, ScriptExecuteRequest,
-    ScriptExecutionOutcome, ScriptInitializeRequest, ScriptTkEvent, ScriptWorkerStatus,
+    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl, ScriptDialogState,
+    ScriptExecuteRequest, ScriptExecutionOutcome, ScriptInitializeRequest, ScriptInputAction,
+    ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -1026,6 +1028,7 @@ class AbortedDialog(PythonCommand):
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
 async fn script_network_and_notifications_use_closed_fail_soft_proxies() {
     const SOURCE: &str = r#"
 from Commands import net
@@ -1068,6 +1071,18 @@ class NetworkAndNotifications(ImageProcPythonCommand):
     let (_temporary, command_root, data_root) = create_profile();
     std::fs::write(command_root.join("network.py"), SOURCE).expect("script fixture is written");
     let host = Arc::new(RecordingScriptHost::default());
+    let ring =
+        SharedFrameRing::create(CaptureResolution::R640x360).expect("test frame ring is created");
+    ring.publish(&BgrFrame::new(640, 360, vec![0; 640 * 360 * 3]).expect("test frame is valid"))
+        .expect("test frame is published");
+    *host.camera_ring.lock().unwrap() = Some(ring);
+    *host.camera_state.lock().unwrap() = Some(HostCameraState {
+        opened: true,
+        fps: 30,
+        capture_resolution: CaptureResolution::R640x360,
+        flip_mode: FlipMode::None,
+        screenshot_format: ScreenshotFormat::Png,
+    });
     host.fail_notifications.store(true, Ordering::Release);
     let (worker, client) = spawn_client(host.clone()).await;
     initialize(&client, &command_root, &data_root).await;
@@ -1111,9 +1126,18 @@ class NetworkAndNotifications(ImageProcPythonCommand):
         ));
         assert!(matches!(
             &notifications[1],
-            HostNotificationRequest::DiscordImage { settings_keys, crop, .. }
+            HostNotificationRequest::DiscordImage {
+                settings_keys,
+                crop,
+                content_type,
+                encoded,
+                ..
+            }
                 if settings_keys == &["HOOK_A", "HOOK_B"]
                     && crop.as_deref() == Some(&[0, 0, 10, 10][..])
+                    && content_type == "image/jpeg"
+                    && encoded.starts_with(&[0xff, 0xd8])
+                    && encoded.len() <= protocol::MAX_NOTIFICATION_IMAGE_BYTES
         ));
         for request in notifications.iter() {
             let debug = format!("{request:?}");
@@ -1121,6 +1145,159 @@ class NetworkAndNotifications(ImageProcPythonCommand):
         }
     }
 
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn overlay_pointer_events_run_fifo_callbacks_without_blocking_ipc() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class PointerCallbacks(ImageProcPythonCommand):
+    def do(self):
+        self.gui.setShowsize(100, 200)
+        self.gui.setTouchscreenArea(0, 0, 200, 100)
+        self.gui.changeRightMouseMode("Qingpi")
+        self.gui.BindLeftClick()
+        self.gui.BindRightClick()
+        while True:
+            pass
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("pointer.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            client
+                .execute(&ScriptExecuteRequest {
+                    path: "pointer.py".into(),
+                    class_name: "PointerCallbacks".to_owned(),
+                    tags: Vec::new(),
+                })
+                .await
+        })
+    };
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let bindings = host
+                .overlay_requests
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|request| matches!(request, HostOverlayRequest::SetBinding { .. }))
+                .count();
+            if bindings == 2 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("pointer bindings are installed");
+
+    for event in [
+        ScriptPointerEvent {
+            button: ScriptPointerButton::Left,
+            phase: ScriptPointerPhase::Pressed,
+            x: 100,
+            y: 50,
+        },
+        ScriptPointerEvent {
+            button: ScriptPointerButton::Left,
+            phase: ScriptPointerPhase::Moved,
+            x: 160,
+            y: 50,
+        },
+        ScriptPointerEvent {
+            button: ScriptPointerButton::Left,
+            phase: ScriptPointerPhase::Released,
+            x: 160,
+            y: 50,
+        },
+        ScriptPointerEvent {
+            button: ScriptPointerButton::Right,
+            phase: ScriptPointerPhase::Pressed,
+            x: 100,
+            y: 50,
+        },
+        ScriptPointerEvent {
+            button: ScriptPointerButton::Right,
+            phase: ScriptPointerPhase::Released,
+            x: 100,
+            y: 50,
+        },
+    ] {
+        client
+            .pointer_event(&event)
+            .await
+            .expect("pointer callback is queued");
+    }
+
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while host.controller_inputs.lock().unwrap().len() < 4 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("pointer callbacks reach the controller host");
+    {
+        let inputs = host.controller_inputs.lock().unwrap();
+        assert!(matches!(
+            &inputs[0],
+            HostControllerInputRequest {
+                action: ScriptInputAction::Press,
+                controls,
+                ..
+            } if controls == &[ScriptControl::Stick {
+                stick: ScriptStick::Left,
+                x: 255,
+                y: 128,
+            }]
+        ));
+        assert!(matches!(
+            &inputs[1],
+            HostControllerInputRequest {
+                action: ScriptInputAction::Press,
+                controls,
+                ..
+            } if controls == &[ScriptControl::Stick {
+                stick: ScriptStick::Left,
+                x: 128,
+                y: 128,
+            }]
+        ));
+        assert!(matches!(
+            &inputs[2],
+            HostControllerInputRequest {
+                action: ScriptInputAction::Press,
+                controls,
+                ..
+            } if controls == &[ScriptControl::Touchscreen { x: 160, y: 120 }]
+        ));
+        assert!(matches!(
+            &inputs[3],
+            HostControllerInputRequest {
+                action: ScriptInputAction::Release,
+                controls,
+                ..
+            } if controls == &[ScriptControl::Touchscreen { x: 0, y: 0 }]
+        ));
+    }
+
+    assert!(client.stop().await.expect("stop succeeds").stop_requested);
+    let result = tokio::time::timeout(Duration::from_secs(3), execution)
+        .await
+        .expect("pointer script stops")
+        .expect("execution task joins")
+        .expect("execution response succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Stopped);
     stop_worker(&worker).await;
 }
 

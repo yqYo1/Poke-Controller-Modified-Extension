@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ScriptUiAction, ScriptUiActionResult } from '../actions';
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
 import CameraViewport from './CameraViewport.svelte';
 
@@ -39,6 +40,7 @@ describe('CameraViewport', () => {
     const oncapture = vi.fn();
     const ontoucharea = vi.fn();
     render(CameraViewport, {
+      actions: { scriptUiAction: vi.fn().mockResolvedValue({ accepted: true }) },
       fps: 30,
       guideVisible: false,
       leftStickEnabled: false,
@@ -92,5 +94,90 @@ describe('CameraViewport', () => {
       right: 0.75,
       top: 0.25
     });
+  });
+
+  it('serializes generation-bound script pointer gestures before normal stick input', async () => {
+    const initial = runtimeView();
+    const view: RuntimeView = {
+      ...initial.view,
+      scriptUi: {
+        ...initial.view.scriptUi,
+        generation: 'user-script-7',
+        overlay: {
+          ...initial.view.scriptUi.overlay,
+          bindings: { left: true, right: false },
+          show_height: 100,
+          show_width: 200
+        }
+      }
+    };
+    const scriptUiAction = vi
+      .fn<(request: ScriptUiAction) => Promise<ScriptUiActionResult>>()
+      .mockResolvedValue({ accepted: true });
+    const setGamepadStick = vi.spyOn(initial.runtime, 'setGamepadStick');
+    render(CameraViewport, {
+      actions: { scriptUiAction },
+      fps: 30,
+      guideVisible: false,
+      leftStickEnabled: true,
+      liveViewEnabled: true,
+      oncapture: vi.fn(),
+      ondownload: vi.fn(),
+      ontoucharea: vi.fn(),
+      pixelValuesVisible: false,
+      rightStickEnabled: false,
+      runtime: initial.runtime,
+      view
+    });
+    const canvas = screen.getByLabelText('Camera capture area');
+    prepareCanvas(canvas);
+
+    await fireEvent.pointerDown(canvas, {
+      button: 0,
+      clientX: 170,
+      clientY: 180,
+      pointerId: 9
+    });
+    await fireEvent.pointerMove(canvas, {
+      button: 0,
+      clientX: 490,
+      clientY: 360,
+      pointerId: 9
+    });
+    await fireEvent.pointerUp(canvas, {
+      button: 0,
+      clientX: 490,
+      clientY: 360,
+      pointerId: 9
+    });
+
+    await waitFor(() => expect(scriptUiAction).toHaveBeenCalledTimes(3));
+    expect(scriptUiAction.mock.calls.map(([request]) => request)).toEqual([
+      {
+        action: 'pointer',
+        button: 'left',
+        generation: 'user-script-7',
+        phase: 'pressed',
+        x: 50,
+        y: 25
+      },
+      {
+        action: 'pointer',
+        button: 'left',
+        generation: 'user-script-7',
+        phase: 'moved',
+        x: 150,
+        y: 75
+      },
+      {
+        action: 'pointer',
+        button: 'left',
+        generation: 'user-script-7',
+        phase: 'released',
+        x: 150,
+        y: 75
+      }
+    ]);
+    expect(setGamepadStick).not.toHaveBeenCalled();
   });
 });

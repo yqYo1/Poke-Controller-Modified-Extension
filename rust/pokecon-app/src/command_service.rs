@@ -15,8 +15,8 @@ use pokecon_settings::pipeline::LoadedSettings;
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use pokecon_worker::script::protocol::{
     ScriptCommandKind, ScriptDiscoveredCommand, ScriptDiscoveryResult, ScriptExecuteRequest,
-    ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseResult, ScriptStopResult,
-    ScriptTkEvent,
+    ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseResult, ScriptPointerEvent,
+    ScriptStopResult, ScriptTkEvent,
 };
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
@@ -141,6 +141,13 @@ pub trait UserScriptSession: Send + Sync {
         Err(CommandBackendError::new(
             "TkEventUnavailable",
             "script session does not support Tk compatibility events",
+        ))
+    }
+
+    async fn pointer_event(&self, _event: &ScriptPointerEvent) -> Result<(), CommandBackendError> {
+        Err(CommandBackendError::new(
+            "PointerEventUnavailable",
+            "script session does not support overlay pointer events",
         ))
     }
 
@@ -602,6 +609,31 @@ impl CommandService {
                 .ok_or(CommandServiceError::CommandNotRunning)?
         };
         session.tk_event(event).await?;
+        Ok(())
+    }
+
+    /// Delivers one validated camera-overlay pointer callback to the active
+    /// worker generation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when no command generation is active or the worker
+    /// rejects the callback event.
+    pub async fn dispatch_pointer_event(
+        &self,
+        event: &ScriptPointerEvent,
+    ) -> Result<(), CommandServiceError> {
+        let session = {
+            let inner = self.inner.lock().await;
+            if !matches!(inner.status, CommandStatus::Running | CommandStatus::Paused) {
+                return Err(CommandServiceError::CommandNotRunning);
+            }
+            inner
+                .session
+                .clone()
+                .ok_or(CommandServiceError::CommandNotRunning)?
+        };
+        session.pointer_event(event).await?;
         Ok(())
     }
 

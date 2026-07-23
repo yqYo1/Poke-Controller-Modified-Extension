@@ -25,7 +25,8 @@ use self::protocol::{
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
     HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
     ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult, ScriptInitializeRequest,
-    ScriptInitializeResult, ScriptPauseResult, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
+    ScriptInitializeResult, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 pub(crate) use self::runtime::ScriptWorkerRuntime;
 
@@ -346,6 +347,20 @@ impl ScriptWorkerClient {
         self.worker
             .connection()
             .send_event(protocol::TK_EVENT, payload)
+            .await?;
+        Ok(())
+    }
+
+    /// Queues one generation-checked camera-overlay pointer callback.
+    ///
+    /// # Errors
+    ///
+    /// Returns a payload or transport error when the event cannot be queued.
+    pub async fn pointer_event(&self, event: &ScriptPointerEvent) -> Result<(), ScriptClientError> {
+        let payload = serialize_value(event)?;
+        self.worker
+            .connection()
+            .send_event(protocol::POINTER_EVENT, payload)
             .await?;
         Ok(())
     }

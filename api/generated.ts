@@ -807,6 +807,10 @@ export interface components {
             left: boolean;
             right: boolean;
         };
+        /** @enum {string} */
+        ScriptPointerButton: "left" | "right";
+        /** @enum {string} */
+        ScriptPointerPhase: "pressed" | "moved" | "released";
         ScriptPopupImage: {
             content_type: string;
             encoded_base64: string;
@@ -895,6 +899,16 @@ export interface components {
             action: "popup_closed";
             generation: string;
             popup_id: components["schemas"]["DecimalString"];
+        } | {
+            /** @enum {string} */
+            action: "pointer";
+            button: components["schemas"]["ScriptPointerButton"];
+            generation: string;
+            phase: components["schemas"]["ScriptPointerPhase"];
+            /** Format: int32 */
+            x: number;
+            /** Format: int32 */
+            y: number;
         };
         ScriptUiActionResult: {
             accepted: boolean;

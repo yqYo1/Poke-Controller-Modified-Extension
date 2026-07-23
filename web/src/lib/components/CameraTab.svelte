@@ -6,6 +6,8 @@
     DownloadResult,
     OperationResult,
     SavedScreenshot,
+    ScriptUiAction,
+    ScriptUiActionResult,
     ScreenshotRequest
   } from '../actions';
   import type { SettingsWriteValues } from '../api';
@@ -26,6 +28,7 @@
     downloadScreenshot(request: DownloadRequest): Promise<DownloadResult>;
     retryCamera(): Promise<OperationResult>;
     saveScreenshot(request: SavedRequest): Promise<SavedScreenshot>;
+    scriptUiAction(request: ScriptUiAction): Promise<ScriptUiActionResult>;
   }
 
   interface Props {
@@ -261,6 +264,7 @@
   {/if}
 
   <CameraViewport
+    {actions}
     fps={values?.['ui.fps'] ?? 30}
     guideVisible={values?.['ui.camera.guide_visible'] ?? false}
     leftStickEnabled={values?.['input.left_stick_mouse_enabled'] ?? false}

@@ -25,8 +25,8 @@ use super::protocol::{
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
     HostSerialWriteRequest, HostSerialWriteRowRequest, HostTkRequest, HostTkResult,
     ScriptCommandKind, ScriptControl, ScriptDiscoveredCommand, ScriptExecutionOutcome,
-    ScriptExecutionResult, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptTkEvent,
-    ScriptWorkerStatus,
+    ScriptExecutionResult, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
+    ScriptPointerEvent, ScriptTkEvent, ScriptWorkerStatus,
 };
 
 #[derive(Clone, Debug)]
@@ -372,6 +372,24 @@ impl PythonActor {
             Ok(())
         })
         .map_err(|error| PythonActorError::new("TkEventError", error.to_string()))
+    }
+
+    pub(super) fn pointer_event(&self, event: &ScriptPointerEvent) -> Result<(), PythonActorError> {
+        if self.commands.is_none() {
+            return Err(PythonActorError::new(
+                "ScriptThreadStopped",
+                "script execution thread is unavailable",
+            ));
+        }
+        let encoded = serde_json::to_string(event)
+            .map_err(|error| PythonActorError::new("PointerEventError", error.to_string()))?;
+        Python::attach(|py| -> PyResult<()> {
+            py.import("_pokecon_script")?
+                .getattr("_pointer_event")?
+                .call1((encoded,))?;
+            Ok(())
+        })
+        .map_err(|error| PythonActorError::new("PointerEventError", error.to_string()))
     }
 
     pub(super) async fn shutdown(&mut self) {
@@ -2002,18 +2020,25 @@ class PythonCommand(Command):
     def mqtt_transmit_message(self, roomid, message):
         if not isinstance(roomid, str) or not isinstance(message, str):
             raise TypeError("MQTT room ID and message must be str")
-        _network("mqtt_transmit", room_id=roomid, message=message)
+        try:
+            _network("mqtt_transmit", room_id=roomid, message=message)
+        except Exception:
+            self._logger.warning("MQTT transmit failed")
         self.checkIfAlive()
 
     def mqtt_receive_message(self, roomid, header, show_msg=False):
         if not isinstance(roomid, str) or not isinstance(header, str):
             raise TypeError("MQTT room ID and header must be str")
-        result = _network(
-            "mqtt_receive",
-            room_id=roomid,
-            headers=[header],
-            show_message=bool(show_msg),
-        )
+        try:
+            result = _network(
+                "mqtt_receive",
+                room_id=roomid,
+                headers=[header],
+                show_message=bool(show_msg),
+            )
+        except Exception:
+            self._logger.warning("MQTT receive failed")
+            result = ""
         self.checkIfAlive()
         return result
 
@@ -2024,12 +2049,16 @@ class PythonCommand(Command):
             not isinstance(header, str) for header in headerlist
         ):
             raise TypeError("MQTT headers must be list[str]")
-        result = _network(
-            "mqtt_receive",
-            room_id=roomid,
-            headers=headerlist,
-            show_message=bool(show_msg),
-        )
+        try:
+            result = _network(
+                "mqtt_receive",
+                room_id=roomid,
+                headers=headerlist,
+                show_message=bool(show_msg),
+            )
+        except Exception:
+            self._logger.warning("MQTT receive failed")
+            result = ""
         self.checkIfAlive()
         return result
 
@@ -2339,6 +2368,9 @@ class CaptureArea:
         self.touchscreen_area = (0.0, 0.0, 1.0, 1.0)
         self._range_start = None
         self._range_end = None
+        self._pointer_radius = 60.0
+        self._left_origin = None
+        self._right_origin = None
 
     @property
     def show_size(self):
@@ -2489,16 +2521,70 @@ class CaptureArea:
         print(f"Color [R: {int(r)}, G: {int(g)}, B: {int(b)}]")
 
     def mouseLeftPress(self, event, keys_):
-        return None
+        self._left_origin = (
+            _require_int(event.x, "event.x"),
+            _require_int(event.y, "event.y"),
+        )
 
     def mouseLeftPressing(self, event, keys_):
-        return None
+        if self._left_origin is None:
+            self.mouseLeftPress(event, keys_)
+        keys_.input(self._pointer_stick(event, self._left_origin, Stick.LEFT))
+
+    def mouseLeftRelease(self, keys_):
+        self._left_origin = None
+        keys_.input(Direction(Stick.LEFT, (128, 128)))
 
     def mouseRightPress(self, event, keys_):
-        return None
+        if self.right_mouse_mode == "Qingpi":
+            self._pointer_touch(event, keys_)
+            return
+        self._right_origin = (
+            _require_int(event.x, "event.x"),
+            _require_int(event.y, "event.y"),
+        )
 
     def mouseRightPressing(self, event, keys_):
-        return None
+        if self.right_mouse_mode == "Qingpi":
+            self._pointer_touch(event, keys_)
+            return
+        if self._right_origin is None:
+            self.mouseRightPress(event, keys_)
+        keys_.input(self._pointer_stick(event, self._right_origin, Stick.RIGHT))
+
+    def mouseRightRelease(self, keys_):
+        if self.right_mouse_mode == "Qingpi":
+            keys_.inputEnd(Touchscreen(0, 0))
+        else:
+            keys_.input(Direction(Stick.RIGHT, (128, 128)))
+        self._right_origin = None
+
+    def _pointer_stick(self, event, origin, stick):
+        x = _require_int(event.x, "event.x")
+        y = _require_int(event.y, "event.y")
+        dx, dy = x - origin[0], y - origin[1]
+        distance = _math.hypot(dx, dy)
+        scale = 1.0 if distance <= self._pointer_radius else self._pointer_radius / distance
+        return Direction(
+            stick,
+            (
+                round(128 + dx * scale * 127 / self._pointer_radius),
+                round(128 - dy * scale * 127 / self._pointer_radius),
+            ),
+        )
+
+    def _pointer_touch(self, event, keys_):
+        x = _require_int(event.x, "event.x")
+        y = _require_int(event.y, "event.y")
+        left, top, right, bottom = self.touchscreen_area
+        height, width = self._show_size
+        normalized_x = x / max(1, width)
+        normalized_y = y / max(1, height)
+        if not (left <= normalized_x <= right and top <= normalized_y <= bottom):
+            return
+        touch_x = min(319, max(0, int(320 * (normalized_x - left) / (right - left))))
+        touch_y = min(239, max(0, int(240 * (normalized_y - top) / (bottom - top))))
+        keys_.input(Touchscreen(touch_x, touch_y))
 
     def StartRangeSS(self, event):
         self._range_start = (_require_int(event.x, "event.x"), _require_int(event.y, "event.y"))
@@ -2825,6 +2911,31 @@ def _tk_event(encoded):
         _tk_queue_callback(widget._command)
 
 
+def _pointer_event(encoded):
+    event = _json.loads(encoded)
+    command = _active_command
+    if not isinstance(command, ImageProcPythonCommand):
+        return
+    area = command.gui
+    pointer = _types.SimpleNamespace(x=int(event["x"]), y=int(event["y"]))
+    button = event["button"]
+    phase = event["phase"]
+    if button == "left":
+        if phase == "pressed":
+            _tk_queue_callback(area.mouseLeftPress, pointer, command.keys)
+        elif phase == "moved":
+            _tk_queue_callback(area.mouseLeftPressing, pointer, command.keys)
+        elif phase == "released":
+            _tk_queue_callback(area.mouseLeftRelease, command.keys)
+    elif button == "right":
+        if phase == "pressed":
+            _tk_queue_callback(area.mouseRightPress, pointer, command.keys)
+        elif phase == "moved":
+            _tk_queue_callback(area.mouseRightPressing, pointer, command.keys)
+        elif phase == "released":
+            _tk_queue_callback(area.mouseRightRelease, command.keys)
+
+
 def _reset_tk():
     global _tk_callback_generation
     _tk_callback_generation += 1
@@ -3020,6 +3131,7 @@ class ImageProcPythonCommand(PythonCommand):
             raise TypeError("discord_image keys must be str or list[str]")
         normalized_crop = None if crop is None else [_require_int(value, "crop coordinate") for value in crop]
         try:
+            encoded = _encode_popup(self.getCameraImage(crop_fmt, crop))
             _notification(
                 {
                     "kind": "discord_image",
@@ -3027,6 +3139,8 @@ class ImageProcPythonCommand(PythonCommand):
                     "settings_keys": settings_keys,
                     "crop_format": str(crop_fmt),
                     "crop": normalized_crop,
+                    "content_type": "image/jpeg",
+                    "encoded": list(encoded),
                 }
             )
         except Exception:
@@ -3440,6 +3554,7 @@ for _bridge_name, _command_name in {
 
 
 _current = _threading.local()
+_active_command = None
 
 
 def _command():
@@ -3624,6 +3739,7 @@ def _discover_source(source, path, module_path):
 
 
 def _run_source(source, path, class_name, tags_json):
+    global _active_command
     namespace = {
         "__name__": f"__pokecon_user_{class_name}",
         "__file__": path,
@@ -3640,11 +3756,14 @@ def _run_source(source, path, class_name, tags_json):
         sender = Sender()
         command.start(sender, None)
         _current.command = command
+        _active_command = command
         try:
             while _api.execution_checkpoint():
                 _time.sleep(0.02)
         finally:
             command.end(sender)
+            if _active_command is command:
+                _active_command = None
             _current.command = None
     else:
         if not isinstance(command_type, type) or not issubclass(command_type, PythonCommand):
@@ -3657,10 +3776,13 @@ def _run_source(source, path, class_name, tags_json):
             command = command_type()
         command.isRunning = True
         _current.command = command
+        _active_command = command
         try:
             command.do()
         finally:
             command.isRunning = False
+            if _active_command is command:
+                _active_command = None
             _reset_dialogs()
             _current.command = None
 "#;

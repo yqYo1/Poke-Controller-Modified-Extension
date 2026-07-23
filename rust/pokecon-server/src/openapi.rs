@@ -17,12 +17,12 @@ use crate::api::{
     RevisionedStateChange, SavedScreenshot, ScreenshotRequest, ScriptDialog,
     ScriptDialogAbortReason, ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind,
     ScriptOverlayRectangle, ScriptOverlayShape, ScriptOverlaySnapshot, ScriptOverlayText,
-    ScriptPointerBindings, ScriptPopupImage, ScriptTkButton, ScriptTkLabel, ScriptTkScale,
-    ScriptTkWidget, ScriptTkWindow, ScriptUiAction, ScriptUiActionResult, ScriptUiSnapshot,
-    SerialControlRequest, SerialData, SerialEncoding, SerialPort, ServerMessage,
-    SessionDescription, SettingsChange, SettingsPatchRequest, SettingsReadValues, SettingsSnapshot,
-    SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition,
-    Success, TouchPoint, UiStateChange, UpdateCheckResult,
+    ScriptPointerBindings, ScriptPointerButton, ScriptPointerPhase, ScriptPopupImage,
+    ScriptTkButton, ScriptTkLabel, ScriptTkScale, ScriptTkWidget, ScriptTkWindow, ScriptUiAction,
+    ScriptUiActionResult, ScriptUiSnapshot, SerialControlRequest, SerialData, SerialEncoding,
+    SerialPort, ServerMessage, SessionDescription, SettingsChange, SettingsPatchRequest,
+    SettingsReadValues, SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch,
+    StateSnapshot, StickName, StickPosition, Success, TouchPoint, UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -91,6 +91,8 @@ use crate::api::{
         ScriptOverlaySnapshot,
         ScriptOverlayText,
         ScriptPointerBindings,
+        ScriptPointerButton,
+        ScriptPointerPhase,
         ScriptPopupImage,
         ScriptTkButton,
         ScriptTkLabel,

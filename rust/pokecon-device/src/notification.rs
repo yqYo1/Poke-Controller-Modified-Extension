@@ -133,6 +133,15 @@ struct DiscordPayload<'a> {
     avatar_url: Option<&'a str>,
 }
 
+/// One bounded image attachment prepared by the isolated script worker.
+#[derive(Clone, Copy, Debug)]
+pub struct DiscordImage<'a> {
+    pub content: &'a str,
+    pub filename: &'a str,
+    pub content_type: &'a str,
+    pub encoded: &'a [u8],
+}
+
 /// Secret-safe HTTP delivery boundary.
 #[async_trait]
 pub trait DiscordTransport: Send + Sync {
@@ -140,6 +149,14 @@ pub trait DiscordTransport: Send + Sync {
         &self,
         webhook: &DiscordWebhookUrl,
         content: &str,
+        username: Option<&str>,
+        avatar_url: Option<&Url>,
+    ) -> Result<(), NotificationError>;
+
+    async fn send_image(
+        &self,
+        webhook: &DiscordWebhookUrl,
+        image: DiscordImage<'_>,
         username: Option<&str>,
         avatar_url: Option<&Url>,
     ) -> Result<(), NotificationError>;
@@ -192,6 +209,41 @@ impl DiscordTransport for ReqwestDiscordTransport {
             Err(NotificationError::DeliveryFailed)
         }
     }
+
+    async fn send_image(
+        &self,
+        webhook: &DiscordWebhookUrl,
+        image: DiscordImage<'_>,
+        username: Option<&str>,
+        avatar_url: Option<&Url>,
+    ) -> Result<(), NotificationError> {
+        let payload = serde_json::to_string(&DiscordPayload {
+            content: image.content,
+            username,
+            avatar_url: avatar_url.map(Url::as_str),
+        })
+        .map_err(|_| NotificationError::DeliveryFailed)?;
+        let attachment = reqwest::multipart::Part::bytes(image.encoded.to_vec())
+            .file_name(image.filename.to_owned())
+            .mime_str(image.content_type)
+            .map_err(|_| NotificationError::DeliveryFailed)?;
+        let response = self
+            .client
+            .post(webhook.as_url().clone())
+            .multipart(
+                reqwest::multipart::Form::new()
+                    .text("payload_json", payload)
+                    .part("files[0]", attachment),
+            )
+            .send()
+            .await
+            .map_err(|_| NotificationError::DeliveryFailed)?;
+        if response.status() == StatusCode::NO_CONTENT || response.status().is_success() {
+            Ok(())
+        } else {
+            Err(NotificationError::DeliveryFailed)
+        }
+    }
 }
 
 /// Fail-soft transport used when the process cannot initialize its TLS trust
@@ -206,6 +258,16 @@ impl DiscordTransport for UnavailableDiscordTransport {
         &self,
         _webhook: &DiscordWebhookUrl,
         _content: &str,
+        _username: Option<&str>,
+        _avatar_url: Option<&Url>,
+    ) -> Result<(), NotificationError> {
+        Err(NotificationError::DeliveryFailed)
+    }
+
+    async fn send_image(
+        &self,
+        _webhook: &DiscordWebhookUrl,
+        _image: DiscordImage<'_>,
         _username: Option<&str>,
         _avatar_url: Option<&Url>,
     ) -> Result<(), NotificationError> {
@@ -336,6 +398,19 @@ impl NotificationService {
         self.deliver_discord(&config.discord, content).await
     }
 
+    /// Delivers a worker-encoded script image without exposing the webhook to
+    /// the compatibility runtime.
+    pub async fn send_script_discord_image(
+        &self,
+        content: &str,
+        content_type: &str,
+        encoded: &[u8],
+    ) -> NotificationOutcome {
+        let config = self.config.read().await.clone();
+        self.deliver_discord_image(&config.discord, content, content_type, encoded)
+            .await
+    }
+
     async fn notify_lifecycle(
         &self,
         event: ScriptNotificationEvent,
@@ -405,6 +480,46 @@ impl NotificationService {
         }
     }
 
+    async fn deliver_discord_image(
+        &self,
+        config: &DiscordNotificationConfig,
+        content: &str,
+        content_type: &str,
+        encoded: &[u8],
+    ) -> NotificationOutcome {
+        let Some(webhook) = &config.webhook else {
+            tracing::warn!(
+                diagnostic_id = "NOTIFICATION_DISCORD_CONFIG_MISSING",
+                "Discord image skipped because no webhook is configured"
+            );
+            return NotificationOutcome::SkippedMissingConfiguration;
+        };
+        if self
+            .discord
+            .send_image(
+                webhook,
+                DiscordImage {
+                    content,
+                    filename: "pokecon-capture.jpg",
+                    content_type,
+                    encoded,
+                },
+                config.username.as_deref(),
+                config.avatar_url.as_ref(),
+            )
+            .await
+            .is_ok()
+        {
+            NotificationOutcome::Delivered
+        } else {
+            tracing::warn!(
+                diagnostic_id = "NOTIFICATION_DISCORD_DELIVERY_FAILED",
+                "Discord image delivery failed"
+            );
+            NotificationOutcome::Failed
+        }
+    }
+
     async fn deliver_native(&self, title: &str, body: &str) -> NotificationOutcome {
         if !self.native.is_supported() {
             return NotificationOutcome::SkippedUnsupportedPlatform;
@@ -441,7 +556,7 @@ mod tests {
     use url::Url;
 
     use super::{
-        DiscordNotificationConfig, DiscordTransport, DiscordWebhookUrl,
+        DiscordImage, DiscordNotificationConfig, DiscordTransport, DiscordWebhookUrl,
         NativeNotificationTransport, NotificationChannel, NotificationConfig, NotificationError,
         NotificationOutcome, NotificationService, WindowsNotificationConfig,
     };
@@ -458,6 +573,21 @@ mod tests {
             &self,
             _webhook: &DiscordWebhookUrl,
             _content: &str,
+            _username: Option<&str>,
+            _avatar_url: Option<&Url>,
+        ) -> Result<(), NotificationError> {
+            self.calls.fetch_add(1, Ordering::AcqRel);
+            if self.fails {
+                Err(NotificationError::DeliveryFailed)
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn send_image(
+            &self,
+            _webhook: &DiscordWebhookUrl,
+            _image: DiscordImage<'_>,
             _username: Option<&str>,
             _avatar_url: Option<&Url>,
         ) -> Result<(), NotificationError> {
@@ -603,6 +733,12 @@ mod tests {
         assert_eq!(
             service.test(NotificationChannel::Windows).await.outcomes[0].1,
             NotificationOutcome::SkippedUnsupportedPlatform
+        );
+        assert_eq!(
+            service
+                .send_script_discord_image("capture", "image/jpeg", &[0xff, 0xd8, 0xff, 0xd9])
+                .await,
+            NotificationOutcome::Delivered
         );
     }
 }

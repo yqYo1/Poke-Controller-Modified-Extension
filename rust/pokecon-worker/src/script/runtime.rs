@@ -10,7 +10,8 @@ use crate::ipc::{
 
 use super::protocol::{
     self, ScriptDiscoveryResult, ScriptExecuteRequest, ScriptInitializeRequest,
-    ScriptInitializeResult, ScriptPauseResult, ScriptStopResult, ScriptTkEvent, ScriptWorkerStatus,
+    ScriptInitializeResult, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
+    ScriptWorkerStatus,
 };
 use super::python::{DiscoverSource, PythonActor, PythonActorConfig, PythonActorError};
 
@@ -72,7 +73,10 @@ impl ScriptWorkerRuntime {
     }
 
     pub(crate) fn handles_event(operation: &str) -> bool {
-        matches!(operation, protocol::TK_EVENT | protocol::STOP)
+        matches!(
+            operation,
+            protocol::TK_EVENT | protocol::POINTER_EVENT | protocol::STOP
+        )
     }
 
     pub(crate) fn handle_event(
@@ -88,21 +92,29 @@ impl ScriptWorkerRuntime {
             }
             return Ok(());
         }
-        if operation != protocol::TK_EVENT {
-            return Err(DispatchError::new(
-                "NotFound",
-                format!("unknown script event `{operation}`"),
-            )
-            .payload());
-        }
-        let event = deserialize_value::<ScriptTkEvent>(payload)
-            .map_err(|error| DispatchError::invalid_payload(&error).payload())?;
         let actor = self.actor.as_ref().ok_or_else(|| {
             DispatchError::new("NotInitialized", "script worker is not initialized").payload()
         })?;
-        actor
-            .tk_event(&event)
-            .map_err(|error| DispatchError::actor(error).payload())
+        match operation {
+            protocol::TK_EVENT => {
+                let event = deserialize_value::<ScriptTkEvent>(payload)
+                    .map_err(|error| DispatchError::invalid_payload(&error).payload())?;
+                actor
+                    .tk_event(&event)
+                    .map_err(|error| DispatchError::actor(error).payload())
+            }
+            protocol::POINTER_EVENT => {
+                let event = deserialize_value::<ScriptPointerEvent>(payload)
+                    .map_err(|error| DispatchError::invalid_payload(&error).payload())?;
+                actor
+                    .pointer_event(&event)
+                    .map_err(|error| DispatchError::actor(error).payload())
+            }
+            _ => Err(
+                DispatchError::new("NotFound", format!("unknown script event `{operation}`"))
+                    .payload(),
+            ),
+        }
     }
 
     pub(crate) async fn handle(

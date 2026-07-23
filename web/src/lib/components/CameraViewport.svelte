@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  import type { ScriptUiAction, ScriptUiActionResult } from '../actions';
   import type { SettingsWriteValues } from '../api';
   import type { components } from '../generated/api';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
@@ -8,9 +9,16 @@
   type NormalizedRegion = components['schemas']['NormalizedRegion'];
   type StickName = components['schemas']['StickName'];
   type TouchscreenArea = NonNullable<SettingsWriteValues['input.touchscreen_area']>;
-  type DragMode = 'capture' | 'download' | 'pixel' | 'stick' | 'touch';
+  type ScriptPointerButton = components['schemas']['ScriptPointerButton'];
+  type ScriptPointerPhase = components['schemas']['ScriptPointerPhase'];
+  type DragMode = 'capture' | 'download' | 'pixel' | 'script' | 'stick' | 'touch';
+
+  interface CameraViewportActions {
+    scriptUiAction(request: ScriptUiAction): Promise<ScriptUiActionResult>;
+  }
 
   interface Props {
+    actions: CameraViewportActions;
     fps: number;
     guideVisible: boolean;
     leftStickEnabled: boolean;
@@ -33,6 +41,8 @@
     readonly mode: DragMode;
     readonly pointerId: number;
     readonly start: Point;
+    readonly scriptButton: ScriptPointerButton | null;
+    readonly scriptGeneration: string | null;
     readonly stick: StickName | null;
   }
 
@@ -48,6 +58,7 @@
   }
 
   let {
+    actions,
     fps,
     guideVisible,
     leftStickEnabled,
@@ -69,14 +80,24 @@
   let lastDrawAt = 0;
   let lastStickAt = 0;
   let pendingStick: Point | null = null;
+  let pendingScript: Point | null = null;
+  let pointerQueue: Promise<void> = Promise.resolve();
   let pixelSample = $state<PixelSample | null>(null);
   let renderFrame: number | null = null;
+  let scriptFrame: number | null = null;
+  let lastScriptAt = 0;
   let sourceHeight = $state(720);
   let sourceWidth = $state(1280);
   let video: HTMLVideoElement | undefined;
 
   const selection = $derived.by(() => {
-    if (drag === null || current === null || drag.mode === 'pixel' || drag.mode === 'stick') {
+    if (
+      drag === null ||
+      current === null ||
+      drag.mode === 'pixel' ||
+      drag.mode === 'script' ||
+      drag.mode === 'stick'
+    ) {
       return null;
     }
     const left = Math.min(drag.start.x, current.x);
@@ -209,25 +230,104 @@
     return rightStickEnabled ? 'RSTICK' : null;
   }
 
+  function scriptButtonFor(event: PointerEvent): ScriptPointerButton | null {
+    if (view.scriptUi.generation === null) return null;
+    if (event.button === 0 && view.scriptUi.overlay.bindings.left) return 'left';
+    if (event.button === 2 && view.scriptUi.overlay.bindings.right) return 'right';
+    return null;
+  }
+
+  function scriptCoordinates(position: Point): { readonly x: number; readonly y: number } {
+    const width = Math.max(1, view.scriptUi.overlay.show_width);
+    const height = Math.max(1, view.scriptUi.overlay.show_height);
+    return {
+      x: Math.min(width - 1, Math.floor(position.x * width)),
+      y: Math.min(height - 1, Math.floor(position.y * height))
+    };
+  }
+
+  function sendScriptPointer(
+    phase: ScriptPointerPhase,
+    position: Point,
+    active: Drag | null = drag
+  ): void {
+    if (
+      active?.mode !== 'script' ||
+      active.scriptButton === null ||
+      active.scriptGeneration === null
+    ) {
+      return;
+    }
+    const coordinates = scriptCoordinates(position);
+    const request: ScriptUiAction = {
+      action: 'pointer',
+      button: active.scriptButton,
+      generation: active.scriptGeneration,
+      phase,
+      ...coordinates
+    };
+    pointerQueue = pointerQueue.then(async () => {
+      try {
+        await actions.scriptUiAction(request);
+      } catch {
+        // A generation can legitimately disappear while a queued gesture drains.
+      }
+    });
+  }
+
+  function flushScript(timestamp: number): void {
+    scriptFrame = null;
+    if (drag?.mode !== 'script' || pendingScript === null) return;
+    if (timestamp - lastScriptAt < 16) {
+      scriptFrame = requestAnimationFrame(flushScript);
+      return;
+    }
+    const position = pendingScript;
+    pendingScript = null;
+    lastScriptAt = timestamp;
+    sendScriptPointer('moved', position);
+  }
+
+  function scheduleScript(position: Point): void {
+    pendingScript = position;
+    scriptFrame ??= requestAnimationFrame(flushScript);
+  }
+
   function pointerDown(event: PointerEvent): void {
     const start = point(event);
     let mode: DragMode;
+    let scriptButton: ScriptPointerButton | null = null;
+    let scriptGeneration: string | null = null;
     let stick: StickName | null = null;
     if (event.ctrlKey && event.button === 2) mode = 'touch';
     else if (event.ctrlKey && event.shiftKey && event.button === 0) mode = 'capture';
     else if (event.ctrlKey && event.altKey && event.button === 0) mode = 'download';
     else if (event.ctrlKey && event.button === 0) mode = 'pixel';
     else {
-      stick = stickFor(event);
-      if (stick === null) return;
-      mode = 'stick';
+      scriptButton = scriptButtonFor(event);
+      if (scriptButton !== null) {
+        mode = 'script';
+        scriptGeneration = view.scriptUi.generation;
+      } else {
+        stick = stickFor(event);
+        if (stick === null) return;
+        mode = 'stick';
+      }
     }
     event.preventDefault();
     const target = event.currentTarget as HTMLElement;
     if (typeof target.setPointerCapture === 'function') target.setPointerCapture(event.pointerId);
-    drag = { mode, pointerId: event.pointerId, start, stick };
+    drag = {
+      mode,
+      pointerId: event.pointerId,
+      scriptButton,
+      scriptGeneration,
+      start,
+      stick
+    };
     current = start;
     if (mode === 'stick') scheduleStick(start);
+    else if (mode === 'script') sendScriptPointer('pressed', start);
   }
 
   function pointerMove(event: PointerEvent): void {
@@ -236,6 +336,7 @@
     const next = point(event);
     current = next;
     if (drag.mode === 'stick') scheduleStick(next);
+    else if (drag.mode === 'script') scheduleScript(next);
   }
 
   function toRegion(start: Point, end: Point): NormalizedRegion | null {
@@ -282,6 +383,10 @@
     const end = point(event);
     if (completed.mode === 'stick' && completed.stick !== null) {
       runtime.setGamepadStick(completed.stick, 128, 128);
+    } else if (completed.mode === 'script') {
+      cancelPendingScript();
+      sendScriptPointer('moved', end, completed);
+      sendScriptPointer('released', end, completed);
     } else if (completed.mode === 'pixel') {
       sample(end);
     } else {
@@ -308,10 +413,20 @@
     animationFrame = null;
   }
 
+  function cancelPendingScript(): void {
+    pendingScript = null;
+    if (scriptFrame !== null) cancelAnimationFrame(scriptFrame);
+    scriptFrame = null;
+  }
+
   function cancel(event: PointerEvent): void {
     if (drag?.pointerId !== event.pointerId) return;
     if (drag.mode === 'stick' && drag.stick !== null) {
       runtime.setGamepadStick(drag.stick, 128, 128);
+    } else if (drag.mode === 'script') {
+      const completed = drag;
+      cancelPendingScript();
+      sendScriptPointer('released', current ?? completed.start, completed);
     }
     cancelPendingStick();
     drag = null;
@@ -325,6 +440,10 @@
       unsubscribe();
       if (renderFrame !== null) cancelAnimationFrame(renderFrame);
       cancelPendingStick();
+      if (drag?.mode === 'script') {
+        sendScriptPointer('released', current ?? drag.start, drag);
+      }
+      cancelPendingScript();
       if (fallbackUrl !== null) URL.revokeObjectURL(fallbackUrl);
     };
   });

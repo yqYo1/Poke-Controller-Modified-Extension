@@ -1,13 +1,14 @@
 //! Rust-main resource adapters for one profile-scoped user-script generation.
 
 use std::collections::BTreeMap;
-use std::io::{Read as _, Write as _};
+use std::io::{ErrorKind, Read as _, Write as _};
 use std::net::{Shutdown, TcpStream, ToSocketAddrs as _};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine as _;
+use chrono::{Local, Timelike as _};
 use parking_lot::Mutex as ParkingMutex;
 use pokecon_camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
 use pokecon_device::controller::{
@@ -28,20 +29,25 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, MAX_POPUP_IMAGE_BYTES, ScriptButton, ScriptControl,
-    ScriptDialogState, ScriptDialogValue, ScriptDialogWidget, ScriptDialogWidgetKind, ScriptHat,
-    ScriptInputAction, ScriptOutputMode, ScriptOutputTarget, ScriptPointerButton, ScriptStick,
-    ScriptTkEvent,
+    HostTkRequest, HostTkResult, MAX_NOTIFICATION_IMAGE_BYTES, MAX_POPUP_IMAGE_BYTES, ScriptButton,
+    ScriptControl, ScriptDialogState, ScriptDialogValue, ScriptDialogWidget,
+    ScriptDialogWidgetKind, ScriptHat, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
+    ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError};
+use rumqttc::{Client as MqttClient, Event as MqttEvent, MqttOptions, Outgoing, Packet, QoS};
 use tokio::runtime::{Handle, RuntimeFlavor};
+use url::Url;
 
 use crate::command_service::CommandBackendError;
 use crate::dynamic_host::StartupDynamicHost;
 use crate::script_runtime::{ScriptGenerationHostFactory, ScriptGenerationResources};
 
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(2);
+const NETWORK_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const MAX_SOCKET_RESPONSE_BYTES: usize = 64 * 1024;
+const MQTT_PORT: u16 = 1883;
+const MQTT_PACKET_BYTES: usize = 64 * 1024;
 
 /// Process-wide bridge between the active profile-scoped script generation
 /// and the typed browser transport.
@@ -64,6 +70,7 @@ struct ActiveScriptUi {
 
 pub(crate) struct ScriptUiActionOutcome {
     pub(crate) abort_command: bool,
+    pub(crate) pointer_event: Option<ScriptPointerEvent>,
     pub(crate) tk_event: Option<ScriptTkEvent>,
 }
 
@@ -181,7 +188,8 @@ fn action_generation(action: &wire::ScriptUiAction) -> &str {
         | wire::ScriptUiAction::TkScaleChanged { generation, .. }
         | wire::ScriptUiAction::TkButtonInvoked { generation, .. }
         | wire::ScriptUiAction::TkWindowClosed { generation, .. }
-        | wire::ScriptUiAction::PopupClosed { generation, .. } => generation,
+        | wire::ScriptUiAction::PopupClosed { generation, .. }
+        | wire::ScriptUiAction::Pointer { generation, .. } => generation,
     }
 }
 
@@ -570,19 +578,38 @@ impl ScriptHost for ProductionScriptHost {
         self.network
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .apply(request)
+            .apply(request, &self.shared.accepting)
     }
 
     fn notification(&self, request: HostNotificationRequest) -> Result<(), ScriptHostError> {
         self.shared.ensure_accepting()?;
-        let content = match request {
-            HostNotificationRequest::DiscordText { content, .. }
-            | HostNotificationRequest::DiscordImage { content, .. } => content,
+        let outcome = match request {
+            HostNotificationRequest::DiscordText { content, .. } => run_sync(
+                &self.shared.runtime,
+                self.notifications.send_script_discord(&content),
+            ),
+            HostNotificationRequest::DiscordImage {
+                content,
+                content_type,
+                encoded,
+                ..
+            } => {
+                if content_type != "image/jpeg"
+                    || encoded.is_empty()
+                    || encoded.len() > MAX_NOTIFICATION_IMAGE_BYTES
+                {
+                    return Err(host_error(
+                        "InvalidNotificationImage",
+                        "notification image is invalid",
+                    ));
+                }
+                run_sync(
+                    &self.shared.runtime,
+                    self.notifications
+                        .send_script_discord_image(&content, &content_type, &encoded),
+                )
+            }
         };
-        let outcome = run_sync(
-            &self.shared.runtime,
-            self.notifications.send_script_discord(&content),
-        );
         match outcome {
             NotificationOutcome::Delivered => Ok(()),
             NotificationOutcome::Disabled
@@ -1275,6 +1302,38 @@ impl OverlayStore {
                 .collect(),
         }
     }
+
+    fn pointer_event(
+        &self,
+        button: wire::ScriptPointerButton,
+        phase: wire::ScriptPointerPhase,
+        x: u32,
+        y: u32,
+    ) -> Result<ScriptPointerEvent, ScriptHostError> {
+        let enabled = match button {
+            wire::ScriptPointerButton::Left => self.bindings.left,
+            wire::ScriptPointerButton::Right => self.bindings.right,
+        };
+        if !enabled || x >= self.show_width || y >= self.show_height {
+            return Err(host_error(
+                "InvalidScriptUiAction",
+                "pointer event is outside the active overlay binding",
+            ));
+        }
+        Ok(ScriptPointerEvent {
+            button: match button {
+                wire::ScriptPointerButton::Left => ScriptPointerButton::Left,
+                wire::ScriptPointerButton::Right => ScriptPointerButton::Right,
+            },
+            phase: match phase {
+                wire::ScriptPointerPhase::Pressed => ScriptPointerPhase::Pressed,
+                wire::ScriptPointerPhase::Moved => ScriptPointerPhase::Moved,
+                wire::ScriptPointerPhase::Released => ScriptPointerPhase::Released,
+            },
+            x,
+            y,
+        })
+    }
 }
 
 #[derive(Default)]
@@ -1355,6 +1414,7 @@ impl GenerationResources {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut abort_command = false;
+        let mut pointer_event = None;
         let mut tk_event = None;
         match action {
             wire::ScriptUiAction::DialogConfirm {
@@ -1409,9 +1469,19 @@ impl GenerationResources {
             wire::ScriptUiAction::PopupClosed { popup_id, .. } => {
                 ui.popups.remove(decimal_id(&popup_id)?)?;
             }
+            wire::ScriptUiAction::Pointer {
+                button,
+                phase,
+                x,
+                y,
+                ..
+            } => {
+                pointer_event = Some(ui.overlay.pointer_event(button, phase, x, y)?);
+            }
         }
         Ok(ScriptUiActionOutcome {
             abort_command,
+            pointer_event,
             tk_event,
         })
     }
@@ -1563,7 +1633,7 @@ impl Default for NetworkState {
         Self {
             socket_address: "127.0.0.1".to_owned(),
             socket_port: 0,
-            socket_alive: false,
+            socket_alive: true,
             socket: None,
             mqtt_broker_address: String::new(),
             mqtt_id: String::new(),
@@ -1575,9 +1645,17 @@ impl Default for NetworkState {
 }
 
 impl NetworkState {
-    fn apply(&mut self, request: HostNetworkRequest) -> Result<HostNetworkResult, ScriptHostError> {
+    fn apply(
+        &mut self,
+        request: HostNetworkRequest,
+        accepting: &AtomicBool,
+    ) -> Result<HostNetworkResult, ScriptHostError> {
         match request {
-            HostNetworkRequest::Cleanup | HostNetworkRequest::SocketDisconnect => {
+            HostNetworkRequest::Cleanup => {
+                self.socket_alive = false;
+                self.disconnect();
+            }
+            HostNetworkRequest::SocketDisconnect => {
                 self.disconnect();
             }
             HostNetworkRequest::SocketConnect => self.connect()?,
@@ -1591,16 +1669,8 @@ impl NetworkState {
                 headers,
                 show_message,
             } => {
-                let socket = self.socket.as_mut().ok_or_else(network_unavailable)?;
-                let mut buffer = vec![0; MAX_SOCKET_RESPONSE_BYTES];
-                let count = socket
-                    .read(&mut buffer)
-                    .map_err(|_error| network_unavailable())?;
-                let message = String::from_utf8_lossy(&buffer[..count]).into_owned();
-                let matches_header =
-                    headers.is_empty() || headers.iter().any(|header| message.starts_with(header));
                 return Ok(HostNetworkResult {
-                    message: (show_message && matches_header).then_some(message),
+                    message: self.socket_receive(&headers, show_message, accepting)?,
                 });
             }
             HostNetworkRequest::SocketChangeAddress { address } => {
@@ -1625,11 +1695,17 @@ impl NetworkState {
             HostNetworkRequest::MqttChangeSubscribeToken { token } => {
                 self.mqtt_subscribe_token = token;
             }
-            HostNetworkRequest::MqttTransmit { .. } | HostNetworkRequest::MqttReceive { .. } => {
-                return Err(host_error(
-                    "MqttUnavailable",
-                    "MQTT compatibility transport is unavailable",
-                ));
+            HostNetworkRequest::MqttTransmit { room_id, message } => {
+                self.mqtt_transmit(&room_id, &message)?;
+            }
+            HostNetworkRequest::MqttReceive {
+                room_id,
+                headers,
+                show_message,
+            } => {
+                return Ok(HostNetworkResult {
+                    message: self.mqtt_receive(&room_id, &headers, show_message, accepting)?,
+                });
             }
         }
         Ok(HostNetworkResult { message: None })
@@ -1653,7 +1729,7 @@ impl NetworkState {
         let stream = TcpStream::connect_timeout(&address, SOCKET_TIMEOUT)
             .map_err(|_error| network_unavailable())?;
         stream
-            .set_read_timeout(Some(SOCKET_TIMEOUT))
+            .set_read_timeout(Some(NETWORK_POLL_INTERVAL))
             .and_then(|()| stream.set_write_timeout(Some(SOCKET_TIMEOUT)))
             .map_err(|_error| network_unavailable())?;
         stream
@@ -1668,6 +1744,217 @@ impl NetworkState {
             let _ = socket.shutdown(Shutdown::Both);
         }
     }
+
+    fn socket_receive(
+        &mut self,
+        headers: &[String],
+        show_message: bool,
+        accepting: &AtomicBool,
+    ) -> Result<Option<String>, ScriptHostError> {
+        while self.socket_alive && accepting.load(Ordering::Acquire) {
+            let mut buffer = vec![0; MAX_SOCKET_RESPONSE_BYTES];
+            let read = self
+                .socket
+                .as_mut()
+                .ok_or_else(network_unavailable)?
+                .read(&mut buffer);
+            let count = match read {
+                Ok(0) => {
+                    self.disconnect();
+                    return Ok(None);
+                }
+                Ok(count) => count,
+                Err(error)
+                    if matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock) =>
+                {
+                    continue;
+                }
+                Err(_error) => return Err(network_unavailable()),
+            };
+            let message = String::from_utf8_lossy(&buffer[..count]).into_owned();
+            let matches_header =
+                headers.is_empty() || headers.iter().any(|header| message.starts_with(header));
+            if matches_header {
+                tracing::info!(target: "pokecon.script.network", "socket message matched");
+                return Ok(Some(message));
+            }
+            if show_message {
+                tracing::info!(
+                    target: "pokecon.script.network",
+                    message,
+                    "socket message did not match the requested header"
+                );
+            }
+        }
+        if !self.socket_alive {
+            self.disconnect();
+        }
+        Ok(None)
+    }
+
+    fn mqtt_transmit(&self, room_id: &str, message: &str) -> Result<(), ScriptHostError> {
+        validate_mqtt_topic(room_id)?;
+        let options = self.mqtt_options(&self.mqtt_publish_token)?;
+        let (client, mut connection) = MqttClient::new(options, 4);
+        connection
+            .eventloop
+            .network_options
+            .set_connection_timeout(SOCKET_TIMEOUT.as_secs());
+        client
+            .publish(
+                room_id,
+                QoS::AtMostOnce,
+                false,
+                mqtt_timestamped_message(message),
+            )
+            .map_err(|_error| mqtt_unavailable())?;
+        let deadline = Instant::now() + SOCKET_TIMEOUT;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(mqtt_unavailable());
+            }
+            match connection.recv_timeout(remaining) {
+                Ok(Ok(MqttEvent::Outgoing(Outgoing::Publish(_)))) => return Ok(()),
+                Ok(Ok(_)) => {}
+                Ok(Err(_)) | Err(_) => return Err(mqtt_unavailable()),
+            }
+        }
+    }
+
+    fn mqtt_receive(
+        &self,
+        room_id: &str,
+        headers: &[String],
+        show_message: bool,
+        accepting: &AtomicBool,
+    ) -> Result<Option<String>, ScriptHostError> {
+        validate_mqtt_topic(room_id)?;
+        let options = self.mqtt_options(&self.mqtt_subscribe_token)?;
+        let (client, mut connection) = MqttClient::new(options, 4);
+        connection
+            .eventloop
+            .network_options
+            .set_connection_timeout(SOCKET_TIMEOUT.as_secs());
+        client
+            .subscribe(room_id, QoS::AtMostOnce)
+            .map_err(|_error| mqtt_unavailable())?;
+        let mut newest_timestamp = mqtt_timestamp();
+        while accepting.load(Ordering::Acquire) {
+            match connection.recv_timeout(NETWORK_POLL_INTERVAL) {
+                Ok(Ok(MqttEvent::Incoming(Packet::Publish(publish)))) => {
+                    let Ok(payload) = std::str::from_utf8(&publish.payload) else {
+                        continue;
+                    };
+                    let Some((timestamp, message)) = split_mqtt_message(payload) else {
+                        continue;
+                    };
+                    if timestamp <= newest_timestamp.as_str() {
+                        continue;
+                    }
+                    timestamp.clone_into(&mut newest_timestamp);
+                    let matches_header = headers.is_empty()
+                        || headers.iter().any(|header| message.starts_with(header));
+                    if matches_header {
+                        tracing::info!(target: "pokecon.script.network", "MQTT message matched");
+                        return Ok(Some(message.to_owned()));
+                    }
+                    if show_message {
+                        tracing::info!(
+                            target: "pokecon.script.network",
+                            message,
+                            "MQTT message did not match the requested header"
+                        );
+                    }
+                }
+                Ok(Ok(_)) | Err(rumqttc::RecvTimeoutError::Timeout) => {}
+                Ok(Err(_)) | Err(rumqttc::RecvTimeoutError::Disconnected) => {
+                    return Err(mqtt_unavailable());
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn mqtt_options(&self, token: &str) -> Result<MqttOptions, ScriptHostError> {
+        let (broker, port) = parse_mqtt_broker(&self.mqtt_broker_address)?;
+        if self.mqtt_id.trim().is_empty()
+            || self.mqtt_client_id.trim().is_empty()
+            || token.trim().is_empty()
+        {
+            return Err(invalid_mqtt_configuration());
+        }
+        let mut options = MqttOptions::new(&self.mqtt_client_id, broker, port);
+        options
+            .set_keep_alive(Duration::from_secs(5))
+            .set_credentials(&self.mqtt_id, token)
+            .set_max_packet_size(MQTT_PACKET_BYTES, MQTT_PACKET_BYTES);
+        Ok(options)
+    }
+}
+
+fn parse_mqtt_broker(raw: &str) -> Result<(String, u16), ScriptHostError> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err(invalid_mqtt_configuration());
+    }
+    let candidate = if raw.contains("://") {
+        raw.to_owned()
+    } else {
+        format!("mqtt://{raw}")
+    };
+    let url = Url::parse(&candidate).map_err(|_error| invalid_mqtt_configuration())?;
+    if !matches!(url.scheme(), "mqtt" | "tcp")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.path(), "" | "/")
+    {
+        return Err(invalid_mqtt_configuration());
+    }
+    let host = url
+        .host_str()
+        .filter(|host| !host.is_empty())
+        .ok_or_else(invalid_mqtt_configuration)?;
+    Ok((host.to_owned(), url.port().unwrap_or(MQTT_PORT)))
+}
+
+fn validate_mqtt_topic(topic: &str) -> Result<(), ScriptHostError> {
+    if topic.is_empty()
+        || topic
+            .chars()
+            .any(|character| matches!(character, '\0' | '#' | '+'))
+    {
+        Err(invalid_mqtt_configuration())
+    } else {
+        Ok(())
+    }
+}
+
+fn mqtt_timestamp() -> String {
+    let now = Local::now();
+    format!(
+        "{}{:06}",
+        now.format("%Y%m%d%H%M%S"),
+        now.nanosecond() / 1_000
+    )
+}
+
+fn mqtt_timestamped_message(message: &str) -> String {
+    format!("[{}]{message}", mqtt_timestamp())
+}
+
+fn split_mqtt_message(payload: &str) -> Option<(&str, &str)> {
+    let bytes = payload.as_bytes();
+    if bytes.len() < 22
+        || bytes[0] != b'['
+        || bytes[21] != b']'
+        || !bytes[1..21].iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    Some((&payload[1..21], &payload[22..]))
 }
 
 fn initialize_source(
@@ -1858,13 +2145,131 @@ fn network_unavailable() -> ScriptHostError {
     host_error("NetworkUnavailable", "network operation failed")
 }
 
+fn invalid_mqtt_configuration() -> ScriptHostError {
+    host_error(
+        "InvalidMqttConfiguration",
+        "MQTT configuration is incomplete or invalid",
+    )
+}
+
+fn mqtt_unavailable() -> ScriptHostError {
+    host_error("MqttUnavailable", "MQTT operation failed")
+}
+
 fn script_resource_error(error: &impl std::fmt::Display) -> CommandBackendError {
     CommandBackendError::new("ScriptResourceUnavailable", error.to_string())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write as _;
+    use std::net::TcpListener;
+    use std::thread;
+
     use super::*;
+
+    #[test]
+    fn mqtt_legacy_envelope_is_exact_and_secret_free() {
+        let encoded = mqtt_timestamped_message("ready");
+        let (timestamp, message) = split_mqtt_message(&encoded).expect("envelope is valid");
+        assert_eq!(timestamp.len(), 20);
+        assert!(timestamp.bytes().all(|byte| byte.is_ascii_digit()));
+        assert_eq!(message, "ready");
+        assert!(split_mqtt_message("ready").is_none());
+        assert!(split_mqtt_message("[2026072212345600000x]ready").is_none());
+    }
+
+    #[test]
+    fn mqtt_broker_parser_accepts_legacy_hosts_and_explicit_ports() {
+        assert_eq!(
+            parse_mqtt_broker("broker.example").unwrap(),
+            ("broker.example".to_owned(), MQTT_PORT)
+        );
+        assert_eq!(
+            parse_mqtt_broker("mqtt://127.0.0.1:2883").unwrap(),
+            ("127.0.0.1".to_owned(), 2883)
+        );
+        assert!(parse_mqtt_broker("https://broker.example").is_err());
+        assert!(parse_mqtt_broker("mqtt://user:secret@broker.example").is_err());
+    }
+
+    #[test]
+    fn socket_matching_is_independent_of_diagnostic_logging() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("test listener binds");
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test client connects");
+            stream
+                .write_all(b"ready:payload")
+                .expect("test payload is written");
+        });
+        let accepting = AtomicBool::new(true);
+        let mut state = NetworkState {
+            socket_port: port,
+            ..NetworkState::default()
+        };
+        state
+            .apply(HostNetworkRequest::SocketConnect, &accepting)
+            .expect("socket connects");
+        let result = state
+            .apply(
+                HostNetworkRequest::SocketReceive {
+                    headers: vec!["ready".to_owned()],
+                    show_message: false,
+                },
+                &accepting,
+            )
+            .expect("socket receive succeeds");
+        assert_eq!(result.message.as_deref(), Some("ready:payload"));
+        server.join().expect("test server exits");
+    }
+
+    #[test]
+    fn overlay_pointer_events_require_binding_and_bounded_coordinates() {
+        let mut overlay = OverlayStore::default();
+        assert!(
+            overlay
+                .pointer_event(
+                    wire::ScriptPointerButton::Left,
+                    wire::ScriptPointerPhase::Pressed,
+                    12,
+                    34,
+                )
+                .is_err()
+        );
+        overlay
+            .apply(HostOverlayRequest::SetBinding {
+                button: ScriptPointerButton::Left,
+                enabled: true,
+            })
+            .unwrap();
+        assert_eq!(
+            overlay
+                .pointer_event(
+                    wire::ScriptPointerButton::Left,
+                    wire::ScriptPointerPhase::Moved,
+                    1279,
+                    719,
+                )
+                .unwrap(),
+            ScriptPointerEvent {
+                button: ScriptPointerButton::Left,
+                phase: ScriptPointerPhase::Moved,
+                x: 1279,
+                y: 719,
+            }
+        );
+        assert!(
+            overlay
+                .pointer_event(
+                    wire::ScriptPointerButton::Left,
+                    wire::ScriptPointerPhase::Released,
+                    1280,
+                    719,
+                )
+                .is_err()
+        );
+    }
 
     #[test]
     fn script_controller_release_centers_continuous_controls() {

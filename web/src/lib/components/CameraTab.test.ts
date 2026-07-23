@@ -41,7 +41,8 @@ function cameraActions() {
     saveScreenshot: vi.fn().mockResolvedValue({
       display_path: '/data/Captures/capture.png',
       format: 'png' as const
-    })
+    }),
+    scriptUiAction: vi.fn().mockResolvedValue({ accepted: true })
   };
 }
 

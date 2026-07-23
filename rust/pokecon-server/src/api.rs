@@ -977,6 +977,21 @@ pub enum ScriptDialogAbortReason {
     Destroy,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptPointerButton {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptPointerPhase {
+    Pressed,
+    Moved,
+    Released,
+}
+
 /// Browser-originated, generation-checked interaction with script-owned UI.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "snake_case", tag = "action")]
@@ -1007,6 +1022,13 @@ pub enum ScriptUiAction {
     PopupClosed {
         generation: String,
         popup_id: DecimalString,
+    },
+    Pointer {
+        generation: String,
+        button: ScriptPointerButton,
+        phase: ScriptPointerPhase,
+        x: u32,
+        y: u32,
     },
 }
 

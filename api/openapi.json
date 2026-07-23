@@ -2661,6 +2661,21 @@
         ],
         "type": "object"
       },
+      "ScriptPointerButton": {
+        "enum": [
+          "left",
+          "right"
+        ],
+        "type": "string"
+      },
+      "ScriptPointerPhase": {
+        "enum": [
+          "pressed",
+          "moved",
+          "released"
+        ],
+        "type": "string"
+      },
       "ScriptPopupImage": {
         "additionalProperties": false,
         "properties": {
@@ -3068,6 +3083,45 @@
             "required": [
               "generation",
               "popup_id",
+              "action"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "enum": [
+                  "pointer"
+                ],
+                "type": "string"
+              },
+              "button": {
+                "$ref": "#/components/schemas/ScriptPointerButton"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "phase": {
+                "$ref": "#/components/schemas/ScriptPointerPhase"
+              },
+              "x": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "y": {
+                "format": "int32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "generation",
+              "button",
+              "phase",
+              "x",
+              "y",
               "action"
             ],
             "type": "object"

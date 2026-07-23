@@ -16,7 +16,8 @@ use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::{LogLevel, LogPayload, ResourceSafety};
 use pokecon_worker::script::protocol::{
     PYTHON_SITE_PACKAGES_ENV, ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult,
-    ScriptInitializeRequest, ScriptPauseResult, ScriptStopResult, ScriptTkEvent,
+    ScriptInitializeRequest, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult,
+    ScriptTkEvent,
 };
 use pokecon_worker::script::{ScriptHost, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerSupervisor};
@@ -306,6 +307,13 @@ impl UserScriptSession for ManagedUserScriptSession {
     async fn tk_event(&self, event: &ScriptTkEvent) -> Result<(), CommandBackendError> {
         self.client
             .tk_event(event)
+            .await
+            .map_err(runtime_environment_error)
+    }
+
+    async fn pointer_event(&self, event: &ScriptPointerEvent) -> Result<(), CommandBackendError> {
+        self.client
+            .pointer_event(event)
             .await
             .map_err(runtime_environment_error)
     }

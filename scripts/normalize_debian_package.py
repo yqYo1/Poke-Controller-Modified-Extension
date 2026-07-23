@@ -5,12 +5,17 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import stat
 import subprocess
 import tempfile
 from pathlib import Path
 
 REPRODUCIBLE_EPOCH = 0
+KIBIBYTE = 1024
 MD5SUM_PATTERN = re.compile(r"(?P<digest>[0-9a-f]{32})  (?P<path>.+)")
+INSTALLED_SIZE_PATTERN = re.compile(
+    r"^Installed-Size:[ \t]*[0-9]+[ \t]*$", re.MULTILINE
+)
 
 
 def normalize_md5sums(root: Path) -> None:
@@ -33,6 +38,46 @@ def normalize_md5sums(root: Path) -> None:
 
     ordered = [line for _path, line in sorted(records)]
     md5sums.write_text("".join(f"{line}\n" for line in ordered), encoding="utf-8")
+
+
+def installed_size_kib(root: Path) -> int:
+    """Calculate Installed-Size without filesystem-dependent directory sizes."""
+    control_directory = root / "DEBIAN"
+    total = 0
+    hardlinks: set[tuple[int, int]] = set()
+    for path in [root, *sorted(root.rglob("*"))]:
+        if path == control_directory or control_directory in path.parents:
+            continue
+        metadata = path.lstat()
+        if stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+            identity = (metadata.st_dev, metadata.st_ino)
+            if identity not in hardlinks:
+                total += (metadata.st_size + KIBIBYTE - 1) // KIBIBYTE
+            if metadata.st_nlink > 1:
+                hardlinks.add(identity)
+        else:
+            total += 1
+    return total
+
+
+def normalize_installed_size(root: Path) -> None:
+    """Replace Tauri's filesystem-dependent Installed-Size calculation."""
+    control = root / "DEBIAN/control"
+    if not control.is_file():
+        message = "Debian package control file is missing"
+        raise ValueError(message)
+
+    contents = control.read_text(encoding="utf-8")
+    normalized, replacements = INSTALLED_SIZE_PATTERN.subn(
+        f"Installed-Size: {installed_size_kib(root)}", contents
+    )
+    if replacements != 1:
+        message = (
+            "Debian package control file must contain exactly one numeric "
+            "Installed-Size field"
+        )
+        raise ValueError(message)
+    control.write_text(normalized, encoding="utf-8")
 
 
 def normalize_timestamps(root: Path) -> None:
@@ -65,6 +110,7 @@ def normalize_package(package: Path, dpkg_deb: Path) -> None:
             check=True,
         )
         normalize_md5sums(extracted)
+        normalize_installed_size(extracted)
         normalize_timestamps(extracted)
         environment = {
             **os.environ,

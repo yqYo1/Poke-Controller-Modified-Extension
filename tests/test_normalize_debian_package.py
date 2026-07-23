@@ -3,8 +3,12 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+import pytest
+
 from scripts.normalize_debian_package import (
     REPRODUCIBLE_EPOCH,
+    installed_size_kib,
+    normalize_installed_size,
     normalize_md5sums,
     normalize_timestamps,
 )
@@ -45,3 +49,46 @@ def test_normalize_md5sums_orders_records_by_package_path(tmp_path: Path) -> Non
         "cccccccccccccccccccccccccccccccc  usr/lib/PokeCon Controller/file\n"
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  usr/share/z-last\n"
     )
+
+
+def test_normalize_installed_size_uses_policy_units(tmp_path: Path) -> None:
+    control_directory = tmp_path / "DEBIAN"
+    control_directory.mkdir()
+    control = control_directory / "control"
+    control.write_text(
+        "Package: poke-con-controller\nInstalled-Size: 999999\n",
+        encoding="utf-8",
+    )
+    binary_directory = tmp_path / "usr/bin"
+    binary_directory.mkdir(parents=True)
+    (binary_directory / "pokecon").write_bytes(b"x" * 1025)
+    os.link(binary_directory / "pokecon", binary_directory / "pokecon-hardlink")
+    (binary_directory / "empty").write_bytes(b"")
+    (binary_directory / "pokecon-link").symlink_to("pokecon")
+
+    assert installed_size_kib(tmp_path) == 6
+
+    normalize_installed_size(tmp_path)
+
+    assert control.read_text(encoding="utf-8") == (
+        "Package: poke-con-controller\nInstalled-Size: 6\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "installed_size",
+    [
+        "",
+        "Installed-Size: unknown\n",
+        "Installed-Size: 1\nInstalled-Size: 2\n",
+    ],
+)
+def test_normalize_installed_size_rejects_invalid_control(
+    tmp_path: Path, installed_size: str
+) -> None:
+    control_directory = tmp_path / "DEBIAN"
+    control_directory.mkdir()
+    (control_directory / "control").write_text(installed_size, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="exactly one numeric Installed-Size"):
+        normalize_installed_size(tmp_path)

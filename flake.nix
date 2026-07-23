@@ -146,7 +146,9 @@
             else
               export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-/tmp/pokecon-nix-tasks}"
             fi
-            mkdir -p "$CARGO_TARGET_DIR"
+            mkdir -p "$CARGO_TARGET_DIR/debug/uv" "$CARGO_TARGET_DIR/release/uv"
+            ln -sfn "${pkgs.uv}/bin/uv" "$CARGO_TARGET_DIR/debug/uv/uv"
+            ln -sfn "${pkgs.uv}/bin/uv" "$CARGO_TARGET_DIR/release/uv/uv"
             workdir="$(mktemp -d)"
             trap 'rm -rf "$workdir"' EXIT
             cp -R "${source}/." "$workdir/"

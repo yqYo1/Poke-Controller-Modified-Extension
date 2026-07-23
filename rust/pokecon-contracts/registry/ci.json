@@ -11,6 +11,25 @@
       "phase": 2
     },
     {
+      "name": "compatibility-roll/evaluate",
+      "workflow": "compatibility-roll",
+      "job": "evaluate",
+      "command": "nix run .#compatibility-roll && nix run .#compatibility",
+      "applicable_when": "the weekly schedule or a manual compatibility evaluation is triggered",
+      "not_applicable": "workflow is not triggered outside its schedule or explicit dispatch",
+      "phase": 14,
+      "implementation_status": "immutable candidates are promoted or quarantined through a signed review pull request"
+    },
+    {
+      "name": "lint/actions",
+      "workflow": "lint",
+      "job": "actions",
+      "command": "nix run .#actionlint",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1
+    },
+    {
       "name": "lint/contracts",
       "workflow": "lint",
       "job": "contracts",
@@ -102,24 +121,46 @@
       "phase": 2
     },
     {
-      "name": "release/rust-publish",
-      "workflow": "release",
-      "job": "rust-publish",
-      "command": "nix run .#release-check -- --component rust",
-      "applicable_when": "a v* tag is pushed and every declared publishable Rust artifact exists",
-      "not_applicable": "workflow is not triggered outside v* tags; missing declared artifacts on a tag is an error",
+      "name": "package/linux",
+      "workflow": "package",
+      "job": "linux",
+      "command": "nix run .#tauri-build -- --bundles deb && nix run .#package-smoke -- dist/tauri/*.deb && nix run .#package-install-smoke -- dist/tauri/*.deb",
+      "applicable_when": "a package-affecting path changes on a configured branch or pull request",
+      "not_applicable": "workflow path and branch filters did not select the change",
       "phase": 13,
-      "implementation_status": "obsolete crate list recorded in foundation path audit"
+      "implementation_status": "Debian resources, clean install, offline startup, upgrade, uninstall, and byte reproducibility are enforced"
     },
     {
-      "name": "release/python-publish",
-      "workflow": "release",
-      "job": "python-publish",
-      "command": "nix run .#release-check -- --component python",
-      "applicable_when": "a v* tag is pushed, Rust publication succeeds, and the PyO3 package exists",
-      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "name": "package/windows",
+      "workflow": "package",
+      "job": "windows",
+      "command": "cargo tauri build --ci --bundles nsis",
+      "applicable_when": "a package-affecting path changes on a configured branch or pull request",
+      "not_applicable": "workflow path and branch filters did not select the change",
       "phase": 13,
-      "implementation_status": "planned replacement of direct host toolchain actions"
+      "execution_environment": "windows-native",
+      "implementation_status": "the pinned native toolchain builds and smoke-tests an offline NSIS installer"
+    },
+    {
+      "name": "release/linux",
+      "workflow": "release",
+      "job": "linux",
+      "command": "nix run .#release-check -- --tag <tag> && nix run .#check && nix run .#tauri-build -- --bundles deb",
+      "applicable_when": "a v* tag is pushed and its version matches every release artifact",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15,
+      "implementation_status": "Nix closure, Python wheel, reproducible Debian package, and checksums are produced together"
+    },
+    {
+      "name": "release/windows",
+      "workflow": "release",
+      "job": "windows",
+      "command": "cargo tauri build --ci --bundles nsis",
+      "applicable_when": "a v* tag is pushed and its version matches every release artifact",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15,
+      "execution_environment": "windows-native",
+      "implementation_status": "the pinned native toolchain produces an NSIS installer and PyO3 wheel with checksums"
     },
     {
       "name": "release/github-release",
@@ -129,7 +170,7 @@
       "applicable_when": "a v* tag is pushed and all package jobs and signed artifact checks succeed",
       "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
       "phase": 15,
-      "implementation_status": "planned release-gate replacement"
+      "implementation_status": "verified Linux and Windows assets are merged into one immutable checksummed release"
     },
     {
       "name": "remote-flake/remote-flake-run",

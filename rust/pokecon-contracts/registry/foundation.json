@@ -93,9 +93,9 @@
       "id": "web_package",
       "paths": ["web/package.json", "web/package-lock.json", "web/src"],
       "observed_in": ["flake.nix", ".github/workflows/lint.yml"],
-      "status": "planned",
+      "status": "implemented",
       "phase": 11,
-      "resolution": "create the Svelte application and enable guarded jobs"
+      "resolution": "the Svelte application, generated API client, tests, static build, and guarded CI job are active"
     },
     {
       "id": "python_tests",
@@ -129,13 +129,12 @@
         "pokecon-cv",
         "pokecon-notify",
         "pokecon-net",
-        "pokecon-lua",
-        "pokecon-core"
+        "pokecon-lua"
       ],
-      "observed_in": [".github/workflows/release.yml"],
-      "status": "obsolete",
+      "observed_in": ["phase 1 release workflow audit"],
+      "status": "resolved",
       "phase": 13,
-      "resolution": "derive release artifacts from the implemented workspace and run build verification through Nix"
+      "resolution": "the release workflow derives artifacts from the implemented workspace and contains no obsolete crate publication list"
     },
     {
       "id": "generated_contracts",
@@ -147,9 +146,9 @@
         "web/src/lib/api/openapi.ts"
       ],
       "observed_in": ["rust/pokecon-contracts/registry/generation.json"],
-      "status": "planned",
+      "status": "implemented",
       "phase": 3,
-      "resolution": "enable each artifact at its declared phase and reject drift once its source exists"
+      "resolution": "all declared contract artifacts are generated at their canonical paths and CI rejects drift"
     }
   ],
   "audit_policy": {

@@ -20,6 +20,10 @@ const WORKFLOWS: &[(&str, &str)] = &[
         "basedpyright",
         include_str!("../../../.github/workflows/basedpyright.yml"),
     ),
+    (
+        "compatibility-roll",
+        include_str!("../../../.github/workflows/compatibility-roll.yml"),
+    ),
     ("lint", include_str!("../../../.github/workflows/lint.yml")),
     (
         "nix-source-filter-check",
@@ -28,6 +32,10 @@ const WORKFLOWS: &[(&str, &str)] = &[
     (
         "pytest",
         include_str!("../../../.github/workflows/pytest.yml"),
+    ),
+    (
+        "package",
+        include_str!("../../../.github/workflows/package.yml"),
     ),
     (
         "release",

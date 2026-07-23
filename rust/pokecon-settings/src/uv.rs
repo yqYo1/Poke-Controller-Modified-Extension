@@ -353,14 +353,7 @@ fn copy_packaged_cache_directory(source: &Path, destination: &Path) -> Result<()
 }
 
 fn atomic_write(path: &Path, contents: &[u8], mode: Option<u32>) -> Result<(), UvError> {
-    let mut options = OpenOptions::new();
-    #[cfg(unix)]
-    if let Some(mode) = mode {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(mode);
-    }
-    #[cfg(not(unix))]
-    let _ = mode;
+    let options = atomic_open_options(mode);
     let mut output = options.open(path).map_err(|source| UvError::Io {
         path: path.to_path_buf(),
         source,
@@ -375,6 +368,23 @@ fn atomic_write(path: &Path, contents: &[u8], mode: Option<u32>) -> Result<(), U
     })
 }
 
+fn atomic_open_options(mode: Option<u32>) -> OpenOptions {
+    #[cfg(unix)]
+    {
+        let mut options = OpenOptions::new();
+        if let Some(mode) = mode {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(mode);
+        }
+        options
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = mode;
+        OpenOptions::new()
+    }
+}
+
 fn atomic_copy(
     source_path: &Path,
     destination_path: &Path,
@@ -384,14 +394,7 @@ fn atomic_copy(
         path: source_path.to_path_buf(),
         source,
     })?;
-    let mut options = OpenOptions::new();
-    #[cfg(unix)]
-    if let Some(mode) = mode {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(mode);
-    }
-    #[cfg(not(unix))]
-    let _ = mode;
+    let options = atomic_open_options(mode);
     let mut output = options
         .open(destination_path)
         .map_err(|source| UvError::Io {

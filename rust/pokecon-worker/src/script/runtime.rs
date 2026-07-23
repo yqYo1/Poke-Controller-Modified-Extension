@@ -137,9 +137,15 @@ impl ScriptWorkerRuntime {
         }
     }
 
-    pub(crate) async fn shutdown(&mut self) {
+    pub(crate) async fn begin_shutdown(&mut self) {
         if let Some(actor) = &mut self.actor {
-            actor.shutdown().await;
+            actor.begin_shutdown().await;
+        }
+    }
+
+    pub(crate) async fn finish_shutdown(&mut self) {
+        if let Some(actor) = &mut self.actor {
+            actor.finish_shutdown().await;
         }
         self.actor = None;
     }

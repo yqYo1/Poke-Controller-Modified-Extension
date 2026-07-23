@@ -392,7 +392,8 @@ impl PythonActor {
         .map_err(|error| PythonActorError::new("PointerEventError", error.to_string()))
     }
 
-    pub(super) async fn shutdown(&mut self) {
+    /// Stops active execution and waits for the actor to accept shutdown.
+    pub(super) async fn begin_shutdown(&mut self) {
         self.state.request_stop();
         if let Some(commands) = self.commands.take() {
             let (sender, receiver) = oneshot::channel();
@@ -400,6 +401,10 @@ impl PythonActor {
                 let _result = receiver.await;
             }
         }
+    }
+
+    /// Reaps local Python threads after the worker has acknowledged shutdown.
+    pub(super) async fn finish_shutdown(&mut self) {
         if let Some(thread) = self.thread.take() {
             let _result = tokio::task::spawn_blocking(move || thread.join()).await;
         }

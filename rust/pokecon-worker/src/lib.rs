@@ -160,9 +160,15 @@ async fn run_protocol(
             }
             "worker.shutdown" => {
                 if let Some(runtime) = &mut script {
-                    runtime.shutdown().await;
+                    runtime.begin_shutdown().await;
                 }
+                // Acknowledge once the actor is quiescent. Auxiliary Python
+                // thread finalization remains bounded by the parent's process
+                // deadline and must not hide an accepted cooperative stop.
                 let response = connection.respond(id, Some(op), IpcValue::Nil).await;
+                if let Some(runtime) = &mut script {
+                    runtime.finish_shutdown().await;
+                }
                 shutdown.request(ShutdownReason::WorkerStop);
                 return match response {
                     Ok(()) | Err(ConnectionError::Disconnected(_)) => Ok(()),

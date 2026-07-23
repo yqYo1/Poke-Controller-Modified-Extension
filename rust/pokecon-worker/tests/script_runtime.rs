@@ -309,7 +309,7 @@ async fn stop_worker(worker: &ManagedWorker) {
         .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(3))
         .await
         .expect("script worker stops cooperatively");
-    assert!(report.cooperative_acknowledged);
+    assert!(report.cooperative_acknowledged, "{report:?}");
     assert!(!report.forced);
     assert!(report.exit.success);
 }
@@ -1794,4 +1794,49 @@ class TkGilBridge(ImageProcPythonCommand):
     assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
 
     stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shutdown_acknowledges_before_slow_local_finalization_is_reaped() {
+    const SOURCE: &str = r"
+import time
+import _pokecon_script
+
+from Commands.PythonCommandBase import PythonCommand
+
+
+class SlowShutdown(PythonCommand):
+    def do(self):
+        original_shutdown = _pokecon_script._shutdown_tk
+
+        def slow_shutdown():
+            time.sleep(1.0)
+            original_shutdown()
+
+        _pokecon_script._shutdown_tk = slow_shutdown
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("slow_shutdown.py"), SOURCE)
+        .expect("slow shutdown script is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "slow_shutdown.py".into(),
+            class_name: "SlowShutdown".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("the slow finalization hook is installed");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_millis(100))
+        .await
+        .expect("the worker is reaped at the shutdown deadline");
+    assert!(report.cooperative_acknowledged, "{report:?}");
+    assert!(report.forced, "{report:?}");
 }

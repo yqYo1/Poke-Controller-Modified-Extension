@@ -1,93 +1,207 @@
 name: Release
+
 on:
   push:
     tags:
       - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  rust-publish:
-    name: Publish Rust crates
+  linux:
+    name: Linux package, Tauri bundle, and wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Publish pokecon-events
-        run: cargo publish -p pokecon-events
-        working-directory: .
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-serial
-        run: cargo publish -p pokecon-serial
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-cv
-        run: cargo publish -p pokecon-cv
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-notify
-        run: cargo publish -p pokecon-notify
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-net
-        run: cargo publish -p pokecon-net
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-lua
-        run: cargo publish -p pokecon-lua
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-core
-        run: cargo publish -p pokecon-core
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - name: Publish pokecon-pybindings
-        run: cargo publish -p pokecon-pybindings
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-  python-publish:
-    name: Build and publish Python wheel to PyPI
-    runs-on: ubuntu-latest
-    needs: [rust-publish]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
         with:
-          target: x86_64
-          manylinux: auto
-          args: --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist
-      - name: Upload wheels as artifacts
-        uses: actions/upload-artifact@v7
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
         with:
-          name: python-wheels
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate release identity
+        run: nix run .#release-check -- --tag "$GITHUB_REF_NAME"
+      - name: Run complete release gate
+        run: nix run .#check
+      - name: Build Linux Nix package
+        run: nix build .#pokecon-server --out-link result-server
+      - name: Build Python wheel
+        run: nix run .#build
+      - name: Build Linux Tauri package
+        run: nix run .#tauri-build -- --bundles deb
+      - name: Audit packaged runtime and offline wheelhouse
+        run: nix run .#package-smoke -- dist/tauri/*.deb
+      - name: Verify clean install, offline startup, upgrade, and uninstall
+        run: nix run .#package-install-smoke -- dist/tauri/*.deb
+      - name: Preserve first Linux package build
+        run: cp dist/tauri/*.deb "$RUNNER_TEMP/pokecon-first.deb"
+      - name: Rebuild Linux package from identical inputs
+        run: nix run .#tauri-build -- --bundles deb
+      - name: Verify byte-for-byte Linux package reproducibility
+        run: cmp "$RUNNER_TEMP/pokecon-first.deb" dist/tauri/*.deb
+      - name: Create portable and offline Nix artifacts
+        run: |
+          mkdir -p dist
+          tar \
+            --dereference \
+            --sort=name \
+            --mtime='@0' \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -C result-server \
+            -czf "dist/pokecon-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" \
+            .
+          mapfile -t closure_paths < <(nix-store -qR result-server)
+          nix-store --export "${closure_paths[@]}" \
+            | zstd -19 -T0 \
+            > "dist/pokecon-${GITHUB_REF_NAME}-linux-x86_64.nar.zst"
+      - name: Generate Linux checksums
+        run: >-
+          nix run .#release-check --
+          --tag "$GITHUB_REF_NAME"
+          --artifacts dist
+          --checksums dist/SHA256SUMS-linux-x86_64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-linux-x86_64
           path: dist/
-      - name: Publish to PyPI
-        uses: PyO3/maturin-action@v1
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows NSIS installer and wheel
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
         with:
-          command: upload
-          args: --skip-existing dist/*
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20.19.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95.0'
+      - name: Install pinned release tools
+        shell: pwsh
+        run: |
+          choco install nasm -y --no-progress
+          python -m pip install --disable-pip-version-check "uv==0.11.8" "maturin>=1.8,<2"
+          cargo install tauri-cli --version 2.9.6 --locked
+          vcpkg install portaudio:x64-windows-static
+      - name: Export release tool identity
+        shell: pwsh
+        run: |
+          $uv = (Get-Command uv).Source
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+          "POKECON_BUILD_UV_PATH=$uv" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_BUILD_UV_VERSION=0.11.8" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_INTERNAL_SCRIPT_SITE_PACKAGES=$sitePackages" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $version = python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])"
+          "POKECON_WEB_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SOURCE_DATE_EPOCH=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Validate release identity
+        shell: pwsh
+        run: python -m scripts.release_gate --tag $env:GITHUB_REF_NAME
+      - name: Build Web distribution
+        shell: pwsh
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          npm --prefix web run lint
+          npm --prefix web run svelte-check
+          npm --prefix web test
+          npm --prefix web run build
+      - name: Build and stage managed runtimes
+        shell: pwsh
+        run: |
+          $uv = (Get-Command uv).Source
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
+          python -m scripts.build_release_runtime `
+            --project . `
+            --uv $uv `
+            --runtime-output target/release-python `
+            --wheelhouse-output target/release-wheelhouse `
+            --vcpkg-path $vcpkg
+          $runtimePython = (Resolve-Path target/release-python/python.exe).Path
+          "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $env:PYO3_PYTHON = $runtimePython
+          cargo build --locked --release --package pokecon-worker --bin pokecon-worker
+          python -m scripts.stage_release `
+            --web web/dist `
+            --worker target/release/pokecon-worker.exe `
+            --uv $uv `
+            --wheelhouse target/release-wheelhouse `
+            --python target/release-python `
+            --output target/bundle-resources `
+            --config-output target/tauri.bundle.json
+      - name: Build offline NSIS installer
+        shell: pwsh
+        working-directory: rust/pokecon-app
+        run: >-
+          cargo tauri build --ci --bundles nsis
+          --config ../../target/tauri.bundle.json
+          -- --locked
+      - name: Verify clean install, startup, upgrade, and uninstall
+        shell: pwsh
+        run: >-
+          ./scripts/windows_install_smoke.ps1
+          -Installer (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+      - name: Build Windows Python wheel
+        shell: pwsh
+        run: >-
+          maturin build --locked --release
+          --manifest-path rust/pokecon-pybindings/Cargo.toml
+          --out dist
+      - name: Collect installer and checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/bundle/nsis/*.exe dist/
+          python -m scripts.release_gate `
+            --tag $env:GITHUB_REF_NAME `
+            --artifacts dist `
+            --checksums dist/SHA256SUMS-windows-x86_64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-x86_64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
   github-release:
-    name: Create GitHub Release
+    name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [python-publish]
+    needs: [linux, windows]
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
-      - name: Download python wheels
-        uses: actions/download-artifact@v8
+      - uses: actions/setup-python@v6
         with:
-          name: python-wheels
-          path: dist/
-      - name: Generate release notes
-        run: |
-          echo "# Poke-Controller Modified Extension ${{ github.ref_name }}" > RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "See [CHANGELOG](https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/main/changelog.txt) for detailed changes." >> RELEASE_NOTES.md
-      - name: Create Release
+          python-version: '3.14'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Generate complete checksum manifest
+        run: >-
+          python -m scripts.release_gate
+          --tag "$GITHUB_REF_NAME"
+          --artifacts release-assets
+          --checksums release-assets/SHA256SUMS
+      - name: Publish immutable release assets
         uses: softprops/action-gh-release@v2
         with:
-          body_path: RELEASE_NOTES.md
-          files: dist/*
+          body: |
+            Installation, upgrade, offline, and migration instructions are in `docs/`.
+            Verify every downloaded artifact against `SHA256SUMS` before use.
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: release-assets/*

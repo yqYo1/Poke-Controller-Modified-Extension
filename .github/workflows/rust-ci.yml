@@ -6,6 +6,9 @@ on:
       - 'rust/**'
       - 'compatibility/**'
       - 'scripts/compatibility_inventory.py'
+      - 'scripts/compatibility_promote.py'
+      - 'scripts/compatibility_roll.py'
+      - 'scripts/compatibility_runner.py'
       - 'scripts/source_filter.py'
       - 'scripts/source_guard.py'
       - 'SPECIFICATION.md'
@@ -14,12 +17,16 @@ on:
       - 'flake.nix'
       - 'flake.lock'
       - '.github/workflows/rust-ci.yml'
+      - '.github/workflows/compatibility-roll.yml'
   pull_request:
     branches: [main, master]
     paths:
       - 'rust/**'
       - 'compatibility/**'
       - 'scripts/compatibility_inventory.py'
+      - 'scripts/compatibility_promote.py'
+      - 'scripts/compatibility_roll.py'
+      - 'scripts/compatibility_runner.py'
       - 'scripts/source_filter.py'
       - 'scripts/source_guard.py'
       - 'SPECIFICATION.md'
@@ -28,6 +35,7 @@ on:
       - 'flake.nix'
       - 'flake.lock'
       - '.github/workflows/rust-ci.yml'
+      - '.github/workflows/compatibility-roll.yml'
 jobs:
   build:
     name: Build and test (Rust)
@@ -51,6 +59,9 @@ jobs:
       - name: Run tests
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#cargo-test
+      - name: Execute immutable compatibility corpus
+        if: steps.rust-check.outputs.applicable == 'true'
+        run: nix run .#compatibility
 
   build-windows:
     name: Build workspace (Windows)

@@ -180,15 +180,36 @@ def install_python(uv: Path, output: Path, workspace: Path) -> Path:
             install_root,
         ]
     )
-    installations = sorted(
-        path
-        for path in install_root.iterdir()
-        if path.is_dir() and not path.is_symlink() and not path.name.startswith(".")
+    discovery_environment = os.environ.copy()
+    discovery_environment["UV_PYTHON_INSTALL_DIR"] = str(install_root)
+    discovered = run(
+        [
+            uv,
+            "--no-config",
+            "python",
+            "find",
+            PYTHON_VERSION,
+            "--managed-python",
+            "--no-python-downloads",
+            "--no-project",
+            "--resolve-links",
+        ],
+        environment=discovery_environment,
+        capture=True,
     )
-    if len(installations) != 1:
-        message = "uv did not produce exactly one managed CPython installation"
+    if not discovered:
+        message = "uv did not find the managed CPython installation it just installed"
         raise ValueError(message)
-    installed_prefix = installations[0]
+    discovered_python = Path(discovered).resolve()
+    installed_prefix = (
+        discovered_python.parent if os.name == "nt" else discovered_python.parent.parent
+    )
+    if installed_prefix.parent.resolve() != install_root.resolve():
+        message = "uv found managed CPython outside the isolated installation root"
+        raise ValueError(message)
+    if python_executable(installed_prefix).resolve() != discovered_python:
+        message = "uv found an unsupported managed CPython executable layout"
+        raise ValueError(message)
     shutil.copytree(installed_prefix, output, symlinks=True)
     normalize_python_sysconfig(output, installed_prefix)
     executable = python_executable(output)

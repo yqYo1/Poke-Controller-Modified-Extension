@@ -4,15 +4,22 @@ import os
 import shlex
 import zipfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+import scripts.build_release_runtime as release_runtime
 from scripts.build_release_runtime import (
     PORTABLE_BUILD_PREFIX,
+    install_python,
     normalize_python_sysconfig,
     normalize_wheel,
+    python_executable,
     wheel_build_environment,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 def test_normalize_python_sysconfig_replaces_temporary_prefix(tmp_path: Path) -> None:
@@ -43,6 +50,62 @@ def test_normalize_python_sysconfig_rejects_unrelated_prefix(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="does not contain its install prefix"):
         normalize_python_sysconfig(runtime, tmp_path / "temporary/python-install")
+
+
+def test_install_python_discovers_the_requested_uv_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output = tmp_path / "runtime"
+    commands: list[list[str]] = []
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        command = [str(argument) for argument in arguments]
+        commands.append(command)
+        if "install" in command:
+            install_root = Path(command[command.index("--install-dir") + 1])
+            installed = install_root / "cpython-fixture"
+            executable = (
+                installed / "python.exe"
+                if os.name == "nt"
+                else installed / "bin/python3.14"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"fixture")
+            (install_root / "unrelated-layout").mkdir()
+            return ""
+        assert capture
+        assert environment is not None
+        install_root = Path(environment["UV_PYTHON_INSTALL_DIR"])
+        executable = (
+            install_root / "cpython-fixture/python.exe"
+            if os.name == "nt"
+            else install_root / "cpython-fixture/bin/python3.14"
+        )
+        return str(executable)
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+
+    def ignore_normalize(_root: Path, _prefix: Path) -> None:
+        return
+
+    def ignore_verify(_python: Path, _root: Path) -> None:
+        return
+
+    monkeypatch.setattr(release_runtime, "normalize_python_sysconfig", ignore_normalize)
+    monkeypatch.setattr(release_runtime, "verify_python", ignore_verify)
+
+    installed = install_python(Path("uv"), output, workspace)
+
+    assert installed == python_executable(output)
+    assert any("find" in command for command in commands)
+    assert not (output / "unrelated-layout").exists()
 
 
 def test_wheel_build_environment_maps_the_portable_python_prefix(
@@ -107,4 +170,4 @@ def test_nix_release_task_declares_native_build_paths() -> None:
 
     assert 'CFLAGS="-I${pkgs.portaudio}/include' in flake
     assert 'LDFLAGS="-L${pkgs.portaudio}/lib' in flake
-    assert 'NIX_LDFLAGS="-L$release_python/lib' in flake
+    assert 'RUSTFLAGS="-Lnative=$release_python/lib' in flake

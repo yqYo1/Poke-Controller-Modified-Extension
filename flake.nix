@@ -602,7 +602,7 @@
                   --strip "${pkgs.binutils}/bin/strip" \
                   --runtime-library-path "${pkgs.portaudio}/lib"
                 export PYO3_PYTHON="$release_python/bin/python3.14"
-                export NIX_LDFLAGS="-L$release_python/lib''${NIX_LDFLAGS:+ $NIX_LDFLAGS}"
+                export RUSTFLAGS="-Lnative=$release_python/lib''${RUSTFLAGS:+ $RUSTFLAGS}"
                 export POKECON_BUILD_UV_PATH="${portableUvBinary}"
                 export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
                 unset POKECON_BUILD_PYTHON

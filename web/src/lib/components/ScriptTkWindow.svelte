@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ScriptUiAction } from '../actions';
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
 
   type TkWindow = components['schemas']['ScriptTkWindow'];
 

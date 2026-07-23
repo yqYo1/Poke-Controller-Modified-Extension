@@ -1,5 +1,5 @@
 import type { SettingsWriteValues } from './api';
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 import {
   InputManager,
   type InputRoute,

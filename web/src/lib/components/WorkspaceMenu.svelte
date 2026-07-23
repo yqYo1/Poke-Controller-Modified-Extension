@@ -15,7 +15,7 @@
     openNativeConfigDirectory
   } from '../desktop';
   import { triggerDownload } from '../download';
-  import openapi from '../generated/openapi.json';
+  import openapi from '../api/openapi.json';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   type DownloadLauncherRequest = GenerateLauncherRequest & {

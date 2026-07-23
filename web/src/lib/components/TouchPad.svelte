@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
 
   type TouchPoint = components['schemas']['TouchPoint'];
 

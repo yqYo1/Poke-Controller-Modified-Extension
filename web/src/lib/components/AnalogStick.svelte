@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
 
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
 
   type StickName = components['schemas']['StickName'];
   type StickPosition = components['schemas']['StickPosition'];

@@ -3,7 +3,10 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pokecon_contracts::{commands_python_typings, dynamic_lua_typings, dynamic_python_typings};
+use pokecon_contracts::{
+    commands_python_typings, dynamic_lua_typings, dynamic_python_typings, settings_json_schema,
+    settings_registry, settings_ui_metadata,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let check = match std::env::args().skip(1).collect::<Vec<_>>().as_slice() {
@@ -25,7 +28,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
+    let settings = settings_registry()?;
     let mut outputs = vec![
+        (
+            PathBuf::from("generated/settings.schema.json"),
+            pretty_json(&settings_json_schema(settings.registry()))?,
+        ),
+        (
+            PathBuf::from("generated/settings-ui.json"),
+            pretty_json(&settings_ui_metadata(settings.registry()))?,
+        ),
         (
             PathBuf::from("python/pokecon/typings/__init__.pyi"),
             dynamic_python_typings()?,
@@ -52,6 +64,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+fn pretty_json(value: &serde_json::Value) -> Result<String, serde_json::Error> {
+    let mut output = serde_json::to_string_pretty(value)?;
+    output.push('\n');
+    Ok(output)
 }
 
 fn check_output(path: &Path, expected: &str) -> Result<(), io::Error> {

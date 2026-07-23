@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
 
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
   import AnalogStick from './AnalogStick.svelte';
   import TouchPad from './TouchPad.svelte';

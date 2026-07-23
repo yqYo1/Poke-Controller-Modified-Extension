@@ -1,6 +1,6 @@
-import openApiDocument from './generated/openapi.json';
+import openApiDocument from './api/openapi.json';
 
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 
 export type ClientMessage = components['schemas']['ClientMessage'];
 export type ServerMessage = components['schemas']['ServerMessage'];

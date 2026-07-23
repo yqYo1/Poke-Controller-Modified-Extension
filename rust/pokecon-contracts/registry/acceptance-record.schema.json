@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecon.invalid/schemas/acceptance-record.schema.json",
+  "title": "PokeCon external acceptance record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "specification_version",
+    "source_commit",
+    "capability",
+    "platform",
+    "started_at",
+    "completed_at",
+    "operator",
+    "environment",
+    "requirement_ids",
+    "steps",
+    "measurements",
+    "result",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "specification_version": {
+      "const": "2.2.0"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "capability": {
+      "enum": [
+        "mcu_serial_device_and_target_console",
+        "capture_device_with_known_frame_fixture",
+        "audio_input_device",
+        "credentialed_network_notification_endpoints",
+        "browser_matrix",
+        "performance",
+        "desktop_lifecycle"
+      ]
+    },
+    "platform": {
+      "enum": ["linux", "windows"]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "operator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_name",
+        "os_version",
+        "app_mode",
+        "build_identity",
+        "device_inventory"
+      ],
+      "properties": {
+        "os_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_mode": {
+          "enum": ["web", "desktop", "headless"]
+        },
+        "build_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "device_inventory": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "client_os"],
+          "properties": {
+            "name": {
+              "enum": ["chrome", "edge", "firefox", "safari"]
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "client_os": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^§[0-9]"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "result", "evidence"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "result": {
+            "enum": ["passed", "failed", "not_applicable"]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "unit", "sample_count", "p50", "p95", "maximum"],
+        "properties": {
+          "metric": {
+            "enum": [
+              "webrtc_video_latency",
+              "mjpeg_video_latency",
+              "controller_input_latency",
+              "ui_frame_rate",
+              "ui_input_latency"
+            ]
+          },
+          "unit": {
+            "enum": ["ms", "fps"]
+          },
+          "sample_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "p50": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p95": {
+            "type": "number",
+            "minimum": 0
+          },
+          "maximum": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "result": {
+      "enum": ["passed", "failed"]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "diagnostic_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "enum": ["browser_matrix", "performance"]
+          }
+        },
+        "required": ["capability"]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "required": ["browser"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "const": "performance"
+          }
+        },
+        "required": ["capability"]
+      },
+      "else": {
+        "properties": {
+          "measurements": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["result"]
+      },
+      "then": {
+        "properties": {
+          "source_commit": {
+            "not": {
+              "const": "0000000000000000000000000000000000000000"
+            }
+          },
+          "operator": {
+            "not": {
+              "const": "example-only-not-acceptance-evidence"
+            }
+          },
+          "environment": {
+            "properties": {
+              "build_identity": {
+                "not": {
+                  "const": "example-only"
+                }
+              },
+              "artifact_sha256": {
+                "not": {
+                  "const": "0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              }
+            }
+          },
+          "steps": {
+            "items": {
+              "properties": {
+                "result": {
+                  "const": "passed"
+                },
+                "evidence": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "const": "performance"
+          },
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["capability", "result"]
+      },
+      "then": {
+        "properties": {
+          "measurements": {
+            "minItems": 5,
+            "maxItems": 5,
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "webrtc_video_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 100
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "mjpeg_video_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "maximum": 150
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "controller_input_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 50
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "ui_frame_rate"
+                    },
+                    "unit": {
+                      "const": "fps"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p50": {
+                      "minimum": 60
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p50"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "ui_input_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 16
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

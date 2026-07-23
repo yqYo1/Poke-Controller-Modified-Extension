@@ -1,4 +1,4 @@
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 import { validateWireValue, type SettingsSnapshot, type StateSnapshot } from './wire';
 
 type SettingsReadValues = components['schemas']['SettingsReadValues'];

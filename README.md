@@ -62,6 +62,8 @@ nix build .#pokecon-server
 
 Package CIはUbuntu 24.04へのクリーンインストール、完全オフラインのmanaged worker起動、upgrade／uninstall時のユーザーデータ保持、Linux成果物の2回buildによるバイト単位の再現性、Windows NSISのsilent install／startup／upgrade／uninstallを検証します。
 
+実機、実ブラウザ、性能、デスクトップライフサイクルは[外部受入ゲート](docs/ACCEPTANCE.md)の手順でrelease candidateごとに検証し、閉じたJSON記録を`nix run .#acceptance-record-check`で検査します。未実施のgateやexample recordは合格証拠として扱いません。
+
 ## 構成
 
 ```text

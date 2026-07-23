@@ -1,4 +1,4 @@
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 import type { RealtimeClient } from './realtime';
 import { incrementRevision, type DecimalString } from './revision';
 import type { ClientMessage, ServerMessage } from './wire';

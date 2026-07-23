@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['.svelte-kit/**', 'build/**', 'dist/**', 'node_modules/**', 'src/lib/generated/**']
+    ignores: [
+      '.svelte-kit/**',
+      'build/**',
+      'dist/**',
+      'node_modules/**',
+      'src/lib/api/openapi.ts'
+    ]
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

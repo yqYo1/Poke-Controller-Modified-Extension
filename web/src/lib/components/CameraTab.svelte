@@ -13,7 +13,7 @@
   import type { SettingsWriteValues } from '../api';
   import { chooseNativeSavePath, isDesktopShell } from '../desktop';
   import { triggerDownload } from '../download';
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
   import CameraViewport from './CameraViewport.svelte';
 

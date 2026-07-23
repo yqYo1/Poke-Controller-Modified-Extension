@@ -22,15 +22,23 @@
     {
       "name": "openapi",
       "sources": ["settings.json", "protocol.json", "Rust server schema types"],
-      "output": "target/openapi.json",
-      "generate_command": "nix run .#build-rust",
-      "tracked": false,
+      "output": "api/openapi.json",
+      "generate_command": "nix run .#generate-api-types",
+      "tracked": true,
       "phase": 10
     },
     {
       "name": "typescript_api",
-      "sources": ["target/openapi.json"],
+      "sources": ["api/openapi.json"],
       "output": "web/src/lib/api/openapi.ts",
+      "generate_command": "nix run .#generate-api-types",
+      "tracked": true,
+      "phase": 10
+    },
+    {
+      "name": "web_openapi_schema",
+      "sources": ["api/openapi.json"],
+      "output": "web/src/lib/api/openapi.json",
       "generate_command": "nix run .#generate-api-types",
       "tracked": true,
       "phase": 10

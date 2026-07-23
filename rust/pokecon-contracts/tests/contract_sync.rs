@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use pokecon_contracts::model::{Access, Mutability, Scope, Setting};
 use pokecon_contracts::{
@@ -324,24 +325,7 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
         assert!(string_at(artifact, "generate_command").starts_with("nix "));
         assert!(artifact["tracked"].is_boolean());
     }
-    assert_eq!(
-        artifact_for_name(artifacts, "typescript_api")["output"],
-        "web/src/lib/api/openapi.ts"
-    );
-    assert!(SPECIFICATION.contains("src/lib/api/openapi.ts"));
-    assert_eq!(
-        artifact_for_name(artifacts, "dynamic_python_typings")["output"],
-        "python/pokecon/typings/__init__.pyi"
-    );
-    assert_eq!(
-        artifact_for_name(artifacts, "commands_python_typings")["output"],
-        "python/pokecon/typings/commands.pyi"
-    );
-    assert_eq!(
-        artifact_for_name(artifacts, "commands_python_package_typings")["output"],
-        "python/pokecon/typings/Commands/"
-    );
-    assert_eq!(artifact_for_name(artifacts, "openapi")["tracked"], false);
+    assert_generated_artifact_contracts(artifacts);
 
     let ci = parse_json(CI_REGISTRY_JSON);
     let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
@@ -366,6 +350,70 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
                 .as_u64()
                 .is_some_and(|phase| (1..=15).contains(&phase))
         );
+    }
+}
+
+fn assert_generated_artifact_contracts(artifacts: &[Value]) {
+    assert_eq!(
+        artifact_for_name(artifacts, "typescript_api")["output"],
+        "web/src/lib/api/openapi.ts"
+    );
+    assert!(SPECIFICATION.contains("src/lib/api/openapi.ts"));
+    assert_eq!(
+        artifact_for_name(artifacts, "dynamic_python_typings")["output"],
+        "python/pokecon/typings/__init__.pyi"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "commands_python_typings")["output"],
+        "python/pokecon/typings/commands.pyi"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "commands_python_package_typings")["output"],
+        "python/pokecon/typings/Commands/"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "settings_json_schema")["output"],
+        "generated/settings.schema.json"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "settings_ui_metadata")["output"],
+        "generated/settings-ui.json"
+    );
+    assert_eq!(
+        artifact_for_name(artifacts, "openapi")["output"],
+        "api/openapi.json"
+    );
+    assert_eq!(artifact_for_name(artifacts, "openapi")["tracked"], true);
+    assert_eq!(
+        artifact_for_name(artifacts, "web_openapi_schema")["output"],
+        "web/src/lib/api/openapi.json"
+    );
+
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("contracts crate must be nested under the repository root");
+    for artifact in artifacts
+        .iter()
+        .filter(|artifact| artifact["tracked"] == true)
+    {
+        let output = string_at(artifact, "output");
+        let path = repository.join(output.trim_end_matches('/'));
+        if output.ends_with('/') {
+            assert!(
+                path.is_dir(),
+                "tracked output directory is missing: {output}"
+            );
+            assert!(
+                path.read_dir()
+                    .expect("tracked output directory must be readable")
+                    .next()
+                    .is_some(),
+                "tracked output directory is empty: {output}"
+            );
+        } else {
+            assert!(path.is_file(), "tracked output file is missing: {output}");
+        }
     }
 }
 
@@ -398,6 +446,15 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
                 .is_some_and(|patterns| !patterns.is_empty())
         );
     }
+    let hardware = categories
+        .iter()
+        .find(|category| category["id"] == "hardware")
+        .expect("hardware category must exist");
+    assert_eq!(
+        hardware["record_schema"],
+        "rust/pokecon-contracts/registry/acceptance-record.schema.json"
+    );
+    assert_eq!(hardware["procedure"], "docs/ACCEPTANCE.md");
     assert_eq!(
         foundation["fixture_naming"]["segment_regex"],
         "^[a-z][a-z0-9_]*$"
@@ -420,6 +477,7 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
         "legacy_typescript_output",
         "legacy_release_crates",
         "generated_contracts",
+        "external_acceptance",
     ] {
         assert!(
             ids.contains(expected),

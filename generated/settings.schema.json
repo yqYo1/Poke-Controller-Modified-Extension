@@ -1,0 +1,4288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Closed flat object keyed by canonical setting ID.",
+  "properties": {
+    "active_profile": {
+      "default": "default",
+      "format": "profile_name",
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "default"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.3",
+          "§11.4.2",
+          "§11.5.6.4.4"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--profile",
+              "-p"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.active_profile",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PROFILE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "profiles.active_profile",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "profile_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "app_name": {
+      "default": "pokecon",
+      "format": "app_name",
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "pokecon"
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.3",
+          "§11.4.2",
+          "§14.1.1"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--app-name"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_APPNAME"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": null,
+            "unsupported_reason": "bootstrap selector would create a cyclic path dependency"
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "auto_reload_config": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--auto-reload-config"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.auto_reload_config",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_AUTO_RELOAD_CONFIG"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "global.auto_reload_config",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "camera.capture_fps": {
+      "default": 60,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 60
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--camera-capture-fps"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.capture_fps",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_CAMERA_CAPTURE_FPS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "camera.capture_fps",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "number_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "camera.capture_resolution": {
+      "default": "1280x720",
+      "enum": [
+        "640x360",
+        "1280x720",
+        "1920x1080"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "1280x720"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--camera-capture-resolution"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.capture_resolution",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_CAMERA_CAPTURE_RESOLUTION"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "camera.capture_resolution",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "resolution_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "camera.device": {
+      "default": 0,
+      "oneOf": [
+        {
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "format": "non_empty_no_nul",
+          "minLength": 1,
+          "type": "string"
+        }
+      ],
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 0
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--camera-device"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.device",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_CAMERA_DEVICE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "camera.device",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "camera_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "camera.flip_mode": {
+      "default": "none",
+      "enum": [
+        "none",
+        "vertical",
+        "horizontal",
+        "both"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "none"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--camera-flip-mode"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.flip_mode",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_CAMERA_FLIP_MODE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "camera.flip_mode",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "flip_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "camera.screenshot_format": {
+      "default": "png",
+      "enum": [
+        "png",
+        "jpeg"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "png"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--camera-screenshot-format"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.camera.screenshot_format",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_CAMERA_SCREENSHOT_FORMAT"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "camera.screenshot_format",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "format_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "commands.tag_match_mode": {
+      "default": "exact",
+      "enum": [
+        "exact",
+        "partial",
+        "prefix",
+        "suffix"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "exact"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--commands-tag-match-mode"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.commands.tag_match_mode",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_COMMANDS_TAG_MATCH_MODE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "commands.tag_match_mode",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "tag_match_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "dynamic.callback_hard_timeout_ms": {
+      "default": 5000,
+      "format": "int64",
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 5000
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-callback-hard-timeout-ms"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.dynamic.callback_hard_timeout_ms",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CALLBACK_HARD_TIMEOUT_MS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "dynamic.callback_hard_timeout_ms",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced callback policy"
+          }
+        }
+      }
+    },
+    "dynamic.callback_max_concurrency": {
+      "default": 8,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 8
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-callback-max-concurrency"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.dynamic.callback_max_concurrency",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CALLBACK_MAX_CONCURRENCY"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "dynamic.callback_max_concurrency",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced callback policy"
+          }
+        }
+      }
+    },
+    "dynamic.callback_queue_capacity": {
+      "default": 1024,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 1024
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-callback-queue-capacity"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.dynamic.callback_queue_capacity",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CALLBACK_QUEUE_CAPACITY"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "dynamic.callback_queue_capacity",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced callback policy"
+          }
+        }
+      }
+    },
+    "dynamic.callback_soft_timeout_grace_ms": {
+      "default": 1000,
+      "format": "int64",
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 1000
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-callback-soft-timeout-grace-ms"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.dynamic.callback_soft_timeout_grace_ms",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CALLBACK_SOFT_TIMEOUT_GRACE_MS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "dynamic.callback_soft_timeout_grace_ms",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced callback policy"
+          }
+        }
+      }
+    },
+    "dynamic.callback_soft_timeout_ms": {
+      "default": 2000,
+      "format": "int64",
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 2000
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-callback-soft-timeout-ms"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.dynamic.callback_soft_timeout_ms",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CALLBACK_SOFT_TIMEOUT_MS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "dynamic.callback_soft_timeout_ms",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced callback policy"
+          }
+        }
+      }
+    },
+    "dynamic_config_language": {
+      "default": "lua",
+      "enum": [
+        "python",
+        "lua",
+        "none"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "lua"
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--dynamic-config-language"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DYNAMIC_CONFIG_LANGUAGE"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "global.dynamic_config_language",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "input.keyboard_enabled": {
+      "default": true,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--input-keyboard-enabled"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.input.keyboard_enabled",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_INPUT_KEYBOARD_ENABLED"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "input.keyboard_enabled",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "input.left_stick_mouse_enabled": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--input-left-stick-mouse-enabled"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.input.left_stick_mouse_enabled",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_INPUT_LEFT_STICK_MOUSE_ENABLED"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "input.left_stick_mouse_enabled",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "input.right_stick_mouse_enabled": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--input-right-stick-mouse-enabled"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.input.right_stick_mouse_enabled",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_INPUT_RIGHT_STICK_MOUSE_ENABLED"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "input.right_stick_mouse_enabled",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "input.touchscreen_area": {
+      "additionalProperties": false,
+      "default": {
+        "bottom": 1.0,
+        "left": 0.0,
+        "right": 1.0,
+        "top": 0.0
+      },
+      "properties": {
+        "bottom": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "left": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "right": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "top": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "bottom",
+        "left",
+        "right",
+        "top"
+      ],
+      "type": "object",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": {
+            "bottom": 1.0,
+            "left": 0.0,
+            "right": 1.0,
+            "top": 0.0
+          }
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "strict_json",
+            "flags": [
+              "--input-touchscreen-area"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.input.touchscreen_area",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "strict_json",
+            "name": "POKECON_INPUT_TOUCHSCREEN_AREA"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "input.touchscreen_area",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "camera_canvas_rectangle",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "jpeg_quality": {
+      "default": 85,
+      "format": "int64",
+      "maximum": 100,
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 85
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--jpeg-quality"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.jpeg_quality",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_JPEG_QUALITY"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "video.fallback.jpeg_quality",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced codec setting"
+          }
+        }
+      }
+    },
+    "language": {
+      "default": "ja",
+      "enum": [
+        "ja",
+        "en"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "ja"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--language"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.language",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_LANGUAGE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "global.language",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "language_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.discord.avatar_url": {
+      "default": "",
+      "format": "http_url_or_empty",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-discord-avatar-url"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.discord.avatar_url",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_DISCORD_AVATAR_URL"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.discord_avatar_url",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "url_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.discord.on_script_end": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-discord-on-script-end"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.discord.on_script_end",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_DISCORD_ON_SCRIPT_END"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.discord_on_script_end",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.discord.on_script_start": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-discord-on-script-start"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.discord.on_script_start",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_DISCORD_ON_SCRIPT_START"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.discord_on_script_start",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.discord.username": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-discord-username"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.discord.username",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_DISCORD_USERNAME"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.discord_username",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "text_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.discord.webhook_url": {
+      "default": "",
+      "format": "discord_webhook_or_empty",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": true,
+        "spec_refs": [
+          "§6.5.2",
+          "§11.4.2",
+          "§11.4.3"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": true,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-discord-webhook-url"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.discord.webhook_url",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": true,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.discord_webhook_url",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "secret_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.line_menu_behavior": {
+      "default": "message",
+      "enum": [
+        "message",
+        "noop"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "message"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-line-menu-behavior"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.line_menu_behavior",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_LINE_MENU_BEHAVIOR"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.line_menu_behavior",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "LINE UI was removed"
+          }
+        }
+      }
+    },
+    "notifications.windows.on_script_end": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-windows-on-script-end"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.windows.on_script_end",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_END"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.windows.on_script_end",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "notifications.windows.on_script_start": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--notifications-windows-on-script-start"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.notifications.windows.on_script_start",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_NOTIFICATIONS_WINDOWS_ON_SCRIPT_START"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "notifications.windows.on_script_start",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "python.dynamic.packages.list": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "extras": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": false,
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": []
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "strict_json",
+            "flags": [
+              "--python-dynamic-packages-list"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "strict_json",
+            "name": "POKECON_PYTHON_DYNAMIC_PACKAGES_LIST"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.packages.list",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.dynamic.packages.override_application_constraints": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-dynamic-packages-override-application-constraints"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.packages.override_application_constraints",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.dynamic.packages.override_package_metadata_constraints": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-dynamic-packages-override-package-metadata-constraints"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_DYNAMIC_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.packages.override_package_metadata_constraints",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.dynamic.packages.revalidate_mutable_sources": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-dynamic-packages-revalidate-mutable-sources"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_DYNAMIC_PACKAGES_REVALIDATE_MUTABLE_SOURCES"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.packages.revalidate_mutable_sources",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.dynamic.packages.uv_config": {
+      "default": null,
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ],
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": null
+        },
+        "mutability": "startup_only",
+        "path": {
+          "auto_create": false,
+          "expected_type": "file",
+          "must_exist": true,
+          "policy": "file",
+          "resolve_symlink": true
+        },
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-dynamic-packages-uv-config"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_DYNAMIC_PACKAGES_UV_CONFIG"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.packages.uv_config",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.dynamic.venv": {
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "data_path",
+          "relative": "venv-dynamic"
+        },
+        "mutability": "startup_only",
+        "path": {
+          "auto_create": true,
+          "expected_type": "directory",
+          "must_exist": false,
+          "policy": "directory",
+          "resolve_symlink": true
+        },
+        "scope": "bootstrap",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-dynamic-venv"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_DYNAMIC_VENV"
+          },
+          "openapi": {
+            "access": "none",
+            "masked_read": false,
+            "unsupported_reason": "bootstrap-only"
+          },
+          "toml": {
+            "name": "python.dynamic.venv",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "bootstrap-only"
+          }
+        }
+      }
+    },
+    "python.script.packages.list": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "extras": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": false,
+      "x-pokecon": {
+        "apply_trigger": "next_package_resolution_or_worker_generation",
+        "default": {
+          "kind": "literal",
+          "value": []
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "strict_json",
+            "flags": [
+              "--python-script-packages-list"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.packages.list",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "strict_json",
+            "name": "POKECON_PYTHON_SCRIPT_PACKAGES_LIST"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.packages.list",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "python.script.packages.override_application_constraints": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": "next_package_resolution_or_worker_generation",
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-packages-override-application-constraints"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.packages.override_application_constraints",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_PACKAGES_OVERRIDE_APPLICATION_CONSTRAINTS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.packages.override_application_constraints",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "python.script.packages.override_package_metadata_constraints": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": "next_package_resolution_or_worker_generation",
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-packages-override-package-metadata-constraints"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.packages.override_package_metadata_constraints",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_PACKAGES_OVERRIDE_PACKAGE_METADATA_CONSTRAINTS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.packages.override_package_metadata_constraints",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "python.script.packages.revalidate_mutable_sources": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": "next_package_resolution_or_worker_generation",
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-packages-revalidate-mutable-sources"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.packages.revalidate_mutable_sources",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_PACKAGES_REVALIDATE_MUTABLE_SOURCES"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.packages.revalidate_mutable_sources",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "python.script.packages.uv_config": {
+      "default": null,
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "minLength": 1,
+          "type": "string"
+        }
+      ],
+      "x-pokecon": {
+        "apply_trigger": "next_package_resolution_or_worker_generation",
+        "default": {
+          "kind": "literal",
+          "value": null
+        },
+        "mutability": "runtime_deferred",
+        "path": {
+          "auto_create": false,
+          "expected_type": "file",
+          "must_exist": true,
+          "policy": "file",
+          "resolve_symlink": true
+        },
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-packages-uv-config"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.packages.uv_config",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_PACKAGES_UV_CONFIG"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.packages.uv_config",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "python.script.shutdown_timeout_ms": {
+      "default": 2000,
+      "format": "int64",
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 2000
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-shutdown-timeout-ms"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.shutdown_timeout_ms",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_SHUTDOWN_TIMEOUT_MS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.shutdown_timeout_ms",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker lifecycle"
+          }
+        }
+      }
+    },
+    "python.script.venv": {
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": "next_user_worker_generation",
+        "default": {
+          "kind": "data_path",
+          "relative": "venv-script"
+        },
+        "mutability": "runtime_deferred",
+        "path": {
+          "auto_create": true,
+          "expected_type": "directory",
+          "must_exist": false,
+          "policy": "directory",
+          "resolve_symlink": true
+        },
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--python-script-venv"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.python.script.venv",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PYTHON_SCRIPT_VENV"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "python.script.venv",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "advanced worker environment"
+          }
+        }
+      }
+    },
+    "report_ignored_profile_global_settings": {
+      "default": true,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--report-ignored-profile-global-settings"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.config.report_ignored_profile_global_settings",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_REPORT_IGNORED_PROFILE_GLOBAL_SETTINGS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "config.report_ignored_profile_global_settings",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "diagnostic-only"
+          }
+        }
+      }
+    },
+    "serial.baud_rate": {
+      "default": 9600,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 9600
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--serial-baud-rate"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.serial.baud_rate",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SERIAL_BAUD_RATE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "serial.serial_baudrate",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "number_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "serial.data_format": {
+      "default": "default",
+      "enum": [
+        "default",
+        "qingpi",
+        "3ds"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "default"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--serial-data-format"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.serial.data_format",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SERIAL_DATA_FORMAT"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "serial.serial_data_format",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "data_format_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "serial.port": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--serial-port"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.serial.port",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SERIAL_PORT"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "serial.serial_port",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "serial_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "server.bind_address": {
+      "default": "127.0.0.1",
+      "format": "ip_literal_non_wildcard",
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "127.0.0.1"
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--bind-address"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_BIND_ADDRESS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "server.bind_address",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "ip_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "server.port": {
+      "default": 8020,
+      "format": "int64",
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 8020
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--port"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_PORT"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "server.port",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "number_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "server.web_dir": {
+      "minLength": 1,
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "resource_path",
+          "relative": "web/dist"
+        },
+        "mutability": "startup_only",
+        "path": {
+          "auto_create": false,
+          "expected_type": "directory",
+          "must_exist": true,
+          "policy": "directory",
+          "resolve_symlink": true
+        },
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--web-dir"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEB_DIR"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "server.web_dir",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "directory_picker",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_1": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-1"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_1",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_1"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_1",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_10": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-10"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_10",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_10"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_10",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_2": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-2"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_2",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_2"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_2",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_3": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-3"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_3",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_3"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_3",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_4": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-4"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_4",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_4"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_4",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_5": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-5"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_5",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_5"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_5",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_6": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-6"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_6",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_6"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_6",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_7": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-7"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_7",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_7"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_7",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_8": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-8"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_8",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_8"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_8",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "shortcuts.button_9": {
+      "default": "",
+      "format": "free",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§6.4.2",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--shortcuts-button-9"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.shortcuts.button_9",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_SHORTCUTS_BUTTON_9"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "shortcuts.button_9",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "command_selector",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "stun_server": {
+      "default": "",
+      "format": "stun_uri_or_empty",
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": "next_webrtc_connection_or_reconnect",
+        "default": {
+          "kind": "literal",
+          "value": ""
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--stun-server"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.stun_server",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_STUN_SERVER"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "webrtc.stun_server",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "stun_uri_input",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.camera.guide_visible": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-camera-guide-visible"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.camera.guide_visible",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_CAMERA_GUIDE_VISIBLE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.camera.guide_visible",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.camera.live_view_enabled": {
+      "default": true,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-camera-live-view-enabled"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.camera.live_view_enabled",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_CAMERA_LIVE_VIEW_ENABLED"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.camera.live_view_enabled",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.camera.pixel_values_visible": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-camera-pixel-values-visible"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.camera.pixel_values_visible",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_CAMERA_PIXEL_VALUES_VISIBLE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.camera.pixel_values_visible",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.controller_position": {
+      "default": "top",
+      "enum": [
+        "top",
+        "bottom"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "top"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-controller-position"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.controller_position",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_CONTROLLER_POSITION"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.controller_position",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "radio_group",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.desktop.close_behavior": {
+      "default": "ask",
+      "enum": [
+        "ask",
+        "shutdown",
+        "keep_backend"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "ask"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-desktop-close-behavior"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.desktop.close_behavior",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_DESKTOP_CLOSE_BEHAVIOR"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.desktop.close_behavior",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "close_behavior_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.desktop.disable_compositing": {
+      "default": false,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": false
+        },
+        "mutability": "startup_only",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--disable-compositing"
+            ]
+          },
+          "dynamic": {
+            "name": null,
+            "unsupported_reason": "startup/bootstrap state cannot be safely changed dynamically"
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_DISABLE_COMPOSITING"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.desktop.disable_compositing",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.dialog_button_position": {
+      "default": "bottom",
+      "enum": [
+        "bottom",
+        "top",
+        "both"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "bottom"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-dialog-button-position"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.dialog_button_position",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_DIALOG_BUTTON_POSITION"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.dialog_button_position",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "radio_group",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.fps": {
+      "default": 30,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 30
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-fps"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.fps",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_FPS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.ui_fps",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "fps_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.fps_options": {
+      "default": [
+        5,
+        15,
+        30,
+        60
+      ],
+      "items": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true,
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": [
+            5,
+            15,
+            30,
+            60
+          ]
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "strict_json",
+            "flags": [
+              "--ui-fps-options"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.fps_options",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "strict_json",
+            "name": "POKECON_UI_FPS_OPTIONS"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.ui_fps_options",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "provides values for the FPS selector"
+          }
+        }
+      }
+    },
+    "ui.output_split_ratio": {
+      "default": 20,
+      "format": "int64",
+      "maximum": 100,
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 20
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-output-split-ratio"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.output_split_ratio",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_OUTPUT_SPLIT_RATIO"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.output_split_ratio",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "range",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.stdout_destination": {
+      "default": "output_1",
+      "enum": [
+        "output_1",
+        "output_2"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "output_1"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-stdout-destination"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.stdout_destination",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_STDOUT_DESTINATION"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.stdout_destination",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "radio_group",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "ui.widget_mode": {
+      "default": "all",
+      "enum": [
+        "all",
+        "outputs",
+        "output_1_controller",
+        "output_2_controller",
+        "output_1",
+        "output_2",
+        "controller"
+      ],
+      "type": "string",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": "all"
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--ui-widget-mode"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.ui.widget_mode",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_UI_WIDGET_MODE"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "ui.widget_mode",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "widget_mode_select",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
+    "webrtc.auto_recover": {
+      "default": true,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--webrtc-auto-recover"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.webrtc.auto_recover",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBRTC_AUTO_RECOVER"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "webrtc.auto_recover",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    },
+    "webrtc.recovery_probe_interval_sec": {
+      "default": 30,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 30
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--webrtc-recovery-probe-interval-sec"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.webrtc.recovery_probe_interval_sec",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBRTC_RECOVERY_PROBE_INTERVAL_SEC"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "webrtc.recovery_probe_interval_sec",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    },
+    "websocket.ping_interval_sec": {
+      "default": 15,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 15
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--websocket-ping-interval-sec"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.websocket.ping_interval_sec",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBSOCKET_PING_INTERVAL_SEC"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "websocket.ping_interval_sec",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    },
+    "websocket.pong_timeout_sec": {
+      "default": 10,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": 10
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--websocket-pong-timeout-sec"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.websocket.pong_timeout_sec",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBSOCKET_PONG_TIMEOUT_SEC"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "websocket.pong_timeout_sec",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    },
+    "websocket.reconnect_interval_sec": {
+      "default": 3,
+      "format": "int64",
+      "minimum": 1,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": "next_reconnect_attempt",
+        "default": {
+          "kind": "literal",
+          "value": 3
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--websocket-reconnect-interval-sec"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.websocket.reconnect_interval_sec",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBSOCKET_RECONNECT_INTERVAL_SEC"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "websocket.reconnect_interval_sec",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    },
+    "websocket.reconnect_max_retries": {
+      "default": 20,
+      "format": "int64",
+      "minimum": 0,
+      "type": "integer",
+      "x-pokecon": {
+        "apply_trigger": "next_reconnect_attempt",
+        "default": {
+          "kind": "literal",
+          "value": 20
+        },
+        "mutability": "runtime_deferred",
+        "path": null,
+        "scope": "global",
+        "secret": false,
+        "spec_refs": [
+          "§11.4.1.1",
+          "§11.4.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--websocket-reconnect-max-retries"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.websocket.reconnect_max_retries",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_WEBSOCKET_RECONNECT_MAX_RETRIES"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "websocket.reconnect_max_retries",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "none",
+            "control": null,
+            "unsupported_reason": "transport policy"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "language",
+    "auto_reload_config",
+    "dynamic_config_language",
+    "dynamic.callback_soft_timeout_ms",
+    "dynamic.callback_soft_timeout_grace_ms",
+    "dynamic.callback_hard_timeout_ms",
+    "dynamic.callback_max_concurrency",
+    "dynamic.callback_queue_capacity",
+    "report_ignored_profile_global_settings",
+    "active_profile",
+    "app_name",
+    "camera.capture_fps",
+    "camera.capture_resolution",
+    "camera.device",
+    "camera.flip_mode",
+    "camera.screenshot_format",
+    "serial.port",
+    "serial.baud_rate",
+    "serial.data_format",
+    "input.keyboard_enabled",
+    "input.left_stick_mouse_enabled",
+    "input.right_stick_mouse_enabled",
+    "input.touchscreen_area",
+    "notifications.line_menu_behavior",
+    "notifications.discord.webhook_url",
+    "notifications.discord.username",
+    "notifications.discord.avatar_url",
+    "notifications.discord.on_script_start",
+    "notifications.discord.on_script_end",
+    "notifications.windows.on_script_start",
+    "notifications.windows.on_script_end",
+    "websocket.reconnect_interval_sec",
+    "websocket.reconnect_max_retries",
+    "websocket.ping_interval_sec",
+    "websocket.pong_timeout_sec",
+    "webrtc.auto_recover",
+    "webrtc.recovery_probe_interval_sec",
+    "stun_server",
+    "jpeg_quality",
+    "server.web_dir",
+    "server.port",
+    "server.bind_address",
+    "ui.fps_options",
+    "ui.fps",
+    "ui.widget_mode",
+    "ui.output_split_ratio",
+    "ui.stdout_destination",
+    "ui.controller_position",
+    "ui.dialog_button_position",
+    "ui.camera.live_view_enabled",
+    "ui.camera.pixel_values_visible",
+    "ui.camera.guide_visible",
+    "ui.desktop.close_behavior",
+    "ui.desktop.disable_compositing",
+    "shortcuts.button_1",
+    "shortcuts.button_2",
+    "shortcuts.button_3",
+    "shortcuts.button_4",
+    "shortcuts.button_5",
+    "shortcuts.button_6",
+    "shortcuts.button_7",
+    "shortcuts.button_8",
+    "shortcuts.button_9",
+    "shortcuts.button_10",
+    "commands.tag_match_mode",
+    "python.script.venv",
+    "python.script.shutdown_timeout_ms",
+    "python.script.packages.list",
+    "python.script.packages.override_application_constraints",
+    "python.script.packages.override_package_metadata_constraints",
+    "python.script.packages.uv_config",
+    "python.script.packages.revalidate_mutable_sources",
+    "python.dynamic.venv",
+    "python.dynamic.packages.list",
+    "python.dynamic.packages.override_application_constraints",
+    "python.dynamic.packages.override_package_metadata_constraints",
+    "python.dynamic.packages.uv_config",
+    "python.dynamic.packages.revalidate_mutable_sources"
+  ],
+  "title": "PokeCon canonical settings values",
+  "type": "object",
+  "x-pokecon-registry-schema-version": 1,
+  "x-pokecon-specification-version": "2.2.0"
+}

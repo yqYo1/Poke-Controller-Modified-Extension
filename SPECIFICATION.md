@@ -1672,18 +1672,16 @@ Camera.image_bgrプロパティ、readFrame()、getCameraImage()は、§7.9.2お
 **ワークフロー**:
 
 ```bash
-# 1. RustコアでOpenAPI JSONを生成（ビルド時に自動実行）
-nix run .#build-rust
-#    生成されたOpenAPI JSONはビルド成果物として保存（例: target/openapi.json）
-
-# 2. 同じnix環境からローカルOpenAPI JSONを対象に型生成
+# 1. Rustコアから追跡対象のOpenAPI JSONを生成し、そのJSONから型を生成
 nix run .#generate-api-types
+#    OpenAPI JSON: api/openapi.json
+#    TypeScript: web/src/lib/api/openapi.ts
 
-# 3. フロントエンドで型を使用
+# 2. フロントエンドで型を使用
 import { paths, components } from '$lib/api/openapi.ts'
 ```
 
-> **注**: HTTPサーバーが起動していなくても、ビルド時に生成されたローカルJSONファイルに対して実行するため、型生成は独立して動作する。これによりサーバーが起動していない状態でも型生成が可能であり、CIでも同様の方法で生成する。
+> **注**: HTTPサーバーが起動していなくても、Rustのschema型から生成したローカルJSONファイルに対して実行するため、型生成は独立して動作する。これによりサーバーが起動していない状態でも型生成が可能であり、CIでも同じ追跡対象JSONとTypeScriptのdriftを検査する。
 
 **自動化**: 実処理は`package.json`の`generate:api`スクリプトとして登録できるが、開発者とCIの正準入口は共通して`nix run .#generate-api-types`とする。CIでは生成済み型ファイルをgit追跡し、対象ソース存在時の生成失敗または生成差分をハードエラーとする。古い生成結果へのフォールバックは行わない。
 

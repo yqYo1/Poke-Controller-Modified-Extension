@@ -1,5 +1,5 @@
 import { ApiRequestError, api, responseError, type ApiClient } from './api';
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 
 export type CameraDevice = components['schemas']['CameraDevice'];
 export type CommandControlRequest = components['schemas']['CommandControlRequest'];

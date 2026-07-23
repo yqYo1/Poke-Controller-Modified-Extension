@@ -3,7 +3,7 @@
 
   import type { CommandControlRequest, OperationResult } from '../actions';
   import type { SettingsWriteValues } from '../api';
-  import type { components } from '../generated/api';
+  import type { components } from '../api/openapi';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   type CommandDisplayItem = components['schemas']['CommandDisplayItem'];

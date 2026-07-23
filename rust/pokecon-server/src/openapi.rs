@@ -1,6 +1,9 @@
 //! Deterministic `OpenAPI` document generation.
 
-use pokecon_contracts::model::{Access, ObjectProperty, Setting, ValueSchema};
+use pokecon_contracts::{
+    model::{Access, Setting},
+    value_json_schema,
+};
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use utoipa::OpenApi;
@@ -248,7 +251,7 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
                 "description": "Secret-safe masked value; configured secrets are returned as ********"
             })
         } else {
-            value_schema(&setting.value)
+            value_json_schema(&setting.value)
         };
         properties.insert(setting.id.clone(), schema);
         if matches!(projection, SettingProjection::Read) {
@@ -261,88 +264,6 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
         "required": required,
         "additionalProperties": false
     })
-}
-
-fn value_schema(schema: &ValueSchema) -> Value {
-    match schema {
-        ValueSchema::Null => json!({"type": "null"}),
-        ValueSchema::Boolean => json!({"type": "boolean"}),
-        ValueSchema::String { min_length, format } => with_optional(
-            json!({"type": "string"}),
-            [
-                ("minLength", min_length.map(|value| json!(value))),
-                ("format", format.as_ref().map(|value| json!(value))),
-            ],
-        ),
-        ValueSchema::Integer { minimum, maximum } => with_optional(
-            json!({"type": "integer", "format": "int64"}),
-            [
-                ("minimum", minimum.map(|value| json!(value))),
-                ("maximum", maximum.map(|value| json!(value))),
-            ],
-        ),
-        ValueSchema::Number { minimum, maximum } => with_optional(
-            json!({"type": "number", "format": "double"}),
-            [
-                ("minimum", minimum.map(|value| json!(value))),
-                ("maximum", maximum.map(|value| json!(value))),
-            ],
-        ),
-        ValueSchema::Enum { values, .. } => json!({"type": "string", "enum": values}),
-        ValueSchema::Union { variants } => json!({
-            "oneOf": variants.iter().map(value_schema).collect::<Vec<_>>()
-        }),
-        ValueSchema::Array {
-            items,
-            min_items,
-            unique_items,
-        } => with_optional(
-            json!({
-                "type": "array",
-                "items": value_schema(items),
-                "uniqueItems": unique_items
-            }),
-            [("minItems", min_items.map(|value| json!(value)))],
-        ),
-        ValueSchema::Object {
-            properties,
-            additional_properties,
-            ..
-        } => object_schema(properties, *additional_properties),
-    }
-}
-
-fn object_schema(
-    properties: &std::collections::BTreeMap<String, ObjectProperty>,
-    additional_properties: bool,
-) -> Value {
-    let schemas = properties
-        .iter()
-        .map(|(name, property)| (name.clone(), value_schema(&property.schema)))
-        .collect::<Map<_, _>>();
-    let required = properties
-        .iter()
-        .filter(|(_, property)| property.required)
-        .map(|(name, _)| Value::String(name.clone()))
-        .collect::<Vec<_>>();
-    json!({
-        "type": "object",
-        "properties": schemas,
-        "required": required,
-        "additionalProperties": additional_properties
-    })
-}
-
-fn with_optional<const N: usize>(mut schema: Value, fields: [(&str, Option<Value>); N]) -> Value {
-    let object = schema
-        .as_object_mut()
-        .expect("schema helper always receives an object");
-    for (name, value) in fields {
-        if let Some(value) = value {
-            object.insert(name.to_owned(), value);
-        }
-    }
-    schema
 }
 
 fn close_named_and_inline_objects(value: &mut Value) {

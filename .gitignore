@@ -51,7 +51,13 @@
 !/api/package.json
 !/api/package-lock.json
 !/api/openapi.json
-!/api/generated.ts
+
+!/generated/
+/generated/*
+!/generated/settings.schema.json
+!/generated/settings-ui.json
+!/generated/lua/
+!/generated/lua/*.lua
 
 !/compatibility/
 /compatibility/*
@@ -219,9 +225,9 @@ result-*
 !/web/src/*.css
 !/web/src/*.html
 !/web/src/lib/
-!/web/src/lib/generated/
-!/web/src/lib/generated/*.ts
-!/web/src/lib/generated/*.json
+!/web/src/lib/api/
+!/web/src/lib/api/*.ts
+!/web/src/lib/api/*.json
 !/web/src/lib/**/*.ts
 !/web/src/lib/**/*.svelte
 !/web/src/lib/**/*.svelte.ts

@@ -1,4 +1,4 @@
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 
 export type DecimalString = components['schemas']['DecimalString'];
 

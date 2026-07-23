@@ -7,11 +7,13 @@
 pub mod commands_typings;
 pub mod dynamic_typings;
 pub mod model;
+pub mod settings_artifacts;
 mod validate;
 
 pub use commands_typings::{PythonTypingFile, commands_python_typings};
 pub use dynamic_typings::{dynamic_lua_typings, dynamic_python_typings};
 pub use model::{Access, DefaultValue, Mutability, Scope, Setting, SettingsRegistry, ValueSchema};
+pub use settings_artifacts::{settings_json_schema, settings_ui_metadata, value_json_schema};
 pub use validate::{ContractError, ValidatedSettingsRegistry};
 
 /// Raw canonical setting registry, embedded for deterministic consumers.

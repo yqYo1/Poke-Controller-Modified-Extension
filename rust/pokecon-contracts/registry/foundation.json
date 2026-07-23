@@ -48,7 +48,9 @@
       "entrypoint_patterns": ["tests/hardware/test_*.py"],
       "fixture_pattern": "tests/fixtures/hardware/<capability>/<case>.<ext>",
       "hardware_allowed": true,
-      "required_record_pattern": "artifacts/hardware/<platform>/<capability>/<utc-timestamp>.json"
+      "required_record_pattern": "artifacts/hardware/<platform>/<capability>/<utc-timestamp>.json",
+      "record_schema": "rust/pokecon-contracts/registry/acceptance-record.schema.json",
+      "procedure": "docs/ACCEPTANCE.md"
     },
     {
       "id": "compatibility",
@@ -119,7 +121,7 @@
       "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
       "status": "resolved",
       "phase": 2,
-      "resolution": "the stale output was removed; phase 10 will generate web/src/lib/api/openapi.ts from target/openapi.json"
+      "resolution": "the stale output was removed; phase 10 generates web/src/lib/api/openapi.ts from the tracked api/openapi.json contract"
     },
     {
       "id": "legacy_release_crates",
@@ -143,12 +145,29 @@
         "generated/settings-ui.json",
         "generated/lua/pokecon.d.lua",
         "python/pokecon/typings",
+        "api/openapi.json",
+        "web/src/lib/api/openapi.json",
         "web/src/lib/api/openapi.ts"
       ],
       "observed_in": ["rust/pokecon-contracts/registry/generation.json"],
       "status": "implemented",
       "phase": 3,
       "resolution": "all declared contract artifacts are generated at their canonical paths and CI rejects drift"
+    },
+    {
+      "id": "external_acceptance",
+      "paths": [
+        "docs/ACCEPTANCE.md",
+        "rust/pokecon-contracts/registry/acceptance-record.schema.json",
+        "rust/pokecon-contracts/registry/acceptance-record.example.json"
+      ],
+      "observed_in": [
+        "flake.nix",
+        "rust/pokecon-contracts/registry/foundation.json"
+      ],
+      "status": "implemented",
+      "phase": 15,
+      "resolution": "hardware, browser, performance, and desktop gates have a closed record schema, validated example, Nix checker, and explicit procedures"
     }
   ],
   "audit_policy": {

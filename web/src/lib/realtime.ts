@@ -1,5 +1,5 @@
 import { loadVisibleSnapshots, type VisibleSnapshots } from './api';
-import type { components } from './generated/api';
+import type { components } from './api/openapi';
 import {
   compareRevisions,
   incrementRevision,

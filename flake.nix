@@ -345,6 +345,21 @@
               '';
             };
 
+            acceptance-record-check = mkTask {
+              name = "acceptance-record-check";
+              runtimeInputs = [ pkgs.check-jsonschema ];
+              text = ''
+                schema="${source}/rust/pokecon-contracts/registry/acceptance-record.schema.json"
+                example="${source}/rust/pokecon-contracts/registry/acceptance-record.example.json"
+                check-jsonschema --check-metaschema "$schema"
+                check-jsonschema --schemafile "$schema" "$example"
+                if [ "$#" -eq 0 ]; then
+                  exit 0
+                fi
+                exec check-jsonschema --schemafile "$schema" "$@"
+              '';
+            };
+
             clippy = mkTask {
               name = "clippy";
               runtimeInputs = rustTaskInputs;
@@ -396,6 +411,7 @@
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.actionlint
                 pkgs.basedpyright
+                pkgs.check-jsonschema
                 pkgs.nodejs_20
                 pkgs.shellcheck
               ];
@@ -406,6 +422,9 @@
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
+                check-jsonschema --check-metaschema generated/settings.schema.json
+                check-jsonschema --check-metaschema rust/pokecon-contracts/registry/acceptance-record.schema.json
+                check-jsonschema --schemafile rust/pokecon-contracts/registry/acceptance-record.schema.json rust/pokecon-contracts/registry/acceptance-record.example.json
                 scripts/generate-api-types.sh --check
                 basedpyright
                 shellcheck scripts/*.sh
@@ -867,6 +886,7 @@
               name = "check";
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.basedpyright
+                pkgs.check-jsonschema
                 pkgs.markdownlint-cli
                 pkgs.nodejs_20
                 pkgs.ripgrep
@@ -890,6 +910,9 @@
                 python -m scripts.release_gate
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
+                check-jsonschema --check-metaschema generated/settings.schema.json
+                check-jsonschema --check-metaschema rust/pokecon-contracts/registry/acceptance-record.schema.json
+                check-jsonschema --schemafile rust/pokecon-contracts/registry/acceptance-record.schema.json rust/pokecon-contracts/registry/acceptance-record.example.json
                 scripts/generate-api-types.sh --check
                 npm --prefix web ci --no-audit --no-fund
                 npm --prefix web run lint

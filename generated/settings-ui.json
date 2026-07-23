@@ -1,0 +1,1825 @@
+{
+  "schema_version": 1,
+  "settings": [
+    {
+      "access": "read_write",
+      "control": "language_select",
+      "default": {
+        "kind": "literal",
+        "value": "ja"
+      },
+      "id": "language",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "ja",
+          "en"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "auto_reload_config",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": "lua"
+      },
+      "id": "dynamic_config_language",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "enum": [
+          "python",
+          "lua",
+          "none"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 2000
+      },
+      "id": "dynamic.callback_soft_timeout_ms",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced callback policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 1000
+      },
+      "id": "dynamic.callback_soft_timeout_grace_ms",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced callback policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 5000
+      },
+      "id": "dynamic.callback_hard_timeout_ms",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced callback policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 8
+      },
+      "id": "dynamic.callback_max_concurrency",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced callback policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 1024
+      },
+      "id": "dynamic.callback_queue_capacity",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced callback policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "report_ignored_profile_global_settings",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "diagnostic-only",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "profile_select",
+      "default": {
+        "kind": "literal",
+        "value": "default"
+      },
+      "id": "active_profile",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.3",
+        "§11.4.2",
+        "§11.5.6.4.4"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "profile_name",
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": "pokecon"
+      },
+      "id": "app_name",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.3",
+        "§11.4.2",
+        "§14.1.1"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "format": "app_name",
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "number_input",
+      "default": {
+        "kind": "literal",
+        "value": 60
+      },
+      "id": "camera.capture_fps",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "resolution_select",
+      "default": {
+        "kind": "literal",
+        "value": "1280x720"
+      },
+      "id": "camera.capture_resolution",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "640x360",
+          "1280x720",
+          "1920x1080"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "camera_selector",
+      "default": {
+        "kind": "literal",
+        "value": 0
+      },
+      "id": "camera.device",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "oneOf": [
+          {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "format": "non_empty_no_nul",
+            "minLength": 1,
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "flip_select",
+      "default": {
+        "kind": "literal",
+        "value": "none"
+      },
+      "id": "camera.flip_mode",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "none",
+          "vertical",
+          "horizontal",
+          "both"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "format_select",
+      "default": {
+        "kind": "literal",
+        "value": "png"
+      },
+      "id": "camera.screenshot_format",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "png",
+          "jpeg"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "serial_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "serial.port",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "number_input",
+      "default": {
+        "kind": "literal",
+        "value": 9600
+      },
+      "id": "serial.baud_rate",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "data_format_select",
+      "default": {
+        "kind": "literal",
+        "value": "default"
+      },
+      "id": "serial.data_format",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "default",
+          "qingpi",
+          "3ds"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "input.keyboard_enabled",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "input.left_stick_mouse_enabled",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "input.right_stick_mouse_enabled",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "camera_canvas_rectangle",
+      "default": {
+        "kind": "literal",
+        "value": {
+          "bottom": 1.0,
+          "left": 0.0,
+          "right": 1.0,
+          "top": 0.0
+        }
+      },
+      "id": "input.touchscreen_area",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bottom": {
+            "format": "double",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "left": {
+            "format": "double",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "right": {
+            "format": "double",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "top": {
+            "format": "double",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "bottom",
+          "left",
+          "right",
+          "top"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": "message"
+      },
+      "id": "notifications.line_menu_behavior",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "LINE UI was removed",
+      "value_schema": {
+        "enum": [
+          "message",
+          "noop"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "secret_input",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "notifications.discord.webhook_url",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": true,
+      "spec_refs": [
+        "§6.5.2",
+        "§11.4.2",
+        "§11.4.3"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "discord_webhook_or_empty",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "text_input",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "notifications.discord.username",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "url_input",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "notifications.discord.avatar_url",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "http_url_or_empty",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "notifications.discord.on_script_start",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "notifications.discord.on_script_end",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "notifications.windows.on_script_start",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "notifications.windows.on_script_end",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 3
+      },
+      "id": "websocket.reconnect_interval_sec",
+      "mutability": "runtime_deferred",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 20
+      },
+      "id": "websocket.reconnect_max_retries",
+      "mutability": "runtime_deferred",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 15
+      },
+      "id": "websocket.ping_interval_sec",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 10
+      },
+      "id": "websocket.pong_timeout_sec",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "webrtc.auto_recover",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 30
+      },
+      "id": "webrtc.recovery_probe_interval_sec",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "transport policy",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "stun_uri_input",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "stun_server",
+      "mutability": "runtime_deferred",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "stun_uri_or_empty",
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 85
+      },
+      "id": "jpeg_quality",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced codec setting",
+      "value_schema": {
+        "format": "int64",
+        "maximum": 100,
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "directory_picker",
+      "default": {
+        "kind": "resource_path",
+        "relative": "web/dist"
+      },
+      "id": "server.web_dir",
+      "mutability": "startup_only",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "number_input",
+      "default": {
+        "kind": "literal",
+        "value": 8020
+      },
+      "id": "server.port",
+      "mutability": "startup_only",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "int64",
+        "maximum": 65535,
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "ip_input",
+      "default": {
+        "kind": "literal",
+        "value": "127.0.0.1"
+      },
+      "id": "server.bind_address",
+      "mutability": "startup_only",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "ip_literal_non_wildcard",
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": [
+          5,
+          15,
+          30,
+          60
+        ]
+      },
+      "id": "ui.fps_options",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "provides values for the FPS selector",
+      "value_schema": {
+        "items": {
+          "format": "int64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "minItems": 1,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "fps_select",
+      "default": {
+        "kind": "literal",
+        "value": 30
+      },
+      "id": "ui.fps",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "int64",
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "widget_mode_select",
+      "default": {
+        "kind": "literal",
+        "value": "all"
+      },
+      "id": "ui.widget_mode",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "all",
+          "outputs",
+          "output_1_controller",
+          "output_2_controller",
+          "output_1",
+          "output_2",
+          "controller"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "range",
+      "default": {
+        "kind": "literal",
+        "value": 20
+      },
+      "id": "ui.output_split_ratio",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "int64",
+        "maximum": 100,
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "radio_group",
+      "default": {
+        "kind": "literal",
+        "value": "output_1"
+      },
+      "id": "ui.stdout_destination",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "output_1",
+          "output_2"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "radio_group",
+      "default": {
+        "kind": "literal",
+        "value": "top"
+      },
+      "id": "ui.controller_position",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "top",
+          "bottom"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "radio_group",
+      "default": {
+        "kind": "literal",
+        "value": "bottom"
+      },
+      "id": "ui.dialog_button_position",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "bottom",
+          "top",
+          "both"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "ui.camera.live_view_enabled",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "ui.camera.pixel_values_visible",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "ui.camera.guide_visible",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "close_behavior_select",
+      "default": {
+        "kind": "literal",
+        "value": "ask"
+      },
+      "id": "ui.desktop.close_behavior",
+      "mutability": "runtime_immediate",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "ask",
+          "shutdown",
+          "keep_backend"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "ui.desktop.disable_compositing",
+      "mutability": "startup_only",
+      "scope": "global",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_1",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_2",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_3",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_4",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_5",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_6",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_7",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_8",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_9",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "command_selector",
+      "default": {
+        "kind": "literal",
+        "value": ""
+      },
+      "id": "shortcuts.button_10",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§6.4.2",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "format": "free",
+        "type": "string"
+      }
+    },
+    {
+      "access": "read_write",
+      "control": "tag_match_select",
+      "default": {
+        "kind": "literal",
+        "value": "exact"
+      },
+      "id": "commands.tag_match_mode",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "enum": [
+          "exact",
+          "partial",
+          "prefix",
+          "suffix"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "data_path",
+        "relative": "venv-script"
+      },
+      "id": "python.script.venv",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": 2000
+      },
+      "id": "python.script.shutdown_timeout_ms",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker lifecycle",
+      "value_schema": {
+        "format": "int64",
+        "minimum": 0,
+        "type": "integer"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": []
+      },
+      "id": "python.script.packages.list",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "extras": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "version": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "type": "array",
+        "uniqueItems": false
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.script.packages.override_application_constraints",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.script.packages.override_package_metadata_constraints",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": null
+      },
+      "id": "python.script.packages.uv_config",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "minLength": 1,
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.script.packages.revalidate_mutable_sources",
+      "mutability": "runtime_deferred",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "advanced worker environment",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "data_path",
+        "relative": "venv-dynamic"
+      },
+      "id": "python.dynamic.venv",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": []
+      },
+      "id": "python.dynamic.packages.list",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "extras": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "version": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "type": "array",
+        "uniqueItems": false
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.dynamic.packages.override_application_constraints",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.dynamic.packages.override_package_metadata_constraints",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": null
+      },
+      "id": "python.dynamic.packages.uv_config",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "minLength": 1,
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "access": "none",
+      "control": null,
+      "default": {
+        "kind": "literal",
+        "value": false
+      },
+      "id": "python.dynamic.packages.revalidate_mutable_sources",
+      "mutability": "startup_only",
+      "scope": "bootstrap",
+      "secret": false,
+      "spec_refs": [
+        "§11.4.1.1",
+        "§11.4.2"
+      ],
+      "unsupported_reason": "bootstrap-only",
+      "value_schema": {
+        "type": "boolean"
+      }
+    }
+  ],
+  "specification_version": "2.2.0"
+}

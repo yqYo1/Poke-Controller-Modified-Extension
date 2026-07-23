@@ -11,8 +11,8 @@ if [[ "$mode" != "generate" && "$mode" != "--check" ]]; then
 fi
 
 npm --prefix api ci --ignore-scripts --no-audit --no-fund
-web_generated="web/src/lib/generated/api.ts"
-web_schema="web/src/lib/generated/openapi.json"
+web_generated="web/src/lib/api/openapi.ts"
+web_schema="web/src/lib/api/openapi.json"
 
 if [[ "$mode" == "--check" ]]; then
   cargo run --locked --package pokecon-server --bin generate_openapi -- --check
@@ -20,27 +20,20 @@ if [[ "$mode" == "--check" ]]; then
   trap 'rm -rf "$generated_dir"' EXIT
   api/node_modules/.bin/openapi-typescript api/openapi.json \
     --output "$generated_dir/generated.ts"
-  if ! cmp --silent api/generated.ts "$generated_dir/generated.ts"; then
-    echo "api/generated.ts differs from the OpenAPI-generated client types" >&2
-    diff --unified api/generated.ts "$generated_dir/generated.ts" || true
-    exit 1
-  fi
-  if [[ -f web/package.json ]] && ! cmp --silent "$web_generated" "$generated_dir/generated.ts"; then
+  if ! cmp --silent "$web_generated" "$generated_dir/generated.ts"; then
     echo "$web_generated differs from the OpenAPI-generated client types" >&2
     diff --unified "$web_generated" "$generated_dir/generated.ts" || true
     exit 1
   fi
-  if [[ -f web/package.json ]] && ! cmp --silent "$web_schema" api/openapi.json; then
+  if ! cmp --silent "$web_schema" api/openapi.json; then
     echo "$web_schema differs from the generated OpenAPI schema" >&2
     diff --unified "$web_schema" api/openapi.json || true
     exit 1
   fi
 else
   cargo run --locked --package pokecon-server --bin generate_openapi
+  mkdir -p "$(dirname "$web_generated")"
   api/node_modules/.bin/openapi-typescript api/openapi.json \
-    --output api/generated.ts
-  if [[ -f web/package.json ]]; then
-    install -D -m 0644 api/generated.ts "$web_generated"
-    install -D -m 0644 api/openapi.json "$web_schema"
-  fi
+    --output "$web_generated"
+  install -D -m 0644 api/openapi.json "$web_schema"
 fi

@@ -703,7 +703,7 @@
               runtimeInputs = [ pkgs.typos ];
               text = ''
                 cd "${source}"
-                exec typos --no-exit-code "$@"
+                exec typos "$@"
               '';
             };
 

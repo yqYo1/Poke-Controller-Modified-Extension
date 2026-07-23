@@ -522,12 +522,7 @@ impl ScriptHost for ProductionScriptHost {
         request: HostDialogOpenRequest,
     ) -> Result<HostDialogOpenResult, ScriptHostError> {
         self.shared.ensure_accepting()?;
-        if request.widgets.is_empty() {
-            return Err(host_error(
-                "InvalidDialog",
-                "dialog requires at least one widget",
-            ));
-        }
+        validate_dialog_open_request(&request)?;
         let mut ui = self
             .shared
             .ui
@@ -2141,6 +2136,16 @@ fn camera_host_error() -> ScriptHostError {
     host_error("CameraUnavailable", "camera operation failed")
 }
 
+fn validate_dialog_open_request(request: &HostDialogOpenRequest) -> Result<(), ScriptHostError> {
+    if request.widgets.is_empty() && request.description.is_none() {
+        return Err(host_error(
+            "InvalidDialog",
+            "dialog requires at least one widget or a message",
+        ));
+    }
+    Ok(())
+}
+
 fn network_unavailable() -> ScriptHostError {
     host_error("NetworkUnavailable", "network operation failed")
 }
@@ -2380,6 +2385,23 @@ mod tests {
                 &widgets,
                 vec![wire::ScriptDialogValue::String("unknown".to_owned())]
             )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn message_only_dialogs_are_valid_but_empty_dialogs_are_rejected() {
+        let request = HostDialogOpenRequest {
+            title: "Notice".to_owned(),
+            description: Some("Completed".to_owned()),
+            widgets: Vec::new(),
+        };
+        validate_dialog_open_request(&request).expect("message-only dialog");
+        assert!(
+            validate_dialog_open_request(&HostDialogOpenRequest {
+                description: None,
+                ..request
+            })
             .is_err()
         );
     }

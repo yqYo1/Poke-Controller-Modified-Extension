@@ -1591,14 +1591,23 @@ def _poll_dialog(dialog_id):
     return True
 
 
-def _show_dialog(command, title, widgets, blocking=True, description=None):
+def _show_dialog(
+    command,
+    title,
+    widgets,
+    blocking=True,
+    description=None,
+    allow_empty=False,
+):
     if isinstance(widgets, Widget):
         widgets = [widgets]
     elif isinstance(widgets, list):
         widgets = list(widgets)
     else:
         raise TypeError("widgets must be a Widget or list[Widget]")
-    if not widgets or any(not isinstance(widget, Widget) for widget in widgets):
+    if any(not isinstance(widget, Widget) for widget in widgets):
+        raise TypeError("dialog requires one or more Widget instances")
+    if not widgets and not allow_empty:
         raise TypeError("dialog requires one or more Widget instances")
     if len({id(widget) for widget in widgets}) != len(widgets):
         raise ValueError("the same Widget cannot occur twice in one dialog")
@@ -3026,6 +3035,7 @@ def _messagebox_show(kind, title=None, message=None, **options):
         [],
         True,
         description,
+        allow_empty=True,
     )
     return "ok"
 

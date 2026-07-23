@@ -11,6 +11,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const SPECIFICATION: &str = include_str!("../../../SPECIFICATION.md");
+const ACCEPTANCE_SCHEMA: &str = include_str!("../registry/acceptance-record.schema.json");
+const ACCEPTANCE_PROCEDURE: &str = include_str!("../../../docs/ACCEPTANCE.md");
 const FIXED_MANIFEST: &str = include_str!("../../../compatibility/fixed-manifest.json");
 const FLAKE: &str = include_str!("../../../flake.nix");
 const PYPROJECT: &str = include_str!("../../../pyproject.toml");
@@ -518,6 +520,57 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
             );
         }
     }
+}
+
+#[test]
+fn external_acceptance_contract_closes_steps_and_release_matrix() {
+    let schema = parse_json(ACCEPTANCE_SCHEMA);
+    let matrix = &schema["x-pokecon-release-matrix"];
+    assert_eq!(matrix["specification_version"], "2.2.0");
+    assert_eq!(matrix["platforms"], serde_json::json!(["linux", "windows"]));
+    assert_eq!(
+        matrix["browsers"],
+        serde_json::json!(["chrome", "edge", "firefox", "safari"])
+    );
+    let capabilities = matrix["capabilities"]
+        .as_array()
+        .expect("acceptance capabilities must be an array");
+    let capability_ids = capabilities
+        .iter()
+        .map(|capability| string_at(capability, "id"))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        capability_ids,
+        BTreeSet::from([
+            "audio_input_device",
+            "browser_matrix",
+            "capture_device_with_known_frame_fixture",
+            "credentialed_network_notification_endpoints",
+            "desktop_lifecycle",
+            "integrated_load_stress",
+            "mcu_serial_device_and_target_console",
+            "performance",
+            "security_acceptance",
+        ])
+    );
+    for capability in capabilities {
+        assert_eq!(capability["release_required"], true);
+        let steps = capability["required_steps"]
+            .as_array()
+            .expect("acceptance capability steps must be an array");
+        let step_ids = steps
+            .iter()
+            .map(|step| step.as_str().expect("acceptance step must be a string"))
+            .collect::<Vec<_>>();
+        let unique_steps = step_ids.iter().copied().collect::<BTreeSet<_>>();
+        assert!(!steps.is_empty());
+        assert_eq!(steps.len(), unique_steps.len());
+        for step in step_ids {
+            assert!(ACCEPTANCE_PROCEDURE.contains(&format!("`{step}`")));
+        }
+    }
+    assert!(FLAKE.contains("python scripts/acceptance_records.py"));
+    assert!(FLAKE.contains("pkgs.check-jsonschema"));
 }
 
 #[derive(Debug)]

@@ -51,7 +51,7 @@ Linuxの保存場所は次のとおりです。
 - Cache: `$XDG_CACHE_HOME/pokecon`、未設定時は`~/.cache/pokecon`
 - State: `$XDG_STATE_HOME/pokecon`、未設定時は`~/.local/state/pokecon`
 
-WindowsではConfigが`%APPDATA%\pokecon`、Dataが`%LOCALAPPDATA%\pokecon\data`、Cacheが`%LOCALAPPDATA%\pokecon\cache`、Stateが`%LOCALAPPDATA%\pokecon\state`です。global設定はConfigの`settings.toml`、profile設定は`profiles/<name>/settings.toml`、スクリプトはDataの`Commands`へ置きます。
+WindowsではConfigが`%APPDATA%\pokecon`、Dataが`%LOCALAPPDATA%\pokecon\data`、Cacheが`%LOCALAPPDATA%\pokecon\cache`、Stateが`%LOCALAPPDATA%\pokecon\state`です。global設定はConfigの`settings.toml`、profile設定はConfigの`profiles/<name>/settings.toml`、スクリプトはDataの`Commands`へ置きます。
 
 ## アップグレード
 

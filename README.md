@@ -31,7 +31,7 @@ nix run . -- --ui web --port 8080 --profile example
 
 `--bind-address`にはワイルドカードではない数値IPだけを指定できます。初回起動時に設定とプロファイルの雛形を作成します。既存のユーザー編集ファイルは上書きしません。
 
-インストーラ、アップグレード、オフライン導入は[インストールガイド](docs/INSTALL.md)、旧実装からの移行は[移行ガイド](docs/MIGRATION.md)を参照してください。
+インストーラ、アップグレード、オフライン導入は[インストールガイド](docs/INSTALL.md)、設定のscope・優先順位・反映タイミングは[設定ガイド](docs/SETTINGS.md)、旧実装からの移行は[移行ガイド](docs/MIGRATION.md)を参照してください。
 
 ## 開発と検証
 
@@ -62,7 +62,7 @@ nix build .#pokecon-server
 
 Package CIはUbuntu 24.04へのクリーンインストール、完全オフラインのmanaged worker起動、upgrade／uninstall時のユーザーデータ保持、Linux成果物の2回buildによるバイト単位の再現性、Windows NSISのsilent install／startup／upgrade／uninstallを検証します。
 
-実機、実ブラウザ、性能、デスクトップライフサイクルは[外部受入ゲート](docs/ACCEPTANCE.md)の手順でrelease candidateごとに検証し、閉じたJSON記録を`nix run .#acceptance-record-check`で検査します。未実施のgateやexample recordは合格証拠として扱いません。
+実機、実ブラウザ、性能、統合stress、security、デスクトップライフサイクルは[外部受入ゲート](docs/ACCEPTANCE.md)の手順でrelease candidateごとに検証し、閉じたJSON記録を`nix run .#acceptance-record-check`で検査します。`--release-candidate <source commit>`はLinux／Windowsと4 browserを含む24件の必須matrixを集約検査します。未実施のgateやexample recordは合格証拠として扱いません。
 
 ## 構成
 
@@ -73,7 +73,7 @@ python/pokecon/               Python bindingと型情報
 api/                          OpenAPIと生成TypeScript
 compatibility/                固定コーパス、実行結果、昇格履歴
 scripts/                      Nix/CIから呼ぶ検証・配布タスク
-docs/                         導入、移行、トラブルシュート
+docs/                         導入、設定、移行、受入、トラブルシュート
 ```
 
 公開契約はRustレジストリからOpenAPI、TypeScript、Python/Lua typingsへ生成します。生成物を手編集せず、`nix run .#contract-check`でdriftを検出してください。

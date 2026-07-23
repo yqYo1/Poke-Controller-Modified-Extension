@@ -347,16 +347,14 @@
 
             acceptance-record-check = mkTask {
               name = "acceptance-record-check";
-              runtimeInputs = [ pkgs.check-jsonschema ];
+              runtimeInputs = [
+                pythonEnv
+                pkgs.check-jsonschema
+              ];
               text = ''
-                schema="${source}/rust/pokecon-contracts/registry/acceptance-record.schema.json"
-                example="${source}/rust/pokecon-contracts/registry/acceptance-record.example.json"
-                check-jsonschema --check-metaschema "$schema"
-                check-jsonschema --schemafile "$schema" "$example"
-                if [ "$#" -eq 0 ]; then
-                  exit 0
-                fi
-                exec check-jsonschema --schemafile "$schema" "$@"
+                cd "${source}"
+                export PYTHONDONTWRITEBYTECODE=1
+                exec python scripts/acceptance_records.py "$@"
               '';
             };
 
@@ -423,8 +421,7 @@
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
-                check-jsonschema --check-metaschema rust/pokecon-contracts/registry/acceptance-record.schema.json
-                check-jsonschema --schemafile rust/pokecon-contracts/registry/acceptance-record.schema.json rust/pokecon-contracts/registry/acceptance-record.example.json
+                python scripts/acceptance_records.py
                 scripts/generate-api-types.sh --check
                 basedpyright
                 shellcheck scripts/*.sh
@@ -582,7 +579,10 @@
 
             test = mkTask {
               name = "test";
-              runtimeInputs = [ pythonEnv ];
+              runtimeInputs = [
+                pythonEnv
+                pkgs.check-jsonschema
+              ];
               text = ''
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
@@ -911,8 +911,7 @@
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
-                check-jsonschema --check-metaschema rust/pokecon-contracts/registry/acceptance-record.schema.json
-                check-jsonschema --schemafile rust/pokecon-contracts/registry/acceptance-record.schema.json rust/pokecon-contracts/registry/acceptance-record.example.json
+                python scripts/acceptance_records.py
                 scripts/generate-api-types.sh --check
                 npm --prefix web ci --no-audit --no-fund
                 npm --prefix web run lint

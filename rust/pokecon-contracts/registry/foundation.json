@@ -158,8 +158,10 @@
       "id": "external_acceptance",
       "paths": [
         "docs/ACCEPTANCE.md",
+        "scripts/acceptance_records.py",
         "rust/pokecon-contracts/registry/acceptance-record.schema.json",
-        "rust/pokecon-contracts/registry/acceptance-record.example.json"
+        "rust/pokecon-contracts/registry/acceptance-record.example.json",
+        "tests/test_acceptance_records.py"
       ],
       "observed_in": [
         "flake.nix",
@@ -167,7 +169,7 @@
       ],
       "status": "implemented",
       "phase": 15,
-      "resolution": "hardware, browser, performance, and desktop gates have a closed record schema, validated example, Nix checker, and explicit procedures"
+      "resolution": "hardware, browser, performance, integrated stress, security, and desktop gates have canonical required steps, a closed record schema, semantic release-matrix validator, Nix checker, and explicit procedures"
     }
   ],
   "audit_policy": {

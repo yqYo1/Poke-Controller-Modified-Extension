@@ -39,7 +39,7 @@ nix run .#compatibility
 
 昇格済みの追補コーパスも同じコマンドで毎回再実行されます。週次監視で新しいupstream SHAが見つかると、評価結果と昇格または隔離のhash chain記録を含むreview PRが作成されます。実機gateが残る候補は自動昇格しません。
 
-実機が必要なMCU、camera、audio、外部notificationは自動fixtureの成功だけで完了扱いにせず、[トラブルシュート](TROUBLESHOOTING.md)のhardware gateも確認してください。
+実機が必要なMCU、camera、audio、外部notificationは自動fixtureの成功だけで完了扱いにせず、[外部受入ゲート](ACCEPTANCE.md)を実施してください。設定surface、scope、優先順位は[設定ガイド](SETTINGS.md)で確認できます。
 
 ## 主な挙動差
 

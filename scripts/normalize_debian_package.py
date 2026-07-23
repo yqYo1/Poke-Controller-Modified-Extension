@@ -4,11 +4,35 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
 
 REPRODUCIBLE_EPOCH = 0
+MD5SUM_PATTERN = re.compile(r"(?P<digest>[0-9a-f]{32})  (?P<path>.+)")
+
+
+def normalize_md5sums(root: Path) -> None:
+    """Order Debian file checksums by path instead of filesystem traversal order."""
+    md5sums = root / "DEBIAN/md5sums"
+    if not md5sums.is_file():
+        return
+
+    records: list[tuple[str, str]] = []
+    for line in md5sums.read_text(encoding="utf-8").splitlines():
+        match = MD5SUM_PATTERN.fullmatch(line)
+        if match is None:
+            message = f"Debian md5sums has an invalid record: {line!r}"
+            raise ValueError(message)
+        records.append((match.group("path"), line))
+    paths = [path for path, _line in records]
+    if len(paths) != len(set(paths)):
+        message = "Debian md5sums repeats a package path"
+        raise ValueError(message)
+
+    ordered = [line for _path, line in sorted(records)]
+    md5sums.write_text("".join(f"{line}\n" for line in ordered), encoding="utf-8")
 
 
 def normalize_timestamps(root: Path) -> None:
@@ -40,6 +64,7 @@ def normalize_package(package: Path, dpkg_deb: Path) -> None:
             [dpkg_deb, "--raw-extract", package, extracted],
             check=True,
         )
+        normalize_md5sums(extracted)
         normalize_timestamps(extracted)
         environment = {
             **os.environ,

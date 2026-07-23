@@ -92,10 +92,11 @@ def object_mapping(value: object, label: str) -> dict[str, object]:
     return {cast("str", key): item for key, item in untyped.items()}
 
 
-def python_executable(root: Path) -> Path:
+def python_executable(root: Path, *, platform_name: str | None = None) -> Path:
+    platform_name = os.name if platform_name is None else platform_name
     candidates = (
-        [root / "python.exe", root / "bin/python.exe"]
-        if os.name == "nt"
+        [root / "python.exe", root / "Scripts/python.exe", root / "bin/python.exe"]
+        if platform_name == "nt"
         else [root / "bin/python3.14", root / "bin/python3", root / "bin/python"]
     )
     executable = next((path for path in candidates if path.is_file()), None)

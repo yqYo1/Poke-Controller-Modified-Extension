@@ -99,6 +99,7 @@ jobs:
       - name: Install pinned package tools
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           choco install nasm -y --no-progress
           python -m pip install --disable-pip-version-check "uv==0.11.8"
           cargo install tauri-cli --version 2.9.6 --locked
@@ -106,6 +107,7 @@ jobs:
       - name: Export package tool identity
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $uv = (Get-Command uv).Source
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
           $version = python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])"
@@ -117,11 +119,13 @@ jobs:
       - name: Build Web distribution
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           npm --prefix web ci --no-audit --no-fund
           npm --prefix web run build
       - name: Build and stage managed runtimes
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $uv = (Get-Command uv).Source
           $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
           $releaseRoot = Join-Path $env:RUNNER_TEMP "pokecon-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"

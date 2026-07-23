@@ -108,6 +108,14 @@ def test_install_python_discovers_the_requested_uv_installation(
     assert not (output / "unrelated-layout").exists()
 
 
+def test_python_executable_accepts_the_windows_venv_layout(tmp_path: Path) -> None:
+    executable = tmp_path / "Scripts/python.exe"
+    executable.parent.mkdir()
+    executable.write_bytes(b"fixture")
+
+    assert python_executable(tmp_path, platform_name="nt") == executable
+
+
 def test_wheel_build_environment_maps_the_portable_python_prefix(
     tmp_path: Path,
 ) -> None:
@@ -159,6 +167,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
 
     assert "$env:RUNNER_TEMP" in workflow
+    assert "$PSNativeCommandUseErrorActionPreference = $true" in workflow
     assert "--runtime-output target/" not in workflow
     assert "--wheelhouse-output target/" not in workflow
     assert "--config $env:POKECON_BUNDLE_CONFIG" in workflow

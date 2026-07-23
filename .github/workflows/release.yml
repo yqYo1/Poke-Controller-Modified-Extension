@@ -91,6 +91,7 @@ jobs:
       - name: Install pinned release tools
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           choco install nasm -y --no-progress
           python -m pip install --disable-pip-version-check "uv==0.11.8" "maturin>=1.8,<2"
           cargo install tauri-cli --version 2.9.6 --locked
@@ -98,6 +99,7 @@ jobs:
       - name: Export release tool identity
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $uv = (Get-Command uv).Source
           $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
           "POKECON_BUILD_UV_PATH=$uv" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -112,6 +114,7 @@ jobs:
       - name: Build Web distribution
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           npm --prefix web ci --no-audit --no-fund
           npm --prefix web run lint
           npm --prefix web run svelte-check
@@ -120,6 +123,7 @@ jobs:
       - name: Build and stage managed runtimes
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $uv = (Get-Command uv).Source
           $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
           $releaseRoot = Join-Path $env:RUNNER_TEMP "pokecon-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
@@ -167,6 +171,7 @@ jobs:
       - name: Collect installer and checksums
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item target/release/bundle/nsis/*.exe dist/
           python -m scripts.release_gate `

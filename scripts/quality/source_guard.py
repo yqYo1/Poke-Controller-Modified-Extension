@@ -55,7 +55,7 @@ def _python_tests_exist(root: Path) -> bool:
 def _web_exists(root: Path) -> bool:
     return (
         (root / "web/package.json").is_file()
-        and (root / "web/package-lock.json").is_file()
+        and (root / "web/bun.lock").is_file()
         and _has_file(root, "web/src", WEB_SUFFIXES)
     )
 
@@ -89,7 +89,7 @@ def evaluate_guard(root: Path, guard: Guard) -> GuardResult:
         Guard.WEB: (
             _web_exists(root),
             "Web package, lockfile, and application source exist",
-            "Web prerequisites (package.json, package-lock.json, web/src source) are absent",
+            "Web prerequisites (package.json, bun.lock, web/src source) are absent",
         ),
         Guard.APP: (
             (root / "rust/pokecon-app/src/main.rs").is_file(),

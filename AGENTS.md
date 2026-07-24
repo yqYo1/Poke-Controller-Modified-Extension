@@ -31,7 +31,7 @@
 ### Nix Source Filter — SPA 404 Incident
 - [2026-05-20] **When adding new frontend file extensions, update `flake.nix` source filter.** The UI showed "404 Not Found" (HTTP 200) because `.svelte` files were missing from the nix source filter — SvelteKit could only build the fallback error page. All source extensions used by the build must be listed in the `filter` function (`.rs`, `.html`, `.css`, `.js`, `.jsx`, `.ts`, `.tsx`, `.svelte`, `.json`, `.svg`, `.md`, etc.).
 - [2026-05-20] **Symptom:** Browser displays "404 Not Found" but HTTP status is 200. The SPA fallback serves `index.html` correctly, but the built `index.html` itself contains only SvelteKit's built-in error page due to missing source files during nix build.
-- [2026-05-20] **Verification:** Compare `nix build` output vs local `npm run build` output. If the nix store build has significantly fewer chunks/CSS files, suspect missing source extensions in the filter.
+- [2026-05-20] **Verification:** Compare `nix build` output vs local `bun run --bun build` output. If the nix store build has significantly fewer chunks/CSS files, suspect missing source extensions in the filter.
 
 ## Quick Reference
 

@@ -10,7 +10,7 @@ if [[ "$mode" != "generate" && "$mode" != "--check" ]]; then
   exit 2
 fi
 
-npm --prefix api ci --ignore-scripts --no-audit --no-fund
+bun install --cwd api --frozen-lockfile --ignore-scripts --no-progress
 web_generated="web/src/lib/api/openapi.ts"
 web_schema="web/src/lib/api/openapi.json"
 
@@ -18,7 +18,7 @@ if [[ "$mode" == "--check" ]]; then
   cargo run --locked --package pokecon-server --bin generate_openapi -- --check
   generated_dir="$(mktemp -d)"
   trap 'rm -rf "$generated_dir"' EXIT
-  api/node_modules/.bin/openapi-typescript api/openapi.json \
+  bun --bun api/node_modules/.bin/openapi-typescript api/openapi.json \
     --output "$generated_dir/generated.ts"
   if ! cmp --silent "$web_generated" "$generated_dir/generated.ts"; then
     echo "$web_generated differs from the OpenAPI-generated client types" >&2
@@ -33,7 +33,7 @@ if [[ "$mode" == "--check" ]]; then
 else
   cargo run --locked --package pokecon-server --bin generate_openapi
   mkdir -p "$(dirname "$web_generated")"
-  api/node_modules/.bin/openapi-typescript api/openapi.json \
+  bun --bun api/node_modules/.bin/openapi-typescript api/openapi.json \
     --output "$web_generated"
   install -D -m 0644 api/openapi.json "$web_schema"
 fi

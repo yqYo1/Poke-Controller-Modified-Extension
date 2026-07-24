@@ -44,15 +44,10 @@ def workspace_version(root: Path) -> str:
 def validate_release(root: Path, tag: str | None = None) -> str:
     version = workspace_version(root)
     web = load_json(root / "web/package.json")
-    lock = load_json(root / "web/package-lock.json")
-    lock_package = mapping(
-        mapping(lock.get("packages"), "package-lock packages").get(""),
-        "package-lock root package",
-    )
+    if not (root / "web/bun.lock").is_file():
+        invalid_value("web/bun.lock is required for a reproducible release")
     versions = {
         "web/package.json": web.get("version"),
-        "web/package-lock.json": lock.get("version"),
-        "web/package-lock root": lock_package.get("version"),
     }
     mismatches = [name for name, value in versions.items() if value != version]
     if mismatches:

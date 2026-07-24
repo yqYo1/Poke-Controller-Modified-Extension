@@ -93,7 +93,7 @@
     },
     {
       "id": "web_package",
-      "paths": ["web/package.json", "web/package-lock.json", "web/src"],
+      "paths": ["web/package.json", "web/bun.lock", "web/src"],
       "observed_in": ["flake.nix", ".github/workflows/lint.yml"],
       "status": "implemented",
       "phase": 11,

@@ -34,7 +34,7 @@ def test_source_guard_reports_absent_fixtures(guard: Guard, tmp_path: Path) -> N
             Guard.WEB,
             [
                 "web/package.json",
-                "web/package-lock.json",
+                "web/bun.lock",
                 "web/src/routes/+page.svelte",
             ],
         ),
@@ -44,7 +44,7 @@ def test_source_guard_reports_absent_fixtures(guard: Guard, tmp_path: Path) -> N
             [
                 "rust/pokecon-app/src/main.rs",
                 "web/package.json",
-                "web/package-lock.json",
+                "web/bun.lock",
                 "web/src/routes/+page.svelte",
             ],
         ),

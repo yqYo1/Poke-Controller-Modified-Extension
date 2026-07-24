@@ -96,6 +96,16 @@
           );
           workspaceManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
           workspaceVersion = workspaceManifest.workspace.package.version;
+          webManifest = builtins.fromJSON (builtins.readFile ./web/package.json);
+          bunPackageManager = webManifest.packageManager;
+          bunVersion = lib.removePrefix "bun@" bunPackageManager;
+          bun =
+            assert lib.assertMsg (lib.hasPrefix "bun@" bunPackageManager)
+              "web/package.json packageManager must select Bun";
+            assert lib.assertMsg (
+              pkgs.bun.version == bunVersion
+            ) "Nix provides Bun ${pkgs.bun.version}; web/package.json requires ${bunVersion}";
+            pkgs.bun;
           portableUvVersion = "0.11.8";
           portableUv =
             if system == "x86_64-linux" then
@@ -167,6 +177,9 @@
             inherit program;
             meta.description = "PokeCon application or reproducible development task";
           };
+          basedpyrightCli = "${pkgs.basedpyright}/lib/node_modules/pyright-root/index.js";
+          markdownlintCli = "${pkgs.markdownlint-cli}/lib/node_modules/markdownlint-cli/markdownlint.js";
+          textlintCli = "${pkgs.textlint}/lib/node_modules/textlint/bin/textlint.js";
           mkTask =
             {
               name,
@@ -232,13 +245,54 @@
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
 
-          buildNpmPackage = pkgs.buildNpmPackage.override { nodejs = pkgs.nodejs_22; };
-          webPackage = buildNpmPackage {
+          webBunDependencies = pkgs.stdenvNoCC.mkDerivation {
+            pname = "pokecon-web-bun-dependencies";
+            version = workspaceVersion;
+            src = source;
+            sourceRoot = "pokecon-source/web";
+            nativeBuildInputs = [
+              bun
+              pkgs.writableTmpDirAsHomeHook
+            ];
+            dontConfigure = true;
+            buildPhase = ''
+              runHook preBuild
+              export BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache"
+              bun install \
+                --cpu="*" \
+                --frozen-lockfile \
+                --ignore-scripts \
+                --no-progress \
+                --os="*"
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -R node_modules "$out/"
+              runHook postInstall
+            '';
+            dontFixup = true;
+            outputHash = "sha256-N8dxmWteovkSMk9wA6K8js8kD9/xB8Ra8QntcnbEC9k=";
+            outputHashMode = "recursive";
+          };
+          webPackage = pkgs.stdenvNoCC.mkDerivation {
             pname = "pokecon-web";
             version = workspaceVersion;
             src = source;
             sourceRoot = "pokecon-source/web";
-            npmDepsHash = "sha256-4YUu0CTgj8cEBMhAU+MU6jUVcqijpefiDMMAvye+zco=";
+            nativeBuildInputs = [ bun ];
+            configurePhase = ''
+              runHook preConfigure
+              cp -R "${webBunDependencies}/node_modules" .
+              chmod -R u+w node_modules
+              runHook postConfigure
+            '';
+            buildPhase = ''
+              runHook preBuild
+              bun run --bun build
+              runHook postBuild
+            '';
             installPhase = ''
               runHook preInstall
               mkdir -p "$out"
@@ -459,8 +513,8 @@
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.actionlint
                 pkgs.basedpyright
+                bun
                 pkgs.check-jsonschema
-                pkgs.nodejs_22
                 pkgs.shellcheck
               ];
               text = ''
@@ -473,7 +527,7 @@
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 scripts/quality/generate-api-types.sh --check
-                basedpyright
+                bun --bun "${basedpyrightCli}"
                 shellcheck scripts/*.sh scripts/*/*.sh
                 python -m scripts.quality.source_filter
               '';
@@ -617,13 +671,14 @@
             basedpyright = mkTask {
               name = "basedpyright";
               runtimeInputs = [
+                bun
                 pythonEnv
                 pkgs.basedpyright
               ];
               text = ''
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
-                exec basedpyright
+                exec bun --bun "${basedpyrightCli}"
               '';
             };
 
@@ -657,9 +712,9 @@
               name = "tauri-build";
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.binutils
+                bun
                 pkgs.cargo-tauri
                 pkgs.dpkg
-                pkgs.nodejs_22
                 pkgs.patchelf
                 pkgs.uv
               ];
@@ -673,8 +728,8 @@
                 ${desktopEnvironment}
                 export POKECON_WEB_VERSION="${workspaceVersion}"
                 export SOURCE_DATE_EPOCH=0
-                npm --prefix web ci --no-audit --no-fund
-                npm --prefix web run build
+                bun install --cwd web --frozen-lockfile --ignore-scripts --no-progress
+                bun run --cwd web --bun build
                 release_python="$workdir/release-python"
                 release_wheelhouse="$workdir/release-wheelhouse"
                 release_build_home="$workdir/release-build-home"
@@ -857,6 +912,7 @@
             markdownlint = mkTask {
               name = "markdownlint";
               runtimeInputs = [
+                bun
                 pkgs.markdownlint-cli
                 pkgs.ripgrep
               ];
@@ -866,13 +922,14 @@
                 if [ "''${#markdown_files[@]}" -eq 0 ]; then
                   mapfile -t markdown_files < <(rg --files -g '*.md')
                 fi
-                exec markdownlint --config .markdownlint.json "''${markdown_files[@]}"
+                exec bun --bun "${markdownlintCli}" --config .markdownlint.json "''${markdown_files[@]}"
               '';
             };
 
             markdownlint-check = mkTask {
               name = "markdownlint-check";
               runtimeInputs = [
+                bun
                 pkgs.markdownlint-cli
                 pkgs.ripgrep
               ];
@@ -882,13 +939,14 @@
                 if [ "''${#markdown_files[@]}" -eq 0 ]; then
                   mapfile -t markdown_files < <(rg --files -g '*.md')
                 fi
-                exec markdownlint --config .markdownlint.json "''${markdown_files[@]}"
+                exec bun --bun "${markdownlintCli}" --config .markdownlint.json "''${markdown_files[@]}"
               '';
             };
 
             textlint = mkTask {
               name = "textlint";
               runtimeInputs = [
+                bun
                 pkgs.ripgrep
                 pkgs.textlint
                 pkgs.textlint-rule-no-start-duplicated-conjunction
@@ -900,13 +958,14 @@
                 if [ "''${#text_files[@]}" -eq 0 ]; then
                   mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
                 fi
-                exec textlint --config .textlintrc.json "''${text_files[@]}"
+                exec bun --bun "${textlintCli}" --config .textlintrc.json "''${text_files[@]}"
               '';
             };
 
             textlint-check = mkTask {
               name = "textlint-check";
               runtimeInputs = [
+                bun
                 pkgs.ripgrep
                 pkgs.textlint
                 pkgs.textlint-rule-no-start-duplicated-conjunction
@@ -918,15 +977,15 @@
                 if [ "''${#text_files[@]}" -eq 0 ]; then
                   mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
                 fi
-                exec textlint --config .textlintrc.json "''${text_files[@]}"
+                exec bun --bun "${textlintCli}" --config .textlintrc.json "''${text_files[@]}"
               '';
             };
 
             web-check = mkTask {
               name = "web-check";
               runtimeInputs = [
+                bun
                 pythonEnv
-                pkgs.nodejs_22
               ];
               text = ''
                 cd "${source}"
@@ -936,11 +995,11 @@
                   cp -R web/. "$workdir/"
                   chmod -R u+w "$workdir"
                   cd "$workdir"
-                  npm ci --no-audit --no-fund
-                  npm run lint
-                  npm run svelte-check
-                  npm test
-                  npm run build
+                  bun install --frozen-lockfile --ignore-scripts --no-progress
+                  bun run --bun lint
+                  bun run --bun svelte-check
+                  bun run --bun test
+                  bun run --bun build
                 else
                   guard_status=$?
                   if [ "$guard_status" -eq 3 ]; then
@@ -954,7 +1013,7 @@
 
             generate-api-types = mkTask {
               name = "generate-api-types";
-              runtimeInputs = rustTaskInputs ++ [ pkgs.nodejs_22 ];
+              runtimeInputs = rustTaskInputs ++ [ bun ];
               text = ''
                 ${desktopEnvironment}
                 exec scripts/quality/generate-api-types.sh "$@"
@@ -965,9 +1024,9 @@
               name = "check";
               runtimeInputs = rustTaskInputs ++ [
                 pkgs.basedpyright
+                bun
                 pkgs.check-jsonschema
                 pkgs.markdownlint-cli
-                pkgs.nodejs_22
                 pkgs.ripgrep
                 pkgs.shellcheck
                 pkgs.textlint
@@ -992,11 +1051,11 @@
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 scripts/quality/generate-api-types.sh --check
-                npm --prefix web ci --no-audit --no-fund
-                npm --prefix web run lint
-                npm --prefix web run svelte-check
-                npm --prefix web test
-                npm --prefix web run build
+                bun install --cwd web --frozen-lockfile --ignore-scripts --no-progress
+                bun run --cwd web --bun lint
+                bun run --cwd web --bun svelte-check
+                bun run --cwd web --bun test
+                bun run --cwd web --bun build
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features
                 cargo build --locked --workspace --all-features
@@ -1008,11 +1067,11 @@
                   --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
                 ruff check --config ruff.toml --no-cache python scripts tests
                 ruff format --config ruff.toml --no-cache --check python scripts tests
-                basedpyright
+                bun --bun "${basedpyrightCli}"
                 python -m pytest -p no:cacheprovider tests -v --tb=short
                 shellcheck scripts/*.sh scripts/*/*.sh
-                markdownlint --config .markdownlint.json ./*.md docs/*.md
-                textlint --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
+                bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
+                bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
                 typos
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
               '';
@@ -1074,6 +1133,7 @@
             packages = rustTaskInputs ++ [
               config.treefmt.build.wrapper
               pkgs.basedpyright
+              bun
               pkgs.cargo-tauri
               pkgs.curl
               pkgs.gh
@@ -1081,7 +1141,6 @@
               pkgs.jq
               pkgs.markdownlint-cli
               pkgs.maturin
-              pkgs.nodejs_22
               pkgs.ripgrep
               pkgs.shellcheck
               pkgs.textlint
@@ -1097,7 +1156,7 @@
             RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
             shellHook = config.pre-commit.shellHook + ''
-              echo "PokeCon Nix development shell: Rust $(rustc --version), Python $(python --version)"
+              echo "PokeCon Nix development shell: Rust $(rustc --version), Python $(python --version), Bun $(bun --version)"
             '';
           };
         };

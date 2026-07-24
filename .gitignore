@@ -52,7 +52,7 @@
 !/api/
 /api/*
 !/api/package.json
-!/api/package-lock.json
+!/api/bun.lock
 !/api/openapi.json
 
 !/generated/
@@ -93,7 +93,7 @@
 !/web/
 /web/*
 !/web/package.json
-!/web/package-lock.json
+!/web/bun.lock
 !/web/vite.config.ts
 !/web/index.html
 !/web/src/
@@ -215,7 +215,7 @@ result-*
 /web/*
 !/web/index.html
 !/web/package.json
-!/web/package-lock.json
+!/web/bun.lock
 !/web/vite.config.js
 !/web/vite.config.ts
 !/web/tsconfig.json

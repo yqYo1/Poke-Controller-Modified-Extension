@@ -1,100 +1,99 @@
 # Poke-Controller Modified Extension
 
-Poke-Controller Modified Extensionは、ゲーム機コントローラー自動化をRust中心の実行系へ再構築したローカルファーストのアプリケーションです。LinuxではWeb UIまたはTauriデスクトップ、WindowsではTauriデスクトップとして動作します。ユーザースクリプトにはPython 3.14互換APIを提供します。
+Poke-Controller Modified Extensionは、ゲーム機向けのコントローラー入力、カメラ映像、Pythonコマンド、動的設定を一つのローカルアプリケーションで扱うソフトウェアです。
 
-## 実装状況
+Rustのメインプロセスがシリアル機器、カメラ、設定、HTTP、WebSocket、WebRTCを所有し、ユーザースクリプトと動的設定は分離したworkerで実行します。
 
-Rustメインプロセス、SvelteKit UI、Tauriシェル、Python／Lua動的設定、プロファイル単位のPython workerを接続済みです。主な境界は次のとおりです。
+対応する配布対象はLinux x86-64とWindows x86-64です。
 
-- Rustがシリアル、カメラ、コントローラー入力、設定、HTTP、WebSocket、WebRTCを所有します。
-- Pythonユーザースクリプトは分離workerで実行し、ハードウェア操作を型付きIPC経由で依頼します。
-- 動的Python／Lua設定は永続workerで評価し、同じ公開APIと設定レジストリを使います。
-- Web UIとTauri UIは同じaxumバックエンド、OpenAPI、イベント系列を利用します。
-- 固定3リポジトリの103スクリプトを、指定commitのままmanaged workerへ読み込む互換性ゲートを備えます。
+## 読む文書を選ぶ
 
-詳細な規範は[SPECIFICATION.md](SPECIFICATION.md)、実装順序と受け入れ条件は[PLAN.md](PLAN.md)にあります。
+文書は読者の役割と作業目的に分けています。
 
-## 起動
+最初に[文書案内](docs/README.md)で、自分の役割に対応する入口を確認してください。
 
-Nixが利用できるLinux環境では、次のコマンドで起動できます。
+| 読者 | 最初に読む文書 |
+|---|---|
+| 初めて使う利用者 | [利用ガイド](docs/USER_GUIDE.md) |
+| 導入や更新を担当する利用者 | [インストールガイド](docs/INSTALL.md) |
+| 設定やLAN公開を管理する上級利用者 | [上級利用ガイド](docs/ADVANCED_USAGE.md) |
+| Pythonコマンドを作る開発者 | [ユーザースクリプト開発ガイド](docs/SCRIPT_DEVELOPMENT.md) |
+| シリアル通信先を作る周辺機器開発者 | [周辺機器開発ガイド](docs/PERIPHERAL_DEVELOPMENT.md) |
+| 本体を変更する開発者 | [本体開発ガイド](docs/DEVELOPMENT.md) |
+
+## Nixで起動する
+
+Nixが利用できるLinux環境では、checkoutからWeb UIを起動できます。
 
 ```bash
-# Web UI。既定では http://127.0.0.1:8020/ui/
 nix run . -- --ui web
+```
 
-# Tauriデスクトップ
+既定のURLは`http://127.0.0.1:8020/ui/`です。
+
+Tauriデスクトップを起動する場合は次を実行します。
+
+```bash
 nix run .#tauri
+```
 
-# ポートとプロファイルを指定
+ポートやプロファイルは設定用CLI引数で指定できます。
+
+```bash
 nix run . -- --ui web --port 8080 --profile example
 ```
 
-`--bind-address`にはワイルドカードではない数値IPだけを指定できます。初回起動時に設定とプロファイルの雛形を作成します。既存のユーザー編集ファイルは上書きしません。
+初回起動では不足している設定ファイルと型情報を作成し、既存のユーザー編集ファイルは上書きしません。
 
-インストーラ、アップグレード、オフライン導入は[インストールガイド](docs/INSTALL.md)、設定のscope・優先順位・反映タイミングは[設定ガイド](docs/SETTINGS.md)、旧実装からの移行は[移行ガイド](docs/MIGRATION.md)を参照してください。
+配布物からの導入、Windowsでの起動、オフライン導入は[インストールガイド](docs/INSTALL.md)を参照してください。
 
-## 開発と検証
+## 対応範囲を確認する
 
-開発コマンドはNix devShell内で実行します。`.envrc`は`use flake`を設定済みです。
+LinuxではWeb UIとTauriデスクトップを提供し、WindowsではTauriデスクトップを配布します。
+
+macOSとPWAは現行リリースの対象外です。
+
+Pythonユーザースクリプトの対象言語版はPython 3.14です。
+
+Web UIの開発と構築にはBunを使用し、配布済みアプリケーションの実行にBunやNode.jsは必要ありません。
+
+実機シリアル、物理カメラ、音声、外部通知には、仮想I/O試験に加えて環境ごとの[外部受入ゲート](docs/ACCEPTANCE.md)が必要です。
+
+## Nix devShellで開発する
+
+開発コマンドはNix devShell内で実行します。
+
+`.envrc`には`use flake`を設定済みです。
 
 ```bash
-direnv allow        # 初回のみ
+direnv allow
 nix develop
 nix fmt
 nix run .#check
 ```
 
-個別の再現可能タスクもflake appとして公開しています。
+変更対象ごとの検証方法と正準ファイルは[本体開発ガイド](docs/DEVELOPMENT.md)を参照してください。
 
-```bash
-nix run .#clippy
-nix run .#cargo-test
-nix run .#virtual-io-check
-nix run .#web-check
-nix run .#compatibility
-nix run .#tauri-check
-nix run .#tauri-build -- --bundles deb
-nix run .#package-smoke -- dist/tauri/*.deb
-nix run .#package-install-smoke -- dist/tauri/*.deb
-nix build .#pokecon-server
-```
-
-`nix run .#compatibility`は固定commitと昇格済みcommitを取得し、全スクリプトの内容hash、Python 3.14構文、import、クラス検出をmanaged workerで検証します。追跡済みの固定結果は[compatibility/fixed-results.json](compatibility/fixed-results.json)です。週次workflowは3 upstreamのdefault branchをimmutable SHAとして収集し、完全保証チェーン、runtime evidence、公開API契約が通った候補だけをhash chain付き履歴へ昇格します。失敗または未完了の実機gateは理由付きで隔離し、署名付きcommitのreview PRとして提出します。
-
-Linuxの`nix run .#virtual-io-check`はkernelのPTYと`v4l2loopback`へテストpatternを流し、native serial／camera backendを実際のdevice node経由で検証します。実行中kernel用の`v4l2loopback` moduleとpasswordless `sudo`が必要です。このsmoke testは実機gateの前段であり、MCU、対象console、物理cameraを使う外部受入記録の代替ではありません。
-
-Package CIはUbuntu 24.04へのクリーンインストール、完全オフラインのmanaged worker起動、upgrade／uninstall時のユーザーデータ保持、Linux成果物の2回buildによるバイト単位の再現性、Windows NSISのsilent install／startup／upgrade／uninstallを検証します。
-
-実機、実ブラウザ、性能、統合stress、security、デスクトップライフサイクルは[外部受入ゲート](docs/ACCEPTANCE.md)の手順でrelease candidateごとに検証し、閉じたJSON記録を`nix run .#acceptance-record-check`で検査します。`--release-candidate <source commit>`はLinux／Windowsと4 browserを含む24件の必須matrixを集約検査します。未実施のgateやexample recordは合格証拠として扱いません。
-
-## 構成
+## リポジトリの入口を確認する
 
 ```text
 rust/                         RustワークスペースとTauriアプリ
-web/                          SvelteKit 2 / Svelte 5 UI
-python/pokecon/               Python bindingと型情報
-api/                          OpenAPIと生成TypeScript
-compatibility/                固定コーパス、実行結果、昇格履歴
-scripts/acceptance/           外部受入記録の検証
-scripts/compatibility/        互換性corpusの収集・実行・昇格
-scripts/integration/          仮想deviceを使う統合smoke test
-scripts/quality/              source guardと生成contract検査
-scripts/release/              配布物の構築・正規化・導入検査
-scripts/ci-watch.sh           push後のGitHub Actions監視
-tests/                        上記Python toolingの責務別test suite
-docs/                         導入、設定、移行、受入、トラブルシュート
+web/                          SvelteKitとSvelteのWeb UI
+python/pokecon/               Python bindingと生成用型情報
+api/                          生成済みOpenAPI文書
+generated/                    設定schemaとLua型情報などの生成物
+compatibility/                固定互換コーパスと昇格履歴
+scripts/                      品質、統合、互換性、配布用タスク
+tests/                        Python toolingのテスト
+docs/                         読者別ガイドと横断リファレンス
 ```
 
-公開契約はRustレジストリからOpenAPI、TypeScript、Python/Lua typingsへ生成します。生成物を手編集せず、`nix run .#contract-check`でdriftを検出してください。
+公開契約はRustのwire型と正準レジストリからOpenAPI、TypeScript、Python、Luaの型情報へ生成します。
 
-## 対象範囲
-
-対象OSはWindowsとLinuxです。PWAとmacOSは将来機能であり、現行リリースの対象ではありません。実機シリアル、カメラ、音声、外部通知には、決定的fixtureに加えて環境ごとの明示的hardware gateが必要です。
-
-問題の切り分けは[トラブルシュート](docs/TROUBLESHOOTING.md)、変更点は[CHANGELOG.md](CHANGELOG.md)にあります。
+生成物は手編集しません。
 
 ## ライセンスと謝辞
 
-[MIT License](LICENSE)で提供します。
+本リポジトリは[MIT License](LICENSE)で提供します。
 
 [Poke-Controller](https://github.com/KawaSwitch/Poke-Controller)のKawaSwitch氏と、[Poke-Controller Modified](https://github.com/Moi-poke/Poke-Controller-Modified)のmoi_poke氏をはじめ、既存実装とスクリプト作者の皆様に感謝します。

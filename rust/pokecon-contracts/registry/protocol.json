@@ -102,8 +102,7 @@
         "Commands.Keys",
         "Commands.dialogue",
         "Commands.image_proc",
-        "Commands.net",
-        "Commands.PythonCommands.bridge_functions.bridge_functions"
+        "Commands.net"
       ],
       "required_imports": [
         { "module": "Commands._meta", "symbols": ["CommandMeta"] },
@@ -116,10 +115,14 @@
         {
           "module": "Commands.Keys",
           "symbols": ["Button", "Hat", "Direction", "Touchscreen", "KeyPress", "Stick"]
-        },
+        }
+      ],
+      "external_imports": [
         {
           "module": "Commands.PythonCommands.bridge_functions.bridge_functions",
           "symbols": ["BridgeFunctions"],
+          "bundled": false,
+          "reason": "separate_license_and_distribution",
           "source": "compatibility/fixed-manifest.json"
         }
       ],

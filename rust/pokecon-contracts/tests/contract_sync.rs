@@ -804,9 +804,42 @@ fn surface_for_worker<'a>(surfaces: &'a [Value], worker: &str) -> &'a Value {
 }
 
 fn assert_fixed_commands_imports_are_classified(user: &Value) {
-    let declared_imports = user["required_imports"]
+    let declared_imports = surface_imports(user, "required_imports");
+    let external_imports = surface_imports(user, "external_imports");
+    assert!(declared_imports.contains(&(
+        "Commands.McuCommandBase".to_owned(),
+        "McuCommand".to_owned()
+    )));
+    assert!(
+        !declared_imports
+            .iter()
+            .any(|(_, symbol)| symbol == "McuCommandBase")
+    );
+    let bridge_import = (
+        "Commands.PythonCommands.bridge_functions.bridge_functions".to_owned(),
+        "BridgeFunctions".to_owned(),
+    );
+    assert!(!declared_imports.contains(&bridge_import));
+    assert_eq!(external_imports, BTreeSet::from([bridge_import]));
+    let bridge = &user["external_imports"][0];
+    assert_eq!(bridge["bundled"], false);
+    assert_eq!(bridge["reason"], "separate_license_and_distribution");
+    let classified_imports = declared_imports
+        .union(&external_imports)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for required in fixed_commands_imports() {
+        assert!(
+            classified_imports.contains(&required),
+            "fixed corpus import {required:?} is not classified"
+        );
+    }
+}
+
+fn surface_imports(user: &Value, field: &str) -> BTreeSet<(String, String)> {
+    user[field]
         .as_array()
-        .expect("required_imports must be an array")
+        .unwrap_or_else(|| panic!("{field} must be an array"))
         .iter()
         .flat_map(|entry| {
             let module = string_at(entry, "module");
@@ -824,22 +857,7 @@ fn assert_fixed_commands_imports_are_classified(user: &Value) {
                     )
                 })
         })
-        .collect::<BTreeSet<_>>();
-    assert!(declared_imports.contains(&(
-        "Commands.McuCommandBase".to_owned(),
-        "McuCommand".to_owned()
-    )));
-    assert!(
-        !declared_imports
-            .iter()
-            .any(|(_, symbol)| symbol == "McuCommandBase")
-    );
-    for required in fixed_commands_imports() {
-        assert!(
-            declared_imports.contains(&required),
-            "fixed corpus import {required:?} is not classified"
-        );
-    }
+        .collect()
 }
 
 fn assert_user_script_members_have_a_normative_source(user: &Value) {

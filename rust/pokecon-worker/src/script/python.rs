@@ -3551,69 +3551,6 @@ class McuCommand(Command):
             self.postProcess()
 
 
-class BridgeFunctions:
-    def __init__(self, commands):
-        self.commands = commands
-        self.is_extension = True
-
-    def check_pokecon_extension(self):
-        return True
-
-    def get_profile_name(self):
-        return _api.profile_name()
-
-    def set_template_directory(self, name1, name2):
-        path = _os.path.join(name1, name2)
-        if _os.path.isdir(path):
-            self.commands.setTemplateDir(name1 + "/")
-
-    def get_template_directory(self):
-        return getattr(self.commands, "template_path_name", "./Template/")
-
-    def bf_print(self, *objects, sep=" ", end="\n"):
-        self.commands.print_tbs("a", *objects, sep=sep, end=end)
-
-    def bf_print_w(self, *objects, sep=" ", end="\n"):
-        self.commands.print_tb("w", *objects, sep=sep, end=end)
-
-    def bf_print_a(self, *objects, sep=" ", end="\n"):
-        self.commands.print_tb("a", *objects, sep=sep, end=end)
-
-    def bf_isContainTemplate(self, *args, **kwargs):
-        return self.commands.isContainTemplate(*args, **kwargs)
-
-    def bf_isContainTemplate_max(self, *args, **kwargs):
-        return self.commands.isContainTemplate_max(*args, **kwargs)
-
-    def bf_dialogue(self, *args, **kwargs):
-        return self.commands.dialogue(*args, **kwargs)
-
-    def bf_dialogue6widget(self, *args, **kwargs):
-        return self.commands.dialogue6widget(*args, **kwargs)
-
-    def bf_dialogue6widget_save_settings(self, *args, **kwargs):
-        return self.commands.dialogue6widget_save_settings(*args, **kwargs)
-
-    def bf_dialogue6widget_select_settings(self, *args, **kwargs):
-        return self.commands.dialogue6widget_select_settings(*args, **kwargs)
-
-    def bf_show_informations(self, name, developer, contributor=None, description=None):
-        self.commands.print_s(name, developer, contributor or "", description or "")
-
-
-for _bridge_name, _command_name in {
-    "bf_isContainTemplate": "isContainTemplate",
-    "bf_isContainTemplate_max": "isContainTemplate_max",
-    "bf_dialogue": "dialogue",
-    "bf_dialogue6widget": "dialogue6widget",
-    "bf_dialogue6widget_save_settings": "dialogue6widget_save_settings",
-    "bf_dialogue6widget_select_settings": "dialogue6widget_select_settings",
-}.items():
-    getattr(BridgeFunctions, _bridge_name).__signature__ = _inspect.signature(
-        getattr(ImageProcPythonCommand, _command_name)
-    )
-
-
 _current = _threading.local()
 _active_command = None
 
@@ -3653,6 +3590,7 @@ def _module(name, package=False):
 
 
 Commands = _module("Commands", True)
+Commands.__path__.append(_api.command_root())
 meta_module = _module("Commands._meta")
 command_module = _module("Commands.CommandBase")
 keys_module = _module("Commands.Keys")
@@ -3663,8 +3601,7 @@ dialogue_module = _module("Commands.dialogue")
 net_module = _module("Commands.net")
 image_module = _module("Commands.image_proc")
 python_commands = _module("Commands.PythonCommands", True)
-bridge_package = _module("Commands.PythonCommands.bridge_functions", True)
-bridge_module = _module("Commands.PythonCommands.bridge_functions.bridge_functions")
+python_commands.__path__.append(_os.path.join(_api.command_root(), "PythonCommands"))
 
 meta_module.CommandMeta = CommandMeta
 command_module.Command = Command
@@ -3681,8 +3618,6 @@ for value in (
     setattr(python_module, value.__name__, value)
 mcu_module.McuCommand = McuCommand
 dialogue_module.Widget = Widget
-bridge_package.BridgeFunctions = BridgeFunctions
-bridge_module.BridgeFunctions = BridgeFunctions
 
 for name in (
     "show_dialog",
@@ -3739,8 +3674,6 @@ Commands.Sender = sender_module
 Commands.PythonCommandBase = python_module
 Commands.McuCommandBase = mcu_module
 Commands.PythonCommands = python_commands
-python_commands.bridge_functions = bridge_package
-bridge_package.bridge_functions = bridge_module
 
 
 def _manual_tags(command):

@@ -12,7 +12,7 @@ Rust版は旧ディレクトリを直接更新しません。旧実装を残し�
 
 ## 3. スクリプトを移す
 
-旧`SerialController/Commands/PythonCommands`と`McuCommands`を、Dataの`Commands`以下へ同じ相対構造でコピーします。sourceを書き換えたり、importを一括置換したりしないでください。managed workerは`Commands.PythonCommandBase`、`Commands.McuCommandBase`、`Commands.Keys`、bridge functionsを互換moduleとして提供します。
+旧`SerialController/Commands/PythonCommands`と`McuCommands`を、Dataの`Commands`以下へ同じ相対構造でコピーします。sourceを書き換えたり、importを一括置換したりしないでください。managed workerは`Commands.PythonCommandBase`、`Commands.McuCommandBase`、`Commands.Keys`を互換moduleとして提供します。異なるライセンスで作者が単体配布する`bridge_functions`は同梱しないため、必要な場合は作者配布の原本を`<Data>/Commands/PythonCommands/bridge_functions/`へ別途配置してください。
 
 templateやcommand固有assetは、スクリプトが期待する相対位置を保って移します。外部の絶対pathを使っていた場合は、profile設定またはスクリプト固有設定で新しいpathを明示します。
 

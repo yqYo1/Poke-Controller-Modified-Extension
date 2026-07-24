@@ -397,6 +397,51 @@ firmware.TAGS = ["mcu"]
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn author_distributed_python_command_dependencies_load_from_the_command_root() {
+    const BRIDGE_SOURCE: &str = r#"
+class BridgeFunctions:
+    origin = "author-distributed"
+"#;
+    const COMMAND_SOURCE: &str = r#"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.PythonCommands.bridge_functions.bridge_functions import BridgeFunctions
+
+
+class UsesExternalBridge(PythonCommand):
+    def do(self):
+        assert BridgeFunctions.origin == "author-distributed"
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    let bridge_directory = command_root.join("PythonCommands/bridge_functions");
+    std::fs::create_dir_all(&bridge_directory).expect("external bridge directory is created");
+    std::fs::write(bridge_directory.join("bridge_functions.py"), BRIDGE_SOURCE)
+        .expect("external bridge fixture is written");
+    std::fs::write(command_root.join("uses_external_bridge.py"), COMMAND_SOURCE)
+        .expect("command fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let discovered = client.discover().await.expect("command discovery succeeds");
+    assert_eq!(discovered.commands.len(), 1);
+    assert_eq!(
+        discovered.commands[0].command.class_name,
+        "UsesExternalBridge"
+    );
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: discovered.commands[0].relative_path.clone(),
+            class_name: "UsesExternalBridge".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("command with external dependency executes");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn pause_and_resume_are_idempotent_and_stop_wakes_a_paused_command() {
     const SOURCE: &str = r"
 from Commands.PythonCommandBase import PythonCommand
@@ -682,12 +727,17 @@ class Contracts(PythonCommand):
             ("PythonCommandBase.pyi", "Commands.PythonCommandBase"),
             ("image_proc.pyi", "Commands.image_proc"),
             ("McuCommandBase.pyi", "Commands.McuCommandBase"),
-            (
-                "PythonCommands/bridge_functions/bridge_functions.pyi",
-                "Commands.PythonCommands.bridge_functions.bridge_functions",
-            ),
         ):
             _check_stub(filename, module_name)
+
+        try:
+            importlib.import_module(
+                "Commands.PythonCommands.bridge_functions.bridge_functions"
+            )
+        except ModuleNotFoundError:
+            pass
+        else:
+            raise AssertionError("bridge_functions must not be bundled by the worker")
 
         assert isinstance(Command, CommandMeta)
         assert isinstance(PythonCommand, CommandMeta)

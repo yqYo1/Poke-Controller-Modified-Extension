@@ -6,5 +6,4 @@ from Commands.CommandBase import Command as Command
 from Commands.Keys import Button as Button, Direction as Direction, Hat as Hat, KeyPress as KeyPress, Stick as Stick, Touchscreen as Touchscreen
 from Commands.McuCommandBase import McuCommand as McuCommand
 from Commands.PythonCommandBase import Camera as Camera, CaptureArea as CaptureArea, ImageProcPythonCommand as ImageProcPythonCommand, PythonCommand as PythonCommand, StopThread as StopThread
-from Commands.PythonCommands.bridge_functions.bridge_functions import BridgeFunctions as BridgeFunctions
 from Commands.dialogue import Widget as Widget

@@ -26,7 +26,11 @@ export default defineConfig(
       },
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.js', 'vitest.setup.ts']
+          allowDefaultProject: [
+            'eslint.config.ts',
+            'svelte.config.ts',
+            'vitest.setup.ts'
+          ]
         },
         extraFileExtensions: ['.svelte']
       }

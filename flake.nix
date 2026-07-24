@@ -157,8 +157,12 @@
               || lib.hasSuffix ".html" sourcePath
               || lib.hasSuffix ".css" sourcePath
               || lib.hasSuffix ".svelte" sourcePath
+              # Keep legacy JavaScript visible so source_filter can reject it
+              # instead of silently omitting it from the Nix source tree.
               || lib.hasSuffix ".js" sourcePath
               || lib.hasSuffix ".jsx" sourcePath
+              || lib.hasSuffix ".mjs" sourcePath
+              || lib.hasSuffix ".cjs" sourcePath
               || lib.hasSuffix ".ts" sourcePath
               || lib.hasSuffix ".tsx" sourcePath
               || lib.hasSuffix ".lua" sourcePath

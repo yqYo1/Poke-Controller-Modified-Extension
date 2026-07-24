@@ -31,7 +31,7 @@ class GuardResult:
 
 
 PYTHON_SUFFIXES: Final = frozenset({".py", ".pyi"})
-WEB_SUFFIXES: Final = frozenset({".svelte", ".ts", ".js", ".tsx", ".jsx"})
+WEB_SUFFIXES: Final = frozenset({".svelte", ".ts", ".tsx"})
 
 
 def _has_file(root: Path, directory: str, suffixes: frozenset[str]) -> bool:

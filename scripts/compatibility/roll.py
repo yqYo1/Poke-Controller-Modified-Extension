@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Never
 
-from scripts.compatibility_inventory import (
+from scripts.compatibility.inventory import (
     Baseline,
     inventory_baseline,
     load_baselines,
@@ -21,7 +21,7 @@ from scripts.compatibility_inventory import (
     require_sequence,
     require_string,
 )
-from scripts.compatibility_promote import (
+from scripts.compatibility.promote import (
     append_decision,
     load_candidates,
     load_history,
@@ -29,7 +29,7 @@ from scripts.compatibility_promote import (
     validate_decision_results,
     validate_history,
 )
-from scripts.compatibility_runner import (
+from scripts.compatibility.runner import (
     FIXTURE_CATALOG,
     build_results,
     load_manifest,
@@ -365,7 +365,7 @@ def evaluate_pending(
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--registry",

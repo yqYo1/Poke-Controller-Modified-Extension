@@ -84,7 +84,7 @@
     "extract": "nix run .#compatibility-inventory",
     "execute": "nix run .#compatibility",
     "verify": "nix run .#compatibility -- --check",
-    "promotion_check": "python -m scripts.compatibility_promote --check",
+    "promotion_check": "python -m scripts.compatibility.promote --check",
     "rolling_evaluate": "nix run .#compatibility-roll",
     "rolling_monitor": ".github/workflows/compatibility-roll.yml"
   }

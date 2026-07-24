@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.source_guard import Guard, evaluate_guard
+from scripts.quality.source_guard import Guard, evaluate_guard
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -28,7 +28,7 @@ def test_source_guard_reports_absent_fixtures(guard: Guard, tmp_path: Path) -> N
     [
         (Guard.RUST, ["rust/example/src/lib.rs"]),
         (Guard.PYTHON, ["python/pokecon/__init__.py"]),
-        (Guard.PYTHON_LINT, ["scripts/source_guard.py"]),
+        (Guard.PYTHON_LINT, ["scripts/quality/source_guard.py"]),
         (Guard.PYTEST, ["tests/component/test_runtime.py"]),
         (
             Guard.WEB,

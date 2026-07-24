@@ -569,7 +569,7 @@ fn external_acceptance_contract_closes_steps_and_release_matrix() {
             assert!(ACCEPTANCE_PROCEDURE.contains(&format!("`{step}`")));
         }
     }
-    assert!(FLAKE.contains("python scripts/acceptance_records.py"));
+    assert!(FLAKE.contains("python -m scripts.acceptance.records"));
     assert!(FLAKE.contains("pkgs.check-jsonschema"));
 }
 

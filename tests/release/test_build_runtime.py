@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import scripts.build_release_runtime as release_runtime
-from scripts.build_release_runtime import (
+import scripts.release.build_runtime as release_runtime
+from scripts.release.build_runtime import (
     PORTABLE_BUILD_PREFIX,
     REPRODUCIBLE_ZIP_EPOCH,
     install_python,
@@ -223,7 +223,7 @@ def test_normalize_wheel_repacks_unchanged_members_deterministically(
 def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow_name: str,
 ) -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
 
     assert "$env:RUNNER_TEMP" in workflow
@@ -234,7 +234,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
 
 
 def test_nix_release_task_declares_reproducible_native_build_paths() -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
 
     assert 'CFLAGS="-I${pkgs.portaudio}/include' in flake

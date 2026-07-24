@@ -438,7 +438,7 @@
       <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension" target="_blank" rel="noreferrer">GitHub</a>
       <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/KawaSwitch/Poke-Controller/wiki" target="_blank" rel="noreferrer">Poke-Controller Guide</a>
       <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/issues/new/choose" target="_blank" rel="noreferrer">{t('Question template', '質問テンプレート')}</a>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/changelog.txt" target="_blank" rel="noreferrer">{t('Change log', '更新履歴')}</a>
+      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/docs/legacy/CHANGELOG.txt" target="_blank" rel="noreferrer">{t('Change log', '更新履歴')}</a>
       <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/LICENSE" target="_blank" rel="noreferrer">LICENSE</a>
       <button
         type="button"

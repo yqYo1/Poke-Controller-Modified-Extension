@@ -24,6 +24,21 @@ nix run .#acceptance-record-check -- \
 
 総合結果を`passed`にできるのは、以下に示す必須step IDを記載順にすべて含め、各stepが`passed`で、該当する閾値をすべて満たした場合だけです。validatorはstepの欠落、追加、重複、順序違い、計測閾値違反、開始時刻以後でない完了時刻を拒否します。`not_applicable`を含む記録は、そのcapabilityの合格証拠として使用できません。
 
+## 仮想I/O事前試験
+
+Linuxでは実機gateへ進む前に、kernel PTYとV4L2 loopbackを使ってnative I/O経路を検査できます。
+
+```bash
+nix run .#virtual-io-check
+
+# 既存のloopback device indexを使う場合
+nix run .#virtual-io-check -- 42
+```
+
+このタスクはPTY master／slave間のpartial read／writeと、`ffmpeg`の既知test patternを入力した`/dev/videoN`の列挙、format交渉、BGR復号、再設定を検証します。実行中kernelに対応する`v4l2loopback` moduleと、moduleをloadできるpasswordless `sudo`が必要です。タスク自身がmoduleをloadした場合だけ終了時にunloadします。
+
+仮想I/Oはnative OS APIまでの決定的な回帰試験です。ただし、USB切断、MCU firmware、対象console上の入力、物理camera固有format、driver差分は再現しないため、以下の実機記録を省略できません。
+
 ## 実機gate
 
 ### MCU／シリアル

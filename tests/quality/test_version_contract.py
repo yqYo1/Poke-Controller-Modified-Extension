@@ -9,7 +9,7 @@ def _read_toml(path: Path) -> dict[str, Any]:
 
 
 def test_workspace_is_the_single_version_source() -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     cargo = _read_toml(root / "Cargo.toml")
     pyproject = _read_toml(root / "pyproject.toml")
 

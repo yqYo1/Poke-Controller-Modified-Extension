@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from scripts.stage_release import bundle_resource_map, stage_resources
+from scripts.release.stage import bundle_resource_map, stage_resources
 
 if TYPE_CHECKING:
     from pathlib import Path

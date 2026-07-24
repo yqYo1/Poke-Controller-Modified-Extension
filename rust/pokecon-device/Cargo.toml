@@ -27,5 +27,8 @@ win32_notif = { version = "0.15.3", default-features = false }
 [dev-dependencies]
 tempfile.workspace = true
 
+[target.'cfg(unix)'.dev-dependencies]
+nix.workspace = true
+
 [lints]
 workspace = true

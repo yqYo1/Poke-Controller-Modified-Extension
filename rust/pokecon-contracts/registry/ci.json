@@ -109,14 +109,14 @@
       "applicable_when": "always; an empty future source directory set is a valid checked state",
       "not_applicable": "forbidden",
       "phase": 2,
-      "implementation_status": "implemented by scripts/source_filter.py with covered and uncovered fixture branches"
+      "implementation_status": "implemented by scripts/quality/source_filter.py with covered and uncovered fixture branches"
     },
     {
       "name": "pytest/test-linux",
       "workflow": "pytest",
       "job": "test-linux",
       "command": "nix run .#test",
-      "applicable_when": "tracked tests/test_*.py or tests/**/*_test.py exists",
+      "applicable_when": "tracked tests/**/test_*.py or tests/**/*_test.py exists",
       "not_applicable": "notice naming both absent pytest collection patterns",
       "phase": 2
     },

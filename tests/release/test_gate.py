@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts.release_gate import validate_release, write_checksums
+from scripts.release.gate import validate_release, write_checksums
 
 
 def test_repository_release_versions_and_contracts_match() -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     assert validate_release(root, "v0.1.0") == "0.1.0"
     with pytest.raises(ValueError, match="must equal"):
         validate_release(root, "v0.1.1")

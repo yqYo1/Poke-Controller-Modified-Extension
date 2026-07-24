@@ -354,7 +354,7 @@
               text = ''
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
-                exec python scripts/acceptance_records.py "$@"
+                exec python -m scripts.acceptance.records "$@"
               '';
             };
 
@@ -385,6 +385,23 @@
                 ${setupWorkdir}
                 ${desktopEnvironment}
                 cargo test --locked --workspace --all-features
+              '';
+            };
+
+            virtual-io-check = mkTask {
+              name = "virtual-io-check";
+              runtimeInputs =
+                rustTaskInputs
+                ++ lib.optionals pkgs.stdenv.isLinux [
+                  pkgs.ffmpeg
+                  pkgs.gnugrep
+                  pkgs.kmod
+                  pkgs.v4l-utils
+                ];
+              text = ''
+                ${setupWorkdir}
+                ${desktopEnvironment}
+                "${pkgs.bash}/bin/bash" scripts/integration/virtual-io-smoke.sh "$@"
               '';
             };
 
@@ -421,11 +438,11 @@
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
-                python scripts/acceptance_records.py
-                scripts/generate-api-types.sh --check
+                python -m scripts.acceptance.records
+                scripts/quality/generate-api-types.sh --check
                 basedpyright
-                shellcheck scripts/*.sh
-                python scripts/source_filter.py
+                shellcheck scripts/*.sh scripts/*/*.sh
+                python -m scripts.quality.source_filter
               '';
             };
 
@@ -446,7 +463,7 @@
               ];
               text = ''
                 cd "${source}"
-                exec python scripts/compatibility_inventory.py --check "$@"
+                exec python -m scripts.compatibility.inventory --check "$@"
               '';
             };
 
@@ -459,8 +476,8 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
-                python -m scripts.compatibility_promote --check
-                exec python -m scripts.compatibility_runner \
+                python -m scripts.compatibility.promote --check
+                exec python -m scripts.compatibility.runner \
                   --check \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
@@ -482,7 +499,7 @@
                 export PYTHONPATH="$PWD''${PYTHONPATH:+:$PYTHONPATH}"
                 export CARGO_TARGET_DIR="''${CARGO_TARGET_DIR:-$PWD/target/nix-tasks}"
                 cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
-                exec python -m scripts.compatibility_roll \
+                exec python -m scripts.compatibility.roll \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
                   --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}" \
@@ -495,7 +512,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${source}"
-                exec python scripts/source_guard.py "$@"
+                exec python -m scripts.quality.source_guard "$@"
               '';
             };
 
@@ -504,7 +521,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${source}"
-                exec python scripts/source_filter.py "$@"
+                exec python -m scripts.quality.source_filter "$@"
               '';
             };
 
@@ -513,7 +530,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 cd "${source}"
-                exec python -m scripts.release_gate "$@"
+                exec python -m scripts.release.gate "$@"
               '';
             };
 
@@ -629,7 +646,7 @@
                 release_wheelhouse="$workdir/release-wheelhouse"
                 CFLAGS="-I${pkgs.portaudio}/include''${CFLAGS:+ $CFLAGS}" \
                 LDFLAGS="-L${pkgs.portaudio}/lib''${LDFLAGS:+ $LDFLAGS}" \
-                  python -m scripts.build_release_runtime \
+                  python -m scripts.release.build_runtime \
                   --project "$workdir" \
                   --uv "${portableUvBinary}" \
                   --runtime-output "$release_python" \
@@ -663,7 +680,7 @@
                 cp -p "$application" "$application_backup"
                 cp -p "$application" "$normalized_application"
                 cp -p "$worker" "$normalized_worker"
-                python -m scripts.normalize_linux_elf \
+                python -m scripts.release.normalize_linux_elf \
                   --application "$normalized_application" \
                   --worker "$normalized_worker" \
                   --python-root "$release_python" \
@@ -672,7 +689,7 @@
                   --objdump "${pkgs.binutils}/bin/objdump"
                 bundle_root="$workdir/bundle-resources"
                 bundle_config="$workdir/tauri.bundle.json"
-                python -m scripts.stage_release \
+                python -m scripts.release.stage \
                   --web "$workdir/web/dist" \
                   --worker "$normalized_worker" \
                   --uv "${portableUvBinary}" \
@@ -695,7 +712,7 @@
                 )
                 restore_release_application
                 while IFS= read -r -d "" package; do
-                  python -m scripts.normalize_debian_package \
+                  python -m scripts.release.normalize_debian_package \
                     --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
                     "$package"
                 done < <(find "$CARGO_TARGET_DIR/release/bundle" -type f -name '*.deb' -print0)
@@ -718,7 +735,7 @@
               ];
               text = ''
                 export PYTHONPATH="${source}''${PYTHONPATH:+:$PYTHONPATH}"
-                exec python -m scripts.package_smoke \
+                exec python -m scripts.release.package_smoke \
                   --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --objdump "${pkgs.binutils}/bin/objdump" \
@@ -735,7 +752,7 @@
               ];
               text = ''
                 export POKECON_DOCKER="${pkgs.docker-client}/bin/docker"
-                exec "${pkgs.bash}/bin/bash" "${source}/scripts/debian_install_smoke.sh" "$@"
+                exec "${pkgs.bash}/bin/bash" "${source}/scripts/release/debian_install_smoke.sh" "$@"
               '';
             };
 
@@ -851,7 +868,7 @@
               ];
               text = ''
                 cd "${source}"
-                if python scripts/source_guard.py web --require-applicable; then
+                if python -m scripts.quality.source_guard web --require-applicable; then
                   workdir="$(mktemp -d)"
                   trap 'rm -rf "$workdir"' EXIT
                   cp -R web/. "$workdir/"
@@ -878,7 +895,7 @@
               runtimeInputs = rustTaskInputs ++ [ pkgs.nodejs_20 ];
               text = ''
                 ${desktopEnvironment}
-                exec scripts/generate-api-types.sh "$@"
+                exec scripts/quality/generate-api-types.sh "$@"
               '';
             };
 
@@ -905,14 +922,14 @@
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules''${NODE_PATH:+:$NODE_PATH}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD''${PYTHONPATH:+:$PYTHONPATH}"
-                python scripts/source_filter.py
+                python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
-                python -m scripts.release_gate
+                python -m scripts.release.gate
                 cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
                 cargo test --locked --package pokecon-contracts --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
-                python scripts/acceptance_records.py
-                scripts/generate-api-types.sh --check
+                python -m scripts.acceptance.records
+                scripts/quality/generate-api-types.sh --check
                 npm --prefix web ci --no-audit --no-fund
                 npm --prefix web run lint
                 npm --prefix web run svelte-check
@@ -921,8 +938,8 @@
                 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 cargo test --locked --workspace --all-features
                 cargo build --locked --workspace --all-features
-                python -m scripts.compatibility_promote --check
-                python -m scripts.compatibility_runner \
+                python -m scripts.compatibility.promote --check
+                python -m scripts.compatibility.runner \
                   --check \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
@@ -931,9 +948,9 @@
                 ruff format --config ruff.toml --no-cache --check python scripts tests
                 basedpyright
                 python -m pytest -p no:cacheprovider tests -v --tb=short
-                shellcheck scripts/*.sh
+                shellcheck scripts/*.sh scripts/*/*.sh
                 markdownlint --config .markdownlint.json ./*.md docs/*.md
-                textlint --config .textlintrc.json ./*.md docs/*.md ./*.txt
+                textlint --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
                 typos
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
               '';
@@ -949,7 +966,7 @@
                 check-workspace-lock = {
                   enable = true;
                   name = "Check root Cargo.lock";
-                  entry = "bash ${source}/scripts/check-workspace-lock.sh";
+                  entry = "bash ${source}/scripts/quality/check-workspace-lock.sh";
                   pass_filenames = false;
                 };
                 clippy = {

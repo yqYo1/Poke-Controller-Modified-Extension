@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 mode="${1:-generate}"
 if [[ "$mode" != "generate" && "$mode" != "--check" ]]; then
-  echo "usage: scripts/generate-api-types.sh [generate|--check]" >&2
+  echo "usage: scripts/quality/generate-api-types.sh [generate|--check]" >&2
   exit 2
 fi
 

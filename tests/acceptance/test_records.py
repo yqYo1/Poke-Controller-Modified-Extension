@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.acceptance_records import (
+from scripts.acceptance.records import (
     AcceptanceContract,
     expected_release_gate_keys,
     load_contract,
@@ -17,7 +17,7 @@ from scripts.acceptance_records import (
     validate_schema_and_records,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = ROOT / "rust/pokecon-contracts/registry/acceptance-record.schema.json"
 EXAMPLE = ROOT / "rust/pokecon-contracts/registry/acceptance-record.example.json"
 SOURCE_COMMIT = "1" * 40

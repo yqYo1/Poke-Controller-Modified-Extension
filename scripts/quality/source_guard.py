@@ -84,7 +84,7 @@ def evaluate_guard(root: Path, guard: Guard) -> GuardResult:
         Guard.PYTEST: (
             _python_tests_exist(root),
             "collectable pytest source exists",
-            "pytest source (tests/test_*.py or tests/**/*_test.py) is absent",
+            "pytest source (tests/**/test_*.py or tests/**/*_test.py) is absent",
         ),
         Guard.WEB: (
             _web_exists(root),

@@ -41,11 +41,15 @@ Linux `.deb`では`70-pokecon-controller.rules`が導入され、active local se
 
 切断時に入力が残る場合は安全性に関わる不具合です。再接続を繰り返さず、対象generation、route、serial modeを記録して停止してください。
 
+実機を接続する前に`nix run .#virtual-io-check`でPTY経路を検査できます。PTY試験だけ失敗する場合は、物理portやudevではなくnative serial backendの回帰として切り分けます。
+
 ## カメラが映らない
 
 OSのprivacy設定とdevice permissionを確認し、別アプリがcameraを占有していない状態にします。Linux `.deb`のudev ruleはactive local sessionへ`video4linux` accessを付与しますが、headless環境では`video` groupまたは管理者ruleが必要です。resolutionやflip設定を変更した後は、状態revisionが更新されているかUIで確認します。WebRTCに失敗した場合はWebSocket fallbackへ移り、条件が戻ると自動復旧します。
 
 実機検証では既知frameを用意し、capture resolution、色順、crop座標、template resultを記録します。
+
+Linuxで仮想camera試験が`module not found`またはsymbol errorになる場合は、実行中の`uname -r`と同じkernel用の追加module、および`v4l2loopback`が導入されているか確認します。すでに別indexで`v4l2loopback`をloadしている場合は、存在するindexを`nix run .#virtual-io-check -- INDEX`へ渡します。
 
 ## デスクトップwindowが閉じない
 

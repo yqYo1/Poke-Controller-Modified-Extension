@@ -101,7 +101,7 @@
     },
     {
       "id": "python_tests",
-      "paths": ["tests/test_*.py", "tests/**/*_test.py"],
+      "paths": ["tests/**/test_*.py", "tests/**/*_test.py"],
       "observed_in": ["flake.nix", ".github/workflows/pytest.yml"],
       "status": "implemented",
       "phase": 2,
@@ -109,11 +109,16 @@
     },
     {
       "id": "legacy_src_server",
-      "paths": ["src-server/Cargo.toml", "src-server/Cargo.lock", "src-server/src/main.rs"],
+      "paths": [
+        "src-server/Cargo.toml",
+        "src-server/Cargo.lock",
+        "src-server/src/main.rs",
+        "src-server/icons"
+      ],
       "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
       "status": "resolved",
       "phase": 2,
-      "resolution": "all active manifests, hooks, and workflows use the root workspace app, server, and desktop crates"
+      "resolution": "all active manifests, hooks, workflows, and icons use the root workspace app, server, and desktop crates; the remaining stale icon directory was removed"
     },
     {
       "id": "legacy_typescript_output",
@@ -158,10 +163,10 @@
       "id": "external_acceptance",
       "paths": [
         "docs/ACCEPTANCE.md",
-        "scripts/acceptance_records.py",
+        "scripts/acceptance/records.py",
         "rust/pokecon-contracts/registry/acceptance-record.schema.json",
         "rust/pokecon-contracts/registry/acceptance-record.example.json",
-        "tests/test_acceptance_records.py"
+        "tests/acceptance/test_records.py"
       ],
       "observed_in": [
         "flake.nix",

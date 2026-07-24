@@ -1,6 +1,6 @@
 # Changelog
 
-この文書はRust再実装系列の変更を記録します。旧Python GUI系列の履歴は[changelog.txt](changelog.txt)に保持しています。
+この文書はRust再実装系列の変更を記録します。旧Python GUI系列の履歴は[docs/legacy/CHANGELOG.txt](docs/legacy/CHANGELOG.txt)に保持しています。
 
 ## 0.1.0 - Unreleased
 
@@ -13,6 +13,7 @@
 - fixed 3 baseline、103 scriptsをmanaged workerで検証する互換性runner
 - Linux package、Windows NSIS installer、Python wheelのrelease pipelineとSHA-256 manifest
 - 同梱CPython 3.14、managed uv、offline wheelhouse、Linux udev access ruleを検証するclean-install package gate
+- PTY serialとV4L2 loopback cameraをnative backend経由で検証するLinux virtual I/O gate
 
 ### Changed
 
@@ -20,6 +21,8 @@
 - user setting、profile、generated typings、managed venvをOS標準のConfig／Data／Cache／Stateへ分離
 - legacy Tk、dialog、image、network、MQTT、LINE／Discord helperを閉じた互換surfaceとして再実装
 - SvelteKit versionとDebian archive metadataを固定し、Linux release artifactをバイト単位で再現可能化
+- 開発toolingとtestをacceptance、compatibility、quality、release、integrationの責務別directoryへ整理
+- Linux camera captureをMMAP優先・USERPTR fallbackにし、driverが報告したframe byte数だけを復号
 
 ### Security
 

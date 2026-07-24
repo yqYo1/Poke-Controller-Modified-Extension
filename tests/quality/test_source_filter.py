@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from scripts.source_filter import check_source_filter
+from scripts.quality.source_filter import check_source_filter
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -9,14 +9,7 @@ on:
       - 'rust/**'
       - 'web/**'
       - 'python/**'
-      - 'scripts/build_release_runtime.py'
-      - 'scripts/debian_container_smoke.sh'
-      - 'scripts/debian_install_smoke.sh'
-      - 'scripts/normalize_debian_package.py'
-      - 'scripts/normalize_linux_elf.py'
-      - 'scripts/package_smoke.py'
-      - 'scripts/stage_release.py'
-      - 'scripts/windows_install_smoke.ps1'
+      - 'scripts/release/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'pyproject.toml'
@@ -31,14 +24,7 @@ on:
       - 'rust/**'
       - 'web/**'
       - 'python/**'
-      - 'scripts/build_release_runtime.py'
-      - 'scripts/debian_container_smoke.sh'
-      - 'scripts/debian_install_smoke.sh'
-      - 'scripts/normalize_debian_package.py'
-      - 'scripts/normalize_linux_elf.py'
-      - 'scripts/package_smoke.py'
-      - 'scripts/stage_release.py'
-      - 'scripts/windows_install_smoke.ps1'
+      - 'scripts/release/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'pyproject.toml'
@@ -133,7 +119,7 @@ jobs:
           $releaseWheelhouse = Join-Path $releaseRoot "wheelhouse"
           $bundleResources = Join-Path $releaseRoot "bundle-resources"
           $bundleConfig = Join-Path $releaseRoot "tauri.bundle.json"
-          python -m scripts.build_release_runtime `
+          python -m scripts.release.build_runtime `
             --project . `
             --uv $uv `
             --runtime-output $releasePython `
@@ -143,7 +129,7 @@ jobs:
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
           cargo build --locked --release --package pokecon-worker --bin pokecon-worker
-          python -m scripts.stage_release `
+          python -m scripts.release.stage `
             --web web/dist `
             --worker target/release/pokecon-worker.exe `
             --uv $uv `
@@ -162,7 +148,7 @@ jobs:
       - name: Verify clean install, startup, upgrade, and uninstall
         shell: pwsh
         run: >-
-          ./scripts/windows_install_smoke.ps1
+          ./scripts/release/windows_install_smoke.ps1
           -Installer (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
       - uses: actions/upload-artifact@v7
         with:

@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.compatibility_inventory import Baseline
-from scripts.compatibility_promote import (
+from scripts.compatibility.inventory import Baseline
+from scripts.compatibility.promote import (
     append_decision,
     canonical_sha256,
     load_candidates,
@@ -17,8 +17,8 @@ from scripts.compatibility_promote import (
     validate_decision_results,
     validate_history,
 )
-from scripts.compatibility_roll import changed_script_paths, discover_candidates
-from scripts.compatibility_runner import command_root_for, script_domains
+from scripts.compatibility.roll import changed_script_paths, discover_candidates
+from scripts.compatibility.runner import command_root_for, script_domains
 
 if TYPE_CHECKING:
     from pathlib import Path

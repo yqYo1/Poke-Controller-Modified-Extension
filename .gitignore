@@ -30,7 +30,6 @@
 !/README.md
 !/CHANGELOG.md
 !/UpdatePokeConModified-Extension.bat
-!/changelog.txt
 !/pyrightconfig.json
 !/pyproject.toml
 !/ruff.toml
@@ -45,6 +44,10 @@
 !/scripts/*.sh
 !/scripts/*.py
 !/scripts/*.ps1
+!/scripts/*/
+!/scripts/**/*.sh
+!/scripts/**/*.py
+!/scripts/**/*.ps1
 
 !/api/
 /api/*
@@ -83,6 +86,9 @@
 !/docs/
 /docs/*
 !/docs/*.md
+!/docs/*/
+!/docs/**/*.md
+!/docs/**/*.txt
 
 !/web/
 /web/*
@@ -201,6 +207,8 @@ result-*
 !/tests/
 /tests/*
 !/tests/*.py
+!/tests/*/
+!/tests/**/*.py
 
 # Web frontend
 !/web/

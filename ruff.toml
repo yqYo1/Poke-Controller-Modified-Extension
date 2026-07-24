@@ -64,22 +64,22 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
-"scripts/compatibility_inventory.py" = [
+"scripts/compatibility/inventory.py" = [
   "EM101",  # 検証失敗の動的な文脈を例外メッセージへ保持する
   "EM102",
   "S603",  # 引数配列で固定git実行ファイルを呼ぶ互換コーパス取得器
   "S607",
 ]
-"scripts/build_release_runtime.py" = [
+"scripts/release/build_runtime.py" = [
   "S603",  # release tool paths are explicit CLI/Nix inputs and never shell-expanded
 ]
-"scripts/normalize_linux_elf.py" = [
+"scripts/release/normalize_linux_elf.py" = [
   "S603",  # release tool paths are explicit CLI/Nix inputs and never shell-expanded
 ]
-"scripts/normalize_debian_package.py" = [
+"scripts/release/normalize_debian_package.py" = [
   "S603",  # dpkg-deb is an explicit resolved CLI/Nix input and is never shell-expanded
 ]
-"scripts/package_smoke.py" = [
+"scripts/release/package_smoke.py" = [
   "S603",  # package/tool paths are explicit CLI/Nix inputs and never shell-expanded
 ]
 "tests/**/*.py" = ["S101"]

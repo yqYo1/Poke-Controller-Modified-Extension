@@ -293,7 +293,7 @@ def validate_schema_and_records(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--release-candidate",

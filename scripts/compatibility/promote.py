@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Never
 
-from scripts.compatibility_inventory import (
+from scripts.compatibility.inventory import (
     require_mapping,
     require_sequence,
     require_string,
@@ -215,7 +215,7 @@ def append_decision(
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--candidates", type=Path, default=root / "compatibility/candidates.json"

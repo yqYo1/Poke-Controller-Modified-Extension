@@ -15,7 +15,7 @@ extend-exclude = [
     ".venv/",
     "*.min.js",
     "*.min.css",
-    "changelog.txt",
+    "docs/legacy/CHANGELOG.txt",
     "SerialController/db/pokedex.json",
 ]
 

@@ -265,7 +265,7 @@ def serialized_inventory(inventory: Mapping[str, object]) -> str:
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--registry",

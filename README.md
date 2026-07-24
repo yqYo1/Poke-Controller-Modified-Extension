@@ -49,6 +49,7 @@ nix run .#check
 ```bash
 nix run .#clippy
 nix run .#cargo-test
+nix run .#virtual-io-check
 nix run .#web-check
 nix run .#compatibility
 nix run .#tauri-check
@@ -59,6 +60,8 @@ nix build .#pokecon-server
 ```
 
 `nix run .#compatibility`は固定commitと昇格済みcommitを取得し、全スクリプトの内容hash、Python 3.14構文、import、クラス検出をmanaged workerで検証します。追跡済みの固定結果は[compatibility/fixed-results.json](compatibility/fixed-results.json)です。週次workflowは3 upstreamのdefault branchをimmutable SHAとして収集し、完全保証チェーン、runtime evidence、公開API契約が通った候補だけをhash chain付き履歴へ昇格します。失敗または未完了の実機gateは理由付きで隔離し、署名付きcommitのreview PRとして提出します。
+
+Linuxの`nix run .#virtual-io-check`はkernelのPTYと`v4l2loopback`へテストpatternを流し、native serial／camera backendを実際のdevice node経由で検証します。実行中kernel用の`v4l2loopback` moduleとpasswordless `sudo`が必要です。このsmoke testは実機gateの前段であり、MCU、対象console、物理cameraを使う外部受入記録の代替ではありません。
 
 Package CIはUbuntu 24.04へのクリーンインストール、完全オフラインのmanaged worker起動、upgrade／uninstall時のユーザーデータ保持、Linux成果物の2回buildによるバイト単位の再現性、Windows NSISのsilent install／startup／upgrade／uninstallを検証します。
 
@@ -72,7 +75,13 @@ web/                          SvelteKit 2 / Svelte 5 UI
 python/pokecon/               Python bindingと型情報
 api/                          OpenAPIと生成TypeScript
 compatibility/                固定コーパス、実行結果、昇格履歴
-scripts/                      Nix/CIから呼ぶ検証・配布タスク
+scripts/acceptance/           外部受入記録の検証
+scripts/compatibility/        互換性corpusの収集・実行・昇格
+scripts/integration/          仮想deviceを使う統合smoke test
+scripts/quality/              source guardと生成contract検査
+scripts/release/              配布物の構築・正規化・導入検査
+scripts/ci-watch.sh           push後のGitHub Actions監視
+tests/                        上記Python toolingの責務別test suite
 docs/                         導入、設定、移行、受入、トラブルシュート
 ```
 

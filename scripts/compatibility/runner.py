@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Never, cast
 
-from scripts.compatibility_inventory import (
+from scripts.compatibility.inventory import (
     Baseline,
     load_baselines,
     materialize_repository,
@@ -23,7 +23,7 @@ from scripts.compatibility_inventory import (
     require_string,
     run_git,
 )
-from scripts.compatibility_promote import (
+from scripts.compatibility.promote import (
     canonical_sha256,
     load_candidates,
     load_history,
@@ -453,7 +453,7 @@ def verify_promoted_corpora(
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--registry",

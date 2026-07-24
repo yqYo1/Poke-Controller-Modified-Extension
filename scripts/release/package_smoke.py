@@ -13,7 +13,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
-from scripts.build_release_runtime import PYTHON_VERSION, WORKER_RUNTIME_SMOKE
+from scripts.release.build_runtime import PYTHON_VERSION, WORKER_RUNTIME_SMOKE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

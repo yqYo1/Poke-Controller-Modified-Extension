@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.package_smoke import (
+from scripts.release.package_smoke import (
     EXPECTED_UDEV_RULES,
     REQUIRED_WORKER_PACKAGES,
     UDEV_RULE_PATH,

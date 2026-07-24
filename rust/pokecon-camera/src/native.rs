@@ -28,6 +28,7 @@ mod platform {
     use nokhwa::utils::{FrameFormat, Resolution};
     use v4l::buffer::Type;
     use v4l::capability::Flags;
+    use v4l::io::mmap::Stream as MmapStream;
     use v4l::io::traits::CaptureStream as _;
     use v4l::io::userptr::Stream as UserptrStream;
     use v4l::video::Capture as _;
@@ -72,10 +73,10 @@ mod platform {
     }
 
     struct LinuxCameraSession {
-        // Keep the device handle alongside the user-pointer stream. The stream
-        // clones the same kernel handle and therefore has no self-reference.
+        // Both stream implementations clone the device's kernel handle. The
+        // mmap lifetime describes its owned mapping arena, not a device borrow.
         device: Device,
-        stream: Option<UserptrStream>,
+        stream: Option<LinuxCaptureStream>,
         source_format: FrameFormat,
         effective: EffectiveCameraConfig,
     }
@@ -135,8 +136,7 @@ mod platform {
             {
                 return Err(CameraError::ResolutionRejected);
             }
-            let mut stream = UserptrStream::with_buffers(&self.device, Type::VideoCapture, 4)
-                .map_err(|_| CameraError::OpenFailed)?;
+            let mut stream = LinuxCaptureStream::with_buffers(&self.device)?;
             stream.set_timeout(FRAME_TIMEOUT);
             self.stream = Some(stream);
             self.source_format = source_format;
@@ -152,6 +152,46 @@ mod platform {
 
         fn stop_stream(&mut self) {
             self.stream.take();
+        }
+    }
+
+    enum LinuxCaptureStream {
+        Mmap(MmapStream<'static>),
+        Userptr(UserptrStream),
+    }
+
+    impl LinuxCaptureStream {
+        fn with_buffers(device: &Device) -> Result<Self, CameraError> {
+            if let Ok(stream) = MmapStream::with_buffers(device, Type::VideoCapture, 4) {
+                return Ok(Self::Mmap(stream));
+            }
+            UserptrStream::with_buffers(device, Type::VideoCapture, 4)
+                .map(Self::Userptr)
+                .map_err(|_| CameraError::OpenFailed)
+        }
+
+        fn set_timeout(&mut self, timeout: Duration) {
+            match self {
+                Self::Mmap(stream) => stream.set_timeout(timeout),
+                Self::Userptr(stream) => stream.set_timeout(timeout),
+            }
+        }
+
+        fn next(&mut self) -> Result<&[u8], CameraError> {
+            match self {
+                Self::Mmap(stream) => {
+                    let (bytes, metadata) = stream.next().map_err(|_| CameraError::ReadFailed)?;
+                    bytes
+                        .get(..metadata.bytesused as usize)
+                        .ok_or(CameraError::ReadFailed)
+                }
+                Self::Userptr(stream) => {
+                    let (bytes, metadata) = stream.next().map_err(|_| CameraError::ReadFailed)?;
+                    bytes
+                        .get(..metadata.bytesused as usize)
+                        .ok_or(CameraError::ReadFailed)
+                }
+            }
         }
     }
 
@@ -172,7 +212,7 @@ mod platform {
 
         fn read_frame(&mut self) -> Result<BgrFrame, CameraError> {
             let stream = self.stream.as_mut().ok_or(CameraError::NotOpen)?;
-            let (bytes, _) = stream.next().map_err(|_| CameraError::ReadFailed)?;
+            let bytes = stream.next()?;
             let size = self.effective.requested().resolution().size();
             let buffer = Buffer::new(
                 Resolution::new(size.width(), size.height()),

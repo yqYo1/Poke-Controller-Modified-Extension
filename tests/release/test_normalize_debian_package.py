@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.normalize_debian_package import (
+from scripts.release.normalize_debian_package import (
     REPRODUCIBLE_EPOCH,
     installed_size_kib,
     normalize_installed_size,

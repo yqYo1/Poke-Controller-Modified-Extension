@@ -199,7 +199,7 @@
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
 
-          buildNpmPackage = pkgs.buildNpmPackage.override { nodejs = pkgs.nodejs_20; };
+          buildNpmPackage = pkgs.buildNpmPackage.override { nodejs = pkgs.nodejs_22; };
           webPackage = buildNpmPackage {
             pname = "pokecon-web";
             version = workspaceVersion;
@@ -427,7 +427,7 @@
                 pkgs.actionlint
                 pkgs.basedpyright
                 pkgs.check-jsonschema
-                pkgs.nodejs_20
+                pkgs.nodejs_22
                 pkgs.shellcheck
               ];
               text = ''
@@ -626,7 +626,7 @@
                 pkgs.binutils
                 pkgs.cargo-tauri
                 pkgs.dpkg
-                pkgs.nodejs_20
+                pkgs.nodejs_22
                 pkgs.patchelf
                 pkgs.uv
               ];
@@ -864,7 +864,7 @@
               name = "web-check";
               runtimeInputs = [
                 pythonEnv
-                pkgs.nodejs_20
+                pkgs.nodejs_22
               ];
               text = ''
                 cd "${source}"
@@ -892,7 +892,7 @@
 
             generate-api-types = mkTask {
               name = "generate-api-types";
-              runtimeInputs = rustTaskInputs ++ [ pkgs.nodejs_20 ];
+              runtimeInputs = rustTaskInputs ++ [ pkgs.nodejs_22 ];
               text = ''
                 ${desktopEnvironment}
                 exec scripts/quality/generate-api-types.sh "$@"
@@ -905,7 +905,7 @@
                 pkgs.basedpyright
                 pkgs.check-jsonschema
                 pkgs.markdownlint-cli
-                pkgs.nodejs_20
+                pkgs.nodejs_22
                 pkgs.ripgrep
                 pkgs.shellcheck
                 pkgs.textlint
@@ -1019,7 +1019,7 @@
               pkgs.jq
               pkgs.markdownlint-cli
               pkgs.maturin
-              pkgs.nodejs_20
+              pkgs.nodejs_22
               pkgs.ripgrep
               pkgs.shellcheck
               pkgs.textlint

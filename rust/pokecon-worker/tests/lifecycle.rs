@@ -527,7 +527,10 @@ async fn dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated() {
             .await,
         Err(SupervisorError::DynamicProfileSwitchForbidden)
     ));
-    assert!(worker.generation().phase() == pokecon_worker::generation::GenerationPhase::Running);
+    assert_eq!(
+        worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Running
+    );
 
     let report = worker
         .stop(StopPurpose::ApplicationShutdown, Duration::from_millis(100))

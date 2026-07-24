@@ -3,6 +3,9 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Ubuntu 24.04 is the Linux package baseline, so native release artifacts
+    # must be built and exercised against its glibc 2.39 ABI ceiling.
+    linux-release-nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
     systems.url = "github:nix-systems/default";
@@ -40,6 +43,36 @@
         }:
         let
           lib = pkgs.lib;
+          linuxReleaseMaximumGlibc = "2.39";
+          linuxReleasePkgs =
+            if !pkgs.stdenv.isLinux then
+              pkgs
+            else
+              let
+                releasePkgs = import inputs.linux-release-nixpkgs { inherit system; };
+                releaseGlibcVersion = lib.versions.majorMinor releasePkgs.glibc.version;
+              in
+              assert lib.assertMsg (lib.versionAtLeast linuxReleaseMaximumGlibc releaseGlibcVersion)
+                "Linux release dependencies use glibc ${releaseGlibcVersion}; expected at most ${linuxReleaseMaximumGlibc}";
+              releasePkgs;
+          linuxReleaseCc = linuxReleasePkgs.stdenv.cc;
+          linuxReleasePortaudio = linuxReleasePkgs.portaudio;
+          linuxReleaseBuildPath = lib.makeBinPath [
+            linuxReleaseCc
+            linuxReleasePkgs.bash
+            linuxReleasePkgs.coreutils
+            linuxReleasePkgs.gnumake
+            linuxReleasePkgs.pkg-config
+          ];
+          linuxReleaseEvdevConfig =
+            if pkgs.stdenv.isLinux then
+              pkgs.writeText "pokecon-linux-release-distutils.cfg" ''
+                [build_ecodes]
+                evdev_headers = ${linuxReleasePkgs.linuxHeaders}/include/linux/input.h:${linuxReleasePkgs.linuxHeaders}/include/linux/input-event-codes.h:${linuxReleasePkgs.linuxHeaders}/include/linux/uinput.h
+                reproducible = 1
+              ''
+            else
+              pkgs.writeText "pokecon-non-linux-release-distutils.cfg" "";
           pkgsWithOverlays = import inputs.nixpkgs {
             inherit system;
             overlays = [ (import rust-overlay) ];
@@ -644,16 +677,44 @@
                 npm --prefix web run build
                 release_python="$workdir/release-python"
                 release_wheelhouse="$workdir/release-wheelhouse"
-                CFLAGS="-I${pkgs.portaudio}/include''${CFLAGS:+ $CFLAGS}" \
-                LDFLAGS="-L${pkgs.portaudio}/lib''${LDFLAGS:+ $LDFLAGS}" \
-                  python -m scripts.release.build_runtime \
+                release_build_home="$workdir/release-build-home"
+                release_build_tmp="$workdir/release-build-tmp"
+                release_uv_cache="$workdir/release-uv-cache"
+                mkdir -p "$release_build_home" "$release_build_tmp" "$release_uv_cache"
+                cp "${linuxReleaseEvdevConfig}" "$release_build_home/.pydistutils.cfg"
+                "${pkgs.coreutils}/bin/env" -i \
+                  AR="${linuxReleaseCc}/bin/ar" \
+                  AS="${linuxReleaseCc}/bin/as" \
+                  CC="${linuxReleaseCc}/bin/gcc" \
+                  CFLAGS="-I${linuxReleasePortaudio}/include" \
+                  CPP="${linuxReleaseCc}/bin/cpp" \
+                  CXX="${linuxReleaseCc}/bin/g++" \
+                  HOME="$release_build_home" \
+                  LANG=C.UTF-8 \
+                  LC_ALL=C.UTF-8 \
+                  LD="${linuxReleaseCc}/bin/ld" \
+                  LDFLAGS="-L${linuxReleasePortaudio}/lib" \
+                  NIX_SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
+                  PATH="${linuxReleaseBuildPath}" \
+                  PKG_CONFIG_PATH="${linuxReleasePortaudio}/lib/pkgconfig" \
+                  PYTHONPATH="$workdir" \
+                  RANLIB="${linuxReleaseCc}/bin/ranlib" \
+                  SOURCE_DATE_EPOCH=0 \
+                  SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
+                  STRIP="${linuxReleaseCc}/bin/strip" \
+                  TMPDIR="$release_build_tmp" \
+                  TZ=UTC \
+                  UV_CACHE_DIR="$release_uv_cache" \
+                  XDG_CACHE_HOME="$release_build_home/.cache" \
+                  XDG_CONFIG_HOME="$release_build_home/.config" \
+                  "${pythonEnv}/bin/python" -m scripts.release.build_runtime \
                   --project "$workdir" \
                   --uv "${portableUvBinary}" \
                   --runtime-output "$release_python" \
                   --wheelhouse-output "$release_wheelhouse" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --strip "${pkgs.binutils}/bin/strip" \
-                  --runtime-library-path "${pkgs.portaudio}/lib"
+                  --runtime-library-path "${linuxReleasePortaudio}/lib"
                 export PYO3_PYTHON="$release_python/bin/python3.14"
                 export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CFLAGS:+ $CFLAGS}"
                 export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CXXFLAGS:+ $CXXFLAGS}"
@@ -731,15 +792,16 @@
                 pkgs.binutils
                 pkgs.dpkg
                 pkgs.patchelf
-                pkgs.portaudio
+                linuxReleasePortaudio
               ];
               text = ''
                 export PYTHONPATH="${source}''${PYTHONPATH:+:$PYTHONPATH}"
+                unset LD_LIBRARY_PATH
                 exec python -m scripts.release.package_smoke \
                   --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --objdump "${pkgs.binutils}/bin/objdump" \
-                  --runtime-library-path "${pkgs.portaudio}/lib" \
+                  --runtime-library-path "${linuxReleasePortaudio}/lib" \
                   "$@"
               '';
             };

@@ -233,12 +233,24 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     assert "--config $env:POKECON_BUNDLE_CONFIG" in workflow
 
 
-def test_nix_release_task_declares_reproducible_native_build_paths() -> None:
+def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
 
-    assert 'CFLAGS="-I${pkgs.portaudio}/include' in flake
-    assert 'LDFLAGS="-L${pkgs.portaudio}/lib' in flake
+    assert 'linux-release-nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";' in flake
+    assert 'linuxReleaseMaximumGlibc = "2.39";' in flake
+    assert "lib.versionAtLeast linuxReleaseMaximumGlibc releaseGlibcVersion" in flake
+    assert '"${pkgs.coreutils}/bin/env" -i' in flake
+    assert 'CC="${linuxReleaseCc}/bin/gcc"' in flake
+    assert 'CFLAGS="-I${linuxReleasePortaudio}/include"' in flake
+    assert 'LDFLAGS="-L${linuxReleasePortaudio}/lib"' in flake
+    assert 'PKG_CONFIG_PATH="${linuxReleasePortaudio}/lib/pkgconfig"' in flake
+    assert "[build_ecodes]" in flake
+    assert "${linuxReleasePkgs.linuxHeaders}/include/linux/input.h" in flake
+    assert '"$release_build_home/.pydistutils.cfg"' in flake
+    assert flake.count('--runtime-library-path "${linuxReleasePortaudio}/lib"') == 2
+    assert 'CFLAGS="-I${pkgs.portaudio}/include' not in flake
+    assert 'LDFLAGS="-L${pkgs.portaudio}/lib' not in flake
     assert 'cp -a "${source}/." "$workdir/"' in flake
     assert 'release_workdir="$CARGO_TARGET_DIR/pokecon-release-workdir"' in flake
     assert 'export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake

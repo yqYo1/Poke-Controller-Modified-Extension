@@ -39,6 +39,8 @@ Codexは、確定した判断、修正要求、受入条件に従って実装を
 
 Cargo workspaceは11クレートで構成されています。
 
+**合成起点**は、下位のサービスを組み立て、プロセス全体の起動と停止を制御する最上位の実装です。
+
 | クレート | 現在の主な責務 | 概算の非テストRust行数 | 成果物または実行境界 |
 |---|---|---:|---|
 | `pokecon-app` | 合成起点、サービス接続、プロファイル、コマンド、起動停止 | 10,400 | メイン実行ファイル |
@@ -57,32 +59,27 @@ Cargo workspaceは11クレートで構成されています。
 
 ## 4. 現在の依存構造
 
-内部依存に循環はありません。
+各クレートの`Cargo.toml`に記載されたworkspace内の`path`依存を全件調査した結果は次のとおりです。
 
-主要な依存は次のようになっています。
+表の右列は、左列のクレートが直接依存するクレートを示します。
 
-```text
-pokecon-contracts
-  └─ pokecon-settings
-       ├─ pokecon-camera
-       ├─ pokecon-device
-       └─ pokecon-dynamic
+| クレート | 直接依存するworkspaceクレート |
+|---|---|
+| `pokecon-contracts` | なし |
+| `pokecon-core` | なし |
+| `pokecon-pybindings` | なし |
+| `pokecon-settings` | `pokecon-contracts` |
+| `pokecon-desktop` | `pokecon-core` |
+| `pokecon-camera` | `pokecon-settings` |
+| `pokecon-device` | `pokecon-settings` |
+| `pokecon-server` | `pokecon-camera`、`pokecon-contracts` |
+| `pokecon-dynamic` | `pokecon-contracts`、`pokecon-device`、`pokecon-settings` |
+| `pokecon-worker` | `pokecon-contracts`、`pokecon-camera`、`pokecon-core`、`pokecon-dynamic` |
+| `pokecon-app` | 他の全クレート。ただし`pokecon-pybindings`を除く |
 
-pokecon-core
-  ├─ pokecon-desktop
-  └─ pokecon-worker
+この直接依存表から内部依存に循環がないことを確認しています。
 
-pokecon-camera + pokecon-contracts
-  └─ pokecon-server
-
-pokecon-contracts + pokecon-camera + pokecon-core + pokecon-dynamic
-  └─ pokecon-worker
-
-各ライブラリー
-  └─ pokecon-app
-```
-
-循環がないことは確認できていますが、依存方向が利用者の意図に合っていることまでは意味しません。
+循環がないことは、依存方向が利用者の意図に合っていることまでは意味しません。
 
 特に`pokecon-camera`と`pokecon-device`が`pokecon-settings`へ依存する構造は、下位のハードウェア処理が上位の設定適用手順を知る形になっています。
 
@@ -150,9 +147,9 @@ pokecon-contracts + pokecon-camera + pokecon-core + pokecon-dynamic
 
 ### 7.1 設定アダプターの配置
 
-`pokecon-camera`の`CameraSettingsApplier`は、`pokecon-settings::RuntimeSettingsApplier`を実装しています。
+`rust/pokecon-camera/src/settings_applier.rs`の`CameraSettingsApplier`は、`rust/pokecon-settings/src/service.rs`の`RuntimeSettingsApplier`を実装しています。
 
-`pokecon-device`の`SerialSettingsApplier`も同じ設定サービストレイトを実装しています。
+`rust/pokecon-device/src/serial/manager.rs`の`SerialSettingsApplier`も同じ設定サービストレイトを実装しています。
 
 このため、カメラとデバイスが、TOML永続化、HMAC、uv、venvまで所有する設定クレートへ依存しています。
 
@@ -164,7 +161,9 @@ pokecon-contracts + pokecon-camera + pokecon-core + pokecon-dynamic
 
 `pokecon-pybindings`が現在公開するのは、実行時バージョンと対象OSを返す二関数だけです。
 
-リポジトリー内に、この二関数または`pokecon._native`の利用箇所はありません。
+`pyproject.toml`と正準レジストリーは`pokecon._native`を配布対象として参照しています。
+
+一方、Python実行コードに、この二関数を呼び出す処理または`pokecon._native`を読み込む処理はありません。
 
 ネイティブ拡張を残す場合は、Rust境界でなければ提供できない具体的な公開APIと受入テストが必要です。
 

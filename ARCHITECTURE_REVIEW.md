@@ -540,6 +540,86 @@ PokeCon本体実行ファイルはWeb UIとTauriの両方を含み、起動時�
 
 `tauri-shell`を利用者が選択する製品機能フラグとしては廃止し、対応しないOSが存在する場合だけ内部のtarget条件を使用します。
 
+### 10.10 CI構成とフィードバック時間
+
+現行CIが検証している機能領域は必要ですが、実行構成は変更範囲、Nixの成果物境界、必須ゲートの責務に一致していません。
+
+通常のpushでは、`Basedpyright`、`Lint`、`Nix Source Filter Check`、`Pytest`、`Ruff Check`、`Rust CI`、`SPA 404 Check`、`Remote Flake Test`の最大8ワークフロー、18ジョブが個別runnerで起動します。
+
+各ジョブはcheckoutとNix導入を繰り返します。
+
+`cachix/install-nix-action`はNixを導入しますが、現在のworkflowにはPokeCon固有のNix成果物を保存、配信するバイナリキャッシュがありません。
+
+現行の`source`はRust、Python、Web、文書、workflowを一つの`builtins.path`へ含め、`pokeconPackage.src`にもそのまま渡しています。
+
+このため、製品ビルドに不要な文書変更でもsource hashが変わり、PokeCon本体とWebのNix成果物を再利用できません。
+
+`source-guard`は対象ソースが存在するかを判定する適用可能性検査であり、今回の差分がその領域を変更したかは判定しません。
+
+したがって、ソースが存在する現在のリポジトリーでは、無関係な変更に対する重いジョブの実行を防ぎません。
+
+現行構成には、次の重複があります。
+
+- Rustのformat検査を`Rust CI`と`Lint`の両方で実行する
+- Clippyを`Rust CI`と`Lint`の両方で実行する
+- Ruff checkとRuff format checkを`Lint`と`Ruff Check`の両方で実行する
+- Basedpyrightを`contract-check`と`Basedpyright`の両方で実行する
+- source filter検査を`contract-check`と`Nix Source Filter Check`の両方で実行する
+- `SPA 404 Check`が`doCheck = true`のPokeConパッケージをビルドし、Rust CIとは別runnerでRustテストを再実行する
+- `Remote Flake Test`がローカルとリモートの既定appおよび`check` appをそれぞれ評価、ビルドする一方、`check --help`は検査本体を実行しない
+
+これらは異なる環境を検証するために必要な重複ではなく、同じSHAに対する同じ論理検査の再実行です。
+
+`Ruff Check`だけは`on: [push, pull_request]`で全branchを対象とし、他の通常workflowとtrigger範囲が一致していません。
+
+同じcommitがpushとpull requestの両方で検査される場合にも、重複実行を防ぐ構成がありません。
+
+Windows jobは`Build workspace (Windows)`という名前ですが、実際には`cargo check`だけを実行しており、リンク可能な成果物を生成しません。
+
+Windowsでのリンクとインストーラー生成は`Package CI`が所有するため、通常CIのjob名と契約は`Check workspace (Windows)`へ揃えます。
+
+また、release時の`nix run .#check`にはrelease identity検査が含まれますが、通常CIの個別workflowには同等の検査がありません。
+
+PRでversion、manifest、lock、生成物の整合性を完了条件にするため、重い`check`全体を重複実行するのではなく、release identityの原子的Nix taskを通常CIで一度実行します。
+
+GitHubの既定branchにはactiveな`protect` rulesetがありますが、現在のruleは削除禁止、non-fast-forward禁止、更新制限だけです。
+
+required status checkは設定されていないため、現在のCIは成功しなくてもruleset上はmergeを拒否しません。
+
+通常CIは、次の構成へ変更します。
+
+1. 常に起動する一つの通常CI workflowで変更領域を判定し、最後に安定した名前の集約ゲートを必ず完了させる
+2. 文書、契約、Rust、Python、Web、製品smoke、リモートflakeを独立した適用領域として判定する
+3. workflowは常に起動し、workflow-level path filterで全体を省略しない
+4. 必要のない領域jobは成功扱いで明示的に省略し、branch protectionの必須ゲートを不定にしない
+5. feature commitはpull requestイベント、既定branchと明示的な統合branchへの直接反映はpushイベントで検査し、同じSHAを両イベントで重複検査しない
+6. 集約CIゲートを既定branchのrulesetでrequired status checkに指定し、検査失敗中または未完了のmergeを拒否する
+7. Package CIも常に軽量な集約ゲートを返し、配布物に関係しない変更は明示的成功、関係する変更はOS別package jobの成功を必須とする
+8. format、静的解析、生成物drift、テスト、ビルド、互換性検査を削除せず、同じSHAと同じ対象環境では各論理検査を一度だけ実行する
+9. 短い文書検査と静的検査は少数のfast jobへまとめ、同じrunner上のNix storeを再利用する
+10. RustのClippy、build、test、互換性検査は一つのLinux jobで`CARGO_TARGET_DIR`を共有し、Windows固有のworkspace checkは別jobとして維持する
+11. `contract-check`からBasedpyright、source filter、一般shell lintを分離し、契約生成、契約同期、schema、受入記録、API生成物driftだけを所有させる
+12. Basedpyright、source filter、shell lint、release identityは対応する原子的Nix taskとして通常CIで一度だけ実行する
+13. PokeCon本体、Web、Python、文書、検査スクリプトごとにNix sourceを分け、無関係なファイル変更で製品成果物のderivation hashを変えない
+14. 製品パッケージのビルドとRustテストderivationを分け、SPA smokeではテスト済みの製品成果物を再利用してサーバー起動と組込みWeb資源だけを検査する
+15. リモートflake検査はリモートSHAのmetadataと既定appの起動可能性を検証し、ローカル側は`nix flake check --no-build`で全出力を評価する
+16. 検査を実行しない`check --help`のローカル・リモート重複は削除する
+17. PokeCon固有derivationをNixの方法で再利用できるバイナリキャッシュを導入し、信頼済みpushだけが書き込み、pull requestは読み取りだけを行う
+18. 同一commitの再実行でsubstituteされたstore path、build対象derivation数、wall-clock時間を比較し、cache hit表示だけで有効性を判断しない
+19. 通常CIへbranch単位の`cancel-in-progress`を設定し、新しいpush後も古いSHAの重い検査を継続しない
+
+通常CIの完了目標は、fast jobを3分以内、文書だけの変更を5分以内、製品コード変更の必須ゲートを10分以内とします。
+
+直近10回の同種変更に対する95パーセンタイルが目標を超えた場合は、job名だけでなくstepとderivation単位の時間を記録して回帰として扱います。
+
+`scripts/ci-watch.sh`の既定600秒は、現行の正常なcritical pathより短いため不適切です。
+
+CI短縮後の95パーセンタイルに30パーセント以上の余裕を加えた監視期限へ変更し、監視期限切れとGitHub Actionsの`completed failure`を異なる終了理由として表示します。
+
+`Package CI`と`Release`は、OS別成果物、クリーンインストール、アップグレード、アンインストール、再現可能性、署名対象を検証する独立した配布ゲートとして維持します。
+
+同一入力からパッケージを二回生成する再現可能性検査は意図した重複であり、通常CIの重複削減対象には含めません。
+
 ## 11. 実装変更へ渡す情報
 
 Codexの実装計画と各変更の受入条件には、次の情報を使用します。
@@ -585,6 +665,12 @@ Codexの実装計画と各変更の受入条件には、次の情報を使用し
 - 移動または削除する型、トレイト、モジュール
 - 移行段階、監督・資源サービス実行ファイル、共通ワーカーごとの検証コマンド
 - workspace全体の完了ゲート
+- 通常CIの変更領域判定、各jobの所有検査、集約必須ゲート
+- 同一SHAと同一対象環境で論理検査を重複実行しないworkflow構成
+- 製品、Web、Python、文書、検査スクリプトを分けるNix source境界
+- PokeCon固有derivationを再利用するバイナリキャッシュの信頼境界
+- fast job、文書変更、製品コード変更のCI完了時間目標
+- CI時間をstep、derivation、cache substituteの単位で検証する受入条件
 
 未確定の方針をCodexが現在の実装から推測して補完しないようにします。
 
@@ -603,6 +689,36 @@ Codexの実装計画と各変更の受入条件には、次の情報を使用し
 
 この結果だけでは、現在の責務配置が利用者の意図に合っているとは判定しません。
 
+### 12.1 CI実行時間
+
+GitHub Actionsの成功済みrunについて、workflowの`startedAt`から`updatedAt`までを計測しました。
+
+| workflow | 成功済みrun | 実測時間 |
+|---|---|---:|
+| `Nix Source Filter Check`、`Pytest`、`Ruff Check`、`Basedpyright` | `30484270677`、`30484270689`、`30484270715`、`30484270634` | 35秒～56秒 |
+| `Lint` | `30381699661`、`30484270721`、`30484595228` | 3分40秒～3分53秒 |
+| `Rust CI` | `30484270635`、`30484595476` | 11分21秒～13分24秒 |
+| `SPA 404 Check` | `30380122821`、`30484270621`、`30484595626` | 10分1秒～13分6秒 |
+| `Remote Flake Test` | `30380123291`、`30381699859`、`30484270651`、`30484595870` | 12分49秒～13分20秒 |
+
+これらのrunでは`createdAt`と`startedAt`が一致しており、10分を超える時間はrunner待ちではなくworkflow実行中に発生しています。
+
+run `30484270635`のRust Linux jobでは、Clippyに2分56秒、全クレートbuildに3分1秒、testに1分33秒、互換性corpusに2分59秒を直列に要しています。
+
+同じSHAの`Lint`でも別runner上のClippyに3分46秒を要しており、Rust静的解析を二重にコンパイルしています。
+
+run `30484270621`の`SPA 404 Check`では、12分40秒のjobのうち`nix build .#pokecon`とサーバー起動が12分6秒を占めます。
+
+run `30484270651`の`Remote Flake Test`では、リモート既定appのhelp実行が12分17秒、別runnerのローカル既定appのhelp実行が11分40秒を占めます。
+
+その後の`check` app helpと`nix flake check --no-build`は各15秒以下であり、critical pathは既定appを二つのrunnerで別々にビルドする構成にあります。
+
+正常終了したcritical pathが600秒を超えるため、現在の`ci-watch.sh`はCI失敗がなくても監視期限切れになります。
+
+特に、文書または定義書だけの変更でもpath filterのない`SPA 404 Check`と`Remote Flake Test`が製品成果物をビルドし、`SPECIFICATION.md`の変更では`Rust CI`も全Rust検査を実行します。
+
+したがって、現在の遅延は単発のrunner混雑ではなく、workflowの適用範囲、重複検査、Nix source境界、成果物再利用の構成上の問題です。
+
 ## 13. 実装の移行順序
 
 クレート統合と機能挙動の変更を一度に混在させず、次の順序で進めます。
@@ -614,7 +730,8 @@ Codexの実装計画と各変更の受入条件には、次の情報を使用し
 5. `pokecon-desktop`を`desktop`へ移し、同じ`pokecon`実行ファイルの起動時引数でWebとTauriを切り替える
 6. `tauri-shell`によるWeb専用ビルドと`pokecon-pybindings`を削除し、標準成果物とPython配布物を更新する
 7. 旧クレートのディレクトリーとworkspace memberを削除し、Cargo.lock、Nix、CI、リリース、インストーラー、文書内のパスとパッケージ名を更新する
-8. この文書で確定した入力調停、通知隔離、動的設定切替、プロファイル切替の挙動変更を、構造統合とは別の変更として実装する
+8. 通常CIを変更領域判定、重複のない領域別job、集約必須ゲート、分割したNix source、バイナリキャッシュへ移行し、実測時間と検査完全性を検証する
+9. この文書で確定した入力調停、通知隔離、動的設定切替、プロファイル切替の挙動変更を、構造統合とは別の変更として実装する
 
 各段階で、既存の互換性検査、Rustテスト、Clippy、ビルド、契約検査をNix taskから実行します。
 
@@ -636,6 +753,20 @@ Codexの実装計画と各変更の受入条件には、次の情報を使用し
 - WebモードとTauriモードの起動検査
 - `pokecon-worker --kind script`と`--kind dynamic`の起動、IPC、停止、強制終了検査
 - 固定互換性基準に対するPythonコマンド検査
+
+CI移行では、文書だけ、定義書だけ、Rustだけ、Pythonだけ、Webだけ、flakeだけを変更したfixtureまたは実commitを用意し、適用対象jobと省略対象jobが設計どおりであることを検証します。
+
+各論理検査が同一SHAと同一対象環境で一度だけ実行され、集約必須ゲートが成功、失敗、明示的省略を正しく集約することを確認します。
+
+既定branchのrulesetを読み戻し、通常CIとPackage CIの集約ゲートがrequired status checkであり、未完了または失敗時にmerge可能と判定されないことを確認します。
+
+rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時無効化を使用しません。
+
+同一commitを二回実行し、二回目のPokeCon固有derivationがバイナリキャッシュからsubstituteされ、build対象derivation数とwall-clock時間が減少することを確認します。
+
+直近10回相当の実行でfast job、文書変更、製品コード変更の時間目標を満たし、`ci-watch.sh`が正常なcritical pathを監視期限切れにしないことを確認します。
+
+通常CIの再構成後も、Package CIとReleaseがOS別成果物、クリーンインストール、アップグレード、アンインストール、再現可能性を従来どおり検証することを確認します。
 
 ワーカー統合後は、配布された`pokecon`が同じ配布物内の`pokecon-worker`を解決でき、プロファイル別環境で両方の役割を起動できることを検証します。
 

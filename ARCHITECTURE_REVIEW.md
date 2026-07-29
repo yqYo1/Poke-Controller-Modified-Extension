@@ -651,6 +651,8 @@ direnvとdevShellはCI runner間のNix成果物共有、derivationの再利用�
 
 `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`のdevShell前提を、flake appを唯一の開発入口とする記述へ同時に更新します。
 
+移行作業を行う各worktreeでは、direnvが生成した非追跡の`.direnv/`cacheも削除し、version管理または配布の対象にはしません。
+
 Nix appで表現できない対話用途が後から生じた場合も、既定devShellを復活させず、用途と環境を限定したappとして追加します。
 
 ## 11. 実装変更へ渡す情報
@@ -813,7 +815,9 @@ devShell移行では、新しいworktreeでdirenvまたは`nix develop`を使用
 
 `editor` appまたはNixが出力するlanguage server実行ファイルだけで、Rust、Python、TypeScriptの解析がhost toolchainとdirenvへ依存せず動作することを確認します。
 
-repository全体から`.envrc`、`direnv`、`nix develop`、`devShell`参照を検索し、履歴説明を除いて正規の開発手順に残っていないことを確認します。
+Git管理対象fileから`.envrc`、`direnv`、`nix develop`、`devShell`参照を検索し、履歴説明を除いて正規の開発手順に残っていないことを確認します。
+
+移行を検証するworktreeに非追跡の`.direnv/`cacheが残っていないことを確認します。
 
 既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性検査、packageの結果が移行前と一致することを確認します。
 

@@ -73,46 +73,59 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 実装
 
-- [ ] **AR-10.11-APP1** callerのworktreeを直接対象にする`nix run .#cargo -- <subcommand> ...`を追加する（予定証跡: 新規worktreeでの`nix run .#cargo -- metadata --locked --no-deps`、package限定test、lock更新、desktop checkのlogとcaller側target path）。
-  - [ ] 固定 Rust toolchain、Python 3.14、uv、desktop native dependency を提供する。
-  - [ ] `PYO3_PYTHON`、build 用 Python／uv、script site-packages、bindgen、pkg-config を既存完了ゲートと一致させる。
-  - [ ] 対話用`cargo`だけがcaller側の共有`target/nix-tasks`と排他lockを使用する。
-  - [ ] package指定、個別test、`nix run .#cargo -- metadata --locked --no-deps`、lock file更新を引数透過で実行できる。
-- [ ] **AR-10.11-APP2** callerの`web/`を直接対象にする`nix run .#web-dev`を追加する（予定証跡: 固定Bun／lock表示、hot-reload log、実行前後の`git status --short --untracked-files=all`差分、許可するignored pathのallowlistと実際のignored path一覧）。
-  - [ ] `web/package.json` が固定する Bun を使用する。
-  - [ ] frozen lock file で依存を準備する。
-  - [ ] hot reload を caller の編集へ追従させる。
-  - [ ] 終了後に意図しない追跡対象差分を残さない。
-- [ ] **AR-10.11-APP3** `nix run .#hooks-install`を追加し、現在のworktreeへ`git-hooks.nix`生成hookを明示的に導入する（予定証跡: 新規worktreeのhook path／内容とpre-commit実行log）。
-- [ ] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainやdirenvなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（予定証跡: `nix run .#editor -- --print`の固定executable一覧と`nix run .#editor-smoke`の4言語別initialize、didOpen、期待diagnostic、shutdown log）。
+- [x] **AR-10.11-APP1** callerのworktreeを直接対象にする`nix run .#cargo -- <subcommand> ...`を追加する（証跡: 2026-07-30の新規worktreeでmetadata、`pokecon-contracts`の1 test、0 package更新のlock操作、desktop checkが成功し、排他lockとtargetがcallerの`target/nix-tasks`を指した。Cargo／Rustは1.97.1、Pythonは3.14.6）。
+  - [x] 固定 Rust toolchain、Python 3.14、uv、desktop native dependency を提供する。
+  - [x] `PYO3_PYTHON`、build 用 Python／uv、script site-packages、bindgen、pkg-config を既存完了ゲートと一致させる。
+  - [x] 対話用`cargo`だけがcaller側の共有`target/nix-tasks`と排他lockを使用する。
+  - [x] package指定、個別test、`nix run .#cargo -- metadata --locked --no-deps`、lock file更新を引数透過で実行できる。
+- [x] **AR-10.11-APP2** callerの`web/`を直接対象にする`nix run .#web-dev`を追加する（証跡: Bun 1.3.13、frozen lock、249 packageの導入、`src/routes/+page.svelte`の`hmr update`を観測。前後の`git status --short --untracked-files=all`は空で、ignored pathは`web/node_modules/`と`web/.svelte-kit/`だけだった）。
+  - [x] `web/package.json` が固定する Bun を使用する。
+  - [x] frozen lock file で依存を準備する。
+  - [x] hot reload を caller の編集へ追従させる。
+  - [x] 終了後に意図しない追跡対象差分を残さない。
+- [x] **AR-10.11-APP3** `nix run .#hooks-install`を追加し、現在のworktreeへ`git-hooks.nix`生成hookを明示的に導入する（証跡: 新規worktreeからGit common hookへ導入し、固定`PATH`、一時`HOME`、`env -i`、hardening markerを読取り。Rust／Python／Markdownをstageしたtest commit `fb4dbeb`で全8 hookが`SKIP`、`BASH_ENV`、`ENV`のpoison下でも実行され成功した）。
+- [x] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainやdirenvなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（証跡: `--print`が5個のNix store executableを返し、`editor-smoke`が4言語すべてでinitialize、didOpen、documentSymbol、期待diagnostic、shutdownを成功させた）。
 - [x] `nix run .#ci-watch` を追加し、CI監視に必要なGitHub CLI等をhost環境から排除する（証跡: 2026-07-30のhostile環境／subdirectoryからの`nix run .#ci-watch -- --help`成功、固定`gh`／`git`／`jq` path）。
 - [x] `ci-watch` の暫定既定期限を現行critical pathの実測最大値 + 30% 以上へ延長し、正常CIを期限切れ扱いしない（証跡: 既定1200秒、settlement 120秒、最小指定130秒のhelp／境界test）。
 - [x] `nix run .#workspace-lock-check` を追加し、pre-commitのlock検査をambientなCargo／GitとcallerのCargo cacheから排除する（証跡: 固定Nix appの生成、実行ごとの一時Cargo target、`nix flake check --no-build`のapp評価成功）。
 - [x] pre-commitのworkspace lock hookを`workspace-lock-check` app経由へ変更する（証跡: 生成済みpre-commit設定のentry読み戻し）。
 - [x] 既存`maturin-develop`appをambient venv、network、host configに依存しない専用`target/maturin-venv`へ移行する。productionのtracked `pyproject.toml`とwheel／sdist契約は変更せず、appの隔離source snapshot内だけでMaturin canonical mixed layoutへ補正し、実行ごとの一時Cargo targetで`pokecon/**`のwheelをoffline buildし、専用の永続venv lock下でinstallする（証跡: 2026-07-30のtracked `pyproject.toml`／lock無差分、fresh／同一venv再実行のhostile offline build成功、wheel payload／source byte照合、venv内`pokecon._native` import成功、`.pth`／想定外distribution／破損／symlink／不正RECORD保持negative test、`nix run .#test` 56件成功）。
-- [ ] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（予定証跡: callerの一時markerをcargo／web-dev／hooks-installから観測するintegration test）。
-- [ ] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（予定証跡: `nix run .#contract-check`の隔離fixtureで、callerの未追跡fileを観測しないnegative case、ambient PATH先頭のdummy tool／関連環境変数のpoisonがtool解決／結果を変えないnegative case、callerの共有target内artifactを改変してもgate結果と改変bytesが変わらないcache-poison negative case、derivation source path／実行ごとのCargo target path）。
-- [ ] **AR-10.11-RUN3** `devShells.default`、`.envrc`、正規手順としてのdirenv／`nix develop`を削除する（予定証跡: `nix flake show`のoutput一覧、許可済み`git grep`のtracked-file log、`.envrc`削除diff）。
-- [ ] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をproject flake output唯一の入口へ更新する（予定証跡: 6文書のVCS diffと許可済み`git grep`の開発command log）。
-- [ ] **AR-10.11-RUN5** このworktreeとphase 1以後に移行を検証する全worktreeそれぞれで、非追跡`.direnv/`cacheが存在する場合は対象pathを記録して削除し、不在を確認する（予定証跡: VCSが読み戻す検証worktree path一覧、cache検出path／削除記録、各pathの`.direnv/`不在log）。
-- [ ] **AR-10.11-RUN6** 新しい対話用途は既定devShellを復活させず、用途と環境を限定したappとして追加する規則を文書化する（予定証跡: 開発者文書の規則と`devShells.default`不在検査）。
-- [ ] **AR-11-48** direnv、`.envrc`、既定devShellを削除し、flake appを唯一の開発入口にする（予定証跡: 許可済み`git grep`のtracked-file logと新規worktreeの`nix run .#check`までのapp-only開発smoke log）。
-- [ ] **AR-13.1-22** Git管理対象から`.envrc`、direnv、`nix develop`、devShell参照を検索し、履歴説明を除いて正規手順に残っていないことを確認する（予定証跡: 許可済み`git grep`のtracked-file限定logと例外判定一覧）。
+- [x] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（証跡: 新規worktreeの絶対pathをCargo metadata／target lock、Viteのfile-change／HMR log、hook config／common hook pathからそれぞれ読取った）。
+- [x] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（証跡: callerだけの未追跡`compile_error!`とambient dummy tool／関連変数のpoison下で`contract-check`が成功。caller cacheの`libserde` pathへ置いたpoisonのSHA-256はgate前後とも`f0e766b483a7c4b0631137d317797efe9a9cdd7fd375433b92679ae01202ca6f`で、gateは別の`/tmp/pokecon-rust-gate-home.../cargo-target`を使用した）。
+- [x] **AR-10.11-RUN3** `devShells.default`、`.envrc`、正規手順としてのdirenv／`nix develop`を削除する（証跡: `devShells`は4 systemすべて空、app一覧は4 systemで同一の44件、`.envrc`はcommit `23149e3`で削除済み）。
+- [x] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をproject flake output唯一の入口へ更新する（証跡: PLAN commit `93f8b6f`と実装commit `23149e3`の6文書diff、tracked command検索で正規手順がflake outputだけであることを確認）。
+- [x] **AR-10.11-RUN5** このworktreeとphase 1以後に移行を検証する全worktreeそれぞれで、非追跡`.direnv/`cacheが存在する場合は対象pathを記録して削除し、不在を確認する（証跡: branch、受入、baseline package比較の3 worktreeを`git worktree list --porcelain`で特定し、Nixの`builtins.pathExists`で`.direnv`がすべてfalseであることを確認。disposableな受入／baseline worktreeは検証後に削除した）。
+- [x] **AR-10.11-RUN6** 新しい対話用途は既定devShellを復活させず、用途と環境を限定したappとして追加する規則を文書化する（証跡: `docs/DEVELOPMENT.md`と`AGENTS.md`の規則、4 systemの空`devShells`評価）。
+- [x] **AR-11-48** direnv、`.envrc`、既定devShellを削除し、flake appを唯一の開発入口にする（証跡: detached clean worktreeを作成し、direnv／`nix develop`なしでformat、4つの対話app、個別gate、aggregate checkまで成功）。
+- [x] **AR-13.1-22** Git管理対象から`.envrc`、direnv、`nix develop`、devShell参照を検索し、履歴説明を除いて正規手順に残っていないことを確認する（証跡: tracked-file検索の残存4件は`AGENTS.md`、`README.md`、`SPECIFICATION.md`、`docs/DEVELOPMENT.md`の禁止または移行説明だけだった）。
 
 ### 受入
 
-- [ ] **AR-13.1-17** 新しいworktreeでdirenvまたは`nix develop`を使わず、flake appだけから開発を開始できる（予定証跡: clean worktree作成から`nix fmt`、`nix run .#cargo -- metadata --locked --no-deps`、`nix run .#check`までのセッションlog）。
-- [ ] **AR-11-49** callerのworktreeを対象とするCargo、frontend dev server、hook導入、editor連携appを揃える（予定証跡: 4 appの`nix flake show`出力とcaller-worktree smoke report）。
-- [ ] **AR-11-50** 完了gateの隔離実行と、書込みまたはwatch appのcaller-worktree実行を区別し、callerへ書き込むgeneratorもbuild artifactは実行ごとの一時targetへ隔離する（予定証跡: tracked／untracked markerを使うpositive／negative isolation test、gate／generator／interactive appのsource pathとCargo target path一覧）。
-- [ ] **AR-13.1-18** `cargo` appがcaller worktreeでpackage限定、個別test、lock file更新、metadata確認を実行でき、固定toolchain／build環境がRust完了gateと一致する（予定証跡: `nix run .#cargo -- <subcommand>`による4操作のlog、toolchain version、主要環境変数diff）。
-- [ ] `nix run .#cargo -- metadata --locked --no-deps` が caller の workspace を読み取る。
-- [ ] `nix run .#cargo -- test --locked -p <package> <test-filter>` が対象を絞って実行できる。
-- [ ] **AR-13.1-19** `web-dev` appが固定Bunとlock fileを使い、callerの`web/`の変更をhot reloadし、終了後に依存差分や生成物を意図せずcommit対象へ残さない（予定証跡: `nix run .#web-dev`のversion／frozen-lock log、reload観測、実行前後の`git status --short --untracked-files=all`差分、ignored path allowlistと実際のignored path一覧）。
-- [ ] **AR-13.1-20** `hooks-install` appを新規worktreeで一度実行し、git hookがNixで固定したpre-commit検査を実行する（予定証跡: hook install log、hook内容、test commitのpre-commit log）。
-- [ ] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`がdevShell外で動作する。
-- [ ] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainとdirenvへ依存せず動作する（予定証跡: `nix run .#editor -- --print`が返すresolved executableと、ambient PATH、language server、compiler関連変数をpoisonした`nix run .#editor-smoke`の4言語別initialize、didOpen、期待diagnostic、shutdown log）。
-- [ ] **AR-13.1-23** 移行を検証する各worktreeそれぞれに非追跡`.direnv/`cacheが残っていない（予定証跡: `git worktree list --porcelain`で得た検証対象path、cache検出path／削除記録、各pathの`.direnv/`不在log）。
-- [ ] **AR-13.1-24** 既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性、packageの結果が移行前と一致する（予定証跡: taskごとの移行前後終了コード／生成物digest表）。
+- [x] **AR-13.1-17** 新しいworktreeでdirenvまたは`nix develop`を使わず、flake appだけから開発を開始できる（証跡: commit `23149e3`から作成したdetached worktreeで`nix fmt -- --ci`、Cargo metadata、aggregate `nix run .#check`まで成功）。
+- [x] **AR-11-49** callerのworktreeを対象とするCargo、frontend dev server、hook導入、editor連携appを揃える（証跡: 4 systemで同一のapp一覧を評価し、新規worktreeで`cargo`、`web-dev`、`hooks-install`、`editor`のcaller smokeに成功）。
+- [x] **AR-11-50** 完了gateの隔離実行と、書込みまたはwatch appのcaller-worktree実行を区別し、callerへ書き込むgeneratorもbuild artifactは実行ごとの一時targetへ隔離する（証跡: Cargo／Web／hookはcaller path、editorは`target/nix-editor`、読取りgateとgeneratorはNix sourceまたは隔離copyと実行ごとの`/tmp/.../cargo-target`を使用。未追跡sourceとcache poisonのnegative testに成功）。
+- [x] **AR-13.1-18** `cargo` appがcaller worktreeでpackage限定、個別test、lock file更新、metadata確認を実行でき、固定toolchain／build環境がRust完了gateと一致する（証跡: Cargo 1.97.1／Rust 1.97.1を固定し、metadata、`pokecon-contracts`の`validates_http_urls_structurally` 1件、`update --workspace --locked`、`tauri-check`が成功。Cargo.lock差分は0）。
+- [x] `nix run .#cargo -- metadata --locked --no-deps` が caller の workspace を読み取る。
+- [x] `nix run .#cargo -- test --locked -p <package> <test-filter>` が対象を絞って実行できる。
+- [x] **AR-13.1-19** `web-dev` appが固定Bunとlock fileを使い、callerの`web/`の変更をhot reloadし、終了後に依存差分や生成物を意図せずcommit対象へ残さない（証跡: Bun 1.3.13／frozen lockで起動し、callerのSvelte変更と復元を2回のHMRとして観測。前後の`git status --short --untracked-files=all`は空、ignored pathは許可した2 directoryだけだった）。
+- [x] **AR-13.1-20** `hooks-install` appを新規worktreeで一度実行し、git hookがNixで固定したpre-commit検査を実行する（証跡: common hookの絶対pathとhardening内容を読取り、hostile環境の署名付きtest commit `fb4dbeb`でlock、clippy、Markdown、Ruff、textlint、treefmt、typosがすべて成功）。
+- [x] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`がdevShell外で動作する。
+- [x] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainとdirenvへ依存せず動作する（証跡: 5 executableのstore pathを読取り、host tool／関連環境変数のpoison下を含む`editor-smoke`で4言語すべての実LSP sessionが成功）。
+- [x] **AR-13.1-23** 移行を検証する各worktreeそれぞれに非追跡`.direnv/`cacheが残っていない（証跡: branch、受入、baseline package比較の3 worktreeで`.direnv`の`pathExists`はすべてfalse。disposableな受入／baseline worktreeを削除し、branch worktreeだけへ正規hookを再導入した）。
+- [x] **AR-13.1-24** 既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性、packageの結果が移行前と一致する（証跡: 下記Phase 1 checkpoint表。列挙したtaskの終了コード0、生成物Git object IDとpackage NAR hashが一致）。
+
+### Phase 1 checkpoint証跡（2026-07-30）
+
+| 対象 | 実測結果 |
+| --- | --- |
+| commit境界 | PLAN `93f8b6f`、実装 `23149e3`。両commit objectにSSH `gpgsig`を確認 |
+| fresh worktree | `23149e3`から作成したdetached worktreeで`.envrc`／`.direnv`不在、format、4対話app、desktop、editor、aggregate checkが成功 |
+| 完了gate | `nix flake check --no-build`、`nix fmt -- --ci`、`contract-check`、`web-check`、`clippy`、`cargo-test`、`test`、`build-rust`、`compatibility`、個別lint／文書task、`nix run .#check`が終了コード0 |
+| test件数 | Web 74件、Python 56件、Rust全workspace test成功。V4L2実機test 1件だけは既定どおりignored |
+| package parity | 移行前`e20fad5`は`ih2419va26ikx0xjbq19kfpz4222svcb-pokecon-0.1.0`、移行後`23149e3`は`w40flwwp2fwjsl6haxmmd133zwiqpbyc-pokecon-0.1.0`。双方のNARは`sha256-jwKvZjYVhpnE0EaLW5/yADdlw5qn+dW/CW7BVy6WNME=`、135653616 bytes |
+| source parity | Cargo.lock `5e5f3542b0267e093bd5796c6652cff14e00bfc7`、web lock `bf27f310dccfb763ad1df795bdcb38d59fbd568b`、generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、OpenAPI `a39cab3bee21a37d54661673be901591b8346937`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`が移行前後で一致 |
+| isolation | caller未追跡source／ambient tool poisonをgateが観測せず、caller cache poisonのSHA-256も前後一致 |
+| cleanup | disposable受入／baseline worktreeを削除し、branch worktreeのtracked statusは空、正規hookを再導入 |
 
 ## フェーズ 2 — Cargo workspace を `rust/pokecon/` の単一パッケージへ統合
 

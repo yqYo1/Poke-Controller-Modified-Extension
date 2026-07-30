@@ -1241,6 +1241,66 @@
             [net]
             offline = true
           '';
+          cliHelpCheck = mkTask {
+            name = "cli-help-check";
+            runtimeInputs = [ pkgs.diffutils ];
+            text = ''
+              if [ "$#" -ne 0 ]; then
+                echo "usage: nix run .#cli-help-check" >&2
+                exit 2
+              fi
+              ${setupSourceGateEnvironment}
+              mkdir -p "$gate_home/.local/share"
+              export XDG_DATA_HOME="$gate_home/.local/share"
+              cli_help_output="$gate_home/cli-help"
+              mkdir -p "$cli_help_output"
+
+              check_cli_help() {
+                local binary fixture label stderr_file stdout_file status
+                binary=$1
+                fixture=$2
+                label=$3
+                stdout_file="$cli_help_output/$label.stdout"
+                stderr_file="$cli_help_output/$label.stderr"
+
+                if "$binary" --help >"$stdout_file" 2>"$stderr_file"; then
+                  status=0
+                else
+                  status=$?
+                fi
+                if [ "$status" -ne 0 ]; then
+                  echo "$label --help exited with status $status" >&2
+                  if [ -s "$stderr_file" ]; then
+                    echo "$label --help stderr:" >&2
+                    cat "$stderr_file" >&2
+                  fi
+                  return 1
+                fi
+                if [ -s "$stderr_file" ]; then
+                  echo "$label --help wrote unexpected stderr:" >&2
+                  cat "$stderr_file" >&2
+                  return 1
+                fi
+                if ! diff -u \
+                  --label "$label.expected" \
+                  --label "$label.actual" \
+                  "$fixture" \
+                  "$stdout_file" >&2; then
+                  echo "$label --help stdout differs from its tracked fixture" >&2
+                  return 1
+                fi
+              }
+
+              check_cli_help \
+                "${self'.packages.pokecon}/bin/pokecon" \
+                "${source}/tests/fixtures/cli-help/pokecon.txt" \
+                pokecon
+              check_cli_help \
+                "${self'.packages.pokecon}/bin/pokecon-worker" \
+                "${source}/tests/fixtures/cli-help/pokecon-worker.txt" \
+                pokecon-worker
+            '';
+          };
         in
         {
           treefmt = {
@@ -1306,6 +1366,7 @@
           apps = {
             default = mkApp "${self'.packages.pokecon}/bin/pokecon";
             fmt = mkApp "${safeFormatter}/bin/pokecon-format";
+            cli-help-check = cliHelpCheck;
 
             cargo = mkTask {
               name = "cargo";
@@ -2782,6 +2843,7 @@
                   echo "Run all currently applicable PokeCon verification gates"
                   exit 0
                 fi
+                "${cliHelpCheck.program}"
                 ${setupWorkdir}
                 ${desktopEnvironment}
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"

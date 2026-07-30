@@ -1,0 +1,9 @@
+PokeCon Rust runtime
+
+Usage: pokecon [OPTIONS]
+
+Options:
+      --ui <UI>             Selects the web-only or desktop lifecycle mode [default: web] [possible values: web, desktop]
+      --exit-after-startup  Exit successfully after the runtime boundaries have started
+  -h, --help                Print help
+  -V, --version             Print version

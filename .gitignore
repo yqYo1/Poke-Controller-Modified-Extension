@@ -209,6 +209,8 @@ result-*
 !/tests/*.py
 !/tests/*/
 !/tests/**/*.py
+!/tests/fixtures/cli-help/
+!/tests/fixtures/cli-help/*.txt
 
 # Web frontend
 !/web/

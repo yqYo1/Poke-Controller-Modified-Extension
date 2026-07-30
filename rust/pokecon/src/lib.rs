@@ -2,11 +2,19 @@
 
 mod application_backend;
 mod command_service;
+#[path = "contracts/facade.rs"]
+mod contracts;
+#[path = "diagnostics/facade.rs"]
+mod diagnostics;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
+#[path = "platform/facade.rs"]
+mod platform;
 mod production;
 mod profile_service;
+#[path = "runtime/facade.rs"]
+mod runtime;
 mod script_host;
 mod script_runtime;
 mod settings_runtime;
@@ -19,10 +27,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
-use pokecon_core::{
-    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownCoordinator, ShutdownReason,
-    install_os_signal_forwarder,
-};
 use pokecon_desktop::DesktopRuntimeSettings;
 use pokecon_server::BoundServer;
 use pokecon_server::router::public_router;
@@ -34,9 +38,13 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
+use crate::diagnostics::{APP_STARTING, APP_STOPPED};
 use crate::dynamic_host::StartupDynamicHost;
 use crate::dynamic_runtime::DynamicRuntime;
 use crate::production::ProductionRuntime;
+use crate::runtime::{
+    RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
+};
 
 const SERVER_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -166,6 +174,7 @@ async fn run_configured_controlled(
         }
     };
     let context = RuntimeContext::native();
+    let platform: &dyn crate::platform::PlatformAdapter = context.platform();
     let signal_task = install_os_signal_forwarder(shutdown.clone()).await;
     let server = match BoundServer::bind(options.listen_address).await {
         Ok(server) => server,
@@ -195,7 +204,7 @@ async fn run_configured_controlled(
         diagnostic_id = APP_STARTING,
         ?listen_address,
         ui_mode = ?options.ui_mode,
-        platform = ?context.platform().kind(),
+        platform = ?platform.kind(),
         "PokeCon production runtime is ready"
     );
     if let Some(ready) = ready

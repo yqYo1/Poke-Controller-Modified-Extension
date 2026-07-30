@@ -492,8 +492,8 @@ LAN clientからcodeを読み込んだ可能性がある場合は、source file�
 
 正確なLua annotationは`generated/lua/pokecon.d.lua`からData rootへ生成したtypingを参照します。
 
-設定propertyは`rust/pokecon-contracts/registry/settings.json`を正本とします。
+設定propertyは`rust/pokecon/registry/settings.json`を正本とします。
 
-event名と公開namespaceは`rust/pokecon-contracts/registry/protocol.json`を正本とします。
+event名と公開namespaceは`rust/pokecon/registry/protocol.json`を正本とします。
 
 本体開発者が契約を変更する場合は、[生成物を正準入力から更新する](DEVELOPMENT.md#生成物を正準入力から更新する)の検査を実行します。

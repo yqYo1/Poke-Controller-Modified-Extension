@@ -458,7 +458,7 @@ def main() -> int:
     parser.add_argument(
         "--registry",
         type=Path,
-        default=root / "rust/pokecon-contracts/registry/compatibility.json",
+        default=root / "rust/pokecon/registry/compatibility.json",
     )
     parser.add_argument(
         "--manifest", type=Path, default=root / "compatibility/fixed-manifest.json"

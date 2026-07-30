@@ -73,7 +73,7 @@ Node.jsを直接呼ぶscriptを追加しません。script内部ではNixが固�
 | `python/pokecon/` | workerから見えるPython packageと生成stub |
 | `scripts/` | quality、compatibility、release、integration tooling |
 | `tests/` | Python toolingとcross-language fixture |
-| `rust/pokecon-contracts/registry/` | 設定、event、受入記録などの正準registry |
+| `rust/pokecon/registry/` | 設定、event、受入記録などの正準registry |
 | `generated/` | registryから生成するschemaやmetadata |
 | `api/` | 生成済みOpenAPI契約 |
 | `docs/` | 読者別の恒久文書 |

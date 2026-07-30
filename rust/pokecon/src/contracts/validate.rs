@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::model::{
+use super::model::{
     Access, DefaultValue, Mutability, OptionalNamedSurface, Setting, SettingsRegistry, ValueSchema,
     WireEncoding,
 };

@@ -5,12 +5,13 @@ use std::path::PathBuf;
 #[cfg(feature = "tauri-shell")]
 use std::sync::mpsc;
 
+use crate::diagnostics::{TracingInitError, init_tracing};
 use crate::dynamic_runtime::bootstrap_dynamic;
+use crate::runtime::ShutdownCoordinator;
+#[cfg(feature = "tauri-shell")]
+use crate::runtime::ShutdownReason;
 use crate::{AppError, AppOptions, RunControl, UiMode, run_configured_controlled};
 use clap::{Parser, ValueEnum};
-#[cfg(feature = "tauri-shell")]
-use pokecon_core::ShutdownReason;
-use pokecon_core::{ShutdownCoordinator, TracingInitError, init_tracing};
 use pokecon_desktop::{CloseBehavior, DesktopError, DesktopRuntimeSettings};
 #[cfg(feature = "tauri-shell")]
 use pokecon_desktop::{DesktopLifecycle, DesktopShellConfig, run_tauri_shell};

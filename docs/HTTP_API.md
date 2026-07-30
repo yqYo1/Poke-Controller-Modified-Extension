@@ -18,7 +18,7 @@ TypeScript型はOpenAPIから生成されるため、手書きの型を公開契
 
 HTTPとWebSocketのRust wire型は`rust/pokecon-server/src/api.rs`にあります。
 
-設定のfield集合は`rust/pokecon-contracts/registry/settings.json`からOpenAPIへ組み込まれます。
+設定のfield集合は`rust/pokecon/registry/settings.json`からOpenAPIへ組み込まれます。
 
 この文書は接続方法と状態同期の規則を説明しますが、すべてのfieldを複製しません。
 

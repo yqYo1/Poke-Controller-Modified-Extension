@@ -49,7 +49,7 @@
       "fixture_pattern": "tests/fixtures/hardware/<capability>/<case>.<ext>",
       "hardware_allowed": true,
       "required_record_pattern": "artifacts/hardware/<platform>/<capability>/<utc-timestamp>.json",
-      "record_schema": "rust/pokecon-contracts/registry/acceptance-record.schema.json",
+      "record_schema": "rust/pokecon/registry/acceptance-record.schema.json",
       "procedure": "docs/ACCEPTANCE.md"
     },
     {
@@ -154,7 +154,7 @@
         "web/src/lib/api/openapi.json",
         "web/src/lib/api/openapi.ts"
       ],
-      "observed_in": ["rust/pokecon-contracts/registry/generation.json"],
+      "observed_in": ["rust/pokecon/registry/generation.json"],
       "status": "implemented",
       "phase": 3,
       "resolution": "all declared contract artifacts are generated at their canonical paths and CI rejects drift"
@@ -164,13 +164,13 @@
       "paths": [
         "docs/ACCEPTANCE.md",
         "scripts/acceptance/records.py",
-        "rust/pokecon-contracts/registry/acceptance-record.schema.json",
-        "rust/pokecon-contracts/registry/acceptance-record.example.json",
+        "rust/pokecon/registry/acceptance-record.schema.json",
+        "rust/pokecon/registry/acceptance-record.example.json",
         "tests/acceptance/test_records.py"
       ],
       "observed_in": [
         "flake.nix",
-        "rust/pokecon-contracts/registry/foundation.json"
+        "rust/pokecon/registry/foundation.json"
       ],
       "status": "implemented",
       "phase": 15,

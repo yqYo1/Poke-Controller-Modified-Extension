@@ -46,6 +46,8 @@ url.workspace = true
 tauri-build = { version = "2.5.4", features = [] }
 
 [dev-dependencies]
+regex.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(unix)'.dev-dependencies]

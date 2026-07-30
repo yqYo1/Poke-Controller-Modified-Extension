@@ -302,10 +302,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("records", nargs="*", type=Path)
     arguments = parser.parse_args(argv)
-    schema_path = root / "rust/pokecon-contracts/registry/acceptance-record.schema.json"
-    example_path = (
-        root / "rust/pokecon-contracts/registry/acceptance-record.example.json"
-    )
+    schema_path = root / "rust/pokecon/registry/acceptance-record.schema.json"
+    example_path = root / "rust/pokecon/registry/acceptance-record.example.json"
     try:
         record_paths = expand_record_paths(arguments.records)
         if arguments.release_candidate is not None and not record_paths:

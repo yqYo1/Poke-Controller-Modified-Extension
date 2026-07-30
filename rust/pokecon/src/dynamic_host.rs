@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use pokecon_contracts::model::Scope;
 use pokecon_device::controller::{ControllerState, ControllerUpdate};
 use pokecon_device::input::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
@@ -31,6 +30,7 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use crate::command_service::{CommandService, CommandServiceError};
+use crate::contracts::model::Scope;
 
 const DYNAMIC_SOURCE: &str = "dynamic-config";
 const DYNAMIC_GENERATION: &str = "dynamic-1";

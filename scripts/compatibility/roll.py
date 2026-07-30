@@ -370,7 +370,7 @@ def main() -> int:
     parser.add_argument(
         "--registry",
         type=Path,
-        default=root / "rust/pokecon-contracts/registry/compatibility.json",
+        default=root / "rust/pokecon/registry/compatibility.json",
     )
     parser.add_argument(
         "--manifest", type=Path, default=root / "compatibility/fixed-manifest.json"
@@ -388,7 +388,7 @@ def main() -> int:
     parser.add_argument(
         "--protocol",
         type=Path,
-        default=root / "rust/pokecon-contracts/registry/protocol.json",
+        default=root / "rust/pokecon/registry/protocol.json",
     )
     parser.add_argument("--compatibility-binary", type=Path)
     parser.add_argument("--worker", type=Path)

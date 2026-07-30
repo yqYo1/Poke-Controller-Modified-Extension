@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{COMPATIBILITY_FIXED_MANIFEST_JSON, ContractError, PROTOCOL_REGISTRY_JSON};
+use super::{COMPATIBILITY_FIXED_MANIFEST_JSON, ContractError, PROTOCOL_REGISTRY_JSON};
 
 /// One generated file in the Python 3.14 `Commands` compatibility typing tree.
 #[derive(Clone, Debug, Eq, PartialEq)]

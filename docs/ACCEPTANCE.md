@@ -52,9 +52,9 @@ screen captureやpacket captureにもsecretがないことを保存前に確認�
 
 記録は`artifacts/hardware/<platform>/<capability>/<UTC timestamp>.json`へ保存します。
 
-形式の正本は[`acceptance-record.schema.json`](../rust/pokecon-contracts/registry/acceptance-record.schema.json)です。
+形式の正本は[`acceptance-record.schema.json`](../rust/pokecon/registry/acceptance-record.schema.json)です。
 
-[example](../rust/pokecon-contracts/registry/acceptance-record.example.json)は形式確認専用で、受入証拠ではありません。
+[example](../rust/pokecon/registry/acceptance-record.example.json)は形式確認専用で、受入証拠ではありません。
 
 一つのrecordは一つのplatformとcapabilityを表します。
 

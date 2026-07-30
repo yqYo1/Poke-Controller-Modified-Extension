@@ -391,7 +391,7 @@ workerのvenv同期は解決済み閉包にないpackageを削除できるため
 
 | path | 役割 |
 |---|---|
-| `rust/pokecon-contracts/registry/settings.json` | 78設定の正準レジストリ |
+| `rust/pokecon/registry/settings.json` | 78設定の正準レジストリ |
 | `generated/settings.schema.json` | 全設定IDを必須keyとして持つ閉じたJSON Schema |
 | `generated/settings-ui.json` | UI control、access、secret、scope、mutabilityのmetadata |
 | `python/pokecon/typings/__init__.pyi` | Python動的設定の型情報 |

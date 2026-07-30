@@ -1927,8 +1927,8 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
-                cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
-                cargo test --locked --package pokecon-contracts --test contract_sync
+                cargo run --locked --package pokecon --bin generate_contracts -- --check
+                cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
@@ -1952,7 +1952,7 @@
                 ${setupCallerRustTaskEnvironment}
                 ${desktopEnvironment}
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
-                cargo run --locked --package pokecon-contracts --bin generate_contracts -- "$@"
+                cargo run --locked --package pokecon --bin generate_contracts -- "$@"
               '';
             };
 
@@ -2852,8 +2852,8 @@
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
-                cargo run --locked --package pokecon-contracts --bin generate_contracts -- --check
-                cargo test --locked --package pokecon-contracts --test contract_sync
+                cargo run --locked --package pokecon --bin generate_contracts -- --check
+                cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"

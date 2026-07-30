@@ -63,9 +63,9 @@
 
 一方で、ほぼ同じAPI一覧や設定一覧を複数の文書へ複製しません。
 
-設定の厳密な型とsurfaceは`rust/pokecon-contracts/registry/settings.json`を正本とします。
+設定の厳密な型とsurfaceは`rust/pokecon/registry/settings.json`を正本とします。
 
-HTTPとWebSocketの厳密なschemaは`api/openapi.json`と`rust/pokecon-contracts/registry/protocol.json`を正本とします。
+HTTPとWebSocketの厳密なschemaは`api/openapi.json`と`rust/pokecon/registry/protocol.json`を正本とします。
 
 ユーザースクリプトの厳密なsignatureは起動時にData rootへ生成される`typings/Commands/*.pyi`を正本とします。
 

@@ -6,7 +6,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::{SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED};
+use crate::diagnostics::{SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED};
 
 /// Operating-system signals normalized across supported platforms.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -73,6 +73,7 @@ impl ShutdownCoordinator {
         }
         if let Some(accepted_reason) = self.state.reason.get() {
             tracing::info!(
+                target: "pokecon_core::shutdown",
                 diagnostic_id = SHUTDOWN_REQUESTED,
                 shutdown_reason = ?accepted_reason,
                 "shutdown requested"
@@ -122,6 +123,7 @@ pub async fn install_os_signal_forwarder(coordinator: ShutdownCoordinator) -> Jo
                     }
                     Err(error) => {
                         tracing::error!(
+                            target: "pokecon_core::shutdown",
                             diagnostic_id = SIGNAL_HANDLER_FAILED,
                             %error,
                             "operating-system signal handler failed"

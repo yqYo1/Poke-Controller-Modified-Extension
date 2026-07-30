@@ -2,10 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use pokecon_contracts::model::{Access, Mutability, Scope, Setting};
-use pokecon_contracts::{
-    CI_REGISTRY_JSON, COMPATIBILITY_REGISTRY_JSON, FOUNDATION_REGISTRY_JSON,
-    GENERATION_REGISTRY_JSON, PROTOCOL_REGISTRY_JSON, settings_registry,
-};
+use pokecon_contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
 use regex::Regex;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -13,6 +10,10 @@ use sha2::{Digest, Sha256};
 const SPECIFICATION: &str = include_str!("../../../SPECIFICATION.md");
 const ACCEPTANCE_SCHEMA: &str = include_str!("../registry/acceptance-record.schema.json");
 const ACCEPTANCE_PROCEDURE: &str = include_str!("../../../docs/ACCEPTANCE.md");
+const COMPATIBILITY_REGISTRY_JSON: &str = include_str!("../registry/compatibility.json");
+const GENERATION_REGISTRY_JSON: &str = include_str!("../registry/generation.json");
+const CI_REGISTRY_JSON: &str = include_str!("../registry/ci.json");
+const FOUNDATION_REGISTRY_JSON: &str = include_str!("../registry/foundation.json");
 const FIXED_MANIFEST: &str = include_str!("../../../compatibility/fixed-manifest.json");
 const FLAKE: &str = include_str!("../../../flake.nix");
 const PYPROJECT: &str = include_str!("../../../pyproject.toml");
@@ -394,7 +395,7 @@ fn assert_generated_artifact_contracts(artifacts: &[Value]) {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
-        .expect("contracts crate must be nested under the repository root");
+        .expect("pokecon package must be nested under the repository root");
     for artifact in artifacts
         .iter()
         .filter(|artifact| artifact["tracked"] == true)
@@ -454,7 +455,7 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
         .expect("hardware category must exist");
     assert_eq!(
         hardware["record_schema"],
-        "rust/pokecon-contracts/registry/acceptance-record.schema.json"
+        "rust/pokecon/registry/acceptance-record.schema.json"
     );
     assert_eq!(hardware["procedure"], "docs/ACCEPTANCE.md");
     assert_eq!(

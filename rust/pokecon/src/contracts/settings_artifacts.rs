@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value, json};
 
-use crate::model::{DefaultValue, ObjectProperty, SettingsRegistry, ValueSchema};
+use super::model::{DefaultValue, ObjectProperty, SettingsRegistry, ValueSchema};
 
 /// Projects the complete canonical setting registry into a closed JSON Schema.
 ///
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn generated_setting_documents_cover_the_validated_registry_exactly() {
-        let validated = crate::settings_registry().expect("settings registry must be valid");
+        let validated = super::super::settings_registry().expect("settings registry must be valid");
         let registry = validated.registry();
         let schema = settings_json_schema(registry);
         let metadata = settings_ui_metadata(registry);

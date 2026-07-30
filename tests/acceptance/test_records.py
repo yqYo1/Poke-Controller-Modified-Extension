@@ -18,8 +18,8 @@ from scripts.acceptance.records import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / "rust/pokecon-contracts/registry/acceptance-record.schema.json"
-EXAMPLE = ROOT / "rust/pokecon-contracts/registry/acceptance-record.example.json"
+SCHEMA = ROOT / "rust/pokecon/registry/acceptance-record.schema.json"
+EXAMPLE = ROOT / "rust/pokecon/registry/acceptance-record.example.json"
 SOURCE_COMMIT = "1" * 40
 BROWSER_CAPABILITIES = {
     "browser_matrix",

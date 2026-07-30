@@ -3767,11 +3767,13 @@ dependencies = [
  "pokecon-server",
  "pokecon-settings",
  "pokecon-worker",
+ "regex",
  "reqwest",
  "rumqttc",
  "semver",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tempfile",
@@ -3807,10 +3809,8 @@ dependencies = [
 name = "pokecon-contracts"
 version = "0.1.0"
 dependencies = [
- "regex",
  "serde",
  "serde_json",
- "sha2",
  "thiserror 2.0.18",
  "url",
 ]

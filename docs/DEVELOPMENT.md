@@ -6,31 +6,45 @@
 
 runtimeの責務境界を変更する前に[本体アーキテクチャ](ARCHITECTURE.md)を参照してください。
 
-## Nix devShellを唯一の開発環境にする
+## projectのNix flake outputを唯一の開発入口にする
 
 repositoryの開発、生成、format、test、packageはすべてflakeが固定するtoolchainで実行します。
 
 hostに入っているRust、Python、Bun、Node.jsを直接使用しません。
 
-direnvを使用する場合はrepositoryへ移動し、初回だけ許可します。
+常駐shellへ広いtoolchainと環境変数を導入しません。
+
+CIと同じ完了gateは`nix run .#<task>`または`nix flake check`で、formatは`nix fmt`、callerのworktreeへ書き込む対話操作は専用appで実行します。
+
+代表的な入口は次のとおりです。
 
 ```bash
-direnv allow
+nix run .#cargo -- test --locked -p pokecon-app
+nix run .#web-dev
+nix run .#hooks-install
+nix run .#editor -- --print
+nix run .#editor-smoke
 ```
 
-明示的にshellへ入る場合は次を実行します。
+`cargo`と`web-dev`は明示的にcallerのworktreeを対象とします。読取り専用の完了gateはNix store上の正準sourceまたは隔離した一時copyを対象とします。対話用の`cargo`だけがcallerの`target/nix-tasks`を排他lock付きで再利用し、長時間起動する`editor`は別の`target/nix-editor`を使用します。Rust完了gateとcallerへ書き込むgeneratorは、実行ごとの一時`cargo-target`で必ず再構築し、callerのCargo cacheを読取り、検査、変更しません。
 
-```bash
-nix develop
-```
+すべてのtask appはflakeが列挙したtoolだけの`PATH`を使用します。`editor`からhost editorを起動する場合は、`nix run .#editor -- /absolute/path/to/editor`のようにabsolute executable pathを指定します。
 
-`.envrc`は`use flake`を使用します。
+読取り専用gateとgeneratorはbuildへ影響するambient環境変数を除去し、一時`HOME`、一時`CARGO_HOME`、実行ごとの一時Cargo target、専用XDG directoryを使用します。Cargo dependencyはflake packageと同じimmutableなNix vendor directoryだけからofflineで解決し、ambientなCargo config、registry source、Git checkout、network cache、以前の実行が残したartifactを使用しません。`cargo`と`editor`は対話的な調査入口であるため、`RUST_LOG`や明示的なcompiler optionなどcallerが渡す非tool環境を意図的に継承します。この対話結果は完了gateの証跡にはせず、toolの`PATH`、Rust／Python toolchain、Cargo targetはappが固定します。
 
-shell開始時にRust、Python、Bunのversionが表示されます。
+`hooks-install`は新しく作成した各worktreeで実行します。再実行するとNix生成configを収束させ、欠落、実行権限を失った、または認識済み生成形式のhookを再導入します。`.pre-commit-config.yaml`に通常fileまたは予期しないsymlinkがある場合、あるいはhook pathにcustom file、symlink、または認識できない内容がある場合は、退避や置換をせず失敗します。生成hookはprivileged Bash、固定`PATH`、一時`HOME`と最小Git contextを使い、`SKIP`などのambient設定では検査を迂回できません。
 
-CIと同じtaskは`nix run .#<task>`で実行します。
+`nix fmt`と`nix run .#fmt`は同じ保護されたformatterです。callerのworktreeを対象にしつつ、shell startup、formatter設定、`HOME`、cacheなどのambient状態を除去してから固定treefmtを実行します。
 
 localだけに存在する依存や環境変数でtestを通さず、必要なtoolは`flake.nix`へ宣言します。
+
+`virtual-io-check`のhost privilege wrapperだけは例外です。setuid executableはimmutableなNix storeへ固定できないため、通常のtoolはflakeで固定したまま、権限昇格だけを下記の明示的なhost契約へ分離します。
+
+新しい対話用途が必要になった場合も、既定shellを追加せず、必要なtoolと環境だけを持つ専用appを追加します。
+
+repositoryの状態確認、commit、worktree作成にはGit／ghqをorchestration入口として使用できます。Gitから起動するproject検査は、host toolchainではなく上記flake outputを呼びます。
+
+このlocal開発規則はNixを利用できるhostを対象にします。native WindowsのCI、package、releaseは明示的なplatform gateであり、各workflowが固定するWindows toolchainを使用します。
 
 ## 対象toolchainを理解する
 
@@ -48,7 +62,7 @@ JavaScriptである必要がない新規sourceはTypeScriptで作成します。
 
 既存JavaScriptを変更する場合も、tool制約がなければ同じ変更でTypeScriptへ移行します。
 
-Node.jsを直接呼ぶscriptを追加せず、`bun --bun`またはflake taskを使用します。
+Node.jsを直接呼ぶscriptを追加しません。script内部ではNixが固定したBunを`bun --bun`で使用し、開発者は対応するflake taskだけを入口にします。
 
 ## repository構造から変更先を選ぶ
 
@@ -64,7 +78,7 @@ Node.jsを直接呼ぶscriptを追加せず、`bun --bun`またはflake taskを�
 | `api/` | 生成済みOpenAPI契約 |
 | `docs/` | 読者別の恒久文書 |
 | `compatibility/` | 固定互換source、期待値、追補記録 |
-| `flake.nix` | source filter、package、devShell、全task |
+| `flake.nix` | source filter、package、完了gate、対話用flake app |
 | `Cargo.toml`と`Cargo.lock` | Rust workspaceと唯一のlock file |
 | `web/package.json`と`web/bun.lock` | frontend依存と唯一のBun lock |
 
@@ -80,9 +94,9 @@ Nix buildはrepository全体を無条件にstoreへコピーせず、`flake.nix`
 
 特に`.svelte`、`.ts`、`.tsx`、`.json`、`.svg`、`.md`の追加漏れを確認します。
 
-source filterにfrontend fileがない場合、local Bun buildは成功してもNix buildではSvelteKitのfallback error pageだけが生成されることがあります。
+source filterにfrontend fileがない場合、callerのsource treeには実装が存在してもNix buildではSvelteKitのfallback error pageだけが生成されることがあります。
 
-HTTP statusが200なのに画面が`404 Not Found`になる場合は、`result/web/dist`とlocal `web/dist`のchunk数を比較します。
+HTTP statusが200なのに画面が`404 Not Found`になる場合は、`nix build .#web`の成果物にfallback以外のexpected chunkがあることを確認し、独立した`nix run .#web-check`も実行します。
 
 filterと禁止sourceの検査は次で実行します。
 
@@ -109,7 +123,11 @@ async executor上でblocking I/Oを直接実行せず、専用threadまたは`sp
 
 bounded queueの容量とoverflow policyをtest可能な設定またはconstantとして定義します。
 
-変更中の素早い確認には対象packageを絞った`cargo test`をdevShell内で実行できます。
+変更中の素早い確認には、callerのworktreeを対象にする`cargo` appでpackageやtestを絞ります。
+
+```bash
+nix run .#cargo -- test --locked -p pokecon-app
+```
 
 共有の完了gateはflake taskを使用します。
 
@@ -123,7 +141,7 @@ nix run .#build-rust
 
 crate内に別のlock fileを作りません。
 
-依存を変更した場合はNix shell内でroot lockを更新し、意図しないtransitive差分がないか確認します。
+依存を変更した場合は`nix run .#cargo -- update ...`でroot lockを更新し、意図しないtransitive差分がないか確認します。
 
 ## Python 3.14 codeを変更する
 
@@ -150,7 +168,16 @@ Rust bindingをlocal interpreterへ導入して調査する場合は次を使用
 nix run .#maturin-develop
 ```
 
-この操作もdevShellが固定するPythonとPyO3を使用します。
+この操作はambient `VIRTUAL_ENV`を使用せず、flakeのPython 3.14で`target/maturin-venv`を初回に作成します。wheelのRust buildは実行ごとの一時Cargo targetを使用し、対話用`target/nix-tasks`を共有しません。同じ永続venvへのbuild／検査／再導入は、厳格に検証した`target/.maturin-develop.lock`で全実行を直列化します。CargoはimmutableなNix vendorからofflineでwheelをbuildし、`uv`は依存をnetwork解決せずそのwheelだけを導入します。移行用wheelはcallerのroot metadata、`rust/`、`python/pokecon/`だけを一時snapshotへcopyし、productionのMaturin設定を変更せずsnapshot内だけでcanonical mixed-project layoutへ補正します。wheel内のPython payloadはcaller sourceとfile単位で照合します。既存venvがsymlink、破損、redirectされた`site-packages`、実行可能な`.pth`／customization、想定外distribution、不正なuninstall manifest、または異なるPythonを含む場合は自動削除せず、退避して再実行するためのpathを診断します。appの`--help`に列挙したbuild optionだけを追加指定でき、manifest、interpreter、target、output、Cargo configは上書きできません。
+
+導入したnative moduleはflakeの固定環境を介して調査します。
+
+```bash
+nix run .#editor -- "$PWD/target/maturin-venv/bin/python" -I -c \
+  'import pokecon._native as native; print(native)'
+```
+
+このvenvと`maturin-develop` taskは移行用であり、Phase 2.6でnative extensionと同時に削除します。
 
 user package同期のproduction経路をsystem `pip`で置き換えません。
 
@@ -168,12 +195,21 @@ dependency取得では`--frozen-lockfile`を使用し、install scriptは必要�
 nix run .#web-check
 ```
 
-dev serverが必要な場合もNix devShell内でBunを使用します。
+dev serverには、固定Bunとfrozen lock fileを使ってcallerの`web/`を監視する専用appを使用します。
 
 ```bash
-bun install --cwd web --frozen-lockfile --ignore-scripts
-bun run --cwd web --bun dev
+nix run .#web-dev
 ```
+
+完了gateはnetwork installを行いません。`web-check`、`check`、`tauri-build`、API型生成はlock fileから作成したhash固定のNix dependency treeを使用します。
+
+editor用language serverの統合は、host `PATH`やdirenvを使わず次で検証します。
+
+```bash
+nix run .#editor-smoke
+```
+
+このsmokeは隔離したfixtureに対してRust、Python、TypeScript、Svelteの各serverを実際にinitializeし、documentをopenし、意図した型errorのdiagnostic code、message、rangeを確認してからshutdownします。version表示だけの検査ではありません。
 
 RESTとWebSocketの型を手書きで複製せず、OpenAPI生成物をimportします。
 
@@ -259,6 +295,8 @@ V4L2試験はffmpegの既知patternを入力し、列挙、format交渉、BGR de
 
 task自身がmoduleをloadした場合だけ終了時にunloadします。
 
+既存deviceがなくmoduleのloadが必要な場合、rootでは対象commandを直接実行し、非rootではhostのsetuid privilege wrapperをnon-interactive modeで使用します。`POKECON_SUDO`にはabsolute executable pathだけを指定できます。未指定時は`/run/wrappers/bin/sudo`、`/usr/bin/sudo`、`/bin/sudo`の順で検出し、ambient `PATH`からは探索しません。これら以外の配置では、たとえば`POKECON_SUDO=/usr/local/bin/sudo nix run .#virtual-io-check`のように明示します。
+
 実行kernelに対応する`v4l2loopback`と、必要時にmoduleをloadできる権限が必要です。
 
 virtual I/Oのためにproduction codeへCI専用backendや分岐を追加しません。
@@ -320,6 +358,8 @@ nix run .#package-smoke -- /absolute/path/to/package.deb
 nix run .#package-install-smoke -- /absolute/path/to/package.deb
 ```
 
+container install gateはflake固定Docker clientを使い、外部Docker daemonだけを明示的なhost境界とします。ambientから継承するDocker設定は`DOCKER_HOST`、`DOCKER_CONTEXT`、`DOCKER_CERT_PATH`、`DOCKER_TLS_VERIFY`、`DOCKER_CONFIG`に限定します。`DOCKER_CONFIG`と`DOCKER_CERT_PATH`を指定する場合は、読取りと探索が可能なabsolute directory pathでなければ実行前に拒否します。
+
 release artifactはbundled worker、uv、Python runtime、wheelhouse、`web/dist`のmanifestとhashを含みます。
 
 実行fileだけを取り出して成功扱いにしません。
@@ -364,13 +404,15 @@ commit前にformat、対象gate、最終`check`を実行します。
 
 commitはprojectの署名方針に従って署名します。
 
-push後はlocal成功だけで完了とせず、対象branchのGitHub Actionsを最後まで監視します。
+push後はlocal成功だけで完了とせず、対象branchで発見されたGitHub Actions runを安定窓の完了まで監視します。
 
-repository付属scriptはbranchとtimeoutを指定できます。
+CI監視appはbranchと任意のtimeoutをscriptへ渡し、必要なcommandをflakeから提供します。既定timeoutと安定窓は`nix run .#ci-watch -- --help`が表示するscript定義を正準とします。
 
 ```bash
-scripts/ci-watch.sh <branch> 3600
+nix run .#ci-watch -- "$BRANCH"
 ```
+
+現段階では、remote branch HEADに対して発見されたworkflow runがすべて成功し、発見済みrunとstatusの集合が安定窓の間変化しなければ監視を完了します。通常CIを単一の集約workflowへ移行するまでは、安定窓の後で新しいworkflow runが出現しないことまでは保証しません。
 
 CIが失敗した場合は該当workflowのlogを確認し、同じNix taskで再現して修正します。
 

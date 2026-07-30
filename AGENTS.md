@@ -3,9 +3,10 @@
 ## Session Directives (Auto-captured)
 
 ### Development Environment
-- [2026-05-09] **All development work MUST use the Nix devShell.** Enter via `nix develop` or let direnv auto-enter with `use flake` in `.envrc`.
-- [2026-05-09] **direnv is available and configured.** The `.envrc` contains `use flake`, so entering the project directory automatically loads the devShell. If direnv is blocked, run `direnv allow`.
-- [2026-05-09] **Do NOT run tools directly from host system.** Always use `nix run .#<task>` or tools provided within `nix develop`. This ensures version parity with CI.
+- [2026-07-30] **All build, test, format, generation, watch, and language-server work MUST use project Nix flake outputs.** Use `nix run .#<task>` for purpose-specific apps, `nix fmt` for the formatter, and `nix flake check` for flake checks. Use `nix run .#cargo -- <subcommand>` for targeted Cargo work.
+- [2026-07-30] **Do not use direnv, `.envrc`, `nix develop`, or a default devShell.** Interactive workflows must be expressed as scoped flake apps such as `cargo`, `web-dev`, `hooks-install`, and `editor`.
+- [2026-07-30] **Do NOT run host language runtimes, compilers, build tools, package managers, or quality tools directly.** The `nix` CLI and VCS/worktree orchestration with `git` or `ghq` are allowed entrypoint operations; project work invoked by them must use the fixed flake outputs above.
+- [2026-07-30] **These flake-output rules govern local work on Nix-capable development hosts.** Explicit Windows CI, packaging, and release jobs use the toolchains pinned by their workflows because native Windows Nix execution is not a supported gate.
 - [2026-05-09] **Python 3.14 is the target version.** Use PEP 695 type parameters and full type hints (basedpyright for checking).
 
 ### Code Quality & Formatting
@@ -22,27 +23,32 @@
 
 ### CI Monitoring (Mandatory)
 - [2026-05-12] **After EVERY git push to origin, verify CI results on GitHub.** Local `nix run .#check` passing does NOT guarantee CI will pass (environment differences, feature flags, etc.).
-- [2026-05-12] **Use `scripts/ci-watch.sh` to monitor CI after push.** This script polls GitHub Actions and blocks until all jobs complete, reporting success/failure.
+- [2026-07-30] **Use `nix run .#ci-watch --` to monitor CI after push.** The flake app runs `scripts/ci-watch.sh` with fixed dependencies, following workflow runs discovered for the pushed SHA until they complete and the discovered run/status set remains stable for the script's settlement window.
 - [2026-05-12] **If CI fails, fix before declaring completion.** Never tell user "CI passed" without actually checking GitHub.
-- [2026-05-12] **CI watch command:** `scripts/ci-watch.sh [branch] [timeout-seconds]` (default: current branch, 600s timeout)
-- [2026-05-12] **Alternative:** `gh run watch` or `gh run list --branch <branch>` to check status manually.
-- [2026-05-16] **After push, monitor CI until completion without user reminder.** Do not wait for user to prompt CI check. Automatically poll `gh run list` and fix failures immediately.
+- [2026-07-30] **CI watch command:** `nix run .#ci-watch -- [branch] [timeout-seconds]` (the script default is current branch and its documented timeout).
+- [2026-07-30] **After push, monitor discovered CI runs through the settlement window without user reminder.** Until the aggregate workflow is implemented, this does not prove that no later workflow run will appear after the window. Fix every discovered failure immediately.
 
 ### Nix Source Filter — SPA 404 Incident
 - [2026-05-20] **When adding new frontend file extensions, update `flake.nix` source filter.** The UI showed "404 Not Found" (HTTP 200) because `.svelte` files were missing from the nix source filter — SvelteKit could only build the fallback error page. All source extensions used by the build must be listed in the `filter` function (`.rs`, `.html`, `.css`, `.ts`, `.tsx`, `.svelte`, `.json`, `.svg`, `.md`, etc.). Project-owned frontend source and configuration must remain TypeScript rather than JavaScript.
 - [2026-05-20] **Symptom:** Browser displays "404 Not Found" but HTTP status is 200. The SPA fallback serves `index.html` correctly, but the built `index.html` itself contains only SvelteKit's built-in error page due to missing source files during nix build.
-- [2026-05-20] **Verification:** Compare `nix build` output vs local `bun run --bun build` output. If the nix store build has significantly fewer chunks/CSS files, suspect missing source extensions in the filter.
+- [2026-05-20] **Verification:** Build the package with `nix build .#web` and run the independent `nix run .#web-check` gate. If the Nix store output contains only the fallback page or unexpectedly few chunks/CSS files, suspect missing source extensions in the filter.
 
 ## Quick Reference
 
 ```bash
-# Enter devShell (auto via direnv, or manual)
-nix develop
-
 # Format all files
 nix fmt
 
 # Run checks
 nix run .#check
+
+# Run a targeted Cargo command in the caller worktree
+nix run .#cargo -- test --locked -p pokecon-app
+
+# Install the Nix-generated pre-commit hook explicitly
+nix run .#hooks-install
+
+# Monitor GitHub Actions with fixed dependencies
+nix run .#ci-watch --
 
 ```

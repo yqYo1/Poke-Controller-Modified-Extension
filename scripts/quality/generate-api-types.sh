@@ -10,7 +10,17 @@ if [[ "$mode" != "generate" && "$mode" != "--check" ]]; then
   exit 2
 fi
 
-bun install --cwd api --frozen-lockfile --ignore-scripts --no-progress
+api_node_modules=${POKECON_API_NODE_MODULES:-}
+if [[ $api_node_modules != /* || ! -d $api_node_modules ]]; then
+  echo "POKECON_API_NODE_MODULES must identify the absolute Nix-provided API dependency directory" >&2
+  echo "run this generator through: nix run .#generate-api-types" >&2
+  exit 2
+fi
+openapi_typescript="$api_node_modules/.bin/openapi-typescript"
+if [[ ! -f $openapi_typescript ]]; then
+  echo "openapi-typescript is missing from the Nix-provided API dependencies: $openapi_typescript" >&2
+  exit 2
+fi
 web_generated="web/src/lib/api/openapi.ts"
 web_schema="web/src/lib/api/openapi.json"
 
@@ -18,7 +28,7 @@ if [[ "$mode" == "--check" ]]; then
   cargo run --locked --package pokecon-server --bin generate_openapi -- --check
   generated_dir="$(mktemp -d)"
   trap 'rm -rf "$generated_dir"' EXIT
-  bun --bun api/node_modules/.bin/openapi-typescript api/openapi.json \
+  bun --bun "$openapi_typescript" api/openapi.json \
     --output "$generated_dir/generated.ts"
   if ! cmp --silent "$web_generated" "$generated_dir/generated.ts"; then
     echo "$web_generated differs from the OpenAPI-generated client types" >&2
@@ -33,7 +43,7 @@ if [[ "$mode" == "--check" ]]; then
 else
   cargo run --locked --package pokecon-server --bin generate_openapi
   mkdir -p "$(dirname "$web_generated")"
-  bun --bun api/node_modules/.bin/openapi-typescript api/openapi.json \
+  bun --bun "$openapi_typescript" api/openapi.json \
     --output "$web_generated"
   install -D -m 0644 api/openapi.json "$web_schema"
 fi

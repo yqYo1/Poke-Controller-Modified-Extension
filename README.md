@@ -59,18 +59,23 @@ Web UIの開発と構築にはBunを使用し、配布済みアプリケーシ�
 
 実機シリアル、物理カメラ、音声、外部通知には、仮想I/O試験に加えて環境ごとの[外部受入ゲート](docs/ACCEPTANCE.md)が必要です。
 
-## Nix devShellで開発する
+## Nix flake outputで開発する
 
-開発コマンドはNix devShell内で実行します。
+開発コマンドは、用途ごとにtoolchainと環境を固定したNix flake app、formatter、checkから実行します。
 
-`.envrc`には`use flake`を設定済みです。
+direnv、`.envrc`、`nix develop`、hostに直接導入したtoolchainは使用しません。
 
 ```bash
-direnv allow
-nix develop
 nix fmt
 nix run .#check
+nix run .#cargo -- test --locked --workspace
+nix run .#hooks-install
+nix run .#editor-smoke
 ```
+
+frontendのhot reloadには`nix run .#web-dev`、editor連携には`nix run .#editor -- --print`を使用します。Rust、Python、TypeScript、Svelteのlanguage server実動検査は`nix run .#editor-smoke`で実行します。
+
+pre-commit hookは新しく作成したworktreeごとに`nix run .#hooks-install`で導入します。同じappを再実行すると、Nix生成configを収束させ、欠落、実行権限を失った、または認識済み生成形式のhookを再導入します。custom hookや予期しないsymlinkは置換せず拒否します。
 
 変更対象ごとの検証方法と正準ファイルは[本体開発ガイド](docs/DEVELOPMENT.md)を参照してください。
 

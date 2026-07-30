@@ -35,6 +35,7 @@ def test_bun_is_the_reproducible_javascript_toolchain() -> None:
 
     flake = (root / "flake.nix").read_text(encoding="utf-8")
     assert "webBunDependencies = pkgs.stdenvNoCC.mkDerivation" in flake
+    assert "apiBunDependencies = pkgs.stdenvNoCC.mkDerivation" in flake
     assert "pkgs.bun.version == bunVersion" in flake
     assert "--frozen-lockfile" in flake
     assert "buildNpmPackage" not in flake
@@ -53,6 +54,7 @@ def test_bun_is_the_reproducible_javascript_toolchain() -> None:
     generator = (root / "scripts/quality/generate-api-types.sh").read_text(
         encoding="utf-8"
     )
-    assert "bun install --cwd api --frozen-lockfile" in generator
+    assert "POKECON_API_NODE_MODULES" in generator
+    assert "bun install" not in generator
     assert "bun --bun" in generator
     assert "npm " not in generator

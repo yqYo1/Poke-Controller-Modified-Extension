@@ -17,6 +17,42 @@ if [[ ! $v4l2_index =~ ^[0-9]+$ ]] || ((v4l2_index > 255)); then
   exit 2
 fi
 
+privilege_wrapper=
+
+resolve_privilege_wrapper() {
+  local candidate
+  if [[ -n ${POKECON_SUDO:-} ]]; then
+    candidate=$POKECON_SUDO
+    if [[ $candidate != /* ]] || [[ ! -x $candidate ]]; then
+      echo "POKECON_SUDO must be an absolute executable path: $candidate" >&2
+      return 2
+    fi
+    privilege_wrapper=$candidate
+    return 0
+  fi
+
+  for candidate in /run/wrappers/bin/sudo /usr/bin/sudo /bin/sudo; do
+    if [[ -x $candidate ]]; then
+      privilege_wrapper=$candidate
+      return 0
+    fi
+  done
+
+  echo "no host privilege wrapper found; set POKECON_SUDO to an absolute executable path" >&2
+  return 2
+}
+
+run_privileged() {
+  if ((EUID == 0)); then
+    "$@"
+    return
+  fi
+  if [[ -z $privilege_wrapper ]]; then
+    resolve_privilege_wrapper || return
+  fi
+  "$privilege_wrapper" -n "$@"
+}
+
 readonly device="/dev/video${v4l2_index}"
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 readonly repo_root
@@ -25,6 +61,16 @@ if ! modprobe_bin=$(command -v modprobe); then
   exit 1
 fi
 readonly modprobe_bin
+if ! chmod_bin=$(type -P chmod); then
+  echo "chmod is required to prepare a virtual camera" >&2
+  exit 1
+fi
+readonly chmod_bin
+if ! true_bin=$(type -P true); then
+  echo "true is required to verify non-interactive privilege elevation" >&2
+  exit 1
+fi
+readonly true_bin
 temp_dir=$(mktemp -d -t pokecon-virtual-io.XXXXXXXX)
 readonly temp_dir
 readonly writer_log="$temp_dir/ffmpeg.log"
@@ -39,7 +85,7 @@ cleanup() {
     wait "$writer_pid" >/dev/null 2>&1 || true
   fi
   if [[ $module_loaded_by_script == true ]]; then
-    sudo -n "$modprobe_bin" -r v4l2loopback >/dev/null 2>&1 || \
+    run_privileged "$modprobe_bin" -r v4l2loopback >/dev/null 2>&1 || \
       echo "warning: could not unload v4l2loopback" >&2
   fi
   if ((status != 0)) && [[ -s $writer_log ]]; then
@@ -58,19 +104,24 @@ if [[ ! -e $device ]]; then
     echo "v4l2loopback is already loaded but $device does not exist; choose an existing loopback index" >&2
     exit 1
   fi
-  if ! sudo -n true >/dev/null 2>&1; then
-    echo "passwordless sudo is required to load the v4l2loopback kernel module" >&2
-    exit 1
+  if ((EUID != 0)); then
+    if ! resolve_privilege_wrapper; then
+      exit 2
+    fi
+    if ! run_privileged "$true_bin" >/dev/null 2>&1; then
+      echo "non-interactive host privilege elevation is required to load the v4l2loopback kernel module" >&2
+      exit 1
+    fi
   fi
-  sudo -n "$modprobe_bin" videodev
-  sudo -n "$modprobe_bin" v4l2loopback \
+  run_privileged "$modprobe_bin" videodev
+  run_privileged "$modprobe_bin" v4l2loopback \
     video_nr="$v4l2_index" \
     card_label=PokeCon-Virtual-Camera \
     exclusive_caps=1 \
     max_width=1920 \
     max_height=1080
   module_loaded_by_script=true
-  sudo -n chmod 0666 "$device"
+  run_privileged "$chmod_bin" 0666 "$device"
 fi
 
 if [[ ! -r $device || ! -w $device ]]; then

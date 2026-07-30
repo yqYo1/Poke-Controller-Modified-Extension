@@ -102,7 +102,7 @@ Rustコアは二つの独立したワーカープロセスをOS上で監督す�
   - **警告**: 既存のvenvパスを指定した場合、アプリケーションはそのvenv内のパッケージをPokeConの解決済み閉包（§14.5.2.1）と正確に同期する。解決済み閉包に含まれない既存パッケージは次回のvenv準備時に自動的にアンインストールされる。これはユーザーが手動または外部ツールでインストールしたパッケージも含む。ユーザー指定venvの使用は、この破壊的削除（destructive removal）を承諾したものとみなす。アプリ管理venvと同様のexact-syncセマンティクスが適用される（§14.5.2.1参照）。
 
 **開発ワークフロー**:
-- **nix-first**: 本プロジェクトはnix flakeを使用して開発する。すべての開発タスク（ビルド、テスト、型チェック、フォーマット）は`nix run .#<task>`または`nix develop`内で実行する
+- **flake-output-only**: Nixを利用できる開発hostでは、本プロジェクトのNix flakeを使用して開発する。ビルド、テスト、型チェック、対象を絞ったCargo操作、frontend dev server、hook導入、editor連携は用途別の`nix run .#<task>`、フォーマットは`nix fmt`、flake評価は`nix flake check`から実行する。direnv、`.envrc`、`nix develop`、既定devShell、hostの言語runtime、compiler、build／品質toolを正規の開発経路にしない。`nix`自体とGit／ghqによるVCS・worktree操作はorchestration入口として使用できる。native Windows CI、package、releaseはNixを利用できない明示的platform gateとして、各workflowが固定するtoolchain契約に従う
 - **nix環境優先、非nix環境もサポート**: まずnix環境で動作するよう実装し、その後非nix環境（Windows含む）でも動作するよう調節する。非nix環境では`PythonManager`がワーカープロセス用のPythonランタイムのセットアップを管理する（§14.4参照）
 
 ### 1.3 対象プラットフォーム・プロセスモデル

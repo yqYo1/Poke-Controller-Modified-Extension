@@ -152,7 +152,6 @@ result-*
 !/Cargo.lock
 !/rust-toolchain.toml
 !/flake.nix
-!/.envrc
 
 !/nix/
 /nix/*

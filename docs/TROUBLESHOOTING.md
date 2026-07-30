@@ -51,7 +51,7 @@ Windowsではinstallerを再実行し、WebView2 runtimeとbundle resourceを修
 
 portがすでに使用中なら、別PokeCon instanceまたは同じ`server.port`を使うprocessを終了します。
 
-本体開発者はNix devShellで次を確認します。
+本体開発者は用途別のNix flake appで次を確認します。
 
 ```bash
 nix run .#build-rust
@@ -110,7 +110,7 @@ nix build .#pokecon-server
 
 `result/web/dist`に`index.html`だけでなく複数のJavaScript、CSS chunkがあることを確認します。
 
-local Bun buildにだけchunkがある場合は、追加した`.svelte`、`.ts`、asset拡張子が`flake.nix`のsource filterに含まれるか確認します。
+callerのsourceにはcomponentがあるのにNix buildのchunkが欠ける場合は、追加した`.svelte`、`.ts`、asset拡張子が`flake.nix`のsource filterに含まれるか確認します。
 
 CI専用にfileをcopyせず、Nix packageのsource集合を修正します。
 

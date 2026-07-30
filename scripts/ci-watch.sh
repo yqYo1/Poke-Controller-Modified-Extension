@@ -2,10 +2,52 @@
 
 set -euo pipefail
 
-readonly branch="${1:-$(git branch --show-current)}"
-readonly timeout_seconds="${2:-600}"
+readonly default_timeout_seconds=1200
 readonly poll_seconds=10
-readonly stable_seconds=30
+readonly settlement_seconds=120
+readonly minimum_timeout_seconds=$((settlement_seconds + poll_seconds))
+
+usage() {
+  printf '%s\n' \
+    "usage: nix run .#ci-watch -- [branch] [timeout-seconds]" \
+    "" \
+    "defaults:" \
+    "  branch: current Git branch" \
+    "  timeout: ${default_timeout_seconds} seconds" \
+    "  minimum timeout: ${minimum_timeout_seconds} seconds" \
+    "" \
+    "The watcher follows workflow runs discovered for the remote branch HEAD." \
+    "It succeeds after every discovered run completes successfully and the" \
+    "discovered run/status set remains unchanged for ${settlement_seconds} seconds." \
+    "Until CI has one aggregate workflow, this does not guarantee that a later" \
+    "workflow run will not appear after the settlement window."
+}
+
+case "${1:-}" in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+esac
+
+if (($# > 2)); then
+  usage >&2
+  exit 2
+fi
+
+for command in date gh git sleep sort; do
+  if ! command -v "${command}" >/dev/null 2>&1; then
+    echo "required command is unavailable: ${command}" >&2
+    exit 2
+  fi
+done
+
+branch="${1:-}"
+if [[ -z "${branch}" ]]; then
+  branch="$(git branch --show-current)"
+fi
+readonly branch
+readonly timeout_seconds="${2:-${default_timeout_seconds}}"
 
 if [[ -z "${branch}" ]]; then
   echo "unable to determine the current branch" >&2
@@ -16,13 +58,11 @@ if [[ ! "${timeout_seconds}" =~ ^[1-9][0-9]*$ ]]; then
   echo "timeout must be a positive number of seconds: ${timeout_seconds}" >&2
   exit 2
 fi
-
-for command in date gh git sort; do
-  if ! command -v "${command}" >/dev/null 2>&1; then
-    echo "required command is unavailable: ${command}" >&2
-    exit 2
-  fi
-done
+if ((timeout_seconds < minimum_timeout_seconds)); then
+  usage >&2
+  echo "timeout must be at least ${minimum_timeout_seconds} seconds to cover one poll after the settlement window: ${timeout_seconds}" >&2
+  exit 2
+fi
 
 readonly remote_ref="refs/remotes/origin/${branch}"
 if ! sha="$(git rev-parse --verify "${remote_ref}^{commit}" 2>/dev/null)"; then
@@ -56,11 +96,13 @@ while true; do
       --jq '.[] | [.databaseId, .workflowName, .status, (.conclusion // ""), .url] | @tsv'
   )"; then
     echo "GitHub Actions query failed; retrying" >&2
+    last_change_at="${now}"
     sleep "${poll_seconds}"
     continue
   fi
 
   if [[ -z "${run_lines}" ]]; then
+    last_change_at="${now}"
     sleep "${poll_seconds}"
     continue
   fi
@@ -94,9 +136,9 @@ while true; do
     exit 1
   fi
 
-  stable_for=$((now - last_change_at))
-  if [[ "${seen_runs}" == true && "${all_complete}" == true && stable_for -ge stable_seconds ]]; then
-    echo "all discovered GitHub Actions runs completed successfully"
+  settled_for=$((now - last_change_at))
+  if [[ "${seen_runs}" == true && "${all_complete}" == true && settled_for -ge settlement_seconds ]]; then
+    echo "all discovered GitHub Actions runs completed successfully after the ${settlement_seconds}s settlement window"
     exit 0
   fi
 

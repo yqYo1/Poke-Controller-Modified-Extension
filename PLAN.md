@@ -17,7 +17,7 @@
 - [x] `ARCHITECTURE_REVIEW.md` の確定方針、移行順序、受入条件を一対一の実装要件として抽出した（2026-07-30 Sol意味監査承認、129要件）。
 - [x] 開始時の作業ツリーがcleanで、HEADが`e20fad5a`、`origin/refactor-rust-core`との差が0/0であることを変更前の`git status --short --branch`と`git rev-list --left-right --count`で記録した（2026-07-30 JST）。
 - [x] 旧実装の不在を前提にした旧 `PLAN.md` を廃止し、本チェックリストへ置き換えた。
-- [ ] フェーズ 1「direnv／既定 devShell 廃止」を実装中。
+- [x] フェーズ 1「direnv／既定 devShell 廃止」を完了した（実装`23149e3`、受入`1e0836b`、再現性修正`7a01da0`。最終GitHub Actions 9/9 success）。
 - [ ] 全フェーズ完了後の要件別監査を通過する。
 
 ## レビュー要件トレーサビリティ
@@ -118,13 +118,16 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 | 対象 | 実測結果 |
 | --- | --- |
-| commit境界 | PLAN `93f8b6f`、実装 `23149e3`。両commit objectにSSH `gpgsig`を確認 |
+| commit境界 | PLAN `93f8b6f`、実装 `23149e3`、受入 `1e0836b`、再現性修正 `7a01da0`。全commit objectにSSH `gpgsig`を確認 |
 | fresh worktree | `23149e3`から作成したdetached worktreeで`.envrc`／`.direnv`不在、format、4対話app、desktop、editor、aggregate checkが成功 |
 | 完了gate | `nix flake check --no-build`、`nix fmt -- --ci`、`contract-check`、`web-check`、`clippy`、`cargo-test`、`test`、`build-rust`、`compatibility`、個別lint／文書task、`nix run .#check`が終了コード0 |
-| test件数 | Web 74件、Python 56件、Rust全workspace test成功。V4L2実機test 1件だけは既定どおりignored |
+| test件数 | Web 74件、Python 60件、Rust全workspace test成功。V4L2実機test 1件だけは既定どおりignored |
 | package parity | 移行前`e20fad5`は`ih2419va26ikx0xjbq19kfpz4222svcb-pokecon-0.1.0`、移行後`23149e3`は`w40flwwp2fwjsl6haxmmd133zwiqpbyc-pokecon-0.1.0`。双方のNARは`sha256-jwKvZjYVhpnE0EaLW5/yADdlw5qn+dW/CW7BVy6WNME=`、135653616 bytes |
+| package再現性 | 受入`1e0836b`の[Package CI](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30521312734)が、隔離rootの8文字suffixだけ異なるDebian packageを検出した。`7a01da0`で対象rootを同長の正準pathへ限定置換し、異なる`pdM2ZYyn`／`gizMUhcL` rootからapp `e889f14870631a3654fb62180f0e49450a82a8ac9db693c05225c05e74ba097f`、worker `ee347a39127ab19f0398f0c32cf763922e461994ed50a1d2c8a1488d6b24ec2f`、content manifest `671835908938703b296837f9b2ac3a5b27430f5e8918773407f1adfc6dec9c0f`、Debian package `bd9cae12a91c32f6fd062018280bbc16039e2e81a4c2759c157e94ac29cb5b7c`（197470220 bytes）が二回とも一致 |
+| package受入 | `nix run .#package-smoke`と固定Ubuntu containerの`nix run .#package-install-smoke`で3801 resources、28 wheels、新規導入、offline起動、同一version更新、再起動、削除が成功。最終[Package CI](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517763)でも[Debian job](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517763/job/90825017375)の二回build／全バイト比較と[NSIS job](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517763/job/90825017380)の新規導入／起動／更新／削除がsuccess |
 | source parity | Cargo.lock `5e5f3542b0267e093bd5796c6652cff14e00bfc7`、web lock `bf27f310dccfb763ad1df795bdcb38d59fbd568b`、generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、OpenAPI `a39cab3bee21a37d54661673be901591b8346937`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`が移行前後で一致 |
 | isolation | caller未追跡source／ambient tool poisonをgateが観測せず、caller cache poisonのSHA-256も前後一致 |
+| GitHub CI | `7a01da0adb01e3853f72cdd351192ce42b4682c4`を対象に[Basedpyright](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517678)、[Ruff Check](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517685)、[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517707)、[Remote Flake Test](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517719)、[Nix Source Filter Check](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517735)、[Rust CI](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517746)、[SPA 404 Check](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517762)、[Package CI](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517763)、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30528517789)が全てsuccess。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後に終了コード0 |
 | cleanup | disposable受入／baseline worktreeを削除し、branch worktreeのtracked statusは空、正規hookを再導入 |
 
 ## フェーズ 2 — Cargo workspace を `rust/pokecon/` の単一パッケージへ統合

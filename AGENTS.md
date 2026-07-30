@@ -43,7 +43,7 @@ nix fmt
 nix run .#check
 
 # Run a targeted Cargo command in the caller worktree
-nix run .#cargo -- test --locked -p pokecon-app
+nix run .#cargo -- test --locked -p pokecon
 
 # Install the Nix-generated pre-commit hook explicitly
 nix run .#hooks-install

@@ -1194,7 +1194,7 @@
               "--features"
               "tauri-shell"
               "--package"
-              "pokecon-app"
+              "pokecon"
               "--package"
               "pokecon-worker"
               "--bin"
@@ -1206,7 +1206,7 @@
               "--features"
               "tauri-shell"
               "--package"
-              "pokecon-app"
+              "pokecon"
               "--package"
               "pokecon-worker"
             ];
@@ -2527,7 +2527,7 @@
                 cargo build \
                   --locked \
                   --release \
-                  --package pokecon-app \
+                  --package pokecon \
                   --bin pokecon \
                   --features tauri-shell
                 normalized_bin="$workdir/normalized-bin"
@@ -2575,7 +2575,7 @@
                 trap cleanup_tauri_build EXIT
                 cp -p "$normalized_application" "$application"
                 (
-                  cd rust/pokecon-app
+                  cd rust/pokecon
                   cargo tauri bundle --ci --config "$bundle_config" "''${bundle_args[@]}"
                 )
                 restore_release_application
@@ -2663,7 +2663,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                cd rust/pokecon-app
+                cd rust/pokecon
                 cargo tauri build --debug --no-bundle --ci -- --locked
               '';
             };

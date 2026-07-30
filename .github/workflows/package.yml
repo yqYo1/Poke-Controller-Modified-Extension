@@ -138,7 +138,7 @@ jobs:
           "POKECON_BUNDLE_CONFIG=$bundleConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build offline NSIS installer
         shell: pwsh
-        working-directory: rust/pokecon-app
+        working-directory: rust/pokecon
         run: >-
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG

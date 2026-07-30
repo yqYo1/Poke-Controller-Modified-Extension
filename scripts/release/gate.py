@@ -58,7 +58,7 @@ def validate_release(root: Path, tag: str | None = None) -> str:
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version} " not in changelog:
         invalid_value(f"CHANGELOG.md has no release heading for {version}")
-    tauri = load_json(root / "rust/pokecon-app/tauri.conf.json")
+    tauri = load_json(root / "rust/pokecon/tauri.conf.json")
     bundle = mapping(tauri.get("bundle"), "Tauri bundle")
     build = mapping(tauri.get("build"), "Tauri build")
     if bundle.get("active") is not True:

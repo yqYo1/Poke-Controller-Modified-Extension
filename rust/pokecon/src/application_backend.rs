@@ -196,10 +196,7 @@ impl ApplicationBackend {
     }
 
     async fn projected_state(&self) -> ApiResult<StateSnapshot> {
-        let mut public = self
-            .host
-            .public_state_snapshot()
-            .map_err(|_error| internal_failure("runtime state projection failed"))?;
+        let mut public = self.host.public_state_snapshot();
         let camera = self.camera.status();
         public.insert(
             "camera_opened".to_owned(),
@@ -966,9 +963,7 @@ pub(crate) async fn initial_state_snapshot(
     camera: &CameraManager,
     serial: &SerialManager,
 ) -> Result<StateSnapshot, String> {
-    let mut public = host
-        .public_state_snapshot()
-        .map_err(|_error| "initial state projection failed".to_owned())?;
+    let mut public = host.public_state_snapshot();
     let camera = camera.status();
     public.insert(
         "camera_opened".to_owned(),

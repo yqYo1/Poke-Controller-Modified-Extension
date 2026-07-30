@@ -102,11 +102,6 @@ impl ManagedUserScriptFactory {
         }
     }
 
-    #[must_use]
-    pub fn supervisor(&self) -> Arc<WorkerSupervisor> {
-        Arc::clone(&self.supervisor)
-    }
-
     async fn prepare(
         &self,
         settings: &LoadedSettings,

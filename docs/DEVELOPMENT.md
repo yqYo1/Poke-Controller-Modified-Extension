@@ -19,7 +19,7 @@ CIと同じ完了gateは`nix run .#<task>`または`nix flake check`で、format
 代表的な入口は次のとおりです。
 
 ```bash
-nix run .#cargo -- test --locked -p pokecon-app
+nix run .#cargo -- test --locked -p pokecon
 nix run .#web-dev
 nix run .#hooks-install
 nix run .#editor -- --print
@@ -126,7 +126,7 @@ bounded queueの容量とoverflow policyをtest可能な設定またはconstant�
 変更中の素早い確認には、callerのworktreeを対象にする`cargo` appでpackageやtestを絞ります。
 
 ```bash
-nix run .#cargo -- test --locked -p pokecon-app
+nix run .#cargo -- test --locked -p pokecon
 ```
 
 共有の完了gateはflake taskを使用します。

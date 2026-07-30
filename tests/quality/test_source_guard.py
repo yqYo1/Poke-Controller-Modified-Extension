@@ -38,11 +38,11 @@ def test_source_guard_reports_absent_fixtures(guard: Guard, tmp_path: Path) -> N
                 "web/src/routes/+page.svelte",
             ],
         ),
-        (Guard.APP, ["rust/pokecon-app/src/main.rs"]),
+        (Guard.APP, ["rust/pokecon/src/main.rs"]),
         (
             Guard.SPA,
             [
-                "rust/pokecon-app/src/main.rs",
+                "rust/pokecon/src/main.rs",
                 "web/package.json",
                 "web/bun.lock",
                 "web/src/routes/+page.svelte",
@@ -60,3 +60,21 @@ def test_source_guard_reports_present_fixtures(
     result = evaluate_guard(tmp_path, guard)
     assert result.applicable
     assert "absent" not in result.reason
+
+
+@pytest.mark.parametrize("guard", [Guard.APP, Guard.SPA])
+def test_legacy_application_entry_point_does_not_activate_app_or_spa(
+    guard: Guard,
+    tmp_path: Path,
+) -> None:
+    for relative_path in (
+        "rust/pokecon-app/src/main.rs",
+        "web/package.json",
+        "web/bun.lock",
+        "web/src/routes/+page.svelte",
+    ):
+        _touch(tmp_path, relative_path)
+
+    result = evaluate_guard(tmp_path, guard)
+    assert not result.applicable
+    assert "absent" in result.reason

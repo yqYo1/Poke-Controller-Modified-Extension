@@ -21,7 +21,7 @@ def test_normalize_ephemeral_build_root_rewrites_every_occurrence(
         + bytes(build_root)
         + b"/cargo-target/release-python/lib\0middle\0"
         + bytes(build_root)
-        + b"/cargo-target/pokecon-release-workdir/rust/pokecon-app\0suffix"
+        + b"/cargo-target/pokecon-release-workdir/rust/pokecon\0suffix"
     )
     binary.write_bytes(content)
 

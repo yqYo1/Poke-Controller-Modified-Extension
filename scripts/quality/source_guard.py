@@ -92,12 +92,12 @@ def evaluate_guard(root: Path, guard: Guard) -> GuardResult:
             "Web prerequisites (package.json, bun.lock, web/src source) are absent",
         ),
         Guard.APP: (
-            (root / "rust/pokecon-app/src/main.rs").is_file(),
+            (root / "rust/pokecon/src/main.rs").is_file(),
             "Rust application entry point exists",
-            "Rust application entry point (rust/pokecon-app/src/main.rs) is absent",
+            "Rust application entry point (rust/pokecon/src/main.rs) is absent",
         ),
         Guard.SPA: (
-            (root / "rust/pokecon-app/src/main.rs").is_file() and _web_exists(root),
+            (root / "rust/pokecon/src/main.rs").is_file() and _web_exists(root),
             "Rust application and complete Web package exist",
             "Rust application or complete Web package is absent",
         ),

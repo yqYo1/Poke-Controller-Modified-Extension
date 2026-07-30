@@ -20,7 +20,6 @@ use pokecon_worker::script::protocol::{
 };
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
-use tokio::task::JoinHandle;
 
 use crate::dynamic_host::StartupDynamicHost;
 
@@ -90,6 +89,13 @@ pub enum CommandReloadResult {
 }
 
 /// One of the exactly ten profile-capable shortcut slots.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "shortcut slot projection awaits product shortcut dispatch wiring"
+    )
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShortcutSlot {
     pub index: u8,
@@ -236,8 +242,22 @@ pub enum CommandServiceError {
     CommandNotFound,
     #[error("command generation changed during a lifecycle callback")]
     CommandGenerationChanged,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shortcut index rejection awaits product shortcut dispatch wiring"
+        )
+    )]
     #[error("shortcut index must be between 1 and 10")]
     InvalidShortcut,
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "unassigned shortcut rejection awaits product shortcut dispatch wiring"
+        )
+    )]
     #[error("shortcut is not assigned to a discovered command")]
     ShortcutUnavailable,
     #[error("command cache changed too frequently to complete one generation")]
@@ -391,22 +411,6 @@ impl CommandService {
         Ok(())
     }
 
-    /// Starts a background listener for coalesced dynamic callback changes.
-    #[must_use]
-    pub fn spawn_recompute_listener(self: &Arc<Self>) -> JoinHandle<()> {
-        let service = Arc::clone(self);
-        let mut invalidations = self.host.subscribe_command_recompute();
-        tokio::spawn(async move {
-            while invalidations.changed().await.is_ok() {
-                if let Err(error) = service.recompute_display_cache().await
-                    && !matches!(error, CommandServiceError::ProfileSwitchInProgress)
-                {
-                    tracing::warn!(error = %error, "command display cache recomputation failed");
-                }
-            }
-        })
-    }
-
     /// Begins one discovered command without blocking the caller until its
     /// execution completes.
     ///
@@ -485,6 +489,13 @@ impl CommandService {
     /// # Errors
     ///
     /// Rejects an invalid/unassigned slot or propagates [`Self::start`] errors.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shortcut execution awaits product shortcut dispatch wiring"
+        )
+    )]
     pub async fn start_shortcut(
         self: &Arc<Self>,
         index: u8,
@@ -679,6 +690,13 @@ impl CommandService {
     /// # Errors
     ///
     /// Returns [`CommandServiceError::ProfileSwitchInProgress`] when held.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "profile switch entry awaits product profile coordination wiring"
+        )
+    )]
     pub fn try_begin_profile_switch(&self) -> Result<(), CommandServiceError> {
         self.host
             .try_begin_profile_switch_gate()
@@ -719,6 +737,13 @@ impl CommandService {
     }
 
     /// Releases the profile gate on success, cancellation, or rollback.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "profile switch completion awaits product profile coordination wiring"
+        )
+    )]
     pub fn finish_profile_switch(&self) {
         self.host.finish_profile_switch_gate();
     }
@@ -759,6 +784,13 @@ impl CommandService {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "command listing awaits product command adapter wiring"
+        )
+    )]
     pub async fn commands(&self) -> Vec<LoadedCommand> {
         self.inner.lock().await.commands.clone()
     }
@@ -768,6 +800,13 @@ impl CommandService {
     /// # Errors
     ///
     /// Returns an error if a canonical shortcut setting is absent or invalid.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shortcut listing awaits product shortcut dispatch wiring"
+        )
+    )]
     pub async fn shortcuts(&self) -> Result<Vec<ShortcutSlot>, CommandServiceError> {
         let settings = self.host.loaded_settings();
         let commands = self.inner.lock().await.commands.clone();
@@ -792,6 +831,13 @@ impl CommandService {
             .collect()
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "shortcut identity resolution awaits product shortcut dispatch wiring"
+        )
+    )]
     async fn shortcut_identity(
         &self,
         index: u8,

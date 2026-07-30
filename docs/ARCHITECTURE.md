@@ -60,7 +60,7 @@ Cargo workspaceは11 crateで構成されます。
 
 | crate | 所有する責務 | 所有しない責務 |
 |---|---|---|
-| `pokecon-app` | composition root、service接続、profile、command、起動と停止順 | codecやHTTP wire型そのもの |
+| `pokecon` | composition root、service接続、profile、command、起動と停止順 | codecやHTTP wire型そのもの |
 | `pokecon-camera` | native camera、最新frame、共有mapping、画像供給 | UI状態や設定永続化 |
 | `pokecon-contracts` | machine-readable registry、schema、生成器 | runtime device処理 |
 | `pokecon-core` | platform、diagnostic ID、shutdown coordinator | application service構成 |
@@ -74,7 +74,7 @@ Cargo workspaceは11 crateで構成されます。
 
 crate間の新しい依存は、この表の責務を逆流させないように追加します。
 
-下位crateが`pokecon-app`を参照する構造はcomposition rootを壊すため避けます。
+下位crateが`pokecon`を参照する構造はcomposition rootを壊すため避けます。
 
 公開wire型をapplication handlerへ埋め込まず、`pokecon-server::api`へ集約します。
 

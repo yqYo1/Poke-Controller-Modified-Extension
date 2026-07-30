@@ -294,6 +294,7 @@ impl StartupDynamicHost {
 
     /// Returns the complete committed top-level assignment map for the final
     /// pipeline and subsequent runtime-host construction.
+    #[cfg(test)]
     #[must_use]
     pub fn dynamic_values(&self) -> BTreeMap<String, Value> {
         self.inner.lock().dynamic_values.clone()
@@ -318,16 +319,7 @@ impl StartupDynamicHost {
         self.notify_runtime_change();
     }
 
-    #[must_use]
-    pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.inner.lock().diagnostics.clone()
-    }
-
-    #[must_use]
-    pub fn outputs(&self) -> Vec<String> {
-        self.inner.lock().outputs.clone()
-    }
-
+    #[cfg(test)]
     #[must_use]
     pub fn command_recompute_requests(&self) -> u64 {
         self.inner.lock().command_recompute_requests
@@ -349,18 +341,14 @@ impl StartupDynamicHost {
 
     /// Returns only the committed UI-visible state. Dynamic callback staging
     /// remains private until a complete command-cache generation is published.
-    ///
-    /// # Errors
-    ///
-    /// Returns a fixed encoding error if controller ownership cannot be
-    /// projected into the public state map.
-    pub fn public_state_snapshot(&self) -> Result<BTreeMap<String, Value>, DynamicHostError> {
+    #[must_use]
+    pub fn public_state_snapshot(&self) -> BTreeMap<String, Value> {
         let mut snapshot = self.inner.lock().public_state.clone();
         snapshot.insert(
             "holding_buttons".to_owned(),
             holding_buttons(self.controller.state()),
         );
-        Ok(snapshot)
+        snapshot
     }
 
     /// Re-enumerates profile directories and publishes the resulting list to
@@ -1425,7 +1413,7 @@ mod tests {
         host.refresh_available_profiles()
             .expect("profile state must refresh");
         assert_eq!(
-            host.public_state_snapshot().unwrap()["available_profiles"],
+            host.public_state_snapshot()["available_profiles"],
             json!(["New", "Other", "default"])
         );
         host.finish_startup().expect("startup must finalize");
@@ -1590,7 +1578,7 @@ mod tests {
         )
         .expect("ScriptLoadPre mutation must be staged");
         assert_eq!(
-            host.public_state_snapshot().unwrap()["command_candidates"],
+            host.public_state_snapshot()["command_candidates"],
             json!([])
         );
         let (candidates, _tags) = host.staged_script_load().unwrap();

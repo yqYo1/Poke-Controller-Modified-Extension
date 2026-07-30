@@ -146,10 +146,30 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.1 合成起点
 
-- [ ] **AR-10.9-01** Rust実装を大きな`rust/pokecon/` package `pokecon`と内部moduleとして作る（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のpackage情報と`nix run .#source-guard`が検査するsource tree）。
-- [ ] 現在の `pokecon` CLI と起動挙動を保ったまま合成起点を移す。
-- [ ] 旧crateを残したまま、本体libraryと合成起点のscaffoldだけを作る。
-- [ ] 内部 module を既定非公開にし、再利用想定だけの公開 API を増やさない。
+- [x] **AR-10.9-01** Rust実装を大きな`rust/pokecon/` package `pokecon`と内部moduleとして作る（証跡: 下記2.1 checkpoint表のCargo合成起点、source境界、metadata／source）。
+- [x] 現在の `pokecon` CLI と起動挙動を保ったまま合成起点を移す。
+- [x] 旧crateを残したまま、本体libraryと合成起点のscaffoldだけを作る。
+- [x] 内部 module を既定非公開にし、再利用想定だけの公開 API を増やさない。
+
+#### 2.1 checkpoint証跡（2026-07-30、commit前）
+
+下表のcommandはcaller worktreeまたはNix store成果物に対して直接実行し、すべて終了コード0だった。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| Cargo合成起点 | workspace 11 packageのうち既存の下位10 crateを保持し、package `pokecon`を`rust/pokecon/`へ配置。library／binary targetはいずれも`pokecon` |
+| source境界 | 正準pathのtracked 18件、旧pathのtracked 0件。旧pathのignored 6件は事前hash不変、正準pathのignored 0件 |
+| 合成／外部API | `main.rs`は4行wrapper、旧mainから`entrypoint.rs`へのGit renameは94%。`pub mod`は0件、公開は`pokecon::{MainError, run_cli}`だけ |
+| Nix成果物 | `nix build .#pokecon --print-out-paths --no-link`がsuffix `-pokecon-0.1.0`のNix store成果物を返す |
+| 契約／Rust | `nix run .#contract-check`、`nix run .#clippy`、`nix run .#build-rust`、`nix run .#compatibility` |
+| Rust統合test | `nix run .#cargo-test`。workerのscript／dynamic両roleの起動、IPC、協調停止、強制終了と、PokeConのlibrary 29件／startup 3件（Web／Tauri起動・停止）を含む |
+| Web／Python | `nix run .#web-check`は74件、`nix run .#check`はPython 63件を含む |
+| format／評価 | `nix fmt`後に`nix fmt -- --ci`、`nix flake check --no-build`、`nix run .#editor-smoke`は4/4 |
+| CLI／成果物 | `nix run .#cli-help-check`で`pokecon`／`pokecon-worker`のbaseline一致、`nix build .#pokecon --print-out-paths --no-link` |
+| metadata／source | `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard -- rust`／`app`／`spa` |
+| 個別gate | `nix run .#source-filter-check`、`nix run .#release-check`、`nix run .#actionlint` |
+| 文書／VCS | `nix run .#markdownlint`、`nix run .#textlint`、`nix run .#typos`、`git diff HEAD --check` |
+| 保留 | 署名付きcommit SHAとGitHub CIは未実施。push後に結果を追記する |
 
 ### 2.2 基盤と契約
 

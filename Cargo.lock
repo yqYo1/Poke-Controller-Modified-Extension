@@ -3748,7 +3748,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pokecon-app"
+name = "pokecon"
 version = "0.1.0"
 dependencies = [
  "async-trait",

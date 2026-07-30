@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "rust/pokecon-app",
+    "rust/pokecon",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
     "rust/pokecon-camera",
@@ -14,7 +14,7 @@ members = [
     "rust/pokecon-worker",
 ]
 default-members = [
-    "rust/pokecon-app",
+    "rust/pokecon",
     "rust/pokecon-contracts",
     "rust/pokecon-core",
     "rust/pokecon-camera",

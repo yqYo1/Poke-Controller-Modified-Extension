@@ -5,9 +5,9 @@ use std::path::PathBuf;
 #[cfg(feature = "tauri-shell")]
 use std::sync::mpsc;
 
+use crate::dynamic_runtime::bootstrap_dynamic;
+use crate::{AppError, AppOptions, RunControl, UiMode, run_configured_controlled};
 use clap::{Parser, ValueEnum};
-use pokecon_app::dynamic_runtime::bootstrap_dynamic;
-use pokecon_app::{AppError, AppOptions, RunControl, UiMode, run_configured_controlled};
 #[cfg(feature = "tauri-shell")]
 use pokecon_core::ShutdownReason;
 use pokecon_core::{ShutdownCoordinator, TracingInitError, init_tracing};
@@ -50,11 +50,11 @@ struct Cli {
 }
 
 #[derive(Debug, Error)]
-enum MainError {
+pub enum MainError {
     #[error(transparent)]
     Tracing(#[from] TracingInitError),
     #[error(transparent)]
-    App(#[from] AppError),
+    App(Box<dyn std::error::Error + Send + Sync>),
     #[error(transparent)]
     Desktop(#[from] DesktopError),
     #[error(transparent)]
@@ -82,8 +82,19 @@ enum MainError {
     CompositingChild(std::process::ExitStatus),
 }
 
-#[tokio::main]
-async fn main() -> Result<(), MainError> {
+impl From<AppError> for MainError {
+    fn from(error: AppError) -> Self {
+        Self::App(Box::new(error))
+    }
+}
+
+/// Runs the canonical command-line and desktop application lifecycle.
+///
+/// # Errors
+///
+/// Returns an error if settings, tracing, scaffolding, desktop startup, address
+/// parsing, or application runtime execution fails.
+pub async fn run_cli() -> Result<(), MainError> {
     let request = PipelineRequest::current()?;
     #[cfg(feature = "tauri-shell")]
     let request = {

@@ -10,8 +10,14 @@ repository.workspace = true
 name = "pokecon"
 path = "src/main.rs"
 
+[[bin]]
+name = "generate_contracts"
+path = "src/bin/generate_contracts.rs"
+required-features = ["contract-generator"]
+
 [features]
 default = []
+contract-generator = []
 tauri-shell = ["dep:tauri", "pokecon-desktop/tauri-shell"]
 
 [dependencies]

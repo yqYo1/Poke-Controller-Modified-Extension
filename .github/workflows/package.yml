@@ -86,7 +86,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           choco install nasm -y --no-progress
           python -m pip install --disable-pip-version-check "uv==0.11.8"
-          cargo install tauri-cli --version 2.9.6 --locked
+          cargo install tauri-cli --version 2.11.4 --locked
           vcpkg install portaudio:x64-windows-static
       - name: Export package tool identity
         shell: pwsh

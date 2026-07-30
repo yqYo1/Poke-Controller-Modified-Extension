@@ -1927,7 +1927,7 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
-                cargo run --locked --package pokecon --bin generate_contracts -- --check
+                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
                 cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
@@ -1952,7 +1952,7 @@
                 ${setupCallerRustTaskEnvironment}
                 ${desktopEnvironment}
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
-                cargo run --locked --package pokecon --bin generate_contracts -- "$@"
+                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- "$@"
               '';
             };
 
@@ -2852,7 +2852,7 @@
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
-                cargo run --locked --package pokecon --bin generate_contracts -- --check
+                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
                 cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records

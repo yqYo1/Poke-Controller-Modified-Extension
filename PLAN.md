@@ -1,679 +1,336 @@
-# Poke-Controller Modified Extension 実装作業計画
-
-- **規範**: [`SPECIFICATION.md`](SPECIFICATION.md) 2.2.0
-- **基準コミット**: `658519757909f91531cc2e8ab61e6f4a80af9612`
-- **対象ブランチ**: `refactor/rust-core`
-
-## 1. 目的
-
-本計画は、実装前の定義書を唯一の設計根拠として、Poke-Controller Modified ExtensionをRustコア、Python／Luaワーカー、axum、SvelteKit、Tauriで段階的に再実装するための作業順序を定める。
-
-各フェーズは、後続作業が依存できる実行可能な成果物、検証手段、完了条件までを含む。フェーズ名だけの進捗や、未実行のスタブを完了として扱わない。
-
-## 2. 完了の定義
-
-再実装全体は、次の条件をすべて満たした時点で完了とする。
-
-1. 定義書の対象機能がWindowsとLinuxで利用できる。
-2. Rustメイン、動的設定ワーカー、ユーザースクリプトワーカー、axum、Tauri、Web UIの責務境界が定義書どおりである。
-3. 正準設定レジストリからTOML、CLI、環境変数、動的設定、UI、OpenAPIが生成または検証され、表面間の差異がない。
-4. 固定3ベースラインの互換コーパスがすべて成功し、追補候補の昇格処理が自動化されている。
-5. カメラ、共有メモリ、シリアル、IPC、profile切替、shutdownの正常系と障害系が自動試験で検証されている。
-6. OpenAPI、TypeScript型、Python型、Lua型が同期し、型生成差分がCIで検出される。
-7. Nix appを介した整形、静的解析、単体試験、統合試験、ビルド、パッケージ検査が成功する。
-8. 実機を必要としない試験はCIで再現でき、実機試験には手順と記録形式がある。
-9. 署名付きコミット、必須レビュー、全CI成功、バージョン更新を経てリリース可能である。
-10. 実装完了後にREADMEと利用者向け文書を現行実装へ合わせて再作成する。
-
-## 3. 開始時点
-
-現在の追跡対象には、定義書、Nix／CI設定、Rust workspaceのルートmanifest、Python project設定、Tauriアイコンがある。Rustクレートの`src/`、Python互換層、Web UI、サーバー実装、テスト実装は存在しない。
-
-したがって、次を前提とする。
-
-- 旧実装の復元や継ぎ足しではなく、定義書からの再構築として進める。
-- `Cargo.toml`、`pyproject.toml`、`flake.nix`、release workflowの既存記述は将来構成の参考であり、定義書より優先しない。
-- 実装ソースが復活した時点で、現在skipされているCIを自動的に厳格実行へ戻す。
-- `docs/`は実装途中の設計置き場として復元しない。実装計画は本ファイル、規範は`SPECIFICATION.md`へ集約する。
-- PWA、macOS、キーコンフィグ再設計、LINE UI、Pokémon HOMEは本計画の対象外とする。
-
-## 4. 実施規則
-
-1. 外部挙動や公開APIを変更する必要が生じた場合は、実装より先に`SPECIFICATION.md`を更新する。
-2. すべての開発・整形・検査・ビルド・実行はNix flake appまたは`nix develop --command`を介して行う。
-3. 各機能はghq配下の専用worktreeとfeature branchで実装し、ルートcheckoutや既定ブランチへ直接コミットしない。
-4. 一つのPRには一つの検証可能な契約または密接な変更群だけを含める。後続フェーズを動かすための巨大な未検証PRを作らない。
-5. 各PRは定義書の該当節、追加した試験、完了条件を本文に記載する。
-6. commitはSSH署名付きとし、push後は人間・botレビューと全CIを確認する。
-7. `--admin`、raw merge API、ruleset変更、CI回避でmergeしない。
-8. 有効なレビュー指摘を反映し、必要なバージョン更新を行ってからmergeする。
-9. 実装フェーズの完了判定は、コードの存在ではなく、そのフェーズの受入試験の成功で行う。
-
-## 5. 依存関係
-
-```text
-フェーズ1  契約と検証基盤
-   └─フェーズ2  Rust／Nix／プロセス土台
-       ├─フェーズ3  XDG・設定・永続化
-       │   ├─フェーズ4  IPC・ワーカー監督
-       │   │   ├─フェーズ5  コントローラー・シリアル・通知
-       │   │   ├─フェーズ6  カメラ・共有メモリ
-       │   │   └─フェーズ7  動的設定
-       │   │       └─フェーズ8  ユーザースクリプト互換層
-       │   │           └─フェーズ9  profile・コマンド・callback統合
-       │   └──────────────────────────────┐
-       └──────────────────────────────────┤
-                                          └─フェーズ10 REST・WebSocket・WebRTC
-                                               └─フェーズ11 Web UI
-                                                    └─フェーズ12 Tauri・ライフサイクル
-                                                         └─フェーズ13 配布環境・パッケージ
-                                                              └─フェーズ14 互換コーパス確定
-                                                                   └─フェーズ15 統合・リリース
-```
-
-次の作業は早期から並行できる。
-
-- 固定ベースラインの互換コーパス収集はフェーズ1から開始し、フェーズ14で合否判定へ接続する。
-- Windows／Linuxのデバイスadapterは、共通trait確定後に別workstreamで並行実装できる。
-- Web UIはフェーズ10の生成OpenAPI型とmock serverが確定した画面から順に並行実装できる。
-- fault injection、仮想カメラ、仮想シリアルfixtureは対象サブシステムと同じフェーズで追加する。
-- 利用者向け文書は実装完了後に作成するが、API docstringと生成型の説明は各フェーズで同時に更新する。
-
-## 6. フェーズ1 — 契約と検証基盤
-
-**参照**: §0、§1、§2、§3、§4.6、§8、§10、§11、§14
-
-### 6.1 作業
-
-1. 定義書の公開契約を、設定CID、REST path、WebSocket variant、IPC kind、イベント名、公開Python／Lua名、対応プラットフォームへ分類する。
-2. 定義書の正準設定レジストリ78件に対応する実装上の機械可読な単一ソースを作り、定義書との同期と各表面への投影差分をCIで検査する方針を確定する。
-3. 固定3ベースラインをimmutableなcommit SHAで取得し、スクリプト、import、公開symbol、期待結果をmanifest化する。
-4. 互換コーパスの固定領域と追補候補領域を分離し、破壊的候補を昇格させない判定形式を作る。
-5. OpenAPI、Python stub、Lua annotation、TypeScript生成物の配置と再生成コマンドを決める。
-6. 単体、契約、統合、障害注入、実機、互換の試験カテゴリとfixture命名規則を定める。
-7. 現在のmanifest、flake app、workflowが期待する将来パスを棚卸しし、定義書と矛盾する古いcrate名やrelease手順を修正対象として記録する。
-
-### 6.2 成果物
-
-- 契約検査用のテスト骨格
-- 正準設定レジストリの機械可読schema
-- 固定ベースラインmanifestと互換コーパス配置
-- 生成物の出力先とdrift検査
-- 各CI jobの適用条件一覧
-
-### 6.3 完了条件
-
-- 同じ正準設定CID、イベント名、REST pathを複数の手書き正本から読み取る必要がない。
-- 固定3 SHAを再取得して同じコーパスを構築できる。
-- 未実装の検査は「成功」ではなく、理由付きのnot applicableとして区別される。
-- `nix fmt`、typos、Nix metadata、schema検査が実装ソースなしでも成功する。
-
-## 7. フェーズ2 — Rust／Nix／プロセス土台
-
-**依存**: フェーズ1
-
-**参照**: §1.2、§1.3、§3、§7.1、§14、§15.1
-
-### 7.1 作業
-
-1. 定義書上の責務に合わせてRust workspaceを再構成する。内部crate名は実装都合で決め、公開API名として扱わない。
-2. Rustメイン、axum server、Tauri shell、PyO3境界、worker executableの最小起動経路を作る。
-3. tokio runtime、構造化logging、診断ID、cancel token、graceful shutdown coordinatorを共通化する。
-4. プラットフォーム差をtrait境界へ隔離し、LinuxとWindows adapterの雛形を用意する。
-5. `nix run .`、`build-rust`、`cargo-test`、`clippy`、`test`、`basedpyright`、`web-check`が対象ソースの出現に応じて有効化されるようflakeを整える。
-6. workspace、Python package、Web package、Tauri serverのversion源を同期できる形にする。
-7. CIのsource-existence guardについて、対象あり／なしの両分岐をfixtureで検証する。
-
-### 7.2 成果物
-
-- build可能なRust workspace
-- 起動後に正常終了できるRustメインとworker executable
-- Nixから実行できる全task app
-- Linux／Windows共通traitとplatform module
-- tracingと診断の共通基盤
-
-### 7.3 完了条件
-
-- Rustメインを起動し、子workerなしの状態で正常終了できる。
-- SIGINT、SIGTERM、Tauri終了要求が同じshutdown coordinatorへ入る。
-- `nix run .#clippy`、`nix run .#cargo-test`、`nix run .#build-rust`が成功する。
-- LinuxとWindowsのCIでworkspaceの最低限ビルドが成功する。
-
-## 8. フェーズ3 — XDG・設定・永続化
-
-**依存**: フェーズ2
-
-**参照**: §6.7、§7.4、§11.3、§11.4、§12、§13、§14.1、§14.2、§14.5、§15.8〜§15.11
-
-### 8.1 作業
-
-1. `app_name`で分離されたConfig、Data、State、Cacheの4ルートをLinux／Windowsで解決する。
-2. bootstrap preparseを実装し、worker構築前に`app_name`、`dynamic_config_language`、`python.dynamic.*`を解決する。
-3. `app_name`とprofile名を安全な単一相対componentとして検証し、空文字、`.`、`..`、path区切り、絶対path、Windows drive／UNC、NUL、通常componentを持たない値を全入力表面で拒否する。綴りのtrimや大小文字正規化は行わない。
-4. 正準設定レジストリからdefault、型、scope、mutability、secret、CLI、環境変数、TOML、動的path、UI、OpenAPI metadataを投影する。
-5. TOMLの未知キー・コメント・並び順を保持する原子的編集、権限設定、親directory同期を実装する。
-6. settings lock、venv lock、HMAC鍵の排他生成、manifest署名、secret maskingを実装する。
-7. profile-capableとglobal専用の保存先を分離し、bootstrap／startup-only／runtime設定の適用時点を実装する。
-8. 設定PATCHのクラスA〜D、`expected_revision`、rollback、`pending_restart_values`、`apply_failures`をservice層で実装する。
-9. CLI、環境変数、TOMLの優先順位と、相対path基準、enum正規化、bool／JSON直列化を実装する。
-10. `server.port`、`server.bind_address`、`server.web_dir`等のstartup-only値を保存値と現在値に分ける。
-11. 相対pathはCLIだけをcurrent working directory基準、TOML／環境変数／動的設定を実効Config基準とする。閉じたenumはruntimeで大小文字不問に正規化し、生成型は正準値だけを列挙する。
-12. profileは`--profile`／`-p`、`POKECON_PROFILE`、TOMLの全経路で解決し、名前の大小文字同一性をOS／filesystemの規則に従わせる。
-13. managed uvをDataルートへ準備し、正準pyprojectのdependencies／dependency groups／extras、application constraint、package metadata constraint、`uv_config`を統合する。PEP 440解析済み句は比較句単位の最小矛盾集合で解決し、直接source句、source priority、`override_application_constraints`の規則を適用してからexact syncとmutable source再検証を行う。
-14. dynamic worker用venvとprofile別user worker用venvを分離し、manifest、HMAC、single-flight、cross-process lock、破損時再構築を実装する。
-15. generated Python／Lua typingsをDataへ、user-editable pyproject／init／profile設定をConfigへ置くpath契約を実装する。
-
-### 8.2 成果物
-
-- XDG path resolver
-- canonical settings service
-- TOML editorとlock manager
-- CLI／環境変数parser
-- secret maskingとHMAC鍵管理
-- managed uv／venv manager
-- settings contract tests
-
-### 8.3 完了条件
-
-- 正準CID78件と環境変数78件に重複・欠落がない。
-- `app_name`／profile名の全拒否形が4ルート外へpathを生成せず、OS固有の大小文字セマンティクスを維持する。
-- 各設定の全表面がregistry metadataと一致する。
-- 複数processから同じTOMLとHMAC鍵へ競合しても破損しない。
-- profile切替中のprofile-capable書込みが`409`となり、誤ったprofileへ保存されない。
-- startup-only値は保存されるが現processへ適用されず、restart情報へ現れる。
-- secret平文がログ、REST応答、WebSocket、manifestへ出ない。
-- 同じvenv pathへの同時準備が1処理へ集約され、別processとの競合後も同じmanifestへ収束する。
-- 依存制約の競合解決が非競合句を保持し、入力順・source provenance・優先順位から同じ有効制約を再現する。
-
-## 9. フェーズ4 — IPC・ワーカー監督
-
-**依存**: フェーズ2、フェーズ3
-
-**参照**: §1.2、§7.8、§11.5.6.4、§14.5、§15.6
-
-### 9.1 作業
-
-1. stdin／stdout上のlength-prefix付きMsgPack framingと1 MiB上限を実装する。
-2. `request`、`response`、`error`、`event`、`log` kindと閉じたpayload検証を実装する。
-3. bounded writer queue、pending waiter table、reader／writer独立task、exactly-once切断処理を実装する。
-4. per-worker generation、cancel token、stopping世代拒否、late response破棄を実装する。
-5. worker起動、協調停止、期限、強制終了、OS process回収を共通supervisorへまとめる。
-6. stdoutのprotocol化とstderrのout-of-band診断を実装する。
-7. worker crash、partial frame、oversize、EOF、writer panic、reader panic、queue overflowのfault injectionを作る。
-8. Rust側resource ownershipを定義し、Python／Luaのfinallyに安全解放を依存させない。
-
-### 9.2 成果物
-
-- IPC codecとschema
-- worker supervisor
-- generation／cancellation manager
-- fault injection fixture
-- worker lifecycle integration tests
-
-### 9.3 完了条件
-
-- readerとwriterが同時に終了しても全waiterが一度だけ完了する。
-- 破損frameとoversize frameを副作用なしで拒否できる。
-- worker crash後にボタン、stick、touchが必ず解放される。
-- 通常運用中に動的設定workerをkill／再生成しない。
-- shutdown時だけ定義済みの強制終了例外が機能する。
-
-## 10. フェーズ5 — コントローラー・シリアル・通知
-
-**依存**: フェーズ3、フェーズ4
-
-**参照**: §5.3、§6.2、§6.3、§6.5、§7.5〜§7.7、§10.5、§11.4.1.6
-
-### 10.1 作業
-
-1. ボタン、hat、左右stick、touchの正準状態modelとneutral stateを実装する。
-2. 入力sourceごとのgeneration、sequence、snapshot、重複排除、強制解放を実装する。
-3. keyboard、mouse、browser gamepad、ユーザースクリプト入力を同じarbiterへ接続する。
-4. Switch／3DS controller data formatとserial frame直列化を実装する。
-5. Linuxのudev selectorとWindowsのCOM selectorを生値のまま保持する。
-6. port、baud rate、data formatの即時切替transactionとrollbackを実装する。
-7. reconnect、20回上限、3秒間隔、明示切断による再試行取消しを実装する。
-8. controller送信、serial送受信、切断、partial write、再接続の仮想serial試験を作る。
-9. Discord webhookとWindows native通知のadapter、開始／終了hook、通知test操作、失敗時の非致命診断を実装する。
-10. Pro Controller／XInput等のhardware controller sourceと記録状態を正準入力modelへ接続する。キーコンフィグ再設計は含めない。
-
-### 10.2 成果物
-
-- controller state machine
-- input arbiter
-- serial adapterとcodec
-- notification serviceとplatform adapter
-- virtual serial fixture
-- controller／serial contract tests
-
-### 10.3 完了条件
-
-- 異なる入力sourceの競合時も定義済みpriorityとrelease規則を守る。
-- 経路切替後に旧generationの入力が再適用されない。
-- serial設定変更が成功時だけ確定し、失敗時は旧接続へ戻る。
-- worker／WebSocket切断時にneutral stateを実機またはloopback fixtureで確認できる。
-- notification失敗がcommand実行やアプリケーションを停止せず、secretを診断へ出さない。
-
-## 11. フェーズ6 — カメラ・共有メモリ・画像保存
-
-**依存**: フェーズ3、フェーズ4
-
-**参照**: §3.1、§6.1、§7.3、§7.9、§10.4.3
-
-### 11.1 作業
-
-1. Linux V4L2 selectorとWindows native selectorを保持するcamera adapterを実装する。
-2. capture FPS、解像度、flip、screenshot formatのruntime適用を実装する。
-3. 最大1920×1080 BGR uint8固定容量の3-slot共有メモリを実装する。
-4. slot CAS、`reader_pin_count`、release／acquire、publication token、8回retry、zero frame規則を実装する。
-5. 解像度変更時に未pin非current slotへ最初の完全frameを書き、出版後に旧slotを遅延更新する。
-6. worker死亡時のpin回収とshutdown時のwriter未停止guardを実装する。
-7. screenshotのcrop、png／jpeg、固定ベースライン名、衝突suffix、overwrite、download／captures／path variantを実装する。
-8. Motion JPEG生成とWebRTCへ渡すframe sourceを分離する。
-9. virtual V4L2、記録済みframe source、Windows mock adapterで試験する。
-10. writer crash、reader crash、pin保持、解像度変更、rollback、shutdownのstress testを作る。
-
-### 11.2 成果物
-
-- camera adapter
-- shared memory ring
-- screenshot service
-- media frame source
-- virtual camera／recorded frame fixture
-
-### 11.3 完了条件
-
-- pin中slotのdataとmetadataを変更しないことを競合試験で証明する。
-- 解像度変更中もreaderが破損frameを観測しない。
-- camera設定失敗時に旧設定へrollbackし、暗黙に別deviceを選ばない。
-- writer停止失敗時に共有メモリをunmapせず、process終了まで安全を維持する。
-- screenshotのpath traversal、衝突、形式、上書き規則が全variantで一致する。
-
-## 12. フェーズ7 — 動的設定エンジン
-
-**依存**: フェーズ3、フェーズ4
-
-**参照**: §1.2、§7.4、§11.5、§14.4、§14.5、§15.6
-
-### 12.1 作業
-
-1. グローバル動的設定worker内にCPython 3.14 main interpreterとLuaJIT runtimeを埋め込む。
-2. `dynamic_config_language`による初期runtimeと、`pokecon.source()`による他言語runtimeの遅延初期化を実装する。
-3. Python／Luaで同じ`pokecon.*`名前空間、設定path、state、event、autocmd、callbackを提供する。
-4. top-level評価、`source()`、reloadを単一coordinatorで直列化する。
-5. registration IDごとのlane、priority queue、bounded concurrency、queue eviction、`once()`を実装する。
-6. soft／grace／hard timeoutと論理完了、実終了、lane占有を分離する。
-7. `load_path`、`load_content`、`reload`、原子的保存、前世代fallbackを実装する。
-8. 非loopback LANでも動的設定操作を制限せず、完全信頼境界としてHost／Origin等の既定検証だけを適用する。
-9. `Commands.*`を動的設定workerのimport pathへ入れず、worker境界を保証する。
-10. callbackが部分適用中の設定を観測しないdispatch barrierを実装する。
-11. 組み込みイベントはPre／Post後置の正準名で発火し、event callbackへ引数やpayloadを渡さず`pokecon.state`から状態を読む。`on()`／`once()`はload順序のため未定義raw文字列を受理し、`BuiltinEvent`は補完用の正準値として提供する。
-
-### 12.2 成果物
-
-- dynamic worker executable
-- Python／Lua `pokecon.*` bindings
-- callback coordinator／executor
-- source／reload transaction
-- cross-language conformance tests
-
-### 12.3 完了条件
-
-- PythonとLuaで同じ操作が同じstate遷移・error・timeoutを生む。
-- 同じ登録IDは直列、異なる登録IDは上限内で並行する。
-- soft deadline後もcallback実終了まではlaneと実行枠を解放しない。
-- hard timeoutでも通常運用中の動的設定worker processを終了・再生成せず、定義済みの論理失敗と診断だけを適用する。
-- reload失敗時に前世代の有効設定を維持する。
-- LANから`load_content`／`load_path`／`reload`を実行でき、UIが完全信頼の警告を表示する。
-- Python／Luaの同一イベントが同じPre／Post順序で発火し、callback引数が常に空である。
-
-## 13. フェーズ8 — ユーザースクリプト互換層
-
-**依存**: フェーズ4、フェーズ5、フェーズ6
-
-**参照**: §4.6、§10、§14.5
-
-### 13.1 作業
-
-1. profileごとのCPythonユーザースクリプトworkerとmanaged venvを実装する。
-2. `Commands` package、`PythonCommand`、`ImageProcPythonCommand`、`Camera`、`CaptureArea`、`Keyboard`、dialog APIを公開する。
-3. `Commands.dialogue`、`Commands.net`、`Commands.image_proc`を実行中command contextへ束縛する。
-4. controller、serial、camera、image processing、notification、socket、MQTTをIPC proxyとして実装する。
-5. 固定ベースラインのcamelCase名、引数、default、同期挙動、例外、`saveCapture`の層差を維持する。
-6. blocking／non-blocking dialog、Widget.value、確認済みdefault、異常close時停止を実装する。
-7. Python専用の`Commands.*`互換APIについてPython 3.14 stubを生成し、公開名とruntime実体の一致を検査する。動的設定用のPython／Lua型はフェーズ7の`pokecon.*`生成型として分離する。
-8. MatLike copy ownership、crop、template matching、overlayのworker内処理を実装する。
-9. worker timeout、停止、強制終了、profile単位の環境分離を実装する。
-
-### 13.2 成果物
-
-- Python package `Commands`
-- user-script worker
-- PyO3 proxy／binding
-- dialog／image／network compatibility API
-- `Commands.*`用`.pyi`
-- API contract tests
-
-### 13.3 完了条件
-
-- 固定ベースラインから抽出したimportとsignatureがLSPとruntimeで一致する。
-- 不正なAPI利用をbasedpyright／LuaLSまたはruntime境界で検出する。
-- dialogのblocking／non-blocking resultと異常closeが定義書どおりである。
-- workerを停止してもRust所有resourceと入力stateが残らない。
-
-## 14. フェーズ9 — profile・コマンド・callback統合
-
-**依存**: フェーズ7、フェーズ8
-
-**参照**: §4.1、§4.2、§6.4、§10、§11.5.6
-
-### 14.1 作業
-
-1. profile発見、作成、選択、保存先、per-profile venv、user worker lifecycleを統合する。
-2. 12-step profile切替transaction、非再入gate、generation stopping、rollbackを実装する。
-3. Python command探索、module／class識別、candidate順序、tag統合を実装する。
-4. 固定コマンド、MCU command、shortcut 10件を同じ表示modelへ統合する。
-5. `ScriptLoadPost`後に有限tag一覧を確定し、全tagの表示一覧を事前計算して1世代として置換する。
-6. custom sort callbackで重複、欠落、separator、空一覧を保持する。
-7. command start／pause／resume／stop、reload、error、display cache loadingを実装する。
-8. profile切替中のcallback再入、user worker停止失敗、late IPC、cache再構築失敗を試験する。
-9. 単一のcommand callbackは登録／解除関数ではなくPythonのcallable変数またはLua関数への代入で設定し、`None`／`nil`で解除する。関連priorityとsoft／grace／hard timeoutを同じ名前空間に置き、専用値が未設定なら`dynamic.callback_*`を継承する。
-
-### 14.2 成果物
-
-- profile manager
-- command discovery／execution service
-- tag／display cache
-- custom sort bridge
-- profile／command integration tests
-
-### 14.3 完了条件
-
-- profile切替の全成功／失敗地点で整合した旧状態または新状態のどちらかだけが見える。
-- command候補の発見順を保ち、暗黙の追加sortを行わない。
-- 全tag cacheが一世代として切り替わり、途中結果をUIへ見せない。
-- 空一覧、重複、欠落、separatorをcallback結果としてそのまま表現できる。
-- callback解除、priority変更、timeout継承変更が次の事前計算世代へ原子的に反映される。
-
-## 15. フェーズ10 — REST・WebSocket・WebRTC
-
-**依存**: フェーズ3、フェーズ5〜フェーズ9
-
-**参照**: §3.4、§7、§8、§15.9〜§15.11
-
-### 15.1 作業
-
-1. axumへ設定、状態、command、device、notification test、screenshot、動的設定、profile launcher、更新確認のREST endpointを実装する。
-2. utoipaからOpenAPIを生成し、closed object、discriminated union、decimal string型を表現する。
-3. OpenAPIからTypeScriptを生成し、手書きwire型を禁止するdrift検査を作る。
-4. 単一`ui.state.changed`、ephemeral event、WebRTC signaling、input messageのWebSocket unionを実装する。
-5. global revision、snapshot、buffer、gap検出、domain別replay、再取得を実装する。
-6. heartbeat、nonce、再接続、最大試行、手動再接続を実装する。
-7. WebRTC video／DataChannelを主経路として実装し、30秒間の復旧試行後にMJPEG／WebSocket fallbackへ移る。
-8. static file jail、SPA fallback、Host／Origin／Content-Type／固定header検証を実装する。
-9. `server.bind_address`の非loopback完全信頼契約を維持し、認証やpeer-IP制限を追加しない。
-10. protocol fuzz、revision競合、out-of-order event、切断／再接続、path traversalを試験する。
-
-### 15.2 成果物
-
-- axum REST server
-- OpenAPI documentと生成TypeScript
-- WebSocket message router
-- WebRTC／MJPEG transport
-- static file server
-- protocol conformance tests
-
-### 15.3 完了条件
-
-- OpenAPI生成差分がなく、SPAが手書きwire型を持たない。
-- RESTとWebSocketの同一transactionが同じrevisionを使用する。
-- gap、重複、再接続時にUIが推測で差分を補わず、正しいsnapshotへ回復する。
-- WebRTC障害時にfallbackし、復旧後に主経路へ戻る。
-- static root外のfileへsymlink、encoded path、Windows pathを介して到達できない。
-
-## 16. フェーズ11 — Web UI
-
-**依存**: フェーズ10。画面単位では生成型とmock endpoint確定後に並行可能
-
-**参照**: §3.2、§3.3、§5、§6、§9、§13
-
-### 16.1 作業
-
-1. SvelteKit 2、Svelte 5、Tailwind CSS v4のshell、routing、state storeを構築する。
-2. 6 main tab、Commands内3 subtab、右側panel、7 widget modeを実装する。
-3. camera canvas、crop／touch area、screenshot、FPS／解像度／flip設定を実装する。
-4. serial monitor、connect state、再試行、data format選択を実装する。
-5. keyboard／mouse／gamepad入力とsoftware controllerをinput protocolへ接続する。
-6. command一覧、tag filter、separator、10 shortcut、実行制御を実装する。
-7. notification、その他、server settings、profile launcher、動的設定editorを実装する。
-8. startup-onlyの現在値と保存値、restart-required、apply failure、expected revision競合を表示する。
-9. Web modeではlocal file managerを開かず、path表示とcopyだけを提供する。
-10. keyboard操作、focus、ARIA、contrast、responsive layoutを検証する。
-11. themeは現行組み込み範囲だけを実装し、PWAとcustom themeを将来扱いのままにする。
-12. clientだけに属する値は§13の規則に従ってbrowser storageへ保存し、正準設定レジストリの値を重複保存しない。
-
-### 16.2 成果物
-
-- SvelteKit SPA
-- generated API client／state store
-- 全tabとdialog component
-- accessibility tests
-- Vitest／component／browser integration tests
-
-### 16.3 完了条件
-
-- 定義書の全UI controlが対応する正準設定または明示的なruntime actionへ接続される。
-- 表示だけ存在する未接続controlがない。
-- WebSocket再接続とrevision競合から自動回復できる。
-- keyboardだけで主要操作を完了できる。
-- Chrome／Edge 94以上、Firefox 130以上、Safari 16.4以上でlayout、入力、WebRTCまたは定義済みfallbackが機能する。
-
-## 17. フェーズ12 — Tauri・デスクトップライフサイクル
-
-**依存**: フェーズ6、フェーズ10、フェーズ11
-
-**参照**: §1.3、§6.1.5、§7.4、§15
-
-### 17.1 作業
-
-1. Tauri window、tray、native file dialog、Config directory操作をaxum serverと統合する。
-2. GUI環境判定、Tauri mode、standalone Web mode、headless server modeを実装する。
-3. `close_behavior`のexit／minimize／background／askを実装する。
-4. `AppShutdownPre`、input neutral化、camera、user worker、dynamic worker、shared memory、serial、axum、Tauriの停止順を実装する。
-5. 各停止stepへ定義済み期限を適用し、camera writer未停止時のmapping保持とprocess終了を実装する。
-6. Linux compositor無効化とWindows相当のstartup-only適用を実装する。
-7. native path、download、capturesのscreenshot保存経路をmode別に検証する。
-8. close連打、OS shutdown、worker hang、camera hang、server接続中終了を障害注入する。
-
-### 17.2 成果物
-
-- Tauri desktop shell
-- tray／native dialog integration
-- lifecycle coordinator
-- shutdown fault tests
-- Linux／Windows desktop smoke tests
-
-### 17.3 完了条件
-
-- 全close behaviorが定義書どおりで、確認dialogの例外条件も一致する。
-- shutdownが無期限に停止せず、終了時に入力stateを残さない。
-- camera writer停止失敗時もuse-after-unmapを起こさない。
-- Web modeからサーバーホストのfile managerを起動できない。
-
-## 18. フェーズ13 — 配布環境・パッケージ
-
-**依存**: フェーズ3、フェーズ4、フェーズ7、フェーズ8、フェーズ12
-
-**参照**: §14、§15.9〜§15.11
-
-### 18.1 作業
-
-1. nix環境と非nix環境の起動経路を分け、同じ実効設定とworker構成へ収束させる。
-2. フェーズ3のmanaged uv／venv managerをNix package、Linux package、Windows installerへ統合し、配布後も同じexact syncとlock契約を使う。
-3. dynamic workerとprofile user workerのvenv／manifest／HMACがinstall／upgradeで混同・消去されないことを検証する。
-4. generated Python／Lua typingsとuser-editable設定がData／Configの正しい配布先へ生成されることを検証する。
-5. Rust binary、Tauri bundle、Python wheel、Web assetsをNixから再現可能にbuildする。
-6. LinuxとWindowsの依存library、camera／serial権限、WebView runtimeをpackageへ含める。
-7. release workflowのcrate一覧、artifact、version、公開順を実際のworkspace構成へ合わせる。
-8. install、upgrade、profile維持、uninstall、offline起動を検証する。
-
-### 18.2 成果物
-
-- Nix package／app
-- Linux packageとWindows installer
-- Python wheel
-- 配布物へ統合済みのmanaged uv／venv環境
-- reproducible release artifact
-
-### 18.3 完了条件
-
-- clean machineでNix経路と非Nix経路の両方から起動できる。
-- 同じlockと入力から同じdependency環境を再現できる。
-- Config／Data／State／Cacheの責務が混ざらない。
-- package後のSPAが404 fallback pageだけにならず、全assetを含む。
-
-## 19. フェーズ14 — 互換コーパス確定と自動追補
-
-**依存**: フェーズ8、フェーズ9、フェーズ13。コーパス収集自体はフェーズ1から継続
-
-**参照**: §4.6、§10.7、§14.5
-
-### 19.1 作業
-
-1. 固定3ベースラインの全対象スクリプトをmanaged user worker環境で実行する。
-2. import、class discovery、signature、controller、serial、camera、image、dialog、network、notificationを領域別に検証する。
-3. 実機依存scriptへdeterministic fixtureまたは明示的な実機gateを割り当てる。
-4. 将来repoのcandidateをimmutable SHAで収集し、API差分と実行結果を記録する。
-5. 非破壊candidateだけをappend-only領域へ自動昇格し、固定領域を変更しない。
-6. 破壊的candidate、環境依存失敗、未検証candidateを昇格させず、理由付きで隔離する。
-7. corpus manifest、artifact、result、promotion履歴の改ざんとdriftをCIで検出する。
-
-### 19.2 成果物
-
-- 固定互換コーパス
-- append-only追補コーパス
-- compatibility runner
-- promotion reportと隔離一覧
-
-### 19.3 完了条件
-
-- 固定3ベースラインが全件成功する。
-- 新規破壊的candidateが固定保証を狭めない。
-- 同じSHAとfixtureから同じ判定を再現できる。
-- 互換失敗時にscript、API、fixture、worker logまで追跡できる。
-
-## 20. フェーズ15 — 統合・性能・リリース
-
-**依存**: フェーズ1〜フェーズ14
-
-**参照**: §3、§14、§15および各機能節
-
-### 20.1 作業
-
-1. Rust、Python、Lua、Web、Tauriを同一process topologyで起動するend-to-end試験を作る。
-2. camera＋WebRTC＋serial＋script＋UIを同時に動かす負荷試験を実行する。
-3. WebRTC映像遅延100ms未満、Motion JPEG fallback遅延50〜150ms、controller入力遅延50ms未満、UI 60 FPS／入力応答16ms未満を再現可能な計測条件で検証する。
-4. callback queue、IPC queue、WebSocket再接続、profile切替、shutdownを長時間stress testする。
-5. LinuxとWindowsで実機camera、serial device、browser、desktop modeを検証する。
-6. LAN完全信頼警告、secret非露出、path jail、dynamic code実行をsecurity acceptanceとして確認する。
-7. full Nix gate、生成物drift、source filter、remote flake、package build、installer smoke testをCIへ統合する。
-8. README、利用者向け設定説明、移行手順、troubleshooting、changelogを現行実装から作成する。
-9. versionを全artifactで一致させ、署名、review、CI、release artifact hashを確認する。
-10. release candidateで固定互換コーパスと全platform matrixを再実行する。
-
-### 20.2 最終検証ゲート
-
-```bash
-nix fmt -- --ci
-nix run .#clippy
-nix run .#cargo-test
-nix run .#ruff-check
-nix run .#ruff-format-check
-nix run .#basedpyright
-nix run .#test
-nix run .#web-check
-nix run .#generate-api-types
-nix run .#check
-nix build .#pokecon-server
-```
-
-上記に加え、次を成功させる。
-
-- Linux／Windows package build
-- OpenAPI／TypeScript／Python／Lua生成物drift検査
-- virtual camera／serial統合試験
-- shared memory／IPC／shutdown fault injection
-- 固定3ベースライン互換コーパス
-- WebRTC主経路、MJPEG／WebSocket fallback、主経路復旧
-- Tauri／Web mode smoke test
-- clean install／upgrade／offline起動
-
-### 20.3 完了条件
-
-- 全必須CI、review、platform gateが成功する。
-- 未解決の重大・高severity defectがない。
-- 対象外機能を実装済みとして表示しない。
-- release artifactとsource commitの対応を検証できる。
-- 実装後文書が実際のCLI、設定、UI、API、既定値を反映する。
-
-## 21. 横断的な受入基準
-
-### 21.1 型とschema
-
-- Rust内部型、OpenAPI、TypeScript、Python、Luaで同じ閉じたenumと判別unionを使う。
-- `Any`、無制限`dict[str, object]`、未検証raw JSONで公開境界を作らない。
-- JavaScript安全整数範囲に依存しない値は10進整数文字列として扱う。
-- generated artifactを手編集せず、正本から再生成する。
-
-### 21.2 並行処理
-
-- 同じ登録IDだけを直列化し、異なるIDの並行性を不必要に失わない。
-- priorityは待機中の開始順だけへ作用し、実行中処理をpreemptしない。
-- lock順序、generation、cancel token、resource ownerを試験で確認する。
-- timeoutの論理完了と実process／task終了を混同しない。
-
-### 21.3 障害時動作
-
-- 失敗時は部分適用状態を公開しない。
-- fallback、rollback、利用不能化、process終了のどれを選ぶかを定義書どおりに固定する。
-- secret、生path、任意コード内容を診断へ出さない。
-- worker、device、networkの障害後も入力をneutralへ戻す。
-
-### 21.4 プラットフォーム
-
-- LinuxとWindowsのraw selectorを共通indexへ書き換えない。
-- platform差はadapter内へ閉じ、上位serviceの状態遷移とerror codeを揃える。
-- macOS固有対応を対象platformの完了条件へ混ぜない。
-
-### 21.5 UI
-
-- 設定controlは正準CIDと一対一に対応する。
-- startup-only、pending restart、apply failure、revision conflictを推測せず表示する。
-- backend処理を伴う離散操作はREST、通知はWebSocket、stream入力はDataChannel／WebSocketを使う。
-- Web modeとTauri modeの権限差をUIで明示する。
-
-## 22. リスクと対策
-
-| リスク | 対策 | 阻止条件 |
-|---|---|---|
-| 定義書と実装の乖離 | spec-first変更、契約生成、drift CI | 未反映の外部挙動変更があるPRはmergeしない |
-| IPC／共有メモリ競合 | generation、CAS、pin、fault injection | race再現試験が不安定または未実施なら後続統合へ進まない |
-| 動的workerの停止不能 | 通常時再生成禁止、shutdown時だけ強制終了 | resource安全性をRust側で証明できない実装を採用しない |
-| 設定表面の欠落 | 正準registryから全表面を生成・検査 | CID／環境変数／OpenAPI件数差があればmergeしない |
-| 固定互換性の後退 | immutable corpus、append-only昇格 | 固定3ベースライン失敗を既知問題として許容しない |
-| 実機依存によるCI空洞化 | virtual fixture＋別実機gate | 実機試験だけでしか検出できない契約を無検証で完了扱いしない |
-| LAN任意コード実行 | 完全信頼の明示、既定localhost、UI警告 | 認証済みと誤認させる表示や説明を許可しない |
-| Nix packageのsource漏れ | source filter検査、package後SPA試験 | packageがfallback pageだけを含む場合はreleaseしない |
-| 既存workflowの古いcrate名 | workspaceからpublish graphを生成・検証 | 存在しないcrateを公開するrelease jobを残さない |
-
-## 23. 進捗管理
-
-各フェーズは次の状態だけを使用する。
-
-- **未着手**: 前提フェーズまたは実装が開始されていない。
-- **実装中**: branch上で実装・試験を進めている。
-- **検証中**: 成果物が揃い、フェーズの受入試験とreviewを実施している。
-- **完了**: 必須試験、review、CI、mergeが完了している。
-- **阻止**: 外部依存または未解決の仕様判断により進行できず、根拠と解除条件が記録されている。
-
-進捗表には、各フェーズのPR、基準commit、成功した検証gate、未解決riskだけを記録する。単なる作業量やファイル数を完了根拠にしない。
+# アーキテクチャレビュー反映計画
+
+## 目的と規範
+
+- 規範: `SPECIFICATION.md`、`ARCHITECTURE_REVIEW.md`
+- 対象ブランチ: `refactor/rust-core`
+- 開始基準: `e20fad5a`（レビュー書更新完了時点）
+- 最終状態: PokeCon を単一 Cargo パッケージへ統合し、レビュー書で確定した責務、優先順位、開発入口、CI、配布契約を実装と検証へ反映する。
+- 進捗規則: 完了を証明するコマンドまたは成果物がある項目だけを `[x]` にする。部分完了は子項目だけを更新する。
+- 変更規則: 構造移行と実行時挙動変更を同じコミットへ混在させない。各チェックポイントで検証してから次へ進む。
+- 委譲規則: 実装委譲は不可分な1タスクずつ行い、primary agentが差分と対応gateを確認し、当該タスクだけを新規文脈のSolへレビュー依頼してから次のタスクへ進む。節全体を一度に委譲しない。
+- 実施順序: レビュー書の原順序は構造移行 → CI 再構成 → devShell 移行 → 実行時挙動変更である。2026-07-30の利用者指示「まずdevShell廃止から」に基づき、常駐するambient PATH／tool／環境変数依存を先に断つ非挙動の開発基盤変更としてフェーズ1だけを承認済み例外で先行する。完了後は構造（フェーズ2） → CI（フェーズ3） → 挙動（フェーズ4）の原順序へ戻る。
+- コミット規則: 構造移行の2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7をそれぞれ独立したコミット境界とする。フェーズ4は4.1主経路と優先順位、4.2手動介入と入力調停、4.3 profile切替、4.4動的設定の候補世代切替、4.5通知隔離を独立した挙動変更checkpointとする。各checkpointの共通完了gateが失敗した状態で後続checkpointへ進まない。
+
+## 現在地
+
+- [x] `ARCHITECTURE_REVIEW.md` の確定方針、移行順序、受入条件を一対一の実装要件として抽出した（2026-07-30 Sol意味監査承認、129要件）。
+- [x] 開始時の作業ツリーがcleanで、HEADが`e20fad5a`、`origin/refactor-rust-core`との差が0/0であることを変更前の`git status --short --branch`と`git rev-list --left-right --count`で記録した（2026-07-30 JST）。
+- [x] 旧実装の不在を前提にした旧 `PLAN.md` を廃止し、本チェックリストへ置き換えた。
+- [ ] フェーズ 1「direnv／既定 devShell 廃止」を実装中。
+- [ ] 全フェーズ完了後の要件別監査を通過する。
+
+## レビュー要件トレーサビリティ
+
+- [x] `ARCHITECTURE_REVIEW.md` §10.4、§10.8、§10.9、§10.10、§10.11、§11、§13.1の各要件を、それぞれ一度だけ現れる個別ID付きcheckboxと同じ行の予定証跡へ展開した（証跡: 2026-07-30の許可済みVCS入口`git grep`機械監査で129件、群別`2 / 5 / 9 / 24 / 10 / 50 / 29`、重複0、予定証跡欠落0。コンテキストを切ったSol意味監査で順序、checkpoint、配置、意味対応を承認）。
+
+IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了判定は行わない。各checkboxの完了時は「予定証跡」を実行結果、生成物、CI run、またはGitHub設定の読み戻し結果で置き換える。
+
+予定証跡のproject操作は、各行に別のNix outputを明記しない限り`nix run .#check`を入口とし、専用操作は`nix run .#<task>`、`nix build .#pokecon`、`nix fmt`、`nix flake check`のいずれかを唯一の実行入口とする。flake output inventoryの読取りには`nix flake show`を使う。「test」、「report」、「log」、「matrix」はそのNix taskまたはCI workflowが生成する成果物を指し、hostの言語runtime、compiler、package manager、品質toolを直接起動しない。Git／GitHubの読取り、worktree操作、CI runの読み戻しはVCS／外部状態証跡として例外とし、native Windows CI／package／releaseだけはworkflowが固定するtoolchainを入口とする。
+
+## 共通完了ゲート
+
+適用対象はフェーズ1、2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7、フェーズ3、4.1、4.2、4.3、4.4、4.5の各checkpointとする。各checkpointで次をすべて実行し、該当しないgateは対象外となる具体的理由と代替証跡をcheckpoint記録に残す。失敗または理由のない未実行がある状態で後続checkpointへ進まない。
+
+- [ ] **AR-13.1-01** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の各構造移行を独立commitにし、当該段階のgate失敗時は後続のcrate／module移行を開始しない（予定証跡: VCSが読み戻す各commit SHAと順序、対応するNix gate log）。
+- [ ] **AR-11-41** workspace全体の共通完了gateを全適用checkpointで実行する（予定証跡: checkpoint／commit SHAごとの下記Nix command終了コード、対象外理由／代替証跡、CI run URL）。
+- [ ] **AR-13.1-03** `nix run .#contract-check`を通す（予定証跡: 各適用checkpointの`nix run .#contract-check` log）。
+- [ ] **AR-13.1-04** `nix run .#cargo-test`を通す（予定証跡: 各適用checkpointの`nix run .#cargo-test` log）。
+- [ ] **AR-13.1-05** `nix run .#clippy`を通す（予定証跡: 各適用checkpointの`nix run .#clippy` log）。
+- [ ] **AR-13.1-06** `nix run .#build-rust`を通す（予定証跡: 各適用checkpointの`nix run .#build-rust` logとNix build成果物一覧）。
+- [ ] **AR-13.1-10** `nix run .#compatibility`で固定互換性基準に対するPython commandを通す（予定証跡: `nix run .#compatibility`が出力するcorpus SHA付きreport）。
+- [ ] `nix run .#web-check`
+- [ ] `nix fmt`
+- [ ] `nix fmt -- --ci`
+- [ ] `nix flake check --no-build`
+- [ ] `nix run .#editor-smoke`
+- [ ] `nix run .#check`
+- [ ] **AR-13.1-07** `pokecon --help`と`pokecon-worker --help`の公開CLI差分を検査する（予定証跡: `nix build .#pokecon --print-out-paths --no-link`が返すstore内binaryの`--help`をNix integration taskが正規化した移行前baseline差分）。
+- [ ] **AR-13.1-08** Web modeとTauri modeの起動検査を通す（予定証跡: `nix build .#pokecon --print-out-paths --no-link`のstore内binaryを使う対応Nix integration taskの両mode health endpointと起動／停止log）。
+- [ ] **AR-13.1-09** `pokecon-worker --kind script`と`--kind dynamic`の起動、IPC、協調停止、強制終了を検査する（予定証跡: `nix run .#cargo-test`がNix build済みworkerを使って出力するrole別integration／fault report）。
+- [ ] push 後に `nix run .#ci-watch -- <branch> <timeout>` で GitHub Actions を完了まで監視し、失敗を解消する。
+
+## レビュー引渡し情報の横断チェック
+
+- [ ] **AR-11-24** 製品全体で優先する設計原則をmoduleと実行時機構へ対応付ける（予定証跡: 設計原則→module／queue／lock／task／threadの対応表とarchitecture test）。
+- [ ] **AR-11-25** 正準controller状態とcamera／serial handle等のhardware resource所有者を一意にする（予定証跡: server socket、worker世代、設定revisionも含むownership tableと重複所有検査）。
+- [ ] **AR-11-26** processごとの責務、寿命、再生成規則を確定する（予定証跡: Rustメイン／script worker／dynamic workerのstate-transition表とfault test）。
+- [ ] **AR-11-27** UI、HTTP、IPC、user script、dynamic configの公開境界を確定する（予定証跡: 公開schema／API一覧とnative object境界越え禁止test）。
+- [ ] **AR-11-28** 設定、profile、commandと互換corpusのlifecycleを確定する（予定証跡: `nix run .#contract-check`が出力するsettings／profile／commandの生成、切替、失敗、破棄の状態表と、`nix run .#compatibility`が証明する固定baseline不変、候補監視 → full-chain再評価 → 成功時のみappend-only昇格、失敗時の従前保証維持report）。
+- [ ] **AR-11-29** 障害、timeout、rollback、終了処理の責任分担を確定する（予定証跡: 責任module／最終状態表と強制停止／resource解放／shutdown fault test）。
+- [ ] **AR-11-30** Windows、Linux、Nix、non-Nixの配布形態を確定する（予定証跡: OS／build／package／runtime別の成果物matrixとPackage／Release CI）。
+- [ ] **AR-11-33** 各内部moduleが所有する責務を確定する（予定証跡: module ownership manifestとarchitecture test）。
+- [ ] **AR-11-34** 各内部moduleが所有しない責務を確定する（予定証跡: negative responsibility manifestとforbidden ownership test）。
+- [ ] **AR-11-35** 許可する内部依存方向を確定する（予定証跡: dependency rule manifestとCargo／source dependency check）。
+- [ ] **AR-11-36** 禁止する内部依存方向を確定する（予定証跡: forbidden-edge fixture付きdependency check）。
+- [ ] **AR-11-39** 各移行前に移動／削除する型、trait、moduleをinventory化する（予定証跡: `nix run .#check`の段階別inventoryと許可済みVCS入口`git grep`の移行後残存参照log）。
+- [ ] **AR-11-40** 移行段階、監督／資源service実行ファイル、共通workerごとの検証commandを確定する（予定証跡: 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7ごとのNix command／期待結果表と実行log）。
+- [ ] **AR-11-10** 主経路のlatency、throughput、停止、復旧の受入条件を定義する（予定証跡: 測定fixture、閾値、移行前baseline、移行後report）。
+- [ ] **AR-11-37** 別processと同一processの境界を確定する（予定証跡: process／module deployment diagramとIPC境界test）。
+- [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
+
+## フェーズ 1 — direnv／既定 devShell を廃止して Nix app へ統一
+
+### 実装
+
+- [ ] **AR-10.11-APP1** callerのworktreeを直接対象にする`nix run .#cargo -- <subcommand> ...`を追加する（予定証跡: 新規worktreeでの`nix run .#cargo -- metadata --locked --no-deps`、package限定test、lock更新、desktop checkのlogとcaller側target path）。
+  - [ ] 固定 Rust toolchain、Python 3.14、uv、desktop native dependency を提供する。
+  - [ ] `PYO3_PYTHON`、build 用 Python／uv、script site-packages、bindgen、pkg-config を既存完了ゲートと一致させる。
+  - [ ] 対話用`cargo`だけがcaller側の共有`target/nix-tasks`と排他lockを使用する。
+  - [ ] package指定、個別test、`nix run .#cargo -- metadata --locked --no-deps`、lock file更新を引数透過で実行できる。
+- [ ] **AR-10.11-APP2** callerの`web/`を直接対象にする`nix run .#web-dev`を追加する（予定証跡: 固定Bun／lock表示、hot-reload log、実行前後の`git status --short --untracked-files=all`差分、許可するignored pathのallowlistと実際のignored path一覧）。
+  - [ ] `web/package.json` が固定する Bun を使用する。
+  - [ ] frozen lock file で依存を準備する。
+  - [ ] hot reload を caller の編集へ追従させる。
+  - [ ] 終了後に意図しない追跡対象差分を残さない。
+- [ ] **AR-10.11-APP3** `nix run .#hooks-install`を追加し、現在のworktreeへ`git-hooks.nix`生成hookを明示的に導入する（予定証跡: 新規worktreeのhook path／内容とpre-commit実行log）。
+- [ ] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainやdirenvなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（予定証跡: `nix run .#editor -- --print`の固定executable一覧と`nix run .#editor-smoke`の4言語別initialize、didOpen、期待diagnostic、shutdown log）。
+- [x] `nix run .#ci-watch` を追加し、CI監視に必要なGitHub CLI等をhost環境から排除する（証跡: 2026-07-30のhostile環境／subdirectoryからの`nix run .#ci-watch -- --help`成功、固定`gh`／`git`／`jq` path）。
+- [x] `ci-watch` の暫定既定期限を現行critical pathの実測最大値 + 30% 以上へ延長し、正常CIを期限切れ扱いしない（証跡: 既定1200秒、settlement 120秒、最小指定130秒のhelp／境界test）。
+- [x] `nix run .#workspace-lock-check` を追加し、pre-commitのlock検査をambientなCargo／GitとcallerのCargo cacheから排除する（証跡: 固定Nix appの生成、実行ごとの一時Cargo target、`nix flake check --no-build`のapp評価成功）。
+- [x] pre-commitのworkspace lock hookを`workspace-lock-check` app経由へ変更する（証跡: 生成済みpre-commit設定のentry読み戻し）。
+- [x] 既存`maturin-develop`appをambient venv、network、host configに依存しない専用`target/maturin-venv`へ移行する。productionのtracked `pyproject.toml`とwheel／sdist契約は変更せず、appの隔離source snapshot内だけでMaturin canonical mixed layoutへ補正し、実行ごとの一時Cargo targetで`pokecon/**`のwheelをoffline buildし、専用の永続venv lock下でinstallする（証跡: 2026-07-30のtracked `pyproject.toml`／lock無差分、fresh／同一venv再実行のhostile offline build成功、wheel payload／source byte照合、venv内`pokecon._native` import成功、`.pth`／想定外distribution／破損／symlink／不正RECORD保持negative test、`nix run .#test` 56件成功）。
+- [ ] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（予定証跡: callerの一時markerをcargo／web-dev／hooks-installから観測するintegration test）。
+- [ ] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（予定証跡: `nix run .#contract-check`の隔離fixtureで、callerの未追跡fileを観測しないnegative case、ambient PATH先頭のdummy tool／関連環境変数のpoisonがtool解決／結果を変えないnegative case、callerの共有target内artifactを改変してもgate結果と改変bytesが変わらないcache-poison negative case、derivation source path／実行ごとのCargo target path）。
+- [ ] **AR-10.11-RUN3** `devShells.default`、`.envrc`、正規手順としてのdirenv／`nix develop`を削除する（予定証跡: `nix flake show`のoutput一覧、許可済み`git grep`のtracked-file log、`.envrc`削除diff）。
+- [ ] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をproject flake output唯一の入口へ更新する（予定証跡: 6文書のVCS diffと許可済み`git grep`の開発command log）。
+- [ ] **AR-10.11-RUN5** このworktreeとphase 1以後に移行を検証する全worktreeそれぞれで、非追跡`.direnv/`cacheが存在する場合は対象pathを記録して削除し、不在を確認する（予定証跡: VCSが読み戻す検証worktree path一覧、cache検出path／削除記録、各pathの`.direnv/`不在log）。
+- [ ] **AR-10.11-RUN6** 新しい対話用途は既定devShellを復活させず、用途と環境を限定したappとして追加する規則を文書化する（予定証跡: 開発者文書の規則と`devShells.default`不在検査）。
+- [ ] **AR-11-48** direnv、`.envrc`、既定devShellを削除し、flake appを唯一の開発入口にする（予定証跡: 許可済み`git grep`のtracked-file logと新規worktreeの`nix run .#check`までのapp-only開発smoke log）。
+- [ ] **AR-13.1-22** Git管理対象から`.envrc`、direnv、`nix develop`、devShell参照を検索し、履歴説明を除いて正規手順に残っていないことを確認する（予定証跡: 許可済み`git grep`のtracked-file限定logと例外判定一覧）。
+
+### 受入
+
+- [ ] **AR-13.1-17** 新しいworktreeでdirenvまたは`nix develop`を使わず、flake appだけから開発を開始できる（予定証跡: clean worktree作成から`nix fmt`、`nix run .#cargo -- metadata --locked --no-deps`、`nix run .#check`までのセッションlog）。
+- [ ] **AR-11-49** callerのworktreeを対象とするCargo、frontend dev server、hook導入、editor連携appを揃える（予定証跡: 4 appの`nix flake show`出力とcaller-worktree smoke report）。
+- [ ] **AR-11-50** 完了gateの隔離実行と、書込みまたはwatch appのcaller-worktree実行を区別し、callerへ書き込むgeneratorもbuild artifactは実行ごとの一時targetへ隔離する（予定証跡: tracked／untracked markerを使うpositive／negative isolation test、gate／generator／interactive appのsource pathとCargo target path一覧）。
+- [ ] **AR-13.1-18** `cargo` appがcaller worktreeでpackage限定、個別test、lock file更新、metadata確認を実行でき、固定toolchain／build環境がRust完了gateと一致する（予定証跡: `nix run .#cargo -- <subcommand>`による4操作のlog、toolchain version、主要環境変数diff）。
+- [ ] `nix run .#cargo -- metadata --locked --no-deps` が caller の workspace を読み取る。
+- [ ] `nix run .#cargo -- test --locked -p <package> <test-filter>` が対象を絞って実行できる。
+- [ ] **AR-13.1-19** `web-dev` appが固定Bunとlock fileを使い、callerの`web/`の変更をhot reloadし、終了後に依存差分や生成物を意図せずcommit対象へ残さない（予定証跡: `nix run .#web-dev`のversion／frozen-lock log、reload観測、実行前後の`git status --short --untracked-files=all`差分、ignored path allowlistと実際のignored path一覧）。
+- [ ] **AR-13.1-20** `hooks-install` appを新規worktreeで一度実行し、git hookがNixで固定したpre-commit検査を実行する（予定証跡: hook install log、hook内容、test commitのpre-commit log）。
+- [ ] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`がdevShell外で動作する。
+- [ ] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainとdirenvへ依存せず動作する（予定証跡: `nix run .#editor -- --print`が返すresolved executableと、ambient PATH、language server、compiler関連変数をpoisonした`nix run .#editor-smoke`の4言語別initialize、didOpen、期待diagnostic、shutdown log）。
+- [ ] **AR-13.1-23** 移行を検証する各worktreeそれぞれに非追跡`.direnv/`cacheが残っていない（予定証跡: `git worktree list --porcelain`で得た検証対象path、cache検出path／削除記録、各pathの`.direnv/`不在log）。
+- [ ] **AR-13.1-24** 既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性、packageの結果が移行前と一致する（予定証跡: taskごとの移行前後終了コード／生成物digest表）。
+
+## フェーズ 2 — Cargo workspace を `rust/pokecon/` の単一パッケージへ統合
+
+構造だけを移し、公開 CLI、設定、IPC、生成契約、配布物、実行時挙動は変更しない。
+
+- [ ] **AR-13.1-02** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の構造移行中は公開CLI、設定、IPC、生成契約、配布物の名前／配置、実行時挙動を変更しない（予定証跡: 各構造commitの`nix run .#contract-check`、`nix run .#cargo-test`、`nix run .#compatibility`、`nix build .#pokecon`が出力するCLI／config／IPC／generated／artifact manifest diffとbehavior regression report）。
+- [ ] **AR-10.8-01** PokeConを独立再利用部品の集合ではなく一つの製品として設計する（予定証跡: package／process／artifact diagramとworkspace member検査）。
+- [ ] **AR-10.8-02** 将来の独立再利用と交換可能性を設計要件にしない（予定証跡: public APIとextension pointの差分review、根拠のない抽象化不在監査）。
+- [ ] **AR-10.8-03** 内部設計で単純さ、変更の追跡しやすさ、状態所有の一元化を優先する（予定証跡: ownership table、change-path review、重複状態検査）。
+- [ ] **AR-10.8-04** 別process、信頼境界、任意のplatform依存、異なる配布成果物など実際の必要性がある場合だけ強い実装境界を設ける（予定証跡: `nix run .#check`の成果物として保存する境界ごとの必要性／信頼／配布根拠表とarchitecture review）。
+- [ ] **AR-10.8-05** 再利用可能性だけを理由にtrait、service層、変換型、crateを追加しない（予定証跡: 追加抽象化inventoryの根拠reviewとcrate数検査）。
+- [ ] **AR-10.9-02** 任意機能はCargo feature、OS差分はtarget条件、別OS processは複数`[[bin]]`による表現を別crateより先に検討する（予定証跡: feature／target／bin選択表、`nix run .#cargo -- metadata --locked --no-deps`、例外根拠review）。
+- [ ] **AR-10.9-03** 単一packageで満たせない具体的要件または実測問題が生じた場合だけ別crateを採用する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のworkspace member一覧と追加crate例外の要件／測定記録）。
+- [ ] **AR-10.9-04** 責務の違い、file数、行数、別OS processであることだけを別crate化の根拠にしない（予定証跡: crate-boundary decision logと`nix run .#cargo -- metadata --locked --no-deps`のworkspace member監査）。
+
+### 2.1 合成起点
+
+- [ ] **AR-10.9-01** Rust実装を大きな`rust/pokecon/` package `pokecon`と内部moduleとして作る（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のpackage情報と`nix run .#source-guard`が検査するsource tree）。
+- [ ] 現在の `pokecon` CLI と起動挙動を保ったまま合成起点を移す。
+- [ ] 旧crateを残したまま、本体libraryと合成起点のscaffoldだけを作る。
+- [ ] 内部 module を既定非公開にし、再利用想定だけの公開 API を増やさない。
+
+### 2.2 基盤と契約
+
+- [ ] `pokecon-core` を `runtime`、`diagnostics`、`platform` へ移す。
+- [ ] `pokecon-contracts` を `contracts` と開発用 generator binary へ移す。
+- [ ] 検査専用データを runtime library 定数から test／検査側へ移す。
+- [ ] 停止経路と生成契約が移行前と一致することを検証する。
+
+### 2.3a settings
+
+- [ ] `pokecon-settings`を`settings`へ移す。
+- [ ] settings移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+### 2.3b camera
+
+- [ ] `pokecon-camera`を`camera`へ移す。
+- [ ] cameraの具体的な設定applierを`runtime`の合成境界へ移す。
+- [ ] cameraから設定永続化、runtime、server、desktopへの依存を排除する。
+- [ ] camera移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+### 2.3c device
+
+- [ ] `pokecon-device`を`device`へ移す。
+- [ ] deviceの具体的な設定applierを`runtime`の合成境界へ移す。
+- [ ] deviceから設定永続化、runtime、server、desktopへの依存を排除する。
+- [ ] device移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+### 2.3d server
+
+- [ ] `pokecon-server`を`server`へ移す。
+- [ ] serverのwire型を追加crateにせず内部変換として維持する。
+- [ ] server移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+### 2.4 dynamic と worker
+
+- [ ] `pokecon-dynamic` の本体側契約／状態を `dynamic` へ移す。
+- [ ] `pokecon-worker` の IPC、世代管理、親側監督を `worker` へ移す。
+- [ ] CPython／LuaJIT 初期化と実行を `pokecon-worker` binary 固有 module に隔離する。
+- [ ] **AR-10.9-06** 同じworker binaryが起動引数`--kind script`または`--kind dynamic`で役割を選択する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のtarget一覧と`nix run .#cargo-test`の両role process／IPC smoke log）。
+- [ ] **AR-11-07** user script workerを自動実行時の機能上の実行主体とし、資源要求を主制御として維持する（予定証跡: script command→IPC request→resource operation traceと実行判断所有test）。
+- [ ] **AR-11-08** RustメインをOS上の監督兼資源serviceとし、process親子と製品機能上の主従を区別する（予定証跡: ownership／control-flow diagramとsupervisor lifecycle test）。
+- [ ] **AR-11-09** worker→Rustメインの資源操作要求を主制御、Rustメイン→workerの起動／停止／世代切替を監督制御とする双方向IPCにする（予定証跡: direction／message-kind contractと双方向integration test）。
+- [ ] 別OS process、双方向IPC、協調停止、強制停止、世代管理を移行前と同じ試験で証明する。
+- [ ] **AR-13.1-26** worker統合直後、配布された`pokecon`が同じ配布物内の`pokecon-worker`を解決し、profile別環境でscript／dynamic両roleを起動できる（予定証跡: `nix build .#pokecon`成果物を使う対応Nix integration taskのclean-install worker resolutionとprofile別両role smoke log）。
+
+### 2.5 desktop移行
+
+- [ ] `pokecon-desktop`を`desktop`内部moduleへ移す。
+- [ ] **AR-10.9-08** PokeCon本体binaryにWeb UIとTauriの両方を含め、起動引数で表示形態を選択する（予定証跡: `nix build .#pokecon --print-out-paths --no-link`が返す同一store binary digestによる対応Nix integration taskのWeb／Tauri起動／停止smoke log）。
+- [ ] **AR-11-11** Web UIを主要UI、Tauriを下位の表示形態とする機能境界を維持する（予定証跡: `nix run .#cargo-test`のmode capability matrix、Web-first endpoint test、Tauri adapter dependency check）。
+- [ ] **AR-11-22** Web UIとTauriを同じPokeCon本体実行ファイルに含め、起動引数で切り替える（予定証跡: `nix build .#pokecon`成果物manifestとstore内binaryを使うNix integration taskの両mode CLI／startup report）。
+- [ ] **AR-13.1-27** desktop移行後、Tauri設定、icon、bundle resource、署名対象、Linux package、Windows installerを`rust/pokecon/`起点で生成する（予定証跡: `nix run .#tauri-build`とWindows Package CIのOS別build log、bundle／signing input manifest）。
+
+### 2.6 `tauri-shell`とPython native extensionの削除
+
+- [ ] **AR-10.9-09** 利用者向け`tauri-shell` featureを廃止し、非対応OSのみ内部target条件を使う（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のfeature／target情報、OS別Nix／Windows CI build matrix、許可済み`git grep`の`tauri-shell`残存参照log）。
+- [ ] **AR-11-23** `tauri-shell`によるWeb専用buildを廃止し、対応OS向け標準成果物に両UI modeを常に含める（予定証跡: `nix build .#pokecon`とWindows Package CIのOS別artifact manifest、store／package binaryの両mode smoke、Web-only artifact不在検査）。
+- [ ] **AR-10.9-07** `pokecon-pybindings`を削除する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard`、`nix build .#pokecon`のpackage outputからのpybindings不在）。
+- [ ] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（予定証跡: `nix run .#check`の移行順序log、Python import／wheelのnegative test、Nix artifact diff）。
+- [ ] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する。
+- [ ] Nix、release gate、成果物一覧からnative wheel参照を削除する。
+- [ ] **AR-13.1-28** Python packageから`_native`のimportとwheel生成を削除し、Nix、maturin、release gate、成果物一覧にnative wheel参照が残っていない（予定証跡: 許可済み`git grep`のlog、`nix run .#test`のPython import negative test、`nix run .#check`とRelease CIのartifact manifest）。
+
+### 2.7 旧crateとworkspace参照の削除
+
+- [ ] **AR-11-31** workspace memberを`rust/pokecon/`だけにする（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のmember一覧）。
+- [ ] **AR-11-32** Cargo package名を`pokecon`へ揃える（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`、Cargo.lock、Nix／CI／releaseのpackage identityを検査する`nix run .#check`のreport）。
+- [ ] Cargo.lock、Nix、CI、release、installer、文書のpath／package名を更新する。
+- [ ] 各旧crateを削除する前に、そのcrate自身を除くCargo manifest、Nix式、CI、release script、Python build、Tauri設定から参照が消えたことを機械検査する。
+- [ ] 旧crate directoryを削除する。
+- [ ] **AR-10.9-05** `pokecon-pybindings`以外の実装をPokeCon本体1 packageへ統合し、監督／資源service、共通worker、開発用generatorを複数`[[bin]]`で配置する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`の1 package／target一覧と`nix build .#pokecon`のstore内binaryを使うNix smoke log）。
+- [ ] **AR-11-20** PokeCon本体の1 package統合を完了し、共通worker実行ファイルを役割引数付きの別OS processとして起動する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`の最終package構成と`nix build .#pokecon`成果物を使うNix integration taskのprocess tree／両role起動／IPC／停止report）。
+- [ ] **AR-13.1-29** repository全体で旧crate名と`rust/pokecon-*` pathを検索し、明示的に維持する履歴説明以外の参照がない（予定証跡: 許可済みVCS入口`git grep`のpattern別logと例外一覧）。
+
+### 内部依存の受入
+
+- [ ] `contracts` は他の実行時 module に依存しない。
+- [ ] `runtime` は `server`／`desktop` に依存せず、合成起点が adapter を接続する。
+- [ ] `server`／`desktop` は hardware handle、interpreter state、正準状態を直接所有しない。
+- [ ] worker は main process 所有の hardware handle／正準状態へ直接アクセスしない。
+- [ ] `settings`、`camera`、`device`、`worker`、`dynamic`、`contracts`、`diagnostics`、`platform` から `runtime` への逆依存がない。
+
+## フェーズ 3 — 通常 CI の責務とフィードバック時間を再構成
+
+### workflow とゲート
+
+- [ ] **AR-10.10-01** 常に起動する一つの通常CI workflowで変更領域を判定し、安定名の集約gateを必ず完了させる（予定証跡: workflow数、job DAG、全fixtureの集約gate conclusion）。
+- [ ] **AR-10.10-02** 文書、契約、Rust、Python、Web、製品smoke、remote flakeを独立した適用領域として判定する（予定証跡: path→領域判定matrixと領域別fixture output）。
+- [ ] **AR-11-42** 通常CIの変更領域判定、各jobの所有検査、集約必須gateを確定する（予定証跡: region／job／check ownership matrixとworkflow fixture report）。
+- [ ] **AR-10.10-03** workflowを常に起動し、workflow-level path filterで全体を省略しない（予定証跡: trigger定義と各single-area fixtureのworkflow run）。
+- [ ] **AR-10.10-04** 不要な領域jobは成功扱いで明示的に省略し、必須gateを不定にしない（予定証跡: 非該当fixtureのskip reason／conclusionとaggregate output）。
+- [ ] **AR-10.10-05** feature commitはpull request、既定branch／明示的な統合branchへの直接反映はpushで検査し、同一SHAを両eventで重複検査しない（予定証跡: event／branch matrixとSHA別workflow-run個数）。
+- [ ] **AR-10.10-19** 通常CIへbranch単位の`cancel-in-progress`を設定し、新push後は旧SHAの重い検査を継続しない（予定証跡: 連続push fixtureの旧run cancelled／新run completed記録）。
+- [ ] **AR-10.10-07** Package CIも常に軽量な集約gateを返し、無関係な変更は明示的成功、関係する変更はOS別package jobの成功を必須にする（予定証跡: package無関係／関係fixtureのjob DAGとaggregate conclusion）。
+- [ ] **AR-10.10-06** 通常CI集約gateを既定branch rulesetのrequired status checkに指定し、失敗中または未完了のmergeを拒否する（予定証跡: ruleset API読み戻しJSONとpending／failing PRのmergeability）。
+- [ ] **AR-13.1-13** 既定branch rulesetを読み戻し、通常CIとPackage CIの集約gateがrequired status checkで、未完了または失敗時にmerge可能と判定されないことを確認する（予定証跡: ruleset JSON、required context一覧、PR mergeability記録）。
+- [ ] **AR-13.1-14** rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時無効化を使用しない（予定証跡: GitHub ruleset／merge audit logと、管理者bypass、直接merge、一時無効化の操作件数0の記録）。
+
+### 重複除去と Nix 成果物境界
+
+- [ ] **AR-10.10-08** format、静的解析、generated drift、test、build、互換性を削除せず、同一SHA／同一対象環境で各論理検査を一度だけ実行する（予定証跡: check ownership inventoryとSHA／環境／logical-check別実行回数report）。
+- [ ] **AR-11-43** 同一SHAと同一対象環境で論理検査を重複実行しないworkflowにする（予定証跡: logical-check execution matrixとworkflow runの重複数0）。
+- [ ] **AR-10.10-09** 短い文書検査と静的検査を少数のfast jobへまとめ、同一runnerのNix storeを再利用する（予定証跡: fast job DAG／runner ID、step別store-path／wall-clock report）。
+- [ ] **AR-10.10-10** RustのClippy、build、test、互換性検査を一つのLinux jobで`CARGO_TARGET_DIR`共有にし、Windows固有workspace checkを`Check workspace (Windows)`として別jobで維持する（予定証跡: job／step定義、target-dir path、Windows job名と`cargo check`ログ）。
+- [ ] **AR-10.10-11** `contract-check`を契約生成、同期、schema、受入記録、API生成物driftだけに限定する（予定証跡: task dependency／command traceと対象検査一覧）。
+- [ ] **AR-10.10-12** Basedpyright、source filter、shell lint、release identityを対応する原子的Nix taskで通常CI中に一度だけ実行する（予定証跡: flake app／check一覧とworkflow command trace）。
+- [ ] **AR-10.10-13** PokeCon本体、Web、Python、文書、検査scriptごとにNix sourceを分け、無関係な変更で製品derivation hashを変えない（予定証跡: source definitionとsingle-area fixture前後のderivation hash matrix）。
+- [ ] **AR-11-44** 製品、Web、Python、文書、検査scriptを分けるNix source境界を確定する（予定証跡: source-boundary manifest、include／exclude fixture、hash isolation report）。
+- [ ] **AR-10.10-14** 製品package buildとRust test derivationを分け、SPA smokeではテスト済み製品成果物を再利用してserver起動と組込みWeb資源だけを検査する（予定証跡: derivation graph、store path同一性、SPA smoke command trace）。
+- [ ] **AR-10.10-15** remote flakeはremote SHAのmetadataと既定appの起動可能性を検査し、localは`nix flake check --no-build`で全outputを評価する（予定証跡: remote SHA／metadata／app smoke logとlocal evaluation log）。
+- [ ] **AR-10.10-16** 検査を実行しないlocal／remoteの`check --help`重複を削除する（予定証跡: 許可済み`git grep`のworkflow command logと`nix run .#check`の削除前後logical-check inventory）。
+- [ ] **AR-10.10-17** PokeCon固有derivationのbinary cacheを導入し、信頼済みpushだけが書込み、pull requestは読取りだけを行う（予定証跡: event別credential／permission表、PR write negative test、trusted-push upload log）。
+- [ ] **AR-11-45** PokeCon固有derivationを再利用するbinary cacheの信頼境界を確定する（予定証跡: actor／event／read-write permission matrixとcache audit log）。
+
+### 計測と受入
+
+- [ ] **AR-13.1-11** 文書だけ、定義書だけ、Rustだけ、Pythonだけ、Webだけ、flakeだけを変更したfixtureまたは実commitで、適用／省略jobが設計どおりか検証する（予定証跡: 6 fixtureのexpected／actual job matrixとrun URL）。
+- [ ] **AR-13.1-12** 各論理検査を同一SHA／同一対象環境で一度だけ実行し、集約必須gateが成功、失敗、明示的省略を正しく集約する（予定証跡: logical-check実行回数表と3 conclusion fixtureのaggregate output）。
+- [ ] **AR-10.10-18** 同一commitの再実行でsubstituteされたstore path、build対象derivation数、wall-clock時間を比較し、cache-hit表示だけで有効性を判断しない（予定証跡: 同一SHAの1回目／2回目のstore path／derivation／wall-clock diff）。
+- [ ] **AR-13.1-15** 同一commitを二回実行し、二回目のPokeCon固有derivationがbinary cacheからsubstituteされ、build対象derivation数とwall-clock時間が減少する（予定証跡: 2 runのsubstitute path、build plan、時間比較report）。
+- [ ] **AR-10.10-TIME-01** 通常CIの完了目標をfast job 3分以内、文書だけの変更 5分以内、製品code変更の必須gate 10分以内とする（予定証跡: 変更種別ごとの直近10回相当のp95 report）。
+- [ ] **AR-11-46** fast job、文書変更、製品code変更のCI完了時間目標を受入gateにする（予定証跡: threshold definitionと変更種別ごとのp95 pass／fail report）。
+- [ ] **AR-10.10-TIME-02** 同種変更の直近10回のp95が目標を超えた場合を回帰とし、job名だけでなくstepとderivation単位の時間を記録する（予定証跡: p95算出program出力、step／derivation timing report、回帰fixture）。
+- [ ] **AR-11-47** CI時間をstep、derivation、cache substituteの単位で検証する（予定証跡: runごとのstep／derivation／substitute／wall-clock計測物）。
+- [ ] **AR-10.10-WATCH** CI短縮後のp95に30%以上の余裕を加えた`ci-watch.sh`監視期限へ変更し、期限切れと`completed failure`を異なる終了理由で表示する（予定証跡: p95算出根拠、既定期限、timeout／failure fixtureのstderr／exit code）。
+- [ ] **AR-13.1-16** 直近10回相当でfast job、文書変更、製品code変更の時間目標を満たし、`ci-watch.sh`が正常critical pathを期限切れにしない（予定証跡: p95 report、watch timeout計算、最長正常runの監視log）。
+- [ ] **AR-10.10-PACKAGE** Package CIとReleaseをOS別成果物、clean install、upgrade、uninstall、再現可能性、署名対象の独立配布gateとして維持する（予定証跡: Package／Release workflowのOS別run URLとconclusion、clean install／upgrade／uninstallの操作log、同一入力2 buildの再現性artifact digest比較、署名対象manifest）。
+- [ ] **AR-13.1-25** 通常CI再構成後もPackage CIとReleaseがOS別成果物、clean install、upgrade、uninstall、再現可能性を従来どおり検査する（予定証跡: 移行前後のjob／assertion matrixとOS別run URL）。
+- [ ] **AR-10.10-PACKAGE-REPRO** 同一入力からpackageを二回生成する再現性検査は意図した重複として通常CIの重複削減対象から除外する（予定証跡: reproducibility jobの2 build trace、artifact digest比較、重複例外inventory）。
+
+## フェーズ 4 — 確定した実行時挙動を反映
+
+構造統合完了後、挙動ごとに独立した変更として進める。
+
+### 4.1 主経路と優先順位
+
+- [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に`SPECIFICATION.md`の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
+- [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: 非競合時の機能別latency／throughput／stability report）。
+- [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
+- [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
+- [ ] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（予定証跡: 各通常処理との競合fault testで安全状態遷移が先行するtrace）。
+- [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（予定証跡: 双方向同時load fixtureのlatency／jitter／progress report）。
+- [ ] **AR-11-05** 明示的優先機構の導入前後で遅延、jitter、飢餓、queue停滞を比較し、改善しない機構は採用しない（予定証跡: before／after benchmarkと採用判定record）。
+- [ ] **AR-11-06** command実行、画像認識、serial出力を結ぶ主経路を実装する（予定証跡: end-to-end command→frame→controller／serial traceとlatency report）。
+- [ ] **AR-11-12** UI制御要求を表示配信より優先し、映像、状態、logの滞留を主経路へ伝播させない（予定証跡: slow／disconnected UI fixtureのcontrol latency、frame freshness、queue bound／backpressure report）。
+- [ ] frame は最新の完全 frame へ追従し、状態更新は同一項目の旧値を集約する。
+- [ ] log 配信を有界 queue とし、低速／切断 UI から主経路への逆圧を防ぐ。
+
+### 4.2 手動介入と入力調停
+
+- [ ] **AR-11-14** script実行中の手動介入を許可または拒否でき、停止と入力解放は常に受け付けるcanonical settingを追加する（予定証跡: setting全表面のdrift check、allow／deny／stop／release arbitration test）。
+- [ ] CLI、TOML、環境変数、Web UI の全表面へ生成／投影する。
+- [ ] 既定は介入許可とし、適用後の入力から即時反映する。
+- [ ] 排他 mode でも停止と全入力解放を常に受け付ける。
+- [ ] **AR-11-15** 介入許可時は操作中の入力要素だけを一時上書きし、操作終了後にscript入力へ戻す（予定証跡: button／stick／touchごとのelement-level arbitration state-transition test）。
+- [ ] button の script／manual 合成規則を試験する。
+- [ ] **AR-11-13** 手動操作が自動scriptへ不意に影響せず、手動単独利用時も低遅延かつ安定して動作する（予定証跡: script実行中のno-input／manual-input isolation testとmanual-only latency／stability report）。
+
+### 4.3 profile切替
+
+- [ ] **AR-11-16** 新規command受付停止、実行中script停止、全入力解放、旧worker終了後にprofile／関連設定を一括切替し、旧commandを自動再開しない（予定証跡: lifecycle state traceと切替後idle／no-auto-restart integration test）。
+- [ ] 新規 command 受付停止 → 実行中 script 停止 → 全入力解放 → 旧 worker 終了の順序を保証する。
+- [ ] profile と関連設定を一括切替し、新 worker 環境を初期化する。
+- [ ] 切替後は旧 command を自動再開せず idle で明示実行を待つ。
+- [ ] **AR-11-17** profile切替失敗時は旧設定だけを復元してidleへ戻し、復元失敗時は安全停止を維持して新しい実行を拒否する（予定証跡: 切替／復元の段階別fault injection、最終profile／input／command-acceptance state）。
+- [ ] 復元失敗時は安全停止状態を維持し、明示復旧まで新規 command を拒否する。
+- [ ] 失敗段階を UI と log へ明示する。
+
+### 4.4 動的設定の候補世代切替
+
+- [ ] **AR-11-18** 動的設定を候補世代で構築し、全読込み／検証成功時だけ自動実行を止めずに一括切替する（予定証跡: concurrent script／reload trace、candidate validation fault test、generation switch log）。
+- [ ] reload 中も現世代を有効に保ち、自動 script を停止しない。
+- [ ] Python／Lua 設定、callback、command 一覧を候補世代として構築する。
+- [ ] 読込みと検証が全成功した場合だけ原子的に切り替える。
+- [ ] 実行中の旧 callback は旧世代で完了させる。
+- [ ] 失敗時は現設定を変更せず、UI と log へ通知する。
+- [ ] reload が camera、serial、script 主経路を待たせないことを検証する。
+
+### 4.5 通知隔離
+
+- [ ] **AR-11-19** 通知を有界queueと期限付きretryへ隔離し、主経路へ待機と障害を伝播させない（予定証跡: queue-full、slow／failing provider、retry deadline fixtureの主経路latency／progress／failure report）。
+- [ ] 通知要求を有界 queue へ入れ、主経路 lock を保持せず処理する。
+- [ ] queue 上限時は主経路を待たせず、呼出元へ明示的失敗を返す。
+- [ ] retry 回数と期限を制限する。
+- [ ] 完了待ちは当該呼出しだけに限定し、camera、画像認識、serial、他要求を継続する。
+- [ ] 外部通知障害を script worker 全体へ伝播させない。
+- [ ] 停止と全入力解放を通知処理より優先する。
+
+## フェーズ 5 — 配布、文書、最終監査
+
+- [ ] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む。
+- [ ] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する。
+- [ ] README と利用者／開発者文書を最終実装へ同期する。
+- [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
+- [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
+- [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
+- [ ] 全共通完了ゲートを clean worktree で再実行する。
+- [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
+- [ ] 最終 push 後の GitHub CI を完了まで監視し、全 required gate の成功を確認する。
+- [ ] `PLAN.md` の全項目を証拠に基づいて `[x]` に更新する。

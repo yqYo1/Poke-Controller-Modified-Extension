@@ -122,9 +122,11 @@
             shift
             : "''${POKECON_RUST_REMAP_SOURCE:?POKECON_RUST_REMAP_SOURCE is required}"
             : "''${POKECON_RUST_REMAP_PYTHON:?POKECON_RUST_REMAP_PYTHON is required}"
+            : "''${POKECON_RUST_REMAP_TARGET:?POKECON_RUST_REMAP_TARGET is required}"
             exec "$rustc" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" \
+              "--remap-path-prefix=$POKECON_RUST_REMAP_TARGET=/build/target" \
               "-Lnative=$POKECON_RUST_REMAP_PYTHON/lib" \
               "$@"
           '';
@@ -2451,10 +2453,11 @@
                   --strip "${pkgs.binutils}/bin/strip" \
                   --runtime-library-path "${linuxReleasePortaudio}/lib"
                 export PYO3_PYTHON="$release_python/bin/python3.14"
-                export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CFLAGS:+ $CFLAGS}"
-                export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python''${CXXFLAGS:+ $CXXFLAGS}"
+                export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CFLAGS:+ $CFLAGS}"
+                export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CXXFLAGS:+ $CXXFLAGS}"
                 export POKECON_RUST_REMAP_SOURCE="$workdir"
                 export POKECON_RUST_REMAP_PYTHON="$release_python"
+                export POKECON_RUST_REMAP_TARGET="$CARGO_TARGET_DIR"
                 export RUSTC_WRAPPER="${reproducibleRustcWrapper}"
                 export POKECON_BUILD_UV_PATH="${portableUvBinary}"
                 export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
@@ -2482,7 +2485,8 @@
                   --python-root "$release_python" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --strip "${pkgs.binutils}/bin/strip" \
-                  --objdump "${pkgs.binutils}/bin/objdump"
+                  --objdump "${pkgs.binutils}/bin/objdump" \
+                  --ephemeral-build-root "$gate_home"
                 bundle_root="$workdir/bundle-resources"
                 bundle_config="$workdir/tauri.bundle.json"
                 python -m scripts.release.stage \

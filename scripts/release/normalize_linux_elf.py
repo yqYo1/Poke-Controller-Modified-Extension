@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 SYSTEM_INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
 MAXIMUM_GLIBC = (2, 39)
 GLIBC_PATTERN = re.compile(r"GLIBC_(\d+)\.(\d+)")
+EPHEMERAL_BUILD_ROOT_PREFIX = Path("/") / "tmp" / "pokecon-rust-gate-home."
+EPHEMERAL_BUILD_ROOT_PATTERN = re.compile(
+    rf"{re.escape(str(EPHEMERAL_BUILD_ROOT_PREFIX))}[A-Za-z0-9]{{8}}"
+)
+CANONICAL_BUILD_ROOT = "/build/pokecon-release-root.00000000"
 
 
 def sha256_file(path: Path) -> str:
@@ -38,11 +43,32 @@ def run(arguments: Sequence[str | Path], *, capture: bool = False) -> str:
     return completed.stdout.strip() if capture else ""
 
 
+def normalize_ephemeral_build_root(binary: Path, build_root: Path) -> int:
+    source = str(build_root)
+    if EPHEMERAL_BUILD_ROOT_PATTERN.fullmatch(source) is None:
+        message = f"unexpected isolated release build root: {source}"
+        raise ValueError(message)
+    source_bytes = source.encode("ascii")
+    replacement_bytes = CANONICAL_BUILD_ROOT.encode("ascii")
+    if len(source_bytes) != len(replacement_bytes):
+        message = (
+            "canonical release build root must preserve the ELF byte layout: "
+            f"{source!r} -> {CANONICAL_BUILD_ROOT!r}"
+        )
+        raise ValueError(message)
+    content = binary.read_bytes()
+    occurrences = content.count(source_bytes)
+    if occurrences:
+        binary.write_bytes(content.replace(source_bytes, replacement_bytes))
+    return occurrences
+
+
 def normalize_binary(
     binary: Path,
     patchelf: Path,
     strip: Path,
     objdump: Path,
+    build_root: Path,
     *,
     rpath: str | None,
 ) -> dict[str, object]:
@@ -55,6 +81,9 @@ def normalize_binary(
     else:
         run([patchelf, "--set-rpath", rpath, binary])
     run([strip, "--strip-unneeded", binary])
+    normalized_build_root_occurrences = normalize_ephemeral_build_root(
+        binary, build_root
+    )
 
     interpreter = run([patchelf, "--print-interpreter", binary], capture=True)
     actual_rpath = run([patchelf, "--print-rpath", binary], capture=True)
@@ -100,6 +129,7 @@ def normalize_binary(
         "rpath": actual_rpath,
         "needed": needed,
         "maximum_glibc": f"{maximum[0]}.{maximum[1]}",
+        "normalized_build_root_occurrences": normalized_build_root_occurrences,
     }
 
 
@@ -110,18 +140,20 @@ def normalize_release(
     patchelf: Path,
     strip: Path,
     objdump: Path,
+    build_root: Path,
 ) -> list[dict[str, object]]:
     python_library = python_root / "lib/libpython3.14.so.1.0"
     if not python_library.is_file():
         message = f"portable Python shared library is missing: {python_library}"
         raise ValueError(message)
     reports = [
-        normalize_binary(application, patchelf, strip, objdump, rpath=None),
+        normalize_binary(application, patchelf, strip, objdump, build_root, rpath=None),
         normalize_binary(
             worker,
             patchelf,
             strip,
             objdump,
+            build_root,
             rpath="$ORIGIN/python/lib",
         ),
     ]
@@ -143,6 +175,7 @@ def main() -> int:
     parser.add_argument("--patchelf", type=Path, required=True)
     parser.add_argument("--strip", type=Path, required=True)
     parser.add_argument("--objdump", type=Path, required=True)
+    parser.add_argument("--ephemeral-build-root", type=Path, required=True)
     arguments = parser.parse_args()
     reports = normalize_release(
         arguments.application,
@@ -151,6 +184,7 @@ def main() -> int:
         arguments.patchelf,
         arguments.strip,
         arguments.objdump,
+        arguments.ephemeral_build_root,
     )
     for report in reports:
         print(report)

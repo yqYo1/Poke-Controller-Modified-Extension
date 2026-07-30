@@ -151,7 +151,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] 旧crateを残したまま、本体libraryと合成起点のscaffoldだけを作る。
 - [x] 内部 module を既定非公開にし、再利用想定だけの公開 API を増やさない。
 
-#### 2.1 checkpoint証跡（2026-07-30、commit前）
+#### 2.1 checkpoint証跡（2026-07-30、完了）
 
 下表のcommandはcaller worktreeまたはNix store成果物に対して直接実行し、すべて終了コード0だった。
 
@@ -169,7 +169,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 | metadata／source | `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard -- rust`／`app`／`spa` |
 | 個別gate | `nix run .#source-filter-check`、`nix run .#release-check`、`nix run .#actionlint` |
 | 文書／VCS | `nix run .#markdownlint`、`nix run .#textlint`、`nix run .#typos`、`git diff HEAD --check` |
-| 保留 | 署名付きcommit SHAとGitHub CIは未実施。push後に結果を追記する |
+| commit／CI | 合成起点の署名commit `64a7dd5b7c7adfc7f57fbde96b3df98fd3ad25e7`、MSRV lint互換の署名commit `b48f1cea5c66624f6e640575d9e5a083e64ae103`。最終SHAの[GitHub Actions](https://github.com/yqYo1/Poke-Controller-Modified-Extension/commit/b48f1cea5c66624f6e640575d9e5a083e64ae103/checks)は9/9 success。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.2 基盤と契約
 

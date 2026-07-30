@@ -91,7 +91,7 @@ pub enum CommandReloadResult {
 /// One of the exactly ten profile-capable shortcut slots.
 #[cfg_attr(
     not(test),
-    expect(
+    allow(
         dead_code,
         reason = "shortcut slot projection awaits product shortcut dispatch wiring"
     )
@@ -244,7 +244,7 @@ pub enum CommandServiceError {
     CommandGenerationChanged,
     #[cfg_attr(
         not(test),
-        expect(
+        allow(
             dead_code,
             reason = "shortcut index rejection awaits product shortcut dispatch wiring"
         )
@@ -253,7 +253,7 @@ pub enum CommandServiceError {
     InvalidShortcut,
     #[cfg_attr(
         not(test),
-        expect(
+        allow(
             dead_code,
             reason = "unassigned shortcut rejection awaits product shortcut dispatch wiring"
         )
@@ -802,7 +802,7 @@ impl CommandService {
     /// Returns an error if a canonical shortcut setting is absent or invalid.
     #[cfg_attr(
         not(test),
-        expect(
+        allow(
             dead_code,
             reason = "shortcut listing awaits product shortcut dispatch wiring"
         )
@@ -833,7 +833,7 @@ impl CommandService {
 
     #[cfg_attr(
         not(test),
-        expect(
+        allow(
             dead_code,
             reason = "shortcut identity resolution awaits product shortcut dispatch wiring"
         )

@@ -173,10 +173,34 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.2 基盤と契約
 
-- [ ] `pokecon-core` を `runtime`、`diagnostics`、`platform` へ移す。
-- [ ] `pokecon-contracts` を `contracts` と開発用 generator binary へ移す。
-- [ ] 検査専用データを runtime library 定数から test／検査側へ移す。
-- [ ] 停止経路と生成契約が移行前と一致することを検証する。
+- [x] `pokecon-core` を `runtime`、`diagnostics`、`platform` へ移す。
+- [x] `pokecon-contracts` を `contracts` と開発用 generator binary へ移す。
+- [x] 検査専用データを runtime library 定数から test／検査側へ移す。
+- [x] 停止経路と生成契約が移行前と一致することを検証する。
+
+#### 2.2 checkpoint証跡（2026-07-31、完了）
+
+下表の合格gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。初回Package CIの失敗は、構造commitを9/9成功と誤記せず、修正根拠として明記する。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| core正準source | 正準実装sourceを物理的に`rust/pokecon/src/runtime/`、`diagnostics/`、`platform/`へ移動。shutdownのfirst-writer testとnative platform testを含む`pokecon-core --lib`は2/2 |
+| contracts正準source | 正準実装sourceを物理的に`rust/pokecon/src/contracts/`へ、8 JSONを`rust/pokecon/registry/`へ、generatorを`src/bin/generate_contracts.rs`へ移動。generatorは既定無効の`contract-generator` required feature付き開発target |
+| 移行facade | 移行中は`pokecon-core`／`pokecon-contracts`が`#[path]`で上記の正準fileをcompileし、`pokecon`の同名private moduleは各`facade.rs`をcompileして互換crateを再exportする。未移行の下位crate依存を維持しつつ実装sourceは重複させず、旧package削除は2.7で行う |
+| 検査専用データ | compatibility、generation、CI、foundationの4 registry定数をruntime libraryから`rust/pokecon/tests/contract_sync.rs`へ移動。runtime側にはsettings／protocolとgeneratorに必要なfixed manifestだけを保持 |
+| 停止／Rust parity | core 2/2、contracts library 8/8、PokeCon library 29/29、Web／Tauri startup 3/3。shutdown first-writer、target adapter、起動／停止経路を移行後sourceで再検証 |
+| 生成契約 parity | generator `--check`は16/16 up-to-date、`contract_sync`は8/8。両commitとも生成済みcontract artifactの内容差分0 |
+| Web／Python | Web 74件、Python 63件が成功 |
+| 集約／format | `nix run .#check`はexit 0。formatは178 files、0 changed |
+| Debian実package | `nix run .#tauri-build -- --bundles deb`、`nix run .#package-smoke -- dist/tauri/*.deb`、`nix run .#package-install-smoke -- dist/tauri/*.deb`が成功 |
+| 構造commit | SSH署名commit `3af92b713a75c2463b441d1ba0f325f669f93c40`。Cargo.lockは`regex`／`sha2`の依存所有を`pokecon-contracts`から`pokecon`へ移す4行だけが変わり、version行は不変 |
+| 初回Package CI | 構造commitの[Package CI 30576972468](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30576972468)はfailure。開発用`generate_contracts`がTauri bundle対象へ漏れ、存在しないrelease binaryのcopyを試みたことで発覚 |
+| packaging修正 | SSH署名commit `5ee440b6dbfe888d1394afd81a3c7718283ac8aa`。generatorをrequired featureで隔離し、Nixの3呼出しだけで有効化。Tauri CLI 2.9.6はtarget filter後に`src/bin`を再走査してgeneratorを再追加するため、Windows Package／Release pinを2.11.4へ更新。この修正commitはCargo.lockと生成物の差分0 |
+| package成果物 | [Debian job 91022531128](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596674/job/91022531128)はbuild、runtime audit、clean install／offline startup／upgrade／uninstall、再現buildに成功。[NSIS job 91022531202](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596674/job/91022531202)もinstaller buildとclean install／startup／upgrade／uninstallに成功 |
+| 最終CI 1/3 | 最終SHAで[Rust 30587596670](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596670)、[Nix Source 30587596671](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596671)、[SPA 30587596673](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596673)がsuccess |
+| 最終CI 2/3 | [Package 30587596674](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596674)、[Pytest 30587596675](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596675)、[Basedpyright 30587596684](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596684)がsuccess |
+| 最終CI 3/3 | [Ruff 30587596704](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596704)、[Lint 30587596709](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596709)、[Remote Flake 30587596710](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30587596710)がsuccess。合計9/9 |
+| review／監視 | packaging修正のfresh Sol final reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.3a settings
 

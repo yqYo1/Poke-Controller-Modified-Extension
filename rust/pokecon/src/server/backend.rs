@@ -4,14 +4,14 @@ use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 
-use crate::api::{
+use crate::server::api::{
     ApiError, ApiErrorCode, CameraDevice, CommandControlRequest, DynamicConfigControlRequest,
     DynamicConfigResult, GenerateLauncherRequest, GenerateLauncherResult, ImageFormat,
     NotificationTestRequest, NotificationTestResult, OperationResult, SavedScreenshot,
     ScreenshotRequest, ScriptUiAction, ScriptUiActionResult, SerialControlRequest, SerialPort,
     SettingsPatchRequest, SettingsSnapshot, UpdateCheckResult,
 };
-use crate::state::StateHub;
+use crate::server::state::StateHub;
 
 /// HTTP status classes that application services may deliberately expose.
 /// Transport-only failures such as malformed JSON are created by `rest`.

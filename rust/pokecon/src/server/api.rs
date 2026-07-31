@@ -213,13 +213,13 @@ pub struct ApiError {
 }
 
 /// Placeholder runtime type whose `OpenAPI` schema is replaced from the
-/// canonical setting registry by `crate::openapi`.
+/// canonical setting registry by `crate::server::openapi`.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(transparent)]
 pub struct SettingsReadValues(pub BTreeMap<String, Value>);
 
 /// Placeholder runtime type whose `OpenAPI` schema is replaced from the
-/// canonical setting registry by `crate::openapi`.
+/// canonical setting registry by `crate::server::openapi`.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(transparent)]
 pub struct SettingsWriteValues(pub BTreeMap<String, Value>);

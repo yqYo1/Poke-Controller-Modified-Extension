@@ -4,11 +4,11 @@ use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 
-use crate::api::{
+use crate::server::api::{
     CameraDevice, EmptyRequest, OperationResult, SavedScreenshot, ScreenshotRequest,
     SerialControlRequest, SerialPort, Success,
 };
-use crate::backend::ScreenshotOutput;
+use crate::server::backend::ScreenshotOutput;
 
 use super::{RestError, RestResult, RestState, download_response, json_request};
 

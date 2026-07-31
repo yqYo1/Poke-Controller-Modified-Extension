@@ -1,6 +1,6 @@
 //! `OpenAPI` path declarations shared with the axum route modules.
 
-use crate::api::{
+use crate::server::api::{
     CameraDevice, CommandControlRequest, DynamicConfigControlRequest, DynamicConfigResult,
     EmptyRequest, ErrorEnvelope, GenerateLauncherRequest, GenerateLauncherResult, OperationResult,
     SavedScreenshot, ScreenshotRequest, SerialControlRequest, SerialPort, SettingsPatchRequest,
@@ -148,9 +148,9 @@ pub fn screenshot() {}
     post,
     path = "/api/notifications/test",
     tag = "notifications",
-    request_body(content = crate::api::NotificationTestRequest, content_type = "application/json"),
+    request_body(content = crate::server::api::NotificationTestRequest, content_type = "application/json"),
     responses(
-        (status = 200, description = "Test notification delivered", body = Success<crate::api::NotificationTestResult>),
+        (status = 200, description = "Test notification delivered", body = Success<crate::server::api::NotificationTestResult>),
         (status = 409, description = "Unsupported notification channel", body = ErrorEnvelope),
         (status = 422, description = "Notification configuration is invalid", body = ErrorEnvelope),
         (status = 500, description = "Notification delivery failure", body = ErrorEnvelope)
@@ -162,9 +162,9 @@ pub fn test_notification() {}
     post,
     path = "/api/script-ui/action",
     tag = "script_ui",
-    request_body(content = crate::api::ScriptUiAction, content_type = "application/json"),
+    request_body(content = crate::server::api::ScriptUiAction, content_type = "application/json"),
     responses(
-        (status = 200, description = "Script UI interaction accepted", body = Success<crate::api::ScriptUiActionResult>),
+        (status = 200, description = "Script UI interaction accepted", body = Success<crate::server::api::ScriptUiActionResult>),
         (status = 409, description = "Stale generation or completed UI object", body = ErrorEnvelope),
         (status = 422, description = "Invalid dialog value or Tk interaction", body = ErrorEnvelope),
         (status = 500, description = "Script worker interaction failed", body = ErrorEnvelope)

@@ -2,7 +2,7 @@ use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 
-use crate::api::{StateSnapshot, Success};
+use crate::server::api::{StateSnapshot, Success};
 
 use super::RestState;
 

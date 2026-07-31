@@ -11,14 +11,14 @@ use tokio::sync::{mpsc, watch};
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 
-use crate::api::{
+use crate::server::api::{
     ClientMessage, InputGeneration, LogData, MessageData, ServerMessage, SessionDescription,
 };
-use crate::realtime::{
+use crate::server::realtime::{
     RealtimeAction, RealtimeRoute, RealtimeTransportConfig, RealtimeTransportController,
 };
-use crate::webrtc::{WebRtcMedia, WebRtcPeer, WebRtcPeerConfig, WebRtcPeerEvent};
-use crate::websocket::{
+use crate::server::webrtc::{WebRtcMedia, WebRtcPeer, WebRtcPeerConfig, WebRtcPeerEvent};
+use crate::server::websocket::{
     ConnectionId, MotionJpegFeed, Outgoing, WebSocketBackend, WebSocketReply, log_backend_failure,
 };
 

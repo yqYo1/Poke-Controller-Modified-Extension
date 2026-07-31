@@ -38,8 +38,8 @@ use webrtc::rtp_transceiver::rtp_codec::{
 use webrtc::track::track_local::TrackLocal;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
-use crate::api::{IceCandidate, LogData, MessageData, ServerMessage, SessionDescription};
-use crate::websocket::MotionJpegFeed;
+use crate::server::api::{IceCandidate, LogData, MessageData, ServerMessage, SessionDescription};
+use crate::server::websocket::MotionJpegFeed;
 
 pub const CONTROL_DATA_CHANNEL: &str = "pokecon-control";
 pub const LOG_DATA_CHANNEL: &str = "pokecon-log";
@@ -992,7 +992,7 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 
-    use crate::api::{LogLevel, LogTarget, Nonce};
+    use crate::server::api::{LogLevel, LogTarget, Nonce};
 
     use super::*;
 
@@ -1162,7 +1162,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "log-loopback".to_owned(),
                 target: LogTarget::Log,
-                operation: crate::api::LogOperation::Append,
+                operation: crate::server::api::LogOperation::Append,
             })
             .await
             .expect("server log send");

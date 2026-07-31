@@ -4,8 +4,8 @@ use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 
-use crate::api::{GenerateLauncherRequest, GenerateLauncherResult, Success};
-use crate::backend::LauncherOutput;
+use crate::server::api::{GenerateLauncherRequest, GenerateLauncherResult, Success};
+use crate::server::backend::LauncherOutput;
 
 use super::{RestError, RestResult, RestState, download_response, json_request};
 

@@ -25,7 +25,7 @@ web_generated="web/src/lib/api/openapi.ts"
 web_schema="web/src/lib/api/openapi.json"
 
 if [[ "$mode" == "--check" ]]; then
-  cargo run --locked --package pokecon-server --bin generate_openapi -- --check
+  cargo run --locked --package pokecon --bin generate_openapi --features contract-generator -- --check
   generated_dir="$(mktemp -d)"
   trap 'rm -rf "$generated_dir"' EXIT
   bun --bun "$openapi_typescript" api/openapi.json \
@@ -41,7 +41,7 @@ if [[ "$mode" == "--check" ]]; then
     exit 1
   fi
 else
-  cargo run --locked --package pokecon-server --bin generate_openapi
+  cargo run --locked --package pokecon --bin generate_openapi --features contract-generator
   mkdir -p "$(dirname "$web_generated")"
   bun --bun "$openapi_typescript" api/openapi.json \
     --output "$web_generated"

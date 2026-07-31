@@ -14,21 +14,21 @@ use crate::device::{
     DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
     WindowsNativeNotificationTransport,
 };
+use crate::server::api::{SerialData, SerialEncoding, StateChangeCause};
+use crate::server::backend::RestBackend;
+use crate::server::realtime::RealtimeTransportConfig;
+use crate::server::realtime_connection::RealtimeConnectionConfig;
+use crate::server::rest;
+use crate::server::state::StateHub;
+use crate::server::webrtc::{WebRtcMedia, WebRtcMediaConfig, WebRtcPeerConfig};
+use crate::server::websocket::{
+    MotionJpegFeed, WebSocketBackend, WebSocketConfig, WebSocketTransport,
+};
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
 use crate::settings::service::SettingsService;
 use axum::Router;
 use base64::Engine as _;
 use pokecon_desktop::DesktopRuntimeSettings;
-use pokecon_server::api::{SerialData, SerialEncoding, StateChangeCause};
-use pokecon_server::backend::RestBackend;
-use pokecon_server::realtime::RealtimeTransportConfig;
-use pokecon_server::realtime_connection::RealtimeConnectionConfig;
-use pokecon_server::rest;
-use pokecon_server::state::StateHub;
-use pokecon_server::webrtc::{WebRtcMedia, WebRtcMediaConfig, WebRtcPeerConfig};
-use pokecon_server::websocket::{
-    MotionJpegFeed, WebSocketBackend, WebSocketConfig, WebSocketTransport,
-};
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
@@ -337,7 +337,7 @@ async fn start_media(
     frames: crate::camera::LatestFrameSource,
     screenshot_settings: ScreenshotRuntimeSettings,
     runtime_settings: tokio::sync::watch::Receiver<
-        pokecon_server::realtime_connection::RealtimeRuntimeSettings,
+        crate::server::realtime_connection::RealtimeRuntimeSettings,
     >,
 ) -> (
     Option<RealtimeConnectionConfig>,
@@ -416,7 +416,7 @@ fn start_fallback_motion_jpeg(
 
 fn spawn_serial_events(
     serial: &SerialManager,
-    broker: pokecon_server::websocket::WebSocketBroker,
+    broker: crate::server::websocket::WebSocketBroker,
 ) -> JoinHandle<()> {
     let mut received = serial.subscribe_received();
     tokio::spawn(async move {

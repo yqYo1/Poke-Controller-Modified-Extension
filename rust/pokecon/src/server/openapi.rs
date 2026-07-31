@@ -8,7 +8,7 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use utoipa::OpenApi;
 
-use crate::api::{
+use crate::server::api::{
     ApiError, ApiErrorCode, ButtonState, CameraDevice, CameraSelector, ClientMessage,
     CommandControlRequest, CommandDisplayItem, CommandIdentity, CommandInfo, CommandState,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage, EmptyRequest,
@@ -129,22 +129,22 @@ use crate::api::{
         UpdateCheckResult
     )),
     paths(
-        crate::paths::get_settings,
-        crate::paths::patch_settings,
-        crate::paths::get_state,
-        crate::paths::control_command,
-        crate::paths::reload_commands,
-        crate::paths::get_cameras,
-        crate::paths::get_serial_ports,
-        crate::paths::control_serial,
-        crate::paths::retry_camera,
-        crate::paths::screenshot,
-        crate::paths::test_notification,
-        crate::paths::script_ui_action,
-        crate::paths::control_dynamic_config,
-        crate::paths::generate_launcher,
-        crate::paths::check_update,
-        crate::paths::websocket
+        crate::server::paths::get_settings,
+        crate::server::paths::patch_settings,
+        crate::server::paths::get_state,
+        crate::server::paths::control_command,
+        crate::server::paths::reload_commands,
+        crate::server::paths::get_cameras,
+        crate::server::paths::get_serial_ports,
+        crate::server::paths::control_serial,
+        crate::server::paths::retry_camera,
+        crate::server::paths::screenshot,
+        crate::server::paths::test_notification,
+        crate::server::paths::script_ui_action,
+        crate::server::paths::control_dynamic_config,
+        crate::server::paths::generate_launcher,
+        crate::server::paths::check_update,
+        crate::server::paths::websocket
     ),
     tags(
         (name = "settings", description = "Canonical settings"),

@@ -2,7 +2,7 @@ use axum::Router;
 use axum::extract::{Json, State};
 use axum::routing::get;
 
-use crate::api::{SettingsPatchRequest, SettingsSnapshot, Success};
+use crate::server::api::{SettingsPatchRequest, SettingsSnapshot, Success};
 
 use super::{RestError, RestResult, RestState, json_request};
 

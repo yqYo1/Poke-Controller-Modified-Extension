@@ -3,7 +3,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::extract::{Json, State};
 use axum::routing::post;
 
-use crate::api::{EmptyRequest, Success, UpdateCheckResult};
+use crate::server::api::{EmptyRequest, Success, UpdateCheckResult};
 
 use super::{RestError, RestResult, RestState, json_request};
 

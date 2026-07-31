@@ -15,6 +15,11 @@ name = "generate_contracts"
 path = "src/bin/generate_contracts.rs"
 required-features = ["contract-generator"]
 
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"
+required-features = ["contract-generator"]
+
 [features]
 default = []
 contract-generator = []

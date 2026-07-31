@@ -7,7 +7,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Mutex, broadcast};
 
-use crate::api::{
+use crate::server::api::{
     DecimalString, RevisionedStateChange, SettingsChange, SettingsSnapshot, SettingsWriteValues,
     StateChangeCause, StatePatch, StateSnapshot, UiStateChange,
 };
@@ -431,7 +431,7 @@ mod tests {
     use tokio::sync::broadcast::error::TryRecvError;
 
     use super::{Replay, StateHub, StateTransaction, StateTransactionError, VisibleSnapshots};
-    use crate::api::{
+    use crate::server::api::{
         CameraSelector, CommandInfo, CommandState, DecimalString, SettingsChange,
         SettingsReadValues, SettingsSnapshot, SettingsWriteValues, StateChangeCause, StateSnapshot,
     };
@@ -689,6 +689,6 @@ mod tests {
     #[test]
     fn arc_events_are_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Arc<crate::api::RevisionedStateChange>>();
+        assert_send_sync::<Arc<crate::server::api::RevisionedStateChange>>();
     }
 }

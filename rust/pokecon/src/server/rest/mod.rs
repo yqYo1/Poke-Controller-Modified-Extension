@@ -23,8 +23,8 @@ use axum::routing::any;
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 
-use crate::api::{ApiError, ApiErrorCode, ErrorEnvelope};
-use crate::backend::{ApiFailure, ApiFailureStatus, DownloadPayload, RestBackend};
+use crate::server::api::{ApiError, ApiErrorCode, ErrorEnvelope};
+use crate::server::backend::{ApiFailure, ApiFailureStatus, DownloadPayload, RestBackend};
 
 #[derive(Clone)]
 pub(crate) struct RestState {
@@ -226,7 +226,7 @@ mod tests {
     use tower::ServiceExt as _;
 
     use super::router;
-    use crate::api::{
+    use crate::server::api::{
         ApiErrorCode, CameraDevice, CameraSelector, CommandControlRequest, CommandState,
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
@@ -235,12 +235,14 @@ mod tests {
         SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot,
         UpdateCheckResult,
     };
-    use crate::backend::{
+    use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
         LauncherOutput, RestBackend, ScreenshotOutput,
     };
-    use crate::state::{StateHub, StateTransaction};
-    use crate::{router::public_router, security::RequestSecurity, static_files::StaticFiles};
+    use crate::server::state::{StateHub, StateTransaction};
+    use crate::server::{
+        router::public_router, security::RequestSecurity, static_files::StaticFiles,
+    };
 
     struct MockBackend {
         hub: StateHub,

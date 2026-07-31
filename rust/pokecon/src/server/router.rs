@@ -2,8 +2,8 @@
 
 use axum::Router;
 
-use crate::security::{RequestSecurity, secure_router};
-use crate::static_files::StaticFiles;
+use crate::server::security::{RequestSecurity, secure_router};
+use crate::server::static_files::StaticFiles;
 
 /// Builds the one public router. Security is deliberately applied after the
 /// static fallback is attached so no HTTP path can bypass Host validation.
@@ -25,8 +25,8 @@ mod tests {
     use tower::ServiceExt as _;
 
     use super::public_router;
-    use crate::security::RequestSecurity;
-    use crate::static_files::StaticFiles;
+    use crate::server::security::RequestSecurity;
+    use crate::server::static_files::StaticFiles;
 
     fn app() -> (tempfile::TempDir, Router) {
         let root = tempdir().expect("static root");

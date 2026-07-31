@@ -17,14 +17,7 @@ use crate::device::{
 use crate::device::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 use crate::device::{NotificationChannel, NotificationOutcome, NotificationService};
 use crate::device::{SerialError, SerialManager, enumerate_native_ports};
-use crate::settings::roots::SafeComponent;
-use crate::settings::service::{
-    PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
-};
-use async_trait::async_trait;
-use parking_lot::Mutex as ParkingMutex;
-use pokecon_dynamic::{DynamicConfigControl, DynamicConfigLanguage};
-use pokecon_server::api::{
+use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
@@ -34,15 +27,22 @@ use pokecon_server::api::{
     SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot,
     UpdateCheckResult,
 };
-use pokecon_server::backend::{
+use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
     RestBackend, ScreenshotOutput,
 };
-use pokecon_server::realtime_connection::RealtimeConnectionConfig;
-use pokecon_server::state::{CommitOutcome, StateHub, StateTransaction};
-use pokecon_server::websocket::{
+use crate::server::realtime_connection::RealtimeConnectionConfig;
+use crate::server::state::{CommitOutcome, StateHub, StateTransaction};
+use crate::server::websocket::{
     ConnectionId, MotionJpegFeed, MotionJpegStream, WebSocketBackend, WebSocketReply,
 };
+use crate::settings::roots::SafeComponent;
+use crate::settings::service::{
+    PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
+};
+use async_trait::async_trait;
+use parking_lot::Mutex as ParkingMutex;
+use pokecon_dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use semver::Version;
 use serde::Deserialize;
@@ -487,7 +487,7 @@ impl RestBackend for ApplicationBackend {
 
     async fn screenshot(
         &self,
-        request: pokecon_server::api::ScreenshotRequest,
+        request: crate::server::api::ScreenshotRequest,
     ) -> ApiResult<ScreenshotOutput> {
         let request = runtime_screenshot_request(request)?;
         let screenshots = self.screenshots.clone();
@@ -497,7 +497,7 @@ impl RestBackend for ApplicationBackend {
             .map_err(screenshot_failure)?;
         match result {
             RuntimeScreenshotResult::Saved(saved) => Ok(ScreenshotOutput::Saved(
-                pokecon_server::api::SavedScreenshot {
+                crate::server::api::SavedScreenshot {
                     display_path: saved.display_path,
                     format: image_format(saved.format),
                 },
@@ -851,8 +851,8 @@ impl WebSocketBackend for ApplicationBackend {
                             runtime_sequence(&data.sequence)?,
                             InputEvent::Stick {
                                 stick: match data.stick {
-                                    pokecon_server::api::StickName::LStick => StickSide::Left,
-                                    pokecon_server::api::StickName::RStick => StickSide::Right,
+                                    crate::server::api::StickName::LStick => StickSide::Left,
+                                    crate::server::api::StickName::RStick => StickSide::Right,
                                 },
                                 position: StickPosition {
                                     x: data.x,
@@ -872,9 +872,9 @@ impl WebSocketBackend for ApplicationBackend {
                             runtime_sequence(&data.sequence)?,
                             InputEvent::MouseButton {
                                 button: match data.button {
-                                    pokecon_server::api::MouseButton::Left => MouseButton::Left,
-                                    pokecon_server::api::MouseButton::Right => MouseButton::Right,
-                                    pokecon_server::api::MouseButton::Middle => MouseButton::Middle,
+                                    crate::server::api::MouseButton::Left => MouseButton::Left,
+                                    crate::server::api::MouseButton::Right => MouseButton::Right,
+                                    crate::server::api::MouseButton::Middle => MouseButton::Middle,
                                 },
                                 state: press_state(data.state),
                             },
@@ -1034,10 +1034,10 @@ fn camera_selector(selector: RuntimeCameraSelector) -> CameraSelector {
 }
 
 fn runtime_screenshot_request(
-    request: pokecon_server::api::ScreenshotRequest,
+    request: crate::server::api::ScreenshotRequest,
 ) -> ApiResult<RuntimeScreenshotRequest> {
     let (region, destination) = match request {
-        pokecon_server::api::ScreenshotRequest::Captures(fields) => (
+        crate::server::api::ScreenshotRequest::Captures(fields) => (
             fields.region,
             ScreenshotDestination::Captures {
                 filename: fields.filename,
@@ -1045,7 +1045,7 @@ fn runtime_screenshot_request(
                 overwrite: fields.overwrite,
             },
         ),
-        pokecon_server::api::ScreenshotRequest::Path(fields) => (
+        crate::server::api::ScreenshotRequest::Path(fields) => (
             fields.region,
             ScreenshotDestination::Path {
                 path: fields.path,
@@ -1053,7 +1053,7 @@ fn runtime_screenshot_request(
                 overwrite: fields.overwrite,
             },
         ),
-        pokecon_server::api::ScreenshotRequest::Download(fields) => (
+        crate::server::api::ScreenshotRequest::Download(fields) => (
             fields.region,
             ScreenshotDestination::Download {
                 filename: fields.filename,
@@ -1104,10 +1104,10 @@ fn runtime_sequence(value: &DecimalString) -> ApiResult<InputSequence> {
     InputSequence::new(value.as_str()).map_err(|_error| invalid_input())
 }
 
-const fn press_state(value: pokecon_server::api::PressState) -> PressState {
+const fn press_state(value: crate::server::api::PressState) -> PressState {
     match value {
-        pokecon_server::api::PressState::Pressed => PressState::Pressed,
-        pokecon_server::api::PressState::Released => PressState::Released,
+        crate::server::api::PressState::Pressed => PressState::Pressed,
+        crate::server::api::PressState::Released => PressState::Released,
     }
 }
 
@@ -1129,8 +1129,8 @@ fn gamepad_event(
             runtime_sequence(&data.sequence)?,
             InputEvent::Stick {
                 stick: match data.stick {
-                    pokecon_server::api::StickName::LStick => StickSide::Left,
-                    pokecon_server::api::StickName::RStick => StickSide::Right,
+                    crate::server::api::StickName::LStick => StickSide::Left,
+                    crate::server::api::StickName::RStick => StickSide::Right,
                 },
                 position: StickPosition {
                     x: data.x,
@@ -1306,9 +1306,9 @@ fn script_ui_failure(error: &pokecon_worker::script::ScriptHostError) -> ApiFail
     ApiFailure::new(status, code, error.message.clone())
 }
 
-fn state_failure(error: pokecon_server::state::StateTransactionError) -> ApiFailure {
+fn state_failure(error: crate::server::state::StateTransactionError) -> ApiFailure {
     match error {
-        pokecon_server::state::StateTransactionError::RevisionConflict { current, .. } => {
+        crate::server::state::StateTransactionError::RevisionConflict { current, .. } => {
             ApiFailure::new(
                 ApiFailureStatus::Conflict,
                 ApiErrorCode::RevisionConflict,

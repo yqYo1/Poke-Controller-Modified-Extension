@@ -21,16 +21,16 @@ use tokio::task::JoinSet;
 use tokio::time::{self, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 
-use crate::api::{
+use crate::server::api::{
     ApiError, ApiErrorCode, ClientMessage, ErrorEnvelope, IceCandidate, InputApplied,
     InputGeneration, LogData, MessageData, Nonce, RevisionedStateChange, ScriptUiSnapshot,
     SerialData, ServerMessage, SessionDescription,
 };
-use crate::backend::{ApiFailure, ApiResult};
-use crate::realtime_connection::{
+use crate::server::backend::{ApiFailure, ApiResult};
+use crate::server::realtime_connection::{
     RealtimeConnectionConfig, RealtimeConnectionIo, run_realtime_connection,
 };
-use crate::state::StateHub;
+use crate::server::state::StateHub;
 
 const DEFAULT_MESSAGE_BYTES: usize = 1024 * 1024;
 
@@ -947,20 +947,20 @@ mod tests {
     use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
     use super::*;
-    use crate::BoundServer;
-    use crate::api::{
+    use crate::server::BoundServer;
+    use crate::server::api::{
         ButtonState, CameraSelector, CommandState, DecimalString, Hat, InputSnapshot, LogLevel,
         LogTarget, MouseButtons, StateChangeCause, StatePatch, StateSnapshot, StickPosition,
         UiStateChange,
     };
-    use crate::api::{SettingsReadValues, SettingsSnapshot, SettingsWriteValues};
-    use crate::realtime::RealtimeTransportConfig;
-    use crate::realtime_connection::RealtimeConnectionConfig;
-    use crate::router::public_router;
-    use crate::security::RequestSecurity;
-    use crate::state::StateTransaction;
-    use crate::static_files::StaticFiles;
-    use crate::webrtc::{
+    use crate::server::api::{SettingsReadValues, SettingsSnapshot, SettingsWriteValues};
+    use crate::server::realtime::RealtimeTransportConfig;
+    use crate::server::realtime_connection::RealtimeConnectionConfig;
+    use crate::server::router::public_router;
+    use crate::server::security::RequestSecurity;
+    use crate::server::state::StateTransaction;
+    use crate::server::static_files::StaticFiles;
+    use crate::server::webrtc::{
         CONTROL_DATA_CHANNEL, LOG_DATA_CHANNEL, WebRtcMedia, WebRtcMediaConfig, WebRtcPeerConfig,
         create_peer_connection,
     };
@@ -1621,7 +1621,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "realtime-log".to_owned(),
                 target: LogTarget::Log,
-                operation: crate::api::LogOperation::Append,
+                operation: crate::server::api::LogOperation::Append,
             }),
             1
         );
@@ -1805,7 +1805,7 @@ mod tests {
                 level: LogLevel::Info,
                 message: "first".to_owned(),
                 target: LogTarget::Panel1,
-                operation: crate::api::LogOperation::Append,
+                operation: crate::server::api::LogOperation::Append,
             }),
             1
         );
@@ -1814,7 +1814,7 @@ mod tests {
                 level: LogLevel::Warning,
                 message: "second".to_owned(),
                 target: LogTarget::Panel1,
-                operation: crate::api::LogOperation::Append,
+                operation: crate::server::api::LogOperation::Append,
             }),
             1
         );
@@ -1837,7 +1837,7 @@ mod tests {
         let transport = WebSocketTransport::new(backend.clone(), test_config()).expect("transport");
         let expected = ScriptUiSnapshot {
             generation: Some("user-script-7".to_owned()),
-            dialogs: vec![crate::api::ScriptDialog {
+            dialogs: vec![crate::server::api::ScriptDialog {
                 id: DecimalString::from_u64(3),
                 title: "Confirm".to_owned(),
                 description: None,

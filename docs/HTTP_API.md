@@ -16,7 +16,7 @@ repositoryには生成済みの[`api/openapi.json`](../api/openapi.json)を収�
 
 TypeScript型はOpenAPIから生成されるため、手書きの型を公開契約として扱いません。
 
-HTTPとWebSocketのRust wire型は`rust/pokecon-server/src/api.rs`にあります。
+HTTPとWebSocketのRust wire型は`rust/pokecon/src/server/api.rs`にあります。
 
 設定のfield集合は`rust/pokecon/registry/settings.json`からOpenAPIへ組み込まれます。
 

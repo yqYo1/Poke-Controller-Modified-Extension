@@ -17,12 +17,12 @@ use crate::device::{
 };
 use crate::device::{NotificationOutcome, NotificationService};
 use crate::device::{SerialError, SerialManager};
+use crate::server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
+use crate::server::websocket::WebSocketBroker;
 use crate::settings::pipeline::LoadedSettings;
 use base64::Engine as _;
 use chrono::{Local, Timelike as _};
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
-use pokecon_server::websocket::WebSocketBroker;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{
     HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,

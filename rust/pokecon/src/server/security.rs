@@ -14,7 +14,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 
-use crate::api::{ApiError, ApiErrorCode, ErrorEnvelope};
+use crate::server::api::{ApiError, ApiErrorCode, ErrorEnvelope};
 
 const REQUEST_MARKER: HeaderName = HeaderName::from_static("x-pokecon-request");
 const ALLOWED_METHODS: &str = "GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS";

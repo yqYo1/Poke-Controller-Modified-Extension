@@ -60,7 +60,7 @@ Cargo workspaceは11 crateで構成されます。
 
 | crate | 所有する責務 | 所有しない責務 |
 |---|---|---|
-| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・camera・deviceの正準実装、正準contract registry・schema・生成器 | HTTP wire型そのもの |
+| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・camera・deviceの正準実装、serverの正準実装・HTTP wire型・OpenAPI generator、正準contract registry・schema・生成器 | 外部dynamic engine、worker実行、desktop shell固有実装 |
 | `pokecon-camera` | Phase 2移行中のcamera compatibility facade（正準sourceは所有しない） | cameraの正準実装、UI状態や設定永続化 |
 | `pokecon-contracts` | Phase 2移行中のcontract compatibility facade（正準sourceは所有しない） | 正準registry・schema・生成器、runtime device処理 |
 | `pokecon-core` | Phase 2移行中のruntime・diagnostics・platform compatibility facade（正準sourceは所有しない） | 正準runtime・diagnostics・platform実装、application service構成 |
@@ -68,7 +68,7 @@ Cargo workspaceは11 crateで構成されます。
 | `pokecon-device` | Phase 2移行中のdevice compatibility facade（正準sourceは所有しない） | deviceの正準実装、command discovery |
 | `pokecon-dynamic` | 動的PythonまたはLua engine、event、generation | native device ownership |
 | `pokecon-pybindings` | Rust機能をPython workerへ公開するbinding | command lifecycle orchestration |
-| `pokecon-server` | REST、OpenAPI、WebSocket、WebRTC、security、static SPA | 設定fileの正準merge |
+| `pokecon-server` | Phase 2移行中のserver compatibility facade（正準sourceは所有しない） | serverの正準実装、wire型、OpenAPI generator |
 | `pokecon-settings` | Phase 2移行中のsettings compatibility facade（正準sourceは所有しない） | settingsの正準実装、UI rendering |
 | `pokecon-worker` | Python command discoveryとexecution、動的worker IPC | hardware handle |
 
@@ -76,7 +76,7 @@ crate間の新しい依存は、この表の責務を逆流させないように
 
 下位crateが`pokecon`を参照する構造はcomposition rootを壊すため避けます。
 
-公開wire型をapplication handlerへ埋め込まず、`pokecon-server::api`へ集約します。
+公開wire型をapplication handlerへ埋め込まず、private `server::api`へ集約します。
 
 設定fieldを個別crateへ重複定義せず、registryとtyped accessを経由します。
 
@@ -105,7 +105,7 @@ page reloadやWebSocket再接続ではserver snapshotから復元できる必要
 | 設定 | `rust/pokecon/registry/settings.json` | Rust metadata、OpenAPI setting schema、frontend metadata |
 | 動的event | `rust/pokecon/registry/protocol.json`の`builtin_events` | Python stub、Lua annotation、runtime registry |
 | Python command API | Rust bindingとworker実装の公開surface | `python/pokecon/typings/`以下の`.pyi` |
-| HTTPとWebSocket | `rust/pokecon-server/src/api.rs`とpath declaration | `api/openapi.json`、TypeScript client型 |
+| HTTPとWebSocket | `rust/pokecon/src/server/api.rs`とpath declaration | `api/openapi.json`、TypeScript client型 |
 | 受入記録 | `acceptance-record.schema.json`とsemantic validator | exampleと検証結果 |
 | 互換性 | 固定source manifestと期待値 | inventory、corpus report、追補chain |
 

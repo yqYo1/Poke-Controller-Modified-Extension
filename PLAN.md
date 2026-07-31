@@ -304,9 +304,36 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.3d server
 
-- [ ] `pokecon-server`を`server`へ移す。
-- [ ] serverのwire型を追加crateにせず内部変換として維持する。
-- [ ] server移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+- [x] `pokecon-server`を`server`へ移す。
+- [x] serverのwire型を追加crateにせず内部変換として維持する。
+- [x] server移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+#### 2.3d checkpoint証跡（2026-07-31、完了）
+
+下表の完了gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。対象外の`virtual-io-check`は理由とserver経路の代替証跡を明記する。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| 正準source | `rust/pokecon/src/server/`の`mod.rs`と22 domain filesへ物理移動し、private `facade.rs`を追加。旧`rust/pokecon-server/src/`はcompatibility facadeの`lib.rs`だけ |
+| compile／型境界 | `pokecon-server`だけが`#[path]`で正準sourceをcompileして従来のpublic APIを再exportし、PokeConはprivate `server/facade.rs`から同じmodule／型をaliasする。nominal type universeを一つに保ち、`pokecon`→`pokecon-server`→camera／contractsの非循環依存を維持 |
+| wire／OpenAPI境界 | wire型の追加crateは作らずserver内部変換を維持し、wire／OpenAPIの挙動は不変 |
+| 内部参照／generator | 正準sourceの内部参照77件を`crate::server`へ変更。PokeCon sourceの直接`pokecon_server`参照はprivate facadeとfeature-gated generatorだけ。OpenAPI generatorをbyte-identicalにPokeCon binへ移し、`required-features = ["contract-generator"]`とscriptの`--package pokecon --features contract-generator`を設定 |
+| 依存／構造scope | server crateから`clap`依存と対応するCargo.lock 1 entryだけを削除。37 files、23 renames、2 additions、12 modifications、+295/-278。構造commitではPLANを除外 |
+| 保護artifact | generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、`rust/pokecon/registry` tree `d847c8088b9a1a2e5cc518b80f50cb9f578a169d`、OpenAPI blob `a39cab3bee21a37d54661673be901591b8346937`、Web OpenAPI TS `fdcefc68198a1089a384c2cb0edd58d62e92302f`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`、flake blob `84f1dae692191ff4f97de0246abfb8a53b9c1291`、root Cargo blob `4dad0e069af0b5d6564fcda985eb99752dbd8ee0`を保持。workflowも不変 |
+| focused test | `workspace-lock-check`、server library 66/66、PokeCon library 31/31、OpenAPI check、all-target／all-feature focused checkがexit 0 |
+| Rust／契約gate | `contract-check`、Clippy、workspace全Cargo test、`build-rust`、`compatibility`がexit 0。Cargo testはworker lifecycle／IPC／start-stop／force-killを含む |
+| Web／成果物gate | `web-check`はSvelte diagnostics 0、74 testsとproduction buildに成功。`cli-help-check`、`nix flake check --no-build`、`editor-smoke` 4/4もexit 0。`nix build .#pokecon`と`nix build .#pokecon-server`は同じ`/nix/store/ym2ngngl3m3hp21y7cfdng0x115dfxzv-pokecon-0.1.0`を返した |
+| virtual I/O | `virtual-io-check`はdevice serial PTY／camera V4L2だけを対象としserver／HTTP／WS経路を含まないため対象外。代替としてserver 66 tests、startup tests、Webと実packageのstartupを検証 |
+| 集約／format | aggregate checkはPython 63件を含めexit 0。最終formatは187 files／0 changed |
+| Debian実package | `tauri-build`、`package-smoke`、`package-install-smoke`がexit 0 |
+| package-smoke | amd64 0.1.0、installed 348,986,519 bytes、Python 3.14.3、resources 3,801、wheels 28、native wheel members 257、JS 10、CSS 1、udev rules 3、uv 0.11.8を検査 |
+| install-smoke／local deb | Ubuntu Nobleでclean install／startup／dynamic worker clean stop、same-version reinstallの`SkippedVerified`、restart、uninstallまで完了。local `.deb`はSHA256 `3f9111fba2c89b37b084a3d75bcc1f9ffbd832a1a5848f997d2eaa3984452608`、197,482,104 bytes |
+| 構造commit／署名 | `46e275b4788e81e8e8f8895012a96fd98ea4f9e9`。`52419113+yqYo1@users.noreply.github.com`のED25519 fingerprint `SHA256:JPH7BePGgqgXSLXc86mmeGeCzD+BdP1cb63qH4J6Tig`でcryptographic `Good "git" signature`を確認 |
+| 最終CI 1/3 | 構造SHAで[Package 30622494292](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494292)、[SPA 30622494300](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494300)、[Lint 30622494310](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494310)がsuccess |
+| 最終CI 2/3 | [Ruff 30622494319](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494319)、[Nix Source 30622494381](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494381)、[Pytest 30622494398](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494398)がsuccess |
+| 最終CI 3/3 | [Rust 30622494410](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494410)、[Remote Flake 30622494413](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494413)、[Basedpyright 30622494420](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494420)がsuccess。合計9/9 |
+| Package CI／artifact | [Package run 30622494292](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494292)の[Debian job 91130056131](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494292/job/91130056131)は29m54s、artifact digest `sha256:f795661238fad76ca4eb5ebfba375001e2e6c75507d0fef36d89da7fff1299ee`、再現した`.deb`のSHA256は`cbb13e3aa3ebe2cc46bd87b495bb78bb682f2372aea0efcaa7bb84bf7406d382`。[NSIS job 91130056300](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30622494292/job/91130056300)は15m30s、artifact digest `sha256:3837866332e4a18675a70b5523384e480e7c99a0368bd6fc1cd32416aafe4827`でsuccess |
+| review／監視 | server構造commitのfresh Sol final reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.4 dynamic と worker
 

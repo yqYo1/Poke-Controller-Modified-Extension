@@ -3794,7 +3794,6 @@ dependencies = [
  "hex",
  "image",
  "nokhwa",
- "pokecon-settings",
  "serde",
  "serde_json",
  "shared_memory",

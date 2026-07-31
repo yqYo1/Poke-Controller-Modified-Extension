@@ -1,13 +1,12 @@
 use std::collections::BTreeMap;
 use std::str::FromStr as _;
 
-use pokecon_settings::service::{PatchClass, RuntimeSettingsApplier};
+use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
 use serde_json::Value;
 
-use crate::backend::{CameraConfig, CameraError};
-use crate::frame::FlipMode;
-use crate::manager::CameraManager;
-use crate::screenshot::{ScreenshotFormat, ScreenshotRuntimeSettings};
+use crate::camera::{
+    CameraConfig, CameraError, CameraManager, FlipMode, ScreenshotFormat, ScreenshotRuntimeSettings,
+};
 
 #[derive(Clone, Debug)]
 struct CameraSettingsValues {
@@ -69,7 +68,7 @@ impl CameraSettingsValues {
 /// Settings-service bridge for acquisition transactions and immediate visual
 /// processing/encoding defaults.
 #[derive(Clone, Debug)]
-pub struct CameraSettingsApplier {
+pub(crate) struct CameraSettingsApplier {
     manager: CameraManager,
     screenshot_settings: ScreenshotRuntimeSettings,
     current: CameraSettingsValues,
@@ -81,7 +80,7 @@ impl CameraSettingsApplier {
     /// # Errors
     ///
     /// Rejects an invalid FPS or JPEG quality.
-    pub fn new(
+    pub(crate) fn new(
         manager: CameraManager,
         config: CameraConfig,
         flip: FlipMode,
@@ -180,19 +179,16 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use pokecon_settings::service::{PatchClass, RuntimeSettingsApplier};
     use serde_json::json;
 
-    use super::CameraSettingsApplier;
-    use crate::backend::CameraConfig;
-    use crate::frame::{CaptureResolution, FlipMode};
-    use crate::manager::CameraManager;
-    use crate::screenshot::{ScreenshotFormat, ScreenshotRuntimeSettings};
-    use crate::selector::CameraSelector;
-    use crate::virtual_camera::{
-        RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
-        VirtualReconfigurePlan, VirtualSessionPlan,
+    use crate::camera::{
+        CameraConfig, CameraManager, CameraSelector, CaptureResolution, FlipMode, RecordedFrame,
+        RecordedFrameSource, ScreenshotFormat, ScreenshotRuntimeSettings, VirtualCameraBackend,
+        VirtualOpenPlan, VirtualReconfigurePlan, VirtualSessionPlan,
     };
+    use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
+
+    use super::CameraSettingsApplier;
 
     #[test]
     fn settings_bridge_applies_and_rolls_back_capture_and_encoding_values() {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{BgrFrame, CameraDevice, CameraSelector, CaptureResolution};
+use crate::camera::{BgrFrame, CameraDevice, CameraSelector, CaptureResolution};
 
 /// Requested device, rate, and closed capture resolution.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

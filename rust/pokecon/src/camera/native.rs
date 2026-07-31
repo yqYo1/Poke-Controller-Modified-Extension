@@ -1,5 +1,5 @@
-use crate::backend::{CameraBackend, CameraConfig, CameraError, CameraSession};
-use crate::selector::{CameraDevice, CameraSelector, enumerate_native_cameras};
+use crate::camera::backend::{CameraBackend, CameraConfig, CameraError, CameraSession};
+use crate::camera::selector::{CameraDevice, CameraSelector, enumerate_native_cameras};
 
 /// Platform-native V4L2 or Media Foundation camera backend.
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,9 +35,9 @@ mod platform {
     use v4l::video::capture::Parameters;
     use v4l::{Device, Format, FourCC};
 
-    use crate::backend::{CameraConfig, CameraError, CameraSession, EffectiveCameraConfig};
-    use crate::frame::{BgrFrame, CaptureResolution};
-    use crate::selector::CameraSelector;
+    use crate::camera::backend::{CameraConfig, CameraError, CameraSession, EffectiveCameraConfig};
+    use crate::camera::frame::{BgrFrame, CaptureResolution};
+    use crate::camera::selector::CameraSelector;
 
     const FRAME_TIMEOUT: Duration = Duration::from_secs(2);
     const FOURCC_PREFERENCE: [[u8; 4]; 6] =
@@ -262,9 +262,9 @@ mod platform {
     };
     use nokhwa::{Buffer, Camera};
 
-    use crate::backend::{CameraConfig, CameraError, CameraSession, EffectiveCameraConfig};
-    use crate::frame::{BgrFrame, CaptureResolution};
-    use crate::selector::CameraSelector;
+    use crate::camera::backend::{CameraConfig, CameraError, CameraSession, EffectiveCameraConfig};
+    use crate::camera::frame::{BgrFrame, CaptureResolution};
+    use crate::camera::selector::CameraSelector;
 
     const FORMAT_PREFERENCE: [FrameFormat; 5] = [
         FrameFormat::MJPEG,
@@ -397,7 +397,7 @@ mod platform {
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 mod platform {
-    use crate::backend::{CameraConfig, CameraError, CameraSession};
+    use crate::camera::backend::{CameraConfig, CameraError, CameraSession};
 
     pub(super) fn open(_config: &CameraConfig) -> Result<Box<dyn CameraSession>, CameraError> {
         Err(CameraError::OpenFailed)

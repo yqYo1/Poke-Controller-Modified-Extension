@@ -4,17 +4,17 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
+use crate::camera::{
+    CameraManager, CameraSelector as RuntimeCameraSelector, ScreenshotDestination,
+    ScreenshotFormat, ScreenshotMode, ScreenshotRequest as RuntimeScreenshotRequest,
+    ScreenshotResult as RuntimeScreenshotResult, ScreenshotService,
+};
 use crate::settings::roots::SafeComponent;
 use crate::settings::service::{
     PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_camera::{
-    CameraManager, CameraSelector as RuntimeCameraSelector, ScreenshotDestination,
-    ScreenshotFormat, ScreenshotMode, ScreenshotRequest as RuntimeScreenshotRequest,
-    ScreenshotResult as RuntimeScreenshotResult, ScreenshotService,
-};
 use pokecon_device::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 use pokecon_device::input::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration as RuntimeInputGeneration,
@@ -1063,7 +1063,7 @@ fn runtime_screenshot_request(
     };
     let region = region
         .map(|region| {
-            pokecon_camera::NormalizedRegion::new(region.x, region.y, region.width, region.height)
+            crate::camera::NormalizedRegion::new(region.x, region.y, region.width, region.height)
         })
         .transpose()
         .map_err(|_error| invalid_field("region", "screenshot region is invalid"))?;
@@ -1335,8 +1335,8 @@ fn camera_failure() -> ApiFailure {
     )
 }
 
-fn screenshot_failure(error: pokecon_camera::ScreenshotError) -> ApiFailure {
-    use pokecon_camera::ScreenshotError;
+fn screenshot_failure(error: crate::camera::ScreenshotError) -> ApiFailure {
+    use crate::camera::ScreenshotError;
     match error {
         ScreenshotError::InvalidFormat
         | ScreenshotError::InvalidJpegQuality

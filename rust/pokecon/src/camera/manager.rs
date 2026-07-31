@@ -6,13 +6,13 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::backend::{
+use crate::camera::backend::{
     CameraBackend, CameraConfig, CameraError, CameraSession, EffectiveCameraConfig,
 };
-use crate::frame::{BgrFrame, FlipMode};
-use crate::media::LatestFrameSource;
-use crate::selector::{CameraDevice, CameraSelector};
-use crate::shared_ring::{MappingDescriptor, RingError, SharedFrameRing};
+use crate::camera::frame::{BgrFrame, FlipMode};
+use crate::camera::media::LatestFrameSource;
+use crate::camera::selector::{CameraDevice, CameraSelector};
+use crate::camera::shared_ring::{MappingDescriptor, RingError, SharedFrameRing};
 
 /// Public camera fields used by the canonical state snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -632,7 +632,7 @@ fn validate_effective(
 
 fn validate_frame(
     frame: &BgrFrame,
-    resolution: crate::CaptureResolution,
+    resolution: crate::camera::CaptureResolution,
 ) -> Result<(), CameraError> {
     if frame.size() == resolution.size() {
         Ok(())
@@ -666,10 +666,10 @@ mod tests {
     use std::time::Duration;
 
     use super::CameraManager;
-    use crate::backend::{CameraConfig, CameraError};
-    use crate::frame::{CaptureResolution, FlipMode};
-    use crate::selector::CameraSelector;
-    use crate::virtual_camera::{
+    use crate::camera::backend::{CameraConfig, CameraError};
+    use crate::camera::frame::{CaptureResolution, FlipMode};
+    use crate::camera::selector::CameraSelector;
+    use crate::camera::virtual_camera::{
         RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualReconfigurePlan,
         VirtualSessionPlan,
     };
@@ -743,7 +743,7 @@ mod tests {
         let backend = VirtualCameraBackend::default();
         let session = VirtualSessionPlan {
             effective_fps: 30,
-            frames: crate::RecordedFrameSource::new([RecordedFrame::Solid([10, 20, 30])]),
+            frames: crate::camera::RecordedFrameSource::new([RecordedFrame::Solid([10, 20, 30])]),
             reconfigurations: VecDeque::from([
                 VirtualReconfigurePlan::Accept { effective_fps: 24 },
                 VirtualReconfigurePlan::Reject,

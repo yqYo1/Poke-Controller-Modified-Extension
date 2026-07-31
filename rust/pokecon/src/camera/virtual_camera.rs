@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::backend::{
+use crate::camera::backend::{
     CameraBackend, CameraConfig, CameraError, CameraSession, EffectiveCameraConfig,
 };
-use crate::frame::{BgrFrame, CaptureResolution};
-use crate::selector::{CameraDevice, CameraSelector};
+use crate::camera::frame::{BgrFrame, CaptureResolution};
+use crate::camera::selector::{CameraDevice, CameraSelector};
 
 /// One deterministic virtual frame read.
 #[derive(Clone, Debug)]

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::frame::{BgrFrame, CaptureResolution, FrameError, FrameSize, MAX_FRAME_BYTES};
+use crate::camera::frame::{BgrFrame, CaptureResolution, FrameError, FrameSize, MAX_FRAME_BYTES};
 
 pub const SLOT_COUNT: usize = 3;
 pub const SLOT_BYTE_SIZE: usize = MAX_FRAME_BYTES;
@@ -828,7 +828,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::{INVALID_PUBLISHED_TOKEN, RingError, RingReader, SLOT_PUBLISHED, SharedFrameRing};
-    use crate::frame::{BgrFrame, CaptureResolution};
+    use crate::camera::frame::{BgrFrame, CaptureResolution};
 
     fn frame(resolution: CaptureResolution, value: u8) -> BgrFrame {
         BgrFrame::solid(

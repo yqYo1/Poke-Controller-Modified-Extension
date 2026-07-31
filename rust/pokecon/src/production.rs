@@ -4,15 +4,14 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::camera::{
+    CameraConfig, CameraManager, CaptureResolution, FlipMode, NativeCameraBackend,
+    ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings, ScreenshotService,
+};
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
 use crate::settings::service::SettingsService;
 use axum::Router;
 use base64::Engine as _;
-use pokecon_camera::{
-    CameraConfig, CameraManager, CameraSettingsApplier, CaptureResolution, FlipMode,
-    NativeCameraBackend, ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings,
-    ScreenshotService,
-};
 use pokecon_desktop::DesktopRuntimeSettings;
 use pokecon_device::controller::ControllerState;
 use pokecon_device::notification::{
@@ -47,7 +46,7 @@ use crate::profile_service::ProfileService;
 use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
 use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
-    CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
+    CameraSettingsApplier, CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
     NotificationSettingsApplier, RealtimeSettingsApplier, notification_config,
     reconcile_desktop_settings,
 };
@@ -337,7 +336,7 @@ impl ProductionRuntime {
 }
 
 async fn start_media(
-    frames: pokecon_camera::LatestFrameSource,
+    frames: crate::camera::LatestFrameSource,
     screenshot_settings: ScreenshotRuntimeSettings,
     runtime_settings: tokio::sync::watch::Receiver<
         pokecon_server::realtime_connection::RealtimeRuntimeSettings,
@@ -386,7 +385,7 @@ async fn start_media(
 }
 
 fn start_fallback_motion_jpeg(
-    frames: &pokecon_camera::LatestFrameSource,
+    frames: &crate::camera::LatestFrameSource,
     screenshot_settings: ScreenshotRuntimeSettings,
 ) -> (
     Option<RealtimeConnectionConfig>,

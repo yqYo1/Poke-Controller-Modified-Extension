@@ -12,7 +12,6 @@ chrono.workspace = true
 getrandom.workspace = true
 hex.workspace = true
 image.workspace = true
-pokecon-settings = { path = "../pokecon-settings" }
 serde.workspace = true
 serde_json.workspace = true
 shared_memory.workspace = true

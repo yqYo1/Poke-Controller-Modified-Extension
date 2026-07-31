@@ -1,5 +1,9 @@
 //! Runtime side-effect composition for the canonical settings service.
 
+mod camera;
+
+pub(crate) use camera::CameraSettingsApplier;
+
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;

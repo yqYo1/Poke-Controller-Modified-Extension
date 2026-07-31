@@ -16,8 +16,8 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::frame::{BgrFrame, FrameError, NormalizedRegion};
-use crate::media::LatestFrameSource;
+use crate::camera::frame::{BgrFrame, FrameError, NormalizedRegion};
+use crate::camera::media::LatestFrameSource;
 
 /// Closed screenshot encoding formats.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
@@ -811,8 +811,8 @@ mod tests {
         ScreenshotClock, ScreenshotDestination, ScreenshotError, ScreenshotFormat, ScreenshotMode,
         ScreenshotRequest, ScreenshotResult, ScreenshotRuntimeSettings, ScreenshotService,
     };
-    use crate::frame::{BgrFrame, CaptureResolution, NormalizedRegion};
-    use crate::media::LatestFrameSource;
+    use crate::camera::frame::{BgrFrame, CaptureResolution, NormalizedRegion};
+    use crate::camera::media::LatestFrameSource;
 
     #[derive(Debug)]
     struct FixedClock;

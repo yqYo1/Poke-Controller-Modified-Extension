@@ -7,11 +7,11 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
+use crate::camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
 use crate::settings::pipeline::LoadedSettings;
 use base64::Engine as _;
 use chrono::{Local, Timelike as _};
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
 use pokecon_device::controller::{
     ControllerState, ControllerUpdate, Hat, StickInput, StickPosition, TouchUpdate,
 };

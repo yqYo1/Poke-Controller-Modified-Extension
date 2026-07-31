@@ -4,8 +4,8 @@ use image::codecs::jpeg::JpegEncoder;
 use image::{ColorType, ImageEncoder as _};
 use tokio::sync::watch;
 
-use crate::frame::BgrFrame;
-use crate::screenshot::{ScreenshotError, ScreenshotRuntimeSettings};
+use crate::camera::frame::BgrFrame;
+use crate::camera::screenshot::{ScreenshotError, ScreenshotRuntimeSettings};
 
 /// One in-process mirror of a successfully published shared-memory frame.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -196,8 +196,8 @@ mod tests {
     use image::GenericImageView as _;
 
     use super::LatestFrameSource;
-    use crate::frame::{BgrFrame, CaptureResolution};
-    use crate::screenshot::ScreenshotRuntimeSettings;
+    use crate::camera::frame::{BgrFrame, CaptureResolution};
+    use crate::camera::screenshot::ScreenshotRuntimeSettings;
 
     #[tokio::test]
     async fn webrtc_raw_and_motion_jpeg_sources_follow_resolution_without_reconnect() {

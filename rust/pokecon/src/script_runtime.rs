@@ -5,16 +5,16 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use async_trait::async_trait;
-use pokecon_settings::package::PythonWorker;
-use pokecon_settings::pipeline::{LoadedSettings, PipelineRequest, SettingSource};
-use pokecon_settings::python::{ManagedPython, prepare_managed_python};
-use pokecon_settings::uv::{
+use crate::settings::package::PythonWorker;
+use crate::settings::pipeline::{LoadedSettings, PipelineRequest, SettingSource};
+use crate::settings::python::{ManagedPython, prepare_managed_python};
+use crate::settings::uv::{
     ManagedUv, ManagedUvSource, PackagedWheelhouse, UvChildEnvironment, packaged_wheelhouse,
 };
-use pokecon_settings::venv::{
+use crate::settings::venv::{
     CommandUvExecutor, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
+use async_trait::async_trait;
 use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::{LogLevel, LogPayload, ResourceSafety};
 use pokecon_worker::script::protocol::{

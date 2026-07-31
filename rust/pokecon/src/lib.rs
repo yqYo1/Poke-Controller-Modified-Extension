@@ -17,6 +17,8 @@ mod profile_service;
 mod runtime;
 mod script_host;
 mod script_runtime;
+#[path = "settings/facade.rs"]
+mod settings;
 mod settings_runtime;
 
 pub use entrypoint::{MainError, run_cli};
@@ -27,12 +29,12 @@ use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
+use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
 use pokecon_desktop::DesktopRuntimeSettings;
 use pokecon_server::BoundServer;
 use pokecon_server::router::public_router;
 use pokecon_server::security::RequestSecurity;
 use pokecon_server::static_files::{StaticFiles, StaticRootError};
-use pokecon_settings::pipeline::{LoadedSettings, PipelineRequest};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;

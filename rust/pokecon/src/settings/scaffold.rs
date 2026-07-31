@@ -8,7 +8,7 @@ use pokecon_contracts::{
 };
 use thiserror::Error;
 
-use crate::roots::{EffectiveRoots, RootError, SafeComponent};
+use crate::settings::roots::{EffectiveRoots, RootError, SafeComponent};
 
 /// Creates missing editable configuration and regenerates managed typings in
 /// their contractually distinct roots.
@@ -233,7 +233,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::ScaffoldManager;
-    use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
 
     #[test]
     fn editable_and_generated_assets_are_separated_and_edits_survive() {

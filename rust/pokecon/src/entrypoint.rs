@@ -10,15 +10,13 @@ use crate::dynamic_runtime::bootstrap_dynamic;
 use crate::runtime::ShutdownCoordinator;
 #[cfg(feature = "tauri-shell")]
 use crate::runtime::ShutdownReason;
+use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline};
+use crate::settings::scaffold::{ScaffoldError, ScaffoldManager};
 use crate::{AppError, AppOptions, RunControl, UiMode, run_configured_controlled};
 use clap::{Parser, ValueEnum};
 use pokecon_desktop::{CloseBehavior, DesktopError, DesktopRuntimeSettings};
 #[cfg(feature = "tauri-shell")]
 use pokecon_desktop::{DesktopLifecycle, DesktopShellConfig, run_tauri_shell};
-use pokecon_settings::pipeline::{
-    LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline,
-};
-use pokecon_settings::scaffold::{ScaffoldError, ScaffoldManager};
 use thiserror::Error;
 
 #[cfg(all(feature = "tauri-shell", target_os = "linux"))]

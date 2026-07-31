@@ -9,9 +9,9 @@ use tempfile::TempDir;
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::lock::{LockError, LockManager};
-use crate::roots::EffectiveRoots;
-use crate::uv::{ManagedUv, UvChildEnvironment};
+use crate::settings::lock::{LockError, LockManager};
+use crate::settings::roots::EffectiveRoots;
+use crate::settings::uv::{ManagedUv, UvChildEnvironment};
 
 /// Exact python-build-standalone interpreter shipped by release artifacts.
 pub const PORTABLE_PYTHON_VERSION: &str = "3.14.3";
@@ -347,8 +347,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::prepare_managed_python;
-    use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
-    use crate::uv::{ManagedUv, UvChildEnvironment};
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+    use crate::settings::uv::{ManagedUv, UvChildEnvironment};
 
     fn roots(temp: &TempDir) -> EffectiveRoots {
         let base = temp.path();

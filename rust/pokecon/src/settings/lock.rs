@@ -5,8 +5,8 @@ use fs4::FileExt;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::path::{PathError, canonical_identity};
-use crate::roots::EffectiveRoots;
+use crate::settings::path::{PathError, canonical_identity};
+use crate::settings::roots::EffectiveRoots;
 
 /// Domain-separated settings and venv lock paths.
 #[derive(Clone, Debug)]

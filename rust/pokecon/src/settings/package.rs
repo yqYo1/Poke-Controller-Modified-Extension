@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use version_ranges::Ranges;
 
-use crate::APPLICATION_REQUIREMENTS_JSON;
-use crate::path::lexical_normalize;
+use crate::settings::APPLICATION_REQUIREMENTS_JSON;
+use crate::settings::path::lexical_normalize;
 
 /// Python worker whose application requirement group is selected.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

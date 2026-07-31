@@ -76,8 +76,8 @@ impl ProfileService {
     }
 }
 
-impl From<pokecon_settings::pipeline::PipelineError> for ProfileSwitchError {
-    fn from(error: pokecon_settings::pipeline::PipelineError) -> Self {
+impl From<crate::settings::pipeline::PipelineError> for ProfileSwitchError {
+    fn from(error: crate::settings::pipeline::PipelineError) -> Self {
         Self::Dynamic(CommandBackendError::new(
             "InvalidSetting",
             error.to_string(),
@@ -93,10 +93,10 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use crate::settings::pipeline::{LoadedSettings, PipelineRequest, SettingsPipeline};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
     use async_trait::async_trait;
     use pokecon_dynamic::{CommandCacheBuildResult, CommandInfo, DynamicHost};
-    use pokecon_settings::pipeline::{LoadedSettings, PipelineRequest, SettingsPipeline};
-    use pokecon_settings::roots::{BaseDirectories, RootEnvironment};
     use pokecon_worker::script::protocol::{
         ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult, ScriptPauseResult,
         ScriptStopResult,

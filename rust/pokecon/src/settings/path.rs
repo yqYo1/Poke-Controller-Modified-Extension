@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use pokecon_contracts::model::{PathKind, PathMetadata};
 use thiserror::Error;
 
-use crate::roots::{EffectiveRoots, RootEnvironment};
+use crate::settings::roots::{EffectiveRoots, RootEnvironment};
 
 /// Input surface controlling the base of a relative path.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -395,7 +395,7 @@ mod tests {
     #[cfg(unix)]
     use super::canonical_identity;
     use super::{ExpansionStyle, expand_environment, lexical_normalize};
-    use crate::roots::RootEnvironment;
+    use crate::settings::roots::RootEnvironment;
 
     #[test]
     fn environment_expansion_is_exactly_one_pass() {

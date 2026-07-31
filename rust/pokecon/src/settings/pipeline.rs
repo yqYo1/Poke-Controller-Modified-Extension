@@ -9,14 +9,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::lock::LockManager;
-use crate::package::{
+use crate::settings::lock::LockManager;
+use crate::settings::package::{
     ConstraintResolver, PackageError, PackageResolution, PackageSource, PackageSourceKind,
     PythonWorker, RequirementEntry,
 };
-use crate::path::{PathError, PathSource, lexical_normalize, resolve_path};
-use crate::persistence::{PersistenceError, SettingsDocument, TomlStore};
-use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, RootError, SafeComponent};
+use crate::settings::path::{PathError, PathSource, lexical_normalize, resolve_path};
+use crate::settings::persistence::{PersistenceError, SettingsDocument, TomlStore};
+use crate::settings::roots::{
+    BaseDirectories, EffectiveRoots, RootEnvironment, RootError, SafeComponent,
+};
 
 pub const SECRET_MASK: &str = "********";
 type PackageSources = BTreeMap<String, Vec<PackageSource>>;
@@ -1310,8 +1312,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
-    use crate::package::{PackageSourceKind, PythonWorker, VersionSelector};
-    use crate::roots::{BaseDirectories, RootEnvironment};
+    use crate::settings::package::{PackageSourceKind, PythonWorker, VersionSelector};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
     fn request(
         temp: &TempDir,

@@ -6,12 +6,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::settings::pipeline::LoadedSettings;
 use async_trait::async_trait;
 use pokecon_dynamic::protocol::DynamicProfileSwitchResult;
 use pokecon_dynamic::{
     CommandCacheBuildResult, CommandDisplayCache, CommandDisplayItem, CommandInfo, DynamicHost,
 };
-use pokecon_settings::pipeline::LoadedSettings;
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use pokecon_worker::script::protocol::{
     ScriptCommandKind, ScriptDiscoveredCommand, ScriptDiscoveryResult, ScriptExecuteRequest,
@@ -1225,9 +1225,9 @@ mod tests {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
 
+    use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
     use pokecon_dynamic::DynamicHost;
-    use pokecon_settings::pipeline::{PipelineRequest, SettingsPipeline};
-    use pokecon_settings::roots::{BaseDirectories, RootEnvironment};
     use serde_json::{Value, json};
     use tempfile::TempDir;
     use tokio::sync::Notify;

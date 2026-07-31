@@ -13,15 +13,19 @@ use tempfile::TempDir;
 use tokio::process::Command;
 use tokio::sync::Notify;
 
-use crate::lock::LockManager;
-use crate::manifest::{
+use crate::settings::lock::LockManager;
+use crate::settings::manifest::{
     FingerprintInput, FingerprintRecord, InstalledDistribution, ManifestOutput, ManifestRead,
     ManifestStore, SecretFingerprintInput, SignedManifest,
 };
-use crate::package::{ApplicationRequirements, PackageResolution, PythonWorker, VersionSelector};
-use crate::path::canonical_identity;
-use crate::roots::EffectiveRoots;
-use crate::uv::{ManagedUv, UvChildEnvironment, UvInvocation, UvPlan, UvPlanInput, venv_python};
+use crate::settings::package::{
+    ApplicationRequirements, PackageResolution, PythonWorker, VersionSelector,
+};
+use crate::settings::path::canonical_identity;
+use crate::settings::roots::EffectiveRoots;
+use crate::settings::uv::{
+    ManagedUv, UvChildEnvironment, UvInvocation, UvPlan, UvPlanInput, venv_python,
+};
 
 /// Whether the application may stage/replace the entire venv directory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -446,7 +450,7 @@ impl VenvManager {
 
 fn fingerprint(
     context: &UvExecutionContext,
-    key: &crate::hmac_key::HmacKey,
+    key: &crate::settings::hmac_key::HmacKey,
 ) -> Result<FingerprintRecord, VenvError> {
     let application = ApplicationRequirements::embedded()
         .map_err(|_| VenvError::new(VenvStage::Fingerprint, VenvFailure::Internal))?;
@@ -783,9 +787,9 @@ mod tests {
         VenvFailure, VenvManager, VenvOwnership, VenvPreparationRequest, VenvStage, commit_staging,
         staging_target,
     };
-    use crate::package::{ConstraintResolver, PythonWorker};
-    use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
-    use crate::uv::{ManagedUv, UvChildEnvironment};
+    use crate::settings::package::{ConstraintResolver, PythonWorker};
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+    use crate::settings::uv::{ManagedUv, UvChildEnvironment};
 
     #[derive(Debug, Default)]
     struct FakeExecutor {

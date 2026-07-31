@@ -7,6 +7,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
+use crate::settings::lock::LockManager;
+use crate::settings::persistence::TomlStore;
+use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline};
+use crate::settings::roots::SafeComponent;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use pokecon_device::controller::{ControllerState, ControllerUpdate};
@@ -19,12 +23,6 @@ use pokecon_dynamic::{
     CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
     merge_state_change,
 };
-use pokecon_settings::lock::LockManager;
-use pokecon_settings::persistence::TomlStore;
-use pokecon_settings::pipeline::{
-    LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline,
-};
-use pokecon_settings::roots::SafeComponent;
 use pokecon_worker::ipc::ResourceSafety;
 use serde_json::Value;
 use tokio::sync::watch;
@@ -1334,10 +1332,10 @@ fn holding_buttons(state: ControllerState) -> Value {
 mod tests {
     use std::ffi::OsString;
 
+    use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
     use pokecon_device::controller::ControllerUpdate;
     use pokecon_dynamic::{CommandDisplayItem, DynamicHost};
-    use pokecon_settings::pipeline::{PipelineRequest, SettingsPipeline};
-    use pokecon_settings::roots::{BaseDirectories, RootEnvironment};
     use serde_json::json;
     use tempfile::TempDir;
 

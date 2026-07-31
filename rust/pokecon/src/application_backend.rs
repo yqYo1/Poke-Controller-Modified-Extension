@@ -4,6 +4,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
+use crate::settings::roots::SafeComponent;
+use crate::settings::service::{
+    PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
+};
 use async_trait::async_trait;
 use parking_lot::Mutex as ParkingMutex;
 use pokecon_camera::{
@@ -38,10 +42,6 @@ use pokecon_server::realtime_connection::RealtimeConnectionConfig;
 use pokecon_server::state::{CommitOutcome, StateHub, StateTransaction};
 use pokecon_server::websocket::{
     ConnectionId, MotionJpegFeed, MotionJpegStream, WebSocketBackend, WebSocketReply,
-};
-use pokecon_settings::roots::SafeComponent;
-use pokecon_settings::service::{
-    PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
 };
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use semver::Version;

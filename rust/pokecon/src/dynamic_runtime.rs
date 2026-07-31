@@ -6,18 +6,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use pokecon_dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
-use pokecon_dynamic::{DynamicConfigLanguage, DynamicHostError};
-use pokecon_settings::package::PythonWorker;
-use pokecon_settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
-use pokecon_settings::python::{PythonError, prepare_managed_python};
-use pokecon_settings::roots::RootEnvironment;
-use pokecon_settings::uv::{
+use crate::settings::package::PythonWorker;
+use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
+use crate::settings::python::{PythonError, prepare_managed_python};
+use crate::settings::roots::RootEnvironment;
+use crate::settings::uv::{
     ManagedUv, ManagedUvSource, UvChildEnvironment, UvError, packaged_wheelhouse,
 };
-use pokecon_settings::venv::{
+use crate::settings::venv::{
     CommandUvExecutor, VenvError, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
+use pokecon_dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
+use pokecon_dynamic::{DynamicConfigLanguage, DynamicHostError};
 use pokecon_worker::WorkerKind;
 use pokecon_worker::dynamic::{DynamicClientError, DynamicWorkerClient};
 use pokecon_worker::ipc::{LogLevel, LogPayload};

@@ -9,7 +9,7 @@ use thiserror::Error;
 use toml::Value as TomlValue;
 use toml_edit::{Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
 
-use crate::lock::{LockError, LockManager};
+use crate::settings::lock::{LockError, LockManager};
 
 /// A format-preserving, cross-process-safe TOML settings store.
 #[derive(Clone, Debug)]
@@ -305,19 +305,20 @@ mod tests {
     use tempfile::TempDir;
 
     use super::TomlStore;
-    use crate::lock::LockManager;
-    use crate::roots::{BaseDirectories, EffectiveRoots, SafeComponent};
+    use crate::settings::lock::LockManager;
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, SafeComponent};
 
     fn roots(temp: &TempDir) -> EffectiveRoots {
         let base = temp.path();
-        let bases = BaseDirectories::linux(&crate::roots::RootEnvironment::from_values([
-            ("HOME", base.as_os_str().to_os_string()),
-            ("XDG_CONFIG_HOME", base.join("config").into_os_string()),
-            ("XDG_DATA_HOME", base.join("data").into_os_string()),
-            ("XDG_CACHE_HOME", base.join("cache").into_os_string()),
-            ("XDG_STATE_HOME", base.join("state").into_os_string()),
-        ]))
-        .expect("bases must resolve");
+        let bases =
+            BaseDirectories::linux(&crate::settings::roots::RootEnvironment::from_values([
+                ("HOME", base.as_os_str().to_os_string()),
+                ("XDG_CONFIG_HOME", base.join("config").into_os_string()),
+                ("XDG_DATA_HOME", base.join("data").into_os_string()),
+                ("XDG_CACHE_HOME", base.join("cache").into_os_string()),
+                ("XDG_STATE_HOME", base.join("state").into_os_string()),
+            ]))
+            .expect("bases must resolve");
         EffectiveRoots::from_bases(
             SafeComponent::new("pokecon").expect("name must be safe"),
             &bases,

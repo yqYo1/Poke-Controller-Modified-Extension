@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::hmac_key::{HmacKey, HmacKeyError};
-use crate::path::{PathError, canonical_identity};
-use crate::roots::EffectiveRoots;
+use crate::settings::hmac_key::{HmacKey, HmacKeyError};
+use crate::settings::path::{PathError, canonical_identity};
+use crate::settings::roots::EffectiveRoots;
 
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
 
@@ -374,7 +374,7 @@ mod tests {
         FingerprintInput, FingerprintRecord, InstalledDistribution, ManifestOutput, ManifestRead,
         ManifestStore, SecretFingerprintInput, SignedManifest,
     };
-    use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
 
     fn roots(temp: &TempDir) -> EffectiveRoots {
         let base = temp.path();

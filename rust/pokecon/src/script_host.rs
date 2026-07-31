@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
+use crate::settings::pipeline::LoadedSettings;
 use base64::Engine as _;
 use chrono::{Local, Timelike as _};
 use parking_lot::Mutex as ParkingMutex;
@@ -22,7 +23,6 @@ use pokecon_device::notification::{NotificationOutcome, NotificationService};
 use pokecon_device::serial::{SerialError, SerialManager};
 use pokecon_server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
 use pokecon_server::websocket::WebSocketBroker;
-use pokecon_settings::pipeline::LoadedSettings;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{
     HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,

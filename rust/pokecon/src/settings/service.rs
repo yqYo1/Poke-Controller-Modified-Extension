@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::lock::LockManager;
-use crate::persistence::{PersistenceError, TomlStore};
-use crate::pipeline::{
+use crate::settings::lock::LockManager;
+use crate::settings::persistence::{PersistenceError, TomlStore};
+use crate::settings::pipeline::{
     LoadedSettings, PipelineError, ResolvedSettings, ResolvedValue, SECRET_MASK, SettingSource,
     normalize_value, public_value, validate_snapshot,
 };
-use crate::roots::{RootError, SafeComponent};
-use crate::scaffold::{ScaffoldError, ScaffoldManager};
+use crate::settings::roots::{RootError, SafeComponent};
+use crate::settings::scaffold::{ScaffoldError, ScaffoldManager};
 
 const CAMERA_TRANSACTION: &[&str] = &[
     "camera.device",
@@ -717,8 +717,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService};
-    use crate::pipeline::{PipelineRequest, SettingsPipeline};
-    use crate::roots::{BaseDirectories, RootEnvironment};
+    use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
     type RecordedCall = (PatchClass, BTreeMap<String, serde_json::Value>);
 

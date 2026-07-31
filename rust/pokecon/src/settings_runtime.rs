@@ -5,6 +5,8 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::settings::pipeline::LoadedSettings;
+use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
 use pokecon_desktop::{CloseBehavior, DesktopRuntimeSettings};
 use pokecon_device::notification::{
     DiscordNotificationConfig, DiscordWebhookUrl, NotificationConfig, NotificationService,
@@ -12,8 +14,6 @@ use pokecon_device::notification::{
 };
 use pokecon_dynamic::DynamicHost as _;
 use pokecon_server::realtime_connection::RealtimeRuntimeSettings;
-use pokecon_settings::pipeline::LoadedSettings;
-use pokecon_settings::service::{PatchClass, RuntimeSettingsApplier};
 use serde_json::Value;
 use tokio::runtime::{Handle, RuntimeFlavor};
 use tokio::sync::watch;
@@ -392,8 +392,8 @@ where
 mod tests {
     use std::ffi::OsString;
 
-    use pokecon_settings::pipeline::{PipelineRequest, SettingsPipeline};
-    use pokecon_settings::roots::{BaseDirectories, RootEnvironment};
+    use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+    use crate::settings::roots::{BaseDirectories, RootEnvironment};
     use tempfile::TempDir;
 
     use super::*;

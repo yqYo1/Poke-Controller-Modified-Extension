@@ -10,8 +10,8 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::MANAGED_UV_SOURCE_JSON;
-use crate::roots::{EffectiveRoots, RootEnvironment};
+use crate::settings::MANAGED_UV_SOURCE_JSON;
+use crate::settings::roots::{EffectiveRoots, RootEnvironment};
 
 const PACKAGED_UV_CACHE_DIRECTORY: &str = "uv-cache";
 const PACKAGED_UV_CACHE_MARKER: &str = ".pokecon-packaged-cache.sha256";
@@ -767,7 +767,7 @@ mod tests {
     use super::{
         ManagedUv, ManagedUvSource, UvChildEnvironment, packaged_wheelhouse, seed_packaged_uv_cache,
     };
-    use crate::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+    use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
 
     fn roots(temp: &TempDir) -> EffectiveRoots {
         let base = temp.path();

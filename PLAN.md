@@ -337,15 +337,45 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.4 dynamic と worker
 
-- [ ] `pokecon-dynamic` の本体側契約／状態を `dynamic` へ移す。
-- [ ] `pokecon-worker` の IPC、世代管理、親側監督を `worker` へ移す。
-- [ ] CPython／LuaJIT 初期化と実行を `pokecon-worker` binary 固有 module に隔離する。
-- [ ] **AR-10.9-06** 同じworker binaryが起動引数`--kind script`または`--kind dynamic`で役割を選択する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のtarget一覧と`nix run .#cargo-test`の両role process／IPC smoke log）。
-- [ ] **AR-11-07** user script workerを自動実行時の機能上の実行主体とし、資源要求を主制御として維持する（予定証跡: script command→IPC request→resource operation traceと実行判断所有test）。
-- [ ] **AR-11-08** RustメインをOS上の監督兼資源serviceとし、process親子と製品機能上の主従を区別する（予定証跡: ownership／control-flow diagramとsupervisor lifecycle test）。
-- [ ] **AR-11-09** worker→Rustメインの資源操作要求を主制御、Rustメイン→workerの起動／停止／世代切替を監督制御とする双方向IPCにする（予定証跡: direction／message-kind contractと双方向integration test）。
-- [ ] 別OS process、双方向IPC、協調停止、強制停止、世代管理を移行前と同じ試験で証明する。
-- [ ] **AR-13.1-26** worker統合直後、配布された`pokecon`が同じ配布物内の`pokecon-worker`を解決し、profile別環境でscript／dynamic両roleを起動できる（予定証跡: `nix build .#pokecon`成果物を使う対応Nix integration taskのclean-install worker resolutionとprofile別両role smoke log）。
+- [x] `pokecon-dynamic` の本体側契約／状態を `dynamic` へ移す。
+- [x] `pokecon-worker` の IPC、世代管理、親側監督を `worker` へ移す。
+- [x] CPython／LuaJIT 初期化と実行を `pokecon-worker` binary 固有 module に隔離する。
+- [x] **AR-10.9-06** 同じworker binaryが起動引数`--kind script`または`--kind dynamic`で役割を選択する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のtarget一覧と`nix run .#cargo-test`の両role process／IPC smoke log）。
+- [x] **AR-11-07** user script workerを自動実行時の機能上の実行主体とし、資源要求を主制御として維持する（予定証跡: script command→IPC request→resource operation traceと実行判断所有test）。
+- [x] **AR-11-08** RustメインをOS上の監督兼資源serviceとし、process親子と製品機能上の主従を区別する（予定証跡: ownership／control-flow diagramとsupervisor lifecycle test）。
+- [x] **AR-11-09** worker→Rustメインの資源操作要求を主制御、Rustメイン→workerの起動／停止／世代切替を監督制御とする双方向IPCにする（予定証跡: direction／message-kind contractと双方向integration test）。
+- [x] 別OS process、双方向IPC、協調停止、強制停止、世代管理を移行前と同じ試験で証明する。
+- [x] **AR-13.1-26** worker統合直後、配布された`pokecon`が同じ配布物内の`pokecon-worker`を解決し、profile別環境でscript／dynamic両roleを起動できる（予定証跡: `nix build .#pokecon`成果物を使う対応Nix integration taskのclean-install worker resolutionとprofile別両role smoke log）。
+
+#### 2.4 checkpoint証跡（2026-08-01、完了）
+
+下表の完了gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| 構造commit／署名 | `e25c1add817ea97edd9ec5bb2d7d64fed91ce7e9`、55 files、+1225/-784。`52419113+yqYo1@users.noreply.github.com`のED25519 fingerprint `SHA256:JPH7BePGgqgXSLXc86mmeGeCzD+BdP1cb63qH4J6Tig`でSSH `Good signature`を確認 |
+| dynamic正準source | 親側本体を`rust/pokecon/src/dynamic/`へ物理移動。旧`rust/pokecon-dynamic/src/`はcompatibility facadeの`lib.rs`だけ |
+| worker正準source | 親側のIPC／世代管理／監督を`rust/pokecon/src/worker/`へ物理移動。子process固有のrun loop、`DynamicEngine`、Python／Lua runtime、script actor／runtimeは`rust/pokecon/src/worker_binary/`だけに隔離 |
+| 旧worker／2.7境界 | 旧`rust/pokecon-worker/src/`は`lib.rs`、`main.rs`、compatibility binだけ。target／test ownerとtarget／package統合は2.7まで維持 |
+| 型／process境界 | PokeCon本体のprivate facade群が親側のnominal type identityを保持。子側の重複dynamic domainはprivate。別OS process境界ではtyped request／response／event／logと`MappingDescriptor`をframed MessagePack、camera bulk frameだけを`SharedFrameRing`で渡し、stderrは診断専用。interpreter object／native handle／正準状態は越えない |
+| role／実行形態 | 同じ`pokecon-worker` binaryが`--kind script`／`--kind dynamic`を選択し、別OS processでPython／Luaを実行 |
+| 主制御／双方向IPC | user scriptの判断を起点にcommand→resource request→controller／serial／output operationを実行。worker→Rustメインを資源の主制御、Rustメイン→workerを起動／停止／世代切替の監督制御とする双方向framed MessagePack IPCを確認 |
+| lifecycle | generation管理、親側supervisor、協調停止、forced stopをprocess integration testで確認 |
+| exact packaged worker | `nix build .#pokecon`は`/nix/store/qizi4ca8xnnzsaf3bv5d5n8fhwwxjv69-pokecon-0.1.0`を生成し、`nix run .#worker-package-check`が成功。同一配布物のexact sibling `execve`、profile別script／dynamic packaged smoke、Python／Lua、双方向framing、controller／serial／output、配布物の協調停止、source-built fixtureのfault policyを確認 |
+| Rust／契約gate | workspace all-target／all-feature Clippy `-D warnings`、`build-rust`、`contract-check`、`compatibility`、Cargo metadataがexit 0。`cargo-test`は331 passed、0 failed、V4L2 hardware-only 1 ignored |
+| source／release gate | workspace lock、source filter、rust／app／spa source guard、actionlint、release-check、`nix flake check --no-build`、`cli-help-check`がexit 0 |
+| Web／editor gate | `web-check`はSvelte diagnostics 0、74/74 tests、production buildに成功。`editor-smoke`は4/4 |
+| 集約／Python／format | `nix run .#check`、standalone `nix run .#test`のPython 63/63、`nix fmt`、`nix fmt -- --ci`がexit 0。formatは0 changes |
+| Tauri／Debian gate | `tauri-check`、`tauri-build -- --bundles deb`、`package-smoke`、`package-install-smoke`がexit 0 |
+| Debian package manifest | amd64 0.1.0、`installed_bytes` 348146823、Python 3.14.3、resources 3801、wheels 28、native members 257、JS 10、CSS 1、udev 3、uv 0.11.8を確認 |
+| Debian install／local deb | Ubuntu Nobleでclean install／startup／dynamic cooperative stop、same-version reinstallの`SkippedVerified`、restart、uninstallまで完了。local `.deb`のSRIは`sha256-soHnAyRpuF8ZO68Osl0PJFzkxvqDaLKkLfA2U4Lw4pI=` |
+| 保護artifact | generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、registry tree `d847c8088b9a1a2e5cc518b80f50cb9f578a169d`、OpenAPI `a39cab3bee21a37d54661673be901591b8346937`、Web TS `fdcefc68198a1089a384c2cb0edd58d62e92302f`、Python typings `e479c1cd5716fdb4c733e2f88dc94354c6986d97`、CLI fixture tree `4cdb63b97d36e984a4b36abde175455b7db7eeff`、compatibility tree `4bd11c1cc611e05d2c5926e021be1062cbf1da95`を保持 |
+| 最終CI 1/3 | 構造SHAで[SPA 30642068356](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068356)、[Pytest 30642068377](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068377)、[Nix Source 30642068397](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068397)がsuccess |
+| 最終CI 2/3 | [Ruff 30642068400](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068400)、[Lint 30642068410](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068410)、[Rust 30642068424](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068424)がsuccess |
+| 最終CI 3/3 | [Remote Flake 30642068441](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068441)、[Package 30642068473](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068473)、[Basedpyright 30642068783](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068783)がsuccess。合計9/9 |
+| Package CI／Debian | [Debian job 91194230214](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068473/job/91194230214)は30m08s。artifact `package-linux-x86_64`、digest `sha256:1aaebb07fd1db6bdc17f6387a5afa7f88360de2dabaed0ddb39d40f15ccf314e`、再現した`.deb`のSHA256 `efa05e3b8f3b29e9f2121343af83d25f1aed8029f961d18a9d5e55602ac162e6`を確認 |
+| Package CI／Windows | [NSIS job 91194230294](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30642068473/job/91194230294)は16m44s。artifact `package-windows-x86_64`、digest `sha256:14342229a41d0de0ed5851286c59df16bfa4b880158eef0e4ec9775583c4a6d7`。clean install、startup 2回、dynamic cooperative stop、same-version upgradeの`SkippedVerified`、`profile_preserved true`、`user_data_preserved true`、uninstallを確認 |
+| review／監視 | fresh Sol reviewの初回Low 1は`docs/ARCHITECTURE.md`のownership tableの陳腐化で、構造commit内で修正。follow-up fresh Sol reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は9 workflow success後の120秒settlementを完了してexit 0 |
 
 ### 2.5 desktop移行
 

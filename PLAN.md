@@ -270,10 +270,37 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.3c device
 
-- [ ] `pokecon-device`を`device`へ移す。
-- [ ] deviceの具体的な設定applierを`runtime`の合成境界へ移す。
-- [ ] deviceから設定永続化、runtime、server、desktopへの依存を排除する。
-- [ ] device移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+- [x] `pokecon-device`を`device`へ移す。
+- [x] deviceの具体的な設定applierを`runtime`の合成境界へ移す。
+- [x] deviceから設定永続化、runtime、server、desktopへの依存を排除する。
+- [x] device移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+#### 2.3c checkpoint証跡（2026-07-31、完了）
+
+下表の完了gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| 正準source | `rust/pokecon/src/device/`の`mod.rs`と10 domain files（controller、hardware、input、notification、serial配下6 files）へ物理移動し、private `facade.rs`を追加。旧`rust/pokecon-device/src/`はcompatibility facadeの`lib.rs`だけ |
+| compile／型境界 | `pokecon-device`だけが`#[path]`で正準sourceをcompileし、PokeConはprivate `device/facade.rs`から必要型だけを再exportするため`pokecon-dynamic`とのnominal type identityは一つ。`SerialSettingsApplier`はpublic compatibility exportに含めない |
+| settings applier | behavior-equivalentなadapterをprivate `rust/pokecon/src/settings_runtime/device.rs`へ移し、applierを`pub(crate)`に限定。production順序host→desktop→camera→serial→notification→realtimeとtransaction rollback挙動は不変 |
+| 依存境界 | device→`pokecon-settings`の唯一のedgeをmanifestとCargo.lockから削除。正準deviceからsettings／runtime／server／desktopへの依存は0で、外部dynamic engineの所有境界は不変 |
+| 構造scope | 24 files、10 renames、3 additions、11 modifications、+301/-252。構造commitではPLAN／generated／OpenAPI／Python typings／`flake.nix`に差分なし |
+| 保護artifact | generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、OpenAPI blob `a39cab3bee21a37d54661673be901591b8346937`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`、flake blob `84f1dae692191ff4f97de0246abfb8a53b9c1291`、pokecon Cargo blob `e0ece437a5cc2998e07d732e75f9c0e6ba64c57a`を保持 |
+| focused test | device library 30/30、`controller_serial_contract` 2/2、実PTYの`native_serial_pty` 1/1、PokeCon library 31/31。all-target／all-feature checkもexit 0 |
+| native／virtual I/O | `virtual-io-check`は実serial PTYとV4L2 cameraの両方に成功 |
+| Rust／契約gate | `contract-check`、全target／feature Clippy、workspace全Cargo test、`build-rust`、`compatibility`がexit 0 |
+| Web／成果物gate | `web-check`はSvelte error／warning 0、74 testとproduction buildに成功。`cli-help-check`、`nix build .#pokecon`、`nix flake check --no-build`、`editor-smoke` 4/4もexit 0 |
+| 集約／format | aggregate checkはPython 63件を含めexit 0。最終formatは185 files／0 changed |
+| Debian実package | `tauri-build --bundles deb`、`package-smoke`、`package-install-smoke`がexit 0 |
+| package-smoke | amd64 0.1.0、Python 3.14.3、resources 3,801、wheels 28、JS 10、CSS 1、udev rules 3を検査 |
+| install-smoke | Ubuntu 24.04でclean startup／shutdown、same-version reinstallの`SkippedVerified`、2回目のstartup／shutdown、uninstallまで完了 |
+| 構造commit／署名 | `d9f44eea797903da1816f0a38e1d64f800577e2c`。raw SSH signatureを`52419113+yqYo1@users.noreply.github.com`のED25519 fingerprint `SHA256:JPH7BePGgqgXSLXc86mmeGeCzD+BdP1cb63qH4J6Tig`としてcryptographic `Good "git" signature`を確認 |
+| 最終CI 1/3 | 構造SHAで[Basedpyright 30612881772](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881772)、[Ruff 30612881793](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881793)、[Lint 30612881807](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881807)がsuccess |
+| 最終CI 2/3 | [Remote Flake 30612881818](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881818)、[SPA 30612881829](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881829)、[Rust 30612881859](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881859)がsuccess |
+| 最終CI 3/3 | [Package 30612881884](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881884)、[Nix Source 30612881946](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881946)、[Pytest 30612882994](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612882994)がsuccess。合計9/9 |
+| Package CI／artifact | [NSIS job 91099443258](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881884/job/91099443258)は25m06s、artifact digest `sha256:48bd961ca371f326a5eb4aefec77345365e0b080a26330d16a0d5e17f98cdb73`。[Debian job 91099443302](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30612881884/job/91099443302)は28m58s、digest `sha256:33bb13e28938538a39b455638d6a5fcd733ba32230ef6c22368306ed005cf93f`でsuccess |
+| review／監視 | device構造commitのfresh Sol final reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.3d server
 

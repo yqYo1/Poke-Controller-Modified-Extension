@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::controller::{
+use crate::device::controller::{
     Button, ButtonState, ControllerError, ControllerState, ControllerUpdate, Hat, StickPosition,
     TouchPoint,
 };
@@ -602,7 +602,9 @@ mod tests {
         InputSequence, InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState,
         StickSide,
     };
-    use crate::controller::{Button, ButtonState, ControllerState, Hat, StickPosition, TouchPoint};
+    use crate::device::controller::{
+        Button, ButtonState, ControllerState, Hat, StickPosition, TouchPoint,
+    };
 
     fn id(value: &str) -> InputSourceId {
         InputSourceId::new(value).unwrap()

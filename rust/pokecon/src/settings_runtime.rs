@@ -1,21 +1,23 @@
 //! Runtime side-effect composition for the canonical settings service.
 
 mod camera;
+mod device;
 
 pub(crate) use camera::CameraSettingsApplier;
+pub(crate) use device::SerialSettingsApplier;
 
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::settings::pipeline::LoadedSettings;
-use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
-use pokecon_desktop::{CloseBehavior, DesktopRuntimeSettings};
-use pokecon_device::notification::{
+use crate::device::{
     DiscordNotificationConfig, DiscordWebhookUrl, NotificationConfig, NotificationService,
     WindowsNotificationConfig,
 };
+use crate::settings::pipeline::LoadedSettings;
+use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
+use pokecon_desktop::{CloseBehavior, DesktopRuntimeSettings};
 use pokecon_dynamic::DynamicHost as _;
 use pokecon_server::realtime_connection::RealtimeRuntimeSettings;
 use serde_json::Value;

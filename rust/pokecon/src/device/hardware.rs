@@ -9,8 +9,8 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::controller::{Button, ControllerState, Hat};
-use crate::input::{
+use crate::device::controller::{Button, ControllerState, Hat};
+use crate::device::input::{
     InputArbiter, InputError, InputEvent, InputGeneration, InputPriority, InputSequence,
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState, StickSide,
 };
@@ -506,8 +506,8 @@ mod tests {
         DpadDirection, HardwareControllerBridge, HardwareControllerEvent, HardwareControllerKind,
         normalize_button,
     };
-    use crate::controller::{Button, ControllerState, Hat};
-    use crate::input::{InputArbiter, PressState};
+    use crate::device::controller::{Button, ControllerState, Hat};
+    use crate::device::input::{InputArbiter, PressState};
     use gilrs::Button as GilrsButton;
 
     fn connected(id: &str, kind: HardwareControllerKind) -> HardwareControllerEvent {

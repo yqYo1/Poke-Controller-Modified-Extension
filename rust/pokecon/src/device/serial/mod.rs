@@ -8,9 +8,7 @@ mod selector;
 mod virtual_port;
 
 pub use codec::{ControllerCodec, ControllerFormat};
-pub use manager::{
-    ReconnectPolicy, SerialConfig, SerialError, SerialManager, SerialSettingsApplier,
-};
+pub use manager::{ReconnectPolicy, SerialConfig, SerialError, SerialManager};
 pub use native::{NativeSerialBackend, NativeSerialIo};
 pub use selector::{
     PortCandidate, PortSelector, SelectorClass, choose_configured, enumerate_native_ports,

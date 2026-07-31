@@ -60,12 +60,12 @@ Cargo workspaceは11 crateで構成されます。
 
 | crate | 所有する責務 | 所有しない責務 |
 |---|---|---|
-| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・cameraの正準実装、正準contract registry・schema・生成器 | codecやHTTP wire型そのもの |
+| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・camera・deviceの正準実装、正準contract registry・schema・生成器 | HTTP wire型そのもの |
 | `pokecon-camera` | Phase 2移行中のcamera compatibility facade（正準sourceは所有しない） | cameraの正準実装、UI状態や設定永続化 |
 | `pokecon-contracts` | Phase 2移行中のcontract compatibility facade（正準sourceは所有しない） | 正準registry・schema・生成器、runtime device処理 |
 | `pokecon-core` | Phase 2移行中のruntime・diagnostics・platform compatibility facade（正準sourceは所有しない） | 正準runtime・diagnostics・platform実装、application service構成 |
 | `pokecon-desktop` | Tauri window、tray、single instance、close policy | web modeやdevice protocol |
-| `pokecon-device` | controller state、serial manager、wire codec、通知transport | command discovery |
+| `pokecon-device` | Phase 2移行中のdevice compatibility facade（正準sourceは所有しない） | deviceの正準実装、command discovery |
 | `pokecon-dynamic` | 動的PythonまたはLua engine、event、generation | native device ownership |
 | `pokecon-pybindings` | Rust機能をPython workerへ公開するbinding | command lifecycle orchestration |
 | `pokecon-server` | REST、OpenAPI、WebSocket、WebRTC、security、static SPA | 設定fileの正準merge |

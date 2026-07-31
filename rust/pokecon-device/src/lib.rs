@@ -1,7 +1,6 @@
-//! Canonical controller input, serial transport, and notification services.
+//! Compatibility facade for canonical device resources owned by `pokecon`.
 
-pub mod controller;
-pub mod hardware;
-pub mod input;
-pub mod notification;
-pub mod serial;
+#[path = "../../pokecon/src/device/mod.rs"]
+mod device;
+
+pub use device::*;

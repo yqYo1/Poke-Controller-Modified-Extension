@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::controller::{Button, ControllerState, Hat, StickPosition};
+use crate::device::controller::{Button, ControllerState, Hat, StickPosition};
 
 /// Supported on-wire controller formats.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -158,7 +158,7 @@ const fn encode_three_ds_axis(value: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{ControllerCodec, ControllerFormat};
-    use crate::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
+    use crate::device::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 
     #[test]
     fn default_text_has_six_hex_digits_and_delta_sticks() {

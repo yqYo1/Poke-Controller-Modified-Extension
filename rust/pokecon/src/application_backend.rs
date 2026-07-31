@@ -9,20 +9,20 @@ use crate::camera::{
     ScreenshotFormat, ScreenshotMode, ScreenshotRequest as RuntimeScreenshotRequest,
     ScreenshotResult as RuntimeScreenshotResult, ScreenshotService,
 };
+use crate::device::{
+    ApplyResult, InputArbiter, InputEvent, InputGeneration as RuntimeInputGeneration,
+    InputPriority, InputSequence, InputSnapshot as RuntimeInputSnapshot, InputSourceId,
+    InputSourceKind, MouseButton, PressState, StickSide,
+};
+use crate::device::{Button, ControllerState, Hat, StickPosition, TouchPoint};
+use crate::device::{NotificationChannel, NotificationOutcome, NotificationService};
+use crate::device::{SerialError, SerialManager, enumerate_native_ports};
 use crate::settings::roots::SafeComponent;
 use crate::settings::service::{
     PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_device::controller::{Button, ControllerState, Hat, StickPosition, TouchPoint};
-use pokecon_device::input::{
-    ApplyResult, InputArbiter, InputEvent, InputGeneration as RuntimeInputGeneration,
-    InputPriority, InputSequence, InputSnapshot as RuntimeInputSnapshot, InputSourceId,
-    InputSourceKind, MouseButton, PressState, StickSide,
-};
-use pokecon_device::notification::{NotificationChannel, NotificationOutcome, NotificationService};
-use pokecon_device::serial::{SerialError, SerialManager, enumerate_native_ports};
 use pokecon_dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use pokecon_server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,

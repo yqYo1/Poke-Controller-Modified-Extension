@@ -6,6 +6,8 @@ mod camera;
 mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;
+#[path = "device/facade.rs"]
+mod device;
 #[path = "diagnostics/facade.rs"]
 mod diagnostics;
 mod dynamic_host;

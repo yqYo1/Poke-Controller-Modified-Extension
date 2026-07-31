@@ -549,11 +549,11 @@ formatが表現しない入力は「成功」として推測せず、制約ど�
 
 周辺機器が実装する公開wire契約はこの文書を正本とします。
 
-Rust encoderは`rust/pokecon-device/src/serial/codec.rs`にあります。
+Rust encoderは`rust/pokecon/src/device/serial/codec.rs`にあります。
 
-button、hat、stick、touchのcanonical stateは`rust/pokecon-device/src/controller.rs`にあります。
+button、hat、stick、touchのcanonical stateは`rust/pokecon/src/device/controller.rs`にあります。
 
-connection、partial write、neutral、retry、rollbackは`rust/pokecon-device/src/serial/manager.rs`にあります。
+connection、partial write、neutral、retry、rollbackは`rust/pokecon/src/device/serial/manager.rs`にあります。
 
 本体開発者がcodecを変更する場合は、test vector、仮想I/O、実機gate、この文書を同じ変更で更新します。
 

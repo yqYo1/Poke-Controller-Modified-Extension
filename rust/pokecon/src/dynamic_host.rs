@@ -7,17 +7,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
+use crate::device::{
+    ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
+    InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
+};
+use crate::device::{ControllerState, ControllerUpdate};
 use crate::settings::lock::LockManager;
 use crate::settings::persistence::TomlStore;
 use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline};
 use crate::settings::roots::SafeComponent;
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use pokecon_device::controller::{ControllerState, ControllerUpdate};
-use pokecon_device::input::{
-    ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
-    InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
-};
 use pokecon_dynamic::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
 use pokecon_dynamic::{
     CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
@@ -146,7 +146,7 @@ fn initialize_dynamic_source(
     arbiter: &mut InputArbiter,
     source: &InputSourceId,
     generation: &InputGeneration,
-) -> Result<(), pokecon_device::input::InputError> {
+) -> Result<(), crate::device::InputError> {
     arbiter.begin_generation(
         source.clone(),
         InputSourceKind::DynamicConfig,
@@ -169,12 +169,12 @@ fn initialize_dynamic_source(
         },
     )?;
     if result != ApplyResult::Applied || acknowledgement.is_none() {
-        return Err(pokecon_device::input::InputError::UnknownSource);
+        return Err(crate::device::InputError::UnknownSource);
     }
     Ok(())
 }
 
-fn input_error(error: &pokecon_device::input::InputError) -> DynamicHostError {
+fn input_error(error: &crate::device::InputError) -> DynamicHostError {
     DynamicHostError::new("InvalidControllerUpdate", error.to_string())
 }
 
@@ -1332,9 +1332,9 @@ fn holding_buttons(state: ControllerState) -> Value {
 mod tests {
     use std::ffi::OsString;
 
+    use crate::device::ControllerUpdate;
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
-    use pokecon_device::controller::ControllerUpdate;
     use pokecon_dynamic::{CommandDisplayItem, DynamicHost};
     use serde_json::json;
     use tempfile::TempDir;

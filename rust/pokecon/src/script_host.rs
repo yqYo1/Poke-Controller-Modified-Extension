@@ -8,19 +8,19 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use crate::camera::{CameraConfig, CameraManager, ScreenshotRuntimeSettings};
+use crate::device::{
+    ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
+    InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
+};
+use crate::device::{
+    ControllerState, ControllerUpdate, Hat, StickInput, StickPosition, TouchUpdate,
+};
+use crate::device::{NotificationOutcome, NotificationService};
+use crate::device::{SerialError, SerialManager};
 use crate::settings::pipeline::LoadedSettings;
 use base64::Engine as _;
 use chrono::{Local, Timelike as _};
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_device::controller::{
-    ControllerState, ControllerUpdate, Hat, StickInput, StickPosition, TouchUpdate,
-};
-use pokecon_device::input::{
-    ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
-    InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
-};
-use pokecon_device::notification::{NotificationOutcome, NotificationService};
-use pokecon_device::serial::{SerialError, SerialManager};
 use pokecon_server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
 use pokecon_server::websocket::WebSocketBroker;
 use pokecon_worker::ipc::ResourceSafety;
@@ -1956,7 +1956,7 @@ fn initialize_source(
     arbiter: &ParkingMutex<InputArbiter>,
     source: &InputSourceId,
     generation: &InputGeneration,
-) -> Result<(), pokecon_device::input::InputError> {
+) -> Result<(), crate::device::InputError> {
     let mut arbiter = arbiter.lock();
     arbiter.begin_generation(
         source.clone(),
@@ -1982,7 +1982,7 @@ fn initialize_source(
     if result == ApplyResult::Applied && acknowledgement.is_some() {
         Ok(())
     } else {
-        Err(pokecon_device::input::InputError::UnknownSource)
+        Err(crate::device::InputError::UnknownSource)
     }
 }
 

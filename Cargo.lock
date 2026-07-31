@@ -3846,7 +3846,6 @@ dependencies = [
  "async-trait",
  "gilrs",
  "nix 0.30.1",
- "pokecon-settings",
  "reqwest",
  "rustls",
  "serde",

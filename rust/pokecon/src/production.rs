@@ -8,19 +8,17 @@ use crate::camera::{
     CameraConfig, CameraManager, CaptureResolution, FlipMode, NativeCameraBackend,
     ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings, ScreenshotService,
 };
+use crate::device::ControllerState;
+use crate::device::{ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager};
+use crate::device::{
+    DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
+    WindowsNativeNotificationTransport,
+};
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
 use crate::settings::service::SettingsService;
 use axum::Router;
 use base64::Engine as _;
 use pokecon_desktop::DesktopRuntimeSettings;
-use pokecon_device::controller::ControllerState;
-use pokecon_device::notification::{
-    DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
-    WindowsNativeNotificationTransport,
-};
-use pokecon_device::serial::{
-    ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager, SerialSettingsApplier,
-};
 use pokecon_server::api::{SerialData, SerialEncoding, StateChangeCause};
 use pokecon_server::backend::RestBackend;
 use pokecon_server::realtime::RealtimeTransportConfig;
@@ -47,8 +45,8 @@ use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
 use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
     CameraSettingsApplier, CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
-    NotificationSettingsApplier, RealtimeSettingsApplier, notification_config,
-    reconcile_desktop_settings,
+    NotificationSettingsApplier, RealtimeSettingsApplier, SerialSettingsApplier,
+    notification_config, reconcile_desktop_settings,
 };
 
 const STATE_HISTORY_CAPACITY: usize = 256;

@@ -207,12 +207,12 @@ result-*
 !/rust/pokecon/linux/*.rules
 !/rust/pokecon/linux/*.sh
 /rust/pokecon-app/
-!/rust/pokecon-desktop/icons/
-/rust/pokecon-desktop/icons/*
-!/rust/pokecon-desktop/icons/*.png
-!/rust/pokecon-desktop/icons/*.svg
-!/rust/pokecon-desktop/icons/*.ico
-!/rust/pokecon-desktop/icons/*.icns
+!/rust/pokecon/icons/
+/rust/pokecon/icons/*
+!/rust/pokecon/icons/*.png
+!/rust/pokecon/icons/*.svg
+!/rust/pokecon/icons/*.ico
+!/rust/pokecon/icons/*.icns
 
 !/python/
 /python/*

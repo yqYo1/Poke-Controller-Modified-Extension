@@ -8,6 +8,7 @@ use crate::camera::{
     CameraConfig, CameraManager, CaptureResolution, FlipMode, NativeCameraBackend,
     ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings, ScreenshotService,
 };
+use crate::desktop::DesktopRuntimeSettings;
 use crate::device::ControllerState;
 use crate::device::{ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager};
 use crate::device::{
@@ -29,7 +30,6 @@ use crate::settings::service::SettingsService;
 use crate::worker::dynamic::DynamicWorkerClient;
 use axum::Router;
 use base64::Engine as _;
-use pokecon_desktop::DesktopRuntimeSettings;
 use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;

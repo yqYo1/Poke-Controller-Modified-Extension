@@ -6,6 +6,8 @@ mod camera;
 mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;
+#[path = "desktop/facade.rs"]
+mod desktop;
 #[path = "device/facade.rs"]
 mod device;
 #[path = "diagnostics/facade.rs"]
@@ -39,12 +41,12 @@ use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
+use crate::desktop::DesktopRuntimeSettings;
 use crate::server::BoundServer;
 use crate::server::router::public_router;
 use crate::server::security::RequestSecurity;
 use crate::server::static_files::{StaticFiles, StaticRootError};
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
-use pokecon_desktop::DesktopRuntimeSettings;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;

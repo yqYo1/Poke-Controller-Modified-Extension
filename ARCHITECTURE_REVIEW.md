@@ -828,6 +828,21 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 
 このevidenceが証明する範囲は、sourceとprocessの所有、機能要求と監督制御の方向、interpreter object／hardware ownership／shared-memory descriptor境界の保存です。Phase 4で行うpriority scheduling、latency、input arbitrationその他のbehavior変更を実装または証明したものではありません。
 
+### 12.3 Phase 2.5a移行時点のdesktop ownership evidence
+
+この節はPhase 2.5a完了時点のdesktop sourceとbundle inputの正準所有だけを固定する移行中の記録です。
+
+| path | Phase 2.5a時点の所有内容 | 移行状態 |
+|---|---|---|
+| `rust/pokecon/src/desktop/mod.rs` | Tauri window、tray、single instance、close policy | 正準source。旧crateだけがpath指定でcompileし、PokeCon本体はprivate `desktop/facade.rs`から同じ型をaliasする |
+| `rust/pokecon/icons/` | tracked desktop icon一式 | 正準icon tree |
+| `rust/pokecon/tauri.conf.json`、`rust/pokecon/linux/` | Tauri設定とLinux bundle input | `rust/pokecon/`起点の正準package input |
+| `rust/pokecon-desktop/src/lib.rs` | 正準desktop sourceを再公開するcompatibility facade | 旧packageとtest targetはPhase 2.7まで維持する暫定入口 |
+
+`tauri-shell` featureはこの段階では維持し、Phase 2.6で削除します。Cargo package、workspace member、依存と旧crate directoryの統合はPhase 2.7で行います。
+
+現行の`--ui desktop --exit-after-startup`はTauri windowの生成とevent loopを通らないため、実packageのTauri window起動を証明しません。real Tauri-window packaged proofは次の不可分atomで追加し、このPhase 2.5aでは完了を主張しません。
+
 ## 13. 実装の移行順序
 
 クレート統合と機能挙動の変更を一度に混在させず、次の順序で進めます。

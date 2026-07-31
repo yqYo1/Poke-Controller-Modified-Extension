@@ -11,6 +11,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::desktop::{CloseBehavior, DesktopRuntimeSettings};
 use crate::device::{
     DiscordNotificationConfig, DiscordWebhookUrl, NotificationConfig, NotificationService,
     WindowsNotificationConfig,
@@ -19,7 +20,6 @@ use crate::dynamic::DynamicHost as _;
 use crate::server::realtime_connection::RealtimeRuntimeSettings;
 use crate::settings::pipeline::LoadedSettings;
 use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
-use pokecon_desktop::{CloseBehavior, DesktopRuntimeSettings};
 use serde_json::Value;
 use tokio::runtime::{Handle, RuntimeFlavor};
 use tokio::sync::watch;

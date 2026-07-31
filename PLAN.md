@@ -204,8 +204,34 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.3a settings
 
-- [ ] `pokecon-settings`を`settings`へ移す。
-- [ ] settings移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+- [x] `pokecon-settings`を`settings`へ移す。
+- [x] settings移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+#### 2.3a checkpoint証跡（2026-07-31、完了）
+
+下表の完了gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。容量枯渇で停止した初回集約checkは、code failureと区別して復旧と再実行を記録する。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| 正準source | `rust/pokecon/src/settings/`の14 files（`mod.rs`、`hmac_key.rs`、`lock.rs`、`manifest.rs`、`package.rs`、`path.rs`、`persistence.rs`、`pipeline.rs`、`python.rs`、`roots.rs`、`scaffold.rs`、`service.rs`、`uv.rs`、`venv.rs`）へ物理移動。旧`rust/pokecon-settings/src/`はcompatibility facadeの`lib.rs`だけ |
+| 移行compile／型 | `pokecon-settings`は`#[path = "../../pokecon/src/settings/mod.rs"]`で正準sourceを一度だけcompileし、`build.rs`、Cargo.toml、`cross_process` testを維持。package固有`OUT_DIR`でrequirements／managed-uvの2 embedded JSONを生成し、nominal type identityを保持 |
+| PokeCon facade | `pokecon`は`#[path = "settings/facade.rs"] mod settings`から`pokecon-settings`の10 moduleを選択的に再export。camera／device／dynamicの下位依存は不変で、旧crate削除は2.7へ延期 |
+| 静的境界 | PokeCon-owned sourceの直接`pokecon_settings`は`settings/facade.rs`だけ。正準settings内のbare `crate::<settings module>`は0件で、全内部参照は`crate::settings`。commit前stageは28 paths／13 renames、unstaged／protected diffは0 |
+| 保護artifact | Cargo.lock blob `79dddc38a84f7aa61817dc811fe3b5df52a38584`、generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、OpenAPI blob `a39cab3bee21a37d54661673be901591b8346937`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`を保持。`flake.nix`も不変 |
+| focused test | `pokecon-settings --lib` 49/49、`cross_process` 6/6、`pokecon --lib` 29/29 |
+| Rust／契約gate | `contract-check`、全target／feature Clippy、workspace全Cargo test、`build-rust`、`compatibility`がexit 0 |
+| Web／成果物gate | `web-check`はSvelte error／warning 0、74 testとproduction buildに成功。`cli-help-check`、`nix build .#pokecon`、`nix flake check --no-build`、`editor-smoke` 4/4もexit 0 |
+| 集約／format | `nix run .#check`はPython 63件を含めexit 0。`nix fmt -- --ci`と最終`nix fmt`もexit 0、180 files／0 changed |
+| 容量枯渇の復旧 | 初回集約checkはhost filesystemの`No space left on device`で停止し、code assertion failureではなかった。調査したdead Nix store 19,056 pathsだけを`nix store gc`で削除して30.1 GiBを解放し、stage／保護ID不変を再確認後、link／testを含むfull checkを再実行してexit 0 |
+| Debian実package | `nix run .#tauri-build -- --bundles deb`、`package-smoke`、`package-install-smoke`がexit 0 |
+| package-smoke | amd64 0.1.0、Python 3.14.3、resources 3,801、wheels 28、JS 10、CSS 1、udev rules 3を検査 |
+| install-smoke | Ubuntu 24.04でclean install／startup probe／clean shutdown、same-version reinstallの`SkippedVerified`、2回目のstartup／clean shutdown、uninstallまで完了 |
+| 構造commit／署名 | `450a85497b1cfcb333bc82210891d8d33ed04fb6`。raw SSH `gpgsig`を保持し、`52419113+yqYo1@users.noreply.github.com`のED25519 fingerprint `SHA256:JPH7BePGgqgXSLXc86mmeGeCzD+BdP1cb63qH4J6Tig`でcryptographic `Good "git" signature`を確認 |
+| 最終CI 1/3 | 構造SHAで[Remote Flake 30597614265](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614265)、[Package 30597614268](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614268)、[Lint 30597614272](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614272)がsuccess |
+| 最終CI 2/3 | [Rust 30597614281](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614281)、[Nix Source 30597614287](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614287)、[Pytest 30597614290](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614290)がsuccess |
+| 最終CI 3/3 | [Basedpyright 30597614293](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614293)、[SPA 30597614297](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614297)、[Ruff 30597614298](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614298)がsuccess。合計9/9 |
+| Package CI／artifact | [Package run 30597614268](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614268)の[Debian job 91053312802](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614268/job/91053312802)は29m53s、artifact digest `sha256:0de38039650e8c87e1286feb765a7185f7f846996f01a8144b5b98ea48fa8062`。[NSIS job 91053312769](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30597614268/job/91053312769)は15m43s、digest `sha256:8dc69f419ea13792b9cc07d8a59de375caa630f9e1a240f5516477ee2376e9da`でsuccess |
+| review／監視 | settings構造commitのfresh Sol final reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.3b camera
 

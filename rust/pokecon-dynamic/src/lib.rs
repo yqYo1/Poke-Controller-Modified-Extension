@@ -1,37 +1,10 @@
-//! Persistent dynamic-configuration execution primitives.
-//!
-//! The language runtimes build on the event and callback machinery in this
-//! crate. Keeping the scheduler independent from `CPython` and `LuaJIT` makes the
-//! lane, queue, and timeout rules directly testable without either interpreter.
+//! Compatibility facade for canonical dynamic contracts and state owned by `pokecon`.
 
-pub mod callback;
-pub mod command;
-pub mod control;
-pub mod engine;
-pub mod event;
-pub mod host;
-pub mod protocol;
-mod runtime;
-pub mod source;
-pub mod transaction;
+#[allow(
+    dead_code,
+    reason = "engine-only helpers are consumed by the worker binary's private copy"
+)]
+#[path = "../../pokecon/src/dynamic/mod.rs"]
+mod dynamic;
 
-pub use callback::{
-    Callback, CallbackError, CallbackErrorKind, CallbackExecutor, CallbackLimits, CallbackOutcome,
-    CallbackReturn, CallbackSettings, DeadlineSignal, Diagnostic, DiagnosticLevel, DiagnosticSink,
-    Invocation, InvocationContext, NoopDiagnosticSink, TimeoutStage,
-};
-pub use command::{
-    CommandCacheBuildResult, CommandCallbackKind, CommandDisplayCache, CommandDisplayItem,
-    CommandError, CommandInfo, CommandOptionField, CommandOptionValue, CommandRegistry,
-    SORT_HANDLER_ID, TAG_MATCH_HANDLER_ID,
-};
-pub use control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult, DynamicSource};
-pub use engine::{DynamicEngine, DynamicEngineError};
-pub use event::{
-    BUILTIN_EVENTS, BuiltinEvent, EventBus, EventError, EventResult, HandlerId, RegistrationOptions,
-};
-pub use host::{
-    DynamicHost, DynamicHostError, DynamicSettingsRegistry, InMemoryDynamicHost, merge_state_change,
-};
-pub use source::{ResolvedSource, SourceError, SourceStore};
-pub use transaction::{EvaluationTransaction, StagedEventOperation, TransactionError};
+pub use dynamic::*;

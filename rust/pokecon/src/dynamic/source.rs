@@ -6,7 +6,7 @@ use atomic_write_file::OpenOptions;
 use parking_lot::Mutex;
 use pokecon_settings::path::lexical_normalize;
 
-use crate::control::{DynamicConfigLanguage, DynamicSource};
+use crate::dynamic::control::{DynamicConfigLanguage, DynamicSource};
 
 /// Fully resolved, cycle-comparable source file.
 #[derive(Clone, Debug, Eq, PartialEq)]

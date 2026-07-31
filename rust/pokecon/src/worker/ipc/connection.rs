@@ -770,7 +770,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::{ConnectionConfig, ConnectionError, IpcConnection, ResourceSafety};
-    use crate::ipc::{Envelope, IpcValue};
+    use crate::worker::ipc::{Envelope, IpcValue};
 
     #[derive(Debug, Default)]
     struct SafetyProbe {

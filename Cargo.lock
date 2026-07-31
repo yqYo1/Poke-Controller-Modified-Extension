@@ -3866,18 +3866,15 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "atomic-write-file",
- "mlua",
  "parking_lot",
  "pokecon-contracts",
  "pokecon-device",
  "pokecon-settings",
- "pyo3",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3942,11 +3939,16 @@ name = "pokecon-worker"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "atomic-write-file",
  "clap",
+ "mlua",
+ "parking_lot",
  "pokecon-camera",
  "pokecon-contracts",
  "pokecon-core",
  "pokecon-dynamic",
+ "pokecon-device",
+ "pokecon-settings",
  "pyo3",
  "rmp-serde",
  "serde",

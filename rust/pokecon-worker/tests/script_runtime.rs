@@ -21,6 +21,10 @@ use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, Worke
 use tempfile::TempDir;
 use tokio::sync::Notify;
 
+mod support;
+
+use support::worker_binary;
+
 #[derive(Debug, Default)]
 struct RecordingScriptHost {
     controller_inputs: Mutex<Vec<HostControllerInputRequest>>,
@@ -267,9 +271,7 @@ async fn spawn_client(
     host: Arc<RecordingScriptHost>,
 ) -> (Arc<ManagedWorker>, Arc<ScriptWorkerClient>) {
     let supervisor = WorkerSupervisor::new();
-    let mut launch =
-        WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Script)
-            .clear_environment();
+    let mut launch = WorkerLaunch::managed(worker_binary(), WorkerKind::Script).clear_environment();
     if let Some(site_packages) = std::env::var_os(protocol::PYTHON_SITE_PACKAGES_ENV) {
         launch = launch.environment(protocol::PYTHON_SITE_PACKAGES_ENV, site_packages);
     }

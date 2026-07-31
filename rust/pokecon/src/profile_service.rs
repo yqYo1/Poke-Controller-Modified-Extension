@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use pokecon_dynamic::protocol::DynamicProfileSwitchResult;
+use crate::dynamic::protocol::DynamicProfileSwitchResult;
 use thiserror::Error;
 
 use crate::command_service::{CommandBackendError, CommandService, DynamicCommandBridge};
@@ -93,14 +93,14 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use crate::dynamic::{CommandCacheBuildResult, CommandInfo, DynamicHost};
     use crate::settings::pipeline::{LoadedSettings, PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
-    use async_trait::async_trait;
-    use pokecon_dynamic::{CommandCacheBuildResult, CommandInfo, DynamicHost};
-    use pokecon_worker::script::protocol::{
+    use crate::worker::script::protocol::{
         ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult, ScriptPauseResult,
         ScriptStopResult,
     };
+    use async_trait::async_trait;
     use serde_json::json;
     use tempfile::TempDir;
 

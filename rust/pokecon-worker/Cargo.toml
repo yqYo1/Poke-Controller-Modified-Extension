@@ -22,11 +22,16 @@ bench = false
 
 [dependencies]
 async-trait.workspace = true
+atomic-write-file.workspace = true
 clap.workspace = true
+mlua.workspace = true
+parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-dynamic = { path = "../pokecon-dynamic" }
+pokecon-device = { path = "../pokecon-device" }
+pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 rmp-serde.workspace = true
 serde.workspace = true

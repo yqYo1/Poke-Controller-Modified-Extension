@@ -16,7 +16,7 @@ use pyo3::types::{PyBytes, PyModule, PyModuleMethods};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 
-use crate::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_value};
+use crate::worker::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_value};
 
 use super::protocol::{
     self, HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,

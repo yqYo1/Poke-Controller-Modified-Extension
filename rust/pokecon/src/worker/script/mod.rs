@@ -1,8 +1,6 @@
-//! Profile-scoped Python user-script worker, typed host proxies, and client.
+//! Profile-scoped Python user-script host proxies and parent-side client.
 
 pub mod protocol;
-mod python;
-mod runtime;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -10,13 +8,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::WorkerKind;
-use crate::generation::OperationClass;
-use crate::ipc::{
+use crate::worker::WorkerKind;
+use crate::worker::generation::OperationClass;
+use crate::worker::ipc::{
     Envelope, IpcConnection, IpcErrorPayload, IpcValue, LogPayload, ValueCodecError,
     deserialize_value, serialize_value,
 };
-use crate::supervisor::{ManagedWorker, WorkerRequestError};
+use crate::worker::supervisor::{ManagedWorker, WorkerRequestError};
 
 use self::protocol::{
     HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,
@@ -28,8 +26,6 @@ use self::protocol::{
     ScriptInitializeResult, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult, ScriptTkEvent,
     ScriptWorkerStatus,
 };
-pub(crate) use self::runtime::ScriptWorkerRuntime;
-
 const LOG_QUEUE_CAPACITY: usize = 128;
 
 /// Stable failure returned by a Rust-main user-script proxy operation.
@@ -182,7 +178,7 @@ pub enum ScriptClientError {
     #[error(transparent)]
     Worker(#[from] WorkerRequestError),
     #[error(transparent)]
-    Connection(#[from] crate::ipc::ConnectionError),
+    Connection(#[from] crate::worker::ipc::ConnectionError),
     #[error(transparent)]
     Payload(#[from] ValueCodecError),
 }

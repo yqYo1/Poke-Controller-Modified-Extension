@@ -19,6 +19,10 @@ use pokecon_worker::supervisor::{StopPurpose, SupervisorError, WorkerLaunch, Wor
 use serde_json::json;
 use tempfile::TempDir;
 
+mod support;
+
+use support::worker_binary;
+
 #[derive(Debug)]
 struct ControllerSafetyProbe {
     buttons_pressed: AtomicBool,
@@ -336,7 +340,7 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
     let safety = Arc::new(ControllerSafetyProbe::active());
     let worker = supervisor
         .spawn(
-            WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Script),
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Script),
             safety.clone(),
         )
         .await
@@ -410,7 +414,7 @@ async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
     let supervisor = WorkerSupervisor::new();
     let worker = supervisor
         .spawn(
-            WorkerLaunch::managed(env!("CARGO_BIN_EXE_pokecon-worker"), WorkerKind::Dynamic)
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Dynamic)
                 .clear_environment()
                 .environment(PYTHON_SITE_PACKAGES_ENV, &site_packages)
                 .environment("POKECON_WORKER_TEST_SENTINEL", "retained"),

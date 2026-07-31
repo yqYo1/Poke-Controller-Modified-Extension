@@ -20,11 +20,8 @@ use crate::device::{SerialError, SerialManager};
 use crate::server::api::{self as wire, LogData, LogLevel, LogOperation, LogTarget};
 use crate::server::websocket::WebSocketBroker;
 use crate::settings::pipeline::LoadedSettings;
-use base64::Engine as _;
-use chrono::{Local, Timelike as _};
-use parking_lot::Mutex as ParkingMutex;
-use pokecon_worker::ipc::ResourceSafety;
-use pokecon_worker::script::protocol::{
+use crate::worker::ipc::ResourceSafety;
+use crate::worker::script::protocol::{
     HostCameraControlRequest, HostCameraInitializeResult, HostCameraState,
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
@@ -34,7 +31,10 @@ use pokecon_worker::script::protocol::{
     ScriptDialogWidgetKind, ScriptHat, ScriptInputAction, ScriptOutputMode, ScriptOutputTarget,
     ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
 };
-use pokecon_worker::script::{ScriptHost, ScriptHostError};
+use crate::worker::script::{ScriptHost, ScriptHostError};
+use base64::Engine as _;
+use chrono::{Local, Timelike as _};
+use parking_lot::Mutex as ParkingMutex;
 use rumqttc::{Client as MqttClient, Event as MqttEvent, MqttOptions, Outgoing, Packet, QoS};
 use tokio::runtime::{Handle, RuntimeFlavor};
 use url::Url;

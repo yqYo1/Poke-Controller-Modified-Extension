@@ -14,16 +14,16 @@ use crate::settings::uv::{
 use crate::settings::venv::{
     CommandUvExecutor, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
-use async_trait::async_trait;
-use pokecon_worker::WorkerKind;
-use pokecon_worker::ipc::{LogLevel, LogPayload, ResourceSafety};
-use pokecon_worker::script::protocol::{
+use crate::worker::WorkerKind;
+use crate::worker::ipc::{LogLevel, LogPayload, ResourceSafety};
+use crate::worker::script::protocol::{
     PYTHON_SITE_PACKAGES_ENV, ScriptDiscoveryResult, ScriptExecuteRequest, ScriptExecutionResult,
     ScriptInitializeRequest, ScriptPauseResult, ScriptPointerEvent, ScriptStopResult,
     ScriptTkEvent,
 };
-use pokecon_worker::script::{ScriptHost, ScriptWorkerClient};
-use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerSupervisor};
+use crate::worker::script::{ScriptHost, ScriptWorkerClient};
+use crate::worker::supervisor::{ManagedWorker, StopPurpose, WorkerSupervisor};
+use async_trait::async_trait;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
@@ -428,7 +428,7 @@ fn spawn_log_receiver(mut receiver: tokio::sync::mpsc::Receiver<LogPayload>) -> 
 }
 
 fn spawn_diagnostic_receiver(
-    mut receiver: tokio::sync::mpsc::Receiver<pokecon_worker::supervisor::OobDiagnostic>,
+    mut receiver: tokio::sync::mpsc::Receiver<crate::worker::supervisor::OobDiagnostic>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(diagnostic) = receiver.recv().await {

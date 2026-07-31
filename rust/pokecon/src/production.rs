@@ -26,10 +26,10 @@ use crate::server::websocket::{
 };
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
 use crate::settings::service::SettingsService;
+use crate::worker::dynamic::DynamicWorkerClient;
 use axum::Router;
 use base64::Engine as _;
 use pokecon_desktop::DesktopRuntimeSettings;
-use pokecon_worker::dynamic::DynamicWorkerClient;
 use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;

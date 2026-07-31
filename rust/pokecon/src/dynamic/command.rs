@@ -6,13 +6,13 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::callback::{
+use crate::dynamic::callback::{
     Callback, CallbackLimits, CallbackOutcome, CallbackReturn, CallbackSettings, Diagnostic,
     DiagnosticLevel,
 };
-use crate::event::{EventBus, EventError, HandlerId};
-use crate::host::{DynamicHost, DynamicHostError};
-use crate::transaction::callback_settings;
+use crate::dynamic::event::{EventBus, EventError, HandlerId};
+use crate::dynamic::host::{DynamicHost, DynamicHostError};
+use crate::dynamic::transaction::callback_settings;
 
 pub const SORT_HANDLER_ID: HandlerId = HandlerId::new(1);
 pub const TAG_MATCH_HANDLER_ID: HandlerId = HandlerId::new(2);
@@ -721,8 +721,10 @@ mod tests {
     use tokio::time::{Duration, timeout};
 
     use super::*;
-    use crate::callback::{CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink};
-    use crate::host::InMemoryDynamicHost;
+    use crate::dynamic::callback::{
+        CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink,
+    };
+    use crate::dynamic::host::InMemoryDynamicHost;
 
     struct ReturningCallback {
         calls: Arc<AtomicUsize>,

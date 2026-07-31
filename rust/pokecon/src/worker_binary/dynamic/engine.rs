@@ -9,21 +9,21 @@ use serde_json::Value;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::callback::{
+use crate::dynamic::callback::{
     Callback, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext, TimeoutStage,
 };
-use crate::command::{
+use crate::dynamic::command::{
     CommandCacheBuildResult, CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo,
     CommandOptionField, CommandOptionValue, CommandRegistry, CommandState,
 };
-use crate::control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult};
-use crate::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
-use crate::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
-use crate::protocol::DynamicProfileSwitchResult;
-use crate::runtime::lua::LuaRuntime;
-use crate::runtime::python::PythonRuntime;
-use crate::source::{ResolvedSource, SourceError, SourceStore};
-use crate::transaction::{
+use crate::dynamic::control::{DynamicConfigControl, DynamicConfigLanguage, DynamicLoadResult};
+use crate::dynamic::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
+use crate::dynamic::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
+use crate::dynamic::protocol::DynamicProfileSwitchResult;
+use crate::dynamic::runtime::lua::LuaRuntime;
+use crate::dynamic::runtime::python::PythonRuntime;
+use crate::dynamic::source::{ResolvedSource, SourceError, SourceStore};
+use crate::dynamic::transaction::{
     EvaluationTransaction, StagedProfileSwitch, TransactionError, callback_settings,
     controller_update_from_value,
 };
@@ -1113,7 +1113,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::host::InMemoryDynamicHost;
+    use crate::dynamic::host::InMemoryDynamicHost;
 
     fn runtime_test_lock() -> &'static tokio::sync::Mutex<()> {
         static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
@@ -1383,7 +1383,7 @@ raise RuntimeError("reload sentinel")
         assert!(
             event.outcomes.iter().all(|(_, outcome)| matches!(
                 outcome,
-                crate::callback::CallbackOutcome::Returned(_)
+                crate::dynamic::callback::CallbackOutcome::Returned(_)
             )),
             "{:?}",
             event.outcomes

@@ -192,7 +192,7 @@ mod tests {
     use tokio::io::{AsyncWriteExt, duplex};
 
     use super::{CodecError, MAX_PAYLOAD_BYTES, decode_payload, encode_frame, read_frame};
-    use crate::ipc::{Envelope, IpcValue};
+    use crate::worker::ipc::{Envelope, IpcValue};
 
     #[test]
     fn frame_round_trip_uses_big_endian_length() {

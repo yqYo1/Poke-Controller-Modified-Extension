@@ -10,6 +10,8 @@ mod contracts;
 mod device;
 #[path = "diagnostics/facade.rs"]
 mod diagnostics;
+#[path = "dynamic/facade.rs"]
+mod dynamic;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
@@ -26,6 +28,8 @@ mod server;
 #[path = "settings/facade.rs"]
 mod settings;
 mod settings_runtime;
+#[path = "worker/facade.rs"]
+mod worker;
 
 pub use entrypoint::{MainError, run_cli};
 

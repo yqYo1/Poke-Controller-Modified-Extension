@@ -11,7 +11,7 @@ use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Instant, sleep_until};
 
-use crate::event::HandlerId;
+use crate::dynamic::event::HandlerId;
 
 const COMMAND_CAPACITY: usize = 64;
 

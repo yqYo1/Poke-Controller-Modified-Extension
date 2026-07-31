@@ -6,18 +6,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use crate::settings::pipeline::LoadedSettings;
-use async_trait::async_trait;
-use pokecon_dynamic::protocol::DynamicProfileSwitchResult;
-use pokecon_dynamic::{
+use crate::dynamic::protocol::DynamicProfileSwitchResult;
+use crate::dynamic::{
     CommandCacheBuildResult, CommandDisplayCache, CommandDisplayItem, CommandInfo, DynamicHost,
 };
-use pokecon_worker::dynamic::DynamicWorkerClient;
-use pokecon_worker::script::protocol::{
+use crate::settings::pipeline::LoadedSettings;
+use crate::worker::dynamic::DynamicWorkerClient;
+use crate::worker::script::protocol::{
     ScriptCommandKind, ScriptDiscoveredCommand, ScriptDiscoveryResult, ScriptExecuteRequest,
     ScriptExecutionOutcome, ScriptExecutionResult, ScriptPauseResult, ScriptPointerEvent,
     ScriptStopResult, ScriptTkEvent,
 };
+use async_trait::async_trait;
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -231,7 +231,7 @@ pub enum CommandServiceError {
     #[error(transparent)]
     Backend(#[from] CommandBackendError),
     #[error(transparent)]
-    Host(#[from] pokecon_dynamic::DynamicHostError),
+    Host(#[from] crate::dynamic::DynamicHostError),
     #[error("profile switch is in progress")]
     ProfileSwitchInProgress,
     #[error("a command is already active")]
@@ -1213,9 +1213,7 @@ fn current_name(inner: &CommandServiceState) -> String {
         .map_or_else(String::new, |command| command.info.name.clone())
 }
 
-fn dynamic_client_error(
-    error: &pokecon_worker::dynamic::DynamicClientError,
-) -> CommandBackendError {
+fn dynamic_client_error(error: &crate::worker::dynamic::DynamicClientError) -> CommandBackendError {
     CommandBackendError::new("DynamicWorkerError", error.to_string())
 }
 
@@ -1225,9 +1223,9 @@ mod tests {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize};
 
+    use crate::dynamic::DynamicHost;
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
-    use pokecon_dynamic::DynamicHost;
     use serde_json::{Value, json};
     use tempfile::TempDir;
     use tokio::sync::Notify;

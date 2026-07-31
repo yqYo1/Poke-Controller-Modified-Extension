@@ -7,12 +7,14 @@ use mlua::{
 };
 use serde_json::Value;
 
-use crate::callback::{Callback, CallbackError, CallbackLimits, CallbackReturn, InvocationContext};
-use crate::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
-use crate::engine::{
+use crate::dynamic::callback::{
+    Callback, CallbackError, CallbackLimits, CallbackReturn, InvocationContext,
+};
+use crate::dynamic::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
+use crate::dynamic::engine::{
     DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
 };
-use crate::event::{HandlerId, RegistrationOptions};
+use crate::dynamic::event::{HandlerId, RegistrationOptions};
 
 const LUA_CALLBACK_INVOKER_REGISTRY_KEY: &str = "pokecon.callback_invoker";
 

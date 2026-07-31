@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use crate::callback::{
+use crate::dynamic::callback::{
     Callback, CallbackError, CallbackExecutor, CallbackLimits, CallbackOutcome, CallbackReturn,
     CallbackSettings, Diagnostic, DiagnosticLevel, DiagnosticSink, Invocation,
 };
@@ -549,7 +549,9 @@ mod tests {
     use async_trait::async_trait;
 
     use super::*;
-    use crate::callback::{CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink};
+    use crate::dynamic::callback::{
+        CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink,
+    };
 
     struct CountingCallback {
         calls: Arc<AtomicUsize>,

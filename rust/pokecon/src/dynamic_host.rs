@@ -12,18 +12,18 @@ use crate::device::{
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons,
 };
 use crate::device::{ControllerState, ControllerUpdate};
+use crate::dynamic::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
+use crate::dynamic::{
+    CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
+    merge_state_change,
+};
 use crate::settings::lock::LockManager;
 use crate::settings::persistence::TomlStore;
 use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline};
 use crate::settings::roots::SafeComponent;
+use crate::worker::ipc::ResourceSafety;
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use pokecon_dynamic::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
-use pokecon_dynamic::{
-    CommandDisplayCache, CommandInfo, Diagnostic, DiagnosticLevel, DynamicHost, DynamicHostError,
-    merge_state_change,
-};
-use pokecon_worker::ipc::ResourceSafety;
 use serde_json::Value;
 use tokio::sync::watch;
 
@@ -906,14 +906,14 @@ impl DynamicHost for StartupDynamicHost {
                 code = diagnostic.code,
                 message = diagnostic.message,
                 event = diagnostic.event,
-                handler_id = diagnostic.handler_id.map(pokecon_dynamic::HandlerId::get),
+                handler_id = diagnostic.handler_id.map(crate::dynamic::HandlerId::get),
                 "dynamic worker diagnostic"
             ),
             DiagnosticLevel::Error => tracing::error!(
                 code = diagnostic.code,
                 message = diagnostic.message,
                 event = diagnostic.event,
-                handler_id = diagnostic.handler_id.map(pokecon_dynamic::HandlerId::get),
+                handler_id = diagnostic.handler_id.map(crate::dynamic::HandlerId::get),
                 "dynamic worker diagnostic"
             ),
         }
@@ -1333,9 +1333,9 @@ mod tests {
     use std::ffi::OsString;
 
     use crate::device::ControllerUpdate;
+    use crate::dynamic::{CommandDisplayItem, DynamicHost};
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
-    use pokecon_dynamic::{CommandDisplayItem, DynamicHost};
     use serde_json::json;
     use tempfile::TempDir;
 

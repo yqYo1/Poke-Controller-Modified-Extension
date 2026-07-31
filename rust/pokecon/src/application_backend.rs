@@ -17,6 +17,7 @@ use crate::device::{
 use crate::device::{Button, ControllerState, Hat, StickPosition, TouchPoint};
 use crate::device::{NotificationChannel, NotificationOutcome, NotificationService};
 use crate::device::{SerialError, SerialManager, enumerate_native_ports};
+use crate::dynamic::{DynamicConfigControl, DynamicConfigLanguage};
 use crate::server::api::{
     ApiErrorCode, CameraDevice, CameraSelector, ClientMessage, CommandControlRequest,
     DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
@@ -40,10 +41,9 @@ use crate::settings::roots::SafeComponent;
 use crate::settings::service::{
     PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
 };
+use crate::worker::dynamic::DynamicWorkerClient;
 use async_trait::async_trait;
 use parking_lot::Mutex as ParkingMutex;
-use pokecon_dynamic::{DynamicConfigControl, DynamicConfigLanguage};
-use pokecon_worker::dynamic::DynamicWorkerClient;
 use semver::Version;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -1288,7 +1288,7 @@ fn command_failure(error: &CommandServiceError) -> ApiFailure {
     }
 }
 
-fn script_ui_failure(error: &pokecon_worker::script::ScriptHostError) -> ApiFailure {
+fn script_ui_failure(error: &crate::worker::script::ScriptHostError) -> ApiFailure {
     let (status, code) = match error.code.as_str() {
         "StaleScriptUiGeneration" | "ScriptUiObjectNotFound" | "WorkerStopping" => (
             ApiFailureStatus::Conflict,

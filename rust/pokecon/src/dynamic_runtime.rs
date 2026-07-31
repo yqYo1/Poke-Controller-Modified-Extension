@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
+use crate::dynamic::{DynamicConfigLanguage, DynamicHostError};
 use crate::settings::package::PythonWorker;
 use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
 use crate::settings::python::{PythonError, prepare_managed_python};
@@ -16,12 +18,10 @@ use crate::settings::uv::{
 use crate::settings::venv::{
     CommandUvExecutor, VenvError, VenvManager, VenvOwnership, VenvPreparationRequest,
 };
-use pokecon_dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
-use pokecon_dynamic::{DynamicConfigLanguage, DynamicHostError};
-use pokecon_worker::WorkerKind;
-use pokecon_worker::dynamic::{DynamicClientError, DynamicWorkerClient};
-use pokecon_worker::ipc::{LogLevel, LogPayload};
-use pokecon_worker::supervisor::{
+use crate::worker::WorkerKind;
+use crate::worker::dynamic::{DynamicClientError, DynamicWorkerClient};
+use crate::worker::ipc::{LogLevel, LogPayload};
+use crate::worker::supervisor::{
     ManagedWorker, StopPurpose, SupervisorError, WorkerLaunch, WorkerSupervisor,
 };
 use thiserror::Error;
@@ -550,7 +550,7 @@ fn log_dynamic_payload(payload: &LogPayload) {
 }
 
 fn spawn_diagnostic_receiver(
-    mut receiver: tokio::sync::mpsc::Receiver<pokecon_worker::supervisor::OobDiagnostic>,
+    mut receiver: tokio::sync::mpsc::Receiver<crate::worker::supervisor::OobDiagnostic>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(diagnostic) = receiver.recv().await {
@@ -579,7 +579,7 @@ async fn stop_failed_startup(
     finish_worker_receivers(worker, client, log_task, diagnostic_task).await;
 }
 
-fn log_stop_result(result: Result<pokecon_worker::supervisor::StopReport, SupervisorError>) {
+fn log_stop_result(result: Result<crate::worker::supervisor::StopReport, SupervisorError>) {
     match result {
         Ok(report) if report.forced => tracing::warn!(
             worker_kind = "dynamic",

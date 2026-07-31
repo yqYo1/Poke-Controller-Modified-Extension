@@ -51,6 +51,9 @@ jobs:
       - name: Run tests
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#cargo-test
+      - name: Verify packaged worker roles
+        if: steps.rust-check.outputs.applicable == 'true'
+        run: nix run .#worker-package-check
       - name: Execute immutable compatibility corpus
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#compatibility

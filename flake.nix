@@ -1301,6 +1301,217 @@
                 pokecon-worker
             '';
           };
+          workerPackageCheck = mkTask {
+            name = "worker-package-check";
+            runtimeInputs = rustTaskInputs ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.strace ];
+            text = ''
+              if [ "$#" -ne 0 ]; then
+                echo "usage: nix run .#worker-package-check" >&2
+                exit 2
+              fi
+            ''
+            + (
+              if pkgs.stdenv.isLinux then
+                ''
+                  ${setupWorkdir}
+                  ${desktopEnvironment}
+
+                  package_output="${self'.packages.pokecon}"
+                  application="$package_output/bin/pokecon"
+                  worker_binary="$(dirname -- "$application")/pokecon-worker"
+                  for packaged_binary in "$application" "$worker_binary"; do
+                    if [ ! -f "$packaged_binary" ] || [ ! -x "$packaged_binary" ]; then
+                      echo "packaged executable is missing or not executable: $packaged_binary" >&2
+                      exit 1
+                    fi
+                  done
+                  store_directory=${lib.escapeShellArg builtins.storeDir}
+                  canonical_package="$(readlink -f -- "$package_output")"
+                  canonical_application="$(readlink -f -- "$application")"
+                  canonical_worker="$(readlink -f -- "$worker_binary")"
+                  if [ "$(dirname -- "$canonical_package")" != "$store_directory" ]; then
+                    echo "package is not a direct output under evaluator store $store_directory: $canonical_package" >&2
+                    exit 1
+                  fi
+                  case "$canonical_application" in
+                    "$canonical_package"/*) ;;
+                    *)
+                      echo "application escapes the selected package output: $canonical_application" >&2
+                      exit 1
+                      ;;
+                  esac
+                  case "$canonical_worker" in
+                    "$canonical_package"/*) ;;
+                    *)
+                      echo "worker escapes the selected package output: $canonical_worker" >&2
+                      exit 1
+                      ;;
+                  esac
+                  if [ "$(dirname -- "$canonical_application")" != "$(dirname -- "$canonical_worker")" ]; then
+                    echo "worker is not the packaged application's sibling: $canonical_worker" >&2
+                    exit 1
+                  fi
+                  application="$canonical_application"
+                  worker_binary="$canonical_worker"
+
+                  product_root="$gate_home/packaged-product"
+                  product_home="$product_root/home"
+                  product_config="$product_root/config"
+                  product_data="$product_root/data"
+                  product_cache="$product_root/cache"
+                  product_state="$product_root/state"
+                  product_runtime="$product_root/runtime"
+                  product_tmp="$product_root/tmp"
+                  product_appdata="$product_root/appdata"
+                  product_localappdata="$product_root/localappdata"
+                  profile_root="$product_config/pokecon/profiles/default"
+                  mkdir -p \
+                    "$product_home" \
+                    "$product_config/pokecon" \
+                    "$product_data" \
+                    "$product_cache" \
+                    "$product_state" \
+                    "$product_runtime" \
+                    "$product_tmp" \
+                    "$product_appdata" \
+                    "$product_localappdata"
+                  chmod 0700 "$product_runtime"
+
+                  product_marker="worker-package-check-lua-marker-AR-13.1-26"
+                  printf 'print("%s")\n' "$product_marker" > "$product_config/pokecon/init.lua"
+                  product_stdout="$product_root/pokecon.stdout"
+                  product_stderr="$product_root/pokecon.stderr"
+                  product_trace="$product_root/pokecon.execve"
+                  product_port="$(
+                    "${pythonEnv}/bin/python" -I -S -c \
+                      'import socket; sock = socket.socket(); sock.bind(("127.0.0.1", 0)); print(sock.getsockname()[1]); sock.close()'
+                  )"
+
+                  set +e
+                  "${pkgs.coreutils}/bin/env" -i \
+                    HOME="$product_home" \
+                    USERPROFILE="$product_home" \
+                    XDG_CONFIG_HOME="$product_config" \
+                    XDG_DATA_HOME="$product_data" \
+                    XDG_CACHE_HOME="$product_cache" \
+                    XDG_STATE_HOME="$product_state" \
+                    XDG_RUNTIME_DIR="$product_runtime" \
+                    TMPDIR="$product_tmp" \
+                    APPDATA="$product_appdata" \
+                    LOCALAPPDATA="$product_localappdata" \
+                    LANG=C \
+                    LC_ALL=C \
+                    TZ=UTC \
+                    PATH="${lib.makeBinPath [ pkgs.coreutils ]}" \
+                    POKECON_WEB_DIR="$package_output/bin/web/dist" \
+                    RUST_LOG=info \
+                    "${pkgs.coreutils}/bin/timeout" --signal=TERM --kill-after=10s 120s \
+                    "${pkgs.strace}/bin/strace" \
+                      -f -qq -s 4096 -e trace=execve -o "$product_trace" \
+                      "$application" \
+                        --ui web \
+                        --port "$product_port" \
+                        --dynamic-config-language lua \
+                        --exit-after-startup \
+                      >"$product_stdout" 2>"$product_stderr"
+                  product_status=$?
+                  set -e
+
+                  show_product_logs() {
+                    if [ -s "$product_stdout" ]; then
+                      echo "packaged product stdout:" >&2
+                      head -n 200 "$product_stdout" >&2
+                    fi
+                    if [ -s "$product_stderr" ]; then
+                      echo "packaged product stderr:" >&2
+                      head -n 200 "$product_stderr" >&2
+                    fi
+                    if [ -s "$product_trace" ]; then
+                      echo "packaged product execve trace:" >&2
+                      head -n 200 "$product_trace" >&2
+                    fi
+                  }
+                  if [ "$product_status" -ne 0 ]; then
+                    echo "packaged product startup failed with status $product_status" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if grep -F -- \
+                    'dynamic configuration is unavailable; continuing with static settings' \
+                    "$product_stdout" "$product_stderr" >/dev/null; then
+                    echo "packaged product fell back to static settings after dynamic startup failure" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if grep -F -- \
+                    'dynamic startup configuration was rejected' \
+                    "$product_stdout" "$product_stderr" >/dev/null; then
+                    echo "packaged dynamic worker rejected its startup configuration" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if ! grep -F -- "$product_marker" "$product_stdout" "$product_stderr" >/dev/null; then
+                    echo "packaged dynamic worker did not evaluate the isolated Lua marker" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if ! grep -F -- '"message":"dynamic worker stopped"' "$product_stdout" "$product_stderr" >/dev/null; then
+                    echo "packaged product did not report dynamic-worker shutdown" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if ! grep -F -- '"cooperative_acknowledged":true' "$product_stdout" "$product_stderr" >/dev/null; then
+                    echo "packaged product did not report cooperative dynamic-worker stop" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  expected_exec='execve("'"$worker_binary"'", ["'"$worker_binary"'", "--kind", "dynamic"]'
+                  if ! grep -F -- "$expected_exec" "$product_trace" >/dev/null; then
+                    echo "product did not exec the exact packaged sibling as its dynamic worker" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+                  if [ ! -d "$profile_root" ]; then
+                    echo "packaged product did not scaffold its isolated default profile: $profile_root" >&2
+                    show_product_logs
+                    exit 1
+                  fi
+
+                  export POKECON_TEST_WORKER_BINARY="$worker_binary"
+                  cargo test --locked --package pokecon-worker --test startup -- --nocapture
+                  cargo test --locked --package pokecon-worker --test lifecycle -- --nocapture
+                  cargo test --locked --package pokecon-worker --test script_runtime \
+                    script_worker_executes_controller_serial_and_output_proxies \
+                    -- --exact --nocapture
+
+                  printf '%s\n' \
+                    "worker-package-check: PASS" \
+                    "store_directory=$store_directory" \
+                    "package=$canonical_package" \
+                    "application=$application" \
+                    "worker=$worker_binary" \
+                    "roles=script,dynamic" \
+                    "product_profile=$profile_root" \
+                    "test_profiles=per-test-temporary-roots" \
+                    "product_resolution=exact-sibling-execve+lua-marker" \
+                    "ipc=framed-bidirectional" \
+                    "script_direction=controller+serial+output" \
+                    "dynamic_languages=python,lua" \
+                    "packaged_stop=cooperative" \
+                    "supervisor_fault_policy=source-built-fixture-force+generation-retention" \
+                    "product_stdout=$product_stdout" \
+                    "product_stderr=$product_stderr" \
+                    "product_execve_trace=$product_trace"
+                  grep -h -F -m 1 -- "$product_marker" "$product_stdout" "$product_stderr"
+                  grep -h -F -m 1 -- '"message":"dynamic worker stopped"' "$product_stdout" "$product_stderr"
+                ''
+              else
+                ''
+                  echo "worker-package-check requires Linux process tracing" >&2
+                  exit 2
+                ''
+            );
+          };
         in
         {
           treefmt = {
@@ -1367,6 +1578,7 @@
             default = mkApp "${self'.packages.pokecon}/bin/pokecon";
             fmt = mkApp "${safeFormatter}/bin/pokecon-format";
             cli-help-check = cliHelpCheck;
+            worker-package-check = workerPackageCheck;
 
             cargo = mkTask {
               name = "cargo";

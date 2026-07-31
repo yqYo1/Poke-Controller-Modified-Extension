@@ -9,8 +9,8 @@ use pokecon_device::controller::{ControllerState, ControllerUpdate};
 use pokecon_settings::pipeline::SECRET_MASK;
 use serde_json::Value;
 
-use crate::callback::Diagnostic;
-use crate::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
+use crate::dynamic::callback::Diagnostic;
+use crate::dynamic::protocol::{HostProfileSwitchBeginResult, HostProfileSwitchCommitResult};
 
 /// Host-operation failure exposed to both language bindings with identical
 /// code and message semantics.

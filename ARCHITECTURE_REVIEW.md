@@ -757,6 +757,77 @@ run `30484270651`の`Remote Flake Test`では、リモート既定appのhelp実�
 
 したがって、現在の遅延は単発のrunner混雑ではなく、workflowの適用範囲、重複検査、Nix source境界、成果物再利用の構成上の問題です。
 
+### 12.2 Phase 2.4移行時点のワーカー境界evidence
+
+この節はPhase 2.4完了時点のsource ownershipとOS process境界を固定する移行中の記録です。Cargo package、target、旧クレートdirectoryの統合はまだ完了しておらず、Phase 2.7で行います。
+
+#### 移行中のsource ownership
+
+| source | Phase 2.4時点の所有内容 | 移行状態 |
+|---|---|---|
+| `rust/pokecon/src/dynamic/` | メインプロセス側の動的設定契約、host、状態、transaction | 正準source。変更の起点はこのdirectoryとする |
+| `rust/pokecon/src/worker/` | typed IPC契約、client、generation、OS process supervision | 正準source。変更の起点はこのdirectoryとする |
+| `rust/pokecon/src/worker_binary/` | script／dynamic workerのentrypoint、CPython／LuaJITを含む子プロセス専用runtime | 子プロセスだけが参照するruntime source |
+| `rust/pokecon-dynamic/src/lib.rs` | `rust/pokecon/src/dynamic/`を再公開するcompatibility facade | 旧package利用者を保つ暫定入口 |
+| `rust/pokecon-worker/` | compatibility facade、`pokecon-worker` bin、compatibility／fault-fixture bin、integration test | Phase 2.7までbin／test ownerを維持する暫定package |
+
+この配置はsourceの正準所有を移したことを示しますが、workspace member、Cargo package名、target ownershipの統合完了を意味しません。
+
+#### processごとの所有、寿命、置換規則
+
+| OS process | 機能上の所有 | 寿命と置換 | 所有しないもの |
+|---|---|---|---|
+| Rust main | 正準controller状態、camera、serial、server、profileと、それらのresource serviceおよびOS process supervision | application lifetime。子processを起動、停止、reapし、generation規則を適用する | CPython／LuaJITのinterpreter state |
+| script worker | ユーザーcommandの実行判断と実行、子process内CPython | profile lifetime。profile switchでは旧processを停止、reapしてから置換する | hardware handle、正準controller／camera／serial／profile状態 |
+| dynamic worker | 動的設定評価を支援するPython／Lua実行、子process内CPython／LuaJIT | application lifetime。profile switchではdynamic worker process generationを置換せず、停止後に新しいgenerationを作らない | hardware handle、正準controller／camera／serial／profile状態、主たる自動実行判断 |
+
+script workerとdynamic workerのいずれもhardware handleまたは正準状態を所有しません。OS上の親であるRust mainと、製品機能上の実行判断を持つscript workerは同じ「主」を意味せず、dynamic workerは動的設定評価の支援役です。
+
+#### 機能要求と監督制御の方向
+
+```text
+ユーザースクリプト／script workerの実行判断
+  │ framed MessagePack request
+  │ script.host.controller_input、script.host.serial_*、script.host.outputなど
+  ▼
+Rust mainのresource service／正準状態／hardware所有
+  │ framed MessagePack response（完了またはdata）
+  ▼
+script workerが次の実行判断を継続
+
+Rust main ── spawn／force-kill／reap ───────────────▶ worker
+           OS supervision
+Rust main ── framed initialize／pause／cooperative shutdown ──▶ worker
+           lifecycle control-plane
+Rust main ── worker process generation gate
+           parent-local supervision
+```
+
+Rust mainから返すresponseは要求の完了または取得dataであり、次のscript execution decisionをRust mainへ移しません。spawn、force-kill、reapはOS supervision、initialize、pause、cooperative shutdown requestはframed lifecycle control-plane、worker process generation gateは親process内のsupervisionです。いずれもscript execution decisionの所有移転ではなく、機能上の主制御への再分類を禁止します。
+
+#### OS process boundary
+
+typed request、response、event、logとしてOS process境界を横断する唯一のIPCは、stdin／stdout上のframed MessagePackです。spawn、force-kill、reapはOS supervisor operationであり、domain objectを転送しません。stderrは診断専用のout-of-band byte streamであり、domain objectの転送には使用しません。
+
+CPythonのobject、LuaJITのvalue、interpreter-native object／pointerは子process内に留まります。camera／deviceのnative hardware handleと正準状態はRust mainに留まり、どちらもframed IPCを横断しません。Rust mainは`HostControllerInputRequest`、`HostSerialWriteRequest`、`HostOutputRequest`などのtyped domain／protocol valueだけを送受信します。
+
+cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`を使用します。Rust mainがhardwareとpublicationを所有し、typed `MappingDescriptor`だけをframed MessagePackで一度渡してchild readerがmappingを開くため、camera handleまたは正準状態の所有は移転しません。ringには固定layoutのframe byteとpublication metadataだけを置き、interpreter object／pointerまたはnative hardware handleを渡しません。
+
+#### 反証可能なevidence mapping
+
+次表のchild binary provenanceはintegration testが起動する子実行ファイルを指します。integration test harnessと親側supervisorはsource-builtです。`worker-package-check`のoverrideはstartup testの直接起動とmanaged childを含む通常worker childをすべてexact packaged workerへ置き換え、明示的な`pokecon-worker-fault-fixture`は対象外としてsource-builtのまま維持します。
+
+| test／task | 検証対象 | child binary provenance |
+|---|---|---|
+| `script_worker_executes_controller_serial_and_output_proxies` | script workerがcontroller、serial、output要求を決定してRust main側hostへ送り、完了後も実行を継続する方向 | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
+| `dynamic_worker_runs_both_languages_over_bidirectional_ipc` | dynamic childのCPython／LuaJIT初期化と、host request／eventを含む双方向IPC | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
+| `managed_worker_uses_protocol_stdout_and_cooperative_stop` | stdoutがframed protocolだけを運び、typed ping responseとcooperative stop acknowledgementを返すこと | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
+| `dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated`、`profile_switch_force_stops_and_replaces_only_the_script_worker` | dynamicのforce条件とgeneration retention、scriptだけのprofile replacement | source-built supervisor test harnessとsource-built `pokecon-worker-fault-fixture`。packaged app／workerのforce証拠とは扱わない |
+| `both_worker_roles_start_and_exit_cleanly` | `--kind script`と`--kind dynamic`が起動し、protocol stdoutを汚さず終了すること | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
+| `nix run .#worker-package-check` | `${self'.packages.pokecon}`のimmutable store outputからappと兄弟workerを導出し、productによるexact sibling `execve`、隔離profile、Lua marker、cooperative stopを確認する。dynamic startup rejectionとstatic fail-soft fallbackのlogがあれば失敗する。process tracingを伴うtask実行はLinux限定で、非Linuxではappを評価できるがunsupported errorで終了し、CI evidenceはUbuntu／Linux jobに限る | product probeはexact packaged app／worker。integration testは通常childだけをexact packaged workerへ置換し、force／generationはsource-built harness／fault fixture |
+
+このevidenceが証明する範囲は、sourceとprocessの所有、機能要求と監督制御の方向、interpreter object／hardware ownership／shared-memory descriptor境界の保存です。Phase 4で行うpriority scheduling、latency、input arbitrationその他のbehavior変更を実装または証明したものではありません。
+
 ## 13. 実装の移行順序
 
 クレート統合と機能挙動の変更を一度に混在させず、次の順序で進めます。

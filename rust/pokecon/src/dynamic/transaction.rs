@@ -4,9 +4,9 @@ use std::sync::Arc;
 use pokecon_device::controller::ControllerUpdate;
 use serde_json::Value;
 
-use crate::callback::{Callback, CallbackError, CallbackSettings};
-use crate::event::{EventBus, EventError, HandlerId, RegistrationOptions};
-use crate::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
+use crate::dynamic::callback::{Callback, CallbackError, CallbackSettings};
+use crate::dynamic::event::{EventBus, EventError, HandlerId, RegistrationOptions};
+use crate::dynamic::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
 
 /// Event mutation staged until a complete top-level/source/reload evaluation
 /// commits.
@@ -450,8 +450,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::callback::{CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink};
-    use crate::host::InMemoryDynamicHost;
+    use crate::dynamic::callback::{
+        CallbackError, CallbackReturn, InvocationContext, NoopDiagnosticSink,
+    };
+    use crate::dynamic::host::InMemoryDynamicHost;
 
     struct CountingCallback(Arc<AtomicUsize>);
 

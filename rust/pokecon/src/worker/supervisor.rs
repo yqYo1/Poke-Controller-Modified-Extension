@@ -12,11 +12,11 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::{Instant, timeout, timeout_at};
 
-use crate::WorkerKind;
-use crate::generation::{
+use crate::worker::WorkerKind;
+use crate::worker::generation::{
     GenerationError, GenerationManager, GenerationPhase, OperationClass, WorkerGeneration,
 };
-use crate::ipc::{
+use crate::worker::ipc::{
     ConnectionConfig, ConnectionError, DisconnectReason, IpcConnection, IpcValue, ResourceSafety,
 };
 

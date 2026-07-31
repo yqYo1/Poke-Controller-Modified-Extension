@@ -2,10 +2,10 @@
 
 use std::path::PathBuf;
 
+use crate::dynamic_domain::CommandInfo;
 use pokecon_camera::{
     CameraSelector, CaptureResolution, FlipMode, MappingDescriptor, ScreenshotFormat,
 };
-use pokecon_dynamic::CommandInfo;
 use serde::{Deserialize, Serialize};
 
 pub const INITIALIZE: &str = "script.initialize";

@@ -9,17 +9,14 @@ repository.workspace = true
 [dependencies]
 async-trait.workspace = true
 atomic-write-file.workspace = true
-mlua.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-device = { path = "../pokecon-device" }
 pokecon-settings = { path = "../pokecon-settings" }
-pyo3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

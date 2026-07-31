@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use tokio::runtime::Handle;
 
-use crate::ipc::{
+use crate::worker::ipc::{
     ConnectionError, IpcConnection, IpcErrorPayload, IpcValue, ValueCodecError, deserialize_value,
     serialize_value,
 };

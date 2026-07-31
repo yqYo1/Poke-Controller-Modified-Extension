@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio_util::sync::CancellationToken;
 
-use crate::WorkerKind;
+use crate::worker::WorkerKind;
 
 /// Monotonic identity assigned to one operating-system worker instance.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -242,7 +242,7 @@ impl GenerationManager {
 #[cfg(test)]
 mod tests {
     use super::{GenerationError, GenerationManager, GenerationPhase, OperationClass};
-    use crate::WorkerKind;
+    use crate::worker::WorkerKind;
 
     #[test]
     fn stopping_cancels_and_rejects_mutating_operations() {

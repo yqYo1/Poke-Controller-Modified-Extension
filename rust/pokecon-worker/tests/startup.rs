@@ -1,9 +1,13 @@
 use std::process::Command;
 
+mod support;
+
+use support::worker_binary;
+
 #[test]
 fn both_worker_roles_start_and_exit_cleanly() {
     for worker_kind in ["script", "dynamic"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_pokecon-worker"))
+        let output = Command::new(worker_binary())
             .args(["--kind", worker_kind, "--exit-after-startup"])
             .env("RUST_LOG", "info")
             .output()

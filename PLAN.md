@@ -235,10 +235,38 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.3b camera
 
-- [ ] `pokecon-camera`を`camera`へ移す。
-- [ ] cameraの具体的な設定applierを`runtime`の合成境界へ移す。
-- [ ] cameraから設定永続化、runtime、server、desktopへの依存を排除する。
-- [ ] camera移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+- [x] `pokecon-camera`を`camera`へ移す。
+- [x] cameraの具体的な設定applierを`runtime`の合成境界へ移す。
+- [x] cameraから設定永続化、runtime、server、desktopへの依存を排除する。
+- [x] camera移行だけの独立構造commitにし、workspace全体の共通完了gateを通す。
+
+#### 2.3b checkpoint証跡（2026-07-31、完了）
+
+下表の完了gateはcaller worktreeまたは実package成果物に対して実行し、すべて終了コード0だった。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| 正準source | `rust/pokecon/src/camera/`の`mod.rs`と9 domain modules（backend、frame、manager、media、native、screenshot、selector、shared_ring、virtual_camera）へ物理移動。旧`rust/pokecon-camera/src/`はcompatibility facadeの`lib.rs`だけ |
+| compile／型境界 | `pokecon-camera`だけが`#[path]`で正準sourceをcompileし、PokeConはprivate `camera/facade.rs`から必要型だけを再exportするためnominal type identityは一つ。移動した`CameraSettingsApplier`はpublic compatibility exportに含めない |
+| settings applier | `rust/pokecon/src/settings_runtime/camera.rs`へ移動し、valuesはprivate、applierは`pub(crate)`。local typeへのtrait実装でorphan-safeを維持し、production adapter順序host→desktop→camera→serial→notification→realtimeとrollback挙動は不変 |
+| 依存境界 | camera→`pokecon-settings`をmanifestとCargo.lockの厳密に1行から削除。cameraからsettings／runtime／server／desktopへの依存は0で、OS別camera target dependencyとshared-ringのunsafe lint境界を維持 |
+| 構造scope | 21 files、10 renames、2 additions、9 modifications、+126/-111。構造commitではgenerated／OpenAPI／Python typings／`flake.nix`／PLANに差分なし |
+| 保護artifact | generated tree `25ad44fa0c95be2254296d2d8e2e4784095d1f52`、OpenAPI blob `a39cab3bee21a37d54661673be901591b8346937`、Python typings tree `e479c1cd5716fdb4c733e2f88dc94354c6986d97`、flake blob `84f1dae692191ff4f97de0246abfb8a53b9c1291`、pokecon Cargo blob `e0ece437a5cc2998e07d732e75f9c0e6ba64c57a`を保持 |
+| focused test | camera library 22/22、PokeCon library 30/30。all-features focused checkもexit 0 |
+| native／isolated test | native V4L2通常gateはhardware依存1件をignored。virtual-io isolated 1/1とserial PTY 1/1は成功 |
+| Rust／契約gate | contract、全target／feature Clippy、workspace全Cargo test、Rust build、compatibilityがexit 0 |
+| Web／成果物gate | Web 74件、CLI help、`nix build .#pokecon`、`nix flake check --no-build`、editor smoke 4/4が成功 |
+| 集約／format | aggregate checkはPython 63件を含めexit 0。最終formatは182 files／0 changed |
+| Debian実package | `tauri-build --bundles deb`、package smoke、package install smokeがexit 0 |
+| package-smoke | amd64 0.1.0、Python 3.14.3、resources 3,801、wheels 28、JS 10、CSS 1、udev rules 3を検査 |
+| install-smoke | Ubuntu 24.04でclean startup／shutdown、same-version reinstallの`SkippedVerified`、2回目のstartup／shutdown、uninstallまで完了 |
+| local deb | SHA256 `788d62c90d199db3a33fec0bc3ee977e8a4ef63c4864397b46c35d0122698fab`、197,519,416 bytes |
+| 構造commit／署名 | `336aec3b1b10898701c1386eae996f1b676f3b80`。raw SSH signatureを`52419113+yqYo1@users.noreply.github.com`、fingerprint `SHA256:JPH7BePGgqgXSLXc86mmeGeCzD+BdP1cb63qH4J6Tig`として検証 |
+| 最終CI 1/3 | 構造SHAで[Nix Source 30604536174](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536174)、[Package 30604536176](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536176)、[Rust 30604536177](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536177)がsuccess |
+| 最終CI 2/3 | [Pytest 30604536180](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536180)、[Lint 30604536187](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536187)、[Basedpyright 30604536193](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536193)がsuccess |
+| 最終CI 3/3 | [SPA 30604536199](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536199)、[Ruff 30604536209](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536209)、[Remote Flake 30604536262](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536262)がsuccess。合計9/9 |
+| Package CI／artifact | [NSIS job 91073990242](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536176/job/91073990242)は16m32s、digest `sha256:8238f919c9c70f08ec35016f4010162217dbd4129b191b4a73874161e52dceb9`。[Debian job 91073990263](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/30604536176/job/91073990263)は29m58s、digest `sha256:762c9ce5bb685987220fd3e31dc8b4d54573429d0f4e576410ad25790cd47fca`でsuccess |
+| review／監視 | camera構造commitのfresh Sol final reviewはFinding 0。`nix run .#ci-watch -- refactor/rust-core 3600`は120秒settlement後exit 0 |
 
 ### 2.3c device
 

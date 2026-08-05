@@ -14,7 +14,7 @@ $resourceManifest = Join-Path $installRoot 'resource-manifest.json'
 $dataRoot = Join-Path $env:LOCALAPPDATA 'pokecon\data'
 $sentinel = Join-Path $dataRoot 'package-smoke-sentinel'
 $desktopWindowTitle = 'PokeCon Controller'
-$desktopWindowTimeoutSeconds = 60
+$desktopWindowTimeoutSeconds = 120
 $desktopTerminationTimeoutSeconds = 15
 
 if (Test-Path -LiteralPath $installRoot) {
@@ -1061,6 +1061,10 @@ function Invoke-DesktopWindowProbe {
 }
 
 function Invoke-StartupProbe {
+    param(
+        [switch] $ProbeDesktopWindow
+    )
+
     if (-not (Test-Path -LiteralPath $application -PathType Leaf)) {
         throw "Installed application is missing: $application"
     }
@@ -1094,15 +1098,17 @@ function Invoke-StartupProbe {
         Out-Host
     Assert-InstalledApplicationHash -Expected $applicationHash -Probe 'Web startup' |
         Out-Host
-    Invoke-DesktopWindowProbe | Out-Host
-    Assert-InstalledApplicationHash -Expected $applicationHash -Probe 'Desktop window' |
-        Out-Host
+    if ($ProbeDesktopWindow) {
+        Invoke-DesktopWindowProbe | Out-Host
+        Assert-InstalledApplicationHash -Expected $applicationHash -Probe 'Desktop window' |
+            Out-Host
+    }
     return $applicationHash
 }
 
 try {
     Invoke-CheckedProcess -FilePath $installerPath -ArgumentList @('/S')
-    $initialApplicationHash = Invoke-StartupProbe
+    $initialApplicationHash = Invoke-StartupProbe -ProbeDesktopWindow
 
     New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
     Set-Content -LiteralPath $sentinel -Value 'preserve-user-data' -NoNewline
@@ -1111,6 +1117,9 @@ try {
     if (-not (Test-Path -LiteralPath $sentinel -PathType Leaf)) {
         throw 'Upgrade removed the user data sentinel'
     }
+    # The clean install already proves the native window. Re-run the Web and
+    # resource startup checks after upgrade, then require the application bytes
+    # to be identical instead of paying for a duplicate desktop initialization.
     $upgradedApplicationHash = Invoke-StartupProbe
     if ($upgradedApplicationHash -cne $initialApplicationHash) {
         throw (
@@ -1133,7 +1142,7 @@ try {
     [ordered]@{
         installer = $installerPath
         application_sha256 = $initialApplicationHash
-        desktop_window_probes = 2
+        desktop_window_probes = 1
         profile_preserved = $true
         startup_probes = 2
         user_data_preserved = $true

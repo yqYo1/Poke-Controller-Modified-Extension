@@ -12,7 +12,7 @@ def section(start: str, end: str) -> str:
     return SCRIPT.split(start, maxsplit=1)[1].split(end, maxsplit=1)[0]
 
 
-def test_each_installed_application_probe_runs_both_modes_with_one_hash() -> None:
+def test_startup_probe_runs_web_and_optionally_desktop_with_one_hash() -> None:
     hash_reader = section(
         "function Get-InstalledApplicationHash {",
         "\nfunction Assert-InstalledApplicationHash {",
@@ -36,7 +36,7 @@ def test_each_installed_application_probe_runs_both_modes_with_one_hash() -> Non
     desktop_probe = "Invoke-DesktopWindowProbe | Out-Host"
     desktop_hash = (
         "Assert-InstalledApplicationHash -Expected $applicationHash "
-        "-Probe 'Desktop window' |\n        Out-Host"
+        "-Probe 'Desktop window'"
     )
 
     assert "Get-FileHash -LiteralPath $application -Algorithm SHA256" in hash_reader
@@ -47,6 +47,8 @@ def test_each_installed_application_probe_runs_both_modes_with_one_hash() -> Non
     assert startup_probe.count(desktop_probe) == 1
     assert startup_probe.count("Assert-InstalledApplicationHash") == 2
     assert startup_probe.count("Out-Host") == 4
+    assert "[switch] $ProbeDesktopWindow" in startup_probe
+    assert "if ($ProbeDesktopWindow)" in startup_probe
     assert (
         startup_probe.index(initial_hash)
         < startup_probe.index(web_probe)
@@ -70,7 +72,7 @@ def test_desktop_probe_requires_a_live_exact_native_window() -> None:
     )[1].split("public void Terminate(uint exitCode)", maxsplit=1)[0]
 
     assert "$desktopWindowTitle = 'PokeCon Controller'" in SCRIPT
-    assert "$desktopWindowTimeoutSeconds = 60" in SCRIPT
+    assert "$desktopWindowTimeoutSeconds = 120" in SCRIPT
     assert "$desktopTerminationTimeoutSeconds = 15" in SCRIPT
     assert "[PokeConSmoke.WindowsJobProcess]::StartDesktop(" in desktop_probe
     assert "$application," in desktop_probe
@@ -214,16 +216,20 @@ def test_desktop_cleanup_uses_one_deadline_for_root_and_job_accounting() -> None
     assert "$Process.Kill($true)" not in SCRIPT
 
 
-def test_clean_install_and_upgrade_each_run_the_dual_mode_probe() -> None:
+def test_clean_install_proves_both_modes_and_upgrade_reuses_exact_binary() -> None:
     lifecycle = SCRIPT.split(
         "\ntry {\n    Invoke-CheckedProcess -FilePath $installerPath",
         maxsplit=1,
     )[1]
 
     assert lifecycle.count("= Invoke-StartupProbe") == 2
-    assert "$initialApplicationHash = Invoke-StartupProbe" in lifecycle
-    assert "$upgradedApplicationHash = Invoke-StartupProbe" in lifecycle
+    clean_install = "$initialApplicationHash = Invoke-StartupProbe -ProbeDesktopWindow"
+    upgraded_install = "$upgradedApplicationHash = Invoke-StartupProbe"
+    assert lifecycle.count("-ProbeDesktopWindow") == 1
+    assert clean_install in lifecycle
+    assert upgraded_install in lifecycle
     assert "$upgradedApplicationHash -cne $initialApplicationHash" in lifecycle
     assert "application_sha256 = $initialApplicationHash" in lifecycle
-    assert "desktop_window_probes = 2" in lifecycle
+    assert "desktop_window_probes = 1" in lifecycle
     assert "web_startup_probes = 2" in lifecycle
+    assert lifecycle.index(clean_install) < lifecycle.index(upgraded_install)

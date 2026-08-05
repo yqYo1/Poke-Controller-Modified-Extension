@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, master, refactor/rust-core]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, refactor/rust-core]
 
 jobs:
   actions:
@@ -36,20 +36,6 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Check formatting with treefmt
         run: nix fmt -- --ci
-
-  rust-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Evaluate Rust source guard
-        id: rust-check
-        run: nix run .#source-guard -- rust --github-output "$GITHUB_OUTPUT"
-      - name: Run cargo clippy
-        if: steps.rust-check.outputs.applicable == 'true'
-        run: nix run .#clippy
 
   python-lint:
     runs-on: ubuntu-latest

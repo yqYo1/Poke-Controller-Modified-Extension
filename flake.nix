@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "36b4aaf75ac4f89ef288a1d706afdddb7b1ee817cd0f66aff9e71b25ee6ee567";
+      canonicalFlakeHash = "6b29fd6ce5b58430006a811e40da0ab29082cbfda2cd67d4b17c0963d4bc4a29";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "19e3f7fa8907d3f8b99fca555b467cb8e0fcd8fd36b8e8192b3e7dd4af9679c9";
+              expectedAuditTestHash = "f2da47b0e1c57f7b84e45381cbcb243a84373bdca923ce4cf4901a40f6ee1c30";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -2581,15 +2581,11 @@
               "--bin"
               "pokecon-worker"
             ];
-            cargoTestFlags = [
-              "--locked"
-              "--package"
-              "pokecon"
-              "--package"
-              "pokecon-worker"
-            ];
-            doCheck = true;
-            POKECON_RESOURCE_PROVENANCE = "development";
+            # Source correctness is owned once by rust-ci-core. The package
+            # gates below execute the exact store binaries instead of rebuilding
+            # the same tests inside this product derivation.
+            doCheck = false;
+            POKECON_RESOURCE_PROVENANCE = "nix-exact";
             postPatch = ''
               test -f "${productionRoutingAudit}/passed"
               ${installControlledCargoManifests}
@@ -2612,16 +2608,6 @@
                 fi
               done
               unset forbidden_package_rust_environment
-            '';
-            preCheck = ''
-              ${installControlledCargoManifests}
-              runtimeRoot="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/$cargoCheckType"
-              mkdir -p "$runtimeRoot/uv"
-              ln -sfn "${pkgs.uv}/bin/uv" "$runtimeRoot/uv/uv"
-            '';
-            preInstall = ''
-              export POKECON_RESOURCE_PROVENANCE=nix-exact
-              cargoBuildHook
             '';
             installPhase = ''
               runHook preInstall
@@ -3569,10 +3555,18 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTHONPATH="$PWD"
                 POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 POKECON_RESOURCE_PROVENANCE=development \
                 cargo build --locked --workspace --all-features
                 POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
+                python -m scripts.compatibility.promote --check
+                python -m scripts.compatibility.runner \
+                  --check \
+                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
               '';
             };
 
@@ -4931,6 +4925,42 @@
                   --objdump "${pkgs.binutils}/bin/objdump" \
                   --runtime-library-path "${linuxReleaseRuntimeLibraries}/lib" \
                   "$@"
+              '';
+            };
+
+            package-reproducibility-check = mkTask {
+              name = "package-reproducibility-check";
+              runtimeInputs = [
+                pkgs.diffutils
+                pkgs.findutils
+              ];
+              text = ''
+                if [ "$#" -ne 2 ]; then
+                  echo "usage: nix run .#package-reproducibility-check -- PRIMARY_DIR REPRODUCTION_DIR" >&2
+                  exit 2
+                fi
+                ${setupSourceGateEnvironment}
+                primary_root=$1
+                reproduction_root=$2
+                for bundle_root in "$primary_root" "$reproduction_root"; do
+                  if [ -L "$bundle_root" ] || [ ! -d "$bundle_root" ]; then
+                    echo "package reproducibility input must be a real directory: $bundle_root" >&2
+                    exit 2
+                  fi
+                done
+                mapfile -d "" -t primary_bundles < <(
+                  find -P "$primary_root" -type f -name '*.deb' -print0
+                )
+                mapfile -d "" -t reproduction_bundles < <(
+                  find -P "$reproduction_root" -type f -name '*.deb' -print0
+                )
+                if [ "''${#primary_bundles[@]}" -ne 1 ] \
+                  || [ "''${#reproduction_bundles[@]}" -ne 1 ]; then
+                  echo "expected exactly one primary and one reproduction Debian bundle" >&2
+                  exit 1
+                fi
+                sha256sum -- "''${primary_bundles[0]}" "''${reproduction_bundles[0]}"
+                cmp -- "''${primary_bundles[0]}" "''${reproduction_bundles[0]}"
               '';
             };
 

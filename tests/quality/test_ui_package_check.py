@@ -1551,7 +1551,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     expected_production_build_input_hashes = {
         "@.gitignore": (
-            "c4d5b0e7d2178ff43cd3015ffe61fb478a05523888dbb06a7f99ca8d6f1778fd"
+            "2d4389264bc9e1f99657e1a6b41f8a58dca00c27b98d1dd05d8dc556633573b3"
         ),
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
@@ -2247,7 +2247,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "bf12209662e1b50a6e2f9762c1876d77c95dbc73faa47d819c6eaa43081f86b8"
+        == "9dc7aca78573a861a428b82f8eb1ad7f702ba5399aefedf6cc478895a491bc45"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3101,10 +3101,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "8495df576757f52f8bb7cd15d1f58b1693d9abed89debbe22aff9560a6535283"
+        == "be02827c8a4d626bbc1213b253c180775d94fe57bfebe812e308b2b279a1c805"
     )
-    assert package_section.count("${installControlledCargoManifests}") == 3
-    assert package_section.count('"--locked"') == 2
+    assert package_section.count("${installControlledCargoManifests}") == 2
+    assert package_section.count('"--locked"') == 1
     assert '"--features"' not in package_section
     assert 'test -f "${productionRoutingAudit}/passed"' in package_section
     assert 'RUSTC = "${rustToolchain}/bin/rustc";' in package_section
@@ -3119,18 +3119,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         if "POKECON_RESOURCE_PROVENANCE" in line
     )
     assert package_provenance_inventory == (
-        'POKECON_RESOURCE_PROVENANCE = "development";',
-        "export POKECON_RESOURCE_PROVENANCE=nix-exact",
+        'POKECON_RESOURCE_PROVENANCE = "nix-exact";',
     )
-    package_preinstall = (
-        "            preInstall = ''\n"
-        "              export POKECON_RESOURCE_PROVENANCE=nix-exact\n"
-        "              cargoBuildHook\n"
-        "            '';\n"
-    )
-    assert package_section.count(package_preinstall) == 1
-    assert package_section.count("preInstall =") == 1
-    assert package_section.count("cargoBuildHook") == 1
+    assert package_section.count("preInstall =") == 0
+    assert package_section.count("cargoBuildHook") == 0
     assert package_section.count("cargoInstallHook") == 0
     package_install = (
         "            installPhase = ''\n"
@@ -3167,9 +3159,9 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "target/@targetSubdirectory@",
     ):
         assert forbidden_release_tree_install not in package_section
-    assert package_section.count("doCheck = true;") == 1
+    assert package_section.count("doCheck = false;") == 1
     assert package_section.count("cargoBuildFlags = [") == 1
-    assert package_section.count("cargoTestFlags = [") == 1
+    assert package_section.count("cargoTestFlags = [") == 0
     for forbidden_package_phase in (
         "buildPhase =",
         "checkPhase =",
@@ -3183,7 +3175,9 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ):
         assert forbidden_package_phase not in package_section
     package_prebuild_start = package_section.index("preBuild =")
-    package_prebuild_end = package_section.index("preCheck =", package_prebuild_start)
+    package_prebuild_end = package_section.index(
+        "installPhase =", package_prebuild_start
+    )
     package_prebuild = package_section[package_prebuild_start:package_prebuild_end]
     assert (
         hashlib.sha256(package_prebuild.strip().encode()).hexdigest()
@@ -3353,7 +3347,7 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "d0edbd3647c38bb3f6f8cb33bc4abacdc51ac25cf14e475c13f3ca6504601b6d"
+        == "c172ceaefba843d3743cb8dc2263574af63464a3421825dd752b0f361e54eda2"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3365,7 +3359,7 @@ offline = true
         == len(development_command_section_boundaries) + 6
     )
     assert flake.count(development_provenance_assignment) == 18
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 22
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
@@ -3433,10 +3427,24 @@ offline = true
     rust_ci_core_section = development_command_sections["rust-ci-core"]
     assert rust_ci_core_section.count("${setupWorkdir}") == 1
     assert rust_ci_core_section.count("${desktopEnvironment}") == 1
+    assert rust_ci_core_section.count("export PYTHONDONTWRITEBYTECODE=1") == 1
+    assert rust_ci_core_section.count('export PYTHONPATH="$PWD"') == 1
+    compatibility_promotion = "python -m scripts.compatibility.promote --check"
+    compatibility_runner = "python -m scripts.compatibility.runner"
+    assert rust_ci_core_section.count(compatibility_promotion) == 1
+    assert rust_ci_core_section.count(compatibility_runner) == 1
+    for compatibility_input in (
+        '--compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility"',
+        '--worker "$CARGO_TARGET_DIR/debug/pokecon-worker"',
+        '--site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"',
+    ):
+        assert rust_ci_core_section.count(compatibility_input) == 1
     assert (
         rust_ci_core_section.index(rust_ci_core_commands[0])
         < rust_ci_core_section.index(rust_ci_core_commands[1])
         < rust_ci_core_section.index(rust_ci_core_commands[2])
+        < rust_ci_core_section.index(compatibility_promotion)
+        < rust_ci_core_section.index(compatibility_runner)
     )
     check_commands = development_command_sections["check"]
     assert check_commands.count('-m "not production_routing_mutation"') == 1
@@ -17001,6 +17009,8 @@ def test_gate_covers_immutable_http_native_window_and_diagnostics() -> None:
         "/api/state",
         "/api/settings",
         "/ui/",
+        "grep -qiE '404|Not Found' \"$packaged_index\"",
+        "packaged Web entrypoint contains SvelteKit error page indicators",
         "main Svelte asset bytes differ",
         "resource_not_found",
         "settings.normalized.json",
@@ -17375,7 +17385,7 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
         assert forbidden not in gate
     assert runtime_inputs.count("pkgs.findutils") == 1
     assert "pkgs.mesa" not in runtime_inputs
-    assert package.count("export POKECON_RESOURCE_PROVENANCE=nix-exact") == 1
+    assert package.count('POKECON_RESOURCE_PROVENANCE = "nix-exact";') == 1
     assert package.count('ln -s ../web "$out/bin/web"') == 1
     assert flake.count("uiPackageSoftwareRenderer = pkgs.mesa;") == 1
     assert gate.count('"${uiPackageSoftwareRenderer}"') == 1
@@ -17471,36 +17481,88 @@ def test_single_instance_primary_election_dependency_is_review_pinned() -> None:
     )
 
 
-def test_rust_ci_runs_ui_and_cached_cli_gates_for_integration_changes() -> None:
+def test_rust_ci_parallelizes_source_and_package_gates_without_rebuilding() -> None:
     workflow = (REPOSITORY / ".github/workflows/rust-ci.yml").read_text()
 
     assert workflow.count("- 'web/**'") == 2
     assert workflow.count("- 'scripts/integration/**'") == 2
     assert workflow.count("- 'tests/fixtures/cli-help/**'") == 2
+    assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
+    source_job = section(workflow, "  build:\n", "  package:\n")
+    package_job = section(workflow, "  package:\n", "  build-windows:\n")
     rust_core_step = (
-        "      - name: Clippy, build, and test\n"
+        "      - name: Clippy, build, test, and compatibility\n"
         "        if: steps.rust-check.outputs.applicable == 'true'\n"
         "        run: nix run .#rust-ci-core\n"
     )
+    worker_step = (
+        "      - name: Verify packaged worker roles\n"
+        "        if: steps.rust-check.outputs.applicable == 'true'\n"
+        "        run: nix run .#worker-package-check\n"
+    )
     ui_step_name = "      - name: Verify immutable Web and Tauri modes\n"
     cli_step_name = "      - name: Verify packaged CLI help\n"
-    compatibility_step_name = "      - name: Execute immutable compatibility corpus\n"
     assert workflow.count(rust_core_step) == 1
+    assert source_job.count(rust_core_step) == 1
+    assert package_job.count(worker_step) == 1
+    assert "needs:" not in package_job
     for superseded_command in (
         "nix run .#clippy",
         "nix run .#build-rust",
         "nix run .#cargo-test",
+        "nix run .#compatibility",
     ):
         assert superseded_command not in workflow
     assert workflow.count(ui_step_name) == 1
     assert workflow.count(cli_step_name) == 1
-    assert section(workflow, ui_step_name, cli_step_name) == (
+    assert section(package_job, ui_step_name, cli_step_name) == (
         "        run: nix run .#ui-package-check\n"
     )
-    assert section(workflow, cli_step_name, compatibility_step_name) == (
+    assert section(workflow, cli_step_name, "\n  build-windows:\n") == (
         "        run: nix run .#cli-help-check\n"
     )
-    assert workflow.index(ui_step_name) < workflow.index(cli_step_name)
+    assert package_job.index(worker_step) < package_job.index(ui_step_name)
+    assert package_job.index(ui_step_name) < package_job.index(cli_step_name)
+
+
+def test_ci_executes_each_existing_logical_check_once() -> None:
+    workflow_root = REPOSITORY / ".github/workflows"
+    retired_workflows = (
+        "basedpyright.yml",
+        "nix-source-filter-check.yml",
+        "ruff.yml",
+        "spa-404-check.yml",
+    )
+    assert all(not (workflow_root / name).exists() for name in retired_workflows)
+
+    workflows = "\n".join(
+        path.read_text() for path in sorted(workflow_root.glob("*.yml"))
+    )
+    lint = (workflow_root / "lint.yml").read_text()
+    remote_flake = (workflow_root / "remote-flake.yml").read_text()
+    flake = (REPOSITORY / "flake.nix").read_text()
+    contract_check = section(
+        flake,
+        "            contract-check = mkTask {\n",
+        "            generate-contracts = mkTask {\n",
+    )
+
+    assert workflows.count("nix fmt -- --ci") == 1
+    assert lint.count("nix run .#ruff-check") == 1
+    assert lint.count("nix run .#ruff-format-check") == 1
+    assert workflows.count("nix run .#clippy") == 0
+    assert workflows.count("nix run .#rust-ci-core") == 1
+    assert contract_check.count('bun --bun "${basedpyrightCli}"') == 1
+    assert contract_check.count("python -m scripts.quality.source_filter") == 1
+    assert remote_flake.count("nix flake check --no-build") == 1
+    assert remote_flake.count("Run default app help from remote") == 1
+    for redundant_flake_probe in (
+        "Run default app help locally",
+        "Run check app help locally",
+        "Run check app help from remote",
+        "nix run .#check -- --help",
+    ):
+        assert redundant_flake_probe not in remote_flake
 
 
 def test_retired_desktop_product_feature_is_absent_from_release_surfaces() -> None:
@@ -17570,6 +17632,8 @@ def test_windows_rust_ci_binds_development_resource_provenance_to_final_check() 
     )
 
     assert workflow.count(step_name) == 1
+    assert workflow.count("name: Check workspace (Windows)") == 1
+    assert "name: Build workspace (Windows)" not in workflow
     assert workflow.endswith(expected_final_step)
     assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 1
     assert workflow.count("POKECON_RESOURCE_PROVENANCE: development") == 1

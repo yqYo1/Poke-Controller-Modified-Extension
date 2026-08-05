@@ -51,20 +51,12 @@ jobs:
         run: nix run .#package-smoke -- dist/tauri/*.deb
       - name: Verify clean install, offline startup, upgrade, and uninstall
         run: nix run .#package-install-smoke -- dist/tauri/*.deb
-      - name: Preserve first package build
-        run: cp dist/tauri/*.deb "$RUNNER_TEMP/pokecon-first.deb"
-      - name: Rebuild Debian package from identical inputs
-        run: nix run .#tauri-build -- --bundles deb
       - name: Record Linux signing inputs
         run: >-
           nix run .#signing-input-manifest --
           --platform linux
           --bundle dist/tauri/*.deb
           --output dist/tauri/signing-inputs.json
-      - name: Verify byte-for-byte package reproducibility
-        run: |
-          cmp "$RUNNER_TEMP/pokecon-first.deb" dist/tauri/*.deb
-          sha256sum dist/tauri/*.deb
       - name: Verify Linux signing inputs at handoff
         run: >-
           nix run .#signing-input-manifest --
@@ -79,6 +71,43 @@ jobs:
             dist/tauri/signing-inputs.json
           if-no-files-found: error
           retention-days: 3
+
+  linux-reproducibility-build:
+    name: Independent Debian reproducibility build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Debian package from identical inputs
+        run: nix run .#tauri-build -- --bundles deb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-linux-x86_64-reproducibility
+          path: dist/tauri/*.deb
+          if-no-files-found: error
+          retention-days: 3
+
+  linux-reproducibility:
+    name: Verify Debian package reproducibility
+    runs-on: ubuntu-latest
+    needs: [linux, linux-reproducibility-build]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-linux-x86_64
+          path: primary
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-linux-x86_64-reproducibility
+          path: reproduction
+      - name: Verify byte-for-byte package reproducibility
+        run: nix run .#package-reproducibility-check -- primary reproduction
 
   windows:
     name: NSIS bundle and clean-install smoke

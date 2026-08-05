@@ -2,15 +2,6 @@
   "schema_version": 1,
   "jobs": [
     {
-      "name": "basedpyright/type-check",
-      "workflow": "basedpyright",
-      "job": "type-check",
-      "command": "nix run .#basedpyright",
-      "applicable_when": "tracked python/**/*.py or python/**/*.pyi exists",
-      "not_applicable": "notice naming the absent Python source/type patterns",
-      "phase": 2
-    },
-    {
       "name": "compatibility-roll/evaluate",
       "workflow": "compatibility-roll",
       "job": "evaluate",
@@ -36,7 +27,8 @@
       "command": "nix run .#contract-check",
       "applicable_when": "always after phase 1",
       "not_applicable": "forbidden",
-      "phase": 1
+      "phase": 1,
+      "implementation_status": "the consolidated contract gate owns contract and generated-output drift, Basedpyright, shell lint, and Nix source-filter validation"
     },
     {
       "name": "lint/nix-fmt",
@@ -48,22 +40,14 @@
       "phase": 1
     },
     {
-      "name": "lint/rust-lint",
-      "workflow": "lint",
-      "job": "rust-lint",
-      "command": "nix run .#clippy",
-      "applicable_when": "at least one tracked rust/**/src/**/*.rs exists",
-      "not_applicable": "notice naming the absent Rust source pattern",
-      "phase": 1
-    },
-    {
       "name": "lint/python-lint",
       "workflow": "lint",
       "job": "python-lint",
       "command": "nix run .#ruff-check && nix run .#ruff-format-check",
-      "applicable_when": "at least one tracked .py file exists",
-      "not_applicable": "notice naming the absent Python source pattern",
-      "phase": 1
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
+      "phase": 1,
+      "implementation_status": "Ruff checking and formatting are consolidated in this single lint job"
     },
     {
       "name": "lint/typos",
@@ -102,16 +86,6 @@
       "phase": 1
     },
     {
-      "name": "nix-source-filter-check/check-source-filter",
-      "workflow": "nix-source-filter-check",
-      "job": "check-source-filter",
-      "command": "nix run .#source-filter-check",
-      "applicable_when": "always; an empty future source directory set is a valid checked state",
-      "not_applicable": "forbidden",
-      "phase": 2,
-      "implementation_status": "implemented by scripts/quality/source_filter.py with covered and uncovered fixture branches"
-    },
-    {
       "name": "pytest/test-linux",
       "workflow": "pytest",
       "job": "test-linux",
@@ -138,7 +112,27 @@
       "applicable_when": "a package-affecting path changes on a configured branch or pull request",
       "not_applicable": "workflow path and branch filters did not select the change",
       "phase": 13,
-      "implementation_status": "Debian resources, clean install, offline startup, upgrade, uninstall, and byte reproducibility are enforced"
+      "implementation_status": "Debian resources, clean install, offline startup, upgrade, uninstall, and signing-input handoff are enforced"
+    },
+    {
+      "name": "package/linux-reproducibility-build",
+      "workflow": "package",
+      "job": "linux-reproducibility-build",
+      "command": "nix run .#tauri-build -- --bundles deb",
+      "applicable_when": "a package-affecting path changes on a configured branch or pull request",
+      "not_applicable": "workflow path and branch filters did not select the change",
+      "phase": 13,
+      "implementation_status": "an independent runner builds the reproduction Debian bundle from identical inputs"
+    },
+    {
+      "name": "package/linux-reproducibility",
+      "workflow": "package",
+      "job": "linux-reproducibility",
+      "command": "nix run .#package-reproducibility-check -- primary reproduction",
+      "applicable_when": "both independent Linux package jobs complete successfully",
+      "not_applicable": "workflow path and branch filters did not select the change, or a required package build failed",
+      "phase": 13,
+      "implementation_status": "the independently built Debian artifacts are downloaded and required to be byte-for-byte identical"
     },
     {
       "name": "package/windows",
@@ -197,28 +191,30 @@
       "workflow": "remote-flake",
       "job": "local-flake-run",
       "command": "nix flake check --no-build",
-      "applicable_when": "flake evaluation always; app help execution after the Rust application entry point exists",
-      "not_applicable": "app substeps use the canonical app guard; evaluation remains applicable",
+      "applicable_when": "always",
+      "not_applicable": "forbidden",
       "phase": 1,
-      "implementation_status": "flake evaluation is unconditional and app help probes use the canonical guard"
-    },
-    {
-      "name": "ruff/ruff",
-      "workflow": "ruff",
-      "job": "ruff",
-      "command": "nix run .#ruff-check && nix run .#ruff-format-check",
-      "applicable_when": "at least one tracked .py file exists",
-      "not_applicable": "notice naming the absent Python source pattern",
-      "phase": 1
+      "implementation_status": "local flake output evaluation is unconditional; executable app resolution is owned by the remote job"
     },
     {
       "name": "rust-ci/build",
       "workflow": "rust-ci",
       "job": "build",
-      "command": "nix run .#clippy && nix run .#build-rust && nix run .#cargo-test",
+      "command": "nix run .#rust-ci-core",
       "applicable_when": "at least one tracked rust/**/src/**/*.rs exists",
       "not_applicable": "notice naming the absent Rust source pattern",
-      "phase": 1
+      "phase": 1,
+      "implementation_status": "Rust Clippy, workspace build and tests, and immutable compatibility checks are consolidated in rust-ci-core"
+    },
+    {
+      "name": "rust-ci/package",
+      "workflow": "rust-ci",
+      "job": "package",
+      "command": "nix run .#worker-package-check && nix run .#ui-package-check && nix run .#cli-help-check",
+      "applicable_when": "the Rust CI workflow path filters select the change; the worker subcheck additionally requires tracked Rust source",
+      "not_applicable": "workflow path filters did not select the change; only the worker subcheck may be skipped by its source guard",
+      "phase": 13,
+      "implementation_status": "immutable worker, UI and SPA, and CLI package checks are consolidated here against Nix-built products"
     },
     {
       "name": "rust-ci/build-windows",
@@ -230,16 +226,6 @@
       "phase": 2,
       "execution_environment": "windows-native",
       "implementation_status": "Windows has no supported native Nix runner, so the pinned rust-toolchain and Python 3.14 are installed explicitly"
-    },
-    {
-      "name": "spa-404-check/spa-404-check",
-      "workflow": "spa-404-check",
-      "job": "spa-404-check",
-      "command": "nix run .#spa-smoke-test",
-      "applicable_when": "server main, Web package, lockfile, and tracked web/src source exist",
-      "not_applicable": "notice naming each absent server/Web prerequisite",
-      "phase": 11,
-      "implementation_status": "canonical SPA guard and root pokecon package path implemented; full smoke test activates with phase 11 Web source"
     }
   ]
 }

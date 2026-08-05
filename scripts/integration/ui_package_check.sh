@@ -1451,6 +1451,9 @@ packaged_index="$canonical_web/index.html"
 if [ ! -f "$packaged_index" ] || [ -L "$packaged_index" ]; then
   fail "packaged Web entrypoint is not a regular immutable file"
 fi
+if grep -qiE '404|Not Found' "$packaged_index"; then
+  fail "packaged Web entrypoint contains SvelteKit error page indicators"
+fi
 asset_path="$(grep -oE '/_app/immutable/entry/app\.[A-Za-z0-9_-]+\.js' \
   "$packaged_index" | head -n 1 || true)"
 if [ -z "$asset_path" ]; then

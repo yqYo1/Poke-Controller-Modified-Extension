@@ -86,7 +86,7 @@
     {
       "id": "python_package",
       "paths": ["python/pokecon", "rust/pokecon-pybindings/Cargo.toml"],
-      "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/basedpyright.yml"],
+      "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/lint.yml"],
       "status": "implemented",
       "phase": 2,
       "resolution": "typed Python package and pokecon._native PyO3 boundary are buildable through maturin"

@@ -23,9 +23,6 @@ jobs:
       - name: Run default app help from remote
         if: steps.app-check.outputs.applicable == 'true'
         run: nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }} -- --help
-      - name: Run check app help from remote
-        if: steps.app-check.outputs.applicable == 'true'
-        run: nix run --refresh github:yqYo1/Poke-Controller-Modified-Extension/${{ github.sha }}#check -- --help
 
   local-flake-run:
     name: Run flake from local checkout
@@ -35,14 +32,5 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Evaluate application source guard
-        id: app-check
-        run: nix run .#source-guard -- app --github-output "$GITHUB_OUTPUT"
-      - name: Run default app help locally
-        if: steps.app-check.outputs.applicable == 'true'
-        run: nix run . -- --help
-      - name: Run check app help locally
-        if: steps.app-check.outputs.applicable == 'true'
-        run: nix run .#check -- --help
       - name: Evaluate all local flake outputs
         run: nix flake check --no-build

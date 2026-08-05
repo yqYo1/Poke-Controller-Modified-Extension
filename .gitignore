@@ -7,8 +7,6 @@
 /.github/*
 !/.github/workflows/
 /.github/workflows/*
-!/.github/workflows/ruff.yml
-!/.github/workflows/basedpyright.yml
 !/.github/workflows/compatibility-roll.yml
 !/.github/workflows/lint.yml
 !/.github/workflows/pytest.yml

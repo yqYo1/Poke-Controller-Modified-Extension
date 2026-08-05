@@ -21,18 +21,10 @@ const CARGO_MANIFEST: &str = include_str!("../../../Cargo.toml");
 const GITIGNORE: &str = include_str!("../../../.gitignore");
 const WORKFLOWS: &[(&str, &str)] = &[
     (
-        "basedpyright",
-        include_str!("../../../.github/workflows/basedpyright.yml"),
-    ),
-    (
         "compatibility-roll",
         include_str!("../../../.github/workflows/compatibility-roll.yml"),
     ),
     ("lint", include_str!("../../../.github/workflows/lint.yml")),
-    (
-        "nix-source-filter-check",
-        include_str!("../../../.github/workflows/nix-source-filter-check.yml"),
-    ),
     (
         "pytest",
         include_str!("../../../.github/workflows/pytest.yml"),
@@ -49,14 +41,9 @@ const WORKFLOWS: &[(&str, &str)] = &[
         "remote-flake",
         include_str!("../../../.github/workflows/remote-flake.yml"),
     ),
-    ("ruff", include_str!("../../../.github/workflows/ruff.yml")),
     (
         "rust-ci",
         include_str!("../../../.github/workflows/rust-ci.yml"),
-    ),
-    (
-        "spa-404-check",
-        include_str!("../../../.github/workflows/spa-404-check.yml"),
     ),
 ];
 

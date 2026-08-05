@@ -9,6 +9,14 @@ import pytest
 from scripts.release.gate import validate_release, write_checksums
 
 
+def workflow_section(document: str, start: str, end: str) -> str:
+    _prefix, separator, tail = document.partition(start)
+    assert separator, f"missing workflow section start: {start}"
+    body, separator, _suffix = tail.partition(end)
+    assert separator, f"missing workflow section end after: {start}"
+    return body
+
+
 def test_repository_release_versions_and_contracts_match() -> None:
     root = Path(__file__).resolve().parents[2]
     assert validate_release(root, "v0.1.0") == "0.1.0"
@@ -80,3 +88,73 @@ def test_checksums_reject_transient_tauri_publication_state(
 
     with pytest.raises(ValueError, match="transient Tauri publication state"):
         write_checksums(artifacts, artifacts / "SHA256SUMS")
+
+
+def test_package_ci_builds_debian_reproducibility_proof_in_parallel() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/package.yml").read_text(encoding="utf-8")
+    flake = (root / "flake.nix").read_text(encoding="utf-8")
+    primary = workflow_section(
+        workflow,
+        "  linux:\n",
+        "  linux-reproducibility-build:\n",
+    )
+    reproduction = workflow_section(
+        workflow,
+        "  linux-reproducibility-build:\n",
+        "  linux-reproducibility:\n",
+    )
+    comparison = workflow_section(
+        workflow,
+        "  linux-reproducibility:\n",
+        "  windows:\n",
+    )
+
+    build_command = "nix run .#tauri-build -- --bundles deb"
+    assert primary.count(build_command) == 1
+    assert reproduction.count(build_command) == 1
+    assert comparison.count(build_command) == 0
+    assert "needs:" not in primary
+    assert "needs:" not in reproduction
+    assert comparison.count("needs: [linux, linux-reproducibility-build]") == 1
+    assert "Preserve first package build" not in workflow
+    assert "Rebuild Debian package from identical inputs" not in workflow
+
+    assert primary.count("name: package-linux-x86_64\n") == 1
+    assert reproduction.count("name: package-linux-x86_64-reproducibility\n") == 1
+    assert primary.count("retention-days: 3") == 1
+    assert reproduction.count("retention-days: 3") == 1
+    for artifact_name in (
+        "package-linux-x86_64",
+        "package-linux-x86_64-reproducibility",
+    ):
+        assert comparison.count(f"name: {artifact_name}\n") == 1
+    for comparison_setup in (
+        "actions/checkout@v6",
+        "cachix/install-nix-action@v31",
+        "actions/download-artifact@v8",
+        "nix run .#package-reproducibility-check -- primary reproduction",
+    ):
+        assert comparison_setup in comparison
+
+    reproducibility_app = workflow_section(
+        flake,
+        "            package-reproducibility-check = mkTask {\n",
+        "            package-install-smoke = mkTask {\n",
+    )
+    for comparison_proof in (
+        "pkgs.diffutils",
+        "pkgs.findutils",
+        'if [ "$#" -ne 2 ]',
+        'mapfile -d "" -t primary_bundles',
+        'mapfile -d "" -t reproduction_bundles',
+        "find -P \"$primary_root\" -type f -name '*.deb' -print0",
+        "find -P \"$reproduction_root\" -type f -name '*.deb' -print0",
+        "if [ \"''${#primary_bundles[@]}\" -ne 1 ]",
+        "sha256sum -- \"''${primary_bundles[0]}\" \"''${reproduction_bundles[0]}\"",
+        "cmp -- \"''${primary_bundles[0]}\" \"''${reproduction_bundles[0]}\"",
+    ):
+        assert comparison_proof in reproducibility_app
+    assert reproducibility_app.index("sha256sum --") < reproducibility_app.index(
+        "cmp --"
+    )

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "6e3f560f77659de3183c8aee7c6a2025a2a878d297c068e55c82d71b2b187d43";
+      canonicalFlakeHash = "756d1e49cadeb559464ae1f8b07e5b05bd81cef017dcdbb73419e3b5b89232cf";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "1fd87d6f306d0e28ab152f3725640bd7b7d01fa8cfaab361ad882842664d0a9e";
+              expectedAuditTestHash = "fa6840965405ef4d827fdf36fcac60ea47c8522bc87faaf08553d1ce9eb79a6f";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -3563,6 +3563,19 @@
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
                 python -m scripts.acceptance.records "$@"
+              '';
+            };
+
+            rust-ci-core = mkTask {
+              name = "rust-ci-core";
+              runtimeInputs = rustTaskInputs;
+              text = ''
+                ${setupWorkdir}
+                ${desktopEnvironment}
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                POKECON_RESOURCE_PROVENANCE=development \
+                cargo build --locked --workspace --all-features
+                POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
               '';
             };
 

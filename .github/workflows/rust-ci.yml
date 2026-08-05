@@ -48,15 +48,9 @@ jobs:
       - name: Evaluate Rust source guard
         id: rust-check
         run: nix run .#source-guard -- rust --github-output "$GITHUB_OUTPUT"
-      - name: Clippy
+      - name: Clippy, build, and test
         if: steps.rust-check.outputs.applicable == 'true'
-        run: nix run .#clippy
-      - name: Build all crates
-        if: steps.rust-check.outputs.applicable == 'true'
-        run: nix run .#build-rust
-      - name: Run tests
-        if: steps.rust-check.outputs.applicable == 'true'
-        run: nix run .#cargo-test
+        run: nix run .#rust-ci-core
       - name: Verify packaged worker roles
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#worker-package-check

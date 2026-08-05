@@ -2176,7 +2176,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "18dbf3fc1cb5757155c8736db02ce8f97206b0417a8f64db33455b9a7dd84bad"
+        == "816706c8ddaf420052524d2f5d0cb980f6ea160451ff539569c1349ed2437fad"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3228,6 +3228,11 @@ offline = true
             "            web-dev = mkTask {\n",
         ),
         (
+            "rust-ci-core",
+            "            rust-ci-core = mkTask {\n",
+            "            clippy = mkTask {\n",
+        ),
+        (
             "clippy",
             "            clippy = mkTask {\n",
             "            build-rust = mkTask {\n",
@@ -3276,22 +3281,29 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "895f6894ce165ae9f0f54e8b69762dbe8bd44db5c915e37a79f959a0f35e2d62"
+        == "526bc07c1c377fff68d895ddddb35e2da1d6c43d938bfe05b54ac2bb6e04c341"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
         development_command_sections_text.count(development_provenance_assignment)
-        == len(development_command_section_boundaries) + 2
+        == len(development_command_section_boundaries) + 4
     )
     assert (
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
-        == len(development_command_section_boundaries) + 2
+        == len(development_command_section_boundaries) + 4
     )
-    assert flake.count(development_provenance_assignment) == 9
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 13
+    assert flake.count(development_provenance_assignment) == 12
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 16
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
+        ),
+        "rust-ci-core": (
+            "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
+            "--workspace --all-targets --all-features -- -D warnings",
+            "cargo build --locked --workspace --all-features",
+            "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
+            "--workspace --all-features",
         ),
         "clippy": (
             "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
@@ -3332,16 +3344,28 @@ offline = true
     assert (
         actual_development_cargo_invocations == expected_development_cargo_invocations
     )
-    for command_section_name in ("build-rust", "build"):
+    for command_section_name, build_command_index in (
+        ("rust-ci-core", 1),
+        ("build-rust", 0),
+        ("build", 0),
+    ):
         command_section = development_command_sections[command_section_name]
         build_commands = expected_development_cargo_invocations[command_section_name]
-        assert len(build_commands) == 1
-        build_command = build_commands[0]
+        build_command = build_commands[build_command_index]
         build_with_local_provenance = (
             "POKECON_RESOURCE_PROVENANCE=development \\\n                "
             + build_command
         )
         assert command_section.count(build_with_local_provenance) == 1
+    rust_ci_core_commands = expected_development_cargo_invocations["rust-ci-core"]
+    rust_ci_core_section = development_command_sections["rust-ci-core"]
+    assert rust_ci_core_section.count("${setupWorkdir}") == 1
+    assert rust_ci_core_section.count("${desktopEnvironment}") == 1
+    assert (
+        rust_ci_core_section.index(rust_ci_core_commands[0])
+        < rust_ci_core_section.index(rust_ci_core_commands[1])
+        < rust_ci_core_section.index(rust_ci_core_commands[2])
+    )
     check_commands = development_command_sections["check"]
     assert check_commands.count('-m "not production_routing_mutation"') == 1
     assert (
@@ -17328,9 +17352,21 @@ def test_rust_ci_runs_ui_and_cached_cli_gates_for_integration_changes() -> None:
     assert workflow.count("- 'web/**'") == 2
     assert workflow.count("- 'scripts/integration/**'") == 2
     assert workflow.count("- 'tests/fixtures/cli-help/**'") == 2
+    rust_core_step = (
+        "      - name: Clippy, build, and test\n"
+        "        if: steps.rust-check.outputs.applicable == 'true'\n"
+        "        run: nix run .#rust-ci-core\n"
+    )
     ui_step_name = "      - name: Verify immutable Web and Tauri modes\n"
     cli_step_name = "      - name: Verify packaged CLI help\n"
     compatibility_step_name = "      - name: Execute immutable compatibility corpus\n"
+    assert workflow.count(rust_core_step) == 1
+    for superseded_command in (
+        "nix run .#clippy",
+        "nix run .#build-rust",
+        "nix run .#cargo-test",
+    ):
+        assert superseded_command not in workflow
     assert workflow.count(ui_step_name) == 1
     assert workflow.count(cli_step_name) == 1
     assert section(workflow, ui_step_name, cli_step_name) == (

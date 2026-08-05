@@ -223,7 +223,12 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
         for line in flake.splitlines()
         if "cargo build " in line and "--workspace" in line
     )
-    assert all_workspace_builds == (regular_build, regular_build, serial_build)
+    assert all_workspace_builds == (
+        regular_build,
+        regular_build,
+        regular_build,
+        serial_build,
+    )
     assert flake.count("--threads=1") == 1
 
 

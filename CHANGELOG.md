@@ -11,7 +11,7 @@
 - profile単位CPython 3.14 workerと、永続Python／Lua dynamic worker
 - OpenAPI、TypeScript、Python、Luaへ生成する正準contract registry
 - fixed 3 baseline、103 scriptsをmanaged workerで検証する互換性runner
-- Linux package、Windows NSIS installer、Python wheelのrelease pipelineとSHA-256 manifest
+- Linux package、Windows NSIS installerのrelease pipelineとSHA-256 manifest
 - 同梱CPython 3.14、managed uv、offline wheelhouse、Linux udev access ruleを検証するclean-install package gate
 - PTY serialとV4L2 loopback cameraをnative backend経由で検証するLinux virtual I/O gate
 

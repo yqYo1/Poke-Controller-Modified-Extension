@@ -172,7 +172,6 @@ WORKSPACE_MEMBERS: tuple[str, ...] = (
     "rust/pokecon-device",
     "rust/pokecon-dynamic",
     "rust/pokecon-desktop",
-    "rust/pokecon-pybindings",
     "rust/pokecon-server",
     "rust/pokecon-settings",
     "rust/pokecon-worker",
@@ -204,7 +203,6 @@ EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
     "rust/pokecon-desktop": "36b5e58e6b7a6ad12993c7287021a5fb6e688ca2fedefd225e1707281e5238aa",
     "rust/pokecon-device": "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b",
     "rust/pokecon-dynamic": "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834",
-    "rust/pokecon-pybindings": "e0cef290e07b82160ea8952cae7dafb3ded68f27b24e0e553592d24da0de2fe7",
     "rust/pokecon-server": "8e8ffb87eac705f21b84254b44fd08a86191691e3e9aec080ae86b8a54e763b5",
     "rust/pokecon-settings": "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972",
     "rust/pokecon-worker": "268c724c9070a28684ca669e889662644ff5044e37bf2f6876afd3b346b8fbb2",
@@ -1241,7 +1239,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "rust/pokecon-desktop": "pokecon-desktop",
         "rust/pokecon-device": "pokecon-device",
         "rust/pokecon-dynamic": "pokecon-dynamic",
-        "rust/pokecon-pybindings": "pokecon-pybindings",
         "rust/pokecon-server": "pokecon-server",
         "rust/pokecon-settings": "pokecon-settings",
         "rust/pokecon-worker": "pokecon-worker",
@@ -1294,7 +1291,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"
+        == "ee283fec3ee44f21e28165eaab164ca77b70826e28ef080fca8cd15359d38ead"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert manifests["rust/pokecon-desktop"] == EXPECTED_POKECON_DESKTOP_MANIFEST
@@ -1555,7 +1552,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         ),
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
-            "d57aadeeac82be547edb7657f47389b5612e65d1e601884ce2cf2e6ae71b3c45"
+            "a0409c3e6fc3816c17c7ae09025d008c311cc0e0b6329863404eb097c653d6ac"
         ),
         "@release/build_runtime.py": (
             "545de05ab40d040fea2b8c40d0f1c6586f1c475e08e55cab1a3026ad2d7cf333"
@@ -1575,7 +1572,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "@tauri/linux/reload-udev.sh": (
             "b176e4dbc7d8e71958822574838c0d572479a9300ced82e695ff8d381847d371"
         ),
-        "@uv.lock": "9e49f50aff8426796552c989a2822473d3616eafbbc803a65d12f48682721265",
+        "@uv.lock": "096ff36b7db11dc61f761aa498f9118e6c6834a757a66cdd44de18c00b7c3ea7",
     }
     assert {
         source_name: hashlib.sha256(sources[source_name].encode()).hexdigest()
@@ -2247,7 +2244,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "9dc7aca78573a861a428b82f8eb1ad7f702ba5399aefedf6cc478895a491bc45"
+        == "75bba30bfee3882ada037b323fe48d45843b5c80d7f8c80eb8ea6491c50fa348"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2338,11 +2335,13 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     python_build_inputs = flake[python_build_inputs_start:python_build_inputs_end]
     assert (
         hashlib.sha256(python_build_inputs.strip().encode()).hexdigest()
-        == "bddf11b4520cec97ab4738bdc7703076775ac363fa761b8945349c1bdca83c7e"
+        == "b1e14a0907dcef949c36a46821b1b852b2cfde6c04b43f0093d8c96bb65c8af0"
     )
     for python_build_input_proof in (
         "pythonEnv = pkgs.python314.withPackages",
         "pytest",
+        'pythonPackageBuildUvVersion = "0.11.28"',
+        "pkgs.uv.version == pythonPackageBuildUvVersion",
         'portableUvVersion = "0.11.8"',
         'portableUvVersionOutput = "uv 0.11.8 (x86_64-unknown-linux-gnu)"',
         'hash = "sha256-LWnCnwmLdeJIV4ytqFqWwwFPlTs+FlODuPJSTgTFngY="',
@@ -2475,14 +2474,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "1718a9afbe4357620c38dfd1fcd8108ac650954009f758586087690c83165164"
+        == "a1fd8a59f7250007ac18492b8f4fe20ba27415291c34fe9abc833117bda91212"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"',
+        '== "ee283fec3ee44f21e28165eaab164ca77b70826e28ef080fca8cd15359d38ead"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -3101,7 +3100,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "be02827c8a4d626bbc1213b253c180775d94fe57bfebe812e308b2b279a1c805"
+        == "b8b6a5a6cc19956473a643b5bf0a280314b8b98ad9465cc12062e1ef23354a45"
     )
     assert package_section.count("${installControlledCargoManifests}") == 2
     assert package_section.count('"--locked"') == 1
@@ -3111,6 +3110,15 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in package_section
     assert "RUSTC_WORKSPACE_WRAPPER" in package_section
     assert "RUSTFLAGS" in package_section
+    for retired_native_artifact in (
+        "*/pokecon/_native*.so",
+        "*/pokecon/_native*.pyd",
+        "*/pokecon/_native*.dylib",
+        "*/pokecon/_native*.dll",
+        "poke_controller_modified_extension-*.whl",
+    ):
+        assert package_section.count(retired_native_artifact) == 1
+    assert package_section.count(r"\( -type f -o -type l \)") == 2
     assert "RUSTFLAGS =" not in package_section
     assert "CARGO_ENCODED_RUSTFLAGS =" not in package_section
     package_provenance_inventory = tuple(
@@ -3271,7 +3279,7 @@ offline = true
     )
     assert "python -m pytest -p no:cacheprovider tests" not in test_task_section
     mutation_test_app_end = flake.index(
-        "            maturin-develop = mkTask {\n", mutation_test_app_start
+        "            tauri-build =\n", mutation_test_app_start
     )
     mutation_test_app_section = flake[mutation_test_app_start:mutation_test_app_end]
     assert mutation_test_app_section.count("mkTask {") == 1
@@ -3314,11 +3322,6 @@ offline = true
             "            virtual-io-check = mkTask {\n",
         ),
         (
-            "build",
-            "            build = mkTask {\n",
-            "            contract-check = mkTask {\n",
-        ),
-        (
             "check",
             "            check = mkTask {\n",
             "          pre-commit = {\n",
@@ -3347,7 +3350,7 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "c172ceaefba843d3743cb8dc2263574af63464a3421825dd752b0f361e54eda2"
+        == "d99682ed0702fffecb8cf2d3621827267b0458fcf1a4d90757a81e440079b179"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3358,8 +3361,8 @@ offline = true
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
         == len(development_command_section_boundaries) + 6
     )
-    assert flake.count(development_provenance_assignment) == 18
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
+    assert flake.count(development_provenance_assignment) == 17
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 20
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
@@ -3380,7 +3383,6 @@ offline = true
             "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
             "--workspace --all-features",
         ),
-        "build": ("cargo build --locked --workspace --all-features",),
         "check": (
             "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
             "--workspace --all-features",
@@ -3413,7 +3415,6 @@ offline = true
     for command_section_name, build_command_index in (
         ("rust-ci-core", 1),
         ("build-rust", 0),
-        ("build", 0),
     ):
         command_section = development_command_sections[command_section_name]
         build_commands = expected_development_cargo_invocations[command_section_name]

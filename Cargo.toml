@@ -8,7 +8,6 @@ members = [
     "rust/pokecon-device",
     "rust/pokecon-dynamic",
     "rust/pokecon-desktop",
-    "rust/pokecon-pybindings",
     "rust/pokecon-server",
     "rust/pokecon-settings",
     "rust/pokecon-worker",

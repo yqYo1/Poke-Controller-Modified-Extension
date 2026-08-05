@@ -8,6 +8,17 @@ import pytest
 
 from scripts.release.gate import validate_release, write_checksums
 
+RELEASE_FIXTURE_FILES = (
+    "Cargo.toml",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "web/package.json",
+    "web/bun.lock",
+    "rust/pokecon/tauri.conf.json",
+    "compatibility/fixed-manifest.json",
+    "compatibility/fixed-results.json",
+)
+
 
 def workflow_section(document: str, start: str, end: str) -> str:
     _prefix, separator, tail = document.partition(start)
@@ -17,11 +28,42 @@ def workflow_section(document: str, start: str, end: str) -> str:
     return body
 
 
+def copy_release_fixture(root: Path, fixture: Path) -> None:
+    for relative in RELEASE_FIXTURE_FILES:
+        source = root / relative
+        destination = fixture / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+
+
 def test_repository_release_versions_and_contracts_match() -> None:
     root = Path(__file__).resolve().parents[2]
     assert validate_release(root, "v0.1.0") == "0.1.0"
     with pytest.raises(ValueError, match="must equal"):
         validate_release(root, "v0.1.1")
+
+
+@pytest.mark.parametrize(
+    ("replacement", "error"),
+    [
+        ('version = "0.1.1"', "release version differs in: pyproject.toml"),
+        ('dynamic = ["version"]', "project.version must be static"),
+    ],
+)
+def test_release_requires_matching_static_python_project_version(
+    tmp_path: Path, replacement: str, error: str
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    fixture = tmp_path / "release"
+    copy_release_fixture(root, fixture)
+    pyproject_path = fixture / "pyproject.toml"
+    pyproject = pyproject_path.read_text(encoding="utf-8")
+    current = 'version = "0.1.0"'
+    assert pyproject.count(current) == 1
+    pyproject_path.write_text(pyproject.replace(current, replacement), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=error):
+        validate_release(fixture, "v0.1.0")
 
 
 @pytest.mark.parametrize("features", [[], ["contract-generator"]])
@@ -30,19 +72,7 @@ def test_release_rejects_tauri_cargo_feature_selection(
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     fixture = tmp_path / "release"
-    for relative in (
-        "Cargo.toml",
-        "CHANGELOG.md",
-        "web/package.json",
-        "web/bun.lock",
-        "rust/pokecon/tauri.conf.json",
-        "compatibility/fixed-manifest.json",
-        "compatibility/fixed-results.json",
-    ):
-        source = root / relative
-        destination = fixture / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(source.read_bytes())
+    copy_release_fixture(root, fixture)
 
     config_path = fixture / "rust/pokecon/tauri.conf.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -67,6 +97,46 @@ def test_checksums_cover_sorted_relative_artifacts(tmp_path: Path) -> None:
         f"{hashlib.sha256(b'z').hexdigest()}  z.bin",
     ]
     assert output.read_text(encoding="utf-8") == "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(
+    "wheel_name",
+    [
+        "poke_controller_modified_extension-0.1.0-cp314-abi3-manylinux_2_17_x86_64.whl",
+        "poke_controller_modified_extension-0.1.0-cp314-abi3-win_amd64.whl",
+    ],
+)
+def test_checksums_reject_top_level_first_party_python_wheels(
+    tmp_path: Path, wheel_name: str
+) -> None:
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    (artifacts / wheel_name).write_bytes(b"obsolete first-party wheel")
+
+    with pytest.raises(ValueError, match="top-level first-party Python wheel"):
+        write_checksums(artifacts, artifacts / "SHA256SUMS")
+
+
+def test_checksums_allow_nested_and_generic_third_party_wheels(tmp_path: Path) -> None:
+    artifacts = tmp_path / "artifacts"
+    wheelhouse = artifacts / "python-wheels"
+    wheelhouse.mkdir(parents=True)
+    nested_first_party = (
+        wheelhouse / "poke_controller_modified_extension-0.1.0-py3-none-any.whl"
+    )
+    third_party = artifacts / "numpy-2.2.6-cp314-cp314-manylinux_2_17_x86_64.whl"
+    nested_first_party.write_bytes(b"nested wheelhouse member")
+    third_party.write_bytes(b"third-party artifact")
+
+    lines = write_checksums(artifacts, artifacts / "SHA256SUMS")
+
+    assert lines == [
+        f"{hashlib.sha256(b'third-party artifact').hexdigest()}  {third_party.name}",
+        (
+            f"{hashlib.sha256(b'nested wheelhouse member').hexdigest()}  "
+            f"python-wheels/{nested_first_party.name}"
+        ),
+    ]
 
 
 @pytest.mark.parametrize(

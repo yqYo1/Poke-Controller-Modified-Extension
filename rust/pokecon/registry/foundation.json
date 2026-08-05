@@ -81,15 +81,23 @@
       "observed_in": ["Cargo.toml", "flake.nix", ".github/workflows/rust-ci.yml"],
       "status": "implemented",
       "phase": 2,
-      "resolution": "responsibility-oriented app, core, contracts, desktop, PyO3, server, and worker crates are root workspace members"
+      "resolution": "responsibility-oriented app, camera, contracts, core, desktop, device, dynamic, server, settings, and worker crates are root workspace members"
     },
     {
       "id": "python_package",
-      "paths": ["python/pokecon", "rust/pokecon-pybindings/Cargo.toml"],
+      "paths": ["python/pokecon"],
       "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/lint.yml"],
       "status": "implemented",
       "phase": 2,
-      "resolution": "typed Python package and pokecon._native PyO3 boundary are buildable through maturin"
+      "resolution": "the typed pure-Python package is buildable through the exactly pinned uv_build backend"
+    },
+    {
+      "id": "legacy_python_native_extension",
+      "paths": ["rust/pokecon-pybindings", "pokecon._native", "maturin"],
+      "observed_in": ["phase 2.6 native-extension removal audit"],
+      "status": "resolved",
+      "phase": 13,
+      "resolution": "the unused first-party PyO3 extension crate, import surface, Maturin backend, and release wheel were removed; embedded worker PyO3 and third-party dependency wheels remain"
     },
     {
       "id": "web_package",

@@ -3882,13 +3882,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pokecon-pybindings"
-version = "0.1.0"
-dependencies = [
- "pyo3",
-]
-
-[[package]]
 name = "pokecon-server"
 version = "0.1.0"
 dependencies = [

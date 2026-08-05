@@ -52,6 +52,8 @@ REQUIRED_WORKER_PACKAGES = {
     "requests",
     "scipy",
 }
+RETIRED_FIRST_PARTY_DISTRIBUTION = "poke-controller-modified-extension"
+RETIRED_FIRST_PARTY_WHEEL_PREFIX = "poke_controller_modified_extension-"
 UDEV_RULE_PATH = Path("usr/lib/udev/rules.d/70-pokecon-controller.rules")
 EXPECTED_UDEV_RULES = (
     'SUBSYSTEM=="video4linux", TAG+="uaccess"',
@@ -204,6 +206,19 @@ def validate_wheelhouse(root: Path) -> tuple[list[dict[str, str]], list[Path]]:
         message = "wheelhouse requirements identity is invalid"
         raise ValueError(message)
 
+    retired_paths = sorted(
+        path.relative_to(wheelhouse).as_posix()
+        for path in wheelhouse.rglob("*")
+        if path.name.casefold().startswith(RETIRED_FIRST_PARTY_WHEEL_PREFIX)
+        and path.name.casefold().endswith(".whl")
+    )
+    if retired_paths:
+        message = (
+            "wheelhouse contains retired first-party distribution wheels: "
+            f"{retired_paths}"
+        )
+        raise ValueError(message)
+
     wheels = sorted(wheelhouse.glob("*.whl"))
     entries = object_list(manifest.get("wheels"), "wheelhouse wheels")
     expected: dict[str, tuple[str, int]] = {}
@@ -221,6 +236,11 @@ def validate_wheelhouse(root: Path) -> tuple[list[dict[str, str]], list[Path]]:
             raise ValueError(message)
         if PurePosixPath(name).name != name or not name.endswith(".whl"):
             message = f"wheelhouse has an unsafe wheel name: {name!r}"
+            raise ValueError(message)
+        if name.casefold().startswith(
+            RETIRED_FIRST_PARTY_WHEEL_PREFIX
+        ) and name.casefold().endswith(".whl"):
+            message = f"wheelhouse manifest contains retired first-party wheel: {name}"
             raise ValueError(message)
         expected[name] = (digest, size)
     actual = {
@@ -242,6 +262,13 @@ def validate_wheelhouse(root: Path) -> tuple[list[dict[str, str]], list[Path]]:
             or not version
         ):
             message = "wheelhouse inventory entry has invalid fields"
+            raise ValueError(message)
+        normalized_name = re.sub(r"[-_.]+", "-", name).casefold()
+        if normalized_name == RETIRED_FIRST_PARTY_DISTRIBUTION:
+            message = (
+                "wheelhouse inventory contains retired first-party distribution: "
+                f"{name}"
+            )
             raise ValueError(message)
         inventory.append({"name": name, "version": version})
     names = {item["name"].casefold() for item in inventory}

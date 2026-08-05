@@ -84,7 +84,7 @@ pre-commit hookは新しく作成したworktreeごとに`nix run .#hooks-install
 ```text
 rust/                         RustワークスペースとTauriアプリ
 web/                          SvelteKitとSvelteのWeb UI
-python/pokecon/               Python bindingと生成用型情報
+python/pokecon/               純Python互換メタデータと生成用型情報
 api/                          生成済みOpenAPI文書
 generated/                    設定schemaとLua型情報などの生成物
 compatibility/                固定互換コーパスと昇格履歴

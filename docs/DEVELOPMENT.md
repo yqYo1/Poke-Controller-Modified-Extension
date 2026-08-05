@@ -68,9 +68,9 @@ Node.jsを直接呼ぶscriptを追加しません。script内部ではNixが固�
 
 | path | 内容 |
 |---|---|
-| `rust/` | Rust workspaceの11 crate |
+| `rust/` | Rust workspaceの10 crate |
 | `web/` | SvelteKit SPA、TypeScript、frontend test |
-| `python/pokecon/` | workerから見えるPython packageと生成stub |
+| `python/pokecon/` | 純Python互換メタデータと生成stub |
 | `scripts/` | quality、compatibility、release、integration tooling |
 | `tests/` | Python toolingとcross-language fixture |
 | `rust/pokecon/registry/` | 設定、event、受入記録などの正準registry |
@@ -161,23 +161,6 @@ nix run .#ruff-check
 nix run .#basedpyright
 nix run .#test
 ```
-
-Rust bindingをlocal interpreterへ導入して調査する場合は次を使用します。
-
-```bash
-nix run .#maturin-develop
-```
-
-この操作はambient `VIRTUAL_ENV`を使用せず、flakeのPython 3.14で`target/maturin-venv`を初回に作成します。wheelのRust buildは実行ごとの一時Cargo targetを使用し、対話用`target/nix-tasks`を共有しません。同じ永続venvへのbuild／検査／再導入は、厳格に検証した`target/.maturin-develop.lock`で全実行を直列化します。CargoはimmutableなNix vendorからofflineでwheelをbuildし、`uv`は依存をnetwork解決せずそのwheelだけを導入します。移行用wheelはcallerのroot metadata、`rust/`、`python/pokecon/`だけを一時snapshotへcopyし、productionのMaturin設定を変更せずsnapshot内だけでcanonical mixed-project layoutへ補正します。wheel内のPython payloadはcaller sourceとfile単位で照合します。既存venvがsymlink、破損、redirectされた`site-packages`、実行可能な`.pth`／customization、想定外distribution、不正なuninstall manifest、または異なるPythonを含む場合は自動削除せず、退避して再実行するためのpathを診断します。appの`--help`に列挙したbuild optionだけを追加指定でき、manifest、interpreter、target、output、Cargo configは上書きできません。
-
-導入したnative moduleはflakeの固定環境を介して調査します。
-
-```bash
-nix run .#editor -- "$PWD/target/maturin-venv/bin/python" -I -c \
-  'import pokecon._native as native; print(native)'
-```
-
-このvenvと`maturin-develop` taskは移行用であり、Phase 2.6でnative extensionと同時に削除します。
 
 user package同期のproduction経路をsystem `pip`で置き換えません。
 
@@ -339,10 +322,10 @@ production互換層を修正するか、実機が必要な能力として明示�
 
 ## 配布物を検証する
 
-Rust workspaceとPyO3 wheelのbuildは次を使用します。
+Rust workspaceの配布用buildは次を使用します。
 
 ```bash
-nix run .#build
+nix run .#build-rust
 ```
 
 Linux desktop bundleは次を使用します。

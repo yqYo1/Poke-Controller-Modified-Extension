@@ -4963,7 +4963,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 以上から、記憶されていた`pkg_resources`依存自体は実在するが、旧アプリケーションUI内部の履歴であり、ユーザースクリプト互換要件ではない。以下の理由により、アプリケーション必須パッケージとして保持しない:
 
 - 新UIでは旧Tkinter版`PokeConVersionCheck`をPythonコードとして移植しない。パッケージ情報が必要な場合はRust側またはPython標準ライブラリのメタデータAPIを使用する。
-- ビルドバックエンドはmaturin（`[build-system].requires = ["maturin>=1.8"]`）であり、setuptoolsをビルド要件として必要としない。
+- ビルドバックエンドはflakeが提供する`uv_build==0.11.28`へ固定し、setuptoolsをビルド要件として必要としない。
 - 13配布物の必要依存和集合（§14.5のworker-script初期必須セット）にはsetuptoolsは含まれず、固定保証スクリプトまたは互換レイヤーの必須importではない。
 - `[project].dependencies`、`[dependency-groups].worker-script`、`[dependency-groups].worker-dynamic`、`[project.optional-dependencies]`のいずれにも属さない。
 - ランタイムブートストラップ（venv作成、uv解決・インストール）にも不要。
@@ -4982,7 +4982,7 @@ nix環境では、Pythonインタープリターのパスを**ビルド時に決
 | `pygame` | 固定保証スクリプト／互換レイヤーの必須importではない |
 | `pyocr` | 固定保証スクリプト／互換レイヤーの必須importではない |
 | `pyyaml` | 固定保証スクリプト／互換レイヤーの必須importではない |
-| `setuptools` | 過去のアプリケーション側実装から残存する履歴的依存関係。ユーザースクリプト非依存。ビルドバックエンドはmaturin。13配布物の必要依存和集合に含まれない。pyproject.tomlの`[project].dependencies`から削除すること（上述の詳細理由参照）。 |
+| `setuptools` | 過去のアプリケーション側実装から残存する履歴的依存関係。ユーザースクリプト非依存。ビルドバックエンドはflakeが提供する`uv_build==0.11.28`へ固定する。13配布物の必要依存和集合に含まれない。pyproject.tomlの`[project].dependencies`から削除すること（上述の詳細理由参照）。 |
 | `windows-capture-device-list` | 固定保証スクリプト／互換レイヤーの必須importではない。Windowsカメラ列挙はRustコアで実装する |
 
 **Optional dependencies**（`[project].optional-dependencies`）は現行のまま維持する。ユーザーは該当グループを`packages.list`経由でインストール可能であるが、`worker-script`初期必須セットや`[project].dependencies`には含めない。

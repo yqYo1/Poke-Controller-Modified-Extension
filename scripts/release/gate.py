@@ -34,19 +34,29 @@ def load_json(path: Path) -> dict[str, object]:
     return mapping(raw, str(path))
 
 
+def load_toml(path: Path) -> dict[str, object]:
+    raw: object = tomllib.loads(path.read_text(encoding="utf-8"))
+    return mapping(raw, str(path))
+
+
 def workspace_version(root: Path) -> str:
-    cargo: object = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
-    workspace = mapping(mapping(cargo, "Cargo.toml").get("workspace"), "workspace")
+    cargo = load_toml(root / "Cargo.toml")
+    workspace = mapping(cargo.get("workspace"), "workspace")
     package = mapping(workspace.get("package"), "workspace.package")
     return string(package.get("version"), "workspace.package.version")
 
 
 def validate_release(root: Path, tag: str | None = None) -> str:
     version = workspace_version(root)
+    pyproject = mapping(load_toml(root / "pyproject.toml").get("project"), "project")
+    dynamic = pyproject.get("dynamic")
+    if isinstance(dynamic, list) and "version" in cast("list[object]", dynamic):
+        invalid_value("project.version must be static")
     web = load_json(root / "web/package.json")
     if not (root / "web/bun.lock").is_file():
         invalid_value("web/bun.lock is required for a reproducible release")
     versions = {
+        "pyproject.toml": string(pyproject.get("version"), "project.version"),
         "web/package.json": web.get("version"),
     }
     mismatches = [name for name, value in versions.items() if value != version]
@@ -92,6 +102,16 @@ def sha256_file(path: Path) -> str:
 def write_checksums(artifacts: Path, output: Path) -> list[str]:
     if not artifacts.is_dir():
         invalid_value(f"artifact directory does not exist: {artifacts}")
+    first_party_wheels = sorted(
+        path.name
+        for path in artifacts.glob("poke_controller_modified_extension-*.whl")
+        if path.is_file()
+    )
+    if first_party_wheels:
+        invalid_value(
+            "artifact directory contains a top-level first-party Python wheel: "
+            + ", ".join(first_party_wheels)
+        )
     transient_paths = sorted(
         path.relative_to(artifacts).as_posix()
         for path in artifacts.rglob("*")

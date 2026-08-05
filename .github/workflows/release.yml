@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   linux:
-    name: Linux package, Tauri bundle, and wheel
+    name: Linux package and Tauri bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -26,8 +26,6 @@ jobs:
         run: nix run .#check
       - name: Build Linux Nix package
         run: nix build .#pokecon-server --out-link result-server
-      - name: Build Python wheel
-        run: nix run .#build
       - name: Build Linux Tauri package
         run: nix run .#tauri-build -- --bundles deb
       - name: Audit packaged runtime and offline wheelhouse
@@ -87,7 +85,7 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows NSIS installer and wheel
+    name: Windows NSIS installer
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -107,7 +105,7 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           choco install nasm -y --no-progress
-          python -m pip install --disable-pip-version-check "uv==0.11.8" "maturin>=1.8,<2"
+          python -m pip install --disable-pip-version-check "uv==0.11.8"
           cargo install tauri-cli --version 2.11.4 --locked
           vcpkg install portaudio:x64-windows-static
       - name: Export release tool identity
@@ -194,12 +192,6 @@ jobs:
         run: >-
           ./scripts/release/windows_install_smoke.ps1
           -Installer (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
-      - name: Build Windows Python wheel
-        shell: pwsh
-        run: >-
-          maturin build --locked --release
-          --manifest-path rust/pokecon-pybindings/Cargo.toml
-          --out dist
       - name: Collect installer and checksums
         shell: pwsh
         run: |

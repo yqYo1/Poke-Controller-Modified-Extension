@@ -153,7 +153,7 @@
       "applicable_when": "a v* tag is pushed and its version matches every release artifact",
       "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
       "phase": 15,
-      "implementation_status": "Nix closure, Python wheel, reproducible Debian package, and checksums are produced together"
+      "implementation_status": "Nix closure, reproducible Debian package, and checksums are produced together"
     },
     {
       "name": "release/windows",
@@ -164,7 +164,7 @@
       "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
       "phase": 15,
       "execution_environment": "windows-native",
-      "implementation_status": "the pinned native toolchain produces an NSIS installer and PyO3 wheel with checksums"
+      "implementation_status": "the pinned native toolchain produces an NSIS installer with checksums"
     },
     {
       "name": "release/github-release",

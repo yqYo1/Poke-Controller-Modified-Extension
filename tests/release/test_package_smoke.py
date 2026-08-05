@@ -140,19 +140,28 @@ def test_udev_support_requires_rules_and_reload_scripts(tmp_path: Path) -> None:
     assert validate_udev_support(tmp_path) == 3
 
 
-def test_wheelhouse_manifest_covers_fixed_worker_packages(tmp_path: Path) -> None:
-    wheelhouse = tmp_path / "python-wheels"
+def write_wheelhouse_fixture(
+    root: Path,
+    extra_distributions: tuple[tuple[str, str], ...] = (),
+) -> Path:
+    wheelhouse = root / "python-wheels"
     wheelhouse.mkdir()
     requirements = wheelhouse / "requirements.lock"
     requirements.write_text("pyaudio==0.2.14\n", encoding="utf-8")
     wheels: list[dict[str, object]] = []
-    for package in sorted(REQUIRED_WORKER_PACKAGES):
-        normalized = package.replace("-", "_")
-        filename = (
-            "pyaudio-0.2.14-cp314-cp314-linux_x86_64.whl"
-            if package == "pyaudio"
-            else f"{normalized}-1.0-py3-none-any.whl"
+    distribution_wheels = [
+        (
+            package,
+            (
+                "pyaudio-0.2.14-cp314-cp314-linux_x86_64.whl"
+                if package == "pyaudio"
+                else f"{package.replace('-', '_')}-1.0-py3-none-any.whl"
+            ),
         )
+        for package in sorted(REQUIRED_WORKER_PACKAGES)
+    ]
+    distribution_wheels.extend(extra_distributions)
+    for package, filename in distribution_wheels:
         wheel = wheelhouse / filename
         wheel.write_bytes(package.encode())
         wheels.append(
@@ -171,12 +180,53 @@ def test_wheelhouse_manifest_covers_fixed_worker_packages(tmp_path: Path) -> Non
                 "wheels": wheels,
                 "inventory": [
                     {"name": package, "version": "1.0"}
-                    for package in sorted(REQUIRED_WORKER_PACKAGES)
+                    for package, _filename in distribution_wheels
                 ],
             }
         ),
         encoding="utf-8",
     )
+    return wheelhouse
+
+
+def test_wheelhouse_manifest_covers_fixed_worker_packages(tmp_path: Path) -> None:
+    write_wheelhouse_fixture(tmp_path)
+
     inventory, wheel_paths = validate_wheelhouse(tmp_path)
+
     assert len(inventory) == len(REQUIRED_WORKER_PACKAGES)
     assert len(wheel_paths) == len(REQUIRED_WORKER_PACKAGES)
+
+
+def test_wheelhouse_rejects_retired_first_party_distribution(tmp_path: Path) -> None:
+    write_wheelhouse_fixture(
+        tmp_path,
+        (
+            (
+                "poke-controller-modified-extension",
+                "poke_controller_modified_extension-0.1.0-py3-none-any.whl",
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="retired first-party distribution"):
+        validate_wheelhouse(tmp_path)
+
+
+def test_wheelhouse_preserves_similarly_named_third_party_distribution(
+    tmp_path: Path,
+) -> None:
+    third_party_name = "poke-controller-modified-extension-tools"
+    third_party_wheel = "poke_controller_modified_extension_tools-1.0-py3-none-any.whl"
+    write_wheelhouse_fixture(
+        tmp_path,
+        ((third_party_name, third_party_wheel),),
+    )
+
+    inventory, wheel_paths = validate_wheelhouse(tmp_path)
+
+    assert {item["name"] for item in inventory} >= {
+        *REQUIRED_WORKER_PACKAGES,
+        third_party_name,
+    }
+    assert {path.name for path in wheel_paths} >= {third_party_wheel}

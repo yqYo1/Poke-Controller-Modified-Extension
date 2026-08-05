@@ -408,7 +408,7 @@ fn assert_generated_artifact_contracts(artifacts: &[Value]) {
 }
 
 #[test]
-fn verification_taxonomy_and_future_path_audit_are_complete() {
+fn verification_taxonomy_is_complete() {
     let foundation = parse_json(FOUNDATION_REGISTRY_JSON);
     let categories = foundation["test_categories"]
         .as_array()
@@ -449,7 +449,11 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
         foundation["fixture_naming"]["segment_regex"],
         "^[a-z][a-z0-9_]*$"
     );
+}
 
+#[test]
+fn future_path_audit_is_complete() {
+    let foundation = parse_json(FOUNDATION_REGISTRY_JSON);
     let audit = foundation["path_audit"]
         .as_array()
         .expect("path_audit must be an array");
@@ -461,6 +465,7 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
     for expected in [
         "rust_workspace",
         "python_package",
+        "legacy_python_native_extension",
         "web_package",
         "python_tests",
         "legacy_src_server",
@@ -506,6 +511,17 @@ fn verification_taxonomy_and_future_path_audit_are_complete() {
                 !legacy_sources.contains(path),
                 "resolved path marker {path} remains in an active manifest or workflow"
             );
+            if path.contains('/') && !path.contains('*') {
+                let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .and_then(Path::parent)
+                    .expect("pokecon package must be nested under the repository root");
+                let resolved_path = repository.join(path);
+                assert!(
+                    !resolved_path.exists() && !resolved_path.is_symlink(),
+                    "resolved literal path still exists in the repository: {path}"
+                );
+            }
         }
     }
 }

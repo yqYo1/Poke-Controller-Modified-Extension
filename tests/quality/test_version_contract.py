@@ -1,7 +1,14 @@
 import hashlib
+import importlib
+import os
+import subprocess
+import sys
 import tomllib
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 from typing import Any
+
+import pytest
 
 CARGO_CACHE_DIRECTORY_TAG = (
     "Signature: 8a477f597d28d172789f06886806bc55\n"
@@ -15,38 +22,122 @@ def _read_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(source)
 
 
-def test_workspace_is_the_single_version_source() -> None:
+def test_workspace_and_pure_python_package_versions_match() -> None:
     root = Path(__file__).resolve().parents[2]
     cargo = _read_toml(root / "Cargo.toml")
     pyproject = _read_toml(root / "pyproject.toml")
 
     workspace_version = cargo["workspace"]["package"]["version"]
     assert workspace_version == "0.1.0"
-    assert pyproject["project"]["dynamic"] == ["version"]
-    assert "version" not in pyproject["project"]
+    assert pyproject["project"]["version"] == workspace_version
+    assert "dynamic" not in pyproject["project"]
+    assert pyproject["build-system"] == {
+        "requires": ["uv_build==0.11.28"],
+        "build-backend": "uv_build",
+    }
+    assert pyproject["tool"]["uv"]["build-backend"] == {
+        "module-name": "pokecon",
+        "module-root": "python",
+    }
 
 
-def test_maturin_development_layout_fix_is_isolated() -> None:
+def test_pure_python_package_builds_offline_without_native_payload(
+    tmp_path: Path,
+) -> None:
     root = Path(__file__).resolve().parents[2]
-    pyproject = _read_toml(root / "pyproject.toml")
-    maturin = pyproject["tool"]["maturin"]
+    uv = Path(os.environ["POKECON_TEST_UV"])
+    assert uv.is_file()
+    output = tmp_path / "wheel"
+    isolated_home = tmp_path / "home"
+    isolated_tmp = tmp_path / "tmp"
+    isolated_cache = tmp_path / "cache"
+    for directory in (output, isolated_home, isolated_tmp, isolated_cache):
+        directory.mkdir()
+    environment = {
+        "HOME": str(isolated_home),
+        "PATH": os.environ["PATH"],
+        "TMPDIR": str(isolated_tmp),
+        "UV_CACHE_DIR": str(isolated_cache),
+        "UV_NO_CONFIG": "1",
+        "UV_OFFLINE": "1",
+    }
+    subprocess.run(  # noqa: S603 - executable path is injected by the pinned Nix task
+        (
+            str(uv),
+            "--no-config",
+            "build",
+            "--offline",
+            "--no-cache",
+            "--wheel",
+            "--out-dir",
+            str(output),
+        ),
+        cwd=root,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
-    assert maturin["python-packages"] == ["python/pokecon"]
-    assert "python-source" not in maturin
+    wheels = tuple(output.glob("*.whl"))
+    assert tuple(wheel.name for wheel in wheels) == (
+        "poke_controller_modified_extension-0.1.0-py3-none-any.whl",
+    )
+    with zipfile.ZipFile(wheels[0]) as archive:
+        members = tuple(archive.namelist())
+        wheel_metadata_members = tuple(
+            member for member in members if member.endswith(".dist-info/WHEEL")
+        )
+        assert len(wheel_metadata_members) == 1
+        wheel_metadata = archive.read(wheel_metadata_members[0]).decode()
+    assert "Root-Is-Purelib: true\n" in wheel_metadata
+    assert "Tag: py3-none-any\n" in wheel_metadata
+    assert not any(
+        PurePosixPath(member).name.startswith("_native")
+        or PurePosixPath(member).suffix in {".dll", ".dylib", ".pyd", ".so"}
+        for member in members
+    )
 
+
+def test_first_party_native_extension_is_retired(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    assert not (root / "rust/pokecon-pybindings").exists()
+    assert not tuple((root / "python/pokecon").glob("_native*"))
+
+    active_contract = "\n".join(
+        (root / relative).read_text(encoding="utf-8")
+        for relative in (
+            "Cargo.toml",
+            "pyproject.toml",
+            "uv.lock",
+            "flake.nix",
+            ".github/workflows/release.yml",
+        )
+    )
+    for retired_marker in (
+        "pokecon-pybindings",
+        "pokecon._native",
+        "maturin",
+    ):
+        assert retired_marker not in active_contract.lower()
+
+    monkeypatch.setattr(sys, "path", [str(root / "python"), *sys.path])
+    monkeypatch.delitem(sys.modules, "pokecon._native", raising=False)
+    monkeypatch.delitem(sys.modules, "pokecon", raising=False)
+    package = importlib.import_module("pokecon")
+    assert package.__file__ is not None
+    assert Path(package.__file__).resolve().is_relative_to(root / "python")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("pokecon._native")
+
+
+def test_interactive_cargo_task_isolation_contracts_remain() -> None:
+    root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
     for contract in (
-        'maturin_source="$gate_home/maturin-source"',
-        "maturin-develop expected exactly one legacy python-packages setting",
-        "Maturin wheel payload must live under pokecon/",
-        "Maturin wheel pure-Python inventory differs from caller source",
-        "maturin venv contains unexpected distributions",
-        "maturin venv project RECORD has an unsafe path",
-        "site-packages tree contains a symlink",
-        'maturin_lock="$maturin_target_root/.maturin-develop.lock"',
         "using isolated per-run Cargo target:",
-        'or "\\\\" in member',
-        "-v | -vv* | --verbose)",
         "PokeCon task lock changed while it was held",
         "refusing a hook path outside the worktree and Git common directory",
     ):
@@ -177,6 +268,7 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     )
     dev_debug_export = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
     test_debug_export = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
+    test_uv_export = 'export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"'
     contract_generator = (
         "cargo run --locked --package pokecon --bin generate_contracts "
         "--features contract-generator -- --check"
@@ -197,10 +289,12 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     assert aggregate_check.count("--threads=1") == 1
     assert aggregate_check.count(dev_debug_export) == 1
     assert aggregate_check.count(test_debug_export) == 1
+    assert aggregate_check.count(test_uv_export) == 1
     assert aggregate_check.count(targeted_contract_test) == 0
     assert flake.count(targeted_contract_test) == 1
     assert (
-        aggregate_check.index(dev_debug_export)
+        aggregate_check.index(test_uv_export)
+        < aggregate_check.index(dev_debug_export)
         < aggregate_check.index(test_debug_export)
         < aggregate_check.index(linux_only_lld_export)
         < aggregate_check.index(contract_generator)
@@ -226,10 +320,20 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     assert all_workspace_builds == (
         regular_build,
         regular_build,
-        regular_build,
         serial_build,
     )
     assert flake.count("--threads=1") == 1
+
+    assert "ruff check --config ruff.toml --no-cache python scripts tests" not in (
+        aggregate_check
+    )
+    assert (
+        "ruff format --config ruff.toml --no-cache --check python scripts tests"
+        not in aggregate_check
+    )
+    assert aggregate_check.count("treefmt --ci --working-dir") == 1
+    assert flake.count("ruff-check.enable = true;") == 1
+    assert flake.count("ruff-format.enable = true;") == 1
 
 
 def test_aggregate_check_runtime_inputs_include_exactly_one_jq() -> None:
@@ -253,6 +357,7 @@ def test_aggregate_check_runtime_inputs_include_exactly_one_jq() -> None:
         "pkgs.diffutils",
         "pkgs.jq",
         "pkgs.markdownlint-cli",
+        "pythonPackageBuildUv",
         "pkgs.ripgrep",
         "pkgs.shellcheck",
         "pkgs.textlint",

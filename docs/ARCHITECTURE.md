@@ -56,7 +56,7 @@ Python command generation   Python or Lua generation
 
 ## Rust crateの責務を分ける
 
-Cargo workspaceは11 crateで構成されます。
+Cargo workspaceは10 crateで構成されます。
 
 | crate | 所有する責務 | 所有しない責務 |
 |---|---|---|
@@ -67,7 +67,6 @@ Cargo workspaceは11 crateで構成されます。
 | `pokecon-desktop` | Phase 2.5a移行中のcompatibility facadeとpackage／test target ownership | desktopの正準source、icon、Tauri設定、Linux bundle input、web modeやdevice protocol |
 | `pokecon-device` | Phase 2移行中のdevice compatibility facade（正準sourceは所有しない） | deviceの正準実装、command discovery |
 | `pokecon-dynamic` | Phase 2.4移行中の`rust/pokecon-dynamic/src/lib.rs` compatibility facade（正準sourceは`rust/pokecon/src/dynamic/`） | dynamicの正準source、child専用Python／Lua runtime、native device ownership |
-| `pokecon-pybindings` | Rust機能をPython workerへ公開するbinding | command lifecycle orchestration |
 | `pokecon-server` | Phase 2移行中のserver compatibility facade（正準sourceは所有しない） | serverの正準実装、wire型、OpenAPI generator |
 | `pokecon-settings` | Phase 2移行中のsettings compatibility facade（正準sourceは所有しない） | settingsの正準実装、UI rendering |
 | `pokecon-worker` | Phase 2.4移行中のcompatibility facadeと、`pokecon-worker`／`pokecon-compatibility`／`pokecon-worker-fault-fixture` binおよびintegration testのtarget ownership | 親側IPC・generation・supervisionの正準source、child専用runtimeの正準source、hardware handle |

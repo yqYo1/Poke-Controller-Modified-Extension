@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "1e069c33b82927755c7d64ddfd03cdc851b44168a4bd43c871e71883401edef4";
+      canonicalFlakeHash = "4e0bd8b4041c7305fab51c464e3793498f28d3337f36a430ad0f49e8ea74fd63";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -198,6 +198,11 @@
             pkgs.bun;
           portableUvVersion = "0.11.8";
           portableUvVersionOutput = "uv 0.11.8 (x86_64-unknown-linux-gnu)";
+          pythonPackageBuildUvVersion = "0.11.28";
+          pythonPackageBuildUv =
+            assert lib.assertMsg (pkgs.uv.version == pythonPackageBuildUvVersion)
+              "Nix provides uv ${pkgs.uv.version}; the Python package build requires ${pythonPackageBuildUvVersion}";
+            pkgs.uv;
           portableUv =
             if system == "x86_64-linux" then
               pkgs.fetchzip {
@@ -446,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "b8898b02c70e821447f77c005ac5a4b5ee6ecef32b600470c7073000309c2cac";
+              expectedAuditTestHash = "12b400accc76e65f8c3fdc042f8522c044c7ab9aaa2fdc193fb45d8a9803f4e5";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -469,7 +474,6 @@
             "rust/pokecon-device"
             "rust/pokecon-dynamic"
             "rust/pokecon-desktop"
-            "rust/pokecon-pybindings"
             "rust/pokecon-server"
             "rust/pokecon-settings"
             "rust/pokecon-worker"
@@ -499,7 +503,6 @@
             "rust/pokecon-desktop" = "pokecon-desktop";
             "rust/pokecon-device" = "pokecon-device";
             "rust/pokecon-dynamic" = "pokecon-dynamic";
-            "rust/pokecon-pybindings" = "pokecon-pybindings";
             "rust/pokecon-server" = "pokecon-server";
             "rust/pokecon-settings" = "pokecon-settings";
             "rust/pokecon-worker" = "pokecon-worker";
@@ -512,7 +515,6 @@
             "rust/pokecon-desktop" = false;
             "rust/pokecon-device" = false;
             "rust/pokecon-dynamic" = false;
-            "rust/pokecon-pybindings" = false;
             "rust/pokecon-server" = false;
             "rust/pokecon-settings" = "build.rs";
             "rust/pokecon-worker" = false;
@@ -525,7 +527,6 @@
             "rust/pokecon-desktop" = "36b5e58e6b7a6ad12993c7287021a5fb6e688ca2fedefd225e1707281e5238aa";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
             "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
-            "rust/pokecon-pybindings" = "e0cef290e07b82160ea8952cae7dafb3ded68f27b24e0e553592d24da0de2fe7";
             "rust/pokecon-server" = "8e8ffb87eac705f21b84254b44fd08a86191691e3e9aec080ae86b8a54e763b5";
             "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
             "rust/pokecon-worker" = "268c724c9070a28684ca669e889662644ff5044e37bf2f6876afd3b346b8fbb2";
@@ -544,7 +545,6 @@
             "rust/pokecon-desktop" = { };
             "rust/pokecon-device" = { };
             "rust/pokecon-dynamic" = { };
-            "rust/pokecon-pybindings" = { };
             "rust/pokecon-server" = { };
             "rust/pokecon-settings" = {
               hex.workspace = true;
@@ -749,7 +749,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "7ac854421771d6e3021485af29620363fd58291368afd67e979dfe6e00de1878"
+                == "1bd093a87503d36a0cedab4bf94c057f04c25cb7ad7719dab005855857e19ca2"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -757,7 +757,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"
+                == "ee283fec3ee44f21e28165eaab164ca77b70826e28ef080fca8cd15359d38ead"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1879,336 +1879,6 @@
             unset canonical_cargo_target cargo_directory cargo_profile cargo_profile_dir cargo_symlink cargo_symlink_target cargo_uv_dir cargo_uv_link
           '';
 
-          validateMaturinDevelopWheel = ''
-            "${pythonEnv}/bin/python" -I -S -c '
-            import hashlib
-            import sys
-            import zipfile
-            from pathlib import Path, PurePosixPath
-
-            wheel = sys.argv[1]
-            source_package = Path(sys.argv[2])
-            with zipfile.ZipFile(wheel) as archive:
-                members = [entry.filename for entry in archive.infolist()]
-            if len(members) != len(set(members)):
-                raise SystemExit(f"Maturin wheel contains duplicate members: {wheel}")
-            paths = [PurePosixPath(member) for member in members]
-            if any(
-                not member
-                or member.startswith("/")
-                or "\\" in member
-                or ".." in path.parts
-                for member, path in zip(members, paths, strict=True)
-            ):
-                raise SystemExit(f"Maturin wheel contains an unsafe member: {wheel}")
-            metadata_roots = {
-                path.parts[0]
-                for path in paths
-                if path.parts and path.parts[0].endswith(".dist-info")
-            }
-            if len(metadata_roots) != 1:
-                raise SystemExit(
-                    f"Maturin wheel must contain one dist-info root: {sorted(metadata_roots)}"
-                )
-            metadata_root = next(iter(metadata_roots))
-            if not (
-                metadata_root.startswith("poke_controller_modified_extension-")
-                and metadata_root.endswith(".dist-info")
-            ):
-                raise SystemExit(f"Maturin wheel has unexpected dist-info: {metadata_root}")
-            required_metadata = {
-                f"{metadata_root}/METADATA",
-                f"{metadata_root}/RECORD",
-                f"{metadata_root}/WHEEL",
-                f"{metadata_root}/licenses/LICENSE",
-            }
-            if missing_metadata := sorted(required_metadata - set(members)):
-                raise SystemExit(
-                    f"Maturin wheel is missing required metadata: {missing_metadata}"
-                )
-            payload = [
-                member
-                for member, path in zip(members, paths, strict=True)
-                if path.parts and path.parts[0] not in metadata_roots
-            ]
-            unexpected = sorted(
-                member for member in payload if not member.startswith("pokecon/")
-            )
-            if unexpected:
-                raise SystemExit(
-                    f"Maturin wheel payload must live under pokecon/: {unexpected}"
-                )
-            if "pokecon/__init__.py" not in payload:
-                raise SystemExit("Maturin wheel is missing pokecon/__init__.py")
-            native_members = [
-                member
-                for member in payload
-                if PurePosixPath(member).parent == PurePosixPath("pokecon")
-                and PurePosixPath(member).name.startswith("_native.")
-                and PurePosixPath(member).suffix in {".so", ".pyd"}
-            ]
-            if len(native_members) != 1:
-                raise SystemExit(
-                    f"Maturin wheel must contain one pokecon native module: {native_members}"
-                )
-            expected_pure = {
-                f"pokecon/{path.relative_to(source_package).as_posix()}": path
-                for path in source_package.rglob("*")
-                if path.is_file() and path.suffix in {".py", ".pyi"}
-            }
-            wheel_pure = {
-                member
-                for member in payload
-                if PurePosixPath(member).suffix in {".py", ".pyi"}
-            }
-            if wheel_pure != set(expected_pure):
-                raise SystemExit(
-                    "Maturin wheel pure-Python inventory differs from caller source: "
-                    f"missing={sorted(set(expected_pure) - wheel_pure)}, "
-                    f"unexpected={sorted(wheel_pure - set(expected_pure))}"
-                )
-            with zipfile.ZipFile(wheel) as archive:
-                mismatched = sorted(
-                    member
-                    for member, source in expected_pure.items()
-                    if hashlib.sha256(archive.read(member)).digest()
-                    != hashlib.sha256(source.read_bytes()).digest()
-                )
-            if mismatched:
-                raise SystemExit(
-                    f"Maturin wheel changed caller Python payload bytes: {mismatched}"
-                )
-            print(
-                f"validated canonical Maturin wheel layout: "
-                f"{len(payload)} payload members, {native_members[0]}"
-            )
-            ' "$maturin_wheel" "$maturin_source/python/pokecon"
-          '';
-
-          validateMaturinVenvInventory = ''
-            maturin_site_roots=(
-              "''${venv_python_probe[5]}"
-              "''${venv_python_probe[7]}"
-            )
-            for maturin_site_root in "''${maturin_site_roots[@]}"; do
-              if [ -L "$maturin_site_root" ] || [ ! -d "$maturin_site_root" ]; then
-                reject_maturin_venv "maturin venv $maturin_inventory_phase site-packages root is redirected or missing: $maturin_site_root"
-              fi
-              if ! maturin_site_symlink="$(
-                "${pkgs.findutils}/bin/find" -P "$maturin_site_root" -type l -print -quit
-              )"; then
-                reject_maturin_venv "maturin venv $maturin_inventory_phase site-packages symlink scan failed: $maturin_site_root"
-              fi
-              if [ -n "$maturin_site_symlink" ]; then
-                reject_maturin_venv "maturin venv $maturin_inventory_phase site-packages tree contains a symlink: $maturin_site_symlink"
-              fi
-            done
-            unset maturin_site_root maturin_site_roots maturin_site_symlink
-            if ! "$maturin_python" -I -S -c '
-            import csv
-            import importlib.metadata
-            import re
-            import stat
-            import sys
-            from pathlib import Path, PurePosixPath, PureWindowsPath
-
-            phase = sys.argv[1]
-            roots = sorted({Path(argument).resolve(strict=True) for argument in sys.argv[2:]})
-
-            def contained(path: Path) -> bool:
-                return any(path == root or root in path.parents for root in roots)
-
-            forbidden = []
-            for root in roots:
-                forbidden.extend(root.rglob("*.pth"))
-                for customization in ("sitecustomize", "usercustomize"):
-                    forbidden.extend(root.glob(f"{customization}.*"))
-                    package = root / customization
-                    if package.exists():
-                        forbidden.append(package)
-            if forbidden:
-                raise SystemExit(
-                    "maturin venv contains executable site customization: "
-                    + ", ".join(str(path) for path in sorted(set(forbidden)))
-                )
-            distribution_entries = []
-            for root in roots:
-                for distribution in importlib.metadata.distributions(path=[str(root)]):
-                    name = distribution.metadata.get("Name")
-                    if not name:
-                        raise SystemExit(
-                            f"maturin venv contains distribution without a name: {distribution}"
-                        )
-                    canonical_name = re.sub(r"[-_.]+", "-", name).lower()
-                    distribution_entries.append(
-                        (canonical_name, distribution.version, distribution)
-                    )
-            expected_name = "poke-controller-modified-extension"
-            unexpected = sorted(
-                (name, version)
-                for name, version, _distribution in distribution_entries
-                if name != expected_name
-            )
-            if unexpected:
-                raise SystemExit(
-                    f"maturin venv contains unexpected distributions: {unexpected}"
-                )
-            if len(distribution_entries) > 1 or (
-                phase == "after" and len(distribution_entries) != 1
-            ):
-                raise SystemExit(
-                    f"maturin venv {phase} inventory is not project-only: "
-                    f"{sorted((name, version) for name, version, _ in distribution_entries)}"
-                )
-
-            dist_info_directories = []
-            egg_info_entries = []
-            uninstall_manifests = []
-            for root in roots:
-                for candidate in root.iterdir():
-                    if candidate.name.endswith(".dist-info"):
-                        dist_info_directories.append(candidate)
-                egg_info_entries.extend(root.rglob("*.egg-info"))
-                egg_info_entries.extend(root.rglob("*.egg-link"))
-                uninstall_manifests.extend(root.rglob("RECORD"))
-                uninstall_manifests.extend(root.rglob("installed-files.txt"))
-            if egg_info_entries:
-                raise SystemExit(
-                    "maturin venv contains legacy uninstall metadata: "
-                    + ", ".join(str(path) for path in sorted(set(egg_info_entries)))
-                )
-
-            expected_dist_info = []
-            expected_records = []
-            for name, version, distribution in distribution_entries:
-                distribution_path = getattr(distribution, "_path", None)
-                if distribution_path is None:
-                    raise SystemExit(
-                        f"maturin venv distribution has no concrete metadata path: {(name, version)}"
-                    )
-                dist_info = Path(distribution_path)
-                try:
-                    dist_info_status = dist_info.lstat()
-                except OSError as error:
-                    raise SystemExit(
-                        f"maturin venv dist-info cannot be inspected: {dist_info}: {error}"
-                    ) from error
-                if not stat.S_ISDIR(dist_info_status.st_mode):
-                    raise SystemExit(
-                        f"maturin venv dist-info is not a real directory: {dist_info}"
-                    )
-                if not dist_info.name.startswith(
-                    "poke_controller_modified_extension-"
-                ) or not dist_info.name.endswith(".dist-info"):
-                    raise SystemExit(
-                        f"maturin venv project has unexpected dist-info path: {dist_info}"
-                    )
-                if dist_info.parent not in roots or not contained(
-                    dist_info.resolve(strict=True)
-                ):
-                    raise SystemExit(
-                        f"maturin venv dist-info escapes site-packages: {dist_info}"
-                    )
-                record = dist_info / "RECORD"
-                try:
-                    record_status = record.lstat()
-                except OSError as error:
-                    raise SystemExit(
-                        f"maturin venv project RECORD cannot be inspected: {record}: {error}"
-                    ) from error
-                if not stat.S_ISREG(record_status.st_mode):
-                    raise SystemExit(
-                        f"maturin venv project RECORD is not a real regular file: {record}"
-                    )
-
-                seen_record_paths = set()
-                try:
-                    with record.open(encoding="utf-8", newline="") as stream:
-                        rows = list(csv.reader(stream, strict=True))
-                except (OSError, UnicodeError, csv.Error) as error:
-                    raise SystemExit(
-                        f"maturin venv project RECORD cannot be parsed: {record}: {error}"
-                    ) from error
-                for row in rows:
-                    if len(row) != 3:
-                        raise SystemExit(
-                            f"maturin venv project RECORD has a malformed row: {row!r}"
-                        )
-                    raw_path = row[0]
-                    posix_path = PurePosixPath(raw_path)
-                    windows_path = PureWindowsPath(raw_path)
-                    if (
-                        not raw_path
-                        or "\0" in raw_path
-                        or "\\" in raw_path
-                        or posix_path.is_absolute()
-                        or windows_path.is_absolute()
-                        or windows_path.drive
-                        or ".." in posix_path.parts
-                        or not posix_path.parts
-                        or posix_path.parts[0] not in {"pokecon", dist_info.name}
-                    ):
-                        raise SystemExit(
-                            f"maturin venv project RECORD has an unsafe path: {raw_path!r}"
-                        )
-                    normalized_path = posix_path.as_posix()
-                    if normalized_path in seen_record_paths:
-                        raise SystemExit(
-                            f"maturin venv project RECORD repeats a path: {normalized_path!r}"
-                        )
-                    seen_record_paths.add(normalized_path)
-                    lexical_target = dist_info.parent.joinpath(*posix_path.parts)
-                    if not contained(lexical_target):
-                        raise SystemExit(
-                            f"maturin venv project RECORD path escapes lexically: {raw_path!r}"
-                        )
-                    try:
-                        target_status = lexical_target.lstat()
-                    except OSError as error:
-                        raise SystemExit(
-                            "maturin venv project RECORD target cannot be inspected: "
-                            f"{lexical_target}: {error}"
-                        ) from error
-                    if not stat.S_ISREG(target_status.st_mode):
-                        raise SystemExit(
-                            "maturin venv project RECORD target is not a real regular file: "
-                            f"{lexical_target}"
-                        )
-                    real_target = lexical_target.resolve(strict=False)
-                    if not contained(real_target):
-                        raise SystemExit(
-                            f"maturin venv project RECORD path escapes after resolution: {raw_path!r}"
-                        )
-                expected_dist_info.append(dist_info)
-                expected_records.append(record)
-
-            if sorted(dist_info_directories) != sorted(expected_dist_info):
-                raise SystemExit(
-                    "maturin venv dist-info directory inventory differs from distributions: "
-                    f"found={sorted(dist_info_directories)}, "
-                    f"expected={sorted(expected_dist_info)}"
-                )
-            if sorted(set(uninstall_manifests)) != sorted(expected_records) or len(
-                uninstall_manifests
-            ) != len(expected_records):
-                raise SystemExit(
-                    "maturin venv uninstall manifest inventory is not canonical: "
-                    f"found={sorted(uninstall_manifests)}, "
-                    f"expected={sorted(expected_records)}"
-                )
-
-            identities = sorted(
-                (name, version) for name, version, _distribution in distribution_entries
-            )
-            print(f"validated maturin venv {phase} inventory: {identities}")
-            ' \
-              "$maturin_inventory_phase" \
-              "''${venv_python_probe[5]}" \
-              "''${venv_python_probe[7]}"; then
-              reject_maturin_venv "maturin venv $maturin_inventory_phase inventory validation failed"
-            fi
-          '';
-
           restoreGateCargoConfig = ''
             expected_cargo_home="$gate_home/cargo-home"
             export CARGO_HOME="$expected_cargo_home"
@@ -2640,6 +2310,23 @@
               ln -s ../web "$out/bin/web"
               mkdir -p "$out/bin/uv"
               cp "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"
+
+              retired_native_extension="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \( \
+                -path '*/pokecon/_native*.so' -o \
+                -path '*/pokecon/_native*.pyd' -o \
+                -path '*/pokecon/_native*.dylib' -o \
+                -path '*/pokecon/_native*.dll' \
+              \) -print -quit)"
+              if [ -n "$retired_native_extension" ]; then
+                echo "retired first-party Python native extension leaked into package: $retired_native_extension" >&2
+                exit 1
+              fi
+              retired_project_wheel="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \
+                -name 'poke_controller_modified_extension-*.whl' -print -quit)"
+              if [ -n "$retired_project_wheel" ]; then
+                echo "retired first-party Python wheel leaked into package: $retired_project_wheel" >&2
+                exit 1
+              fi
             '';
             postFixup = lib.optionalString pkgs.stdenv.isLinux ''
               application_runtime_path=${lib.escapeShellArg (lib.makeLibraryPath linuxApplicationRuntimePackages)}
@@ -3629,23 +3316,6 @@
               '';
             };
 
-            build = mkTask {
-              name = "build";
-              runtimeInputs = rustTaskInputs ++ [
-                pkgs.maturin
-              ];
-              text = ''
-                ${setupWorkdir}
-                ${desktopEnvironment}
-                export PYO3_PYTHON="${pythonEnv}/bin/python"
-                POKECON_RESOURCE_PROVENANCE=development \
-                cargo build --locked --workspace --all-features
-                maturin build --locked --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist
-                mkdir -p "$caller_dir/dist"
-                cp dist/*.whl "$caller_dir/dist/"
-              '';
-            };
-
             contract-check = mkTask {
               name = "contract-check";
               runtimeInputs = rustTaskInputs ++ [
@@ -3893,12 +3563,14 @@
                 pkgs.git
                 pkgs.gnugrep
                 pkgs.jq
+                pythonPackageBuildUv
               ];
               text = ''
                 ${setupSourceGateEnvironment}
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="${source}/python:${source}"
+                export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"
                 pytest_arguments=("$@")
                 if [ "''${#pytest_arguments[@]}" -eq 0 ]; then
                   pytest_arguments=(tests)
@@ -3916,302 +3588,6 @@
               name = "test-production-routing-mutations";
               text = ''
                 exec "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" "$@"
-              '';
-            };
-
-            maturin-develop = mkTask {
-              name = "maturin-develop";
-              runtimeInputs = rustTaskInputs ++ [
-                pkgs.maturin
-                pkgs.uv
-              ];
-              text = ''
-                                ${sanitizeGateEnvironment}
-                                if ! repo_root="$("${pkgs.git}/bin/git" rev-parse --show-toplevel)"; then
-                                  echo "maturin-develop must be run from a PokeCon worktree" >&2
-                                  exit 2
-                                fi
-                                repo_root="$(readlink -f "$repo_root")"
-                                cd "$repo_root"
-                                maturin_target_root="$repo_root/target"
-                                maturin_venv="$maturin_target_root/maturin-venv"
-                                maturin_python="$maturin_venv/bin/python"
-                                reject_maturin_venv() {
-                                  echo "$1" >&2
-                                  echo "move $maturin_venv aside, then rerun nix run .#maturin-develop" >&2
-                                  exit 2
-                                }
-                                if [ "''${1:-}" = "--help" ]; then
-                                  if [ "$#" -ne 1 ]; then
-                                    echo "--help does not accept additional arguments" >&2
-                                    exit 2
-                                  fi
-                                  echo "usage: nix run .#maturin-develop [-- safe-build-options]"
-                                  echo "safe options: --release, --strip, --features, --all-features, --no-default-features, --jobs, --profile, --timings, --future-incompat-report, --ignore-rust-version, --quiet, --verbose, --color, --compression-method, --compression-level"
-                                  exit 0
-                                fi
-                                maturin_arguments=()
-                                while [ "$#" -gt 0 ]; do
-                                  case "$1" in
-                                    -r | --release | --strip | --all-features | --no-default-features | --timings | --future-incompat-report | --ignore-rust-version | -q | --quiet | -v | -vv* | --verbose)
-                                      maturin_arguments+=("$1")
-                                      shift
-                                      ;;
-                                    -F | --features | -j | --jobs | --profile | --color | --compression-method | --compression-level)
-                                      if [ "$#" -lt 2 ] || [[ $2 == -* ]]; then
-                                        echo "maturin-develop option requires a value: $1" >&2
-                                        exit 2
-                                      fi
-                                      maturin_arguments+=("$1" "$2")
-                                      shift 2
-                                      ;;
-                                    -F?* | -j?* | --features=* | --jobs=* | --profile=* | --color=* | --compression-method=* | --compression-level=*)
-                                      maturin_arguments+=("$1")
-                                      shift
-                                      ;;
-                                    *)
-                                      echo "maturin-develop rejects an unsupported or contract-overriding option: $1" >&2
-                                      echo "run nix run .#maturin-develop -- --help for the safe option list" >&2
-                                      exit 2
-                                      ;;
-                                  esac
-                                done
-                                if [ -L "$maturin_target_root" ]; then
-                                  echo "maturin-develop refuses a symlinked target directory: $maturin_target_root" >&2
-                                  exit 2
-                                fi
-                                if [ -e "$maturin_target_root" ] && [ ! -d "$maturin_target_root" ]; then
-                                  echo "maturin-develop target path is not a directory: $maturin_target_root" >&2
-                                  exit 2
-                                fi
-                                if [ ! -e "$maturin_target_root" ]; then
-                                  (umask 022; mkdir -- "$maturin_target_root") 2>/dev/null || true
-                                fi
-                                if [ -L "$maturin_target_root" ] \
-                                  || [ ! -d "$maturin_target_root" ] \
-                                  || [ "$(readlink -f "$maturin_target_root")" != "$maturin_target_root" ]; then
-                                  echo "maturin-develop target directory escapes its worktree: $maturin_target_root" >&2
-                                  exit 2
-                                fi
-                                maturin_lock="$maturin_target_root/.maturin-develop.lock"
-                                if [ -L "$maturin_lock" ]; then
-                                  echo "maturin-develop lock path must not be a symlink: $maturin_lock" >&2
-                                  exit 2
-                                fi
-                                if [ ! -e "$maturin_lock" ]; then
-                                  (set -o noclobber; umask 022; : > "$maturin_lock") 2>/dev/null || true
-                                fi
-                                if [ -L "$maturin_lock" ] \
-                                  || [ ! -f "$maturin_lock" ] \
-                                  || [ "$(readlink -f "$maturin_lock")" != "$maturin_lock" ]; then
-                                  echo "maturin-develop lock is not a contained regular file: $maturin_lock" >&2
-                                  exit 2
-                                fi
-                                exec 8<>"$maturin_lock"
-                                if [ ! "$maturin_lock" -ef /dev/fd/8 ]; then
-                                  echo "maturin-develop lock changed while it was opened: $maturin_lock" >&2
-                                  exit 2
-                                fi
-                                echo "waiting for maturin-develop lock: $maturin_lock" >&2
-                                "${pkgs.flock}/bin/flock" -x 8
-                                if [ -L "$maturin_lock" ] \
-                                  || [ ! -f "$maturin_lock" ] \
-                                  || [ ! "$maturin_lock" -ef /dev/fd/8 ]; then
-                                  echo "maturin-develop lock changed while it was held: $maturin_lock" >&2
-                                  exit 2
-                                fi
-                                echo "acquired maturin-develop lock: $maturin_lock" >&2
-                                if [ -L "$maturin_venv" ]; then
-                                  reject_maturin_venv "maturin venv path must not be a symlink: $maturin_venv"
-                                fi
-                                ${setupCallerRustTaskEnvironment}
-                                ${desktopEnvironment}
-                                if [ -e "$maturin_venv" ] && [ ! -d "$maturin_venv" ]; then
-                                  reject_maturin_venv "maturin venv path is not a directory: $maturin_venv"
-                                fi
-                                canonical_maturin_venv="$repo_root/target/maturin-venv"
-                                if [ "$(readlink -m "$maturin_venv")" != "$canonical_maturin_venv" ]; then
-                                  reject_maturin_venv "maturin venv resolves outside the worktree target directory: $maturin_venv"
-                                fi
-                                if [ ! -e "$maturin_venv" ]; then
-                                  "${pythonEnv}/bin/python" -I -S -m venv \
-                                    --without-pip \
-                                    "$maturin_venv"
-                                fi
-                                if [ "$(readlink -f "$maturin_venv")" != "$canonical_maturin_venv" ]; then
-                                  reject_maturin_venv "maturin venv does not resolve to its fixed worktree path: $maturin_venv"
-                                fi
-                                for maturin_directory in \
-                                  "$maturin_venv/bin" \
-                                  "$maturin_venv/lib"; do
-                                  if [ -L "$maturin_directory" ] || [ ! -d "$maturin_directory" ]; then
-                                    reject_maturin_venv "maturin venv contains a redirected or missing directory: $maturin_directory"
-                                  fi
-                                done
-                                if [ -L "$maturin_venv/pyvenv.cfg" ] || [ ! -f "$maturin_venv/pyvenv.cfg" ]; then
-                                  reject_maturin_venv "maturin venv has a redirected or missing pyvenv.cfg: $maturin_venv/pyvenv.cfg"
-                                fi
-                                if [ ! -x "$maturin_python" ]; then
-                                  reject_maturin_venv "maturin venv has no executable Python: $maturin_python"
-                                fi
-                                expected_python="$(readlink -f "${pythonEnv}/bin/python")"
-                                actual_python="$(readlink -f "$maturin_python")"
-                                if [ "$actual_python" != "$expected_python" ]; then
-                                  echo "maturin venv uses an unexpected Python: $actual_python" >&2
-                                  echo "expected the flake Python: $expected_python" >&2
-                                  reject_maturin_venv "maturin venv interpreter does not match the flake Python"
-                                fi
-                                flake_python_output="$("${pythonEnv}/bin/python" -I -S -c '
-                import os
-                import sys
-
-                print(os.path.realpath(sys.base_prefix))
-                print(os.path.realpath(sys._base_executable))
-                ')"
-                                mapfile -t flake_python_probe <<< "$flake_python_output"
-                                venv_python_output="$("$maturin_python" -I -S -c '
-                import os
-                import sys
-                import sysconfig
-
-                print(f"{sys.version_info.major}.{sys.version_info.minor}")
-                print(os.path.realpath(sys.prefix))
-                print(os.path.realpath(sys.base_prefix))
-                print(os.path.realpath(sys._base_executable))
-                print(os.path.realpath(sys.executable))
-                for name in ("purelib", "platlib", "scripts"):
-                    path = sysconfig.get_path(name)
-                    if path is None:
-                        raise RuntimeError(f"missing sysconfig path: {name}")
-                    print(path)
-                    print(os.path.realpath(path))
-                ')"
-                                mapfile -t venv_python_probe <<< "$venv_python_output"
-                                if [ "''${#flake_python_probe[@]}" -ne 2 ] || [ "''${#venv_python_probe[@]}" -ne 11 ]; then
-                                  reject_maturin_venv "maturin venv Python returned an incomplete isolation probe"
-                                fi
-                                if [ "''${venv_python_probe[0]}" != "3.14" ]; then
-                                  reject_maturin_venv "maturin venv must use Python 3.14: $maturin_python"
-                                fi
-                                if [ "''${venv_python_probe[1]}" != "$canonical_maturin_venv" ]; then
-                                  reject_maturin_venv "maturin venv reports an unexpected sys.prefix: ''${venv_python_probe[1]}"
-                                fi
-                                if [ "''${venv_python_probe[2]}" != "''${flake_python_probe[0]}" ] \
-                                  || [ "''${venv_python_probe[3]}" != "''${flake_python_probe[1]}" ] \
-                                  || [ "''${venv_python_probe[4]}" != "$expected_python" ]; then
-                                  reject_maturin_venv "maturin venv Python base does not match the flake Python"
-                                fi
-                                for maturin_directory in \
-                                  "''${venv_python_probe[5]}" \
-                                  "''${venv_python_probe[7]}" \
-                                  "''${venv_python_probe[9]}" \
-                                  "''${venv_python_probe[5]%/site-packages}" \
-                                  "''${venv_python_probe[7]%/site-packages}"; do
-                                  if [ -L "$maturin_directory" ] || [ ! -d "$maturin_directory" ]; then
-                                    reject_maturin_venv "maturin venv sysconfig contains a redirected or missing directory: $maturin_directory"
-                                  fi
-                                done
-                                for maturin_directory in \
-                                  "''${venv_python_probe[6]}" \
-                                  "''${venv_python_probe[8]}" \
-                                  "''${venv_python_probe[10]}"; do
-                                  case "$maturin_directory" in
-                                    "$canonical_maturin_venv"/*) ;;
-                                    *) reject_maturin_venv "maturin venv sysconfig path escapes the fixed venv: $maturin_directory" ;;
-                                  esac
-                                done
-                                maturin_inventory_phase=before
-                                ${validateMaturinVenvInventory}
-                                maturin_source="$gate_home/maturin-source"
-                                mkdir -p "$maturin_source/python"
-                                for maturin_source_file in \
-                                  Cargo.toml \
-                                  Cargo.lock \
-                                  pyproject.toml \
-                                  README.md \
-                                  LICENSE; do
-                                  if [ -L "$repo_root/$maturin_source_file" ] \
-                                    || [ ! -f "$repo_root/$maturin_source_file" ]; then
-                                    echo "maturin-develop source input must be a regular file: $repo_root/$maturin_source_file" >&2
-                                    exit 2
-                                  fi
-                                  cp -p -- "$repo_root/$maturin_source_file" "$maturin_source/$maturin_source_file"
-                                done
-                                for maturin_source_directory in \
-                                  "$repo_root/rust" \
-                                  "$repo_root/python/pokecon"; do
-                                  if [ -L "$maturin_source_directory" ] \
-                                    || [ ! -d "$maturin_source_directory" ]; then
-                                    echo "maturin-develop source input must be a real directory: $maturin_source_directory" >&2
-                                    exit 2
-                                  fi
-                                  if [ -n "$("${pkgs.findutils}/bin/find" "$maturin_source_directory" -type l -print -quit)" ]; then
-                                    echo "maturin-develop source input must not contain symlinks: $maturin_source_directory" >&2
-                                    exit 2
-                                  fi
-                                done
-                                cp -a -- "$repo_root/rust" "$maturin_source/rust"
-                                cp -a -- "$repo_root/python/pokecon" "$maturin_source/python/pokecon"
-                                "${pythonEnv}/bin/python" -I -S -c '
-                import sys
-                from pathlib import Path
-
-                pyproject = Path(sys.argv[1])
-                content = pyproject.read_text(encoding="utf-8")
-                old = "python-packages = [\"python/pokecon\"]"
-                replacement = "python-source = \"python\"\npython-packages = [\"pokecon\"]"
-                if content.count(old) != 1 or "python-source" in content:
-                    raise SystemExit(
-                        "maturin-develop expected exactly one legacy python-packages setting"
-                    )
-                pyproject.write_text(content.replace(old, replacement), encoding="utf-8")
-                ' "$maturin_source/pyproject.toml"
-                                export VIRTUAL_ENV="$maturin_venv"
-                                export PYO3_PYTHON="$maturin_python"
-                                export UV_OFFLINE=1
-                                wheel_dir="$gate_home/maturin-wheel"
-                                mkdir -p "$wheel_dir"
-                                cd "$maturin_source"
-                                maturin build \
-                                  --locked \
-                                  --offline \
-                                  --manifest-path rust/pokecon-pybindings/Cargo.toml \
-                                  --out "$wheel_dir" \
-                                  "''${maturin_arguments[@]}"
-                                shopt -s nullglob
-                                maturin_wheels=("$wheel_dir"/*.whl)
-                                shopt -u nullglob
-                                if [ "''${#maturin_wheels[@]}" -ne 1 ]; then
-                                  echo "maturin-develop expected exactly one wheel, found ''${#maturin_wheels[@]}" >&2
-                                  exit 1
-                                fi
-                                maturin_wheel="''${maturin_wheels[0]}"
-                                ${validateMaturinDevelopWheel}
-                                maturin_inventory_phase=before
-                                ${validateMaturinVenvInventory}
-                                "${pkgs.uv}/bin/uv" --no-config pip install \
-                                  --offline \
-                                  --no-deps \
-                                  --reinstall \
-                                  --python "$maturin_python" \
-                                  "$maturin_wheel"
-                                maturin_inventory_phase=after
-                                ${validateMaturinVenvInventory}
-                                native_module="$("$maturin_python" -I -c '
-                import os
-                import pokecon._native as module
-
-                if module.__file__ is None:
-                    raise RuntimeError("pokecon._native has no module file")
-                print(os.path.realpath(module.__file__))
-                ')"
-                                case "$native_module" in
-                                  "''${venv_python_probe[6]}"/* | "''${venv_python_probe[8]}"/*) ;;
-                                  *)
-                                    reject_maturin_venv "installed pokecon._native escapes the fixed venv: $native_module"
-                                    ;;
-                                esac
-                                echo "installed and imported pokecon._native from $native_module"
               '';
             };
 
@@ -5183,6 +4559,7 @@
                 pkgs.diffutils
                 pkgs.jq
                 pkgs.markdownlint-cli
+                pythonPackageBuildUv
                 pkgs.ripgrep
                 pkgs.shellcheck
                 pkgs.textlint
@@ -5199,6 +4576,7 @@
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
+                export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"
                 export CARGO_PROFILE_DEV_DEBUG=line-tables-only
                 export CARGO_PROFILE_TEST_DEBUG=line-tables-only
                 ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
@@ -5226,8 +4604,6 @@
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
                   --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
-                ruff check --config ruff.toml --no-cache python scripts tests
-                ruff format --config ruff.toml --no-cache --check python scripts tests
                 bun --bun "${basedpyrightCli}"
                 "${pythonEnv}/bin/python" -I \
                   "${source}/scripts/quality/run_parallel_checks.py" \

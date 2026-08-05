@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use nix::pty::{OpenptyResult, openpty};
 use nix::unistd::ttyname;
-use pokecon_device::serial::{NativeSerialBackend, PortSelector, SerialBackend as _};
+use pokecon::device::serial::{NativeSerialBackend, PortSelector, SerialBackend as _};
 use tokio::time::timeout;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(2);

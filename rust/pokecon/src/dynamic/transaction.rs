@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use pokecon_device::controller::ControllerUpdate;
+use crate::device::controller::ControllerUpdate;
 use serde_json::Value;
 
 use crate::dynamic::callback::{Callback, CallbackError, CallbackSettings};

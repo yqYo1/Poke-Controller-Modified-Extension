@@ -7,8 +7,8 @@ mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;
 mod desktop;
-#[path = "device/facade.rs"]
-mod device;
+#[doc(hidden)]
+pub mod device;
 #[doc(hidden)]
 pub mod diagnostics;
 #[allow(

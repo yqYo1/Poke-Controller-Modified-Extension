@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use crate::device::controller::{ControllerState, ControllerUpdate};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use pokecon_contracts::model::{Setting, ValueSchema};
 use pokecon_contracts::{ContractError, settings_registry};
-use pokecon_device::controller::{ControllerState, ControllerUpdate};
 use pokecon_settings::pipeline::SECRET_MASK;
 use serde_json::Value;
 

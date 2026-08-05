@@ -157,7 +157,7 @@ if [[ $camera_ready != true ]]; then
   exit 1
 fi
 
-cargo test --locked --package pokecon-device --test native_serial_pty
+cargo test --locked --package pokecon --test native_serial_pty
 POKECON_V4L2_INDEX="$v4l2_index" \
   cargo test --locked --package pokecon-camera --test native_v4l2 -- --ignored --nocapture
 

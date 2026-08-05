@@ -3759,6 +3759,7 @@ dependencies = [
  "clap",
  "dunce",
  "futures-util",
+ "gilrs",
  "mime_guess",
  "mlua",
  "nix 0.30.1",
@@ -3767,7 +3768,6 @@ dependencies = [
  "parking_lot",
  "pokecon-camera",
  "pokecon-contracts",
- "pokecon-device",
  "pokecon-settings",
  "proc-macro2",
  "pyo3",
@@ -3776,6 +3776,7 @@ dependencies = [
  "rfd",
  "rmp-serde",
  "rumqttc",
+ "rustls",
  "semver",
  "serde",
  "serde_json",
@@ -3787,6 +3788,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-serial",
  "tokio-tungstenite",
  "tokio-util",
  "tower",
@@ -3796,6 +3798,7 @@ dependencies = [
  "utoipa",
  "webrtc",
  "winapi-util",
+ "win32_notif",
 ]
 
 [[package]]
@@ -3826,27 +3829,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "url",
-]
-
-[[package]]
-name = "pokecon-device"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "gilrs",
- "nix 0.30.1",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-serial",
- "tokio-util",
- "tracing",
- "url",
- "win32_notif",
 ]
 
 [[package]]

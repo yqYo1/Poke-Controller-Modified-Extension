@@ -193,7 +193,7 @@ Phase 2.7の最初の不可分atomで`pokecon-desktop` compatibility packageを�
 
 `pokecon-camera`はカメラと画像処理のプラットフォーム依存を所有しています。
 
-`pokecon-device`はシリアル、ゲームパッド、Windows通知の依存を所有しています。
+Phase 2.7のdevice atomで`pokecon-device` compatibility packageを削除し、シリアル、ゲームパッド、Windows通知の依存とintegration testsを`pokecon`へ統合しました。deviceの正準実装は`pokecon::device`に一度だけcompileされ、workerのprivate dynamic domainも同じ型を参照します。
 
 Phase 2.7のserver detach atomで、WebRTC、OpenH264、axumの依存を`pokecon`へ移しました。続く削除atomで`pokecon-server` compatibility package、workspace参照、Nix package aliasを削除しました。
 
@@ -310,13 +310,13 @@ CPythonとLuaJITを初期化してPython／Luaコードを実行する実装は�
 
 ### 9.1 設定アダプターの配置
 
-`rust/pokecon-camera/src/settings_applier.rs`の`CameraSettingsApplier`は、`rust/pokecon-settings/src/service.rs`の`RuntimeSettingsApplier`を実装しています。
+`rust/pokecon/src/settings_runtime/camera.rs`の`CameraSettingsApplier`は、`rust/pokecon/src/settings/service.rs`の`RuntimeSettingsApplier`を実装しています。
 
-`rust/pokecon-device/src/serial/manager.rs`の`SerialSettingsApplier`も同じ設定サービストレイトを実装しています。
+`rust/pokecon/src/settings_runtime/device.rs`の`SerialSettingsApplier`も同じ設定サービストレイトを実装しています。
 
-このため、カメラとデバイスが、TOML永続化、HMAC、uv、venvまで所有する設定クレートへ依存しています。
+この配置により、cameraとdeviceの正準モジュールは、TOML永続化、HMAC、uv、venvを所有するsettings実装へ依存しません。
 
-統合時には、具体的な設定アダプターを合成起点へ移し、カメラとデバイスの内部モジュールはドメイン固有の設定適用APIだけを公開します。
+具体的な設定アダプターは合成起点が所有し、cameraとdeviceの内部モジュールはドメイン固有の設定適用APIだけを公開します。
 
 ### 9.2 Pythonネイティブ拡張の必要性
 

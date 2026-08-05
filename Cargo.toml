@@ -4,14 +4,12 @@ members = [
     "rust/pokecon",
     "rust/pokecon-contracts",
     "rust/pokecon-camera",
-    "rust/pokecon-device",
     "rust/pokecon-settings",
 ]
 default-members = [
     "rust/pokecon",
     "rust/pokecon-contracts",
     "rust/pokecon-camera",
-    "rust/pokecon-device",
     "rust/pokecon-settings",
 ]
 

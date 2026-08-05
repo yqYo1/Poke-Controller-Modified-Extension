@@ -47,6 +47,7 @@ base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 futures-util.workspace = true
+gilrs.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
 opener.workspace = true
@@ -54,13 +55,13 @@ openh264.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
-pokecon-device = { path = "../pokecon-device" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 reqwest.workspace = true
 rfd.workspace = true
 rmp-serde.workspace = true
 rumqttc.workspace = true
+rustls.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -70,6 +71,7 @@ thiserror.workspace = true
 tauri.workspace = true
 tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
+tokio-serial.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -96,6 +98,7 @@ nix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 winapi-util = "0.1.11"
+win32_notif = { version = "0.15.3", default-features = false }
 
 [lints]
 workspace = true

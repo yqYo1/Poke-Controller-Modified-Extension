@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use pokecon_device::controller::ControllerUpdate;
+use crate::device::controller::ControllerUpdate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

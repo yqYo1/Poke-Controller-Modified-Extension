@@ -2208,7 +2208,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "187d7176f432ce07bfdcf61a06a78c1a4d49471a3dbdaead236f60ef83058658"
+        == "4e969443d7d68a607dc79c00e016e4cd77b2ebbbe0ae163b143a7f007473ce26"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3058,7 +3058,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert runtime_environment_section.count("UV_LIBC") == 1
 
     package_start = flake.index("pokeconPackage = rustPlatform.buildRustPackage")
-    package_end = flake.index("gateCargoConfig =", package_start)
+    package_end = flake.index("gateCargoLock =", package_start)
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
@@ -3156,12 +3156,69 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert package_prebuild.count("${installControlledCargoManifests}") == 1
     assert package_prebuild.count("${sanitizeCargoCompilerEnvironment}") == 1
 
-    gate_cargo_config_start = package_end
+    gate_cargo_vendor_start = package_end
+    gate_cargo_vendor_end = flake.index("gateCargoConfig =", gate_cargo_vendor_start)
+    gate_cargo_vendor_section = flake[gate_cargo_vendor_start:gate_cargo_vendor_end]
+    assert (
+        hashlib.sha256(gate_cargo_vendor_section.strip().encode()).hexdigest()
+        == "f6c72fc870b648a1603cd8e7898fb4bfd212175628adbe3e1496f5e3a6dab141"
+    )
+    canonical_cargo_lock = tomllib.loads(sources[WORKSPACE_LOCK_SOURCE])
+    external_cargo_packages = [
+        package for package in canonical_cargo_lock["package"] if "source" in package
+    ]
+    gate_cargo_vendor_lock = {
+        "version": canonical_cargo_lock["version"],
+        "package": external_cargo_packages,
+    }
+    if "metadata" in canonical_cargo_lock:
+        gate_cargo_vendor_lock["metadata"] = canonical_cargo_lock["metadata"]
+    expected_gate_cargo_vendor_identity = (
+        "206ade87ceac36a1c8a0b29358ad3320eced78535da9aa96d3a97c18b22b7202"
+    )
+    assert (
+        hashlib.sha256(
+            json.dumps(
+                gate_cargo_vendor_lock,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        == expected_gate_cargo_vendor_identity
+    )
+    for gate_cargo_vendor_proof in (
+        "assert workspaceCargoInputsAreCanonical;",
+        "builtins.fromTOML canonicalCargoLockText;",
+        "inherit (gateCargoLock) version;",
+        "builtins.filter (package: package ? source)",
+        "gateCargoLock.package",
+        "lib.optionalAttrs (gateCargoLock ? metadata)",
+        "inherit (gateCargoLock) metadata;",
+        'builtins.hashString "sha256"',
+        "builtins.toJSON gateCargoVendorLock",
+        f'"{expected_gate_cargo_vendor_identity}";',
+        'lib.splitString "\\n[[package]]\\n" canonicalCargoLockText',
+        "builtins.head gateCargoLockSections",
+        "builtins.tail gateCargoLockSections",
+        'lib.hasInfix "\\nsource = " packageText',
+        'lib.concatStringsSep "\\n[[package]]\\n"',
+        "builtins.attrNames gateCargoLock",
+        "builtins.length gateCargoVendorPackageTexts",
+        "builtins.length gateCargoVendorLock.package",
+        "builtins.fromTOML gateCargoVendorLockText == gateCargoVendorLock",
+        "gateCargoVendorIdentity == expectedGateCargoVendorIdentity",
+        "rustPlatform.importCargoLock {",
+        "lockFileContents = gateCargoVendorLockText;",
+        "allowBuiltinFetchGit = true;",
+    ):
+        assert gate_cargo_vendor_section.count(gate_cargo_vendor_proof) == 1
+
+    gate_cargo_config_start = gate_cargo_vendor_end
     gate_cargo_config_end = flake.index("gateCargoHome =", gate_cargo_config_start)
     gate_cargo_config_section = flake[gate_cargo_config_start:gate_cargo_config_end]
     assert (
         hashlib.sha256(gate_cargo_config_section.strip().encode()).hexdigest()
-        == "641fd8fc3e3b9ceec546f655e1ef86a4530d4300f62963619170848b827b1437"
+        == "31906d147ca5c3de90d8c72090c3d6f2c377e1a9194da6deecb8d2240a823a84"
     )
     gate_cargo_config_opening = (
         "gateCargoConfig = pkgs.writeText \"pokecon-gate-cargo-config.toml\" ''\n"
@@ -3180,7 +3237,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
-directory = "${pokeconPackage.cargoDeps}"
+directory = "${gateCargoVendorDir}"
 
 [net]
 offline = true
@@ -3189,7 +3246,7 @@ offline = true
     assert tomllib.loads(gate_cargo_config_body) == {
         "source": {
             "crates-io": {"replace-with": "vendored-sources"},
-            "vendored-sources": {"directory": "${pokeconPackage.cargoDeps}"},
+            "vendored-sources": {"directory": "${gateCargoVendorDir}"},
         },
         "net": {"offline": True},
     }
@@ -17367,7 +17424,7 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
     package = section(
         flake,
         "pokeconPackage = rustPlatform.buildRustPackage {",
-        "\n          gateCargoConfig =",
+        "\n          gateCargoLock =",
     )
     session_bus = section(
         flake,

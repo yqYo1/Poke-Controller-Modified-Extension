@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "a80360e8b210c86ec9b8ffe07cfebb9c5cc753a8447ee5c29bb71c1c734c780d";
+      canonicalFlakeHash = "35c3db5b909d6e28898886f145b7229ff1505b267176dfd3435788fe92db7fe0";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "a638b609b08992cbe7a921d90910af56e976a74e95a8400cae03cbcca05aafdb";
+              expectedAuditTestHash = "80475a0e61a29679e724ce919529ab15cadb422b320fb10a650c358da89c1a08";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -2283,12 +2283,56 @@
               esac
             '';
           };
+          gateCargoLock =
+            assert workspaceCargoInputsAreCanonical;
+            builtins.fromTOML canonicalCargoLockText;
+          gateCargoVendorLock = {
+            inherit (gateCargoLock) version;
+            package = builtins.filter (package: package ? source) gateCargoLock.package;
+          }
+          // lib.optionalAttrs (gateCargoLock ? metadata) {
+            inherit (gateCargoLock) metadata;
+          };
+          gateCargoVendorIdentity = builtins.hashString "sha256" (builtins.toJSON gateCargoVendorLock);
+          expectedGateCargoVendorIdentity = "206ade87ceac36a1c8a0b29358ad3320eced78535da9aa96d3a97c18b22b7202";
+          # buildRustPackage vendors from the full workspace lock, whose store
+          # path changes for local-only graph edits. This source-only lock keeps
+          # the immutable gate vendor path stable until external inputs change.
+          gateCargoLockSections = lib.splitString "\n[[package]]\n" canonicalCargoLockText;
+          gateCargoLockHeader = builtins.head gateCargoLockSections;
+          gateCargoPackageTexts = builtins.tail gateCargoLockSections;
+          gateCargoVendorPackageTexts = builtins.filter (
+            packageText: lib.hasInfix "\nsource = " packageText
+          ) gateCargoPackageTexts;
+          gateCargoVendorLockText = lib.concatStringsSep "\n[[package]]\n" (
+            [ gateCargoLockHeader ] ++ gateCargoVendorPackageTexts
+          );
+          gateCargoVendorDir =
+            assert lib.assertMsg (
+              builtins.attrNames gateCargoLock == [
+                "package"
+                "version"
+              ]
+            ) "Cargo lock structure cannot be normalized safely";
+            assert lib.assertMsg (
+              builtins.length gateCargoVendorPackageTexts == builtins.length gateCargoVendorLock.package
+            ) "Cargo vendor package text inventory changed";
+            assert lib.assertMsg (
+              builtins.fromTOML gateCargoVendorLockText == gateCargoVendorLock
+            ) "normalized Cargo vendor lock did not round-trip";
+            assert lib.assertMsg (
+              gateCargoVendorIdentity == expectedGateCargoVendorIdentity
+            ) "external Cargo vendor identity changed";
+            rustPlatform.importCargoLock {
+              lockFileContents = gateCargoVendorLockText;
+              allowBuiltinFetchGit = true;
+            };
           gateCargoConfig = pkgs.writeText "pokecon-gate-cargo-config.toml" ''
             [source.crates-io]
             replace-with = "vendored-sources"
 
             [source.vendored-sources]
-            directory = "${pokeconPackage.cargoDeps}"
+            directory = "${gateCargoVendorDir}"
 
             [net]
             offline = true

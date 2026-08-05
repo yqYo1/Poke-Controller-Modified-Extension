@@ -91,6 +91,19 @@ def sha256_file(path: Path) -> str:
 def write_checksums(artifacts: Path, output: Path) -> list[str]:
     if not artifacts.is_dir():
         invalid_value(f"artifact directory does not exist: {artifacts}")
+    transient_paths = sorted(
+        path.relative_to(artifacts).as_posix()
+        for path in artifacts.rglob("*")
+        if any(
+            part == ".tauri-build.lock" or part.startswith(".tauri-")
+            for part in path.relative_to(artifacts).parts
+        )
+    )
+    if transient_paths:
+        invalid_value(
+            "artifact directory contains transient Tauri publication state: "
+            + ", ".join(transient_paths)
+        )
     output_resolved = output.resolve()
     files = sorted(
         path

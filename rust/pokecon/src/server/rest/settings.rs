@@ -1,13 +1,18 @@
 use axum::Router;
 use axum::extract::{Json, State};
-use axum::routing::get;
+use axum::routing::{MethodFilter, on};
 
 use crate::server::api::{SettingsPatchRequest, SettingsSnapshot, Success};
 
-use super::{RestError, RestResult, RestState, json_request};
+use super::{RestError, RestResult, RestState, json_request, method_not_allowed};
 
 pub(super) fn router() -> Router<RestState> {
-    Router::new().route("/api/settings", get(get_settings).patch(patch_settings))
+    Router::new().route(
+        "/api/settings",
+        on(MethodFilter::GET, get_settings)
+            .on(MethodFilter::HEAD, method_not_allowed)
+            .patch(patch_settings),
+    )
 }
 
 async fn get_settings(State(state): State<RestState>) -> Json<Success<SettingsSnapshot>> {

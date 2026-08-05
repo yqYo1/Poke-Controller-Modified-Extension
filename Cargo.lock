@@ -3782,6 +3782,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+ "winapi-util",
 ]
 
 [[package]]

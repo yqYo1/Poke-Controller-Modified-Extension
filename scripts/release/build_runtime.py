@@ -12,6 +12,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import tomllib
 import zipfile
@@ -23,9 +24,15 @@ if TYPE_CHECKING:
 
 
 PYTHON_VERSION = "3.14.3"
+LINUX_PYTHON_INSTALL_REQUEST = "cpython-3.14.3-linux-x86_64-gnu"
+WINDOWS_PYTHON_INSTALL_REQUEST = "cpython-3.14.3-windows-x86_64-none"
+LINUX_PYTHON_MINOR_REDIRECT = "cpython-3.14-linux-x86_64-gnu"
+WINDOWS_PYTHON_MINOR_REDIRECT = "cpython-3.14-windows-x86_64-none"
 SETUPTOOLS_VERSION = "82.0.1"
 WHEEL_VERSION = "0.46.3"
 PORTABLE_BUILD_PREFIX = "/install"
+PORTABLE_SYSTEM_INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
+PORTABLE_PYTHON_RPATH = "$ORIGIN/../lib"
 REPRODUCIBLE_ZIP_EPOCH = 315_532_800
 WORKER_RUNTIME_SMOKE = """\
 import cv2, numpy, pandas, PIL, pyaudio, scipy
@@ -62,10 +69,12 @@ def run(
     capture: bool = False,
 ) -> str:
     command = [str(argument) for argument in arguments]
+    child_environment = dict(os.environ if environment is None else environment)
+    child_environment["PYTHONDONTWRITEBYTECODE"] = "1"
     completed = subprocess.run(
         command,
         check=True,
-        env=None if environment is None else dict(environment),
+        env=child_environment,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
@@ -93,6 +102,24 @@ def object_mapping(value: object, label: str) -> dict[str, object]:
     return {cast("str", key): item for key, item in untyped.items()}
 
 
+def python_install_request(platform_name: str) -> str:
+    if platform_name == "linux":
+        return LINUX_PYTHON_INSTALL_REQUEST
+    if platform_name == "win32":
+        return WINDOWS_PYTHON_INSTALL_REQUEST
+    message = f"portable Python install request does not support {platform_name!r}"
+    raise ValueError(message)
+
+
+def python_minor_redirect_name(platform_name: str) -> str:
+    if platform_name == "linux":
+        return LINUX_PYTHON_MINOR_REDIRECT
+    if platform_name == "win32":
+        return WINDOWS_PYTHON_MINOR_REDIRECT
+    message = f"portable Python minor redirect does not support {platform_name!r}"
+    raise ValueError(message)
+
+
 def python_executable(root: Path, *, platform_name: str | None = None) -> Path:
     platform_name = os.name if platform_name is None else platform_name
     candidates = (
@@ -105,6 +132,162 @@ def python_executable(root: Path, *, platform_name: str | None = None) -> Path:
         message = f"portable Python has no supported executable below {root}"
         raise ValueError(message)
     return executable
+
+
+def normalize_python_bytecode(root: Path) -> None:
+    """Remove upstream bytecode caches without traversing redirected paths."""
+    if not _is_real_directory(root):
+        message = f"portable Python runtime root is redirected: {root}"
+        raise ValueError(message)
+
+    bytecode_files: list[Path] = []
+    cache_directories: list[Path] = []
+    pending_directories: list[Path] = [root]
+    while pending_directories:
+        directory = pending_directories.pop()
+        if not _is_real_directory(directory):
+            message = (
+                f"portable Python runtime directory became redirected: {directory}"
+            )
+            raise ValueError(message)
+        try:
+            entries = tuple(directory.iterdir())
+        except OSError as error:
+            message = (
+                f"portable Python runtime directory cannot be inspected: {directory}"
+            )
+            raise ValueError(message) from error
+        for entry in entries:
+            try:
+                redirected = entry.is_symlink() or entry.is_junction()
+                entry_mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError as error:
+                message = f"portable Python runtime entry cannot be inspected: {entry}"
+                raise ValueError(message) from error
+            if entry.suffix == ".pyc":
+                if redirected or not stat.S_ISREG(entry_mode):
+                    message = (
+                        "portable Python bytecode artifact is not one real file: "
+                        f"{entry}"
+                    )
+                    raise ValueError(message)
+                if directory.name != "__pycache__":
+                    message = (
+                        "portable Python bytecode artifact is outside a real "
+                        f"__pycache__ directory: {entry}"
+                    )
+                    raise ValueError(message)
+                bytecode_files.append(entry)
+                continue
+            if entry.name == "__pycache__":
+                if redirected or not stat.S_ISDIR(entry_mode):
+                    message = (
+                        "portable Python bytecode cache is redirected or not one "
+                        f"real directory: {entry}"
+                    )
+                    raise ValueError(message)
+                cache_directories.append(entry)
+                pending_directories.append(entry)
+                continue
+            if directory.name == "__pycache__":
+                message = (
+                    "portable Python bytecode cache contains non-bytecode residue: "
+                    f"{entry}"
+                )
+                raise ValueError(message)
+            if not redirected and stat.S_ISDIR(entry_mode):
+                pending_directories.append(entry)
+
+    for bytecode_file in bytecode_files:
+        cache_directory = bytecode_file.parent
+        if not _is_real_directory(cache_directory):
+            message = (
+                "portable Python bytecode cache became redirected before "
+                f"normalization: {cache_directory}"
+            )
+            raise ValueError(message)
+        if not _is_real_regular_file(bytecode_file):
+            message = (
+                "portable Python bytecode artifact became redirected or non-regular: "
+                f"{bytecode_file}"
+            )
+            raise ValueError(message)
+        try:
+            bytecode_file.unlink()
+        except OSError as error:
+            message = (
+                f"portable Python bytecode artifact cannot be removed: {bytecode_file}"
+            )
+            raise ValueError(message) from error
+
+    for cache_directory in sorted(
+        cache_directories,
+        key=lambda path: len(path.parts),
+        reverse=True,
+    ):
+        if not _is_real_directory(cache_directory):
+            message = (
+                f"portable Python bytecode cache became redirected: {cache_directory}"
+            )
+            raise ValueError(message)
+        try:
+            residue = tuple(cache_directory.iterdir())
+        except OSError as error:
+            message = (
+                f"portable Python bytecode cache cannot be inspected: {cache_directory}"
+            )
+            raise ValueError(message) from error
+        if residue:
+            message = (
+                "portable Python bytecode cache became nonempty during normalization: "
+                f"{cache_directory}"
+            )
+            raise ValueError(message)
+        try:
+            cache_directory.rmdir()
+        except OSError as error:
+            message = (
+                f"portable Python bytecode cache cannot be removed: {cache_directory}"
+            )
+            raise ValueError(message) from error
+
+
+def audit_python_bytecode(root: Path) -> None:
+    """Fail if a runtime contains bytecode without following redirects."""
+    if not _is_real_directory(root):
+        message = f"portable Python runtime root is redirected: {root}"
+        raise ValueError(message)
+
+    pending_directories: list[Path] = [root]
+    while pending_directories:
+        directory = pending_directories.pop()
+        if not _is_real_directory(directory):
+            message = (
+                f"portable Python runtime directory became redirected: {directory}"
+            )
+            raise ValueError(message)
+        try:
+            entries = tuple(directory.iterdir())
+        except OSError as error:
+            message = (
+                f"portable Python runtime directory cannot be inspected: {directory}"
+            )
+            raise ValueError(message) from error
+        for entry in entries:
+            try:
+                redirected = entry.is_symlink() or entry.is_junction()
+                entry_mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError as error:
+                message = f"portable Python runtime entry cannot be inspected: {entry}"
+                raise ValueError(message) from error
+            if entry.suffix in {".pyc", ".pyo"} or entry.name == "__pycache__":
+                message = (
+                    "portable Python runtime contains a bytecode artifact after "
+                    f"normalization: {entry}"
+                )
+                raise ValueError(message)
+            if not redirected and stat.S_ISDIR(entry_mode):
+                pending_directories.append(entry)
 
 
 def normalize_python_sysconfig(root: Path, installed_prefix: Path) -> None:
@@ -167,62 +350,218 @@ def verify_python(executable: Path, root: Path) -> None:
         raise ValueError(message)
 
 
+def _is_real_regular_file(path: Path) -> bool:
+    try:
+        return (
+            not path.is_symlink()
+            and not path.is_junction()
+            and stat.S_ISREG(path.stat(follow_symlinks=False).st_mode)
+        )
+    except OSError:
+        return False
+
+
+def _is_real_directory(path: Path) -> bool:
+    try:
+        return (
+            not path.is_symlink()
+            and not path.is_junction()
+            and stat.S_ISDIR(path.stat(follow_symlinks=False).st_mode)
+        )
+    except OSError:
+        return False
+
+
+def managed_python_install_prefix(
+    install_root: Path,
+    install_request: str,
+    *,
+    platform_name: str,
+) -> Path:
+    expected_install_request = python_install_request(platform_name)
+    minor_redirect_name = python_minor_redirect_name(platform_name)
+    if install_request != expected_install_request:
+        message = (
+            f"managed Python install request {install_request!r} differs from "
+            f"{expected_install_request!r}"
+        )
+        raise ValueError(message)
+    if not _is_real_directory(install_root):
+        message = f"uv managed Python installation root is redirected: {install_root}"
+        raise ValueError(message)
+    resolved_install_root = install_root.resolve(strict=True)
+    entries = {entry.name: entry for entry in install_root.iterdir()}
+    expected_names = {
+        ".gitignore",
+        ".lock",
+        ".temp",
+        install_request,
+        minor_redirect_name,
+    }
+    actual_names = set(entries)
+    if actual_names != expected_names:
+        missing = sorted(expected_names - actual_names)
+        extras = sorted(actual_names - expected_names)
+        message = (
+            "uv managed Python installation root inventory differs from the "
+            f"pinned layout; missing={missing!r}; extras={extras!r}"
+        )
+        raise ValueError(message)
+
+    gitignore = entries[".gitignore"]
+    if not _is_real_regular_file(gitignore) or gitignore.read_bytes() != b"*":
+        message = "uv managed Python .gitignore must be one real file containing b'*'"
+        raise ValueError(message)
+    lock = entries[".lock"]
+    if not _is_real_regular_file(lock) or lock.read_bytes() != b"":
+        message = "uv managed Python .lock must be one real empty file"
+        raise ValueError(message)
+    temporary = entries[".temp"]
+    if not _is_real_directory(temporary) or tuple(temporary.iterdir()):
+        message = "uv managed Python .temp must be one real empty directory"
+        raise ValueError(message)
+
+    full_install = entries[install_request]
+    if not _is_real_directory(full_install):
+        message = f"uv managed Python full installation is redirected: {full_install}"
+        raise ValueError(message)
+    installed_prefix = full_install.resolve(strict=True)
+    if installed_prefix.parent != resolved_install_root:
+        message = "uv installed managed CPython outside the isolated installation root"
+        raise ValueError(message)
+
+    minor_redirect = entries[minor_redirect_name]
+    if platform_name == "linux":
+        redirect_kind_is_valid = (
+            minor_redirect.is_symlink() and not minor_redirect.is_junction()
+        )
+    elif platform_name == "win32":
+        redirect_kind_is_valid = (
+            minor_redirect.is_junction() and not minor_redirect.is_symlink()
+        )
+    else:
+        message = f"portable Python layout does not support {platform_name!r}"
+        raise ValueError(message)
+    if not redirect_kind_is_valid:
+        message = (
+            "uv managed Python minor redirect has the wrong platform-specific kind: "
+            f"{minor_redirect}"
+        )
+        raise ValueError(message)
+    if minor_redirect.resolve(strict=True) != installed_prefix:
+        message = (
+            "uv managed Python minor redirect does not target the full installation"
+        )
+        raise ValueError(message)
+    return installed_prefix
+
+
 def install_python(uv: Path, output: Path, workspace: Path) -> Path:
     install_root = workspace / "python-installs"
+    install_request = python_install_request(sys.platform)
     run(
         [
             uv,
             "--no-config",
             "python",
             "install",
-            PYTHON_VERSION,
+            install_request,
             "--managed-python",
             "--no-bin",
             "--install-dir",
             install_root,
         ]
     )
-    discovery_environment = os.environ.copy()
-    discovery_environment["UV_PYTHON_INSTALL_DIR"] = str(install_root)
-    discovered = run(
-        [
-            uv,
-            "--no-config",
-            "python",
-            "find",
-            PYTHON_VERSION,
-            "--managed-python",
-            "--no-python-downloads",
-            "--no-project",
-            "--resolve-links",
-        ],
-        environment=discovery_environment,
-        capture=True,
+    installed_prefix = managed_python_install_prefix(
+        install_root,
+        install_request,
+        platform_name=sys.platform,
     )
-    if not discovered:
-        message = "uv did not find the managed CPython installation it just installed"
-        raise ValueError(message)
-    discovered_python = Path(discovered).resolve()
-    installed_prefix = (
-        discovered_python.parent if os.name == "nt" else discovered_python.parent.parent
-    )
-    if installed_prefix.parent.resolve() != install_root.resolve():
-        message = "uv found managed CPython outside the isolated installation root"
-        raise ValueError(message)
-    if python_executable(installed_prefix).resolve() != discovered_python:
-        message = "uv found an unsupported managed CPython executable layout"
+    installed_python = python_executable(installed_prefix)
+    resolved_installed_python = installed_python.resolve(strict=True)
+    if installed_prefix not in resolved_installed_python.parents:
+        message = "uv installed a managed CPython executable outside its runtime root"
         raise ValueError(message)
     shutil.copytree(installed_prefix, output, symlinks=True)
+    normalize_python_bytecode(output)
     normalize_python_sysconfig(output, installed_prefix)
-    executable = python_executable(output)
-    verify_python(executable, output)
-    return executable
+    return python_executable(output)
+
+
+def portable_python_elf_metadata(executable: Path, patchelf: Path) -> tuple[str, str]:
+    return (
+        run([patchelf, "--print-interpreter", executable], capture=True),
+        run([patchelf, "--print-rpath", executable], capture=True),
+    )
+
+
+def prepare_python_execution_copy(
+    runtime_root: Path,
+    workspace: Path,
+    patchelf: Path,
+    execution_loader: Path,
+    execution_library_path: str,
+) -> tuple[Path, Path, str]:
+    """Create a temporary Nix-loadable copy without changing portable output bytes."""
+    raw_python = python_executable(runtime_root)
+    if raw_python.is_symlink() or not raw_python.is_file():
+        message = f"portable Python executable must be one real file: {raw_python}"
+        raise ValueError(message)
+    raw_metadata = portable_python_elf_metadata(raw_python, patchelf)
+    expected_raw_metadata = (PORTABLE_SYSTEM_INTERPRETER, PORTABLE_PYTHON_RPATH)
+    if raw_metadata != expected_raw_metadata:
+        message = (
+            "portable Python ELF boundary changed: "
+            f"interpreter={raw_metadata[0]!r}, rpath={raw_metadata[1]!r}"
+        )
+        raise ValueError(message)
+    raw_digest = sha256_file(raw_python)
+    if not execution_loader.is_absolute() or not execution_loader.is_file():
+        message = f"portable Python execution loader is invalid: {execution_loader}"
+        raise ValueError(message)
+    library_entries = execution_library_path.split(os.pathsep)
+    if not library_entries or any(
+        not entry or not Path(entry).is_absolute() or not Path(entry).is_dir()
+        for entry in library_entries
+    ):
+        message = (
+            "portable Python execution library path is not an exact absolute inventory"
+        )
+        raise ValueError(message)
+
+    execution_root = workspace / "python-execution"
+    shutil.copytree(runtime_root, execution_root, symlinks=True)
+    execution_python = python_executable(execution_root)
+    if execution_python.is_symlink() or not execution_python.is_file():
+        message = (
+            "portable Python execution copy must expose one real executable: "
+            f"{execution_python}"
+        )
+        raise ValueError(message)
+    execution_rpath = os.pathsep.join((PORTABLE_PYTHON_RPATH, execution_library_path))
+    run([patchelf, "--set-interpreter", execution_loader, execution_python])
+    run([patchelf, "--set-rpath", execution_rpath, execution_python])
+    execution_metadata = portable_python_elf_metadata(execution_python, patchelf)
+    if execution_metadata != (str(execution_loader), execution_rpath):
+        message = (
+            "portable Python execution copy did not receive its pinned ELF boundary"
+        )
+        raise ValueError(message)
+    if portable_python_elf_metadata(raw_python, patchelf) != expected_raw_metadata:
+        message = "preparing the execution copy changed portable Python ELF metadata"
+        raise ValueError(message)
+    if sha256_file(raw_python) != raw_digest:
+        message = "preparing the execution copy changed portable Python bytes"
+        raise ValueError(message)
+    verify_python(execution_python, execution_root)
+    return execution_python, execution_root, raw_digest
 
 
 def export_requirements(uv: Path, project: Path, output: Path) -> None:
     run(
         [
             uv,
+            "--no-config",
             "--quiet",
             "export",
             "--project",
@@ -542,6 +881,8 @@ def build_release_runtime(
     strip: Path | None = None,
     vcpkg_path: Path | None = None,
     runtime_library_path: Path | None = None,
+    execution_loader: Path | None = None,
+    execution_library_path: str | None = None,
 ) -> dict[str, object]:
     if runtime_output.exists() or wheelhouse_output.exists():
         message = "release runtime outputs must not already exist"
@@ -552,15 +893,47 @@ def build_release_runtime(
         prefix="pokecon-release-runtime-", dir=runtime_output.parent
     ) as directory:
         workspace = Path(directory)
-        python = install_python(uv, runtime_output, workspace)
+        raw_python = install_python(uv, runtime_output, workspace)
+        execution_python = raw_python
+        execution_root = runtime_output
+        raw_python_digest = sha256_file(raw_python)
+        if os.name == "nt":
+            if execution_loader is not None or execution_library_path is not None:
+                message = (
+                    "Windows portable Python must not receive an ELF execution boundary"
+                )
+                raise ValueError(message)
+            verify_python(raw_python, runtime_output)
+        elif sys.platform.startswith("linux"):
+            if (
+                patchelf is None
+                or execution_loader is None
+                or execution_library_path is None
+            ):
+                message = (
+                    "Linux portable Python requires patchelf, an execution loader, "
+                    "and an execution library path"
+                )
+                raise ValueError(message)
+            execution_python, execution_root, raw_python_digest = (
+                prepare_python_execution_copy(
+                    runtime_output,
+                    workspace,
+                    patchelf,
+                    execution_loader,
+                    execution_library_path,
+                )
+            )
+        else:
+            verify_python(raw_python, runtime_output)
         requirements = wheelhouse_output / "requirements.lock"
         export_requirements(uv, project, requirements)
         build_wheels(
             uv,
-            python,
+            execution_python,
             requirements,
             wheelhouse_output,
-            runtime_output,
+            execution_root,
             workspace,
             patchelf,
             strip,
@@ -568,12 +941,26 @@ def build_release_runtime(
         )
         inventory = verify_wheelhouse(
             uv,
-            python,
+            execution_python,
             project,
             wheelhouse_output,
             workspace,
             runtime_library_path,
         )
+        if sha256_file(raw_python) != raw_python_digest:
+            message = "release build changed the raw portable Python executable"
+            raise ValueError(message)
+        if sys.platform.startswith("linux"):
+            if patchelf is None:
+                message = "Linux portable Python lost its patchelf audit boundary"
+                raise ValueError(message)
+            if portable_python_elf_metadata(raw_python, patchelf) != (
+                PORTABLE_SYSTEM_INTERPRETER,
+                PORTABLE_PYTHON_RPATH,
+            ):
+                message = "release build changed portable Python ELF metadata"
+                raise ValueError(message)
+        audit_python_bytecode(runtime_output)
     wheels = [
         {
             "path": wheel.name,
@@ -618,6 +1005,8 @@ def main() -> int:
     parser.add_argument("--strip", type=Path)
     parser.add_argument("--vcpkg-path", type=Path)
     parser.add_argument("--runtime-library-path", type=Path)
+    parser.add_argument("--execution-loader", type=Path)
+    parser.add_argument("--execution-library-path")
     arguments = parser.parse_args()
     build_release_runtime(
         arguments.project.resolve(),
@@ -630,6 +1019,10 @@ def main() -> int:
         None
         if arguments.runtime_library_path is None
         else arguments.runtime_library_path.resolve(),
+        None
+        if arguments.execution_loader is None
+        else arguments.execution_loader.resolve(),
+        arguments.execution_library_path,
     )
     return 0
 

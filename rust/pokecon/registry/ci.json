@@ -121,6 +121,16 @@
       "phase": 2
     },
     {
+      "name": "pytest/production-routing-mutation-audit-linux",
+      "workflow": "pytest",
+      "job": "production-routing-mutation-audit-linux",
+      "command": "nix run .#test-production-routing-mutations",
+      "applicable_when": "tracked tests/**/test_*.py or tests/**/*_test.py exists",
+      "not_applicable": "notice naming both absent pytest collection patterns",
+      "phase": 2,
+      "implementation_status": "the production-routing mutation audit runs in a dedicated parallel CI job"
+    },
+    {
       "name": "package/linux",
       "workflow": "package",
       "job": "linux",

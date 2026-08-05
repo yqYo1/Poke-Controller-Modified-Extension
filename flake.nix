@@ -26,6 +26,75 @@
       treefmt-nix,
       ...
     }:
+    let
+      canonicalFlakeHash = "5c0995e7a41fb09bba6ec1c0ef703bff937dbf4d35119cfa5b534481eea5b148";
+      canonicalFlakePath = ./flake.nix;
+      canonicalFlakeText = builtins.readFile canonicalFlakePath;
+      normalizedCanonicalFlakeText =
+        builtins.replaceStrings [ canonicalFlakeHash ] [ "<canonical-flake-sha256>" ]
+          canonicalFlakeText;
+      expectedResolvedInputs = [
+        {
+          name = "flake-parts";
+          value = flake-parts;
+          rev = "17c9d6cdfc60c64f4ee8d306f9bc0b4ccb51481e";
+          narHash = "sha256-vp6Y/Grm98ESt6ceOkWiHWyZRDV3J1RID4w+6NWK9yA=";
+        }
+        {
+          name = "git-hooks";
+          value = git-hooks;
+          rev = "43b3c1ab9d40fb1dbb008f451988a91e375825e9";
+          narHash = "sha256-ReRHaLgr/uVqdD8afFSn+myXIfpHeOhP0yYe0TJqAA8=";
+        }
+        {
+          name = "linux-release-nixpkgs";
+          value = inputs.linux-release-nixpkgs;
+          rev = "b134951a4c9f3c995fd7be05f3243f8ecd65d798";
+          narHash = "sha256-OnSAY7XDSx7CtDoqNh8jwVwh4xNL/2HaJxGjryLWzX8=";
+        }
+        {
+          name = "nixpkgs";
+          value = inputs.nixpkgs;
+          rev = "e2587caef70cea85dd97d7daab492899902dbf5d";
+          narHash = "sha256-wWFrV5/Qbm+lyt5x20E/bSbfJiGKMo4RCxZV8cl/WZI=";
+        }
+        {
+          name = "rust-overlay";
+          value = rust-overlay;
+          rev = "471286a5fadc690e2408ad854eb32325f5e74da7";
+          narHash = "sha256-ZaS89rj5u6pygXKDRfCzPMGm7isJxLsSeIAR5EaSyu8=";
+        }
+        {
+          name = "systems";
+          value = systems;
+          rev = "da67096a3b9bf56a91d16901293e51ba5b49a27e";
+          narHash = "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=";
+        }
+        {
+          name = "treefmt-nix";
+          value = treefmt-nix;
+          rev = "df3c0640565d04a0261253cdd89fce78ec50168a";
+          narHash = "sha256-47cxbcZODibHv3rELFQ9vZly0vUNkND/atn/U7HLeb0=";
+        }
+      ];
+      resolvedInputsAreCanonical = builtins.all (
+        expected:
+        expected.value ? rev
+        && expected.value.rev == expected.rev
+        && expected.value ? narHash
+        && expected.value.narHash == expected.narHash
+      ) expectedResolvedInputs;
+    in
+    # Repository follows edges are fixed by the normalized flake hash and the
+    # audited flake.lock. Nix only exposes source identity for direct inputs;
+    # nested CLI --override-input authority remains outside this app boundary.
+    assert
+      (builtins.readDir ./.)."flake.nix" == "regular" || builtins.throw "flake.nix is not a regular file";
+    assert
+      builtins.hashString "sha256" normalizedCanonicalFlakeText == canonicalFlakeHash
+      || builtins.throw "flake.nix differs from its normalized canonical hash";
+    assert
+      resolvedInputsAreCanonical || builtins.throw "resolved direct Nix inputs differ from flake.lock";
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
       imports = [
@@ -57,6 +126,20 @@
               releasePkgs;
           linuxReleaseCc = linuxReleasePkgs.stdenv.cc;
           linuxReleasePortaudio = linuxReleasePkgs.portaudio;
+          linuxReleaseRuntimeLibraries = linuxReleasePkgs.symlinkJoin {
+            name = "pokecon-linux-release-runtime-libraries";
+            paths = [
+              linuxReleasePortaudio
+              linuxReleaseCc.cc.lib
+              linuxReleasePkgs.zlib
+              linuxReleasePkgs.xorg.libxcb
+              linuxReleasePkgs.libglvnd
+              linuxReleasePkgs.glib.out
+              linuxReleasePkgs.xorg.libSM
+              linuxReleasePkgs.xorg.libXext
+              linuxReleasePkgs.xorg.libXrender
+            ];
+          };
           linuxReleaseBuildPath = lib.makeBinPath [
             linuxReleaseCc
             linuxReleasePkgs.bash
@@ -77,7 +160,14 @@
             inherit system;
             overlays = [ (import rust-overlay) ];
           };
-          rustToolchain = pkgsWithOverlays.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          rustToolchain =
+            assert lib.assertMsg (
+              (builtins.readDir inputs.self.outPath)."rust-toolchain.toml" == "regular"
+              &&
+                builtins.hashFile "sha256" (inputs.self.outPath + "/rust-toolchain.toml")
+                == "d3ceb1cb2217972a209e49ca1ac585998f21a2dabf96e6ceda03e9442e34ee29"
+            ) "Rust toolchain file changed or is not a regular file";
+            pkgsWithOverlays.rust-bin.fromRustupToolchainFile (inputs.self.outPath + "/rust-toolchain.toml");
           rustPlatform = pkgs.makeRustPlatform {
             cargo = rustToolchain;
             rustc = rustToolchain;
@@ -107,6 +197,7 @@
             ) "Nix provides Bun ${pkgs.bun.version}; web/package.json requires ${bunVersion}";
             pkgs.bun;
           portableUvVersion = "0.11.8";
+          portableUvVersionOutput = "uv 0.11.8 (x86_64-unknown-linux-gnu)";
           portableUv =
             if system == "x86_64-linux" then
               pkgs.fetchzip {
@@ -116,67 +207,957 @@
             else
               pkgs.uv;
           portableUvBinary = if system == "x86_64-linux" then "${portableUv}/uv" else "${pkgs.uv}/bin/uv";
+          portableUvFileSha256 = "646adf5cf12ba17d1a41fa77c8dd6496f73651dcfeeed6b5f4ec019b36bc7153";
+          portableUvSystemInterpreter = "/lib64/ld-linux-x86-64.so.2";
+          portableUvNeededLibraries = [
+            "libc.so.6"
+            "libdl.so.2"
+            "libgcc_s.so.1"
+            "libm.so.6"
+            "libpthread.so.0"
+            "librt.so.1"
+          ];
+          portableUvNeededInventory = linuxReleasePkgs.writeText "pokecon-portable-uv-needed.txt" ''
+            ${lib.concatStringsSep "\n" portableUvNeededLibraries}
+          '';
+          portableUvExecutionLoader = linuxReleasePkgs.stdenv.cc.bintools.dynamicLinker;
+          portableUvExecutionLibraryPath = linuxReleasePkgs.lib.makeLibraryPath [
+            linuxReleasePkgs.glibc
+            linuxReleaseCc.cc.lib
+          ];
+          portableUvExecution =
+            if system == "x86_64-linux" then
+              linuxReleasePkgs.runCommand "pokecon-portable-uv-execution-${portableUvVersion}" { } ''
+                set -o errexit -o nounset -o pipefail
+                raw_uv="${portableUvBinary}"
+                if [ -L "$raw_uv" ] || [ ! -f "$raw_uv" ] || [ ! -x "$raw_uv" ]; then
+                  echo "portable uv is not a real executable file: $raw_uv" >&2
+                  exit 2
+                fi
+                raw_uv_sha256="$("${linuxReleasePkgs.coreutils}/bin/sha256sum" -- "$raw_uv")"
+                raw_uv_sha256="''${raw_uv_sha256%% *}"
+                if [ "$raw_uv_sha256" != "${portableUvFileSha256}" ]; then
+                  echo "portable uv executable digest changed: $raw_uv_sha256" >&2
+                  exit 2
+                fi
+                raw_uv_interpreter="$("${linuxReleasePkgs.patchelf}/bin/patchelf" --print-interpreter "$raw_uv")"
+                if [ "$raw_uv_interpreter" != "${portableUvSystemInterpreter}" ]; then
+                  echo "portable uv interpreter changed: $raw_uv_interpreter" >&2
+                  exit 2
+                fi
+                raw_uv_rpath="$("${linuxReleasePkgs.patchelf}/bin/patchelf" --print-rpath "$raw_uv")"
+                if [ -n "$raw_uv_rpath" ]; then
+                  echo "portable uv unexpectedly carries an RPATH: $raw_uv_rpath" >&2
+                  exit 2
+                fi
+                actual_needed="$TMPDIR/portable-uv-needed.txt"
+                "${linuxReleasePkgs.patchelf}/bin/patchelf" --print-needed "$raw_uv" \
+                  | "${linuxReleasePkgs.coreutils}/bin/sort" > "$actual_needed"
+                if ! "${linuxReleasePkgs.diffutils}/bin/cmp" -s -- \
+                  "${portableUvNeededInventory}" "$actual_needed"; then
+                  echo "portable uv DT_NEEDED inventory changed" >&2
+                  "${linuxReleasePkgs.diffutils}/bin/diff" -u \
+                    "${portableUvNeededInventory}" "$actual_needed" >&2 || true
+                  exit 2
+                fi
+                if [ ! -f "${portableUvExecutionLoader}" ] \
+                  || [ ! -x "${portableUvExecutionLoader}" ]; then
+                  echo "portable uv execution loader is unavailable" >&2
+                  exit 2
+                fi
+                "${linuxReleasePkgs.coreutils}/bin/mkdir" -p "$out/bin"
+                "${linuxReleasePkgs.coreutils}/bin/install" -m 0755 \
+                  "$raw_uv" "$out/bin/uv"
+                "${linuxReleasePkgs.patchelf}/bin/patchelf" \
+                  --set-interpreter "${portableUvExecutionLoader}" \
+                  --set-rpath "${portableUvExecutionLibraryPath}" \
+                  "$out/bin/uv"
+                if [ "$("${linuxReleasePkgs.patchelf}/bin/patchelf" --print-interpreter "$out/bin/uv")" \
+                  != "${portableUvExecutionLoader}" ]; then
+                  echo "portable uv execution copy has an unexpected interpreter" >&2
+                  exit 2
+                fi
+                if [ "$("${linuxReleasePkgs.patchelf}/bin/patchelf" --print-rpath "$out/bin/uv")" \
+                  != "${portableUvExecutionLibraryPath}" ]; then
+                  echo "portable uv execution copy has an unexpected RPATH" >&2
+                  exit 2
+                fi
+                patched_needed="$TMPDIR/patched-portable-uv-needed.txt"
+                "${linuxReleasePkgs.patchelf}/bin/patchelf" --print-needed "$out/bin/uv" \
+                  | "${linuxReleasePkgs.coreutils}/bin/sort" > "$patched_needed"
+                if ! "${linuxReleasePkgs.diffutils}/bin/cmp" -s -- \
+                  "${portableUvNeededInventory}" "$patched_needed"; then
+                  echo "patching the portable uv execution copy changed DT_NEEDED" >&2
+                  exit 2
+                fi
+                resolution="$TMPDIR/portable-uv-resolution.txt"
+                "${portableUvExecutionLoader}" \
+                  --inhibit-cache \
+                  --library-path "${portableUvExecutionLibraryPath}" \
+                  --list "$out/bin/uv" > "$resolution"
+                while IFS= read -r needed_library; do
+                  if [ "$needed_library" = "libgcc_s.so.1" ]; then
+                    expected_library="${linuxReleaseCc.cc.lib}/lib/$needed_library"
+                  else
+                    expected_library="${linuxReleasePkgs.glibc}/lib/$needed_library"
+                  fi
+                  if [ "$("${linuxReleasePkgs.gnugrep}/bin/grep" -F -c -- "$needed_library => " "$resolution")" -ne 1 ]; then
+                    echo "portable uv loader did not resolve exactly one $needed_library" >&2
+                    exit 2
+                  fi
+                  resolved_library="$(
+                    "${linuxReleasePkgs.gnugrep}/bin/grep" -F -- "$needed_library => " "$resolution" \
+                      | "${linuxReleasePkgs.gawk}/bin/awk" '{ print $3 }'
+                  )"
+                  if [ "$("${linuxReleasePkgs.coreutils}/bin/readlink" -f -- "$resolved_library")" \
+                    != "$("${linuxReleasePkgs.coreutils}/bin/readlink" -f -- "$expected_library")" ]; then
+                    echo "portable uv resolved $needed_library outside the pinned release closure: $resolved_library" >&2
+                    exit 2
+                  fi
+                done < "${portableUvNeededInventory}"
+                actual_portable_uv_version_output=
+                if ! actual_portable_uv_version_output="$("$out/bin/uv" --version)"; then
+                  echo "portable uv execution copy version probe failed; actual output: $actual_portable_uv_version_output" >&2
+                  exit 2
+                fi
+                if [ "$actual_portable_uv_version_output" != "${portableUvVersionOutput}" ]; then
+                  echo "portable uv execution copy reports an unexpected version; expected: ${portableUvVersionOutput}; actual: $actual_portable_uv_version_output" >&2
+                  exit 2
+                fi
+                if [ "$("${linuxReleasePkgs.coreutils}/bin/sha256sum" -- "$raw_uv")" \
+                  != "${portableUvFileSha256}  $raw_uv" ]; then
+                  echo "portable uv raw artifact changed while preparing its execution copy" >&2
+                  exit 2
+                fi
+                "${linuxReleasePkgs.coreutils}/bin/chmod" 0555 "$out/bin/uv"
+              ''
+            else
+              portableUv;
+          portableUvExecutionBinary =
+            if system == "x86_64-linux" then "${portableUvExecution}/bin/uv" else portableUvBinary;
           reproducibleRustcWrapper = pkgs.writeShellScript "pokecon-reproducible-rustc-wrapper" ''
             set -o errexit -o nounset -o pipefail
+            if [ "$#" -lt 1 ]; then
+              echo "reproducible rustc wrapper received no compiler" >&2
+              exit 2
+            fi
             rustc="$1"
             shift
+            if [ "$rustc" != "${rustToolchain}/bin/rustc" ]; then
+              echo "reproducible rustc wrapper rejected a nested or redirected compiler: $rustc" >&2
+              exit 2
+            fi
             : "''${POKECON_RUST_REMAP_SOURCE:?POKECON_RUST_REMAP_SOURCE is required}"
             : "''${POKECON_RUST_REMAP_PYTHON:?POKECON_RUST_REMAP_PYTHON is required}"
             : "''${POKECON_RUST_REMAP_TARGET:?POKECON_RUST_REMAP_TARGET is required}"
             exec "$rustc" \
+              "--remap-path-prefix=${source}=/build/pokecon" \
+              "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_TARGET=/build/target" \
               "-Lnative=$POKECON_RUST_REMAP_PYTHON/lib" \
               "$@"
           '';
+          pinnedRustcWrapper = pkgs.writeShellScript "pokecon-pinned-rustc-wrapper" ''
+            set -o errexit -o nounset -o pipefail
+            if [ "$#" -lt 1 ]; then
+              echo "pinned rustc wrapper received no compiler" >&2
+              exit 2
+            fi
+            compiler="$1"
+            shift
+            case "$compiler" in
+              "${rustToolchain}/bin/rustc")
+                exec "$compiler" "$@"
+                ;;
+              "${pkgs.cargo-auditable}/bin/cargo-auditable")
+                if [ "$#" -lt 1 ] || [ "$1" != "${rustToolchain}/bin/rustc" ]; then
+                  echo "pinned rustc wrapper rejected cargo-auditable with a redirected compiler: ''${1:-<unset>}" >&2
+                  exit 2
+                fi
+                exec "$compiler" "$@"
+                ;;
+              *)
+                echo "pinned rustc wrapper rejected a nested or redirected compiler: $compiler" >&2
+                exit 2
+                ;;
+            esac
+          '';
+          cargoInvocationRoot = pkgs.runCommand "pokecon-cargo-invocation-root" { } ''
+            mkdir -p "$out"
+          '';
 
-          source = builtins.path {
-            path = inputs.self.outPath;
-            name = "pokecon-source";
-            filter =
-              path: type:
-              let
-                sourcePath = toString path;
-              in
-              type == "directory"
-              || lib.hasSuffix "/.gitignore" sourcePath
-              || lib.hasSuffix ".rs" sourcePath
-              || lib.hasSuffix ".toml" sourcePath
-              || lib.hasSuffix ".lock" sourcePath
-              || lib.hasSuffix ".json" sourcePath
-              || lib.hasSuffix ".jsonl" sourcePath
-              || lib.hasSuffix ".py" sourcePath
-              || lib.hasSuffix ".pyi" sourcePath
-              || lib.hasSuffix ".ps1" sourcePath
-              || lib.hasSuffix ".rules" sourcePath
-              || lib.hasSuffix ".sh" sourcePath
-              || lib.hasSuffix ".nix" sourcePath
-              || lib.hasSuffix ".md" sourcePath
-              || lib.hasSuffix ".txt" sourcePath
-              || lib.hasSuffix ".yml" sourcePath
-              || lib.hasSuffix ".yaml" sourcePath
-              || lib.hasSuffix ".html" sourcePath
-              || lib.hasSuffix ".css" sourcePath
-              || lib.hasSuffix ".svelte" sourcePath
-              # Keep legacy JavaScript visible so source_filter can reject it
-              # instead of silently omitting it from the Nix source tree.
-              || lib.hasSuffix ".js" sourcePath
-              || lib.hasSuffix ".jsx" sourcePath
-              || lib.hasSuffix ".mjs" sourcePath
-              || lib.hasSuffix ".cjs" sourcePath
-              || lib.hasSuffix ".ts" sourcePath
-              || lib.hasSuffix ".tsx" sourcePath
-              || lib.hasSuffix ".lua" sourcePath
-              || lib.hasSuffix ".svg" sourcePath
-              || lib.hasSuffix ".png" sourcePath
-              || lib.hasSuffix ".ico" sourcePath
-              || lib.hasSuffix ".icns" sourcePath
-              || lib.hasSuffix ".woff" sourcePath
-              || lib.hasSuffix ".woff2" sourcePath
-              || lib.hasSuffix ".ttf" sourcePath
-              || lib.hasSuffix ".eot" sourcePath;
+          source =
+            assert workspaceCargoInputsAreCanonical;
+            builtins.path {
+              path = inputs.self.outPath;
+              name = "pokecon-source";
+              filter =
+                path: type:
+                let
+                  sourcePath = toString path;
+                in
+                type == "directory"
+                || (
+                  type == "regular"
+                  && (
+                    lib.hasSuffix "/.gitignore" sourcePath
+                    || sourcePath == "${inputs.self.outPath}/LICENSE"
+                    || lib.hasSuffix ".rs" sourcePath
+                    || lib.hasSuffix ".toml" sourcePath
+                    || lib.hasSuffix ".lock" sourcePath
+                    || lib.hasSuffix ".json" sourcePath
+                    || lib.hasSuffix ".json5" sourcePath
+                    || lib.hasSuffix ".jsonl" sourcePath
+                    || lib.hasSuffix ".py" sourcePath
+                    || lib.hasSuffix ".pyi" sourcePath
+                    || lib.hasSuffix ".ps1" sourcePath
+                    || lib.hasSuffix ".rules" sourcePath
+                    || lib.hasSuffix ".sh" sourcePath
+                    || lib.hasSuffix ".nix" sourcePath
+                    || lib.hasSuffix ".md" sourcePath
+                    || lib.hasSuffix ".txt" sourcePath
+                    || lib.hasSuffix ".yml" sourcePath
+                    || lib.hasSuffix ".yaml" sourcePath
+                    || lib.hasSuffix ".html" sourcePath
+                    || lib.hasSuffix ".css" sourcePath
+                    || lib.hasSuffix ".svelte" sourcePath
+                    # Keep legacy JavaScript visible so source_filter can reject it
+                    # instead of silently omitting it from the Nix source tree.
+                    || lib.hasSuffix ".js" sourcePath
+                    || lib.hasSuffix ".jsx" sourcePath
+                    || lib.hasSuffix ".mjs" sourcePath
+                    || lib.hasSuffix ".cjs" sourcePath
+                    || lib.hasSuffix ".ts" sourcePath
+                    || lib.hasSuffix ".tsx" sourcePath
+                    || lib.hasSuffix ".lua" sourcePath
+                    || lib.hasSuffix ".svg" sourcePath
+                    || lib.hasSuffix ".png" sourcePath
+                    || lib.hasSuffix ".ico" sourcePath
+                    || lib.hasSuffix ".icns" sourcePath
+                    || lib.hasSuffix ".woff" sourcePath
+                    || lib.hasSuffix ".woff2" sourcePath
+                    || lib.hasSuffix ".ttf" sourcePath
+                    || lib.hasSuffix ".eot" sourcePath
+                  )
+                );
+            };
+          productionRoutingAuditTest =
+            let
+              relativeAuditTest = "/tests/quality/test_ui_package_check.py";
+              expectedAuditTestHash = "fe10523be09be1013e18839de9bf09d9b51b7a6a591f1d7a0a49cf0769e3ea43";
+              inputAuditTest = inputs.self.outPath + relativeAuditTest;
+              filteredAuditTest = source + relativeAuditTest;
+            in
+            assert
+              (builtins.readDir (inputs.self.outPath + "/tests/quality"))."test_ui_package_check.py" == "regular"
+              || builtins.throw "production routing audit test is not a regular input file";
+            assert
+              builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
+              || builtins.throw "production routing audit test input changed";
+            assert
+              builtins.hashFile "sha256" filteredAuditTest == expectedAuditTestHash
+              || builtins.throw "filtered production routing audit test changed";
+            filteredAuditTest;
+
+          workspaceMemberPaths = [
+            "rust/pokecon"
+            "rust/pokecon-contracts"
+            "rust/pokecon-core"
+            "rust/pokecon-camera"
+            "rust/pokecon-device"
+            "rust/pokecon-dynamic"
+            "rust/pokecon-desktop"
+            "rust/pokecon-pybindings"
+            "rust/pokecon-server"
+            "rust/pokecon-settings"
+            "rust/pokecon-worker"
+          ];
+          workspaceDefaultMemberPaths = [
+            "rust/pokecon"
+            "rust/pokecon-contracts"
+            "rust/pokecon-core"
+            "rust/pokecon-camera"
+            "rust/pokecon-device"
+            "rust/pokecon-desktop"
+            "rust/pokecon-server"
+            "rust/pokecon-settings"
+            "rust/pokecon-worker"
+          ];
+          workspaceMemberManifests = builtins.listToAttrs (
+            map (memberPath: {
+              name = memberPath;
+              value = builtins.fromTOML (builtins.readFile (inputs.self.outPath + "/${memberPath}/Cargo.toml"));
+            }) workspaceMemberPaths
+          );
+          expectedWorkspacePackageNames = {
+            "rust/pokecon" = "pokecon";
+            "rust/pokecon-camera" = "pokecon-camera";
+            "rust/pokecon-contracts" = "pokecon-contracts";
+            "rust/pokecon-core" = "pokecon-core";
+            "rust/pokecon-desktop" = "pokecon-desktop";
+            "rust/pokecon-device" = "pokecon-device";
+            "rust/pokecon-dynamic" = "pokecon-dynamic";
+            "rust/pokecon-pybindings" = "pokecon-pybindings";
+            "rust/pokecon-server" = "pokecon-server";
+            "rust/pokecon-settings" = "pokecon-settings";
+            "rust/pokecon-worker" = "pokecon-worker";
           };
+          expectedWorkspacePackageBuild = {
+            "rust/pokecon" = "build.rs";
+            "rust/pokecon-camera" = false;
+            "rust/pokecon-contracts" = false;
+            "rust/pokecon-core" = false;
+            "rust/pokecon-desktop" = false;
+            "rust/pokecon-device" = false;
+            "rust/pokecon-dynamic" = false;
+            "rust/pokecon-pybindings" = false;
+            "rust/pokecon-server" = false;
+            "rust/pokecon-settings" = "build.rs";
+            "rust/pokecon-worker" = false;
+          };
+          expectedWorkspaceManifestHashes = {
+            "rust/pokecon" = "d168a69b1bdb7c108700eaa37c2e57f3dafbe88be78d701da463d2f1b194667a";
+            "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
+            "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
+            "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
+            "rust/pokecon-desktop" = "a8e82d6036e66a6205914e017f0ce8a464b2f4ac16a3d63d538de9950aace3e7";
+            "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
+            "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
+            "rust/pokecon-pybindings" = "e0cef290e07b82160ea8952cae7dafb3ded68f27b24e0e553592d24da0de2fe7";
+            "rust/pokecon-server" = "8e8ffb87eac705f21b84254b44fd08a86191691e3e9aec080ae86b8a54e763b5";
+            "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
+            "rust/pokecon-worker" = "268c724c9070a28684ca669e889662644ff5044e37bf2f6876afd3b346b8fbb2";
+          };
+          expectedWorkspaceBuildDependencies = {
+            "rust/pokecon" = {
+              tauri-build = {
+                features = [ ];
+                version = "2.5.4";
+              };
+            };
+            "rust/pokecon-camera" = { };
+            "rust/pokecon-contracts" = { };
+            "rust/pokecon-core" = { };
+            "rust/pokecon-desktop" = { };
+            "rust/pokecon-device" = { };
+            "rust/pokecon-dynamic" = { };
+            "rust/pokecon-pybindings" = { };
+            "rust/pokecon-server" = { };
+            "rust/pokecon-settings" = {
+              hex.workspace = true;
+              serde.workspace = true;
+              serde_json.workspace = true;
+              sha2.workspace = true;
+              toml.workspace = true;
+            };
+            "rust/pokecon-worker" = { };
+          };
+          actualWorkspacePackageNames = lib.mapAttrs (
+            _memberPath: manifest: manifest.package.name or null
+          ) workspaceMemberManifests;
+          actualWorkspacePackageBuild = lib.mapAttrs (
+            _memberPath: manifest: manifest.package.build or null
+          ) workspaceMemberManifests;
+          actualWorkspaceBuildDependencies = lib.mapAttrs (
+            _memberPath: manifest: manifest."build-dependencies" or { }
+          ) workspaceMemberManifests;
+          workspaceTargetBuildDependenciesAreEmpty = lib.all (
+            manifest:
+            lib.all (targetManifest: (targetManifest."build-dependencies" or { }) == { }) (
+              builtins.attrValues (manifest.target or { })
+            )
+          ) (builtins.attrValues workspaceMemberManifests);
+          dependencyTableNames = [
+            "dependencies"
+            "dev-dependencies"
+            "build-dependencies"
+          ];
+          dependencyTablesForManifest =
+            manifest:
+            map (dependencyTableName: manifest.${dependencyTableName} or { }) dependencyTableNames
+            ++ lib.concatMap (
+              targetManifest:
+              map (dependencyTableName: targetManifest.${dependencyTableName} or { }) dependencyTableNames
+            ) (builtins.attrValues (manifest.target or { }));
+          pathDependenciesForOwner =
+            ownerPath: manifest:
+            lib.concatMap (
+              dependencyTable:
+              lib.filter (dependency: dependency != null) (
+                lib.mapAttrsToList (
+                  dependencyName: dependencySpec:
+                  if builtins.isAttrs dependencySpec && dependencySpec ? path then
+                    {
+                      inherit dependencyName ownerPath;
+                      packageName = dependencySpec.package or dependencyName;
+                      path = dependencySpec.path;
+                    }
+                  else
+                    null
+                ) dependencyTable
+              )
+            ) (dependencyTablesForManifest manifest);
+          workspacePathDependencies =
+            pathDependenciesForOwner "" {
+              dependencies = workspaceManifest.workspace.dependencies or { };
+            }
+            ++ lib.concatMap (
+              memberPath: pathDependenciesForOwner memberPath workspaceMemberManifests.${memberPath}
+            ) workspaceMemberPaths;
+          normalizeWorkspacePath =
+            ownerPath: dependencyPath:
+            let
+              initialParts = lib.filter (part: part != "") (lib.splitString "/" ownerPath);
+              normalized =
+                lib.foldl'
+                  (
+                    state: part:
+                    if part == "" || part == "." then
+                      state
+                    else if part == ".." then
+                      if state.parts == [ ] then
+                        state // { escaped = true; }
+                      else
+                        state // { parts = lib.init state.parts; }
+                    else
+                      state // { parts = state.parts ++ [ part ]; }
+                  )
+                  {
+                    escaped = false;
+                    parts = initialParts;
+                  }
+                  (lib.splitString "/" dependencyPath);
+            in
+            if normalized.escaped then null else lib.concatStringsSep "/" normalized.parts;
+          workspacePathDependenciesAreClosed = lib.all (
+            dependency:
+            builtins.isString dependency.path
+            && !(lib.hasPrefix "/" dependency.path)
+            && !(lib.hasInfix "\\" dependency.path)
+            && (
+              let
+                resolvedPath = normalizeWorkspacePath dependency.ownerPath dependency.path;
+              in
+              resolvedPath != null
+              && lib.elem resolvedPath workspaceMemberPaths
+              && dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}
+              && dependency.packageName == expectedWorkspacePackageNames.${resolvedPath}
+            )
+          ) workspacePathDependencies;
+          expectedWorkspaceBuildScripts = {
+            "rust/pokecon/build.rs" = "8db901eb02c6d44c65eae76e26498ea8d65aaf2c3985a4ccc35d34f4e91a5979";
+            "rust/pokecon-settings/build.rs" =
+              "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0";
+          };
+          actualWorkspaceBuildScriptPaths = lib.sort builtins.lessThan (
+            lib.concatMap (
+              memberPath:
+              let
+                memberEntries = builtins.readDir (inputs.self.outPath + "/${memberPath}");
+              in
+              lib.optional (memberEntries ? "build.rs") "${memberPath}/build.rs"
+            ) workspaceMemberPaths
+          );
+          workspaceBuildScriptsAreCanonical = lib.all (
+            buildScriptPath:
+            let
+              memberPath = lib.removeSuffix "/build.rs" buildScriptPath;
+              memberEntries = builtins.readDir (inputs.self.outPath + "/${memberPath}");
+            in
+            memberEntries."build.rs" == "regular"
+            &&
+              builtins.hashFile "sha256" (inputs.self.outPath + "/${buildScriptPath}")
+              == expectedWorkspaceBuildScripts.${buildScriptPath}
+          ) (builtins.attrNames expectedWorkspaceBuildScripts);
+          workspaceMemberManifestsAreCanonical = lib.all (
+            memberPath:
+            let
+              memberEntries = builtins.readDir (inputs.self.outPath + "/${memberPath}");
+            in
+            memberEntries."Cargo.toml" == "regular"
+            &&
+              builtins.hashFile "sha256" (inputs.self.outPath + "/${memberPath}/Cargo.toml")
+              == expectedWorkspaceManifestHashes.${memberPath}
+          ) workspaceMemberPaths;
+          repositoryCargoConfigInventory =
+            let
+              scanDirectory =
+                relativeDirectory:
+                let
+                  absoluteDirectory =
+                    inputs.self.outPath + lib.optionalString (relativeDirectory != "") "/${relativeDirectory}";
+                  entries = builtins.readDir absoluteDirectory;
+                in
+                lib.concatMap (
+                  entryName:
+                  let
+                    entryType = entries.${entryName};
+                    relativeEntry = if relativeDirectory == "" then entryName else "${relativeDirectory}/${entryName}";
+                  in
+                  if entryName == ".cargo" then
+                    if entryType != "directory" then
+                      [ "${relativeEntry}/<redirected>" ]
+                    else
+                      let
+                        cargoEntries = builtins.readDir (inputs.self.outPath + "/${relativeEntry}");
+                      in
+                      lib.concatMap
+                        (
+                          configName: lib.optional (builtins.hasAttr configName cargoEntries) "${relativeEntry}/${configName}"
+                        )
+                        [
+                          "config"
+                          "config.toml"
+                        ]
+                  else if entryType == "directory" then
+                    scanDirectory relativeEntry
+                  else
+                    [ ]
+                ) (builtins.attrNames entries);
+            in
+            lib.sort builtins.lessThan (scanDirectory "");
+          workspaceCargoInputsAreCanonical =
+            assert lib.assertMsg (
+              workspaceManifest.workspace.resolver == "2"
+            ) "Cargo workspace resolver changed";
+            assert lib.assertMsg (
+              !(workspaceManifest ? patch) && !(workspaceManifest ? replace)
+            ) "Cargo workspace patch/replace tables are forbidden";
+            assert lib.assertMsg (
+              workspaceManifest.workspace.members == workspaceMemberPaths
+            ) "Cargo workspace member inventory changed";
+            assert lib.assertMsg (
+              workspaceManifest.workspace.default-members == workspaceDefaultMemberPaths
+            ) "Cargo workspace default-member inventory changed";
+            assert lib.assertMsg (
+              actualWorkspacePackageNames == expectedWorkspacePackageNames
+            ) "Cargo workspace package names changed";
+            assert lib.assertMsg (
+              actualWorkspacePackageBuild == expectedWorkspacePackageBuild
+            ) "Cargo workspace package.build map changed";
+            assert lib.assertMsg (
+              actualWorkspaceBuildDependencies == expectedWorkspaceBuildDependencies
+            ) "Cargo workspace build-dependencies changed";
+            assert lib.assertMsg workspaceTargetBuildDependenciesAreEmpty
+              "Cargo target-specific build-dependencies are forbidden";
+            assert lib.assertMsg workspacePathDependenciesAreClosed
+              "Cargo path dependency escaped or renamed a canonical workspace member";
+            assert lib.assertMsg (
+              (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
+              &&
+                builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
+                == "7ac854421771d6e3021485af29620363fd58291368afd67e979dfe6e00de1878"
+            ) "Cargo workspace manifest content changed";
+            assert lib.assertMsg workspaceMemberManifestsAreCanonical
+              "Cargo workspace member manifest content changed";
+            assert lib.assertMsg (
+              (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
+              &&
+                builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
+                == "62852d9298562271195afa17b870cbab1d8583002f0c11ad11d40fe5e8f7bbb8"
+            ) "Cargo lockfile content changed";
+            assert lib.assertMsg (
+              actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
+            ) "Cargo workspace build.rs inventory changed";
+            assert lib.assertMsg workspaceBuildScriptsAreCanonical "Cargo workspace build.rs content changed";
+            assert lib.assertMsg (
+              repositoryCargoConfigInventory == [ ]
+            ) "repository Cargo config inventory is forbidden";
+            true;
+          countStringOccurrences = needle: haystack: builtins.length (lib.splitString needle haystack) - 1;
+          replaceManifestString =
+            label: needle: replacement: manifestText:
+            assert lib.assertMsg (
+              countStringOccurrences needle manifestText == 1
+            ) "${label} manifest anchor is not unique";
+            lib.replaceStrings [ needle ] [ replacement ] manifestText;
+          canonicalPokeconManifestText = builtins.readFile (inputs.self.outPath + "/rust/pokecon/Cargo.toml");
+          canonicalWorkspaceManifestText = builtins.readFile (inputs.self.outPath + "/Cargo.toml");
+          canonicalCargoLockText = builtins.readFile (inputs.self.outPath + "/Cargo.lock");
+          canonicalServerManifestText = builtins.readFile (
+            inputs.self.outPath + "/rust/pokecon-server/Cargo.toml"
+          );
+          canonicalSettingsManifestText = builtins.readFile (
+            inputs.self.outPath + "/rust/pokecon-settings/Cargo.toml"
+          );
+          canonicalPokeconManifest = workspaceMemberManifests."rust/pokecon";
+          canonicalServerManifest = workspaceMemberManifests."rust/pokecon-server";
+          canonicalSettingsManifest = workspaceMemberManifests."rust/pokecon-settings";
+          controlledPokeconManifestText =
+            replaceManifestString "pokecon implicit library target" "\n[features]\n"
+              ''
+
+                [lib]
+                path = "${source}/rust/pokecon/src/lib.rs"
+
+                [features]
+              ''
+              (
+                replaceManifestString "pokecon primary binary target"
+                  "[[bin]]\nname = \"pokecon\"\npath = \"src/main.rs\"\n"
+                  "[[bin]]\nname = \"pokecon\"\npath = \"${source}/rust/pokecon/src/main.rs\"\n"
+                  (
+                    replaceManifestString "pokecon build script" ''build = "build.rs"''
+                      ''build = "${source}/rust/pokecon/build.rs"''
+                      canonicalPokeconManifestText
+                  )
+              );
+          expectedControlledPokeconManifest = canonicalPokeconManifest // {
+            package = canonicalPokeconManifest.package // {
+              build = "${source}/rust/pokecon/build.rs";
+            };
+            lib = {
+              path = "${source}/rust/pokecon/src/lib.rs";
+            };
+            bin = [
+              (
+                (builtins.head canonicalPokeconManifest.bin)
+                // {
+                  path = "${source}/rust/pokecon/src/main.rs";
+                }
+              )
+            ]
+            ++ builtins.tail canonicalPokeconManifest.bin;
+          };
+          controlledPokeconManifest =
+            assert lib.assertMsg (
+              builtins.fromTOML (builtins.unsafeDiscardStringContext controlledPokeconManifestText)
+              == expectedControlledPokeconManifest
+            ) "controlled pokecon Cargo manifest changed outside its audited target paths";
+            pkgs.writeText "pokecon-controlled-Cargo.toml" controlledPokeconManifestText;
+          controlledServerManifestText =
+            replaceManifestString "pokecon-server library target" "\n[dependencies]\n"
+              ''
+
+                [lib]
+                path = "${source}/rust/pokecon-server/src/lib.rs"
+
+                [dependencies]
+              ''
+              canonicalServerManifestText;
+          expectedControlledServerManifest = canonicalServerManifest // {
+            lib = {
+              path = "${source}/rust/pokecon-server/src/lib.rs";
+            };
+          };
+          controlledServerManifest =
+            assert lib.assertMsg (
+              builtins.fromTOML (builtins.unsafeDiscardStringContext controlledServerManifestText)
+              == expectedControlledServerManifest
+            ) "controlled pokecon-server Cargo manifest changed outside its audited library path";
+            pkgs.writeText "pokecon-server-controlled-Cargo.toml" controlledServerManifestText;
+          controlledSettingsManifestText =
+            replaceManifestString "pokecon-settings build script" ''build = "build.rs"''
+              ''build = "${source}/rust/pokecon-settings/build.rs"''
+              canonicalSettingsManifestText;
+          expectedControlledSettingsManifest = canonicalSettingsManifest // {
+            package = canonicalSettingsManifest.package // {
+              build = "${source}/rust/pokecon-settings/build.rs";
+            };
+          };
+          controlledSettingsManifest =
+            assert lib.assertMsg (
+              builtins.fromTOML (builtins.unsafeDiscardStringContext controlledSettingsManifestText)
+              == expectedControlledSettingsManifest
+            ) "controlled pokecon-settings Cargo manifest changed outside its audited build path";
+            pkgs.writeText "pokecon-settings-controlled-Cargo.toml" controlledSettingsManifestText;
+          controlledWorkspaceManifest =
+            assert lib.assertMsg (
+              builtins.fromTOML canonicalWorkspaceManifestText == workspaceManifest
+            ) "controlled workspace Cargo manifest differs from the audited workspace manifest";
+            pkgs.writeText "pokecon-workspace-controlled-Cargo.toml" canonicalWorkspaceManifestText;
+          controlledCargoLock = pkgs.writeText "pokecon-controlled-Cargo.lock" canonicalCargoLockText;
+          controlledWorkspaceMemberManifests = lib.mapAttrs (
+            memberPath: canonicalManifest:
+            if memberPath == "rust/pokecon" then
+              controlledPokeconManifest
+            else if memberPath == "rust/pokecon-server" then
+              controlledServerManifest
+            else if memberPath == "rust/pokecon-settings" then
+              controlledSettingsManifest
+            else
+              let
+                canonicalManifestText = builtins.readFile (inputs.self.outPath + "/${memberPath}/Cargo.toml");
+              in
+              assert lib.assertMsg (
+                builtins.fromTOML canonicalManifestText == canonicalManifest
+              ) "controlled ${memberPath} Cargo manifest differs from its audited manifest";
+              pkgs.writeText "${canonicalManifest.package.name}-controlled-Cargo.toml" canonicalManifestText
+          ) workspaceMemberManifests;
+          validateControlledCargoWorkspace = ''
+            controlled_workspace_root="$(pwd -P)"
+            if [ -L "$PWD" ] || [ "$PWD" != "$controlled_workspace_root" ] \
+              || [ ! -d "$controlled_workspace_root" ]; then
+              echo "controlled Cargo workspace root is redirected or missing: $PWD" >&2
+              exit 2
+            fi
+            ${lib.concatMapStringsSep "\n" (workspaceDirectory: ''
+              controlled_workspace_directory="$controlled_workspace_root/${workspaceDirectory}"
+              if [ -L "$controlled_workspace_directory" ] \
+                || [ ! -d "$controlled_workspace_directory" ] \
+                || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$controlled_workspace_directory")" != "$controlled_workspace_directory" ]; then
+                echo "controlled Cargo workspace directory is redirected or missing: $controlled_workspace_directory" >&2
+                exit 2
+              fi
+            '') ([ "rust" ] ++ workspaceMemberPaths)}
+          '';
+          verifyControlledCargoManifests = ''
+            ${validateControlledCargoWorkspace}
+            verify_controlled_cargo_manifest() {
+              controlled_manifest_source="$1"
+              controlled_manifest_destination="$controlled_workspace_root/$2"
+              if [ -L "$controlled_manifest_destination" ] \
+                || [ ! -f "$controlled_manifest_destination" ] \
+                || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$controlled_manifest_destination")" != "$controlled_manifest_destination" ] \
+                || ! "${pkgs.diffutils}/bin/cmp" -s -- "$controlled_manifest_source" "$controlled_manifest_destination"; then
+                echo "controlled Cargo manifest differs from its immutable source: $controlled_manifest_destination" >&2
+                exit 2
+              fi
+            }
+            verify_controlled_cargo_manifest "${controlledWorkspaceManifest}" Cargo.toml
+            verify_controlled_cargo_manifest "${controlledCargoLock}" Cargo.lock
+            ${lib.concatMapStringsSep "\n" (
+              memberPath:
+              ''verify_controlled_cargo_manifest "${
+                controlledWorkspaceMemberManifests.${memberPath}
+              }" "${memberPath}/Cargo.toml"''
+            ) workspaceMemberPaths}
+            unset -f verify_controlled_cargo_manifest
+            unset \
+              controlled_manifest_source \
+              controlled_manifest_destination \
+              controlled_workspace_directory \
+              controlled_workspace_root
+          '';
+          installControlledCargoManifests = ''
+            ${validateControlledCargoWorkspace}
+            install_controlled_cargo_manifest() {
+              controlled_manifest_source="$1"
+              controlled_manifest_destination="$controlled_workspace_root/$2"
+              "${pkgs.coreutils}/bin/rm" -rf -- "$controlled_manifest_destination"
+              "${pkgs.coreutils}/bin/cp" -- "$controlled_manifest_source" "$controlled_manifest_destination"
+            }
+            install_controlled_cargo_manifest "${controlledWorkspaceManifest}" Cargo.toml
+            install_controlled_cargo_manifest "${controlledCargoLock}" Cargo.lock
+            ${lib.concatMapStringsSep "\n" (
+              memberPath:
+              ''install_controlled_cargo_manifest "${
+                controlledWorkspaceMemberManifests.${memberPath}
+              }" "${memberPath}/Cargo.toml"''
+            ) workspaceMemberPaths}
+            unset -f install_controlled_cargo_manifest
+            unset \
+              controlled_manifest_source \
+              controlled_manifest_destination \
+              controlled_workspace_directory \
+              controlled_workspace_root
+            ${verifyControlledCargoManifests}
+          '';
+          controlledCargoSource = pkgs.runCommand "pokecon-controlled-cargo-source" { } ''
+            "${pkgs.coreutils}/bin/mkdir" -p "$out"
+            "${pkgs.coreutils}/bin/cp" -a -- "${source}/." "$out/"
+            if ! "${pkgs.diffutils}/bin/diff" \
+              --brief \
+              --recursive \
+              --no-dereference \
+              -- "${source}" "$out"; then
+              echo "controlled Cargo source copy differs before manifest overlay" >&2
+              exit 2
+            fi
+            "${pkgs.coreutils}/bin/chmod" -R u+w -- "$out"
+            cd "$out"
+            ${installControlledCargoManifests}
+            "${pkgs.coreutils}/bin/chmod" -R a-w -- "$out"
+            if ! controlled_source_violation="$(
+              "${pkgs.findutils}/bin/find" -P "$out" \
+                \( -type l -o -perm /0222 \) -print -quit
+            )"; then
+              echo "controlled Cargo source inventory failed" >&2
+              exit 2
+            fi
+            if [ -n "$controlled_source_violation" ]; then
+              echo "controlled Cargo source contains a symlink or writable entry: $controlled_source_violation" >&2
+              exit 2
+            fi
+            ${verifyControlledCargoManifests}
+            unset controlled_source_violation
+          '';
+          auditPytestConfig = pkgs.writeText "pokecon-audit-pytest.ini" ''
+            [pytest]
+            addopts =
+            markers =
+                production_routing_mutation: exhaustive fail-closed mutation audit run by its dedicated Nix gate
+          '';
+          productionRoutingAudit =
+            pkgs.runCommand "pokecon-production-routing-audit"
+              {
+                nativeBuildInputs = [
+                  pythonEnv
+                  pkgs.util-linux
+                ];
+              }
+              ''
+                export CI=1
+                export LANG=C
+                export LC_ALL=C
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+                unset PYTEST_ADDOPTS PYTEST_PLUGINS PYTHONPATH
+                artifact_directory_lock_probe="$TMPDIR/pokecon-artifact-directory-lock-probe"
+                mkdir -- "$artifact_directory_lock_probe"
+                exec {artifact_directory_lock_probe_fd}< "$artifact_directory_lock_probe"
+                if [ "$(stat -Lc '%d:%i' -- "$artifact_directory_lock_probe")" \
+                  != "$(stat -Lc '%d:%i' -- "/proc/self/fd/$artifact_directory_lock_probe_fd")" ]; then
+                  echo "directory FD lock probe path and descriptor differ" >&2
+                  exit 2
+                fi
+                flock -x "$artifact_directory_lock_probe_fd"
+                exec {artifact_directory_lock_contender_fd}< "$artifact_directory_lock_probe"
+                if flock -n -x "$artifact_directory_lock_contender_fd"; then
+                  echo "directory FD lock probe admitted a concurrent contender" >&2
+                  exit 2
+                fi
+                exec {artifact_directory_lock_contender_fd}<&-
+                exec {artifact_directory_lock_probe_fd}<&-
+                rmdir -- "$artifact_directory_lock_probe"
+                unset \
+                  artifact_directory_lock_contender_fd \
+                  artifact_directory_lock_probe \
+                  artifact_directory_lock_probe_fd
+                cd "${source}"
+                "${pythonEnv}/bin/python" -I -m pytest \
+                  -c "${auditPytestConfig}" \
+                  --noconftest \
+                  --import-mode=importlib \
+                  -p no:cacheprovider \
+                  "${productionRoutingAuditTest}::test_rust_routes_override_implicit_head_and_websocket_any"
+                mkdir -p "$out"
+                touch "$out/passed"
+              '';
+          productionRoutingMutationAuditRunner = pkgs.writeShellApplication {
+            name = "pokecon-production-routing-mutation-audit";
+            excludeShellChecks = [ "SC2329" ];
+            runtimeInputs = [
+              pkgs.coreutils
+              pythonEnv
+            ];
+            text = ''
+              mutation_worker_limit=8
+              mutation_worker_default_limit=4
+              if [ "$#" -eq 0 ]; then
+                mutation_worker_count="$(nproc)"
+                if [ "$mutation_worker_count" -gt "$mutation_worker_default_limit" ]; then
+                  mutation_worker_count="$mutation_worker_default_limit"
+                fi
+              elif [ "$#" -eq 1 ] && [ "$1" = "--help" ]; then
+                echo "usage: nix run .#test-production-routing-mutations [-- --workers COUNT]"
+                echo "Run the exhaustive production-routing mutation audit in parallel."
+                exit 0
+              elif [ "$#" -eq 2 ] && [ "$1" = "--workers" ]; then
+                mutation_worker_count="$2"
+              else
+                echo "usage: nix run .#test-production-routing-mutations [-- --workers COUNT]" >&2
+                exit 2
+              fi
+              if [[ ! $mutation_worker_count =~ ^[1-9][0-9]*$ ]] \
+                || [ "$mutation_worker_count" -gt "$mutation_worker_limit" ]; then
+                echo "mutation worker count must be an integer from 1 through $mutation_worker_limit" >&2
+                exit 2
+              fi
+
+              export CI=1
+              export LANG=C
+              export LC_ALL=C
+              export PYTHONDONTWRITEBYTECODE=1
+              export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+              unset \
+                POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT \
+                POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX \
+                PYTEST_ADDOPTS \
+                PYTEST_PLUGINS \
+                PYTHONPATH
+              cd "${source}"
+
+              mutation_log_directory=
+              mutation_worker_pids=()
+              cleanup_mutation_audit() {
+                mutation_cleanup_status=$?
+                trap - EXIT
+                if [ -n "$mutation_log_directory" ]; then
+                  rm -rf -- "$mutation_log_directory"
+                fi
+                exit "$mutation_cleanup_status"
+              }
+              terminate_mutation_workers() {
+                trap - INT TERM
+                mutation_active_worker_pids=()
+                mapfile -t mutation_active_worker_pids < <(jobs -p)
+                for mutation_worker_pid in "''${mutation_active_worker_pids[@]}"; do
+                  kill "$mutation_worker_pid" 2>/dev/null || true
+                done
+                for mutation_worker_pid in "''${mutation_active_worker_pids[@]}"; do
+                  wait "$mutation_worker_pid" 2>/dev/null || true
+                done
+                exit 130
+              }
+              trap cleanup_mutation_audit EXIT
+              trap terminate_mutation_workers INT TERM
+              mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
+              mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
+
+              echo "Running 393 production-routing mutations across $mutation_worker_count process shards"
+              for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
+                POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
+                  POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \
+                  "${pythonEnv}/bin/python" -I -m pytest \
+                  -c "${auditPytestConfig}" \
+                  --noconftest \
+                  --import-mode=importlib \
+                  -p no:cacheprovider \
+                  "$mutation_test" \
+                  >"$mutation_log_directory/$mutation_shard_index.log" 2>&1 &
+                mutation_worker_pids+=("$!")
+              done
+
+              mutation_audit_status=0
+              mutation_worker_statuses=()
+              for mutation_worker_pid in "''${mutation_worker_pids[@]}"; do
+                if wait "$mutation_worker_pid"; then
+                  mutation_worker_status=0
+                else
+                  mutation_worker_status=$?
+                  if [ "$mutation_audit_status" -eq 0 ]; then
+                    mutation_audit_status="$mutation_worker_status"
+                  fi
+                fi
+                mutation_worker_statuses+=("$mutation_worker_status")
+              done
+              trap - INT TERM
+
+              for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
+                printf '\n=== production-routing mutation shard %s/%s ===\n' \
+                  "$mutation_shard_index" "$mutation_worker_count"
+                cat -- "$mutation_log_directory/$mutation_shard_index.log"
+                mutation_worker_status="''${mutation_worker_statuses[$mutation_shard_index]}"
+                if [ "$mutation_worker_status" -ne 0 ]; then
+                  echo "production-routing mutation shard $mutation_shard_index failed with status $mutation_worker_status" >&2
+                fi
+              done
+              exit "$mutation_audit_status"
+            '';
+          };
+          productionRoutingMutationAudit =
+            pkgs.runCommand "pokecon-production-routing-mutation-audit"
+              {
+                nativeBuildInputs = [ productionRoutingMutationAuditRunner ];
+              }
+              ''
+                "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit"
+                mkdir -p "$out"
+                touch "$out/passed"
+              '';
 
           mkApp = program: {
             type = "app";
@@ -411,6 +1392,267 @@
             export TZ=UTC
             export UV_NO_CONFIG=1
             umask 022
+          '';
+
+          sanitizeCargoCompilerEnvironment = ''
+            cargo_compiler_environment=()
+            while IFS= read -r -d "" cargo_environment_entry; do
+              cargo_environment_name="''${cargo_environment_entry%%=*}"
+              case "$cargo_environment_name" in
+                CARGO_BUILD_RUSTC | CARGO_BUILD_RUSTC_WRAPPER | CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER \
+                  | CARGO_BUILD_RUSTFLAGS | CARGO_BUILD_RUSTDOC | CARGO_BUILD_RUSTDOCFLAGS \
+                  | CARGO_BUILD_TARGET | CARGO_ENCODED_RUSTFLAGS | CARGO_ENCODED_RUSTDOCFLAGS \
+                  | CARGO_TARGET_*_RUSTC | CARGO_TARGET_*_RUSTFLAGS | CARGO_TARGET_*_RUSTDOC \
+                  | CARGO_TARGET_*_RUSTDOCFLAGS | CARGO_TARGET_*_RUNNER | CARGO_TARGET_*_LINKER)
+                  cargo_compiler_environment+=("$cargo_environment_name")
+                  ;;
+              esac
+            done < <("${pkgs.coreutils}/bin/env" -0)
+            for cargo_environment_name in "''${cargo_compiler_environment[@]}"; do
+              unset "$cargo_environment_name"
+              if [[ -v $cargo_environment_name ]]; then
+                echo "failed to clear Cargo compiler environment alias: $cargo_environment_name" >&2
+                exit 2
+              fi
+            done
+            unset cargo_compiler_environment cargo_environment_entry cargo_environment_name
+          '';
+
+          assertNoRepositoryCargoConfigs = ''
+            repository_cargo_configs=()
+            repository_cargo_config_inventory=
+            if [ -z "''${TMPDIR:-}" ] || [ -L "$TMPDIR" ] || [ ! -d "$TMPDIR" ]; then
+              echo "repository Cargo configuration scan requires a real TMPDIR" >&2
+              exit 2
+            fi
+            if ! repository_cargo_config_tmpdir="$(
+              "${pkgs.coreutils}/bin/readlink" -f -- "$TMPDIR"
+            )"; then
+              echo "repository Cargo configuration scan cannot resolve TMPDIR: $TMPDIR" >&2
+              exit 2
+            fi
+            if [ "$repository_cargo_config_tmpdir" != "$TMPDIR" ]; then
+              echo "repository Cargo configuration scan TMPDIR is redirected: $TMPDIR" >&2
+              exit 2
+            fi
+            if ! repository_cargo_config_inventory="$(
+              "${pkgs.coreutils}/bin/mktemp" \
+                --tmpdir="$repository_cargo_config_tmpdir" \
+                pokecon-repository-cargo-configs.XXXXXXXX
+            )"; then
+              echo "failed to create repository Cargo configuration inventory" >&2
+              exit 2
+            fi
+            case "$repository_cargo_config_inventory" in
+              "$repository_cargo_config_tmpdir"/*) ;;
+              *)
+                "${pkgs.coreutils}/bin/rm" -f -- "$repository_cargo_config_inventory"
+                echo "repository Cargo configuration inventory escaped TMPDIR" >&2
+                exit 2
+                ;;
+            esac
+            if ! repository_cargo_config_inventory_canonical="$(
+              "${pkgs.coreutils}/bin/readlink" -f -- "$repository_cargo_config_inventory"
+            )"; then
+              "${pkgs.coreutils}/bin/rm" -f -- "$repository_cargo_config_inventory"
+              echo "repository Cargo configuration inventory cannot be resolved" >&2
+              exit 2
+            fi
+            if [ -L "$repository_cargo_config_inventory" ] \
+              || [ ! -f "$repository_cargo_config_inventory" ] \
+              || [ "$repository_cargo_config_inventory_canonical" != "$repository_cargo_config_inventory" ] \
+              || [ "$("${pkgs.coreutils}/bin/stat" -c %a -- "$repository_cargo_config_inventory")" != 600 ]; then
+              "${pkgs.coreutils}/bin/rm" -f -- "$repository_cargo_config_inventory"
+              echo "repository Cargo configuration inventory is not a private regular file" >&2
+              exit 2
+            fi
+            if ! "${pkgs.findutils}/bin/find" -P "$PWD" \
+              \( \
+                -path "$PWD/web/node_modules" \
+                -o -path "$PWD/release-python" \
+                -o -path "$PWD/release-wheelhouse" \
+                -o -path "$PWD/bundle-resources" \
+                -o -path "$PWD/normalized-bin" \
+              \) -prune \
+              -o \( \
+                \( -type l -name .cargo \) \
+                -o -path '*/.cargo/config' \
+                -o -path '*/.cargo/config.toml' \
+              \) -print0 > "$repository_cargo_config_inventory"; then
+              "${pkgs.coreutils}/bin/rm" -f -- "$repository_cargo_config_inventory"
+              echo "repository Cargo configuration scan failed" >&2
+              exit 2
+            fi
+            while IFS= read -r -d "" repository_cargo_config; do
+              repository_cargo_configs+=("$repository_cargo_config")
+            done < "$repository_cargo_config_inventory"
+            "${pkgs.coreutils}/bin/rm" -f -- "$repository_cargo_config_inventory"
+            if [ -e "$repository_cargo_config_inventory" ] \
+              || [ -L "$repository_cargo_config_inventory" ]; then
+              echo "failed to remove repository Cargo configuration inventory" >&2
+              exit 2
+            fi
+            if [ "''${#repository_cargo_configs[@]}" -ne 0 ]; then
+              printf 'repository Cargo configuration is forbidden: %s\n' \
+                "''${repository_cargo_configs[@]}" >&2
+              exit 2
+            fi
+            unset \
+              repository_cargo_config \
+              repository_cargo_config_inventory \
+              repository_cargo_config_inventory_canonical \
+              repository_cargo_config_tmpdir \
+              repository_cargo_configs
+          '';
+
+          assertNoCargoConfigAncestors = ''
+            cargo_config_ancestor="$(pwd -P)"
+            while true; do
+              cargo_config_directory="''${cargo_config_ancestor%/}/.cargo"
+              if [ -L "$cargo_config_directory" ]; then
+                echo "ancestor Cargo config directory must not be a symlink: $cargo_config_directory" >&2
+                exit 2
+              fi
+              for cargo_config_name in config config.toml; do
+                cargo_config_candidate="$cargo_config_directory/$cargo_config_name"
+                if [ -e "$cargo_config_candidate" ] || [ -L "$cargo_config_candidate" ]; then
+                  echo "ancestor Cargo configuration is forbidden: $cargo_config_candidate" >&2
+                  exit 2
+                fi
+              done
+              if [ "$cargo_config_ancestor" = / ]; then
+                break
+              fi
+              cargo_config_parent="$(dirname -- "$cargo_config_ancestor")"
+              if [ "$cargo_config_parent" = "$cargo_config_ancestor" ]; then
+                echo "Cargo config ancestor walk did not reach the filesystem root" >&2
+                exit 2
+              fi
+              cargo_config_ancestor="$cargo_config_parent"
+            done
+            unset \
+              cargo_config_ancestor \
+              cargo_config_candidate \
+              cargo_config_directory \
+              cargo_config_name \
+              cargo_config_parent
+          '';
+
+          resetTauriCargoTarget = ''
+            expected_cargo_target_dir="$gate_home/cargo-target"
+            if [ -L "$gate_home" ] \
+              || [ ! -d "$gate_home" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$gate_home")" != "$gate_home" ]; then
+              echo "tauri-build cannot reset Cargo target below a redirected gate home" >&2
+              exit 2
+            fi
+            "${pkgs.coreutils}/bin/rm" -rf -- "$expected_cargo_target_dir"
+            "${pkgs.coreutils}/bin/mkdir" -- "$expected_cargo_target_dir"
+            if [ -L "$expected_cargo_target_dir" ] \
+              || [ ! -d "$expected_cargo_target_dir" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$expected_cargo_target_dir")" != "$expected_cargo_target_dir" ]; then
+              echo "tauri-build failed to recreate a canonical Cargo target" >&2
+              exit 2
+            fi
+            if ! cargo_target_residue="$(
+              "${pkgs.findutils}/bin/find" -P "$expected_cargo_target_dir" \
+                -mindepth 1 -print -quit
+            )"; then
+              echo "tauri-build Cargo target inventory failed" >&2
+              exit 2
+            fi
+            if [ -n "$cargo_target_residue" ]; then
+              echo "tauri-build recreated a non-empty Cargo target: $cargo_target_residue" >&2
+              exit 2
+            fi
+            export CARGO_INCREMENTAL=0
+            export CARGO_TARGET_DIR="$expected_cargo_target_dir"
+            unset cargo_target_residue expected_cargo_target_dir
+          '';
+
+          prepareTauriCargoInvocation = ''
+            cargo_source_root="${controlledCargoSource}"
+            if [ -L "$cargo_source_root" ] \
+              || [ ! -d "$cargo_source_root" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$cargo_source_root")" != "$cargo_source_root" ]; then
+              echo "tauri-build controlled Cargo source is redirected or missing" >&2
+              exit 2
+            fi
+            if ! controlled_source_boundary_violation="$(
+              "${pkgs.findutils}/bin/find" -P "$cargo_source_root" \
+                \( -type l -o -perm /0222 \) -print -quit
+            )"; then
+              echo "tauri-build controlled Cargo source inventory failed" >&2
+              exit 2
+            fi
+            if [ -n "$controlled_source_boundary_violation" ]; then
+              echo "tauri-build controlled Cargo source is redirected or writable: $controlled_source_boundary_violation" >&2
+              exit 2
+            fi
+            unset controlled_source_boundary_violation
+            (
+              cd "$cargo_source_root"
+              ${verifyControlledCargoManifests}
+              ${assertNoRepositoryCargoConfigs}
+              ${assertNoCargoConfigAncestors}
+            )
+            if ! "${pkgs.diffutils}/bin/cmp" -s -- \
+              "${source}/pyproject.toml" \
+              "$cargo_source_root/pyproject.toml"; then
+              echo "tauri-build controlled pyproject.toml differs from the immutable source" >&2
+              exit 2
+            fi
+            export CARGO_HOME="${gateCargoHome}"
+            if [ -L "$CARGO_HOME" ] \
+              || [ ! -d "$CARGO_HOME" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$CARGO_HOME")" != "${gateCargoHome}" ] \
+              || [ ! -L "$CARGO_HOME/config.toml" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ]; then
+              echo "tauri-build immutable Cargo home is not canonical" >&2
+              exit 2
+            fi
+            ${sanitizeCargoCompilerEnvironment}
+            expected_cargo_target_dir="$gate_home/cargo-target"
+            if [ "''${CARGO_TARGET_DIR:-}" != "$expected_cargo_target_dir" ] \
+              || [ "''${CARGO_INCREMENTAL:-}" != 0 ] \
+              || [ -L "$CARGO_TARGET_DIR" ] \
+              || [ ! -d "$CARGO_TARGET_DIR" ] \
+              || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$CARGO_TARGET_DIR")" != "$expected_cargo_target_dir" ]; then
+              echo "tauri-build Cargo target boundary is not canonical" >&2
+              exit 2
+            fi
+            unset expected_cargo_target_dir
+            if [[ -v CARGO ]] && [ "$CARGO" != "${rustToolchain}/bin/cargo" ]; then
+              echo "tauri-build retained an unexpected CARGO: $CARGO" >&2
+              exit 2
+            fi
+            if [[ -v RUSTC ]] && [ "$RUSTC" != "${rustToolchain}/bin/rustc" ]; then
+              echo "tauri-build retained an unexpected RUSTC: $RUSTC" >&2
+              exit 2
+            fi
+            if [[ -v RUSTC_WRAPPER ]] && [ "$RUSTC_WRAPPER" != "${reproducibleRustcWrapper}" ]; then
+              echo "tauri-build retained an unexpected RUSTC_WRAPPER: $RUSTC_WRAPPER" >&2
+              exit 2
+            fi
+            unset CARGO RUSTC RUSTC_WRAPPER
+            for forbidden_rust_environment in \
+              RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS; do
+              if [[ -v $forbidden_rust_environment ]]; then
+                echo "tauri-build retained forbidden ambient Rust configuration: $forbidden_rust_environment" >&2
+                exit 2
+              fi
+            done
+            unset forbidden_rust_environment
+            export CARGO="${rustToolchain}/bin/cargo"
+            export RUSTC="${rustToolchain}/bin/rustc"
+            export RUSTC_WRAPPER="${reproducibleRustcWrapper}"
+            if [ "$CARGO" != "${rustToolchain}/bin/cargo" ] \
+              || [ "$RUSTC" != "${rustToolchain}/bin/rustc" ] \
+              || [ "$RUSTC_WRAPPER" != "${reproducibleRustcWrapper}" ] \
+              || [ "$CARGO_HOME" != "${gateCargoHome}" ]; then
+              echo "tauri-build Cargo invocation boundary is not canonical" >&2
+              exit 2
+            fi
           '';
 
           gateHomeExports = ''
@@ -966,10 +2208,30 @@
             fi
           '';
 
+          restoreGateCargoConfig = ''
+            expected_cargo_home="$gate_home/cargo-home"
+            export CARGO_HOME="$expected_cargo_home"
+            if [ -L "$CARGO_HOME" ] || [ ! -d "$CARGO_HOME" ] \
+              || [ "$(readlink -f "$CARGO_HOME")" != "$expected_cargo_home" ]; then
+              echo "isolated Cargo home is redirected or missing: $CARGO_HOME" >&2
+              exit 2
+            fi
+            rm -rf -- "$CARGO_HOME/config" "$CARGO_HOME/config.toml"
+            ln -s -- "${gateCargoConfig}" "$CARGO_HOME/config.toml"
+            if [ -e "$CARGO_HOME/config" ] || [ -L "$CARGO_HOME/config" ] \
+              || [ ! -L "$CARGO_HOME/config.toml" ] \
+              || [ "$(readlink -- "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ] \
+              || [ "$(readlink -f "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ]; then
+              echo "failed to restore the immutable Cargo gate config" >&2
+              exit 2
+            fi
+            unset expected_cargo_home
+          '';
+
           setupIsolatedCargoHome = ''
             export CARGO_HOME="$gate_home/cargo-home"
             mkdir -p "$CARGO_HOME"
-            ln -s "${gateCargoConfig}" "$CARGO_HOME/config.toml"
+            ${restoreGateCargoConfig}
           '';
 
           setupPerRunCargoTarget = ''
@@ -982,7 +2244,7 @@
               echo "per-run Cargo gate home is not canonical: $gate_home" >&2
               exit 2
             fi
-            cargo_target_dir="$gate_home/cargo-target"
+            cargo_target_dir="$gate_home/target"
             if [ -e "$cargo_target_dir" ] || [ -L "$cargo_target_dir" ]; then
               echo "per-run Cargo target unexpectedly exists: $cargo_target_dir" >&2
               exit 2
@@ -999,9 +2261,24 @@
                 exit 2
                 ;;
             esac
+            cargo_cache_tag="$cargo_target_dir/CACHEDIR.TAG"
+            if ! (set -o noclobber; umask 022; "${pkgs.coreutils}/bin/cat" "${cargoCacheDirectoryTag}" >"$cargo_cache_tag"); then
+              echo "failed to create the canonical Cargo cache directory tag: $cargo_cache_tag" >&2
+              exit 2
+            fi
+            if [ -L "$cargo_cache_tag" ] || [ ! -f "$cargo_cache_tag" ] \
+              || [ "$(readlink -f "$cargo_cache_tag")" != "$cargo_cache_tag" ]; then
+              echo "per-run Cargo cache directory tag is redirected or not a regular file: $cargo_cache_tag" >&2
+              exit 2
+            fi
+            if ! "${pkgs.diffutils}/bin/cmp" -s -- "${cargoCacheDirectoryTag}" "$cargo_cache_tag"; then
+              echo "per-run Cargo cache directory tag differs from Cargo's canonical tag: $cargo_cache_tag" >&2
+              exit 2
+            fi
+            export CARGO_INCREMENTAL=0
             export CARGO_TARGET_DIR="$cargo_target_dir"
             echo "using isolated per-run Cargo target: $CARGO_TARGET_DIR" >&2
-            unset canonical_gate_home cargo_target_dir
+            unset canonical_gate_home cargo_cache_tag cargo_target_dir
           '';
 
           setupCallerRustTaskEnvironment = ''
@@ -1024,6 +2301,27 @@
             ${setupUvLinks}
           '';
 
+          cargoCacheDirectoryTag = pkgs.writeText "pokecon-cargo-cache-directory-tag" ''
+            Signature: 8a477f597d28d172789f06886806bc55
+            # This file is a cache directory tag created by cargo.
+            # For information about cache directory tags see https://bford.info/cachedir/
+          '';
+
+          reclaimPerRunCargoTarget = ''
+            ${restoreGateCargoConfig}
+            ${assertNoCargoConfigAncestors}
+            if [ "$CARGO_TARGET_DIR" != "$gate_home/target" ] \
+              || [ -L "$CARGO_TARGET_DIR" ] \
+              || [ ! -d "$CARGO_TARGET_DIR" ] \
+              || [ "$(readlink -f "$CARGO_TARGET_DIR")" != "$CARGO_TARGET_DIR" ]; then
+              echo "aggregate check refuses to clean an unowned Cargo target: $CARGO_TARGET_DIR" >&2
+              exit 2
+            fi
+            cargo clean --target-dir "$CARGO_TARGET_DIR"
+            ${setupPerRunCargoTarget}
+            ${setupUvLinks}
+          '';
+
           setupWorkdir = ''
             ${sanitizeGateEnvironment}
             ${discoverRustWorktree}
@@ -1032,11 +2330,24 @@
             cleanup_gate_directories() {
               gate_status=$?
               trap - EXIT
+              gate_cleanup_status=0
+              if declare -F pokecon_cleanup_task_artifacts >/dev/null; then
+                pokecon_cleanup_task_artifacts || gate_cleanup_status=$?
+              fi
               if [ -n "$workdir" ]; then
-                rm -rf -- "$workdir"
+                if ! "${pkgs.coreutils}/bin/rm" -rf -- "$workdir"; then
+                  echo "failed to remove the gate worktree: $workdir" >&2
+                  gate_cleanup_status=1
+                fi
               fi
               if [ -n "$gate_home" ]; then
-                rm -rf -- "$gate_home"
+                if ! "${pkgs.coreutils}/bin/rm" -rf -- "$gate_home"; then
+                  echo "failed to remove the gate home: $gate_home" >&2
+                  gate_cleanup_status=1
+                fi
+              fi
+              if [ "$gate_status" -eq 0 ] && [ "$gate_cleanup_status" -ne 0 ]; then
+                gate_status=$gate_cleanup_status
               fi
               exit "$gate_status"
             }
@@ -1051,6 +2362,7 @@
             cp -a "${source}/." "$workdir/"
             chmod -R u+w "$workdir"
             cd "$workdir"
+            ${assertNoCargoConfigAncestors}
           '';
 
           linuxDesktopPackages = lib.optionals pkgs.stdenv.isLinux [
@@ -1067,6 +2379,9 @@
             pkgs.udev
             pkgs.webkitgtk_4_1
             pkgs.zlib
+          ];
+          linuxApplicationRuntimePackages = lib.optionals pkgs.stdenv.isLinux [
+            pkgs.libayatana-appindicator
           ];
           rustTaskInputs = [
             rustToolchain
@@ -1157,6 +2472,8 @@
             src = source;
             sourceRoot = "pokecon-source/web";
             nativeBuildInputs = [ bun ];
+            POKECON_WEB_VERSION = workspaceVersion;
+            SOURCE_DATE_EPOCH = "0";
             configurePhase = ''
               runHook preConfigure
               cp -R "${webBunDependencies}/node_modules" .
@@ -1176,6 +2493,80 @@
             '';
           };
 
+          linuxReleaseRuntime =
+            if system == "x86_64-linux" then
+              pkgs.stdenvNoCC.mkDerivation {
+                pname = "pokecon-linux-release-runtime";
+                version = workspaceVersion;
+                nativeBuildInputs = [
+                  pkgs.cacert
+                  pkgs.patchelf
+                  pythonEnv
+                ];
+                phases = [ "buildPhase" ];
+                buildPhase = ''
+                  runHook preBuild
+                  mkdir -p "$TMPDIR/release-home" "$TMPDIR/uv-cache"
+                  cp "${linuxReleaseEvdevConfig}" "$TMPDIR/release-home/.pydistutils.cfg"
+                  "${pkgs.coreutils}/bin/env" -i \
+                    AR="${linuxReleaseCc}/bin/ar" \
+                    AS="${linuxReleaseCc}/bin/as" \
+                    CC="${linuxReleaseCc}/bin/gcc" \
+                    CFLAGS="-I${linuxReleasePortaudio}/include" \
+                    CPP="${linuxReleaseCc}/bin/cpp" \
+                    CXX="${linuxReleaseCc}/bin/g++" \
+                    HOME="$TMPDIR/release-home" \
+                    LANG=C.UTF-8 \
+                    LC_ALL=C.UTF-8 \
+                    LD="${linuxReleaseCc}/bin/ld" \
+                    LDFLAGS="-L${linuxReleasePortaudio}/lib" \
+                    NIX_SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
+                    PATH="${linuxReleaseBuildPath}" \
+                    PIP_CONFIG_FILE=/dev/null \
+                    PKG_CONFIG_LIBDIR="${linuxReleasePortaudio}/lib/pkgconfig" \
+                    PKG_CONFIG_PATH="${linuxReleasePortaudio}/lib/pkgconfig" \
+                    PYTHONHASHSEED=0 \
+                    PYTHONDONTWRITEBYTECODE=1 \
+                    PYTHONNOUSERSITE=1 \
+                    PYTHONSAFEPATH=1 \
+                    RANLIB="${linuxReleaseCc}/bin/ranlib" \
+                    SOURCE_DATE_EPOCH=0 \
+                    SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
+                    STRIP="${linuxReleaseCc}/bin/strip" \
+                    TMPDIR="$TMPDIR" \
+                    TZ=UTC \
+                    UV_CACHE_DIR="$TMPDIR/uv-cache" \
+                    UV_LIBC=gnu \
+                    UV_NO_CONFIG=1 \
+                    XDG_CACHE_HOME="$TMPDIR/release-home/.cache" \
+                    XDG_CONFIG_HOME="$TMPDIR/release-home/.config" \
+                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py" \
+                    --project "${controlledCargoSource}" \
+                    --uv "${portableUvExecutionBinary}" \
+                    --runtime-output "$out/python" \
+                    --wheelhouse-output "$out/wheelhouse" \
+                    --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                    --strip "${pkgs.binutils}/bin/strip" \
+                    --execution-loader "${portableUvExecutionLoader}" \
+                    --execution-library-path "${portableUvExecutionLibraryPath}" \
+                    --runtime-library-path "${linuxReleaseRuntimeLibraries}/lib"
+                  if [ -n "$(
+                    "${pkgs.findutils}/bin/find" "$out" \
+                      \( -type d -name __pycache__ -o -type f -name '*.pyc' \) \
+                      -print -quit
+                  )" ]; then
+                    echo "fixed release runtime contains Python bytecode cache artifacts" >&2
+                    exit 2
+                  fi
+                  runHook postBuild
+                '';
+                dontFixup = true;
+                outputHash = "sha256-/oX5m7mZkIwXl383NXN4qc2qGnfsJSlPMgVKMrurSmY=";
+                outputHashMode = "recursive";
+              }
+            else
+              null;
+
           pokeconPackage = rustPlatform.buildRustPackage {
             pname = "pokecon";
             version = workspaceVersion;
@@ -1184,13 +2575,17 @@
               pkgs.nasm
               pkgs.pkg-config
             ]
-            ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.llvmPackages.libclang ];
-            buildInputs = [ pythonEnv ] ++ linuxDesktopPackages;
+            ++ lib.optionals pkgs.stdenv.isLinux [
+              pkgs.llvmPackages.libclang
+              pkgs.patchelf
+            ];
+            buildInputs = [ pythonEnv ] ++ linuxDesktopPackages ++ linuxApplicationRuntimePackages;
             cargoLock = {
               lockFile = ./Cargo.lock;
               allowBuiltinFetchGit = true;
             };
             cargoBuildFlags = [
+              "--locked"
               "--features"
               "tauri-shell"
               "--package"
@@ -1203,6 +2598,7 @@
               "pokecon-worker"
             ];
             cargoTestFlags = [
+              "--locked"
               "--features"
               "tauri-shell"
               "--package"
@@ -1211,16 +2607,63 @@
               "pokecon-worker"
             ];
             doCheck = true;
+            POKECON_RESOURCE_PROVENANCE = "development";
+            postPatch = ''
+              test -f "${productionRoutingAudit}/passed"
+              ${installControlledCargoManifests}
+            '';
+            preBuild = ''
+              ${installControlledCargoManifests}
+              ${sanitizeCargoCompilerEnvironment}
+              if [ "''${RUSTC:-}" != "${rustToolchain}/bin/rustc" ]; then
+                echo "pokecon package build has an unpinned RUSTC: ''${RUSTC:-<unset>}" >&2
+                exit 2
+              fi
+              if [ "''${RUSTC_WRAPPER:-}" != "${pinnedRustcWrapper}" ]; then
+                echo "pokecon package build has an unpinned RUSTC_WRAPPER: ''${RUSTC_WRAPPER:-<unset>}" >&2
+                exit 2
+              fi
+              for forbidden_package_rust_environment in RUSTC_WORKSPACE_WRAPPER RUSTFLAGS; do
+                if [[ -v $forbidden_package_rust_environment ]]; then
+                  echo "pokecon package build forbids $forbidden_package_rust_environment" >&2
+                  exit 2
+                fi
+              done
+              unset forbidden_package_rust_environment
+            '';
             preCheck = ''
+              ${installControlledCargoManifests}
               runtimeRoot="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/$cargoCheckType"
               mkdir -p "$runtimeRoot/uv"
               ln -sfn "${pkgs.uv}/bin/uv" "$runtimeRoot/uv/uv"
+            '';
+            preInstall = ''
+              export POKECON_RESOURCE_PROVENANCE=nix-exact
+              cargoBuildHook
+            '';
+            installPhase = ''
+              runHook preInstall
+              : "''${cargoBuildType:?cargoBuildType is required}"
+              package_target="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/$cargoBuildType"
+              for packaged_binary in pokecon pokecon-worker; do
+                packaged_source="$package_target/$packaged_binary"
+                if [ -L "$packaged_source" ] || [ ! -f "$packaged_source" ] || [ ! -x "$packaged_source" ]; then
+                  echo "packaged executable is missing, redirected, or not executable: $packaged_source" >&2
+                  exit 2
+                fi
+                "${pkgs.coreutils}/bin/install" -Dm755 -- \
+                  "$packaged_source" "$out/bin/$packaged_binary"
+              done
+              unset packaged_binary packaged_source package_target
+              runHook postInstall
             '';
             POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
             POKECON_BUILD_UV_VERSION = pkgs.uv.version;
             POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
             PYO3_PYTHON = "${pythonEnv}/bin/python";
             POKECON_BUILD_PYTHON = "${pythonEnv}/bin/python";
+            RUSTC = "${rustToolchain}/bin/rustc";
+            RUSTC_WRAPPER = "${pinnedRustcWrapper}";
             BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
             postInstall = ''
@@ -1229,6 +2672,18 @@
               ln -s ../web "$out/bin/web"
               mkdir -p "$out/bin/uv"
               cp "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"
+            '';
+            postFixup = lib.optionalString pkgs.stdenv.isLinux ''
+              application_runtime_path=${lib.escapeShellArg (lib.makeLibraryPath linuxApplicationRuntimePackages)}
+              patchelf --add-rpath "$application_runtime_path" "$out/bin/pokecon"
+              patched_rpath="$(patchelf --print-rpath "$out/bin/pokecon")"
+              case ":$patched_rpath:" in
+                *":$application_runtime_path:"*) ;;
+                *)
+                  echo "packaged application RPATH does not contain its AppIndicator closure" >&2
+                  exit 1
+                  ;;
+              esac
             '';
           };
           gateCargoConfig = pkgs.writeText "pokecon-gate-cargo-config.toml" ''
@@ -1240,6 +2695,10 @@
 
             [net]
             offline = true
+          '';
+          gateCargoHome = pkgs.runCommand "pokecon-gate-cargo-home" { } ''
+            "${pkgs.coreutils}/bin/mkdir" -p "$out"
+            "${pkgs.coreutils}/bin/ln" -s -- "${gateCargoConfig}" "$out/config.toml"
           '';
           cliHelpCheck = mkTask {
             name = "cli-help-check";
@@ -1512,6 +2971,74 @@
                 ''
             );
           };
+          uiPackageSoftwareRenderer = pkgs.mesa;
+          uiPackageSessionBusConfig = pkgs.writeTextFile {
+            name = "pokecon-ui-package-session-bus-config";
+            destination = "/share/dbus-1/session.conf";
+            text = ''
+              <busconfig>
+                <type>session</type>
+                <keep_umask/>
+                <listen>unix:runtime=yes</listen>
+                <auth>EXTERNAL</auth>
+                <policy context="default">
+                  <allow send_destination="*" eavesdrop="true"/>
+                  <allow eavesdrop="true"/>
+                  <allow own="*"/>
+                </policy>
+              </busconfig>
+            '';
+          };
+          uiPackageCheck = mkTask {
+            name = "ui-package-check";
+            runtimeInputs = [
+              pkgs.python314
+              pkgs.curl
+              pkgs.dbus
+              pkgs.diffutils
+              pkgs.findutils
+              pkgs.gnugrep
+              pkgs.jq
+              pkgs.procps
+              pkgs.util-linux
+              pkgs.xauth
+              pkgs.xdotool
+              pkgs.xprop
+              pkgs.xwininfo
+              pkgs.xvfb-run
+            ];
+            text = ''
+              if [ "$#" -ne 0 ]; then
+                echo "usage: nix run .#ui-package-check" >&2
+                exit 2
+              fi
+            ''
+            + (
+              if pkgs.stdenv.isLinux then
+                ''
+                  ${setupSourceGateEnvironment}
+                  "${pkgs.bash}/bin/bash" \
+                    "${source}/scripts/integration/ui_package_check.sh" \
+                    "${self'.packages.pokecon}" \
+                    "${pkgs.python314}/bin/python3.14" \
+                    ${lib.escapeShellArg builtins.storeDir} \
+                    "$gate_home" \
+                    "${pkgs.bash}/bin/bash" \
+                    "${lib.makeBinPath [ pkgs.coreutils ]}" \
+                    "${uiPackageSessionBusConfig}/share/dbus-1/session.conf" \
+                    "${uiPackageSoftwareRenderer}" \
+                    "${source}/scripts/integration/proc_socket_evidence.py" \
+                    "${source}/scripts/integration/pidfd_signal.py" \
+                    "${source}/scripts/integration/ewmh_close_relay.py" \
+                    "${source}/api/openapi.json"
+                ''
+              else
+                ''
+                  echo "ui-package-check requires Linux desktop process inspection" >&2
+                  exit 2
+                ''
+            );
+          };
         in
         {
           treefmt = {
@@ -1572,12 +3099,15 @@
           formatter = safeFormatter;
 
           checks.pokecon = pokeconPackage;
+          checks.production-routing-audit = productionRoutingAudit;
+          checks.production-routing-mutation-audit = productionRoutingMutationAudit;
           checks.web = webPackage;
 
           apps = {
             default = mkApp "${self'.packages.pokecon}/bin/pokecon";
             fmt = mkApp "${safeFormatter}/bin/pokecon-format";
             cli-help-check = cliHelpCheck;
+            ui-package-check = uiPackageCheck;
             worker-package-check = workerPackageCheck;
 
             cargo = mkTask {
@@ -1610,7 +3140,7 @@
                 ${acquireCargoTaskLock}
                 ${setupUvLinks}
                 ${desktopEnvironment}
-                "${rustToolchain}/bin/cargo" "$@"
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"
               '';
             };
 
@@ -2056,7 +3586,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
               '';
             };
 
@@ -2066,6 +3596,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
+                POKECON_RESOURCE_PROVENANCE=development \
                 cargo build --locked --workspace --all-features
               '';
             };
@@ -2076,7 +3607,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                cargo test --locked --workspace --all-features
+                POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
               '';
             };
 
@@ -2117,6 +3648,7 @@
                 ${setupWorkdir}
                 ${desktopEnvironment}
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
+                POKECON_RESOURCE_PROVENANCE=development \
                 cargo build --locked --workspace --all-features
                 maturin build --locked --release --manifest-path rust/pokecon-pybindings/Cargo.toml --out dist
                 mkdir -p "$caller_dir/dist"
@@ -2356,13 +3888,31 @@
                 pythonEnv
                 pkgs.check-jsonschema
                 pkgs.git
+                pkgs.gnugrep
+                pkgs.jq
               ];
               text = ''
                 ${setupSourceGateEnvironment}
                 cd "${source}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="${source}/python:${source}"
-                python -m pytest -p no:cacheprovider tests -v --tb=short
+                pytest_arguments=("$@")
+                if [ "''${#pytest_arguments[@]}" -eq 0 ]; then
+                  pytest_arguments=(tests)
+                fi
+                python -m pytest \
+                  -p no:cacheprovider \
+                  -v \
+                  --tb=short \
+                  "''${pytest_arguments[@]}" \
+                  -m "not production_routing_mutation"
+              '';
+            };
+
+            test-production-routing-mutations = mkTask {
+              name = "test-production-routing-mutations";
+              text = ''
+                exec "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" "$@"
               '';
             };
 
@@ -2662,147 +4212,697 @@
               '';
             };
 
-            tauri-build = mkTask {
-              name = "tauri-build";
-              runtimeInputs = rustTaskInputs ++ [
-                pkgs.binutils
-                bun
-                pkgs.cargo-tauri
-                pkgs.dpkg
-                pkgs.patchelf
-                pkgs.uv
-              ];
-              text = ''
-                ${setupWorkdir}
-                release_workdir="$CARGO_TARGET_DIR/pokecon-release-workdir"
-                rm -rf -- "$release_workdir"
-                mv "$workdir" "$release_workdir"
-                workdir="$release_workdir"
-                cd "$workdir"
-                ${desktopEnvironment}
-                export POKECON_WEB_VERSION="${workspaceVersion}"
-                export SOURCE_DATE_EPOCH=0
-                cp -R "${webBunDependencies}/node_modules" web/
-                chmod -R u+w web/node_modules
-                bun run --cwd web --bun build
-                release_python="$workdir/release-python"
-                release_wheelhouse="$workdir/release-wheelhouse"
-                release_build_home="$workdir/release-build-home"
-                release_build_tmp="$workdir/release-build-tmp"
-                release_uv_cache="$workdir/release-uv-cache"
-                mkdir -p "$release_build_home" "$release_build_tmp" "$release_uv_cache"
-                cp "${linuxReleaseEvdevConfig}" "$release_build_home/.pydistutils.cfg"
-                "${pkgs.coreutils}/bin/env" -i \
-                  AR="${linuxReleaseCc}/bin/ar" \
-                  AS="${linuxReleaseCc}/bin/as" \
-                  CC="${linuxReleaseCc}/bin/gcc" \
-                  CFLAGS="-I${linuxReleasePortaudio}/include" \
-                  CPP="${linuxReleaseCc}/bin/cpp" \
-                  CXX="${linuxReleaseCc}/bin/g++" \
-                  HOME="$release_build_home" \
-                  LANG=C.UTF-8 \
-                  LC_ALL=C.UTF-8 \
-                  LD="${linuxReleaseCc}/bin/ld" \
-                  LDFLAGS="-L${linuxReleasePortaudio}/lib" \
-                  NIX_SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
-                  PATH="${linuxReleaseBuildPath}" \
-                  PKG_CONFIG_PATH="${linuxReleasePortaudio}/lib/pkgconfig" \
-                  PYTHONPATH="$workdir" \
-                  RANLIB="${linuxReleaseCc}/bin/ranlib" \
-                  SOURCE_DATE_EPOCH=0 \
-                  SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt" \
-                  STRIP="${linuxReleaseCc}/bin/strip" \
-                  TMPDIR="$release_build_tmp" \
-                  TZ=UTC \
-                  UV_CACHE_DIR="$release_uv_cache" \
-                  XDG_CACHE_HOME="$release_build_home/.cache" \
-                  XDG_CONFIG_HOME="$release_build_home/.config" \
-                  "${pythonEnv}/bin/python" -m scripts.release.build_runtime \
-                  --project "$workdir" \
-                  --uv "${portableUvBinary}" \
-                  --runtime-output "$release_python" \
-                  --wheelhouse-output "$release_wheelhouse" \
-                  --patchelf "${pkgs.patchelf}/bin/patchelf" \
-                  --strip "${pkgs.binutils}/bin/strip" \
-                  --runtime-library-path "${linuxReleasePortaudio}/lib"
-                export PYO3_PYTHON="$release_python/bin/python3.14"
-                export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CFLAGS:+ $CFLAGS}"
-                export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CXXFLAGS:+ $CXXFLAGS}"
-                export POKECON_RUST_REMAP_SOURCE="$workdir"
-                export POKECON_RUST_REMAP_PYTHON="$release_python"
-                export POKECON_RUST_REMAP_TARGET="$CARGO_TARGET_DIR"
-                export RUSTC_WRAPPER="${reproducibleRustcWrapper}"
-                export POKECON_BUILD_UV_PATH="${portableUvBinary}"
-                export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
-                unset POKECON_BUILD_PYTHON
-                cargo build --locked --release --package pokecon-worker --bin pokecon-worker
-                cargo build \
-                  --locked \
-                  --release \
-                  --package pokecon \
-                  --bin pokecon \
-                  --features tauri-shell
-                normalized_bin="$workdir/normalized-bin"
-                application="$CARGO_TARGET_DIR/release/pokecon"
-                worker="$CARGO_TARGET_DIR/release/pokecon-worker"
-                normalized_application="$normalized_bin/pokecon"
-                normalized_worker="$normalized_bin/pokecon-worker"
-                application_backup="$normalized_bin/pokecon.raw"
-                mkdir -p "$normalized_bin"
-                cp -p "$application" "$application_backup"
-                cp -p "$application" "$normalized_application"
-                cp -p "$worker" "$normalized_worker"
-                python -m scripts.release.normalize_linux_elf \
-                  --application "$normalized_application" \
-                  --worker "$normalized_worker" \
-                  --python-root "$release_python" \
-                  --patchelf "${pkgs.patchelf}/bin/patchelf" \
-                  --strip "${pkgs.binutils}/bin/strip" \
-                  --objdump "${pkgs.binutils}/bin/objdump" \
-                  --ephemeral-build-root "$gate_home"
-                bundle_root="$workdir/bundle-resources"
-                bundle_config="$workdir/tauri.bundle.json"
-                python -m scripts.release.stage \
-                  --web "$workdir/web/dist" \
-                  --worker "$normalized_worker" \
-                  --uv "${portableUvBinary}" \
-                  --wheelhouse "$release_wheelhouse" \
-                  --python "$release_python" \
-                  --output "$bundle_root" \
-                  --config-output "$bundle_config"
-                bundle_args=("$@")
-                if [ "''${#bundle_args[@]}" -eq 0 ]; then
-                  bundle_args=(--bundles deb)
-                fi
-                restore_release_application() {
-                  cp -p "$application_backup" "$application"
+            tauri-build =
+              if system != "x86_64-linux" then
+                mkTask {
+                  name = "tauri-build";
+                  text = ''
+                    echo "tauri-build supports only x86_64-linux" >&2
+                    exit 2
+                  '';
                 }
-                cleanup_tauri_build() {
-                  gate_status=$?
-                  trap - EXIT
-                  restore_release_application || true
-                  rm -rf -- "$workdir" "$gate_home"
-                  exit "$gate_status"
-                }
-                trap cleanup_tauri_build EXIT
-                cp -p "$normalized_application" "$application"
-                (
-                  cd rust/pokecon
-                  cargo tauri bundle --ci --config "$bundle_config" "''${bundle_args[@]}"
-                )
-                restore_release_application
-                while IFS= read -r -d "" package; do
-                  python -m scripts.release.normalize_debian_package \
-                    --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
-                    "$package"
-                done < <(find "$CARGO_TARGET_DIR/release/bundle" -type f -name '*.deb' -print0)
-                artifact_dir="$caller_dir/dist/tauri"
-                mkdir -p "$artifact_dir"
-                find "$CARGO_TARGET_DIR/release/bundle" -type f \
-                  \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \) \
-                  -exec cp {} "$artifact_dir/" \;
-              '';
-            };
+              else
+                mkTask {
+                  name = "tauri-build";
+                  runtimeInputs = rustTaskInputs ++ [
+                    pkgs.binutils
+                    pkgs.cargo-tauri
+                    pkgs.dpkg
+                    pkgs.patchelf
+                  ];
+                  text = ''
+                    if [ "$#" -eq 0 ]; then
+                      :
+                    elif [ "$#" -eq 2 ] && [ "$1" = --bundles ] && [ "$2" = deb ]; then
+                      :
+                    else
+                      echo "usage: nix run .#tauri-build -- [--bundles deb]" >&2
+                      exit 2
+                    fi
+                    bundle_args=(--bundles deb)
+                    # Nix realizes this app's interpolated closure before the launcher can
+                    # run. At the first executable boundary, hide any prior canonical
+                    # artifact before workspace setup and retain it only under a hidden name.
+                    ${sanitizeGateEnvironment}
+                    ${discoverRustWorktree}
+                    artifact_parent="$caller_dir/dist"
+                    artifact_replaced=0
+                    artifact_stale_canonical_identity=
+                    artifact_backup_identity=
+                    artifact_publish_identity=
+                    artifact_committed_identity=
+                    if [ -L "$artifact_parent" ]; then
+                      echo "tauri-build artifact parent must not be a symlink: $artifact_parent" >&2
+                      exit 2
+                    fi
+                    "${pkgs.coreutils}/bin/mkdir" -p -- "$artifact_parent"
+                    if [ ! -d "$artifact_parent" ] \
+                      || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$artifact_parent")" != "$artifact_parent" ]; then
+                      echo "tauri-build artifact parent is redirected or invalid: $artifact_parent" >&2
+                      exit 2
+                    fi
+                    exec {artifact_parent_fd}< "$artifact_parent"
+                    artifact_parent_anchor="/proc/self/fd/$artifact_parent_fd"
+                    if [ ! -d "$artifact_parent_anchor" ]; then
+                      echo "tauri-build artifact parent descriptor is not a directory" >&2
+                      exit 2
+                    fi
+                    artifact_parent_path_identity="$(
+                      "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_parent"
+                    )"
+                    artifact_parent_fd_identity="$(
+                      "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_parent_anchor"
+                    )"
+                    if [ "$artifact_parent_path_identity" != "$artifact_parent_fd_identity" ]; then
+                      echo "tauri-build artifact parent descriptor does not match its path" >&2
+                      exit 2
+                    fi
+                    artifact_parent_anchor_identity_is_owned() {
+                      local current_artifact_parent_anchor_identity
+                      if [ ! -d "$artifact_parent_anchor" ]; then
+                        return 1
+                      fi
+                      if ! current_artifact_parent_anchor_identity="$(
+                        "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_parent_anchor"
+                      )"; then
+                        return 1
+                      fi
+                      if [ "$current_artifact_parent_anchor_identity" \
+                        != "$artifact_parent_fd_identity" ]; then
+                        return 1
+                      fi
+                      return 0
+                    }
+                    artifact_parent_identity_is_current() {
+                      local current_artifact_parent_identity current_artifact_parent_path
+                      if ! artifact_parent_anchor_identity_is_owned \
+                        || [ -L "$artifact_parent" ] || [ ! -d "$artifact_parent" ]; then
+                        return 1
+                      fi
+                      if ! current_artifact_parent_path="$(
+                        "${pkgs.coreutils}/bin/readlink" -f -- "$artifact_parent"
+                      )"; then
+                        return 1
+                      fi
+                      if [ "$current_artifact_parent_path" != "$artifact_parent" ]; then
+                        return 1
+                      fi
+                      if ! current_artifact_parent_identity="$(
+                        "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_parent"
+                      )"; then
+                        return 1
+                      fi
+                      if [ "$current_artifact_parent_identity" != "$artifact_parent_fd_identity" ]; then
+                        return 1
+                      fi
+                      return 0
+                    }
+                    "${pkgs.util-linux}/bin/flock" -x "$artifact_parent_fd"
+                    if ! artifact_parent_identity_is_current; then
+                      echo "tauri-build artifact parent changed while waiting for its directory lock" >&2
+                      exit 2
+                    fi
+                    artifact_dir="$artifact_parent_anchor/tauri"
+                    artifact_dir_expected="$artifact_parent/tauri"
+                    artifact_backup_dir="$artifact_parent_anchor/.tauri-previous"
+                    artifact_publish_dir="$artifact_parent_anchor/.tauri-publish"
+                    artifact_publish_dir_expected="$artifact_parent/.tauri-publish"
+                    artifact_legacy_lock="$artifact_parent_anchor/.tauri-build.lock"
+
+                    remove_saved_artifact_directory() {
+                      local artifact_cleanup_actual_identity artifact_cleanup_expected_identity
+                      local artifact_cleanup_label artifact_cleanup_target
+                      artifact_cleanup_label=$1
+                      artifact_cleanup_target=$2
+                      artifact_cleanup_expected_identity=$3
+                      if ! artifact_parent_anchor_identity_is_owned; then
+                        echo "refusing $artifact_cleanup_label cleanup after artifact parent descriptor identity changed" >&2
+                        return 1
+                      fi
+                      if [ -z "$artifact_cleanup_expected_identity" ] \
+                        || [ -L "$artifact_cleanup_target" ] \
+                        || [ ! -d "$artifact_cleanup_target" ]; then
+                        echo "refusing $artifact_cleanup_label cleanup without an owned real directory" >&2
+                        return 1
+                      fi
+                      if ! artifact_cleanup_actual_identity="$(
+                        "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_cleanup_target"
+                      )"; then
+                        echo "failed to inspect $artifact_cleanup_label before cleanup" >&2
+                        return 1
+                      fi
+                      if [ "$artifact_cleanup_actual_identity" != "$artifact_cleanup_expected_identity" ]; then
+                        echo "refusing $artifact_cleanup_label cleanup after its identity changed" >&2
+                        return 1
+                      fi
+                      if ! "${pkgs.coreutils}/bin/rm" -rf -- "$artifact_cleanup_target"; then
+                        echo "failed to remove owned $artifact_cleanup_label" >&2
+                        return 1
+                      fi
+                      if [ -e "$artifact_cleanup_target" ] || [ -L "$artifact_cleanup_target" ]; then
+                        echo "owned $artifact_cleanup_label remains after cleanup" >&2
+                        return 1
+                      fi
+                      return 0
+                    }
+
+                    pokecon_cleanup_task_artifacts() {
+                      local artifact_cleanup_status
+                      artifact_cleanup_status=0
+                      if [ "$artifact_replaced" -eq 1 ] \
+                        && { [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ]; }; then
+                        remove_saved_artifact_directory \
+                          "published canonical artifact" \
+                          "$artifact_dir" \
+                          "$artifact_committed_identity" \
+                          || artifact_cleanup_status=1
+                      fi
+                      if [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ]; then
+                        remove_saved_artifact_directory \
+                          "publication staging artifact" \
+                          "$artifact_publish_dir" \
+                          "$artifact_publish_identity" \
+                          || artifact_cleanup_status=1
+                      fi
+                      if [ -n "$artifact_stale_canonical_identity" ] \
+                        && { [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ]; }; then
+                        remove_saved_artifact_directory \
+                          "stale canonical artifact" \
+                          "$artifact_dir" \
+                          "$artifact_stale_canonical_identity" \
+                          || artifact_cleanup_status=1
+                      fi
+                      return "$artifact_cleanup_status"
+                    }
+
+                    fail_closed_tauri_artifact_preflight() {
+                      gate_status=$?
+                      trap - EXIT
+                      artifact_cleanup_status=0
+                      pokecon_cleanup_task_artifacts || artifact_cleanup_status=$?
+                      if [ "$gate_status" -eq 0 ] && [ "$artifact_cleanup_status" -ne 0 ]; then
+                        gate_status=$artifact_cleanup_status
+                      fi
+                      exit "$gate_status"
+                    }
+                    trap fail_closed_tauri_artifact_preflight EXIT
+                    for artifact_existing_name in tauri .tauri-previous .tauri-publish; do
+                      artifact_existing_dir="$artifact_parent_anchor/$artifact_existing_name"
+                      artifact_existing_expected="$artifact_parent/$artifact_existing_name"
+                      if [ -e "$artifact_existing_dir" ] || [ -L "$artifact_existing_dir" ]; then
+                        if [ -L "$artifact_existing_dir" ] || [ ! -d "$artifact_existing_dir" ] \
+                          || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$artifact_existing_dir")" \
+                            != "$artifact_existing_expected" ]; then
+                          echo "tauri-build artifact boundary is redirected or invalid: $artifact_existing_dir" >&2
+                          exit 2
+                        fi
+                        artifact_existing_identity="$(
+                          "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_existing_dir"
+                        )"
+                        case "$artifact_existing_name" in
+                          tauri)
+                            artifact_stale_canonical_identity=$artifact_existing_identity
+                            ;;
+                          .tauri-previous)
+                            artifact_backup_identity=$artifact_existing_identity
+                            ;;
+                          .tauri-publish)
+                            artifact_publish_identity=$artifact_existing_identity
+                            ;;
+                        esac
+                      fi
+                    done
+                    unset \
+                      artifact_existing_dir \
+                      artifact_existing_expected \
+                      artifact_existing_identity \
+                      artifact_existing_name
+                    if [ -e "$artifact_legacy_lock" ] || [ -L "$artifact_legacy_lock" ]; then
+                      echo "tauri-build refuses legacy persistent lock residue: $artifact_parent/.tauri-build.lock" >&2
+                      exit 2
+                    fi
+                    if [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ]; then
+                      remove_saved_artifact_directory \
+                        "stale publication staging artifact" \
+                        "$artifact_publish_dir" \
+                        "$artifact_publish_identity"
+                      artifact_publish_identity=
+                    fi
+                    if [ -d "$artifact_dir" ]; then
+                      if [ -d "$artifact_backup_dir" ]; then
+                        remove_saved_artifact_directory \
+                          "retained previous artifact" \
+                          "$artifact_backup_dir" \
+                          "$artifact_backup_identity"
+                        artifact_backup_identity=
+                      fi
+                      if ! artifact_parent_identity_is_current; then
+                        echo "tauri-build artifact parent changed before stale artifact hiding" >&2
+                        exit 2
+                      fi
+                      "${pkgs.coreutils}/bin/mv" -T -- \
+                        "$artifact_dir" "$artifact_backup_dir"
+                      if [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ] \
+                        || [ -L "$artifact_backup_dir" ] || [ ! -d "$artifact_backup_dir" ] \
+                        || [ "$("${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_backup_dir")" \
+                          != "$artifact_stale_canonical_identity" ]; then
+                        echo "tauri-build did not atomically hide the owned stale artifact" >&2
+                        exit 2
+                      fi
+                      artifact_backup_identity=$artifact_stale_canonical_identity
+                      artifact_stale_canonical_identity=
+                    fi
+                    if ! artifact_parent_identity_is_current \
+                      || [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ] \
+                      || [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ]; then
+                      echo "tauri-build failed to establish a clean artifact preflight boundary" >&2
+                      exit 2
+                    fi
+                    ${setupWorkdir}
+                    release_workdir="$gate_home/pokecon-release-workdir"
+                    rm -rf -- "$release_workdir"
+                    mv "$workdir" "$release_workdir"
+                    workdir="$release_workdir"
+                    cd "$workdir"
+                    test -f "${productionRoutingAudit}/passed"
+                    export SOURCE_DATE_EPOCH=0
+                    release_python="${linuxReleaseRuntime}/python"
+                    release_wheelhouse="${linuxReleaseRuntime}/wheelhouse"
+                    ${resetTauriCargoTarget}
+                    ${desktopEnvironment}
+                    export PYO3_PYTHON="$release_python/bin/python3.14"
+                    export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CFLAGS:+ $CFLAGS}"
+                    export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CXXFLAGS:+ $CXXFLAGS}"
+                    export POKECON_RUST_REMAP_SOURCE="${controlledCargoSource}"
+                    export POKECON_RUST_REMAP_PYTHON="$release_python"
+                    export POKECON_RUST_REMAP_TARGET="$CARGO_TARGET_DIR"
+                    export POKECON_BUILD_UV_PATH="${portableUvBinary}"
+                    export POKECON_BUILD_UV_VERSION="${portableUvVersion}"
+                    unset POKECON_BUILD_PYTHON
+                    unset POKECON_RESOURCE_PROVENANCE
+                    ${prepareTauriCargoInvocation}
+                    (
+                      cd "${cargoInvocationRoot}"
+                      ${assertNoCargoConfigAncestors}
+                      "${rustToolchain}/bin/cargo" build \
+                        --manifest-path "$cargo_source_root/Cargo.toml" \
+                        --locked \
+                        --release \
+                        --package pokecon-worker \
+                        --bin pokecon-worker
+                    )
+                    normalized_bin="$workdir/normalized-bin"
+                    worker="$CARGO_TARGET_DIR/release/pokecon-worker"
+                    normalized_worker="$normalized_bin/pokecon-worker"
+                    mkdir -p "$normalized_bin"
+                    cp -p "$worker" "$normalized_worker"
+                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \
+                      --worker "$normalized_worker" \
+                      --python-root "$release_python" \
+                      --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                      --strip "${pkgs.binutils}/bin/strip" \
+                      --objdump "${pkgs.binutils}/bin/objdump" \
+                      --ephemeral-build-root "$gate_home"
+                    bundle_root="$workdir/bundle-resources"
+                    bundle_config="$workdir/tauri.bundle.json"
+                    if ! stage_report_json="$(
+                      "${pythonEnv}/bin/python" -I "${source}/scripts/release/stage.py" \
+                        --web "${webPackage}" \
+                        --worker "$normalized_worker" \
+                        --uv "${portableUvBinary}" \
+                        --wheelhouse "$release_wheelhouse" \
+                        --python "$release_python" \
+                        --output "$bundle_root" \
+                        --config-output "$bundle_config"
+                    )"; then
+                      echo "release resource staging failed" >&2
+                      exit 2
+                    fi
+                    if ! packaged_resource_digest="$(
+                      "${pythonEnv}/bin/python" -I -S -c '
+                    import json
+                    import re
+                    import sys
+
+                    def reject_duplicate_keys(pairs):
+                        report = {}
+                        for key, value in pairs:
+                            if key in report:
+                                raise ValueError("duplicate release stage report key")
+                            report[key] = value
+                        return report
+
+                    try:
+                        report = json.loads(
+                            sys.argv[1], object_pairs_hook=reject_duplicate_keys
+                        )
+                    except (json.JSONDecodeError, ValueError) as error:
+                        raise SystemExit(
+                            "release stage report is not valid strict JSON"
+                        ) from error
+                    if type(report) is not dict:
+                        raise SystemExit(
+                            "release stage report must be exactly one JSON object"
+                        )
+                    if set(report) != {"content_sha256", "file_count", "platform"}:
+                        raise SystemExit("release stage report has unexpected keys")
+                    platform = report["platform"]
+                    if type(platform) is not str or platform != "unix":
+                        raise SystemExit(
+                            "release stage report platform must be exactly unix"
+                        )
+                    content_sha256 = report["content_sha256"]
+                    if (
+                        type(content_sha256) is not str
+                        or re.fullmatch(r"[0-9a-f]{64}", content_sha256) is None
+                    ):
+                        raise SystemExit(
+                            "release stage report content_sha256 must be exactly 64 lowercase hexadecimal characters"
+                        )
+                    file_count = report["file_count"]
+                    if type(file_count) is not int or file_count <= 0:
+                        raise SystemExit(
+                            "release stage report file_count must be a positive integer"
+                        )
+                    print(content_sha256)
+                    ' "$stage_report_json"
+                    )"; then
+                      echo "release stage report validation failed" >&2
+                      exit 2
+                    fi
+                    ${prepareTauriCargoInvocation}
+                    (
+                      cd "${cargoInvocationRoot}"
+                      ${assertNoCargoConfigAncestors}
+                      export POKECON_RESOURCE_PROVENANCE="packaged:$packaged_resource_digest"
+                      "${rustToolchain}/bin/cargo" build \
+                        --manifest-path "$cargo_source_root/Cargo.toml" \
+                        --locked \
+                        --release \
+                        --package pokecon \
+                        --bin pokecon \
+                        --features tauri-shell
+                    )
+                    application="$CARGO_TARGET_DIR/release/pokecon"
+                    normalized_application="$normalized_bin/pokecon"
+                    application_backup="$normalized_bin/pokecon.raw"
+                    cp -p "$application" "$application_backup"
+                    cp -p "$application" "$normalized_application"
+                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \
+                      --application "$normalized_application" \
+                      --patchelf "${pkgs.patchelf}/bin/patchelf" \
+                      --strip "${pkgs.binutils}/bin/strip" \
+                      --objdump "${pkgs.binutils}/bin/objdump" \
+                      --ephemeral-build-root "$gate_home"
+                    if ! bundle_config_json="$(
+                      "${pythonEnv}/bin/python" -I -S -c '
+                    import json
+                    import os
+                    import sys
+                    from pathlib import Path
+
+                    config_path = Path(sys.argv[1])
+                    resource_root = Path(sys.argv[2]).resolve(strict=True)
+                    frontend_root = Path(sys.argv[3]).resolve(strict=True)
+                    if config_path.is_symlink() or not config_path.is_file():
+                        raise SystemExit("generated Tauri bundle config is not a real regular file")
+                    if not frontend_root.is_dir() or not (frontend_root / "index.html").is_file():
+                        raise SystemExit("canonical Tauri frontend distribution is incomplete")
+                    expected_generated = {
+                        "bundle": {
+                            "resources": {f"{resource_root}{os.sep}": ""},
+                        },
+                    }
+                    with config_path.open(encoding="utf-8") as stream:
+                        actual = json.load(stream)
+                    if actual != expected_generated:
+                        raise SystemExit(
+                            "generated Tauri bundle config contains unexpected settings"
+                        )
+                    expected = {
+                        "build": {"frontendDist": str(frontend_root)},
+                        **expected_generated,
+                    }
+                    print(json.dumps(expected, sort_keys=True, separators=(",", ":")))
+                    ' "$bundle_config" "$bundle_root" "${webPackage}"
+                    )"; then
+                      echo "generated Tauri bundle config validation failed" >&2
+                      exit 2
+                    fi
+                    restore_release_application() {
+                      cp -p "$application_backup" "$application"
+                    }
+                    cleanup_tauri_build() {
+                      gate_status=$?
+                      trap - EXIT
+                      tauri_cleanup_status=0
+                      if ! restore_release_application; then
+                        echo "failed to restore the release application during cleanup" >&2
+                        tauri_cleanup_status=1
+                      fi
+                      if [ -n "$workdir" ] \
+                        && ! "${pkgs.coreutils}/bin/rm" -rf -- "$workdir"; then
+                        echo "failed to remove the Tauri build worktree: $workdir" >&2
+                        tauri_cleanup_status=1
+                      fi
+                      if [ -n "$gate_home" ] \
+                        && ! "${pkgs.coreutils}/bin/rm" -rf -- "$gate_home"; then
+                        echo "failed to remove the Tauri build gate home: $gate_home" >&2
+                        tauri_cleanup_status=1
+                      fi
+                      if [ "$gate_status" -eq 0 ] && [ "$tauri_cleanup_status" -ne 0 ]; then
+                        gate_status=$tauri_cleanup_status
+                      fi
+                      if [ "$gate_status" -eq 0 ] \
+                        && ! artifact_parent_identity_is_current; then
+                        echo "tauri-build artifact parent changed before successful cleanup finalization" >&2
+                        gate_status=1
+                      fi
+                      if [ "$gate_status" -ne 0 ]; then
+                        pokecon_cleanup_task_artifacts || tauri_cleanup_status=1
+                      else
+                        artifact_replaced=0
+                        artifact_committed_identity=
+                      fi
+                      exit "$gate_status"
+                    }
+                    trap cleanup_tauri_build EXIT
+                    cp -p "$normalized_application" "$application"
+                    ${prepareTauriCargoInvocation}
+                    (
+                      export PATH="${rustToolchain}/bin:$PATH"
+                      cd "$cargo_source_root/rust/pokecon"
+                      "${pkgs.cargo-tauri}/bin/cargo-tauri" tauri bundle \
+                        --ci \
+                        --config "$bundle_config_json" \
+                        "''${bundle_args[@]}"
+                    )
+                    restore_release_application
+                    validate_private_tauri_inventory() {
+                      local inventory_label inventory_path inventory_resolved
+                      inventory_path=$1
+                      inventory_label=$2
+                      case "$inventory_path" in
+                        "$gate_home"/*) ;;
+                        *)
+                          echo "$inventory_label escaped the private gate home" >&2
+                          return 1
+                          ;;
+                      esac
+                      if ! inventory_resolved="$(
+                        "${pkgs.coreutils}/bin/readlink" -f -- "$inventory_path"
+                      )"; then
+                        echo "$inventory_label cannot be resolved" >&2
+                        return 1
+                      fi
+                      if [ -L "$inventory_path" ] || [ ! -f "$inventory_path" ] \
+                        || [ "$inventory_resolved" != "$inventory_path" ] \
+                        || [ "$("${pkgs.coreutils}/bin/stat" -c %a -- "$inventory_path")" != 600 ]; then
+                        echo "$inventory_label is not a private real inventory file" >&2
+                        return 1
+                      fi
+                      return 0
+                    }
+                    remove_private_tauri_inventory() {
+                      local inventory_label inventory_path
+                      inventory_path=$1
+                      inventory_label=$2
+                      if ! validate_private_tauri_inventory "$inventory_path" "$inventory_label"; then
+                        return 1
+                      fi
+                      if ! "${pkgs.coreutils}/bin/rm" -f -- "$inventory_path"; then
+                        echo "failed to remove $inventory_label" >&2
+                        return 1
+                      fi
+                      if [ -e "$inventory_path" ] || [ -L "$inventory_path" ]; then
+                        echo "$inventory_label remains after removal" >&2
+                        return 1
+                      fi
+                      return 0
+                    }
+
+                    bundle_deb_inventory=
+                    if ! bundle_deb_inventory="$(
+                      "${pkgs.coreutils}/bin/mktemp" \
+                        --tmpdir="$gate_home" pokecon-tauri-bundle-debs.XXXXXXXX.nul
+                    )"; then
+                      echo "failed to create the private Tauri bundle inventory" >&2
+                      exit 2
+                    fi
+                    validate_private_tauri_inventory \
+                      "$bundle_deb_inventory" "Tauri bundle inventory"
+                    if ! "${pkgs.findutils}/bin/find" -P \
+                      "$CARGO_TARGET_DIR/release/bundle" \
+                      -name '*.deb' -print0 > "$bundle_deb_inventory"; then
+                      echo "tauri-build failed to inventory Debian bundle outputs" >&2
+                      exit 2
+                    fi
+                    bundle_deb_entries=()
+                    while IFS= read -r -d "" package; do
+                      bundle_deb_entries+=("$package")
+                    done < "$bundle_deb_inventory"
+                    remove_private_tauri_inventory \
+                      "$bundle_deb_inventory" "Tauri bundle inventory"
+                    bundle_deb_inventory=
+                    if [ "''${#bundle_deb_entries[@]}" -ne 1 ]; then
+                      echo "tauri-build expected exactly one Debian package, found ''${#bundle_deb_entries[@]}" >&2
+                      exit 2
+                    fi
+                    package="''${bundle_deb_entries[0]}"
+                    if [ -L "$package" ] || [ ! -f "$package" ]; then
+                      echo "tauri-build Debian package is not a real regular file: $package" >&2
+                      exit 2
+                    fi
+                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_debian_package.py" \
+                      --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
+                      "$package"
+                    if ! artifact_parent_identity_is_current \
+                      || [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ] \
+                      || [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ] \
+                      || [ -e "$artifact_legacy_lock" ] || [ -L "$artifact_legacy_lock" ]; then
+                      echo "tauri-build artifact publication boundary changed during the build" >&2
+                      exit 2
+                    fi
+                    "${pkgs.coreutils}/bin/mkdir" -- "$artifact_publish_dir"
+                    if [ -L "$artifact_publish_dir" ] || [ ! -d "$artifact_publish_dir" ] \
+                      || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$artifact_publish_dir")" \
+                        != "$artifact_publish_dir_expected" ]; then
+                      echo "tauri-build fixed artifact publication directory is invalid" >&2
+                      exit 2
+                    fi
+                    artifact_publish_identity="$(
+                      "${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_publish_dir"
+                    )"
+                    package_name="''${package##*/}"
+                    "${pkgs.coreutils}/bin/cp" -p -- \
+                      "$package" "$artifact_publish_dir/$package_name"
+                    artifact_publish_inventory=
+                    if ! artifact_publish_inventory="$(
+                      "${pkgs.coreutils}/bin/mktemp" \
+                        --tmpdir="$gate_home" pokecon-tauri-publish.XXXXXXXX.nul
+                    )"; then
+                      echo "failed to create the private Tauri publication inventory" >&2
+                      exit 2
+                    fi
+                    validate_private_tauri_inventory \
+                      "$artifact_publish_inventory" "Tauri publication inventory"
+                    if ! "${pkgs.findutils}/bin/find" -P "$artifact_publish_dir" \
+                      -mindepth 1 -print0 > "$artifact_publish_inventory"; then
+                      echo "tauri-build failed to inventory fixed publication staging" >&2
+                      exit 2
+                    fi
+                    artifact_publish_entries=()
+                    while IFS= read -r -d "" published_entry; do
+                      artifact_publish_entries+=("$published_entry")
+                    done < "$artifact_publish_inventory"
+                    remove_private_tauri_inventory \
+                      "$artifact_publish_inventory" "Tauri publication inventory"
+                    artifact_publish_inventory=
+                    if [ "''${#artifact_publish_entries[@]}" -ne 1 ] \
+                      || [ "''${artifact_publish_entries[0]}" != "$artifact_publish_dir/$package_name" ] \
+                      || [ -L "''${artifact_publish_entries[0]}" ] \
+                      || [ ! -f "''${artifact_publish_entries[0]}" ] \
+                      || ! "${pkgs.diffutils}/bin/cmp" -s -- \
+                        "$package" "''${artifact_publish_entries[0]}"; then
+                      echo "tauri-build artifact publication inventory is not exact" >&2
+                      exit 2
+                    fi
+                    if ! artifact_parent_identity_is_current \
+                      || [ -e "$artifact_dir" ] || [ -L "$artifact_dir" ] \
+                      || [ -L "$artifact_publish_dir" ] || [ ! -d "$artifact_publish_dir" ] \
+                      || [ "$("${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_publish_dir")" \
+                        != "$artifact_publish_identity" ]; then
+                      echo "tauri-build fixed publication staging changed before commit" >&2
+                      exit 2
+                    fi
+                    artifact_committed_identity=$artifact_publish_identity
+                    artifact_replaced=1
+                    "${pkgs.coreutils}/bin/mv" -T -- \
+                      "$artifact_publish_dir" "$artifact_dir"
+                    if [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ] \
+                      || [ -L "$artifact_dir" ] || [ ! -d "$artifact_dir" ] \
+                      || [ "$("${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_dir")" \
+                        != "$artifact_committed_identity" ]; then
+                      echo "tauri-build committed artifact identity differs from owned staging" >&2
+                      exit 2
+                    fi
+                    artifact_publish_identity=
+                    artifact_published_inventory=
+                    if ! artifact_published_inventory="$(
+                      "${pkgs.coreutils}/bin/mktemp" \
+                        --tmpdir="$gate_home" pokecon-tauri-published.XXXXXXXX.nul
+                    )"; then
+                      echo "failed to create the private Tauri published inventory" >&2
+                      exit 2
+                    fi
+                    validate_private_tauri_inventory \
+                      "$artifact_published_inventory" "Tauri published inventory"
+                    if ! "${pkgs.findutils}/bin/find" -P "$artifact_dir" \
+                      -mindepth 1 -print0 > "$artifact_published_inventory"; then
+                      echo "tauri-build failed to inventory the committed canonical artifact" >&2
+                      exit 2
+                    fi
+                    artifact_published_entries=()
+                    while IFS= read -r -d "" published_entry; do
+                      artifact_published_entries+=("$published_entry")
+                    done < "$artifact_published_inventory"
+                    remove_private_tauri_inventory \
+                      "$artifact_published_inventory" "Tauri published inventory"
+                    artifact_published_inventory=
+                    if [ -L "$artifact_dir" ] || [ ! -d "$artifact_dir" ] \
+                      || [ "$("${pkgs.coreutils}/bin/readlink" -f -- "$artifact_dir")" \
+                        != "$artifact_dir_expected" ] \
+                      || [ "$("${pkgs.coreutils}/bin/stat" -Lc '%d:%i' -- "$artifact_dir")" \
+                        != "$artifact_committed_identity" ] \
+                      || [ "''${#artifact_published_entries[@]}" -ne 1 ] \
+                      || [ "''${artifact_published_entries[0]}" != "$artifact_dir/$package_name" ] \
+                      || [ -L "''${artifact_published_entries[0]}" ] \
+                      || [ ! -f "''${artifact_published_entries[0]}" ] \
+                      || ! "${pkgs.diffutils}/bin/cmp" -s -- \
+                        "$package" "''${artifact_published_entries[0]}"; then
+                      echo "tauri-build published artifact inventory is not canonical" >&2
+                      exit 2
+                    fi
+                    if ! artifact_parent_identity_is_current; then
+                      echo "tauri-build artifact parent changed before success cleanup" >&2
+                      exit 2
+                    fi
+                    if [ -e "$artifact_backup_dir" ] || [ -L "$artifact_backup_dir" ]; then
+                      remove_saved_artifact_directory \
+                        "retained previous artifact" \
+                        "$artifact_backup_dir" \
+                        "$artifact_backup_identity"
+                      artifact_backup_identity=
+                    fi
+                    if ! artifact_parent_identity_is_current \
+                      || [ -e "$artifact_backup_dir" ] || [ -L "$artifact_backup_dir" ] \
+                      || [ -e "$artifact_publish_dir" ] || [ -L "$artifact_publish_dir" ] \
+                      || [ -e "$artifact_legacy_lock" ] || [ -L "$artifact_legacy_lock" ]; then
+                      echo "tauri-build success left transient artifact state in dist" >&2
+                      exit 2
+                    fi
+                  '';
+                };
 
             package-smoke = mkTask {
               name = "package-smoke";
@@ -2811,7 +4911,7 @@
                 pkgs.binutils
                 pkgs.dpkg
                 pkgs.patchelf
-                linuxReleasePortaudio
+                linuxReleaseRuntimeLibraries
               ];
               text = ''
                 ${setupSourceGateEnvironment}
@@ -2821,7 +4921,7 @@
                   --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
                   --patchelf "${pkgs.patchelf}/bin/patchelf" \
                   --objdump "${pkgs.binutils}/bin/objdump" \
-                  --runtime-library-path "${linuxReleasePortaudio}/lib" \
+                  --runtime-library-path "${linuxReleaseRuntimeLibraries}/lib" \
                   "$@"
               '';
             };
@@ -2876,7 +4976,7 @@
                 ${setupWorkdir}
                 ${desktopEnvironment}
                 cd rust/pokecon
-                cargo tauri build --debug --no-bundle --ci -- --locked
+                POKECON_RESOURCE_PROVENANCE=development cargo tauri build --debug --no-bundle --ci -- --locked
               '';
             };
 
@@ -3043,6 +5143,7 @@
                 bun
                 pkgs.check-jsonschema
                 pkgs.diffutils
+                pkgs.jq
                 pkgs.markdownlint-cli
                 pkgs.ripgrep
                 pkgs.shellcheck
@@ -3052,10 +5153,9 @@
               ];
               text = ''
                 if [ "''${1:-}" = "--help" ]; then
-                  echo "Run all currently applicable PokeCon verification gates"
+                  echo "Run aggregate source verification gates; packaged CLI and UI use dedicated apps"
                   exit 0
                 fi
-                "${cliHelpCheck.program}"
                 ${setupWorkdir}
                 ${desktopEnvironment}
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
@@ -3076,9 +5176,12 @@
                 bun run --cwd web --bun svelte-check
                 bun run --cwd web --bun test
                 bun run --cwd web --bun build
-                cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                cargo test --locked --workspace --all-features
-                cargo build --locked --workspace --all-features
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                ${lib.optionalString pkgs.stdenv.isLinux reclaimPerRunCargoTarget}
+                ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
+                POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
+                POKECON_RESOURCE_PROVENANCE=development \
+                cargo build --locked --workspace --all-features --jobs 1
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
                   --check \
@@ -3088,7 +5191,13 @@
                 ruff check --config ruff.toml --no-cache python scripts tests
                 ruff format --config ruff.toml --no-cache --check python scripts tests
                 bun --bun "${basedpyrightCli}"
-                python -m pytest -p no:cacheprovider tests -v --tb=short
+                python -m pytest \
+                  -p no:cacheprovider \
+                  -m "not production_routing_mutation" \
+                  tests \
+                  -v \
+                  --tb=short
+                "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit"
                 shellcheck scripts/*.sh scripts/*/*.sh
                 bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
                 bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt

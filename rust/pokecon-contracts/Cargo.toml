@@ -9,6 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 description = "Compatibility facade for canonical contracts owned by the pokecon crate"
 publish = false
+build = false
 
 [dependencies]
 serde.workspace = true

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import stat
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -41,6 +42,17 @@ def run(arguments: Sequence[str | Path], *, capture: bool = False) -> str:
         text=True,
     )
     return completed.stdout.strip() if capture else ""
+
+
+def _is_real_regular_file(path: Path) -> bool:
+    try:
+        return (
+            not path.is_symlink()
+            and not path.is_junction()
+            and stat.S_ISREG(path.stat(follow_symlinks=False).st_mode)
+        )
+    except OSError:
+        return False
 
 
 def normalize_ephemeral_build_root(binary: Path, build_root: Path) -> int:
@@ -134,44 +146,63 @@ def normalize_binary(
 
 
 def normalize_release(
-    application: Path,
-    worker: Path,
-    python_root: Path,
+    application: Path | None,
+    worker: Path | None,
+    python_root: Path | None,
     patchelf: Path,
     strip: Path,
     objdump: Path,
     build_root: Path,
 ) -> list[dict[str, object]]:
-    python_library = python_root / "lib/libpython3.14.so.1.0"
-    if not python_library.is_file():
-        message = f"portable Python shared library is missing: {python_library}"
+    if application is None and worker is None:
+        message = "release normalization requires an application or worker"
         raise ValueError(message)
-    reports = [
-        normalize_binary(application, patchelf, strip, objdump, build_root, rpath=None),
-        normalize_binary(
+    if worker is not None:
+        if python_root is None:
+            message = "portable Python root is required for worker normalization"
+            raise ValueError(message)
+        python_library = python_root / "lib/libpython3.14.so.1.0"
+        if not _is_real_regular_file(python_library):
+            message = f"portable Python shared library is missing: {python_library}"
+            raise ValueError(message)
+
+    reports: list[dict[str, object]] = []
+    if application is not None:
+        reports.append(
+            normalize_binary(
+                application,
+                patchelf,
+                strip,
+                objdump,
+                build_root,
+                rpath=None,
+            )
+        )
+    if worker is not None:
+        worker_report = normalize_binary(
             worker,
             patchelf,
             strip,
             objdump,
             build_root,
             rpath="$ORIGIN/python/lib",
-        ),
-    ]
-    worker_needed = reports[1]["needed"]
-    if (
-        not isinstance(worker_needed, list)
-        or "libpython3.14.so.1.0" not in worker_needed
-    ):
-        message = "managed worker is not linked to the pinned CPython 3.14 runtime"
-        raise ValueError(message)
+        )
+        worker_needed = worker_report["needed"]
+        if (
+            not isinstance(worker_needed, list)
+            or "libpython3.14.so.1.0" not in worker_needed
+        ):
+            message = "managed worker is not linked to the pinned CPython 3.14 runtime"
+            raise ValueError(message)
+        reports.append(worker_report)
     return reports
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--application", type=Path, required=True)
-    parser.add_argument("--worker", type=Path, required=True)
-    parser.add_argument("--python-root", type=Path, required=True)
+    parser.add_argument("--application", type=Path)
+    parser.add_argument("--worker", type=Path)
+    parser.add_argument("--python-root", type=Path)
     parser.add_argument("--patchelf", type=Path, required=True)
     parser.add_argument("--strip", type=Path, required=True)
     parser.add_argument("--objdump", type=Path, required=True)

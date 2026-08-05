@@ -2,7 +2,7 @@ use axum::Router;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{MethodFilter, on, post};
 
 use crate::server::api::{
     CameraDevice, EmptyRequest, OperationResult, SavedScreenshot, ScreenshotRequest,
@@ -10,12 +10,20 @@ use crate::server::api::{
 };
 use crate::server::backend::ScreenshotOutput;
 
-use super::{RestError, RestResult, RestState, download_response, json_request};
+use super::{
+    RestError, RestResult, RestState, download_response, json_request, method_not_allowed,
+};
 
 pub(super) fn router() -> Router<RestState> {
     Router::new()
-        .route("/api/devices/cameras", get(cameras))
-        .route("/api/devices/serial-ports", get(serial_ports))
+        .route(
+            "/api/devices/cameras",
+            on(MethodFilter::GET, cameras).on(MethodFilter::HEAD, method_not_allowed),
+        )
+        .route(
+            "/api/devices/serial-ports",
+            on(MethodFilter::GET, serial_ports).on(MethodFilter::HEAD, method_not_allowed),
+        )
         .route("/api/serial/control", post(control_serial))
         .route("/api/camera/retry", post(retry_camera))
         .route("/api/camera/screenshot", post(screenshot))

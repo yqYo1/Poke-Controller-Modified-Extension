@@ -10,9 +10,10 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::extract::ws::rejection::WebSocketUpgradeRejection;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, close_code};
-use axum::http::StatusCode;
+use axum::http::header::ALLOW;
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::any;
+use axum::routing::{MethodFilter, on};
 use axum::{Json, Router};
 use futures_util::{Sink, SinkExt as _, Stream, StreamExt as _};
 use thiserror::Error;
@@ -336,9 +337,26 @@ impl WebSocketTransport {
 
     pub fn router(&self) -> Router {
         Router::new()
-            .route("/ws", any(websocket_upgrade))
+            .route(
+                "/ws",
+                on(MethodFilter::GET, websocket_upgrade)
+                    .on(MethodFilter::HEAD, websocket_method_not_allowed)
+                    .fallback(websocket_method_not_allowed),
+            )
             .with_state(self.state.clone())
     }
+}
+
+async fn websocket_method_not_allowed() -> Response {
+    let mut response = http_error(
+        StatusCode::METHOD_NOT_ALLOWED,
+        ApiErrorCode::MethodNotAllowed,
+        "HTTP method is not allowed for this resource",
+    );
+    response
+        .headers_mut()
+        .insert(ALLOW, HeaderValue::from_static("GET"));
+    response
 }
 
 async fn websocket_upgrade(
@@ -927,7 +945,8 @@ mod tests {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use axum::http::StatusCode;
+    use axum::http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE};
+    use axum::http::{Method, StatusCode};
     use futures_util::{SinkExt as _, StreamExt as _};
     use pokecon_camera::{
         BgrFrame, CaptureResolution, LatestFrameSource, ScreenshotRuntimeSettings,
@@ -1688,6 +1707,86 @@ mod tests {
             .expect("recovered client close");
         backend.wait_for_disconnect().await;
         stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    async fn websocket_route_accepts_only_get_from_the_standard_method_matrix() {
+        use tower::ServiceExt as _;
+
+        let transport = WebSocketTransport::new(Arc::new(TestBackend::new()), test_config())
+            .expect("transport");
+        let app = transport.router();
+        let mut advertised_count = 0;
+        let mut rejected_count = 0;
+        for method in [
+            Method::GET,
+            Method::HEAD,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::TRACE,
+            Method::CONNECT,
+        ] {
+            let method_name = method.as_str().to_owned();
+            let response = app
+                .clone()
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method(method)
+                        .uri("/ws")
+                        .body(axum::body::Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            let expected_status = if method_name == "GET" {
+                advertised_count += 1;
+                StatusCode::BAD_REQUEST
+            } else {
+                rejected_count += 1;
+                StatusCode::METHOD_NOT_ALLOWED
+            };
+            assert_eq!(response.status(), expected_status, "{method_name} /ws");
+            assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
+            if method_name != "GET" {
+                assert_eq!(
+                    response.headers()[ALLOW],
+                    "GET",
+                    "Allow for {method_name} /ws"
+                );
+            }
+            if method_name == "HEAD" {
+                assert!(
+                    response.headers()[CONTENT_LENGTH]
+                        .to_str()
+                        .expect("content length")
+                        .parse::<usize>()
+                        .expect("numeric content length")
+                        > 0
+                );
+                assert!(
+                    axum::body::to_bytes(response.into_body(), 1024)
+                        .await
+                        .expect("HEAD body")
+                        .is_empty()
+                );
+            } else {
+                let bytes = axum::body::to_bytes(response.into_body(), 1024)
+                    .await
+                    .expect("body");
+                let error: ErrorEnvelope = serde_json::from_slice(&bytes).expect("error envelope");
+                let expected_code = if method_name == "GET" {
+                    ApiErrorCode::InvalidRequest
+                } else {
+                    ApiErrorCode::MethodNotAllowed
+                };
+                assert_eq!(error.error.code, expected_code, "{method_name} /ws");
+            }
+        }
+        assert_eq!(advertised_count, 1);
+        assert_eq!(rejected_count, 8);
     }
 
     #[tokio::test]

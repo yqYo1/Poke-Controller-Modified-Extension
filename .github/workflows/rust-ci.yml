@@ -4,9 +4,12 @@ on:
     branches: [main, master, refactor/rust-core]
     paths:
       - 'rust/**'
+      - 'web/**'
       - 'compatibility/**'
+      - 'scripts/integration/**'
       - 'scripts/compatibility/**'
       - 'scripts/quality/**'
+      - 'tests/fixtures/cli-help/**'
       - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -18,9 +21,12 @@ on:
     branches: [main, master]
     paths:
       - 'rust/**'
+      - 'web/**'
       - 'compatibility/**'
+      - 'scripts/integration/**'
       - 'scripts/compatibility/**'
       - 'scripts/quality/**'
+      - 'tests/fixtures/cli-help/**'
       - 'SPECIFICATION.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -54,6 +60,10 @@ jobs:
       - name: Verify packaged worker roles
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#worker-package-check
+      - name: Verify immutable Web and Tauri modes
+        run: nix run .#ui-package-check
+      - name: Verify packaged CLI help
+        run: nix run .#cli-help-check
       - name: Execute immutable compatibility corpus
         if: steps.rust-check.outputs.applicable == 'true'
         run: nix run .#compatibility
@@ -70,4 +80,6 @@ jobs:
         with:
           toolchain: '1.95.0'
       - name: Check all Windows targets and features
+        env:
+          POKECON_RESOURCE_PROVENANCE: development
         run: cargo check --locked --workspace --all-targets --all-features

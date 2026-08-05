@@ -25,6 +25,7 @@ MAXIMUM_INSTALLED_BYTES = 512 * 1024 * 1024
 GLIBC_PATTERN = re.compile(r"GLIBC_(\d+)\.(\d+)")
 ASSET_PATTERN = re.compile(r"[\"'(](/_app/[^\"')]+)")
 REQUIRED_DEPENDENCIES = {
+    "libayatana-appindicator3-1",
     "libgl1",
     "libglib2.0-0",
     "libgtk-3-0",
@@ -32,6 +33,7 @@ REQUIRED_DEPENDENCIES = {
     "libsm6",
     "libudev1",
     "libwebkit2gtk-4.1-0",
+    "libxcb1",
     "libxext6",
     "libxrender1",
 }

@@ -33,10 +33,12 @@
           "libgl1",
           "libglib2.0-0",
           "libgtk-3-0",
+          "libayatana-appindicator3-1",
           "libportaudio2",
           "libsm6",
           "libudev1",
           "libwebkit2gtk-4.1-0",
+          "libxcb1",
           "libxext6",
           "libxrender1"
         ],

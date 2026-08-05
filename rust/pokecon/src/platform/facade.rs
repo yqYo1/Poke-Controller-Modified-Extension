@@ -1,1 +1,1 @@
-pub(crate) use pokecon_core::platform::PlatformAdapter;
+pub(crate) use pokecon_core::platform::PlatformKind;

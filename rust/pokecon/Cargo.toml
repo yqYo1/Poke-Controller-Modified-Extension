@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "pokecon"
@@ -23,7 +24,12 @@ required-features = ["contract-generator"]
 [features]
 default = []
 contract-generator = []
-tauri-shell = ["dep:tauri", "pokecon-desktop/tauri-shell"]
+tauri-shell = [
+  "dep:nix",
+  "dep:tauri",
+  "dep:winapi-util",
+  "pokecon-desktop/tauri-shell",
+]
 
 [dependencies]
 async-trait.workspace = true
@@ -46,6 +52,8 @@ rumqttc.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tauri = { workspace = true, optional = true }
 tokio.workspace = true
@@ -58,11 +66,15 @@ tauri-build = { version = "2.5.4", features = [] }
 
 [dev-dependencies]
 regex.workspace = true
-sha2.workspace = true
-tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["fs"], optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi-util = { version = "0.1.11", optional = true }
 
 [lints]
 workspace = true

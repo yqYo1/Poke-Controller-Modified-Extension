@@ -3,7 +3,9 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use pokecon_contracts::model::{DefaultValue, Scope, Setting, ValueSchema, WireEncoding};
+use pokecon_contracts::model::{
+    DefaultValue, Mutability, Scope, Setting, ValueSchema, WireEncoding,
+};
 use pokecon_contracts::{ContractError, SettingsRegistry, settings_registry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -298,6 +300,74 @@ pub struct LoadedSettings {
 }
 
 impl LoadedSettings {
+    /// Retargets defaults derived from the packaged resource root without
+    /// rereading any settings layer.
+    ///
+    /// This preserves the already-resolved startup snapshot while allowing a
+    /// packaged application to replace its executable-adjacent discovery path
+    /// with a verified private resource snapshot after primary-instance
+    /// election. Explicit TOML, environment, dynamic, and CLI path values are
+    /// left unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a canonical resource-path default is missing or no
+    /// longer satisfies its declared value schema.
+    pub fn with_resource_root(mut self, resource_root: PathBuf) -> Result<Self, PipelineError> {
+        self.recipe.request.resource_root = resource_root;
+        for setting in &self.recipe.registry.settings {
+            if !matches!(&setting.default, DefaultValue::ResourcePath { .. }) {
+                continue;
+            }
+            let resolved = self
+                .settings
+                .values
+                .get_mut(&setting.id)
+                .ok_or_else(|| PipelineError::MissingCanonicalSetting(setting.id.clone()))?;
+            if resolved.source == SettingSource::Default {
+                resolved.value = default_value(
+                    setting,
+                    Some(&self.roots),
+                    &self.recipe.request.resource_root,
+                    SettingSource::Default,
+                )?;
+            }
+        }
+        validate_snapshot(&self.settings.values)?;
+        Ok(self)
+    }
+
+    /// Resolves one process-start boolean after its deferred CLI assignment.
+    ///
+    /// This accessor is restricted to startup-only settings which cannot be
+    /// assigned by dynamic configuration, so the returned value is final
+    /// before the dynamic worker starts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the setting is absent, is not immutable before
+    /// dynamic configuration, has an invalid CLI value, or is not a boolean.
+    pub fn pre_dynamic_final_boolean_with_cli(&self, id: &str) -> Result<bool, PipelineError> {
+        let setting = setting_by_id(&self.recipe.registry, id)?;
+        if !pre_dynamic_final_selector(setting) {
+            return Err(PipelineError::NotPreDynamicFinal(id.to_owned()));
+        }
+        let Some(raw) = self.recipe.parsed_cli.assignments.get(id) else {
+            return self.settings.boolean(id);
+        };
+        let value = parse_wire_value(setting, raw, SettingSource::CommandLine)?;
+        let value = normalize_value(
+            setting,
+            value,
+            SettingSource::CommandLine,
+            &self.roots,
+            &self.recipe.request,
+        )?;
+        value
+            .as_bool()
+            .ok_or_else(|| PipelineError::TypedLookup(id.to_owned()))
+    }
+
     /// Applies post-startup dynamic assignments after the completed CLI layer
     /// without persisting them.
     ///
@@ -1056,6 +1126,10 @@ fn bootstrap_selector(setting: &Setting) -> bool {
     setting.scope == Scope::Bootstrap || setting.id == "active_profile"
 }
 
+fn pre_dynamic_final_selector(setting: &Setting) -> bool {
+    setting.mutability == Mutability::StartupOnly && setting.surfaces.dynamic.name.is_none()
+}
+
 fn parse_wire_value(
     setting: &Setting,
     raw: &OsStr,
@@ -1291,6 +1365,8 @@ pub enum PipelineError {
     CrossSetting(String),
     #[error("canonical setting {0} has an unexpected resolved type")]
     TypedLookup(String),
+    #[error("canonical setting {0} is not immutable before dynamic configuration")]
+    NotPreDynamicFinal(String),
     #[error("profile directory does not exist")]
     ProfileNotFound,
     #[error("startup current directory is unavailable: {0}")]
@@ -1517,6 +1593,141 @@ mod tests {
                 .expect("port must exist")
                 .source,
             SettingSource::CommandLine
+        );
+    }
+
+    #[test]
+    fn pre_dynamic_final_boolean_applies_only_its_deferred_cli_value() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let loaded = SettingsPipeline::new(request(
+            &temp,
+            &[
+                "pokecon",
+                "--disable-compositing",
+                "true",
+                "--port",
+                "not-a-number",
+            ],
+            &[("POKECON_DISABLE_COMPOSITING", "false")],
+        ))
+        .load_before_dynamic()
+        .expect("unrelated deferred CLI values must remain unresolved");
+
+        assert!(
+            !loaded
+                .settings
+                .boolean("ui.desktop.disable_compositing")
+                .unwrap()
+        );
+        assert_eq!(
+            loaded
+                .settings
+                .get("ui.desktop.disable_compositing")
+                .expect("compositing setting")
+                .source,
+            SettingSource::Environment
+        );
+        assert!(
+            loaded
+                .pre_dynamic_final_boolean_with_cli("ui.desktop.disable_compositing")
+                .expect("target CLI value must resolve")
+        );
+        assert!(
+            !loaded
+                .settings
+                .boolean("ui.desktop.disable_compositing")
+                .unwrap()
+        );
+        assert!(matches!(
+            loaded.pre_dynamic_final_boolean_with_cli("webrtc.auto_recover"),
+            Err(super::PipelineError::NotPreDynamicFinal(id)) if id == "webrtc.auto_recover"
+        ));
+
+        let mut startup_setting =
+            super::setting_by_id(&loaded.recipe.registry, "ui.desktop.disable_compositing")
+                .expect("canonical startup setting")
+                .clone();
+        assert!(super::pre_dynamic_final_selector(&startup_setting));
+        startup_setting.surfaces.dynamic.name = Some("synthetic.dynamic.name".to_owned());
+        assert!(!super::pre_dynamic_final_selector(&startup_setting));
+    }
+
+    #[test]
+    fn resource_root_retarget_changes_only_default_resource_paths() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let original = SettingsPipeline::new(request(&temp, &["pokecon"], &[]))
+            .load_before_dynamic()
+            .expect("startup settings must resolve");
+        let original_resource_root = temp.path().join("resources");
+        let verified_resource_root = temp.path().join("verified-resources");
+        let original_config_root = original.roots.config.clone();
+        let original_close_behavior = original
+            .settings
+            .string("ui.desktop.close_behavior")
+            .expect("close behavior must exist")
+            .to_owned();
+
+        let retargeted = original
+            .clone()
+            .with_resource_root(verified_resource_root.clone())
+            .expect("verified resource root must retarget defaults");
+
+        assert_eq!(
+            original.settings.string("server.web_dir").unwrap(),
+            original_resource_root.join("web/dist").to_string_lossy()
+        );
+        assert_eq!(
+            retargeted.settings.string("server.web_dir").unwrap(),
+            verified_resource_root.join("web/dist").to_string_lossy()
+        );
+        assert_eq!(
+            retargeted.settings.get("server.web_dir").unwrap().source,
+            SettingSource::Default
+        );
+        assert_eq!(
+            retargeted.recipe.request.resource_root,
+            verified_resource_root
+        );
+        assert_eq!(retargeted.roots.config, original_config_root);
+        assert_eq!(
+            retargeted
+                .settings
+                .string("ui.desktop.close_behavior")
+                .unwrap(),
+            original_close_behavior
+        );
+
+        fs::create_dir_all(temp.path().join("config/pokecon/explicit-web"))
+            .expect("explicit web directory must exist");
+        let overridden = SettingsPipeline::new(request(
+            &temp,
+            &["pokecon"],
+            &[("POKECON_WEB_DIR", "explicit-web")],
+        ))
+        .load_before_dynamic()
+        .expect("overridden startup settings must resolve");
+        let explicit_web_dir = overridden
+            .settings
+            .string("server.web_dir")
+            .expect("web directory must exist")
+            .to_owned();
+        let retargeted_override = overridden
+            .with_resource_root(temp.path().join("other-verified-resources"))
+            .expect("explicit path must survive resource retargeting");
+        assert_eq!(
+            retargeted_override
+                .settings
+                .string("server.web_dir")
+                .unwrap(),
+            explicit_web_dir
+        );
+        assert_eq!(
+            retargeted_override
+                .settings
+                .get("server.web_dir")
+                .unwrap()
+                .source,
+            SettingSource::Environment
         );
     }
 

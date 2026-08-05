@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::rejection::JsonRejection;
-use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::header::{ALLOW, CONTENT_DISPOSITION, CONTENT_TYPE};
+use axum::http::{HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
 use axum::{Json, Router};
@@ -202,12 +202,32 @@ async fn not_found() -> RestError {
     )
 }
 
-async fn method_not_allowed() -> RestError {
-    RestError::new(
+async fn method_not_allowed(uri: Uri) -> Response {
+    let allow = match uri.path() {
+        "/api/settings" => "GET, PATCH",
+        "/api/devices/cameras" | "/api/devices/serial-ports" | "/api/state" => "GET",
+        "/api/camera/retry"
+        | "/api/camera/screenshot"
+        | "/api/commands/control"
+        | "/api/commands/reload"
+        | "/api/dynamic-config/control"
+        | "/api/notifications/test"
+        | "/api/profiles/generate-launcher"
+        | "/api/script-ui/action"
+        | "/api/serial/control"
+        | "/api/update/check" => "POST",
+        _ => return not_found().await.into_response(),
+    };
+    let mut response = RestError::new(
         StatusCode::METHOD_NOT_ALLOWED,
         ApiErrorCode::MethodNotAllowed,
         "HTTP method is not allowed for this resource",
     )
+    .into_response();
+    response
+        .headers_mut()
+        .insert(ALLOW, HeaderValue::from_static(allow));
+    response
 }
 
 #[cfg(test)]
@@ -219,7 +239,10 @@ mod tests {
 
     use async_trait::async_trait;
     use axum::body::{Body, to_bytes};
-    use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE};
+    use axum::http::header::{
+        ACCESS_CONTROL_REQUEST_METHOD, ALLOW, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE,
+        HOST, ORIGIN,
+    };
     use axum::http::{Method, Request, StatusCode};
     use serde_json::{Value, json};
     use tempfile::tempdir;
@@ -478,6 +501,129 @@ mod tests {
         serde_json::from_slice(&bytes).expect("JSON response")
     }
 
+    fn resource_not_found_error() -> Value {
+        json!({
+            "error": {
+                "code": "resource_not_found",
+                "fields": null,
+                "message": "API resource was not found"
+            }
+        })
+    }
+
+    fn request_forbidden_error() -> Value {
+        json!({
+            "error": {
+                "code": "request_forbidden",
+                "fields": null,
+                "message": "request validation failed"
+            }
+        })
+    }
+
+    const STANDARD_METHODS: [&str; 9] = [
+        "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT",
+    ];
+    const REST_METHOD_MATRIX: [(&str, &[&str]); 14] = [
+        ("/api/camera/retry", &["POST"]),
+        ("/api/camera/screenshot", &["POST"]),
+        ("/api/commands/control", &["POST"]),
+        ("/api/commands/reload", &["POST"]),
+        ("/api/devices/cameras", &["GET"]),
+        ("/api/devices/serial-ports", &["GET"]),
+        ("/api/dynamic-config/control", &["POST"]),
+        ("/api/notifications/test", &["POST"]),
+        ("/api/profiles/generate-launcher", &["POST"]),
+        ("/api/script-ui/action", &["POST"]),
+        ("/api/serial/control", &["POST"]),
+        ("/api/settings", &["GET", "PATCH"]),
+        ("/api/state", &["GET"]),
+        ("/api/update/check", &["POST"]),
+    ];
+
+    #[tokio::test]
+    async fn normative_rest_routes_accept_exactly_the_advertised_method_matrix() {
+        let app = router(Arc::new(MockBackend::new()));
+        let mut advertised_count = 0;
+        let mut rejected_count = 0;
+
+        for (path, advertised_methods) in REST_METHOD_MATRIX {
+            for method_name in STANDARD_METHODS {
+                let method = Method::from_bytes(method_name.as_bytes()).expect("standard method");
+                let advertised = advertised_methods.contains(&method_name);
+                let request_body = if advertised && method != Method::GET {
+                    "{"
+                } else {
+                    "{}"
+                };
+                let response = app
+                    .clone()
+                    .oneshot(json_request(method, path, request_body))
+                    .await
+                    .expect("response");
+
+                if advertised {
+                    advertised_count += 1;
+                    let expected_status = if method_name == "GET" {
+                        StatusCode::OK
+                    } else {
+                        StatusCode::BAD_REQUEST
+                    };
+                    assert_eq!(response.status(), expected_status, "{method_name} {path}");
+                    let body = response_json(response).await;
+                    if method_name == "GET" {
+                        assert!(body.get("data").is_some(), "{method_name} {path}");
+                    } else {
+                        assert_eq!(
+                            body.pointer("/error/code"),
+                            Some(&json!("malformed_json")),
+                            "{method_name} {path}"
+                        );
+                    }
+                    continue;
+                }
+
+                rejected_count += 1;
+                assert_eq!(
+                    response.status(),
+                    StatusCode::METHOD_NOT_ALLOWED,
+                    "{method_name} {path}"
+                );
+                assert_eq!(
+                    response.headers()[ALLOW],
+                    advertised_methods.join(", "),
+                    "Allow for {method_name} {path}"
+                );
+                if method_name == "HEAD" {
+                    assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
+                    assert!(
+                        response.headers()[CONTENT_LENGTH]
+                            .to_str()
+                            .expect("content length")
+                            .parse::<usize>()
+                            .expect("numeric content length")
+                            > 0
+                    );
+                    assert!(
+                        to_bytes(response.into_body(), 1024)
+                            .await
+                            .expect("HEAD body")
+                            .is_empty()
+                    );
+                } else {
+                    assert_eq!(
+                        response_json(response).await.pointer("/error/code"),
+                        Some(&json!("method_not_allowed")),
+                        "{method_name} {path}"
+                    );
+                }
+            }
+        }
+
+        assert_eq!(advertised_count, 15);
+        assert_eq!(rejected_count, 111);
+    }
+
     #[tokio::test]
     async fn every_normative_rest_route_is_bound() {
         let app = router(Arc::new(MockBackend::new()));
@@ -589,23 +735,141 @@ mod tests {
     #[tokio::test]
     async fn unknown_resources_and_methods_have_common_errors() {
         let app = router(Arc::new(MockBackend::new()));
-        for (request, status, code) in [
+        let expected_not_found = resource_not_found_error();
+        let expected_not_found_length = serde_json::to_vec(&expected_not_found)
+            .expect("serialize canonical not-found envelope")
+            .len();
+        for method_name in STANDARD_METHODS {
+            let method = Method::from_bytes(method_name.as_bytes()).expect("standard method");
+            let response = app
+                .clone()
+                .oneshot(json_request(method, "/api/unknown", "{}"))
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method_name}");
+            assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
+            if method_name == "HEAD" {
+                assert_eq!(
+                    response.headers()[CONTENT_LENGTH],
+                    expected_not_found_length.to_string(),
+                    "canonical Content-Length for {method_name}"
+                );
+                assert!(
+                    to_bytes(response.into_body(), 1024)
+                        .await
+                        .expect("HEAD body")
+                        .is_empty(),
+                    "{method_name} body"
+                );
+            } else {
+                assert_eq!(
+                    response_json(response).await,
+                    expected_not_found,
+                    "{method_name}"
+                );
+            }
+        }
+
+        let response = app
+            .oneshot(json_request(Method::DELETE, "/api/state", "{}"))
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            response_json(response).await.pointer("/error/code"),
+            Some(&serde_json::to_value(ApiErrorCode::MethodNotAllowed).expect("code"))
+        );
+    }
+
+    async fn assert_public_unknown_non_options_matrix(app: &axum::Router) {
+        let expected_not_found = resource_not_found_error();
+        let expected_not_found_length = serde_json::to_vec(&expected_not_found)
+            .expect("serialize canonical not-found envelope")
+            .len();
+        for method_name in STANDARD_METHODS
+            .into_iter()
+            .filter(|method_name| *method_name != "OPTIONS")
+        {
+            let method = Method::from_bytes(method_name.as_bytes()).expect("standard method");
+            let mut request = Request::builder()
+                .method(method.clone())
+                .uri("/api/unknown")
+                .header(HOST, "localhost:8020")
+                .header(ORIGIN, "http://localhost:8020");
+            if matches!(
+                method,
+                Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+            ) {
+                request = request
+                    .header(CONTENT_TYPE, "application/json")
+                    .header("x-pokecon-request", "1");
+            }
+            let response = app
+                .clone()
+                .oneshot(request.body(Body::from("{}")).expect("request"))
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method_name}");
+            assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
+            if method_name == "HEAD" {
+                assert_eq!(
+                    response.headers()[CONTENT_LENGTH],
+                    expected_not_found_length.to_string(),
+                    "canonical Content-Length for {method_name}"
+                );
+                assert!(
+                    to_bytes(response.into_body(), 1024)
+                        .await
+                        .expect("HEAD body")
+                        .is_empty(),
+                    "{method_name} body"
+                );
+            } else {
+                assert_eq!(
+                    response_json(response).await,
+                    expected_not_found,
+                    "{method_name}"
+                );
+            }
+        }
+    }
+
+    async fn assert_public_unknown_options_security_matrix(app: &axum::Router) {
+        for (request_variant, origin, requested_method) in [
+            ("bare", None, None),
+            ("origin_only", Some("http://localhost:8020"), None),
+            ("requested_method_only", None, Some("GET")),
             (
-                json_request(Method::GET, "/api/unknown", ""),
-                StatusCode::NOT_FOUND,
-                ApiErrorCode::ResourceNotFound,
-            ),
-            (
-                json_request(Method::DELETE, "/api/state", "{}"),
-                StatusCode::METHOD_NOT_ALLOWED,
-                ApiErrorCode::MethodNotAllowed,
+                "complete_unknown_preflight",
+                Some("http://localhost:8020"),
+                Some("GET"),
             ),
         ] {
-            let response = app.clone().oneshot(request).await.expect("response");
-            assert_eq!(response.status(), status);
+            let mut request = Request::builder()
+                .method(Method::OPTIONS)
+                .uri("/api/unknown")
+                .header(HOST, "localhost:8020");
+            if let Some(origin) = origin {
+                request = request.header(ORIGIN, origin);
+            }
+            if let Some(requested_method) = requested_method {
+                request = request.header(ACCESS_CONTROL_REQUEST_METHOD, requested_method);
+            }
+            let response = app
+                .clone()
+                .oneshot(request.body(Body::empty()).expect("request"))
+                .await
+                .expect("response");
             assert_eq!(
-                response_json(response).await.pointer("/error/code"),
-                Some(&serde_json::to_value(code).expect("code"))
+                response.status(),
+                StatusCode::FORBIDDEN,
+                "{request_variant}"
+            );
+            assert_eq!(response.headers()[CONTENT_TYPE], "application/json");
+            assert_eq!(
+                response_json(response).await,
+                request_forbidden_error(),
+                "{request_variant}"
             );
         }
     }
@@ -637,21 +901,27 @@ mod tests {
         assert_eq!(spa.status(), StatusCode::OK);
         assert_eq!(to_bytes(spa.into_body(), 16).await.expect("body"), "spa");
 
-        let api = app
+        let connect = app
+            .clone()
             .oneshot(
                 Request::builder()
-                    .uri("/api/unknown")
+                    .method(Method::CONNECT)
+                    .uri("/api/state")
                     .header("host", "localhost:8020")
                     .body(Body::empty())
                     .expect("request"),
             )
             .await
             .expect("response");
-        assert_eq!(api.status(), StatusCode::NOT_FOUND);
+        assert_eq!(connect.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(connect.headers()[ALLOW], "GET");
         assert_eq!(
-            response_json(api).await.pointer("/error/code"),
-            Some(&json!("resource_not_found"))
+            response_json(connect).await.pointer("/error/code"),
+            Some(&json!("method_not_allowed"))
         );
+
+        assert_public_unknown_non_options_matrix(&app).await;
+        assert_public_unknown_options_security_matrix(&app).await;
     }
 
     #[tokio::test]

@@ -15,12 +15,58 @@ if TYPE_CHECKING:
     from typing import Never
 
 
-IGNORED_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache"}
-IGNORED_SUFFIXES = {".pyc", ".pyo"}
+BYTECODE_SUFFIXES = {".pyc", ".pyo"}
+IGNORED_NAMES = {".pytest_cache", ".ruff_cache"}
 
 
 def invalid_value(message: str) -> Never:
     raise ValueError(message)
+
+
+def _is_real_directory(path: Path) -> bool:
+    try:
+        return (
+            not path.is_symlink()
+            and not path.is_junction()
+            and stat.S_ISDIR(path.stat(follow_symlinks=False).st_mode)
+        )
+    except OSError:
+        return False
+
+
+def reject_python_bytecode(root: Path) -> None:
+    """Reject staged Python bytecode without traversing redirected paths."""
+    if not _is_real_directory(root):
+        invalid_value(
+            f"Python distribution is redirected or not one real directory: {root}"
+        )
+
+    pending_directories: list[Path] = [root]
+    while pending_directories:
+        directory = pending_directories.pop()
+        if not _is_real_directory(directory):
+            invalid_value(f"Python distribution directory is redirected: {directory}")
+        try:
+            entries = tuple(directory.iterdir())
+        except OSError as error:
+            message = f"Python distribution directory cannot be inspected: {directory}"
+            raise ValueError(message) from error
+        for entry in entries:
+            try:
+                redirected = entry.is_symlink() or entry.is_junction()
+                entry_mode = entry.stat(follow_symlinks=False).st_mode
+            except OSError as error:
+                message = f"Python distribution entry cannot be inspected: {entry}"
+                raise ValueError(message) from error
+            if (
+                entry.name == "__pycache__"
+                or entry.suffix.casefold() in BYTECODE_SUFFIXES
+            ):
+                invalid_value(
+                    f"Python distribution contains bytecode artifact: {entry}"
+                )
+            if not redirected and stat.S_ISDIR(entry_mode):
+                pending_directories.append(entry)
 
 
 def normalized_copy(source: str, destination: str) -> str:
@@ -38,8 +84,8 @@ def ignore_entries(_directory: str, names: list[str]) -> set[str]:
         name
         for name in names
         if name in IGNORED_NAMES
-        or Path(name).suffix.casefold() in IGNORED_SUFFIXES
         or Path(_directory, name).is_symlink()
+        or Path(_directory, name).is_junction()
     }
 
 
@@ -76,16 +122,22 @@ def sha256_file(path: Path) -> str:
 
 
 def resource_inventory(root: Path) -> list[dict[str, object]]:
+    emitted_files: list[tuple[str, Path]] = []
+    for candidate in root.rglob("*"):
+        if not candidate.is_file():
+            continue
+        relative = candidate.relative_to(root).as_posix()
+        if relative == "resource-manifest.json":
+            continue
+        emitted_files.append((relative, candidate))
+    emitted_files.sort(key=lambda item: item[0])
     return [
         {
-            "path": path.relative_to(root).as_posix(),
+            "path": relative,
             "sha256": sha256_file(path),
             "size": path.stat().st_size,
         }
-        for path in sorted(
-            candidate for candidate in root.rglob("*") if candidate.is_file()
-        )
-        if path.name != "resource-manifest.json"
+        for relative, path in emitted_files
     ]
 
 
@@ -144,8 +196,9 @@ def stage_resources(
     require_file(wheelhouse / "wheelhouse-manifest.json", "offline wheelhouse manifest")
     require_file(wheelhouse / "requirements.lock", "offline requirements lock")
     require_directory(python, "Python distribution")
+    reject_python_bytecode(python)
     windows = worker.suffix.casefold() == ".exe"
-    python_executable(python, windows)
+    selected_python = python_executable(python, windows)
     if output.exists():
         invalid_value(f"resource output already exists: {output}")
 
@@ -157,11 +210,16 @@ def stage_resources(
     copy_executable(uv, output / "uv" / uv_name)
     copy_tree(wheelhouse, output / "python-wheels")
     copy_tree(python, output / "python")
+    canonical_python = (
+        output / "python/python.exe" if windows else output / "python/bin/python3.14"
+    )
+    copy_executable(selected_python, canonical_python)
     if windows:
         for pattern in ("python*.dll", "vcruntime*.dll"):
             for library in sorted(python.glob(pattern)):
                 if library.is_file():
                     normalized_copy(str(library), str(output / library.name))
+    reject_python_bytecode(output / "python")
 
     files = resource_inventory(output)
     manifest: dict[str, object] = {

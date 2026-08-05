@@ -17,7 +17,7 @@ use axum::{Json, Router};
 use crate::server::api::{ApiError, ApiErrorCode, ErrorEnvelope};
 
 const REQUEST_MARKER: HeaderName = HeaderName::from_static("x-pokecon-request");
-const ALLOWED_METHODS: &str = "GET, HEAD, PATCH, POST, PUT, DELETE, OPTIONS";
+const ALLOWED_METHODS: &str = "GET, PATCH, POST, OPTIONS";
 const ALLOWED_HEADERS: &str = "Content-Type, X-Pokecon-Request";
 
 /// Request policy derived only from the effective bound address and UI mode.
@@ -32,10 +32,10 @@ impl RequestSecurity {
     pub fn new(address: SocketAddr, desktop_mode: bool) -> Self {
         let authority = address.to_string();
         let mut allowed_hosts = BTreeSet::from([authority.clone()]);
-        let mut allowed_origins = BTreeSet::from([format!("http://{authority}")]);
+        let mut allowed_origins = BTreeSet::from([::std::format!("http://{authority}")]);
         if address.ip().is_loopback() {
-            let localhost = format!("localhost:{}", address.port());
-            allowed_origins.insert(format!("http://{localhost}"));
+            let localhost = ::std::format!("localhost:{}", address.port());
+            allowed_origins.insert(::std::format!("http://{localhost}"));
             allowed_hosts.insert(localhost);
         }
         if desktop_mode {
@@ -84,7 +84,7 @@ impl RequestSecurity {
 
         if method == Method::OPTIONS {
             let origin = origin.ok_or(SecurityError::Forbidden)?;
-            validate_preflight(headers)?;
+            validate_preflight(uri.path(), headers)?;
             return Ok(SecurityDecision::Preflight { origin });
         }
         if uri.path() == "/ws" && origin.is_none() {
@@ -178,14 +178,28 @@ fn is_mutating(method: &Method) -> bool {
         || method == Method::DELETE
 }
 
-fn validate_preflight(headers: &HeaderMap) -> Result<(), SecurityError> {
+fn validate_preflight(path: &str, headers: &HeaderMap) -> Result<(), SecurityError> {
     let requested_method = required_header(headers, &ACCESS_CONTROL_REQUEST_METHOD)?;
     let requested_method = Method::from_bytes(requested_method.as_bytes())
         .map_err(|_error| SecurityError::Forbidden)?;
-    if !matches!(
-        requested_method,
-        Method::GET | Method::HEAD | Method::PATCH | Method::POST | Method::PUT | Method::DELETE
-    ) {
+    let advertised = match path {
+        "/api/settings" => requested_method == Method::GET || requested_method == Method::PATCH,
+        "/api/devices/cameras" | "/api/devices/serial-ports" | "/api/state" | "/ws" => {
+            requested_method == Method::GET
+        }
+        "/api/camera/retry"
+        | "/api/camera/screenshot"
+        | "/api/commands/control"
+        | "/api/commands/reload"
+        | "/api/dynamic-config/control"
+        | "/api/notifications/test"
+        | "/api/profiles/generate-launcher"
+        | "/api/script-ui/action"
+        | "/api/serial/control"
+        | "/api/update/check" => requested_method == Method::POST,
+        _ => false,
+    };
+    if !advertised {
         return Err(SecurityError::Forbidden);
     }
     let Some(requested_headers) = optional_header(headers, &ACCESS_CONTROL_REQUEST_HEADERS)? else {
@@ -247,7 +261,9 @@ async fn enforce_security(
 
 /// Applies request validation to every route and fallback in `router`.
 pub fn secure_router(router: Router, security: RequestSecurity) -> Router {
-    router.layer(middleware::from_fn_with_state(security, enforce_security))
+    Router::new()
+        .fallback_service(router)
+        .layer(middleware::from_fn_with_state(security, enforce_security))
 }
 
 #[cfg(test)]
@@ -255,16 +271,18 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
     use axum::Router;
-    use axum::body::Body;
+    use axum::body::{Body, to_bytes};
     use axum::http::header::{
-        ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD,
-        CONTENT_TYPE, HOST, ORIGIN,
+        ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+        ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD, ALLOW, CONTENT_TYPE, HOST,
+        ORIGIN, VARY,
     };
-    use axum::http::{Request, StatusCode};
+    use axum::http::{HeaderMap, HeaderName, HeaderValue, Request, StatusCode};
     use axum::routing::{get, post};
+    use serde_json::json;
     use tower::ServiceExt as _;
 
-    use super::{RequestSecurity, secure_router};
+    use super::{ALLOWED_HEADERS, ALLOWED_METHODS, RequestSecurity, secure_router};
 
     fn policy() -> RequestSecurity {
         RequestSecurity::new(
@@ -278,6 +296,134 @@ mod tests {
             .method(method)
             .uri(uri)
             .header(HOST, "127.0.0.1:8020")
+    }
+
+    fn assert_single_header(headers: &HeaderMap, name: &HeaderName, expected: &str, label: &str) {
+        let mut values = headers.get_all(name).iter();
+        let value = values
+            .next()
+            .unwrap_or_else(|| panic!("missing {name} for {label}"));
+        assert!(values.next().is_none(), "duplicate {name} for {label}");
+        assert_eq!(value, expected, "{name} for {label}");
+    }
+
+    async fn assert_bare_options_rejected_without_route_headers(app: &Router, path: &str) {
+        let response = app
+            .clone()
+            .oneshot(
+                request("OPTIONS", path)
+                    .body(Body::empty())
+                    .expect("bare OPTIONS request"),
+            )
+            .await
+            .expect("bare OPTIONS response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{path}");
+        assert_single_header(response.headers(), &CONTENT_TYPE, "application/json", path);
+        for forbidden in [
+            &ALLOW,
+            &ACCESS_CONTROL_ALLOW_ORIGIN,
+            &ACCESS_CONTROL_ALLOW_METHODS,
+            &ACCESS_CONTROL_ALLOW_HEADERS,
+            &VARY,
+        ] {
+            assert!(
+                !response.headers().contains_key(forbidden),
+                "unexpected {forbidden} for bare OPTIONS {path}"
+            );
+        }
+        let body = to_bytes(response.into_body(), 4096)
+            .await
+            .expect("bare OPTIONS rejection body");
+        let body: serde_json::Value =
+            serde_json::from_slice(&body).expect("bare OPTIONS rejection JSON");
+        assert_eq!(
+            body,
+            json!({
+                "error": {
+                    "code": "request_forbidden",
+                    "fields": null,
+                    "message": "request validation failed"
+                }
+            }),
+            "{path}"
+        );
+    }
+
+    #[tokio::test]
+    async fn security_responses_precede_method_router_header_decoration() {
+        let app = secure_router(
+            Router::new()
+                .route("/api/camera/retry", post(|| async {}))
+                .route("/api/settings", get(|| async {}).patch(|| async {}))
+                .route("/ws", get(|| async {}).head(|| async {})),
+            policy(),
+        );
+
+        for path in ["/api/camera/retry", "/api/settings", "/ws"] {
+            assert_bare_options_rejected_without_route_headers(&app, path).await;
+        }
+
+        let preflight = app
+            .clone()
+            .oneshot(
+                request("OPTIONS", "/api/camera/retry")
+                    .header(ORIGIN, "http://localhost:8020")
+                    .header(ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                    .header(
+                        ACCESS_CONTROL_REQUEST_HEADERS,
+                        "content-type, x-pokecon-request",
+                    )
+                    .body(Body::empty())
+                    .expect("complete preflight request"),
+            )
+            .await
+            .expect("complete preflight response");
+        assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
+        assert_single_header(
+            preflight.headers(),
+            &ACCESS_CONTROL_ALLOW_ORIGIN,
+            "http://localhost:8020",
+            "complete preflight",
+        );
+        assert_single_header(
+            preflight.headers(),
+            &ACCESS_CONTROL_ALLOW_METHODS,
+            ALLOWED_METHODS,
+            "complete preflight",
+        );
+        assert_single_header(
+            preflight.headers(),
+            &ACCESS_CONTROL_ALLOW_HEADERS,
+            ALLOWED_HEADERS,
+            "complete preflight",
+        );
+        assert_single_header(preflight.headers(), &VARY, "Origin", "complete preflight");
+        assert!(!preflight.headers().contains_key(ALLOW));
+        assert!(
+            to_bytes(preflight.into_body(), 1)
+                .await
+                .expect("complete preflight body")
+                .is_empty()
+        );
+
+        let inner_method_rejection = app
+            .oneshot(
+                request("GET", "/api/camera/retry")
+                    .body(Body::empty())
+                    .expect("inner wrong-method request"),
+            )
+            .await
+            .expect("inner wrong-method response");
+        assert_eq!(
+            inner_method_rejection.status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+        assert_single_header(
+            inner_method_rejection.headers(),
+            &ALLOW,
+            "POST",
+            "inner method rejection",
+        );
     }
 
     #[tokio::test]
@@ -432,7 +578,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn websocket_origin_is_mandatory_and_preflight_is_closed() {
+    async fn websocket_origin_is_mandatory() {
         let app = secure_router(Router::new().route("/ws", get(|| async {})), policy());
         let response = app
             .clone()
@@ -452,25 +598,133 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn preflight_header_lookup_is_canonical_and_singleton() {
+        let app = secure_router(Router::new().route("/ws", get(|| async {})), policy());
+        let decoy = request("OPTIONS", "/api/state")
+            .header(ORIGIN, "http://localhost:8020")
+            .header(ACCESS_CONTROL_REQUEST_METHOD, "CONNECT")
+            .header("x-pokecon-preflight-method", "GET")
+            .body(Body::empty())
+            .expect("decoy request");
+        let mut duplicate = request("OPTIONS", "/api/state")
+            .header(ORIGIN, "http://localhost:8020")
+            .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .body(Body::empty())
+            .expect("duplicate request");
+        duplicate.headers_mut().append(
+            ACCESS_CONTROL_REQUEST_METHOD,
+            HeaderValue::from_static("CONNECT"),
+        );
+
+        for (label, request) in [("alternate", decoy), ("duplicate", duplicate)] {
+            let response = app.clone().oneshot(request).await.expect("response");
+            assert_eq!(response.status(), StatusCode::FORBIDDEN, "{label}");
+            let body = to_bytes(response.into_body(), 4096)
+                .await
+                .expect("preflight rejection body");
+            let body: serde_json::Value =
+                serde_json::from_slice(&body).expect("preflight rejection JSON");
+            assert_eq!(body["error"]["code"], "request_forbidden", "{label}");
+        }
+    }
+
+    #[tokio::test]
+    async fn preflights_match_the_openapi_surface() {
+        let app = secure_router(Router::new().route("/ws", get(|| async {})), policy());
+        let preflight_policy: [(&str, &[&str]); 15] = [
+            ("/api/camera/retry", &["POST"]),
+            ("/api/camera/screenshot", &["POST"]),
+            ("/api/commands/control", &["POST"]),
+            ("/api/commands/reload", &["POST"]),
+            ("/api/devices/cameras", &["GET"]),
+            ("/api/devices/serial-ports", &["GET"]),
+            ("/api/dynamic-config/control", &["POST"]),
+            ("/api/notifications/test", &["POST"]),
+            ("/api/profiles/generate-launcher", &["POST"]),
+            ("/api/script-ui/action", &["POST"]),
+            ("/api/serial/control", &["POST"]),
+            ("/api/settings", &["GET", "PATCH"]),
+            ("/api/state", &["GET"]),
+            ("/api/update/check", &["POST"]),
+            ("/ws", &["GET"]),
+        ];
+        for (path, advertised_methods) in preflight_policy {
+            for requested_method in [
+                "GET", "HEAD", "PATCH", "POST", "PUT", "DELETE", "OPTIONS", "TRACE", "CONNECT",
+            ] {
+                let mut request = request("OPTIONS", path)
+                    .header(ORIGIN, "http://localhost:8020")
+                    .header(ACCESS_CONTROL_REQUEST_METHOD, requested_method);
+                if matches!(requested_method, "PATCH" | "POST") {
+                    request = request.header(
+                        ACCESS_CONTROL_REQUEST_HEADERS,
+                        "content-type, x-pokecon-request",
+                    );
+                }
+                let response = app
+                    .clone()
+                    .oneshot(request.body(Body::empty()).expect("request"))
+                    .await
+                    .expect("response");
+                if advertised_methods.contains(&requested_method) {
+                    assert_eq!(
+                        response.status(),
+                        StatusCode::NO_CONTENT,
+                        "OPTIONS {path} for {requested_method}"
+                    );
+                    assert_eq!(
+                        response.headers()[ACCESS_CONTROL_ALLOW_ORIGIN],
+                        "http://localhost:8020"
+                    );
+                    assert_eq!(
+                        response.headers()[ACCESS_CONTROL_ALLOW_METHODS],
+                        ALLOWED_METHODS
+                    );
+                    assert_eq!(
+                        response.headers()[ACCESS_CONTROL_ALLOW_HEADERS],
+                        ALLOWED_HEADERS
+                    );
+                    assert!(
+                        to_bytes(response.into_body(), 1)
+                            .await
+                            .expect("preflight body")
+                            .is_empty()
+                    );
+                } else {
+                    assert_eq!(
+                        response.status(),
+                        StatusCode::FORBIDDEN,
+                        "OPTIONS {path} for {requested_method}"
+                    );
+                    let body = to_bytes(response.into_body(), 4096)
+                        .await
+                        .expect("preflight rejection body");
+                    let body: serde_json::Value =
+                        serde_json::from_slice(&body).expect("preflight rejection JSON");
+                    assert_eq!(body["error"]["code"], "request_forbidden");
+                }
+            }
+        }
 
         let response = app
             .oneshot(
-                request("OPTIONS", "/api/settings")
+                request("OPTIONS", "/api/not-in-openapi")
                     .header(ORIGIN, "http://localhost:8020")
-                    .header(ACCESS_CONTROL_REQUEST_METHOD, "PATCH")
-                    .header(
-                        ACCESS_CONTROL_REQUEST_HEADERS,
-                        "content-type, x-pokecon-request",
-                    )
+                    .header(ACCESS_CONTROL_REQUEST_METHOD, "GET")
                     .body(Body::empty())
                     .expect("request"),
             )
             .await
             .expect("response");
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        assert_eq!(
-            response.headers()[ACCESS_CONTROL_ALLOW_ORIGIN],
-            "http://localhost:8020"
-        );
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = to_bytes(response.into_body(), 4096)
+            .await
+            .expect("unknown preflight body");
+        let body: serde_json::Value =
+            serde_json::from_slice(&body).expect("unknown preflight JSON");
+        assert_eq!(body["error"]["code"], "request_forbidden");
     }
 }

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from scripts.release.package_smoke import (
     EXPECTED_UDEV_RULES,
+    REQUIRED_DEPENDENCIES,
     REQUIRED_WORKER_PACKAGES,
     UDEV_RULE_PATH,
     sha256_file,
@@ -16,9 +17,6 @@ from scripts.release.package_smoke import (
     validate_udev_support,
     validate_wheelhouse,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def write_resource_manifest(root: Path) -> None:
@@ -83,6 +81,32 @@ def test_resource_manifest_and_spa_are_complete(tmp_path: Path) -> None:
     _manifest, file_count = validate_resource_manifest(tmp_path)
     assert file_count == 7
     assert validate_spa(tmp_path) == (5, 1)
+
+
+def test_debian_dependencies_match_package_auditor() -> None:
+    repository = Path(__file__).resolve().parents[2]
+    config = json.loads((repository / "rust/pokecon/tauri.conf.json").read_text())
+    configured_dependencies = config["bundle"]["linux"]["deb"]["depends"]
+    expected_dependencies = {
+        "libayatana-appindicator3-1",
+        "libgl1",
+        "libglib2.0-0",
+        "libgtk-3-0",
+        "libportaudio2",
+        "libsm6",
+        "libudev1",
+        "libwebkit2gtk-4.1-0",
+        "libxcb1",
+        "libxext6",
+        "libxrender1",
+    }
+
+    assert "libxcb1" in configured_dependencies
+    assert "libxcb1" in REQUIRED_DEPENDENCIES
+    assert "libayatana-appindicator3-1" in configured_dependencies
+    assert len(configured_dependencies) == len(expected_dependencies)
+    assert set(configured_dependencies) == expected_dependencies
+    assert expected_dependencies == REQUIRED_DEPENDENCIES
 
 
 def test_resource_manifest_rejects_changed_file(tmp_path: Path) -> None:

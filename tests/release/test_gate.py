@@ -29,3 +29,24 @@ def test_checksums_cover_sorted_relative_artifacts(tmp_path: Path) -> None:
         f"{hashlib.sha256(b'z').hexdigest()}  z.bin",
     ]
     assert output.read_text(encoding="utf-8") == "\n".join(lines) + "\n"
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        ".tauri-build.lock",
+        ".tauri-publish/package.deb",
+        "nested/.tauri-previous/package.deb",
+        ".tauri-unexpected/residue",
+    ],
+)
+def test_checksums_reject_transient_tauri_publication_state(
+    tmp_path: Path, relative_path: str
+) -> None:
+    artifacts = tmp_path / "artifacts"
+    artifact = artifacts / relative_path
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"residue")
+
+    with pytest.raises(ValueError, match="transient Tauri publication state"):
+        write_checksums(artifacts, artifacts / "SHA256SUMS")

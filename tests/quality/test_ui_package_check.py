@@ -2205,7 +2205,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "224cc85771470963ccbf11eb2ffa3b2fda6c0db9e7e729b7ebf41ee96f429ee0"
+        == "7dfdc41a4858d9e4414799431d78d6986bf6e097261cc997d7ce9f7bb8524349"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3307,9 +3307,31 @@ offline = true
         f"[{section_name}]\n{development_command_sections[section_name]}"
         for section_name, _, _ in development_command_section_boundaries
     )
+    pre_commit_clippy_entry = (
+        'entry = "nix run .#cargo -- clippy --locked --workspace '
+        '--all-targets --all-features -- -D warnings";'
+    )
+    pre_commit_clippy_files = (
+        r'files = "(^|/)(Cargo\\.toml|Cargo\\.lock|flake\\.nix|flake\\.lock|'
+        r'rust-toolchain\\.toml)$|\\.rs$";'
+    )
+    assert flake.count(pre_commit_clippy_entry) == 1
+    assert flake.count(pre_commit_clippy_files) == 1
+    assert 'entry = "nix run .#clippy";' not in flake
+    cargo_command_section = development_command_sections["cargo"]
+    for cached_cargo_proof in (
+        "${setupInteractiveCargoEnvironment}",
+        "${acquireCargoTaskLock}",
+        "if [ \"''${1:-}\" = update ]; then",
+        "export CARGO_NET_OFFLINE=false",
+        'export CARGO_HOME="${gateCargoHome}"',
+        "export CARGO_NET_OFFLINE=true",
+        '"$(readlink -f "$CARGO_HOME/config.toml")" != "${gateCargoConfig}"',
+    ):
+        assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "f6fd372c7d799725e12c2aac99eb2371fce60457d544b91fdd65cd570b42113b"
+        == "cd113f31e69a87ec9a30bd7f7e5ad708933a27707dc9dd9149c185b31ff5b1ed"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (

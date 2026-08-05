@@ -26,13 +26,15 @@ nix run .#editor -- --print
 nix run .#editor-smoke
 ```
 
-`cargo`と`web-dev`は明示的にcallerのworktreeを対象とします。読取り専用の完了gateはNix store上の正準sourceまたは隔離した一時copyを対象とします。対話用の`cargo`だけがcallerの`target/nix-tasks`を排他lock付きで再利用し、長時間起動する`editor`は別の`target/nix-editor`を使用します。Rust完了gateとcallerへ書き込むgeneratorは、実行ごとの一時`cargo-target`で必ず再構築し、callerのCargo cacheを読取り、検査、変更しません。
+`cargo`と`web-dev`は明示的にcallerのworktreeを対象とします。読取り専用の完了gateはNix store上の正準sourceまたは隔離した一時copyを対象とします。対話用の`cargo`だけがcallerの`target/nix-tasks`を排他lock付きで再利用し、通常のbuild、test、Clippyではimmutableなoffline vendorを使用します。依存解決を変更する明示的な`cargo update`だけがcallerのCargo homeとregistryを使用します。長時間起動する`editor`は別の`target/nix-editor`を使用します。Rust完了gateとcallerへ書き込むgeneratorは、実行ごとの一時`cargo-target`で必ず再構築し、callerのCargo cacheを読取り、検査、変更しません。
 
 すべてのtask appはflakeが列挙したtoolだけの`PATH`を使用します。`editor`からhost editorを起動する場合は、`nix run .#editor -- /absolute/path/to/editor`のようにabsolute executable pathを指定します。
 
 読取り専用gateとgeneratorはbuildへ影響するambient環境変数を除去し、一時`HOME`、一時`CARGO_HOME`、実行ごとの一時Cargo target、専用XDG directoryを使用します。Cargo dependencyはflake packageと同じimmutableなNix vendor directoryだけからofflineで解決し、ambientなCargo config、registry source、Git checkout、network cache、以前の実行が残したartifactを使用しません。`cargo`と`editor`は対話的な調査入口であるため、`RUST_LOG`や明示的なcompiler optionなどcallerが渡す非tool環境を意図的に継承します。この対話結果は完了gateの証跡にはせず、toolの`PATH`、Rust／Python toolchain、Cargo targetはappが固定します。
 
 `hooks-install`は新しく作成した各worktreeで実行します。再実行するとNix生成configを収束させ、欠落、実行権限を失った、または認識済み生成形式のhookを再導入します。`.pre-commit-config.yaml`に通常fileまたは予期しないsymlinkがある場合、あるいはhook pathにcustom file、symlink、または認識できない内容がある場合は、退避や置換をせず失敗します。生成hookはprivileged Bash、固定`PATH`、一時`HOME`と最小Git contextを使い、`SKIP`などのambient設定では検査を迂回できません。
+
+pre-commitのClippyはRust、Cargo、flake、toolchain入力をstageしたcommitだけを対象にし、固定toolchain、immutableなoffline vendor、排他lockを保ったまま`cargo` appの`target/nix-tasks`を再利用します。完了判定では引き続き隔離sourceと実行ごとの空のCargo targetを使う`rust-ci-core`を実行するため、local feedbackのcacheは完了gateの証跡へ混入しません。
 
 `nix fmt`と`nix run .#fmt`は同じ保護されたformatterです。callerのworktreeを対象にしつつ、shell startup、formatter設定、`HOME`、cacheなどのambient状態を除去してから固定treefmtを実行します。
 

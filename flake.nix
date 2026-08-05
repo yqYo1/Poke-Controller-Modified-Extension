@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "733379830905ed8837458293d3664ff91fd6c8af8f15fc68c7361082d36b6987";
+      canonicalFlakeHash = "269bb82681111f97cf5a00fb61b3abfc53ed271772d1fde203837e17f5ce73e7";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "c8e36bd7effc79cd0f755e66b35730063ef2e393ad798f9765c64adf924901cb";
+              expectedAuditTestHash = "421e544b08b5380f6836e3ba6d7049bd0f706ee1506beac5bc927dd97ef6f1f7";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -2747,6 +2747,21 @@
                 ${acquireCargoTaskLock}
                 ${setupUvLinks}
                 ${desktopEnvironment}
+                if [ "''${1:-}" = update ]; then
+                  export CARGO_NET_OFFLINE=false
+                  echo "cargo update uses the caller Cargo home and registry state" >&2
+                else
+                  export CARGO_HOME="${gateCargoHome}"
+                  export CARGO_NET_OFFLINE=true
+                  if [ -L "$CARGO_HOME" ] \
+                    || [ ! -d "$CARGO_HOME" ] \
+                    || [ "$(readlink -f "$CARGO_HOME")" != "${gateCargoHome}" ] \
+                    || [ ! -L "$CARGO_HOME/config.toml" ] \
+                    || [ "$(readlink -f "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ]; then
+                    echo "cargo app immutable Cargo home is not canonical" >&2
+                    exit 2
+                  fi
+                fi
                 POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"
               '';
             };
@@ -4610,7 +4625,8 @@
                 };
                 clippy = {
                   enable = true;
-                  entry = "nix run .#clippy";
+                  entry = "nix run .#cargo -- clippy --locked --workspace --all-targets --all-features -- -D warnings";
+                  files = "(^|/)(Cargo\\.toml|Cargo\\.lock|flake\\.nix|flake\\.lock|rust-toolchain\\.toml)$|\\.rs$";
                   pass_filenames = false;
                 };
                 markdownlint = {

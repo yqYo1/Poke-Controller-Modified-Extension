@@ -42,12 +42,14 @@ use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
+use crate::camera::ScreenshotMode;
 use crate::desktop::DesktopRuntimeSettings;
 use crate::server::BoundServer;
 use crate::server::router::public_router;
 use crate::server::security::RequestSecurity;
 use crate::server::static_files::{StaticFiles, StaticRootError};
 use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
+use axum::Router;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -71,6 +73,43 @@ enum UiMode {
     Web,
     /// Prepare the Tauri lifecycle boundary alongside axum.
     Desktop,
+}
+
+/// Capabilities that differ between the primary Web UI and its desktop adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct UiCapabilities {
+    /// Whether requests originating from the colocated Tauri `WebView` are accepted.
+    allow_tauri_origin: bool,
+    /// Whether API destinations may name an absolute native filesystem path.
+    screenshot_mode: ScreenshotMode,
+}
+
+impl UiMode {
+    fn capabilities(self) -> UiCapabilities {
+        let capabilities = match self {
+            Self::Web => UiCapabilities {
+                allow_tauri_origin: false,
+                screenshot_mode: ScreenshotMode::Web,
+            },
+            Self::Desktop => UiCapabilities {
+                allow_tauri_origin: true,
+                screenshot_mode: ScreenshotMode::Desktop,
+            },
+        };
+        debug_assert_eq!(capabilities.allow_tauri_origin, self == Self::Desktop);
+        capabilities
+    }
+}
+
+/// Composes the Web-primary router shared by browser and desktop display modes.
+fn ui_router(
+    api: Router,
+    static_files: StaticFiles,
+    listen_address: SocketAddr,
+    ui: UiCapabilities,
+) -> Router {
+    let security = RequestSecurity::new(listen_address, ui.allow_tauri_origin);
+    public_router(api, static_files, security)
 }
 
 /// Startup values required by the phase-two process skeleton.
@@ -198,9 +237,9 @@ async fn run_configured_controlled(
     mut dynamic: Option<DynamicRuntime>,
     control: RunControl,
 ) -> Result<(), AppError> {
-    let shutdown = control.shutdown;
-    let ready = control.ready;
+    let (shutdown, ready) = (control.shutdown, control.ready);
     let desktop_settings = control.desktop_settings;
+    let ui = options.ui_mode.capabilities();
     let static_files = match StaticFiles::new(&options.web_root) {
         Ok(static_files) => static_files,
         Err(error) => return fail_startup(&mut dynamic, AppError::Static(error)).await,
@@ -211,7 +250,7 @@ async fn run_configured_controlled(
         loaded,
         host,
         dynamic_client,
-        options.ui_mode,
+        ui.screenshot_mode,
         desktop_settings,
     )
     .await
@@ -231,8 +270,8 @@ async fn run_configured_controlled(
         }
     };
     let listen_address = server.local_addr();
-    let security = RequestSecurity::new(listen_address, options.ui_mode == UiMode::Desktop);
-    let server = server.with_router(public_router(production.router(), static_files, security));
+    let app = ui_router(production.router(), static_files, listen_address, ui);
+    let server = server.with_router(app);
     let server_shutdown = CancellationToken::new();
     let (server_readiness_sender, server_readiness_receiver) = oneshot::channel();
     let mut server_task = tokio::spawn(serve_with_readiness_barrier(
@@ -450,6 +489,8 @@ async fn finish_server_task(mut task: JoinHandle<io::Result<()>>) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
+    mod ui_boundary_acceptance;
+
     use std::future::pending;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};

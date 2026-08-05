@@ -2040,6 +2040,20 @@ mod tests {
 
     const TEST_TIMEOUT: Duration = Duration::from_secs(1);
 
+    #[test]
+    fn ar_11_11_web_is_the_default_and_desktop_is_an_explicit_mode() {
+        use clap::Parser as _;
+
+        let default = super::Cli::try_parse_from(["pokecon"]).expect("default CLI");
+        assert_eq!(default.ui, super::UiArgument::Web);
+        assert_eq!(crate::UiMode::from(default.ui), crate::UiMode::Web);
+
+        let desktop =
+            super::Cli::try_parse_from(["pokecon", "--ui", "desktop"]).expect("desktop CLI");
+        assert_eq!(desktop.ui, super::UiArgument::Desktop);
+        assert_eq!(crate::UiMode::from(desktop.ui), crate::UiMode::Desktop);
+    }
+
     struct FatalBeforeReadinessDropGuard {
         shutdown: ShutdownCoordinator,
         _readiness_sender: mpsc::SyncSender<super::SocketAddr>,

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "db314c76a42bc5c6b0ad908c1c7a364b1888291e5b448d9f1551e77e0679e351";
+      canonicalFlakeHash = "6e3f560f77659de3183c8aee7c6a2025a2a878d297c068e55c82d71b2b187d43";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "520669529381209254a6a3556218f912fd079beb65e1c323a3067dd29e01678a";
+              expectedAuditTestHash = "1fd87d6f306d0e28ab152f3725640bd7b7d01fa8cfaab361ad882842664d0a9e";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -518,7 +518,7 @@
             "rust/pokecon-worker" = false;
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "6daee13e8eb7bcb4248e865fdee79fa9df12e4de2f36e6888e362d0bde3e36b5";
+            "rust/pokecon" = "4fa5120217c01cac8f205975a7c330f12adcbc053f235499525c96b7aa09359a";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
@@ -757,7 +757,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "a2b0f474e6042791a8e7b9c5fb38089e4626a58ae1ad3d5673a3226c5c7ccdd5"
+                == "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1108,7 +1108,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 393 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 395 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \

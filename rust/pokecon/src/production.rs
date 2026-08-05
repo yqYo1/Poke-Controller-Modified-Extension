@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::camera::{
     CameraConfig, CameraManager, CaptureResolution, FlipMode, NativeCameraBackend,
-    ScreenshotFormat, ScreenshotMode, ScreenshotRuntimeSettings, ScreenshotService,
+    ScreenshotFormat, ScreenshotRuntimeSettings, ScreenshotService,
 };
 use crate::desktop::DesktopRuntimeSettings;
 use crate::device::ControllerState;
@@ -34,10 +34,10 @@ use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use crate::UiMode;
 use crate::application_backend::{
     ApplicationBackend, ApplicationBackendParts, initial_settings_snapshot, initial_state_snapshot,
 };
+use crate::camera::ScreenshotMode;
 use crate::command_service::{CommandService, DynamicCommandBridge, StaticCommandBridge};
 use crate::dynamic_host::StartupDynamicHost;
 use crate::profile_service::ProfileService;
@@ -85,7 +85,7 @@ impl ProductionRuntime {
         loaded: LoadedSettings,
         host: Arc<StartupDynamicHost>,
         dynamic: Option<Arc<DynamicWorkerClient>>,
-        ui_mode: UiMode,
+        screenshot_mode: ScreenshotMode,
         desktop_settings: Option<DesktopRuntimeSettings>,
     ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::current();
@@ -101,10 +101,6 @@ impl ProductionRuntime {
         let camera =
             CameraManager::start(Arc::new(NativeCameraBackend), camera_config.clone(), flip)
                 .map_err(|_error| "camera runtime initialization failed".to_owned())?;
-        let screenshot_mode = match ui_mode {
-            UiMode::Web => ScreenshotMode::Web,
-            UiMode::Desktop => ScreenshotMode::Desktop,
-        };
         let screenshots = ScreenshotService::new(
             camera.frame_source(),
             loaded.roots.data.clone(),

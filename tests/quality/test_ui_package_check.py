@@ -196,7 +196,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "6daee13e8eb7bcb4248e865fdee79fa9df12e4de2f36e6888e362d0bde3e36b5",
+    "rust/pokecon": "4fa5120217c01cac8f205975a7c330f12adcbc053f235499525c96b7aa09359a",
     "rust/pokecon-camera": "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd",
     "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
     "rust/pokecon-core": "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9",
@@ -357,7 +357,9 @@ dunce = "1.0.5"
 tauri-build = { version = "2.5.4", features = [] }
 
 [dev-dependencies]
+proc-macro2 = "1"
 regex.workspace = true
+syn = { version = "2", features = ["full", "visit"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true, features = ["fs"], optional = true }
@@ -1239,7 +1241,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "a2b0f474e6042791a8e7b9c5fb38089e4626a58ae1ad3d5673a3226c5c7ccdd5"
+        == "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert {
@@ -1961,7 +1963,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "0b65f1fee28f55e09a1e5fe88145119a2cb43cb45007e3db49bbdf3ba8b5ebdf"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "258e8a768aa907efe0411ab66103153e225be87f5dced2c5bd535d0245b3b06b"
+            "5a5237d46b1d8ed20c796d0296171fe9f095fe35f45ec0bbe76506a07f6c7ff8"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2174,7 +2176,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "1d90fda63b4f73c7e32eace6ecaa0b2eb0096726ab19d9c424f162627aa4f907"
+        == "18dbf3fc1cb5757155c8736db02ce8f97206b0417a8f64db33455b9a7dd84bad"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2402,14 +2404,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "5d8425af7bb57c08073e318bf7f9f9fda5c778006f8e26d7aa61438717b47ffb"
+        == "8735e70b2dbae955e72cb1630ed3ba350fa14e84daa829ef42d892ab1b7287dc"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "a2b0f474e6042791a8e7b9c5fb38089e4626a58ae1ad3d5673a3226c5c7ccdd5"',
+        '== "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -2528,7 +2530,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_runner_section = flake[mutation_runner_start:mutation_runner_end]
     assert (
         hashlib.sha256(mutation_runner_section.strip().encode()).hexdigest()
-        == "d7f99df1e1bf0c0c9746abe6239d18eb7a65ab89af3deb30ae11d2c6944bc7eb"
+        == "07aae5086ac36d80476918cd0f3c85d571528055ee3f4f713577160c773e7456"
     )
     for mutation_runner_proof in (
         'name = "pokecon-production-routing-mutation-audit";',
@@ -2556,7 +2558,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "--import-mode=importlib",
         "-p no:cacheprovider",
         '"$mutation_test"',
-        "Running 393 production-routing mutations across $mutation_worker_count process shards",
+        "Running 395 production-routing mutations across $mutation_worker_count process shards",
     ):
         assert mutation_runner_proof in mutation_runner_section, mutation_runner_proof
     assert (
@@ -4906,6 +4908,16 @@ pub use entrypoint::{MainError, run_cli};
         r"\basync\s+fn\s+run_configured_controlled\s*\(",
     )
     application_run = rust_lexical_mask(application_run_body)
+    ui_router_body = rust_top_level_function_body(
+        sources["lib.rs"],
+        r"\bfn\s+ui_router\s*\(",
+    )
+    assert compact_rust(rust_lexical_mask(ui_router_body)) == compact_rust(
+        """
+        let security = RequestSecurity::new(listen_address, ui.allow_tauri_origin);
+        public_router(api, static_files, security)
+        """
+    )
     readiness_barrier_body = rust_top_level_function_body(
         sources["lib.rs"],
         r"\basync\s+fn\s+serve_with_readiness_barrier\s*<",
@@ -5043,34 +5055,42 @@ pub use entrypoint::{MainError, run_cli};
             "ProductionRuntime",
             "RequestSecurity",
             "StaticFiles",
+            "app",
             "production",
             "public_router",
             "router",
             "security",
             "server",
             "static_files",
+            "ui",
+            "ui_router",
         )
     } == {
         "BoundServer": 1,
         "ProductionRuntime": 1,
-        "RequestSecurity": 1,
+        "RequestSecurity": 0,
         "StaticFiles": 1,
+        "app": 2,
         "production": 6,
-        "public_router": 1,
+        "public_router": 0,
         "router": 1,
-        "security": 2,
+        "security": 0,
         "server": 7,
         "static_files": 4,
+        "ui": 3,
+        "ui_router": 1,
     }
 
     application = compact_rust(application_source)
     for canonical_statement in (
         "let static_files = match StaticFiles::new(&options.web_root) {",
+        "let ui = options.ui_mode.capabilities();",
         "let mut production = match ProductionRuntime::build(",
+        "ui.screenshot_mode,",
         "let server = match BoundServer::bind(options.listen_address).await {",
         "let listen_address = server.local_addr();",
-        "let security = RequestSecurity::new(listen_address, options.ui_mode == UiMode::Desktop);",
-        "let server = server.with_router(public_router(production.router(), static_files, security));",
+        "let app = ui_router(production.router(), static_files, listen_address, ui);",
+        "let server = server.with_router(app);",
         "let mut signal_task = install_os_signal_forwarder(shutdown.clone()).await;",
         "let (server_readiness_sender, server_readiness_receiver) = oneshot::channel();",
         "let mut server_task = tokio::spawn(serve_with_readiness_barrier(",
@@ -5083,6 +5103,8 @@ pub use entrypoint::{MainError, run_cli};
     )
     assert len(re.findall(r"\blet\s+(?:mut\s+)?production\b", application_source)) == 1
     assert len(re.findall(r"\blet\s+(?:mut\s+)?security\b", application_source)) == 1
+    assert len(re.findall(r"\blet\s+(?:mut\s+)?app\b", application_source)) == 1
+    assert len(re.findall(r"\blet\s+(?:mut\s+)?ui\b", application_source)) == 1
     assert len(re.findall(r"\blet\s+(?:mut\s+)?server\b", application_source)) == 2
     readiness_preparation_call = compact_rust(
         """
@@ -5359,6 +5381,8 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
         ), source_name
 
     canonical_route_builder_imports = {
+        "@rust/pokecon/src/lib.rs": ("use axum::Router;",),
+        "lib.rs": ("use axum::Router;",),
         "production.rs": ("use axum::Router;",),
         "server/mod.rs": ("use axum::Router;",),
         "server/rest/commands.rs": (
@@ -6405,12 +6429,14 @@ mod update;
         "@rust/pokecon/src/lib.rs": 1,
         "lib.rs": 1,
     }
-    assert (
-        compact_rust(sources["lib.rs"]).count(
-            "let server = server.with_router(public_router(production.router(), static_files, security));"
-        )
-        == 1
-    )
+    compact_application_source = compact_rust(sources["lib.rs"])
+    for exact_ui_composition in (
+        "let security = RequestSecurity::new(listen_address, ui.allow_tauri_origin);",
+        "public_router(api, static_files, security)",
+        "let app = ui_router(production.router(), static_files, listen_address, ui);",
+        "let server = server.with_router(app);",
+    ):
+        assert compact_application_source.count(exact_ui_composition) == 1
 
 
 def section(document: str, start: str, end: str) -> str:
@@ -13025,9 +13051,9 @@ def test_production_routing_mutation_shard_contract(
         covered_indices = sorted(
             mutation_index
             for shard_index in range(shard_count)
-            for mutation_index in range(shard_index, 393, shard_count)
+            for mutation_index in range(shard_index, 395, shard_count)
         )
-        assert covered_indices == list(range(393))
+        assert covered_indices == list(range(395))
 
     for shard_index, shard_count in (("0", "1"), ("7", "8")):
         monkeypatch.setenv(PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV, shard_index)
@@ -13207,8 +13233,19 @@ impl MethodFilter {
     )
     public_composition = replace_once(
         "lib.rs",
-        "public_router(production.router(), static_files, security)",
-        "public_router(production.router().merge(hidden_router()), static_files, security)",
+        "public_router(api, static_files, security)",
+        "public_router(api.merge(hidden_router()), static_files, security)",
+    )
+    production_ui_composition = replace_once(
+        "lib.rs",
+        "ui_router(production.router(), static_files, listen_address, ui)",
+        "ui_router(production.router().merge(hidden_router()), static_files, listen_address, ui)",
+    )
+    locally_shadowed_ui_router = replace_once(
+        "lib.rs",
+        "let app = ui_router(production.router(), static_files, listen_address, ui);",
+        """let ui_router = |api, _static_files, _listen_address, _ui| api;
+    let app = ui_router(production.router(), static_files, listen_address, ui);""",
     )
     locally_shadowed_secure_router = replace_once(
         "server/router.rs",
@@ -16487,6 +16524,8 @@ runner = "scripts/attacker-runner.sh"
         ("foreign production merge", foreign_merge),
         ("substituted production router getter", substituted_production_getter),
         ("foreign public composition", public_composition),
+        ("foreign production UI composition", production_ui_composition),
+        ("locally shadowed UI router", locally_shadowed_ui_router),
         ("locally shadowed secure_router", locally_shadowed_secure_router),
         ("extra WebSocket path", websocket_extra_path),
         ("nested item-producing macro", nested_transport_macro),
@@ -16739,7 +16778,7 @@ runner = "scripts/attacker-runner.sh"
         ),
         ("alternate desktop backend", alternate_desktop_backend),
     )
-    assert len(mutations) == 393
+    assert len(mutations) == 395
     mutation_labels = tuple(label for label, _mutated_sources in mutations)
     assert len(set(mutation_labels)) == len(mutation_labels)
     mutation_deltas = tuple(

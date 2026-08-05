@@ -238,17 +238,44 @@ fn prepare_tauri_build_context(
     Ok(context_manifest_directory)
 }
 
+fn tauri_current_directory_is_compatible(path: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        use std::path::{Component, Prefix};
+
+        matches!(
+            path.components().next(),
+            Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_))
+        )
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        true
+    }
+}
+
 fn run_tauri_build() -> Result<(), Box<dyn std::error::Error>> {
-    let manifest_directory = fs::canonicalize(
+    let manifest_directory = dunce::canonicalize(
         env::var_os("CARGO_MANIFEST_DIR")
             .ok_or("Cargo did not provide CARGO_MANIFEST_DIR to the PokeCon build script")?,
     )?;
-    let out_directory = fs::canonicalize(
+    let out_directory = dunce::canonicalize(
         env::var_os("OUT_DIR")
             .ok_or("Cargo did not provide OUT_DIR to the PokeCon build script")?,
     )?;
     let context_manifest_directory =
         prepare_tauri_build_context(&manifest_directory, &out_directory)?;
+    if !tauri_current_directory_is_compatible(&context_manifest_directory) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "Tauri build context cannot be represented as a conventional Windows disk path: {}",
+                context_manifest_directory.display()
+            ),
+        )
+        .into());
+    }
     env::set_current_dir(&context_manifest_directory)?;
     let manifest =
         tauri_build::AppManifest::new().commands(&["choose_save_path", "open_config_directory"]);

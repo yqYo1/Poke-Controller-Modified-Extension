@@ -706,6 +706,7 @@ fn metadata_is_executable(metadata: &Metadata) -> bool {
     }
     #[cfg(not(unix))]
     {
+        let _ = metadata;
         true
     }
 }
@@ -1076,6 +1077,7 @@ fn set_snapshot_permissions(
     }
     #[cfg(not(unix))]
     {
+        let _ = (directory, executable);
         let mut permissions = std::fs::metadata(path)?.permissions();
         permissions.set_readonly(!writable);
         std::fs::set_permissions(path, permissions)
@@ -2022,13 +2024,15 @@ mod tests {
     use crate::desktop::DesktopError;
     use crate::runtime::{ShutdownCoordinator, ShutdownReason};
 
+    #[cfg(unix)]
+    use super::read_stable_resource_file_with;
     use super::{
         MissingManifestPolicy, ResourceManifestEntry, ResourceManifestError, ResourceOrigin,
         ResourceOriginPlatform, ResourcePlatform, ResourceProvenance, expected_resource_files,
         finish_desktop_run, has_exact_cargo_output_layout, is_valid_nix_store_package_basename,
         packaged_resource_candidate, parse_resource_provenance, provenance_accepts_origin,
-        read_stable_resource_file_with, select_resource_root_for_provenance,
-        select_tauri_resource_root, select_tauri_resource_root_for_platform,
+        select_resource_root_for_provenance, select_tauri_resource_root,
+        select_tauri_resource_root_for_platform,
         select_tauri_resource_root_for_platform_with_policy, sha256_bytes,
         supervise_desktop_backend_startup, supervise_desktop_backend_task,
         verify_materialized_snapshot, windows_attributes_include_reparse_point,

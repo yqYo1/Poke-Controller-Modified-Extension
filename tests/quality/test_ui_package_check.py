@@ -196,7 +196,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "d168a69b1bdb7c108700eaa37c2e57f3dafbe88be78d701da463d2f1b194667a",
+    "rust/pokecon": "6daee13e8eb7bcb4248e865fdee79fa9df12e4de2f36e6888e362d0bde3e36b5",
     "rust/pokecon-camera": "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd",
     "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
     "rust/pokecon-core": "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9",
@@ -353,6 +353,7 @@ tracing.workspace = true
 url.workspace = true
 
 [build-dependencies]
+dunce = "1.0.5"
 tauri-build = { version = "2.5.4", features = [] }
 
 [dev-dependencies]
@@ -1199,6 +1200,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         member: {} for member in WORKSPACE_MEMBERS
     }
     expected_build_dependencies["rust/pokecon"] = {
+        "dunce": "1.0.5",
         "tauri-build": {"version": "2.5.4", "features": []},
     }
     expected_build_dependencies["rust/pokecon-settings"] = {
@@ -1237,7 +1239,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "62852d9298562271195afa17b870cbab1d8583002f0c11ad11d40fe5e8f7bbb8"
+        == "a2b0f474e6042791a8e7b9c5fb38089e4626a58ae1ad3d5673a3226c5c7ccdd5"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert {
@@ -1333,7 +1335,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert actual_build_script_sources == set(WORKSPACE_BUILD_SCRIPT_SOURCES.values())
     expected_build_script_hashes = {
         "@pokecon/build.rs": (
-            "8db901eb02c6d44c65eae76e26498ea8d65aaf2c3985a4ccc35d34f4e91a5979"
+            "877c790712b3075df19e1b8dcfd9d3249835e6bbf9c065b1f7fda0bbd6f3d916"
         ),
         "@pokecon-settings/build.rs": (
             "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0"
@@ -1360,10 +1362,31 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         ('"icons/icon.ico"', 1),
         ('"linux/70-pokecon-controller.rules"', 1),
         ('"linux/reload-udev.sh"', 1),
+        ("dunce::canonicalize(", 2),
+        ("tauri_current_directory_is_compatible", 2),
+        ("Prefix::Disk(_)", 1),
+        (
+            "Tauri build context cannot be represented as a conventional Windows disk path",
+            1,
+        ),
     ):
         assert pokecon_build_script.count(staging_proof) == expected_count, (
             staging_proof
         )
+    run_tauri_build_body = rust_top_level_function_body(
+        pokecon_build_script,
+        r"\bfn\s+run_tauri_build\s*\(",
+    )
+    assert "fs::canonicalize(" not in run_tauri_build_body
+    assert (
+        run_tauri_build_body.index('env::var_os("CARGO_MANIFEST_DIR")')
+        < run_tauri_build_body.index('env::var_os("OUT_DIR")')
+        < run_tauri_build_body.index("prepare_tauri_build_context(")
+        < run_tauri_build_body.index("tauri_current_directory_is_compatible(")
+        < run_tauri_build_body.index(
+            "env::set_current_dir(&context_manifest_directory)?;"
+        )
+    )
     copied_file_permissions_body = rust_top_level_function_body(
         pokecon_build_script,
         r"\bfn\s+make_copied_file_owner_writable\s*\(",
@@ -2151,7 +2174,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "02b25b9fd55124d65e8f23a573eb57f820d0c941ac83bb3e19ccb306e38bdcbc"
+        == "69c2bca404f9dfb41fabb9a29625642eb4d7b7e06b31fea026523b73e476771b"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2379,14 +2402,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "40227151218791acd4106ca68ccf29b6741fafd88816eaea545e6632308b8c27"
+        == "5d8425af7bb57c08073e318bf7f9f9fda5c778006f8e26d7aa61438717b47ffb"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "62852d9298562271195afa17b870cbab1d8583002f0c11ad11d40fe5e8f7bbb8"',
+        '== "a2b0f474e6042791a8e7b9c5fb38089e4626a58ae1ad3d5673a3226c5c7ccdd5"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",

@@ -15986,12 +15986,12 @@ runner = "scripts/attacker-runner.sh"
     )
     omitted_resource_provenance_rerun = replace_once(
         "@pokecon/build.rs",
-        '        println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");\n',
+        '    println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");\n',
         "",
     )
     omitted_resource_provenance_rustc_env = replace_once(
         "@pokecon/build.rs",
-        '        println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");\n',
+        '    println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");\n',
         "",
     )
     relaxed_resource_provenance_digest = replace_once(
@@ -16959,7 +16959,18 @@ runner = "scripts/attacker-runner.sh"
         "    fn test_only() { Router::new().route(TEST_PATH, handler); }\n"
         "}\n"
     )
-    assert production_rust_source(test_only_route) == "fn production() {}\n"
+    production_prefix = "fn production() {}\n"
+    test_only_production = production_rust_source(test_only_route)
+    assert test_only_production[: len(production_prefix)] == production_prefix
+    assert len(test_only_production) == len(test_only_route)
+    assert tuple(
+        index
+        for index, character in enumerate(test_only_production)
+        if character in "\r\n"
+    ) == tuple(
+        index for index, character in enumerate(test_only_route) if character in "\r\n"
+    )
+    assert not test_only_production[len(production_prefix) :].strip()
 
     production_after_test_tail = (
         REPOSITORY / "rust/pokecon/src/server/rest/mod.rs"

@@ -15,7 +15,7 @@ struct Arguments {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arguments = Arguments::parse();
-    let generated = pokecon_server::openapi::document_json()?;
+    let generated = pokecon::generate_openapi_document_json()?;
     if arguments.check {
         let existing = fs::read_to_string(&arguments.output)?;
         if existing != generated {

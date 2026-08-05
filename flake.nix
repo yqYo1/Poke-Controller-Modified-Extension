@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "028341a06b5e8d1e0b1d6e2760cce169e86ae46c01640f7cce7d2c66dd0066c1";
+      canonicalFlakeHash = "09541faefbc28c33292d803ce01876be9090b793fa9b9d2a65258ebdfeb5e7fd";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "07d1b6377addb44eec14053d1559842af0667104cdda5ec52db30a57e4d53193";
+              expectedAuditTestHash = "8b85628b203fae97b8683ab05afbc2bc7715992e953dba378e504532eb946f13";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -516,7 +516,7 @@
             "rust/pokecon-worker" = false;
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "b66d3e5463cbea97efe96651b324fa2083c7412eb57a22fd8602f6ae467f6465";
+            "rust/pokecon" = "65836572f235f2160ecb84704fc1c447e0639c8b56fdde1d243b42c97eae91af";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
@@ -751,7 +751,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "55d37e7e96762d79956be724924f46956b385e7537c3eae18d4f736df6bdb980"
+                == "61e995292f67b97cfaf94c9e24dd8e991f49f955a3aa99ece3cdbb7d6d98963d"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts

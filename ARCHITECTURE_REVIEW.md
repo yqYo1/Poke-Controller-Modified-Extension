@@ -195,7 +195,7 @@ Phase 2.7の最初の不可分atomで`pokecon-desktop` compatibility packageを�
 
 `pokecon-device`はシリアル、ゲームパッド、Windows通知の依存を所有しています。
 
-`pokecon-server`はWebRTC、OpenH264、axumの依存を所有しています。
+Phase 2.7のserver detach atomで、WebRTC、OpenH264、axumの依存を`pokecon`へ移しました。`pokecon-server` compatibility packageは削除前の無参照検査用に残っていますが、PokeCon本体は依存していません。
 
 分離したクレートが下位の共通クレートへ不要な依存を持つ場合、この効果は弱くなります。
 
@@ -223,7 +223,7 @@ Web UIとTauriは別の実行ファイルにせず、同じPokeCon本体実行�
 
 現在、Webとdesktopを切り替えるアプリケーション固有のCargo機能フラグはありません。`contract-generator`は開発用generator targetだけを有効にします。
 
-`pokecon-app`は、`pokecon-camera`、`pokecon-device`、`pokecon-dynamic`、`pokecon-server`、`pokecon-settings`、`pokecon-worker`へ無条件に依存しています。
+レビュー開始時の`pokecon-app`は、`pokecon-camera`、`pokecon-device`、`pokecon-dynamic`、`pokecon-server`、`pokecon-settings`、`pokecon-worker`へ無条件に依存していました。
 
 したがって、これらを別クレートにしたこと自体は、メインアプリケーションのビルドから各依存を除外するビルドオプションとして機能していません。
 
@@ -346,7 +346,7 @@ Rust境界でなければ提供できない具体的な公開APIと受入テス�
 
 ### 9.5 serverのwire型
 
-`pokecon-server`は、カメラやコントローラーのドメイン型に対応するwire型を独自に定義しています。
+レビュー開始時の`pokecon-server`は、カメラやコントローラーのドメイン型に対応するwire型を独自に定義していました。現在はPokeCon本体のprivate `server::api`が同じ境界を維持します。
 
 この重複には変換と同期の費用がありますが、ドメイン型へOpenAPI依存を持ち込まない効果もあります。
 

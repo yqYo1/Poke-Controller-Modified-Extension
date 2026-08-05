@@ -24,7 +24,8 @@ mod profile_service;
 mod runtime;
 mod script_host;
 mod script_runtime;
-#[path = "server/facade.rs"]
+#[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
+#[allow(clippy::option_option, reason = "wire patch fields are three-state")]
 mod server;
 #[path = "settings/facade.rs"]
 mod settings;
@@ -62,6 +63,18 @@ use crate::production::ProductionRuntime;
 use crate::runtime::{
     RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
 };
+
+/// Builds the canonical `OpenAPI` document for the generator binary.
+///
+/// # Errors
+///
+/// Returns an error when the API schema or canonical contract registry cannot
+/// be serialized.
+#[cfg(feature = "contract-generator")]
+#[doc(hidden)]
+pub fn generate_openapi_document_json() -> Result<String, Box<dyn std::error::Error>> {
+    server::openapi::document_json().map_err(Into::into)
+}
 
 const SERVER_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 

@@ -379,17 +379,34 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2.5 desktop移行
 
-- [ ] `pokecon-desktop`を`desktop`内部moduleへ移す。
-- [ ] **AR-10.9-08** PokeCon本体binaryにWeb UIとTauriの両方を含め、起動引数で表示形態を選択する（予定証跡: `nix build .#pokecon --print-out-paths --no-link`が返す同一store binary digestによる対応Nix integration taskのWeb／Tauri起動／停止smoke log）。
-- [ ] **AR-11-11** Web UIを主要UI、Tauriを下位の表示形態とする機能境界を維持する（予定証跡: `nix run .#cargo-test`のmode capability matrix、Web-first endpoint test、Tauri adapter dependency check）。
-- [ ] **AR-11-22** Web UIとTauriを同じPokeCon本体実行ファイルに含め、起動引数で切り替える（予定証跡: `nix build .#pokecon`成果物manifestとstore内binaryを使うNix integration taskの両mode CLI／startup report）。
-- [ ] **AR-13.1-27** desktop移行後、Tauri設定、icon、bundle resource、署名対象、Linux package、Windows installerを`rust/pokecon/`起点で生成する（予定証跡: `nix run .#tauri-build`とWindows Package CIのOS別build log、bundle／signing input manifest）。
+- [x] `pokecon-desktop`を`desktop`内部moduleへ移す（証跡: canonical実装／iconを`rust/pokecon/`へ移し、同起点のTauri設定を更新した`5fd5aa2`と下記checkpoint。旧crateは2.7までcompatibility facadeだけを維持）。
+- [x] **AR-10.9-08** PokeCon本体binaryにWeb UIとTauriの両方を含め、起動引数で表示形態を選択する（証跡: 同一store binary digestを保ったWeb／Tauri起動／停止smokeと下記checkpoint）。
+- [x] **AR-11-11** Web UIを主要UI、Tauriを下位の表示形態とする機能境界を維持する（証跡: Rust source testのmode capability／Web-first endpoint／Tauri adapter検査、exact packageの`ui-package-check`と下記checkpoint）。
+- [x] **AR-11-22** Web UIとTauriを同じPokeCon本体実行ファイルに含め、起動引数で切り替える（証跡: 同一store binaryとinstalled packageを使う`--ui web`／`--ui desktop` startup reportと下記checkpoint）。
+- [x] **AR-13.1-27** desktop移行後、Tauri設定、icon、bundle resource、署名対象、Linux package、Windows installerを`rust/pokecon/`起点で生成する（証跡: OS別Package CIのbundle／signing manifestと下記checkpoint）。
 
 ### 2.6 `tauri-shell`とPython native extensionの削除
 
-- [ ] **AR-10.9-09** 利用者向け`tauri-shell` featureを廃止し、非対応OSのみ内部target条件を使う（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のfeature／target情報、OS別Nix／Windows CI build matrix、許可済み`git grep`の`tauri-shell`残存参照log）。
-- [ ] **AR-11-23** `tauri-shell`によるWeb専用buildを廃止し、対応OS向け標準成果物に両UI modeを常に含める（予定証跡: `nix build .#pokecon`とWindows Package CIのOS別artifact manifest、store／package binaryの両mode smoke、Web-only artifact不在検査）。
-  - 2026-08-05 local evidence: Cargo metadataで製品feature不在とdesktop依存の非optional化を確認し、workspaceのall-target／all-feature check、対象lib test、release／closed-world auditを通過した。Windows Package CIとinstalled `.deb`／NSISの両mode証跡は未取得のため、AR-10.9-09／AR-11-23は未完了のままとする。
+- [x] **AR-10.9-09** 利用者向け`tauri-shell` featureを廃止し、非対応OSのみ内部target条件を使う（証跡: Cargo metadata／残存参照監査、Linux／Windows build matrixと下記checkpoint）。
+- [x] **AR-11-23** `tauri-shell`によるWeb専用buildを廃止し、対応OS向け標準成果物に両UI modeを常に含める（証跡: OS別artifact manifest、store／installed packageの両mode smoke、Web-only artifact不在検査と下記checkpoint）。
+
+#### 2.5／2.6 checkpoint証跡（2026-08-05、部分完了）
+
+下表はdesktop配布境界と`tauri-shell`廃止の完了証跡である。Python native extension削除は対象外であり、AR-10.9-07／AR-11-21／AR-13.1-28は未完了のままとする。
+
+| 対象 | 実測結果 |
+| --- | --- |
+| desktop実装commit | native shell統合`0df5e8503cca2be83ade51bc315899a5d2b320f8`、icon配布`23d3dffd614a06446463586f4e335824f9ee9786`、canonical module移動`5fd5aa2253578d3216a45bc3dde1b601cc132d08`、exact package検査`204a007cba30722130245b6ab1a6e15022df8cc6`、UI境界`fdf209d995ad49857e22194a60619e6d47f2d3c3`、`tauri-shell`廃止`52540e17780ca76c0b62b0e40de7b540aa41141b`。全commitにSSH signatureを格納 |
+| CI改善commit | Debian desktop probe修正`fb2f62362673fe2fcc87059c2eac7d49c535cf06`、重複CI廃止`dad5f45d470f8dbbb765beca2f3f6825f6430cd2`、filtered source具現化`a9484a26ad8487870465cf92222aa6dd4e5ee01a`。全commitにSSH signatureを格納 |
+| Web主要／Tauri下位境界 | [Rust CI 31008261621](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)のsource jobがmode capability、Web-first endpoint、Tauri adapter依存境界を検査し、exact `ui-package-check`がOpenAPI 15 path／135 method matrixをWeb／Desktopの同じpackageに対して検査してsuccess |
+| 同一binaryの両UI mode | exact package `/nix/store/zz97vmdh48nfjch9hyaraaaxcz2lgwzq-pokecon-0.1.0`内の同じ`bin/pokecon`を`--ui web`／`--ui desktop`で起動し、両startup reportと停止を確認。Web専用feature／artifactは不在 |
+| `tauri-shell`廃止 | Cargo metadataとclosed-world source／release監査で製品feature参照が0、desktop依存がnon-optionalであることを確認。[Rust CI 31008261621](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)のLinux all-target／all-featureとWindows checkがsuccess |
+| Linux／Windows配布 | [Package CI 31008261238](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261238)が`rust/pokecon/`起点でDebian packageとNSIS installerを生成し、clean install後のWeb／Desktop両modeを検査。Windows installer SHA256は`c1d8d9464cf673b258e9cd8ef897b5ce74f105acd5906635e7c29e8edad5647c`、installed application SHA256は`23323dc4d6bb41fb351d9edcb64842a9f9f696b235f93602002405485cf31db0` |
+| artifact／再現性 | Linux artifact digestは`sha256:3a85f82acc5f8d19b808757b2785b2e8f43c8ea5d61aad1626de3e7269c140ed`、Windowsは`sha256:0f7df04fde7ab753944a4a9a9440718e3b99d1ff7e50175d6eaf9fc12295f022`。独立buildした2個の`.deb`はSHA256 `e13954594b84360327cf94f7dd211e10a26ecb77eba020f76d978e8898e34062`で一致し、byte比較もsuccess |
+| 必要性監査／責務集約 | Basedpyrightとsource／shell契約はLint、RuffはLint、Rust source検査はRust CI、exact worker／UI／CLI package検査はRust CI package job、OS別install／signing／Debian再現性はPackage CIへ一意に集約。独立SPA workflowは、より強いexact packageの404／route検査へ統合 |
+| CI短縮実測 | Rust CIは27m21s→12m52s（14m29s、53.0%短縮）、Package CIは24m56s→18m07s（6m49s、27.3%短縮）、Remote Flakeは15m02s→7m39s（7m23s、49.1%短縮）。単独13m50sだったSPA workflowも廃止 |
+| 最終CI | [Package](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261238)、[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261274)、[Remote Flake](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261451)、[Rust](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008262095)がすべてsuccess。`ci-watch`は120秒settlement後exit 0 |
+
 - [ ] **AR-10.9-07** `pokecon-pybindings`を削除する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard`、`nix build .#pokecon`のpackage outputからのpybindings不在）。
 - [ ] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（予定証跡: `nix run .#check`の移行順序log、Python import／wheelのnegative test、Nix artifact diff）。
 - [ ] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する。

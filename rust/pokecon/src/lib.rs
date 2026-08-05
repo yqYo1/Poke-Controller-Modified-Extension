@@ -6,7 +6,6 @@ mod camera;
 mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;
-#[path = "desktop/facade.rs"]
 mod desktop;
 #[path = "device/facade.rs"]
 mod device;

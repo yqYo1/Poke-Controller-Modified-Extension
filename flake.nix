@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "6ed6a6946f03067527dcf858cabc034310edfcc80d3a312e72087bf7b0581f67";
+      canonicalFlakeHash = "028341a06b5e8d1e0b1d6e2760cce169e86ae46c01640f7cce7d2c66dd0066c1";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "a6cefee45eefc655a4d612965ffdbd69534182e5960d7a109b3c8701b930f963";
+              expectedAuditTestHash = "07d1b6377addb44eec14053d1559842af0667104cdda5ec52db30a57e4d53193";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -473,7 +473,6 @@
             "rust/pokecon-camera"
             "rust/pokecon-device"
             "rust/pokecon-dynamic"
-            "rust/pokecon-desktop"
             "rust/pokecon-server"
             "rust/pokecon-settings"
             "rust/pokecon-worker"
@@ -484,7 +483,6 @@
             "rust/pokecon-core"
             "rust/pokecon-camera"
             "rust/pokecon-device"
-            "rust/pokecon-desktop"
             "rust/pokecon-server"
             "rust/pokecon-settings"
             "rust/pokecon-worker"
@@ -500,7 +498,6 @@
             "rust/pokecon-camera" = "pokecon-camera";
             "rust/pokecon-contracts" = "pokecon-contracts";
             "rust/pokecon-core" = "pokecon-core";
-            "rust/pokecon-desktop" = "pokecon-desktop";
             "rust/pokecon-device" = "pokecon-device";
             "rust/pokecon-dynamic" = "pokecon-dynamic";
             "rust/pokecon-server" = "pokecon-server";
@@ -512,7 +509,6 @@
             "rust/pokecon-camera" = false;
             "rust/pokecon-contracts" = false;
             "rust/pokecon-core" = false;
-            "rust/pokecon-desktop" = false;
             "rust/pokecon-device" = false;
             "rust/pokecon-dynamic" = false;
             "rust/pokecon-server" = false;
@@ -520,11 +516,10 @@
             "rust/pokecon-worker" = false;
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "9bcb9da3d19ecc6ecd99b04a2d0a698071dbcdf6d3f3eec606a527700dcc5084";
+            "rust/pokecon" = "b66d3e5463cbea97efe96651b324fa2083c7412eb57a22fd8602f6ae467f6465";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
-            "rust/pokecon-desktop" = "36b5e58e6b7a6ad12993c7287021a5fb6e688ca2fedefd225e1707281e5238aa";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
             "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
             "rust/pokecon-server" = "8e8ffb87eac705f21b84254b44fd08a86191691e3e9aec080ae86b8a54e763b5";
@@ -542,7 +537,6 @@
             "rust/pokecon-camera" = { };
             "rust/pokecon-contracts" = { };
             "rust/pokecon-core" = { };
-            "rust/pokecon-desktop" = { };
             "rust/pokecon-device" = { };
             "rust/pokecon-dynamic" = { };
             "rust/pokecon-server" = { };
@@ -749,7 +743,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "1bd093a87503d36a0cedab4bf94c057f04c25cb7ad7719dab005855857e19ca2"
+                == "b47c64c5107a31aefa108fab7e4a30f2227e3c4d90fe9be010434c2b6e050e97"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -757,7 +751,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "ee283fec3ee44f21e28165eaab164ca77b70826e28ef080fca8cd15359d38ead"
+                == "55d37e7e96762d79956be724924f46956b385e7537c3eae18d4f736df6bdb980"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1108,7 +1102,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 395 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 394 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \

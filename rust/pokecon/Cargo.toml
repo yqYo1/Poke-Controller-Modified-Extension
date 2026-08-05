@@ -31,17 +31,18 @@ axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
+opener.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
-pokecon-desktop = { path = "../pokecon-desktop" }
 pokecon-device = { path = "../pokecon-device" }
 pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-server = { path = "../pokecon-server" }
 pokecon-settings = { path = "../pokecon-settings" }
 pokecon-worker = { path = "../pokecon-worker" }
 reqwest.workspace = true
+rfd.workspace = true
 rumqttc.workspace = true
 semver.workspace = true
 serde.workspace = true
@@ -50,6 +51,7 @@ sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

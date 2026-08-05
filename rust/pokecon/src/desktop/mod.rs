@@ -328,6 +328,8 @@ mod shell {
             .title("PokeCon Controller")
             .inner_size(1440.0, 900.0)
             .min_inner_size(960.0, 640.0);
+        #[cfg(not(target_os = "windows"))]
+        let _ = state.config.disable_compositing;
         #[cfg(target_os = "windows")]
         let builder = if state.config.disable_compositing {
             builder.additional_browser_args("--disable-gpu-compositing")

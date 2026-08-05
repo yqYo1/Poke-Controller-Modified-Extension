@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "652a320c172c95c3b7733cd394a6aa3a193cee06a44fbbb3b9166e8cdce2435a";
+      canonicalFlakeHash = "537ff0292a1bc01ac86a0a4da81f52ee582e128f4f8eca89a41ef8b3df084267";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "12e540498bda801963e4b467dc21e2aa710176df88e5ee3640d1b8c52764897b";
+              expectedAuditTestHash = "4d19999be105426929f85b2ac6b8de53def1592f6ea7daa44f7d720d9a2985fa";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -625,7 +625,7 @@
             )
           ) workspacePathDependencies;
           expectedWorkspaceBuildScripts = {
-            "rust/pokecon/build.rs" = "4be14ee06480c69114877e23c07e18ff7ead774f68e4ded3e7b62fe549b86d9a";
+            "rust/pokecon/build.rs" = "b6d20c87b467de6fdad83dc6d5ae8eeb88705f72bb8e7fb8d1dae057f34f0cfe";
             "rust/pokecon-settings/build.rs" =
               "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0";
           };
@@ -726,7 +726,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "de91ecf59c88b49d02dfa68d290e6604a6e93c308e721a247a44b0d048631cd5"
+                == "51f3eabdd01e1a1e7fd760f1510ac6ae7a2e271da1ed4d979a712daa7af3df42"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";

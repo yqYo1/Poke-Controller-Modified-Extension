@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 POLICY_RELATIVE_PATH = Path("rust/pokecon/signing-targets.json")
 TAURI_ROOT = "rust/pokecon"
+PATH_STAT_CTIME_IS_CREATION_TIME = os.name == "nt"
 
 
 def invalid_value(message: str) -> Never:
@@ -111,6 +112,21 @@ def file_identity(metadata: os.stat_result) -> tuple[int, int, int]:
     return metadata.st_dev, metadata.st_ino, stat.S_IFMT(metadata.st_mode)
 
 
+def file_path_snapshot(
+    metadata: os.stat_result,
+) -> tuple[int, int, int, int, int, int | None]:
+    """Return fields that have matching semantics for path stat and fstat."""
+    compatible_ctime = (
+        None if PATH_STAT_CTIME_IS_CREATION_TIME else metadata.st_ctime_ns
+    )
+    return (
+        *file_identity(metadata),
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        compatible_ctime,
+    )
+
+
 def file_snapshot(metadata: os.stat_result) -> tuple[int, int, int, int, int, int]:
     return (
         *file_identity(metadata),
@@ -136,7 +152,7 @@ def opened_regular_file(
         or path.is_junction()
         or not stat.S_ISREG(opened.st_mode)
         or not stat.S_ISREG(linked.st_mode)
-        or file_snapshot(opened) != file_snapshot(linked)
+        or file_path_snapshot(opened) != file_path_snapshot(linked)
     ):
         invalid_value(f"{label} must be one stable real regular file: {path}")
     if opened.st_size <= 0:
@@ -160,7 +176,7 @@ def finish_regular_file(
         path.is_symlink()
         or path.is_junction()
         or file_snapshot(before) != file_snapshot(after)
-        or file_snapshot(after) != file_snapshot(linked)
+        or file_path_snapshot(after) != file_path_snapshot(linked)
     ):
         invalid_value(f"{label} changed while it was read: {path}")
     return after

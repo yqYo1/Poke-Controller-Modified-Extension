@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import stat
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
+from scripts.release import signing_manifest
 from scripts.release.signing_manifest import (
     load_policy,
     signing_inputs,
@@ -21,6 +25,26 @@ def artifact(path: Path, contents: bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(contents)
     return path
+
+
+def metadata_with_ctime(
+    metadata: os.stat_result,
+    ctime_ns: int,
+) -> os.stat_result:
+    return cast(
+        "os.stat_result",
+        cast(
+            "object",
+            SimpleNamespace(
+                st_dev=metadata.st_dev,
+                st_ino=metadata.st_ino,
+                st_mode=metadata.st_mode,
+                st_size=metadata.st_size,
+                st_mtime_ns=metadata.st_mtime_ns,
+                st_ctime_ns=ctime_ns,
+            ),
+        ),
+    )
 
 
 def test_linux_manifest_records_exact_debian_signing_input(tmp_path: Path) -> None:
@@ -69,6 +93,60 @@ def test_windows_manifest_records_exact_nsis_signing_input(tmp_path: Path) -> No
             "size": 9,
         },
     ]
+
+
+def test_windows_path_fstat_ctime_difference_is_not_a_file_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installer = artifact(tmp_path / "package-setup.exe", b"installer")
+    original_fstat = os.fstat
+
+    def windows_fstat(file_descriptor: int) -> os.stat_result:
+        metadata = original_fstat(file_descriptor)
+        return metadata_with_ctime(metadata, metadata.st_ctime_ns + 1)
+
+    monkeypatch.setattr(
+        signing_manifest,
+        "PATH_STAT_CTIME_IS_CREATION_TIME",
+        True,
+    )
+    monkeypatch.setattr(
+        "scripts.release.signing_manifest.os.fstat",
+        windows_fstat,
+    )
+
+    manifest = signing_inputs(REPOSITORY, "windows", installer)
+
+    assert manifest["targets"]
+
+
+def test_windows_handle_ctime_change_during_read_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installer = artifact(tmp_path / "package-setup.exe", b"installer")
+    original_fstat = os.fstat
+    call_count = 0
+
+    def changing_fstat(file_descriptor: int) -> os.stat_result:
+        nonlocal call_count
+        metadata = original_fstat(file_descriptor)
+        call_count += 1
+        return metadata_with_ctime(metadata, metadata.st_ctime_ns + call_count)
+
+    monkeypatch.setattr(
+        signing_manifest,
+        "PATH_STAT_CTIME_IS_CREATION_TIME",
+        True,
+    )
+    monkeypatch.setattr(
+        "scripts.release.signing_manifest.os.fstat",
+        changing_fstat,
+    )
+
+    with pytest.raises(ValueError, match="changed while it was read"):
+        signing_manifest.read_regular_bytes(installer, "installer")
 
 
 @pytest.mark.parametrize(

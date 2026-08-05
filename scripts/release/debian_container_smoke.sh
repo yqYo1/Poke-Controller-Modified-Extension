@@ -394,7 +394,7 @@ terminate_application_group_and_reap() {
     "$wait_status"
 }
 
-desktop_session_probe() {
+desktop_session_probe() (
   if [[ $# -ne 2 || ! $1 =~ ^(installed|upgraded)$ || ! $2 =~ ^[0-9a-f]{64}$ ]]; then
     echo "internal desktop probe contract is invalid" >&2
     return 2
@@ -587,7 +587,7 @@ desktop_session_probe() {
     "$application" \
     --ui desktop \
     --bind-address 127.0.0.1 \
-    --port 0 \
+    --port 8020 \
     --dynamic-config-language none \
     --disable-compositing true \
     --ui-desktop-close-behavior shutdown \
@@ -732,7 +732,7 @@ desktop_session_probe() {
   grep -E '_NET_WM_PID|_NET_WM_NAME|WM_NAME' "$probe_root/window.xprop"
   grep -E 'Window id:|Map State:' "$probe_root/window.xwininfo"
   desktop_cleanup
-}
+)
 
 if [[ ${1:-} == __desktop_session_probe ]]; then
   shift

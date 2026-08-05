@@ -200,8 +200,8 @@ def test_installed_and_upgraded_debian_binary_prove_web_and_desktop_modes() -> N
     web_probe = section(smoke, "run_web_probe() {\n", "\n}\n\nrun_desktop_probe()")
     desktop_probe = section(
         smoke,
-        "desktop_session_probe() {\n",
-        "\n}\n\nif [[ ${1:-} == __desktop_session_probe ]]",
+        "desktop_session_probe() (\n",
+        "\n)\n\nif [[ ${1:-} == __desktop_session_probe ]]",
     )
     group_member_scan = section(
         smoke,
@@ -216,7 +216,7 @@ def test_installed_and_upgraded_debian_binary_prove_web_and_desktop_modes() -> N
     group_cleanup = section(
         smoke,
         "terminate_application_group_and_reap() {\n",
-        "\n}\n\ndesktop_session_probe()",
+        "\n}\n\ndesktop_session_probe() (",
     )
     combined_probe = section(smoke, "run_probe() {\n", "\n}\n\ninstalled_sha=")
 
@@ -249,6 +249,8 @@ def test_installed_and_upgraded_debian_binary_prove_web_and_desktop_modes() -> N
     assert 'DBUS_SESSION_BUS_ADDRESS="$dbus_address"' in desktop_probe
     assert 'DISPLAY="$display"' in desktop_probe
     assert 'setsid -- \\\n    "$application"' in desktop_probe
+    assert "--port 8020" in desktop_probe
+    assert "--port 0" not in desktop_probe
     assert "application_pid=$!" in desktop_probe
     assert '"/proc/$application_pid/exe"' in desktop_probe
     assert "process_stat_snapshot()" in smoke
@@ -307,8 +309,8 @@ def test_debian_desktop_readiness_budget_finishes_before_outer_term() -> None:
     )
     desktop_probe = section(
         smoke,
-        "desktop_session_probe() {\n",
-        "\n}\n\nif [[ ${1:-} == __desktop_session_probe ]]",
+        "desktop_session_probe() (\n",
+        "\n)\n\nif [[ ${1:-} == __desktop_session_probe ]]",
     )
     bounded_command = section(
         smoke,
@@ -323,7 +325,7 @@ def test_debian_desktop_readiness_budget_finishes_before_outer_term() -> None:
     group_cleanup = section(
         smoke,
         "terminate_application_group_and_reap() {\n",
-        "\n}\n\ndesktop_session_probe()",
+        "\n}\n\ndesktop_session_probe() (",
     )
     group_wait = section(
         smoke,

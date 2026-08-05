@@ -1,48 +1,37 @@
-#[cfg(feature = "tauri-shell")]
 use std::ffi::OsStr;
-#[cfg(feature = "tauri-shell")]
 use std::fs::{File, Metadata, OpenOptions};
-#[cfg(feature = "tauri-shell")]
 use std::io::{Read, Write};
 use std::net::{AddrParseError, IpAddr, SocketAddr};
 use std::num::TryFromIntError;
-#[cfg(feature = "tauri-shell")]
 use std::path::Path;
 use std::path::PathBuf;
 
-#[cfg(feature = "tauri-shell")]
 use std::collections::BTreeMap;
-#[cfg(feature = "tauri-shell")]
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(feature = "tauri-shell")]
 use std::sync::{Arc, mpsc};
 
-#[cfg(all(feature = "tauri-shell", unix))]
+#[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-#[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 use std::os::unix::process::CommandExt;
-#[cfg(all(feature = "tauri-shell", windows))]
+#[cfg(windows)]
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 
 use crate::desktop::{CloseBehavior, DesktopError, DesktopRuntimeSettings};
-#[cfg(feature = "tauri-shell")]
 use crate::desktop::{DesktopLifecycle, DesktopShellConfig, run_tauri_shell};
 use crate::diagnostics::{TracingInitError, init_tracing};
 use crate::dynamic_runtime::bootstrap_dynamic;
 use crate::runtime::ShutdownCoordinator;
-#[cfg(feature = "tauri-shell")]
 use crate::runtime::ShutdownReason;
 use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingsPipeline};
 use crate::settings::scaffold::{ScaffoldError, ScaffoldManager};
 use crate::{AppError, AppOptions, RunControl, UiMode, run_configured_controlled};
 use clap::{Parser, ValueEnum};
-#[cfg(feature = "tauri-shell")]
 use sha2::{Digest, Sha256};
-#[cfg(feature = "tauri-shell")]
 use tempfile::TempDir;
 use thiserror::Error;
 
-#[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 const COMPOSITING_REEXEC_MARKER: &str = "PCME_DESKTOP_COMPOSITING_CONFIGURED";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -87,19 +76,13 @@ pub enum MainError {
     BindAddress(#[from] AddrParseError),
     #[error("canonical server.port is outside the u16 range")]
     Port(#[from] TryFromIntError),
-    #[cfg(feature = "tauri-shell")]
     #[error("desktop backend task failed: {0}")]
     BackendTask(#[source] tokio::task::JoinError),
-    #[cfg(feature = "tauri-shell")]
     #[error("the primary desktop instance did not start its backend")]
     BackendNotStarted,
-    #[cfg(feature = "tauri-shell")]
     #[error(transparent)]
     ResourceManifest(#[from] ResourceManifestError),
-    #[cfg(not(feature = "tauri-shell"))]
-    #[error("desktop mode is unavailable in this binary; rebuild with feature `tauri-shell`")]
-    DesktopUnavailable,
-    #[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     #[error("failed to relaunch with Linux WebView compositing disabled: {0}")]
     CompositingRelaunch(#[source] std::io::Error),
 }
@@ -121,7 +104,7 @@ pub async fn run_cli() -> Result<(), MainError> {
     let before_dynamic = SettingsPipeline::new(request.clone()).load_before_dynamic()?;
     let cli = Cli::parse_from(&before_dynamic.remaining_arguments);
 
-    #[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     {
         let disable_compositing =
             before_dynamic.pre_dynamic_final_boolean_with_cli("ui.desktop.disable_compositing")?;
@@ -142,25 +125,10 @@ pub async fn run_cli() -> Result<(), MainError> {
         .ensure(before_dynamic.active_profile.as_str())?;
 
     if cli.ui == UiArgument::Desktop && !cli.exit_after_startup {
-        #[cfg(feature = "tauri-shell")]
         return run_desktop(request, before_dynamic).await;
-        #[cfg(not(feature = "tauri-shell"))]
-        return Err(MainError::DesktopUnavailable);
     }
 
-    #[cfg(feature = "tauri-shell")]
-    return run_packaged_backend(
-        request,
-        before_dynamic,
-        cli.ui.into(),
-        cli.exit_after_startup,
-        RunControl::new(ShutdownCoordinator::new()),
-        None,
-    )
-    .await;
-
-    #[cfg(not(feature = "tauri-shell"))]
-    run_backend(
+    run_packaged_backend(
         request,
         before_dynamic,
         cli.ui.into(),
@@ -171,7 +139,6 @@ pub async fn run_cli() -> Result<(), MainError> {
     .await
 }
 
-#[cfg(feature = "tauri-shell")]
 fn packaged_resource_root(current: &Path) -> Result<SelectedResourceRoot, ResourceManifestError> {
     let provenance = compiled_resource_provenance()?;
     let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
@@ -187,7 +154,6 @@ fn packaged_resource_root(current: &Path) -> Result<SelectedResourceRoot, Resour
     )
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Debug, Error)]
 pub enum ResourceManifestError {
     #[error("compiled resource provenance is invalid")]
@@ -230,14 +196,12 @@ pub enum ResourceManifestError {
     },
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResourcePlatform {
     Unix,
     Windows,
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResourceProvenance<'a> {
     Development,
@@ -245,7 +209,6 @@ enum ResourceProvenance<'a> {
     Packaged(&'a str),
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResourceOrigin {
     Cargo,
@@ -253,7 +216,6 @@ enum ResourceOrigin {
     Packaged,
 }
 
-#[cfg(feature = "tauri-shell")]
 impl ResourceOrigin {
     const fn name(self) -> &'static str {
         match self {
@@ -264,7 +226,6 @@ impl ResourceOrigin {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn parse_resource_provenance(value: &str) -> Result<ResourceProvenance<'_>, ResourceManifestError> {
     match value {
         "development" => Ok(ResourceProvenance::Development),
@@ -277,12 +238,10 @@ fn parse_resource_provenance(value: &str) -> Result<ResourceProvenance<'_>, Reso
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn compiled_resource_provenance() -> Result<ResourceProvenance<'static>, ResourceManifestError> {
     parse_resource_provenance(env!("POKECON_RESOURCE_PROVENANCE"))
 }
 
-#[cfg(feature = "tauri-shell")]
 const fn provenance_accepts_origin(
     provenance: ResourceProvenance<'_>,
     origin: ResourceOrigin,
@@ -295,7 +254,6 @@ const fn provenance_accepts_origin(
     )
 }
 
-#[cfg(feature = "tauri-shell")]
 fn require_resource_origin(
     provenance: ResourceProvenance<'_>,
     origin: ResourceOrigin,
@@ -309,7 +267,6 @@ fn require_resource_origin(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResourceOriginPlatform {
     Linux,
@@ -318,7 +275,6 @@ enum ResourceOriginPlatform {
     Unsupported,
 }
 
-#[cfg(feature = "tauri-shell")]
 impl ResourceOriginPlatform {
     const fn current() -> Self {
         if cfg!(target_os = "linux") {
@@ -360,14 +316,12 @@ impl ResourceOriginPlatform {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MissingManifestPolicy {
     Reject,
     DevelopmentFallback,
 }
 
-#[cfg(feature = "tauri-shell")]
 impl MissingManifestPolicy {
     #[cfg(test)]
     const fn runtime(platform: ResourcePlatform, development_build: bool) -> Self {
@@ -379,7 +333,6 @@ impl MissingManifestPolicy {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 impl ResourcePlatform {
     #[cfg(test)]
     const fn current() -> Self {
@@ -427,26 +380,22 @@ impl ResourcePlatform {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 struct ResourceSnapshot {
     _container: TempDir,
     root: PathBuf,
 }
 
-#[cfg(feature = "tauri-shell")]
 impl Drop for ResourceSnapshot {
     fn drop(&mut self) {
         let _result = make_snapshot_tree_writable(&self.root);
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 struct SelectedResourceRoot {
     path: PathBuf,
     _snapshot: Option<ResourceSnapshot>,
 }
 
-#[cfg(feature = "tauri-shell")]
 impl SelectedResourceRoot {
     fn borrowed(path: &Path) -> Self {
         Self {
@@ -467,7 +416,6 @@ impl SelectedResourceRoot {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StableMetadata {
     length: u64,
@@ -479,7 +427,7 @@ struct StableMetadata {
     platform: OtherStableMetadata,
 }
 
-#[cfg(all(feature = "tauri-shell", unix))]
+#[cfg(unix)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct UnixStableMetadata {
     device: u64,
@@ -494,7 +442,7 @@ struct UnixStableMetadata {
     changed_nanoseconds: i64,
 }
 
-#[cfg(all(feature = "tauri-shell", windows))]
+#[cfg(windows)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct WindowsStableMetadata {
     attributes: u64,
@@ -505,14 +453,13 @@ struct WindowsStableMetadata {
     links: u64,
 }
 
-#[cfg(all(feature = "tauri-shell", not(any(unix, windows))))]
+#[cfg(not(any(unix, windows)))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct OtherStableMetadata {
     readonly: bool,
     modified: Option<std::time::SystemTime>,
 }
 
-#[cfg(feature = "tauri-shell")]
 struct VerifiedOpenFile {
     path: PathBuf,
     file: File,
@@ -521,14 +468,12 @@ struct VerifiedOpenFile {
     executable: bool,
 }
 
-#[cfg(feature = "tauri-shell")]
 struct ObservedDirectory {
     path: PathBuf,
     handle: File,
     identity: StableMetadata,
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ResourceManifest {
@@ -539,7 +484,6 @@ struct ResourceManifest {
     content_sha256: String,
 }
 
-#[cfg(feature = "tauri-shell")]
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 struct ResourceManifestEntry {
@@ -548,13 +492,11 @@ struct ResourceManifestEntry {
     size: u64,
 }
 
-#[cfg(feature = "tauri-shell")]
 struct ExpectedResourceManifest {
     files: BTreeMap<String, (String, u64)>,
     content_sha256: String,
 }
 
-#[cfg(feature = "tauri-shell")]
 fn is_lowercase_sha256(value: &str) -> bool {
     value.len() == 64
         && value
@@ -562,7 +504,6 @@ fn is_lowercase_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn is_safe_manifest_path(value: &str) -> bool {
     !value.is_empty()
         && !value.starts_with('/')
@@ -574,7 +515,6 @@ fn is_safe_manifest_path(value: &str) -> bool {
             .all(|component| !component.is_empty() && component != "." && component != "..")
 }
 
-#[cfg(feature = "tauri-shell")]
 fn invalid_manifest(manifest_path: &Path, reason: impl Into<String>) -> ResourceManifestError {
     ResourceManifestError::Invalid {
         path: manifest_path.to_path_buf(),
@@ -582,7 +522,6 @@ fn invalid_manifest(manifest_path: &Path, reason: impl Into<String>) -> Resource
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn resource_io(
     operation: &'static str,
     path: &Path,
@@ -595,7 +534,6 @@ fn resource_io(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn lowercase_hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -606,12 +544,11 @@ fn lowercase_hex(bytes: &[u8]) -> String {
     encoded
 }
 
-#[cfg(feature = "tauri-shell")]
 fn sha256_bytes(bytes: &[u8]) -> String {
     lowercase_hex(&Sha256::digest(bytes))
 }
 
-#[cfg(all(feature = "tauri-shell", unix))]
+#[cfg(unix)]
 fn stable_metadata(_file: &File, metadata: &Metadata, _path: &Path) -> StableMetadata {
     StableMetadata {
         length: metadata.len(),
@@ -630,7 +567,7 @@ fn stable_metadata(_file: &File, metadata: &Metadata, _path: &Path) -> StableMet
     }
 }
 
-#[cfg(all(feature = "tauri-shell", windows))]
+#[cfg(windows)]
 fn stable_metadata(
     file: &File,
     _metadata: &Metadata,
@@ -651,7 +588,7 @@ fn stable_metadata(
     })
 }
 
-#[cfg(all(feature = "tauri-shell", not(any(unix, windows))))]
+#[cfg(not(any(unix, windows)))]
 fn stable_metadata(_file: &File, metadata: &Metadata, _path: &Path) -> StableMetadata {
     StableMetadata {
         length: metadata.len(),
@@ -662,7 +599,6 @@ fn stable_metadata(_file: &File, metadata: &Metadata, _path: &Path) -> StableMet
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 impl StableMetadata {
     fn has_single_link(&self) -> bool {
         #[cfg(any(unix, windows))]
@@ -676,14 +612,13 @@ impl StableMetadata {
     }
 }
 
-#[cfg(all(feature = "tauri-shell", any(windows, test)))]
+#[cfg(any(windows, test))]
 const fn windows_attributes_include_reparse_point(attributes: u32) -> bool {
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
 
     attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
-#[cfg(feature = "tauri-shell")]
 fn metadata_is_link_or_reparse_point(metadata: &Metadata) -> bool {
     if metadata.file_type().is_symlink() {
         return true;
@@ -698,7 +633,6 @@ fn metadata_is_link_or_reparse_point(metadata: &Metadata) -> bool {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn metadata_is_executable(metadata: &Metadata) -> bool {
     #[cfg(unix)]
     {
@@ -711,7 +645,7 @@ fn metadata_is_executable(metadata: &Metadata) -> bool {
     }
 }
 
-#[cfg(all(feature = "tauri-shell", unix))]
+#[cfg(unix)]
 fn open_no_follow(path: &Path, directory: bool) -> Result<File, ResourceManifestError> {
     use nix::fcntl::{OFlag, open};
     use nix::sys::stat::Mode;
@@ -730,7 +664,7 @@ fn open_no_follow(path: &Path, directory: bool) -> Result<File, ResourceManifest
     Ok(File::from(descriptor))
 }
 
-#[cfg(all(feature = "tauri-shell", windows))]
+#[cfg(windows)]
 fn open_no_follow(path: &Path, directory: bool) -> Result<File, ResourceManifestError> {
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
@@ -747,7 +681,7 @@ fn open_no_follow(path: &Path, directory: bool) -> Result<File, ResourceManifest
         .map_err(|error| resource_io("open without following links", path, error))
 }
 
-#[cfg(all(feature = "tauri-shell", not(any(unix, windows))))]
+#[cfg(not(any(unix, windows)))]
 fn open_no_follow(path: &Path, _directory: bool) -> Result<File, ResourceManifestError> {
     OpenOptions::new()
         .read(true)
@@ -755,7 +689,6 @@ fn open_no_follow(path: &Path, _directory: bool) -> Result<File, ResourceManifes
         .map_err(|error| resource_io("open resource", path, error))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn ensure_regular_file(
     metadata: &Metadata,
     path: &Path,
@@ -773,7 +706,6 @@ fn ensure_regular_file(
     Ok(())
 }
 
-#[cfg(feature = "tauri-shell")]
 fn inspect_open_regular_file(
     file: &File,
     path: &Path,
@@ -799,7 +731,6 @@ fn inspect_open_regular_file(
     Ok((identity, metadata_is_executable(&metadata)))
 }
 
-#[cfg(feature = "tauri-shell")]
 impl VerifiedOpenFile {
     fn verify_stable(&self, manifest_path: &Path) -> Result<(), ResourceManifestError> {
         let (handle_identity, _executable) =
@@ -820,7 +751,6 @@ impl VerifiedOpenFile {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn read_stable_resource_file_with<F>(
     path: &Path,
     manifest_path: &Path,
@@ -858,7 +788,6 @@ where
     Ok(verified)
 }
 
-#[cfg(feature = "tauri-shell")]
 fn read_stable_resource_file(
     path: &Path,
     manifest_path: &Path,
@@ -866,7 +795,6 @@ fn read_stable_resource_file(
     read_stable_resource_file_with(path, manifest_path, || {})
 }
 
-#[cfg(feature = "tauri-shell")]
 fn inspect_open_directory(
     file: &File,
     path: &Path,
@@ -894,7 +822,6 @@ fn inspect_open_directory(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn observe_directory(
     path: &Path,
     manifest_path: &Path,
@@ -919,7 +846,6 @@ fn observe_directory(
     })
 }
 
-#[cfg(feature = "tauri-shell")]
 impl ObservedDirectory {
     fn verify_stable(&self, manifest_path: &Path) -> Result<(), ResourceManifestError> {
         let handle_identity = inspect_open_directory(&self.handle, &self.path, manifest_path)?;
@@ -938,7 +864,6 @@ impl ObservedDirectory {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn relative_resource_path(
     resource_root: &Path,
     path: &Path,
@@ -976,7 +901,6 @@ fn relative_resource_path(
     Ok(relative)
 }
 
-#[cfg(feature = "tauri-shell")]
 fn expected_resource_files(
     contents: &[u8],
     manifest_path: &Path,
@@ -1042,7 +966,6 @@ fn expected_resource_files(
     })
 }
 
-#[cfg(feature = "tauri-shell")]
 fn require_packaged_resource_identity(
     actual: &str,
     required: Option<&str>,
@@ -1057,7 +980,6 @@ fn require_packaged_resource_identity(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn set_snapshot_permissions(
     path: &Path,
     directory: bool,
@@ -1084,7 +1006,6 @@ fn set_snapshot_permissions(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn make_snapshot_tree_writable(path: &Path) -> std::io::Result<()> {
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
@@ -1107,7 +1028,6 @@ fn make_snapshot_tree_writable(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "tauri-shell")]
 fn seal_snapshot_directories(path: &Path) -> Result<(), ResourceManifestError> {
     for entry in std::fs::read_dir(path)
         .map_err(|error| resource_io("read snapshot directory", path, error))?
@@ -1133,7 +1053,6 @@ fn seal_snapshot_directories(path: &Path) -> Result<(), ResourceManifestError> {
         .map_err(|error| resource_io("seal snapshot directory", path, error))
 }
 
-#[cfg(feature = "tauri-shell")]
 impl ResourceSnapshot {
     fn create() -> Result<Self, ResourceManifestError> {
         let container = tempfile::Builder::new()
@@ -1154,7 +1073,6 @@ impl ResourceSnapshot {
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn write_snapshot_file(
     snapshot_root: &Path,
     relative: &str,
@@ -1187,7 +1105,6 @@ fn write_snapshot_file(
         .map_err(|error| resource_io("seal snapshot resource", &destination, error))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn ensure_canonical_resource_containment(
     path: &Path,
     canonical_root: &Path,
@@ -1209,7 +1126,6 @@ fn ensure_canonical_resource_containment(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn inventory_resource_files(
     resource_root: &Path,
     canonical_root: &Path,
@@ -1313,7 +1229,6 @@ fn inventory_resource_files(
     Ok(inventory)
 }
 
-#[cfg(feature = "tauri-shell")]
 fn ensure_resource_inventory(
     expected: &BTreeMap<String, (String, u64)>,
     actual: &BTreeMap<String, (String, u64)>,
@@ -1346,7 +1261,6 @@ fn ensure_resource_inventory(
     ))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn verify_materialized_snapshot(
     snapshot_root: &Path,
     manifest_contents: &[u8],
@@ -1392,7 +1306,6 @@ fn verify_materialized_snapshot(
     manifest.verify_stable(&manifest_path)
 }
 
-#[cfg(feature = "tauri-shell")]
 fn materialize_resource_manifest(
     resource_root: &Path,
     origin_platform: ResourceOriginPlatform,
@@ -1462,7 +1375,6 @@ fn materialize_resource_manifest(
     Ok(Some(SelectedResourceRoot::snapshot(snapshot)))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn malformed_resource_origin(
     current: &Path,
     platform: ResourceOriginPlatform,
@@ -1475,7 +1387,6 @@ fn malformed_resource_origin(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 fn select_resource_root_for_provenance(
     current: &Path,
     product_name: &str,
@@ -1509,7 +1420,6 @@ fn select_resource_root_for_provenance(
         })
 }
 
-#[cfg(feature = "tauri-shell")]
 fn packaged_resource_candidate(
     current: &Path,
     product_name: &str,
@@ -1592,7 +1502,7 @@ fn packaged_resource_candidate(
     }
 }
 
-#[cfg(all(feature = "tauri-shell", test))]
+#[cfg(test)]
 fn select_tauri_resource_root(
     current: &Path,
     candidate: &Path,
@@ -1605,7 +1515,7 @@ fn select_tauri_resource_root(
     )
 }
 
-#[cfg(all(feature = "tauri-shell", test))]
+#[cfg(test)]
 fn select_tauri_resource_root_for_platform(
     current: &Path,
     candidate: &Path,
@@ -1620,7 +1530,7 @@ fn select_tauri_resource_root_for_platform(
     )
 }
 
-#[cfg(all(feature = "tauri-shell", test))]
+#[cfg(test)]
 fn select_tauri_resource_root_for_platform_with_policy(
     current: &Path,
     candidate: &Path,
@@ -1645,7 +1555,6 @@ fn select_tauri_resource_root_for_platform_with_policy(
     })
 }
 
-#[cfg(feature = "tauri-shell")]
 fn has_exact_cargo_output_layout(current: &Path, candidate: &Path) -> bool {
     if current != candidate || current.file_name().is_none_or(OsStr::is_empty) {
         return false;
@@ -1683,7 +1592,6 @@ fn has_exact_cargo_output_layout(current: &Path, candidate: &Path) -> bool {
     !metadata_is_link_or_reparse_point(&marker_metadata) && marker_metadata.file_type().is_file()
 }
 
-#[cfg(feature = "tauri-shell")]
 fn is_valid_nix_store_package_basename(value: &OsStr) -> bool {
     const NIX_BASE32: &str = "0123456789abcdfghijklmnpqrsvwxyz";
 
@@ -1700,7 +1608,6 @@ fn is_valid_nix_store_package_basename(value: &OsStr) -> bool {
             .all(|byte| NIX_BASE32.as_bytes().contains(&byte))
 }
 
-#[cfg(feature = "tauri-shell")]
 fn has_exact_nix_resource_layout(current: &Path) -> bool {
     if !cfg!(unix) || current.file_name() != Some(OsStr::new("bin")) {
         return false;
@@ -1820,7 +1727,6 @@ async fn run_backend(
     Ok(())
 }
 
-#[cfg(feature = "tauri-shell")]
 async fn run_packaged_backend(
     mut request: PipelineRequest,
     before_dynamic: LoadedSettings,
@@ -1845,7 +1751,6 @@ async fn run_packaged_backend(
     result
 }
 
-#[cfg(feature = "tauri-shell")]
 async fn supervise_desktop_backend_task(
     inner_task: tokio::task::JoinHandle<Result<(), MainError>>,
     shutdown: ShutdownCoordinator,
@@ -1866,7 +1771,6 @@ async fn supervise_desktop_backend_task(
     }
 }
 
-#[cfg(feature = "tauri-shell")]
 async fn supervise_desktop_backend_startup<ReadinessGuard>(
     inner_task: tokio::task::JoinHandle<Result<(), MainError>>,
     shutdown: ShutdownCoordinator,
@@ -1877,7 +1781,6 @@ async fn supervise_desktop_backend_startup<ReadinessGuard>(
     result
 }
 
-#[cfg(feature = "tauri-shell")]
 async fn run_desktop(
     request: PipelineRequest,
     before_dynamic: LoadedSettings,
@@ -1952,7 +1855,6 @@ async fn run_desktop(
     .await
 }
 
-#[cfg(feature = "tauri-shell")]
 async fn finish_desktop_run(
     shell_result: Result<(), DesktopError>,
     task_receiver: mpsc::Receiver<tokio::task::JoinHandle<Result<(), MainError>>>,
@@ -1986,7 +1888,7 @@ async fn finish_desktop_run(
     backend_result
 }
 
-#[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn should_reexec_for_linux_compositing(
     ui: UiArgument,
     exit_after_startup: bool,
@@ -1996,7 +1898,7 @@ fn should_reexec_for_linux_compositing(
     ui == UiArgument::Desktop && !exit_after_startup && disable_compositing && !already_reexecuted
 }
 
-#[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+#[cfg(target_os = "linux")]
 fn reexec_for_linux_compositing() -> Result<(), MainError> {
     let executable = std::env::current_exe().map_err(MainError::CompositingRelaunch)?;
     let error = std::process::Command::new(executable)
@@ -2007,7 +1909,7 @@ fn reexec_for_linux_compositing() -> Result<(), MainError> {
     Err(MainError::CompositingRelaunch(error))
 }
 
-#[cfg(all(test, feature = "tauri-shell"))]
+#[cfg(test)]
 mod tests {
     use std::fs;
     use std::future::pending;

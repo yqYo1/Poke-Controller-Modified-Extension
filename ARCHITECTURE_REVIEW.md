@@ -187,9 +187,9 @@ Cargo workspaceは11クレートで構成されています。
 
 ### 7.2 重い依存の隔離
 
-`pokecon-desktop`は現在Tauri関連依存を`tauri-shell`機能へ隔離していますが、Tauri設定、ビルドスクリプト、アプリケーション実行ファイル、署名対象、インストーラー生成は`pokecon-app`側にあります。
+`pokecon-desktop`はPhase 2.7までcompatibility packageとして残りますが、Tauri関連依存を製品機能で分岐しません。Tauri設定、ビルドスクリプト、アプリケーション実行ファイル、署名対象、インストーラー生成は`pokecon-app`側にあります。
 
-標準成果物にWeb UIとTauriの両方を含めるため、`tauri-shell`によるWeb専用ビルドは廃止します。
+標準成果物にWeb UIとTauriの両方を含めるため、`tauri-shell`によるWeb専用ビルドを廃止しました。
 
 `pokecon-camera`はカメラと画像処理のプラットフォーム依存を所有しています。
 
@@ -221,7 +221,7 @@ Web UIとTauriは別の実行ファイルにせず、同じPokeCon本体実行�
 
 ### 7.5 Cargo機能フラグとの比較
 
-現在、アプリケーション固有の機能フラグとして実装されているのは、主に`tauri-shell`です。
+現在、Webとdesktopを切り替えるアプリケーション固有のCargo機能フラグはありません。`contract-generator`は開発用generator targetだけを有効にします。
 
 `pokecon-app`は、`pokecon-camera`、`pokecon-device`、`pokecon-dynamic`、`pokecon-server`、`pokecon-settings`、`pokecon-worker`へ無条件に依存しています。
 
@@ -839,7 +839,7 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 | `rust/pokecon/tauri.conf.json`、`rust/pokecon/linux/` | Tauri設定とLinux bundle input | `rust/pokecon/`起点の正準package input |
 | `rust/pokecon-desktop/src/lib.rs` | 正準desktop sourceを再公開するcompatibility facade | 旧packageとtest targetはPhase 2.7まで維持する暫定入口 |
 
-`tauri-shell` featureはこの段階では維持し、Phase 2.6で削除します。Cargo package、workspace member、依存と旧crate directoryの統合はPhase 2.7で行います。
+`tauri-shell` featureはPhase 2.5a時点では維持していましたが、Phase 2.6で削除しました。Cargo package、workspace member、依存と旧crate directoryの統合はPhase 2.7で行います。
 
 現行の`--ui desktop --exit-after-startup`はTauri windowの生成とevent loopを通らないため、実packageのTauri window起動を証明しません。real Tauri-window packaged proofは次の不可分atomで追加し、このPhase 2.5aでは完了を主張しません。
 
@@ -852,7 +852,7 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 3. `pokecon-settings`、`pokecon-camera`、`pokecon-device`、`pokecon-server`を内部モジュールへ順番に移し、各段階でworkspace全体を検証する
 4. `pokecon-dynamic`と`pokecon-worker`を移し、`pokecon-worker --kind script`と`--kind dynamic`の別プロセス境界、双方向IPC、強制停止、世代管理を維持する。`--kind script`からRustメインへの資源操作要求を自動実行の主制御として扱い、親プロセス側の監督実装へ実行判断を移さない
 5. `pokecon-desktop`を`desktop`へ移し、同じ`pokecon`実行ファイルの起動時引数でWebとTauriを切り替える
-6. `tauri-shell`によるWeb専用ビルドと`pokecon-pybindings`を削除し、標準成果物とPython配布物を更新する
+6. `tauri-shell`によるWeb専用ビルドを廃止して標準成果物を更新し、続いて`pokecon-pybindings`を削除してPython配布物を更新する
 7. 旧クレートのディレクトリーとworkspace memberを削除し、Cargo.lock、Nix、CI、リリース、インストーラー、文書内のパスとパッケージ名を更新する
 8. 通常CIを変更領域判定、重複のない領域別job、集約必須ゲート、分割したNix source、バイナリキャッシュへ移行し、実測時間と検査完全性を検証する
 9. Cargo、frontend dev server、hook導入、エディター連携のflake appを追加して対話用途を移行し、`.envrc`と既定devShellを削除した後、repository全体のdevShell前提を更新する

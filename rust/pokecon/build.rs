@@ -15,12 +15,10 @@ enum ResourceProvenanceEnvironmentError {
 impl fmt::Display for ResourceProvenanceEnvironmentError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Missing => formatter.write_str(
-                "POKECON_RESOURCE_PROVENANCE is required when tauri-shell is enabled",
-            ),
-            Self::NonUnicode => formatter.write_str(
-                "POKECON_RESOURCE_PROVENANCE must be valid Unicode when tauri-shell is enabled",
-            ),
+            Self::Missing => formatter.write_str("POKECON_RESOURCE_PROVENANCE is required"),
+            Self::NonUnicode => {
+                formatter.write_str("POKECON_RESOURCE_PROVENANCE must be valid Unicode")
+            }
             Self::Malformed => formatter.write_str(
                 "POKECON_RESOURCE_PROVENANCE must be exactly development, nix-exact, or packaged: followed by 64 lowercase hexadecimal characters",
             ),
@@ -289,10 +287,8 @@ fn run_tauri_build() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=POKECON_BUILD_PYTHON");
-    if env::var_os("CARGO_FEATURE_TAURI_SHELL").is_some() {
-        println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");
-        let provenance = validated_resource_provenance().unwrap_or_else(|error| panic!("{error}"));
-        println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");
-        run_tauri_build().expect("Tauri application metadata must be valid");
-    }
+    println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");
+    let provenance = validated_resource_provenance().unwrap_or_else(|error| panic!("{error}"));
+    println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");
+    run_tauri_build().expect("Tauri application metadata must be valid");
 }

@@ -12,9 +12,7 @@
 
 Linuxの`.deb`はUbuntu 24.04 x86-64を検証基準とし、成果物が要求するglibcの上限を2.39とします。
 
-LinuxではWeb UIとTauriデスクトップを利用できます。
-
-WindowsではTauriデスクトップを利用します。
+LinuxとWindowsの標準成果物はWeb UIとTauriデスクトップの両方を含み、起動時に表示形態を選択できます。
 
 macOSとPWAは現行リリースの対象外です。
 
@@ -138,7 +136,7 @@ Data/
 
 ## Web modeを起動する
 
-LinuxでWeb UIを使用する場合は次のように起動します。
+LinuxまたはWindowsでWeb UIを使用する場合は、terminalから次のように起動します。
 
 ```bash
 pokecon --ui web

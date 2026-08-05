@@ -37,6 +37,7 @@ CARGO_CACHE_DIRECTORY_TAG = (
     "# This file is a cache directory tag created by cargo.\n"
     "# For information about cache directory tags see https://bford.info/cachedir/\n"
 )
+RETIRED_DESKTOP_PRODUCT_FEATURE = "tauri" + "-shell"
 
 EXPECTED_OPENAPI_OPERATIONS: tuple[tuple[str, str, str], ...] = (
     ("/api/camera/retry", "post", "retry_camera"),
@@ -196,11 +197,11 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "4fa5120217c01cac8f205975a7c330f12adcbc053f235499525c96b7aa09359a",
+    "rust/pokecon": "9bcb9da3d19ecc6ecd99b04a2d0a698071dbcdf6d3f3eec606a527700dcc5084",
     "rust/pokecon-camera": "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd",
     "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
     "rust/pokecon-core": "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9",
-    "rust/pokecon-desktop": "a8e82d6036e66a6205914e017f0ce8a464b2f4ac16a3d63d538de9950aace3e7",
+    "rust/pokecon-desktop": "36b5e58e6b7a6ad12993c7287021a5fb6e688ca2fedefd225e1707281e5238aa",
     "rust/pokecon-device": "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b",
     "rust/pokecon-dynamic": "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834",
     "rust/pokecon-pybindings": "e0cef290e07b82160ea8952cae7dafb3ded68f27b24e0e553592d24da0de2fe7",
@@ -315,12 +316,6 @@ required-features = ["contract-generator"]
 [features]
 default = []
 contract-generator = []
-tauri-shell = [
-  "dep:nix",
-  "dep:tauri",
-  "dep:winapi-util",
-  "pokecon-desktop/tauri-shell",
-]
 
 [dependencies]
 async-trait.workspace = true
@@ -346,7 +341,7 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tauri = { workspace = true, optional = true }
+tauri.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -362,13 +357,43 @@ regex.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { workspace = true, features = ["fs"], optional = true }
+nix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-winapi-util = { version = "0.1.11", optional = true }
+winapi-util = "0.1.11"
+
+[lints]
+workspace = true
+"""
+)
+
+EXPECTED_POKECON_DESKTOP_MANIFEST = tomllib.loads(
+    r"""
+[package]
+name = "pokecon-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+build = false
+
+[features]
+default = []
+
+[dependencies]
+pokecon-core = { path = "../pokecon-core" }
+opener.workspace = true
+rfd.workspace = true
+tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
 
 [lints]
 workspace = true
@@ -638,28 +663,48 @@ def production_rust_source(source: str) -> str:
     )
     if not test_boundaries:
         return source
-    assert len(test_boundaries) == 1, "multiple top-level cfg(test) item tails"
-    test_boundary = test_boundaries[0]
-    item_start = test_boundary.end()
-    while item_start < len(mask) and mask[item_start].isspace():
-        item_start += 1
+    production = list(source)
+    brace_depths, parenthesis_depths, bracket_depths = rust_delimiter_depths(mask)
+    for boundary_index, test_boundary in enumerate(test_boundaries):
+        item_start = test_boundary.end()
+        while item_start < len(mask) and mask[item_start].isspace():
+            item_start += 1
 
-    module = re.match(r"mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{", mask[item_start:])
-    if module is not None:
-        open_brace = item_start + module.end() - 1
-        item_end = matching_rust_brace(mask, open_brace) + 1
-    else:
-        test_reexport = re.match(
-            r"pub\s*\(\s*crate\s*\)\s+use\b",
+        braced_item = re.match(
+            r"(?:mod\s+[A-Za-z_][A-Za-z0-9_]*|"
+            r"(?:pub(?:\s*\([^)]*\))?\s+)?(?:async\s+|const\s+)?fn\b)",
             mask[item_start:],
         )
-        assert test_reexport is not None, "unsupported top-level cfg(test) item tail"
-        item_end = terminal_rust_semicolon(mask, item_start) + 1
+        if braced_item is not None:
+            open_brace = next(
+                (
+                    index
+                    for index in range(item_start + braced_item.end(), len(mask))
+                    if mask[index] == "{"
+                    and brace_depths[index] == 0
+                    and parenthesis_depths[index] == 0
+                    and bracket_depths[index] == 0
+                ),
+                -1,
+            )
+            assert open_brace != -1, "cfg(test) item has no top-level body"
+            item_end = matching_rust_brace(mask, open_brace) + 1
+        else:
+            test_reexport = re.match(
+                r"pub\s*\(\s*crate\s*\)\s+use\b",
+                mask[item_start:],
+            )
+            assert test_reexport is not None, "unsupported top-level cfg(test) item"
+            item_end = terminal_rust_semicolon(mask, item_start) + 1
 
-    assert not mask[item_end:].strip(), (
-        "production tokens follow the cfg(test) item tail"
-    )
-    return source[: test_boundary.start()]
+        if boundary_index == len(test_boundaries) - 1:
+            assert not mask[item_end:].strip(), (
+                "production tokens follow the final cfg(test) item"
+            )
+        for index in range(test_boundary.start(), item_end):
+            if source[index] not in "\r\n":
+                production[index] = " "
+    return "".join(production)
 
 
 def load_production_routing_sources() -> dict[str, str]:
@@ -1180,6 +1225,14 @@ def cargo_dependency_tables(
 
 
 def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
+    assert (
+        sorted(
+            source_name
+            for source_name, source in sources.items()
+            if RETIRED_DESKTOP_PRODUCT_FEATURE in source
+        )
+        == []
+    )
     expected_package_names = {
         "rust/pokecon": "pokecon",
         "rust/pokecon-camera": "pokecon-camera",
@@ -1244,6 +1297,26 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         == "9c46e4a315573254606fde26683dece2a879972c71487e006d1e9485db52a425"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
+    assert manifests["rust/pokecon-desktop"] == EXPECTED_POKECON_DESKTOP_MANIFEST
+    assert all(
+        RETIRED_DESKTOP_PRODUCT_FEATURE not in sources[source_name]
+        for source_name in WORKSPACE_MANIFEST_SOURCES.values()
+    )
+    for member, dependency_names in (
+        ("rust/pokecon", ("tauri",)),
+        (
+            "rust/pokecon-desktop",
+            ("opener", "rfd", "tauri", "tauri-plugin-single-instance"),
+        ),
+    ):
+        dependencies = validated_string_object_dict(
+            manifests[member]["dependencies"], (member, "dependencies")
+        )
+        for dependency_name in dependency_names:
+            dependency = validated_string_object_dict(
+                dependencies[dependency_name], (member, dependency_name)
+            )
+            assert dependency == {"workspace": True}, (member, dependency_name)
     assert {
         member: validated_string_object_dict(manifest["package"], (member, "package"))[
             "name"
@@ -1337,7 +1410,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert actual_build_script_sources == set(WORKSPACE_BUILD_SCRIPT_SOURCES.values())
     expected_build_script_hashes = {
         "@pokecon/build.rs": (
-            "877c790712b3075df19e1b8dcfd9d3249835e6bbf9c065b1f7fda0bbd6f3d916"
+            "4be14ee06480c69114877e23c07e18ff7ead774f68e4ded3e7b62fe549b86d9a"
         ),
         "@pokecon-settings/build.rs": (
             "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0"
@@ -1432,12 +1505,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert compact_rust(provenance_build_main) == compact_rust(
         """
         println!("cargo:rerun-if-env-changed=POKECON_BUILD_PYTHON");
-        if env::var_os("CARGO_FEATURE_TAURI_SHELL").is_some() {
-            println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");
-            let provenance = validated_resource_provenance().unwrap_or_else(|error| panic!("{error}"));
-            println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");
-            run_tauri_build().expect("Tauri application metadata must be valid");
-        }
+        println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");
+        let provenance = validated_resource_provenance().unwrap_or_else(|error| panic!("{error}"));
+        println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");
+        run_tauri_build().expect("Tauri application metadata must be valid");
         """
     )
     assert (
@@ -1999,12 +2070,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "5b8484169b34f1f8063b8aa43d5c1ba8874aac18b5d4c9cfba6c1a0b214003e5"
+        == "da9e84c38519abdfbf9b2f64f4710108bd57ca571266b3152b2b412252f94dae"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
     )
-    assert tauri_config["build"] == {"features": ["tauri-shell"]}
+    assert "build" not in tauri_config
     expected_debian_dependencies = [
         "libgl1",
         "libglib2.0-0",
@@ -2176,7 +2247,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "816706c8ddaf420052524d2f5d0cb980f6ea160451ff539569c1349ed2437fad"
+        == "bf12209662e1b50a6e2f9762c1876d77c95dbc73faa47d819c6eaa43081f86b8"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2404,7 +2475,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "8735e70b2dbae955e72cb1630ed3ba350fa14e84daa829ef42d892ab1b7287dc"
+        == "1718a9afbe4357620c38dfd1fcd8108ac650954009f758586087690c83165164"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -3030,10 +3101,11 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "90658f350b23aa5a6f3d79571f17e6236abd6e00522b7ccc5d34732fdfd52571"
+        == "8495df576757f52f8bb7cd15d1f58b1693d9abed89debbe22aff9560a6535283"
     )
     assert package_section.count("${installControlledCargoManifests}") == 3
     assert package_section.count('"--locked"') == 2
+    assert '"--features"' not in package_section
     assert 'test -f "${productionRoutingAudit}/passed"' in package_section
     assert 'RUSTC = "${rustToolchain}/bin/rustc";' in package_section
     assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in package_section
@@ -3281,19 +3353,19 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "526bc07c1c377fff68d895ddddb35e2da1d6c43d938bfe05b54ac2bb6e04c341"
+        == "d0edbd3647c38bb3f6f8cb33bc4abacdc51ac25cf14e475c13f3ca6504601b6d"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
         development_command_sections_text.count(development_provenance_assignment)
-        == len(development_command_section_boundaries) + 4
+        == len(development_command_section_boundaries) + 6
     )
     assert (
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
-        == len(development_command_section_boundaries) + 4
+        == len(development_command_section_boundaries) + 6
     )
-    assert flake.count(development_provenance_assignment) == 12
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 16
+    assert flake.count(development_provenance_assignment) == 18
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 22
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
@@ -3406,6 +3478,13 @@ offline = true
         "cargo run --locked --package pokecon --bin generate_contracts "
         "--features contract-generator -- --check"
     )
+    contract_generator_with_provenance = (
+        f"{development_provenance_assignment} {contract_generator}"
+    )
+    api_type_generation_with_provenance = (
+        f"{development_provenance_assignment} "
+        "scripts/quality/generate-api-types.sh --check"
+    )
     targeted_contract_test = (
         "cargo test --locked --package pokecon --test contract_sync"
     )
@@ -3414,6 +3493,8 @@ offline = true
     assert check_commands.count(shared_linker_flags) == 1
     assert check_commands.count(dev_debug_flags) == 1
     assert check_commands.count(test_debug_flags) == 1
+    assert check_commands.count(contract_generator_with_provenance) == 1
+    assert check_commands.count(api_type_generation_with_provenance) == 1
     assert check_commands.count(targeted_contract_test) == 0
     assert flake.count(targeted_contract_test) == 1
     check_invocations = expected_development_cargo_invocations["check"]
@@ -3429,10 +3510,70 @@ offline = true
         check_commands.index(dev_debug_flags)
         < check_commands.index(test_debug_flags)
         < check_commands.index(shared_linker_flags)
-        < check_commands.index(contract_generator)
+        < check_commands.index(contract_generator_with_provenance)
+        < check_commands.index(api_type_generation_with_provenance)
         < check_commands.index(check_test)
         < check_commands.index(check_build)
         < check_commands.index(check_clippy)
+    )
+
+    editor_section = section(
+        flake,
+        "            editor = mkTask {\n",
+        "            editor-smoke = mkTask {\n",
+    )
+    editor_provenance = "export POKECON_RESOURCE_PROVENANCE=development"
+    assert editor_section.count(editor_provenance) == 1
+    assert (
+        editor_section.index("${desktopEnvironment}")
+        < editor_section.index(editor_provenance)
+        < editor_section.index("export RUST_ANALYZER_PATH=")
+    )
+
+    contract_check_section = section(
+        flake,
+        "            contract-check = mkTask {\n",
+        "            generate-contracts = mkTask {\n",
+    )
+    assert contract_check_section.count(editor_provenance) == 1
+    assert contract_check_section.index(
+        editor_provenance
+    ) < contract_check_section.index(
+        "cargo run --locked --package pokecon --bin generate_contracts"
+    )
+    assert contract_check_section.index(
+        editor_provenance
+    ) < contract_check_section.index(
+        "cargo test --locked --package pokecon --test contract_sync"
+    )
+    assert contract_check_section.index(
+        editor_provenance
+    ) < contract_check_section.index("scripts/quality/generate-api-types.sh --check")
+
+    generate_contracts_section = section(
+        flake,
+        "            generate-contracts = mkTask {\n",
+        "            compatibility-inventory = mkTask {\n",
+    )
+    assert (
+        generate_contracts_section.count(
+            "POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package "
+            'pokecon --bin generate_contracts --features contract-generator -- "$@"'
+        )
+        == 1
+    )
+
+    generate_api_types_section = section(
+        flake,
+        "            generate-api-types = mkTask {\n",
+        "            check = mkTask {\n",
+    )
+    assert (
+        generate_api_types_section.count(
+            "POKECON_RESOURCE_PROVENANCE=development "
+            'scripts/quality/generate-api-types.sh "$@"'
+        )
+        == 1
     )
 
     tauri_task_anchor = "\n            tauri-build =\n"
@@ -3441,7 +3582,7 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "6665b015ba621ac50353a96b8c39621f7dbcea79037ede2752eea2e3c0736c28"
+        == "59153302eb4547ad3ccbe4ef060c2133df2b9508a43b00b9a604a7393af3310a"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
@@ -3626,8 +3767,7 @@ offline = true
         "                        --locked \\\n"
         "                        --release \\\n"
         "                        --package pokecon \\\n"
-        "                        --bin pokecon \\\n"
-        "                        --features tauri-shell\n"
+        "                        --bin pokecon\n"
         "                    )"
     )
     assert tauri_section.count(worker_cargo_build) == 1
@@ -3752,7 +3892,7 @@ offline = true
     tauri_compile_boundary = tauri_section[tauri_compile_start:tauri_compile_end]
     assert (
         hashlib.sha256(tauri_compile_boundary.strip().encode()).hexdigest()
-        == "53fef1909468b00f9f00899fd6496bb217d7bef9bcdab8c260f8e7407d36f64a"
+        == "77da2e7b639cf7855bcf866c7b538b2fe1f1334d85d6ee2b30db58031f1435d1"
     )
     bundle_boundary_end = tauri_section.index(
         'while IFS= read -r -d "" package; do', bundle_boundary_start
@@ -4247,7 +4387,6 @@ pub use entrypoint::{MainError, run_cli};
         entrypoint_source,
         r"\bfn\s+packaged_resource_root\s*\(\s*current\s*:\s*&\s*Path\s*\)\s*"
         r"->\s*Result\s*<\s*SelectedResourceRoot\s*,\s*ResourceManifestError\s*>",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(packaged_resource_root_body) == compact_rust(
         """
@@ -4285,7 +4424,6 @@ pub use entrypoint::{MainError, run_cli};
     provenance_matrix_body = rust_top_level_function_body(
         entrypoint_source,
         r"\bconst\s+fn\s+provenance_accepts_origin\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(provenance_matrix_body) == compact_rust(
         """
@@ -4300,7 +4438,6 @@ pub use entrypoint::{MainError, run_cli};
     provenance_selection_body = rust_top_level_function_body(
         entrypoint_source,
         r"\bfn\s+select_resource_root_for_provenance\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(provenance_selection_body) == compact_rust(
         """
@@ -4358,17 +4495,14 @@ pub use entrypoint::{MainError, run_cli};
     materialize_manifest_body = rust_top_level_function_body(
         entrypoint_source,
         r"\bfn\s+materialize_resource_manifest\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     verify_snapshot_body = rust_top_level_function_body(
         entrypoint_source,
         r"\bfn\s+verify_materialized_snapshot\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     inventory_resource_files_body = rust_top_level_function_body(
         entrypoint_source,
         r"\bfn\s+inventory_resource_files\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     packager_owned_regular_skip = inventory_resource_files_body.index(
         "if packager_owned {",
@@ -4532,7 +4666,7 @@ pub use entrypoint::{MainError, run_cli};
         let before_dynamic = SettingsPipeline::new(request.clone()).load_before_dynamic()?;
         let cli = Cli::parse_from(&before_dynamic.remaining_arguments);
 
-        #[cfg(all(feature = "tauri-shell", target_os = "linux"))]
+        #[cfg(target_os = "linux")]
         {
             let disable_compositing =
                 before_dynamic.pre_dynamic_final_boolean_with_cli("ui.desktop.disable_compositing")?;
@@ -4553,25 +4687,10 @@ pub use entrypoint::{MainError, run_cli};
             .ensure(before_dynamic.active_profile.as_str())?;
 
         if cli.ui == UiArgument::Desktop && !cli.exit_after_startup {
-            #[cfg(feature = "tauri-shell")]
             return run_desktop(request, before_dynamic).await;
-            #[cfg(not(feature = "tauri-shell"))]
-            return Err(MainError::DesktopUnavailable);
         }
 
-        #[cfg(feature = "tauri-shell")]
-        return run_packaged_backend(
-            request,
-            before_dynamic,
-            cli.ui.into(),
-            cli.exit_after_startup,
-            RunControl::new(ShutdownCoordinator::new()),
-            None,
-        )
-        .await;
-
-        #[cfg(not(feature = "tauri-shell"))]
-        run_backend(
+        run_packaged_backend(
             request,
             before_dynamic,
             cli.ui.into(),
@@ -4590,7 +4709,7 @@ pub use entrypoint::{MainError, run_cli};
         r"\bfn\s+should_reexec_for_linux_compositing\s*\(\s*ui\s*:\s*UiArgument\s*,"
         r"\s*exit_after_startup\s*:\s*bool\s*,\s*disable_compositing\s*:\s*bool\s*,"
         r"\s*already_reexecuted\s*:\s*bool\s*,?\s*\)\s*->\s*bool",
-        attributes=('#[cfg(all(feature = "tauri-shell", target_os = "linux"))]',),
+        attributes=('#[cfg(target_os = "linux")]',),
     )
     assert compact_rust(compositing_reexec_predicate_body) == compact_rust(
         """
@@ -4604,7 +4723,7 @@ pub use entrypoint::{MainError, run_cli};
         entrypoint_source,
         r"\bfn\s+reexec_for_linux_compositing\s*\(\s*\)\s*"
         r"->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
-        attributes=('#[cfg(all(feature = "tauri-shell", target_os = "linux"))]',),
+        attributes=('#[cfg(target_os = "linux")]',),
     )
     assert compact_rust(compositing_reexec_body) == compact_rust(
         """
@@ -4686,7 +4805,6 @@ pub use entrypoint::{MainError, run_cli};
         r"\s*exit_after_startup\s*:\s*bool\s*,\s*control\s*:\s*RunControl\s*,"
         r"\s*desktop_settings\s*:\s*Option\s*<\s*DesktopRuntimeSettings\s*>\s*,?"
         r"\s*\)\s*->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(run_packaged_backend_body) == compact_rust(
         """
@@ -4722,7 +4840,6 @@ pub use entrypoint::{MainError, run_cli};
         r"\basync\s+fn\s+run_desktop\s*\(\s*request\s*:\s*PipelineRequest\s*,"
         r"\s*before_dynamic\s*:\s*LoadedSettings\s*,?\s*\)\s*"
         r"->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(run_desktop_body) == compact_rust(
         """
@@ -4799,7 +4916,6 @@ pub use entrypoint::{MainError, run_cli};
     desktop_backend_supervisor_body = rust_top_level_function_body(
         entrypoint_source,
         r"\basync\s+fn\s+supervise_desktop_backend_task\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(desktop_backend_supervisor_body) == compact_rust(
         """
@@ -4826,7 +4942,6 @@ pub use entrypoint::{MainError, run_cli};
     desktop_backend_startup_supervisor_body = rust_top_level_function_body(
         entrypoint_source,
         r"\basync\s+fn\s+supervise_desktop_backend_startup\s*<ReadinessGuard>\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(desktop_backend_startup_supervisor_body) == compact_rust(
         """
@@ -4842,7 +4957,6 @@ pub use entrypoint::{MainError, run_cli};
     finish_desktop_body = rust_top_level_function_body(
         entrypoint_source,
         r"\basync\s+fn\s+finish_desktop_run\s*\(",
-        attributes=('#[cfg(feature = "tauri-shell")]',),
     )
     assert compact_rust(finish_desktop_body) == compact_rust(
         """
@@ -17376,6 +17490,22 @@ def test_rust_ci_runs_ui_and_cached_cli_gates_for_integration_changes() -> None:
         "        run: nix run .#cli-help-check\n"
     )
     assert workflow.index(ui_step_name) < workflow.index(cli_step_name)
+
+
+def test_retired_desktop_product_feature_is_absent_from_release_surfaces() -> None:
+    release_surfaces = [
+        REPOSITORY / "flake.nix",
+        REPOSITORY / "scripts/release/gate.py",
+        *(REPOSITORY / ".github/workflows").glob("*.yml"),
+    ]
+    assert (
+        sorted(
+            path.relative_to(REPOSITORY).as_posix()
+            for path in release_surfaces
+            if RETIRED_DESKTOP_PRODUCT_FEATURE in path.read_text(encoding="utf-8")
+        )
+        == []
+    )
 
 
 def test_pytest_ci_runs_common_and_mutation_gates_as_parallel_jobs() -> None:

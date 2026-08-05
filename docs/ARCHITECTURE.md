@@ -64,7 +64,7 @@ Cargo workspaceは11 crateで構成されます。
 | `pokecon-camera` | Phase 2移行中のcamera compatibility facade（正準sourceは所有しない） | cameraの正準実装、UI状態や設定永続化 |
 | `pokecon-contracts` | Phase 2移行中のcontract compatibility facade（正準sourceは所有しない） | 正準registry・schema・生成器、runtime device処理 |
 | `pokecon-core` | Phase 2移行中のruntime・diagnostics・platform compatibility facade（正準sourceは所有しない） | 正準runtime・diagnostics・platform実装、application service構成 |
-| `pokecon-desktop` | Phase 2.5a移行中のcompatibility facadeとCargo feature／package／test target ownership | desktopの正準source、icon、Tauri設定、Linux bundle input、web modeやdevice protocol |
+| `pokecon-desktop` | Phase 2.5a移行中のcompatibility facadeとpackage／test target ownership | desktopの正準source、icon、Tauri設定、Linux bundle input、web modeやdevice protocol |
 | `pokecon-device` | Phase 2移行中のdevice compatibility facade（正準sourceは所有しない） | deviceの正準実装、command discovery |
 | `pokecon-dynamic` | Phase 2.4移行中の`rust/pokecon-dynamic/src/lib.rs` compatibility facade（正準sourceは`rust/pokecon/src/dynamic/`） | dynamicの正準source、child専用Python／Lua runtime、native device ownership |
 | `pokecon-pybindings` | Rust機能をPython workerへ公開するbinding | command lifecycle orchestration |
@@ -74,7 +74,7 @@ Cargo workspaceは11 crateで構成されます。
 
 crate間の新しい依存は、この表の責務を逆流させないように追加します。
 
-この表のPhase 2.5配置はdesktopのsource、icon、Tauri設定、Linux bundle input、OS別の署名対象policyまでを`rust/pokecon/`へ移した状態です。Package／Releaseはそのpolicyから実際に配布するLinux packageとWindows installerの名前、形式、size、SHA-256を記録したmanifestを生成し、引き渡し直前に実物と再照合します。`tauri-shell` featureはPhase 2.6まで維持し、Cargo package、workspace member、bin／test targetの統合と旧compatibility crateの削除はPhase 2.7で行います。
+この表のPhase 2.5配置はdesktopのsource、icon、Tauri設定、Linux bundle input、OS別の署名対象policyまでを`rust/pokecon/`へ移した状態です。Package／Releaseはそのpolicyから実際に配布するLinux packageとWindows installerの名前、形式、size、SHA-256を記録したmanifestを生成し、引き渡し直前に実物と再照合します。Phase 2.6ではdesktopを製品featureで分岐する構成を廃止し、Webとdesktopを常に同じ本体へ含めます。Cargo package、workspace member、bin／test targetの統合と旧compatibility crateの削除はPhase 2.7で行います。
 
 下位crateが`pokecon`を参照する構造はcomposition rootを壊すため避けます。
 

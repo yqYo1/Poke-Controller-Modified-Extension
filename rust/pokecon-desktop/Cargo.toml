@@ -9,19 +9,13 @@ build = false
 
 [features]
 default = []
-tauri-shell = [
-    "dep:opener",
-    "dep:rfd",
-    "dep:tauri",
-    "dep:tauri-plugin-single-instance",
-]
 
 [dependencies]
 pokecon-core = { path = "../pokecon-core" }
-opener = { workspace = true, optional = true }
-rfd = { workspace = true, optional = true }
-tauri = { workspace = true, optional = true }
-tauri-plugin-single-instance = { workspace = true, optional = true }
+opener.workspace = true
+rfd.workspace = true
+tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

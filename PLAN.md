@@ -389,6 +389,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 - [ ] **AR-10.9-09** 利用者向け`tauri-shell` featureを廃止し、非対応OSのみ内部target条件を使う（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のfeature／target情報、OS別Nix／Windows CI build matrix、許可済み`git grep`の`tauri-shell`残存参照log）。
 - [ ] **AR-11-23** `tauri-shell`によるWeb専用buildを廃止し、対応OS向け標準成果物に両UI modeを常に含める（予定証跡: `nix build .#pokecon`とWindows Package CIのOS別artifact manifest、store／package binaryの両mode smoke、Web-only artifact不在検査）。
+  - 2026-08-05 local evidence: Cargo metadataで製品feature不在とdesktop依存の非optional化を確認し、workspaceのall-target／all-feature check、対象lib test、release／closed-world auditを通過した。Windows Package CIとinstalled `.deb`／NSISの両mode証跡は未取得のため、AR-10.9-09／AR-11-23は未完了のままとする。
 - [ ] **AR-10.9-07** `pokecon-pybindings`を削除する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard`、`nix build .#pokecon`のpackage outputからのpybindings不在）。
 - [ ] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（予定証跡: `nix run .#check`の移行順序log、Python import／wheelのnegative test、Nix artifact diff）。
 - [ ] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する。

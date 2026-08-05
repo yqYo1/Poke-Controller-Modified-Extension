@@ -1,11 +1,9 @@
 //! Native desktop shell and close-policy boundary for the shared Rust backend.
 
-#[cfg(any(feature = "tauri-shell", test))]
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-#[cfg(any(feature = "tauri-shell", test))]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -121,7 +119,6 @@ pub enum DesktopError {
     #[error("desktop lifecycle reported a fatal shutdown: {0}")]
     FatalShutdown(String),
     /// Tauri could not initialize or run the native shell.
-    #[cfg(feature = "tauri-shell")]
     #[error("Tauri desktop shell failed: {0}")]
     Tauri(#[from] tauri::Error),
 }
@@ -173,7 +170,6 @@ fn finish_event_loop(exit_code: i32, lifecycle: &DesktopLifecycle) -> Result<(),
     Err(error)
 }
 
-#[cfg(any(feature = "tauri-shell", test))]
 fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
         (*message).to_owned()
@@ -184,7 +180,6 @@ fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
-#[cfg(any(feature = "tauri-shell", test))]
 fn catch_tauri_shell_panic<T, F>(
     lifecycle: &DesktopLifecycle,
     run_shell: F,
@@ -204,7 +199,6 @@ where
     }
 }
 
-#[cfg(any(feature = "tauri-shell", test))]
 fn open_main_window_if_shell_ready<E, F>(
     shell_ready: &AtomicBool,
     open_main_window: F,
@@ -236,12 +230,10 @@ pub const fn close_decision(
     }
 }
 
-#[cfg(any(feature = "tauri-shell", test))]
 fn backend_app_url(address: SocketAddr) -> String {
     format!("http://{address}")
 }
 
-#[cfg(feature = "tauri-shell")]
 mod shell {
     use std::net::SocketAddr;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -527,7 +519,6 @@ mod shell {
 ///
 /// Returns an error if the application URL is invalid, Tauri cannot create its
 /// event loop, window, menu, or tray, or the event loop returns a nonzero status.
-#[cfg(feature = "tauri-shell")]
 pub fn run_tauri_shell<F>(
     context: tauri::Context<tauri::Wry>,
     config: DesktopShellConfig,

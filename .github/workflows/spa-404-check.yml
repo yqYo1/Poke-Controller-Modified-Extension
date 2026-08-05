@@ -39,7 +39,7 @@ jobs:
           nix build .#pokecon --out-link result-server
 
           # Start server in background with web UI mode
-          # Use --ui web to avoid Tauri/GUI dependencies
+          # Use --ui web to exercise the browser-served display mode without launching a desktop window
           ./result-server/bin/pokecon \
             --ui web \
             --port 8080 &

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "756d1e49cadeb559464ae1f8b07e5b05bd81cef017dcdbb73419e3b5b89232cf";
+      canonicalFlakeHash = "337da9bafca1c6c0312d26dbd8715fe7fe34bc0613249bc7ea69890e54f744c0";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "fa6840965405ef4d827fdf36fcac60ea47c8522bc87faaf08553d1ce9eb79a6f";
+              expectedAuditTestHash = "4c720afad8b225c0e2948ed9e78df8efef6fa5785b06027a4c4bef1ed9cb70b9";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -518,11 +518,11 @@
             "rust/pokecon-worker" = false;
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "4fa5120217c01cac8f205975a7c330f12adcbc053f235499525c96b7aa09359a";
+            "rust/pokecon" = "9bcb9da3d19ecc6ecd99b04a2d0a698071dbcdf6d3f3eec606a527700dcc5084";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
-            "rust/pokecon-desktop" = "a8e82d6036e66a6205914e017f0ce8a464b2f4ac16a3d63d538de9950aace3e7";
+            "rust/pokecon-desktop" = "36b5e58e6b7a6ad12993c7287021a5fb6e688ca2fedefd225e1707281e5238aa";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
             "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
             "rust/pokecon-pybindings" = "e0cef290e07b82160ea8952cae7dafb3ded68f27b24e0e553592d24da0de2fe7";
@@ -648,7 +648,7 @@
             )
           ) workspacePathDependencies;
           expectedWorkspaceBuildScripts = {
-            "rust/pokecon/build.rs" = "877c790712b3075df19e1b8dcfd9d3249835e6bbf9c065b1f7fda0bbd6f3d916";
+            "rust/pokecon/build.rs" = "4be14ee06480c69114877e23c07e18ff7ead774f68e4ded3e7b62fe549b86d9a";
             "rust/pokecon-settings/build.rs" =
               "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0";
           };
@@ -2572,8 +2572,6 @@
             };
             cargoBuildFlags = [
               "--locked"
-              "--features"
-              "tauri-shell"
               "--package"
               "pokecon"
               "--package"
@@ -2585,8 +2583,6 @@
             ];
             cargoTestFlags = [
               "--locked"
-              "--features"
-              "tauri-shell"
               "--package"
               "pokecon"
               "--package"
@@ -3408,6 +3404,7 @@
                 ${rustEnvironmentExports}
                 ${setupUvLinks}
                 ${desktopEnvironment}
+                export POKECON_RESOURCE_PROVENANCE=development
                 export RUST_ANALYZER_PATH="${pkgs.rust-analyzer}/bin/rust-analyzer"
                 export BASEDPYRIGHT_LANGSERVER_PATH="${pkgs.basedpyright}/bin/basedpyright-langserver"
                 export TYPESCRIPT_LANGUAGE_SERVER_PATH="${pkgs.typescript-language-server}/bin/typescript-language-server"
@@ -3670,6 +3667,7 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
+                export POKECON_RESOURCE_PROVENANCE=development
                 cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
                 cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
@@ -3695,7 +3693,7 @@
                 ${setupCallerRustTaskEnvironment}
                 ${desktopEnvironment}
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
-                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- "$@"
+                POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- "$@"
               '';
             };
 
@@ -4611,8 +4609,7 @@
                         --locked \
                         --release \
                         --package pokecon \
-                        --bin pokecon \
-                        --features tauri-shell
+                        --bin pokecon
                     )
                     application="$CARGO_TARGET_DIR/release/pokecon"
                     normalized_application="$normalized_bin/pokecon"
@@ -5142,7 +5139,7 @@
                 ${setupCallerRustTaskEnvironment}
                 ${desktopEnvironment}
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
-                scripts/quality/generate-api-types.sh "$@"
+                POKECON_RESOURCE_PROVENANCE=development scripts/quality/generate-api-types.sh "$@"
               '';
             };
 
@@ -5178,11 +5175,11 @@
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
-                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
+                POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
-                scripts/quality/generate-api-types.sh --check
+                POKECON_RESOURCE_PROVENANCE=development scripts/quality/generate-api-types.sh --check
                 cp -R "${webBunDependencies}/node_modules" web/
                 chmod -R u+w web/node_modules
                 bun run --cwd web --bun lint

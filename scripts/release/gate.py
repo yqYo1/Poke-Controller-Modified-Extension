@@ -60,11 +60,12 @@ def validate_release(root: Path, tag: str | None = None) -> str:
         invalid_value(f"CHANGELOG.md has no release heading for {version}")
     tauri = load_json(root / "rust/pokecon/tauri.conf.json")
     bundle = mapping(tauri.get("bundle"), "Tauri bundle")
-    build = mapping(tauri.get("build"), "Tauri build")
     if bundle.get("active") is not True:
         invalid_value("Tauri bundle must be active for release")
-    if "tauri-shell" not in cast("list[object]", build.get("features")):
-        invalid_value("Tauri release build must enable tauri-shell")
+    if "build" in tauri:
+        build = mapping(tauri["build"], "Tauri build")
+        if "features" in build:
+            invalid_value("Tauri release build must not select Cargo features")
 
     manifest = load_json(root / "compatibility/fixed-manifest.json")
     results = load_json(root / "compatibility/fixed-results.json")

@@ -49,7 +49,7 @@ nix run . -- --ui web --port 8080 --profile example
 
 ## 対応範囲を確認する
 
-LinuxではWeb UIとTauriデスクトップを提供し、WindowsではTauriデスクトップを配布します。
+LinuxとWindowsの標準成果物は、同じPokeCon本体にWeb UIとTauriデスクトップの両方を含み、起動時に表示形態を選択します。
 
 macOSとPWAは現行リリースの対象外です。
 

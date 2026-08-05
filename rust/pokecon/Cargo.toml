@@ -24,12 +24,6 @@ required-features = ["contract-generator"]
 [features]
 default = []
 contract-generator = []
-tauri-shell = [
-  "dep:nix",
-  "dep:tauri",
-  "dep:winapi-util",
-  "pokecon-desktop/tauri-shell",
-]
 
 [dependencies]
 async-trait.workspace = true
@@ -55,7 +49,7 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
-tauri = { workspace = true, optional = true }
+tauri.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -71,13 +65,13 @@ regex.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { workspace = true, features = ["fs"], optional = true }
+nix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-winapi-util = { version = "0.1.11", optional = true }
+winapi-util = "0.1.11"
 
 [lints]
 workspace = true

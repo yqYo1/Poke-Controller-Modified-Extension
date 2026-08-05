@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "4e0bd8b4041c7305fab51c464e3793498f28d3337f36a430ad0f49e8ea74fd63";
+      canonicalFlakeHash = "f519813792ba198174166c7470c44d4691b967199a4b775ce9ba94866359b0c7";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "12b400accc76e65f8c3fdc042f8522c044c7ab9aaa2fdc193fb45d8a9803f4e5";
+              expectedAuditTestHash = "5d5762c696c8d6113bea99da7954150244f700295b3e219778f8c92818ab98a3";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -4583,28 +4583,50 @@
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
-                POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
-                check-jsonschema --check-metaschema generated/settings.schema.json
-                python -m scripts.acceptance.records
+                ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
-                POKECON_RESOURCE_PROVENANCE=development scripts/quality/generate-api-types.sh --check
-                cp -R "${webBunDependencies}/node_modules" web/
-                chmod -R u+w web/node_modules
-                bun run --cwd web --bun lint
-                bun run --cwd web --bun svelte-check
-                bun run --cwd web --bun test
-                bun run --cwd web --bun build
-                POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
-                POKECON_RESOURCE_PROVENANCE=development \
-                cargo build --locked --workspace --all-features --jobs 1
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                python -m scripts.compatibility.promote --check
-                python -m scripts.compatibility.runner \
-                  --check \
-                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
-                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
-                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
-                bun --bun "${basedpyrightCli}"
+                # shellcheck disable=SC2016
+                "${pythonEnv}/bin/python" -I \
+                  "${source}/scripts/quality/run_parallel_checks.py" \
+                  rust-and-contracts \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
+                    check-jsonschema --check-metaschema generated/settings.schema.json
+                    python -m scripts.acceptance.records
+                    POKECON_RESOURCE_PROVENANCE=development scripts/quality/generate-api-types.sh --check
+                    POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
+                    POKECON_RESOURCE_PROVENANCE=development \
+                    cargo build --locked --workspace --all-features --jobs 1
+                    POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                    python -m scripts.compatibility.promote --check
+                    python -m scripts.compatibility.runner \
+                      --check \
+                      --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                      --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                      --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                  ' \
+                  --next \
+                  web-and-static \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    cp -R "${webBunDependencies}/node_modules" web/
+                    chmod -R u+w web/node_modules
+                    bun run --cwd web --bun lint
+                    bun run --cwd web --bun svelte-check
+                    bun run --cwd web --bun test
+                    bun run --cwd web --bun build
+                    bun --bun "${basedpyrightCli}"
+                    shellcheck scripts/*.sh scripts/*/*.sh
+                    bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
+                    bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
+                    typos
+                  '
+                aggregate_mutation_workers="$(nproc)"
+                if [ "$aggregate_mutation_workers" -gt 1 ]; then
+                  aggregate_mutation_workers="$((aggregate_mutation_workers - 1))"
+                fi
+                if [ "$aggregate_mutation_workers" -gt 3 ]; then
+                  aggregate_mutation_workers=3
+                fi
                 "${pythonEnv}/bin/python" -I \
                   "${source}/scripts/quality/run_parallel_checks.py" \
                   pytest \
@@ -4616,12 +4638,8 @@
                   --tb=short \
                   --next \
                   production-routing-mutation-audit \
-                  "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit"
-                shellcheck scripts/*.sh scripts/*/*.sh
-                bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
-                bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
-                typos
-                ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
+                  "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" \
+                  --workers "$aggregate_mutation_workers"
               '';
             };
           };

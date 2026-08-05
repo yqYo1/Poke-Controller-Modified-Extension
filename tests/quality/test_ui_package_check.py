@@ -2244,7 +2244,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "75bba30bfee3882ada037b323fe48d45843b5c80d7f8c80eb8ea6491c50fa348"
+        == "1ac8c4872ccf20b7fb27fc3e0c31ef1177dcfe341295fdf0469dbf46688e5187"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3350,7 +3350,7 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "d99682ed0702fffecb8cf2d3621827267b0458fcf1a4d90757a81e440079b179"
+        == "f6fd372c7d799725e12c2aac99eb2371fce60457d544b91fdd65cd570b42113b"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3457,13 +3457,50 @@ offline = true
         == 1
     )
     parallel_checks_start = '                "${pythonEnv}/bin/python" -I \\\n'
-    assert check_commands.count(parallel_checks_start) == 1
-    parallel_checks = section(
+    parallel_runner = '"${source}/scripts/quality/run_parallel_checks.py"'
+    assert check_commands.count(parallel_checks_start) == 2
+    assert check_commands.count(parallel_runner) == 2
+    rust_lane = section(
         check_commands,
-        parallel_checks_start,
-        "                shellcheck scripts/*.sh scripts/*/*.sh",
+        "                  rust-and-contracts \\\n",
+        "                  --next \\\n                  web-and-static \\\n",
     )
-    assert parallel_checks == (
+    web_lane = section(
+        check_commands,
+        "                  web-and-static \\\n",
+        parallel_checks_start,
+    )
+    for rust_lane_command in (
+        '"${pkgs.bash}/bin/bash" -euo pipefail -c',
+        "cargo run --locked --package pokecon --bin generate_contracts",
+        "check-jsonschema --check-metaschema generated/settings.schema.json",
+        "python -m scripts.acceptance.records",
+        "scripts/quality/generate-api-types.sh --check",
+        "cargo test --locked --workspace --all-features",
+        "cargo build --locked --workspace --all-features --jobs 1",
+        "cargo clippy --locked --workspace --all-targets --all-features",
+        "python -m scripts.compatibility.promote --check",
+        "python -m scripts.compatibility.runner",
+    ):
+        assert rust_lane_command in rust_lane
+    for web_lane_command in (
+        '"${pkgs.bash}/bin/bash" -euo pipefail -c',
+        'cp -R "${webBunDependencies}/node_modules" web/',
+        "bun run --cwd web --bun lint",
+        "bun run --cwd web --bun svelte-check",
+        "bun run --cwd web --bun test",
+        "bun run --cwd web --bun build",
+        'bun --bun "${basedpyrightCli}"',
+        "shellcheck scripts/*.sh scripts/*/*.sh",
+        'bun --bun "${markdownlintCli}"',
+        'bun --bun "${textlintCli}"',
+        "typos",
+    ):
+        assert web_lane_command in web_lane
+    assert "cargo " not in web_lane
+    assert "bun run --cwd web" not in rust_lane
+    pytest_and_mutation_wave = (
+        '                "${pythonEnv}/bin/python" -I \\\n'
         '                  "${source}/scripts/quality/run_parallel_checks.py" \\\n'
         "                  pytest \\\n"
         "                  python -m pytest \\\n"
@@ -3475,8 +3512,20 @@ offline = true
         "                  --next \\\n"
         "                  production-routing-mutation-audit \\\n"
         '                  "${productionRoutingMutationAuditRunner}/bin/'
-        'pokecon-production-routing-mutation-audit"\n'
+        'pokecon-production-routing-mutation-audit" \\\n'
+        '                  --workers "$aggregate_mutation_workers"\n'
     )
+    assert check_commands.count(pytest_and_mutation_wave) == 1
+    aggregate_mutation_worker_setup = (
+        'aggregate_mutation_workers="$(nproc)"\n'
+        '                if [ "$aggregate_mutation_workers" -gt 1 ]; then\n'
+        '                  aggregate_mutation_workers="$((aggregate_mutation_workers - 1))"\n'
+        "                fi\n"
+        '                if [ "$aggregate_mutation_workers" -gt 3 ]; then\n'
+        "                  aggregate_mutation_workers=3\n"
+        "                fi"
+    )
+    assert check_commands.count(aggregate_mutation_worker_setup) == 1
     shared_linker_flags = (
         "${lib.optionalString pkgs.stdenv.isLinux \"export RUSTFLAGS='-C "
         "link-arg=-Wl,--threads=1'\"}"
@@ -3512,7 +3561,7 @@ offline = true
     check_build = check_invocations[1]
     check_clippy = check_invocations[2]
     check_build_with_local_provenance = (
-        "POKECON_RESOURCE_PROVENANCE=development \\\n                " + check_build
+        "POKECON_RESOURCE_PROVENANCE=development \\\n                    " + check_build
     )
     assert check_commands.count(check_build_with_local_provenance) == 1
     assert (
@@ -3524,6 +3573,16 @@ offline = true
         < check_commands.index(check_test)
         < check_commands.index(check_build)
         < check_commands.index(check_clippy)
+    )
+    treefmt_check = (
+        '${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"'
+    )
+    assert check_commands.count(treefmt_check) == 1
+    assert (
+        check_commands.index("python -m scripts.release.gate")
+        < check_commands.index(treefmt_check)
+        < check_commands.index("rust-and-contracts")
+        < check_commands.index(pytest_and_mutation_wave)
     )
 
     editor_section = section(

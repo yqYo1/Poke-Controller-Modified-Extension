@@ -390,9 +390,9 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] **AR-10.9-09** 利用者向け`tauri-shell` featureを廃止し、非対応OSのみ内部target条件を使う（証跡: Cargo metadata／残存参照監査、Linux／Windows build matrixと下記checkpoint）。
 - [x] **AR-11-23** `tauri-shell`によるWeb専用buildを廃止し、対応OS向け標準成果物に両UI modeを常に含める（証跡: OS別artifact manifest、store／installed packageの両mode smoke、Web-only artifact不在検査と下記checkpoint）。
 
-#### 2.5／2.6 checkpoint証跡（2026-08-05、部分完了）
+#### 2.5／2.6 checkpoint証跡（2026-08-06、部分完了）
 
-下表はdesktop配布境界と`tauri-shell`廃止の完了証跡である。Python native extension削除は対象外であり、AR-10.9-07／AR-11-21／AR-13.1-28は未完了のままとする。
+下表はdesktop配布境界、`tauri-shell`廃止、およびPython native extension削除の実装／通常CI証跡である。AR-10.9-07、AR-11-21とその2子項目は完了した。AR-13.1-28は`v*` tagで起動するRelease CIのartifact manifestが未取得のため未完了のままとする。
 
 | 対象 | 実測結果 |
 | --- | --- |
@@ -405,13 +405,23 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 | artifact／再現性 | Linux artifact digestは`sha256:3a85f82acc5f8d19b808757b2785b2e8f43c8ea5d61aad1626de3e7269c140ed`、Windowsは`sha256:0f7df04fde7ab753944a4a9a9440718e3b99d1ff7e50175d6eaf9fc12295f022`。独立buildした2個の`.deb`はSHA256 `e13954594b84360327cf94f7dd211e10a26ecb77eba020f76d978e8898e34062`で一致し、byte比較もsuccess |
 | 必要性監査／責務集約 | Basedpyrightとsource／shell契約はLint、RuffはLint、Rust source検査はRust CI、exact worker／UI／CLI package検査はRust CI package job、OS別install／signing／Debian再現性はPackage CIへ一意に集約。独立SPA workflowは、より強いexact packageの404／route検査へ統合 |
 | CI短縮実測 | Rust CIは27m21s→12m52s（14m29s、53.0%短縮）、Package CIは24m56s→18m07s（6m49s、27.3%短縮）、Remote Flakeは15m02s→7m39s（7m23s、49.1%短縮）。単独13m50sだったSPA workflowも廃止 |
-| 最終CI | [Package](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261238)、[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261274)、[Remote Flake](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261451)、[Rust](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008262095)がすべてsuccess。`ci-watch`は120秒settlement後exit 0 |
+| desktop／`tauri-shell`最終CI | [Package](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261238)、[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261274)、[Remote Flake](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261451)、[Rust](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008262095)がすべてsuccess。`ci-watch`は120秒settlement後exit 0 |
+| Python native extension削除commit | `8726b23142345bc702655ced24f35240f96acbb4`で未使用の`pokecon-pybindings` crate、`pokecon._native`／Maturin build surface、Nixの`build`／`maturin-develop` app、Linux／Windows Releaseのfirst-party native wheel生成／収集を削除。24 files、+828/-845、SSH signature格納 |
+| Cargo／source／package不在 | Cargo metadataはworkspace 10 package、`pokecon-pybindings` 0件。SHA固定のtracked path／active marker監査と`source-guard`が成功し、exact package `/nix/store/x9b40b6wa910zhh12pbcma48al16b1jj-pokecon-0.1.0`およびclosure内のpybindings、`_native`、first-party wheelは0件 |
+| Python／release negative test | [Pytest 31022369923](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022369923)は286 passed、1 deselected。`uv_build==0.11.28`のpure-Python wheelにnative payloadがなく、`pokecon._native` importが`ModuleNotFoundError`となり、native binding marker、first-party release wheel、wheelhouse inventoryの再導入をfail-closedで拒否 |
+| Nix artifact差分 | 親commit `f42d15d5e2c00d96ba2559c7c17b47ee96ca712b`比でx86_64-linux appは51→49、削除は`build`と`maturin-develop`だけ。package outputは`default`、`pokecon`、`pokecon-server`、`web`の4件を維持し、native extension／wheel outputは不在 |
+| native extensionのOS package成果物 | [Package CI 31022370244](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022370244)はOSごとにbundleとsigning manifestの2 filesだけをupload。Linux artifact `8937755264`は`sha256:6df2d5a897f1dad7f59f141bd2ed91c87d158d73092cd45fb302946be3197ac9`、Windows artifact `8937772674`は`sha256:afbed4ff60939232bacea7e60bb21f2e1f9183369645451b45c3b0a5c1673859`で、third-party worker wheelを維持しつつfirst-party wheelは不在 |
+| native extension最終CI | `8726b23142345bc702655ced24f35240f96acbb4`の5 workflowは2026-08-06 00:51:05 JSTに開始し、[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022369923) 00:52:57（1m52s）、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022369976) 00:57:35（6m30s）、[Remote Flake](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022369920) 01:01:41（10m36s）、[Rust](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022369942) 01:03:31（12m26s）、[Package](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31022370244) 01:10:48（19m43s）にすべてsuccess |
+| aggregate高速化commit／実測 | 検査lane並列化`b4d172ea70d188d66a55ed4f5756e3c231b4406b`とmutation fixture更新`7c5318746416cc62ad732b023464c71c0c9af20e`。full aggregateの実測は680s→600.9s（-79s、-11.6%）。その後の最終3-worker wave単体は93s→85sで、最終構成のfull aggregateは約593sを見込むが、593sはfull aggregateの実測値ではない |
+| aggregate traversal／gate維持 | treefmtのaggregate traversalは117272→380。必要なworkspace／all-features Cargo、pytest／production-routing mutation、package install smokeを維持し、treefmtが既に担当する重複Ruff invocationだけをaggregateから削除 |
+| Package critical path | 既存Package jobsはすでに並列実行されている。残るcritical pathは実packageのinstall／startup／upgrade／uninstall検証であり、受入強度を落とさず維持 |
+| Windows package probeのfalse negative除去 | `7c5318746416cc62ad732b023464c71c0c9af20e`では[Pytest](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31027857129)、[Lint](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31027856831)、[Remote Flake](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31027856671)、[Rust](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31027855547)とPackageのDebian／再現性jobがsuccess。NSISだけが同一processのsingle-instance補助窓`com.yqyo1.pokecon-siw`を`.NET MainWindowTitle`で選ぶfalse negativeとなったため、`f4c614926dedf2dadcf266628dcba775083a94cf`でroot PIDの全可視top-level窓を列挙し、exact titleの同一HWNDを連続確認する検査へ修正。埋め込みC# compile、Windows smoke 5件、release 142件がsuccess |
 
-- [ ] **AR-10.9-07** `pokecon-pybindings`を削除する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`、`nix run .#source-guard`、`nix build .#pokecon`のpackage outputからのpybindings不在）。
-- [ ] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（予定証跡: `nix run .#check`の移行順序log、Python import／wheelのnegative test、Nix artifact diff）。
-- [ ] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する。
-- [ ] Nix、release gate、成果物一覧からnative wheel参照を削除する。
-- [ ] **AR-13.1-28** Python packageから`_native`のimportとwheel生成を削除し、Nix、maturin、release gate、成果物一覧にnative wheel参照が残っていない（予定証跡: 許可済み`git grep`のlog、`nix run .#test`のPython import negative test、`nix run .#check`とRelease CIのartifact manifest）。
+- [x] **AR-10.9-07** `pokecon-pybindings`を削除する（証跡: Cargo metadataのworkspace 10 package／対象0件、`source-guard`、exact `nix build .#pokecon` package output／closureのpybindings 0件と上記checkpoint）。
+- [x] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（証跡: `nix run .#check`のfull aggregate実測600.9s、Python import／wheel negative test、Nix app 51→49のartifact差分と上記checkpoint）。
+- [x] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する（証跡: pure-Python wheel／`ModuleNotFoundError` negative test、active marker 0件）。
+- [x] Nix、release gate、成果物一覧からnative wheel参照を削除する（証跡: Nix app／Release workflow差分、first-party wheelを拒否するrelease／package negative test、Package CIのOS別2-file manifest）。
+- [ ] **AR-13.1-28** Python packageから`_native`のimportとwheel生成を削除し、Nix、maturin、release gate、成果物一覧にnative wheel参照が残っていない（実装済み部分証跡: 許可済み`git grep`のactive marker 0件、`nix run .#test`のPython import／wheel negative test、`nix run .#check`のfull aggregate実測600.9s。未完了証跡: `Release`は`v*` tag専用で、`8726b23142345bc702655ced24f35240f96acbb4`のrunは通常CI 5件だけであり、実Releaseのartifact manifestは未取得）。
 
 ### 2.7 旧crateとworkspace参照の削除
 

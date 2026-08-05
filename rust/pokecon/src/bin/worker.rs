@@ -1,6 +1,6 @@
-pub(crate) use pokecon_worker as worker;
+pub(crate) use pokecon::worker;
 
-#[path = "../../pokecon/src/worker_binary/mod.rs"]
+#[path = "../worker_binary/mod.rs"]
 mod worker_binary;
 
 pub(crate) use worker_binary::dynamic;

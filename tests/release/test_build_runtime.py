@@ -1199,7 +1199,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     )
     runtime_build = "python -m scripts.release.build_runtime `"
     worker_build = (
-        "cargo build --locked --release --package pokecon-worker --bin pokecon-worker"
+        "cargo build --locked --release --package pokecon --bin pokecon-worker"
     )
     stage_capture = "$stageJson = python -m scripts.release.stage `"
     stage_command = (

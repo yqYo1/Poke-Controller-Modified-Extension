@@ -769,7 +769,7 @@ run `30484270651`の`Remote Flake Test`では、リモート既定appのhelp実�
 | `rust/pokecon/src/worker/` | typed IPC契約、client、generation、OS process supervision | 正準source。変更の起点はこのdirectoryとする |
 | `rust/pokecon/src/worker_binary/` | script／dynamic workerのentrypoint、CPython／LuaJITを含む子プロセス専用runtime | 子プロセスだけが参照するruntime source |
 | `rust/pokecon-dynamic/src/lib.rs` | `rust/pokecon/src/dynamic/`を再公開するcompatibility facade | 旧package利用者を保つ暫定入口 |
-| `rust/pokecon-worker/` | compatibility facade、`pokecon-worker` bin、compatibility／fault-fixture bin、integration test | Phase 2.7までbin／test ownerを維持する暫定package |
+| `rust/pokecon/src/worker/`、`rust/pokecon/src/worker_binary/` | 親側worker契約、child runtime、`pokecon-worker`／compatibility／fault-fixture bin、integration test | Phase 2.7でtarget ownershipもPokeCon本体へ統合 |
 
 この配置はsourceの正準所有を移したことを示しますが、workspace member、Cargo package名、target ownershipの統合完了を意味しません。
 

@@ -1,5 +1,5 @@
 //! Closed payloads and operation names shared by the dynamic worker and its
-//! Rust-main client. The transport envelope remains owned by `pokecon-worker`.
+//! Rust-main client. The transport envelope remains owned by `PokeCon`'s worker module.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

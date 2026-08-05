@@ -1,5 +1,7 @@
 //! Top-level process orchestration for web and desktop modes.
 
+pub(crate) use pokecon_dynamic as dynamic_domain;
+
 mod application_backend;
 #[path = "camera/facade.rs"]
 mod camera;
@@ -30,8 +32,8 @@ mod server;
 #[path = "settings/facade.rs"]
 mod settings;
 mod settings_runtime;
-#[path = "worker/facade.rs"]
-mod worker;
+#[doc(hidden)]
+pub mod worker;
 
 pub use entrypoint::{MainError, run_cli};
 

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "f8210ef3854c46780c15e017fe5a91cb2bb0728aa8efd0ed7babc624430cc536";
+      canonicalFlakeHash = "733379830905ed8837458293d3664ff91fd6c8af8f15fc68c7361082d36b6987";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "77f0e8c7426719d490be3c11db56b46fc0c43e7471b0d227c8a19fc771371c79";
+              expectedAuditTestHash = "c8e36bd7effc79cd0f755e66b35730063ef2e393ad798f9765c64adf924901cb";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -474,7 +474,6 @@
             "rust/pokecon-device"
             "rust/pokecon-dynamic"
             "rust/pokecon-settings"
-            "rust/pokecon-worker"
           ];
           workspaceDefaultMemberPaths = [
             "rust/pokecon"
@@ -483,7 +482,6 @@
             "rust/pokecon-camera"
             "rust/pokecon-device"
             "rust/pokecon-settings"
-            "rust/pokecon-worker"
           ];
           workspaceMemberManifests = builtins.listToAttrs (
             map (memberPath: {
@@ -499,7 +497,6 @@
             "rust/pokecon-device" = "pokecon-device";
             "rust/pokecon-dynamic" = "pokecon-dynamic";
             "rust/pokecon-settings" = "pokecon-settings";
-            "rust/pokecon-worker" = "pokecon-worker";
           };
           expectedWorkspacePackageBuild = {
             "rust/pokecon" = "build.rs";
@@ -509,17 +506,15 @@
             "rust/pokecon-device" = false;
             "rust/pokecon-dynamic" = false;
             "rust/pokecon-settings" = "build.rs";
-            "rust/pokecon-worker" = false;
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "65836572f235f2160ecb84704fc1c447e0639c8b56fdde1d243b42c97eae91af";
+            "rust/pokecon" = "e99292613015230a7c594f117759c3040775c28b4cdb06e6d2785039608e624b";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
             "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
             "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
-            "rust/pokecon-worker" = "268c724c9070a28684ca669e889662644ff5044e37bf2f6876afd3b346b8fbb2";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -541,7 +536,6 @@
               sha2.workspace = true;
               toml.workspace = true;
             };
-            "rust/pokecon-worker" = { };
           };
           actualWorkspacePackageNames = lib.mapAttrs (
             _memberPath: manifest: manifest.package.name or null
@@ -737,7 +731,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "46ece2c61e97e12064ceb689e2dc1086b4314dec7c7b97613e459ba0b1bea14c"
+                == "0fc3ca598a840b77e2d7e42ce62266b1012850ddc6bdeb1843c2d2b58fb5e218"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -745,7 +739,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "64aae61f3983c2bb0da3be025ca146b70e6e3d9ce9383843dba3c082fcab2c54"
+                == "40ac279e7e9da471fbbb816502265faec06058a664ae6fde96f24713100d880e"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1069,7 +1063,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 388 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 387 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \
@@ -2205,8 +2199,6 @@
               "--locked"
               "--package"
               "pokecon"
-              "--package"
-              "pokecon-worker"
               "--bin"
               "pokecon"
               "--bin"
@@ -2553,9 +2545,9 @@
                   fi
 
                   export POKECON_TEST_WORKER_BINARY="$worker_binary"
-                  cargo test --locked --package pokecon-worker --test startup -- --nocapture
-                  cargo test --locked --package pokecon-worker --test lifecycle -- --nocapture
-                  cargo test --locked --package pokecon-worker --test script_runtime \
+                  cargo test --locked --package pokecon --test worker_startup -- --nocapture
+                  cargo test --locked --package pokecon --test lifecycle -- --nocapture
+                  cargo test --locked --package pokecon --test script_runtime \
                     script_worker_executes_controller_serial_and_output_proxies \
                     -- --exact --nocapture
 
@@ -3342,7 +3334,7 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
-                cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
+                cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
                   --check \
@@ -3367,7 +3359,7 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
-                cargo build --locked --jobs 1 --package pokecon-worker --bin pokecon-worker --bin pokecon-compatibility
+                cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
                 python -m scripts.compatibility.roll \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
@@ -3847,7 +3839,7 @@
                         --manifest-path "$cargo_source_root/Cargo.toml" \
                         --locked \
                         --release \
-                        --package pokecon-worker \
+                        --package pokecon \
                         --bin pokecon-worker
                     )
                     normalized_bin="$workdir/normalized-bin"

@@ -253,7 +253,7 @@ def test_generic_worker_native_and_dependency_wheel_sources_remain_allowed(
 ) -> None:
     _write(
         tmp_path,
-        "rust/pokecon-worker/Cargo.toml",
+        "rust/pokecon/Cargo.toml",
         '[dependencies]\npyo3 = { version = "0.28", features = ["auto-initialize"] }\n',
     )
     _write(

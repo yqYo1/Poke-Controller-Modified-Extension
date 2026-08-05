@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
+use pokecon::worker as pokecon_worker;
 use pokecon_dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
 use pokecon_dynamic::protocol::{DynamicInitializeRequest, DynamicProfileSwitchResult};
 use pokecon_dynamic::{

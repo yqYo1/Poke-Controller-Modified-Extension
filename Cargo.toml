@@ -8,7 +8,6 @@ members = [
     "rust/pokecon-device",
     "rust/pokecon-dynamic",
     "rust/pokecon-settings",
-    "rust/pokecon-worker",
 ]
 default-members = [
     "rust/pokecon",
@@ -17,7 +16,6 @@ default-members = [
     "rust/pokecon-camera",
     "rust/pokecon-device",
     "rust/pokecon-settings",
-    "rust/pokecon-worker",
 ]
 
 [workspace.package]

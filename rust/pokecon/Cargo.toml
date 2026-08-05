@@ -12,6 +12,20 @@ name = "pokecon"
 path = "src/main.rs"
 
 [[bin]]
+name = "pokecon-worker"
+path = "src/bin/worker.rs"
+
+[[bin]]
+name = "pokecon-compatibility"
+path = "src/bin/compatibility.rs"
+
+[[bin]]
+name = "pokecon-worker-fault-fixture"
+path = "tests/fixtures/fault_worker.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "generate_contracts"
 path = "src/bin/generate_contracts.rs"
 required-features = ["contract-generator"]
@@ -27,12 +41,14 @@ contract-generator = []
 
 [dependencies]
 async-trait.workspace = true
+atomic-write-file.workspace = true
 axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 futures-util.workspace = true
 mime_guess.workspace = true
+mlua.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true
@@ -42,9 +58,10 @@ pokecon-core = { path = "../pokecon-core" }
 pokecon-device = { path = "../pokecon-device" }
 pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-settings = { path = "../pokecon-settings" }
-pokecon-worker = { path = "../pokecon-worker" }
+pyo3.workspace = true
 reqwest.workspace = true
 rfd.workspace = true
+rmp-serde.workspace = true
 rumqttc.workspace = true
 semver.workspace = true
 serde.workspace = true

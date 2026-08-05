@@ -64,6 +64,10 @@ def test_desktop_probe_requires_a_live_exact_native_window() -> None:
         "\nfunction Invoke-StartupProbe {",
     )
     job_wrapper = section("Add-Type -TypeDefinition @'", "\n'@")
+    window_observer = job_wrapper.split(
+        "public VisibleWindowObservation ObserveVisibleTopLevelWindows(",
+        maxsplit=1,
+    )[1].split("public void Terminate(uint exitCode)", maxsplit=1)[0]
 
     assert "$desktopWindowTitle = 'PokeCon Controller'" in SCRIPT
     assert "$desktopWindowTimeoutSeconds = 60" in SCRIPT
@@ -76,8 +80,35 @@ def test_desktop_probe_requires_a_live_exact_native_window() -> None:
     assert "--exit-after-startup" not in desktop_probe
     assert "$process.Refresh()" in desktop_probe
     assert "if ($process.HasExited)" in desktop_probe
-    assert "$process.MainWindowHandle.ToInt64() -ne 0" in desktop_probe
-    assert "$process.MainWindowTitle -ceq $desktopWindowTitle" in desktop_probe
+    assert "MainWindowHandle" not in desktop_probe
+    assert "MainWindowTitle" not in desktop_probe
+    assert "NativeMethods.EnumWindows(" in window_observer
+    assert "NativeMethods.IsWindowVisible(window)" in window_observer
+    assert "NativeMethods.GetWindowThreadProcessId(window" in window_observer
+    assert "NativeMethods.GetWindowTextLengthW(window)" in window_observer
+    assert "NativeMethods.GetWindowTextW(window" in window_observer
+    assert "uint rootProcessId = unchecked((uint)RootProcess.Id);" in window_observer
+    assert "windowProcessId != rootProcessId" in window_observer
+    assert "visibleWindows.Add(" in window_observer
+    assert window_observer.count("return true;") >= 2
+    assert (
+        "String.Equals(title, exactTitle, StringComparison.Ordinal)" in window_observer
+    )
+    observation = (
+        "$observation = $jobProcess.ObserveVisibleTopLevelWindows($desktopWindowTitle)"
+    )
+    confirmation = (
+        "$confirmation = $jobProcess.ObserveVisibleTopLevelWindows(\n"
+        "                        $desktopWindowTitle\n"
+        "                    )"
+    )
+    assert desktop_probe.count(observation) == 1
+    assert desktop_probe.count(confirmation) == 1
+    assert "$observation.MatchingCount -eq 1" in desktop_probe
+    assert "$observation.MatchingHandle -ne 0" in desktop_probe
+    assert "$confirmation.MatchingCount -eq 1" in desktop_probe
+    assert "$confirmation.MatchingHandle -eq $candidateHandle" in desktop_probe
+    assert "last visible top-level windows" in desktop_probe
     assert "$desktopWindowTimeoutSeconds" in desktop_probe
     assert "exited early with code" in desktop_probe
     assert "did not expose a live native window" in desktop_probe

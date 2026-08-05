@@ -179,6 +179,8 @@ namespace PokeConSmoke
             internal uint dwThreadId;
         }
 
+        internal delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
+
         [DllImport(
             "kernel32.dll",
             CharSet = CharSet.Unicode,
@@ -256,6 +258,38 @@ namespace PokeConSmoke
             IntPtr handle,
             uint milliseconds);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool EnumWindows(
+            EnumWindowsProc callback,
+            IntPtr parameter);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsWindowVisible(IntPtr window);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern uint GetWindowThreadProcessId(
+            IntPtr window,
+            out uint processId);
+
+        [DllImport(
+            "user32.dll",
+            CharSet = CharSet.Unicode,
+            ExactSpelling = true,
+            SetLastError = true)]
+        internal static extern int GetWindowTextLengthW(IntPtr window);
+
+        [DllImport(
+            "user32.dll",
+            CharSet = CharSet.Unicode,
+            ExactSpelling = true,
+            SetLastError = true)]
+        internal static extern int GetWindowTextW(
+            IntPtr window,
+            StringBuilder title,
+            int maxCount);
+
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool CloseHandle(IntPtr handle);
@@ -264,6 +298,25 @@ namespace PokeConSmoke
         {
             return new Win32Exception(Marshal.GetLastWin32Error(), operation);
         }
+    }
+
+    public sealed class VisibleWindowObservation
+    {
+        internal VisibleWindowObservation(
+            long matchingHandle,
+            int matchingCount,
+            string visibleWindows)
+        {
+            MatchingHandle = matchingHandle;
+            MatchingCount = matchingCount;
+            VisibleWindows = visibleWindows;
+        }
+
+        public long MatchingHandle { get; private set; }
+
+        public int MatchingCount { get; private set; }
+
+        public string VisibleWindows { get; private set; }
     }
 
     public sealed class WindowsJobProcess : IDisposable
@@ -591,6 +644,52 @@ namespace PokeConSmoke
             return information.ActiveProcesses;
         }
 
+        public VisibleWindowObservation ObserveVisibleTopLevelWindows(string exactTitle)
+        {
+            ThrowIfDisposed();
+            if (exactTitle == null)
+            {
+                throw new ArgumentNullException("exactTitle");
+            }
+
+            uint rootProcessId = unchecked((uint)RootProcess.Id);
+            List<string> visibleWindows = new List<string>();
+            long matchingHandle = 0;
+            int matchingCount = 0;
+            NativeMethods.EnumWindowsProc callback = delegate(IntPtr window, IntPtr parameter)
+            {
+                uint windowProcessId;
+                if (!NativeMethods.IsWindowVisible(window) ||
+                    NativeMethods.GetWindowThreadProcessId(window, out windowProcessId) == 0 ||
+                    windowProcessId != rootProcessId)
+                {
+                    return true;
+                }
+
+                int titleLength = NativeMethods.GetWindowTextLengthW(window);
+                StringBuilder titleBuffer = new StringBuilder(Math.Max(1, titleLength + 1));
+                NativeMethods.GetWindowTextW(window, titleBuffer, titleBuffer.Capacity);
+                string title = titleBuffer.ToString();
+                visibleWindows.Add(
+                    "handle=0x" + window.ToInt64().ToString("X") + " title=[" + title + "]");
+                if (String.Equals(title, exactTitle, StringComparison.Ordinal))
+                {
+                    matchingHandle = window.ToInt64();
+                    ++matchingCount;
+                }
+                return true;
+            };
+            if (!NativeMethods.EnumWindows(callback, IntPtr.Zero))
+            {
+                throw NativeMethods.LastError("EnumWindows failed");
+            }
+
+            string summary = visibleWindows.Count == 0
+                ? "<none>"
+                : String.Join(", ", visibleWindows.ToArray());
+            return new VisibleWindowObservation(matchingHandle, matchingCount, summary);
+        }
+
         public void Terminate(uint exitCode)
         {
             SafeJobHandle jobHandle = GetOpenJobHandle();
@@ -904,8 +1003,7 @@ function Invoke-DesktopWindowProbe {
     try {
         $process = $jobProcess.RootProcess
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-        $lastHandle = 0L
-        $lastTitle = ''
+        $lastVisibleWindows = '<not observed>'
         $observedWindow = $false
         while ($stopwatch.Elapsed.TotalSeconds -lt $desktopWindowTimeoutSeconds) {
             $process.Refresh()
@@ -913,29 +1011,38 @@ function Invoke-DesktopWindowProbe {
                 throw (
                     "Desktop probe process $($process.Id) exited early with code " +
                     "$($process.ExitCode) after $([Math]::Round($stopwatch.Elapsed.TotalSeconds, 2)) seconds; " +
-                    "last MainWindowHandle=$lastHandle; last title=[$lastTitle]"
+                    "last visible top-level windows=[$lastVisibleWindows]"
                 )
             }
 
-            $lastHandle = $process.MainWindowHandle.ToInt64()
-            $lastTitle = $process.MainWindowTitle
-            if ($lastHandle -ne 0 -and $lastTitle -ceq $desktopWindowTitle) {
+            $observation = $jobProcess.ObserveVisibleTopLevelWindows($desktopWindowTitle)
+            $lastVisibleWindows = $observation.VisibleWindows
+            if ($observation.MatchingCount -eq 1 -and $observation.MatchingHandle -ne 0) {
+                $candidateHandle = $observation.MatchingHandle
+                Start-Sleep -Milliseconds 200
                 $process.Refresh()
-                if (-not $process.HasExited -and
-                    $process.MainWindowHandle.ToInt64() -ne 0 -and
-                    $process.MainWindowTitle -ceq $desktopWindowTitle) {
-                    $observedWindow = $true
-                    break
+                if (-not $process.HasExited) {
+                    $confirmation = $jobProcess.ObserveVisibleTopLevelWindows(
+                        $desktopWindowTitle
+                    )
+                    $lastVisibleWindows = $confirmation.VisibleWindows
+                    if ($confirmation.MatchingCount -eq 1 -and
+                        $confirmation.MatchingHandle -eq $candidateHandle) {
+                        $observedWindow = $true
+                        break
+                    }
                 }
             }
-            Start-Sleep -Milliseconds 200
+            else {
+                Start-Sleep -Milliseconds 200
+            }
         }
 
         if (-not $observedWindow) {
             throw (
                 "Desktop probe process $($process.Id) did not expose a live native window " +
                 "with exact title [$desktopWindowTitle] within $desktopWindowTimeoutSeconds seconds; " +
-                "last MainWindowHandle=$lastHandle; last title=[$lastTitle]"
+                "last visible top-level windows=[$lastVisibleWindows]"
             )
         }
     }

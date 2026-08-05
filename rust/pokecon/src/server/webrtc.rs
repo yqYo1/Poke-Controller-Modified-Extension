@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 
+use crate::camera::{MediaFrame, MotionJpegSource, WebRtcFrameSource};
 use axum::body::Bytes;
 use openh264::OpenH264API;
 use openh264::encoder::{
@@ -11,7 +12,6 @@ use openh264::encoder::{
     VuiConfig,
 };
 use openh264::formats::{BgrSliceU8, YUVBuffer};
-use pokecon_camera::{MediaFrame, MotionJpegSource, WebRtcFrameSource};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::{JoinHandle, spawn_blocking};
@@ -984,11 +984,11 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
-    use openh264::decoder::Decoder;
-    use openh264::formats::YUVSource as _;
-    use pokecon_camera::{
+    use crate::camera::{
         BgrFrame, CaptureResolution, LatestFrameSource, ScreenshotRuntimeSettings,
     };
+    use openh264::decoder::Decoder;
+    use openh264::formats::YUVSource as _;
     use tokio::sync::mpsc;
     use tokio::time::timeout;
 

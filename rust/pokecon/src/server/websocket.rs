@@ -945,12 +945,12 @@ mod tests {
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use crate::camera::{
+        BgrFrame, CaptureResolution, LatestFrameSource, ScreenshotRuntimeSettings,
+    };
     use axum::http::header::{ALLOW, CONTENT_LENGTH, CONTENT_TYPE};
     use axum::http::{Method, StatusCode};
     use futures_util::{SinkExt as _, StreamExt as _};
-    use pokecon_camera::{
-        BgrFrame, CaptureResolution, LatestFrameSource, ScreenshotRuntimeSettings,
-    };
     use tokio::sync::{Notify, mpsc};
     use tokio::time::timeout;
     use tokio_tungstenite::MaybeTlsStream;

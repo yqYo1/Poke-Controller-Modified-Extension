@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
+use pokecon::camera::{CaptureResolution, FlipMode, ScreenshotFormat};
 use pokecon::worker as pokecon_worker;
-use pokecon_camera::{CaptureResolution, FlipMode, ScreenshotFormat};
 use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{

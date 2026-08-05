@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::env;
 
-use pokecon_camera::{
+use pokecon::camera::{
     CameraBackend as _, CameraConfig, CameraSelector, CaptureResolution, NativeCameraBackend,
 };
 

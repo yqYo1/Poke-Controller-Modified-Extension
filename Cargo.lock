@@ -3759,14 +3759,17 @@ dependencies = [
  "clap",
  "dunce",
  "futures-util",
+ "getrandom 0.4.3",
  "gilrs",
+ "hex",
+ "image",
  "mime_guess",
  "mlua",
  "nix 0.30.1",
+ "nokhwa",
  "opener",
  "openh264",
  "parking_lot",
- "pokecon-camera",
  "pokecon-contracts",
  "pokecon-settings",
  "proc-macro2",
@@ -3781,6 +3784,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shared_memory",
  "syn 2.0.119",
  "tauri",
  "tauri-build",
@@ -3796,29 +3800,10 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "utoipa",
+ "v4l",
  "webrtc",
  "winapi-util",
  "win32_notif",
-]
-
-[[package]]
-name = "pokecon-camera"
-version = "0.1.0"
-dependencies = [
- "atomic-write-file",
- "chrono",
- "getrandom 0.4.3",
- "hex",
- "image",
- "nokhwa",
- "serde",
- "serde_json",
- "shared_memory",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "v4l",
 ]
 
 [[package]]

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::JoinHandle;
 
-use pokecon_camera::{
+use crate::camera::{
     BgrFrame, CaptureResolution, LatestFrameSource, RingReader, ScreenshotFormat, ScreenshotMode,
     ScreenshotRuntimeSettings, ScreenshotService, SharedFrameRing,
 };

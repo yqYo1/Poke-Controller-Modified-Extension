@@ -1,8 +1,8 @@
 //! Top-level process orchestration for web and desktop modes.
 
 mod application_backend;
-#[path = "camera/facade.rs"]
-mod camera;
+#[doc(hidden)]
+pub mod camera;
 mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;

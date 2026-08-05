@@ -1,3 +1,4 @@
+pub(crate) use pokecon::camera;
 pub(crate) use pokecon::device;
 pub(crate) use pokecon::worker;
 

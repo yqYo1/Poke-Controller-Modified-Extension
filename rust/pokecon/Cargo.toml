@@ -47,14 +47,16 @@ base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
 gilrs.workspace = true
+hex.workspace = true
+image.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
-pokecon-camera = { path = "../pokecon-camera" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 reqwest.workspace = true
@@ -66,6 +68,7 @@ semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+shared_memory.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tauri.workspace = true
@@ -96,9 +99,21 @@ nix = { workspace = true, features = ["fs"] }
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+nokhwa = { workspace = true, features = ["input-v4l"] }
+v4l.workspace = true
+
 [target.'cfg(windows)'.dependencies]
+nokhwa = { workspace = true, features = ["input-msmf"] }
 winapi-util = "0.1.11"
 win32_notif = { version = "0.15.3", default-features = false }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

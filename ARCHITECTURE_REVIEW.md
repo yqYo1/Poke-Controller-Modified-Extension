@@ -191,7 +191,7 @@ Phase 2.7の最初の不可分atomで`pokecon-desktop` compatibility packageを�
 
 標準成果物にWeb UIとTauriの両方を含めるため、`tauri-shell`によるWeb専用ビルドを廃止しました。
 
-`pokecon-camera`はカメラと画像処理のプラットフォーム依存を所有しています。
+Phase 2.7のcamera atomで`pokecon-camera` compatibility packageを削除し、カメラ、画像処理、共有メモリーのプラットフォーム依存とintegration testを`pokecon`へ統合しました。cameraの正準実装は`pokecon::camera`に一度だけcompileされ、serverとworkerも同じ型を参照します。
 
 Phase 2.7のdevice atomで`pokecon-device` compatibility packageを削除し、シリアル、ゲームパッド、Windows通知の依存とintegration testsを`pokecon`へ統合しました。deviceの正準実装は`pokecon::device`に一度だけcompileされ、workerのprivate dynamic domainも同じ型を参照します。
 

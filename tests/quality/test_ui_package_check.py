@@ -142,7 +142,6 @@ PRODUCTION_BINARY_BUILD_INPUT_SOURCES: dict[str, str] = {
     "@tauri/icons/icon.ico": "rust/pokecon/icons/icon.ico",
 }
 PRODUCTION_CARGO_TARGET_ROOT_SOURCES: dict[str, str] = {
-    "@rust/pokecon-camera/src/lib.rs": "rust/pokecon-camera/src/lib.rs",
     "@rust/pokecon-contracts/src/lib.rs": "rust/pokecon-contracts/src/lib.rs",
     "@rust/pokecon-settings/src/lib.rs": "rust/pokecon-settings/src/lib.rs",
     "@rust/pokecon/src/bin/worker.rs": "rust/pokecon/src/bin/worker.rs",
@@ -159,13 +158,11 @@ TAURI_AUTO_CONFIG_PATTERN = re.compile(
 WORKSPACE_MEMBERS: tuple[str, ...] = (
     "rust/pokecon",
     "rust/pokecon-contracts",
-    "rust/pokecon-camera",
     "rust/pokecon-settings",
 )
 WORKSPACE_DEFAULT_MEMBERS: tuple[str, ...] = (
     "rust/pokecon",
     "rust/pokecon-contracts",
-    "rust/pokecon-camera",
     "rust/pokecon-settings",
 )
 WORKSPACE_MANIFEST_SOURCES: dict[str, str] = {
@@ -177,8 +174,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "205a3bc0523f9aa220038b590367590b8900c8d39c39f910b6dec7ef3107faff",
-    "rust/pokecon-camera": "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd",
+    "rust/pokecon": "e1953d2e764f9da42847ca81eb600c57f8ce6ee3ce7f0010f7064e4013f0653e",
     "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
     "rust/pokecon-settings": "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972",
 }
@@ -312,14 +308,16 @@ base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
 gilrs.workspace = true
+hex.workspace = true
+image.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
-pokecon-camera = { path = "../pokecon-camera" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 reqwest.workspace = true
@@ -331,6 +329,7 @@ semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+shared_memory.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tauri.workspace = true
@@ -361,12 +360,24 @@ nix = { workspace = true, features = ["fs"] }
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+nokhwa = { workspace = true, features = ["input-v4l"] }
+v4l.workspace = true
+
 [target.'cfg(windows)'.dependencies]
+nokhwa = { workspace = true, features = ["input-msmf"] }
 winapi-util = "0.1.11"
 win32_notif = { version = "0.15.3", default-features = false }
 
-[lints]
-workspace = true
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
 """
 )
 
@@ -1202,7 +1213,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     expected_package_names = {
         "rust/pokecon": "pokecon",
-        "rust/pokecon-camera": "pokecon-camera",
         "rust/pokecon-contracts": "pokecon-contracts",
         "rust/pokecon-settings": "pokecon-settings",
     }
@@ -1258,7 +1268,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "d7d3cc8dae6121ec900da3ec7cfcbc7a58985604c79c915f8ad157d2a55fab54"
+        == "37c8bdc111864f027359b783aa2b181928385c523d9f90e2c04faffe88515187"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -1982,9 +1992,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         for relative_path in PRODUCTION_CARGO_TARGET_ROOT_SOURCES.values()
     ]
     expected_production_cargo_target_root_hashes = {
-        "@rust/pokecon-camera/src/lib.rs": (
-            "a5604ab7c12d7937a9f95d9068bfada165970b6b67cf978fd38c75d192a09a4c"
-        ),
         "@rust/pokecon-contracts/src/lib.rs": (
             "aa6190e6e334b6d20331a746ab9390450e241dac389f1cd5005a9f3a908f44cc"
         ),
@@ -1992,10 +1999,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "6d4beafcf5fdf1decaad9c117612f08e670fcef1486076b7e310c589ecf47d29"
         ),
         "@rust/pokecon/src/bin/worker.rs": (
-            "4e15dbddb878175394afda049d5af647297a6e8f1ceb2e0032ccb9b54c0732b2"
+            "8089c86668e21370215b50b0544ef719e76a4a30d23b86640e1947736c3bc212"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "b8f93ec8f58813da3d3debdea6c412171a624bc7e06fa91ac37976b39396ab00"
+            "20bd796a0296185e09635f108c991bbc2a6c20f9868929a9da83fd807f290736"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2009,7 +2016,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         set(PRODUCTION_CARGO_TARGET_ROOT_SOURCES.values())
         | set(WORKSPACE_BUILD_SCRIPT_SOURCES)
     ) == {
-        "rust/pokecon-camera/src/lib.rs",
         "rust/pokecon-contracts/src/lib.rs",
         "rust/pokecon-settings/src/lib.rs",
         "rust/pokecon/src/bin/worker.rs",
@@ -2202,7 +2208,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "2c2678667f5b1dbb626037fc439ef0f1f4f88895686c7dd479cb770674bfb1ec"
+        == "a1511bd32402e73ebd0b112013688b2906e789481374ca558d042fbd22aef9fe"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2432,14 +2438,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "81ee014c37ddbcec654e08a2b4da01fe9e6c964ad2cd8a084712340f1b86a728"
+        == "d8f878e680386fd0c3256fd210676e5fce446d801d8533db3977614d217d8af9"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "d7d3cc8dae6121ec900da3ec7cfcbc7a58985604c79c915f8ad157d2a55fab54"',
+        '== "37c8bdc111864f027359b783aa2b181928385c523d9f90e2c04faffe88515187"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -4106,6 +4112,18 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     manifest = tomllib.loads(sources[POKECON_MANIFEST_SOURCE])
     assert manifest["package"]["name"] == "pokecon"
     assert manifest["package"]["build"] == "build.rs"
+    assert manifest["lints"] == {
+        "rust": {
+            "unsafe_code": "deny",
+            "unsafe_op_in_unsafe_fn": "deny",
+        },
+        "clippy": {
+            "all": {"level": "deny", "priority": -1},
+            "pedantic": {"level": "deny", "priority": -1},
+            "module_name_repetitions": "allow",
+            "must_use_candidate": "allow",
+        },
+    }
     assert "autolib" not in manifest["package"]
     assert "lib" not in manifest
     assert manifest["bin"] == [
@@ -4131,6 +4149,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     ]
     dependencies = manifest["dependencies"]
     assert isinstance(dependencies, dict)
+    assert "pokecon-camera" not in dependencies
     assert "pokecon-dynamic" not in dependencies
     assert "pokecon-core" not in dependencies
     assert "pokecon-device" not in dependencies
@@ -4185,6 +4204,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         generate_openapi_source.count("pokecon::generate_openapi_document_json()") == 1
     )
     for retired_crate_identifier in (
+        "pokecon_camera",
         "pokecon_core",
         "pokecon_device",
         "pokecon_dynamic",
@@ -4195,6 +4215,17 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
             for source_name, source in sources.items()
             if source_name.endswith(".rs")
         )
+
+    unsafe_sites = {
+        source_name: len(re.findall(r"\bunsafe\b", rust_lexical_mask(source)))
+        for source_name, source in sources.items()
+        if source_name.endswith(".rs")
+        and re.search(r"\bunsafe\b", rust_lexical_mask(source)) is not None
+    }
+    assert unsafe_sites == {"camera/shared_ring.rs": 8}
+    shared_ring_source = rust_lexical_mask(sources["camera/shared_ring.rs"])
+    assert shared_ring_source.count("#[allow(unsafe_code)]") == 1
+    assert "#[allow(unsafe_code)]\nmod mapping {" in shared_ring_source
 
     server_module = sources["server/mod.rs"]
     server_module_code = rust_without_comments(server_module).lstrip()
@@ -4386,8 +4417,8 @@ pub mod websocket;
     application_source = rust_lexical_mask(sources["lib.rs"])
     expected_application_prelude = """
 mod application_backend;
-#[path = "camera/facade.rs"]
-mod camera;
+#[doc(hidden)]
+pub mod camera;
 mod command_service;
 #[path = "contracts/facade.rs"]
 mod contracts;
@@ -14031,7 +14062,7 @@ use std::collections::BTreeMap;""",
     shadowed_std_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
         "[dev-dependencies]",
-        """std = { package = "pokecon-camera", path = "../pokecon-camera" }
+        """std = { package = "pokecon-contracts", path = "../pokecon-contracts" }
 
 [dev-dependencies]""",
     )
@@ -14101,9 +14132,9 @@ fn allow_attacker(&mut self) {
     )
     restored_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-camera = { path = "../pokecon-camera" }\n'
+        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-camera = { path = "../pokecon-camera" }\n'
+        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
         'pokecon-server = { path = "../pokecon-server" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
     )
@@ -14725,7 +14756,7 @@ pub(super) fn r#router() -> Router<RestState> {{
             (f"changed Tauri asset {asset_source}", changed_asset)
         )
     implicit_dependency_build_script = add_build_script(
-        "rust/pokecon-camera", "fn main() {}\n"
+        "rust/pokecon-contracts", "fn main() {}\n"
     )
     symlinked_allowed_build_script = sources.copy()
     symlinked_build_script_inventory = json.loads(
@@ -14743,7 +14774,7 @@ pub(super) fn r#router() -> Router<RestState> {{
         'fn main() { std::fs::write("../pokecon/src/server/security.rs", "").unwrap();',
     )
     enabled_dependency_build_script = replace_once(
-        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-camera"],
+        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-contracts"],
         "build = false",
         'build = "build.rs"',
     )
@@ -14756,9 +14787,14 @@ pub(super) fn r#router() -> Router<RestState> {{
 tauri-build = "2.5.4"
 """
     added_registry_dependency = replace_once(
-        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-camera"],
+        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-contracts"],
         "[dependencies]\n",
         '[dependencies]\nring = "0.17.14"\n',
+    )
+    allowed_application_unsafe_code = replace_once(
+        POKECON_MANIFEST_SOURCE,
+        'unsafe_code = "deny"',
+        'unsafe_code = "allow"',
     )
     changed_cargo_lock = replace_once(
         WORKSPACE_LOCK_SOURCE,
@@ -14767,21 +14803,21 @@ tauri-build = "2.5.4"
     )
     escaped_path_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-camera = { path = "../pokecon-camera" }',
-        'pokecon-camera = { path = "../../attacker-camera" }',
+        'pokecon-contracts = { path = "../pokecon-contracts" }',
+        'pokecon-contracts = { path = "../../attacker-contracts" }',
     )
     aliased_pokecon_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-camera = { path = "../pokecon-camera" }\n'
+        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-camera = { path = "../pokecon-camera" }\n'
-        'pokecon-server = { package = "pokecon-camera", path = "../pokecon-camera" }\n'
+        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
+        'pokecon-server = { package = "pokecon-contracts", path = "../pokecon-contracts" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
     )
     aliased_workspace_axum_dependency = replace_once(
         WORKSPACE_MANIFEST_SOURCE,
         'axum = "0.8.9"',
-        'axum = { package = "pokecon-camera", path = "rust/pokecon-camera" }',
+        'axum = { package = "pokecon-contracts", path = "rust/pokecon-contracts" }',
     )
     cargo_config_wrapper = sources.copy()
     cargo_config_wrapper[CARGO_CONFIG_INVENTORY_SOURCE] = json.dumps(
@@ -14867,8 +14903,8 @@ runner = "scripts/attacker-runner.sh"
         "              );",
         "                      (\n"
         '                        replaceManifestString "controlled dependency redirect"\n'
-        "                          ''pokecon-camera = { path = \"../pokecon-camera\" }''\n"
-        "                          ''pokecon-camera = { package = \"pokecon-contracts\", path = \"../pokecon-contracts\" }''\n"
+        "                          ''pokecon-settings = { path = \"../pokecon-settings\" }''\n"
+        "                          ''pokecon-settings = { package = \"pokecon-contracts\", path = \"../pokecon-contracts\" }''\n"
         "                          canonicalPokeconManifestText\n"
         "                      )\n"
         "                  )\n"
@@ -15023,7 +15059,7 @@ runner = "scripts/attacker-runner.sh"
         "              ''install_controlled_cargo_manifest \"${\n"
         "                controlledWorkspaceMemberManifests.${memberPath}\n"
         '              }" "${memberPath}/Cargo.toml"\'\'\n'
-        '            ) (lib.filter (memberPath: memberPath != "rust/pokecon-camera") workspaceMemberPaths)}\n'
+        '            ) (lib.filter (memberPath: memberPath != "rust/pokecon-contracts") workspaceMemberPaths)}\n'
         "            unset -f install_controlled_cargo_manifest",
     )
     bypassed_symlink_member_check = replace_once(
@@ -16653,6 +16689,7 @@ runner = "scripts/attacker-runner.sh"
         ("enabled dependency build script", enabled_dependency_build_script),
         ("target-specific build dependency", target_specific_build_dependency),
         ("added registry dependency", added_registry_dependency),
+        ("allowed application unsafe code", allowed_application_unsafe_code),
         ("changed Cargo lock", changed_cargo_lock),
         ("escaped Cargo path dependency", escaped_path_dependency),
         ("aliased pokecon-server path dependency", aliased_pokecon_server_dependency),

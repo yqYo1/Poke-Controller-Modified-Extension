@@ -113,7 +113,7 @@ CI専用のcopyやfallbackを追加せず、Nix buildがproduction sourceを正�
 
 crateは[本体アーキテクチャ](ARCHITECTURE.md#rust-crateの責務を分ける)の所有境界に従います。
 
-workspace全体は`unsafe_code = "forbid"`です。
+workspaceの既定は`unsafe_code = "forbid"`です。本体crateだけは`deny`を使用し、camera共有メモリーmappingの監査済み境界に限って局所的に`allow`します。
 
 Clippyの`all`と`pedantic`をwarningではなくerrorとして扱います。
 

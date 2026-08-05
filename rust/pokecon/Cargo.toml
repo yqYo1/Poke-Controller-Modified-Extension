@@ -54,7 +54,6 @@ openh264.workspace = true
 parking_lot.workspace = true
 pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
-pokecon-core = { path = "../pokecon-core" }
 pokecon-device = { path = "../pokecon-device" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
@@ -73,6 +72,7 @@ tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 url.workspace = true
 utoipa.workspace = true
 webrtc.workspace = true

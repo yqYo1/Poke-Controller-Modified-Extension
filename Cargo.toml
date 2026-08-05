@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "rust/pokecon",
     "rust/pokecon-contracts",
-    "rust/pokecon-core",
     "rust/pokecon-camera",
     "rust/pokecon-device",
     "rust/pokecon-settings",
@@ -11,7 +10,6 @@ members = [
 default-members = [
     "rust/pokecon",
     "rust/pokecon-contracts",
-    "rust/pokecon-core",
     "rust/pokecon-camera",
     "rust/pokecon-device",
     "rust/pokecon-settings",

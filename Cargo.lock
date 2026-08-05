@@ -3767,7 +3767,6 @@ dependencies = [
  "parking_lot",
  "pokecon-camera",
  "pokecon-contracts",
- "pokecon-core",
  "pokecon-device",
  "pokecon-settings",
  "proc-macro2",
@@ -3792,6 +3791,7 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "url",
  "utoipa",
  "webrtc",
@@ -3826,18 +3826,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "url",
-]
-
-[[package]]
-name = "pokecon-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.18",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

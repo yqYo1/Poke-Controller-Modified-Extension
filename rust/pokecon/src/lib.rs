@@ -9,8 +9,8 @@ mod contracts;
 mod desktop;
 #[path = "device/facade.rs"]
 mod device;
-#[path = "diagnostics/facade.rs"]
-mod diagnostics;
+#[doc(hidden)]
+pub mod diagnostics;
 #[allow(
     dead_code,
     reason = "engine-only helpers are consumed by the worker binary's private copy"
@@ -21,12 +21,12 @@ pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
-#[path = "platform/facade.rs"]
-mod platform;
+#[doc(hidden)]
+pub mod platform;
 mod production;
 mod profile_service;
-#[path = "runtime/facade.rs"]
-mod runtime;
+#[doc(hidden)]
+pub mod runtime;
 mod script_host;
 mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
@@ -38,7 +38,16 @@ mod settings_runtime;
 #[doc(hidden)]
 pub mod worker;
 
+#[doc(hidden)]
+pub use diagnostics::{
+    APP_STARTING, APP_STOPPED, SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED, TracingInitError,
+    init_tracing, init_tracing_to_stderr,
+};
 pub use entrypoint::{MainError, run_cli};
+#[doc(hidden)]
+pub use runtime::{
+    OsSignal, RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
+};
 
 use std::future::Future;
 use std::io;
@@ -61,13 +70,9 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 
-use crate::diagnostics::{APP_STARTING, APP_STOPPED};
 use crate::dynamic_host::StartupDynamicHost;
 use crate::dynamic_runtime::DynamicRuntime;
 use crate::production::ProductionRuntime;
-use crate::runtime::{
-    RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
-};
 
 /// Builds the canonical `OpenAPI` document for the generator binary.
 ///
@@ -512,7 +517,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use pokecon_core::OsSignal;
+    use crate::OsSignal;
 
     use super::*;
 

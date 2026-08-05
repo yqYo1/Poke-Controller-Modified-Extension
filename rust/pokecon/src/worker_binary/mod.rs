@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 use std::future::Future;
 
 use clap::{Parser, ValueEnum};
-use pokecon_core::{
-    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownReason, TracingInitError,
-    init_tracing_to_stderr, install_os_signal_forwarder,
+use pokecon::{
+    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownCoordinator, ShutdownReason,
+    TracingInitError, init_tracing_to_stderr, install_os_signal_forwarder,
 };
 use thiserror::Error;
 
@@ -177,7 +177,7 @@ async fn run(kind: WorkerKind, exit_after_startup: bool) -> Result<WorkerSummary
 }
 
 async fn supervise_worker_tasks(
-    shutdown: &pokecon_core::ShutdownCoordinator,
+    shutdown: &ShutdownCoordinator,
     signal_task: &mut tokio::task::JoinHandle<()>,
     protocol: impl Future<Output = Result<(), WorkerError>>,
 ) -> WorkerTaskResult {
@@ -210,7 +210,7 @@ async fn supervise_worker_tasks(
 }
 
 fn completed_signal_task_result(
-    shutdown: &pokecon_core::ShutdownCoordinator,
+    shutdown: &ShutdownCoordinator,
     result: Result<(), tokio::task::JoinError>,
 ) -> WorkerSignalTaskResult {
     let early_signal_error = match result {
@@ -234,7 +234,7 @@ fn completed_signal_task_result(
 async fn run_protocol(
     kind: WorkerKind,
     connection: &IpcConnection,
-    shutdown: &pokecon_core::ShutdownCoordinator,
+    shutdown: &ShutdownCoordinator,
 ) -> Result<(), WorkerError> {
     let mut dynamic =
         (kind == WorkerKind::Dynamic).then(|| DynamicWorkerRuntime::new(connection.clone()));
@@ -334,7 +334,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    use pokecon_core::{OsSignal, ShutdownCoordinator, ShutdownReason};
+    use pokecon::{OsSignal, ShutdownCoordinator, ShutdownReason};
     use tokio::task::JoinHandle;
     use tokio::time::timeout;
 

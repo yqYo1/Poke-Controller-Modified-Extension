@@ -7,8 +7,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use pokecon_core::{ShutdownCoordinator, ShutdownReason};
 use thiserror::Error;
+
+use crate::runtime::{ShutdownCoordinator, ShutdownReason};
 
 /// Canonical behavior for a user request to close the last desktop window.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -392,105 +393,105 @@ mod shell {
         });
         let single_instance_state = Arc::clone(&state);
         let setup_state = Arc::clone(&state);
-        let builder =
-            tauri::Builder::default()
-                .manage(Arc::clone(&state))
-                .plugin(tauri_plugin_single_instance::init(
-                    move |app, _arguments, _cwd| {
-                        if let Err(error) = open_main_window_if_shell_ready(
-                            &single_instance_state.shell_ready,
-                            || open_main_window(app),
-                        ) {
-                            single_instance_state.lifecycle.coordinator().request(
-                                pokecon_core::ShutdownReason::FatalError(error.to_string()),
+        let builder = tauri::Builder::default()
+            .manage(Arc::clone(&state))
+            .plugin(tauri_plugin_single_instance::init(
+                move |app, _arguments, _cwd| {
+                    if let Err(error) =
+                        open_main_window_if_shell_ready(&single_instance_state.shell_ready, || {
+                            open_main_window(app)
+                        })
+                    {
+                        single_instance_state.lifecycle.coordinator().request(
+                            crate::runtime::ShutdownReason::FatalError(error.to_string()),
+                        );
+                    }
+                },
+            ))
+            .invoke_handler(tauri::generate_handler![
+                choose_save_path,
+                open_config_directory
+            ])
+            .setup(move |app| {
+                let backend_address = on_primary_instance()?;
+                let app_url = backend_app_url(backend_address);
+                tauri::Url::parse(&app_url)
+                    .map_err(|_error| DesktopError::InvalidAppUrl(app_url.clone()))?;
+                let remote = format!("{}/*", app_url.trim_end_matches('/'));
+                app.add_capability(
+                    CapabilityBuilder::new("pokecon-local-backend")
+                        .local(false)
+                        .remote(remote)
+                        .window(MAIN_WINDOW_LABEL)
+                        .permission("allow-choose-save-path")
+                        .permission("allow-open-config-directory"),
+                )?;
+                setup_state
+                    .backend_address
+                    .set(backend_address)
+                    .map_err(|_address| DesktopError::BackendAddressAlreadyPublished)?;
+                open_main_window(app.handle())?;
+                let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&open, &quit])?;
+                TrayIconBuilder::new()
+                    .icon(tray_icon())
+                    .menu(&menu)
+                    .show_menu_on_left_click(true)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "open" => {
+                            if let Err(error) = open_main_window(app) {
+                                app.state::<Arc<ShellState>>()
+                                    .lifecycle
+                                    .coordinator()
+                                    .request(crate::runtime::ShutdownReason::FatalError(
+                                        error.to_string(),
+                                    ));
+                            }
+                        }
+                        "quit" => {
+                            app.state::<Arc<ShellState>>().lifecycle.request_exit();
+                        }
+                        _ => {}
+                    })
+                    .build(app)?;
+
+                let app_handle = app.handle().clone();
+                let shutdown = setup_state.lifecycle.coordinator();
+                tauri::async_runtime::spawn(async move {
+                    let _reason = shutdown.cancelled().await;
+                    app_handle.exit(0);
+                });
+                setup_state.shell_ready.store(true, Ordering::Release);
+                Ok(())
+            })
+            .on_window_event(|window, event| {
+                let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+                    return;
+                };
+                if window.app_handle().webview_windows().len() > 1 {
+                    return;
+                }
+                api.prevent_close();
+                let state = window.state::<Arc<ShellState>>();
+                let behavior = state.config.runtime_settings.close_behavior();
+                let confirmation = (behavior == CloseBehavior::Ask).then(ask_close).flatten();
+                match close_decision(behavior, confirmation) {
+                    CloseDecision::KeepBackend => {
+                        state.background.store(true, Ordering::Release);
+                        if let Err(error) = window.destroy() {
+                            state.background.store(false, Ordering::Release);
+                            state.lifecycle.coordinator().request(
+                                crate::runtime::ShutdownReason::FatalError(error.to_string()),
                             );
                         }
-                    },
-                ))
-                .invoke_handler(tauri::generate_handler![
-                    choose_save_path,
-                    open_config_directory
-                ])
-                .setup(move |app| {
-                    let backend_address = on_primary_instance()?;
-                    let app_url = backend_app_url(backend_address);
-                    tauri::Url::parse(&app_url)
-                        .map_err(|_error| DesktopError::InvalidAppUrl(app_url.clone()))?;
-                    let remote = format!("{}/*", app_url.trim_end_matches('/'));
-                    app.add_capability(
-                        CapabilityBuilder::new("pokecon-local-backend")
-                            .local(false)
-                            .remote(remote)
-                            .window(MAIN_WINDOW_LABEL)
-                            .permission("allow-choose-save-path")
-                            .permission("allow-open-config-directory"),
-                    )?;
-                    setup_state
-                        .backend_address
-                        .set(backend_address)
-                        .map_err(|_address| DesktopError::BackendAddressAlreadyPublished)?;
-                    open_main_window(app.handle())?;
-                    let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
-                    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-                    let menu = Menu::with_items(app, &[&open, &quit])?;
-                    TrayIconBuilder::new()
-                        .icon(tray_icon())
-                        .menu(&menu)
-                        .show_menu_on_left_click(true)
-                        .on_menu_event(|app, event| match event.id.as_ref() {
-                            "open" => {
-                                if let Err(error) = open_main_window(app) {
-                                    app.state::<Arc<ShellState>>()
-                                        .lifecycle
-                                        .coordinator()
-                                        .request(pokecon_core::ShutdownReason::FatalError(
-                                            error.to_string(),
-                                        ));
-                                }
-                            }
-                            "quit" => {
-                                app.state::<Arc<ShellState>>().lifecycle.request_exit();
-                            }
-                            _ => {}
-                        })
-                        .build(app)?;
-
-                    let app_handle = app.handle().clone();
-                    let shutdown = setup_state.lifecycle.coordinator();
-                    tauri::async_runtime::spawn(async move {
-                        let _reason = shutdown.cancelled().await;
-                        app_handle.exit(0);
-                    });
-                    setup_state.shell_ready.store(true, Ordering::Release);
-                    Ok(())
-                })
-                .on_window_event(|window, event| {
-                    let tauri::WindowEvent::CloseRequested { api, .. } = event else {
-                        return;
-                    };
-                    if window.app_handle().webview_windows().len() > 1 {
-                        return;
                     }
-                    api.prevent_close();
-                    let state = window.state::<Arc<ShellState>>();
-                    let behavior = state.config.runtime_settings.close_behavior();
-                    let confirmation = (behavior == CloseBehavior::Ask).then(ask_close).flatten();
-                    match close_decision(behavior, confirmation) {
-                        CloseDecision::KeepBackend => {
-                            state.background.store(true, Ordering::Release);
-                            if let Err(error) = window.destroy() {
-                                state.background.store(false, Ordering::Release);
-                                state.lifecycle.coordinator().request(
-                                    pokecon_core::ShutdownReason::FatalError(error.to_string()),
-                                );
-                            }
-                        }
-                        CloseDecision::Shutdown => {
-                            state.lifecycle.request_exit();
-                        }
-                        CloseDecision::Cancel => {}
+                    CloseDecision::Shutdown => {
+                        state.lifecycle.request_exit();
                     }
-                });
+                    CloseDecision::Cancel => {}
+                }
+            });
 
         let app = builder.build(context)?;
         let exit_code = run_event_loop(app, state);
@@ -545,7 +546,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use pokecon_core::{ShutdownCoordinator, ShutdownReason};
+    use crate::runtime::{ShutdownCoordinator, ShutdownReason};
 
     use super::{
         CloseBehavior, CloseDecision, DesktopLifecycle, DesktopRuntimeSettings, backend_app_url,

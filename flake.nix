@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "537ff0292a1bc01ac86a0a4da81f52ee582e128f4f8eca89a41ef8b3df084267";
+      canonicalFlakeHash = "a80360e8b210c86ec9b8ffe07cfebb9c5cc753a8447ee5c29bb71c1c734c780d";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "4d19999be105426929f85b2ac6b8de53def1592f6ea7daa44f7d720d9a2985fa";
+              expectedAuditTestHash = "a638b609b08992cbe7a921d90910af56e976a74e95a8400cae03cbcca05aafdb";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -469,7 +469,6 @@
           workspaceMemberPaths = [
             "rust/pokecon"
             "rust/pokecon-contracts"
-            "rust/pokecon-core"
             "rust/pokecon-camera"
             "rust/pokecon-device"
             "rust/pokecon-settings"
@@ -477,7 +476,6 @@
           workspaceDefaultMemberPaths = [
             "rust/pokecon"
             "rust/pokecon-contracts"
-            "rust/pokecon-core"
             "rust/pokecon-camera"
             "rust/pokecon-device"
             "rust/pokecon-settings"
@@ -492,7 +490,6 @@
             "rust/pokecon" = "pokecon";
             "rust/pokecon-camera" = "pokecon-camera";
             "rust/pokecon-contracts" = "pokecon-contracts";
-            "rust/pokecon-core" = "pokecon-core";
             "rust/pokecon-device" = "pokecon-device";
             "rust/pokecon-settings" = "pokecon-settings";
           };
@@ -500,15 +497,13 @@
             "rust/pokecon" = "build.rs";
             "rust/pokecon-camera" = false;
             "rust/pokecon-contracts" = false;
-            "rust/pokecon-core" = false;
             "rust/pokecon-device" = false;
             "rust/pokecon-settings" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "2e2e01277e76aa2bae9eec9e25146ec15b9fbf1d4621112063c3683a7e4d92f8";
+            "rust/pokecon" = "b80de505a68dd55eee49e25d97e48ba6110f674f5652f60a0382e6e2280fc19b";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
-            "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
             "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
           };
@@ -522,7 +517,6 @@
             };
             "rust/pokecon-camera" = { };
             "rust/pokecon-contracts" = { };
-            "rust/pokecon-core" = { };
             "rust/pokecon-device" = { };
             "rust/pokecon-settings" = {
               hex.workspace = true;
@@ -726,7 +720,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "51f3eabdd01e1a1e7fd760f1510ac6ae7a2e271da1ed4d979a712daa7af3df42"
+                == "7c31737db2c95b36500c8bfd3994ef30ad5b39cafffd1ab14e3364b0a6967546"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -734,7 +728,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "bb0fb4bfe7ecee8e1f9be4335779714535ff598ee7ba8a88ce6779f3cc3c3daf"
+                == "8b1fc0f162febcc8c7ee76d697ef207a07fe041e1acb2a42e22d1a231aa0bd80"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1058,7 +1052,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 386 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 385 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \

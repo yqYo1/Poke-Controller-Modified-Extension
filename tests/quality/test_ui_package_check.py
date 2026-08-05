@@ -1478,7 +1478,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     expected_production_build_input_hashes = {
         "@.gitignore": (
-            "cc7eed8906fb15e79ed7f47f513e25010ab314b5e98c3c0134bc053ca398f9ec"
+            "c4d5b0e7d2178ff43cd3015ffe61fb478a05523888dbb06a7f99ca8d6f1778fd"
         ),
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
@@ -2174,7 +2174,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "69c2bca404f9dfb41fabb9a29625642eb4d7b7e06b31fea026523b73e476771b"
+        == "1d90fda63b4f73c7e32eace6ecaa0b2eb0096726ab19d9c424f162627aa4f907"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2821,17 +2821,17 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "          '';\n\n"
         f"{cargo_cache_tag_definition}"
         "\n"
-        "          reclaimPerRunCargoTarget = ''"
+        "          setupWorkdir = ''"
     )
     assert flake.count(cargo_cache_tag_placement) == 1
     cargo_cache_tag_definition_start = flake.index(cargo_cache_tag_definition)
-    reclaim_helper_start = flake.index(
-        "reclaimPerRunCargoTarget =", cargo_cache_tag_definition_start
+    setup_workdir_start = flake.index(
+        "setupWorkdir =", cargo_cache_tag_definition_start
     )
     assert (
         per_run_cargo_target_end
         < cargo_cache_tag_definition_start
-        < reclaim_helper_start
+        < setup_workdir_start
     )
 
     target_mkdir = 'mkdir -- "$cargo_target_dir"'
@@ -2913,10 +2913,9 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         flake.count(
             "            ${setupPerRunCargoTarget}\n            ${setupUvLinks}"
         )
-        == 3
+        == 2
     )
 
-    setup_workdir_start = flake.index("setupWorkdir =")
     setup_workdir_end = flake.index("linuxDesktopPackages =", setup_workdir_start)
     setup_workdir = flake[setup_workdir_start:setup_workdir_end]
     assert (
@@ -3275,7 +3274,7 @@ offline = true
     )
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "3fa7aee329933805182ae41cc3306c8ec1d8db7b4a733201054f1a12faad12c9"
+        == "895f6894ce165ae9f0f54e8b69762dbe8bd44db5c915e37a79f959a0f35e2d62"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3303,11 +3302,11 @@ offline = true
         ),
         "build": ("cargo build --locked --workspace --all-features",),
         "check": (
-            "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
-            "--workspace --all-targets --all-features -- -D warnings",
             "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
             "--workspace --all-features",
             "cargo build --locked --workspace --all-features --jobs 1",
+            "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
+            "--workspace --all-targets --all-features -- -D warnings",
         ),
         "tauri-check": (
             "POKECON_RESOURCE_PROVENANCE=development cargo tauri build "
@@ -3350,41 +3349,64 @@ offline = true
         )
         == 1
     )
-    assert check_commands.index('-m "not production_routing_mutation"') < (
-        check_commands.index(
-            '"${productionRoutingMutationAuditRunner}/bin/'
-            'pokecon-production-routing-mutation-audit"'
-        )
+    parallel_checks_start = '                "${pythonEnv}/bin/python" -I \\\n'
+    assert check_commands.count(parallel_checks_start) == 1
+    parallel_checks = section(
+        check_commands,
+        parallel_checks_start,
+        "                shellcheck scripts/*.sh scripts/*/*.sh",
     )
-    first_reclaim = check_commands.index(
-        "${lib.optionalString pkgs.stdenv.isLinux reclaimPerRunCargoTarget}"
+    assert parallel_checks == (
+        '                  "${source}/scripts/quality/run_parallel_checks.py" \\\n'
+        "                  pytest \\\n"
+        "                  python -m pytest \\\n"
+        "                  -p no:cacheprovider \\\n"
+        '                  -m "not production_routing_mutation" \\\n'
+        "                  tests \\\n"
+        "                  -v \\\n"
+        "                  --tb=short \\\n"
+        "                  --next \\\n"
+        "                  production-routing-mutation-audit \\\n"
+        '                  "${productionRoutingMutationAuditRunner}/bin/'
+        'pokecon-production-routing-mutation-audit"\n'
     )
     shared_linker_flags = (
         "${lib.optionalString pkgs.stdenv.isLinux \"export RUSTFLAGS='-C "
         "link-arg=-Wl,--threads=1'\"}"
     )
-    assert (
-        check_commands.count(
-            "${lib.optionalString pkgs.stdenv.isLinux reclaimPerRunCargoTarget}"
-        )
-        == 1
+    dev_debug_flags = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
+    test_debug_flags = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
+    contract_generator = (
+        "cargo run --locked --package pokecon --bin generate_contracts "
+        "--features contract-generator -- --check"
     )
+    targeted_contract_test = (
+        "cargo test --locked --package pokecon --test contract_sync"
+    )
+    assert "reclaimPerRunCargoTarget" not in flake
+    assert "cargo clean" not in flake
     assert check_commands.count(shared_linker_flags) == 1
+    assert check_commands.count(dev_debug_flags) == 1
+    assert check_commands.count(test_debug_flags) == 1
+    assert check_commands.count(targeted_contract_test) == 0
+    assert flake.count(targeted_contract_test) == 1
     check_invocations = expected_development_cargo_invocations["check"]
     assert len(check_invocations) == 3
-    check_clippy = check_invocations[0]
-    check_test = check_invocations[1]
-    check_build = check_invocations[2]
+    check_test = check_invocations[0]
+    check_build = check_invocations[1]
+    check_clippy = check_invocations[2]
     check_build_with_local_provenance = (
         "POKECON_RESOURCE_PROVENANCE=development \\\n                " + check_build
     )
     assert check_commands.count(check_build_with_local_provenance) == 1
     assert (
-        check_commands.index(check_clippy)
-        < first_reclaim
+        check_commands.index(dev_debug_flags)
+        < check_commands.index(test_debug_flags)
         < check_commands.index(shared_linker_flags)
+        < check_commands.index(contract_generator)
         < check_commands.index(check_test)
         < check_commands.index(check_build)
+        < check_commands.index(check_clippy)
     )
 
     tauri_task_anchor = "\n            tauri-build =\n"
@@ -15543,12 +15565,11 @@ runner = "scripts/attacker-runner.sh"
     )
     aggregate_omits_mutation_audit = replace_once(
         FLAKE_SOURCE,
-        "                  --tb=short\n"
-        '                "${productionRoutingMutationAuditRunner}/bin/'
-        'pokecon-production-routing-mutation-audit"\n'
-        "                shellcheck scripts/*.sh scripts/*/*.sh\n",
-        "                  --tb=short\n"
-        "                shellcheck scripts/*.sh scripts/*/*.sh\n",
+        "                  --next \\\n"
+        "                  production-routing-mutation-audit \\\n"
+        '                  "${productionRoutingMutationAuditRunner}/bin/'
+        'pokecon-production-routing-mutation-audit"\n',
+        "",
     )
     dedicated_check_omits_mutation_audit = replace_once(
         FLAKE_SOURCE,

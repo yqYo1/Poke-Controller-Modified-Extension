@@ -38,11 +38,21 @@ jobs:
         run: cp dist/tauri/*.deb "$RUNNER_TEMP/pokecon-first.deb"
       - name: Rebuild Linux package from identical inputs
         run: nix run .#tauri-build -- --bundles deb
+      - name: Record Linux signing inputs
+        run: >-
+          nix run .#signing-input-manifest --
+          --platform linux
+          --bundle dist/tauri/*.deb
+          --output dist/tauri/signing-inputs.json
       - name: Verify byte-for-byte Linux package reproducibility
         run: cmp "$RUNNER_TEMP/pokecon-first.deb" dist/tauri/*.deb
       - name: Create portable and offline Nix artifacts
         run: |
           mkdir -p dist
+          mv dist/tauri/*.deb dist/
+          mv \
+            dist/tauri/signing-inputs.json \
+            dist/signing-inputs-linux-x86_64.json
           tar \
             --dereference \
             --sort=name \
@@ -57,6 +67,12 @@ jobs:
           nix-store --export "${closure_paths[@]}" \
             | zstd -19 -T0 \
             > "dist/pokecon-${GITHUB_REF_NAME}-linux-x86_64.nar.zst"
+      - name: Verify Linux signing inputs at handoff
+        run: >-
+          nix run .#signing-input-manifest --
+          --platform linux
+          --bundle dist/*.deb
+          --verify dist/signing-inputs-linux-x86_64.json
       - name: Generate Linux checksums
         run: >-
           nix run .#release-check --
@@ -164,6 +180,15 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Record Windows signing inputs
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -m scripts.release.signing_manifest `
+            --platform windows `
+            --bundle $installer `
+            --output target/release/bundle/nsis/signing-inputs.json
       - name: Verify clean install, startup, upgrade, and uninstall
         shell: pwsh
         run: >-
@@ -181,6 +206,14 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item target/release/bundle/nsis/*.exe dist/
+          Copy-Item `
+            target/release/bundle/nsis/signing-inputs.json `
+            dist/signing-inputs-windows-x86_64.json
+          $installer = (Get-ChildItem dist/*-setup.exe -File).FullName
+          python -m scripts.release.signing_manifest `
+            --platform windows `
+            --bundle $installer `
+            --verify dist/signing-inputs-windows-x86_64.json
           python -m scripts.release.gate `
             --tag $env:GITHUB_REF_NAME `
             --artifacts dist `

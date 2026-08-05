@@ -55,14 +55,28 @@ jobs:
         run: cp dist/tauri/*.deb "$RUNNER_TEMP/pokecon-first.deb"
       - name: Rebuild Debian package from identical inputs
         run: nix run .#tauri-build -- --bundles deb
+      - name: Record Linux signing inputs
+        run: >-
+          nix run .#signing-input-manifest --
+          --platform linux
+          --bundle dist/tauri/*.deb
+          --output dist/tauri/signing-inputs.json
       - name: Verify byte-for-byte package reproducibility
         run: |
           cmp "$RUNNER_TEMP/pokecon-first.deb" dist/tauri/*.deb
           sha256sum dist/tauri/*.deb
+      - name: Verify Linux signing inputs at handoff
+        run: >-
+          nix run .#signing-input-manifest --
+          --platform linux
+          --bundle dist/tauri/*.deb
+          --verify dist/tauri/signing-inputs.json
       - uses: actions/upload-artifact@v7
         with:
           name: package-linux-x86_64
-          path: dist/tauri/*.deb
+          path: |
+            dist/tauri/*.deb
+            dist/tauri/signing-inputs.json
           if-no-files-found: error
           retention-days: 3
 
@@ -152,14 +166,34 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Record Windows signing inputs
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -m scripts.release.signing_manifest `
+            --platform windows `
+            --bundle $installer `
+            --output target/release/bundle/nsis/signing-inputs.json
       - name: Verify clean install, startup, upgrade, and uninstall
         shell: pwsh
         run: >-
           ./scripts/release/windows_install_smoke.ps1
           -Installer (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+      - name: Verify Windows signing inputs at handoff
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -m scripts.release.signing_manifest `
+            --platform windows `
+            --bundle $installer `
+            --verify target/release/bundle/nsis/signing-inputs.json
       - uses: actions/upload-artifact@v7
         with:
           name: package-windows-x86_64
-          path: target/release/bundle/nsis/*.exe
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/signing-inputs.json
           if-no-files-found: error
           retention-days: 3

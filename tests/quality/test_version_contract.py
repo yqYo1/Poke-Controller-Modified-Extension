@@ -96,7 +96,7 @@ def test_per_run_cargo_target_installs_canonical_cache_directory_tag() -> None:
         "          '';\n\n"
         f"{tag_definition}"
         "\n"
-        "          reclaimPerRunCargoTarget = ''"
+        "          setupWorkdir = ''"
     )
     assert flake.count(tag_placement) == 1
 
@@ -152,10 +152,10 @@ def test_per_run_cargo_target_installs_canonical_cache_directory_tag() -> None:
     per_run_target_with_uv = (
         "            ${setupPerRunCargoTarget}\n            ${setupUvLinks}"
     )
-    assert flake.count(per_run_target_with_uv) == 3
+    assert flake.count(per_run_target_with_uv) == 2
 
 
-def test_aggregate_check_reclaims_clippy_then_reuses_test_artifacts_for_build() -> None:
+def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
     aggregate_check = flake.split("            check = mkTask {", maxsplit=1)[1].split(
@@ -169,53 +169,20 @@ def test_aggregate_check_reclaims_clippy_then_reuses_test_artifacts_for_build() 
         "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"
     )
     workspace_test = "cargo test --locked --workspace --all-features"
-    cargo_clean = 'cargo clean --target-dir "$CARGO_TARGET_DIR"'
-    cargo_config_restore = "${restoreGateCargoConfig}"
-    ancestor_config_guard = "${assertNoCargoConfigAncestors}"
-    target_reinitialization = "${setupPerRunCargoTarget}"
-    uv_reinstallation = "${setupUvLinks}"
-    reclamation_helper_start = "reclaimPerRunCargoTarget = ''"
-    assert flake.count(reclamation_helper_start) == 1
-    reclamation_helper_end_marker = "\n          '';"
-    reclamation_helper_start_index = flake.index(reclamation_helper_start)
-    reclamation_helper_end_index = flake.index(
-        reclamation_helper_end_marker, reclamation_helper_start_index
-    ) + len(reclamation_helper_end_marker)
-    reclamation_helper = flake[
-        reclamation_helper_start_index:reclamation_helper_end_index
-    ]
-    ownership_guard = 'if [ "$CARGO_TARGET_DIR" != "$gate_home/target" ] \\'
-    assert tuple(
-        line.strip() for line in reclamation_helper.splitlines() if line.strip()
-    ) == (
-        reclamation_helper_start,
-        cargo_config_restore,
-        ancestor_config_guard,
-        ownership_guard,
-        '|| [ -L "$CARGO_TARGET_DIR" ] \\',
-        '|| [ ! -d "$CARGO_TARGET_DIR" ] \\',
-        '|| [ "$(readlink -f "$CARGO_TARGET_DIR")" != "$CARGO_TARGET_DIR" ]; then',
-        'echo "aggregate check refuses to clean an unowned Cargo target: $CARGO_TARGET_DIR" >&2',
-        "exit 2",
-        "fi",
-        cargo_clean,
-        target_reinitialization,
-        uv_reinstallation,
-        "'';",
-    )
-    assert reclamation_helper.count(cargo_clean) == 1
-    assert flake.count(cargo_clean) == 1
-    assert flake.count("cargo clean") == 1
-    linux_reclamation = (
-        "${lib.optionalString pkgs.stdenv.isLinux reclaimPerRunCargoTarget}"
-    )
-    assert aggregate_check.count(linux_reclamation) == 1
-    assert flake.count(linux_reclamation) == 1
-    assert aggregate_check.count("reclaimPerRunCargoTarget") == 1
-    assert flake.count("reclaimPerRunCargoTarget") == 2
+    assert "reclaimPerRunCargoTarget" not in flake
+    assert "cargo clean" not in flake
     linux_only_lld_export = (
         "${lib.optionalString pkgs.stdenv.isLinux "
         "\"export RUSTFLAGS='-C link-arg=-Wl,--threads=1'\"}"
+    )
+    dev_debug_export = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
+    test_debug_export = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
+    contract_generator = (
+        "cargo run --locked --package pokecon --bin generate_contracts "
+        "--features contract-generator -- --check"
+    )
+    targeted_contract_test = (
+        "cargo test --locked --package pokecon --test contract_sync"
     )
     serial_build = f"{regular_build} --jobs 1"
     aggregate_workspace_builds = tuple(
@@ -228,13 +195,18 @@ def test_aggregate_check_reclaims_clippy_then_reuses_test_artifacts_for_build() 
     assert aggregate_check.count(workspace_test) == 1
     assert aggregate_check.count("--jobs 1") == 1
     assert aggregate_check.count("--threads=1") == 1
-    first_reclamation = aggregate_check.index(linux_reclamation)
+    assert aggregate_check.count(dev_debug_export) == 1
+    assert aggregate_check.count(test_debug_export) == 1
+    assert aggregate_check.count(targeted_contract_test) == 0
+    assert flake.count(targeted_contract_test) == 1
     assert (
-        aggregate_check.index(workspace_clippy)
-        < first_reclamation
+        aggregate_check.index(dev_debug_export)
+        < aggregate_check.index(test_debug_export)
         < aggregate_check.index(linux_only_lld_export)
+        < aggregate_check.index(contract_generator)
         < aggregate_check.index(workspace_test)
         < aggregate_check.index(serial_build)
+        < aggregate_check.index(workspace_clippy)
     )
 
     for compatibility_binary in (
@@ -242,7 +214,7 @@ def test_aggregate_check_reclaims_clippy_then_reuses_test_artifacts_for_build() 
         '--worker "$CARGO_TARGET_DIR/debug/pokecon-worker"',
     ):
         assert aggregate_check.count(compatibility_binary) == 1
-        assert aggregate_check.index(serial_build) < aggregate_check.index(
+        assert aggregate_check.index(workspace_clippy) < aggregate_check.index(
             compatibility_binary
         )
 

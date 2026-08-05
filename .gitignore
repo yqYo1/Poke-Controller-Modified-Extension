@@ -202,6 +202,7 @@ result-*
 !/rust/pokecon/benches/*.rs
 
 !/rust/pokecon/tauri.conf.json
+!/rust/pokecon/signing-targets.json
 !/rust/pokecon/permissions/
 /rust/pokecon/permissions/*
 !/rust/pokecon/permissions/**/

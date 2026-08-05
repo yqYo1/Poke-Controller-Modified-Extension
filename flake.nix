@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "d3c50dc0294c5c14ee9fdffc04c081e1c27d334c00279367277391cdd8b034db";
+      canonicalFlakeHash = "db314c76a42bc5c6b0ad908c1c7a364b1888291e5b448d9f1551e77e0679e351";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "e8b2b4cd797ec7bd2c2afa116fdb6d0a2109825681cd4e18bfd17071fe568751";
+              expectedAuditTestHash = "520669529381209254a6a3556218f912fd079beb65e1c323a3067dd29e01678a";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -2308,21 +2308,6 @@
             # For information about cache directory tags see https://bford.info/cachedir/
           '';
 
-          reclaimPerRunCargoTarget = ''
-            ${restoreGateCargoConfig}
-            ${assertNoCargoConfigAncestors}
-            if [ "$CARGO_TARGET_DIR" != "$gate_home/target" ] \
-              || [ -L "$CARGO_TARGET_DIR" ] \
-              || [ ! -d "$CARGO_TARGET_DIR" ] \
-              || [ "$(readlink -f "$CARGO_TARGET_DIR")" != "$CARGO_TARGET_DIR" ]; then
-              echo "aggregate check refuses to clean an unowned Cargo target: $CARGO_TARGET_DIR" >&2
-              exit 2
-            fi
-            cargo clean --target-dir "$CARGO_TARGET_DIR"
-            ${setupPerRunCargoTarget}
-            ${setupUvLinks}
-          '';
-
           setupWorkdir = ''
             ${sanitizeGateEnvironment}
             ${discoverRustWorktree}
@@ -3789,6 +3774,18 @@
               '';
             };
 
+            signing-input-manifest = mkTask {
+              name = "signing-input-manifest";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                ${sanitizeGateEnvironment}
+                ${discoverRustWorktree}
+                cd "$caller_dir"
+                export PYTHONDONTWRITEBYTECODE=1
+                python -I "${source}/scripts/release/signing_manifest.py" "$@"
+              '';
+            };
+
             ruff-check = mkTask {
               name = "ruff-check";
               runtimeInputs = [
@@ -5162,11 +5159,13 @@
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
+                export CARGO_PROFILE_DEV_DEBUG=line-tables-only
+                export CARGO_PROFILE_TEST_DEBUG=line-tables-only
+                ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
                 cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
-                cargo test --locked --package pokecon --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
@@ -5177,12 +5176,10 @@
                 bun run --cwd web --bun svelte-check
                 bun run --cwd web --bun test
                 bun run --cwd web --bun build
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                ${lib.optionalString pkgs.stdenv.isLinux reclaimPerRunCargoTarget}
-                ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
                 POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
                 POKECON_RESOURCE_PROVENANCE=development \
                 cargo build --locked --workspace --all-features --jobs 1
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
                   --check \
@@ -5192,13 +5189,18 @@
                 ruff check --config ruff.toml --no-cache python scripts tests
                 ruff format --config ruff.toml --no-cache --check python scripts tests
                 bun --bun "${basedpyrightCli}"
-                python -m pytest \
+                "${pythonEnv}/bin/python" -I \
+                  "${source}/scripts/quality/run_parallel_checks.py" \
+                  pytest \
+                  python -m pytest \
                   -p no:cacheprovider \
                   -m "not production_routing_mutation" \
                   tests \
                   -v \
-                  --tb=short
-                "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit"
+                  --tb=short \
+                  --next \
+                  production-routing-mutation-audit \
+                  "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit"
                 shellcheck scripts/*.sh scripts/*/*.sh
                 bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
                 bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt

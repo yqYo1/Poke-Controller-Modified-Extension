@@ -105,7 +105,7 @@ HTTP statusが200でも画面に`404 Not Found`と表示される場合は、SPA
 
 ```bash
 nix build .#web
-nix build .#pokecon-server
+nix build .#pokecon
 ```
 
 `result/web/dist`に`index.html`だけでなく複数のJavaScript、CSS chunkがあることを確認します。

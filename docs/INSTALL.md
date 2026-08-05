@@ -42,7 +42,7 @@ pokecon --ui web
 checkoutをそのまま検証する場合は、同じcheckoutからbuildしたbinaryを起動します。
 
 ```bash
-nix build .#pokecon-server
+nix build .#pokecon
 ./result/bin/pokecon --ui web
 ```
 

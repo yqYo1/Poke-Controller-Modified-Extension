@@ -195,7 +195,7 @@ Phase 2.7の最初の不可分atomで`pokecon-desktop` compatibility packageを�
 
 `pokecon-device`はシリアル、ゲームパッド、Windows通知の依存を所有しています。
 
-Phase 2.7のserver detach atomで、WebRTC、OpenH264、axumの依存を`pokecon`へ移しました。`pokecon-server` compatibility packageは削除前の無参照検査用に残っていますが、PokeCon本体は依存していません。
+Phase 2.7のserver detach atomで、WebRTC、OpenH264、axumの依存を`pokecon`へ移しました。続く削除atomで`pokecon-server` compatibility package、workspace参照、Nix package aliasを削除しました。
 
 分離したクレートが下位の共通クレートへ不要な依存を持つ場合、この効果は弱くなります。
 

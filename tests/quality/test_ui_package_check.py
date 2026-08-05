@@ -15811,7 +15811,8 @@ runner = "scripts/attacker-runner.sh"
         "                  --next \\\n"
         "                  production-routing-mutation-audit \\\n"
         '                  "${productionRoutingMutationAuditRunner}/bin/'
-        'pokecon-production-routing-mutation-audit"\n',
+        'pokecon-production-routing-mutation-audit" \\\n'
+        '                  --workers "$aggregate_mutation_workers"\n',
         "",
     )
     dedicated_check_omits_mutation_audit = replace_once(

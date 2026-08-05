@@ -32,5 +32,7 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize filtered flake source
+        run: nix derivation show .#pokecon > /dev/null
       - name: Evaluate all local flake outputs
         run: nix flake check --no-build

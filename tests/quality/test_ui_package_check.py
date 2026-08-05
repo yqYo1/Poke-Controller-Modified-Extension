@@ -17554,7 +17554,12 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     assert workflows.count("nix run .#rust-ci-core") == 1
     assert contract_check.count('bun --bun "${basedpyrightCli}"') == 1
     assert contract_check.count("python -m scripts.quality.source_filter") == 1
+    source_materialization = "nix derivation show .#pokecon > /dev/null"
     assert remote_flake.count("nix flake check --no-build") == 1
+    assert remote_flake.count(source_materialization) == 1
+    assert remote_flake.index(source_materialization) < remote_flake.index(
+        "nix flake check --no-build"
+    )
     assert remote_flake.count("Run default app help from remote") == 1
     for redundant_flake_probe in (
         "Run default app help locally",

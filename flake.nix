@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "6b29fd6ce5b58430006a811e40da0ab29082cbfda2cd67d4b17c0963d4bc4a29";
+      canonicalFlakeHash = "1e069c33b82927755c7d64ddfd03cdc851b44168a4bd43c871e71883401edef4";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -446,7 +446,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "f2da47b0e1c57f7b84e45381cbcb243a84373bdca923ce4cf4901a40f6ee1c30";
+              expectedAuditTestHash = "b8898b02c70e821447f77c005ac5a4b5ee6ecef32b600470c7073000309c2cac";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in

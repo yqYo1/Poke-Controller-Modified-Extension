@@ -190,11 +190,11 @@
       "name": "remote-flake/local-flake-run",
       "workflow": "remote-flake",
       "job": "local-flake-run",
-      "command": "nix flake check --no-build",
+      "command": "nix derivation show .#pokecon > /dev/null && nix flake check --no-build",
       "applicable_when": "always",
       "not_applicable": "forbidden",
       "phase": 1,
-      "implementation_status": "local flake output evaluation is unconditional; executable app resolution is owned by the remote job"
+      "implementation_status": "the filtered source is materialized without building the package before unconditional local flake output evaluation; executable app resolution is owned by the remote job"
     },
     {
       "name": "rust-ci/build",

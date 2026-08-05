@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "269bb82681111f97cf5a00fb61b3abfc53ed271772d1fde203837e17f5ce73e7";
+      canonicalFlakeHash = "652a320c172c95c3b7733cd394a6aa3a193cee06a44fbbb3b9166e8cdce2435a";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "421e544b08b5380f6836e3ba6d7049bd0f706ee1506beac5bc927dd97ef6f1f7";
+              expectedAuditTestHash = "12e540498bda801963e4b467dc21e2aa710176df88e5ee3640d1b8c52764897b";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -472,7 +472,6 @@
             "rust/pokecon-core"
             "rust/pokecon-camera"
             "rust/pokecon-device"
-            "rust/pokecon-dynamic"
             "rust/pokecon-settings"
           ];
           workspaceDefaultMemberPaths = [
@@ -495,7 +494,6 @@
             "rust/pokecon-contracts" = "pokecon-contracts";
             "rust/pokecon-core" = "pokecon-core";
             "rust/pokecon-device" = "pokecon-device";
-            "rust/pokecon-dynamic" = "pokecon-dynamic";
             "rust/pokecon-settings" = "pokecon-settings";
           };
           expectedWorkspacePackageBuild = {
@@ -504,16 +502,14 @@
             "rust/pokecon-contracts" = false;
             "rust/pokecon-core" = false;
             "rust/pokecon-device" = false;
-            "rust/pokecon-dynamic" = false;
             "rust/pokecon-settings" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "e99292613015230a7c594f117759c3040775c28b4cdb06e6d2785039608e624b";
+            "rust/pokecon" = "2e2e01277e76aa2bae9eec9e25146ec15b9fbf1d4621112063c3683a7e4d92f8";
             "rust/pokecon-camera" = "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd";
             "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
             "rust/pokecon-core" = "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9";
             "rust/pokecon-device" = "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b";
-            "rust/pokecon-dynamic" = "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834";
             "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
           };
           expectedWorkspaceBuildDependencies = {
@@ -528,7 +524,6 @@
             "rust/pokecon-contracts" = { };
             "rust/pokecon-core" = { };
             "rust/pokecon-device" = { };
-            "rust/pokecon-dynamic" = { };
             "rust/pokecon-settings" = {
               hex.workspace = true;
               serde.workspace = true;
@@ -731,7 +726,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "0fc3ca598a840b77e2d7e42ce62266b1012850ddc6bdeb1843c2d2b58fb5e218"
+                == "de91ecf59c88b49d02dfa68d290e6604a6e93c308e721a247a44b0d048631cd5"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -739,7 +734,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "40ac279e7e9da471fbbb816502265faec06058a664ae6fde96f24713100d880e"
+                == "bb0fb4bfe7ecee8e1f9be4335779714535ff598ee7ba8a88ce6779f3cc3c3daf"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1063,7 +1058,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 387 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 386 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \

@@ -56,7 +56,6 @@ pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-device = { path = "../pokecon-device" }
-pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 reqwest.workspace = true

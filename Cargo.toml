@@ -6,7 +6,6 @@ members = [
     "rust/pokecon-core",
     "rust/pokecon-camera",
     "rust/pokecon-device",
-    "rust/pokecon-dynamic",
     "rust/pokecon-settings",
 ]
 default-members = [

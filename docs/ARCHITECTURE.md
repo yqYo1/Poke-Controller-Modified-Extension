@@ -56,21 +56,20 @@ Python command generation   Python or Lua generation
 
 ## Rust crateの責務を分ける
 
-Cargo workspaceは7 crateで構成されます。
+Cargo workspaceは6 crateで構成されます。
 
 | crate | 所有する責務 | 所有しない責務 |
 |---|---|---|
-| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・camera・deviceの正準実装、serverの正準実装・HTTP wire型・OpenAPI generator、正準contract registry・schema・生成器、`rust/pokecon/src/dynamic/`のdynamic契約・main側状態、`rust/pokecon/src/worker/`の親側IPC・generation・supervision、`rust/pokecon/src/worker_binary/`のchild専用Python／Lua runtime、worker／compatibility／fault-fixture binとintegration test、desktop shell／test、icon、Tauri設定、Linux bundle input、署名対象policy | 下位compatibility crateの正準実装 |
+| `pokecon` | composition root、service接続、profile、command、起動と停止順、runtime・diagnostics・platform・settings・camera・deviceの正準実装、serverの正準実装・HTTP wire型・OpenAPI generator、正準contract registry・schema・生成器、dynamic契約・main側状態、親側worker IPC・generation・supervision、child専用Python／Lua runtime、worker／compatibility／fault-fixture binとintegration test、desktop shell／test、icon、Tauri設定、Linux bundle input、署名対象policy | 下位compatibility crateの正準実装 |
 | `pokecon-camera` | Phase 2移行中のcamera compatibility facade（正準sourceは所有しない） | cameraの正準実装、UI状態や設定永続化 |
 | `pokecon-contracts` | Phase 2移行中のcontract compatibility facade（正準sourceは所有しない） | 正準registry・schema・生成器、runtime device処理 |
 | `pokecon-core` | Phase 2移行中のruntime・diagnostics・platform compatibility facade（正準sourceは所有しない） | 正準runtime・diagnostics・platform実装、application service構成 |
 | `pokecon-device` | Phase 2移行中のdevice compatibility facade（正準sourceは所有しない） | deviceの正準実装、command discovery |
-| `pokecon-dynamic` | Phase 2.4移行中の`rust/pokecon-dynamic/src/lib.rs` compatibility facade（正準sourceは`rust/pokecon/src/dynamic/`） | dynamicの正準source、child専用Python／Lua runtime、native device ownership |
 | `pokecon-settings` | Phase 2移行中のsettings compatibility facade（正準sourceは所有しない） | settingsの正準実装、UI rendering |
 
 crate間の新しい依存は、この表の責務を逆流させないように追加します。
 
-この表のPhase 2.5配置はdesktopのsource、icon、Tauri設定、Linux bundle input、OS別の署名対象policyまでを`rust/pokecon/`へ移した状態です。Package／Releaseはそのpolicyから実際に配布するLinux packageとWindows installerの名前、形式、size、SHA-256を記録したmanifestを生成し、引き渡し直前に実物と再照合します。Phase 2.6ではdesktopを製品featureで分岐する構成を廃止し、Webとdesktopを常に同じ本体へ含めます。Phase 2.7ではdesktop、server、workerの旧packageを削除し、workerの3 binとintegration testもPokeCon本体へ統合済みです。残るcompatibility crateも依存グラフの上位から順次統合します。
+この表のPhase 2.5配置はdesktopのsource、icon、Tauri設定、Linux bundle input、OS別の署名対象policyまでを`rust/pokecon/`へ移した状態です。Package／Releaseはそのpolicyから実際に配布するLinux packageとWindows installerの名前、形式、size、SHA-256を記録したmanifestを生成し、引き渡し直前に実物と再照合します。Phase 2.6ではdesktopを製品featureで分岐する構成を廃止し、Webとdesktopを常に同じ本体へ含めます。Phase 2.7ではdesktop、server、worker、dynamicの旧packageを削除し、workerの3 binとintegration testもPokeCon本体へ統合済みです。残るcompatibility crateも依存グラフの上位から順次統合します。
 
 下位crateが`pokecon`を参照する構造はcomposition rootを壊すため避けます。
 

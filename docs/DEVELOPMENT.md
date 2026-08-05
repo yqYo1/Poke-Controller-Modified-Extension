@@ -70,7 +70,7 @@ Node.jsを直接呼ぶscriptを追加しません。script内部ではNixが固�
 
 | path | 内容 |
 |---|---|
-| `rust/` | Rust workspaceの10 crate |
+| `rust/` | Rust workspace |
 | `web/` | SvelteKit SPA、TypeScript、frontend test |
 | `python/pokecon/` | 純Python互換メタデータと生成stub |
 | `scripts/` | quality、compatibility、release、integration tooling |

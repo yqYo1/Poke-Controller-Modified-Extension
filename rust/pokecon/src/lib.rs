@@ -1,7 +1,5 @@
 //! Top-level process orchestration for web and desktop modes.
 
-pub(crate) use pokecon_dynamic as dynamic_domain;
-
 mod application_backend;
 #[path = "camera/facade.rs"]
 mod camera;
@@ -13,8 +11,13 @@ mod desktop;
 mod device;
 #[path = "diagnostics/facade.rs"]
 mod diagnostics;
-#[path = "dynamic/facade.rs"]
-mod dynamic;
+#[allow(
+    dead_code,
+    reason = "engine-only helpers are consumed by the worker binary's private copy"
+)]
+#[doc(hidden)]
+pub mod dynamic;
+pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;

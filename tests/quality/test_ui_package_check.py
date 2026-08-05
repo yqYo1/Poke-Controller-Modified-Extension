@@ -146,7 +146,6 @@ PRODUCTION_CARGO_TARGET_ROOT_SOURCES: dict[str, str] = {
     "@rust/pokecon-contracts/src/lib.rs": "rust/pokecon-contracts/src/lib.rs",
     "@rust/pokecon-core/src/lib.rs": "rust/pokecon-core/src/lib.rs",
     "@rust/pokecon-device/src/lib.rs": "rust/pokecon-device/src/lib.rs",
-    "@rust/pokecon-dynamic/src/lib.rs": "rust/pokecon-dynamic/src/lib.rs",
     "@rust/pokecon-settings/src/lib.rs": "rust/pokecon-settings/src/lib.rs",
     "@rust/pokecon/src/bin/worker.rs": "rust/pokecon/src/bin/worker.rs",
     "@rust/pokecon/src/lib.rs": "rust/pokecon/src/lib.rs",
@@ -165,7 +164,6 @@ WORKSPACE_MEMBERS: tuple[str, ...] = (
     "rust/pokecon-core",
     "rust/pokecon-camera",
     "rust/pokecon-device",
-    "rust/pokecon-dynamic",
     "rust/pokecon-settings",
 )
 WORKSPACE_DEFAULT_MEMBERS: tuple[str, ...] = (
@@ -185,12 +183,11 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "e99292613015230a7c594f117759c3040775c28b4cdb06e6d2785039608e624b",
+    "rust/pokecon": "2e2e01277e76aa2bae9eec9e25146ec15b9fbf1d4621112063c3683a7e4d92f8",
     "rust/pokecon-camera": "e14e0b007e994bdb7f74df1aaf6765ce57c9269fc78612c290e3e35fbb5037fd",
     "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
     "rust/pokecon-core": "7102df1a8877cc2ed5c2033e1cb256067181af13867bf2c20d78f841bb894cd9",
     "rust/pokecon-device": "9bf1252084706e64f67cf1471fbd8f659e2a71b8773e5c28354c18cb6adf887b",
-    "rust/pokecon-dynamic": "04d64485584691365a1de0bc1165734fe8426458511a80e2cc13df2079816834",
     "rust/pokecon-settings": "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972",
 }
 
@@ -332,7 +329,6 @@ pokecon-contracts = { path = "../pokecon-contracts" }
 pokecon-camera = { path = "../pokecon-camera" }
 pokecon-core = { path = "../pokecon-core" }
 pokecon-device = { path = "../pokecon-device" }
-pokecon-dynamic = { path = "../pokecon-dynamic" }
 pokecon-settings = { path = "../pokecon-settings" }
 pyo3.workspace = true
 reqwest.workspace = true
@@ -1215,7 +1211,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "rust/pokecon-contracts": "pokecon-contracts",
         "rust/pokecon-core": "pokecon-core",
         "rust/pokecon-device": "pokecon-device",
-        "rust/pokecon-dynamic": "pokecon-dynamic",
         "rust/pokecon-settings": "pokecon-settings",
     }
     expected_package_build: dict[str, str | bool] = {
@@ -1266,7 +1261,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "40ac279e7e9da471fbbb816502265faec06058a664ae6fde96f24713100d880e"
+        == "bb0fb4bfe7ecee8e1f9be4335779714535ff598ee7ba8a88ce6779f3cc3c3daf"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -1985,9 +1980,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "@rust/pokecon-device/src/lib.rs": (
             "211d02351a54715c07db50c6a33ba4b69586f09c944016f637146736f4e0e9b2"
         ),
-        "@rust/pokecon-dynamic/src/lib.rs": (
-            "6bd4aa6c08eab4289a2f5f1243c0c7936e0e2c378b3470b3a8cb8efabfcd8bd0"
-        ),
         "@rust/pokecon-settings/src/lib.rs": (
             "6d4beafcf5fdf1decaad9c117612f08e670fcef1486076b7e310c589ecf47d29"
         ),
@@ -1995,7 +1987,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "626a823d41d7e39dbdb9817ba0a9bf8c1dd4c01c0e2cc11890bd52a59368e62c"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "6ea6e486ac737e995fe4d7da202d4796c47e1d384de1495575d1bf973e4ded1e"
+            "fda8798faa52c2d971ad6e29fbf2a39379cbec72b57254fc1edd399193cf9a0c"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2013,7 +2005,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "rust/pokecon-contracts/src/lib.rs",
         "rust/pokecon-core/src/lib.rs",
         "rust/pokecon-device/src/lib.rs",
-        "rust/pokecon-dynamic/src/lib.rs",
         "rust/pokecon-settings/src/lib.rs",
         "rust/pokecon/src/bin/worker.rs",
         "rust/pokecon/src/lib.rs",
@@ -2205,7 +2196,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "7dfdc41a4858d9e4414799431d78d6986bf6e097261cc997d7ce9f7bb8524349"
+        == "123801b4b756f14261f9bf32b7384f54627f51795b1ad97dfeb6f3269847ac63"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2435,14 +2426,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "b7c4cdfce25d150b00943e6295b1f539f53ec2287af9fa2b761d6d9a064645cf"
+        == "eaa9536ef17c3aebd167a5909fe66c077bc2764a6d5fc3b640cd6a1f74fb9892"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "40ac279e7e9da471fbbb816502265faec06058a664ae6fde96f24713100d880e"',
+        '== "bb0fb4bfe7ecee8e1f9be4335779714535ff598ee7ba8a88ce6779f3cc3c3daf"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -2559,7 +2550,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_runner_section = flake[mutation_runner_start:mutation_runner_end]
     assert (
         hashlib.sha256(mutation_runner_section.strip().encode()).hexdigest()
-        == "f6e71772eac34efdae138f9fc0f347c25376b63ba95a051c0d14720efb8ce8b1"
+        == "3eed180881dffa0d6d120b493ff08adf007138211b46317dcd1a4a6cf04d4686"
     )
     for mutation_runner_proof in (
         'name = "pokecon-production-routing-mutation-audit";',
@@ -2587,7 +2578,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "--import-mode=importlib",
         "-p no:cacheprovider",
         '"$mutation_test"',
-        "Running 387 production-routing mutations across $mutation_worker_count process shards",
+        "Running 386 production-routing mutations across $mutation_worker_count process shards",
     ):
         assert mutation_runner_proof in mutation_runner_section, mutation_runner_proof
     assert (
@@ -4077,6 +4068,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     ]
     dependencies = manifest["dependencies"]
     assert isinstance(dependencies, dict)
+    assert "pokecon-dynamic" not in dependencies
     assert "pokecon-server" not in dependencies
     assert "pokecon-worker" not in dependencies
     assert dependencies["axum"] == {"workspace": True, "features": ["ws"]}
@@ -4127,11 +4119,12 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     assert (
         generate_openapi_source.count("pokecon::generate_openapi_document_json()") == 1
     )
-    assert all(
-        "pokecon_server" not in rust_lexical_mask(source)
-        for source_name, source in sources.items()
-        if source_name.endswith(".rs")
-    )
+    for retired_crate_identifier in ("pokecon_dynamic", "pokecon_server"):
+        assert all(
+            retired_crate_identifier not in rust_lexical_mask(source)
+            for source_name, source in sources.items()
+            if source_name.endswith(".rs")
+        )
 
     server_module = sources["server/mod.rs"]
     server_module_code = rust_without_comments(server_module).lstrip()
@@ -4322,8 +4315,6 @@ pub mod websocket;
     application_with_literals = rust_without_comments(sources["lib.rs"])
     application_source = rust_lexical_mask(sources["lib.rs"])
     expected_application_prelude = """
-pub(crate) use pokecon_dynamic as dynamic_domain;
-
 mod application_backend;
 #[path = "camera/facade.rs"]
 mod camera;
@@ -4335,8 +4326,13 @@ mod desktop;
 mod device;
 #[path = "diagnostics/facade.rs"]
 mod diagnostics;
-#[path = "dynamic/facade.rs"]
-mod dynamic;
+#[allow(
+    dead_code,
+    reason = "engine-only helpers are consumed by the worker binary's private copy"
+)]
+#[doc(hidden)]
+pub mod dynamic;
+pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
@@ -13236,9 +13232,9 @@ def test_production_routing_mutation_shard_contract(
         covered_indices = sorted(
             mutation_index
             for shard_index in range(shard_count)
-            for mutation_index in range(shard_index, 387, shard_count)
+            for mutation_index in range(shard_index, 386, shard_count)
         )
-        assert covered_indices == list(range(387))
+        assert covered_indices == list(range(386))
 
     for shard_index, shard_count in (("0", "1"), ("7", "8")):
         monkeypatch.setenv(PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV, shard_index)
@@ -14026,9 +14022,9 @@ fn allow_attacker(&mut self) {
     )
     restored_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-dynamic = { path = "../pokecon-dynamic" }\n'
+        'pokecon-device = { path = "../pokecon-device" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-dynamic = { path = "../pokecon-dynamic" }\n'
+        'pokecon-device = { path = "../pokecon-device" }\n'
         'pokecon-server = { path = "../pokecon-server" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
     )
@@ -14697,9 +14693,9 @@ tauri-build = "2.5.4"
     )
     aliased_pokecon_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-dynamic = { path = "../pokecon-dynamic" }\n'
+        'pokecon-device = { path = "../pokecon-device" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-dynamic = { path = "../pokecon-dynamic" }\n'
+        'pokecon-device = { path = "../pokecon-device" }\n'
         'pokecon-server = { package = "pokecon-camera", path = "../pokecon-camera" }\n'
         'pokecon-settings = { path = "../pokecon-settings" }',
     )
@@ -16946,7 +16942,7 @@ runner = "scripts/attacker-runner.sh"
         ),
         ("alternate desktop backend", alternate_desktop_backend),
     )
-    assert len(mutations) == 387
+    assert len(mutations) == 386
     mutation_labels = tuple(label for label, _mutated_sources in mutations)
     assert len(set(mutation_labels)) == len(mutation_labels)
     mutation_deltas = tuple(

@@ -695,7 +695,7 @@ fn discover_commands(
             discovered
                 .into_iter()
                 .map(|discovered| ScriptDiscoveredCommand {
-                    command: pokecon_dynamic::CommandInfo {
+                    command: pokecon::dynamic::CommandInfo {
                         name: discovered.name,
                         module_path: source.module_path.clone(),
                         class_name: discovered.class_name,

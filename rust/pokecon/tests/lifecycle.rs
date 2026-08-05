@@ -3,13 +3,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use pokecon::worker as pokecon_worker;
-use pokecon_dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
-use pokecon_dynamic::protocol::{DynamicInitializeRequest, DynamicProfileSwitchResult};
-use pokecon_dynamic::{
+use pokecon::dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
+use pokecon::dynamic::protocol::{DynamicInitializeRequest, DynamicProfileSwitchResult};
+use pokecon::dynamic::{
     CommandDisplayItem, CommandInfo, DynamicConfigControl, DynamicConfigLanguage, DynamicHost,
     InMemoryDynamicHost,
 };
+use pokecon::worker as pokecon_worker;
 use pokecon_worker::WorkerKind;
 use pokecon_worker::dynamic::DynamicWorkerClient;
 use pokecon_worker::generation::GenerationError;
@@ -429,7 +429,7 @@ async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
 
     assert_eq!(
         client.status().await.expect("status request succeeds"),
-        pokecon_dynamic::protocol::DynamicWorkerStatus::uninitialized()
+        pokecon::dynamic::protocol::DynamicWorkerStatus::uninitialized()
     );
     let initialized = client
         .initialize(&DynamicInitializeRequest {

@@ -142,8 +142,6 @@ PRODUCTION_BINARY_BUILD_INPUT_SOURCES: dict[str, str] = {
     "@tauri/icons/icon.ico": "rust/pokecon/icons/icon.ico",
 }
 PRODUCTION_CARGO_TARGET_ROOT_SOURCES: dict[str, str] = {
-    "@rust/pokecon-contracts/src/lib.rs": "rust/pokecon-contracts/src/lib.rs",
-    "@rust/pokecon-settings/src/lib.rs": "rust/pokecon-settings/src/lib.rs",
     "@rust/pokecon/src/bin/worker.rs": "rust/pokecon/src/bin/worker.rs",
     "@rust/pokecon/src/lib.rs": "rust/pokecon/src/lib.rs",
     "@rust/pokecon/src/main.rs": "rust/pokecon/src/main.rs",
@@ -155,28 +153,17 @@ TAURI_ACL_INPUT_ROOTS: tuple[str, ...] = (
 TAURI_AUTO_CONFIG_PATTERN = re.compile(
     r"(?:tauri(?:\.[^.]+)?\.conf\.(?:json|json5)|Tauri(?:\.[^.]+)?\.toml)"
 )
-WORKSPACE_MEMBERS: tuple[str, ...] = (
-    "rust/pokecon",
-    "rust/pokecon-contracts",
-    "rust/pokecon-settings",
-)
-WORKSPACE_DEFAULT_MEMBERS: tuple[str, ...] = (
-    "rust/pokecon",
-    "rust/pokecon-contracts",
-    "rust/pokecon-settings",
-)
+WORKSPACE_MEMBERS: tuple[str, ...] = ("rust/pokecon",)
+WORKSPACE_DEFAULT_MEMBERS: tuple[str, ...] = ("rust/pokecon",)
 WORKSPACE_MANIFEST_SOURCES: dict[str, str] = {
     member: f"@{member.removeprefix('rust/')}/Cargo.toml"
     for member in WORKSPACE_MEMBERS
 }
 WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
-    "rust/pokecon-settings/build.rs": "@pokecon-settings/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "e1953d2e764f9da42847ca81eb600c57f8ce6ee3ce7f0010f7064e4013f0653e",
-    "rust/pokecon-contracts": "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98",
-    "rust/pokecon-settings": "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972",
+    "rust/pokecon": "cb2f55bcc3f59c62a980cee0453be238fb5bf64ccb082ff412aeca5ca84b6791",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -307,18 +294,19 @@ axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
+fs4.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 gilrs.workspace = true
 hex.workspace = true
+hmac.workspace = true
 image.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true
-pokecon-contracts = { path = "../pokecon-contracts" }
-pokecon-settings = { path = "../pokecon-settings" }
+pep440_rs.workspace = true
 pyo3.workspace = true
 reqwest.workspace = true
 rfd.workspace = true
@@ -337,15 +325,23 @@ tauri-plugin-single-instance.workspace = true
 tokio.workspace = true
 tokio-serial.workspace = true
 tokio-util.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 utoipa.workspace = true
+version-ranges.workspace = true
 webrtc.workspace = true
 
 [build-dependencies]
 dunce = "1.0.5"
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 tauri-build = { version = "2.5.4", features = [] }
+toml.workspace = true
 
 [dev-dependencies]
 proc-macro2 = "1"
@@ -1213,26 +1209,21 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     expected_package_names = {
         "rust/pokecon": "pokecon",
-        "rust/pokecon-contracts": "pokecon-contracts",
-        "rust/pokecon-settings": "pokecon-settings",
     }
     expected_package_build: dict[str, str | bool] = {
         member: False for member in WORKSPACE_MEMBERS
     }
     expected_package_build["rust/pokecon"] = "build.rs"
-    expected_package_build["rust/pokecon-settings"] = "build.rs"
     expected_build_dependencies: dict[str, dict[str, object]] = {
         member: {} for member in WORKSPACE_MEMBERS
     }
     expected_build_dependencies["rust/pokecon"] = {
         "dunce": "1.0.5",
-        "tauri-build": {"version": "2.5.4", "features": []},
-    }
-    expected_build_dependencies["rust/pokecon-settings"] = {
         "hex": {"workspace": True},
         "serde": {"workspace": True},
         "serde_json": {"workspace": True},
         "sha2": {"workspace": True},
+        "tauri-build": {"version": "2.5.4", "features": []},
         "toml": {"workspace": True},
     }
 
@@ -1268,7 +1259,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "37c8bdc111864f027359b783aa2b181928385c523d9f90e2c04faffe88515187"
+        == "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -1382,10 +1373,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert actual_build_script_sources == set(WORKSPACE_BUILD_SCRIPT_SOURCES.values())
     expected_build_script_hashes = {
         "@pokecon/build.rs": (
-            "b6d20c87b467de6fdad83dc6d5ae8eeb88705f72bb8e7fb8d1dae057f34f0cfe"
-        ),
-        "@pokecon-settings/build.rs": (
-            "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0"
+            "3a7feb6b0da1d702fed78e2e3a7d0c9362a3d6f4b3364089c2a40612ee594858"
         ),
     }
     assert {
@@ -1451,6 +1439,30 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "env::set_current_dir(&context_manifest_directory)?;"
         )
     )
+    settings_resources_body = rust_top_level_function_body(
+        pokecon_build_script,
+        r"\bfn\s+generate_settings_resources\s*\(\s*\)",
+    )
+    for settings_resource_proof, expected_count in (
+        ('manifest_directory.join("../../pyproject.toml")', 1),
+        ('env::var_os("POKECON_BUILD_UV_PATH")', 1),
+        ('env::var("POKECON_BUILD_UV_VERSION")', 1),
+        ('"uv.exe"', 1),
+        ('"uv"', 1),
+        ("sha256: digest_build_input(&path)", 1),
+        ('.join("application-requirements.json")', 1),
+        ('.join("managed-uv-source.json")', 1),
+    ):
+        assert (
+            settings_resources_body.count(settings_resource_proof) == expected_count
+        ), settings_resource_proof
+    assert (
+        settings_resources_body.index("match (")
+        < settings_resources_body.index('env::var_os("POKECON_BUILD_UV_PATH")')
+        < settings_resources_body.index('env::var("POKECON_BUILD_UV_VERSION")')
+        < settings_resources_body.index("sha256: digest_build_input(&path)")
+        < settings_resources_body.index('.join("managed-uv-source.json")')
+    )
     copied_file_permissions_body = rust_top_level_function_body(
         pokecon_build_script,
         r"\bfn\s+make_copied_file_owner_writable\s*\(",
@@ -1497,6 +1509,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         println!("cargo:rerun-if-env-changed={RESOURCE_PROVENANCE_ENVIRONMENT}");
         let provenance = validated_resource_provenance().unwrap_or_else(|error| panic!("{error}"));
         println!("cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}");
+        generate_settings_resources();
         run_tauri_build().expect("Tauri application metadata must be valid");
         """
     )
@@ -1508,6 +1521,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         < provenance_build_main.index(
             "cargo:rustc-env={RESOURCE_PROVENANCE_ENVIRONMENT}={provenance}"
         )
+        < provenance_build_main.index("generate_settings_resources()")
         < provenance_build_main.index("run_tauri_build()")
     )
     for provenance_build_proof, expected_count in (
@@ -1992,17 +2006,11 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         for relative_path in PRODUCTION_CARGO_TARGET_ROOT_SOURCES.values()
     ]
     expected_production_cargo_target_root_hashes = {
-        "@rust/pokecon-contracts/src/lib.rs": (
-            "aa6190e6e334b6d20331a746ab9390450e241dac389f1cd5005a9f3a908f44cc"
-        ),
-        "@rust/pokecon-settings/src/lib.rs": (
-            "6d4beafcf5fdf1decaad9c117612f08e670fcef1486076b7e310c589ecf47d29"
-        ),
         "@rust/pokecon/src/bin/worker.rs": (
-            "8089c86668e21370215b50b0544ef719e76a4a30d23b86640e1947736c3bc212"
+            "8d0cdb537d0c2ee0226c38706d1c3939791b8fd5bb01014b059535ba4af15d21"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "20bd796a0296185e09635f108c991bbc2a6c20f9868929a9da83fd807f290736"
+            "420ce5e2a0b0c5ea7b67dcef273b7d7873ad3f83863b578e09338c85302709f0"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2016,13 +2024,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         set(PRODUCTION_CARGO_TARGET_ROOT_SOURCES.values())
         | set(WORKSPACE_BUILD_SCRIPT_SOURCES)
     ) == {
-        "rust/pokecon-contracts/src/lib.rs",
-        "rust/pokecon-settings/src/lib.rs",
         "rust/pokecon/src/bin/worker.rs",
         "rust/pokecon/src/lib.rs",
         "rust/pokecon/src/main.rs",
         "rust/pokecon/build.rs",
-        "rust/pokecon-settings/build.rs",
     }
     assert json.loads(sources[TAURI_ACL_INPUT_INVENTORY_SOURCE]) == []
     assert json.loads(sources[TAURI_CONFIG_INVENTORY_SOURCE]) == [
@@ -2208,7 +2213,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "a1511bd32402e73ebd0b112013688b2906e789481374ca558d042fbd22aef9fe"
+        == "432d08fc92b760e99a7282f9476d0296db085b012546d0bd36a6ef387b9116a2"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2438,14 +2443,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "d8f878e680386fd0c3256fd210676e5fce446d801d8533db3977614d217d8af9"
+        == "21e506524e5e6b0dc73faba9e2c07eeaad7ed9ce9c1692f996c8a20e49a91354"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "37c8bdc111864f027359b783aa2b181928385c523d9f90e2c04faffe88515187"',
+        '== "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -2462,20 +2467,18 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(controlled_manifest_section.strip().encode()).hexdigest()
-        == "b018c2224deb87211d4469e03c362cb2080cb3b74ec551a1548b94ee738f9eac"
+        == "4749e115e0cf519da6370308219a8f7f9c346aece31b8e24a675a7d2d053a62c"
     )
     for exact_overlay_path, expected_count in (
         ('path = "${source}/rust/pokecon/src/lib.rs"', 2),
         ('path = \\"${source}/rust/pokecon/src/main.rs\\"', 1),
         ('build = "${source}/rust/pokecon/build.rs"', 2),
-        ('build = "${source}/rust/pokecon-settings/build.rs"', 2),
     ):
         assert (
             controlled_manifest_section.count(exact_overlay_path) == expected_count
         ), exact_overlay_path
     for controlled_manifest_proof in (
         "expectedControlledPokeconManifest =",
-        "expectedControlledSettingsManifest =",
         "controlledWorkspaceManifest =",
         "controlledCargoLock =",
         "controlledWorkspaceMemberManifests = lib.mapAttrs",
@@ -2501,7 +2504,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         controlled_manifest_section.count(
             "builtins.fromTOML (builtins.unsafeDiscardStringContext controlled"
         )
-        == 2
+        == 1
     )
 
     audit_start = flake.index("productionRoutingAudit =")
@@ -2644,7 +2647,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert '"${pythonEnv}/bin/python"' not in mutation_audit_section
     assert flake.count("checks.production-routing-mutation-audit =") == 1
     assert flake.count("test-production-routing-mutations =") == 1
-    assert controlled_manifest_section.count("replaceManifestString") >= 5
+    assert controlled_manifest_section.count("replaceManifestString") >= 4
 
     gate_environment_sanitizer_start = flake.index("sanitizeGateEnvironment =")
     sanitizer_start = flake.index(
@@ -3265,7 +3268,7 @@ offline = true
     gate_cargo_home_section = flake[gate_cargo_config_end:gate_cargo_home_end]
     assert (
         hashlib.sha256(gate_cargo_home_section.strip().encode()).hexdigest()
-        == "f387a4167caa6b8352a916782b3e0d124e3bb05cd666331176355eef5196d9b3"
+        == "41f29db56f614a425361a13daed2c93da612963dc2e8bca5b16b83785d2c0cb9"
     )
     assert (
         gate_cargo_home_section.count(
@@ -3403,7 +3406,7 @@ offline = true
         == len(development_command_section_boundaries) + 6
     )
     assert flake.count(development_provenance_assignment) == 17
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 20
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
@@ -4092,6 +4095,160 @@ offline = true
     assert '"$artifact_backup_dir" "$artifact_dir"' not in tauri_section
 
 
+def module_source_items(
+    sources: dict[str, str], module: str
+) -> tuple[tuple[str, str], ...]:
+    prefix = f"{module}/"
+    return tuple(
+        (source_name, source)
+        for source_name, source in sources.items()
+        if source_name == f"{module}.rs" or source_name.startswith(prefix)
+    )
+
+
+def assert_forbidden_root_module_references(
+    sources: dict[str, str], modules: tuple[str, ...], forbidden: frozenset[str]
+) -> None:
+    for module in modules:
+        for source_name, source in module_source_items(sources, module):
+            source_mask = rust_lexical_mask(source)
+            for forbidden_module in forbidden:
+                direct_reference = re.compile(
+                    rf"\b(?:crate|pokecon)\s*::\s*{re.escape(forbidden_module)}\b"
+                )
+                grouped_reference = re.compile(
+                    rf"\b(?:crate|pokecon)\s*::\s*\{{[^;]*"
+                    rf"\b{re.escape(forbidden_module)}\b",
+                    re.DOTALL,
+                )
+                parent_reference = re.compile(
+                    rf"\b(?:super\s*::\s*)+{re.escape(forbidden_module)}\b"
+                )
+                assert direct_reference.search(source_mask) is None, (
+                    source_name,
+                    forbidden_module,
+                )
+                assert grouped_reference.search(source_mask) is None, (
+                    source_name,
+                    forbidden_module,
+                )
+                assert parent_reference.search(source_mask) is None, (
+                    source_name,
+                    forbidden_module,
+                )
+
+
+def assert_internal_module_dependency_and_ownership_boundaries(
+    sources: dict[str, str],
+) -> None:
+    runtime_modules = frozenset(
+        {
+            "application_backend",
+            "camera",
+            "command_service",
+            "desktop",
+            "device",
+            "diagnostics",
+            "dynamic",
+            "dynamic_host",
+            "entrypoint",
+            "platform",
+            "production",
+            "profile_service",
+            "runtime",
+            "script_host",
+            "script_runtime",
+            "server",
+            "settings",
+            "settings_runtime",
+            "worker",
+            "worker_binary",
+        }
+    )
+    assert_forbidden_root_module_references(sources, ("contracts",), runtime_modules)
+    assert_forbidden_root_module_references(
+        sources, ("runtime",), frozenset({"desktop", "server"})
+    )
+    assert_forbidden_root_module_references(
+        sources,
+        (
+            "camera",
+            "contracts",
+            "device",
+            "diagnostics",
+            "dynamic",
+            "platform",
+            "settings",
+            "worker",
+        ),
+        frozenset({"runtime"}),
+    )
+
+    adapter_owner_tokens = frozenset(
+        {
+            "CameraManager",
+            "CameraSession",
+            "ControllerState",
+            "InputArbiter",
+            "NativeCameraBackend",
+            "NativeSerialBackend",
+            "SerialManager",
+            "gilrs",
+            "mlua",
+            "pyo3",
+            "tokio_serial",
+            "v4l",
+        }
+    )
+    for module in ("desktop", "server"):
+        for source_name, source in module_source_items(sources, module):
+            source_mask = rust_lexical_mask(source)
+            for owner_token in adapter_owner_tokens:
+                assert (
+                    re.search(rf"\b{re.escape(owner_token)}\b", source_mask) is None
+                ), (
+                    source_name,
+                    owner_token,
+                )
+
+    worker_owner_tokens = frozenset(
+        {
+            "ApplicationBackend",
+            "CameraManager",
+            "CameraSession",
+            "InputArbiter",
+            "NativeCameraBackend",
+            "NativeSerialBackend",
+            "SerialManager",
+            "StateHub",
+        }
+    )
+    for module in ("dynamic", "worker", "worker_binary"):
+        for source_name, source in module_source_items(sources, module):
+            source_mask = rust_lexical_mask(source)
+            for owner_token in worker_owner_tokens:
+                assert (
+                    re.search(rf"\b{re.escape(owner_token)}\b", source_mask) is None
+                ), (
+                    source_name,
+                    owner_token,
+                )
+
+    assert sources["server/state.rs"].startswith(
+        "//! Atomic UI-visible state snapshots and revisioned change publication.\n"
+    )
+    application_backend = rust_lexical_mask(sources["application_backend.rs"])
+    for application_owner in (
+        r"\bhub\s*:\s*StateHub\b",
+        r"\bcamera\s*:\s*CameraManager\b",
+        r"\bserial\s*:\s*SerialManager\b",
+        r"\barbiter\s*:\s*Arc\s*<\s*ParkingMutex\s*<\s*InputArbiter\s*>\s*>",
+    ):
+        assert re.search(application_owner, application_backend) is not None, (
+            application_owner
+        )
+
+
 def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     public_router_source = compact_rust(
         rust_without_comments(sources["server/router.rs"])
@@ -4150,10 +4307,12 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     dependencies = manifest["dependencies"]
     assert isinstance(dependencies, dict)
     assert "pokecon-camera" not in dependencies
+    assert "pokecon-contracts" not in dependencies
     assert "pokecon-dynamic" not in dependencies
     assert "pokecon-core" not in dependencies
     assert "pokecon-device" not in dependencies
     assert "pokecon-server" not in dependencies
+    assert "pokecon-settings" not in dependencies
     assert "pokecon-worker" not in dependencies
     assert dependencies["axum"] == {"workspace": True, "features": ["ws"]}
     for server_dependency in (
@@ -4205,10 +4364,12 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     )
     for retired_crate_identifier in (
         "pokecon_camera",
+        "pokecon_contracts",
         "pokecon_core",
         "pokecon_device",
         "pokecon_dynamic",
         "pokecon_server",
+        "pokecon_settings",
     ):
         assert all(
             retired_crate_identifier not in rust_lexical_mask(source)
@@ -4420,8 +4581,8 @@ mod application_backend;
 #[doc(hidden)]
 pub mod camera;
 mod command_service;
-#[path = "contracts/facade.rs"]
-mod contracts;
+#[doc(hidden)]
+pub mod contracts;
 mod desktop;
 #[doc(hidden)]
 pub mod device;
@@ -4448,8 +4609,8 @@ mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
 #[allow(clippy::option_option, reason = "wire patch fields are three-state")]
 mod server;
-#[path = "settings/facade.rs"]
-mod settings;
+#[doc(hidden)]
+pub mod settings;
 mod settings_runtime;
 #[doc(hidden)]
 pub mod worker;
@@ -5606,6 +5767,7 @@ pub use runtime::{
 
 def assert_closed_production_routing(sources: dict[str, str]) -> None:
     assert_canonical_cargo_provenance(sources)
+    assert_internal_module_dependency_and_ownership_boundaries(sources)
     production_macro_definition = re.compile(r"\bmacro_rules\s*!")
     production_include_invocation = re.compile(r"\b(?:r#)?include\s*!")
     top_level_bang_macro = re.compile(
@@ -6736,6 +6898,79 @@ def section(document: str, start: str, end: str) -> str:
     body, separator, _suffix = tail.partition(end)
     assert separator, f"missing section end after: {start}"
     return body
+
+
+def test_packaged_worker_harness_is_store_cached_and_runtime_compile_free() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text()
+    harness = section(
+        flake,
+        "workerPackageTestHarness =",
+        "\n          cliHelpCheck =",
+    )
+    gate = section(
+        flake,
+        "workerPackageCheck =",
+        "\n          uiPackageSoftwareRenderer =",
+    )
+    lifecycle = (REPOSITORY / "rust/pokecon/tests/lifecycle.rs").read_text()
+
+    for required in (
+        "rustPlatform.buildRustPackage",
+        "dontCargoBuild = true;",
+        "doCheck = true;",
+        'checkType = "debug";',
+        'POKECON_RESOURCE_PROVENANCE = "development";',
+        "${installControlledCargoManifests}",
+        "${sanitizeCargoCompilerEnvironment}",
+        'RUSTC = "${rustToolchain}/bin/rustc";',
+        'RUSTC_WRAPPER = "${pinnedRustcWrapper}";',
+        '"--no-run"',
+        '"worker_startup"',
+        '"lifecycle"',
+        '"script_runtime"',
+        '"$out/bin/pokecon-worker-fault-fixture"',
+    ):
+        assert required in harness
+    assert harness.count('"--test"') == 3
+    assert harness.count("cargoTestFlags = [") == 1
+    assert harness.count("cargoBuildFlags = [") == 0
+
+    for required in (
+        "${setupSourceGateEnvironment}",
+        'harness_output="${workerPackageTestHarness}"',
+        'canonical_harness="$(readlink -f -- "$harness_output")"',
+        'export POKECON_TEST_WORKER_BINARY="$worker_binary"',
+        'export POKECON_TEST_FAULT_WORKER_BINARY="$fault_worker_binary"',
+        '"$worker_startup_harness" --nocapture',
+        '"$lifecycle_harness" --nocapture',
+        '"$script_runtime_harness"',
+        "--exact --nocapture",
+    ):
+        assert required in gate
+    for forbidden in (
+        "${setupWorkdir}",
+        "${desktopEnvironment}",
+        "rustTaskInputs",
+        "cargo test",
+        "cargo build",
+    ):
+        assert forbidden not in gate
+    assert gate.index('package_output="${self\'.packages.pokecon}"') < gate.index(
+        'harness_output="${workerPackageTestHarness}"'
+    )
+    assert gate.index(
+        'export POKECON_TEST_WORKER_BINARY="$worker_binary"'
+    ) < gate.index('"$worker_startup_harness" --nocapture')
+    assert "POKECON_TEST_FAULT_WORKER_BINARY" in lifecycle
+    assert (
+        len(
+            re.findall(
+                r'env!\(\s*"CARGO_BIN_EXE_pokecon-worker-fault-fixture"\s*\)',
+                lifecycle,
+            )
+        )
+        == 2
+    )
 
 
 def test_gate_keeps_real_packaged_modes_and_forbidden_bypasses_out() -> None:
@@ -13412,30 +13647,6 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
         mutated[source_name] = replacement
         return mutated
 
-    def add_build_script(
-        member: str, content: str, *, kind: str = "regular"
-    ) -> dict[str, str]:
-        mutated = sources.copy()
-        relative_build_script = f"{member}/build.rs"
-        source_name = f"@{member.removeprefix('rust/')}/build.rs"
-        mutated[source_name] = content
-        inventory = {
-            entry["path"]: entry
-            for entry in json.loads(mutated[BUILD_SCRIPT_INVENTORY_SOURCE])
-        }
-        inventory[relative_build_script] = {
-            "path": relative_build_script,
-            "kind": kind,
-        }
-        mutated[BUILD_SCRIPT_INVENTORY_SOURCE] = json.dumps(
-            [
-                inventory[f"{workspace_member}/build.rs"]
-                for workspace_member in WORKSPACE_MEMBERS
-                if f"{workspace_member}/build.rs" in inventory
-            ]
-        )
-        return mutated
-
     def add_inventory_input(
         inventory_source: str,
         relative_path: str,
@@ -13460,6 +13671,32 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
         mutated[inventory_source] = json.dumps(inventory)
         mutated[f"@{relative_path}"] = content
         return mutated
+
+    contracts_runtime_dependency = replace_once(
+        "contracts/mod.rs",
+        "\npub mod commands_typings;",
+        "\nuse crate::runtime::ShutdownCoordinator;\n\npub mod commands_typings;",
+    )
+    runtime_server_dependency = replace_once(
+        "runtime/mod.rs",
+        "\nuse crate::platform::PlatformAdapter;",
+        "\nuse crate::server::BoundServer;\nuse crate::platform::PlatformAdapter;",
+    )
+    settings_runtime_reverse_dependency = replace_once(
+        "settings/mod.rs",
+        "\npub mod hmac_key;",
+        "\nuse crate::runtime::RuntimeContext;\n\npub mod hmac_key;",
+    )
+    server_hardware_owner = replace_once(
+        "server/mod.rs",
+        "\nuse std::io;",
+        "\nuse crate::camera::CameraManager;\n\nuse std::io;",
+    )
+    worker_main_state_owner = replace_once(
+        "worker/mod.rs",
+        "\nuse serde::{Deserialize, Serialize};",
+        "\nuse crate::device::InputArbiter;\n\nuse serde::{Deserialize, Serialize};",
+    )
 
     constant_path = replace_once(
         "server/rest/state.rs",
@@ -14132,11 +14369,8 @@ fn allow_attacker(&mut self) {
     )
     restored_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
-        'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
-        'pokecon-server = { path = "../pokecon-server" }\n'
-        'pokecon-settings = { path = "../pokecon-settings" }',
+        "\n[build-dependencies]\n",
+        '\npokecon-server = { path = "../pokecon-server" }\n\n[build-dependencies]\n',
     )
     changed_server_module = replace_once(
         "server/mod.rs",
@@ -14755,9 +14989,6 @@ pub(super) fn r#router() -> Router<RestState> {{
         changed_tauri_assets.append(
             (f"changed Tauri asset {asset_source}", changed_asset)
         )
-    implicit_dependency_build_script = add_build_script(
-        "rust/pokecon-contracts", "fn main() {}\n"
-    )
     symlinked_allowed_build_script = sources.copy()
     symlinked_build_script_inventory = json.loads(
         symlinked_allowed_build_script[BUILD_SCRIPT_INVENTORY_SOURCE]
@@ -14773,21 +15004,14 @@ pub(super) fn r#router() -> Router<RestState> {{
         "fn main() {",
         'fn main() { std::fs::write("../pokecon/src/server/security.rs", "").unwrap();',
     )
-    enabled_dependency_build_script = replace_once(
-        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-contracts"],
-        "build = false",
-        'build = "build.rs"',
-    )
     target_specific_build_dependency = sources.copy()
-    target_specific_build_dependency[
-        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-settings"]
-    ] += """
+    target_specific_build_dependency[WORKSPACE_MANIFEST_SOURCES["rust/pokecon"]] += """
 
 [target.'cfg(unix)'.build-dependencies]
 tauri-build = "2.5.4"
 """
     added_registry_dependency = replace_once(
-        WORKSPACE_MANIFEST_SOURCES["rust/pokecon-contracts"],
+        WORKSPACE_MANIFEST_SOURCES["rust/pokecon"],
         "[dependencies]\n",
         '[dependencies]\nring = "0.17.14"\n',
     )
@@ -14803,21 +15027,19 @@ tauri-build = "2.5.4"
     )
     escaped_path_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-contracts = { path = "../pokecon-contracts" }',
-        'pokecon-contracts = { path = "../../attacker-contracts" }',
+        "\n[build-dependencies]\n",
+        '\nattacker = { path = "../../attacker" }\n\n[build-dependencies]\n',
     )
     aliased_pokecon_server_dependency = replace_once(
         POKECON_MANIFEST_SOURCE,
-        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
-        'pokecon-settings = { path = "../pokecon-settings" }',
-        'pokecon-contracts = { path = "../pokecon-contracts" }\n'
-        'pokecon-server = { package = "pokecon-contracts", path = "../pokecon-contracts" }\n'
-        'pokecon-settings = { path = "../pokecon-settings" }',
+        "\n[build-dependencies]\n",
+        '\npokecon-server = { package = "pokecon", path = "." }\n\n'
+        "[build-dependencies]\n",
     )
     aliased_workspace_axum_dependency = replace_once(
         WORKSPACE_MANIFEST_SOURCE,
         'axum = "0.8.9"',
-        'axum = { package = "pokecon-contracts", path = "rust/pokecon-contracts" }',
+        'axum = { package = "pokecon", path = "rust/pokecon" }',
     )
     cargo_config_wrapper = sources.copy()
     cargo_config_wrapper[CARGO_CONFIG_INVENTORY_SOURCE] = json.dumps(
@@ -14891,11 +15113,6 @@ runner = "scripts/attacker-runner.sh"
         'build = "${source}/rust/pokecon/build.rs"',
         'build = "build.rs"',
     )
-    redirected_settings_build_overlay = replace_once(
-        FLAKE_SOURCE,
-        'build = "${source}/rust/pokecon-settings/build.rs"',
-        'build = "build.rs"',
-    )
     redirected_controlled_dependency = replace_once(
         FLAKE_SOURCE,
         "                      canonicalPokeconManifestText\n"
@@ -14903,8 +15120,8 @@ runner = "scripts/attacker-runner.sh"
         "              );",
         "                      (\n"
         '                        replaceManifestString "controlled dependency redirect"\n'
-        "                          ''pokecon-settings = { path = \"../pokecon-settings\" }''\n"
-        "                          ''pokecon-settings = { package = \"pokecon-contracts\", path = \"../pokecon-contracts\" }''\n"
+        "                          ''webrtc.workspace = true''\n"
+        "                          ''webrtc = { package = \"pokecon\", path = \".\" }''\n"
         "                          canonicalPokeconManifestText\n"
         "                      )\n"
         "                  )\n"
@@ -15059,7 +15276,7 @@ runner = "scripts/attacker-runner.sh"
         "              ''install_controlled_cargo_manifest \"${\n"
         "                controlledWorkspaceMemberManifests.${memberPath}\n"
         '              }" "${memberPath}/Cargo.toml"\'\'\n'
-        '            ) (lib.filter (memberPath: memberPath != "rust/pokecon-contracts") workspaceMemberPaths)}\n'
+        '            ) (lib.filter (memberPath: memberPath != "rust/pokecon") workspaceMemberPaths)}\n'
         "            unset -f install_controlled_cargo_manifest",
     )
     bypassed_symlink_member_check = replace_once(
@@ -16177,6 +16394,14 @@ runner = "scripts/attacker-runner.sh"
     )
     mutations: tuple[ProductionRoutingMutation, ...] = (
         *changed_production_target_roots,
+        ("contracts runtime dependency", contracts_runtime_dependency),
+        ("runtime server dependency", runtime_server_dependency),
+        (
+            "settings runtime reverse dependency",
+            settings_runtime_reverse_dependency,
+        ),
+        ("server hardware owner", server_hardware_owner),
+        ("worker main state owner", worker_main_state_owner),
         ("symlinked production Cargo target root", symlinked_worker_target_root),
         ("custom nested Tauri permission", custom_tauri_permission),
         ("custom Tauri capability", custom_tauri_capability),
@@ -16683,10 +16908,8 @@ runner = "scripts/attacker-runner.sh"
             "omitted snapshot resource identity binding",
             omitted_snapshot_resource_identity_binding,
         ),
-        ("implicit path-dependency build.rs", implicit_dependency_build_script),
         ("symlinked allowed build.rs", symlinked_allowed_build_script),
         ("changed allowed build.rs", changed_allowed_build_script),
-        ("enabled dependency build script", enabled_dependency_build_script),
         ("target-specific build dependency", target_specific_build_dependency),
         ("added registry dependency", added_registry_dependency),
         ("allowed application unsafe code", allowed_application_unsafe_code),
@@ -16712,10 +16935,6 @@ runner = "scripts/attacker-runner.sh"
         (
             "redirected controlled pokecon build overlay",
             redirected_pokecon_build_overlay,
-        ),
-        (
-            "redirected controlled settings build overlay",
-            redirected_settings_build_overlay,
         ),
         ("redirected controlled dependency", redirected_controlled_dependency),
         ("accepted symlinked source", accepted_symlinked_source),
@@ -17548,11 +17767,11 @@ def test_desktop_shell_uses_only_the_published_listener_address() -> None:
     setup = section(
         desktop,
         ".setup(move |app| {",
-        "\n                })\n                .on_window_event",
+        "\n            .on_window_event",
     )
     builder = section(
         desktop,
-        "        let builder =\n            tauri::Builder::default()",
+        "        let builder = tauri::Builder::default()",
         "\n\n        let app = builder.build(context)?;",
     )
 

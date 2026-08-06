@@ -2,9 +2,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::settings::path::lexical_normalize;
 use atomic_write_file::OpenOptions;
 use parking_lot::Mutex;
-use pokecon_settings::path::lexical_normalize;
 
 use crate::dynamic::control::{DynamicConfigLanguage, DynamicSource};
 

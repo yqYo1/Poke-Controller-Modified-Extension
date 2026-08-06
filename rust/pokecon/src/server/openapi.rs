@@ -1,6 +1,6 @@
 //! Deterministic `OpenAPI` document generation.
 
-use pokecon_contracts::{
+use crate::contracts::{
     model::{Access, Setting},
     value_json_schema,
 };
@@ -165,7 +165,7 @@ struct ApiDocument;
 /// represented as the expected `OpenAPI` object.
 pub fn document() -> Result<Value, OpenApiError> {
     let mut document = serde_json::to_value(ApiDocument::openapi())?;
-    let registry = pokecon_contracts::settings_registry()?;
+    let registry = crate::contracts::settings_registry()?;
     let schemas = document
         .pointer_mut("/components/schemas")
         .and_then(Value::as_object_mut)
@@ -293,7 +293,7 @@ pub enum OpenApiError {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
-    Contract(#[from] pokecon_contracts::ContractError),
+    Contract(#[from] crate::contracts::ContractError),
     #[error("utoipa document is missing components.schemas")]
     MissingSchemas,
     #[error("utoipa document is missing schema {0}")]
@@ -302,7 +302,7 @@ pub enum OpenApiError {
 
 #[cfg(test)]
 mod tests {
-    use pokecon_contracts::model::Access;
+    use crate::contracts::model::Access;
 
     use super::document;
 
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(read["additionalProperties"], false);
         assert_eq!(write["additionalProperties"], false);
 
-        let registry = pokecon_contracts::settings_registry().unwrap();
+        let registry = crate::contracts::settings_registry().unwrap();
         for setting in registry.settings() {
             let readable = matches!(
                 setting.surfaces.openapi.access,

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -23,6 +24,54 @@ use tempfile::TempDir;
 mod support;
 
 use support::worker_binary;
+
+const TEST_FAULT_WORKER_BINARY_ENV: &str = "POKECON_TEST_FAULT_WORKER_BINARY";
+
+fn resolve_fault_worker_binary(override_binary: Option<PathBuf>) -> Result<PathBuf, &'static str> {
+    let Some(binary) = override_binary else {
+        return Ok(PathBuf::from(env!(
+            "CARGO_BIN_EXE_pokecon-worker-fault-fixture"
+        )));
+    };
+    if !binary.is_absolute() {
+        return Err("must name an absolute path");
+    }
+    if !binary.is_file() {
+        return Err("must name a regular file");
+    }
+    Ok(binary)
+}
+
+fn fault_worker_binary() -> PathBuf {
+    resolve_fault_worker_binary(std::env::var_os(TEST_FAULT_WORKER_BINARY_ENV).map(PathBuf::from))
+        .unwrap_or_else(|reason| panic!("{TEST_FAULT_WORKER_BINARY_ENV} {reason}"))
+}
+
+#[test]
+fn fault_worker_override_requires_an_absolute_regular_file() {
+    let temporary = TempDir::new().expect("temporary directory");
+    let override_binary = temporary.path().join("fault-worker");
+    std::fs::write(&override_binary, b"fixture").expect("override fixture is written");
+
+    assert_eq!(
+        resolve_fault_worker_binary(Some(override_binary.clone())),
+        Ok(override_binary)
+    );
+    assert_eq!(
+        resolve_fault_worker_binary(Some(PathBuf::from("relative-fault-worker"))),
+        Err("must name an absolute path")
+    );
+    assert_eq!(
+        resolve_fault_worker_binary(Some(temporary.path().join("missing-fault-worker"))),
+        Err("must name a regular file")
+    );
+    assert_eq!(
+        resolve_fault_worker_binary(None),
+        Ok(PathBuf::from(env!(
+            "CARGO_BIN_EXE_pokecon-worker-fault-fixture"
+        )))
+    );
+}
 
 #[derive(Debug)]
 struct ControllerSafetyProbe {
@@ -479,11 +528,7 @@ async fn crash_and_malformed_frames_release_rust_owned_resources() {
         let safety = Arc::new(ControllerSafetyProbe::active());
         let worker = supervisor
             .spawn(
-                WorkerLaunch::custom(
-                    env!("CARGO_BIN_EXE_pokecon-worker-fault-fixture"),
-                    WorkerKind::Script,
-                )
-                .argument(mode),
+                WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script).argument(mode),
                 safety.clone(),
             )
             .await
@@ -517,11 +562,8 @@ async fn crash_and_malformed_frames_release_rust_owned_resources() {
 async fn dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated() {
     let supervisor = WorkerSupervisor::new();
     let safety = Arc::new(ControllerSafetyProbe::active());
-    let launch = WorkerLaunch::custom(
-        env!("CARGO_BIN_EXE_pokecon-worker-fault-fixture"),
-        WorkerKind::Dynamic,
-    )
-    .argument("ignore-shutdown");
+    let launch = WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+        .argument("ignore-shutdown");
     let worker = supervisor
         .spawn(launch.clone(), safety.clone())
         .await
@@ -560,11 +602,8 @@ async fn profile_switch_force_stops_and_replaces_only_the_script_worker() {
     let old_safety = Arc::new(ControllerSafetyProbe::active());
     let old_worker = supervisor
         .spawn(
-            WorkerLaunch::custom(
-                env!("CARGO_BIN_EXE_pokecon-worker-fault-fixture"),
-                WorkerKind::Script,
-            )
-            .argument("ignore-shutdown"),
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ignore-shutdown"),
             old_safety.clone(),
         )
         .await
@@ -580,11 +619,7 @@ async fn profile_switch_force_stops_and_replaces_only_the_script_worker() {
     let replacement_safety = Arc::new(ControllerSafetyProbe::active());
     let replacement = supervisor
         .spawn(
-            WorkerLaunch::custom(
-                env!("CARGO_BIN_EXE_pokecon-worker-fault-fixture"),
-                WorkerKind::Script,
-            )
-            .argument("eof"),
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script).argument("eof"),
             replacement_safety.clone(),
         )
         .await

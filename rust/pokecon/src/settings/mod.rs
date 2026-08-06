@@ -1,7 +1,7 @@
 //! Canonical settings, persistence, and managed Python-environment services.
 //!
 //! Every public settings surface consumes the same embedded registry from
-//! `pokecon-contracts`. Runtime code must not maintain a second handwritten
+//! `crate::contracts`. Runtime code must not maintain a second handwritten
 //! setting list.
 
 pub mod hmac_key;

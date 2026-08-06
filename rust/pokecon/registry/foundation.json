@@ -81,7 +81,7 @@
       "observed_in": ["Cargo.toml", "flake.nix", ".github/workflows/rust-ci.yml"],
       "status": "implemented",
       "phase": 2,
-      "resolution": "responsibility-oriented application, contracts, and settings crates are root workspace members; runtime, diagnostics, platform, dynamic, camera, device, and worker process targets belong to the application package"
+      "resolution": "the root workspace contains only the application package; contracts, settings, runtime, diagnostics, platform, dynamic, camera, device, and worker process targets are internal application modules or binaries"
     },
     {
       "id": "python_package",

@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use pokecon_contracts::model::{Access, Mutability, Scope, Setting};
-use pokecon_contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
+use pokecon::contracts::model::{Access, Mutability, Scope, Setting};
+use pokecon::contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
 use regex::Regex;
 use serde_json::Value;
 use sha2::{Digest, Sha256};

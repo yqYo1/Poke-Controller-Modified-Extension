@@ -4,8 +4,8 @@ mod application_backend;
 #[doc(hidden)]
 pub mod camera;
 mod command_service;
-#[path = "contracts/facade.rs"]
-mod contracts;
+#[doc(hidden)]
+pub mod contracts;
 mod desktop;
 #[doc(hidden)]
 pub mod device;
@@ -32,8 +32,8 @@ mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
 #[allow(clippy::option_option, reason = "wire patch fields are three-state")]
 mod server;
-#[path = "settings/facade.rs"]
-mod settings;
+#[doc(hidden)]
+pub mod settings;
 mod settings_runtime;
 #[doc(hidden)]
 pub mod worker;

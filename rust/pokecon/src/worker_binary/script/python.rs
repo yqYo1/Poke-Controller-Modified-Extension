@@ -9,7 +9,7 @@ use crate::camera::{
     BgrFrame, CaptureResolution, LatestFrameSource, RingReader, ScreenshotFormat, ScreenshotMode,
     ScreenshotRuntimeSettings, ScreenshotService, SharedFrameRing,
 };
-use pokecon_contracts::PROTOCOL_REGISTRY_JSON;
+use crate::contracts::PROTOCOL_REGISTRY_JSON;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule, PyModuleMethods};

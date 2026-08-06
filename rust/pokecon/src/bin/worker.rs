@@ -1,5 +1,7 @@
 pub(crate) use pokecon::camera;
+pub(crate) use pokecon::contracts;
 pub(crate) use pokecon::device;
+pub(crate) use pokecon::settings;
 pub(crate) use pokecon::worker;
 
 #[path = "../worker_binary/mod.rs"]

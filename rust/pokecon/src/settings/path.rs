@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use pokecon_contracts::model::{PathKind, PathMetadata};
+use crate::contracts::model::{PathKind, PathMetadata};
 use thiserror::Error;
 
 use crate::settings::roots::{EffectiveRoots, RootEnvironment};

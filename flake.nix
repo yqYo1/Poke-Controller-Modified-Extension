@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "bfc9e79a5e6d28f265922e1b4fbff48bb6b14260673555c3af257850553b7da6";
+      canonicalFlakeHash = "233ae288775a6a8b1bf62def8dc950b1e75570386624f7a4c4b13b57be23d6b9";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "b6821ae0d948a3a2cd55cacbbc9cb049fea6954ea7b3e10eca9439f99337cd69";
+              expectedAuditTestHash = "9d4f85eb1514351519afcf960ecd8c47f0567912274deecb251a679bace44643";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -468,13 +468,9 @@
 
           workspaceMemberPaths = [
             "rust/pokecon"
-            "rust/pokecon-contracts"
-            "rust/pokecon-settings"
           ];
           workspaceDefaultMemberPaths = [
             "rust/pokecon"
-            "rust/pokecon-contracts"
-            "rust/pokecon-settings"
           ];
           workspaceMemberManifests = builtins.listToAttrs (
             map (memberPath: {
@@ -484,33 +480,24 @@
           );
           expectedWorkspacePackageNames = {
             "rust/pokecon" = "pokecon";
-            "rust/pokecon-contracts" = "pokecon-contracts";
-            "rust/pokecon-settings" = "pokecon-settings";
           };
           expectedWorkspacePackageBuild = {
             "rust/pokecon" = "build.rs";
-            "rust/pokecon-contracts" = false;
-            "rust/pokecon-settings" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "e1953d2e764f9da42847ca81eb600c57f8ce6ee3ce7f0010f7064e4013f0653e";
-            "rust/pokecon-contracts" = "7e1dac2f761acaf07f144ae0a59d464f725a71c262367efd20903920d6a9db98";
-            "rust/pokecon-settings" = "31a6cedff2ac68e2c712e2cb624bc29ad0950904413ae26107890d1c4955a972";
+            "rust/pokecon" = "cb2f55bcc3f59c62a980cee0453be238fb5bf64ccb082ff412aeca5ca84b6791";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
               dunce = "1.0.5";
-              tauri-build = {
-                features = [ ];
-                version = "2.5.4";
-              };
-            };
-            "rust/pokecon-contracts" = { };
-            "rust/pokecon-settings" = {
               hex.workspace = true;
               serde.workspace = true;
               serde_json.workspace = true;
               sha2.workspace = true;
+              tauri-build = {
+                features = [ ];
+                version = "2.5.4";
+              };
               toml.workspace = true;
             };
           };
@@ -607,9 +594,7 @@
             )
           ) workspacePathDependencies;
           expectedWorkspaceBuildScripts = {
-            "rust/pokecon/build.rs" = "b6d20c87b467de6fdad83dc6d5ae8eeb88705f72bb8e7fb8d1dae057f34f0cfe";
-            "rust/pokecon-settings/build.rs" =
-              "961b332422780c5fa343893522af831ed23828e707e5934f7fdf91caac0138b0";
+            "rust/pokecon/build.rs" = "3a7feb6b0da1d702fed78e2e3a7d0c9362a3d6f4b3364089c2a40612ee594858";
           };
           actualWorkspaceBuildScriptPaths = lib.sort builtins.lessThan (
             lib.concatMap (
@@ -708,7 +693,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "27c029cd86503a3a09687e72fc92863383ba64ffa4ae946534407bee5f922428"
+                == "3aa13f59ba5e6c65f45ea43e3e1624352ca21b10b5ee16ba525f56844f865273"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -716,7 +701,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "37c8bdc111864f027359b783aa2b181928385c523d9f90e2c04faffe88515187"
+                == "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -736,11 +721,7 @@
           canonicalPokeconManifestText = builtins.readFile (inputs.self.outPath + "/rust/pokecon/Cargo.toml");
           canonicalWorkspaceManifestText = builtins.readFile (inputs.self.outPath + "/Cargo.toml");
           canonicalCargoLockText = builtins.readFile (inputs.self.outPath + "/Cargo.lock");
-          canonicalSettingsManifestText = builtins.readFile (
-            inputs.self.outPath + "/rust/pokecon-settings/Cargo.toml"
-          );
           canonicalPokeconManifest = workspaceMemberManifests."rust/pokecon";
-          canonicalSettingsManifest = workspaceMemberManifests."rust/pokecon-settings";
           controlledPokeconManifestText =
             replaceManifestString "pokecon implicit library target" "\n[features]\n"
               ''
@@ -783,21 +764,6 @@
               == expectedControlledPokeconManifest
             ) "controlled pokecon Cargo manifest changed outside its audited target paths";
             pkgs.writeText "pokecon-controlled-Cargo.toml" controlledPokeconManifestText;
-          controlledSettingsManifestText =
-            replaceManifestString "pokecon-settings build script" ''build = "build.rs"''
-              ''build = "${source}/rust/pokecon-settings/build.rs"''
-              canonicalSettingsManifestText;
-          expectedControlledSettingsManifest = canonicalSettingsManifest // {
-            package = canonicalSettingsManifest.package // {
-              build = "${source}/rust/pokecon-settings/build.rs";
-            };
-          };
-          controlledSettingsManifest =
-            assert lib.assertMsg (
-              builtins.fromTOML (builtins.unsafeDiscardStringContext controlledSettingsManifestText)
-              == expectedControlledSettingsManifest
-            ) "controlled pokecon-settings Cargo manifest changed outside its audited build path";
-            pkgs.writeText "pokecon-settings-controlled-Cargo.toml" controlledSettingsManifestText;
           controlledWorkspaceManifest =
             assert lib.assertMsg (
               builtins.fromTOML canonicalWorkspaceManifestText == workspaceManifest
@@ -808,8 +774,6 @@
             memberPath: canonicalManifest:
             if memberPath == "rust/pokecon" then
               controlledPokeconManifest
-            else if memberPath == "rust/pokecon-settings" then
-              controlledSettingsManifest
             else
               let
                 canonicalManifestText = builtins.readFile (inputs.self.outPath + "/${memberPath}/Cargo.toml");
@@ -2329,6 +2293,109 @@
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
             "${pkgs.coreutils}/bin/ln" -s -- "${gateCargoConfig}" "$out/config.toml"
           '';
+          workerPackageTestHarness =
+            if pkgs.stdenv.isLinux then
+              rustPlatform.buildRustPackage {
+                pname = "pokecon-worker-package-test-harness";
+                version = workspaceVersion;
+                src = source;
+                nativeBuildInputs = [
+                  pkgs.nasm
+                  pkgs.pkg-config
+                  pkgs.llvmPackages.libclang
+                  pkgs.patchelf
+                ];
+                buildInputs = [ pythonEnv ] ++ linuxDesktopPackages ++ linuxApplicationRuntimePackages;
+                cargoLock = {
+                  lockFile = ./Cargo.lock;
+                  allowBuiltinFetchGit = true;
+                };
+                dontCargoBuild = true;
+                doCheck = true;
+                checkType = "debug";
+                cargoTestFlags = [
+                  "--locked"
+                  "--no-run"
+                  "--package"
+                  "pokecon"
+                  "--test"
+                  "worker_startup"
+                  "--test"
+                  "lifecycle"
+                  "--test"
+                  "script_runtime"
+                ];
+                POKECON_RESOURCE_PROVENANCE = "development";
+                postPatch = ''
+                  test -f "${productionRoutingAudit}/passed"
+                  ${installControlledCargoManifests}
+                '';
+                preCheck = ''
+                  ${installControlledCargoManifests}
+                  ${sanitizeCargoCompilerEnvironment}
+                  if [ "''${RUSTC:-}" != "${rustToolchain}/bin/rustc" ]; then
+                    echo "worker package harness has an unpinned RUSTC: ''${RUSTC:-<unset>}" >&2
+                    exit 2
+                  fi
+                  if [ "''${RUSTC_WRAPPER:-}" != "${pinnedRustcWrapper}" ]; then
+                    echo "worker package harness has an unpinned RUSTC_WRAPPER: ''${RUSTC_WRAPPER:-<unset>}" >&2
+                    exit 2
+                  fi
+                  for forbidden_harness_rust_environment in RUSTC_WORKSPACE_WRAPPER RUSTFLAGS; do
+                    if [[ -v $forbidden_harness_rust_environment ]]; then
+                      echo "worker package harness forbids $forbidden_harness_rust_environment" >&2
+                      exit 2
+                    fi
+                  done
+                  unset forbidden_harness_rust_environment
+                '';
+                installPhase = ''
+                  runHook preInstall
+                  harness_target="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/debug"
+                  harness_deps="$harness_target/deps"
+                  for harness_name in worker_startup lifecycle script_runtime; do
+                    harness_candidates=()
+                    while IFS= read -r -d "" harness_candidate; do
+                      harness_candidates+=("$harness_candidate")
+                    done < <(
+                      "${pkgs.findutils}/bin/find" "$harness_deps" \
+                        -maxdepth 1 -type f -perm -0100 -name "$harness_name-*" -print0
+                    )
+                    if [ "''${#harness_candidates[@]}" -ne 1 ]; then
+                      echo "expected one executable $harness_name test harness, found ''${#harness_candidates[@]}" >&2
+                      exit 2
+                    fi
+                    "${pkgs.coreutils}/bin/install" -Dm755 -- \
+                      "''${harness_candidates[0]}" "$out/bin/$harness_name"
+                  done
+                  fault_worker="$harness_target/pokecon-worker-fault-fixture"
+                  if [ -L "$fault_worker" ] || [ ! -f "$fault_worker" ] || [ ! -x "$fault_worker" ]; then
+                    echo "fault worker test fixture is missing, redirected, or not executable: $fault_worker" >&2
+                    exit 2
+                  fi
+                  "${pkgs.coreutils}/bin/install" -Dm755 -- \
+                    "$fault_worker" "$out/bin/pokecon-worker-fault-fixture"
+                  unset \
+                    fault_worker \
+                    harness_candidate \
+                    harness_candidates \
+                    harness_deps \
+                    harness_name \
+                    harness_target
+                  runHook postInstall
+                '';
+                POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
+                POKECON_BUILD_UV_VERSION = pkgs.uv.version;
+                POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
+                PYO3_PYTHON = "${pythonEnv}/bin/python";
+                POKECON_BUILD_PYTHON = "${pythonEnv}/bin/python";
+                RUSTC = "${rustToolchain}/bin/rustc";
+                RUSTC_WRAPPER = "${pinnedRustcWrapper}";
+                BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
+                LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+              }
+            else
+              null;
           cliHelpCheck = mkTask {
             name = "cli-help-check";
             runtimeInputs = [ pkgs.diffutils ];
@@ -2391,7 +2458,7 @@
           };
           workerPackageCheck = mkTask {
             name = "worker-package-check";
-            runtimeInputs = rustTaskInputs ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.strace ];
+            runtimeInputs = [ pkgs.gnugrep ] ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.strace ];
             text = ''
               if [ "$#" -ne 0 ]; then
                 echo "usage: nix run .#worker-package-check" >&2
@@ -2401,10 +2468,11 @@
             + (
               if pkgs.stdenv.isLinux then
                 ''
-                  ${setupWorkdir}
-                  ${desktopEnvironment}
+                  ${setupSourceGateEnvironment}
+                  cd "${source}"
 
                   package_output="${self'.packages.pokecon}"
+                  harness_output="${workerPackageTestHarness}"
                   application="$package_output/bin/pokecon"
                   worker_binary="$(dirname -- "$application")/pokecon-worker"
                   for packaged_binary in "$application" "$worker_binary"; do
@@ -2441,6 +2509,35 @@
                   fi
                   application="$canonical_application"
                   worker_binary="$canonical_worker"
+
+                  canonical_harness="$(readlink -f -- "$harness_output")"
+                  if [ "$(dirname -- "$canonical_harness")" != "$store_directory" ]; then
+                    echo "test harness is not a direct output under evaluator store $store_directory: $canonical_harness" >&2
+                    exit 1
+                  fi
+                  for harness_binary_name in \
+                    worker_startup \
+                    lifecycle \
+                    script_runtime \
+                    pokecon-worker-fault-fixture; do
+                    harness_binary="$canonical_harness/bin/$harness_binary_name"
+                    if [ -L "$harness_binary" ] || [ ! -f "$harness_binary" ] || [ ! -x "$harness_binary" ]; then
+                      echo "test harness executable is missing, redirected, or not executable: $harness_binary" >&2
+                      exit 1
+                    fi
+                    canonical_harness_binary="$(readlink -f -- "$harness_binary")"
+                    case "$canonical_harness_binary" in
+                      "$canonical_harness"/*) ;;
+                      *)
+                        echo "test harness executable escapes its store output: $canonical_harness_binary" >&2
+                        exit 1
+                        ;;
+                    esac
+                  done
+                  worker_startup_harness="$canonical_harness/bin/worker_startup"
+                  lifecycle_harness="$canonical_harness/bin/lifecycle"
+                  script_runtime_harness="$canonical_harness/bin/script_runtime"
+                  fault_worker_binary="$canonical_harness/bin/pokecon-worker-fault-fixture"
 
                   product_root="$gate_home/packaged-product"
                   product_home="$product_root/home"
@@ -2566,16 +2663,18 @@
                   fi
 
                   export POKECON_TEST_WORKER_BINARY="$worker_binary"
-                  cargo test --locked --package pokecon --test worker_startup -- --nocapture
-                  cargo test --locked --package pokecon --test lifecycle -- --nocapture
-                  cargo test --locked --package pokecon --test script_runtime \
+                  export POKECON_TEST_FAULT_WORKER_BINARY="$fault_worker_binary"
+                  "$worker_startup_harness" --nocapture
+                  "$lifecycle_harness" --nocapture
+                  "$script_runtime_harness" \
                     script_worker_executes_controller_serial_and_output_proxies \
-                    -- --exact --nocapture
+                    --exact --nocapture
 
                   printf '%s\n' \
                     "worker-package-check: PASS" \
                     "store_directory=$store_directory" \
                     "package=$canonical_package" \
+                    "harness=$canonical_harness" \
                     "application=$application" \
                     "worker=$worker_binary" \
                     "roles=script,dynamic" \

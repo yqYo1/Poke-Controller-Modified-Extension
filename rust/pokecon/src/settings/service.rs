@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use pokecon_contracts::model::{Access, Mutability, Scope, Setting};
+use crate::contracts::model::{Access, Mutability, Scope, Setting};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;

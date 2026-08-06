@@ -2,10 +2,10 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use atomic_write_file::AtomicWriteFile;
-use pokecon_contracts::{
+use crate::contracts::{
     ContractError, commands_python_typings, dynamic_lua_typings, dynamic_python_typings,
 };
+use atomic_write_file::AtomicWriteFile;
 use thiserror::Error;
 
 use crate::settings::roots::{EffectiveRoots, RootError, SafeComponent};

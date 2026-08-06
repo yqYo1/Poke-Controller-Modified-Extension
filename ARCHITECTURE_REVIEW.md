@@ -197,6 +197,8 @@ Phase 2.7のdevice atomで`pokecon-device` compatibility packageを削除し、�
 
 Phase 2.7のserver detach atomで、WebRTC、OpenH264、axumの依存を`pokecon`へ移しました。続く削除atomで`pokecon-server` compatibility package、workspace参照、Nix package aliasを削除しました。
 
+Phase 2.7の最終atomで`pokecon-settings`と`pokecon-contracts` compatibility packageを依存順に削除し、settingsのbuild-time resource生成とcross-process testも`pokecon`へ統合しました。Cargo workspaceは`pokecon`の1 packageだけです。
+
 分離したクレートが下位の共通クレートへ不要な依存を持つ場合、この効果は弱くなります。
 
 ### 7.3 独立した成果物
@@ -213,11 +215,7 @@ Web UIとTauriは別の実行ファイルにせず、同じPokeCon本体実行�
 
 ### 7.4 対象を絞った検査
 
-`pokecon-contracts`は、他のworkspaceクレートを対象にせず単独でビルドとテストを実行できます。
-
-一方、正式な完了ゲートはworkspace全体のClippy、テスト、ビルドを実行します。
-
-現在の分割に対象変更時の反復を短くする効果はありますが、完了ゲート全体を短縮する効果は確認できていません。
+対象変更時は`pokecon`のmoduleまたはintegration testを指定して短いfeedbackを得ます。正式な完了ゲートは単一workspace packageのClippy、テスト、ビルドを共有target上で順に実行します。
 
 ### 7.5 Cargo機能フラグとの比較
 
@@ -300,11 +298,13 @@ CPythonとLuaJITを初期化してPython／Luaコードを実行する実装は�
 - `contracts`から他の実行時モジュールへの依存
 - `camera`または`device`から設定永続化、`runtime`、`server`、`desktop`への依存
 - `runtime`から表示・通信アダプターである`server`または`desktop`への依存
-- `server`または`desktop`からシリアルポート、カメラハンドル、インタープリター状態への直接アクセス
+- `server`または`desktop`からシリアルポート、カメラハンドル、インタープリター状態、正準controller／device状態への直接アクセス
 - ワーカーからメインプロセスが所有するハードウェアハンドルまたは正準状態への直接アクセス
 - `settings`、`camera`、`device`、`worker`、`dynamic`、`contracts`、`diagnostics`、`platform`から合成・状態所有モジュールである`runtime`への逆依存
 
 カメラとデバイスへ動的設定を適用するアダプターは`runtime`に置き、各モジュール自身は適用に必要な値型と操作だけを公開します。
+
+`server::state::StateHub`はHTTP／WebSocketへ公開するrevision付きUI projectionであり、正準controller／device状態のownerではありません。`ApplicationBackend`が`StateHub`、camera、serial、controller arbiterを一緒に所有し、adapterからの操作を一つのmutation gateでprojectionへ反映します。
 
 ## 9. クレート構成に必要な変更
 
@@ -338,7 +338,7 @@ Rust境界でなければ提供できない具体的な公開APIと受入テス�
 
 ### 9.4 正準契約と検査専用データ
 
-`pokecon-contracts`は、設定や公開プロトコルに加えて、CI適用表やテスト分類もライブラリー定数として埋め込んでいます。
+`pokecon::contracts`は、設定や公開プロトコルに加えて、CI適用表やテスト分類もライブラリー定数として埋め込んでいます。
 
 検査だけが読むデータを共通ライブラリーへ埋め込むと、その変更が下流クレートの再コンパイル要因になります。
 
@@ -815,16 +815,16 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 
 #### 反証可能なevidence mapping
 
-次表のchild binary provenanceはintegration testが起動する子実行ファイルを指します。integration test harnessと親側supervisorはsource-builtです。`worker-package-check`のoverrideはstartup testの直接起動とmanaged childを含む通常worker childをすべてexact packaged workerへ置き換え、明示的な`pokecon-worker-fault-fixture`は対象外としてsource-builtのまま維持します。
+次表のchild binary provenanceはintegration testが起動する子実行ファイルを指します。通常testのintegration harness、親側supervisor、fault fixtureはsource-builtです。`worker-package-check`では3個のintegration harnessとfault fixtureを一つのimmutable Nix outputとして事前compileし、startup testの直接起動とmanaged childを含む通常worker childだけをexact packaged workerへ置き換えます。製品packageとtest harnessは独立したstore outputとして初回から並列具現化し、task実行時にCargo compileしません。
 
 | test／task | 検証対象 | child binary provenance |
 |---|---|---|
 | `script_worker_executes_controller_serial_and_output_proxies` | script workerがcontroller、serial、output要求を決定してRust main側hostへ送り、完了後も実行を継続する方向 | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
 | `dynamic_worker_runs_both_languages_over_bidirectional_ipc` | dynamic childのCPython／LuaJIT初期化と、host request／eventを含む双方向IPC | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
 | `managed_worker_uses_protocol_stdout_and_cooperative_stop` | stdoutがframed protocolだけを運び、typed ping responseとcooperative stop acknowledgementを返すこと | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated`、`profile_switch_force_stops_and_replaces_only_the_script_worker` | dynamicのforce条件とgeneration retention、scriptだけのprofile replacement | source-built supervisor test harnessとsource-built `pokecon-worker-fault-fixture`。packaged app／workerのforce証拠とは扱わない |
+| `dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated`、`profile_switch_force_stops_and_replaces_only_the_script_worker` | dynamicのforce条件とgeneration retention、scriptだけのprofile replacement | 通常testではsource-built、`worker-package-check`ではimmutable Nix harness／fault fixture。どちらもpackaged app／workerのforce証拠とは扱わない |
 | `both_worker_roles_start_and_exit_cleanly` | `--kind script`と`--kind dynamic`が起動し、protocol stdoutを汚さず終了すること | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `nix run .#worker-package-check` | `${self'.packages.pokecon}`のimmutable store outputからappと兄弟workerを導出し、productによるexact sibling `execve`、隔離profile、Lua marker、cooperative stopを確認する。dynamic startup rejectionとstatic fail-soft fallbackのlogがあれば失敗する。process tracingを伴うtask実行はLinux限定で、非Linuxではappを評価できるがunsupported errorで終了し、CI evidenceはUbuntu／Linux jobに限る | product probeはexact packaged app／worker。integration testは通常childだけをexact packaged workerへ置換し、force／generationはsource-built harness／fault fixture |
+| `nix run .#worker-package-check` | `${self'.packages.pokecon}`のimmutable store outputからappと兄弟workerを導出し、productによるexact sibling `execve`、隔離profile、Lua marker、cooperative stopを確認する。dynamic startup rejectionとstatic fail-soft fallbackのlogがあれば失敗する。process tracingを伴うtask実行はLinux限定で、非Linuxではappを評価できるがunsupported errorで終了し、CI evidenceはUbuntu／Linux jobに限る | product probeはexact packaged app／worker。integration testは通常childだけをexact packaged workerへ置換し、host harness／fault fixtureは別のimmutable store outputを使用 |
 
 このevidenceが証明する範囲は、sourceとprocessの所有、機能要求と監督制御の方向、interpreter object／hardware ownership／shared-memory descriptor境界の保存です。Phase 4で行うpriority scheduling、latency、input arbitrationその他のbehavior変更を実装または証明したものではありません。
 

@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use pokecon_contracts::{
+use pokecon::contracts::{
     commands_python_typings, dynamic_lua_typings, dynamic_python_typings, settings_json_schema,
     settings_registry, settings_ui_metadata,
 };

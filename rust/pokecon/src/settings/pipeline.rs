@@ -3,10 +3,10 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use pokecon_contracts::model::{
+use crate::contracts::model::{
     DefaultValue, Mutability, Scope, Setting, ValueSchema, WireEncoding,
 };
-use pokecon_contracts::{ContractError, SettingsRegistry, settings_registry};
+use crate::contracts::{ContractError, SettingsRegistry, settings_registry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;

@@ -3758,10 +3758,12 @@ dependencies = [
  "chrono",
  "clap",
  "dunce",
+ "fs4",
  "futures-util",
  "getrandom 0.4.3",
  "gilrs",
  "hex",
+ "hmac",
  "image",
  "mime_guess",
  "mlua",
@@ -3770,8 +3772,7 @@ dependencies = [
  "opener",
  "openh264",
  "parking_lot",
- "pokecon-contracts",
- "pokecon-settings",
+ "pep440_rs",
  "proc-macro2",
  "pyo3",
  "regex",
@@ -3795,50 +3796,18 @@ dependencies = [
  "tokio-serial",
  "tokio-tungstenite",
  "tokio-util",
+ "toml 0.8.2",
+ "toml_edit 0.22.27",
  "tower",
  "tracing",
  "tracing-subscriber",
  "url",
  "utoipa",
  "v4l",
+ "version-ranges",
  "webrtc",
  "winapi-util",
  "win32_notif",
-]
-
-[[package]]
-name = "pokecon-contracts"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "url",
-]
-
-[[package]]
-name = "pokecon-settings"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "atomic-write-file",
- "chrono",
- "fs4",
- "getrandom 0.4.3",
- "hex",
- "hmac",
- "parking_lot",
- "pep440_rs",
- "pokecon-contracts",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "toml 0.8.2",
- "toml_edit 0.22.27",
- "version-ranges",
 ]
 
 [[package]]

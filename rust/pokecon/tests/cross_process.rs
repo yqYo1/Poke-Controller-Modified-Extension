@@ -7,14 +7,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use pokecon_settings::hmac_key::HmacKey;
-use pokecon_settings::lock::LockManager;
-use pokecon_settings::manifest::ManifestOutput;
-use pokecon_settings::package::{ConstraintResolver, PythonWorker};
-use pokecon_settings::persistence::TomlStore;
-use pokecon_settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
-use pokecon_settings::uv::{ManagedUv, UvChildEnvironment};
-use pokecon_settings::venv::{
+use pokecon::settings::hmac_key::HmacKey;
+use pokecon::settings::lock::LockManager;
+use pokecon::settings::manifest::ManifestOutput;
+use pokecon::settings::package::{ConstraintResolver, PythonWorker};
+use pokecon::settings::persistence::TomlStore;
+use pokecon::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
+use pokecon::settings::uv::{ManagedUv, UvChildEnvironment};
+use pokecon::settings::venv::{
     PreparationDisposition, UvExecutionContext, UvExecutor, VenvError, VenvManager, VenvOwnership,
     VenvPreparationRequest,
 };

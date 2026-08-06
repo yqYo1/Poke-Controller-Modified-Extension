@@ -434,18 +434,18 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] **AR-11-20** PokeCon本体の1 package統合を完了し、共通worker実行ファイルを役割引数付きの別OS processとして起動する（証跡: `rust-ci-core`がsource-built workerのscript／dynamic両role、双方向IPC、Python／Lua、協調停止、fault終了を一度だけ検査し、`worker-package-check`がexact release packageの両role直接起動、productからのexact sibling `execve`、Lua marker、fail-soft拒否、協調停止を検査）。
 - [x] **AR-13.1-29** repository全体で旧crate名と`rust/pokecon-*` pathを検索し、明示的に維持する履歴説明以外の参照がない（証跡: 許可済みVCS入口のpattern別検索とproduction-routing auditがactive Cargo／Nix／CI／release／installer／Rust identifier参照0件を確認。残存文字列はPLAN／reviewの履歴、retired-path negative fixture、互換性を維持するdiagnostic／Python namespaceだけ）。
 
-#### 2.7 checkpoint証跡（2026-08-06、local完了・最終CI待ち）
+#### 2.7 checkpoint証跡（2026-08-06、local／CI完了）
 
 | 対象 | 実測結果 |
 | --- | --- |
 | workspace／target | Cargo metadataはworkspace／packageとも`pokecon` 1件。library、main、共通worker、compatibility、fault fixture、2 generator、9 integration-test target、build scriptを同じmanifestから列挙 |
 | build／静的契約 | `cargo check --locked --package pokecon --all-targets --all-features`は共有cache再実行でCargo 10.83秒、Nix app全体16.6秒。変更対象の静的test 4件は8.96秒、`nix flake check --no-build`は5.5秒で成功 |
 | exact package | `ui-package-check`、`worker-package-check`、`cli-help-check`は同じexact release packageを再利用する。worker gateはscript／dynamic両roleの直接startupと、product経由のexact sibling `execve`、隔離profile、Lua marker、fail-soft拒否、協調停止だけを担当し、source integration testを再compileしない。新gateはcold 521秒、warm 5秒で成功 |
-| package test短縮 | 旧worker gateはexact package build後に毎回一時Cargo targetで全依存を再compileしていた。immutable harness化でwarm実行を10秒まで短縮したが、clean runnerではrelease製品とdebug harnessの全依存graphが競合し、local／CIとも約12分超を要した。full integration testは並行する`rust-ci-core`が既に全件実行するためmandatory package gateから重複debug harnessを除き、固有のexact release製品境界だけを残した。単独cold実測は521秒で約3分半短縮 |
+| package test短縮 | 旧worker gateはexact package build後に毎回一時Cargo targetで全依存を再compileしていた。immutable harness化でwarm実行を10秒まで短縮したが、clean runnerではrelease製品とdebug harnessの全依存graphが競合し、local／CIとも約12分超を要した。full integration testは並行する`rust-ci-core`が既に全件実行するためmandatory package gateから重複debug harnessを除き、固有のexact release製品境界だけを残した。単独cold実測は521秒。GitHubの`Verify packaged worker roles`は13分08秒から7分49秒へ5分19秒（約40%）短縮 |
 | test選定 | 変更前aggregateでRust／Web／379 mutationとPython 285/286件が成功し、残る1件はrustfmt空白に依存したdesktop source parserだけだった。意味境界へ修正後に対象test、exact package、Nix評価を再実行し、無変更のcold Rust／Web全件は重複実行しなかった |
 | 内部依存／ownership | 全Rust production sourceを字句解析する静的監査で、contracts分離、runtime→adapter禁止、8 moduleのruntime逆依存禁止、server／desktopとworkerのowner型禁止、application backendのStateHub／camera／serial／arbiter所有を検査。各分類を破る5 mutationも拒否 |
 | mutation監査 | 最終source／flake snapshotに対するproduction-routing mutation 384件を4 process shardで実行し、384/384件を約50秒で検知 |
-| 最終外部gate | push前のformat／文書／差分監査と、push後のGitHub Actions全job監視を残す。CI success取得前にcheckpointを外部完了とは扱わない |
+| 最終外部gate | commit `f292a350e544d81f75a6efd81357614182a0f25f`で[Pytest 31068364663](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31068364663)、[Remote Flake 31068364681](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31068364681)、[Package 31068364683](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31068364683)、[Lint 31068364694](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31068364694)、[Rust 31068364697](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31068364697)が全てsuccess。`ci-watch`は120秒settlement後exit 0 |
 
 ### 内部依存の受入
 

@@ -815,16 +815,16 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 
 #### 反証可能なevidence mapping
 
-次表のchild binary provenanceはintegration testが起動する子実行ファイルを指します。通常testのintegration harness、親側supervisor、fault fixtureはsource-builtです。`worker-package-check`では3個のintegration harnessとfault fixtureを一つのimmutable Nix outputとして事前compileし、startup testの直接起動とmanaged childを含む通常worker childだけをexact packaged workerへ置き換えます。製品packageとtest harnessは独立したstore outputとして初回から並列具現化し、task実行時にCargo compileしません。
+次表のchild binary provenanceはintegration testが起動する子実行ファイルを指します。通常testのintegration harness、親側supervisor、worker、fault fixtureはsource-builtで、`rust-ci-core`が一度だけcompile／実行します。`worker-package-check`はこのintegration test群を再compileせず、同じCI内で後続のUI／CLI gateも使うexact release packageだけを具現化します。package gateはexact packaged workerの両roleを直接起動し、productからのexact sibling解決、隔離profile、Lua marker、fail-soft拒否、協調停止を検査します。
 
 | test／task | 検証対象 | child binary provenance |
 |---|---|---|
-| `script_worker_executes_controller_serial_and_output_proxies` | script workerがcontroller、serial、output要求を決定してRust main側hostへ送り、完了後も実行を継続する方向 | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `dynamic_worker_runs_both_languages_over_bidirectional_ipc` | dynamic childのCPython／LuaJIT初期化と、host request／eventを含む双方向IPC | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `managed_worker_uses_protocol_stdout_and_cooperative_stop` | stdoutがframed protocolだけを運び、typed ping responseとcooperative stop acknowledgementを返すこと | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated`、`profile_switch_force_stops_and_replaces_only_the_script_worker` | dynamicのforce条件とgeneration retention、scriptだけのprofile replacement | 通常testではsource-built、`worker-package-check`ではimmutable Nix harness／fault fixture。どちらもpackaged app／workerのforce証拠とは扱わない |
-| `both_worker_roles_start_and_exit_cleanly` | `--kind script`と`--kind dynamic`が起動し、protocol stdoutを汚さず終了すること | 通常testではsource-built worker、`worker-package-check`内ではexact packaged worker |
-| `nix run .#worker-package-check` | `${self'.packages.pokecon}`のimmutable store outputからappと兄弟workerを導出し、productによるexact sibling `execve`、隔離profile、Lua marker、cooperative stopを確認する。dynamic startup rejectionとstatic fail-soft fallbackのlogがあれば失敗する。process tracingを伴うtask実行はLinux限定で、非Linuxではappを評価できるがunsupported errorで終了し、CI evidenceはUbuntu／Linux jobに限る | product probeはexact packaged app／worker。integration testは通常childだけをexact packaged workerへ置換し、host harness／fault fixtureは別のimmutable store outputを使用 |
+| `script_worker_executes_controller_serial_and_output_proxies` | script workerがcontroller、serial、output要求を決定してRust main側hostへ送り、完了後も実行を継続する方向 | `rust-ci-core`のsource-built worker |
+| `dynamic_worker_runs_both_languages_over_bidirectional_ipc` | dynamic childのCPython／LuaJIT初期化と、host request／eventを含む双方向IPC | `rust-ci-core`のsource-built worker |
+| `managed_worker_uses_protocol_stdout_and_cooperative_stop` | stdoutがframed protocolだけを運び、typed ping responseとcooperative stop acknowledgementを返すこと | `rust-ci-core`のsource-built worker |
+| `dynamic_worker_is_forced_only_at_app_shutdown_and_never_regenerated`、`profile_switch_force_stops_and_replaces_only_the_script_worker` | dynamicのforce条件とgeneration retention、scriptだけのprofile replacement | `rust-ci-core`のsource-built worker／fault fixture。packaged app／workerのforce証拠とは扱わない |
+| `both_worker_roles_start_and_exit_cleanly` | `--kind script`と`--kind dynamic`が起動し、protocol stdoutを汚さず終了すること | `rust-ci-core`ではsource-built worker。`worker-package-check`では同じ引数とstdout／stderr契約をexact packaged workerへ直接適用 |
+| `nix run .#worker-package-check` | `${self'.packages.pokecon}`のimmutable store outputからappと兄弟workerを導出し、両roleの直接startup、productによるexact sibling `execve`、隔離profile、Lua marker、cooperative stopを確認する。dynamic startup rejectionとstatic fail-soft fallbackのlogがあれば失敗する。process tracingを伴うtask実行はLinux限定で、非Linuxではappを評価できるがunsupported errorで終了し、CI evidenceはUbuntu／Linux jobに限る | exact packaged app／worker。source integration harnessを再compileしない |
 
 このevidenceが証明する範囲は、sourceとprocessの所有、機能要求と監督制御の方向、interpreter object／hardware ownership／shared-memory descriptor境界の保存です。Phase 4で行うpriority scheduling、latency、input arbitrationその他のbehavior変更を実装または証明したものではありません。
 

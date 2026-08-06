@@ -2219,7 +2219,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "e33384cc6f688bbd446537f6dc7a1aa9d7466f93b9402658a1b19711c10a7584"
+        == "0aa833ac4b384f244a4a9a7c03c091411a7f709896fadfb6731fb93dd1dd70bc"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3275,7 +3275,7 @@ offline = true
     gate_cargo_home_section = flake[gate_cargo_config_end:gate_cargo_home_end]
     assert (
         hashlib.sha256(gate_cargo_home_section.strip().encode()).hexdigest()
-        == "9207dcc81935903fe42a5444660f1992ec9aa68494e0dd544961c1a55fa956a4"
+        == "f387a4167caa6b8352a916782b3e0d124e3bb05cd666331176355eef5196d9b3"
     )
     assert (
         gate_cargo_home_section.count(
@@ -3413,7 +3413,7 @@ offline = true
         == len(development_command_section_boundaries) + 6
     )
     assert flake.count(development_provenance_assignment) == 20
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 24
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 23
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -6956,78 +6956,58 @@ def section(document: str, start: str, end: str) -> str:
     return body
 
 
-def test_packaged_worker_harness_is_store_cached_and_runtime_compile_free() -> None:
+def test_packaged_worker_gate_reuses_product_without_recompiling_tests() -> None:
     flake = (REPOSITORY / "flake.nix").read_text()
-    harness = section(
-        flake,
-        "workerPackageTestHarness =",
-        "\n          cliHelpCheck =",
-    )
     gate = section(
         flake,
         "workerPackageCheck =",
         "\n          uiPackageSoftwareRenderer =",
     )
-    lifecycle = (REPOSITORY / "rust/pokecon/tests/lifecycle.rs").read_text()
-
-    for required in (
-        "rustPlatform.buildRustPackage",
-        "dontCargoBuild = true;",
-        "doCheck = true;",
-        'checkType = "debug";',
-        'POKECON_RESOURCE_PROVENANCE = "development";',
-        "${installControlledCargoManifests}",
-        "${sanitizeCargoCompilerEnvironment}",
-        'RUSTC = "${rustToolchain}/bin/rustc";',
-        'RUSTC_WRAPPER = "${pinnedRustcWrapper}";',
-        '"--no-run"',
-        '"--features"',
-        '"worker-binary,worker-test-fixture"',
-        '"worker_startup"',
-        '"lifecycle"',
-        '"script_runtime"',
-        '"$out/bin/pokecon-worker-fault-fixture"',
-    ):
-        assert required in harness
-    assert harness.count('"--test"') == 3
-    assert harness.count("cargoTestFlags = [") == 1
-    assert harness.count("cargoBuildFlags = [") == 0
+    rust_ci_core = section(
+        flake,
+        "            rust-ci-core = mkTask {\n",
+        "            clippy = mkTask {\n",
+    )
 
     for required in (
         "${setupSourceGateEnvironment}",
-        'harness_output="${workerPackageTestHarness}"',
-        'canonical_harness="$(readlink -f -- "$harness_output")"',
-        'export POKECON_TEST_WORKER_BINARY="$worker_binary"',
-        'export POKECON_TEST_FAULT_WORKER_BINARY="$fault_worker_binary"',
-        '"$worker_startup_harness" --nocapture',
-        '"$lifecycle_harness" --nocapture',
-        '"$script_runtime_harness"',
-        "--exact --nocapture",
+        'package_output="${self\'.packages.pokecon}"',
+        'role_probe_root="$product_root/worker-role-probes"',
+        "for worker_role in script dynamic; do",
+        '"$worker_binary" \\\n'
+        '                        --kind "$worker_role" \\\n'
+        "                        --exit-after-startup \\\n",
+        'if [ -s "$role_stdout" ]; then',
+        'if [ ! -s "$role_stderr" ]; then',
+        "product_resolution=exact-sibling-execve+lua-marker",
+        "role_probes=exact-packaged-worker",
+        "packaged_stop=cooperative",
     ):
         assert required in gate
     for forbidden in (
         "${setupWorkdir}",
         "${desktopEnvironment}",
         "rustTaskInputs",
+        "workerPackageTestHarness",
+        "POKECON_TEST_WORKER_BINARY",
+        "POKECON_TEST_FAULT_WORKER_BINARY",
+        "worker_startup_harness",
+        "lifecycle_harness",
+        "script_runtime_harness",
         "cargo test",
         "cargo build",
     ):
         assert forbidden not in gate
-    assert gate.index('package_output="${self\'.packages.pokecon}"') < gate.index(
-        'harness_output="${workerPackageTestHarness}"'
-    )
-    assert gate.index(
-        'export POKECON_TEST_WORKER_BINARY="$worker_binary"'
-    ) < gate.index('"$worker_startup_harness" --nocapture')
-    assert "POKECON_TEST_FAULT_WORKER_BINARY" in lifecycle
+    assert "workerPackageTestHarness" not in flake
     assert (
-        len(
-            re.findall(
-                r'env!\(\s*"CARGO_BIN_EXE_pokecon-worker-fault-fixture"\s*\)',
-                lifecycle,
-            )
+        rust_ci_core.count(
+            "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
+            "--workspace --all-features"
         )
-        == 2
+        == 1
+    )
+    assert gate.index("for worker_role in script dynamic; do") < gate.index(
+        'product_marker="worker-package-check-lua-marker-AR-13.1-26"'
     )
 
 

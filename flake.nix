@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "e05d45655a782cefb08e469a275e54b7f817f58f21e796411dde0d94bbd798bd";
+      canonicalFlakeHash = "101b45b3a596f35add953030ec21de3e2eed88563495b1d5dcb5cd21a4baf542";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "8a3b50635162dc8cb22b2cd80b1d03fc9c7cc6333686f7bbc3f9385a842d038e";
+              expectedAuditTestHash = "6261bf734e9201214b22f41864d355ebc944d5a24be7ba60e25fcff4f052b37c";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -2295,111 +2295,6 @@
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
             "${pkgs.coreutils}/bin/ln" -s -- "${gateCargoConfig}" "$out/config.toml"
           '';
-          workerPackageTestHarness =
-            if pkgs.stdenv.isLinux then
-              rustPlatform.buildRustPackage {
-                pname = "pokecon-worker-package-test-harness";
-                version = workspaceVersion;
-                src = source;
-                nativeBuildInputs = [
-                  pkgs.nasm
-                  pkgs.pkg-config
-                  pkgs.llvmPackages.libclang
-                  pkgs.patchelf
-                ];
-                buildInputs = [ pythonEnv ] ++ linuxDesktopPackages ++ linuxApplicationRuntimePackages;
-                cargoLock = {
-                  lockFile = ./Cargo.lock;
-                  allowBuiltinFetchGit = true;
-                };
-                dontCargoBuild = true;
-                doCheck = true;
-                checkType = "debug";
-                cargoTestFlags = [
-                  "--locked"
-                  "--no-run"
-                  "--package"
-                  "pokecon"
-                  "--features"
-                  "worker-binary,worker-test-fixture"
-                  "--test"
-                  "worker_startup"
-                  "--test"
-                  "lifecycle"
-                  "--test"
-                  "script_runtime"
-                ];
-                POKECON_RESOURCE_PROVENANCE = "development";
-                postPatch = ''
-                  test -f "${productionRoutingAudit}/passed"
-                  ${installControlledCargoManifests}
-                '';
-                preCheck = ''
-                  ${installControlledCargoManifests}
-                  ${sanitizeCargoCompilerEnvironment}
-                  if [ "''${RUSTC:-}" != "${rustToolchain}/bin/rustc" ]; then
-                    echo "worker package harness has an unpinned RUSTC: ''${RUSTC:-<unset>}" >&2
-                    exit 2
-                  fi
-                  if [ "''${RUSTC_WRAPPER:-}" != "${pinnedRustcWrapper}" ]; then
-                    echo "worker package harness has an unpinned RUSTC_WRAPPER: ''${RUSTC_WRAPPER:-<unset>}" >&2
-                    exit 2
-                  fi
-                  for forbidden_harness_rust_environment in RUSTC_WORKSPACE_WRAPPER RUSTFLAGS; do
-                    if [[ -v $forbidden_harness_rust_environment ]]; then
-                      echo "worker package harness forbids $forbidden_harness_rust_environment" >&2
-                      exit 2
-                    fi
-                  done
-                  unset forbidden_harness_rust_environment
-                '';
-                installPhase = ''
-                  runHook preInstall
-                  harness_target="target/${pkgs.stdenv.targetPlatform.rust.cargoShortTarget}/debug"
-                  harness_deps="$harness_target/deps"
-                  for harness_name in worker_startup lifecycle script_runtime; do
-                    harness_candidates=()
-                    while IFS= read -r -d "" harness_candidate; do
-                      harness_candidates+=("$harness_candidate")
-                    done < <(
-                      "${pkgs.findutils}/bin/find" "$harness_deps" \
-                        -maxdepth 1 -type f -perm -0100 -name "$harness_name-*" -print0
-                    )
-                    if [ "''${#harness_candidates[@]}" -ne 1 ]; then
-                      echo "expected one executable $harness_name test harness, found ''${#harness_candidates[@]}" >&2
-                      exit 2
-                    fi
-                    "${pkgs.coreutils}/bin/install" -Dm755 -- \
-                      "''${harness_candidates[0]}" "$out/bin/$harness_name"
-                  done
-                  fault_worker="$harness_target/pokecon-worker-fault-fixture"
-                  if [ -L "$fault_worker" ] || [ ! -f "$fault_worker" ] || [ ! -x "$fault_worker" ]; then
-                    echo "fault worker test fixture is missing, redirected, or not executable: $fault_worker" >&2
-                    exit 2
-                  fi
-                  "${pkgs.coreutils}/bin/install" -Dm755 -- \
-                    "$fault_worker" "$out/bin/pokecon-worker-fault-fixture"
-                  unset \
-                    fault_worker \
-                    harness_candidate \
-                    harness_candidates \
-                    harness_deps \
-                    harness_name \
-                    harness_target
-                  runHook postInstall
-                '';
-                POKECON_BUILD_UV_PATH = "${pkgs.uv}/bin/uv";
-                POKECON_BUILD_UV_VERSION = pkgs.uv.version;
-                POKECON_INTERNAL_SCRIPT_SITE_PACKAGES = "${pythonEnv}/${pkgs.python314.sitePackages}";
-                PYO3_PYTHON = "${pythonEnv}/bin/python";
-                POKECON_BUILD_PYTHON = "${pythonEnv}/bin/python";
-                RUSTC = "${rustToolchain}/bin/rustc";
-                RUSTC_WRAPPER = "${pinnedRustcWrapper}";
-                BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
-                LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-              }
-            else
-              null;
           cliHelpCheck = mkTask {
             name = "cli-help-check";
             runtimeInputs = [ pkgs.diffutils ];
@@ -2476,7 +2371,6 @@
                   cd "${source}"
 
                   package_output="${self'.packages.pokecon}"
-                  harness_output="${workerPackageTestHarness}"
                   application="$package_output/bin/pokecon"
                   worker_binary="$(dirname -- "$application")/pokecon-worker"
                   for packaged_binary in "$application" "$worker_binary"; do
@@ -2514,35 +2408,6 @@
                   application="$canonical_application"
                   worker_binary="$canonical_worker"
 
-                  canonical_harness="$(readlink -f -- "$harness_output")"
-                  if [ "$(dirname -- "$canonical_harness")" != "$store_directory" ]; then
-                    echo "test harness is not a direct output under evaluator store $store_directory: $canonical_harness" >&2
-                    exit 1
-                  fi
-                  for harness_binary_name in \
-                    worker_startup \
-                    lifecycle \
-                    script_runtime \
-                    pokecon-worker-fault-fixture; do
-                    harness_binary="$canonical_harness/bin/$harness_binary_name"
-                    if [ -L "$harness_binary" ] || [ ! -f "$harness_binary" ] || [ ! -x "$harness_binary" ]; then
-                      echo "test harness executable is missing, redirected, or not executable: $harness_binary" >&2
-                      exit 1
-                    fi
-                    canonical_harness_binary="$(readlink -f -- "$harness_binary")"
-                    case "$canonical_harness_binary" in
-                      "$canonical_harness"/*) ;;
-                      *)
-                        echo "test harness executable escapes its store output: $canonical_harness_binary" >&2
-                        exit 1
-                        ;;
-                    esac
-                  done
-                  worker_startup_harness="$canonical_harness/bin/worker_startup"
-                  lifecycle_harness="$canonical_harness/bin/lifecycle"
-                  script_runtime_harness="$canonical_harness/bin/script_runtime"
-                  fault_worker_binary="$canonical_harness/bin/pokecon-worker-fault-fixture"
-
                   product_root="$gate_home/packaged-product"
                   product_home="$product_root/home"
                   product_config="$product_root/config"
@@ -2565,6 +2430,50 @@
                     "$product_appdata" \
                     "$product_localappdata"
                   chmod 0700 "$product_runtime"
+
+                  role_probe_root="$product_root/worker-role-probes"
+                  mkdir -p "$role_probe_root"
+                  for worker_role in script dynamic; do
+                    role_stdout="$role_probe_root/$worker_role.stdout"
+                    role_stderr="$role_probe_root/$worker_role.stderr"
+                    set +e
+                    "${pkgs.coreutils}/bin/env" -i \
+                      HOME="$product_home" \
+                      USERPROFILE="$product_home" \
+                      XDG_CONFIG_HOME="$product_config" \
+                      XDG_DATA_HOME="$product_data" \
+                      XDG_CACHE_HOME="$product_cache" \
+                      XDG_STATE_HOME="$product_state" \
+                      XDG_RUNTIME_DIR="$product_runtime" \
+                      TMPDIR="$product_tmp" \
+                      APPDATA="$product_appdata" \
+                      LOCALAPPDATA="$product_localappdata" \
+                      LANG=C \
+                      LC_ALL=C \
+                      RUST_LOG=info \
+                      "${pkgs.coreutils}/bin/timeout" --signal=TERM --kill-after=5s 30s \
+                      "$worker_binary" \
+                        --kind "$worker_role" \
+                        --exit-after-startup \
+                      >"$role_stdout" 2>"$role_stderr"
+                    role_status=$?
+                    set -e
+                    if [ "$role_status" -ne 0 ]; then
+                      echo "packaged $worker_role worker startup probe failed with status $role_status" >&2
+                      head -n 200 "$role_stderr" >&2
+                      exit 1
+                    fi
+                    if [ -s "$role_stdout" ]; then
+                      echo "packaged $worker_role worker polluted protocol stdout" >&2
+                      head -n 200 "$role_stdout" >&2
+                      exit 1
+                    fi
+                    if [ ! -s "$role_stderr" ]; then
+                      echo "packaged $worker_role worker emitted no out-of-band diagnostics" >&2
+                      exit 1
+                    fi
+                  done
+                  unset role_status role_stderr role_stdout worker_role
 
                   product_marker="worker-package-check-lua-marker-AR-13.1-26"
                   printf 'print("%s")\n' "$product_marker" > "$product_config/pokecon/init.lua"
@@ -2666,30 +2575,19 @@
                     exit 1
                   fi
 
-                  export POKECON_TEST_WORKER_BINARY="$worker_binary"
-                  export POKECON_TEST_FAULT_WORKER_BINARY="$fault_worker_binary"
-                  "$worker_startup_harness" --nocapture
-                  "$lifecycle_harness" --nocapture
-                  "$script_runtime_harness" \
-                    script_worker_executes_controller_serial_and_output_proxies \
-                    --exact --nocapture
-
                   printf '%s\n' \
                     "worker-package-check: PASS" \
                     "store_directory=$store_directory" \
                     "package=$canonical_package" \
-                    "harness=$canonical_harness" \
                     "application=$application" \
                     "worker=$worker_binary" \
                     "roles=script,dynamic" \
+                    "role_probes=exact-packaged-worker" \
                     "product_profile=$profile_root" \
-                    "test_profiles=per-test-temporary-roots" \
                     "product_resolution=exact-sibling-execve+lua-marker" \
-                    "ipc=framed-bidirectional" \
-                    "script_direction=controller+serial+output" \
-                    "dynamic_languages=python,lua" \
+                    "ipc=dynamic-init+log+cooperative-stop" \
+                    "dynamic_language=lua" \
                     "packaged_stop=cooperative" \
-                    "supervisor_fault_policy=source-built-fixture-force+generation-retention" \
                     "product_stdout=$product_stdout" \
                     "product_stderr=$product_stderr" \
                     "product_execve_trace=$product_trace"

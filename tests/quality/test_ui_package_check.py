@@ -2213,7 +2213,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "432d08fc92b760e99a7282f9476d0296db085b012546d0bd36a6ef387b9116a2"
+        == "3f5c2426aaab9ad88cc43edc2f3e1bf1caf83d66aa88c6a7194194e28c36977d"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3405,8 +3405,23 @@ offline = true
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
         == len(development_command_section_boundaries) + 6
     )
-    assert flake.count(development_provenance_assignment) == 17
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
+    assert flake.count(development_provenance_assignment) == 20
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 24
+    compatibility_cargo_build = (
+        "cargo build --locked --jobs 1 --package pokecon "
+        "--bin pokecon-worker --bin pokecon-compatibility"
+    )
+    flake_lines = flake.splitlines()
+    compatibility_cargo_build_indices = tuple(
+        line_index
+        for line_index, line in enumerate(flake_lines)
+        if compatibility_cargo_build in line
+    )
+    assert len(compatibility_cargo_build_indices) == 2
+    for line_index in compatibility_cargo_build_indices:
+        assert flake_lines[line_index - 1].strip() == (
+            f"{development_provenance_assignment} " + "\\"
+        )
     expected_development_cargo_invocations: dict[str, tuple[str, ...]] = {
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
@@ -3694,7 +3709,7 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "cd9333ac87edbf4db3e0ba5e0eb38ee57ace039a6f10bdf565546135df0c0463"
+        == "3dcb903b83598b96139da06a5ce937eb45192c5873c2a6406aee540aebf84669"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
@@ -3860,7 +3875,8 @@ offline = true
         "                    (\n"
         '                      cd "${cargoInvocationRoot}"\n'
         "                      ${assertNoCargoConfigAncestors}\n"
-        '                      "${rustToolchain}/bin/cargo" build \\\n'
+        "                      POKECON_RESOURCE_PROVENANCE=development \\\n"
+        '                        "${rustToolchain}/bin/cargo" build \\\n'
         '                        --manifest-path "$cargo_source_root/Cargo.toml" \\\n'
         "                        --locked \\\n"
         "                        --release \\\n"
@@ -3894,6 +3910,7 @@ offline = true
     assert tauri_section.count(cargo_bundle_adjacency) == 1
 
     resource_provenance_clear = "unset POKECON_RESOURCE_PROVENANCE"
+    worker_provenance = "POKECON_RESOURCE_PROVENANCE=development"
     worker_normalization = (
         '"${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \\\n'
         '                      --worker "$normalized_worker" \\\n'
@@ -3937,13 +3954,18 @@ offline = true
     )
     bundle_invocation = '"${pkgs.cargo-tauri}/bin/cargo-tauri" tauri bundle \\\n'
     assert tauri_section.count(resource_provenance_clear) == 1
-    assert tauri_section.count("POKECON_RESOURCE_PROVENANCE") == 2
+    assert tauri_section.count(worker_provenance) == 1
+    assert tauri_section.count("POKECON_RESOURCE_PROVENANCE") == 3
     provenance_lines = tuple(
         line.strip()
         for line in tauri_section.splitlines()
         if "POKECON_RESOURCE_PROVENANCE" in line
     )
-    assert provenance_lines == (resource_provenance_clear, provenance_export)
+    assert provenance_lines == (
+        resource_provenance_clear,
+        f"{worker_provenance} \\",
+        provenance_export,
+    )
     assert "$POKECON_RESOURCE_PROVENANCE" not in tauri_section
     assert "${POKECON_RESOURCE_PROVENANCE" not in tauri_section
     assert tauri_section.count("normalize_linux_elf.py") == 2
@@ -4012,7 +4034,7 @@ offline = true
     tauri_compile_boundary = tauri_section[tauri_compile_start:tauri_compile_end]
     assert (
         hashlib.sha256(tauri_compile_boundary.strip().encode()).hexdigest()
-        == "d4812f0214e8d20b2bb62dd32a4c951f9bb6f152ea2ca303849262641bfdc23e"
+        == "b0e77a4383bd3bc65829c610bdb0598dd558a3e9a465da1906a7de5c0bcb43da"
     )
     bundle_boundary_end = tauri_section.index(
         'while IFS= read -r -d "" package; do', bundle_boundary_start
@@ -15300,9 +15322,11 @@ runner = "scripts/attacker-runner.sh"
         FLAKE_SOURCE,
         '                      cd "${cargoInvocationRoot}"\n'
         "                      ${assertNoCargoConfigAncestors}\n"
-        '                      "${rustToolchain}/bin/cargo" build',
+        "                      POKECON_RESOURCE_PROVENANCE=development \\\n"
+        '                        "${rustToolchain}/bin/cargo" build',
         '                      cd "${cargoInvocationRoot}"\n'
-        '                      "${rustToolchain}/bin/cargo" build',
+        "                      POKECON_RESOURCE_PROVENANCE=development \\\n"
+        '                        "${rustToolchain}/bin/cargo" build',
     )
     omitted_setup_workdir_ancestor_config_guard = replace_once(
         FLAKE_SOURCE,

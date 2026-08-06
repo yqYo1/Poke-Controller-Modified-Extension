@@ -1193,6 +1193,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     build_stage = workflow[build_stage_start:build_stage_end]
     error_preference = "$PSNativeCommandUseErrorActionPreference = $true"
     provenance_clear = "$env:POKECON_RESOURCE_PROVENANCE = $null"
+    provenance_development = '$env:POKECON_RESOURCE_PROVENANCE = "development"'
     no_bytecode_current_process = '$env:PYTHONDONTWRITEBYTECODE = "1"'
     no_bytecode_later_steps = (
         '"PYTHONDONTWRITEBYTECODE=1" | Out-File -FilePath $env:GITHUB_ENV -Append'
@@ -1242,7 +1243,8 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     next_installer_step = "      - name: Build offline NSIS installer"
 
     assert build_stage.count(error_preference) == 1
-    assert workflow.count(provenance_clear) == 1
+    assert workflow.count(provenance_clear) == 2
+    assert workflow.count(provenance_development) == 1
     assert workflow.count(no_bytecode_current_process) == 1
     assert workflow.count(no_bytecode_later_steps) == 1
     assert build_stage.count(runtime_build) == 1
@@ -1261,13 +1263,18 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     ):
         assert workflow.count(identity_statement) == 1
     assert workflow.count(bundle_config_export) == 1
-    assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 2
+    assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 4
     provenance_lines = tuple(
         line.strip()
         for line in build_stage.splitlines()
         if "POKECON_RESOURCE_PROVENANCE" in line
     )
-    assert provenance_lines == (provenance_clear, provenance_export)
+    assert provenance_lines == (
+        provenance_clear,
+        provenance_development,
+        provenance_clear,
+        provenance_export,
+    )
     assert workflow.count("POKECON_BUNDLE_CONFIG") == 2
     bundle_config_lines = tuple(
         line.strip()
@@ -1305,6 +1312,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         error_preference,
         provenance_clear,
         runtime_build,
+        provenance_development,
         worker_build,
         stage_capture,
         stage_parse,
@@ -1325,7 +1333,9 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         < build_stage.index(no_bytecode_later_steps)
         < build_stage.index(runtime_build)
         < build_stage.index("$env:PYO3_PYTHON = $runtimePython")
+        < build_stage.index(provenance_development)
         < build_stage.index(worker_build)
+        < build_stage.index(provenance_clear, build_stage.index(worker_build))
         < build_stage.index(stage_capture)
     )
 

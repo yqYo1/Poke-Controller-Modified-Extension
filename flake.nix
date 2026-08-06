@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "233ae288775a6a8b1bf62def8dc950b1e75570386624f7a4c4b13b57be23d6b9";
+      canonicalFlakeHash = "4f7a2d045559cc71dd0b3c1b0c0a88da8fcbc43df6060e05d1772c42a354371c";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "9d4f85eb1514351519afcf960ecd8c47f0567912274deecb251a679bace44643";
+              expectedAuditTestHash = "d25430bf0f5b7ead674c61294daff0b2404e16b80acae205be06303223a275da";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -3469,7 +3469,8 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
-                cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
+                POKECON_RESOURCE_PROVENANCE=development \
+                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
                   --check \
@@ -3494,7 +3495,8 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
-                cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
+                POKECON_RESOURCE_PROVENANCE=development \
+                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
                 python -m scripts.compatibility.roll \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
@@ -3970,7 +3972,8 @@
                     (
                       cd "${cargoInvocationRoot}"
                       ${assertNoCargoConfigAncestors}
-                      "${rustToolchain}/bin/cargo" build \
+                      POKECON_RESOURCE_PROVENANCE=development \
+                        "${rustToolchain}/bin/cargo" build \
                         --manifest-path "$cargo_source_root/Cargo.toml" \
                         --locked \
                         --release \

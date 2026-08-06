@@ -155,7 +155,9 @@ jobs:
           $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
+          $env:POKECON_RESOURCE_PROVENANCE = "development"
           cargo build --locked --release --package pokecon --bin pokecon-worker
+          $env:POKECON_RESOURCE_PROVENANCE = $null
           $stageJson = python -m scripts.release.stage `
             --web web/dist `
             --worker target/release/pokecon-worker.exe `

@@ -14,16 +14,19 @@ path = "src/main.rs"
 [[bin]]
 name = "pokecon-worker"
 path = "src/bin/worker.rs"
+required-features = ["worker-binary"]
 
 [[bin]]
 name = "pokecon-compatibility"
 path = "src/bin/compatibility.rs"
+required-features = ["compatibility-tool"]
 
 [[bin]]
 name = "pokecon-worker-fault-fixture"
 path = "tests/fixtures/fault_worker.rs"
 test = false
 bench = false
+required-features = ["worker-test-fixture"]
 
 [[bin]]
 name = "generate_contracts"
@@ -37,7 +40,10 @@ required-features = ["contract-generator"]
 
 [features]
 default = []
+compatibility-tool = []
 contract-generator = []
+worker-binary = []
+worker-test-fixture = []
 
 [dependencies]
 async-trait.workspace = true

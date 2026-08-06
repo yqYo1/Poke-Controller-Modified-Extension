@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "4f7a2d045559cc71dd0b3c1b0c0a88da8fcbc43df6060e05d1772c42a354371c";
+      canonicalFlakeHash = "e05d45655a782cefb08e469a275e54b7f817f58f21e796411dde0d94bbd798bd";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "d25430bf0f5b7ead674c61294daff0b2404e16b80acae205be06303223a275da";
+              expectedAuditTestHash = "8a3b50635162dc8cb22b2cd80b1d03fc9c7cc6333686f7bbc3f9385a842d038e";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -485,7 +485,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "cb2f55bcc3f59c62a980cee0453be238fb5bf64ccb082ff412aeca5ca84b6791";
+            "rust/pokecon" = "ca44175b6670d791ab556b5bb6c898ef70eafeb25579dc90b7905e3a697404b0";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -2140,6 +2140,8 @@
               "--locked"
               "--package"
               "pokecon"
+              "--features"
+              "worker-binary"
               "--bin"
               "pokecon"
               "--bin"
@@ -2318,6 +2320,8 @@
                   "--no-run"
                   "--package"
                   "pokecon"
+                  "--features"
+                  "worker-binary,worker-test-fixture"
                   "--test"
                   "worker_startup"
                   "--test"
@@ -3470,7 +3474,7 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
                 POKECON_RESOURCE_PROVENANCE=development \
-                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
+                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility --features compatibility-tool,worker-binary
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
                   --check \
@@ -3496,7 +3500,7 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
                 POKECON_RESOURCE_PROVENANCE=development \
-                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility
+                  cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility --features compatibility-tool,worker-binary
                 python -m scripts.compatibility.roll \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
@@ -3978,7 +3982,8 @@
                         --locked \
                         --release \
                         --package pokecon \
-                        --bin pokecon-worker
+                        --bin pokecon-worker \
+                        --features worker-binary
                     )
                     normalized_bin="$workdir/normalized-bin"
                     worker="$CARGO_TARGET_DIR/release/pokecon-worker"

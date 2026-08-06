@@ -163,7 +163,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "cb2f55bcc3f59c62a980cee0453be238fb5bf64ccb082ff412aeca5ca84b6791",
+    "rust/pokecon": "ca44175b6670d791ab556b5bb6c898ef70eafeb25579dc90b7905e3a697404b0",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -262,16 +262,19 @@ path = "src/main.rs"
 [[bin]]
 name = "pokecon-worker"
 path = "src/bin/worker.rs"
+required-features = ["worker-binary"]
 
 [[bin]]
 name = "pokecon-compatibility"
 path = "src/bin/compatibility.rs"
+required-features = ["compatibility-tool"]
 
 [[bin]]
 name = "pokecon-worker-fault-fixture"
 path = "tests/fixtures/fault_worker.rs"
 test = false
 bench = false
+required-features = ["worker-test-fixture"]
 
 [[bin]]
 name = "generate_contracts"
@@ -285,7 +288,10 @@ required-features = ["contract-generator"]
 
 [features]
 default = []
+compatibility-tool = []
 contract-generator = []
+worker-binary = []
+worker-test-fixture = []
 
 [dependencies]
 async-trait.workspace = true
@@ -2213,7 +2219,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "3f5c2426aaab9ad88cc43edc2f3e1bf1caf83d66aa88c6a7194194e28c36977d"
+        == "e33384cc6f688bbd446537f6dc7a1aa9d7466f93b9402658a1b19711c10a7584"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2443,7 +2449,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "21e506524e5e6b0dc73faba9e2c07eeaad7ed9ce9c1692f996c8a20e49a91354"
+        == "065e5cfe0a71870f05d729ac06c9b0909a3a0186dc361c1a171bdff589187629"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -3065,11 +3071,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "a7707ec55b72e712dfaf7639311cedb49d171a11f567857e986e7c0d9112379a"
+        == "b1ea23c1b84866f6745126849a86d9317cc36e0360068bed17a745f38187996e"
     )
     assert package_section.count("${installControlledCargoManifests}") == 2
     assert package_section.count('"--locked"') == 1
-    assert '"--features"' not in package_section
+    assert package_section.count('"--features"') == 1
+    assert package_section.count('"worker-binary"') == 1
     assert 'test -f "${productionRoutingAudit}/passed"' in package_section
     assert 'RUSTC = "${rustToolchain}/bin/rustc";' in package_section
     assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in package_section
@@ -3268,7 +3275,7 @@ offline = true
     gate_cargo_home_section = flake[gate_cargo_config_end:gate_cargo_home_end]
     assert (
         hashlib.sha256(gate_cargo_home_section.strip().encode()).hexdigest()
-        == "41f29db56f614a425361a13daed2c93da612963dc2e8bca5b16b83785d2c0cb9"
+        == "9207dcc81935903fe42a5444660f1992ec9aa68494e0dd544961c1a55fa956a4"
     )
     assert (
         gate_cargo_home_section.count(
@@ -3409,7 +3416,8 @@ offline = true
     assert flake.count("POKECON_RESOURCE_PROVENANCE") == 24
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
-        "--bin pokecon-worker --bin pokecon-compatibility"
+        "--bin pokecon-worker --bin pokecon-compatibility "
+        "--features compatibility-tool,worker-binary"
     )
     flake_lines = flake.splitlines()
     compatibility_cargo_build_indices = tuple(
@@ -3709,7 +3717,7 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "3dcb903b83598b96139da06a5ce937eb45192c5873c2a6406aee540aebf84669"
+        == "bb7967c3943095d7fd33209ee1b4790f5bc0af6dc6ca9c52887e015aebcd768e"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
@@ -3881,7 +3889,8 @@ offline = true
         "                        --locked \\\n"
         "                        --release \\\n"
         "                        --package pokecon \\\n"
-        "                        --bin pokecon-worker\n"
+        "                        --bin pokecon-worker \\\n"
+        "                        --features worker-binary\n"
         "                    )"
     )
     application_cargo_build = (
@@ -3900,14 +3909,23 @@ offline = true
     )
     assert tauri_section.count(worker_cargo_build) == 1
     assert tauri_section.count(application_cargo_build) == 1
-    cargo_bundle_adjacency = (
+    cargo_bundle_invocation = (
         "${prepareTauriCargoInvocation}\n"
         "                    (\n"
         '                      export PATH="${rustToolchain}/bin:$PATH"\n'
         '                      cd "$cargo_source_root/rust/pokecon"\n'
         '                      "${pkgs.cargo-tauri}/bin/cargo-tauri" tauri bundle \\\n'
+        "                        --ci \\\n"
+        '                        --config "$bundle_config_json" \\\n'
+        "                        \"''${bundle_args[@]}\"\n"
+        "                    )"
     )
-    assert tauri_section.count(cargo_bundle_adjacency) == 1
+    assert tauri_section.count(cargo_bundle_invocation) == 1
+    cargo_bundle_start = tauri_section.index(cargo_bundle_invocation)
+    cargo_bundle_call = tauri_section[
+        cargo_bundle_start : cargo_bundle_start + len(cargo_bundle_invocation)
+    ]
+    assert "--features" not in cargo_bundle_call
 
     resource_provenance_clear = "unset POKECON_RESOURCE_PROVENANCE"
     worker_provenance = "POKECON_RESOURCE_PROVENANCE=development"
@@ -4034,7 +4052,7 @@ offline = true
     tauri_compile_boundary = tauri_section[tauri_compile_start:tauri_compile_end]
     assert (
         hashlib.sha256(tauri_compile_boundary.strip().encode()).hexdigest()
-        == "b0e77a4383bd3bc65829c610bdb0598dd558a3e9a465da1906a7de5c0bcb43da"
+        == "cabfffd59d95bfaf501407dce67897a1259f6510d38dc62f705fa474f5f5e3b0"
     )
     bundle_boundary_end = tauri_section.index(
         'while IFS= read -r -d "" package; do', bundle_boundary_start
@@ -4307,13 +4325,22 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
     assert "lib" not in manifest
     assert manifest["bin"] == [
         {"name": "pokecon", "path": "src/main.rs"},
-        {"name": "pokecon-worker", "path": "src/bin/worker.rs"},
-        {"name": "pokecon-compatibility", "path": "src/bin/compatibility.rs"},
+        {
+            "name": "pokecon-worker",
+            "path": "src/bin/worker.rs",
+            "required-features": ["worker-binary"],
+        },
+        {
+            "name": "pokecon-compatibility",
+            "path": "src/bin/compatibility.rs",
+            "required-features": ["compatibility-tool"],
+        },
         {
             "name": "pokecon-worker-fault-fixture",
             "path": "tests/fixtures/fault_worker.rs",
             "test": False,
             "bench": False,
+            "required-features": ["worker-test-fixture"],
         },
         {
             "name": "generate_contracts",
@@ -4326,6 +4353,13 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
             "required-features": ["contract-generator"],
         },
     ]
+    assert manifest["features"] == {
+        "default": [],
+        "compatibility-tool": [],
+        "contract-generator": [],
+        "worker-binary": [],
+        "worker-test-fixture": [],
+    }
     dependencies = manifest["dependencies"]
     assert isinstance(dependencies, dict)
     assert "pokecon-camera" not in dependencies
@@ -6947,6 +6981,8 @@ def test_packaged_worker_harness_is_store_cached_and_runtime_compile_free() -> N
         'RUSTC = "${rustToolchain}/bin/rustc";',
         'RUSTC_WRAPPER = "${pinnedRustcWrapper}";',
         '"--no-run"',
+        '"--features"',
+        '"worker-binary,worker-test-fixture"',
         '"worker_startup"',
         '"lifecycle"',
         '"script_runtime"',

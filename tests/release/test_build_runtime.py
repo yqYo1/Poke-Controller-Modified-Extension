@@ -1191,6 +1191,10 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         "      - name: Build offline NSIS installer", build_stage_start
     )
     build_stage = workflow[build_stage_start:build_stage_end]
+    installer_stage_end = workflow.index(
+        "      - name: Record Windows signing inputs", build_stage_end
+    )
+    installer_stage = workflow[build_stage_end:installer_stage_end]
     error_preference = "$PSNativeCommandUseErrorActionPreference = $true"
     provenance_clear = "$env:POKECON_RESOURCE_PROVENANCE = $null"
     provenance_development = '$env:POKECON_RESOURCE_PROVENANCE = "development"'
@@ -1200,7 +1204,8 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     )
     runtime_build = "python -m scripts.release.build_runtime `"
     worker_build = (
-        "cargo build --locked --release --package pokecon --bin pokecon-worker"
+        "cargo build --locked --release --package pokecon --bin pokecon-worker "
+        "--features worker-binary"
     )
     stage_capture = "$stageJson = python -m scripts.release.stage `"
     stage_command = (
@@ -1241,6 +1246,15 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         f"          {bundle_config_export}\n"
     )
     next_installer_step = "      - name: Build offline NSIS installer"
+    canonical_installer_stage = (
+        "      - name: Build offline NSIS installer\n"
+        "        shell: pwsh\n"
+        "        working-directory: rust/pokecon\n"
+        "        run: >-\n"
+        "          cargo tauri build --ci --bundles nsis\n"
+        "          --config $env:POKECON_BUNDLE_CONFIG\n"
+        "          -- --locked\n"
+    )
 
     assert build_stage.count(error_preference) == 1
     assert workflow.count(provenance_clear) == 2
@@ -1306,6 +1320,8 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         f"          {no_bytecode_later_steps}\n" in build_stage
     )
     assert build_stage.count(canonical_stage_identity_block) == 1
+    assert installer_stage == canonical_installer_stage
+    assert "--features" not in installer_stage
     post_bundle_config_export = build_stage.split(bundle_config_export, maxsplit=1)[1]
     assert not post_bundle_config_export.strip()
     ordered_statements = (

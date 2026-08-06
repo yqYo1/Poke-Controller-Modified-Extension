@@ -156,7 +156,7 @@ jobs:
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
           $env:POKECON_RESOURCE_PROVENANCE = "development"
-          cargo build --locked --release --package pokecon --bin pokecon-worker
+          cargo build --locked --release --package pokecon --bin pokecon-worker --features worker-binary
           $env:POKECON_RESOURCE_PROVENANCE = $null
           $stageJson = python -m scripts.release.stage `
             --web web/dist `

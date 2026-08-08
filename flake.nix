@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "c6996f839ce928df065ea6cc59194c393eb706498a5e5062fce4369d6218933d";
+      canonicalFlakeHash = "0fc187ca718032e96b8c2c2f436bf3744b389c7b0c6ae97c05000cc2ad05cd9c";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -356,7 +356,7 @@
             : "''${POKECON_RUST_REMAP_PYTHON:?POKECON_RUST_REMAP_PYTHON is required}"
             : "''${POKECON_RUST_REMAP_TARGET:?POKECON_RUST_REMAP_TARGET is required}"
             exec "$rustc" \
-              "--remap-path-prefix=${source}=/build/pokecon" \
+              "--remap-path-prefix=${repositorySource}=/build/pokecon" \
               "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" \
@@ -393,11 +393,196 @@
             mkdir -p "$out"
           '';
 
-          source =
+          sourceBoundaryPaths = rec {
+            product = [
+              "Cargo.lock"
+              "Cargo.toml"
+              "LICENSE"
+              "compatibility/fixed-manifest.json"
+              "pyproject.toml"
+              "rust/pokecon/Cargo.toml"
+              "rust/pokecon/build.rs"
+              "rust/pokecon/icons"
+              "rust/pokecon/linux"
+              "rust/pokecon/permissions"
+              "rust/pokecon/registry/protocol.json"
+              "rust/pokecon/registry/settings.json"
+              "rust/pokecon/src"
+              "rust/pokecon/tauri.conf.json"
+            ];
+            rustTest = product ++ [
+              ".gitignore"
+              ".github/workflows/compatibility-roll.yml"
+              ".github/workflows/normal-ci.yml"
+              ".github/workflows/package.yml"
+              ".github/workflows/release.yml"
+              "SPECIFICATION.md"
+              "api/openapi.json"
+              "compatibility"
+              "docs/ACCEPTANCE.md"
+              "flake.lock"
+              "flake.nix"
+              "generated"
+              "python/pokecon/typings"
+              "rust/pokecon/tests"
+              "rust-toolchain.toml"
+              "scripts"
+              "web/src/lib/api"
+            ];
+            web = [ "web" ];
+            api = [ "api" ];
+            python = [
+              "pyproject.toml"
+              "python"
+              "tests"
+              "uv.lock"
+            ];
+            documentation = [
+              "AGENTS.md"
+              "ARCHITECTURE_REVIEW.md"
+              "PLAN.md"
+              "README.md"
+              "SPECIFICATION.md"
+              "docs"
+            ];
+            quality = [
+              ".github"
+              ".gitignore"
+              ".markdownlint.json"
+              ".textlintrc.json"
+              "AGENTS.md"
+              "ARCHITECTURE_REVIEW.md"
+              "Cargo.lock"
+              "Cargo.toml"
+              "PLAN.md"
+              "README.md"
+              "SPECIFICATION.md"
+              "api"
+              "compatibility"
+              "docs"
+              "flake.lock"
+              "flake.nix"
+              "generated"
+              "pyproject.toml"
+              "python"
+              "ruff.toml"
+              "rust"
+              "rust-toolchain.toml"
+              "scripts"
+              "tests"
+              "treefmt.toml"
+              "uv.lock"
+              "web"
+            ];
+          };
+          optionalSourceBoundaryPaths = {
+            product = [ "rust/pokecon/capabilities" ];
+            rustTest = [ "rust/pokecon/capabilities" ];
+          };
+          mkScopedSource =
+            {
+              excludedPaths ? [ ],
+              name,
+              optionalPaths ? [ ],
+              paths,
+            }:
+            let
+              repositoryRoot = toString inputs.self.outPath;
+              validRelativePath =
+                relativePath:
+                relativePath != ""
+                && !(lib.hasPrefix "/" relativePath)
+                && builtins.all (component: component != "" && component != "." && component != "..") (
+                  lib.splitString "/" relativePath
+                );
+              normalizedRequiredPaths = lib.unique paths;
+              normalizedOptionalPaths = lib.unique optionalPaths;
+              normalizedPaths = lib.unique (normalizedRequiredPaths ++ normalizedOptionalPaths);
+              normalizedExcludedPaths = lib.unique excludedPaths;
+              requiredPathExists = relativePath: builtins.pathExists (inputs.self.outPath + "/${relativePath}");
+              pathIsSelected =
+                relativePath:
+                builtins.any (
+                  selectedPath: relativePath == selectedPath || lib.hasPrefix "${selectedPath}/" relativePath
+                ) normalizedPaths;
+              pathIsAncestor =
+                relativePath:
+                relativePath == ""
+                || builtins.any (selectedPath: lib.hasPrefix "${relativePath}/" selectedPath) normalizedPaths;
+              pathIsExcluded =
+                relativePath:
+                builtins.any (
+                  excludedPath: relativePath == excludedPath || lib.hasPrefix "${excludedPath}/" relativePath
+                ) normalizedExcludedPaths;
+            in
+            assert lib.assertMsg (normalizedPaths != [ ]) "scoped Nix source must select at least one path";
+            assert lib.assertMsg (builtins.all validRelativePath (
+              normalizedPaths ++ normalizedExcludedPaths
+            )) "scoped Nix source paths must be normalized repository-relative paths";
+            assert lib.assertMsg (builtins.all requiredPathExists (
+              normalizedRequiredPaths ++ normalizedExcludedPaths
+            )) "required scoped Nix source path is missing";
+            assert lib.assertMsg (builtins.all (
+              excludedPath: pathIsSelected excludedPath
+            ) normalizedExcludedPaths) "scoped Nix source exclusion must be contained by a selected path";
+            builtins.path {
+              path = inputs.self.outPath;
+              inherit name;
+              filter =
+                path: type:
+                let
+                  sourcePath = toString path;
+                  relativePath =
+                    if sourcePath == repositoryRoot then "" else lib.removePrefix "${repositoryRoot}/" sourcePath;
+                in
+                !(pathIsExcluded relativePath)
+                && (
+                  (type == "directory" && pathIsAncestor relativePath)
+                  || (type == "directory" && pathIsSelected relativePath)
+                  || (type == "regular" && pathIsSelected relativePath)
+                );
+            };
+          pokeconProductSource =
+            assert workspaceCargoInputsAreCanonical;
+            mkScopedSource {
+              excludedPaths = [ "rust/pokecon/src/tests" ];
+              name = "pokecon-product-source";
+              optionalPaths = optionalSourceBoundaryPaths.product;
+              paths = sourceBoundaryPaths.product;
+            };
+          rustTestSource =
+            assert workspaceCargoInputsAreCanonical;
+            mkScopedSource {
+              name = "pokecon-rust-test-source";
+              optionalPaths = optionalSourceBoundaryPaths.rustTest;
+              paths = sourceBoundaryPaths.rustTest;
+            };
+          webSource = mkScopedSource {
+            name = "pokecon-web-source";
+            paths = sourceBoundaryPaths.web;
+          };
+          apiSource = mkScopedSource {
+            name = "pokecon-api-source";
+            paths = sourceBoundaryPaths.api;
+          };
+          pythonSource = mkScopedSource {
+            name = "pokecon-python-source";
+            paths = sourceBoundaryPaths.python;
+          };
+          documentationSource = mkScopedSource {
+            name = "pokecon-documentation-source";
+            paths = sourceBoundaryPaths.documentation;
+          };
+          qualityContractSource = mkScopedSource {
+            name = "pokecon-quality-contract-source";
+            paths = sourceBoundaryPaths.quality;
+          };
+
+          repositorySource =
             assert workspaceCargoInputsAreCanonical;
             builtins.path {
               path = inputs.self.outPath;
-              name = "pokecon-source";
+              name = "pokecon-repository-source";
               filter =
                 path: type:
                 let
@@ -451,9 +636,9 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "d67928624174fbba2e8ca65510b25f87a280789de917a0bbfc6a5b8f338ab978";
+              expectedAuditTestHash = "c60fdcfabf583f4349b4396df647d501308b01d7cb6f1921300e7366e6c00dc5";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
-              filteredAuditTest = source + relativeAuditTest;
+              filteredAuditTest = repositorySource + relativeAuditTest;
             in
             assert
               (builtins.readDir (inputs.self.outPath + "/tests/quality"))."test_ui_package_check.py" == "regular"
@@ -727,32 +912,32 @@
               ''
 
                 [lib]
-                path = "${source}/rust/pokecon/src/lib.rs"
+                path = "${repositorySource}/rust/pokecon/src/lib.rs"
 
                 [features]
               ''
               (
                 replaceManifestString "pokecon primary binary target"
                   "[[bin]]\nname = \"pokecon\"\npath = \"src/main.rs\"\n"
-                  "[[bin]]\nname = \"pokecon\"\npath = \"${source}/rust/pokecon/src/main.rs\"\n"
+                  "[[bin]]\nname = \"pokecon\"\npath = \"${repositorySource}/rust/pokecon/src/main.rs\"\n"
                   (
                     replaceManifestString "pokecon build script" ''build = "build.rs"''
-                      ''build = "${source}/rust/pokecon/build.rs"''
+                      ''build = "${repositorySource}/rust/pokecon/build.rs"''
                       canonicalPokeconManifestText
                   )
               );
           expectedControlledPokeconManifest = canonicalPokeconManifest // {
             package = canonicalPokeconManifest.package // {
-              build = "${source}/rust/pokecon/build.rs";
+              build = "${repositorySource}/rust/pokecon/build.rs";
             };
             lib = {
-              path = "${source}/rust/pokecon/src/lib.rs";
+              path = "${repositorySource}/rust/pokecon/src/lib.rs";
             };
             bin = [
               (
                 (builtins.head canonicalPokeconManifest.bin)
                 // {
-                  path = "${source}/rust/pokecon/src/main.rs";
+                  path = "${repositorySource}/rust/pokecon/src/main.rs";
                 }
               )
             ]
@@ -854,12 +1039,12 @@
           '';
           controlledCargoSource = pkgs.runCommand "pokecon-controlled-cargo-source" { } ''
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
-            "${pkgs.coreutils}/bin/cp" -a -- "${source}/." "$out/"
+            "${pkgs.coreutils}/bin/cp" -a -- "${repositorySource}/." "$out/"
             if ! "${pkgs.diffutils}/bin/diff" \
               --brief \
               --recursive \
               --no-dereference \
-              -- "${source}" "$out"; then
+              -- "${repositorySource}" "$out"; then
               echo "controlled Cargo source copy differs before manifest overlay" >&2
               exit 2
             fi
@@ -924,7 +1109,7 @@
                   artifact_directory_lock_contender_fd \
                   artifact_directory_lock_probe \
                   artifact_directory_lock_probe_fd
-                cd "${source}"
+                cd "${repositorySource}"
                 "${pythonEnv}/bin/python" -I -m pytest \
                   -c "${auditPytestConfig}" \
                   --noconftest \
@@ -976,7 +1161,7 @@
                 PYTEST_ADDOPTS \
                 PYTEST_PLUGINS \
                 PYTHONPATH
-              cd "${source}"
+              cd "${repositorySource}"
 
               mutation_log_directory=
               mutation_worker_pids=()
@@ -1495,7 +1680,7 @@
               ${assertNoCargoConfigAncestors}
             )
             if ! "${pkgs.diffutils}/bin/cmp" -s -- \
-              "${source}/pyproject.toml" \
+              "${repositorySource}/pyproject.toml" \
               "$cargo_source_root/pyproject.toml"; then
               echo "tauri-build controlled pyproject.toml differs from the immutable source" >&2
               exit 2
@@ -1912,7 +2097,7 @@
             ${setupPerRunCargoTarget}
             ${setupUvLinks}
             workdir="$(mktemp -d)"
-            cp -a "${source}/." "$workdir/"
+            cp -a "${repositorySource}/." "$workdir/"
             chmod -R u+w "$workdir"
             cd "$workdir"
             ${assertNoCargoConfigAncestors}
@@ -1960,8 +2145,8 @@
           webBunDependencies = pkgs.stdenvNoCC.mkDerivation {
             pname = "pokecon-web-bun-dependencies";
             version = workspaceVersion;
-            src = source;
-            sourceRoot = "pokecon-source/web";
+            src = webSource;
+            sourceRoot = "pokecon-web-source/web";
             nativeBuildInputs = [
               bun
               pkgs.writableTmpDirAsHomeHook
@@ -1991,8 +2176,8 @@
           apiBunDependencies = pkgs.stdenvNoCC.mkDerivation {
             pname = "pokecon-api-bun-dependencies";
             version = workspaceVersion;
-            src = source;
-            sourceRoot = "pokecon-source/api";
+            src = apiSource;
+            sourceRoot = "pokecon-api-source/api";
             nativeBuildInputs = [
               bun
               pkgs.writableTmpDirAsHomeHook
@@ -2022,8 +2207,8 @@
           webPackage = pkgs.stdenvNoCC.mkDerivation {
             pname = "pokecon-web";
             version = workspaceVersion;
-            src = source;
-            sourceRoot = "pokecon-source/web";
+            src = webSource;
+            sourceRoot = "pokecon-web-source/web";
             nativeBuildInputs = [ bun ];
             POKECON_WEB_VERSION = workspaceVersion;
             SOURCE_DATE_EPOCH = "0";
@@ -2093,7 +2278,7 @@
                     UV_NO_CONFIG=1 \
                     XDG_CACHE_HOME="$TMPDIR/release-home/.cache" \
                     XDG_CONFIG_HOME="$TMPDIR/release-home/.config" \
-                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py" \
+                    "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py" \
                     --project "${controlledCargoSource}" \
                     --uv "${portableUvExecutionBinary}" \
                     --runtime-output "$out/python" \
@@ -2123,7 +2308,7 @@
           pokeconPackage = rustPlatform.buildRustPackage {
             pname = "pokecon";
             version = workspaceVersion;
-            src = source;
+            src = repositorySource;
             nativeBuildInputs = [
               pkgs.nasm
               pkgs.pkg-config
@@ -2348,11 +2533,11 @@
 
               check_cli_help \
                 "${self'.packages.pokecon}/bin/pokecon" \
-                "${source}/tests/fixtures/cli-help/pokecon.txt" \
+                "${repositorySource}/tests/fixtures/cli-help/pokecon.txt" \
                 pokecon
               check_cli_help \
                 "${self'.packages.pokecon}/bin/pokecon-worker" \
-                "${source}/tests/fixtures/cli-help/pokecon-worker.txt" \
+                "${repositorySource}/tests/fixtures/cli-help/pokecon-worker.txt" \
                 pokecon-worker
             '';
           };
@@ -2369,7 +2554,7 @@
               if pkgs.stdenv.isLinux then
                 ''
                   ${setupSourceGateEnvironment}
-                  cd "${source}"
+                  cd "${repositorySource}"
 
                   package_output="${self'.packages.pokecon}"
                   application="$package_output/bin/pokecon"
@@ -2649,7 +2834,7 @@
                 ''
                   ${setupSourceGateEnvironment}
                   "${pkgs.bash}/bin/bash" \
-                    "${source}/scripts/integration/ui_package_check.sh" \
+                    "${repositorySource}/scripts/integration/ui_package_check.sh" \
                     "${self'.packages.pokecon}" \
                     "${pkgs.python314}/bin/python3.14" \
                     ${lib.escapeShellArg builtins.storeDir} \
@@ -2658,10 +2843,10 @@
                     "${lib.makeBinPath [ pkgs.coreutils ]}" \
                     "${uiPackageSessionBusConfig}/share/dbus-1/session.conf" \
                     "${uiPackageSoftwareRenderer}" \
-                    "${source}/scripts/integration/proc_socket_evidence.py" \
-                    "${source}/scripts/integration/pidfd_signal.py" \
-                    "${source}/scripts/integration/ewmh_close_relay.py" \
-                    "${source}/api/openapi.json"
+                    "${repositorySource}/scripts/integration/proc_socket_evidence.py" \
+                    "${repositorySource}/scripts/integration/pidfd_signal.py" \
+                    "${repositorySource}/scripts/integration/ewmh_close_relay.py" \
+                    "${repositorySource}/api/openapi.json"
                 ''
               else
                 ''
@@ -3149,7 +3334,7 @@
                 mkdir -p "$fixture_root"
                 cp -R "${webBunDependencies}/node_modules" "$fixture_root/"
                 chmod -R u+w "$fixture_root/node_modules"
-                "${pythonEnv}/bin/python" "${source}/scripts/integration/editor_lsp_smoke.py" \
+                "${pythonEnv}/bin/python" "${repositorySource}/scripts/integration/editor_lsp_smoke.py" \
                   --fixture-root "$fixture_root" \
                   --rust-analyzer "${pkgs.rust-analyzer}/bin/rust-analyzer" \
                   --basedpyright "${pkgs.basedpyright}/bin/basedpyright-langserver" \
@@ -3189,7 +3374,7 @@
                 done < <("${pkgs.coreutils}/bin/env" -0)
                 unset ci_watch_entry ci_watch_name
                 cd "$repo_root"
-                exec "${pkgs.bash}/bin/bash" "${source}/scripts/ci-watch.sh" "$@"
+                exec "${pkgs.bash}/bin/bash" "${repositorySource}/scripts/ci-watch.sh" "$@"
               '';
             };
 
@@ -3207,7 +3392,7 @@
                 fi
                 cd "$repo_root"
                 ${setupCallerRustTaskEnvironment}
-                "${pkgs.bash}/bin/bash" "${source}/scripts/quality/check-workspace-lock.sh" "$@"
+                "${pkgs.bash}/bin/bash" "${repositorySource}/scripts/quality/check-workspace-lock.sh" "$@"
               '';
             };
 
@@ -3216,7 +3401,7 @@
               runtimeInputs = [ pkgs.actionlint ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 if [ "$#" -eq 0 ]; then
                   actionlint .github/workflows/*.yml
                 else
@@ -3233,7 +3418,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 python -m scripts.acceptance.records "$@"
               '';
@@ -3253,7 +3438,7 @@
                 fi
                 cd "$repo_root"
                 export PYTHONDONTWRITEBYTECODE=1
-                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/regions.py" "$@"
+                "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/ci/regions.py" "$@"
               '';
             };
 
@@ -3263,7 +3448,7 @@
               text = ''
                 ${setupSourceGateEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
-                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/aggregate.py" "$@"
+                "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/ci/aggregate.py" "$@"
               '';
             };
 
@@ -3273,7 +3458,7 @@
               text = ''
                 ${setupSourceGateEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
-                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/timing.py" "$@"
+                "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/ci/timing.py" "$@"
               '';
             };
 
@@ -3293,7 +3478,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
                 test -f "${productionRoutingAudit}/passed"
@@ -3469,7 +3654,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python -m scripts.compatibility.inventory --check "$@"
               '';
             };
@@ -3523,7 +3708,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python -m scripts.quality.source_guard "$@"
               '';
             };
@@ -3536,7 +3721,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python -m scripts.quality.source_filter "$@"
               '';
             };
@@ -3546,7 +3731,7 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python -m scripts.release.gate "$@"
               '';
             };
@@ -3559,7 +3744,7 @@
                 ${discoverRustWorktree}
                 cd "$caller_dir"
                 export PYTHONDONTWRITEBYTECODE=1
-                python -I "${source}/scripts/release/signing_manifest.py" "$@"
+                python -I "${repositorySource}/scripts/release/signing_manifest.py" "$@"
               '';
             };
 
@@ -3571,7 +3756,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python_files=("$@")
                 if [ "''${#python_files[@]}" -eq 0 ]; then
                   mapfile -t python_files < <(rg --files python scripts tests -g '*.py' -g '*.pyi')
@@ -3633,7 +3818,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 python_files=("$@")
                 if [ "''${#python_files[@]}" -eq 0 ]; then
                   mapfile -t python_files < <(rg --files python scripts tests -g '*.py' -g '*.pyi')
@@ -3651,7 +3836,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 bun --bun "${basedpyrightCli}"
               '';
@@ -3669,9 +3854,9 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
-                export PYTHONPATH="${source}/python:${source}"
+                export PYTHONPATH="${repositorySource}/python:${repositorySource}"
                 export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"
                 pytest_arguments=("$@")
                 if [ "''${#pytest_arguments[@]}" -eq 0 ]; then
@@ -3999,7 +4184,7 @@
                     normalized_worker="$normalized_bin/pokecon-worker"
                     mkdir -p "$normalized_bin"
                     cp -p "$worker" "$normalized_worker"
-                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \
+                    "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/normalize_linux_elf.py" \
                       --worker "$normalized_worker" \
                       --python-root "$release_python" \
                       --patchelf "${pkgs.patchelf}/bin/patchelf" \
@@ -4009,7 +4194,7 @@
                     bundle_root="$workdir/bundle-resources"
                     bundle_config="$workdir/tauri.bundle.json"
                     if ! stage_report_json="$(
-                      "${pythonEnv}/bin/python" -I "${source}/scripts/release/stage.py" \
+                      "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/stage.py" \
                         --web "${webPackage}" \
                         --worker "$normalized_worker" \
                         --uv "${portableUvBinary}" \
@@ -4090,7 +4275,7 @@
                     application_backup="$normalized_bin/pokecon.raw"
                     cp -p "$application" "$application_backup"
                     cp -p "$application" "$normalized_application"
-                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \
+                    "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/normalize_linux_elf.py" \
                       --application "$normalized_application" \
                       --patchelf "${pkgs.patchelf}/bin/patchelf" \
                       --strip "${pkgs.binutils}/bin/strip" \
@@ -4255,7 +4440,7 @@
                       echo "tauri-build Debian package is not a real regular file: $package" >&2
                       exit 2
                     fi
-                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_debian_package.py" \
+                    "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/normalize_debian_package.py" \
                       --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
                       "$package"
                     if ! artifact_parent_identity_is_current \
@@ -4397,7 +4582,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                export PYTHONPATH="${source}"
+                export PYTHONPATH="${repositorySource}"
                 unset LD_LIBRARY_PATH
                 python -m scripts.release.package_smoke \
                   --dpkg-deb "${pkgs.dpkg}/bin/dpkg-deb" \
@@ -4483,7 +4668,7 @@
                   fi
                 fi
                 export POKECON_DOCKER="${pkgs.docker-client}/bin/docker"
-                "${pkgs.bash}/bin/bash" "${source}/scripts/release/debian_install_smoke.sh" "$@"
+                "${pkgs.bash}/bin/bash" "${repositorySource}/scripts/release/debian_install_smoke.sh" "$@"
               '';
             };
 
@@ -4510,7 +4695,7 @@
               runtimeInputs = [ pkgs.typos ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 typos "$@"
               '';
             };
@@ -4520,7 +4705,7 @@
               runtimeInputs = [ pkgs.typos ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 typos "$@"
               '';
             };
@@ -4534,7 +4719,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 markdown_files=("$@")
                 if [ "''${#markdown_files[@]}" -eq 0 ]; then
                   mapfile -t markdown_files < <(rg --files -g '*.md')
@@ -4552,7 +4737,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 markdown_files=("$@")
                 if [ "''${#markdown_files[@]}" -eq 0 ]; then
                   mapfile -t markdown_files < <(rg --files -g '*.md')
@@ -4571,7 +4756,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 text_files=("$@")
                 if [ "''${#text_files[@]}" -eq 0 ]; then
@@ -4591,7 +4776,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 text_files=("$@")
                 if [ "''${#text_files[@]}" -eq 0 ]; then
@@ -4609,7 +4794,7 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
-                cd "${source}"
+                cd "${repositorySource}"
                 if python -m scripts.quality.source_guard web --require-applicable; then
                   workdir="$gate_home/web"
                   mkdir -p "$workdir"
@@ -4692,7 +4877,7 @@
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
                 # shellcheck disable=SC2016
                 "${pythonEnv}/bin/python" -I \
-                  "${source}/scripts/quality/run_parallel_checks.py" \
+                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \
                   rust-and-contracts \
                   "${pkgs.bash}/bin/bash" -euo pipefail -c '
                     export POKECON_RESOURCE_PROVENANCE=development
@@ -4732,7 +4917,7 @@
                   aggregate_mutation_workers=3
                 fi
                 "${pythonEnv}/bin/python" -I \
-                  "${source}/scripts/quality/run_parallel_checks.py" \
+                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \
                   pytest \
                   python -m pytest \
                   -p no:cacheprovider \

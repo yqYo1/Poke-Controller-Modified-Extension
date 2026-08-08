@@ -1448,7 +1448,7 @@ def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     assert "PYTHONNOUSERSITE=1" in flake
     assert "PYTHONSAFEPATH=1" in flake
     assert (
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py"'
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py"'
         in flake
     )
     assert '--project "${controlledCargoSource}"' in flake
@@ -1477,14 +1477,14 @@ def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     assert 'LDFLAGS="-L${linuxReleaseRuntimeLibraries}' not in flake
     assert 'CFLAGS="-I${pkgs.portaudio}/include' not in flake
     assert 'LDFLAGS="-L${pkgs.portaudio}/lib' not in flake
-    assert 'cp -a "${source}/." "$workdir/"' in flake
+    assert 'cp -a "${repositorySource}/." "$workdir/"' in flake
     assert 'release_workdir="$gate_home/pokecon-release-workdir"' in flake
     assert 'export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
     assert 'export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
     assert 'export POKECON_RUST_REMAP_SOURCE="${controlledCargoSource}"' in flake
     assert 'export POKECON_RUST_REMAP_PYTHON="$release_python"' in flake
     assert 'export RUSTC_WRAPPER="${reproducibleRustcWrapper}"' in flake
-    assert "--remap-path-prefix=${source}=/build/pokecon" in flake
+    assert "--remap-path-prefix=${repositorySource}=/build/pokecon" in flake
     assert "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" in flake
     assert "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" in flake
     assert "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" in flake

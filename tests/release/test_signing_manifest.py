@@ -286,4 +286,7 @@ def test_package_and_release_workflows_preserve_signing_manifests() -> None:
     assert "dist/signing-inputs-linux-x86_64.json" in release
     assert "dist/signing-inputs-windows-x86_64.json" in release
     assert "signing-input-manifest = mkTask {" in flake
-    assert 'python -I "${source}/scripts/release/signing_manifest.py" "$@"' in flake
+    assert (
+        'python -I "${repositorySource}/scripts/release/signing_manifest.py" "$@"'
+        in flake
+    )

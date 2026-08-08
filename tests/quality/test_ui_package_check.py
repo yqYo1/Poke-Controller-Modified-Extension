@@ -2275,7 +2275,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "b612a060d82c7f2a2ad1d68ad9e6db67358abb402c3ff191ddc26dabfa166179"
+        == "3a06904988d514b16bb30d6f50fcebf184862b5403017a906250f7583e14bcb8"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2427,14 +2427,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     reproducible_wrapper = flake[reproducible_wrapper_start:pinned_wrapper_start]
     assert (
         hashlib.sha256(reproducible_wrapper.strip().encode()).hexdigest()
-        == "ba283b0613e626069d43dfa85da25b4e96083947ad0fc4c291ffdbe95fdda8b7"
+        == "29cda22305e8fe004792fb2257fa86f7d88b9a6c5a72631d5a9e476360ba8bed"
     )
     for wrapper_proof in (
         'if [ "$#" -lt 1 ]; then',
         'rustc="$1"',
         'if [ "$rustc" != "${rustToolchain}/bin/rustc" ]; then',
         'exec "$rustc"',
-        '"--remap-path-prefix=${source}=/build/pokecon"',
+        '"--remap-path-prefix=${repositorySource}=/build/pokecon"',
         '"--remap-path-prefix=${controlledCargoSource}=/build/pokecon"',
         '"--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon"',
     ):
@@ -2464,7 +2464,9 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         'exec "$compiler"'
     )
 
-    cargo_invocation_root_end = flake.index("source =", cargo_invocation_root_start)
+    cargo_invocation_root_end = flake.index(
+        "sourceBoundaryPaths =", cargo_invocation_root_start
+    )
     cargo_invocation_root = flake[cargo_invocation_root_start:cargo_invocation_root_end]
     assert (
         hashlib.sha256(cargo_invocation_root.strip().encode()).hexdigest()
@@ -2479,20 +2481,87 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert cargo_invocation_root.count('mkdir -p "$out"') == 1
     assert "!(workspaceManifest ? patch) && !(workspaceManifest ? replace)" in flake
 
-    source_filter_start = flake.index("source =", cargo_invocation_root_end)
+    source_filter_start = flake.index(
+        "sourceBoundaryPaths =", cargo_invocation_root_end
+    )
     source_filter_end = flake.index("productionRoutingAuditTest =", source_filter_start)
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "84a195661ddb9c3f5284bc0a30ac1d207d89078c506b906ebcfb79f01e5c5596"
+        == "0beb3bfebaf18475bc940cdfe7089584031d82cb0af4330f7a331b187c2a8ef5"
     )
-    assert source_filter_section.count('type == "directory"') == 1
-    assert source_filter_section.count('type == "regular"') == 1
-    assert source_filter_section.count('lib.hasSuffix ".json5" sourcePath') == 1
+    scoped_source_start = source_filter_section.index("mkScopedSource =")
+    repository_source_start = source_filter_section.index("repositorySource =")
+    scoped_source_section = source_filter_section[
+        scoped_source_start:repository_source_start
+    ]
+    repository_source_section = source_filter_section[repository_source_start:]
+    assert scoped_source_section.count('type == "directory"') == 2
+    assert scoped_source_section.count('type == "regular"') == 1
+    assert "lib.hasSuffix" not in scoped_source_section
+    assert repository_source_section.count('type == "directory"') == 1
+    assert repository_source_section.count('type == "regular"') == 1
+    assert repository_source_section.count('lib.hasSuffix ".json5" sourcePath') == 1
     assert (
-        source_filter_section.count('sourcePath == "${inputs.self.outPath}/LICENSE"')
+        repository_source_section.count(
+            'sourcePath == "${inputs.self.outPath}/LICENSE"'
+        )
         == 1
     )
+    for scoped_source_proof in (
+        "sourceBoundaryPaths = rec {",
+        'web = [ "web" ];',
+        'api = [ "api" ];',
+        "mkScopedSource =",
+        "builtins.all requiredPathExists",
+        "normalizedPaths ++ normalizedExcludedPaths",
+        'excludedPaths = [ "rust/pokecon/src/tests" ];',
+        'name = "pokecon-product-source";',
+        'name = "pokecon-rust-test-source";',
+        'name = "pokecon-web-source";',
+        'name = "pokecon-api-source";',
+        'name = "pokecon-python-source";',
+        'name = "pokecon-documentation-source";',
+        'name = "pokecon-quality-contract-source";',
+        'name = "pokecon-repository-source";',
+    ):
+        assert source_filter_section.count(scoped_source_proof) == 1, (
+            scoped_source_proof
+        )
+    product_boundary_start = source_filter_section.index("product = [")
+    rust_test_boundary_start = source_filter_section.index(
+        "rustTest = product ++ [", product_boundary_start
+    )
+    product_boundary = source_filter_section[
+        product_boundary_start:rust_test_boundary_start
+    ]
+    for product_input in (
+        '"rust/pokecon/registry/protocol.json"',
+        '"rust/pokecon/registry/settings.json"',
+        '"rust/pokecon/src"',
+    ):
+        assert product_boundary.count(product_input) == 1, product_input
+    for test_only_product_input in (
+        '"generated/lua/pokecon.d.lua"',
+        '"python/pokecon/typings/__init__.pyi"',
+        '"rust/pokecon/registry"',
+        '"rust/pokecon/signing-targets.json"',
+    ):
+        assert test_only_product_input not in product_boundary
+    rust_test_boundary_end = source_filter_section.index(
+        'web = [ "web" ];', rust_test_boundary_start
+    )
+    rust_test_boundary = source_filter_section[
+        rust_test_boundary_start:rust_test_boundary_end
+    ]
+    for rust_test_input in (
+        '"generated"',
+        '"python/pokecon/typings"',
+        '"rust/pokecon/tests"',
+        '"scripts"',
+        '"web/src/lib/api"',
+    ):
+        assert rust_test_boundary.count(rust_test_input) == 1, rust_test_input
 
     workspace_provenance_start = flake.index(
         "workspaceMemberPaths =", source_filter_end
@@ -2529,12 +2598,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(controlled_manifest_section.strip().encode()).hexdigest()
-        == "331f085428d0ad0507637b42271372b78f89a5aa02bc69784a166aac24cab576"
+        == "209e89021601a45fde6b99847092c616ed42a90e3b493fd2816fe6486bdbcffc"
     )
     for exact_overlay_path, expected_count in (
-        ('path = "${source}/rust/pokecon/src/lib.rs"', 2),
-        ('path = \\"${source}/rust/pokecon/src/main.rs\\"', 1),
-        ('build = "${source}/rust/pokecon/build.rs"', 2),
+        ('path = "${repositorySource}/rust/pokecon/src/lib.rs"', 2),
+        ('path = \\"${repositorySource}/rust/pokecon/src/main.rs\\"', 1),
+        ('build = "${repositorySource}/rust/pokecon/build.rs"', 2),
     ):
         assert (
             controlled_manifest_section.count(exact_overlay_path) == expected_count
@@ -2578,7 +2647,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     audit_section = flake[audit_start:audit_end]
     assert (
         hashlib.sha256(audit_section.strip().encode()).hexdigest()
-        == "623da76a199fe96a17bc299aacdbeea482580d766b31d16ddba45c06a69e5214"
+        == "dcde20876dd28e62584906428d9a8a2b6f38c6806807e6dc3168c58db08b7c8a"
     )
     assert (
         audit_section.count('pkgs.runCommand "pokecon-production-routing-audit"') == 1
@@ -2628,7 +2697,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_runner_section = flake[mutation_runner_start:mutation_runner_end]
     assert (
         hashlib.sha256(mutation_runner_section.strip().encode()).hexdigest()
-        == "abb5e87c7028baccb0e57560959c38915bc470df8b141fdbdbd72ef5cf406bed"
+        == "d99000bc5940e39d7c4dfd35ea2056f6ca000c132a2dc689dd8e4399f97af9b2"
     )
     for mutation_runner_proof in (
         'name = "pokecon-production-routing-mutation-audit";',
@@ -2799,7 +2868,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_boundary = flake[ancestor_config_guard_end:tauri_boundary_end]
     assert (
         hashlib.sha256(tauri_boundary.strip().encode()).hexdigest()
-        == "90bdf3e7ae3cb836bc89c3f6ba72e12b7d1d26fc868973989e5795d8737b1da3"
+        == "4e9abb7cf86211132bd5d11f0666cf00c0e26cf12d78c0a4e2bad6d17848347e"
     )
     tauri_invocation_boundary_start = tauri_boundary.index(
         "prepareTauriCargoInvocation ="
@@ -3020,7 +3089,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     setup_workdir = flake[setup_workdir_start:setup_workdir_end]
     assert (
         hashlib.sha256(setup_workdir.strip().encode()).hexdigest()
-        == "24eda15cba1fe91db390a1b52049e19b73ae1e11d5fb7cd222669f2eb13efd76"
+        == "6c5af84420cec19c7e7950e56106b7b968f1328b213757b6c072d5a719916347"
     )
     assert setup_workdir.count("${assertNoCargoConfigAncestors}") == 1
     for composed_cleanup_proof in (
@@ -3038,15 +3107,32 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "          '';"
     ) in setup_workdir
 
-    web_package_start = flake.index("webPackage = pkgs.stdenvNoCC.mkDerivation")
+    web_dependencies_start = flake.index(
+        "webBunDependencies = pkgs.stdenvNoCC.mkDerivation"
+    )
+    api_dependencies_start = flake.index(
+        "apiBunDependencies = pkgs.stdenvNoCC.mkDerivation",
+        web_dependencies_start,
+    )
+    web_dependencies_section = flake[web_dependencies_start:api_dependencies_start]
+    assert web_dependencies_section.count("src = webSource;") == 1
+    assert web_dependencies_section.count('sourceRoot = "pokecon-web-source/web";') == 1
+    web_package_start = flake.index(
+        "webPackage = pkgs.stdenvNoCC.mkDerivation", api_dependencies_start
+    )
+    api_dependencies_section = flake[api_dependencies_start:web_package_start]
+    assert api_dependencies_section.count("src = apiSource;") == 1
+    assert api_dependencies_section.count('sourceRoot = "pokecon-api-source/api";') == 1
     runtime_package_start = flake.index("linuxReleaseRuntime =", web_package_start)
     web_package_section = flake[web_package_start:runtime_package_start]
     assert (
         hashlib.sha256(web_package_section.strip().encode()).hexdigest()
-        == "a7339b708c39a8fe546cdb917916d6cbd03085026e63908cda1755651c1505a8"
+        == "761cdafb6e1272192602292298485d8b28f7bd924450da0e66804f052c68f4fa"
     )
     assert web_package_section.count("POKECON_WEB_VERSION = workspaceVersion;") == 1
     assert web_package_section.count('SOURCE_DATE_EPOCH = "0";') == 1
+    assert web_package_section.count("src = webSource;") == 1
+    assert web_package_section.count('sourceRoot = "pokecon-web-source/web";') == 1
 
     runtime_package_end = flake.index(
         "pokeconPackage = rustPlatform.buildRustPackage", runtime_package_start
@@ -3054,7 +3140,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     runtime_package_section = flake[runtime_package_start:runtime_package_end]
     assert (
         hashlib.sha256(runtime_package_section.strip().encode()).hexdigest()
-        == "5bbbb6dfb4067d4c605cc1869f71d16ffb890d67e66459f993cdbb13f9e70d20"
+        == "48aa83a9478779710e4e9d7e90c50b1b530121c93e356f9e7af44154b0383f0e"
     )
     runtime_output_hash = (
         'outputHash = "sha256-/oX5m7mZkIwXl383NXN4qc2qGnfsJSlPMgVKMrurSmY=";'
@@ -3073,7 +3159,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     for runtime_package_proof in (
         'if system == "x86_64-linux" then',
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py"',
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py"',
         '--project "${controlledCargoSource}"',
         '--uv "${portableUvExecutionBinary}"',
         '--execution-loader "${portableUvExecutionLoader}"',
@@ -3108,7 +3194,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         '"${pkgs.coreutils}/bin/env" -i \\\n'
     )
     runtime_builder_start = runtime_package_section.index(
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py"',
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py"',
         runtime_environment_start,
     )
     runtime_environment_section = runtime_package_section[
@@ -3128,7 +3214,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "b1ea23c1b84866f6745126849a86d9317cc36e0360068bed17a745f38187996e"
+        == "b430d8049a6584a241ace9769ba6ec7cfe06b93d94979ae95b016d7cc71a6282"
     )
     assert package_section.count("${installControlledCargoManifests}") == 2
     assert package_section.count('"--locked"') == 1
@@ -3466,7 +3552,7 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "26ec09b758abcff7959b6ebfca6b6f15451d35adf8ad8a3d450532d66e3f8583"
+        == "f396c3dcfe5b8ea5a2465cdbeb596a99980a424a17feeaaaa567914a9008a44f"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3596,7 +3682,7 @@ offline = true
         == 1
     )
     parallel_checks_start = '                "${pythonEnv}/bin/python" -I \\\n'
-    parallel_runner = '"${source}/scripts/quality/run_parallel_checks.py"'
+    parallel_runner = '"${repositorySource}/scripts/quality/run_parallel_checks.py"'
     assert check_commands.count(parallel_checks_start) == 2
     assert check_commands.count(parallel_runner) == 2
     rust_lane = section(
@@ -3640,7 +3726,7 @@ offline = true
     assert "bun run --cwd web" not in rust_lane
     pytest_and_mutation_wave = (
         '                "${pythonEnv}/bin/python" -I \\\n'
-        '                  "${source}/scripts/quality/run_parallel_checks.py" \\\n'
+        '                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \\\n'
         "                  pytest \\\n"
         "                  python -m pytest \\\n"
         "                  -p no:cacheprovider \\\n"
@@ -3803,7 +3889,7 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "bb7967c3943095d7fd33209ee1b4790f5bc0af6dc6ca9c52887e015aebcd768e"
+        == "8847901780d8fa5fdfbaced0f3a164a3ff3a5850f79275a5f3d5e32a28810ee0"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
@@ -4017,7 +4103,7 @@ offline = true
     resource_provenance_clear = "unset POKECON_RESOURCE_PROVENANCE"
     worker_provenance = "POKECON_RESOURCE_PROVENANCE=development"
     worker_normalization = (
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \\\n'
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/normalize_linux_elf.py" \\\n'
         '                      --worker "$normalized_worker" \\\n'
         '                      --python-root "$release_python" \\\n'
         '                      --patchelf "${pkgs.patchelf}/bin/patchelf" \\\n'
@@ -4027,7 +4113,7 @@ offline = true
     )
     stage_capture = 'if ! stage_report_json="$('
     stage_command = (
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/stage.py" \\\n'
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/stage.py" \\\n'
         '                        --web "${webPackage}" \\\n'
         '                        --worker "$normalized_worker" \\\n'
         '                        --uv "${portableUvBinary}" \\\n'
@@ -4050,7 +4136,7 @@ offline = true
         "                    )"
     )
     application_normalization = (
-        '"${pythonEnv}/bin/python" -I "${source}/scripts/release/normalize_linux_elf.py" \\\n'
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/normalize_linux_elf.py" \\\n'
         '                      --application "$normalized_application" \\\n'
         '                      --patchelf "${pkgs.patchelf}/bin/patchelf" \\\n'
         '                      --strip "${pkgs.binutils}/bin/strip" \\\n'
@@ -4139,7 +4225,7 @@ offline = true
     tauri_compile_boundary = tauri_section[tauri_compile_start:tauri_compile_end]
     assert (
         hashlib.sha256(tauri_compile_boundary.strip().encode()).hexdigest()
-        == "cabfffd59d95bfaf501407dce67897a1259f6510d38dc62f705fa474f5f5e3b0"
+        == "6282ec84e77b4ca0279d6cf00fad5d657e177f337c98ebf01a4c2f538e9ae55b"
     )
     bundle_boundary_end = tauri_section.index(
         'while IFS= read -r -d "" package; do', bundle_boundary_start
@@ -8105,10 +8191,10 @@ def test_openapi_runtime_inventory_is_canonical_complete_and_valid_bash() -> Non
     task_start = flake.index("uiPackageCheck = mkTask {")
     task_end = flake.index("\n        in\n", task_start)
     ui_task = flake[task_start:task_end]
-    assert ui_task.count('"${source}/api/openapi.json"') == 1
-    assert ui_task.index('"${source}/scripts/integration/ewmh_close_relay.py"') < (
-        ui_task.index('"${source}/api/openapi.json"')
-    )
+    assert ui_task.count('"${repositorySource}/api/openapi.json"') == 1
+    assert ui_task.index(
+        '"${repositorySource}/scripts/integration/ewmh_close_relay.py"'
+    ) < (ui_task.index('"${repositorySource}/api/openapi.json"'))
     assert gate.count('if [ "$#" -ne 12 ]') == 2
     assert (
         "usage: ui_package_check.sh PACKAGE PYTHON STORE GATE_ROOT BASH "
@@ -15262,17 +15348,17 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_pokecon_lib_overlay = replace_once(
         FLAKE_SOURCE,
-        'path = "${source}/rust/pokecon/src/lib.rs"',
+        'path = "${repositorySource}/rust/pokecon/src/lib.rs"',
         'path = "src/alternate.rs"',
     )
     redirected_pokecon_main_overlay = replace_once(
         FLAKE_SOURCE,
-        'path = \\"${source}/rust/pokecon/src/main.rs\\"',
+        'path = \\"${repositorySource}/rust/pokecon/src/main.rs\\"',
         'path = \\"src/alternate-main.rs\\"',
     )
     redirected_pokecon_build_overlay = replace_once(
         FLAKE_SOURCE,
-        'build = "${source}/rust/pokecon/build.rs"',
+        'build = "${repositorySource}/rust/pokecon/build.rs"',
         'build = "build.rs"',
     )
     redirected_controlled_dependency = replace_once(
@@ -15342,7 +15428,7 @@ runner = "scripts/attacker-runner.sh"
         "          pokeconPackage = rustPlatform.buildRustPackage {\n"
         '            pname = "pokecon";\n'
         "            version = workspaceVersion;\n"
-        "            src = source;\n",
+        "            src = repositorySource;\n",
         "          pokeconPackage = rustPlatform.buildRustPackage {\n"
         '            pname = "pokecon";\n'
         "            version = workspaceVersion;\n"
@@ -16115,7 +16201,7 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_runtime_script = replace_once(
         FLAKE_SOURCE,
-        '"${source}/scripts/release/build_runtime.py"',
+        '"${repositorySource}/scripts/release/build_runtime.py"',
         '"/tmp/attacker-build-runtime.py"',
     )
     redirected_runtime_project = replace_once(
@@ -16150,7 +16236,7 @@ runner = "scripts/attacker-runner.sh"
         FLAKE_SOURCE,
         '                    release_python="${linuxReleaseRuntime}/python"\n',
         '                    release_python="$workdir/python"\n'
-        '                    "${pythonEnv}/bin/python" -I "${source}/scripts/release/build_runtime.py"\n',
+        '                    "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py"\n',
     )
     omitted_tauri_target_reset = replace_once(
         FLAKE_SOURCE,
@@ -16175,7 +16261,7 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_controlled_source_input = replace_once(
         FLAKE_SOURCE,
-        '            "${pkgs.coreutils}/bin/cp" -a -- "${source}/." "$out/"\n',
+        '            "${pkgs.coreutils}/bin/cp" -a -- "${repositorySource}/." "$out/"\n',
         '            "${pkgs.coreutils}/bin/cp" -a -- /tmp/attacker-source/. "$out/"\n',
     )
     omitted_controlled_source_diff = replace_once(
@@ -17910,9 +17996,9 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
         "pkgs.findutils",
         '"${uiPackageSessionBusConfig}/share/dbus-1/session.conf"',
         '"${uiPackageSoftwareRenderer}"',
-        '"${source}/scripts/integration/proc_socket_evidence.py"',
-        '"${source}/scripts/integration/pidfd_signal.py"',
-        '"${source}/scripts/integration/ewmh_close_relay.py"',
+        '"${repositorySource}/scripts/integration/proc_socket_evidence.py"',
+        '"${repositorySource}/scripts/integration/pidfd_signal.py"',
+        '"${repositorySource}/scripts/integration/ewmh_close_relay.py"',
         "pkgs.jq",
         "pkgs.xdotool",
         "pkgs.xprop",
@@ -17938,14 +18024,21 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
     assert package.count('ln -s ../web "$out/bin/web"') == 1
     assert flake.count("uiPackageSoftwareRenderer = pkgs.mesa;") == 1
     assert gate.count('"${uiPackageSoftwareRenderer}"') == 1
-    assert gate.count('"${source}/scripts/integration/proc_socket_evidence.py"') == 1
-    assert gate.count('"${source}/scripts/integration/pidfd_signal.py"') == 1
-    assert gate.count('"${source}/scripts/integration/ewmh_close_relay.py"') == 1
+    assert (
+        gate.count('"${repositorySource}/scripts/integration/proc_socket_evidence.py"')
+        == 1
+    )
+    assert gate.count('"${repositorySource}/scripts/integration/pidfd_signal.py"') == 1
+    assert (
+        gate.count('"${repositorySource}/scripts/integration/ewmh_close_relay.py"') == 1
+    )
     assert (
         gate.index('"${uiPackageSoftwareRenderer}"')
-        < gate.index('"${source}/scripts/integration/proc_socket_evidence.py"')
-        < gate.index('"${source}/scripts/integration/pidfd_signal.py"')
-        < gate.index('"${source}/scripts/integration/ewmh_close_relay.py"')
+        < gate.index(
+            '"${repositorySource}/scripts/integration/proc_socket_evidence.py"'
+        )
+        < gate.index('"${repositorySource}/scripts/integration/pidfd_signal.py"')
+        < gate.index('"${repositorySource}/scripts/integration/ewmh_close_relay.py"')
     )
     assert "ui-package-check = uiPackageCheck;" in flake
     assert "patchelf --add-rpath" in flake

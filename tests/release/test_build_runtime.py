@@ -1484,7 +1484,7 @@ def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     assert 'export POKECON_RUST_REMAP_SOURCE="${controlledCargoSource}"' in flake
     assert 'export POKECON_RUST_REMAP_PYTHON="$release_python"' in flake
     assert 'export RUSTC_WRAPPER="${reproducibleRustcWrapper}"' in flake
-    assert "--remap-path-prefix=${repositorySource}=/build/pokecon" in flake
+    assert "--remap-path-prefix=${pokeconProductSource}=/build/pokecon" in flake
     assert "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" in flake
     assert "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" in flake
     assert "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" in flake

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "0fc187ca718032e96b8c2c2f436bf3744b389c7b0c6ae97c05000cc2ad05cd9c";
+      canonicalFlakeHash = "6d9f7ae9205fd8999510951088a2e5c0f74bfad1dfea021e44718cd50a1d07df";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -356,7 +356,7 @@
             : "''${POKECON_RUST_REMAP_PYTHON:?POKECON_RUST_REMAP_PYTHON is required}"
             : "''${POKECON_RUST_REMAP_TARGET:?POKECON_RUST_REMAP_TARGET is required}"
             exec "$rustc" \
-              "--remap-path-prefix=${repositorySource}=/build/pokecon" \
+              "--remap-path-prefix=${pokeconProductSource}=/build/pokecon" \
               "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" \
               "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" \
@@ -404,11 +404,15 @@
               "rust/pokecon/build.rs"
               "rust/pokecon/icons"
               "rust/pokecon/linux"
-              "rust/pokecon/permissions"
               "rust/pokecon/registry/protocol.json"
               "rust/pokecon/registry/settings.json"
               "rust/pokecon/src"
               "rust/pokecon/tauri.conf.json"
+            ];
+            release = product ++ [
+              "README.md"
+              "rust/pokecon/signing-targets.json"
+              "uv.lock"
             ];
             rustTest = product ++ [
               ".gitignore"
@@ -470,14 +474,23 @@
               "rust-toolchain.toml"
               "scripts"
               "tests"
-              "treefmt.toml"
               "uv.lock"
               "web"
             ];
           };
           optionalSourceBoundaryPaths = {
-            product = [ "rust/pokecon/capabilities" ];
-            rustTest = [ "rust/pokecon/capabilities" ];
+            product = [
+              "rust/pokecon/capabilities"
+              "rust/pokecon/permissions"
+            ];
+            release = [
+              "rust/pokecon/capabilities"
+              "rust/pokecon/permissions"
+            ];
+            rustTest = [
+              "rust/pokecon/capabilities"
+              "rust/pokecon/permissions"
+            ];
           };
           mkScopedSource =
             {
@@ -549,6 +562,14 @@
               name = "pokecon-product-source";
               optionalPaths = optionalSourceBoundaryPaths.product;
               paths = sourceBoundaryPaths.product;
+            };
+          pokeconReleaseSource =
+            assert workspaceCargoInputsAreCanonical;
+            mkScopedSource {
+              excludedPaths = [ "rust/pokecon/src/tests" ];
+              name = "pokecon-release-source";
+              optionalPaths = optionalSourceBoundaryPaths.release;
+              paths = sourceBoundaryPaths.release;
             };
           rustTestSource =
             assert workspaceCargoInputsAreCanonical;
@@ -636,7 +657,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "c60fdcfabf583f4349b4396df647d501308b01d7cb6f1921300e7366e6c00dc5";
+              expectedAuditTestHash = "c15b33ab4b635e165a031002aee372c41584c631c20a7c9ba39edfec9981b965";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = repositorySource + relativeAuditTest;
             in
@@ -912,32 +933,32 @@
               ''
 
                 [lib]
-                path = "${repositorySource}/rust/pokecon/src/lib.rs"
+                path = "${pokeconProductSource}/rust/pokecon/src/lib.rs"
 
                 [features]
               ''
               (
                 replaceManifestString "pokecon primary binary target"
                   "[[bin]]\nname = \"pokecon\"\npath = \"src/main.rs\"\n"
-                  "[[bin]]\nname = \"pokecon\"\npath = \"${repositorySource}/rust/pokecon/src/main.rs\"\n"
+                  "[[bin]]\nname = \"pokecon\"\npath = \"${pokeconProductSource}/rust/pokecon/src/main.rs\"\n"
                   (
                     replaceManifestString "pokecon build script" ''build = "build.rs"''
-                      ''build = "${repositorySource}/rust/pokecon/build.rs"''
+                      ''build = "${pokeconProductSource}/rust/pokecon/build.rs"''
                       canonicalPokeconManifestText
                   )
               );
           expectedControlledPokeconManifest = canonicalPokeconManifest // {
             package = canonicalPokeconManifest.package // {
-              build = "${repositorySource}/rust/pokecon/build.rs";
+              build = "${pokeconProductSource}/rust/pokecon/build.rs";
             };
             lib = {
-              path = "${repositorySource}/rust/pokecon/src/lib.rs";
+              path = "${pokeconProductSource}/rust/pokecon/src/lib.rs";
             };
             bin = [
               (
                 (builtins.head canonicalPokeconManifest.bin)
                 // {
-                  path = "${repositorySource}/rust/pokecon/src/main.rs";
+                  path = "${pokeconProductSource}/rust/pokecon/src/main.rs";
                 }
               )
             ]
@@ -1039,12 +1060,12 @@
           '';
           controlledCargoSource = pkgs.runCommand "pokecon-controlled-cargo-source" { } ''
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
-            "${pkgs.coreutils}/bin/cp" -a -- "${repositorySource}/." "$out/"
+            "${pkgs.coreutils}/bin/cp" -a -- "${pokeconReleaseSource}/." "$out/"
             if ! "${pkgs.diffutils}/bin/diff" \
               --brief \
               --recursive \
               --no-dereference \
-              -- "${repositorySource}" "$out"; then
+              -- "${pokeconReleaseSource}" "$out"; then
               echo "controlled Cargo source copy differs before manifest overlay" >&2
               exit 2
             fi
@@ -1680,7 +1701,7 @@
               ${assertNoCargoConfigAncestors}
             )
             if ! "${pkgs.diffutils}/bin/cmp" -s -- \
-              "${repositorySource}/pyproject.toml" \
+              "${pokeconReleaseSource}/pyproject.toml" \
               "$cargo_source_root/pyproject.toml"; then
               echo "tauri-build controlled pyproject.toml differs from the immutable source" >&2
               exit 2
@@ -2305,10 +2326,10 @@
             else
               null;
 
-          pokeconPackage = rustPlatform.buildRustPackage {
-            pname = "pokecon";
+          pokeconCorePackage = rustPlatform.buildRustPackage {
+            pname = "pokecon-core";
             version = workspaceVersion;
-            src = repositorySource;
+            src = pokeconProductSource;
             nativeBuildInputs = [
               pkgs.nasm
               pkgs.pkg-config
@@ -2319,7 +2340,7 @@
             ];
             buildInputs = [ pythonEnv ] ++ linuxDesktopPackages ++ linuxApplicationRuntimePackages;
             cargoLock = {
-              lockFile = ./Cargo.lock;
+              lockFile = controlledCargoLock;
               allowBuiltinFetchGit = true;
             };
             cargoBuildFlags = [
@@ -2333,13 +2354,11 @@
               "--bin"
               "pokecon-worker"
             ];
-            # Source correctness is owned once by rust-ci-core. The package
-            # gates below execute the exact store binaries instead of rebuilding
-            # the same tests inside this product derivation.
+            # Source correctness is owned once by rust-ci-core. Product assembly
+            # and package smoke reuse these binaries without recompiling Rust.
             doCheck = false;
             POKECON_RESOURCE_PROVENANCE = "nix-exact";
             postPatch = ''
-              test -f "${productionRoutingAudit}/passed"
               ${installControlledCargoManifests}
             '';
             preBuild = ''
@@ -2386,30 +2405,6 @@
             RUSTC_WRAPPER = "${pinnedRustcWrapper}";
             BINDGEN_EXTRA_CLANG_ARGS = linuxBindgenArgs;
             LIBCLANG_PATH = lib.optionalString pkgs.stdenv.isLinux "${pkgs.llvmPackages.libclang.lib}/lib";
-            postInstall = ''
-              mkdir -p "$out/web/dist"
-              cp -R "${webPackage}/." "$out/web/dist/"
-              ln -s ../web "$out/bin/web"
-              mkdir -p "$out/bin/uv"
-              cp "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"
-
-              retired_native_extension="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \( \
-                -path '*/pokecon/_native*.so' -o \
-                -path '*/pokecon/_native*.pyd' -o \
-                -path '*/pokecon/_native*.dylib' -o \
-                -path '*/pokecon/_native*.dll' \
-              \) -print -quit)"
-              if [ -n "$retired_native_extension" ]; then
-                echo "retired first-party Python native extension leaked into package: $retired_native_extension" >&2
-                exit 1
-              fi
-              retired_project_wheel="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \
-                -name 'poke_controller_modified_extension-*.whl' -print -quit)"
-              if [ -n "$retired_project_wheel" ]; then
-                echo "retired first-party Python wheel leaked into package: $retired_project_wheel" >&2
-                exit 1
-              fi
-            '';
             postFixup = lib.optionalString pkgs.stdenv.isLinux ''
               application_runtime_path=${lib.escapeShellArg (lib.makeLibraryPath linuxApplicationRuntimePackages)}
               patchelf --add-rpath "$application_runtime_path" "$out/bin/pokecon"
@@ -2423,6 +2418,44 @@
               esac
             '';
           };
+          pokeconPackage = pkgs.runCommand "pokecon-${workspaceVersion}" { } ''
+            test -f "${productionRoutingAudit}/passed"
+            "${pkgs.coreutils}/bin/mkdir" -p "$out"
+            "${pkgs.coreutils}/bin/cp" -a -- "${pokeconCorePackage}/." "$out/"
+            "${pkgs.coreutils}/bin/chmod" -R u+w -- "$out"
+
+            "${pkgs.coreutils}/bin/mkdir" -p "$out/web/dist"
+            "${pkgs.coreutils}/bin/cp" -R -- "${webPackage}/." "$out/web/dist/"
+            "${pkgs.coreutils}/bin/ln" -s -- ../web "$out/bin/web"
+            "${pkgs.coreutils}/bin/mkdir" -p "$out/bin/uv"
+            "${pkgs.coreutils}/bin/cp" -- "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"
+
+            for packaged_binary in pokecon pokecon-worker; do
+              packaged_path="$out/bin/$packaged_binary"
+              if [ -L "$packaged_path" ] || [ ! -f "$packaged_path" ] || [ ! -x "$packaged_path" ]; then
+                echo "assembled executable is missing, redirected, or not executable: $packaged_path" >&2
+                exit 2
+              fi
+            done
+            unset packaged_binary packaged_path
+
+            retired_native_extension="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \( \
+              -path '*/pokecon/_native*.so' -o \
+              -path '*/pokecon/_native*.pyd' -o \
+              -path '*/pokecon/_native*.dylib' -o \
+              -path '*/pokecon/_native*.dll' \
+            \) -print -quit)"
+            if [ -n "$retired_native_extension" ]; then
+              echo "retired first-party Python native extension leaked into package: $retired_native_extension" >&2
+              exit 1
+            fi
+            retired_project_wheel="$(${pkgs.findutils}/bin/find "$out" \( -type f -o -type l \) \
+              -name 'poke_controller_modified_extension-*.whl' -print -quit)"
+            if [ -n "$retired_project_wheel" ]; then
+              echo "retired first-party Python wheel leaked into package: $retired_project_wheel" >&2
+              exit 1
+            fi
+          '';
           gateCargoLock =
             assert workspaceCargoInputsAreCanonical;
             builtins.fromTOML canonicalCargoLockText;
@@ -2857,6 +2890,19 @@
           };
         in
         {
+          devShells.default = pkgs.mkShell {
+            packages = rustTaskInputs ++ [
+              bun
+              pkgs.cargo-tauri
+              pkgs.uv
+            ];
+            shellHook = ''
+              ${rustEnvironmentExports}
+              ${desktopEnvironment}
+              export POKECON_RESOURCE_PROVENANCE=development
+            '';
+          };
+
           treefmt = {
             projectRootFile = "flake.nix";
             programs = {
@@ -2908,12 +2954,14 @@
           packages = {
             default = pokeconPackage;
             pokecon = pokeconPackage;
+            pokecon-core = pokeconCorePackage;
             web = webPackage;
           };
 
           formatter = safeFormatter;
 
           checks.pokecon = pokeconPackage;
+          checks.pokecon-core = pokeconCorePackage;
           checks.production-routing-audit = productionRoutingAudit;
           checks.production-routing-mutation-audit = productionRoutingMutationAudit;
           checks.web = webPackage;

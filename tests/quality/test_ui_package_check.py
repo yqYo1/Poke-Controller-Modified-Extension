@@ -2275,7 +2275,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "3a06904988d514b16bb30d6f50fcebf184862b5403017a906250f7583e14bcb8"
+        == "72d5c7bf57852e65dd3cac09ab86ae1ed6a0d31756f5bdf7b8e7408f8b84db98"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2427,14 +2427,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     reproducible_wrapper = flake[reproducible_wrapper_start:pinned_wrapper_start]
     assert (
         hashlib.sha256(reproducible_wrapper.strip().encode()).hexdigest()
-        == "29cda22305e8fe004792fb2257fa86f7d88b9a6c5a72631d5a9e476360ba8bed"
+        == "4fd3c7e1154cb34a73ec615524997f756597630f3bc4dd5783f07a3a89123d48"
     )
     for wrapper_proof in (
         'if [ "$#" -lt 1 ]; then',
         'rustc="$1"',
         'if [ "$rustc" != "${rustToolchain}/bin/rustc" ]; then',
         'exec "$rustc"',
-        '"--remap-path-prefix=${repositorySource}=/build/pokecon"',
+        '"--remap-path-prefix=${pokeconProductSource}=/build/pokecon"',
         '"--remap-path-prefix=${controlledCargoSource}=/build/pokecon"',
         '"--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon"',
     ):
@@ -2488,7 +2488,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "0beb3bfebaf18475bc940cdfe7089584031d82cb0af4330f7a331b187c2a8ef5"
+        == "544b622bb01b0df470f9732fa1b36bb401a2e0b8db6ee780031f215aef36c461"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")
@@ -2515,8 +2515,8 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "mkScopedSource =",
         "builtins.all requiredPathExists",
         "normalizedPaths ++ normalizedExcludedPaths",
-        'excludedPaths = [ "rust/pokecon/src/tests" ];',
         'name = "pokecon-product-source";',
+        'name = "pokecon-release-source";',
         'name = "pokecon-rust-test-source";',
         'name = "pokecon-web-source";',
         'name = "pokecon-api-source";',
@@ -2528,12 +2528,19 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         assert source_filter_section.count(scoped_source_proof) == 1, (
             scoped_source_proof
         )
+    assert (
+        source_filter_section.count('excludedPaths = [ "rust/pokecon/src/tests" ];')
+        == 2
+    )
     product_boundary_start = source_filter_section.index("product = [")
+    release_boundary_start = source_filter_section.index(
+        "release = product ++ [", product_boundary_start
+    )
     rust_test_boundary_start = source_filter_section.index(
-        "rustTest = product ++ [", product_boundary_start
+        "rustTest = product ++ [", release_boundary_start
     )
     product_boundary = source_filter_section[
-        product_boundary_start:rust_test_boundary_start
+        product_boundary_start:release_boundary_start
     ]
     for product_input in (
         '"rust/pokecon/registry/protocol.json"',
@@ -2548,6 +2555,15 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         '"rust/pokecon/signing-targets.json"',
     ):
         assert test_only_product_input not in product_boundary
+    release_boundary = source_filter_section[
+        release_boundary_start:rust_test_boundary_start
+    ]
+    for release_input in (
+        '"README.md"',
+        '"rust/pokecon/signing-targets.json"',
+        '"uv.lock"',
+    ):
+        assert release_boundary.count(release_input) == 1, release_input
     rust_test_boundary_end = source_filter_section.index(
         'web = [ "web" ];', rust_test_boundary_start
     )
@@ -2598,12 +2614,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(controlled_manifest_section.strip().encode()).hexdigest()
-        == "209e89021601a45fde6b99847092c616ed42a90e3b493fd2816fe6486bdbcffc"
+        == "ed2b3d8368efd6ce6ce26084f7081de8b69cd7577f3f9d46166589f9b824c665"
     )
     for exact_overlay_path, expected_count in (
-        ('path = "${repositorySource}/rust/pokecon/src/lib.rs"', 2),
-        ('path = \\"${repositorySource}/rust/pokecon/src/main.rs\\"', 1),
-        ('build = "${repositorySource}/rust/pokecon/build.rs"', 2),
+        ('path = "${pokeconProductSource}/rust/pokecon/src/lib.rs"', 2),
+        ('path = \\"${pokeconProductSource}/rust/pokecon/src/main.rs\\"', 1),
+        ('build = "${pokeconProductSource}/rust/pokecon/build.rs"', 2),
     ):
         assert (
             controlled_manifest_section.count(exact_overlay_path) == expected_count
@@ -2868,7 +2884,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_boundary = flake[ancestor_config_guard_end:tauri_boundary_end]
     assert (
         hashlib.sha256(tauri_boundary.strip().encode()).hexdigest()
-        == "4e9abb7cf86211132bd5d11f0666cf00c0e26cf12d78c0a4e2bad6d17848347e"
+        == "0ab86109df19e6e19358a2c6d9147f2f678762ad9518f85714169a2c146b93d6"
     )
     tauri_invocation_boundary_start = tauri_boundary.index(
         "prepareTauriCargoInvocation ="
@@ -3135,7 +3151,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert web_package_section.count('sourceRoot = "pokecon-web-source/web";') == 1
 
     runtime_package_end = flake.index(
-        "pokeconPackage = rustPlatform.buildRustPackage", runtime_package_start
+        "pokeconCorePackage = rustPlatform.buildRustPackage", runtime_package_start
     )
     runtime_package_section = flake[runtime_package_start:runtime_package_end]
     assert (
@@ -3209,45 +3225,48 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert runtime_environment_section.count("UV_LIBC") == 1
 
-    package_start = flake.index("pokeconPackage = rustPlatform.buildRustPackage")
+    core_package_start = flake.index(
+        "pokeconCorePackage = rustPlatform.buildRustPackage"
+    )
+    package_start = flake.index(
+        'pokeconPackage = pkgs.runCommand "pokecon-${workspaceVersion}"',
+        core_package_start,
+    )
+    core_package_section = flake[core_package_start:package_start]
     package_end = flake.index("gateCargoLock =", package_start)
     package_section = flake[package_start:package_end]
     assert (
-        hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "b430d8049a6584a241ace9769ba6ec7cfe06b93d94979ae95b016d7cc71a6282"
+        hashlib.sha256(core_package_section.strip().encode()).hexdigest()
+        == "9081add73eb7787680347e62b5e7859a6c35691621c27fa19918449d40ea2743"
     )
-    assert package_section.count("${installControlledCargoManifests}") == 2
-    assert package_section.count('"--locked"') == 1
-    assert package_section.count('"--features"') == 1
-    assert package_section.count('"worker-binary"') == 1
-    assert "integration-test-support" not in package_section
-    assert 'test -f "${productionRoutingAudit}/passed"' in package_section
-    assert 'RUSTC = "${rustToolchain}/bin/rustc";' in package_section
-    assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in package_section
-    assert "RUSTC_WORKSPACE_WRAPPER" in package_section
-    assert "RUSTFLAGS" in package_section
-    for retired_native_artifact in (
-        "*/pokecon/_native*.so",
-        "*/pokecon/_native*.pyd",
-        "*/pokecon/_native*.dylib",
-        "*/pokecon/_native*.dll",
-        "poke_controller_modified_extension-*.whl",
-    ):
-        assert package_section.count(retired_native_artifact) == 1
-    assert package_section.count(r"\( -type f -o -type l \)") == 2
-    assert "RUSTFLAGS =" not in package_section
-    assert "CARGO_ENCODED_RUSTFLAGS =" not in package_section
+    assert core_package_section.count("${installControlledCargoManifests}") == 2
+    assert core_package_section.count('"--locked"') == 1
+    assert core_package_section.count('"--features"') == 1
+    assert core_package_section.count('"worker-binary"') == 1
+    assert "integration-test-support" not in core_package_section
+    assert "productionRoutingAudit" not in core_package_section
+    assert "webPackage" not in core_package_section
+    assert "repositorySource" not in core_package_section
+    assert "rustTestSource" not in core_package_section
+    assert core_package_section.count("src = pokeconProductSource;") == 1
+    assert core_package_section.count("lockFile = controlledCargoLock;") == 1
+    assert 'RUSTC = "${rustToolchain}/bin/rustc";' in core_package_section
+    assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in core_package_section
+    assert "RUSTC_WORKSPACE_WRAPPER" in core_package_section
+    assert "RUSTFLAGS" in core_package_section
+    assert "RUSTFLAGS =" not in core_package_section
+    assert "CARGO_ENCODED_RUSTFLAGS =" not in core_package_section
     package_provenance_inventory = tuple(
         line.strip()
-        for line in package_section.splitlines()
+        for line in core_package_section.splitlines()
         if "POKECON_RESOURCE_PROVENANCE" in line
     )
     assert package_provenance_inventory == (
         'POKECON_RESOURCE_PROVENANCE = "nix-exact";',
     )
-    assert package_section.count("preInstall =") == 0
-    assert package_section.count("cargoBuildHook") == 0
-    assert package_section.count("cargoInstallHook") == 0
+    assert core_package_section.count("preInstall =") == 0
+    assert core_package_section.count("cargoBuildHook") == 0
+    assert core_package_section.count("cargoInstallHook") == 0
     package_install = (
         "            installPhase = ''\n"
         "              runHook preInstall\n"
@@ -3268,24 +3287,25 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "              runHook postInstall\n"
         "            '';\n"
     )
-    assert package_section.count(package_install) == 1
-    assert package_section.count("installPhase =") == 1
-    assert package_section.count("runHook preInstall") == 1
-    assert package_section.count("runHook postInstall") == 1
+    assert core_package_section.count(package_install) == 1
+    assert core_package_section.count("installPhase =") == 1
+    assert core_package_section.count("runHook preInstall") == 1
+    assert core_package_section.count("runHook postInstall") == 1
     assert (
-        package_section.count("for packaged_binary in pokecon pokecon-worker; do") == 1
+        core_package_section.count("for packaged_binary in pokecon pokecon-worker; do")
+        == 1
     )
-    assert package_section.count('"${pkgs.coreutils}/bin/install" -Dm755 --') == 1
+    assert core_package_section.count('"${pkgs.coreutils}/bin/install" -Dm755 --') == 1
     for forbidden_release_tree_install in (
         "cargoInstallPostBuildHook",
         "release-tmp",
         "${releaseDir}",
         "target/@targetSubdirectory@",
     ):
-        assert forbidden_release_tree_install not in package_section
-    assert package_section.count("doCheck = false;") == 1
-    assert package_section.count("cargoBuildFlags = [") == 1
-    assert package_section.count("cargoTestFlags = [") == 0
+        assert forbidden_release_tree_install not in core_package_section
+    assert core_package_section.count("doCheck = false;") == 1
+    assert core_package_section.count("cargoBuildFlags = [") == 1
+    assert core_package_section.count("cargoTestFlags = [") == 0
     for forbidden_package_phase in (
         "buildPhase =",
         "checkPhase =",
@@ -3297,18 +3317,46 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "dontInstall =",
         "phases =",
     ):
-        assert forbidden_package_phase not in package_section
-    package_prebuild_start = package_section.index("preBuild =")
-    package_prebuild_end = package_section.index(
+        assert forbidden_package_phase not in core_package_section
+    package_prebuild_start = core_package_section.index("preBuild =")
+    package_prebuild_end = core_package_section.index(
         "installPhase =", package_prebuild_start
     )
-    package_prebuild = package_section[package_prebuild_start:package_prebuild_end]
+    package_prebuild = core_package_section[package_prebuild_start:package_prebuild_end]
     assert (
         hashlib.sha256(package_prebuild.strip().encode()).hexdigest()
         == "711d19dff45a4ff4ac5ef8edd99b263a0eb7dc22704de1719d135d132ea07ade"
     )
     assert package_prebuild.count("${installControlledCargoManifests}") == 1
     assert package_prebuild.count("${sanitizeCargoCompilerEnvironment}") == 1
+
+    assert (
+        hashlib.sha256(package_section.strip().encode()).hexdigest()
+        == "1ae13f63bbeabb593c4cd4cc14faba7f21d370dd7d4a70025c9b6f0f85467740"
+    )
+    for assembly_proof in (
+        'pokeconPackage = pkgs.runCommand "pokecon-${workspaceVersion}"',
+        'test -f "${productionRoutingAudit}/passed"',
+        '"${pkgs.coreutils}/bin/cp" -a -- "${pokeconCorePackage}/." "$out/"',
+        '"${pkgs.coreutils}/bin/cp" -R -- "${webPackage}/." "$out/web/dist/"',
+        '"${pkgs.coreutils}/bin/ln" -s -- ../web "$out/bin/web"',
+        '"${pkgs.coreutils}/bin/cp" -- "${pkgs.uv}/bin/uv" "$out/bin/uv/uv"',
+        "assembled executable is missing, redirected, or not executable",
+    ):
+        assert package_section.count(assembly_proof) == 1, assembly_proof
+    assert "rustPlatform.buildRustPackage" not in package_section
+    assert "cargoBuildFlags" not in package_section
+    assert "repositorySource" not in package_section
+    assert "rustTestSource" not in package_section
+    for retired_native_artifact in (
+        "*/pokecon/_native*.so",
+        "*/pokecon/_native*.pyd",
+        "*/pokecon/_native*.dylib",
+        "*/pokecon/_native*.dll",
+        "poke_controller_modified_extension-*.whl",
+    ):
+        assert package_section.count(retired_native_artifact) == 1
+    assert package_section.count(r"\( -type f -o -type l \)") == 2
 
     gate_cargo_vendor_start = package_end
     gate_cargo_vendor_end = flake.index("gateCargoConfig =", gate_cargo_vendor_start)
@@ -3563,8 +3611,8 @@ offline = true
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
         == len(development_command_section_boundaries) + 2
     )
-    assert flake.count(development_provenance_assignment) == 17
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 20
+    assert flake.count(development_provenance_assignment) == 18
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -15348,17 +15396,17 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_pokecon_lib_overlay = replace_once(
         FLAKE_SOURCE,
-        'path = "${repositorySource}/rust/pokecon/src/lib.rs"',
+        'path = "${pokeconProductSource}/rust/pokecon/src/lib.rs"',
         'path = "src/alternate.rs"',
     )
     redirected_pokecon_main_overlay = replace_once(
         FLAKE_SOURCE,
-        'path = \\"${repositorySource}/rust/pokecon/src/main.rs\\"',
+        'path = \\"${pokeconProductSource}/rust/pokecon/src/main.rs\\"',
         'path = \\"src/alternate-main.rs\\"',
     )
     redirected_pokecon_build_overlay = replace_once(
         FLAKE_SOURCE,
-        'build = "${repositorySource}/rust/pokecon/build.rs"',
+        'build = "${pokeconProductSource}/rust/pokecon/build.rs"',
         'build = "build.rs"',
     )
     redirected_controlled_dependency = replace_once(
@@ -15425,12 +15473,12 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_package_source = replace_once(
         FLAKE_SOURCE,
-        "          pokeconPackage = rustPlatform.buildRustPackage {\n"
-        '            pname = "pokecon";\n'
+        "          pokeconCorePackage = rustPlatform.buildRustPackage {\n"
+        '            pname = "pokecon-core";\n'
         "            version = workspaceVersion;\n"
-        "            src = repositorySource;\n",
-        "          pokeconPackage = rustPlatform.buildRustPackage {\n"
-        '            pname = "pokecon";\n'
+        "            src = pokeconProductSource;\n",
+        "          pokeconCorePackage = rustPlatform.buildRustPackage {\n"
+        '            pname = "pokecon-core";\n'
         "            version = workspaceVersion;\n"
         "            src = /tmp/attacker-source;\n",
     )
@@ -16218,7 +16266,7 @@ runner = "scripts/attacker-runner.sh"
     runtime_hash_flake = sources[FLAKE_SOURCE]
     runtime_hash_start = runtime_hash_flake.index("linuxReleaseRuntime =")
     runtime_hash_end = runtime_hash_flake.index(
-        "pokeconPackage = rustPlatform.buildRustPackage", runtime_hash_start
+        "pokeconCorePackage = rustPlatform.buildRustPackage", runtime_hash_start
     )
     runtime_hash_match = re.search(
         r"outputHash = (?P<value>[^;]+);",
@@ -16261,7 +16309,7 @@ runner = "scripts/attacker-runner.sh"
     )
     redirected_controlled_source_input = replace_once(
         FLAKE_SOURCE,
-        '            "${pkgs.coreutils}/bin/cp" -a -- "${repositorySource}/." "$out/"\n',
+        '            "${pkgs.coreutils}/bin/cp" -a -- "${pokeconReleaseSource}/." "$out/"\n',
         '            "${pkgs.coreutils}/bin/cp" -a -- /tmp/attacker-source/. "$out/"\n',
     )
     omitted_controlled_source_diff = replace_once(
@@ -17953,11 +18001,38 @@ def test_gate_proves_keep_backend_close_and_same_session_reopen() -> None:
     assert "validate_diagnostics" in final_stop
 
 
+def test_default_devshell_is_tool_only_and_skips_product_builds() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text()
+    devshell_start = flake.index("devShells.default =")
+    devshell_end = flake.index("treefmt = {", devshell_start)
+    devshell = flake[devshell_start:devshell_end]
+
+    for tool_input in (
+        "pkgs.mkShell",
+        "rustTaskInputs",
+        "bun",
+        "pkgs.cargo-tauri",
+        "pkgs.uv",
+        "${rustEnvironmentExports}",
+        "${desktopEnvironment}",
+        "POKECON_RESOURCE_PROVENANCE=development",
+    ):
+        assert devshell.count(tool_input) == 1, tool_input
+    for product_build_input in (
+        "pokeconPackage",
+        "pokeconCorePackage",
+        "webPackage",
+        "productionRoutingAudit",
+        "self'.packages",
+    ):
+        assert product_build_input not in devshell, product_build_input
+
+
 def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
     flake = (REPOSITORY / "flake.nix").read_text()
     package = section(
         flake,
-        "pokeconPackage = rustPlatform.buildRustPackage {",
+        "pokeconCorePackage = rustPlatform.buildRustPackage {",
         "\n          gateCargoLock =",
     )
     session_bus = section(
@@ -18021,7 +18096,7 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
     assert runtime_inputs.count("pkgs.findutils") == 1
     assert "pkgs.mesa" not in runtime_inputs
     assert package.count('POKECON_RESOURCE_PROVENANCE = "nix-exact";') == 1
-    assert package.count('ln -s ../web "$out/bin/web"') == 1
+    assert package.count('"${pkgs.coreutils}/bin/ln" -s -- ../web "$out/bin/web"') == 1
     assert flake.count("uiPackageSoftwareRenderer = pkgs.mesa;") == 1
     assert gate.count('"${uiPackageSoftwareRenderer}"') == 1
     assert (

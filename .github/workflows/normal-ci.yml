@@ -1,0 +1,243 @@
+name: Normal CI
+
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+  pull_request:
+    branches: [main, master, refactor/rust-core]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: >-
+    normal-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan changed regions
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master' &&
+      github.head_ref != 'refactor/rust-core')
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.regions.outputs.docs }}
+      contracts: ${{ steps.regions.outputs.contracts }}
+      rust: ${{ steps.regions.outputs.rust }}
+      python: ${{ steps.regions.outputs.python }}
+      routing: ${{ steps.regions.outputs.routing }}
+      web: ${{ steps.regions.outputs.web }}
+      product: ${{ steps.regions.outputs.product }}
+      remote_flake: ${{ steps.regions.outputs.remote_flake }}
+      regions_json: ${{ steps.regions.outputs.regions_json }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Classify changed regions
+        id: regions
+        env:
+          BASE_SHA: >-
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: >-
+            ${{ github.sha }}
+        run: >-
+          nix run .#ci-regions --
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --github-output "$GITHUB_OUTPUT"
+
+  fast:
+    name: Fast checks
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master' &&
+      github.head_ref != 'refactor/rust-core')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check formatting with treefmt
+        run: nix fmt -- --ci
+      - name: Run fast static checks
+        run: nix run .#ci-fast
+
+  rust_contracts:
+    name: Rust and contracts (Linux)
+    needs: plan
+    if: >-
+      needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run combined Rust and contract checks
+        if: >-
+          needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts == 'true'
+        run: nix run .#ci-rust-contracts
+      - name: Run Rust checks
+        if: >-
+          needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts != 'true'
+        run: nix run .#rust-ci-core
+      - name: Run contract checks
+        if: >-
+          needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
+        run: nix run .#contract-check
+
+  python_tests:
+    name: Python tests
+    needs: plan
+    if: needs.plan.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Python tests
+        run: nix run .#test
+
+  routing_mutations:
+    name: Production-routing mutation audit
+    needs: plan
+    if: needs.plan.outputs.routing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run production-routing mutation audit
+        run: nix run .#test-production-routing-mutations -- --workers 4
+
+  web:
+    name: Web checks
+    needs: plan
+    if: needs.plan.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Web checks
+        run: nix run .#web-check
+
+  product_flake:
+    name: Product smoke and remote flake (Linux)
+    needs: plan
+    if: >-
+      needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run product smoke checks
+        if: needs.plan.outputs.product == 'true'
+        run: nix run .#product-smoke
+      - name: Evaluate all local flake outputs
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: nix flake check --no-build
+      - name: Validate remote flake metadata
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: >-
+          nix flake metadata --refresh
+          github:${{ github.repository }}/${{ github.sha }}
+      - name: Run default app help from remote
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: >-
+          nix run --refresh
+          github:${{ github.repository }}/${{ github.sha }}
+          -- --help
+
+  windows:
+    name: Check workspace (Windows)
+    needs: plan
+    if: needs.plan.outputs.rust == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95.0'
+      - name: Check all Windows targets and features
+        env:
+          POKECON_RESOURCE_PROVENANCE: development
+        run: cargo check --locked --workspace --all-targets --all-features
+
+  required:
+    name: Normal CI Required
+    needs:
+      - plan
+      - fast
+      - rust_contracts
+      - python_tests
+      - routing_mutations
+      - web
+      - product_flake
+      - windows
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master' &&
+      github.head_ref != 'refactor/rust-core'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Aggregate required job results
+        env:
+          PLAN_JSON: >-
+            {"plan_status":"${{ needs.plan.result }}",
+            "regions":${{ needs.plan.outputs.regions_json || 'null' }},
+            "region_outputs":{
+            "docs":"${{ needs.plan.outputs.docs }}",
+            "contracts":"${{ needs.plan.outputs.contracts }}",
+            "rust":"${{ needs.plan.outputs.rust }}",
+            "python":"${{ needs.plan.outputs.python }}",
+            "routing":"${{ needs.plan.outputs.routing }}",
+            "web":"${{ needs.plan.outputs.web }}",
+            "product":"${{ needs.plan.outputs.product }}",
+            "remote_flake":"${{ needs.plan.outputs.remote_flake }}"
+            },"jobs":{
+            "fast":{"applicable":true,"reason":"always required"},
+            "rust_contracts":{"applicable":${{ needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true' }},"reason":"Rust or contract paths changed"},
+            "python_tests":{"applicable":${{ needs.plan.outputs.python == 'true' }},"reason":"Python paths changed"},
+            "routing_mutations":{"applicable":${{ needs.plan.outputs.routing == 'true' }},"reason":"production-routing audit inputs changed"},
+            "web":{"applicable":${{ needs.plan.outputs.web == 'true' }},"reason":"Web paths changed"},
+            "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true' }},"reason":"product or remote-flake paths changed"},
+            "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
+            }}
+        run: |
+          nix run .#ci-aggregate -- "$PLAN_JSON" \
+            fast=${{ needs.fast.result }} \
+            rust_contracts=${{ needs.rust_contracts.result }} \
+            python_tests=${{ needs.python_tests.result }} \
+            routing_mutations=${{ needs.routing_mutations.result }} \
+            web=${{ needs.web.result }} \
+            product_flake=${{ needs.product_flake.result }} \
+            windows=${{ needs.windows.result }}

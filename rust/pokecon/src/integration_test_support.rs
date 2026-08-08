@@ -20,6 +20,12 @@ pub mod contracts {
     }
 
     pub use crate::contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
+
+    /// Explicit read-only generator checks used by contract drift tests.
+    #[cfg(feature = "contract-generator")]
+    pub mod generator {
+        pub use crate::contracts::{check_generated_artifacts, check_openapi_artifact};
+    }
 }
 
 /// Device, input-arbitration, and serial fixtures used by integration tests.

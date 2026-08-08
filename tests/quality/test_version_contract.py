@@ -269,39 +269,40 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     dev_debug_export = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
     test_debug_export = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
     test_uv_export = 'export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"'
-    contract_generator = (
-        "cargo run --locked --package pokecon --bin generate_contracts "
-        "--features contract-generator -- --check"
-    )
+    api_type_check = "scripts/quality/generate-api-types.sh --check-types-only"
     targeted_contract_test = (
-        "cargo test --locked --package pokecon --test contract_sync "
-        "--features integration-test-support"
+        "cargo test --locked --package pokecon \\\n"
+        "                  --features integration-test-support,contract-generator \\\n"
+        "                  --test contract_sync"
     )
-    serial_build = f"{regular_build} --jobs 1"
     aggregate_workspace_builds = tuple(
         line.strip()
         for line in aggregate_check.splitlines()
         if "cargo build " in line and "--workspace" in line
     )
-    assert aggregate_workspace_builds == (serial_build,)
+    assert aggregate_workspace_builds == (regular_build,)
     assert aggregate_check.count(workspace_clippy) == 1
     assert aggregate_check.count(workspace_test) == 1
-    assert aggregate_check.count("--jobs 1") == 1
+    assert aggregate_check.count("--jobs 1") == 0
     assert aggregate_check.count("--threads=1") == 1
     assert aggregate_check.count(dev_debug_export) == 1
     assert aggregate_check.count(test_debug_export) == 1
     assert aggregate_check.count(test_uv_export) == 1
     assert aggregate_check.count(targeted_contract_test) == 0
     assert flake.count(targeted_contract_test) == 1
+    assert "cargo run --locked --package pokecon --bin generate_contracts" not in (
+        aggregate_check
+    )
+    assert aggregate_check.count(api_type_check) == 1
     assert (
         aggregate_check.index(test_uv_export)
         < aggregate_check.index(dev_debug_export)
         < aggregate_check.index(test_debug_export)
         < aggregate_check.index(linux_only_lld_export)
-        < aggregate_check.index(contract_generator)
-        < aggregate_check.index(workspace_test)
-        < aggregate_check.index(serial_build)
+        < aggregate_check.index(regular_build)
         < aggregate_check.index(workspace_clippy)
+        < aggregate_check.index(workspace_test)
+        < aggregate_check.index(api_type_check)
     )
 
     for compatibility_binary in (
@@ -321,7 +322,8 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     assert all_workspace_builds == (
         regular_build,
         regular_build,
-        serial_build,
+        regular_build,
+        regular_build,
     )
     assert flake.count("--threads=1") == 1
 

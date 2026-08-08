@@ -1,6 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+#[cfg(feature = "contract-generator")]
+use pokecon::integration_test_support::contracts::generator::{
+    check_generated_artifacts, check_openapi_artifact,
+};
 use pokecon::integration_test_support::contracts::model::{Access, Mutability, Scope, Setting};
 use pokecon::integration_test_support::contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
 use regex::Regex;
@@ -13,6 +17,9 @@ const ACCEPTANCE_PROCEDURE: &str = include_str!("../../../docs/ACCEPTANCE.md");
 const COMPATIBILITY_REGISTRY_JSON: &str = include_str!("../registry/compatibility.json");
 const GENERATION_REGISTRY_JSON: &str = include_str!("../registry/generation.json");
 const CI_REGISTRY_JSON: &str = include_str!("../registry/ci.json");
+const CI_REGIONS: &str = include_str!("../../../scripts/ci/regions.py");
+const CI_AGGREGATE: &str = include_str!("../../../scripts/ci/aggregate.py");
+const CI_TIMING: &str = include_str!("../../../scripts/ci/timing.py");
 const FOUNDATION_REGISTRY_JSON: &str = include_str!("../registry/foundation.json");
 const FIXED_MANIFEST: &str = include_str!("../../../compatibility/fixed-manifest.json");
 const FLAKE: &str = include_str!("../../../flake.nix");
@@ -24,10 +31,9 @@ const WORKFLOWS: &[(&str, &str)] = &[
         "compatibility-roll",
         include_str!("../../../.github/workflows/compatibility-roll.yml"),
     ),
-    ("lint", include_str!("../../../.github/workflows/lint.yml")),
     (
-        "pytest",
-        include_str!("../../../.github/workflows/pytest.yml"),
+        "normal-ci",
+        include_str!("../../../.github/workflows/normal-ci.yml"),
     ),
     (
         "package",
@@ -37,15 +43,21 @@ const WORKFLOWS: &[(&str, &str)] = &[
         "release",
         include_str!("../../../.github/workflows/release.yml"),
     ),
-    (
-        "remote-flake",
-        include_str!("../../../.github/workflows/remote-flake.yml"),
-    ),
-    (
-        "rust-ci",
-        include_str!("../../../.github/workflows/rust-ci.yml"),
-    ),
 ];
+
+#[cfg(feature = "contract-generator")]
+#[test]
+fn generated_settings_and_typing_artifacts_are_current() {
+    check_generated_artifacts(repository_root())
+        .expect("tracked settings and typing artifacts must match their generators");
+}
+
+#[cfg(feature = "contract-generator")]
+#[test]
+fn generated_openapi_artifact_is_current() {
+    check_openapi_artifact(&repository_root().join("api/openapi.json"))
+        .expect("tracked OpenAPI artifact must match the server schema generator");
+}
 
 #[test]
 fn canonical_settings_match_every_normative_spec_projection() {
@@ -291,6 +303,200 @@ fn fixed_compatibility_inventory_is_complete_and_content_addressed() {
 #[test]
 fn generation_and_ci_registries_define_drift_and_applicability_gates() {
     let generation = parse_json(GENERATION_REGISTRY_JSON);
+    assert_generation_registry(&generation);
+
+    let ci = parse_json(CI_REGISTRY_JSON);
+    assert_eq!(ci["schema_version"], 3);
+    assert_ci_workflow_registry(&ci);
+
+    assert_ci_job_registry(&ci);
+
+    assert_ci_region_registry(&ci);
+
+    assert_ci_classification_contract(&ci);
+}
+
+#[test]
+fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
+    let ci = parse_json(CI_REGISTRY_JSON);
+    let event = &ci["event_contract"];
+    assert_eq!(
+        event["integration_branches"],
+        serde_json::json!(["main", "master", "refactor/rust-core"])
+    );
+    assert_eq!(
+        event["canonical_events"],
+        serde_json::json!([
+            {
+                "source": "push to a configured integration branch",
+                "event": "push",
+            },
+            {
+                "source": "same-repository pull request from a non-integration branch",
+                "event": "pull_request",
+            },
+            {
+                "source": "fork pull request",
+                "event": "pull_request",
+            },
+        ])
+    );
+    assert_eq!(
+        event["suppressed_event"],
+        serde_json::json!({
+            "source": "same-repository pull request from a configured integration branch",
+            "event": "pull_request",
+            "canonical_event": "push",
+        })
+    );
+    assert_eq!(
+        event["sha"],
+        serde_json::json!({
+            "base": {
+                "push": "github.event.before",
+                "pull_request": "github.event.pull_request.base.sha",
+            },
+            "head": {
+                "push": "github.sha",
+                "pull_request": "github.sha",
+            },
+            "pull_request_head_semantics": "GitHub pull-request merge commit SHA",
+        })
+    );
+    assert_eq!(event["cancel_in_progress"], true);
+
+    let workflow_names = string_set(&event["workflows"]);
+    assert_eq!(workflow_names, BTreeSet::from(["normal-ci", "package"]));
+    for concurrency in event["concurrency"]
+        .as_array()
+        .expect("event concurrency contracts must be an array")
+    {
+        let workflow = string_at(concurrency, "workflow");
+        let source = WORKFLOWS
+            .iter()
+            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .unwrap_or_else(|| panic!("event workflow {workflow} must exist"));
+        assert!(source.contains(&format!("    {}", string_at(concurrency, "group"))));
+        assert!(source.contains("  cancel-in-progress: true"));
+        assert!(source.contains("branches: [main, master, refactor/rust-core]"));
+        assert!(
+            source
+                .contains("github.event.pull_request.head.repo.full_name != github.repository ||")
+        );
+        for branch in ["main", "master", "refactor/rust-core"] {
+            assert!(source.contains(&format!("github.head_ref != '{branch}'")));
+        }
+        assert!(source.contains(
+            "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+        ));
+        assert!(source.contains("HEAD_SHA: >-\n            ${{ github.sha }}"));
+        assert!(!source.contains("github.event.pull_request.head.sha"));
+
+        let elected_jobs = event["elected_jobs"][workflow]
+            .as_array()
+            .expect("elected jobs must be an array");
+        assert_eq!(
+            source.matches("github.event_name == 'push' ||").count(),
+            elected_jobs.len()
+        );
+        for job in elected_jobs {
+            let job = job.as_str().expect("elected job must be a string");
+            assert!(source.contains(&format!("  {job}:\n")));
+        }
+    }
+}
+
+#[test]
+fn ci_aggregate_registry_matches_both_required_workflow_gates() {
+    let ci = parse_json(CI_REGISTRY_JSON);
+    let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
+    let aggregate = &ci["aggregate_contract"];
+    assert_ci_aggregate_schema(aggregate);
+    assert_ci_aggregate_implementation(aggregate);
+
+    assert_ci_aggregate_workflow_contracts(aggregate, jobs);
+}
+
+#[test]
+fn ci_cache_and_timing_registry_distinguishes_policy_from_implementation() {
+    let ci = parse_json(CI_REGISTRY_JSON);
+    let cache = &ci["binary_cache_contract"];
+    assert_eq!(cache["scope"], "PokeCon-specific Nix derivations");
+    assert_eq!(
+        cache["desired_permissions"],
+        serde_json::json!([
+            {
+                "event": "pull_request",
+                "actor": "any pull-request actor",
+                "read": true,
+                "write": false,
+            },
+            {
+                "event": "push",
+                "actor": "trusted repository writer",
+                "read": true,
+                "write": true,
+            },
+        ])
+    );
+    assert_eq!(cache["current_implementation"]["status"], "not_configured");
+    assert_eq!(
+        cache["current_implementation"]["pokecon_specific_read"],
+        false
+    );
+    assert_eq!(
+        cache["current_implementation"]["pokecon_specific_write"],
+        false
+    );
+    assert_eq!(
+        cache["current_implementation"]["validator_enforces_push_only_writes"],
+        true
+    );
+    assert_eq!(
+        cache["current_implementation"]["validator_enforces_trusted_actor_allowlist"],
+        false
+    );
+    assert!(CI_TIMING.contains("if report.cache.write and report.cache.event != \"push\""));
+    for workflow in ["normal-ci", "package"] {
+        let source = WORKFLOWS
+            .iter()
+            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .expect("normal and package workflows must exist");
+        assert!(source.contains("uses: cachix/install-nix-action@v31"));
+        assert!(!source.contains("uses: cachix/cachix-action@"));
+    }
+
+    let timing = &ci["timing_contract"];
+    assert_eq!(timing["schema_version"], 1);
+    assert_eq!(timing["command"], "nix run .#ci-timing --");
+    assert_eq!(
+        timing["change_kind_threshold_seconds"],
+        serde_json::json!({"fast": 180, "docs": 300, "product": 600})
+    );
+    assert_eq!(timing["p95"]["method"], "nearest-rank");
+    assert_eq!(timing["p95"]["minimum_same_kind_samples"], 10);
+    assert_eq!(timing["current_implementation"]["validator"], "implemented");
+    assert_eq!(
+        timing["current_implementation"]["workflow_evidence_collection"],
+        "not_implemented"
+    );
+    assert_eq!(
+        timing["current_implementation"]["workflow_p95_gate"],
+        "not_implemented"
+    );
+    assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
+    assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
+    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 600.0"));
+    assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
+    for (_, workflow) in WORKFLOWS
+        .iter()
+        .filter(|(workflow, _)| matches!(*workflow, "normal-ci" | "package"))
+    {
+        assert!(!workflow.contains("nix run .#ci-timing"));
+    }
+}
+
+fn assert_generation_registry(generation: &Value) {
     assert_eq!(
         generation["generate_command"],
         "nix run .#generate-contracts"
@@ -316,23 +522,112 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
         assert!(artifact["tracked"].is_boolean());
     }
     assert_generated_artifact_contracts(artifacts);
+}
 
-    let ci = parse_json(CI_REGISTRY_JSON);
-    let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
-    let names = jobs
+fn assert_ci_workflow_registry(ci: &Value) {
+    let workflows = ci["workflows"]
+        .as_array()
+        .expect("CI workflows must be an array");
+    let registered_workflows = workflows
         .iter()
-        .map(|job| string_at(job, "name").to_owned())
+        .map(|workflow| string_at(workflow, "id"))
         .collect::<BTreeSet<_>>();
-    assert_eq!(names.len(), jobs.len(), "CI job names must be unique");
-    assert_eq!(names, workflow_job_names());
-    assert!(names.contains("lint/contracts"));
+    let active_workflows = WORKFLOWS
+        .iter()
+        .map(|(workflow, _)| *workflow)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(registered_workflows, active_workflows);
+    for workflow in workflows {
+        let id = string_at(workflow, "id");
+        assert_eq!(
+            string_at(workflow, "file"),
+            format!(".github/workflows/{id}.yml")
+        );
+        let source = WORKFLOWS
+            .iter()
+            .find_map(|(workflow, source)| (*workflow == id).then_some(*source))
+            .unwrap_or_else(|| panic!("registered workflow {id} must be embedded"));
+        assert!(
+            source.starts_with(&format!("name: {}\n", string_at(workflow, "display_name"))),
+            "workflow display name must match {id}"
+        );
+    }
+}
+
+fn assert_ci_job_registry(ci: &Value) {
+    let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
+    let jobs_by_name = jobs
+        .iter()
+        .map(|job| (string_at(job, "name"), job))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(
+        jobs_by_name.len(),
+        jobs.len(),
+        "CI job names must be unique"
+    );
+    assert_eq!(
+        jobs_by_name
+            .keys()
+            .map(|name| (*name).to_owned())
+            .collect::<BTreeSet<_>>(),
+        workflow_job_names()
+    );
+
+    let regions = ci["regions"]
+        .as_array()
+        .expect("CI regions must be an array");
+    let region_names = regions
+        .iter()
+        .map(|region| string_at(region, "name"))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        region_names,
+        BTreeSet::from([
+            "contracts",
+            "docs",
+            "product",
+            "python",
+            "remote_flake",
+            "routing",
+            "rust",
+            "web",
+        ])
+    );
+
     for job in jobs {
+        let workflow = string_at(job, "workflow");
+        let job_id = string_at(job, "job");
+        assert_eq!(string_at(job, "name"), format!("{workflow}/{job_id}"));
         let command = string_at(job, "command");
         let windows_native = job["execution_environment"] == "windows-native";
         assert!(
             command.starts_with("nix ") || (windows_native && command.starts_with("cargo ")),
-            "CI commands must use Nix except for the explicit Windows-native build: {command}"
+            "CI commands must use Nix except for explicit Windows-native jobs: {command}"
         );
+        assert!(
+            job["owns"]
+                .as_array()
+                .is_some_and(|ownership| !ownership.is_empty()),
+            "CI job {} must own at least one check",
+            string_at(job, "name")
+        );
+        assert!(matches!(
+            string_at(job, "aggregate_role"),
+            "none" | "plan" | "input" | "required_gate"
+        ));
+        for region in job["selected_by_regions"]
+            .as_array()
+            .expect("selected_by_regions must be an array")
+        {
+            let region = region
+                .as_str()
+                .expect("selected region names must be strings");
+            assert!(
+                region_names.contains(region),
+                "job {} selects unknown region {region}",
+                string_at(job, "name")
+            );
+        }
         assert!(!string_at(job, "applicable_when").is_empty());
         assert!(!string_at(job, "not_applicable").is_empty());
         assert!(
@@ -340,6 +635,423 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
                 .as_u64()
                 .is_some_and(|phase| (1..=15).contains(&phase))
         );
+    }
+}
+
+fn assert_ci_region_registry(ci: &Value) {
+    assert_ci_region_exports_and_owners(ci);
+    assert_ci_region_ownership_matrix(ci);
+}
+
+fn assert_ci_region_exports_and_owners(ci: &Value) {
+    let regions = ci["regions"]
+        .as_array()
+        .expect("CI regions must be an array");
+    let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
+    let jobs_by_name = jobs
+        .iter()
+        .map(|job| (string_at(job, "name"), job))
+        .collect::<BTreeMap<_, _>>();
+
+    for region in regions {
+        let name = string_at(region, "name");
+        let enum_name = name.to_ascii_uppercase();
+        assert!(
+            CI_REGIONS.contains(&format!("    {enum_name} = \"{name}\"")),
+            "region {name} must be exported by ci-regions"
+        );
+        for (_, workflow) in WORKFLOWS
+            .iter()
+            .filter(|(workflow, _)| matches!(*workflow, "normal-ci" | "package"))
+        {
+            assert!(
+                workflow.contains(&format!(
+                    "      {name}: ${{{{ steps.regions.outputs.{name} }}}}"
+                )),
+                "workflow must export region {name}"
+            );
+        }
+        for owner_key in ["normal_ci_owner_jobs", "package_ci_owner_jobs"] {
+            for owner in region[owner_key]
+                .as_array()
+                .expect("region owner jobs must be an array")
+            {
+                let owner = owner.as_str().expect("region owner job must be a string");
+                assert!(
+                    jobs_by_name.contains_key(owner),
+                    "region {name} references unknown owner {owner}"
+                );
+            }
+        }
+    }
+}
+
+fn assert_ci_region_ownership_matrix(ci: &Value) {
+    assert_eq!(
+        ci["regions"],
+        serde_json::json!([
+            {
+                "name": "docs",
+                "normal_ci_owner_jobs": ["normal-ci/fast"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "contracts",
+                "normal_ci_owner_jobs": ["normal-ci/rust_contracts"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "rust",
+                "normal_ci_owner_jobs": ["normal-ci/rust_contracts", "normal-ci/windows"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "python",
+                "normal_ci_owner_jobs": ["normal-ci/python_tests"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "routing",
+                "normal_ci_owner_jobs": ["normal-ci/routing_mutations"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "web",
+                "normal_ci_owner_jobs": ["normal-ci/web"],
+                "package_ci_owner_jobs": [],
+            },
+            {
+                "name": "product",
+                "normal_ci_owner_jobs": ["normal-ci/product_flake"],
+                "package_ci_owner_jobs": [
+                    "package/linux",
+                    "package/linux_repro",
+                    "package/repro_check",
+                    "package/windows",
+                ],
+            },
+            {
+                "name": "remote_flake",
+                "normal_ci_owner_jobs": ["normal-ci/product_flake"],
+                "package_ci_owner_jobs": [],
+            },
+        ])
+    );
+}
+
+fn assert_ci_classification_contract(ci: &Value) {
+    let classification = &ci["classification_contract"];
+    let region_names = ci["regions"]
+        .as_array()
+        .expect("CI regions must be an array")
+        .iter()
+        .map(|region| string_at(region, "name"))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(classification["schema_version"], 1);
+    assert_eq!(classification["command"], "nix run .#ci-regions --");
+    assert_eq!(string_set(&classification["region_names"]), region_names);
+    assert_eq!(
+        classification["github_outputs"]["structured"],
+        "regions_json"
+    );
+    assert_eq!(
+        string_set(&classification["github_outputs"]["scalars"]),
+        string_set(&classification["region_names"])
+    );
+    assert_eq!(
+        classification["github_outputs"]["scalar_values"],
+        serde_json::json!(["false", "true"])
+    );
+    assert!(
+        CI_REGIONS
+            .contains("f\"{region.value}={str(region in classification.applicable).lower()}\"")
+    );
+    assert!(CI_REGIONS.contains("f\"regions_json={regions_json}\""));
+
+    assert_ci_fail_closed_classification(classification);
+    assert_ci_compatibility_classification(classification);
+    assert_ci_routing_classification(classification);
+    assert_ci_workflow_region_outputs(classification);
+}
+
+fn assert_ci_fail_closed_classification(classification: &Value) {
+    let fail_closed = &classification["fail_closed"];
+    assert_eq!(
+        string_set(&fail_closed["selected_regions"]),
+        string_set(&classification["region_names"])
+    );
+    for path in fail_closed["paths"]
+        .as_array()
+        .expect("fail-closed paths must be an array")
+    {
+        let path = path.as_str().expect("fail-closed path must be a string");
+        assert!(
+            CI_REGIONS.contains(&format!("        \"{path}\",")),
+            "ci-regions must fail closed for {path}"
+        );
+    }
+    for prefix in fail_closed["prefixes"]
+        .as_array()
+        .expect("fail-closed prefixes must be an array")
+    {
+        let prefix = prefix
+            .as_str()
+            .expect("fail-closed prefix must be a string");
+        assert!(
+            CI_REGIONS.contains(&format!("\"{prefix}\"")),
+            "ci-regions must fail closed below {prefix}"
+        );
+    }
+}
+
+fn assert_ci_compatibility_classification(classification: &Value) {
+    let compatibility = &classification["compatibility"];
+    assert_eq!(
+        compatibility["forced_regions"],
+        serde_json::json!(["contracts", "rust", "product"])
+    );
+    assert_eq!(compatibility["python_sources_also_select"], "python");
+    for prefix in compatibility["prefixes"]
+        .as_array()
+        .expect("compatibility prefixes must be an array")
+    {
+        let prefix = prefix
+            .as_str()
+            .expect("compatibility prefix must be a string");
+        assert!(CI_REGIONS.contains(&format!("    \"{prefix}\",")));
+    }
+    assert!(CI_REGIONS.contains("regions.update((Region.RUST, Region.PRODUCT))"));
+
+    for path in classification["openapi_contract_paths"]
+        .as_array()
+        .expect("OpenAPI contract paths must be an array")
+    {
+        let path = path.as_str().expect("OpenAPI path must be a string");
+        assert!(
+            CI_REGIONS.contains(&format!("        \"{path}\",")),
+            "ci-regions must classify exact OpenAPI path {path}"
+        );
+    }
+}
+
+fn assert_ci_routing_classification(classification: &Value) {
+    let routing = &classification["routing_audit"];
+    for path in routing["direct_paths"]
+        .as_array()
+        .expect("routing direct paths must be an array")
+    {
+        let path = path.as_str().expect("routing direct path must be a string");
+        assert!(
+            CI_REGIONS.contains(&format!("        \"{path}\",")),
+            "ci-regions must classify direct routing input {path}"
+        );
+    }
+    assert_eq!(routing["rust_source_prefix"], "rust/pokecon/src/");
+    assert_eq!(routing["rust_source_suffix"], ".rs");
+    assert!(CI_REGIONS.contains("ROUTING_RUST_SOURCE_PREFIX"));
+    assert!(CI_REGIONS.contains("path.endswith(\".rs\")"));
+    for prefix in routing["acl_prefixes"]
+        .as_array()
+        .expect("routing ACL prefixes must be an array")
+    {
+        let prefix = prefix
+            .as_str()
+            .expect("routing ACL prefix must be a string");
+        assert!(CI_REGIONS.contains(&format!("    \"{prefix}\",")));
+    }
+    for prefix in routing["excluded_prefixes"]
+        .as_array()
+        .expect("routing excluded prefixes must be an array")
+    {
+        let prefix = prefix
+            .as_str()
+            .expect("routing excluded prefix must be a string");
+        assert!(CI_REGIONS.contains(&format!("\"{prefix}\"")));
+    }
+    assert_eq!(routing["tauri_config_parent"], "rust/pokecon");
+    assert_eq!(
+        routing["tauri_config_pattern"],
+        r"(?:tauri(?:\.[^.]+)?\.conf\.(?:json|json5)|Tauri(?:\.[^.]+)?\.toml)"
+    );
+    assert!(CI_REGIONS.contains("ROUTING_TAURI_CONFIG_PATTERN.fullmatch"));
+    for name in routing["cargo_config_names"]
+        .as_array()
+        .expect("routing Cargo config names must be an array")
+    {
+        let name = name
+            .as_str()
+            .expect("routing Cargo config name must be a string");
+        assert!(CI_REGIONS.contains(&format!("\"{name}\"")));
+    }
+    for part in routing["cargo_config_excluded_parts"]
+        .as_array()
+        .expect("routing Cargo config exclusions must be an array")
+    {
+        let part = part
+            .as_str()
+            .expect("routing Cargo config exclusion must be a string");
+        assert!(CI_REGIONS.contains(&format!("        \"{part}\",")));
+    }
+    assert_eq!(
+        routing["uncertain_ci_control_policy"],
+        "select every region"
+    );
+    assert!(CI_REGIONS.contains("if is_routing_path(path):"));
+    assert!(CI_REGIONS.contains("regions.add(Region.ROUTING)"));
+}
+
+fn assert_ci_workflow_region_outputs(classification: &Value) {
+    for (_, workflow) in WORKFLOWS
+        .iter()
+        .filter(|(workflow, _)| matches!(*workflow, "normal-ci" | "package"))
+    {
+        assert!(workflow.contains("      regions_json: ${{ steps.regions.outputs.regions_json }}"));
+        assert!(workflow.contains("\"regions\":${{ needs.plan.outputs.regions_json || 'null' }}"));
+        for region in string_set(&classification["region_names"]) {
+            assert!(workflow.contains(&format!(
+                "\"{region}\":\"${{{{ needs.plan.outputs.{region} }}}}\""
+            )));
+        }
+    }
+}
+
+fn assert_ci_aggregate_schema(aggregate: &Value) {
+    assert_eq!(aggregate["command"], "nix run .#ci-aggregate --");
+    assert_eq!(
+        aggregate["plan_keys"],
+        serde_json::json!(["jobs", "plan_status", "region_outputs", "regions"])
+    );
+    assert_eq!(
+        aggregate["planned_job_keys"],
+        serde_json::json!(["applicable", "reason"])
+    );
+    assert_eq!(
+        aggregate["region_keys"],
+        serde_json::json!([
+            "docs",
+            "contracts",
+            "rust",
+            "python",
+            "routing",
+            "web",
+            "product",
+            "remote_flake",
+        ])
+    );
+    assert_eq!(aggregate["region_value_type"], "boolean");
+    assert_eq!(
+        aggregate["region_output_values"],
+        serde_json::json!(["false", "true"])
+    );
+    assert_eq!(aggregate["region_outputs_must_match_regions"], true);
+    assert_eq!(
+        aggregate["report_keys"],
+        serde_json::json!([
+            "conclusion",
+            "extra_results",
+            "jobs",
+            "plan_status",
+            "region_outputs",
+            "regions",
+            "violations",
+        ])
+    );
+    assert_eq!(
+        aggregate["job_report_keys"],
+        serde_json::json!(["applicable", "expected_result", "name", "reason", "result",])
+    );
+    assert_eq!(
+        aggregate["canonical_serialization"],
+        serde_json::json!({
+            "sort_keys": true,
+            "ensure_ascii": false,
+            "separators": [",", ":"],
+        })
+    );
+    assert_eq!(
+        aggregate["accepted_results"],
+        serde_json::json!(["success", "skipped", "failure", "cancelled", "timed_out",])
+    );
+    assert_eq!(aggregate["required_plan_result"], "success");
+    assert_eq!(aggregate["applicable_job_result"], "success");
+    assert_eq!(aggregate["inapplicable_job_result"], "skipped");
+    assert_eq!(aggregate["missing_results_are_errors"], true);
+    assert_eq!(aggregate["extra_results_are_errors"], true);
+}
+
+fn assert_ci_aggregate_implementation(aggregate: &Value) {
+    assert!(CI_AGGREGATE.contains(
+        "PLAN_KEYS: Final = frozenset({\"jobs\", \"plan_status\", \"region_outputs\", \"regions\"})"
+    ));
+    assert!(CI_AGGREGATE.contains("REGION_KEYS: Final = frozenset(REGION_NAMES)"));
+    assert!(CI_AGGREGATE.contains("\"region_outputs\": self.region_outputs"));
+    assert!(CI_AGGREGATE.contains("\"regions\": self.regions"));
+    assert!(CI_AGGREGATE.contains("ensure_ascii=False"));
+    assert!(CI_AGGREGATE.contains("separators=(\",\", \":\")"));
+    assert!(CI_AGGREGATE.contains("sort_keys=True"));
+    for region in string_set(&aggregate["region_keys"]) {
+        assert!(CI_AGGREGATE.contains(&format!("    \"{region}\",")));
+    }
+    for result in string_set(&aggregate["accepted_results"]) {
+        assert!(
+            CI_AGGREGATE.contains(&format!("= \"{result}\"")),
+            "aggregate result {result} must be implemented"
+        );
+    }
+}
+
+fn assert_ci_aggregate_workflow_contracts(aggregate: &Value, jobs: &[Value]) {
+    let workflow_contracts = aggregate["workflows"]
+        .as_array()
+        .expect("aggregate workflows must be an array");
+    assert_eq!(workflow_contracts.len(), 2);
+    for contract in workflow_contracts {
+        let workflow = string_at(contract, "workflow");
+        let source = WORKFLOWS
+            .iter()
+            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .unwrap_or_else(|| panic!("aggregate workflow {workflow} must exist"));
+        let expected_inputs = jobs
+            .iter()
+            .filter(|job| job["workflow"] == workflow && job["aggregate_role"] == "input")
+            .map(|job| string_at(job, "name"))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(string_set(&contract["input_jobs"]), expected_inputs);
+
+        let plan_job = string_at(contract, "plan_job");
+        let required_job = string_at(contract, "required_job");
+        let plan = jobs
+            .iter()
+            .find(|job| job["name"] == plan_job)
+            .unwrap_or_else(|| panic!("aggregate plan job {plan_job} must exist"));
+        let required = jobs
+            .iter()
+            .find(|job| job["name"] == required_job)
+            .unwrap_or_else(|| panic!("aggregate required job {required_job} must exist"));
+        assert_eq!(plan["aggregate_role"], "plan");
+        assert_eq!(required["aggregate_role"], "required_gate");
+        assert!(source.contains(&format!(
+            "    name: {}",
+            string_at(contract, "required_context")
+        )));
+        assert!(source.contains("\"plan_status\":\"${{ needs.plan.result }}\""));
+        assert!(source.contains("\"regions\":${{ needs.plan.outputs.regions_json || 'null' }}"));
+        assert!(source.contains("\"region_outputs\":{"));
+        for region in string_set(&aggregate["region_keys"]) {
+            assert!(source.contains(&format!(
+                "\"{region}\":\"${{{{ needs.plan.outputs.{region} }}}}\""
+            )));
+        }
+        for input in contract["input_jobs"].as_array().expect("input jobs") {
+            let input = input.as_str().expect("aggregate input must be a string");
+            let (_, job_id) = input
+                .split_once('/')
+                .expect("aggregate input must be workflow-qualified");
+            assert!(
+                source.contains(&format!("{job_id}=${{{{ needs.{job_id}.result }}}}")),
+                "workflow {workflow} must pass result for {job_id}"
+            );
+        }
     }
 }
 
@@ -379,10 +1091,7 @@ fn assert_generated_artifact_contracts(artifacts: &[Value]) {
         "web/src/lib/api/openapi.json"
     );
 
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("pokecon package must be nested under the repository root");
+    let repository = repository_root();
     for artifact in artifacts
         .iter()
         .filter(|artifact| artifact["tracked"] == true)
@@ -405,6 +1114,13 @@ fn assert_generated_artifact_contracts(artifacts: &[Value]) {
             assert!(path.is_file(), "tracked output file is missing: {output}");
         }
     }
+}
+
+fn repository_root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("pokecon package must be nested under the repository root")
 }
 
 #[test]

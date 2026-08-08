@@ -65,6 +65,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 markers = [
+    "production_routing_audit: baseline fail-closed routing audit run by its dedicated Nix gate",
     "production_routing_mutation: exhaustive fail-closed mutation audit run by its dedicated Nix gate",
 ]
 

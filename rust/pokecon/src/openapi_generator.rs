@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
@@ -15,21 +15,36 @@ struct Arguments {
 
 pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
     let arguments = Arguments::parse();
-    let generated = crate::server::openapi::document_json()?;
     if arguments.check {
-        let existing = fs::read_to_string(&arguments.output)?;
-        if existing != generated {
-            return Err(format!(
-                "{} differs from the generated OpenAPI document",
-                arguments.output.display()
-            )
-            .into());
-        }
+        check_openapi_artifact(&arguments.output)
     } else {
-        if let Some(parent) = arguments.output.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(&arguments.output, generated)?;
+        write_openapi_artifact(&arguments.output)
     }
+}
+
+/// Checks an `OpenAPI` artifact against the server schema generator.
+///
+/// # Errors
+///
+/// Returns an error when the document cannot be generated or the artifact is missing or stale.
+pub(crate) fn check_openapi_artifact(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let generated = crate::server::openapi::document_json()?;
+    let existing = fs::read_to_string(output)?;
+    if existing != generated {
+        return Err(format!(
+            "{} differs from the generated OpenAPI document",
+            output.display()
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn write_openapi_artifact(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let generated = crate::server::openapi::document_json()?;
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(output, generated)?;
     Ok(())
 }

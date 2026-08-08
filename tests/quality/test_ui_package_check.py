@@ -11,6 +11,7 @@ import subprocess
 import sys
 import textwrap
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 from typing import TypeIs
@@ -23,6 +24,7 @@ type JsonValue = (
 )
 type ProductionRoutingMutation = tuple[str, dict[str, str]]
 type CorsSuccessRequiredHeaderFault = tuple[str, str, str, str]
+type OpenapiFixtureProbe = tuple[str, Path, str, str, dict[str, str]]
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV = (
@@ -1618,7 +1620,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         ),
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
-            "a0409c3e6fc3816c17c7ae09025d008c311cc0e0b6329863404eb097c653d6ac"
+            "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
             "545de05ab40d040fea2b8c40d0f1c6586f1c475e08e55cab1a3026ad2d7cf333"
@@ -2273,7 +2275,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "d73963e4a82efce54d1ede9b84dab71325eb4c81ea5b470a6407a8a5e422a271"
+        == "b612a060d82c7f2a2ad1d68ad9e6db67358abb402c3ff191ddc26dabfa166179"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2527,7 +2529,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(controlled_manifest_section.strip().encode()).hexdigest()
-        == "4749e115e0cf519da6370308219a8f7f9c346aece31b8e24a675a7d2d053a62c"
+        == "331f085428d0ad0507637b42271372b78f89a5aa02bc69784a166aac24cab576"
     )
     for exact_overlay_path, expected_count in (
         ('path = "${source}/rust/pokecon/src/lib.rs"', 2),
@@ -2555,6 +2557,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "\\( -type l -o -perm /0222 \\) -print -quit",
         "${verifyControlledCargoManifests}",
         'auditPytestConfig = pkgs.writeText "pokecon-audit-pytest.ini"',
+        "production_routing_audit: baseline fail-closed routing audit",
         "production_routing_mutation: exhaustive fail-closed mutation audit",
     ):
         assert controlled_manifest_proof in controlled_manifest_section, (
@@ -3354,12 +3357,14 @@ offline = true
         'pytest_arguments=("$@")',
         "if [ \"''${#pytest_arguments[@]}\" -eq 0 ]; then",
         "pytest_arguments=(tests)",
-        '-m "not production_routing_mutation"',
+        '-m "not production_routing_audit and not production_routing_mutation"',
         "\"''${pytest_arguments[@]}\"",
     ):
         assert test_task_section.count(test_task_proof) == 1, test_task_proof
     assert test_task_section.index("\"''${pytest_arguments[@]}\"") < (
-        test_task_section.index('-m "not production_routing_mutation"')
+        test_task_section.index(
+            '-m "not production_routing_audit and not production_routing_mutation"'
+        )
     )
     assert "python -m pytest -p no:cacheprovider tests" not in test_task_section
     mutation_test_app_end = flake.index(
@@ -3388,6 +3393,11 @@ offline = true
         (
             "rust-ci-core",
             "            rust-ci-core = mkTask {\n",
+            "            ci-rust-contracts = mkTask {\n",
+        ),
+        (
+            "ci-rust-contracts",
+            "            ci-rust-contracts = mkTask {\n",
             "            clippy = mkTask {\n",
         ),
         (
@@ -3456,19 +3466,19 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "cd113f31e69a87ec9a30bd7f7e5ad708933a27707dc9dd9149c185b31ff5b1ed"
+        == "26ec09b758abcff7959b6ebfca6b6f15451d35adf8ad8a3d450532d66e3f8583"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
         development_command_sections_text.count(development_provenance_assignment)
-        == len(development_command_section_boundaries) + 6
+        == len(development_command_section_boundaries) + 2
     )
     assert (
         development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
-        == len(development_command_section_boundaries) + 6
+        == len(development_command_section_boundaries) + 2
     )
-    assert flake.count(development_provenance_assignment) == 20
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 23
+    assert flake.count(development_provenance_assignment) == 17
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 20
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -3490,11 +3500,16 @@ offline = true
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
         ),
         "rust-ci-core": (
+            "cargo build --locked --workspace --all-features",
             "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
             "--workspace --all-targets --all-features -- -D warnings",
-            "cargo build --locked --workspace --all-features",
             "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
             "--workspace --all-features",
+        ),
+        "ci-rust-contracts": (
+            "cargo build --locked --workspace --all-features",
+            "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+            "cargo test --locked --workspace --all-features",
         ),
         "clippy": (
             "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
@@ -3506,11 +3521,9 @@ offline = true
             "--workspace --all-features",
         ),
         "check": (
-            "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
-            "--workspace --all-features",
-            "cargo build --locked --workspace --all-features --jobs 1",
-            "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
-            "--workspace --all-targets --all-features -- -D warnings",
+            "cargo build --locked --workspace --all-features",
+            "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+            "cargo test --locked --workspace --all-features",
         ),
         "tauri-check": (
             "POKECON_RESOURCE_PROVENANCE=development cargo tauri build "
@@ -3535,7 +3548,7 @@ offline = true
         actual_development_cargo_invocations == expected_development_cargo_invocations
     )
     for command_section_name, build_command_index in (
-        ("rust-ci-core", 1),
+        ("rust-ci-core", 0),
         ("build-rust", 0),
     ):
         command_section = development_command_sections[command_section_name]
@@ -3570,7 +3583,11 @@ offline = true
         < rust_ci_core_section.index(compatibility_runner)
     )
     check_commands = development_command_sections["check"]
-    assert check_commands.count('-m "not production_routing_mutation"') == 1
+    ordinary_pytest_marker_expression = (
+        '-m "not production_routing_audit and not production_routing_mutation"'
+    )
+    assert check_commands.count(ordinary_pytest_marker_expression) == 1
+    assert check_commands.count('test -f "${productionRoutingAudit}/passed"') == 1
     assert (
         check_commands.count(
             '"${productionRoutingMutationAuditRunner}/bin/'
@@ -3594,15 +3611,15 @@ offline = true
     )
     for rust_lane_command in (
         '"${pkgs.bash}/bin/bash" -euo pipefail -c',
-        "cargo run --locked --package pokecon --bin generate_contracts",
-        "check-jsonschema --check-metaschema generated/settings.schema.json",
-        "python -m scripts.acceptance.records",
-        "scripts/quality/generate-api-types.sh --check",
-        "cargo test --locked --workspace --all-features",
-        "cargo build --locked --workspace --all-features --jobs 1",
+        "export POKECON_RESOURCE_PROVENANCE=development",
+        "cargo build --locked --workspace --all-features",
         "cargo clippy --locked --workspace --all-targets --all-features",
+        "cargo test --locked --workspace --all-features",
         "python -m scripts.compatibility.promote --check",
         "python -m scripts.compatibility.runner",
+        "check-jsonschema --check-metaschema generated/settings.schema.json",
+        "python -m scripts.acceptance.records",
+        "scripts/quality/generate-api-types.sh --check-types-only",
     ):
         assert rust_lane_command in rust_lane
     for web_lane_command in (
@@ -3627,7 +3644,8 @@ offline = true
         "                  pytest \\\n"
         "                  python -m pytest \\\n"
         "                  -p no:cacheprovider \\\n"
-        '                  -m "not production_routing_mutation" \\\n'
+        "                  -m "
+        '"not production_routing_audit and not production_routing_mutation" \\\n'
         "                  tests \\\n"
         "                  -v \\\n"
         "                  --tb=short \\\n"
@@ -3654,48 +3672,43 @@ offline = true
     )
     dev_debug_flags = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
     test_debug_flags = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
-    contract_generator = (
-        "cargo run --locked --package pokecon --bin generate_contracts "
-        "--features contract-generator -- --check"
-    )
-    contract_generator_with_provenance = (
-        f"{development_provenance_assignment} {contract_generator}"
-    )
-    api_type_generation_with_provenance = (
-        f"{development_provenance_assignment} "
-        "scripts/quality/generate-api-types.sh --check"
+    aggregate_provenance = f"export {development_provenance_assignment}"
+    aggregate_api_type_check = (
+        "scripts/quality/generate-api-types.sh --check-types-only"
     )
     targeted_contract_test = (
-        "cargo test --locked --package pokecon --test contract_sync "
-        "--features integration-test-support"
+        "cargo test --locked --package pokecon \\\n"
+        "                  --features integration-test-support,contract-generator \\\n"
+        "                  --test contract_sync"
     )
     assert "reclaimPerRunCargoTarget" not in flake
     assert "cargo clean" not in flake
     assert check_commands.count(shared_linker_flags) == 1
     assert check_commands.count(dev_debug_flags) == 1
     assert check_commands.count(test_debug_flags) == 1
-    assert check_commands.count(contract_generator_with_provenance) == 1
-    assert check_commands.count(api_type_generation_with_provenance) == 1
+    assert check_commands.count(aggregate_provenance) == 1
+    assert check_commands.count(aggregate_api_type_check) == 1
+    assert (
+        "cargo run --locked --package pokecon --bin generate_contracts"
+        not in check_commands
+    )
+    assert "scripts/quality/generate-api-types.sh --check\n" not in check_commands
     assert check_commands.count(targeted_contract_test) == 0
     assert flake.count(targeted_contract_test) == 1
     check_invocations = expected_development_cargo_invocations["check"]
     assert len(check_invocations) == 3
-    check_test = check_invocations[0]
-    check_build = check_invocations[1]
-    check_clippy = check_invocations[2]
-    check_build_with_local_provenance = (
-        "POKECON_RESOURCE_PROVENANCE=development \\\n                    " + check_build
-    )
-    assert check_commands.count(check_build_with_local_provenance) == 1
+    check_build = check_invocations[0]
+    check_clippy = check_invocations[1]
+    check_test = check_invocations[2]
     assert (
         check_commands.index(dev_debug_flags)
         < check_commands.index(test_debug_flags)
         < check_commands.index(shared_linker_flags)
-        < check_commands.index(contract_generator_with_provenance)
-        < check_commands.index(api_type_generation_with_provenance)
-        < check_commands.index(check_test)
+        < check_commands.index(aggregate_provenance)
         < check_commands.index(check_build)
         < check_commands.index(check_clippy)
+        < check_commands.index(check_test)
+        < check_commands.index(aggregate_api_type_check)
     )
     treefmt_check = (
         '${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"'
@@ -3729,15 +3742,21 @@ offline = true
     assert contract_check_section.count(editor_provenance) == 1
     assert contract_check_section.index(
         editor_provenance
-    ) < contract_check_section.index(
-        "cargo run --locked --package pokecon --bin generate_contracts"
-    )
-    assert contract_check_section.index(
-        editor_provenance
     ) < contract_check_section.index(targeted_contract_test)
     assert contract_check_section.index(
         editor_provenance
-    ) < contract_check_section.index("scripts/quality/generate-api-types.sh --check")
+    ) < contract_check_section.index(
+        "scripts/quality/generate-api-types.sh --check-types-only"
+    )
+    assert "cargo build " not in contract_check_section
+    assert '"$CARGO_TARGET_DIR/debug/generate_contracts"' not in contract_check_section
+    assert "POKECON_OPENAPI_GENERATOR" not in contract_check_section
+    for unrelated_contract_command in (
+        "basedpyrightCli",
+        "shellcheck ",
+        "scripts.quality.source_filter",
+    ):
+        assert unrelated_contract_command not in contract_check_section
 
     generate_contracts_section = section(
         flake,
@@ -12021,6 +12040,52 @@ fetch_advertised_bare_options_probe() {
         assert len(matching_scopes) == 1, injected_name
         return fault_probe_scope(matching_scopes[0])
 
+    def prepare_fixture_probe(
+        fixture_root: Path,
+        fixture_mode: str,
+        probe_scope: str,
+        environment: dict[str, str],
+        fixture_program: str = program,
+    ) -> OpenapiFixtureProbe:
+        fixture_root.mkdir()
+        return fixture_program, fixture_root, fixture_mode, probe_scope, environment
+
+    def run_fixture_probe(
+        fixture_probe: OpenapiFixtureProbe,
+    ) -> subprocess.CompletedProcess[str]:
+        fixture_program, fixture_root, fixture_mode, probe_scope, environment = (
+            fixture_probe
+        )
+        return subprocess.run(  # noqa: S603
+            [
+                bash,
+                "-c",
+                fixture_program,
+                str(python_executable),
+                str(inventory),
+                str(fixture_root),
+                fixture_mode,
+                probe_scope,
+            ],
+            check=False,
+            capture_output=True,
+            cwd=REPOSITORY,
+            env={
+                **environment,
+                "LC_ALL": "C",
+                "PATH": fixture_path,
+            },
+            text=True,
+            timeout=20,
+        )
+
+    def run_fixture_probes(
+        fixture_probes: tuple[OpenapiFixtureProbe, ...],
+    ) -> tuple[subprocess.CompletedProcess[str], ...]:
+        assert fixture_probes
+        with ThreadPoolExecutor(max_workers=min(4, len(fixture_probes))) as executor:
+            return tuple(executor.map(run_fixture_probe, fixture_probes))
+
     unique_json_decoder_program_lock_anchor = (
         "\n}\nreadonly -f validate_unique_json_object_keys\n\nrequire_json_response() {"
     )
@@ -12034,26 +12099,39 @@ fetch_advertised_bare_options_probe() {
     assert late_multiline_unique_json_decoder_program != program
     decoder_locked_redefinition_root = tmp_path / "locked-unique-json-redefinition"
     decoder_locked_redefinition_root.mkdir()
-    rejected_decoder_locked_redefinition = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            late_multiline_unique_json_decoder_program,
-            str(python_executable),
-            str(inventory),
-            str(decoder_locked_redefinition_root),
-            production_modes[0],
-            "all",
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "LC_ALL": "C",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
+    forbidden_preflight_program_lock_anchor = (
+        "\n}\nreadonly -f require_forbidden_preflight\n\nrequire_exact_allow_header() {"
+    )
+    late_multiline_forbidden_preflight_program = program.replace(
+        forbidden_preflight_program_lock_anchor,
+        "\n}\nreadonly -f require_forbidden_preflight"
+        "\n\nfunction require_forbidden_preflight()\n{\n  :\n}\n\n"
+        "require_exact_allow_header() {",
+        1,
+    )
+    assert late_multiline_forbidden_preflight_program != program
+    locked_redefinition_root = tmp_path / "locked-forbidden-preflight-redefinition"
+    locked_redefinition_root.mkdir()
+    (
+        rejected_decoder_locked_redefinition,
+        rejected_locked_redefinition,
+    ) = run_fixture_probes(
+        (
+            (
+                late_multiline_unique_json_decoder_program,
+                decoder_locked_redefinition_root,
+                production_modes[0],
+                "all",
+                {},
+            ),
+            (
+                late_multiline_forbidden_preflight_program,
+                locked_redefinition_root,
+                production_modes[0],
+                "all",
+                {},
+            ),
+        )
     )
     assert rejected_decoder_locked_redefinition.returncode != 0
     assert rejected_decoder_locked_redefinition.stdout == ""
@@ -12069,40 +12147,6 @@ fetch_advertised_bare_options_probe() {
     assert not decoder_locked_redefinition_root.joinpath(
         "request-invocations.tsv"
     ).exists()
-    forbidden_preflight_program_lock_anchor = (
-        "\n}\nreadonly -f require_forbidden_preflight\n\nrequire_exact_allow_header() {"
-    )
-    late_multiline_forbidden_preflight_program = program.replace(
-        forbidden_preflight_program_lock_anchor,
-        "\n}\nreadonly -f require_forbidden_preflight"
-        "\n\nfunction require_forbidden_preflight()\n{\n  :\n}\n\n"
-        "require_exact_allow_header() {",
-        1,
-    )
-    assert late_multiline_forbidden_preflight_program != program
-    locked_redefinition_root = tmp_path / "locked-forbidden-preflight-redefinition"
-    locked_redefinition_root.mkdir()
-    rejected_locked_redefinition = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            late_multiline_forbidden_preflight_program,
-            str(python_executable),
-            str(inventory),
-            str(locked_redefinition_root),
-            production_modes[0],
-            "all",
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "LC_ALL": "C",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
-    )
     assert rejected_locked_redefinition.returncode != 0
     assert rejected_locked_redefinition.stdout == ""
     assert len(rejected_locked_redefinition.stderr.splitlines()) == 1
@@ -12115,29 +12159,17 @@ fetch_advertised_bare_options_probe() {
         is not None
     )
     assert not locked_redefinition_root.joinpath("request-invocations.tsv").exists()
-    completed_baseline_modes: list[str] = []
-    for mode in production_modes:
-        completed = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(result_roots[mode]),
-                mode,
-                "all",
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+    completed_baselines = run_fixture_probes(
+        tuple(
+            (program, result_roots[mode], mode, "all", {}) for mode in production_modes
         )
+    )
+    completed_baseline_modes: list[str] = []
+    for mode, completed in zip(
+        production_modes,
+        completed_baselines,
+        strict=True,
+    ):
         assert completed.returncode == 0, completed.stderr
         assert completed.stdout == ""
         assert completed.stderr == ""
@@ -12575,56 +12607,29 @@ fetch_advertised_bare_options_probe() {
     existing_fault_mode = production_modes[0]
     fail_open_root = tmp_path / "fail-open-preflight-result"
     fail_open_root.mkdir()
-    fail_open = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            program,
-            str(python_executable),
-            str(inventory),
-            str(fail_open_root),
-            existing_fault_mode,
-            fault_probe_scope("cors"),
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "FAIL_OPEN_PREFLIGHTS": "1",
-            "LC_ALL": "C",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
+    duplicate_cors_root = tmp_path / "duplicate-cors-header-result"
+    duplicate_cors_root.mkdir()
+    fail_open, rejected_duplicate_cors = run_fixture_probes(
+        (
+            (
+                program,
+                fail_open_root,
+                existing_fault_mode,
+                fault_probe_scope("cors"),
+                {"FAIL_OPEN_PREFLIGHTS": "1"},
+            ),
+            (
+                program,
+                duplicate_cors_root,
+                existing_fault_mode,
+                fault_probe_scope("cors"),
+                {"DUPLICATE_CORS_HEADER": "1"},
+            ),
+        )
     )
     assert fail_open.returncode != 0
     assert "HTTP 204" in fail_open.stderr
     assert "unadvertised CORS preflight" in fail_open.stderr
-
-    duplicate_cors_root = tmp_path / "duplicate-cors-header-result"
-    duplicate_cors_root.mkdir()
-    rejected_duplicate_cors = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            program,
-            str(python_executable),
-            str(inventory),
-            str(duplicate_cors_root),
-            existing_fault_mode,
-            fault_probe_scope("cors"),
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "DUPLICATE_CORS_HEADER": "1",
-            "LC_ALL": "C",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
-    )
     assert rejected_duplicate_cors.returncode != 0
     assert (
         "did not return exactly one Access-Control-Allow-Origin header"
@@ -12632,48 +12637,48 @@ fetch_advertised_bare_options_probe() {
     )
 
     later_forbidden_fault_invocation = "/api/settings\toptions\tput"
+    forbidden_envelope_fault_cases = tuple(
+        (mode, selector, expected_diagnostic)
+        for mode in production_modes
+        for selector, expected_diagnostic in cors_preflight_forbidden_envelope_faults
+    )
+    rejected_forbidden_envelopes = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-envelope-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_PREFLIGHT_FORBIDDEN_ENVELOPE_FAULT": selector},
+            )
+            for mode, selector, _expected_diagnostic in forbidden_envelope_fault_cases
+        )
+    )
     forbidden_envelope_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for selector, expected_diagnostic in cors_preflight_forbidden_envelope_faults:
-            forbidden_envelope_root = (
-                tmp_path / f"{mode}-cors-forbidden-envelope-{selector}"
-            )
-            forbidden_envelope_root.mkdir()
-            rejected_forbidden_envelope = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(forbidden_envelope_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_PREFLIGHT_FORBIDDEN_ENVELOPE_FAULT": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_forbidden_envelope.returncode != 0
-            assert rejected_forbidden_envelope.stdout == ""
-            assert rejected_forbidden_envelope.stderr.splitlines() == [
-                f"{mode} unadvertised CORS preflight OPTIONS /api/settings for PUT "
-                f"{expected_diagnostic}"
-            ]
-            assert (
-                forbidden_envelope_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_forbidden_fault_invocation
-            )
-            forbidden_envelope_fault_coverage.add((mode, selector))
+    for (
+        mode,
+        selector,
+        expected_diagnostic,
+    ), rejected_forbidden_envelope in zip(
+        forbidden_envelope_fault_cases,
+        rejected_forbidden_envelopes,
+        strict=True,
+    ):
+        forbidden_envelope_root = (
+            tmp_path / f"{mode}-cors-forbidden-envelope-{selector}"
+        )
+        assert rejected_forbidden_envelope.returncode != 0
+        assert rejected_forbidden_envelope.stdout == ""
+        assert rejected_forbidden_envelope.stderr.splitlines() == [
+            f"{mode} unadvertised CORS preflight OPTIONS /api/settings for PUT "
+            f"{expected_diagnostic}"
+        ]
+        assert (
+            forbidden_envelope_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_forbidden_fault_invocation
+        )
+        forbidden_envelope_fault_coverage.add((mode, selector))
     assert forbidden_envelope_fault_coverage == {
         (mode, selector)
         for mode in production_modes
@@ -12681,33 +12686,25 @@ fetch_advertised_bare_options_probe() {
     }
     assert len(forbidden_envelope_fault_coverage) == len(production_modes) * 5 == 10
 
-    completed_unknown_forbidden_envelope_modes: list[str] = []
-    for mode in production_modes:
-        unknown_forbidden_envelope_root = (
-            tmp_path / f"{mode}-cors-forbidden-envelope-unknown"
-        )
-        unknown_forbidden_envelope_root.mkdir()
-        rejected_unknown_forbidden_envelope = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_forbidden_envelope_root),
+    rejected_unknown_forbidden_envelopes = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-envelope-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_PREFLIGHT_FORBIDDEN_ENVELOPE_FAULT": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_PREFLIGHT_FORBIDDEN_ENVELOPE_FAULT": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_forbidden_envelope_modes: list[str] = []
+    for mode, rejected_unknown_forbidden_envelope in zip(
+        production_modes,
+        rejected_unknown_forbidden_envelopes,
+        strict=True,
+    ):
+        unknown_forbidden_envelope_root = (
+            tmp_path / f"{mode}-cors-forbidden-envelope-unknown"
         )
         assert rejected_unknown_forbidden_envelope.returncode != 0
         assert rejected_unknown_forbidden_envelope.stdout == ""
@@ -12722,48 +12719,48 @@ fetch_advertised_bare_options_probe() {
     assert tuple(completed_unknown_forbidden_envelope_modes) == production_modes
 
     later_forbidden_document_fault_invocation = "/api/state\toptions\tdelete"
+    forbidden_document_fault_cases = tuple(
+        (mode, selector, expected_diagnostic)
+        for mode in production_modes
+        for selector, expected_diagnostic in cors_preflight_forbidden_document_faults
+    )
+    rejected_forbidden_documents = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-document-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_PREFLIGHT_FORBIDDEN_DOCUMENT_FAULT": selector},
+            )
+            for mode, selector, _expected_diagnostic in forbidden_document_fault_cases
+        )
+    )
     forbidden_document_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for selector, expected_diagnostic in cors_preflight_forbidden_document_faults:
-            forbidden_document_root = (
-                tmp_path / f"{mode}-cors-forbidden-document-{selector}"
-            )
-            forbidden_document_root.mkdir()
-            rejected_forbidden_document = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(forbidden_document_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_PREFLIGHT_FORBIDDEN_DOCUMENT_FAULT": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_forbidden_document.returncode != 0
-            assert rejected_forbidden_document.stdout == ""
-            assert rejected_forbidden_document.stderr.splitlines() == [
-                f"{mode} unadvertised CORS preflight OPTIONS /api/state for DELETE "
-                f"{expected_diagnostic}"
-            ]
-            assert (
-                forbidden_document_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_forbidden_document_fault_invocation
-            )
-            forbidden_document_fault_coverage.add((mode, selector))
+    for (
+        mode,
+        selector,
+        expected_diagnostic,
+    ), rejected_forbidden_document in zip(
+        forbidden_document_fault_cases,
+        rejected_forbidden_documents,
+        strict=True,
+    ):
+        forbidden_document_root = (
+            tmp_path / f"{mode}-cors-forbidden-document-{selector}"
+        )
+        assert rejected_forbidden_document.returncode != 0
+        assert rejected_forbidden_document.stdout == ""
+        assert rejected_forbidden_document.stderr.splitlines() == [
+            f"{mode} unadvertised CORS preflight OPTIONS /api/state for DELETE "
+            f"{expected_diagnostic}"
+        ]
+        assert (
+            forbidden_document_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_forbidden_document_fault_invocation
+        )
+        forbidden_document_fault_coverage.add((mode, selector))
     assert forbidden_document_fault_coverage == {
         (mode, selector)
         for mode in production_modes
@@ -12771,33 +12768,25 @@ fetch_advertised_bare_options_probe() {
     }
     assert len(forbidden_document_fault_coverage) == len(production_modes) * 4 == 8
 
-    completed_unknown_forbidden_document_modes: list[str] = []
-    for mode in production_modes:
-        unknown_forbidden_document_root = (
-            tmp_path / f"{mode}-cors-forbidden-document-unknown"
-        )
-        unknown_forbidden_document_root.mkdir()
-        rejected_unknown_forbidden_document = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_forbidden_document_root),
+    rejected_unknown_forbidden_documents = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-document-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_PREFLIGHT_FORBIDDEN_DOCUMENT_FAULT": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_PREFLIGHT_FORBIDDEN_DOCUMENT_FAULT": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_forbidden_document_modes: list[str] = []
+    for mode, rejected_unknown_forbidden_document in zip(
+        production_modes,
+        rejected_unknown_forbidden_documents,
+        strict=True,
+    ):
+        unknown_forbidden_document_root = (
+            tmp_path / f"{mode}-cors-forbidden-document-unknown"
         )
         assert rejected_unknown_forbidden_document.returncode != 0
         assert rejected_unknown_forbidden_document.stdout == ""
@@ -12812,48 +12801,44 @@ fetch_advertised_bare_options_probe() {
     assert tuple(completed_unknown_forbidden_document_modes) == production_modes
 
     later_forbidden_semantic_fault_invocation = "/api/state\toptions\tconnect"
+    forbidden_semantic_fault_cases = tuple(
+        (mode, selector)
+        for mode in production_modes
+        for selector in cors_preflight_forbidden_semantic_faults
+    )
+    rejected_forbidden_semantics = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-semantic-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_PREFLIGHT_FORBIDDEN_SEMANTIC_FAULT": selector},
+            )
+            for mode, selector in forbidden_semantic_fault_cases
+        )
+    )
     forbidden_semantic_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for selector in cors_preflight_forbidden_semantic_faults:
-            forbidden_semantic_root = (
-                tmp_path / f"{mode}-cors-forbidden-semantic-{selector}"
-            )
-            forbidden_semantic_root.mkdir()
-            rejected_forbidden_semantic = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(forbidden_semantic_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_PREFLIGHT_FORBIDDEN_SEMANTIC_FAULT": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_forbidden_semantic.returncode != 0
-            assert rejected_forbidden_semantic.stdout == ""
-            assert rejected_forbidden_semantic.stderr.splitlines() == [
-                f"{mode} unadvertised CORS preflight OPTIONS /api/state for CONNECT "
-                f"{forbidden_semantic_diagnostic}"
-            ]
-            assert (
-                forbidden_semantic_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_forbidden_semantic_fault_invocation
-            )
-            forbidden_semantic_fault_coverage.add((mode, selector))
+    for (mode, selector), rejected_forbidden_semantic in zip(
+        forbidden_semantic_fault_cases,
+        rejected_forbidden_semantics,
+        strict=True,
+    ):
+        forbidden_semantic_root = (
+            tmp_path / f"{mode}-cors-forbidden-semantic-{selector}"
+        )
+        assert rejected_forbidden_semantic.returncode != 0
+        assert rejected_forbidden_semantic.stdout == ""
+        assert rejected_forbidden_semantic.stderr.splitlines() == [
+            f"{mode} unadvertised CORS preflight OPTIONS /api/state for CONNECT "
+            f"{forbidden_semantic_diagnostic}"
+        ]
+        assert (
+            forbidden_semantic_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_forbidden_semantic_fault_invocation
+        )
+        forbidden_semantic_fault_coverage.add((mode, selector))
     assert forbidden_semantic_fault_coverage == {
         (mode, selector)
         for mode in production_modes
@@ -12861,33 +12846,25 @@ fetch_advertised_bare_options_probe() {
     }
     assert len(forbidden_semantic_fault_coverage) == len(production_modes) * 5 == 10
 
-    completed_unknown_forbidden_semantic_modes: list[str] = []
-    for mode in production_modes:
-        unknown_forbidden_semantic_root = (
-            tmp_path / f"{mode}-cors-forbidden-semantic-unknown"
-        )
-        unknown_forbidden_semantic_root.mkdir()
-        rejected_unknown_forbidden_semantic = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_forbidden_semantic_root),
+    rejected_unknown_forbidden_semantics = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-semantic-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_PREFLIGHT_FORBIDDEN_SEMANTIC_FAULT": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_PREFLIGHT_FORBIDDEN_SEMANTIC_FAULT": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_forbidden_semantic_modes: list[str] = []
+    for mode, rejected_unknown_forbidden_semantic in zip(
+        production_modes,
+        rejected_unknown_forbidden_semantics,
+        strict=True,
+    ):
+        unknown_forbidden_semantic_root = (
+            tmp_path / f"{mode}-cors-forbidden-semantic-unknown"
         )
         assert rejected_unknown_forbidden_semantic.returncode != 0
         assert rejected_unknown_forbidden_semantic.stdout == ""
@@ -12902,52 +12879,44 @@ fetch_advertised_bare_options_probe() {
     assert tuple(completed_unknown_forbidden_semantic_modes) == production_modes
 
     terminal_forbidden_header_fault_invocation = "/api/not-in-openapi\toptions\tget"
+    rejected_preflight_header_fault_cases = tuple(
+        (mode, selector, header_name)
+        for mode in production_modes
+        for selector, header_name, _response_header in (
+            cors_preflight_forbidden_header_faults
+        )
+    )
+    rejected_preflight_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-header-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_PREFLIGHT_FORBIDDEN_HEADER_FAULT": selector},
+            )
+            for mode, selector, _header_name in rejected_preflight_header_fault_cases
+        )
+    )
     rejected_preflight_header_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for (
-            selector,
-            header_name,
-            _response_header,
-        ) in cors_preflight_forbidden_header_faults:
-            forbidden_header_root = (
-                tmp_path / f"{mode}-cors-forbidden-header-{selector}"
-            )
-            forbidden_header_root.mkdir()
-            rejected_forbidden_header = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(forbidden_header_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_PREFLIGHT_FORBIDDEN_HEADER_FAULT": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_forbidden_header.returncode != 0
-            assert rejected_forbidden_header.stdout == ""
-            assert rejected_forbidden_header.stderr.splitlines() == [
-                f"{mode} unknown-path CORS preflight OPTIONS /api/not-in-openapi "
-                f"for GET returned forbidden {header_name} response header"
-            ]
-            assert (
-                forbidden_header_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == terminal_forbidden_header_fault_invocation
-            )
-            rejected_preflight_header_fault_coverage.add((mode, selector))
+    for (mode, selector, header_name), rejected_forbidden_header in zip(
+        rejected_preflight_header_fault_cases,
+        rejected_preflight_headers,
+        strict=True,
+    ):
+        forbidden_header_root = tmp_path / f"{mode}-cors-forbidden-header-{selector}"
+        assert rejected_forbidden_header.returncode != 0
+        assert rejected_forbidden_header.stdout == ""
+        assert rejected_forbidden_header.stderr.splitlines() == [
+            f"{mode} unknown-path CORS preflight OPTIONS /api/not-in-openapi "
+            f"for GET returned forbidden {header_name} response header"
+        ]
+        assert (
+            forbidden_header_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == terminal_forbidden_header_fault_invocation
+        )
+        rejected_preflight_header_fault_coverage.add((mode, selector))
     assert rejected_preflight_header_fault_coverage == {
         (mode, selector)
         for mode in production_modes
@@ -12959,33 +12928,25 @@ fetch_advertised_bare_options_probe() {
         len(rejected_preflight_header_fault_coverage) == len(production_modes) * 8 == 16
     )
 
-    completed_unknown_forbidden_header_modes: list[str] = []
-    for mode in production_modes:
-        unknown_forbidden_header_root = (
-            tmp_path / f"{mode}-cors-forbidden-header-unknown"
-        )
-        unknown_forbidden_header_root.mkdir()
-        rejected_unknown_forbidden_header = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_forbidden_header_root),
+    rejected_unknown_forbidden_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-forbidden-header-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_PREFLIGHT_FORBIDDEN_HEADER_FAULT": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_PREFLIGHT_FORBIDDEN_HEADER_FAULT": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_forbidden_header_modes: list[str] = []
+    for mode, rejected_unknown_forbidden_header in zip(
+        production_modes,
+        rejected_unknown_forbidden_headers,
+        strict=True,
+    ):
+        unknown_forbidden_header_root = (
+            tmp_path / f"{mode}-cors-forbidden-header-unknown"
         )
         assert rejected_unknown_forbidden_header.returncode != 0
         assert rejected_unknown_forbidden_header.stdout == ""
@@ -13000,52 +12961,52 @@ fetch_advertised_bare_options_probe() {
     assert tuple(completed_unknown_forbidden_header_modes) == production_modes
 
     later_advertised_fault_invocation = "/api/settings\toptions\tget"
+    required_header_fault_cases = tuple(
+        (mode, selector, header_name, expected_value)
+        for mode in production_modes
+        for selector, header_name, expected_value, _fault_kind in (
+            cors_success_required_header_faults
+        )
+    )
+    rejected_required_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-success-required-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_SUCCESS_REQUIRED_HEADER_FAULT": selector},
+            )
+            for mode, selector, _header_name, _expected_value in (
+                required_header_fault_cases
+            )
+        )
+    )
     required_header_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for (
-            selector,
-            header_name,
-            expected_value,
-            _fault_kind,
-        ) in cors_success_required_header_faults:
-            required_header_root = tmp_path / f"{mode}-cors-success-required-{selector}"
-            required_header_root.mkdir()
-            rejected_required_header = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(required_header_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_SUCCESS_REQUIRED_HEADER_FAULT": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_required_header.returncode != 0
-            assert rejected_required_header.stdout == ""
-            assert rejected_required_header.stderr.splitlines() == [
-                f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
-                f"did not return exactly one {header_name} header with value "
-                f"{expected_value}"
-            ]
-            assert (
-                required_header_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_advertised_fault_invocation
-            )
-            required_header_fault_coverage.add((mode, selector))
+    for (
+        mode,
+        selector,
+        header_name,
+        expected_value,
+    ), rejected_required_header in zip(
+        required_header_fault_cases,
+        rejected_required_headers,
+        strict=True,
+    ):
+        required_header_root = tmp_path / f"{mode}-cors-success-required-{selector}"
+        assert rejected_required_header.returncode != 0
+        assert rejected_required_header.stdout == ""
+        assert rejected_required_header.stderr.splitlines() == [
+            f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
+            f"did not return exactly one {header_name} header with value "
+            f"{expected_value}"
+        ]
+        assert (
+            required_header_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_advertised_fault_invocation
+        )
+        required_header_fault_coverage.add((mode, selector))
     expected_required_header_fault_coverage = {
         (mode, selector)
         for mode in production_modes
@@ -13056,33 +13017,25 @@ fetch_advertised_bare_options_probe() {
     assert required_header_fault_coverage == expected_required_header_fault_coverage
     assert len(required_header_fault_coverage) == len(production_modes) * 12 == 24
 
-    completed_unknown_required_header_modes: list[str] = []
-    for mode in production_modes:
-        unknown_required_header_root = (
-            tmp_path / f"{mode}-cors-success-required-unknown"
-        )
-        unknown_required_header_root.mkdir()
-        rejected_unknown_required_header = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_required_header_root),
+    rejected_unknown_required_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-success-required-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_SUCCESS_REQUIRED_HEADER_FAULT": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_SUCCESS_REQUIRED_HEADER_FAULT": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_required_header_modes: list[str] = []
+    for mode, rejected_unknown_required_header in zip(
+        production_modes,
+        rejected_unknown_required_headers,
+        strict=True,
+    ):
+        unknown_required_header_root = (
+            tmp_path / f"{mode}-cors-success-required-unknown"
         )
         assert rejected_unknown_required_header.returncode != 0
         assert rejected_unknown_required_header.stdout == ""
@@ -13096,52 +13049,44 @@ fetch_advertised_bare_options_probe() {
         completed_unknown_required_header_modes.append(mode)
     assert tuple(completed_unknown_required_header_modes) == production_modes
 
+    forbidden_header_fault_cases = tuple(
+        (mode, selector, forbidden_name)
+        for mode in production_modes
+        for selector, forbidden_name, _response_header in (
+            cors_success_forbidden_header_faults
+        )
+    )
+    rejected_forbidden_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-success-forbidden-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_SUCCESS_FORBIDDEN_HEADER_KIND": selector},
+            )
+            for mode, selector, _forbidden_name in forbidden_header_fault_cases
+        )
+    )
     forbidden_header_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for (
-            selector,
-            forbidden_name,
-            _response_header,
-        ) in cors_success_forbidden_header_faults:
-            forbidden_header_root = (
-                tmp_path / f"{mode}-cors-success-forbidden-{selector}"
-            )
-            forbidden_header_root.mkdir()
-            rejected_forbidden_header = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(forbidden_header_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_SUCCESS_FORBIDDEN_HEADER_KIND": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_forbidden_header.returncode != 0
-            assert rejected_forbidden_header.stdout == ""
-            assert rejected_forbidden_header.stderr.splitlines() == [
-                f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
-                f"returned forbidden {forbidden_name} response header"
-            ]
-            assert (
-                forbidden_header_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_advertised_fault_invocation
-            )
-            forbidden_header_fault_coverage.add((mode, selector))
+    for (mode, selector, forbidden_name), rejected_forbidden_header in zip(
+        forbidden_header_fault_cases,
+        rejected_forbidden_headers,
+        strict=True,
+    ):
+        forbidden_header_root = tmp_path / f"{mode}-cors-success-forbidden-{selector}"
+        assert rejected_forbidden_header.returncode != 0
+        assert rejected_forbidden_header.stdout == ""
+        assert rejected_forbidden_header.stderr.splitlines() == [
+            f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
+            f"returned forbidden {forbidden_name} response header"
+        ]
+        assert (
+            forbidden_header_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_advertised_fault_invocation
+        )
+        forbidden_header_fault_coverage.add((mode, selector))
     assert forbidden_header_fault_coverage == {
         (mode, selector)
         for mode in production_modes
@@ -13150,33 +13095,25 @@ fetch_advertised_bare_options_probe() {
         )
     }
 
-    completed_unknown_selector_modes: list[str] = []
-    for mode in production_modes:
-        unknown_forbidden_header_root = (
-            tmp_path / f"{mode}-cors-success-forbidden-unknown"
-        )
-        unknown_forbidden_header_root.mkdir()
-        rejected_unknown_forbidden_header = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_forbidden_header_root),
+    rejected_unknown_selector_headers = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-success-forbidden-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_SUCCESS_FORBIDDEN_HEADER_KIND": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_SUCCESS_FORBIDDEN_HEADER_KIND": "unknown"},
+            )
+            for mode in production_modes
+        )
+    )
+    completed_unknown_selector_modes: list[str] = []
+    for mode, rejected_unknown_forbidden_header in zip(
+        production_modes,
+        rejected_unknown_selector_headers,
+        strict=True,
+    ):
+        unknown_forbidden_header_root = (
+            tmp_path / f"{mode}-cors-success-forbidden-unknown"
         )
         assert rejected_unknown_forbidden_header.returncode != 0
         assert rejected_unknown_forbidden_header.stdout == ""
@@ -13190,78 +13127,66 @@ fetch_advertised_bare_options_probe() {
         completed_unknown_selector_modes.append(mode)
     assert tuple(completed_unknown_selector_modes) == production_modes
 
+    envelope_fault_cases = tuple(
+        (mode, selector, expected_diagnostic)
+        for mode in production_modes
+        for selector, expected_diagnostic in cors_success_preflight_envelope_faults
+    )
+    rejected_envelopes = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-envelope-{selector}",
+                mode,
+                fault_probe_scope("cors"),
+                {"CORS_SUCCESS_PREFLIGHT_ENVELOPE_KIND": selector},
+            )
+            for mode, selector, _expected_diagnostic in envelope_fault_cases
+        )
+    )
     envelope_fault_coverage: set[tuple[str, str]] = set()
-    for mode in production_modes:
-        for selector, expected_diagnostic in cors_success_preflight_envelope_faults:
-            envelope_fault_root = tmp_path / f"{mode}-cors-envelope-{selector}"
-            envelope_fault_root.mkdir()
-            rejected_envelope = subprocess.run(  # noqa: S603
-                [
-                    bash,
-                    "-c",
-                    program,
-                    str(python_executable),
-                    str(inventory),
-                    str(envelope_fault_root),
-                    mode,
-                    fault_probe_scope("cors"),
-                ],
-                check=False,
-                capture_output=True,
-                cwd=REPOSITORY,
-                env={
-                    "CORS_SUCCESS_PREFLIGHT_ENVELOPE_KIND": selector,
-                    "LC_ALL": "C",
-                    "PATH": fixture_path,
-                },
-                text=True,
-                timeout=20,
-            )
-            assert rejected_envelope.returncode != 0
-            assert rejected_envelope.stdout == ""
-            assert rejected_envelope.stderr.splitlines() == [
-                f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
-                f"{expected_diagnostic}"
-            ]
-            assert (
-                envelope_fault_root.joinpath("request-invocations.tsv")
-                .read_text()
-                .splitlines()[-1]
-                == later_advertised_fault_invocation
-            )
-            envelope_fault_coverage.add((mode, selector))
+    for (mode, selector, expected_diagnostic), rejected_envelope in zip(
+        envelope_fault_cases,
+        rejected_envelopes,
+        strict=True,
+    ):
+        envelope_fault_root = tmp_path / f"{mode}-cors-envelope-{selector}"
+        assert rejected_envelope.returncode != 0
+        assert rejected_envelope.stdout == ""
+        assert rejected_envelope.stderr.splitlines() == [
+            f"{mode} advertised CORS preflight OPTIONS /api/settings for GET "
+            f"{expected_diagnostic}"
+        ]
+        assert (
+            envelope_fault_root.joinpath("request-invocations.tsv")
+            .read_text()
+            .splitlines()[-1]
+            == later_advertised_fault_invocation
+        )
+        envelope_fault_coverage.add((mode, selector))
     assert envelope_fault_coverage == {
         (mode, selector)
         for mode in production_modes
         for selector, _expected_diagnostic in cors_success_preflight_envelope_faults
     }
 
-    completed_unknown_envelope_modes: list[str] = []
-    for mode in production_modes:
-        unknown_envelope_root = tmp_path / f"{mode}-cors-envelope-unknown"
-        unknown_envelope_root.mkdir()
-        rejected_unknown_envelope = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(unknown_envelope_root),
+    rejected_unknown_envelopes = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / f"{mode}-cors-envelope-unknown",
                 mode,
                 fault_probe_scope("cors"),
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                "CORS_SUCCESS_PREFLIGHT_ENVELOPE_KIND": "unknown",
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                {"CORS_SUCCESS_PREFLIGHT_ENVELOPE_KIND": "unknown"},
+            )
+            for mode in production_modes
         )
+    )
+    completed_unknown_envelope_modes: list[str] = []
+    for mode, rejected_unknown_envelope in zip(
+        production_modes,
+        rejected_unknown_envelopes,
+        strict=True,
+    ):
+        unknown_envelope_root = tmp_path / f"{mode}-cors-envelope-unknown"
         assert rejected_unknown_envelope.returncode != 0
         assert rejected_unknown_envelope.stdout == ""
         assert rejected_unknown_envelope.stderr == ""
@@ -13276,27 +13201,25 @@ fetch_advertised_bare_options_probe() {
 
     nonempty_head_root = tmp_path / "nonempty-head-result"
     nonempty_head_root.mkdir()
-    rejected_head = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            program,
-            str(python_executable),
-            str(inventory),
-            str(nonempty_head_root),
-            existing_fault_mode,
-            fault_probe_scope("method"),
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "ADVERTISED_HEAD_BODY_KIND": "nonempty",
-            "LC_ALL": "C",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
+    misleading_allow_root = tmp_path / "misleading-allow-result"
+    misleading_allow_root.mkdir()
+    rejected_head, rejected_misleading_allow = run_fixture_probes(
+        (
+            (
+                program,
+                nonempty_head_root,
+                existing_fault_mode,
+                fault_probe_scope("method"),
+                {"ADVERTISED_HEAD_BODY_KIND": "nonempty"},
+            ),
+            (
+                program,
+                misleading_allow_root,
+                existing_fault_mode,
+                fault_probe_scope("method"),
+                {"MISLEADING_ALLOW": "1"},
+            ),
+        )
     )
     assert rejected_head.returncode != 0
     assert rejected_head.stderr.splitlines() == [
@@ -13304,35 +13227,10 @@ fetch_advertised_bare_options_probe() {
         "returned response "
         "bytes after the HEAD headers"
     ]
-
-    misleading_allow_root = tmp_path / "misleading-allow-result"
-    misleading_allow_root.mkdir()
-    rejected_misleading_allow = subprocess.run(  # noqa: S603
-        [
-            bash,
-            "-c",
-            program,
-            str(python_executable),
-            str(inventory),
-            str(misleading_allow_root),
-            existing_fault_mode,
-            fault_probe_scope("method"),
-        ],
-        check=False,
-        capture_output=True,
-        cwd=REPOSITORY,
-        env={
-            "LC_ALL": "C",
-            "MISLEADING_ALLOW": "1",
-            "PATH": fixture_path,
-        },
-        text=True,
-        timeout=20,
-    )
     assert rejected_misleading_allow.returncode != 0
     assert "did not return exactly one Allow header" in rejected_misleading_allow.stderr
 
-    for label, injected_environment, expected_diagnostic in (
+    injected_fault_cases = (
         (
             "wrong-advertised-head-status",
             {"ADVERTISED_HEAD_STATUS": "200"},
@@ -13500,32 +13398,31 @@ fetch_advertised_bare_options_probe() {
             f"{existing_fault_mode} advertised bare OPTIONS /api/camera/retry returned "
             "forbidden Access-Control-Allow-Origin response header",
         ),
-    ):
-        selected_probe_scope = injected_fault_probe_scope(injected_environment)
-        rejected_root = tmp_path / label
-        rejected_root.mkdir()
-        rejected = subprocess.run(  # noqa: S603
-            [
-                bash,
-                "-c",
-                program,
-                str(python_executable),
-                str(inventory),
-                str(rejected_root),
+    )
+    rejected_injected_faults = run_fixture_probes(
+        tuple(
+            prepare_fixture_probe(
+                tmp_path / label,
                 existing_fault_mode,
-                selected_probe_scope,
-            ],
-            check=False,
-            capture_output=True,
-            cwd=REPOSITORY,
-            env={
-                **injected_environment,
-                "LC_ALL": "C",
-                "PATH": fixture_path,
-            },
-            text=True,
-            timeout=20,
+                injected_fault_probe_scope(injected_environment),
+                injected_environment,
+            )
+            for label, injected_environment, _expected_diagnostic in (
+                injected_fault_cases
+            )
         )
+    )
+    for (
+        label,
+        _injected_environment,
+        expected_diagnostic,
+    ), rejected in zip(
+        injected_fault_cases,
+        rejected_injected_faults,
+        strict=True,
+    ):
+        rejected_root = tmp_path / label
+        assert rejected_root.is_dir(), label
         assert rejected.returncode != 0, label
         assert expected_diagnostic in rejected.stderr, label
 
@@ -13588,6 +13485,7 @@ fetch_advertised_bare_options_probe() {
     )
 
 
+@pytest.mark.production_routing_audit
 def test_rust_routes_override_implicit_head_and_websocket_any() -> None:
     production_sources = load_production_routing_sources()
     assert_closed_production_routing(production_sources)
@@ -13926,9 +13824,8 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
     )
     contract_check_omits_integration_test_support = replace_once(
         FLAKE_SOURCE,
-        "cargo test --locked --package pokecon --test contract_sync "
-        "--features integration-test-support",
-        "cargo test --locked --package pokecon --test contract_sync",
+        "                  --features integration-test-support,contract-generator \\\n",
+        "                  --features contract-generator \\\n",
     )
     virtual_io_omits_integration_test_support = replace_once(
         VIRTUAL_IO_SMOKE_SOURCE,
@@ -16341,9 +16238,10 @@ runner = "scripts/attacker-runner.sh"
         '                if wait "$mutation_worker_pid"; then\n',
         "                if true; then\n",
     )
-    default_test_includes_mutation_audit = replace_once(
+    default_test_includes_dedicated_audits = replace_once(
         FLAKE_SOURCE,
-        '                  -m "not production_routing_mutation"\n',
+        '                  -m "not production_routing_audit and '
+        'not production_routing_mutation"\n',
         "",
     )
     default_test_ignores_forwarded_arguments = replace_once(
@@ -17071,8 +16969,8 @@ runner = "scripts/attacker-runner.sh"
         ("serial mutation runner", serial_mutation_runner),
         ("mutation runner skips worker wait", mutation_runner_skips_worker_wait),
         (
-            "default test includes mutation audit",
-            default_test_includes_mutation_audit,
+            "default test includes dedicated audits",
+            default_test_includes_dedicated_audits,
         ),
         (
             "default test ignores forwarded arguments",
@@ -18132,66 +18030,117 @@ def test_single_instance_primary_election_dependency_is_review_pinned() -> None:
     )
 
 
-def test_rust_ci_parallelizes_source_and_package_gates_without_rebuilding() -> None:
-    workflow = (REPOSITORY / ".github/workflows/rust-ci.yml").read_text()
+def test_ci_workflows_use_one_fail_closed_region_plan_and_required_aggregates() -> None:
+    workflow_root = REPOSITORY / ".github/workflows"
+    normal = (workflow_root / "normal-ci.yml").read_text()
+    package = (workflow_root / "package.yml").read_text()
 
-    assert workflow.count("- 'web/**'") == 2
-    assert workflow.count("- 'scripts/integration/**'") == 2
-    assert workflow.count("- 'tests/fixtures/cli-help/**'") == 2
-    assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
-    source_job = section(workflow, "  build:\n", "  package:\n")
-    package_job = section(workflow, "  package:\n", "  build-windows:\n")
-    rust_core_step = (
-        "      - name: Clippy, build, test, and compatibility\n"
-        "        if: steps.rust-check.outputs.applicable == 'true'\n"
-        "        run: nix run .#rust-ci-core\n"
-    )
-    worker_step = (
-        "      - name: Verify packaged worker roles\n"
-        "        if: steps.rust-check.outputs.applicable == 'true'\n"
-        "        run: nix run .#worker-package-check\n"
-    )
-    ui_step_name = "      - name: Verify immutable Web and Tauri modes\n"
-    cli_step_name = "      - name: Verify packaged CLI help\n"
-    assert workflow.count(rust_core_step) == 1
-    assert source_job.count(rust_core_step) == 1
-    assert package_job.count(worker_step) == 1
-    assert "needs:" not in package_job
-    for superseded_command in (
-        "nix run .#clippy",
-        "nix run .#build-rust",
-        "nix run .#cargo-test",
-        "nix run .#compatibility",
+    for retired_workflow in (
+        "lint.yml",
+        "pytest.yml",
+        "remote-flake.yml",
+        "rust-ci.yml",
     ):
-        assert superseded_command not in workflow
-    assert workflow.count(ui_step_name) == 1
-    assert workflow.count(cli_step_name) == 1
-    assert section(package_job, ui_step_name, cli_step_name) == (
-        "        run: nix run .#ui-package-check\n"
+        assert not (workflow_root / retired_workflow).exists()
+    for workflow in (normal, package):
+        assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
+        assert "paths:" not in workflow
+        assert workflow.count("  plan:\n") == 1
+        assert workflow.count("name: Plan changed regions") == 1
+        assert workflow.count("fetch-depth: 0") == 1
+        assert workflow.count("nix run .#ci-regions --") == 1
+        assert workflow.count('--github-output "$GITHUB_OUTPUT"') == 1
+        assert (
+            workflow.count(
+                "      regions_json: ${{ steps.regions.outputs.regions_json }}"
+            )
+            == 1
+        )
+        assert "github.event.pull_request.head.sha" not in workflow
+        assert workflow.count("${{ github.sha }}") >= 1
+        assert (
+            "${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}"
+            in workflow
+        )
+        for region in (
+            "docs",
+            "contracts",
+            "rust",
+            "python",
+            "web",
+            "product",
+            "remote_flake",
+        ):
+            assert (
+                workflow.count(
+                    f"      {region}: ${{{{ steps.regions.outputs.{region} }}}}"
+                )
+                == 1
+            )
+
+    assert normal.count("name: Normal CI Required") == 1
+    assert package.count("name: Package CI Required") == 1
+    assert (
+        normal.count(
+            "github.event.pull_request.head.repo.full_name != github.repository"
+        )
+        == 3
     )
-    assert section(workflow, cli_step_name, "\n  build-windows:\n") == (
-        "        run: nix run .#cli-help-check\n"
+    assert (
+        package.count(
+            "github.event.pull_request.head.repo.full_name != github.repository"
+        )
+        == 2
     )
-    assert package_job.index(worker_step) < package_job.index(ui_step_name)
-    assert package_job.index(ui_step_name) < package_job.index(cli_step_name)
+    for workflow in (normal, package):
+        required_job = workflow[workflow.index("  required:\n") :]
+        assert required_job.count("      always() &&") == 1
+        assert required_job.count("nix run .#ci-aggregate --") == 1
+        assert '"plan_status":"${{ needs.plan.result }}"' in required_job
+        assert (
+            "\"regions\":${{ needs.plan.outputs.regions_json || 'null' }}"
+            in required_job
+        )
+        for region in (
+            "docs",
+            "contracts",
+            "rust",
+            "python",
+            "web",
+            "product",
+            "remote_flake",
+        ):
+            assert (
+                f'"{region}":"${{{{ needs.plan.outputs.{region} }}}}"' in required_job
+            )
+        assert "continue-on-error:" not in required_job
+        assert "|| true" not in required_job
+
+    for product_job in ("linux", "linux_repro", "repro_check", "windows"):
+        expected_plan_entry = (
+            f'"{product_job}":{{"applicable":'
+            "${{ needs.plan.outputs.product == 'true' }}"
+        )
+        assert expected_plan_entry in package
 
 
 def test_ci_executes_each_existing_logical_check_once() -> None:
     workflow_root = REPOSITORY / ".github/workflows"
-    retired_workflows = (
-        "basedpyright.yml",
-        "nix-source-filter-check.yml",
-        "ruff.yml",
-        "spa-404-check.yml",
-    )
-    assert all(not (workflow_root / name).exists() for name in retired_workflows)
-
     workflows = "\n".join(
         path.read_text() for path in sorted(workflow_root.glob("*.yml"))
     )
-    lint = (workflow_root / "lint.yml").read_text()
-    remote_flake = (workflow_root / "remote-flake.yml").read_text()
+    normal = (workflow_root / "normal-ci.yml").read_text()
     flake = (REPOSITORY / "flake.nix").read_text()
+    ci_fast = section(
+        flake,
+        "            ci-fast = mkTask {\n",
+        "            rust-ci-core = mkTask {\n",
+    )
+    combined_check = section(
+        flake,
+        "            ci-rust-contracts = mkTask {\n",
+        "            clippy = mkTask {\n",
+    )
     contract_check = section(
         flake,
         "            contract-check = mkTask {\n",
@@ -18199,26 +18148,85 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     )
 
     assert workflows.count("nix fmt -- --ci") == 1
-    assert lint.count("nix run .#ruff-check") == 1
-    assert lint.count("nix run .#ruff-format-check") == 1
-    assert workflows.count("nix run .#clippy") == 0
-    assert workflows.count("nix run .#rust-ci-core") == 1
-    assert contract_check.count('bun --bun "${basedpyrightCli}"') == 1
-    assert contract_check.count("python -m scripts.quality.source_filter") == 1
-    source_materialization = "nix derivation show .#pokecon > /dev/null"
-    assert remote_flake.count("nix flake check --no-build") == 1
-    assert remote_flake.count(source_materialization) == 1
-    assert remote_flake.index(source_materialization) < remote_flake.index(
-        "nix flake check --no-build"
-    )
-    assert remote_flake.count("Run default app help from remote") == 1
-    for redundant_flake_probe in (
-        "Run default app help locally",
-        "Run check app help locally",
-        "Run check app help from remote",
+    for command in (
+        "nix run .#ci-fast",
+        "nix run .#ci-rust-contracts",
+        "nix run .#rust-ci-core",
+        "nix run .#contract-check",
+        "nix run .#product-smoke",
+        "nix flake check --no-build",
+        "Run default app help from remote",
+    ):
+        assert normal.count(command) == 1
+    for superseded_command in (
+        "nix run .#clippy",
+        "nix run .#build-rust",
+        "nix run .#cargo-test",
+        "nix run .#compatibility",
+        "nix run .#ruff-check",
+        "nix run .#ruff-format-check",
         "nix run .#check -- --help",
     ):
-        assert redundant_flake_probe not in remote_flake
+        assert superseded_command not in normal
+
+    for static_check in (
+        'bun --bun "${basedpyrightCli}"',
+        "shellcheck scripts/*.sh scripts/*/*.sh",
+        "python -m scripts.quality.source_filter",
+        "python -m scripts.release.gate",
+    ):
+        assert ci_fast.count(static_check) == 1
+        assert static_check not in contract_check
+    for shared_rust_command in (
+        "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+        "cargo build --locked --workspace --all-features",
+        "cargo test --locked --workspace --all-features",
+    ):
+        assert combined_check.count(shared_rust_command) == 1
+    assert '"$CARGO_TARGET_DIR/debug/generate_contracts"' not in combined_check
+    assert "POKECON_OPENAPI_GENERATOR" not in combined_check
+    assert (
+        combined_check.count("scripts/quality/generate-api-types.sh --check-types-only")
+        == 1
+    )
+    assert "cargo build --locked --package pokecon" not in contract_check
+    assert (
+        contract_check.count("--features integration-test-support,contract-generator")
+        == 1
+    )
+    assert contract_check.count("--test contract_sync") == 1
+    assert (
+        contract_check.count("scripts/quality/generate-api-types.sh --check-types-only")
+        == 1
+    )
+
+
+def test_api_type_drift_reuses_the_contract_test_openapi_proof() -> None:
+    script = (REPOSITORY / "scripts/quality/generate-api-types.sh").read_text()
+    generator = section(
+        script,
+        "run_openapi_generator() {\n",
+        '\n}\n\nif [[ "$mode" == "--check"',
+    )
+
+    assert (
+        generator.count("cargo run --locked --package pokecon --bin generate_openapi")
+        == 1
+    )
+    assert generator.count("--features contract-generator") == 1
+    assert "--all-features" not in generator
+    assert (
+        script.count(
+            'if [[ "$mode" == "--check" || "$mode" == "--check-types-only" ]]; then'
+        )
+        == 1
+    )
+    assert (
+        script.count(
+            'if [[ "$mode" == "--check" ]]; then\n    run_openapi_generator --check'
+        )
+        == 1
+    )
 
 
 def test_retired_desktop_product_feature_is_absent_from_release_surfaces() -> None:
@@ -18237,45 +18245,37 @@ def test_retired_desktop_product_feature_is_absent_from_release_surfaces() -> No
     )
 
 
-def test_pytest_ci_runs_common_and_mutation_gates_as_parallel_jobs() -> None:
-    workflow = (REPOSITORY / ".github/workflows/pytest.yml").read_text()
+def test_normal_ci_runs_python_and_mutation_gates_as_parallel_jobs() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text()
     common_job = section(
         workflow,
-        "  test-linux:\n",
-        "  production-routing-mutation-audit-linux:\n",
+        "  python_tests:\n",
+        "  routing_mutations:\n",
     )
-    mutation_job = workflow[
-        workflow.index("  production-routing-mutation-audit-linux:\n") :
-    ]
-
-    source_guard_step = (
-        "      - name: Evaluate pytest source guard\n"
-        "        id: pytest-check\n"
-        '        run: nix run .#source-guard -- pytest --github-output "$GITHUB_OUTPUT"\n'
-    )
-    common_test_step = (
-        "      - name: Run pytest\n"
-        "        if: steps.pytest-check.outputs.applicable == 'true'\n"
-        "        run: nix run .#test\n"
-    )
+    mutation_job = section(workflow, "  routing_mutations:\n", "  web:\n")
+    common_test_step = "      - name: Run Python tests\n        run: nix run .#test\n"
     mutation_test_step = (
         "      - name: Run production-routing mutation audit\n"
-        "        if: steps.pytest-check.outputs.applicable == 'true'\n"
-        "        run: nix run .#test-production-routing-mutations\n"
+        "        run: nix run .#test-production-routing-mutations -- --workers 4\n"
     )
     assert common_job.count(common_test_step) == 1
     assert mutation_job.count(mutation_test_step) == 1
     for job in (common_job, mutation_job):
         assert job.count("runs-on: ubuntu-latest") == 1
-        assert job.count(source_guard_step) == 1
-        assert job.count("if:") == 1
+        assert job.count("    needs: plan") == 1
         assert "continue-on-error:" not in job
         assert "|| true" not in job
-        assert "needs:" not in job
+    assert common_job.count("    if: needs.plan.outputs.python == 'true'") == 1
+    assert mutation_job.count("    if: needs.plan.outputs.routing == 'true'") == 1
+    assert "outputs.routing" not in common_job
+    assert "outputs.python" not in mutation_job
+    assert "needs: python_tests" not in mutation_job
+    assert "needs: routing_mutations" not in common_job
 
 
 def test_windows_rust_ci_binds_development_resource_provenance_to_final_check() -> None:
-    workflow = (REPOSITORY / ".github/workflows/rust-ci.yml").read_text()
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text()
+    windows_job = section(workflow, "  windows:\n", "  required:\n")
     step_name = "      - name: Check all Windows targets and features\n"
     run_command = (
         "        run: cargo check --locked --workspace --all-targets --all-features\n"
@@ -18290,7 +18290,9 @@ def test_windows_rust_ci_binds_development_resource_provenance_to_final_check() 
     assert workflow.count(step_name) == 1
     assert workflow.count("name: Check workspace (Windows)") == 1
     assert "name: Build workspace (Windows)" not in workflow
-    assert workflow.endswith(expected_final_step)
-    assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 1
-    assert workflow.count("POKECON_RESOURCE_PROVENANCE: development") == 1
-    assert workflow.count(run_command) == 1
+    assert windows_job.endswith(expected_final_step + "\n")
+    assert windows_job.count("    needs: plan") == 1
+    assert windows_job.count("    if: needs.plan.outputs.rust == 'true'") == 1
+    assert windows_job.count("POKECON_RESOURCE_PROVENANCE") == 1
+    assert windows_job.count("POKECON_RESOURCE_PROVENANCE: development") == 1
+    assert windows_job.count(run_command) == 1

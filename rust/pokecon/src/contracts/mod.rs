@@ -36,6 +36,29 @@ pub fn settings_registry() -> Result<ValidatedSettingsRegistry, ContractError> {
     ValidatedSettingsRegistry::try_from(registry)
 }
 
+/// Checks every tracked settings and scripting artifact under a repository root.
+///
+/// # Errors
+///
+/// Returns an error when the root is invalid, canonical contracts cannot be loaded, or a
+/// generated output is missing or stale.
+#[cfg(feature = "contract-generator")]
+pub fn check_generated_artifacts(
+    repository_root: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    crate::contract_generator::check_generated_artifacts(repository_root)
+}
+
+/// Checks an `OpenAPI` artifact against the server schema generator.
+///
+/// # Errors
+///
+/// Returns an error when the document cannot be generated or the artifact is missing or stale.
+#[cfg(feature = "contract-generator")]
+pub fn check_openapi_artifact(output: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    crate::openapi_generator::check_openapi_artifact(output)
+}
+
 /// Parse an embedded non-settings registry and require a JSON object root.
 ///
 /// # Errors

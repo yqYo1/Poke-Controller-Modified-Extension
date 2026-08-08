@@ -5,8 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 mode="${1:-generate}"
-if [[ "$mode" != "generate" && "$mode" != "--check" ]]; then
-  echo "usage: scripts/quality/generate-api-types.sh [generate|--check]" >&2
+if [[ "$mode" != "generate" && "$mode" != "--check" && "$mode" != "--check-types-only" ]]; then
+  echo "usage: scripts/quality/generate-api-types.sh [generate|--check|--check-types-only]" >&2
   exit 2
 fi
 
@@ -24,8 +24,24 @@ fi
 web_generated="web/src/lib/api/openapi.ts"
 web_schema="web/src/lib/api/openapi.json"
 
-if [[ "$mode" == "--check" ]]; then
-  cargo run --locked --package pokecon --bin generate_openapi --features contract-generator -- --check
+run_openapi_generator() {
+  local generator=${POKECON_OPENAPI_GENERATOR:-}
+  if [[ -z $generator ]]; then
+    cargo run --locked --package pokecon --bin generate_openapi \
+      --features contract-generator -- "$@"
+    return
+  fi
+  if [[ $generator != /* || ! -f $generator || ! -x $generator || -L $generator ]]; then
+    echo "POKECON_OPENAPI_GENERATOR must identify an absolute, regular executable" >&2
+    exit 2
+  fi
+  "$generator" "$@"
+}
+
+if [[ "$mode" == "--check" || "$mode" == "--check-types-only" ]]; then
+  if [[ "$mode" == "--check" ]]; then
+    run_openapi_generator --check
+  fi
   generated_dir="$(mktemp -d)"
   trap 'rm -rf "$generated_dir"' EXIT
   bun --bun "$openapi_typescript" api/openapi.json \
@@ -41,7 +57,7 @@ if [[ "$mode" == "--check" ]]; then
     exit 1
   fi
 else
-  cargo run --locked --package pokecon --bin generate_openapi --features contract-generator
+  run_openapi_generator
   mkdir -p "$(dirname "$web_generated")"
   bun --bun "$openapi_typescript" api/openapi.json \
     --output "$web_generated"

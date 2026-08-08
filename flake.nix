@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "9e808d1fc3eb9b165ed41574b6e92dc7d92ab9794b69859eb5dddf5c393111cd";
+      canonicalFlakeHash = "c6996f839ce928df065ea6cc59194c393eb706498a5e5062fce4369d6218933d";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "c6bd221a8d65eb50941e639e7747ad6c80ac945f4fef5328e56d75574f2d9535";
+              expectedAuditTestHash = "d67928624174fbba2e8ca65510b25f87a280789de917a0bbfc6a5b8f338ab978";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -885,6 +885,7 @@
             [pytest]
             addopts =
             markers =
+                production_routing_audit: baseline fail-closed routing audit run by its dedicated Nix gate
                 production_routing_mutation: exhaustive fail-closed mutation audit run by its dedicated Nix gate
           '';
           productionRoutingAudit =
@@ -2739,6 +2740,19 @@
             ui-package-check = uiPackageCheck;
             worker-package-check = workerPackageCheck;
 
+            product-smoke = mkTask {
+              name = "product-smoke";
+              text = ''
+                if [ "$#" -ne 0 ]; then
+                  echo "usage: nix run .#product-smoke" >&2
+                  exit 2
+                fi
+                "${workerPackageCheck.program}"
+                "${uiPackageCheck.program}"
+                "${cliHelpCheck.program}"
+              '';
+            };
+
             cargo = mkTask {
               name = "cargo";
               runtimeInputs = rustTaskInputs ++ [
@@ -3225,6 +3239,79 @@
               '';
             };
 
+            ci-regions = mkTask {
+              name = "ci-regions";
+              runtimeInputs = [
+                pythonEnv
+                pkgs.git
+              ];
+              text = ''
+                ${sanitizeGateEnvironment}
+                if ! repo_root="$("${pkgs.git}/bin/git" -C "$PWD" rev-parse --show-toplevel)"; then
+                  echo "ci-regions must be run from a PokeCon worktree" >&2
+                  exit 2
+                fi
+                cd "$repo_root"
+                export PYTHONDONTWRITEBYTECODE=1
+                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/regions.py" "$@"
+              '';
+            };
+
+            ci-aggregate = mkTask {
+              name = "ci-aggregate";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                ${setupSourceGateEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/aggregate.py" "$@"
+              '';
+            };
+
+            ci-timing = mkTask {
+              name = "ci-timing";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                ${setupSourceGateEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                "${pythonEnv}/bin/python" -I "${source}/scripts/ci/timing.py" "$@"
+              '';
+            };
+
+            ci-fast = mkTask {
+              name = "ci-fast";
+              runtimeInputs = [
+                bun
+                pythonEnv
+                pkgs.actionlint
+                pkgs.basedpyright
+                pkgs.markdownlint-cli
+                pkgs.ripgrep
+                pkgs.shellcheck
+                pkgs.textlint
+                pkgs.textlint-rule-no-start-duplicated-conjunction
+                pkgs.typos
+              ];
+              text = ''
+                ${setupSourceGateEnvironment}
+                cd "${source}"
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTHONPATH="$PWD/python:$PWD"
+                test -f "${productionRoutingAudit}/passed"
+                actionlint .github/workflows/*.yml
+                bun --bun "${basedpyrightCli}"
+                shellcheck scripts/*.sh scripts/*/*.sh
+                python -m scripts.quality.source_filter
+                python -m scripts.quality.source_guard rust --require-applicable
+                python -m scripts.release.gate
+                typos
+                mapfile -t markdown_files < <(rg --files -g '*.md')
+                bun --bun "${markdownlintCli}" --config .markdownlint.json "''${markdown_files[@]}"
+                export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
+                mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
+                bun --bun "${textlintCli}" --config .textlintrc.json "''${text_files[@]}"
+              '';
+            };
+
             rust-ci-core = mkTask {
               name = "rust-ci-core";
               runtimeInputs = rustTaskInputs;
@@ -3233,9 +3320,9 @@
                 ${desktopEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD"
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 POKECON_RESOURCE_PROVENANCE=development \
                 cargo build --locked --workspace --all-features
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
                 POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
                 python -m scripts.compatibility.promote --check
                 python -m scripts.compatibility.runner \
@@ -3243,6 +3330,35 @@
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
                   --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+              '';
+            };
+
+            ci-rust-contracts = mkTask {
+              name = "ci-rust-contracts";
+              runtimeInputs = rustTaskInputs ++ [
+                bun
+                pkgs.check-jsonschema
+                pkgs.diffutils
+              ];
+              text = ''
+                ${setupWorkdir}
+                ${desktopEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                export PYTHONPATH="$PWD/python:$PWD"
+                export POKECON_RESOURCE_PROVENANCE=development
+                cargo build --locked --workspace --all-features
+                cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                cargo test --locked --workspace --all-features
+                python -m scripts.compatibility.promote --check
+                python -m scripts.compatibility.runner \
+                  --check \
+                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
+                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
+                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                check-jsonschema --check-metaschema generated/settings.schema.json
+                python -m scripts.acceptance.records
+                export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
+                scripts/quality/generate-api-types.sh --check-types-only
               '';
             };
 
@@ -3308,12 +3424,9 @@
             contract-check = mkTask {
               name = "contract-check";
               runtimeInputs = rustTaskInputs ++ [
-                pkgs.actionlint
-                pkgs.basedpyright
                 bun
                 pkgs.check-jsonschema
                 pkgs.diffutils
-                pkgs.shellcheck
               ];
               text = ''
                 ${setupWorkdir}
@@ -3321,15 +3434,13 @@
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
                 export POKECON_RESOURCE_PROVENANCE=development
-                cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
-                cargo test --locked --package pokecon --test contract_sync --features integration-test-support
+                cargo test --locked --package pokecon \
+                  --features integration-test-support,contract-generator \
+                  --test contract_sync
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
-                scripts/quality/generate-api-types.sh --check
-                bun --bun "${basedpyrightCli}"
-                shellcheck scripts/*.sh scripts/*/*.sh
-                python -m scripts.quality.source_filter
+                scripts/quality/generate-api-types.sh --check-types-only
               '';
             };
 
@@ -3571,7 +3682,7 @@
                   -v \
                   --tb=short \
                   "''${pytest_arguments[@]}" \
-                  -m "not production_routing_mutation"
+                  -m "not production_routing_audit and not production_routing_mutation"
               '';
             };
 
@@ -4577,26 +4688,26 @@
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
+                test -f "${productionRoutingAudit}/passed"
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
                 # shellcheck disable=SC2016
                 "${pythonEnv}/bin/python" -I \
                   "${source}/scripts/quality/run_parallel_checks.py" \
                   rust-and-contracts \
                   "${pkgs.bash}/bin/bash" -euo pipefail -c '
-                    POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
-                    check-jsonschema --check-metaschema generated/settings.schema.json
-                    python -m scripts.acceptance.records
-                    POKECON_RESOURCE_PROVENANCE=development scripts/quality/generate-api-types.sh --check
-                    POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
-                    POKECON_RESOURCE_PROVENANCE=development \
-                    cargo build --locked --workspace --all-features --jobs 1
-                    POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                    export POKECON_RESOURCE_PROVENANCE=development
+                    cargo build --locked --workspace --all-features
+                    cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                    cargo test --locked --workspace --all-features
                     python -m scripts.compatibility.promote --check
                     python -m scripts.compatibility.runner \
                       --check \
                       --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                       --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
                       --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                    check-jsonschema --check-metaschema generated/settings.schema.json
+                    python -m scripts.acceptance.records
+                    scripts/quality/generate-api-types.sh --check-types-only
                   ' \
                   --next \
                   web-and-static \
@@ -4625,7 +4736,7 @@
                   pytest \
                   python -m pytest \
                   -p no:cacheprovider \
-                  -m "not production_routing_mutation" \
+                  -m "not production_routing_audit and not production_routing_mutation" \
                   tests \
                   -v \
                   --tb=short \

@@ -167,16 +167,16 @@ def test_package_ci_builds_debian_reproducibility_proof_in_parallel() -> None:
     primary = workflow_section(
         workflow,
         "  linux:\n",
-        "  linux-reproducibility-build:\n",
+        "  linux_repro:\n",
     )
     reproduction = workflow_section(
         workflow,
-        "  linux-reproducibility-build:\n",
-        "  linux-reproducibility:\n",
+        "  linux_repro:\n",
+        "  repro_check:\n",
     )
     comparison = workflow_section(
         workflow,
-        "  linux-reproducibility:\n",
+        "  repro_check:\n",
         "  windows:\n",
     )
 
@@ -184,9 +184,11 @@ def test_package_ci_builds_debian_reproducibility_proof_in_parallel() -> None:
     assert primary.count(build_command) == 1
     assert reproduction.count(build_command) == 1
     assert comparison.count(build_command) == 0
-    assert "needs:" not in primary
-    assert "needs:" not in reproduction
-    assert comparison.count("needs: [linux, linux-reproducibility-build]") == 1
+    assert primary.count("needs: plan") == 1
+    assert reproduction.count("needs: plan") == 1
+    assert "needs: linux" not in reproduction
+    assert "needs: linux_repro" not in primary
+    assert comparison.count("needs: [plan, linux, linux_repro]") == 1
     assert "Preserve first package build" not in workflow
     assert "Rebuild Debian package from identical inputs" not in workflow
 

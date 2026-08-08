@@ -21,13 +21,49 @@ pub(crate) fn run() -> Result<(), Box<dyn Error>> {
         }
     };
     let root = std::env::current_dir()?;
-    if !root.join("Cargo.toml").is_file() || !root.join("SPECIFICATION.md").is_file() {
-        return Err(io::Error::new(
+    if check {
+        check_generated_artifacts(&root)
+    } else {
+        write_generated_artifacts(&root)
+    }
+}
+
+/// Checks every tracked settings and scripting artifact under a repository root.
+///
+/// # Errors
+///
+/// Returns an error when the root is invalid, canonical contracts cannot be loaded, or a
+/// generated output is missing or stale.
+pub(crate) fn check_generated_artifacts(root: &Path) -> Result<(), Box<dyn Error>> {
+    validate_repository_root(root)?;
+    for (relative, source) in generated_outputs()? {
+        check_output(&root.join(&relative), &source)?;
+        println!("up to date: {}", relative.display());
+    }
+    Ok(())
+}
+
+fn write_generated_artifacts(root: &Path) -> Result<(), Box<dyn Error>> {
+    validate_repository_root(root)?;
+    for (relative, source) in generated_outputs()? {
+        write_output(&root.join(&relative), &source)?;
+        println!("generated: {}", relative.display());
+    }
+    Ok(())
+}
+
+fn validate_repository_root(root: &Path) -> Result<(), io::Error> {
+    if root.join("Cargo.toml").is_file() && root.join("SPECIFICATION.md").is_file() {
+        Ok(())
+    } else {
+        Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "generate_contracts must run from the repository root",
-        )
-        .into());
+        ))
     }
+}
+
+fn generated_outputs() -> Result<Vec<(PathBuf, String)>, Box<dyn Error>> {
     let settings = settings_registry()?;
     let mut outputs = vec![
         (
@@ -53,17 +89,7 @@ pub(crate) fn run() -> Result<(), Box<dyn Error>> {
             typing.source().to_owned(),
         )
     }));
-    for (relative, source) in outputs {
-        let path = root.join(&relative);
-        if check {
-            check_output(&path, &source)?;
-            println!("up to date: {}", relative.display());
-        } else {
-            write_output(&path, &source)?;
-            println!("generated: {}", relative.display());
-        }
-    }
-    Ok(())
+    Ok(outputs)
 }
 
 fn pretty_json(value: &serde_json::Value) -> Result<String, serde_json::Error> {

@@ -8,32 +8,20 @@ pub mod native;
 pub mod screenshot;
 pub mod selector;
 pub mod shared_ring;
+#[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "virtual camera fixtures are unit-test-only")
+)]
 pub mod virtual_camera;
 
-pub use backend::{CameraBackend, CameraConfig, CameraError, CameraSession, EffectiveCameraConfig};
-pub use frame::{
-    BgrFrame, CaptureResolution, FlipMode, FrameError, FrameSize, NormalizedRegion, PixelRegion,
-};
-pub use manager::{CameraManager, CameraRuntimeStatus, UnstoppedCameraWriter};
-pub use media::{
-    EncodedMotionJpeg, LatestFrameSource, MediaFrame, MediaSourceError, MotionJpegSource,
-    WebRtcFrameSource,
-};
+pub use backend::{CameraBackend, CameraConfig, CameraError};
+pub use frame::{BgrFrame, CaptureResolution, FlipMode, NormalizedRegion};
+pub use manager::CameraManager;
+pub use media::{LatestFrameSource, MediaFrame, MotionJpegSource, WebRtcFrameSource};
 pub use native::NativeCameraBackend;
 pub use screenshot::{
-    DownloadScreenshot, SavedScreenshot, ScreenshotClock, ScreenshotDestination, ScreenshotError,
-    ScreenshotFormat, ScreenshotMode, ScreenshotRequest, ScreenshotResult,
-    ScreenshotRuntimeSettings, ScreenshotService, SystemScreenshotClock,
+    ScreenshotDestination, ScreenshotError, ScreenshotFormat, ScreenshotMode, ScreenshotRequest,
+    ScreenshotResult, ScreenshotRuntimeSettings, ScreenshotService,
 };
-pub use selector::{
-    CameraDevice, CameraEnumerationError, CameraSelector, CameraSelectorError,
-    WindowsCameraDescriptor, enumerate_native_cameras, select_windows_candidates,
-};
-pub use shared_ring::{
-    DebugPinnedFrame, MappingDescriptor, Publication, RingError, RingReader, SLOT_BYTE_SIZE,
-    SLOT_COUNT, SharedFrameRing,
-};
-pub use virtual_camera::{
-    RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
-    VirtualReconfigurePlan, VirtualSessionPlan,
-};
+pub use selector::{CameraDevice, CameraSelector};
+pub use shared_ring::{MappingDescriptor, RingReader, SharedFrameRing};

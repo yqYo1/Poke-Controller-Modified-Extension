@@ -108,6 +108,7 @@ WORKSPACE_LOCK_SOURCE = "@workspace/Cargo.lock"
 FLAKE_SOURCE = "@flake.nix"
 FLAKE_LOCK_SOURCE = "@flake.lock"
 FLAKE_LOCK_INVENTORY_SOURCE = "@flake-lock-inventory"
+VIRTUAL_IO_SMOKE_SOURCE = "@scripts/integration/virtual-io-smoke.sh"
 RUST_TOOLCHAIN_SOURCE = "@rust-toolchain.toml"
 RUST_TOOLCHAIN_INVENTORY_SOURCE = "@rust-toolchain-inventory"
 CARGO_CONFIG_INVENTORY_SOURCE = "@repository/.cargo-config-inventory"
@@ -163,7 +164,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "ca44175b6670d791ab556b5bb6c898ef70eafeb25579dc90b7905e3a697404b0",
+    "rust/pokecon": "72a4ffeeb40de1af2621a2c159b13f8886c5f35c7eed8bc716e77e8657def2da",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -286,10 +287,60 @@ name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
 required-features = ["contract-generator"]
 
+[[test]]
+name = "contract_sync"
+path = "tests/contract_sync.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "controller_serial_contract"
+path = "tests/controller_serial_contract.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "cross_process"
+path = "tests/cross_process.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "lifecycle"
+path = "tests/lifecycle.rs"
+required-features = [
+  "integration-test-support",
+  "worker-binary",
+  "worker-test-fixture",
+]
+
+[[test]]
+name = "native_serial_pty"
+path = "tests/native_serial_pty.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "native_v4l2"
+path = "tests/native_v4l2.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "script_runtime"
+path = "tests/script_runtime.rs"
+required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
+name = "startup"
+path = "tests/startup.rs"
+required-features = ["worker-binary"]
+
+[[test]]
+name = "worker_startup"
+path = "tests/worker_startup.rs"
+required-features = ["worker-binary"]
+
 [features]
 default = []
 compatibility-tool = []
 contract-generator = []
+integration-test-support = []
 worker-binary = []
 worker-test-fixture = []
 
@@ -725,6 +776,9 @@ def load_production_routing_sources() -> dict[str, str]:
         )
     sources[BUILD_SCRIPT_INVENTORY_SOURCE] = json.dumps(build_script_inventory)
     sources[FLAKE_SOURCE] = (REPOSITORY / "flake.nix").read_text()
+    sources[VIRTUAL_IO_SMOKE_SOURCE] = (
+        REPOSITORY / "scripts/integration/virtual-io-smoke.sh"
+    ).read_text()
     flake_lock_path = REPOSITORY / "flake.lock"
     flake_lock_status = flake_lock_path.lstat()
     if stat.S_ISREG(flake_lock_status.st_mode):
@@ -2013,10 +2067,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     expected_production_cargo_target_root_hashes = {
         "@rust/pokecon/src/bin/worker.rs": (
-            "8d0cdb537d0c2ee0226c38706d1c3939791b8fd5bb01014b059535ba4af15d21"
+            "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "420ce5e2a0b0c5ea7b67dcef273b7d7873ad3f83863b578e09338c85302709f0"
+            "3ab5e0f7439deb5d363a563632d2db9cb57b685a47acc36632bebd833defc507"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2219,7 +2273,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "0aa833ac4b384f244a4a9a7c03c091411a7f709896fadfb6731fb93dd1dd70bc"
+        == "d73963e4a82efce54d1ede9b84dab71325eb4c81ea5b470a6407a8a5e422a271"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2449,7 +2503,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "065e5cfe0a71870f05d729ac06c9b0909a3a0186dc361c1a171bdff589187629"
+        == "9cf9214f3a6f0d41bd0b4ff56ef90d6fd177135ba10c9418bcaade53a71ae460"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -2571,7 +2625,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_runner_section = flake[mutation_runner_start:mutation_runner_end]
     assert (
         hashlib.sha256(mutation_runner_section.strip().encode()).hexdigest()
-        == "622d395643a2cc269bffcd6fc3dae15172b7ea561b31c45da17ff364243265b6"
+        == "abb5e87c7028baccb0e57560959c38915bc470df8b141fdbdbd72ef5cf406bed"
     )
     for mutation_runner_proof in (
         'name = "pokecon-production-routing-mutation-audit";',
@@ -2599,7 +2653,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "--import-mode=importlib",
         "-p no:cacheprovider",
         '"$mutation_test"',
-        "Running 384 production-routing mutations across $mutation_worker_count process shards",
+        "Running 394 production-routing mutations across $mutation_worker_count process shards",
     ):
         assert mutation_runner_proof in mutation_runner_section, mutation_runner_proof
     assert (
@@ -3077,6 +3131,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert package_section.count('"--locked"') == 1
     assert package_section.count('"--features"') == 1
     assert package_section.count('"worker-binary"') == 1
+    assert "integration-test-support" not in package_section
     assert 'test -f "${productionRoutingAudit}/passed"' in package_section
     assert 'RUSTC = "${rustToolchain}/bin/rustc";' in package_section
     assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in package_section
@@ -3611,7 +3666,8 @@ offline = true
         "scripts/quality/generate-api-types.sh --check"
     )
     targeted_contract_test = (
-        "cargo test --locked --package pokecon --test contract_sync"
+        "cargo test --locked --package pokecon --test contract_sync "
+        "--features integration-test-support"
     )
     assert "reclaimPerRunCargoTarget" not in flake
     assert "cargo clean" not in flake
@@ -3678,9 +3734,7 @@ offline = true
     )
     assert contract_check_section.index(
         editor_provenance
-    ) < contract_check_section.index(
-        "cargo test --locked --package pokecon --test contract_sync"
-    )
+    ) < contract_check_section.index(targeted_contract_test)
     assert contract_check_section.index(
         editor_provenance
     ) < contract_check_section.index("scripts/quality/generate-api-types.sh --check")
@@ -3697,6 +3751,19 @@ offline = true
         )
         == 1
     )
+
+    virtual_io_smoke = sources[VIRTUAL_IO_SMOKE_SOURCE]
+    native_serial_test = (
+        "cargo test --locked --package pokecon --test native_serial_pty \\\n"
+        "  --features integration-test-support"
+    )
+    native_v4l2_test = (
+        'POKECON_V4L2_INDEX="$v4l2_index" \\\n'
+        "  cargo test --locked --package pokecon --test native_v4l2 \\\n"
+        "  --features integration-test-support -- --ignored --nocapture"
+    )
+    assert virtual_io_smoke.count(native_serial_test) == 1
+    assert virtual_io_smoke.count(native_v4l2_test) == 1
 
     generate_api_types_section = section(
         flake,
@@ -3909,6 +3976,7 @@ offline = true
     )
     assert tauri_section.count(worker_cargo_build) == 1
     assert tauri_section.count(application_cargo_build) == 1
+    assert "integration-test-support" not in tauri_section
     cargo_bundle_invocation = (
         "${prepareTauriCargoInvocation}\n"
         "                    (\n"
@@ -4353,10 +4421,12 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
             "required-features": ["contract-generator"],
         },
     ]
+    assert manifest["test"] == EXPECTED_POKECON_MANIFEST["test"]
     assert manifest["features"] == {
         "default": [],
         "compatibility-tool": [],
         "contract-generator": [],
+        "integration-test-support": [],
         "worker-binary": [],
         "worker-test-fixture": [],
     }
@@ -4402,21 +4472,55 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         }
         """
     )
-    openapi_bridge_body = rust_top_level_function_body(
-        sources["lib.rs"],
-        r"\bpub\s+fn\s+generate_openapi_document_json\s*\(\s*\)\s*->\s*"
-        r"Result\s*<\s*String\s*,\s*Box\s*<\s*dyn\s+std\s*::\s*error\s*::\s*Error\s*>\s*>",
-        attributes=(
-            '#[cfg(feature = "contract-generator")]',
-            "#[doc(hidden)]",
+    binary_wrappers = {
+        "bin/compatibility.rs": "compatibility",
+        "bin/generate_contracts.rs": "generate_contracts",
+        "bin/generate_openapi.rs": "generate_openapi",
+        "bin/worker.rs": "worker",
+    }
+    for source_name, entrypoint in binary_wrappers.items():
+        wrapper = compact_rust(rust_without_comments(sources[source_name]))
+        expected_wrapper = compact_rust(
+            f"""
+            fn main() -> Result<(), Box<dyn std::error::Error>> {{
+                pokecon::binary_entrypoints::{entrypoint}()
+            }}
+            """
+        )
+        assert wrapper == expected_wrapper, source_name
+
+    binary_entrypoints = sources["binary_entrypoints.rs"]
+    expected_entrypoint_bodies = {
+        "compatibility": (
+            "compatibility-tool",
+            "crate::compatibility_tool::run()",
         ),
+        "generate_contracts": (
+            "contract-generator",
+            "crate::contract_generator::run()",
+        ),
+        "generate_openapi": (
+            "contract-generator",
+            "crate::openapi_generator::run()",
+        ),
+        "worker": (
+            "worker-binary",
+            "crate::worker_binary::main().map_err(Into::into)",
+        ),
+    }
+    for entrypoint, (feature, expected_body) in expected_entrypoint_bodies.items():
+        body = rust_top_level_function_body(
+            binary_entrypoints,
+            rf"\bpub\s+fn\s+{entrypoint}\s*\(",
+            attributes=(f'#[cfg(feature = "{feature}")]',),
+        )
+        assert compact_rust(body) == compact_rust(expected_body), entrypoint
+    public_entrypoints = rust_top_level_matches(
+        binary_entrypoints,
+        r"(?m)^[ \t]*pub\s+fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(",
     )
-    assert compact_rust(openapi_bridge_body) == compact_rust(
-        "server::openapi::document_json().map_err(Into::into)"
-    )
-    generate_openapi_source = rust_lexical_mask(sources["bin/generate_openapi.rs"])
-    assert (
-        generate_openapi_source.count("pokecon::generate_openapi_document_json()") == 1
+    assert tuple(match.group(1) for match in public_entrypoints) == tuple(
+        expected_entrypoint_bodies
     )
     for retired_crate_identifier in (
         "pokecon_camera",
@@ -4635,52 +4739,47 @@ pub mod websocket;
     expected_application_prelude = """
 mod application_backend;
 #[doc(hidden)]
-pub mod camera;
+pub mod binary_entrypoints;
+mod camera;
 mod command_service;
-#[doc(hidden)]
-pub mod contracts;
+#[cfg(feature = "compatibility-tool")]
+mod compatibility_tool;
+#[cfg(feature = "contract-generator")]
+mod contract_generator;
+mod contracts;
 mod desktop;
-#[doc(hidden)]
-pub mod device;
-#[doc(hidden)]
-pub mod diagnostics;
+mod device;
+mod diagnostics;
 #[allow(
     dead_code,
-    reason = "engine-only helpers are consumed by the worker binary's private copy"
+    reason = "worker-only engine helpers are enabled by the worker-binary feature"
 )]
-#[doc(hidden)]
-pub mod dynamic;
+mod dynamic;
 pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
+#[cfg(feature = "integration-test-support")]
 #[doc(hidden)]
-pub mod platform;
+pub mod integration_test_support;
+#[cfg(feature = "contract-generator")]
+mod openapi_generator;
+mod platform;
 mod production;
 mod profile_service;
-#[doc(hidden)]
-pub mod runtime;
+mod runtime;
 mod script_host;
 mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
 #[allow(clippy::option_option, reason = "wire patch fields are three-state")]
 mod server;
-#[doc(hidden)]
-pub mod settings;
+mod settings;
 mod settings_runtime;
-#[doc(hidden)]
-pub mod worker;
+mod worker;
+#[cfg(feature = "worker-binary")]
+mod worker_binary;
 
-#[doc(hidden)]
-pub use diagnostics::{
-    APP_STARTING, APP_STOPPED, SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED, TracingInitError,
-    init_tracing, init_tracing_to_stderr,
-};
 pub use entrypoint::{MainError, run_cli};
-#[doc(hidden)]
-pub use runtime::{
-    OsSignal, RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
-};
 """.lstrip()
     assert application_with_literals.lstrip().startswith(
         f"{expected_application_prelude}\nuse std::future::Future;\nuse std::io;"
@@ -4691,8 +4790,11 @@ pub use runtime::{
     )
     assert tuple(module.group(1) for module in application_modules) == (
         "application_backend",
+        "binary_entrypoints",
         "camera",
         "command_service",
+        "compatibility_tool",
+        "contract_generator",
         "contracts",
         "desktop",
         "device",
@@ -4701,6 +4803,8 @@ pub use runtime::{
         "dynamic_host",
         "dynamic_runtime",
         "entrypoint",
+        "integration_test_support",
+        "openapi_generator",
         "platform",
         "production",
         "profile_service",
@@ -4711,7 +4815,74 @@ pub use runtime::{
         "settings",
         "settings_runtime",
         "worker",
+        "worker_binary",
     )
+    public_application_modules = rust_top_level_matches(
+        sources["lib.rs"],
+        r"(?m)^[ \t]*pub\s+mod\s+((?:r#)?[A-Za-z_][A-Za-z0-9_]*)\s*;",
+    )
+    assert tuple(module.group(1) for module in public_application_modules) == (
+        "binary_entrypoints",
+        "integration_test_support",
+    )
+    application_mask = rust_lexical_mask(sources["lib.rs"])
+    public_module_attributes = {
+        module.group(1): rust_item_attributes(
+            sources["lib.rs"], application_mask, module.start()
+        )
+        for module in public_application_modules
+    }
+    assert public_module_attributes == {
+        "binary_entrypoints": ("#[doc(hidden)]",),
+        "integration_test_support": (
+            '#[cfg(feature = "integration-test-support")]',
+            "#[doc(hidden)]",
+        ),
+    }
+    integration_test_support = rust_lexical_mask(sources["integration_test_support.rs"])
+    support_public_items = tuple(
+        re.findall(r"\bpub\s+(mod|use)\b", integration_test_support)
+    )
+    assert support_public_items
+    assert len(re.findall(r"\bpub\b", integration_test_support)) == len(
+        support_public_items
+    )
+    support_reexports = tuple(
+        compact_rust(match.group(1))
+        for match in re.finditer(
+            r"\bpub\s+use\s+([^;]+);",
+            integration_test_support,
+        )
+    )
+    assert support_reexports
+    exact_support_path = re.compile(
+        r"crate::(?:camera|contracts|device|dynamic|settings|worker)::.+"
+    )
+    for support_reexport in support_reexports:
+        assert "*" not in support_reexport, support_reexport
+        assert exact_support_path.fullmatch(support_reexport) is not None, (
+            support_reexport
+        )
+        assert not support_reexport.startswith("crate::{"), support_reexport
+    worker_dynamic_module = rust_without_comments(
+        sources["worker_binary/dynamic/mod.rs"]
+    )
+    assert (
+        re.search(
+            r'#\s*\[\s*path\s*=\s*"[^"]*dynamic/mod\.rs"\s*\]',
+            worker_dynamic_module,
+        )
+        is None
+    )
+    assert re.search(r"(?m)^\s*mod\s+domain\s*;", worker_dynamic_module) is None
+    assert (
+        re.search(
+            r"(?m)^\s*pub\s*\(crate\)\s+use\s+domain\b",
+            worker_dynamic_module,
+        )
+        is None
+    )
+    assert "use crate::dynamic::" in sources["worker_binary/dynamic/engine.rs"]
     server_module_paths = tuple(
         match.group(1)
         for match in rust_top_level_matches(
@@ -13615,9 +13786,9 @@ def test_production_routing_mutation_shard_contract(
         covered_indices = sorted(
             mutation_index
             for shard_index in range(shard_count)
-            for mutation_index in range(shard_index, 384, shard_count)
+            for mutation_index in range(shard_index, 394, shard_count)
         )
-        assert covered_indices == list(range(384))
+        assert covered_indices == list(range(394))
 
     for shard_index, shard_count in (("0", "1"), ("7", "8")):
         monkeypatch.setenv(PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV, shard_index)
@@ -13709,6 +13880,62 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
         mutated[inventory_source] = json.dumps(inventory)
         mutated[f"@{relative_path}"] = content
         return mutated
+
+    public_internal_camera_module = replace_once(
+        "lib.rs",
+        "mod camera;",
+        "pub mod camera;",
+    )
+    unhidden_binary_entrypoints = replace_once(
+        "lib.rs",
+        "#[doc(hidden)]\npub mod binary_entrypoints;",
+        "pub mod binary_entrypoints;",
+    )
+    unconditional_integration_test_support = replace_once(
+        "lib.rs",
+        '#[cfg(feature = "integration-test-support")]\n'
+        "#[doc(hidden)]\n"
+        "pub mod integration_test_support;",
+        "#[doc(hidden)]\npub mod integration_test_support;",
+    )
+    integration_test_support_glob_reexport = replace_once(
+        "integration_test_support.rs",
+        "pub use crate::camera::{",
+        "pub use crate::camera::*;\n    use crate::camera::{",
+    )
+    integration_test_support_root_reexport = replace_once(
+        "integration_test_support.rs",
+        "pub use crate::worker::WorkerKind;",
+        "pub use crate::worker;",
+    )
+    worker_wrapper_bypasses_entrypoint = replace_once(
+        "bin/worker.rs",
+        "pokecon::binary_entrypoints::worker()",
+        "pokecon::run_cli()",
+    )
+    restored_worker_dynamic_domain_reload = replace_once(
+        "worker_binary/dynamic/mod.rs",
+        "mod dispatch;",
+        'mod dispatch;\n#[path = "../../dynamic/mod.rs"]\nmod domain;',
+    )
+    production_package_enables_integration_test_support = replace_once(
+        FLAKE_SOURCE,
+        '              "worker-binary"\n              "--bin"\n',
+        '              "worker-binary,integration-test-support"\n'
+        '              "--bin"\n',
+    )
+    contract_check_omits_integration_test_support = replace_once(
+        FLAKE_SOURCE,
+        "cargo test --locked --package pokecon --test contract_sync "
+        "--features integration-test-support",
+        "cargo test --locked --package pokecon --test contract_sync",
+    )
+    virtual_io_omits_integration_test_support = replace_once(
+        VIRTUAL_IO_SMOKE_SOURCE,
+        "cargo test --locked --package pokecon --test native_serial_pty \\\n"
+        "  --features integration-test-support",
+        "cargo test --locked --package pokecon --test native_serial_pty",
+    )
 
     contracts_runtime_dependency = replace_once(
         "contracts/mod.rs",
@@ -16442,6 +16669,37 @@ runner = "scripts/attacker-runner.sh"
         ),
         ("server hardware owner", server_hardware_owner),
         ("worker main state owner", worker_main_state_owner),
+        ("public internal camera module", public_internal_camera_module),
+        ("unhidden binary entrypoints", unhidden_binary_entrypoints),
+        (
+            "unconditional integration test support",
+            unconditional_integration_test_support,
+        ),
+        (
+            "integration test support glob reexport",
+            integration_test_support_glob_reexport,
+        ),
+        (
+            "integration test support root reexport",
+            integration_test_support_root_reexport,
+        ),
+        ("worker wrapper bypasses entrypoint", worker_wrapper_bypasses_entrypoint),
+        (
+            "restored worker dynamic domain reload",
+            restored_worker_dynamic_domain_reload,
+        ),
+        (
+            "production package enables integration test support",
+            production_package_enables_integration_test_support,
+        ),
+        (
+            "contract check omits integration test support",
+            contract_check_omits_integration_test_support,
+        ),
+        (
+            "virtual IO omits integration test support",
+            virtual_io_omits_integration_test_support,
+        ),
         ("symlinked production Cargo target root", symlinked_worker_target_root),
         ("custom nested Tauri permission", custom_tauri_permission),
         ("custom Tauri capability", custom_tauri_capability),
@@ -17317,7 +17575,7 @@ runner = "scripts/attacker-runner.sh"
         ),
         ("alternate desktop backend", alternate_desktop_backend),
     )
-    assert len(mutations) == 384
+    assert len(mutations) == 394
     mutation_labels = tuple(label for label, _mutated_sources in mutations)
     assert len(set(mutation_labels)) == len(mutation_labels)
     mutation_deltas = tuple(

@@ -3,8 +3,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use pokecon::camera::{BgrFrame, CaptureResolution, FlipMode, ScreenshotFormat, SharedFrameRing};
-use pokecon::worker as pokecon_worker;
+use pokecon::integration_test_support::camera::{
+    BgrFrame, CaptureResolution, FlipMode, ScreenshotFormat, SharedFrameRing,
+};
+use pokecon::integration_test_support::worker as pokecon_worker;
 use pokecon_worker::WorkerKind;
 use pokecon_worker::ipc::ResourceSafety;
 use pokecon_worker::script::protocol::{

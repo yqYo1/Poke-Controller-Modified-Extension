@@ -101,6 +101,13 @@ impl CameraDevice {
 
 /// Native Windows descriptor used by both Media Foundation enumeration and
 /// the platform-independent mock adapter tests.
+#[cfg_attr(
+    not(any(test, target_os = "windows")),
+    allow(
+        dead_code,
+        reason = "Windows descriptors are compiled on Linux for unit tests"
+    )
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WindowsCameraDescriptor {
     pub index: u32,
@@ -111,6 +118,13 @@ pub struct WindowsCameraDescriptor {
 /// Maps Media Foundation descriptors to opaque string selectors. An exact
 /// configured selector remains visible as unavailable when not enumerated.
 #[must_use]
+#[cfg_attr(
+    not(any(test, target_os = "windows")),
+    allow(
+        dead_code,
+        reason = "Windows selection is compiled on Linux for unit tests"
+    )
+)]
 pub fn select_windows_candidates(
     descriptors: Vec<WindowsCameraDescriptor>,
     configured: Option<&CameraSelector>,
@@ -324,6 +338,13 @@ fn selector_label(selector: &CameraSelector) -> String {
     }
 }
 
+#[cfg_attr(
+    not(any(test, target_os = "windows")),
+    allow(
+        dead_code,
+        reason = "Windows label normalization is compiled on Linux for unit tests"
+    )
+)]
 fn nonempty_label(label: String, index: u32) -> String {
     if label.is_empty() {
         format!("Camera {index}")

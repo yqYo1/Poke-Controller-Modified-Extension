@@ -1309,6 +1309,10 @@ pub fn public_value(setting: &Setting, value: &Value) -> Value {
 
 /// Returns a dynamic-language-safe string for a secret getter.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the dynamic getter projection is retained pending settings-host wiring"
+)]
 pub fn dynamic_secret_value(setting: &Setting, value: &Value) -> Value {
     if setting.secret && value.as_str().is_some_and(|value| !value.is_empty()) {
         Value::String(SECRET_MASK.to_owned())

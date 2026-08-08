@@ -3,14 +3,14 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 
-use clap::{Parser, ValueEnum};
-use pokecon::{
-    APP_STARTING, APP_STOPPED, RuntimeContext, ShutdownCoordinator, ShutdownReason,
-    TracingInitError, init_tracing_to_stderr, install_os_signal_forwarder,
+use crate::diagnostics::{APP_STARTING, APP_STOPPED, TracingInitError, init_tracing_to_stderr};
+use crate::runtime::{
+    RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
 };
+use clap::{Parser, ValueEnum};
 use thiserror::Error;
 
-use crate::dynamic::DynamicWorkerRuntime;
+use self::dynamic::DynamicWorkerRuntime;
 use crate::worker::WorkerKind;
 use crate::worker::ipc::{
     ConnectionConfig, ConnectionError, Envelope, IpcConnection, IpcErrorPayload, IpcValue,
@@ -334,7 +334,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    use pokecon::{OsSignal, ShutdownCoordinator, ShutdownReason};
+    use crate::runtime::{OsSignal, ShutdownCoordinator, ShutdownReason};
     use tokio::task::JoinHandle;
     use tokio::time::timeout;
 

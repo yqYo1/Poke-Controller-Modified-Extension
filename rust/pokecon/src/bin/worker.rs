@@ -1,14 +1,3 @@
-pub(crate) use pokecon::camera;
-pub(crate) use pokecon::contracts;
-pub(crate) use pokecon::device;
-pub(crate) use pokecon::settings;
-pub(crate) use pokecon::worker;
-
-#[path = "../worker_binary/mod.rs"]
-mod worker_binary;
-
-pub(crate) use worker_binary::dynamic;
-
-fn main() -> Result<(), worker_binary::MainError> {
-    worker_binary::main()
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    pokecon::binary_entrypoints::worker()
 }

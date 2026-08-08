@@ -13,7 +13,21 @@ use thiserror::Error;
 use crate::settings::MANAGED_UV_SOURCE_JSON;
 use crate::settings::roots::{EffectiveRoots, RootEnvironment};
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache seeding is exercised by uv unit tests"
+    )
+)]
 const PACKAGED_UV_CACHE_DIRECTORY: &str = "uv-cache";
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache seeding is exercised by uv unit tests"
+    )
+)]
 const PACKAGED_UV_CACHE_MARKER: &str = ".pokecon-packaged-cache.sha256";
 const PACKAGED_WHEELHOUSE_DIRECTORY: &str = "python-wheels";
 
@@ -242,6 +256,13 @@ impl ManagedUv {
 ///
 /// Returns an error when a present cache or its resource manifest is invalid,
 /// or when cache materialization fails.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache seeding is exercised by uv unit tests"
+    )
+)]
 pub fn seed_packaged_uv_cache(
     resource_root: &Path,
     roots: &EffectiveRoots,
@@ -291,6 +312,13 @@ pub fn seed_packaged_uv_cache(
     Ok(true)
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache copying is exercised by uv unit tests"
+    )
+)]
 fn copy_packaged_cache_directory(source: &Path, destination: &Path) -> Result<(), UvError> {
     let mut entries = fs::read_dir(source)
         .map_err(|source_error| UvError::Io {
@@ -352,6 +380,13 @@ fn copy_packaged_cache_directory(source: &Path, destination: &Path) -> Result<()
     Ok(())
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache writes are exercised by uv unit tests"
+    )
+)]
 fn atomic_write(path: &Path, contents: &[u8], mode: Option<u32>) -> Result<(), UvError> {
     let options = atomic_open_options(mode);
     let mut output = options.open(path).map_err(|source| UvError::Io {
@@ -368,6 +403,13 @@ fn atomic_write(path: &Path, contents: &[u8], mode: Option<u32>) -> Result<(), U
     })
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache writes are exercised by uv unit tests"
+    )
+)]
 fn atomic_open_options(mode: Option<u32>) -> OpenOptions {
     #[cfg(unix)]
     {
@@ -385,6 +427,13 @@ fn atomic_open_options(mode: Option<u32>) -> OpenOptions {
     }
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "packaged cache copying is exercised by uv unit tests"
+    )
+)]
 fn atomic_copy(
     source_path: &Path,
     destination_path: &Path,

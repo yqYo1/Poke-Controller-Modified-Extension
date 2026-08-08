@@ -11,10 +11,10 @@ use crate::dynamic::callback::{
     Callback, CallbackError, CallbackLimits, CallbackReturn, InvocationContext,
 };
 use crate::dynamic::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
-use crate::dynamic::engine::{
+use crate::dynamic::event::{HandlerId, RegistrationOptions};
+use crate::worker_binary::dynamic::engine::{
     DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
 };
-use crate::dynamic::event::{HandlerId, RegistrationOptions};
 
 const LUA_CALLBACK_INVOKER_REGISTRY_KEY: &str = "pokecon.callback_invoker";
 

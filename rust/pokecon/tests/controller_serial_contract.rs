@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use pokecon::device::controller::{Button, ControllerState};
-use pokecon::device::input::{
+use pokecon::integration_test_support::device::controller::{Button, ControllerState};
+use pokecon::integration_test_support::device::input::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration, InputPriority, InputSequence,
     InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState,
 };
-use pokecon::device::serial::{
+use pokecon::integration_test_support::device::serial::{
     ControllerFormat, SerialConfig, SerialManager, VirtualOpenPlan, VirtualSerialBackend,
     VirtualSerialEndpoint,
 };

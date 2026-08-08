@@ -38,10 +38,60 @@ name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
 required-features = ["contract-generator"]
 
+[[test]]
+name = "contract_sync"
+path = "tests/contract_sync.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "controller_serial_contract"
+path = "tests/controller_serial_contract.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "cross_process"
+path = "tests/cross_process.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "lifecycle"
+path = "tests/lifecycle.rs"
+required-features = [
+  "integration-test-support",
+  "worker-binary",
+  "worker-test-fixture",
+]
+
+[[test]]
+name = "native_serial_pty"
+path = "tests/native_serial_pty.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "native_v4l2"
+path = "tests/native_v4l2.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "script_runtime"
+path = "tests/script_runtime.rs"
+required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
+name = "startup"
+path = "tests/startup.rs"
+required-features = ["worker-binary"]
+
+[[test]]
+name = "worker_startup"
+path = "tests/worker_startup.rs"
+required-features = ["worker-binary"]
+
 [features]
 default = []
 compatibility-tool = []
 contract-generator = []
+integration-test-support = []
 worker-binary = []
 worker-test-fixture = []
 

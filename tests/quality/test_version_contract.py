@@ -274,7 +274,8 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
         "--features contract-generator -- --check"
     )
     targeted_contract_test = (
-        "cargo test --locked --package pokecon --test contract_sync"
+        "cargo test --locked --package pokecon --test contract_sync "
+        "--features integration-test-support"
     )
     serial_build = f"{regular_build} --jobs 1"
     aggregate_workspace_builds = tuple(

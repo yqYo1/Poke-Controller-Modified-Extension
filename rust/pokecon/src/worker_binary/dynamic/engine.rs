@@ -20,13 +20,13 @@ use crate::dynamic::control::{DynamicConfigControl, DynamicConfigLanguage, Dynam
 use crate::dynamic::event::{EventBus, EventError, EventResult, HandlerId, RegistrationOptions};
 use crate::dynamic::host::{DynamicHost, DynamicHostError, DynamicSettingsRegistry};
 use crate::dynamic::protocol::DynamicProfileSwitchResult;
-use crate::dynamic::runtime::lua::LuaRuntime;
-use crate::dynamic::runtime::python::PythonRuntime;
 use crate::dynamic::source::{ResolvedSource, SourceError, SourceStore};
 use crate::dynamic::transaction::{
     EvaluationTransaction, StagedProfileSwitch, TransactionError, callback_settings,
     controller_update_from_value,
 };
+use crate::worker_binary::dynamic::runtime::lua::LuaRuntime;
+use crate::worker_binary::dynamic::runtime::python::PythonRuntime;
 
 const FIRST_PUBLIC_HANDLER_ID: u64 = 3;
 

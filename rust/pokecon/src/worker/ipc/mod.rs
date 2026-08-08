@@ -4,9 +4,6 @@ mod codec;
 mod connection;
 mod schema;
 
-pub use codec::{
-    CodecError, MAX_PAYLOAD_BYTES, decode_payload, encode_frame, read_frame, write_frame,
-};
 pub use connection::{
     ConnectionConfig, ConnectionError, DisconnectReason, IpcConnection, ResourceSafety,
 };

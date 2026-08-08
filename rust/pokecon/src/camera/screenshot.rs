@@ -344,6 +344,13 @@ impl ScreenshotService {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the settings accessor is exercised by screenshot unit tests"
+        )
+    )]
     pub const fn settings(&self) -> &ScreenshotRuntimeSettings {
         &self.settings
     }
@@ -837,6 +844,8 @@ mod tests {
             ScreenshotRuntimeSettings::default(),
             Arc::new(FixedClock),
         );
+        assert_eq!(service.settings().format(), ScreenshotFormat::Png);
+        assert_eq!(service.settings().jpeg_quality(), 85);
         (data, frames, service)
     }
 

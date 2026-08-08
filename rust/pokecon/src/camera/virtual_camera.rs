@@ -227,3 +227,28 @@ impl CameraSession for VirtualCameraSession {
         self.closed = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualReconfigurePlan,
+        VirtualSessionPlan,
+    };
+    use crate::camera::backend::CameraBackend;
+    use crate::camera::frame::{BgrFrame, CaptureResolution};
+
+    #[test]
+    fn explicit_frames_and_optional_fixture_controls_are_preserved() {
+        let frame = BgrFrame::solid(CaptureResolution::R640x360, [1, 2, 3]);
+        let mut source = RecordedFrameSource::new([RecordedFrame::Frame(frame.clone())]);
+        assert_eq!(source.read(CaptureResolution::R640x360).unwrap(), frame);
+
+        let plan = VirtualSessionPlan::recorded(30, [RecordedFrame::Solid([4, 5, 6])])
+            .with_reconfigurations([VirtualReconfigurePlan::Reject]);
+        assert_eq!(plan.reconfigurations.len(), 1);
+
+        let backend = VirtualCameraBackend::default();
+        backend.set_devices(Vec::new());
+        assert!(backend.enumerate(None).unwrap().is_empty());
+    }
+}

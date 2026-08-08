@@ -81,6 +81,13 @@ pub trait RuntimeSettingsApplier: Send {
 }
 
 /// No-op runtime adapter for startup and isolated contract tests.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "the no-op adapter is exercised by settings unit tests"
+    )
+)]
 #[derive(Debug, Default)]
 pub struct NoopSettingsApplier;
 
@@ -135,6 +142,13 @@ impl SettingsService {
 
     /// Returns the common settings/state revision.
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the local revision accessor is exercised by settings unit tests"
+        )
+    )]
     pub const fn revision(&self) -> u64 {
         self.revision
     }
@@ -147,6 +161,13 @@ impl SettingsService {
 
     /// Returns a REST-safe current snapshot.
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the direct snapshot accessor is exercised by settings unit tests"
+        )
+    )]
     pub fn public_snapshot(&self) -> BTreeMap<String, Value> {
         public_snapshot(&self.loaded.settings, &self.current)
     }
@@ -216,6 +237,13 @@ impl SettingsService {
     /// # Errors
     ///
     /// Returns [`PatchError::ProfileSwitchInProgress`] if already held.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the switch guard accessor is exercised by settings unit tests"
+        )
+    )]
     pub fn begin_profile_switch(&self) -> Result<ProfileSwitchGuard, PatchError> {
         acquire_switch_gate(&self.switch_gate)
     }
@@ -716,7 +744,9 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
 
-    use super::{PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService};
+    use super::{
+        NoopSettingsApplier, PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService,
+    };
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -758,6 +788,14 @@ mod tests {
         ) {
             *self.rollbacks.lock().expect("rollback lock must work") += 1;
         }
+    }
+
+    #[test]
+    fn noop_settings_applier_accepts_and_rolls_back_empty_changes() {
+        let mut applier = NoopSettingsApplier;
+        let changes = BTreeMap::new();
+        assert!(applier.apply(PatchClass::Ordinary, &changes).is_ok());
+        applier.rollback(PatchClass::Ordinary, &changes);
     }
 
     fn service(temp: &TempDir, applier: RecordingApplier) -> SettingsService {

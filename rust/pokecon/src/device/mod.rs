@@ -1,6 +1,13 @@
 //! Canonical controller input, serial transport, and notification services.
 
 pub mod controller;
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "the hardware bridge is retained and compiled through its unit tests"
+    )
+)]
 pub mod hardware;
 pub mod input;
 pub mod notification;

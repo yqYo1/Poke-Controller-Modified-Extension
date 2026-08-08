@@ -222,6 +222,13 @@ impl ManifestStore {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the manifest directory accessor is exercised by manifest unit tests"
+        )
+    )]
     pub const fn directory(&self) -> &PathBuf {
         &self.directory
     }
@@ -398,6 +405,7 @@ mod tests {
         let roots = roots(&temp);
         roots.ensure().expect("roots must be created");
         let store = ManifestStore::new(&roots);
+        assert_eq!(store.directory(), &roots.data.join("venv-manifests"));
         let key = store.key().expect("key must be available");
         let raw_resolved = "https://user:raw-secret@example.invalid/package.whl";
         let input = FingerprintInput {

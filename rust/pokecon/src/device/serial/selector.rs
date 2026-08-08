@@ -79,6 +79,13 @@ pub fn select_linux_candidates(mut candidates: Vec<PortCandidate>) -> Vec<PortCa
 /// Resolves only an exact configured spelling. A missing selection stays
 /// unavailable and never falls through to another detected port.
 #[must_use]
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "configured-port selection is exercised by serial unit tests"
+    )
+)]
 pub fn choose_configured<'a>(
     configured: &PortSelector,
     candidates: &'a [PortCandidate],

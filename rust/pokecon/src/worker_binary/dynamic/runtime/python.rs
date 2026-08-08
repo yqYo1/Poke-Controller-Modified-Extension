@@ -14,11 +14,11 @@ use serde_json::{Map, Number, Value};
 use crate::dynamic::callback::CallbackLimits;
 use crate::dynamic::callback::{Callback, CallbackError, CallbackReturn, InvocationContext};
 use crate::dynamic::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
-use crate::dynamic::engine::{
-    DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
-};
 use crate::dynamic::event::{HandlerId, RegistrationOptions};
 use crate::dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
+use crate::worker_binary::dynamic::engine::{
+    DeadlineCheckpoint, DynamicEngineError, EngineInner, InvocationScope, deadline_checkpoint,
+};
 
 const PYTHON_BOOTSTRAP: &str = r#"
 import copy as _copy

@@ -42,6 +42,10 @@ impl ControllerCodec {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "codec identity is exercised by serial unit tests")
+    )]
     pub const fn format(&self) -> ControllerFormat {
         self.format
     }
@@ -63,6 +67,13 @@ impl ControllerCodec {
     }
 
     /// Clears delta state on a new connection so the neutral baseline is known.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "codec reset semantics are exercised by serial unit tests"
+        )
+    )]
     pub const fn reset(&mut self) {
         self.previous = ControllerState::NEUTRAL;
     }
@@ -163,6 +174,7 @@ mod tests {
     #[test]
     fn default_text_has_six_hex_digits_and_delta_sticks() {
         let mut codec = ControllerCodec::new(ControllerFormat::Default);
+        assert_eq!(codec.format(), ControllerFormat::Default);
         let mut state = ControllerState::NEUTRAL;
         state.buttons.set(Button::A, true);
         state.buttons.set(Button::Capture, true);
@@ -171,6 +183,8 @@ mod tests {
         assert_eq!(codec.encode(state), b"0x008012 1 00 ff\r\n".to_vec());
         codec.commit(state);
         assert_eq!(codec.encode(state), b"0x008010 1\r\n".to_vec());
+        codec.reset();
+        assert_eq!(codec.encode(state), b"0x008012 1 00 ff\r\n".to_vec());
     }
 
     #[test]

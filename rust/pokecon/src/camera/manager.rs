@@ -178,6 +178,13 @@ impl CameraManager {
     }
 
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the shared-ring accessor is exercised by camera unit tests"
+        )
+    )]
     pub fn ring(&self) -> SharedFrameRing {
         self.inner.ring.clone()
     }
@@ -300,6 +307,10 @@ impl CameraManager {
 pub struct UnstoppedCameraWriter {
     ring: SharedFrameRing,
     join: Option<JoinHandle<()>>,
+    #[allow(
+        dead_code,
+        reason = "the receiver is retained for the explicit wait API even when callers only keep the mapping guard"
+    )]
     stopped: Option<Receiver<()>>,
 }
 
@@ -325,6 +336,10 @@ impl UnstoppedCameraWriter {
     }
 
     /// Waits without a deadline after an external driver/device recovery.
+    #[allow(
+        dead_code,
+        reason = "callers may choose retention-only shutdown while this explicit blocking recovery API remains available"
+    )]
     pub fn wait(mut self) {
         if let Some(stopped) = self.stopped.take() {
             let _ = stopped.recv();
@@ -670,8 +685,8 @@ mod tests {
     use crate::camera::frame::{CaptureResolution, FlipMode};
     use crate::camera::selector::CameraSelector;
     use crate::camera::virtual_camera::{
-        RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualReconfigurePlan,
-        VirtualSessionPlan,
+        RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
+        VirtualReconfigurePlan, VirtualSessionPlan,
     };
 
     fn config(selector: u32, fps: u32, resolution: CaptureResolution) -> CameraConfig {
@@ -743,7 +758,7 @@ mod tests {
         let backend = VirtualCameraBackend::default();
         let session = VirtualSessionPlan {
             effective_fps: 30,
-            frames: crate::camera::RecordedFrameSource::new([RecordedFrame::Solid([10, 20, 30])]),
+            frames: RecordedFrameSource::new([RecordedFrame::Solid([10, 20, 30])]),
             reconfigurations: VecDeque::from([
                 VirtualReconfigurePlan::Accept { effective_fps: 24 },
                 VirtualReconfigurePlan::Reject,

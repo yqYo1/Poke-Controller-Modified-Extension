@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "101b45b3a596f35add953030ec21de3e2eed88563495b1d5dcb5cd21a4baf542";
+      canonicalFlakeHash = "9e808d1fc3eb9b165ed41574b6e92dc7d92ab9794b69859eb5dddf5c393111cd";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -451,7 +451,7 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "6261bf734e9201214b22f41864d355ebc944d5a24be7ba60e25fcff4f052b37c";
+              expectedAuditTestHash = "c6bd221a8d65eb50941e639e7747ad6c80ac945f4fef5328e56d75574f2d9535";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = source + relativeAuditTest;
             in
@@ -485,7 +485,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "ca44175b6670d791ab556b5bb6c898ef70eafeb25579dc90b7905e3a697404b0";
+            "rust/pokecon" = "72a4ffeeb40de1af2621a2c159b13f8886c5f35c7eed8bc716e77e8657def2da";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -1004,7 +1004,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 384 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 394 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \
@@ -3322,7 +3322,7 @@
                 export PYTHONPATH="$PWD/python:$PWD"
                 export POKECON_RESOURCE_PROVENANCE=development
                 cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- --check
-                cargo test --locked --package pokecon --test contract_sync
+                cargo test --locked --package pokecon --test contract_sync --features integration-test-support
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"

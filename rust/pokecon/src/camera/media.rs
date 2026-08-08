@@ -76,6 +76,13 @@ pub struct WebRtcFrameSource {
 
 impl WebRtcFrameSource {
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the snapshot accessor is exercised by media unit tests"
+        )
+    )]
     pub fn latest(&self) -> Option<Arc<MediaFrame>> {
         self.receiver.borrow().clone()
     }
@@ -130,6 +137,13 @@ impl MotionJpegSource {
     /// # Errors
     ///
     /// Returns no-frame or fixed encoding failures.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the snapshot encoder is exercised by media unit tests"
+        )
+    )]
     pub fn latest_jpeg(&self) -> Result<EncodedMotionJpeg, ScreenshotError> {
         let snapshot = self
             .receiver
@@ -144,6 +158,13 @@ impl MotionJpegSource {
     /// # Errors
     ///
     /// Returns a closed, no-frame, or encoding failure.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "the change-stream encoder is exercised by media unit tests"
+        )
+    )]
     pub async fn changed_jpeg(&mut self) -> Result<EncodedMotionJpeg, MediaSourceError> {
         let snapshot = self.changed().await?.ok_or(MediaSourceError::NoFrame)?;
         self.encode_jpeg(&snapshot)
@@ -181,6 +202,13 @@ fn encode_motion_jpeg(
 }
 
 /// Media subscription failure.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "media stream failures are exercised by media unit tests"
+    )
+)]
 #[derive(Clone, Copy, Debug, thiserror::Error, Eq, PartialEq)]
 pub enum MediaSourceError {
     #[error("camera media source is closed")]
@@ -210,6 +238,8 @@ mod tests {
         );
         let raw = webrtc.changed().await.unwrap().unwrap();
         let encoded = mjpeg.changed_jpeg().await.unwrap();
+        assert_eq!(webrtc.latest().unwrap().frame_sequence, 7);
+        assert_eq!(mjpeg.latest_jpeg().unwrap().frame_sequence, 7);
         assert_eq!(raw.frame_sequence, 7);
         assert_eq!(raw.frame.pixels()[..3], [10, 20, 30]);
         assert_eq!(encoded.frame_sequence, 7);

@@ -336,12 +336,20 @@ fn dpad_hat(directions: &BTreeSet<DpadDirection>) -> Hat {
 }
 
 /// Native gilrs producer. Linux uses udev; Windows enables `XInput`.
+#[allow(
+    dead_code,
+    reason = "the OS event-source entrypoint is retained pending production hardware-loop wiring"
+)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GilrsHardwareSource;
 
 impl GilrsHardwareSource {
     /// Starts one blocking OS event pump and returns normalized events.
     #[must_use]
+    #[allow(
+        dead_code,
+        reason = "the OS event-source entrypoint is retained pending production hardware-loop wiring"
+    )]
     pub fn spawn(cancellation: CancellationToken) -> mpsc::Receiver<HardwareControllerEvent> {
         let (sender, receiver) = mpsc::channel(128);
         tokio::task::spawn_blocking(move || {
@@ -374,6 +382,10 @@ impl GilrsHardwareSource {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "normalization is reached from the retained OS event-source entrypoint"
+)]
 fn normalize_gilrs_event(
     device_id: String,
     name: String,
@@ -504,11 +516,11 @@ pub enum HardwareError {
 mod tests {
     use super::{
         DpadDirection, HardwareControllerBridge, HardwareControllerEvent, HardwareControllerKind,
-        normalize_button,
+        normalize_axis, normalize_button,
     };
     use crate::device::controller::{Button, ControllerState, Hat};
     use crate::device::input::{InputArbiter, PressState};
-    use gilrs::Button as GilrsButton;
+    use gilrs::{Axis as GilrsAxis, Button as GilrsButton};
 
     fn connected(id: &str, kind: HardwareControllerKind) -> HardwareControllerEvent {
         HardwareControllerEvent::Connected {
@@ -551,10 +563,31 @@ mod tests {
     }
 
     #[test]
+    fn unknown_devices_and_axes_are_normalized_canonically() {
+        assert_eq!(
+            HardwareControllerKind::detect("Nintendo Switch Pro Controller"),
+            HardwareControllerKind::ProController
+        );
+        assert_eq!(
+            HardwareControllerKind::detect("unmapped controller"),
+            HardwareControllerKind::Generic
+        );
+        assert!(matches!(
+            normalize_axis("one".to_owned(), GilrsAxis::LeftStickX, 1.0),
+            Some(HardwareControllerEvent::Axis {
+                x: Some(255),
+                y: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn bridge_records_canonical_state_and_disconnect_releases() {
         let mut arbiter = InputArbiter::default();
         let mut bridge = HardwareControllerBridge::default();
         bridge.recorder_mut().start();
+        assert!(bridge.recorder().is_recording());
         bridge
             .apply(
                 &mut arbiter,
@@ -608,5 +641,7 @@ mod tests {
             bridge.recorder().frames().last().unwrap().state,
             ControllerState::NEUTRAL
         );
+        bridge.recorder_mut().stop();
+        assert!(!bridge.recorder().is_recording());
     }
 }

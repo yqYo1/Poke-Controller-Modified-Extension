@@ -14,13 +14,14 @@ use crate::dynamic::protocol::{
     HostSetStateValueRequest, HostSettings, HostSettingsChanges, HostState,
 };
 use crate::dynamic::{
-    CommandInfo, Diagnostic, DynamicConfigControl, DynamicEngine, DynamicEngineError, DynamicHost,
-    DynamicHostError,
+    CommandInfo, Diagnostic, DynamicConfigControl, DynamicHost, DynamicHostError,
 };
 use crate::worker::ipc::{
     ConnectionError, IpcConnection, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget,
     ValueCodecError, deserialize_value, serialize_value,
 };
+
+use super::{DynamicEngine, DynamicEngineError};
 
 #[derive(Debug)]
 struct DispatchError {

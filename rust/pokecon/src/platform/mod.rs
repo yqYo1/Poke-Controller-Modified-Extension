@@ -1,11 +1,13 @@
 //! Platform-specific behavior is isolated behind this module.
 
 mod linux;
+#[cfg(target_os = "windows")]
 mod windows;
 
 use std::fmt::Debug;
 
 pub use linux::LinuxAdapter;
+#[cfg(target_os = "windows")]
 pub use windows::WindowsAdapter;
 
 /// Supported native target families.
@@ -14,8 +16,10 @@ pub enum PlatformKind {
     /// Linux desktop or server.
     Linux,
     /// Windows desktop or server.
+    #[cfg(target_os = "windows")]
     Windows,
     /// A build-only target outside the supported runtime matrix.
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     Unsupported,
 }
 
@@ -25,6 +29,13 @@ pub trait PlatformAdapter: Debug + Send + Sync {
     fn kind(&self) -> PlatformKind;
 
     /// Indicates whether native desktop notifications can be implemented.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "notification capability is asserted by target tests"
+        )
+    )]
     fn supports_native_notifications(&self) -> bool;
 }
 

@@ -7,14 +7,16 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use pokecon::settings::hmac_key::HmacKey;
-use pokecon::settings::lock::LockManager;
-use pokecon::settings::manifest::ManifestOutput;
-use pokecon::settings::package::{ConstraintResolver, PythonWorker};
-use pokecon::settings::persistence::TomlStore;
-use pokecon::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
-use pokecon::settings::uv::{ManagedUv, UvChildEnvironment};
-use pokecon::settings::venv::{
+use pokecon::integration_test_support::settings::hmac_key::HmacKey;
+use pokecon::integration_test_support::settings::lock::LockManager;
+use pokecon::integration_test_support::settings::manifest::ManifestOutput;
+use pokecon::integration_test_support::settings::package::{ConstraintResolver, PythonWorker};
+use pokecon::integration_test_support::settings::persistence::TomlStore;
+use pokecon::integration_test_support::settings::roots::{
+    BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent,
+};
+use pokecon::integration_test_support::settings::uv::{ManagedUv, UvChildEnvironment};
+use pokecon::integration_test_support::settings::venv::{
     PreparationDisposition, UvExecutionContext, UvExecutor, VenvError, VenvManager, VenvOwnership,
     VenvPreparationRequest,
 };

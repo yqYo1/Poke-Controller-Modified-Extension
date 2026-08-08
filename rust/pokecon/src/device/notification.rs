@@ -90,10 +90,24 @@ pub struct WindowsNotificationConfig {
 #[derive(Clone, Debug, Default)]
 pub struct NotificationConfig {
     pub discord: DiscordNotificationConfig,
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "native lifecycle flags are exercised by notification unit tests"
+        )
+    )]
     pub windows: WindowsNotificationConfig,
 }
 
 /// Script lifecycle hook.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "script lifecycle hooks are exercised by notification unit tests"
+    )
+)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScriptNotificationEvent {
     Start,
@@ -111,6 +125,13 @@ pub enum NotificationChannel {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NotificationOutcome {
     Delivered,
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "disabled lifecycle outcomes are exercised by notification unit tests"
+        )
+    )]
     Disabled,
     SkippedMissingConfiguration,
     SkippedUnsupportedPlatform,
@@ -363,12 +384,26 @@ impl NotificationService {
     }
 
     /// Executes the script-start hook without propagating delivery failure.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "script lifecycle hooks are exercised by notification unit tests"
+        )
+    )]
     pub async fn on_script_start(&self, script_name: &str) -> NotificationReport {
         self.notify_lifecycle(ScriptNotificationEvent::Start, script_name)
             .await
     }
 
     /// Executes the script-end hook without propagating delivery failure.
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "script lifecycle hooks are exercised by notification unit tests"
+        )
+    )]
     pub async fn on_script_end(&self, script_name: &str) -> NotificationReport {
         self.notify_lifecycle(ScriptNotificationEvent::End, script_name)
             .await
@@ -411,6 +446,13 @@ impl NotificationService {
             .await
     }
 
+    #[cfg_attr(
+        not(test),
+        allow(
+            dead_code,
+            reason = "script lifecycle hooks are exercised by notification unit tests"
+        )
+    )]
     async fn notify_lifecycle(
         &self,
         event: ScriptNotificationEvent,
@@ -667,6 +709,16 @@ mod tests {
             report.outcomes,
             vec![
                 (NotificationChannel::Discord, NotificationOutcome::Failed),
+                (NotificationChannel::Windows, NotificationOutcome::Disabled),
+            ]
+        );
+        assert_eq!(discord.calls.load(Ordering::Acquire), 1);
+
+        let report = service.on_script_end("command.py").await;
+        assert_eq!(
+            report.outcomes,
+            vec![
+                (NotificationChannel::Discord, NotificationOutcome::Disabled),
                 (NotificationChannel::Windows, NotificationOutcome::Disabled),
             ]
         );

@@ -2,7 +2,7 @@ mod shutdown;
 
 use std::sync::Arc;
 
-pub use shutdown::{OsSignal, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder};
+pub use shutdown::{ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder};
 
 use crate::platform::PlatformAdapter;
 
@@ -41,3 +41,6 @@ impl Default for RuntimeContext {
         Self::native()
     }
 }
+
+#[cfg(test)]
+pub(crate) use shutdown::OsSignal;

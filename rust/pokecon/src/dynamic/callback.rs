@@ -65,6 +65,10 @@ impl CallbackSettings {
 
 /// Per-registration optional timeout overrides. `None` inherits the global
 /// value and `Some(0)` disables the corresponding stage.
+#[allow(
+    clippy::struct_field_names,
+    reason = "the ms suffix makes the timeout unit explicit at language-runtime boundaries"
+)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CallbackLimits {
     pub soft_timeout_ms: Option<u64>,
@@ -112,6 +116,10 @@ fn validate_timeout_combination(
 }
 
 /// Fully resolved timeout values captured when a callback actually starts.
+#[allow(
+    clippy::struct_field_names,
+    reason = "the ms suffix makes the timeout unit explicit at language-runtime boundaries"
+)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EffectiveLimits {
     pub soft_timeout_ms: u64,

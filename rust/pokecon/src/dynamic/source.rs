@@ -151,6 +151,10 @@ impl SourceStore {
     /// # Errors
     ///
     /// Returns an I/O error for unreadable or non-UTF-8 content.
+    #[allow(
+        clippy::unused_self,
+        reason = "reading a resolved source remains an operation of its validating source store"
+    )]
     pub fn read(&self, source_file: &ResolvedSource) -> Result<String, SourceError> {
         fs::read_to_string(&source_file.path).map_err(|source| SourceError::Io {
             path: source_file.path.clone(),

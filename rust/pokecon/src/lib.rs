@@ -2,52 +2,47 @@
 
 mod application_backend;
 #[doc(hidden)]
-pub mod camera;
+pub mod binary_entrypoints;
+mod camera;
 mod command_service;
-#[doc(hidden)]
-pub mod contracts;
+#[cfg(feature = "compatibility-tool")]
+mod compatibility_tool;
+#[cfg(feature = "contract-generator")]
+mod contract_generator;
+mod contracts;
 mod desktop;
-#[doc(hidden)]
-pub mod device;
-#[doc(hidden)]
-pub mod diagnostics;
+mod device;
+mod diagnostics;
 #[allow(
     dead_code,
-    reason = "engine-only helpers are consumed by the worker binary's private copy"
+    reason = "worker-only engine helpers are enabled by the worker-binary feature"
 )]
-#[doc(hidden)]
-pub mod dynamic;
+mod dynamic;
 pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
+#[cfg(feature = "integration-test-support")]
 #[doc(hidden)]
-pub mod platform;
+pub mod integration_test_support;
+#[cfg(feature = "contract-generator")]
+mod openapi_generator;
+mod platform;
 mod production;
 mod profile_service;
-#[doc(hidden)]
-pub mod runtime;
+mod runtime;
 mod script_host;
 mod script_runtime;
 #[allow(dead_code, reason = "retained internal server and OpenAPI contracts")]
 #[allow(clippy::option_option, reason = "wire patch fields are three-state")]
 mod server;
-#[doc(hidden)]
-pub mod settings;
+mod settings;
 mod settings_runtime;
-#[doc(hidden)]
-pub mod worker;
+mod worker;
+#[cfg(feature = "worker-binary")]
+mod worker_binary;
 
-#[doc(hidden)]
-pub use diagnostics::{
-    APP_STARTING, APP_STOPPED, SHUTDOWN_REQUESTED, SIGNAL_HANDLER_FAILED, TracingInitError,
-    init_tracing, init_tracing_to_stderr,
-};
 pub use entrypoint::{MainError, run_cli};
-#[doc(hidden)]
-pub use runtime::{
-    OsSignal, RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
-};
 
 use std::future::Future;
 use std::io;
@@ -58,6 +53,10 @@ use std::time::Duration;
 
 use crate::camera::ScreenshotMode;
 use crate::desktop::DesktopRuntimeSettings;
+use crate::diagnostics::{APP_STARTING, APP_STOPPED};
+use crate::runtime::{
+    RuntimeContext, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder,
+};
 use crate::server::BoundServer;
 use crate::server::router::public_router;
 use crate::server::security::RequestSecurity;
@@ -73,18 +72,6 @@ use tokio_util::sync::CancellationToken;
 use crate::dynamic_host::StartupDynamicHost;
 use crate::dynamic_runtime::DynamicRuntime;
 use crate::production::ProductionRuntime;
-
-/// Builds the canonical `OpenAPI` document for the generator binary.
-///
-/// # Errors
-///
-/// Returns an error when the API schema or canonical contract registry cannot
-/// be serialized.
-#[cfg(feature = "contract-generator")]
-#[doc(hidden)]
-pub fn generate_openapi_document_json() -> Result<String, Box<dyn std::error::Error>> {
-    server::openapi::document_json().map_err(Into::into)
-}
 
 const SERVER_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -517,7 +504,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use crate::OsSignal;
+    use crate::runtime::OsSignal;
 
     use super::*;
 

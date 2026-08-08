@@ -181,10 +181,13 @@ mod tests {
 
     use serde_json::json;
 
+    use crate::camera::virtual_camera::{
+        RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
+        VirtualReconfigurePlan, VirtualSessionPlan,
+    };
     use crate::camera::{
-        CameraConfig, CameraManager, CameraSelector, CaptureResolution, FlipMode, RecordedFrame,
-        RecordedFrameSource, ScreenshotFormat, ScreenshotRuntimeSettings, VirtualCameraBackend,
-        VirtualOpenPlan, VirtualReconfigurePlan, VirtualSessionPlan,
+        CameraConfig, CameraManager, CameraSelector, CaptureResolution, FlipMode, ScreenshotFormat,
+        ScreenshotRuntimeSettings,
     };
     use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
 

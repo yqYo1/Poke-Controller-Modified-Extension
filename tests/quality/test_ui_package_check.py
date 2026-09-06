@@ -2286,7 +2286,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "e7e9022fd8771acd27867489183871e7d0a0ce68a8bbb575e1a0021c5d4a839f"
+        == "97b9f3e5e491d3ebb104d2dc44326bc5231a49b94cdc4218ac40448896ec5ef5"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (

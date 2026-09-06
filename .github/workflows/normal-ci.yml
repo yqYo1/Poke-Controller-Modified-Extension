@@ -417,13 +417,13 @@ jobs:
             --arg event "$CACHE_EVENT" \
             --arg actor "$CACHE_ACTOR" \
             --argjson attempt "$attempt" \
-            --argjson regions "${REGIONS_JSON:-{}}" \
+            --argjson regions "${REGIONS_JSON:-null}" \
             --argjson measured_wall_seconds "$measured_wall_seconds" \
             '{
               sha: $sha,
               attempt: $attempt,
               change_kind: $change_kind,
-              regions: ($regions | to_entries | map(select(.value == true) | .key)),
+              regions: (($regions // {}) | to_entries | map(select(.value == true) | .key)),
               measured_wall_seconds: $measured_wall_seconds,
               workflow: {name: $workflow_name, wall_seconds: $measured_wall_seconds},
               cache: {read: false, write: false, actor: $actor, event: $event},

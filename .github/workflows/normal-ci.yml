@@ -392,6 +392,7 @@ jobs:
           mkdir -p "$timing_dir"
           run_json="$timing_dir/run.json"
           jobs_json="$timing_dir/jobs.json"
+          completed_jobs_json="$timing_dir/completed-jobs.json"
           metadata_json="$timing_dir/run-metadata.json"
           report_json="$timing_dir/timing-report.json"
           gh api \
@@ -400,6 +401,8 @@ jobs:
           gh api \
             "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
             > "$jobs_json"
+          jq '{jobs: [.jobs[] | select(.status == "completed")]}' \
+            "$jobs_json" > "$completed_jobs_json"
           sha="$(jq -er '.head_sha' "$run_json")"
           attempt="$(jq -er '.run_attempt' "$run_json")"
           workflow_name="$(jq -er '.name' "$run_json")"
@@ -430,7 +433,7 @@ jobs:
               jobs_evidence: {}
             }' > "$metadata_json"
           nix run .#ci-timing -- collect \
-            --jobs "$jobs_json" \
+            --jobs "$completed_jobs_json" \
             --run-metadata "$metadata_json" \
             --output "$report_json"
       - uses: actions/upload-artifact@v7

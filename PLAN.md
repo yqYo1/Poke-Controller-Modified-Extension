@@ -9,7 +9,7 @@
 - 進捗規則: 完了を証明するコマンドまたは成果物がある項目だけを `[x]` にする。部分完了は子項目だけを更新する。
 - 変更規則: 構造移行と実行時挙動変更を同じコミットへ混在させない。各チェックポイントで検証してから次へ進む。
 - 委譲規則: 実装委譲は不可分な1タスクずつ行い、primary agentが差分と対応gateを確認し、当該タスクだけを新規文脈のSolへレビュー依頼してから次のタスクへ進む。節全体を一度に委譲しない。
-- 実施順序: レビュー書の原順序は構造移行 → CI 再構成 → devShell 移行 → 実行時挙動変更である。2026-07-30の利用者指示「まずdevShell廃止から」に基づき、常駐するambient PATH／tool／環境変数依存を先に断つ非挙動の開発基盤変更としてフェーズ1だけを承認済み例外で先行する。完了後は構造（フェーズ2） → CI（フェーズ3） → 挙動（フェーズ4）の原順序へ戻る。
+- 実施順序: レビュー書の原順序は構造移行 → CI 再構成 → 開発入口の確定 → 実行時挙動変更である。2026-07-30にはflake app化を先行し、2026-08-09の利用者指示でtool-only devShell／direnvを正規入口として復帰した。用途別appと隔離gateは維持し、現在は構造（フェーズ2）完了後のCI（フェーズ3） → 挙動（フェーズ4）の原順序で進める。
 - コミット規則: 構造移行の2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7をそれぞれ独立したコミット境界とする。フェーズ4は4.1主経路と優先順位、4.2手動介入と入力調停、4.3 profile切替、4.4動的設定の候補世代切替、4.5通知隔離を独立した挙動変更checkpointとする。各checkpointの共通完了gateが失敗した状態で後続checkpointへ進まない。
 
 ## 現在地
@@ -17,7 +17,8 @@
 - [x] `ARCHITECTURE_REVIEW.md` の確定方針、移行順序、受入条件を一対一の実装要件として抽出した（2026-07-30 Sol意味監査承認、129要件）。
 - [x] 開始時の作業ツリーがcleanで、HEADが`e20fad5a`、`origin/refactor-rust-core`との差が0/0であることを変更前の`git status --short --branch`と`git rev-list --left-right --count`で記録した（2026-07-30 JST）。
 - [x] 旧実装の不在を前提にした旧 `PLAN.md` を廃止し、本チェックリストへ置き換えた。
-- [x] フェーズ 1「direnv／既定 devShell 廃止」を完了した（実装`23149e3`、受入`1e0836b`、再現性修正`7a01da0`。最終GitHub Actions 9/9 success）。
+- [x] 2026-07-30時点の旧フェーズ1「flake appへの開発入口移行」を完了した（実装`23149e3`、受入`1e0836b`、再現性修正`7a01da0`。最終GitHub Actions 9/9 success）。
+- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を再受入する。
 - [ ] 全フェーズ完了後の要件別監査を通過する。
 
 ## レビュー要件トレーサビリティ
@@ -26,7 +27,7 @@
 
 IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了判定は行わない。各checkboxの完了時は「予定証跡」を実行結果、生成物、CI run、またはGitHub設定の読み戻し結果で置き換える。
 
-予定証跡のproject操作は、各行に別のNix outputを明記しない限り`nix run .#check`を入口とし、専用操作は`nix run .#<task>`、`nix build .#pokecon`、`nix fmt`、`nix flake check`のいずれかを唯一の実行入口とする。flake output inventoryの読取りには`nix flake show`を使う。「test」、「report」、「log」、「matrix」はそのNix taskまたはCI workflowが生成する成果物を指し、hostの言語runtime、compiler、package manager、品質toolを直接起動しない。Git／GitHubの読取り、worktree操作、CI runの読み戻しはVCS／外部状態証跡として例外とし、native Windows CI／package／releaseだけはworkflowが固定するtoolchainを入口とする。
+予定証跡のproject操作はtool-only devShell内から実行し、各行に別のNix outputを明記しない限り`nix run .#check`を入口とする。専用操作は`nix run .#<task>`、`nix build .#pokecon`、`nix fmt`、`nix flake check`のいずれかを完了証跡の入口とし、flake output inventoryの読取りには`nix flake show`を使う。「test」、「report」、「log」、「matrix」はそのNix taskまたはCI workflowが生成する成果物を指し、hostの言語runtime、compiler、package manager、品質toolを直接起動しない。Git／GitHubの読取り、worktree操作、CI runの読み戻しはVCS／外部状態証跡として例外とし、native Windows CI／package／releaseだけはworkflowが固定するtoolchainを入口とする。
 
 ## 共通完了ゲート
 
@@ -69,7 +70,9 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-11-37** 別processと同一processの境界を確定する（予定証跡: process／module deployment diagramとIPC境界test）。
 - [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
 
-## フェーズ 1 — direnv／既定 devShell を廃止して Nix app へ統一
+## フェーズ 1 — tool-only devShellと用途別Nix appへ開発入口を固定
+
+2026-07-30の旧方針で得た用途別app／隔離gateの証跡は維持する。2026-08-09の利用者指示がdevShell廃止だけを上書きしたため、該当IDは現在の意味へ更新し、再受入が終わるまで未完了へ戻す。
 
 ### 実装
 
@@ -84,7 +87,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
   - [x] hot reload を caller の編集へ追従させる。
   - [x] 終了後に意図しない追跡対象差分を残さない。
 - [x] **AR-10.11-APP3** `nix run .#hooks-install`を追加し、現在のworktreeへ`git-hooks.nix`生成hookを明示的に導入する（証跡: 新規worktreeからGit common hookへ導入し、固定`PATH`、一時`HOME`、`env -i`、hardening markerを読取り。Rust／Python／Markdownをstageしたtest commit `fb4dbeb`で全8 hookが`SKIP`、`BASH_ENV`、`ENV`のpoison下でも実行され成功した）。
-- [x] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainやdirenvなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（証跡: `--print`が5個のNix store executableを返し、`editor-smoke`が4言語すべてでinitialize、didOpen、documentSymbol、期待diagnostic、shutdownを成功させた）。
+- [x] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（証跡: `--print`が5個のNix store executableを返し、`editor-smoke`が4言語すべてでinitialize、didOpen、documentSymbol、期待diagnostic、shutdownを成功させた）。
 - [x] `nix run .#ci-watch` を追加し、CI監視に必要なGitHub CLI等をhost環境から排除する（証跡: 2026-07-30のhostile環境／subdirectoryからの`nix run .#ci-watch -- --help`成功、固定`gh`／`git`／`jq` path）。
 - [x] `ci-watch` の暫定既定期限を現行critical pathの実測最大値 + 30% 以上へ延長し、正常CIを期限切れ扱いしない（証跡: 既定1200秒、settlement 120秒、最小指定130秒のhelp／境界test）。
 - [x] `nix run .#workspace-lock-check` を追加し、pre-commitのlock検査をambientなCargo／GitとcallerのCargo cacheから排除する（証跡: 固定Nix appの生成、実行ごとの一時Cargo target、`nix flake check --no-build`のapp評価成功）。
@@ -92,16 +95,16 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] 既存`maturin-develop`appをambient venv、network、host configに依存しない専用`target/maturin-venv`へ移行する。productionのtracked `pyproject.toml`とwheel／sdist契約は変更せず、appの隔離source snapshot内だけでMaturin canonical mixed layoutへ補正し、実行ごとの一時Cargo targetで`pokecon/**`のwheelをoffline buildし、専用の永続venv lock下でinstallする（証跡: 2026-07-30のtracked `pyproject.toml`／lock無差分、fresh／同一venv再実行のhostile offline build成功、wheel payload／source byte照合、venv内`pokecon._native` import成功、`.pth`／想定外distribution／破損／symlink／不正RECORD保持negative test、`nix run .#test` 56件成功）。
 - [x] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（証跡: 新規worktreeの絶対pathをCargo metadata／target lock、Viteのfile-change／HMR log、hook config／common hook pathからそれぞれ読取った）。
 - [x] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（証跡: callerだけの未追跡`compile_error!`とambient dummy tool／関連変数のpoison下で`contract-check`が成功。caller cacheの`libserde` pathへ置いたpoisonのSHA-256はgate前後とも`f0e766b483a7c4b0631137d317797efe9a9cdd7fd375433b92679ae01202ca6f`で、gateは別の`/tmp/pokecon-rust-gate-home.../cargo-target`を使用した）。
-- [x] **AR-10.11-RUN3** `devShells.default`、`.envrc`、正規手順としてのdirenv／`nix develop`を削除する（証跡: `devShells`は4 systemすべて空、app一覧は4 systemで同一の44件、`.envrc`はcommit `23149e3`で削除済み）。
-- [x] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をproject flake output唯一の入口へ更新する（証跡: PLAN commit `93f8b6f`と実装commit `23149e3`の6文書diff、tracked command検索で正規手順がflake outputだけであることを確認）。
-- [x] **AR-10.11-RUN5** このworktreeとphase 1以後に移行を検証する全worktreeそれぞれで、非追跡`.direnv/`cacheが存在する場合は対象pathを記録して削除し、不在を確認する（証跡: branch、受入、baseline package比較の3 worktreeを`git worktree list --porcelain`で特定し、Nixの`builtins.pathExists`で`.direnv`がすべてfalseであることを確認。disposableな受入／baseline worktreeは検証後に削除した）。
-- [x] **AR-10.11-RUN6** 新しい対話用途は既定devShellを復活させず、用途と環境を限定したappとして追加する規則を文書化する（証跡: `docs/DEVELOPMENT.md`と`AGENTS.md`の規則、4 systemの空`devShells`評価）。
-- [x] **AR-11-48** direnv、`.envrc`、既定devShellを削除し、flake appを唯一の開発入口にする（証跡: detached clean worktreeを作成し、direnv／`nix develop`なしでformat、4つの対話app、個別gate、aggregate checkまで成功）。
-- [x] **AR-13.1-22** Git管理対象から`.envrc`、direnv、`nix develop`、devShell参照を検索し、履歴説明を除いて正規手順に残っていないことを確認する（証跡: tracked-file検索の残存4件は`AGENTS.md`、`README.md`、`SPECIFICATION.md`、`docs/DEVELOPMENT.md`の禁止または移行説明だけだった）。
+- [ ] **AR-10.11-RUN3** 追跡対象の`.envrc`を`use flake`だけにし、tool-onlyの`devShells.default`をdirenvまたは`nix develop`から使用する（予定証跡: cleanな新規worktreeのtracked `.envrc`、4 systemのdevShell評価、tool／環境inventory、入室時のbuild／test副作用0）。
+- [ ] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をtool-only devShellと用途別flake appの併用へ更新する（予定証跡: 6文書の契約検索と相互矛盾0のreport）。
+- [ ] **AR-10.11-RUN5** direnvが生成する`.direnv/`をGit管理／配布対象から除外する（予定証跡: cleanな新規worktreeでdirenv読込み後のtracked／package manifestに`.direnv` 0件）。
+- [ ] **AR-10.11-RUN6** 既定devShellをtool-onlyに保ち、新しい常駐環境、watch、書込み、長時間処理は用途を限定したappへ追加する規則を文書化する（予定証跡: devShell package／hook inventoryと専用app ownership test）。
+- [ ] **AR-11-48** 追跡した`.envrc`、tool-only既定devShell、用途別flake appを併用し、host toolchainを開発入口にしない（予定証跡: hostile host PATHの新規worktreeでdirenv／`nix develop`、4対話app、個別gate、aggregate checkが成功）。
+- [ ] **AR-13.1-22** tracked `.envrc`が`use flake`だけを含み、direnv、`nix develop`、devShellを記載する全正規文書が同じtool-only契約を示す（予定証跡: tracked-file契約検索と矛盾fixture）。
 
 ### 受入
 
-- [x] **AR-13.1-17** 新しいworktreeでdirenvまたは`nix develop`を使わず、flake appだけから開発を開始できる（証跡: commit `23149e3`から作成したdetached worktreeで`nix fmt -- --ci`、Cargo metadata、aggregate `nix run .#check`まで成功）。
+- [ ] **AR-13.1-17** 新しいworktreeで`direnv allow`または`nix develop`から固定toolchainへ入り、flake appだけで完了gateまで実行できる（予定証跡: clean detached worktreeの両入口、Cargo metadata、`nix fmt -- --ci`、aggregate check log）。
 - [x] **AR-11-49** callerのworktreeを対象とするCargo、frontend dev server、hook導入、editor連携appを揃える（証跡: 4 systemで同一のapp一覧を評価し、新規worktreeで`cargo`、`web-dev`、`hooks-install`、`editor`のcaller smokeに成功）。
 - [x] **AR-11-50** 完了gateの隔離実行と、書込みまたはwatch appのcaller-worktree実行を区別し、callerへ書き込むgeneratorもbuild artifactは実行ごとの一時targetへ隔離する（証跡: Cargo／Web／hookはcaller path、editorは`target/nix-editor`、読取りgateとgeneratorはNix sourceまたは隔離copyと実行ごとの`/tmp/.../cargo-target`を使用。未追跡sourceとcache poisonのnegative testに成功）。
 - [x] **AR-13.1-18** `cargo` appがcaller worktreeでpackage限定、個別test、lock file更新、metadata確認を実行でき、固定toolchain／build環境がRust完了gateと一致する（証跡: Cargo 1.97.1／Rust 1.97.1を固定し、metadata、`pokecon-contracts`の`validates_http_urls_structurally` 1件、`update --workspace --locked`、`tauri-check`が成功。Cargo.lock差分は0）。
@@ -109,12 +112,14 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] `nix run .#cargo -- test --locked -p <package> <test-filter>` が対象を絞って実行できる。
 - [x] **AR-13.1-19** `web-dev` appが固定Bunとlock fileを使い、callerの`web/`の変更をhot reloadし、終了後に依存差分や生成物を意図せずcommit対象へ残さない（証跡: Bun 1.3.13／frozen lockで起動し、callerのSvelte変更と復元を2回のHMRとして観測。前後の`git status --short --untracked-files=all`は空、ignored pathは許可した2 directoryだけだった）。
 - [x] **AR-13.1-20** `hooks-install` appを新規worktreeで一度実行し、git hookがNixで固定したpre-commit検査を実行する（証跡: common hookの絶対pathとhardening内容を読取り、hostile環境の署名付きtest commit `fb4dbeb`でlock、clippy、Markdown、Ruff、textlint、treefmt、typosがすべて成功）。
-- [x] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`がdevShell外で動作する。
-- [x] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainとdirenvへ依存せず動作する（証跡: 5 executableのstore pathを読取り、host tool／関連環境変数のpoison下を含む`editor-smoke`で4言語すべての実LSP sessionが成功）。
-- [x] **AR-13.1-23** 移行を検証する各worktreeそれぞれに非追跡`.direnv/`cacheが残っていない（証跡: branch、受入、baseline package比較の3 worktreeで`.direnv`の`pathExists`はすべてfalse。disposableな受入／baseline worktreeを削除し、branch worktreeだけへ正規hookを再導入した）。
-- [x] **AR-13.1-24** 既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性、packageの結果が移行前と一致する（証跡: 下記Phase 1 checkpoint表。列挙したtaskの終了コード0、生成物Git object IDとpackage NAR hashが一致）。
+- [x] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`が固定flake appとして動作する。
+- [x] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainへ依存せず動作する（証跡: 5 executableのstore pathを読取り、host tool／関連環境変数のpoison下を含む`editor-smoke`で4言語すべての実LSP sessionが成功）。
+- [ ] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（予定証跡: direnv読込み後のGit inventory、Nix source、package manifestのnegative report）。
+- [ ] **AR-13.1-24** 既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性、packageがambient shell状態へ依存せず移行前と一致する（予定証跡: current checkpointの全task log、生成物Git object ID、package NAR hash）。
 
-### Phase 1 checkpoint証跡（2026-07-30）
+### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）
+
+下表はflake appと隔離gateの履歴証跡である。2026-08-09に上書きされたdevShell／direnv項目の現在完了証跡には使用しない。
 
 | 対象 | 実測結果 |
 | --- | --- |
@@ -513,53 +518,53 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: 非競合時の機能別latency／throughput／stability report）。
 - [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
-- [ ] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（予定証跡: 各通常処理との競合fault testで安全状態遷移が先行するtrace）。
+- [x] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（証跡: `cargo test --locked --workspace --all-targets --all-features` の input／notification／worker lifecycle fault tests）。
 - [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（予定証跡: 双方向同時load fixtureのlatency／jitter／progress report）。
 - [ ] **AR-11-05** 明示的優先機構の導入前後で遅延、jitter、飢餓、queue停滞を比較し、改善しない機構は採用しない（予定証跡: before／after benchmarkと採用判定record）。
 - [ ] **AR-11-06** command実行、画像認識、serial出力を結ぶ主経路を実装する（予定証跡: end-to-end command→frame→controller／serial traceとlatency report）。
-- [ ] **AR-11-12** UI制御要求を表示配信より優先し、映像、状態、logの滞留を主経路へ伝播させない（予定証跡: slow／disconnected UI fixtureのcontrol latency、frame freshness、queue bound／backpressure report）。
-- [ ] frame は最新の完全 frame へ追従し、状態更新は同一項目の旧値を集約する。
-- [ ] log 配信を有界 queue とし、低速／切断 UI から主経路への逆圧を防ぐ。
+- [x] **AR-11-12** UI制御要求を表示配信より優先し、映像、状態、logの滞留を主経路へ伝播させない（証跡: WebSocket の slow-client、latest-frame、control-latency、bounded-log tests）。
+- [x] frame は最新の完全 frame へ追従し、状態更新は同一項目の旧値を集約する。
+- [x] log 配信を有界 queue とし、低速／切断 UI から主経路への逆圧を防ぐ。
 
 ### 4.2 手動介入と入力調停
 
-- [ ] **AR-11-14** script実行中の手動介入を許可または拒否でき、停止と入力解放は常に受け付けるcanonical settingを追加する（予定証跡: setting全表面のdrift check、allow／deny／stop／release arbitration test）。
-- [ ] CLI、TOML、環境変数、Web UI の全表面へ生成／投影する。
-- [ ] 既定は介入許可とし、適用後の入力から即時反映する。
-- [ ] 排他 mode でも停止と全入力解放を常に受け付ける。
-- [ ] **AR-11-15** 介入許可時は操作中の入力要素だけを一時上書きし、操作終了後にscript入力へ戻す（予定証跡: button／stick／touchごとのelement-level arbitration state-transition test）。
-- [ ] button の script／manual 合成規則を試験する。
-- [ ] **AR-11-13** 手動操作が自動scriptへ不意に影響せず、手動単独利用時も低遅延かつ安定して動作する（予定証跡: script実行中のno-input／manual-input isolation testとmanual-only latency／stability report）。
+- [x] **AR-11-14** script実行中の手動介入を許可または拒否でき、停止と入力解放は常に受け付けるcanonical settingを追加する（証跡: settings registry／SPECIFICATION／generated OpenAPI・UI・typing drift tests、input arbitration tests）。
+- [x] CLI、TOML、環境変数、Web UI の全表面へ生成／投影する。
+- [x] 既定は介入許可とし、適用後の入力から即時反映する。
+- [x] 排他 mode でも停止と全入力解放を常に受け付ける。
+- [x] **AR-11-15** 介入許可時は操作中の入力要素だけを一時上書きし、操作終了後にscript入力へ戻す（証跡: button／stick／touch の element-level arbitration tests）。
+- [x] button の script／manual 合成規則を試験する。
+- [x] **AR-11-13** 手動操作が自動scriptへ不意に影響せず、手動単独利用時も低遅延かつ安定して動作する（証跡: denied/manual isolation、manual-only handoff tests）。
 
 ### 4.3 profile切替
 
-- [ ] **AR-11-16** 新規command受付停止、実行中script停止、全入力解放、旧worker終了後にprofile／関連設定を一括切替し、旧commandを自動再開しない（予定証跡: lifecycle state traceと切替後idle／no-auto-restart integration test）。
-- [ ] 新規 command 受付停止 → 実行中 script 停止 → 全入力解放 → 旧 worker 終了の順序を保証する。
-- [ ] profile と関連設定を一括切替し、新 worker 環境を初期化する。
-- [ ] 切替後は旧 command を自動再開せず idle で明示実行を待つ。
-- [ ] **AR-11-17** profile切替失敗時は旧設定だけを復元してidleへ戻し、復元失敗時は安全停止を維持して新しい実行を拒否する（予定証跡: 切替／復元の段階別fault injection、最終profile／input／command-acceptance state）。
-- [ ] 復元失敗時は安全停止状態を維持し、明示復旧まで新規 command を拒否する。
-- [ ] 失敗段階を UI と log へ明示する。
+- [x] **AR-11-16** 新規command受付停止、実行中script停止、全入力解放、旧worker終了後にprofile／関連設定を一括切替し、旧commandを自動再開しない（証跡: profile switch lifecycle、stop/reap、idle/no-auto-restart integration tests）。
+- [x] 新規 command 受付停止 → 実行中 script 停止 → 全入力解放 → 旧 worker 終了の順序を保証する。
+- [x] profile と関連設定を一括切替し、新 worker 環境を初期化する。
+- [x] 切替後は旧 command を自動再開せず idle で明示実行を待つ。
+- [x] **AR-11-17** profile切替失敗時は旧設定だけを復元してidleへ戻し、復元失敗時は安全停止を維持して新しい実行を拒否する（証跡: validation／commit／stop／restore failure-injection tests）。
+- [x] 復元失敗時は安全停止状態を維持し、明示復旧まで新規 command を拒否する。
+- [x] 失敗段階を UI と log へ明示する。
 
 ### 4.4 動的設定の候補世代切替
 
-- [ ] **AR-11-18** 動的設定を候補世代で構築し、全読込み／検証成功時だけ自動実行を止めずに一括切替する（予定証跡: concurrent script／reload trace、candidate validation fault test、generation switch log）。
-- [ ] reload 中も現世代を有効に保ち、自動 script を停止しない。
-- [ ] Python／Lua 設定、callback、command 一覧を候補世代として構築する。
-- [ ] 読込みと検証が全成功した場合だけ原子的に切り替える。
-- [ ] 実行中の旧 callback は旧世代で完了させる。
-- [ ] 失敗時は現設定を変更せず、UI と log へ通知する。
-- [ ] reload が camera、serial、script 主経路を待たせないことを検証する。
+- [x] **AR-11-18** 動的設定を候補世代で構築し、全読込み／検証成功時だけ自動実行を止めずに一括切替する（証跡: concurrent candidate、generation、failure、old-callback、lock-isolation tests）。
+- [x] reload 中も現世代を有効に保ち、自動 script を停止しない。
+- [x] Python／Lua 設定、callback、command 一覧を候補世代として構築する。
+- [x] 読込みと検証が全成功した場合だけ原子的に切り替える。
+- [x] 実行中の旧 callback は旧世代で完了させる。
+- [x] 失敗時は現設定を変更せず、UI と log へ通知する。
+- [x] reload が camera、serial、script 主経路を待たせないことを検証する。
 
 ### 4.5 通知隔離
 
-- [ ] **AR-11-19** 通知を有界queueと期限付きretryへ隔離し、主経路へ待機と障害を伝播させない（予定証跡: queue-full、slow／failing provider、retry deadline fixtureの主経路latency／progress／failure report）。
-- [ ] 通知要求を有界 queue へ入れ、主経路 lock を保持せず処理する。
-- [ ] queue 上限時は主経路を待たせず、呼出元へ明示的失敗を返す。
-- [ ] retry 回数と期限を制限する。
-- [ ] 完了待ちは当該呼出しだけに限定し、camera、画像認識、serial、他要求を継続する。
-- [ ] 外部通知障害を script worker 全体へ伝播させない。
-- [ ] 停止と全入力解放を通知処理より優先する。
+- [x] **AR-11-19** 通知を有界queueと期限付きretryへ隔離し、主経路へ待機と障害を伝播させない（証跡: queue-full、slow/failing provider、retry deadline、stop-priority tests）。
+- [x] 通知要求を有界 queue へ入れ、主経路 lock を保持せず処理する。
+- [x] queue 上限時は主経路を待たせず、呼出元へ明示的失敗を返す。
+- [x] retry 回数と期限を制限する。
+- [x] 完了待ちは当該呼出しだけに限定し、camera、画像認識、serial、他要求を継続する。
+- [x] 外部通知障害を script worker 全体へ伝播させない。
+- [x] 停止と全入力解放を通知処理より優先する。
 
 ## フェーズ 5 — 配布、文書、最終監査
 

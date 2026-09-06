@@ -561,6 +561,28 @@
       }
     },
     {
+      "access": "read_write",
+      "control": "checkbox",
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "id": "input.allow_manual_intervention",
+      "mutability": "runtime_immediate",
+      "scope": "profile",
+      "secret": false,
+      "spec_refs": [
+        "§10.3",
+        "§11.4.1.1",
+        "§11.4.2",
+        "§11.4.1.2"
+      ],
+      "unsupported_reason": null,
+      "value_schema": {
+        "type": "boolean"
+      }
+    },
+    {
       "access": "none",
       "control": null,
       "default": {

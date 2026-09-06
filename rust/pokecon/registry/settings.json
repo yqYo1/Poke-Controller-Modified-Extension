@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "specification_version": "2.2.0",
-  "expected_setting_count": 78,
+  "expected_setting_count": 79,
   "settings": [
     {
       "id": "language",
@@ -1120,6 +1120,52 @@
       "spec_refs": [
         "§11.4.1.1",
         "§11.4.2"
+      ]
+    },
+    {
+      "id": "input.allow_manual_intervention",
+      "value": {
+        "kind": "boolean"
+      },
+      "default": {
+        "kind": "literal",
+        "value": true
+      },
+      "scope": "profile",
+      "mutability": "runtime_immediate",
+      "surfaces": {
+        "toml": {
+          "name": "input.allow_manual_intervention"
+        },
+        "dynamic": {
+          "name": "pokecon.opt.input.allow_manual_intervention"
+        },
+        "cli": {
+          "flags": [
+            "--input-allow-manual-intervention"
+          ],
+          "encoding": "scalar",
+          "discouraged": false
+        },
+        "env": {
+          "name": "POKECON_INPUT_ALLOW_MANUAL_INTERVENTION",
+          "encoding": "scalar"
+        },
+        "ui": {
+          "access": "read_write",
+          "control": "checkbox"
+        },
+        "openapi": {
+          "access": "read_write",
+          "masked_read": false
+        }
+      },
+      "secret": false,
+      "spec_refs": [
+        "§10.3",
+        "§11.4.1.1",
+        "§11.4.2",
+        "§11.4.1.2"
       ]
     },
     {

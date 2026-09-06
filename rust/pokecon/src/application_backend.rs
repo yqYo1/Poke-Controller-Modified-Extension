@@ -9,6 +9,7 @@ use crate::camera::{
     ScreenshotFormat, ScreenshotMode, ScreenshotRequest as RuntimeScreenshotRequest,
     ScreenshotResult as RuntimeScreenshotResult, ScreenshotService,
 };
+use crate::device::input::ManualInterventionPolicy;
 use crate::device::{
     ApplyResult, InputArbiter, InputEvent, InputGeneration as RuntimeInputGeneration,
     InputPriority, InputSequence, InputSnapshot as RuntimeInputSnapshot, InputSourceId,
@@ -147,12 +148,39 @@ impl ApplicationBackend {
         Arc::clone(&self.host)
     }
 
+    /// Smallest typed API for the composition root to enforce manual intervention.
+    /// `Allowed` (default) permits element-level manual override; `Denied` blocks
+    /// manual press/move while keeping neutral release and `force_release_all`
+    /// unconditional. Takes effect from the next input.
+    pub fn set_manual_intervention(&self, policy: ManualInterventionPolicy) {
+        self.arbiter.lock().set_manual_policy(policy);
+    }
+
+    #[allow(dead_code, reason = "public diagnostic API for alternate adapters")]
+    #[must_use]
+    pub fn manual_policy(&self) -> ManualInterventionPolicy {
+        self.arbiter.lock().manual_policy()
+    }
+
+    #[allow(dead_code, reason = "public diagnostic API for alternate adapters")]
+    #[must_use]
+    pub fn is_manual_allowed(&self) -> bool {
+        self.arbiter.lock().is_manual_allowed()
+    }
+
     pub(crate) async fn reconcile_host(&self, cause: StateChangeCause) -> ApiResult<()> {
         let _gate = self.mutation_gate.lock().await;
-        self.settings
-            .lock()
-            .await
-            .adopt_runtime_loaded(self.host.loaded_settings());
+        let loaded = self.host.loaded_settings();
+        let manual_allowed = loaded
+            .settings
+            .boolean("input.allow_manual_intervention")
+            .unwrap_or(true);
+        self.settings.lock().await.adopt_runtime_loaded(loaded);
+        self.set_manual_intervention(if manual_allowed {
+            ManualInterventionPolicy::Allowed
+        } else {
+            ManualInterventionPolicy::Denied
+        });
         self.commit_projection(cause, true, None)
             .await
             .map(|_outcome| ())
@@ -527,6 +555,7 @@ impl RestBackend for ApplicationBackend {
             .map_or(NotificationOutcome::Failed, |(_channel, outcome)| *outcome);
         match outcome {
             NotificationOutcome::Delivered => Ok(NotificationTestResult { delivered: true }),
+            NotificationOutcome::QueueFull => Ok(NotificationTestResult { delivered: false }),
             NotificationOutcome::Failed | NotificationOutcome::Disabled => {
                 Ok(NotificationTestResult { delivered: false })
             }

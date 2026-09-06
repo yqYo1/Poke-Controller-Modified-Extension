@@ -222,7 +222,7 @@
       }
     ],
     "suppressed_event": {
-      "source": "same-repository pull request from a configured integration branch",
+      "source": "same-repository pull request from the main or master integration branch",
       "event": "pull_request",
       "canonical_event": "push"
     },
@@ -276,14 +276,14 @@
       "owns": ["changed-path classification for all eight regions"],
       "aggregate_role": "plan",
       "applicable_when": "the Normal CI push or pull-request event is elected as canonical for the SHA",
-      "not_applicable": "a same-repository pull request from a configured integration branch is suppressed because its push event owns the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
       "phase": 3
     },
     {
       "name": "normal-ci/fast",
       "workflow": "normal-ci",
       "job": "fast",
-      "command": "nix fmt -- --ci && nix run .#ci-fast",
+      "command": "nix run .#ci-parallel -- formatting nix fmt -- --ci --next static nix run .#ci-fast",
       "selected_by_regions": [],
       "owns": [
         "repository formatting",
@@ -293,7 +293,6 @@
         "shell lint",
         "Nix source-filter validation",
         "Rust source presence",
-        "baseline production-routing audit",
         "release identity",
         "typos",
         "Markdown lint",
@@ -301,7 +300,7 @@
       ],
       "aggregate_role": "input",
       "applicable_when": "the Normal CI push or pull-request event is elected as canonical for the SHA",
-      "not_applicable": "a same-repository pull request from a configured integration branch is suppressed because its push event owns the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
       "phase": 3
     },
     {
@@ -338,7 +337,10 @@
       "job": "routing_mutations",
       "command": "nix run .#test-production-routing-mutations -- --workers 4",
       "selected_by_regions": ["routing"],
-      "owns": ["production-routing mutation audit"],
+      "owns": [
+        "baseline production-routing audit",
+        "production-routing mutation audit"
+      ],
       "aggregate_role": "input",
       "applicable_when": "the routing region is selected",
       "not_applicable": "the planning job records routing as false and GitHub concludes skipped",
@@ -394,7 +396,7 @@
       "owns": ["Normal CI Required aggregate context"],
       "aggregate_role": "required_gate",
       "applicable_when": "always for the elected Normal CI event, including when dependencies fail or are skipped",
-      "not_applicable": "a same-repository pull request from a configured integration branch is suppressed because its push event owns the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
       "phase": 3
     },
     {
@@ -406,7 +408,7 @@
       "owns": ["Package CI changed-path classification for all eight regions"],
       "aggregate_role": "plan",
       "applicable_when": "the Package CI push or pull-request event is elected as canonical for the SHA",
-      "not_applicable": "a same-repository pull request from a configured integration branch is suppressed because its push event owns the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
       "phase": 13
     },
     {
@@ -475,7 +477,7 @@
       "owns": ["Package CI Required aggregate context"],
       "aggregate_role": "required_gate",
       "applicable_when": "always for the elected Package CI event, including when package jobs fail or are skipped",
-      "not_applicable": "a same-repository pull request from a configured integration branch is suppressed because its push event owns the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
       "phase": 13
     },
     {
@@ -622,13 +624,26 @@
       "substituted_store_paths"
     ],
     "current_implementation": {
-      "status": "not_configured",
-      "pokecon_specific_read": false,
-      "pokecon_specific_write": false,
+      "status": "signed_file_cache_optional",
+      "pokecon_specific_read": true,
+      "pokecon_specific_write": true,
       "installer_action": "cachix/install-nix-action@v31",
       "installer_action_role": "installs Nix; it does not configure a PokeCon-specific binary cache",
+      "cache_store": "file://$RUNNER_TEMP/pokecon-nix-cache?priority=20",
+      "trust_boundary": "cryptographic Nix signature verification when the repository public-key secret is configured; otherwise the optional substituter is not enabled",
+      "public_key_id": "POKECON_NIX_CACHE_PUBLIC_KEY",
+      "public_key": "GitHub Actions secret POKECON_NIX_CACHE_PUBLIC_KEY (not stored in the repository)",
+      "secret_key_variable": "POKECON_NIX_CACHE_SECRET_KEY",
+      "secret_key_source": "GitHub Actions secret POKECON_NIX_CACHE_SECRET_KEY (repository secret, never printed)",
+      "writer_condition": "github.event_name == 'push' && contains(fromJSON('[\"yqYo1\"]'), github.actor) && cache-hit != 'true' && signing and public keys are configured",
+      "reader_condition": "unrestricted restore via actions/cache/restore; the Nix substituter is enabled only with require-sigs=true and the configured public key",
+      "trusted_writer_flow": "sign store paths before nix copy with the secret key; no trusted=true file-store option",
       "validator_enforces_push_only_writes": true,
-      "validator_enforces_trusted_actor_allowlist": false
+      "validator_enforces_trusted_actor_allowlist": true,
+      "validator_rejects_trusted_equals_true": true,
+      "validator_requires_require_sigs": true,
+      "required_jobs_run_on_refactor_pr": true,
+      "head_ref_exclusion_removed": "github.head_ref != 'refactor/rust-core' removed from plan/fast/required gating so PRs from refactor/rust-core execute required aggregates (no bypass)"
     }
   },
   "timing_contract": {
@@ -660,8 +675,8 @@
     ],
     "current_implementation": {
       "validator": "implemented",
-      "workflow_evidence_collection": "not_implemented",
-      "workflow_p95_gate": "not_implemented"
+      "workflow_evidence_collection": "implemented",
+      "workflow_p95_gate": "optional_baseline_gate"
     }
   }
 }

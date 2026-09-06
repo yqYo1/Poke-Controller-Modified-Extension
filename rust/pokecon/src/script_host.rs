@@ -607,6 +607,10 @@ impl ScriptHost for ProductionScriptHost {
         };
         match outcome {
             NotificationOutcome::Delivered => Ok(()),
+            NotificationOutcome::QueueFull => Err(host_error(
+                "NotificationQueueFull",
+                "notification queue is full",
+            )),
             NotificationOutcome::Disabled
             | NotificationOutcome::SkippedMissingConfiguration
             | NotificationOutcome::SkippedUnsupportedPlatform

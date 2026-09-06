@@ -17,6 +17,7 @@
 
 # not ignore
 !/.gitignore
+!/.envrc
 !/flake.lock
 !/uv.lock
 !/AGENTS.md
@@ -243,6 +244,8 @@ result-*
 !/tests/*.py
 !/tests/*/
 !/tests/**/*.py
+!/tests/quality/security/
+!/tests/quality/security/*.py
 !/tests/fixtures/cli-help/
 !/tests/fixtures/cli-help/*.txt
 

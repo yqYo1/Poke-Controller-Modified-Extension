@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import math
+import os
 import re
 import sys
-from collections.abc import Mapping, Sequence
+import urllib.error
+import urllib.request
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final, Never, cast
@@ -177,11 +181,13 @@ THRESHOLDS: Final = {
     ChangeKind.PRODUCT: 600.0,
 }
 MINIMUM_P95_SAMPLES: Final = 10
+TRUSTED_CACHE_WRITERS: Final = frozenset({"yqYo1"})
 SHA_PATTERN: Final = re.compile(r"[0-9a-fA-F]{40}\Z")
 REGION_PATTERN: Final = re.compile(r"[a-z][a-z0-9_-]*\Z")
 EVENT_PATTERN: Final = re.compile(r"[a-z][a-z0-9_]*\Z")
 STORE_PATH_PATTERN: Final = re.compile(r"/nix/store/[0-9a-z]{32}-(?P<name>[^/\s]+)\Z")
 POKECON_STORE_NAME_PATTERN: Final = re.compile(r"pokecon(?:[.-]|\Z)")
+GITHUB_API_BASE: Final = "https://api.github.com"
 
 
 def _is_pokecon_path(path: str) -> bool:
@@ -478,11 +484,694 @@ def report_violations(report: TimingReport) -> tuple[str, ...]:
             "cache writes are permitted only for push events, "
             f"got event {report.cache.event!r}"
         )
+    if report.cache.write and report.cache.actor not in TRUSTED_CACHE_WRITERS:
+        violations.append(
+            f"cache writes require a trusted actor, got actor {report.cache.actor!r}"
+        )
     if report.substituted_store_paths and not report.cache.read:
         violations.append(
             "substituted store paths were recorded while cache.read is false"
         )
     return tuple(violations)
+
+
+def _parse_github_timestamp(value: object, context: str) -> datetime.datetime:
+    raw = _require_string(value, context)
+    text = raw.strip()
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.UTC)
+        return dt.astimezone(datetime.UTC)
+    except Exception as error:
+        message = f"{context} has invalid timestamp {raw!r}"
+        raise InputError(message) from error
+
+
+def _wall_seconds_between(
+    started_raw: object, completed_raw: object, context: str
+) -> float:
+    started = _parse_github_timestamp(started_raw, f"{context}.started_at")
+    completed = _parse_github_timestamp(completed_raw, f"{context}.completed_at")
+    delta = (completed - started).total_seconds()
+    if not math.isfinite(delta) or delta < 0:
+        message = f"{context} has non-monotonic wall time"
+        raise InputError(message)
+    return delta
+
+
+def _map_github_conclusion(raw: object, context: str) -> Conclusion:
+    value = _require_string(raw, context)
+    normalized = value.strip().lower()
+    mapping: Mapping[str, Conclusion] = {
+        "success": Conclusion.SUCCESS,
+        "skipped": Conclusion.SKIPPED,
+        "failure": Conclusion.FAILURE,
+        "cancelled": Conclusion.CANCELLED,
+        "timed_out": Conclusion.TIMED_OUT,
+    }
+    if normalized not in mapping:
+        allowed = ", ".join(conclusion.value for conclusion in Conclusion)
+        message = (
+            f"{context} has unsupported conclusion {value!r}; "
+            f"expected one of: {allowed}"
+        )
+        raise InputError(message)
+    return mapping[normalized]
+
+
+def _github_api_get(url: str, token: str) -> JsonDocument:
+    if not token or not token.strip():
+        message = "GITHUB_TOKEN is required for GitHub API collection"
+        raise InputError(message)
+    request = urllib.request.Request(url)  # noqa: S310 - URL is GitHub API validated above
+    request.add_header("Authorization", f"Bearer {token.strip()}")
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("X-GitHub-Api-Version", "2022-11-28")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - fixed GitHub API host
+            status = response.status
+            body = response.read()
+            if status < 200 or status >= 300:
+                message = f"GitHub API request to {url!r} failed with status {status}"
+                raise InputError(message)
+            try:
+                document = json.loads(
+                    body.decode("utf-8"),
+                    object_pairs_hook=_object_without_duplicate_keys,
+                    parse_constant=_reject_json_constant,
+                )
+            except json.JSONDecodeError as error:
+                message = (
+                    f"GitHub API response is not valid JSON at line {error.lineno}, "
+                    f"column {error.colno}: {error.msg}"
+                )
+                raise InputError(message) from error
+            return _require_object(cast("object", document), "github response")
+    except urllib.error.HTTPError as error:
+        body_text = ""
+        try:
+            body_text = error.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            body_text = ""
+        message = (
+            f"GitHub API request to {url!r} failed with HTTP {error.code}: "
+            f"{error.reason}; {body_text}"
+        )
+        raise InputError(message) from error
+    except urllib.error.URLError as error:
+        message = f"GitHub API request to {url!r} failed: {error.reason}"
+        raise InputError(message) from error
+
+
+def _fetch_workflow_run(
+    repo: str,
+    run_id: str,
+    token: str,
+    *,
+    fetcher: Callable[[str, str], JsonDocument] | None = None,
+) -> JsonDocument:
+    if not re.fullmatch(r"[^/]+/[^/]+", repo):
+        message = f"repo must be owner/name, got {repo!r}"
+        raise InputError(message)
+    if not re.fullmatch(r"[0-9]+", run_id):
+        message = f"run_id must be numeric, got {run_id!r}"
+        raise InputError(message)
+    url = f"{GITHUB_API_BASE}/repos/{repo}/actions/runs/{run_id}"
+    get = fetcher if fetcher is not None else _github_api_get
+    return get(url, token)
+
+
+def _fetch_jobs(
+    repo: str,
+    run_id: str,
+    token: str,
+    *,
+    fetcher: Callable[[str, str], JsonDocument] | None = None,
+) -> list[JsonDocument]:
+    if not re.fullmatch(r"[^/]+/[^/]+", repo):
+        message = f"repo must be owner/name, got {repo!r}"
+        raise InputError(message)
+    if not re.fullmatch(r"[0-9]+", run_id):
+        message = f"run_id must be numeric, got {run_id!r}"
+        raise InputError(message)
+    get = fetcher if fetcher is not None else _github_api_get
+    jobs: list[JsonDocument] = []
+    page = 1
+    total: int | None = None
+    while True:
+        url = f"{GITHUB_API_BASE}/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&page={page}"
+        document = get(url, token)
+        batch = _require_array(document.get("jobs"), "github jobs response.jobs")
+        jobs.extend(
+            _require_object(item, "github jobs response.jobs[]") for item in batch
+        )
+        if total is None:
+            raw_total = document.get("total_count")
+            if isinstance(raw_total, int) and raw_total >= 0:
+                total = raw_total
+            else:
+                total = len(jobs)
+        if len(jobs) >= total or not batch:
+            break
+        page += 1
+        if page > 10:
+            message = "GitHub jobs pagination exceeded 10 pages"
+            raise InputError(message)
+    return jobs
+
+
+def _parse_jobs_evidence(
+    raw: object, context: str
+) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
+    document = _require_object(raw, context)
+    evidence: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
+    for job_name, job_value in document.items():
+        if not isinstance(job_name, str) or not job_name.strip():
+            message = f"{context} has invalid job name {job_name!r}"
+            raise InputError(message)
+        job_doc = _require_object(job_value, f"{context}[{job_name!r}]")
+        _require_exact_keys(
+            job_doc,
+            frozenset({"built_derivations", "substituted_store_paths"}),
+            f"{context}[{job_name!r}]",
+        )
+        built = _require_store_paths(
+            job_doc["built_derivations"],
+            f"{context}[{job_name!r}].built_derivations",
+            derivations=True,
+        )
+        substituted = _require_store_paths(
+            job_doc["substituted_store_paths"],
+            f"{context}[{job_name!r}].substituted_store_paths",
+            derivations=False,
+        )
+        if job_name in evidence:
+            message = f"{context} has duplicate job {job_name!r}"
+            raise InputError(message)
+        evidence[job_name] = (built, substituted)
+    return evidence
+
+
+def _build_report_from_github(
+    *,
+    sha: str,
+    attempt: int,
+    change_kind: ChangeKind,
+    regions: tuple[str, ...],
+    cache_actor: str,
+    cache_event: str,
+    cache_read: bool,
+    cache_write: bool,
+    jobs_evidence: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]],
+    run_data: JsonDocument,
+    jobs_data: Sequence[JsonDocument],
+) -> TimingReport:
+    # Validate sha/attempt/change_kind/regions/cache already validated by caller,
+    # but re-validate for direct invocation.
+    if SHA_PATTERN.fullmatch(sha) is None:
+        message = "report.sha must contain exactly 40 hexadecimal characters"
+        raise InputError(message)
+    if attempt < 1:
+        message = "report.attempt must be an integer greater than or equal to 1"
+        raise InputError(message)
+    # Validate run_data matches sha/attempt when present
+    head_sha = run_data.get("head_sha")
+    if isinstance(head_sha, str) and head_sha.lower() != sha.lower():
+        message = (
+            f"GitHub run head_sha {head_sha!r} does not match requested sha {sha!r}"
+        )
+        raise InputError(message)
+    run_attempt = run_data.get("run_attempt")
+    if isinstance(run_attempt, int) and run_attempt != attempt:
+        message = f"GitHub run attempt {run_attempt!r} does not match requested attempt {attempt!r}"
+        raise InputError(message)
+    # Workflow timing
+    workflow_name_raw = (
+        run_data.get("name") or run_data.get("displayTitle") or "Normal CI"
+    )
+    workflow_name = _require_string(workflow_name_raw, "github run name")
+    # Prefer run_started_at, fallback to created_at
+    started_raw = run_data.get("run_started_at") or run_data.get("created_at")
+    updated_raw = run_data.get("updated_at")
+    if started_raw is None or updated_raw is None:
+        message = (
+            "GitHub run is missing run_started_at/created_at or updated_at timestamps"
+        )
+        raise InputError(message)
+    workflow_wall = _wall_seconds_between(started_raw, updated_raw, "github run")
+    # Measured is workflow wall; fail closed if non-finite already checked
+    measured_wall_seconds = workflow_wall
+    workflow_timing = WorkflowTiming(name=workflow_name, wall_seconds=workflow_wall)
+    # Cache
+    cache = CacheAccess(
+        read=cache_read, write=cache_write, actor=cache_actor, event=cache_event
+    )
+    # Jobs
+    job_timings: list[JobTiming] = []
+    seen_names: set[str] = set()
+    for raw_job in jobs_data:
+        job_name = _require_string(raw_job.get("name"), "github job name")
+        if job_name in seen_names:
+            message = f"github jobs must have unique names; duplicate {job_name!r}"
+            raise InputError(message)
+        seen_names.add(job_name)
+        # conclusion: GitHub may have null for in-progress, but we require it for completed runs
+        raw_conclusion = raw_job.get("conclusion")
+        if raw_conclusion is None:
+            # Check status: if status != completed, fail closed
+            status = raw_job.get("status")
+            if status != "completed":
+                message = f"github job {job_name!r} is not completed; status {status!r}"
+                raise InputError(message)
+            message = f"github job {job_name!r} is missing conclusion"
+            raise InputError(message)
+        conclusion = _map_github_conclusion(
+            raw_conclusion, f"github job {job_name!r}.conclusion"
+        )
+        # For skipped jobs, wall time is 0 and steps may be missing
+        if conclusion is Conclusion.SKIPPED:
+            wall_seconds = 0.0
+            steps: tuple[StepTiming, ...] = ()
+        else:
+            started = raw_job.get("started_at")
+            completed = raw_job.get("completed_at")
+            if not isinstance(started, str) or not isinstance(completed, str):
+                message = (
+                    f"github job {job_name!r} is missing started_at or completed_at"
+                )
+                raise InputError(message)
+            wall_seconds = _wall_seconds_between(
+                started, completed, f"github job {job_name!r}"
+            )
+            raw_steps_value = raw_job.get("steps")
+            if not isinstance(raw_steps_value, list):
+                message = f"github job {job_name!r} is missing steps array"
+                raise InputError(message)
+            raw_steps = cast("list[object]", raw_steps_value)
+            step_timings: list[StepTiming] = []
+            step_names: set[str] = set()
+            for index, raw_step in enumerate(raw_steps):
+                step_doc = _require_object(
+                    raw_step, f"github job {job_name!r}.steps[{index}]"
+                )
+                step_name = _require_string(
+                    step_doc.get("name"), f"github job {job_name!r}.steps[{index}].name"
+                )
+                if step_name in step_names:
+                    message = f"github job {job_name!r}.steps must have unique names; duplicate {step_name!r}"
+                    raise InputError(message)
+                step_names.add(step_name)
+                s_started = step_doc.get("started_at")
+                s_completed = step_doc.get("completed_at")
+                if not isinstance(s_started, str) or not isinstance(s_completed, str):
+                    message = f"github job {job_name!r} step {step_name!r} is missing timestamps"
+                    raise InputError(message)
+                s_wall = _wall_seconds_between(
+                    s_started,
+                    s_completed,
+                    f"github job {job_name!r} step {step_name!r}",
+                )
+                step_timings.append(StepTiming(name=step_name, wall_seconds=s_wall))
+            steps = tuple(sorted(step_timings, key=lambda s: s.name))
+        # Nix evidence from explicit workflow outputs
+        if job_name in jobs_evidence:
+            built, substituted = jobs_evidence[job_name]
+        else:
+            built = ()
+            substituted = ()
+        job_timings.append(
+            JobTiming(
+                name=job_name,
+                conclusion=conclusion,
+                wall_seconds=wall_seconds,
+                steps=steps,
+                built_derivations=built,
+                substituted_store_paths=substituted,
+            )
+        )
+    # Ensure at least one job? Fail closed if no jobs
+    if not job_timings:
+        message = "GitHub jobs response contains no jobs"
+        raise InputError(message)
+    # Check that supplied jobs_evidence does not contain unknown jobs (typo)
+    # But allow extra evidence for jobs not in API? That would be inventing, so fail closed if evidence contains job not in API
+    api_names = {j.name for j in job_timings}
+    for ev_name in jobs_evidence:
+        if ev_name not in api_names:
+            message = (
+                f"jobs_evidence contains unknown job {ev_name!r} not in GitHub jobs"
+            )
+            raise InputError(message)
+    # Sort jobs by name for canonicalization
+    jobs_sorted = tuple(sorted(job_timings, key=lambda j: j.name))
+    return TimingReport(
+        sha=sha.lower(),
+        attempt=attempt,
+        change_kind=change_kind,
+        regions=regions,
+        measured_wall_seconds=measured_wall_seconds,
+        workflow=workflow_timing,
+        jobs=jobs_sorted,
+        cache=cache,
+    )
+
+
+def collect_report(
+    *,
+    repo: str,
+    run_id: str,
+    sha: str,
+    attempt: int,
+    change_kind: str | ChangeKind,
+    regions: Sequence[str] | str,
+    cache_actor: str,
+    cache_event: str,
+    cache_read: bool | str,
+    cache_write: bool | str,
+    jobs_evidence_json: str | Mapping[str, object],
+    token: str | None = None,
+    workflow_name: str | None = None,
+    fetcher: Callable[[str, str], JsonDocument] | None = None,
+) -> TimingReport:
+    """Collect timing evidence via GitHub API and explicit workflow outputs."""
+    token_value = token if token is not None else os.environ.get("GITHUB_TOKEN", "")
+    if not token_value or not token_value.strip():
+        message = "GITHUB_TOKEN is required for GitHub API collection"
+        raise InputError(message)
+    # Normalize repo/run_id
+    repo_norm = repo.strip()
+    run_id_norm = run_id.strip()
+    sha_norm = sha.strip().lower()
+    if SHA_PATTERN.fullmatch(sha_norm) is None:
+        # Allow uppercase input, then lower
+        if SHA_PATTERN.fullmatch(sha.strip()) is None:
+            message = "report.sha must contain exactly 40 hexadecimal characters"
+            raise InputError(message)
+        sha_norm = sha.strip().lower()
+    if not isinstance(attempt, int) or attempt < 1:
+        # attempt may be passed as string from CLI
+        try:
+            attempt_int = int(attempt)
+        except Exception as error:
+            message = "report.attempt must be an integer greater than or equal to 1"
+            raise InputError(message) from error
+        if attempt_int < 1:
+            message = "report.attempt must be an integer greater than or equal to 1"
+            raise InputError(message)
+        attempt = attempt_int
+    # change_kind
+    raw_kind = (
+        change_kind.value if isinstance(change_kind, ChangeKind) else str(change_kind)
+    )
+    raw_kind = raw_kind.strip()
+    try:
+        kind = ChangeKind(raw_kind)
+    except ValueError as error:
+        allowed = ", ".join(k.value for k in ChangeKind)
+        message = f"report.change_kind has unsupported value {raw_kind!r}; expected one of: {allowed}"
+        raise InputError(message) from error
+    # regions: may be JSON string or list
+    if isinstance(regions, str):
+        try:
+            parsed_regions = json.loads(
+                regions,
+                object_pairs_hook=_object_without_duplicate_keys,
+                parse_constant=_reject_json_constant,
+            )
+        except json.JSONDecodeError as error:
+            message = f"regions is not valid JSON: {error.msg}"
+            raise InputError(message) from error
+        regions_array = _require_array(cast("object", parsed_regions), "regions")
+        region_list = [
+            _require_string(v, f"regions[{i}]") for i, v in enumerate(regions_array)
+        ]
+    else:
+        region_list = list(regions)  # type: ignore[arg-type]
+    # Validate regions sorted, unique, pattern
+    regions_tuple = _require_string_array(
+        region_list,
+        "report.regions",
+        pattern=REGION_PATTERN,
+        require_sorted=True,
+    )
+    # cache
+    actor = cache_actor.strip()
+    if not actor:
+        message = "cache.actor must be a non-empty string"
+        raise InputError(message)
+    event = cache_event.strip()
+    if EVENT_PATTERN.fullmatch(event) is None:
+        message = f"report.cache.event has invalid value {event!r}"
+        raise InputError(message)
+
+    # cache_read/write may be bool or string
+    def _parse_bool(value: object, context: str) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            low = value.strip().lower()
+            if low == "true":
+                return True
+            if low == "false":
+                return False
+        message = f"{context} must be a boolean"
+        raise InputError(message)
+
+    read = _parse_bool(cache_read, "cache.read")
+    write = _parse_bool(cache_write, "cache.write")
+    # jobs_evidence_json
+    if isinstance(jobs_evidence_json, str):
+        raw_ev = jobs_evidence_json.strip()
+        if not raw_ev:
+            evidence_obj: Mapping[str, object] = {}
+        else:
+            try:
+                parsed = json.loads(
+                    raw_ev,
+                    object_pairs_hook=_object_without_duplicate_keys,
+                    parse_constant=_reject_json_constant,
+                )
+            except json.JSONDecodeError as error:
+                message = f"jobs_evidence is not valid JSON: {error.msg}"
+                raise InputError(message) from error
+            evidence_obj = _require_object(cast("object", parsed), "jobs_evidence")
+    else:
+        evidence_obj = jobs_evidence_json
+    jobs_evidence = _parse_jobs_evidence(evidence_obj, "jobs_evidence")
+    # Fetch GitHub data
+    run_data = _fetch_workflow_run(repo_norm, run_id_norm, token_value, fetcher=fetcher)
+    jobs_data = _fetch_jobs(repo_norm, run_id_norm, token_value, fetcher=fetcher)
+    # If workflow_name override provided, patch run_data
+    if workflow_name is not None and workflow_name.strip():
+        # Create copy to avoid mutating original
+        run_data = dict(run_data)
+        run_data["name"] = workflow_name.strip()
+    return _build_report_from_github(
+        sha=sha_norm,
+        attempt=attempt,
+        change_kind=kind,
+        regions=regions_tuple,
+        cache_actor=actor,
+        cache_event=event,
+        cache_read=read,
+        cache_write=write,
+        jobs_evidence=jobs_evidence,
+        run_data=run_data,
+        jobs_data=jobs_data,
+    )
+
+
+def _collect_from_deterministic_jsons(
+    *, jobs_json: str, run_metadata_json: str
+) -> TimingReport:
+    """Collect timing report from deterministic JSON inputs without network."""
+    try:
+        raw_jobs = json.loads(
+            jobs_json,
+            object_pairs_hook=_object_without_duplicate_keys,
+            parse_constant=_reject_json_constant,
+        )
+    except json.JSONDecodeError as error:
+        message = f"jobs JSON is not valid JSON at line {error.lineno}, column {error.colno}: {error.msg}"
+        raise InputError(message) from error
+    jobs_array: list[object]
+    if isinstance(raw_jobs, dict):
+        jobs_doc = _require_object(cast("object", raw_jobs), "jobs JSON")
+        if "jobs" in jobs_doc:
+            jobs_array = _require_array(jobs_doc["jobs"], "jobs JSON.jobs")
+        else:
+            message = "jobs JSON object must contain key 'jobs'"
+            raise InputError(message)
+    elif isinstance(raw_jobs, list):
+        jobs_array = cast("list[object]", raw_jobs)
+    else:
+        message = "jobs JSON must be an object with 'jobs' key or an array"
+        raise InputError(message)
+    jobs_data: list[JsonDocument] = []
+    for idx, raw_job in enumerate(jobs_array):
+        doc = _require_object(raw_job, f"jobs JSON.jobs[{idx}]")
+        jobs_data.append(doc)
+    try:
+        raw_meta = json.loads(
+            run_metadata_json,
+            object_pairs_hook=_object_without_duplicate_keys,
+            parse_constant=_reject_json_constant,
+        )
+    except json.JSONDecodeError as error:
+        message = f"run metadata JSON is not valid JSON at line {error.lineno}, column {error.colno}: {error.msg}"
+        raise InputError(message) from error
+    meta = _require_object(cast("object", raw_meta), "run metadata")
+    expected_meta_keys = frozenset(
+        {
+            "sha",
+            "attempt",
+            "change_kind",
+            "regions",
+            "workflow",
+            "measured_wall_seconds",
+            "cache",
+            "jobs_evidence",
+        }
+    )
+    _require_exact_keys(meta, expected_meta_keys, "run metadata")
+    sha = _require_string(meta["sha"], "run metadata.sha")
+    if SHA_PATTERN.fullmatch(sha) is None:
+        message = "run metadata.sha must contain exactly 40 hexadecimal characters"
+        raise InputError(message)
+    sha = sha.lower()
+    attempt_val = meta["attempt"]
+    if (
+        isinstance(attempt_val, bool)
+        or not isinstance(attempt_val, int)
+        or attempt_val < 1
+    ):
+        message = "run metadata.attempt must be an integer greater than or equal to 1"
+        raise InputError(message)
+    attempt = attempt_val
+    raw_kind = _require_string(meta["change_kind"], "run metadata.change_kind")
+    try:
+        change_kind = ChangeKind(raw_kind)
+    except ValueError as error:
+        allowed = ", ".join(k.value for k in ChangeKind)
+        message = f"run metadata.change_kind has unsupported value {raw_kind!r}; expected one of: {allowed}"
+        raise InputError(message) from error
+    regions = _require_string_array(
+        meta["regions"],
+        "run metadata.regions",
+        pattern=REGION_PATTERN,
+        require_sorted=True,
+    )
+    workflow = _parse_workflow(meta["workflow"])
+    measured = _require_wall_seconds(
+        meta["measured_wall_seconds"], "run metadata.measured_wall_seconds"
+    )
+    cache = _parse_cache(meta["cache"])
+    jobs_evidence = _parse_jobs_evidence(
+        meta["jobs_evidence"], "run metadata.jobs_evidence"
+    )
+    job_timings: list[JobTiming] = []
+    seen_names: set[str] = set()
+    for raw_job in jobs_data:
+        job_name = _require_string(raw_job.get("name"), "jobs JSON job name")
+        if job_name in seen_names:
+            message = f"jobs JSON must have unique names; duplicate {job_name!r}"
+            raise InputError(message)
+        seen_names.add(job_name)
+        raw_conclusion = raw_job.get("conclusion")
+        if raw_conclusion is None:
+            status = raw_job.get("status")
+            if status is not None and status != "completed":
+                message = (
+                    f"jobs JSON job {job_name!r} is not completed; status {status!r}"
+                )
+                raise InputError(message)
+            message = f"jobs JSON job {job_name!r} is missing conclusion"
+            raise InputError(message)
+        conclusion = _map_github_conclusion(
+            raw_conclusion, f"jobs JSON job {job_name!r}.conclusion"
+        )
+        if conclusion is Conclusion.SKIPPED:
+            wall_seconds = 0.0
+            steps: tuple[StepTiming, ...] = ()
+        else:
+            started = raw_job.get("started_at")
+            completed = raw_job.get("completed_at")
+            if not isinstance(started, str) or not isinstance(completed, str):
+                message = (
+                    f"jobs JSON job {job_name!r} is missing started_at or completed_at"
+                )
+                raise InputError(message)
+            wall_seconds = _wall_seconds_between(
+                started, completed, f"jobs JSON job {job_name!r}"
+            )
+            raw_steps_value = raw_job.get("steps")
+            if not isinstance(raw_steps_value, list):
+                message = f"jobs JSON job {job_name!r} is missing steps array"
+                raise InputError(message)
+            raw_steps = cast("list[object]", raw_steps_value)
+            step_timings: list[StepTiming] = []
+            step_names: set[str] = set()
+            for s_idx, raw_step in enumerate(raw_steps):
+                step_doc = _require_object(
+                    raw_step, f"jobs JSON job {job_name!r}.steps[{s_idx}]"
+                )
+                step_name = _require_string(
+                    step_doc.get("name"),
+                    f"jobs JSON job {job_name!r}.steps[{s_idx}].name",
+                )
+                if step_name in step_names:
+                    message = f"jobs JSON job {job_name!r}.steps must have unique names; duplicate {step_name!r}"
+                    raise InputError(message)
+                step_names.add(step_name)
+                s_started = step_doc.get("started_at")
+                s_completed = step_doc.get("completed_at")
+                if not isinstance(s_started, str) or not isinstance(s_completed, str):
+                    message = f"jobs JSON job {job_name!r} step {step_name!r} is missing timestamps"
+                    raise InputError(message)
+                s_wall = _wall_seconds_between(
+                    s_started,
+                    s_completed,
+                    f"jobs JSON job {job_name!r} step {step_name!r}",
+                )
+                step_timings.append(StepTiming(name=step_name, wall_seconds=s_wall))
+            steps = tuple(sorted(step_timings, key=lambda s: s.name))
+        if job_name in jobs_evidence:
+            built, substituted = jobs_evidence[job_name]
+        else:
+            built = ()
+            substituted = ()
+        job_timings.append(
+            JobTiming(
+                name=job_name,
+                conclusion=conclusion,
+                wall_seconds=wall_seconds,
+                steps=steps,
+                built_derivations=built,
+                substituted_store_paths=substituted,
+            )
+        )
+    if not job_timings:
+        message = "jobs JSON contains no jobs"
+        raise InputError(message)
+    api_names = {j.name for j in job_timings}
+    for ev_name in jobs_evidence:
+        if ev_name not in api_names:
+            message = f"run metadata.jobs_evidence contains unknown job {ev_name!r} not in jobs JSON"
+            raise InputError(message)
+    jobs_sorted = tuple(sorted(job_timings, key=lambda j: j.name))
+    return TimingReport(
+        sha=sha,
+        attempt=attempt,
+        change_kind=change_kind,
+        regions=regions,
+        measured_wall_seconds=measured,
+        workflow=workflow,
+        jobs=jobs_sorted,
+        cache=cache,
+    )
 
 
 def _canonical_json(document: Mapping[str, object]) -> str:
@@ -665,6 +1354,26 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     compare_parser.add_argument("first", metavar="FIRST_REPORT_JSON")
     compare_parser.add_argument("second", metavar="SECOND_REPORT_JSON")
+
+    collect_parser = subparsers.add_parser(
+        "collect", help="collect deterministic timing evidence from GitHub jobs JSON"
+    )
+    collect_parser.add_argument(
+        "--jobs",
+        required=True,
+        help="GitHub jobs API JSON (jobs array or full response with jobs key)",
+    )
+    collect_parser.add_argument(
+        "--run-metadata",
+        required=True,
+        help="Explicit run metadata JSON with sha, attempt, change_kind, regions, workflow, measured_wall_seconds, cache, jobs_evidence",
+    )
+    collect_parser.add_argument(
+        "--output",
+        required=False,
+        default=None,
+        help="path to write collected report JSON",
+    )
     return parser.parse_args(argv)
 
 
@@ -693,6 +1402,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             first = parse_report(cast("str", arguments.first))
             second = parse_report(cast("str", arguments.second))
             document = comparison_document(first, second)
+        elif command == "collect":
+            report = _collect_from_deterministic_jsons(
+                jobs_json=cast("str", arguments.jobs),
+                run_metadata_json=cast("str", arguments.run_metadata),
+            )
+            output_path = cast("str | None", arguments.output)
+            if output_path is not None:
+                with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+                    handle.write(_canonical_json(report.to_document()))
+                    handle.write("\n")
+            document = validation_document(report)
         else:
             raise AssertionError(command)
     except InputError as error:

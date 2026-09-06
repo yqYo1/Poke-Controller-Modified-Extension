@@ -59,13 +59,15 @@ Web UIの開発と構築にはBunを使用し、配布済みアプリケーシ�
 
 実機シリアル、物理カメラ、音声、外部通知には、仮想I/O試験に加えて環境ごとの[外部受入ゲート](docs/ACCEPTANCE.md)が必要です。
 
-## Nix flake outputで開発する
+## Nix devShellで開発する
 
-開発コマンドは、用途ごとにtoolchainと環境を固定したNix flake app、formatter、checkから実行します。
+開発作業は、toolchainを固定したNix devShell内で行います。`.envrc`は`use flake`を指定しているため、新しいworktreeでは一度`direnv allow`を実行します。自動読込みを使わない場合は`nix develop`で同じ環境へ入れます。
 
-direnv、`.envrc`、`nix develop`、hostに直接導入したtoolchainは使用しません。
+hostに直接導入したtoolchainは使用しません。完了gate、formatter、用途別の隔離実行は引き続き固定したflake appから実行します。
 
 ```bash
+direnv allow
+# または: nix develop
 nix fmt
 nix run .#check
 nix run .#cargo -- test --locked --workspace

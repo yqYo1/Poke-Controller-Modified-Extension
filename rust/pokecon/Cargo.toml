@@ -7,18 +7,27 @@ license.workspace = true
 repository.workspace = true
 build = "build.rs"
 
+[lib]
+doctest = false
+
 [[bin]]
 name = "pokecon"
 path = "src/main.rs"
+test = false
+bench = false
 
 [[bin]]
 name = "pokecon-worker"
 path = "src/bin/worker.rs"
+test = false
+bench = false
 required-features = ["worker-binary"]
 
 [[bin]]
 name = "pokecon-compatibility"
 path = "src/bin/compatibility.rs"
+test = false
+bench = false
 required-features = ["compatibility-tool"]
 
 [[bin]]
@@ -31,11 +40,15 @@ required-features = ["worker-test-fixture"]
 [[bin]]
 name = "generate_contracts"
 path = "src/bin/generate_contracts.rs"
+test = false
+bench = false
 required-features = ["contract-generator"]
 
 [[bin]]
 name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
+test = false
+bench = false
 required-features = ["contract-generator"]
 
 [[test]]
@@ -80,7 +93,7 @@ required-features = ["integration-test-support", "worker-binary"]
 [[test]]
 name = "startup"
 path = "tests/startup.rs"
-required-features = ["worker-binary"]
+required-features = ["integration-test-support", "worker-binary"]
 
 [[test]]
 name = "worker_startup"

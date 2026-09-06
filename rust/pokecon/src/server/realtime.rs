@@ -1,4 +1,7 @@
 //! Deterministic WebRTC-primary and WebSocket-fallback route arbitration.
+//! Bounded control priority: WebRTC attempts and fallback are serialized and
+//! never block the main command/camera/serial/script paths; recovery probes
+//! are coalesced and bounded.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};

@@ -148,6 +148,21 @@ def test_validate_rejects_non_push_cache_write_as_contract_violation() -> None:
     assert _document(completed)["conclusion"] == "failure"
 
 
+def test_validate_rejects_untrusted_push_cache_writer() -> None:
+    completed = _run(
+        "validate",
+        _report(
+            cache_write=True,
+            cache_event="push",
+            cache_actor="untrusted-contributor",
+        ),
+    )
+
+    assert completed.returncode == 1
+    assert "cache writes require a trusted actor" in completed.stderr
+    assert _document(completed)["conclusion"] == "failure"
+
+
 def test_validate_rejects_substitution_when_cache_read_is_false() -> None:
     completed = _run(
         "validate",
@@ -285,6 +300,7 @@ def test_compare_accepts_concrete_cache_reuse_improvement() -> None:
             _store_path("pokecon-test.drv"),
         ),
         cache_event="push",
+        cache_actor="yqYo1",
         cache_write=True,
     )
     second = _report(
@@ -470,3 +486,61 @@ def test_public_compare_uses_measured_duration_and_derivation_counts() -> None:
     assert first.change_kind is ChangeKind.FAST
     assert document["conclusion"] == "success"
     assert document["wall_seconds_decreased"] is True
+
+
+def test_collect_builds_a_report_from_deterministic_github_json(tmp_path: Path) -> None:
+    jobs = {
+        "jobs": [
+            {
+                "name": "Fast checks",
+                "conclusion": "success",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": "2026-01-01T00:00:05Z",
+                "steps": [
+                    {
+                        "name": "Run checks",
+                        "started_at": "2026-01-01T00:00:01Z",
+                        "completed_at": "2026-01-01T00:00:04Z",
+                    }
+                ],
+            }
+        ]
+    }
+    metadata = {
+        "sha": "a" * 40,
+        "attempt": 1,
+        "change_kind": "fast",
+        "regions": ["contracts", "rust"],
+        "measured_wall_seconds": 5.0,
+        "workflow": {"name": "Normal CI", "wall_seconds": 5.0},
+        "cache": {
+            "read": False,
+            "write": False,
+            "actor": "octocat",
+            "event": "pull_request",
+        },
+        "jobs_evidence": {},
+    }
+    output = tmp_path / "timing-report.json"
+    completed = subprocess.run(  # noqa: S603 - fixed repository script and fixture data
+        [
+            sys.executable,
+            "-I",
+            str(TIMING),
+            "collect",
+            "--jobs",
+            json.dumps(jobs),
+            "--run-metadata",
+            json.dumps(metadata),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["sha"] == "a" * 40
+    assert report["jobs"][0]["wall_seconds"] == 5.0

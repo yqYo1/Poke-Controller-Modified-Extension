@@ -2997,7 +2997,7 @@ validate_http_contract() {
     ]
     and (.data.revision | type) == "string"
     and (.data.values | type) == "object"
-    and (.data.values | length) == 78
+    and (.data.values | length) == 79
     and (.data.pending_restart_values | type) == "object"
     and (.data.restart_required | type) == "array"
     and (.data.apply_failures | type) == "object"

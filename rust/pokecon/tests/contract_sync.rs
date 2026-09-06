@@ -1,5 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 #[cfg(feature = "contract-generator")]
 use pokecon::integration_test_support::contracts::generator::{
@@ -11,39 +14,43 @@ use regex::Regex;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-const SPECIFICATION: &str = include_str!("../../../SPECIFICATION.md");
-const ACCEPTANCE_SCHEMA: &str = include_str!("../registry/acceptance-record.schema.json");
-const ACCEPTANCE_PROCEDURE: &str = include_str!("../../../docs/ACCEPTANCE.md");
-const COMPATIBILITY_REGISTRY_JSON: &str = include_str!("../registry/compatibility.json");
-const GENERATION_REGISTRY_JSON: &str = include_str!("../registry/generation.json");
-const CI_REGISTRY_JSON: &str = include_str!("../registry/ci.json");
-const CI_REGIONS: &str = include_str!("../../../scripts/ci/regions.py");
-const CI_AGGREGATE: &str = include_str!("../../../scripts/ci/aggregate.py");
-const CI_TIMING: &str = include_str!("../../../scripts/ci/timing.py");
-const FOUNDATION_REGISTRY_JSON: &str = include_str!("../registry/foundation.json");
-const FIXED_MANIFEST: &str = include_str!("../../../compatibility/fixed-manifest.json");
-const FLAKE: &str = include_str!("../../../flake.nix");
-const PYPROJECT: &str = include_str!("../../../pyproject.toml");
-const CARGO_MANIFEST: &str = include_str!("../../../Cargo.toml");
-const GITIGNORE: &str = include_str!("../../../.gitignore");
-const WORKFLOWS: &[(&str, &str)] = &[
-    (
-        "compatibility-roll",
-        include_str!("../../../.github/workflows/compatibility-roll.yml"),
-    ),
-    (
-        "normal-ci",
-        include_str!("../../../.github/workflows/normal-ci.yml"),
-    ),
-    (
-        "package",
-        include_str!("../../../.github/workflows/package.yml"),
-    ),
-    (
-        "release",
-        include_str!("../../../.github/workflows/release.yml"),
-    ),
-];
+static SPECIFICATION: LazyLock<String> = LazyLock::new(|| repository_text("SPECIFICATION.md"));
+static ACCEPTANCE_SCHEMA: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/acceptance-record.schema.json"));
+static ACCEPTANCE_PROCEDURE: LazyLock<String> =
+    LazyLock::new(|| repository_text("docs/ACCEPTANCE.md"));
+static COMPATIBILITY_REGISTRY_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/compatibility.json"));
+static GENERATION_REGISTRY_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/generation.json"));
+static CI_REGISTRY_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/ci.json"));
+static CI_REGIONS: LazyLock<String> = LazyLock::new(|| repository_text("scripts/ci/regions.py"));
+static CI_AGGREGATE: LazyLock<String> =
+    LazyLock::new(|| repository_text("scripts/ci/aggregate.py"));
+static CI_TIMING: LazyLock<String> = LazyLock::new(|| repository_text("scripts/ci/timing.py"));
+static FOUNDATION_REGISTRY_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/foundation.json"));
+static FIXED_MANIFEST: LazyLock<String> =
+    LazyLock::new(|| repository_text("compatibility/fixed-manifest.json"));
+static FLAKE: LazyLock<String> = LazyLock::new(|| repository_text("flake.nix"));
+static PYPROJECT: LazyLock<String> = LazyLock::new(|| repository_text("pyproject.toml"));
+static CARGO_MANIFEST: LazyLock<String> = LazyLock::new(|| repository_text("Cargo.toml"));
+static GITIGNORE: LazyLock<String> = LazyLock::new(|| repository_text(".gitignore"));
+static WORKFLOWS: LazyLock<[(&'static str, String); 4]> = LazyLock::new(|| {
+    [
+        (
+            "compatibility-roll",
+            repository_text(".github/workflows/compatibility-roll.yml"),
+        ),
+        (
+            "normal-ci",
+            repository_text(".github/workflows/normal-ci.yml"),
+        ),
+        ("package", repository_text(".github/workflows/package.yml")),
+        ("release", repository_text(".github/workflows/release.yml")),
+    ]
+});
 
 #[cfg(feature = "contract-generator")]
 #[test]
@@ -63,14 +70,14 @@ fn generated_openapi_artifact_is_current() {
 fn canonical_settings_match_every_normative_spec_projection() {
     let validated = settings_registry().expect("canonical settings registry must be valid");
     let settings = validated.settings();
-    assert_eq!(settings.len(), 78);
+    assert_eq!(settings.len(), 79);
 
     let registry_by_id = settings
         .iter()
         .map(|setting| (setting.id.as_str(), setting))
         .collect::<BTreeMap<_, _>>();
     let spec_rows = setting_projection_rows();
-    assert_eq!(spec_rows.len(), 78);
+    assert_eq!(spec_rows.len(), 79);
     assert_eq!(
         registry_by_id.keys().copied().collect::<BTreeSet<_>>(),
         spec_rows
@@ -214,7 +221,7 @@ fn public_python_and_lua_names_are_classified_without_worker_leakage() {
 
 #[test]
 fn compatibility_baselines_are_immutable_and_match_the_specification() {
-    let compatibility = parse_json(COMPATIBILITY_REGISTRY_JSON);
+    let compatibility = parse_json(&COMPATIBILITY_REGISTRY_JSON);
     let baselines = compatibility["fixed_baselines"]
         .as_array()
         .expect("fixed_baselines must be an array");
@@ -246,8 +253,8 @@ fn compatibility_baselines_are_immutable_and_match_the_specification() {
 
 #[test]
 fn fixed_compatibility_inventory_is_complete_and_content_addressed() {
-    let compatibility = parse_json(COMPATIBILITY_REGISTRY_JSON);
-    let inventory = parse_json(FIXED_MANIFEST);
+    let compatibility = parse_json(&COMPATIBILITY_REGISTRY_JSON);
+    let inventory = parse_json(&FIXED_MANIFEST);
     let expected = compatibility["fixed_baselines"]
         .as_array()
         .expect("fixed_baselines must be an array")
@@ -302,10 +309,10 @@ fn fixed_compatibility_inventory_is_complete_and_content_addressed() {
 
 #[test]
 fn generation_and_ci_registries_define_drift_and_applicability_gates() {
-    let generation = parse_json(GENERATION_REGISTRY_JSON);
+    let generation = parse_json(&GENERATION_REGISTRY_JSON);
     assert_generation_registry(&generation);
 
-    let ci = parse_json(CI_REGISTRY_JSON);
+    let ci = parse_json(&CI_REGISTRY_JSON);
     assert_eq!(ci["schema_version"], 3);
     assert_ci_workflow_registry(&ci);
 
@@ -318,7 +325,7 @@ fn generation_and_ci_registries_define_drift_and_applicability_gates() {
 
 #[test]
 fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
-    let ci = parse_json(CI_REGISTRY_JSON);
+    let ci = parse_json(&CI_REGISTRY_JSON);
     let event = &ci["event_contract"];
     assert_eq!(
         event["integration_branches"],
@@ -344,7 +351,7 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
     assert_eq!(
         event["suppressed_event"],
         serde_json::json!({
-            "source": "same-repository pull request from a configured integration branch",
+            "source": "same-repository pull request from the main or master integration branch",
             "event": "pull_request",
             "canonical_event": "push",
         })
@@ -374,7 +381,7 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
         let workflow = string_at(concurrency, "workflow");
         let source = WORKFLOWS
             .iter()
-            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .find_map(|(name, source)| (*name == workflow).then_some(source.as_str()))
             .unwrap_or_else(|| panic!("event workflow {workflow} must exist"));
         assert!(source.contains(&format!("    {}", string_at(concurrency, "group"))));
         assert!(source.contains("  cancel-in-progress: true"));
@@ -383,7 +390,7 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
             source
                 .contains("github.event.pull_request.head.repo.full_name != github.repository ||")
         );
-        for branch in ["main", "master", "refactor/rust-core"] {
+        for branch in ["main", "master"] {
             assert!(source.contains(&format!("github.head_ref != '{branch}'")));
         }
         assert!(source.contains(
@@ -408,7 +415,7 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
 
 #[test]
 fn ci_aggregate_registry_matches_both_required_workflow_gates() {
-    let ci = parse_json(CI_REGISTRY_JSON);
+    let ci = parse_json(&CI_REGISTRY_JSON);
     let jobs = ci["jobs"].as_array().expect("CI jobs must be an array");
     let aggregate = &ci["aggregate_contract"];
     assert_ci_aggregate_schema(aggregate);
@@ -417,9 +424,10 @@ fn ci_aggregate_registry_matches_both_required_workflow_gates() {
     assert_ci_aggregate_workflow_contracts(aggregate, jobs);
 }
 
+#[allow(clippy::too_many_lines)]
 #[test]
-fn ci_cache_and_timing_registry_distinguishes_policy_from_implementation() {
-    let ci = parse_json(CI_REGISTRY_JSON);
+fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
+    let ci = parse_json(&CI_REGISTRY_JSON);
     let cache = &ci["binary_cache_contract"];
     assert_eq!(cache["scope"], "PokeCon-specific Nix derivations");
     assert_eq!(
@@ -439,14 +447,17 @@ fn ci_cache_and_timing_registry_distinguishes_policy_from_implementation() {
             },
         ])
     );
-    assert_eq!(cache["current_implementation"]["status"], "not_configured");
+    assert_eq!(
+        cache["current_implementation"]["status"],
+        "signed_file_cache_optional"
+    );
     assert_eq!(
         cache["current_implementation"]["pokecon_specific_read"],
-        false
+        true
     );
     assert_eq!(
         cache["current_implementation"]["pokecon_specific_write"],
-        false
+        true
     );
     assert_eq!(
         cache["current_implementation"]["validator_enforces_push_only_writes"],
@@ -454,13 +465,38 @@ fn ci_cache_and_timing_registry_distinguishes_policy_from_implementation() {
     );
     assert_eq!(
         cache["current_implementation"]["validator_enforces_trusted_actor_allowlist"],
-        false
+        true
     );
     assert!(CI_TIMING.contains("if report.cache.write and report.cache.event != \"push\""));
+    assert!(CI_TIMING.contains("TRUSTED_CACHE_WRITERS: Final = frozenset({\"yqYo1\"})"));
+    assert!(CI_TIMING.contains("report.cache.actor not in TRUSTED_CACHE_WRITERS"));
+    let normal_ci = WORKFLOWS
+        .iter()
+        .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))
+        .expect("Normal CI workflow must exist");
+    assert_eq!(
+        normal_ci
+            .matches("uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
+            .count(),
+        2
+    );
+    assert_eq!(
+        normal_ci
+            .matches("uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
+            .count(),
+        2
+    );
+    assert_eq!(
+        normal_ci
+            .matches("contains(fromJSON('[\"yqYo1\"]'), github.actor)")
+            .count(),
+        4
+    );
+    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 7);
     for workflow in ["normal-ci", "package"] {
         let source = WORKFLOWS
             .iter()
-            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .find_map(|(name, source)| (*name == workflow).then_some(source.as_str()))
             .expect("normal and package workflows must exist");
         assert!(source.contains("uses: cachix/install-nix-action@v31"));
         assert!(!source.contains("uses: cachix/cachix-action@"));
@@ -478,22 +514,21 @@ fn ci_cache_and_timing_registry_distinguishes_policy_from_implementation() {
     assert_eq!(timing["current_implementation"]["validator"], "implemented");
     assert_eq!(
         timing["current_implementation"]["workflow_evidence_collection"],
-        "not_implemented"
+        "implemented"
     );
     assert_eq!(
         timing["current_implementation"]["workflow_p95_gate"],
-        "not_implemented"
+        "optional_baseline_gate"
     );
     assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
     assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
     assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 600.0"));
     assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
-    for (_, workflow) in WORKFLOWS
+    let normal_ci = WORKFLOWS
         .iter()
-        .filter(|(workflow, _)| matches!(*workflow, "normal-ci" | "package"))
-    {
-        assert!(!workflow.contains("nix run .#ci-timing"));
-    }
+        .find_map(|(workflow, source)| (*workflow == "normal-ci").then_some(source))
+        .expect("normal-ci workflow must exist");
+    assert!(normal_ci.contains("nix run .#ci-timing -- collect"));
 }
 
 fn assert_generation_registry(generation: &Value) {
@@ -545,7 +580,7 @@ fn assert_ci_workflow_registry(ci: &Value) {
         );
         let source = WORKFLOWS
             .iter()
-            .find_map(|(workflow, source)| (*workflow == id).then_some(*source))
+            .find_map(|(workflow, source)| (*workflow == id).then_some(source.as_str()))
             .unwrap_or_else(|| panic!("registered workflow {id} must be embedded"));
         assert!(
             source.starts_with(&format!("name: {}\n", string_at(workflow, "display_name"))),
@@ -1009,7 +1044,7 @@ fn assert_ci_aggregate_workflow_contracts(aggregate: &Value, jobs: &[Value]) {
         let workflow = string_at(contract, "workflow");
         let source = WORKFLOWS
             .iter()
-            .find_map(|(name, source)| (*name == workflow).then_some(*source))
+            .find_map(|(name, source)| (*name == workflow).then_some(source.as_str()))
             .unwrap_or_else(|| panic!("aggregate workflow {workflow} must exist"));
         let expected_inputs = jobs
             .iter()
@@ -1116,16 +1151,46 @@ fn assert_generated_artifact_contracts(artifacts: &[Value]) {
     }
 }
 
+fn repository_text(relative_path: &str) -> String {
+    fs::read_to_string(repository_root().join(relative_path))
+        .unwrap_or_else(|error| panic!("contract input {relative_path} must be readable: {error}"))
+}
+
 fn repository_root() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("pokecon package must be nested under the repository root")
+    static ROOT: LazyLock<PathBuf> = LazyLock::new(|| {
+        let candidate = env::var_os("POKECON_CONTRACT_TEST_ROOT").map_or_else(
+            || {
+                env::current_dir()
+                    .expect("contract test current directory must be readable")
+                    .ancestors()
+                    .find(|ancestor| {
+                        ancestor.join("Cargo.toml").is_file()
+                            && ancestor.join("SPECIFICATION.md").is_file()
+                    })
+                    .expect("contract tests must run below the repository root")
+                    .to_path_buf()
+            },
+            PathBuf::from,
+        );
+        assert!(
+            candidate.is_absolute(),
+            "contract test root must be absolute"
+        );
+        let canonical = candidate
+            .canonicalize()
+            .expect("contract test root must resolve to an existing directory");
+        assert!(
+            canonical.join("Cargo.toml").is_file() && canonical.join("SPECIFICATION.md").is_file(),
+            "contract test root must contain Cargo.toml and SPECIFICATION.md"
+        );
+        canonical
+    });
+    ROOT.as_path()
 }
 
 #[test]
 fn verification_taxonomy_is_complete() {
-    let foundation = parse_json(FOUNDATION_REGISTRY_JSON);
+    let foundation = parse_json(&FOUNDATION_REGISTRY_JSON);
     let categories = foundation["test_categories"]
         .as_array()
         .expect("test_categories must be an array");
@@ -1169,7 +1234,7 @@ fn verification_taxonomy_is_complete() {
 
 #[test]
 fn future_path_audit_is_complete() {
-    let foundation = parse_json(FOUNDATION_REGISTRY_JSON);
+    let foundation = parse_json(&FOUNDATION_REGISTRY_JSON);
     let audit = foundation["path_audit"]
         .as_array()
         .expect("path_audit must be an array");
@@ -1196,8 +1261,14 @@ fn future_path_audit_is_complete() {
         );
     }
 
-    let mut legacy_sources = format!("{FLAKE}\n{PYPROJECT}\n{CARGO_MANIFEST}\n{GITIGNORE}");
-    for (_, source) in WORKFLOWS {
+    let mut legacy_sources = format!(
+        "{}\n{}\n{}\n{}",
+        FLAKE.as_str(),
+        PYPROJECT.as_str(),
+        CARGO_MANIFEST.as_str(),
+        GITIGNORE.as_str()
+    );
+    for (_, source) in WORKFLOWS.iter() {
         legacy_sources.push('\n');
         legacy_sources.push_str(source);
     }
@@ -1227,12 +1298,9 @@ fn future_path_audit_is_complete() {
                 !legacy_sources.contains(path),
                 "resolved path marker {path} remains in an active manifest or workflow"
             );
-            if path.contains('/') && !path.contains('*') {
-                let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .parent()
-                    .and_then(Path::parent)
-                    .expect("pokecon package must be nested under the repository root");
-                let resolved_path = repository.join(path);
+            let is_legacy_release_crate = string_at(entry, "id") == "legacy_release_crates";
+            if (path.contains('/') || is_legacy_release_crate) && !path.contains('*') {
+                let resolved_path = repository_root().join(path);
                 assert!(
                     !resolved_path.exists() && !resolved_path.is_symlink(),
                     "resolved literal path still exists in the repository: {path}"
@@ -1244,7 +1312,7 @@ fn future_path_audit_is_complete() {
 
 #[test]
 fn external_acceptance_contract_closes_steps_and_release_matrix() {
-    let schema = parse_json(ACCEPTANCE_SCHEMA);
+    let schema = parse_json(&ACCEPTANCE_SCHEMA);
     let matrix = &schema["x-pokecon-release-matrix"];
     assert_eq!(matrix["specification_version"], "2.2.0");
     assert_eq!(matrix["platforms"], serde_json::json!(["linux", "windows"]));
@@ -1304,7 +1372,7 @@ struct ProjectionRow {
 }
 
 fn setting_projection_rows() -> BTreeMap<String, ProjectionRow> {
-    let section = between(SPECIFICATION, "#### 11.4.2", "**注**");
+    let section = between(&SPECIFICATION, "#### 11.4.2", "**注**");
     let mut rows = BTreeMap::new();
     for line in section.lines().filter(|line| line.starts_with("| `")) {
         let columns = split_markdown_row(line);
@@ -1358,7 +1426,7 @@ fn expand_projection_cell(cell: &str) -> Vec<String> {
 }
 
 fn specification_environment_names() -> BTreeSet<&'static str> {
-    between(SPECIFICATION, "## 12. 環境変数", "## 13.")
+    between(&SPECIFICATION, "## 12. 環境変数", "## 13.")
         .lines()
         .filter(|line| line.starts_with("| `POKECON_") && !line.contains("POKECON_UV_*"))
         .map(|line| {
@@ -1372,7 +1440,7 @@ fn specification_environment_names() -> BTreeSet<&'static str> {
 }
 
 fn specification_rest_endpoints() -> BTreeSet<String> {
-    between(SPECIFICATION, "### 7.4 HTTP REST API", "### 7.5")
+    between(&SPECIFICATION, "### 7.4 HTTP REST API", "### 7.5")
         .lines()
         .filter_map(|line| {
             let columns = split_markdown_row(line);
@@ -1383,7 +1451,7 @@ fn specification_rest_endpoints() -> BTreeSet<String> {
 }
 
 fn specification_websocket_variants() -> BTreeSet<String> {
-    let section = between(SPECIFICATION, "#### 7.3.2", "### 7.8");
+    let section = between(&SPECIFICATION, "#### 7.3.2", "### 7.8");
     let union_table = between(
         section,
         "- **イベント／メッセージunion**:",
@@ -1406,7 +1474,7 @@ fn specification_websocket_variants() -> BTreeSet<String> {
 
 fn specification_builtin_events() -> BTreeSet<(String, String)> {
     between(
-        SPECIFICATION,
+        &SPECIFICATION,
         "###### 11.5.6.1.5 組み込みイベント一覧",
         "**1. ScriptLoadPre/ScriptLoadPostのタイミング**",
     )
@@ -1420,7 +1488,7 @@ fn specification_builtin_events() -> BTreeSet<(String, String)> {
 }
 
 fn specification_compatibility_baselines() -> BTreeSet<(String, String)> {
-    between(SPECIFICATION, "#### 4.6.1", "#### 4.6.2")
+    between(&SPECIFICATION, "#### 4.6.1", "#### 4.6.2")
         .lines()
         .filter_map(|line| {
             let columns = split_markdown_row(line);
@@ -1602,7 +1670,7 @@ fn assert_user_script_members_have_a_normative_source(user: &Value) {
 }
 
 fn fixed_commands_imports() -> BTreeSet<(String, String)> {
-    let inventory = parse_json(FIXED_MANIFEST);
+    let inventory = parse_json(&FIXED_MANIFEST);
     inventory["baselines"]
         .as_array()
         .expect("inventory baselines must be an array")

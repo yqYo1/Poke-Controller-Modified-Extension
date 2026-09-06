@@ -23,8 +23,7 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name != github.repository ||
       (github.head_ref != 'main' &&
-      github.head_ref != 'master' &&
-      github.head_ref != 'refactor/rust-core')
+      github.head_ref != 'master')
     runs-on: ubuntu-latest
     outputs:
       docs: ${{ steps.regions.outputs.docs }}
@@ -62,18 +61,18 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name != github.repository ||
       (github.head_ref != 'main' &&
-      github.head_ref != 'master' &&
-      github.head_ref != 'refactor/rust-core')
+      github.head_ref != 'master')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check formatting with treefmt
-        run: nix fmt -- --ci
-      - name: Run fast static checks
-        run: nix run .#ci-fast
+      - name: Run formatting and fast static checks in parallel
+        run: >-
+          nix run .#ci-parallel --
+          formatting nix fmt -- --ci
+          --next static nix run .#ci-fast
 
   rust_contracts:
     name: Rust and contracts (Linux)
@@ -86,6 +85,44 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the Rust-check cache identity
+        id: rust_cache_key
+        run: |
+          target_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid Rust-check derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-rust-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore the PokeCon Rust binary cache
+        id: rust_cache_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.rust_cache_key.outputs.key }}
+      - name: Enable the PokeCon Rust binary cache (signed, fail-closed)
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Run combined Rust and contract checks
         if: >-
           needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts == 'true'
@@ -98,6 +135,36 @@ jobs:
         if: >-
           needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
         run: nix run .#contract-check
+      - name: Export the PokeCon Rust check to the binary cache (signed)
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.rust_cache_restore.outputs.cache-hit != 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
+            echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            exit 0
+          fi
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
+          chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
+          nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#checks.x86_64-linux.rust-core-artifacts)"
+          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
+          rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
+      - name: Save the PokeCon Rust binary cache
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.rust_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.rust_cache_key.outputs.key }}
 
   python_tests:
     name: Python tests
@@ -149,6 +216,47 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the product cache identity
+        id: product_cache_key
+        if: needs.plan.outputs.product == 'true'
+        run: |
+          target_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid product derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-product-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore the PokeCon product binary cache
+        id: product_cache_restore
+        if: needs.plan.outputs.product == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.product_cache_key.outputs.key }}
+      - name: Enable the PokeCon product binary cache (signed, fail-closed)
+        if: needs.plan.outputs.product == 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Run product smoke checks
         if: needs.plan.outputs.product == 'true'
         run: nix run .#product-smoke
@@ -166,6 +274,38 @@ jobs:
           nix run --refresh
           github:${{ github.repository }}/${{ github.sha }}
           -- --help
+      - name: Export the PokeCon product roots to the binary cache (signed)
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.product_cache_restore.outputs.cache-hit != 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
+            echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            exit 0
+          fi
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
+          chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
+          for attr in "pokecon" "pokecon-core" "web"; do nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#packages.x86_64-linux.$attr)"; done
+          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
+          rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
+      - name: Save the PokeCon product binary cache
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.product_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.product_cache_key.outputs.key }}
 
   windows:
     name: Check workspace (Windows)
@@ -201,8 +341,7 @@ jobs:
       (github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name != github.repository ||
       (github.head_ref != 'main' &&
-      github.head_ref != 'master' &&
-      github.head_ref != 'refactor/rust-core'))
+      github.head_ref != 'master'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -241,3 +380,61 @@ jobs:
             web=${{ needs.web.result }} \
             product_flake=${{ needs.product_flake.result }} \
             windows=${{ needs.windows.result }}
+      - name: Collect CI timing evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGIONS_JSON: ${{ needs.plan.outputs.regions_json || '[]' }}
+          CACHE_EVENT: ${{ github.event_name }}
+          CACHE_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          timing_dir="$RUNNER_TEMP/pokecon-ci-timing"
+          mkdir -p "$timing_dir"
+          run_json="$timing_dir/run.json"
+          jobs_json="$timing_dir/jobs.json"
+          metadata_json="$timing_dir/run-metadata.json"
+          report_json="$timing_dir/timing-report.json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > "$run_json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+            > "$jobs_json"
+          sha="$(jq -er '.head_sha' "$run_json")"
+          attempt="$(jq -er '.run_attempt' "$run_json")"
+          workflow_name="$(jq -er '.name' "$run_json")"
+          measured_wall_seconds="$(jq -er '(.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601)' "$run_json")"
+          change_kind=fast
+          if [ "${{ needs.plan.outputs.product }}" = true ]; then
+            change_kind=product
+          elif [ "${{ needs.plan.outputs.docs }}" = true ]; then
+            change_kind=docs
+          fi
+          jq -n \
+            --arg sha "$sha" \
+            --arg workflow_name "$workflow_name" \
+            --arg change_kind "$change_kind" \
+            --arg event "$CACHE_EVENT" \
+            --arg actor "$CACHE_ACTOR" \
+            --argjson attempt "$attempt" \
+            --argjson regions "${REGIONS_JSON:-[]}" \
+            --argjson measured_wall_seconds "$measured_wall_seconds" \
+            '{
+              sha: $sha,
+              attempt: $attempt,
+              change_kind: $change_kind,
+              regions: $regions,
+              measured_wall_seconds: $measured_wall_seconds,
+              workflow: {name: $workflow_name, wall_seconds: $measured_wall_seconds},
+              cache: {read: false, write: false, actor: $actor, event: $event},
+              jobs_evidence: {}
+            }' > "$metadata_json"
+          nix run .#ci-timing -- collect \
+            --jobs "$jobs_json" \
+            --run-metadata "$metadata_json" \
+            --output "$report_json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ci-timing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pokecon-ci-timing/timing-report.json
+          if-no-files-found: error

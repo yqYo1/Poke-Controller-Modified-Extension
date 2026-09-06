@@ -1019,6 +1019,7 @@ export interface components {
             "dynamic.callback_soft_timeout_grace_ms": number;
             /** Format: int64 */
             "dynamic.callback_soft_timeout_ms": number;
+            "input.allow_manual_intervention": boolean;
             "input.keyboard_enabled": boolean;
             "input.left_stick_mouse_enabled": boolean;
             "input.right_stick_mouse_enabled": boolean;
@@ -1159,6 +1160,7 @@ export interface components {
             "dynamic.callback_soft_timeout_grace_ms"?: number;
             /** Format: int64 */
             "dynamic.callback_soft_timeout_ms"?: number;
+            "input.allow_manual_intervention"?: boolean;
             "input.keyboard_enabled"?: boolean;
             "input.left_stick_mouse_enabled"?: boolean;
             "input.right_stick_mouse_enabled"?: boolean;

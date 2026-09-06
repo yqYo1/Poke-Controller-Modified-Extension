@@ -77,7 +77,8 @@ export function settingsValues(
     'websocket.pong_timeout_sec': 10,
     'websocket.reconnect_interval_sec': 3,
     'websocket.reconnect_max_retries': 20,
-    ...overrides
+    ...overrides,
+    'input.allow_manual_intervention': overrides['input.allow_manual_intervention'] ?? true
   };
   return validateWireValue('SettingsReadValues', values) as SettingsReadValues;
 }

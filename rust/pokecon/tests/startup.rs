@@ -1,7 +1,8 @@
 #[cfg(unix)]
-use std::net::SocketAddrV4;
-use std::net::{Ipv4Addr, TcpListener};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::process::Command;
+#[cfg(unix)]
+use std::process::Stdio;
 #[cfg(unix)]
 use std::time::Duration;
 
@@ -11,35 +12,44 @@ use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 use tempfile::TempDir;
 #[cfg(unix)]
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 #[cfg(unix)]
 use tokio::net::TcpStream;
 #[cfg(unix)]
 use tokio::process::Command as TokioCommand;
 #[cfg(unix)]
+use tokio::sync::oneshot;
+#[cfg(unix)]
+use tokio::task::JoinHandle;
+#[cfg(unix)]
 use tokio::time::{Instant, sleep, timeout};
 
 #[test]
-fn rust_main_starts_and_exits_cleanly_in_both_modes() {
+fn rust_main_starts_and_exits_cleanly_in_web_mode() {
+    assert_startup_probe("web");
+}
+
+#[test]
+fn rust_main_starts_and_exits_cleanly_in_desktop_mode() {
+    assert_startup_probe("desktop");
+}
+
+fn assert_startup_probe(ui_mode: &str) {
     let roots = TempDir::new().expect("isolated roots must exist");
-    for ui_mode in ["web", "desktop"] {
-        let port = unused_local_port().to_string();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_pokecon"));
-        isolate_std_command(&mut command, &roots);
-        let status = command
-            .args([
-                "--ui",
-                ui_mode,
-                "--port",
-                &port,
-                "--dynamic-config-language",
-                "none",
-                "--exit-after-startup",
-            ])
-            .status()
-            .expect("PokeCon process must start");
-        assert!(status.success(), "{ui_mode} startup probe failed");
-    }
+    let mut command = Command::new(env!("CARGO_BIN_EXE_pokecon"));
+    isolate_std_command(&mut command, &roots);
+    let status = command
+        .args([
+            "--ui",
+            ui_mode,
+            "--ephemeral-port",
+            "--dynamic-config-language",
+            "none",
+            "--exit-after-startup",
+        ])
+        .status()
+        .expect("PokeCon process must start");
+    assert!(status.success(), "{ui_mode} startup probe failed");
 }
 
 #[test]
@@ -64,13 +74,11 @@ pokecon.autocmd.on("AppShutdownPre", {
     )
     .expect("dynamic fixture must be written");
 
-    let port = unused_local_port().to_string();
     let mut command = Command::new(env!("CARGO_BIN_EXE_pokecon"));
     isolate_std_command(&mut command, &roots);
     let output = command
         .args([
-            "--port",
-            &port,
+            "--ephemeral-port",
             "--dynamic-config-language",
             "lua",
             "--exit-after-startup",
@@ -95,58 +103,64 @@ pokecon.autocmd.on("AppShutdownPre", {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn operating_system_signals_use_the_clean_shutdown_path() {
-    let roots = TempDir::new().expect("isolated roots must exist");
-    for signal in [Signal::SIGINT, Signal::SIGTERM] {
-        let port = unused_local_port();
-        let port_argument = port.to_string();
-        let mut command = TokioCommand::new(env!("CARGO_BIN_EXE_pokecon"));
-        isolate_tokio_command(&mut command, &roots);
-        let mut child = command
-            .args([
-                "--port",
-                &port_argument,
-                "--dynamic-config-language",
-                "none",
-            ])
-            .spawn()
-            .expect("PokeCon process must start");
-        wait_until_listening(&mut child, port).await;
-        assert_ui_is_served(port).await;
-        assert_api_is_served(port).await;
-
-        kill(
-            Pid::from_raw(
-                child
-                    .id()
-                    .expect("running process must have an identifier")
-                    .cast_signed(),
-            ),
-            signal,
-        )
-        .expect("the operating-system signal must be delivered");
-        let status = timeout(Duration::from_secs(10), child.wait())
-            .await
-            .unwrap_or_else(|_| {
-                child
-                    .start_kill()
-                    .expect("timed-out process must be terminated");
-                panic!("PokeCon did not stop after {signal:?}");
-            })
-            .expect("process status must be readable");
-        assert!(
-            status.success(),
-            "shutdown after {signal:?} failed: {status}"
-        );
-    }
+async fn sigint_uses_the_clean_shutdown_path() {
+    assert_signal_uses_clean_shutdown(Signal::SIGINT).await;
 }
 
-fn unused_local_port() -> u16 {
-    TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
-        .expect("an ephemeral loopback port must be available")
-        .local_addr()
-        .expect("the loopback listener must have an address")
-        .port()
+#[cfg(unix)]
+#[tokio::test]
+async fn sigterm_uses_the_clean_shutdown_path() {
+    assert_signal_uses_clean_shutdown(Signal::SIGTERM).await;
+}
+
+#[cfg(unix)]
+async fn assert_signal_uses_clean_shutdown(signal: Signal) {
+    let roots = TempDir::new().expect("isolated roots must exist");
+    let mut command = TokioCommand::new(env!("CARGO_BIN_EXE_pokecon"));
+    isolate_tokio_command(&mut command, &roots);
+    command.stdout(Stdio::piped());
+    let mut child = command
+        .args(["--ephemeral-port", "--dynamic-config-language", "none"])
+        .spawn()
+        .expect("PokeCon process must start");
+    let (ready_address, stdout_task) = monitor_startup_stdout(&mut child);
+    let address = wait_for_ready_address(&mut child, ready_address).await;
+    let port = address.port();
+    wait_until_listening(&mut child, address).await;
+    assert_ui_is_served(port).await;
+    assert_api_is_served(port).await;
+
+    kill(
+        Pid::from_raw(
+            child
+                .id()
+                .expect("running process must have an identifier")
+                .cast_signed(),
+        ),
+        signal,
+    )
+    .expect("the operating-system signal must be delivered");
+    let status = match timeout(Duration::from_secs(10), child.wait()).await {
+        Ok(result) => result.expect("process status must be readable"),
+        Err(_elapsed) => {
+            child
+                .start_kill()
+                .expect("timed-out process must be terminated");
+            child
+                .wait()
+                .await
+                .expect("terminated process must be reaped");
+            panic!("PokeCon did not stop after {signal:?}");
+        }
+    };
+    let stdout = stdout_task
+        .await
+        .expect("startup stdout monitor must not panic")
+        .expect("startup stdout must remain readable");
+    assert!(
+        status.success(),
+        "shutdown after {signal:?} failed: {status}; stdout={stdout}"
+    );
 }
 
 fn isolated_environment(roots: &TempDir) -> [(&'static str, std::path::PathBuf); 7] {
@@ -195,8 +209,140 @@ fn prepare_web_fixture(roots: &TempDir) -> std::path::PathBuf {
 }
 
 #[cfg(unix)]
-async fn wait_until_listening(child: &mut tokio::process::Child, port: u16) {
-    let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+fn monitor_startup_stdout(
+    child: &mut tokio::process::Child,
+) -> (
+    oneshot::Receiver<SocketAddrV4>,
+    JoinHandle<std::io::Result<String>>,
+) {
+    let stdout = child
+        .stdout
+        .take()
+        .expect("startup stdout must be configured as piped");
+    let (ready_sender, ready_receiver) = oneshot::channel();
+    let task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        let mut output = String::new();
+        let mut ready_sender = Some(ready_sender);
+        while let Some(line) = lines.next_line().await? {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&line);
+            if let Some(address) = ready_address_from_log(&line)
+                && let Some(sender) = ready_sender.take()
+            {
+                let _ignored_receiver_closed = sender.send(address);
+            }
+        }
+        Ok(output)
+    });
+    (ready_receiver, task)
+}
+
+#[cfg(unix)]
+fn ready_address_from_log(line: &str) -> Option<SocketAddrV4> {
+    let document: serde_json::Value = serde_json::from_str(line).ok()?;
+    let fields = document.get("fields")?;
+    if fields.get("diagnostic_id")?.as_str()? != "POKECON-RUNTIME-0001" {
+        return None;
+    }
+    let address = fields.get("listen_address")?.as_str()?.parse().ok()?;
+    match address {
+        SocketAddr::V4(address) if address.ip().is_loopback() && address.port() != 0 => {
+            Some(address)
+        }
+        SocketAddr::V4(_) | SocketAddr::V6(_) => None,
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn readiness_log_accepts_only_usable_ipv4_loopback_addresses() {
+    let valid = serde_json::json!({
+        "fields": {
+            "diagnostic_id": "POKECON-RUNTIME-0001",
+            "listen_address": "127.0.0.1:43210",
+        },
+    })
+    .to_string();
+    assert_eq!(
+        ready_address_from_log(&valid),
+        Some(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 43_210))
+    );
+
+    for rejected in [
+        "not-json".to_owned(),
+        serde_json::json!({
+            "fields": {
+                "diagnostic_id": "POKECON-RUNTIME-9999",
+                "listen_address": "127.0.0.1:43210",
+            },
+        })
+        .to_string(),
+        serde_json::json!({
+            "fields": {
+                "diagnostic_id": "POKECON-RUNTIME-0001",
+                "listen_address": "127.0.0.1:0",
+            },
+        })
+        .to_string(),
+        serde_json::json!({
+            "fields": {
+                "diagnostic_id": "POKECON-RUNTIME-0001",
+                "listen_address": "192.0.2.1:43210",
+            },
+        })
+        .to_string(),
+        serde_json::json!({
+            "fields": {
+                "diagnostic_id": "POKECON-RUNTIME-0001",
+                "listen_address": "[::1]:43210",
+            },
+        })
+        .to_string(),
+    ] {
+        assert_eq!(ready_address_from_log(&rejected), None, "{rejected}");
+    }
+}
+
+#[cfg(unix)]
+async fn wait_for_ready_address(
+    child: &mut tokio::process::Child,
+    ready_address: oneshot::Receiver<SocketAddrV4>,
+) -> SocketAddrV4 {
+    match timeout(Duration::from_secs(10), ready_address).await {
+        Ok(Ok(address)) => address,
+        Ok(Err(_closed)) => {
+            let status = child
+                .try_wait()
+                .expect("process status must be readable after stdout closes");
+            if status.is_none() {
+                child
+                    .start_kill()
+                    .expect("stdout-closed process must be terminated");
+                child
+                    .wait()
+                    .await
+                    .expect("stdout-closed process must be reaped");
+            }
+            panic!("PokeCon stdout closed before readiness: {status:?}");
+        }
+        Err(_elapsed) => {
+            child
+                .start_kill()
+                .expect("timed-out process must be terminated");
+            child
+                .wait()
+                .await
+                .expect("terminated process must be reaped");
+            panic!("PokeCon did not publish its ephemeral listen address");
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn wait_until_listening(child: &mut tokio::process::Child, address: SocketAddrV4) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         if timeout(Duration::from_millis(100), TcpStream::connect(address))

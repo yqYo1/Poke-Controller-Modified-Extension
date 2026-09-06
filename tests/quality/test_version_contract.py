@@ -1,6 +1,7 @@
 import hashlib
 import importlib
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -252,79 +253,78 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     aggregate_check = flake.split("            check = mkTask {", maxsplit=1)[1].split(
         "\n            };", maxsplit=1
     )[0]
+    rust_check = flake.split(
+        "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
+    )[1].split("          contractSyncCheck =", maxsplit=1)[0]
+    compatibility_check = flake.split(
+        "          compatibilityCorpusCheck =", maxsplit=1
+    )[1].split("          rustCoreDrvPath =", maxsplit=1)[0]
     assert "${cliHelpCheck.program}" not in aggregate_check
     assert "packaged CLI and UI use dedicated apps" in aggregate_check
 
-    regular_build = "cargo build --locked --workspace --all-features"
-    workspace_clippy = (
-        "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"
+    workspace_clippy = "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings"
+    workspace_test = (
+        "cargo test --locked --workspace --all-features --no-run \\\n"
+        "                --message-format=json-render-diagnostics"
     )
-    workspace_test = "cargo test --locked --workspace --all-features"
     assert "reclaimPerRunCargoTarget" not in flake
     assert "cargo clean" not in flake
     linux_only_lld_export = (
         "${lib.optionalString pkgs.stdenv.isLinux "
         "\"export RUSTFLAGS='-C link-arg=-Wl,--threads=1'\"}"
     )
-    dev_debug_export = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
-    test_debug_export = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
+    dev_debug_export = "export CARGO_PROFILE_DEV_DEBUG="
+    test_debug_export = "export CARGO_PROFILE_TEST_DEBUG=0"
     test_uv_export = 'export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"'
     api_type_check = "scripts/quality/generate-api-types.sh --check-types-only"
-    targeted_contract_test = (
-        "cargo test --locked --package pokecon \\\n"
-        "                  --features integration-test-support,contract-generator \\\n"
-        "                  --test contract_sync"
-    )
-    aggregate_workspace_builds = tuple(
-        line.strip()
-        for line in aggregate_check.splitlines()
-        if "cargo build " in line and "--workspace" in line
-    )
-    assert aggregate_workspace_builds == (regular_build,)
-    assert aggregate_check.count(workspace_clippy) == 1
-    assert aggregate_check.count(workspace_test) == 1
+    assert "cargo build " not in aggregate_check
+    assert workspace_clippy not in aggregate_check
+    assert workspace_test not in aggregate_check
+    assert "cargo build " not in rust_check
+    assert rust_check.count(workspace_clippy) == 1
+    assert rust_check.count(workspace_test) == 1
+    assert rust_check.count("${setupUvLinks}") == 1
+    assert aggregate_check.count("${realizeRustCiCore}") == 1
+    assert "rustTaskInputs" not in aggregate_check
+    assert "${setupQualityWorkdir}" in aggregate_check
+    assert "${setupWorkdir}" not in aggregate_check
     assert aggregate_check.count("--jobs 1") == 0
-    assert aggregate_check.count("--threads=1") == 1
-    assert aggregate_check.count(dev_debug_export) == 1
-    assert aggregate_check.count(test_debug_export) == 1
+    assert rust_check.count("--threads=1") == 1
+    assert dev_debug_export not in rust_check
+    assert rust_check.count(test_debug_export) == 1
     assert aggregate_check.count(test_uv_export) == 1
-    assert aggregate_check.count(targeted_contract_test) == 0
-    assert flake.count(targeted_contract_test) == 1
+    assert "cargo test" not in aggregate_check
+    assert "cargo test" not in compatibility_check
     assert "cargo run --locked --package pokecon --bin generate_contracts" not in (
         aggregate_check
     )
     assert aggregate_check.count(api_type_check) == 1
     assert (
         aggregate_check.index(test_uv_export)
-        < aggregate_check.index(dev_debug_export)
-        < aggregate_check.index(test_debug_export)
-        < aggregate_check.index(linux_only_lld_export)
-        < aggregate_check.index(regular_build)
-        < aggregate_check.index(workspace_clippy)
-        < aggregate_check.index(workspace_test)
+        < aggregate_check.index("${realizeRustCiCore}")
         < aggregate_check.index(api_type_check)
+    )
+    assert (
+        rust_check.index("${setupUvLinks}")
+        < rust_check.index(test_debug_export)
+        < rust_check.index(linux_only_lld_export)
+        < rust_check.index(workspace_test)
+        < rust_check.index(workspace_clippy)
     )
 
     for compatibility_binary in (
-        '--compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility"',
-        '--worker "$CARGO_TARGET_DIR/debug/pokecon-worker"',
+        '--compatibility-binary "${rustCoreCheck}/libexec/pokecon-compatibility"',
+        '--worker "${rustCoreCheck}/libexec/pokecon-worker"',
     ):
-        assert aggregate_check.count(compatibility_binary) == 1
-        assert aggregate_check.index(workspace_clippy) < aggregate_check.index(
-            compatibility_binary
-        )
+        assert compatibility_check.count(compatibility_binary) == 1
 
     all_workspace_builds = tuple(
         line.strip()
         for line in flake.splitlines()
         if "cargo build " in line and "--workspace" in line
     )
-    assert all_workspace_builds == (
-        regular_build,
-        regular_build,
-        regular_build,
-        regular_build,
-    )
+    development_build = "cargo build --locked --workspace --all-features"
+    assert all_workspace_builds == (development_build,)
     assert flake.count("--threads=1") == 1
 
     assert "ruff check --config ruff.toml --no-cache python scripts tests" not in (
@@ -339,6 +339,103 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     assert flake.count("ruff-format.enable = true;") == 1
 
 
+def test_native_rtc_tests_use_test_only_loopback_candidates() -> None:
+    root = Path(__file__).resolve().parents[2]
+    flake = (root / "flake.nix").read_text(encoding="utf-8")
+    webrtc = (root / "rust/pokecon/src/server/webrtc.rs").read_text(encoding="utf-8")
+    websocket = (root / "rust/pokecon/src/server/websocket.rs").read_text(
+        encoding="utf-8"
+    )
+    rust_check = flake.split(
+        "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
+    )[1].split("          contractSyncCheck =", maxsplit=1)[0]
+
+    for loopback_setting in (
+        "#[cfg(test)]\n    let api_builder = {",
+        "let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();",
+        "setting_engine.set_include_loopback_candidate(true);",
+        "setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback()));",
+        "api_builder.with_setting_engine(setting_engine)",
+    ):
+        assert webrtc.count(loopback_setting) == 1
+    assert webrtc.count("create_peer_connection(") == 3
+    assert websocket.count("create_peer_connection(") == 1
+    assert "acquire_loopback_test_lock" not in webrtc
+    assert "acquire_loopback_test_lock" not in websocket
+    assert rust_check.count("__darwinAllowLocalNetworking = pkgs.stdenv.isDarwin;") == 1
+    assert rust_check.count("cargo test --locked --workspace --all-features") == 1
+    for escaped_test in (
+        "--skip server::webrtc::tests::loopback_transports_h264_and_isolated_data_channels",
+        "--skip server::websocket::tests::realtime_connection_promotes_atomically_and_falls_back_without_closing_signaling",
+        "pokecon-lib-tests",
+    ):
+        assert escaped_test not in flake
+
+
+def test_rust_ci_split_executes_every_declared_non_contract_target_once() -> None:
+    root = Path(__file__).resolve().parents[2]
+    flake = (root / "flake.nix").read_text(encoding="utf-8")
+    manifest = _read_toml(root / "rust/pokecon/Cargo.toml")
+    workspace_manifest = _read_toml(root / "Cargo.toml")
+    declared_tests = {test["name"] for test in manifest["test"]}
+    rust_check = flake.split(
+        "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
+    )[1].split("          contractSyncCheck =", maxsplit=1)[0]
+    inventory_contract = rust_check.split(
+        "                def expected_targets: [", maxsplit=1
+    )[1].split("                ];", maxsplit=1)[0]
+    inventory_target_list = re.findall(
+        r'^\s+name: "([a-z0-9_]+)",$', inventory_contract, flags=re.MULTILINE
+    )
+    inventory_targets = set(inventory_target_list)
+    execution = rust_check.split(
+        "# Execute the lib harness and every non-contract integration harness",
+        maxsplit=1,
+    )[1].split("cargo clippy --locked", maxsplit=1)[0]
+
+    assert inventory_targets == {"pokecon", *declared_tests}
+    assert len(inventory_target_list) == len(inventory_targets)
+    assert workspace_manifest["workspace"]["members"] == ["rust/pokecon"]
+    assert workspace_manifest["workspace"]["default-members"] == ["rust/pokecon"]
+    assert manifest["lib"]["doctest"] is False
+    assert all(binary.get("test") is False for binary in manifest["bin"])
+    assert "example" not in manifest
+    assert "bench" not in manifest
+    assert rust_check.count("--no-run") == 1
+    assert rust_check.count("--message-format=json-render-diagnostics") == 1
+    assert rust_check.count("--all-targets") == 1
+    assert rust_check.count("cargo test --locked") == 1
+    assert "--doc" not in rust_check
+    assert 'select(.name != "contract_sync")' in execution
+    assert '"$test_executable"' in execution
+    assert 'if [ "$executed_test_count" -ne 9 ]; then' in execution
+    assert rust_check.count('install -m 0555 "$contract_test_executable"') == 1
+    assert "src = rustCoreTestSource;" in rust_check
+
+    rustdoc_code_fences = [
+        f"{source.relative_to(root)}:{line_number}"
+        for source in sorted((root / "rust/pokecon").rglob("*.rs"))
+        for line_number, line in enumerate(
+            source.read_text(encoding="utf-8").splitlines(), start=1
+        )
+        if "```" in line or "~~~" in line
+    ]
+    assert rustdoc_code_fences == []
+
+    contract_check = flake.split("          contractSyncCheck =", maxsplit=1)[1].split(
+        "          compatibilityCorpusCheck =", maxsplit=1
+    )[0]
+    assert "src = rustTestSource;" in contract_check
+    assert 'export POKECON_CONTRACT_TEST_ROOT="$PWD"' in contract_check
+    assert '"${rustCoreCheck}/libexec/contract-sync"' in contract_check
+
+    contract_source = (root / "rust/pokecon/tests/contract_sync.rs").read_text(
+        encoding="utf-8"
+    )
+    assert "include_str!" not in contract_source
+    assert 'env::var_os("POKECON_CONTRACT_TEST_ROOT")' in contract_source
+
+
 def test_aggregate_check_runtime_inputs_include_exactly_one_jq() -> None:
     root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
@@ -346,7 +443,7 @@ def test_aggregate_check_runtime_inputs_include_exactly_one_jq() -> None:
         "\n            };", maxsplit=1
     )[0]
     runtime_inputs = aggregate_check.split(
-        "              runtimeInputs = rustTaskInputs ++ [", maxsplit=1
+        "              runtimeInputs = [", maxsplit=1
     )[1].split("\n              ];", maxsplit=1)[0]
     runtime_input_names = tuple(
         line.strip() for line in runtime_inputs.splitlines() if line.strip()
@@ -358,8 +455,11 @@ def test_aggregate_check_runtime_inputs_include_exactly_one_jq() -> None:
         "bun",
         "pkgs.check-jsonschema",
         "pkgs.diffutils",
+        "pkgs.git",
+        "pkgs.gnugrep",
         "pkgs.jq",
         "pkgs.markdownlint-cli",
+        "pythonEnv",
         "pythonPackageBuildUv",
         "pkgs.ripgrep",
         "pkgs.shellcheck",

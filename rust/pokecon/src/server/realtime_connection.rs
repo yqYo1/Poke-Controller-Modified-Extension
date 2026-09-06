@@ -1,5 +1,8 @@
 //! Per-WebSocket orchestration of WebRTC signaling, media failover, and input
 //! generation handoffs.
+//! Bounded queues: control `DataChannel` (ordered, reliable) outranks log
+//! `DataChannel` (bounded drop); motion JPEG is latest-only; handoff generation
+//! is serialized and never blocks camera/serial/script paths.
 
 use std::future;
 use std::net::Ipv6Addr;

@@ -96,7 +96,7 @@ impl fmt::Debug for ResolvedValue {
     }
 }
 
-/// Complete 78-setting snapshot.
+/// Complete settings snapshot.
 #[derive(Clone)]
 pub struct ResolvedSettings {
     registry: SettingsRegistry,
@@ -1972,7 +1972,7 @@ mod tests {
         let loaded = SettingsPipeline::new(request(&temp, &["pokecon"], &[]))
             .load()
             .expect("pipeline must resolve");
-        assert_eq!(loaded.settings.values().len(), 78);
+        assert_eq!(loaded.settings.values().len(), 79);
         let names = loaded
             .settings
             .registry()
@@ -1980,6 +1980,6 @@ mod tests {
             .iter()
             .map(|setting| setting.surfaces.env.name.as_str())
             .collect::<BTreeSet<_>>();
-        assert_eq!(names.len(), 78);
+        assert_eq!(names.len(), 79);
     }
 }

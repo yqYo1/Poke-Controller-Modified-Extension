@@ -128,6 +128,7 @@
 ---@field callback_soft_timeout_ms integer
 
 ---@class PokeconOptInput
+---@field allow_manual_intervention boolean
 ---@field keyboard_enabled boolean
 ---@field left_stick_mouse_enabled boolean
 ---@field right_stick_mouse_enabled boolean

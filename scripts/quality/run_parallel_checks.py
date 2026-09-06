@@ -1,4 +1,4 @@
-"""Run two independent verification commands concurrently with bounded cleanup."""
+"""Run independent verification commands concurrently with bounded cleanup."""
 
 from __future__ import annotations
 
@@ -54,35 +54,43 @@ class TerminationRequested(Exception):
 def usage() -> NoReturn:
     print(
         "usage: run_parallel_checks.py "
-        "LABEL COMMAND [ARG ...] --next LABEL COMMAND [ARG ...]",
+        "LABEL COMMAND [ARG ...] --next LABEL COMMAND [ARG ...] [--next ...]",
         file=sys.stderr,
     )
     raise SystemExit(2)
 
 
-def parse_arguments(arguments: Sequence[str]) -> tuple[CheckSpec, CheckSpec]:
+def parse_arguments(arguments: Sequence[str]) -> tuple[CheckSpec, ...]:
     if len(arguments) < 5:
         usage()
-    try:
-        delimiter = arguments.index("--next", 1)
-    except ValueError:
-        usage()
-    if delimiter < 2 or delimiter + 2 >= len(arguments):
+
+    command_arguments: list[Sequence[str]] = []
+    command_start = 0
+    for index, argument in enumerate(arguments):
+        if argument != "--next":
+            continue
+        command_arguments.append(arguments[command_start:index])
+        command_start = index + 1
+    command_arguments.append(arguments[command_start:])
+    if len(command_arguments) < 2 or any(
+        len(command) < 2 for command in command_arguments
+    ):
         usage()
 
-    first = CheckSpec(arguments[0], tuple(arguments[1:delimiter]))
-    second = CheckSpec(arguments[delimiter + 1], tuple(arguments[delimiter + 2 :]))
-    for check in (first, second):
+    checks = tuple(
+        CheckSpec(command[0], tuple(command[1:])) for command in command_arguments
+    )
+    for check in checks:
         if SAFE_LABEL.fullmatch(check.label) is None:
             print(
                 f"parallel check label is not a safe log name: {check.label}",
                 file=sys.stderr,
             )
             raise SystemExit(2)
-    if first.label == second.label:
+    if len({check.label for check in checks}) != len(checks):
         print("parallel check labels must be distinct", file=sys.stderr)
         raise SystemExit(2)
-    return first, second
+    return checks
 
 
 def request_termination(signum: int, _frame: FrameType | None) -> NoReturn:
@@ -220,7 +228,7 @@ def replay_logs(checks: Sequence[RunningCheck], statuses: Sequence[int]) -> None
 
 
 def launch_checks(
-    specs: tuple[CheckSpec, CheckSpec],
+    specs: Sequence[CheckSpec],
     log_directory: Path,
     running: list[RunningCheck],
 ) -> tuple[CheckSpec, OSError] | None:
@@ -238,7 +246,7 @@ def launch_checks(
     return launch_error
 
 
-def run_checks(specs: tuple[CheckSpec, CheckSpec]) -> int:
+def run_checks(specs: Sequence[CheckSpec]) -> int:
     with TemporaryDirectory(prefix="pokecon-parallel-checks.") as temporary:
         log_directory = Path(temporary)
         running: list[RunningCheck] = []

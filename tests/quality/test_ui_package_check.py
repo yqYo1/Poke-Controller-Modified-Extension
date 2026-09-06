@@ -166,7 +166,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "72a4ffeeb40de1af2621a2c159b13f8886c5f35c7eed8bc716e77e8657def2da",
+    "rust/pokecon": "2792deb76814f512fe15f39ca21a157b1a5a332013aec31f03909c128dca209e",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -258,18 +258,27 @@ license.workspace = true
 repository.workspace = true
 build = "build.rs"
 
+[lib]
+doctest = false
+
 [[bin]]
 name = "pokecon"
 path = "src/main.rs"
+test = false
+bench = false
 
 [[bin]]
 name = "pokecon-worker"
 path = "src/bin/worker.rs"
+test = false
+bench = false
 required-features = ["worker-binary"]
 
 [[bin]]
 name = "pokecon-compatibility"
 path = "src/bin/compatibility.rs"
+test = false
+bench = false
 required-features = ["compatibility-tool"]
 
 [[bin]]
@@ -282,11 +291,15 @@ required-features = ["worker-test-fixture"]
 [[bin]]
 name = "generate_contracts"
 path = "src/bin/generate_contracts.rs"
+test = false
+bench = false
 required-features = ["contract-generator"]
 
 [[bin]]
 name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
+test = false
+bench = false
 required-features = ["contract-generator"]
 
 [[test]]
@@ -331,7 +344,7 @@ required-features = ["integration-test-support", "worker-binary"]
 [[test]]
 name = "startup"
 path = "tests/startup.rs"
-required-features = ["worker-binary"]
+required-features = ["integration-test-support", "worker-binary"]
 
 [[test]]
 name = "worker_startup"
@@ -1615,9 +1628,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": (
-            "2d4389264bc9e1f99657e1a6b41f8a58dca00c27b98d1dd05d8dc556633573b3"
-        ),
+        "@.gitignore": "617735bd436b0595b26081aa3128a3776f96278cc807c1277b738e44429029f4",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
@@ -2275,7 +2286,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "72d5c7bf57852e65dd3cac09ab86ae1ed6a0d31756f5bdf7b8e7408f8b84db98"
+        == "e7e9022fd8771acd27867489183871e7d0a0ce68a8bbb575e1a0021c5d4a839f"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2465,7 +2476,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
 
     cargo_invocation_root_end = flake.index(
-        "sourceBoundaryPaths =", cargo_invocation_root_start
+        "foundationRegistry =", cargo_invocation_root_start
     )
     cargo_invocation_root = flake[cargo_invocation_root_start:cargo_invocation_root_end]
     assert (
@@ -2481,14 +2492,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert cargo_invocation_root.count('mkdir -p "$out"') == 1
     assert "!(workspaceManifest ? patch) && !(workspaceManifest ? replace)" in flake
 
-    source_filter_start = flake.index(
-        "sourceBoundaryPaths =", cargo_invocation_root_end
-    )
+    source_filter_start = cargo_invocation_root_end
     source_filter_end = flake.index("productionRoutingAuditTest =", source_filter_start)
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "544b622bb01b0df470f9732fa1b36bb401a2e0b8db6ee780031f215aef36c461"
+        == "978936a7104aca0c862674285018c4a678e8507535551c67361142e8d8c73bbc"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")
@@ -2517,6 +2526,8 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "normalizedPaths ++ normalizedExcludedPaths",
         'name = "pokecon-product-source";',
         'name = "pokecon-release-source";',
+        'name = "pokecon-rust-core-test-source";',
+        'name = "pokecon-compatibility-check-source";',
         'name = "pokecon-rust-test-source";',
         'name = "pokecon-web-source";',
         'name = "pokecon-api-source";',
@@ -2536,8 +2547,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     release_boundary_start = source_filter_section.index(
         "release = product ++ [", product_boundary_start
     )
+    rust_core_boundary_start = source_filter_section.index(
+        "rustCoreTest = product ++ [", release_boundary_start
+    )
+    compatibility_boundary_start = source_filter_section.index(
+        "compatibilityCheck = [", rust_core_boundary_start
+    )
     rust_test_boundary_start = source_filter_section.index(
-        "rustTest = product ++ [", release_boundary_start
+        "rustTest = product ++ [", compatibility_boundary_start
     )
     product_boundary = source_filter_section[
         product_boundary_start:release_boundary_start
@@ -2556,7 +2573,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ):
         assert test_only_product_input not in product_boundary
     release_boundary = source_filter_section[
-        release_boundary_start:rust_test_boundary_start
+        release_boundary_start:rust_core_boundary_start
     ]
     for release_input in (
         '"README.md"',
@@ -2564,6 +2581,39 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         '"uv.lock"',
     ):
         assert release_boundary.count(release_input) == 1, release_input
+    rust_core_boundary = source_filter_section[
+        rust_core_boundary_start:compatibility_boundary_start
+    ]
+    for rust_core_input in (
+        '"generated/lua"',
+        '"python/pokecon/typings"',
+        '"rust/pokecon/tests"',
+        '"rust-toolchain.toml"',
+    ):
+        assert rust_core_boundary.count(rust_core_input) == 1, rust_core_input
+    for broad_contract_input in (
+        '".github/workflows/normal-ci.yml"',
+        '"SPECIFICATION.md"',
+        '"flake.nix"',
+        '"scripts/ci/timing.py"',
+    ):
+        assert broad_contract_input not in rust_core_boundary
+    compatibility_boundary = source_filter_section[
+        compatibility_boundary_start:rust_test_boundary_start
+    ]
+    for compatibility_input in (
+        '"compatibility/candidates.json"',
+        '"compatibility/fixed-manifest.json"',
+        '"compatibility/fixed-results.json"',
+        '"compatibility/promotions.jsonl"',
+        '"rust/pokecon/registry/compatibility.json"',
+        '"scripts/compatibility/inventory.py"',
+        '"scripts/compatibility/promote.py"',
+        '"scripts/compatibility/runner.py"',
+    ):
+        assert compatibility_boundary.count(compatibility_input) == 1, (
+            compatibility_input
+        )
     rust_test_boundary_end = source_filter_section.index(
         'web = [ "web" ];', rust_test_boundary_start
     )
@@ -2573,11 +2623,67 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     for rust_test_input in (
         '"generated"',
         '"python/pokecon/typings"',
+        '"rust/pokecon/registry/acceptance-record.schema.json"',
+        '"rust/pokecon/registry/ci.json"',
+        '"rust/pokecon/registry/compatibility.json"',
+        '"rust/pokecon/registry/foundation.json"',
+        '"rust/pokecon/registry/generation.json"',
         '"rust/pokecon/tests"',
-        '"scripts"',
+        '"scripts/__init__.py"',
+        '"scripts/ci/aggregate.py"',
+        '"scripts/ci/regions.py"',
+        '"scripts/ci/timing.py"',
+        '"scripts/compatibility"',
         '"web/src/lib/api"',
     ):
         assert rust_test_boundary.count(rust_test_input) == 1, rust_test_input
+    optional_boundary_start = source_filter_section.index(
+        "optionalSourceBoundaryPaths =", rust_test_boundary_end
+    )
+    optional_compatibility_start = source_filter_section.index(
+        "compatibilityCheck = [", optional_boundary_start
+    )
+    optional_compatibility_end = source_filter_section.index(
+        "];", optional_compatibility_start
+    )
+    optional_compatibility_boundary = source_filter_section[
+        optional_compatibility_start:optional_compatibility_end
+    ]
+    assert optional_compatibility_boundary.count('"compatibility/results"') == 1
+    assert (
+        source_filter_section.count(
+            "optionalPaths = optionalSourceBoundaryPaths.compatibilityCheck;"
+        )
+        == 1
+    )
+    optional_rust_test_start = source_filter_section.index(
+        "rustTest = [", optional_boundary_start
+    )
+    optional_rust_test_end = source_filter_section.index(
+        "++ resolvedRustTestTombstonePaths;", optional_rust_test_start
+    ) + len("++ resolvedRustTestTombstonePaths;")
+    optional_rust_test_boundary = source_filter_section[
+        optional_rust_test_start:optional_rust_test_end
+    ]
+    for resolved_tombstone_proof in (
+        "resolvedRustTestTombstonePaths = lib.concatMap",
+        'entry.status == "resolved"',
+        '!(lib.hasInfix "*" path)',
+        'lib.hasInfix "/" path || entry.id == "legacy_release_crates"',
+        ") foundationRegistry.path_audit;",
+        "rustTest = [",
+        "++ resolvedRustTestTombstonePaths;",
+    ):
+        assert source_filter_section.count(resolved_tombstone_proof) == 1
+    assert optional_rust_test_boundary.count("resolvedRustTestTombstonePaths") == 1
+    assert (
+        flake.count(
+            'builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash'
+        )
+        == 1
+    )
+    assert 'builtins.hashFile "sha256" filteredAuditTest' not in flake
+    assert flake.count("expectedAuditTestHash =") == 1
 
     workspace_provenance_start = flake.index(
         "workspaceMemberPaths =", source_filter_end
@@ -2590,7 +2696,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "9cf9214f3a6f0d41bd0b4ff56ef90d6fd177135ba10c9418bcaade53a71ae460"
+        == "baa58d01acf676019c6a668c91266bc11139ac984b913bf92db7fb5b7afe51e3"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -2614,7 +2720,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(controlled_manifest_section.strip().encode()).hexdigest()
-        == "ed2b3d8368efd6ce6ce26084f7081de8b69cd7577f3f9d46166589f9b824c665"
+        == "dca0cef5861be8dd886266a193aef7cd83259f327b787eca548ca91fe2ccbdb0"
     )
     for exact_overlay_path, expected_count in (
         ('path = "${pokeconProductSource}/rust/pokecon/src/lib.rs"', 2),
@@ -2663,7 +2769,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     audit_section = flake[audit_start:audit_end]
     assert (
         hashlib.sha256(audit_section.strip().encode()).hexdigest()
-        == "dcde20876dd28e62584906428d9a8a2b6f38c6806807e6dc3168c58db08b7c8a"
+        == "2b8a056da9c0e38e5230970d7a14bff2b502e044107f73934d2214b7751165c5"
     )
     assert (
         audit_section.count('pkgs.runCommand "pokecon-production-routing-audit"') == 1
@@ -2676,6 +2782,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         == 1
     )
     assert audit_section.count('touch "$out/passed"') == 1
+    for lazy_audit_proof in (
+        "productionRoutingAuditDrvPath =",
+        "builtins.unsafeDiscardOutputDependency productionRoutingAudit.drvPath",
+        "realizeProductionRoutingAudit =",
+        '"${pkgs.nix}/bin/nix-store" --realise "${productionRoutingAuditDrvPath}"',
+        "production routing audit returned an invalid result",
+    ):
+        assert audit_section.count(lazy_audit_proof) == 1
     for audit_harness_proof in (
         '"${pythonEnv}/bin/python" -I -m pytest',
         '-c "${auditPytestConfig}"',
@@ -2686,6 +2800,17 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ):
         assert audit_section.count(audit_harness_proof) == 1
     assert "export PYTHONPATH=" not in audit_section
+    for filtered_audit_hash_proof in (
+        '"${pkgs.coreutils}/bin/sha256sum" -- "${productionRoutingAuditTest}"',
+        "filtered_audit_hash=\"''${filtered_audit_hash%% *}\"",
+        'if [ "$filtered_audit_hash" != "${expectedAuditTestHash}" ]; then',
+        "filtered production routing audit test changed",
+        "unset filtered_audit_hash",
+    ):
+        assert audit_section.count(filtered_audit_hash_proof) == 1
+    assert audit_section.index('filtered_audit_hash="$(') < audit_section.index(
+        'cd "${repositorySource}"'
+    )
     for directory_lock_probe_proof in (
         "pkgs.util-linux",
         'exec {artifact_directory_lock_probe_fd}< "$artifact_directory_lock_probe"',
@@ -2713,7 +2838,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_runner_section = flake[mutation_runner_start:mutation_runner_end]
     assert (
         hashlib.sha256(mutation_runner_section.strip().encode()).hexdigest()
-        == "d99000bc5940e39d7c4dfd35ea2056f6ca000c132a2dc689dd8e4399f97af9b2"
+        == "7ed7922d2d032735fa3f1b088b9b15e9a5c2c6f80e6b344219df69b2d28e401b"
     )
     for mutation_runner_proof in (
         'name = "pokecon-production-routing-mutation-audit";',
@@ -2741,7 +2866,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "--import-mode=importlib",
         "-p no:cacheprovider",
         '"$mutation_test"',
-        "Running 394 production-routing mutations across $mutation_worker_count process shards",
+        "Running 395 production-routing mutations across $mutation_worker_count process shards",
     ):
         assert mutation_runner_proof in mutation_runner_section, mutation_runner_proof
     assert (
@@ -2779,7 +2904,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     mutation_audit_section = flake[mutation_audit_start:mutation_audit_end]
     assert (
         hashlib.sha256(mutation_audit_section.strip().encode()).hexdigest()
-        == "1c68ae8ae0e4ea1f2951a7aad951edba2a090045fe8ff4595a96af17377ea335"
+        == "4ecf5faf5438233f9d411a6b2d9105cef4b7a9189da471589533fbfdbfbb634b"
     )
     assert (
         mutation_audit_section.count(
@@ -2792,6 +2917,17 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert "nativeBuildInputs = [ productionRoutingMutationAuditRunner ];" in (
         mutation_audit_section
     )
+    for mutation_audit_realization_proof in (
+        "productionRoutingMutationAuditDrvPath =",
+        "builtins.unsafeDiscardOutputDependency "
+        "productionRoutingMutationAudit.drvPath;",
+        "realizeProductionRoutingMutationAudit =",
+        '"${pkgs.nix}/bin/nix-store" --realise '
+        '"${productionRoutingMutationAuditDrvPath}"',
+        "production routing mutation audit realization failed",
+        "production routing mutation audit returned an invalid result",
+    ):
+        assert mutation_audit_section.count(mutation_audit_realization_proof) == 1
     assert '"${pythonEnv}/bin/python"' not in mutation_audit_section
     assert flake.count("checks.production-routing-mutation-audit =") == 1
     assert flake.count("test-production-routing-mutations =") == 1
@@ -3101,7 +3237,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         == 2
     )
 
-    setup_workdir_end = flake.index("linuxDesktopPackages =", setup_workdir_start)
+    setup_workdir_end = flake.index("setupQualityWorkdir =", setup_workdir_start)
     setup_workdir = flake[setup_workdir_start:setup_workdir_end]
     assert (
         hashlib.sha256(setup_workdir.strip().encode()).hexdigest()
@@ -3122,6 +3258,31 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "            ${assertNoCargoConfigAncestors}\n"
         "          '';"
     ) in setup_workdir
+
+    quality_workdir_end = flake.index("linuxDesktopPackages =", setup_workdir_end)
+    quality_workdir = flake[setup_workdir_end:quality_workdir_end]
+    assert (
+        hashlib.sha256(quality_workdir.strip().encode()).hexdigest()
+        == "737d40697d0fe179cbc73954ff0a9d5a1be41d5e58ace99ea6d213d9fd3eadff"
+    )
+    for quality_workdir_proof in (
+        "setupQualityWorkdir =",
+        "${setupSourceGateEnvironment}",
+        "cleanup_quality_workdir()",
+        "quality_cleanup_status=0",
+        "pokecon-quality-workdir.XXXXXXXX",
+        'cp -a "${repositorySource}/." "$workdir/"',
+        'chmod -R u+w "$workdir"',
+        'cd "$workdir"',
+    ):
+        assert quality_workdir.count(quality_workdir_proof) == 1
+    for forbidden_quality_workdir_proof in (
+        "${discoverRustWorktree}",
+        "${setupIsolatedCargoHome}",
+        "${setupPerRunCargoTarget}",
+        "${setupUvLinks}",
+    ):
+        assert forbidden_quality_workdir_proof not in quality_workdir
 
     web_dependencies_start = flake.index(
         "webBunDependencies = pkgs.stdenvNoCC.mkDerivation"
@@ -3237,7 +3398,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(core_package_section.strip().encode()).hexdigest()
-        == "9081add73eb7787680347e62b5e7859a6c35691621c27fa19918449d40ea2743"
+        == "fef58d07c94acf7a1f10fab37e1b8fb6cd2c221505cc48cf78987feea0a9e847"
     )
     assert core_package_section.count("${installControlledCargoManifests}") == 2
     assert core_package_section.count('"--locked"') == 1
@@ -3249,7 +3410,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert "repositorySource" not in core_package_section
     assert "rustTestSource" not in core_package_section
     assert core_package_section.count("src = pokeconProductSource;") == 1
-    assert core_package_section.count("lockFile = controlledCargoLock;") == 1
+    assert core_package_section.count("lockFileContents = canonicalCargoLockText;") == 1
     assert 'RUSTC = "${rustToolchain}/bin/rustc";' in core_package_section
     assert 'RUSTC_WRAPPER = "${pinnedRustcWrapper}";' in core_package_section
     assert "RUSTC_WORKSPACE_WRAPPER" in core_package_section
@@ -3332,11 +3493,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
 
     assert (
         hashlib.sha256(package_section.strip().encode()).hexdigest()
-        == "1ae13f63bbeabb593c4cd4cc14faba7f21d370dd7d4a70025c9b6f0f85467740"
+        == "d5476de6b2998ee64112d8d6fa78eb3e926b85491f04a3cffb0c33e5512b97c5"
     )
     for assembly_proof in (
         'pokeconPackage = pkgs.runCommand "pokecon-${workspaceVersion}"',
-        'test -f "${productionRoutingAudit}/passed"',
         '"${pkgs.coreutils}/bin/cp" -a -- "${pokeconCorePackage}/." "$out/"',
         '"${pkgs.coreutils}/bin/cp" -R -- "${webPackage}/." "$out/web/dist/"',
         '"${pkgs.coreutils}/bin/ln" -s -- ../web "$out/bin/web"',
@@ -3344,6 +3504,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "assembled executable is missing, redirected, or not executable",
     ):
         assert package_section.count(assembly_proof) == 1, assembly_proof
+    assert "productionRoutingAudit" not in package_section
     assert "rustPlatform.buildRustPackage" not in package_section
     assert "cargoBuildFlags" not in package_section
     assert "repositorySource" not in package_section
@@ -3463,7 +3624,10 @@ offline = true
     ):
         assert forbidden_gate_cargo_config not in gate_cargo_config_body
 
-    gate_cargo_home_end = flake.index("cliHelpCheck =", gate_cargo_config_end)
+    compatibility_sources_start = flake.index(
+        "yqyo1CompatibilitySource =", gate_cargo_config_end
+    )
+    gate_cargo_home_end = compatibility_sources_start
     gate_cargo_home_section = flake[gate_cargo_config_end:gate_cargo_home_end]
     assert (
         hashlib.sha256(gate_cargo_home_section.strip().encode()).hexdigest()
@@ -3475,6 +3639,96 @@ offline = true
         )
         == 1
     )
+
+    compatibility_sources_end = flake.index(
+        "rustCoreCheck =", compatibility_sources_start
+    )
+    compatibility_sources_section = flake[
+        compatibility_sources_start:compatibility_sources_end
+    ]
+    assert (
+        hashlib.sha256(compatibility_sources_section.strip().encode()).hexdigest()
+        == "2cd8250398cc95352a8bf3679c80bcbe2b88a219db676d1ca229b5c885cc6d3b"
+    )
+    for compatibility_source_proof in (
+        'name = "pokecon-compatibility-yqyo1-extension";',
+        'url = "https://github.com/yqYo1/Poke-Controller-Modified-Extension.git";',
+        'rev = "dfc13b82cb926b571351265a9333a7e4bc1f8aeb";',
+        'hash = "sha256-zMcizC/LelDv8jcwqxQg0At7T6yNzPwVC8TUl4fJbsk=";',
+        'name = "pokecon-compatibility-futo030-extension";',
+        'url = "https://github.com/futo030/Poke-Controller-Modified-Extension.git";',
+        'rev = "b4d0eff04b1c525d78034ab47b87a7c7ef17089a";',
+        'hash = "sha256-05CeAU/i++sQWr5ohyEWwhZHPdSErehq+eHt55ngTJk=";',
+        'name = "pokecon-compatibility-moi-poke-modified";',
+        'url = "https://github.com/Moi-poke/Poke-Controller-Modified.git";',
+        'rev = "431d0e22dbc6b900efcfb9a72e722a8484c8e4bb";',
+        'hash = "sha256-IOTOmQGL9ZYEPz2RhO9o46zxInBu4HMvB5gW7R9SgrM=";',
+    ):
+        assert compatibility_sources_section.count(compatibility_source_proof) == 1
+    assert compatibility_sources_section.count("pkgs.fetchgit {") == 3
+    assert compatibility_sources_section.count("leaveDotGit = true;") == 3
+
+    rust_ci_check_end = flake.index("cliHelpCheck =", compatibility_sources_end)
+    rust_ci_check_section = flake[compatibility_sources_end:rust_ci_check_end]
+    assert (
+        hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
+        == "b042aca9a9b804454d7dcdc2f544d650641c487e426435d1670200505ba350bb"
+    )
+    for rust_ci_check_proof in (
+        "rustCoreCheck = pkgs.stdenv.mkDerivation {",
+        "src = rustCoreTestSource;",
+        'sourceRoot = "pokecon-rust-core-test-source";',
+        "nativeBuildInputs = rustTaskInputs ++ [ pkgs.jq ];",
+        "__darwinAllowLocalNetworking = pkgs.stdenv.isDarwin;",
+        "${setupUvLinks}",
+        'ln -s -- "${gateCargoConfig}" "$CARGO_HOME/config.toml"',
+        "${rustEnvironmentExports}",
+        "${desktopEnvironment}",
+        "export CARGO_PROFILE_TEST_DEBUG=0",
+        "${lib.optionalString pkgs.stdenv.isLinux \"export RUSTFLAGS='-C link-arg=-Wl,--threads=1'\"}",
+        "Compile the complete test graph once.",
+        "workflow/spec changes do not invalidate this",
+        "Execute the lib harness and every non-contract integration harness",
+        "cargo test --locked --workspace --all-features",
+        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
+        "python -m scripts.compatibility.promote --check",
+        "python -m scripts.compatibility.runner",
+        "export GIT_CONFIG_COUNT=3",
+        "export GIT_CONFIG_KEY_0=safe.directory",
+        'export GIT_CONFIG_VALUE_0="${yqyo1CompatibilitySource}"',
+        '--repository "yqyo1-extension=${yqyo1CompatibilitySource}"',
+        '--repository "futo030-extension=${futo030CompatibilitySource}"',
+        '--repository "moi-poke-modified=${moiCompatibilitySource}"',
+        'touch "$out/passed"',
+        "rustCoreDrvPath = builtins.unsafeDiscardOutputDependency rustCoreCheck.drvPath;",
+        "realizeRustCiCore =",
+        '"${pkgs.nix}/bin/nix-store" --realise',
+        "rust-ci-core returned an invalid result",
+    ):
+        expected_count = {
+            "${desktopEnvironment}": 2,
+            'touch "$out/passed"': 3,
+            '"${pkgs.nix}/bin/nix-store" --realise': 2,
+            "rust-ci-core returned an invalid result": 2,
+        }.get(rust_ci_check_proof, 1)
+        assert rust_ci_check_section.count(rust_ci_check_proof) == expected_count, (
+            rust_ci_check_proof
+        )
+    assert "cargo build " not in rust_ci_check_section
+    assert "CARGO_PROFILE_DEV_DEBUG" not in rust_ci_check_section
+    assert "line-tables-only" not in rust_ci_check_section
+    for forbidden_rust_ci_input in (
+        "repositorySource",
+        "pokeconProductSource",
+        "pokeconReleaseSource",
+        "webPackage",
+        "productionRoutingAudit",
+        "setupWorkdir",
+    ):
+        assert forbidden_rust_ci_input not in rust_ci_check_section
+    assert flake.count("checks.rust-ci-core = rustCoreCheck;") == 1
+    assert flake.count("checks.rust-core-artifacts = rustCoreCheck;") == 1
+    assert flake.count("${realizeRustCiCore}") == 3
     assert (
         gate_cargo_home_section.count(
             '"${pkgs.coreutils}/bin/ln" -s -- "${gateCargoConfig}" "$out/config.toml"'
@@ -3512,10 +3766,17 @@ offline = true
     )
     assert (
         mutation_test_app_section.count(
-            'exec "${productionRoutingMutationAuditRunner}/bin/'
+            '"${productionRoutingMutationAuditRunner}/bin/'
             'pokecon-production-routing-mutation-audit" "$@"'
         )
         == 1
+    )
+    assert "exec " not in mutation_test_app_section
+    assert mutation_test_app_section.count("${setupSourceGateEnvironment}") == 1
+    assert mutation_test_app_section.count('if [ "$#" -eq 0 ]; then') == 1
+    assert mutation_test_app_section.count("${realizeProductionRoutingAudit}") == 2
+    assert (
+        mutation_test_app_section.count("${realizeProductionRoutingMutationAudit}") == 1
     )
 
     development_command_section_boundaries = (
@@ -3578,7 +3839,7 @@ offline = true
     )
     pre_commit_clippy_entry = (
         'entry = "nix run .#cargo -- clippy --locked --workspace '
-        '--all-targets --all-features -- -D warnings";'
+        '--all-targets --all-features --no-deps -- -D warnings";'
     )
     pre_commit_clippy_files = (
         r'files = "(^|/)(Cargo\\.toml|Cargo\\.lock|flake\\.nix|flake\\.lock|'
@@ -3600,19 +3861,15 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "f396c3dcfe5b8ea5a2465cdbeb596a99980a424a17feeaaaa567914a9008a44f"
+        == "10cb869f0e10490dfb47026852b037eba17db658c7c2556db4263afd736dd937"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
-        development_command_sections_text.count(development_provenance_assignment)
-        == len(development_command_section_boundaries) + 2
+        development_command_sections_text.count(development_provenance_assignment) == 5
     )
-    assert (
-        development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE")
-        == len(development_command_section_boundaries) + 2
-    )
-    assert flake.count(development_provenance_assignment) == 18
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
+    assert development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE") == 5
+    assert flake.count(development_provenance_assignment) == 13
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 16
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -3633,32 +3890,18 @@ offline = true
         "cargo": (
             'POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" "$@"',
         ),
-        "rust-ci-core": (
-            "cargo build --locked --workspace --all-features",
-            "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
-            "--workspace --all-targets --all-features -- -D warnings",
-            "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
-            "--workspace --all-features",
-        ),
-        "ci-rust-contracts": (
-            "cargo build --locked --workspace --all-features",
-            "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
-            "cargo test --locked --workspace --all-features",
-        ),
+        "rust-ci-core": (),
+        "ci-rust-contracts": (),
         "clippy": (
             "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
-            "--workspace --all-targets --all-features -- -D warnings",
+            "--workspace --all-targets --all-features --no-deps -- -D warnings",
         ),
         "build-rust": ("cargo build --locked --workspace --all-features",),
         "cargo-test": (
             "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
             "--workspace --all-features",
         ),
-        "check": (
-            "cargo build --locked --workspace --all-features",
-            "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
-            "cargo test --locked --workspace --all-features",
-        ),
+        "check": (),
         "tauri-check": (
             "POKECON_RESOURCE_PROVENANCE=development cargo tauri build "
             "--debug --no-bundle --ci -- --locked",
@@ -3681,10 +3924,7 @@ offline = true
     assert (
         actual_development_cargo_invocations == expected_development_cargo_invocations
     )
-    for command_section_name, build_command_index in (
-        ("rust-ci-core", 0),
-        ("build-rust", 0),
-    ):
+    for command_section_name, build_command_index in (("build-rust", 0),):
         command_section = development_command_sections[command_section_name]
         build_commands = expected_development_cargo_invocations[command_section_name]
         build_command = build_commands[build_command_index]
@@ -3693,69 +3933,89 @@ offline = true
             + build_command
         )
         assert command_section.count(build_with_local_provenance) == 1
-    rust_ci_core_commands = expected_development_cargo_invocations["rust-ci-core"]
     rust_ci_core_section = development_command_sections["rust-ci-core"]
-    assert rust_ci_core_section.count("${setupWorkdir}") == 1
-    assert rust_ci_core_section.count("${desktopEnvironment}") == 1
-    assert rust_ci_core_section.count("export PYTHONDONTWRITEBYTECODE=1") == 1
-    assert rust_ci_core_section.count('export PYTHONPATH="$PWD"') == 1
-    compatibility_promotion = "python -m scripts.compatibility.promote --check"
-    compatibility_runner = "python -m scripts.compatibility.runner"
-    assert rust_ci_core_section.count(compatibility_promotion) == 1
-    assert rust_ci_core_section.count(compatibility_runner) == 1
-    for compatibility_input in (
-        '--compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility"',
-        '--worker "$CARGO_TARGET_DIR/debug/pokecon-worker"',
-        '--site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"',
-    ):
-        assert rust_ci_core_section.count(compatibility_input) == 1
-    assert (
-        rust_ci_core_section.index(rust_ci_core_commands[0])
-        < rust_ci_core_section.index(rust_ci_core_commands[1])
-        < rust_ci_core_section.index(rust_ci_core_commands[2])
-        < rust_ci_core_section.index(compatibility_promotion)
-        < rust_ci_core_section.index(compatibility_runner)
-    )
+    assert rust_ci_core_section.count("${realizeRustCiCore}") == 1
+    assert rust_ci_core_section.count('echo "usage: nix run .#rust-ci-core"') == 1
+    assert "${setupWorkdir}" not in rust_ci_core_section
+    assert "cargo " not in rust_ci_core_section
+    assert "python " not in rust_ci_core_section
+    ci_rust_contracts_section = development_command_sections["ci-rust-contracts"]
+    assert ci_rust_contracts_section.count("${realizeRustCiCore}") == 1
+    assert ci_rust_contracts_section.count("${setupSourceGateEnvironment}") == 1
+    assert ci_rust_contracts_section.count('cd "${repositorySource}"') == 1
+    assert "rustTaskInputs" not in ci_rust_contracts_section
+    assert "${setupWorkdir}" not in ci_rust_contracts_section
+    assert "${desktopEnvironment}" not in ci_rust_contracts_section
+    assert "cargo " not in ci_rust_contracts_section
     check_commands = development_command_sections["check"]
+    assert check_commands.count("${setupQualityWorkdir}") == 1
+    assert "rustTaskInputs" not in check_commands
+    assert "${setupWorkdir}" not in check_commands
+    assert "${desktopEnvironment}" not in check_commands
     ordinary_pytest_marker_expression = (
         '-m "not production_routing_audit and not production_routing_mutation"'
     )
     assert check_commands.count(ordinary_pytest_marker_expression) == 1
-    assert check_commands.count('test -f "${productionRoutingAudit}/passed"') == 1
+    assert 'test -f "${productionRoutingAudit}/passed"' not in check_commands
+    assert check_commands.count("${realizeProductionRoutingAudit}") == 1
+    assert check_commands.count("${realizeProductionRoutingMutationAudit}") == 1
     assert (
-        check_commands.count(
-            '"${productionRoutingMutationAuditRunner}/bin/'
-            'pokecon-production-routing-mutation-audit"'
-        )
-        == 1
+        '"${productionRoutingMutationAuditRunner}/bin/'
+        'pokecon-production-routing-mutation-audit"' not in check_commands
     )
     parallel_checks_start = '                "${pythonEnv}/bin/python" -I \\\n'
     parallel_runner = '"${repositorySource}/scripts/quality/run_parallel_checks.py"'
-    assert check_commands.count(parallel_checks_start) == 2
-    assert check_commands.count(parallel_runner) == 2
+    assert check_commands.count(parallel_checks_start) == 1
+    assert check_commands.count(parallel_runner) == 1
+    lane_labels = (
+        "production-routing-audit",
+        "rust-ci-core",
+        "contracts",
+        "web-and-static",
+        "pytest",
+        "production-routing-mutation-audit",
+    )
+    for lane_label in lane_labels:
+        assert check_commands.count(f"                  {lane_label} \\\n") == 1
+    assert check_commands.count("                  --next \\\n") == len(lane_labels) - 1
+    routing_lane = section(
+        check_commands,
+        "                  production-routing-audit \\\n",
+        "                  --next \\\n                  rust-ci-core \\\n",
+    )
     rust_lane = section(
         check_commands,
-        "                  rust-and-contracts \\\n",
+        "                  rust-ci-core \\\n",
+        "                  --next \\\n                  contracts \\\n",
+    )
+    contracts_lane = section(
+        check_commands,
+        "                  contracts \\\n",
         "                  --next \\\n                  web-and-static \\\n",
     )
     web_lane = section(
         check_commands,
         "                  web-and-static \\\n",
-        parallel_checks_start,
+        "                  --next \\\n                  pytest \\\n",
     )
+    assert "${realizeProductionRoutingAudit}" in routing_lane
+    assert "cargo " not in routing_lane
     for rust_lane_command in (
         '"${pkgs.bash}/bin/bash" -euo pipefail -c',
-        "export POKECON_RESOURCE_PROVENANCE=development",
-        "cargo build --locked --workspace --all-features",
-        "cargo clippy --locked --workspace --all-targets --all-features",
-        "cargo test --locked --workspace --all-features",
-        "python -m scripts.compatibility.promote --check",
-        "python -m scripts.compatibility.runner",
+        "${realizeRustCiCore}",
+    ):
+        assert rust_lane_command in rust_lane
+    assert "cargo " not in rust_lane
+    assert "scripts.compatibility" not in rust_lane
+    for contracts_lane_command in (
+        '"${pkgs.bash}/bin/bash" -euo pipefail -c',
         "check-jsonschema --check-metaschema generated/settings.schema.json",
         "python -m scripts.acceptance.records",
         "scripts/quality/generate-api-types.sh --check-types-only",
     ):
-        assert rust_lane_command in rust_lane
+        assert contracts_lane_command in contracts_lane
+    assert "${realizeRustCiCore}" not in contracts_lane
+    assert "cargo " not in contracts_lane
     for web_lane_command in (
         '"${pkgs.bash}/bin/bash" -euo pipefail -c',
         'cp -R "${webBunDependencies}/node_modules" web/',
@@ -3772,10 +4032,12 @@ offline = true
         assert web_lane_command in web_lane
     assert "cargo " not in web_lane
     assert "bun run --cwd web" not in rust_lane
-    pytest_and_mutation_wave = (
-        '                "${pythonEnv}/bin/python" -I \\\n'
-        '                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \\\n'
-        "                  pytest \\\n"
+    pytest_lane = section(
+        check_commands,
+        "                  pytest \\\n",
+        "                  --next \\\n                  production-routing-mutation-audit \\\n",
+    )
+    pytest_command = (
         "                  python -m pytest \\\n"
         "                  -p no:cacheprovider \\\n"
         "                  -m "
@@ -3783,66 +4045,30 @@ offline = true
         "                  tests \\\n"
         "                  -v \\\n"
         "                  --tb=short \\\n"
-        "                  --next \\\n"
-        "                  production-routing-mutation-audit \\\n"
-        '                  "${productionRoutingMutationAuditRunner}/bin/'
-        'pokecon-production-routing-mutation-audit" \\\n'
-        '                  --workers "$aggregate_mutation_workers"\n'
     )
-    assert check_commands.count(pytest_and_mutation_wave) == 1
-    aggregate_mutation_worker_setup = (
-        'aggregate_mutation_workers="$(nproc)"\n'
-        '                if [ "$aggregate_mutation_workers" -gt 1 ]; then\n'
-        '                  aggregate_mutation_workers="$((aggregate_mutation_workers - 1))"\n'
-        "                fi\n"
-        '                if [ "$aggregate_mutation_workers" -gt 3 ]; then\n'
-        "                  aggregate_mutation_workers=3\n"
-        "                fi"
-    )
-    assert check_commands.count(aggregate_mutation_worker_setup) == 1
-    shared_linker_flags = (
-        "${lib.optionalString pkgs.stdenv.isLinux \"export RUSTFLAGS='-C "
-        "link-arg=-Wl,--threads=1'\"}"
-    )
-    dev_debug_flags = "export CARGO_PROFILE_DEV_DEBUG=line-tables-only"
-    test_debug_flags = "export CARGO_PROFILE_TEST_DEBUG=line-tables-only"
-    aggregate_provenance = f"export {development_provenance_assignment}"
+    assert pytest_lane.count(pytest_command) == 1
+    assert "aggregate_mutation_workers" not in check_commands
     aggregate_api_type_check = (
         "scripts/quality/generate-api-types.sh --check-types-only"
     )
-    targeted_contract_test = (
-        "cargo test --locked --package pokecon \\\n"
-        "                  --features integration-test-support,contract-generator \\\n"
-        "                  --test contract_sync"
-    )
     assert "reclaimPerRunCargoTarget" not in flake
     assert "cargo clean" not in flake
-    assert check_commands.count(shared_linker_flags) == 1
-    assert check_commands.count(dev_debug_flags) == 1
-    assert check_commands.count(test_debug_flags) == 1
-    assert check_commands.count(aggregate_provenance) == 1
+    assert "CARGO_PROFILE_DEV_DEBUG" not in check_commands
+    assert "CARGO_PROFILE_TEST_DEBUG" not in check_commands
+    assert "export RUSTFLAGS=" not in check_commands
+    assert f"export {development_provenance_assignment}" not in check_commands
     assert check_commands.count(aggregate_api_type_check) == 1
     assert (
         "cargo run --locked --package pokecon --bin generate_contracts"
         not in check_commands
     )
     assert "scripts/quality/generate-api-types.sh --check\n" not in check_commands
-    assert check_commands.count(targeted_contract_test) == 0
-    assert flake.count(targeted_contract_test) == 1
+    assert "cargo test" not in check_commands
+    assert flake.count("${realizeContractSync}") == 2
     check_invocations = expected_development_cargo_invocations["check"]
-    assert len(check_invocations) == 3
-    check_build = check_invocations[0]
-    check_clippy = check_invocations[1]
-    check_test = check_invocations[2]
-    assert (
-        check_commands.index(dev_debug_flags)
-        < check_commands.index(test_debug_flags)
-        < check_commands.index(shared_linker_flags)
-        < check_commands.index(aggregate_provenance)
-        < check_commands.index(check_build)
-        < check_commands.index(check_clippy)
-        < check_commands.index(check_test)
-        < check_commands.index(aggregate_api_type_check)
+    assert check_invocations == ()
+    assert check_commands.index("${realizeRustCiCore}") < (
+        check_commands.index(aggregate_api_type_check)
     )
     treefmt_check = (
         '${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"'
@@ -3851,8 +4077,13 @@ offline = true
     assert (
         check_commands.index("python -m scripts.release.gate")
         < check_commands.index(treefmt_check)
-        < check_commands.index("rust-and-contracts")
-        < check_commands.index(pytest_and_mutation_wave)
+        < check_commands.index(parallel_runner)
+        < check_commands.index("production-routing-audit")
+        < check_commands.index("rust-ci-core")
+        < check_commands.index("contracts")
+        < check_commands.index("web-and-static")
+        < check_commands.index("pytest")
+        < check_commands.index("production-routing-mutation-audit")
     )
 
     editor_section = section(
@@ -3873,12 +4104,10 @@ offline = true
         "            contract-check = mkTask {\n",
         "            generate-contracts = mkTask {\n",
     )
-    assert contract_check_section.count(editor_provenance) == 1
+    assert editor_provenance not in contract_check_section
+    assert contract_check_section.count("${realizeContractSync}") == 1
     assert contract_check_section.index(
-        editor_provenance
-    ) < contract_check_section.index(targeted_contract_test)
-    assert contract_check_section.index(
-        editor_provenance
+        "${realizeContractSync}"
     ) < contract_check_section.index(
         "scripts/quality/generate-api-types.sh --check-types-only"
     )
@@ -3937,12 +4166,12 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "8847901780d8fa5fdfbaced0f3a164a3ff3a5850f79275a5f3d5e32a28810ee0"
+        == "4a41ed7b3d82ac729d2ad53053682aafd5b369fdd9e6ca1324aefb93db511e98"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
     assert tauri_section.count("${resetTauriCargoTarget}") == 1
-    assert 'test -f "${productionRoutingAudit}/passed"' in tauri_section
+    assert "productionRoutingAudit" not in tauri_section
     assert 'release_workdir="$gate_home/pokecon-release-workdir"' in tauri_section
     assert 'release_workdir="$CARGO_TARGET_DIR/' not in tauri_section
     assert tauri_section.count('"${pkgs.coreutils}/bin/env" -i') == 0
@@ -4543,17 +4772,26 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         },
     }
     assert "autolib" not in manifest["package"]
-    assert "lib" not in manifest
+    assert manifest["lib"] == {"doctest": False}
     assert manifest["bin"] == [
-        {"name": "pokecon", "path": "src/main.rs"},
+        {
+            "name": "pokecon",
+            "path": "src/main.rs",
+            "test": False,
+            "bench": False,
+        },
         {
             "name": "pokecon-worker",
             "path": "src/bin/worker.rs",
+            "test": False,
+            "bench": False,
             "required-features": ["worker-binary"],
         },
         {
             "name": "pokecon-compatibility",
             "path": "src/bin/compatibility.rs",
+            "test": False,
+            "bench": False,
             "required-features": ["compatibility-tool"],
         },
         {
@@ -4566,11 +4804,15 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         {
             "name": "generate_contracts",
             "path": "src/bin/generate_contracts.rs",
+            "test": False,
+            "bench": False,
             "required-features": ["contract-generator"],
         },
         {
             "name": "generate_openapi",
             "path": "src/bin/generate_openapi.rs",
+            "test": False,
+            "bench": False,
             "required-features": ["contract-generator"],
         },
     ]
@@ -5068,6 +5310,12 @@ pub use entrypoint::{MainError, run_cli};
     assert len(re.findall(r"\bpublic_router\b", application_source)) == 2
 
     entrypoint_source = sources["entrypoint.rs"]
+    test_only_ephemeral_port_field = (
+        '    #[cfg(feature = "integration-test-support")]\n'
+        "    #[arg(long, hide = true)]\n"
+        "    ephemeral_port: bool,"
+    )
+    assert entrypoint_source.count(test_only_ephemeral_port_field) == 1
     controlled_runner_imports = rust_top_level_matches(
         entrypoint_source,
         r"(?ms)^[ \t]*use\s+crate\s*::\s*\{([^;]+\brun_configured_controlled\b[^;]*)\}\s*;",
@@ -5376,12 +5624,17 @@ pub use entrypoint::{MainError, run_cli};
             }
         }
 
+        #[cfg(feature = "integration-test-support")]
+        let ephemeral_port = cli.ephemeral_port;
+        #[cfg(not(feature = "integration-test-support"))]
+        let ephemeral_port = false;
+
         init_tracing("info")?;
         ScaffoldManager::new(before_dynamic.roots.clone())
             .ensure(before_dynamic.active_profile.as_str())?;
 
         if cli.ui == UiArgument::Desktop && !cli.exit_after_startup {
-            return run_desktop(request, before_dynamic).await;
+            return run_desktop(request, before_dynamic, ephemeral_port).await;
         }
 
         run_packaged_backend(
@@ -5389,6 +5642,7 @@ pub use entrypoint::{MainError, run_cli};
             before_dynamic,
             cli.ui.into(),
             cli.exit_after_startup,
+            ephemeral_port,
             RunControl::new(ShutdownCoordinator::new()),
             None,
         )
@@ -5446,7 +5700,8 @@ pub use entrypoint::{MainError, run_cli};
         entrypoint_source,
         r"\basync\s+fn\s+run_backend\s*\(\s*request\s*:\s*PipelineRequest\s*,"
         r"\s*before_dynamic\s*:\s*LoadedSettings\s*,\s*ui_mode\s*:\s*UiMode\s*,"
-        r"\s*exit_after_startup\s*:\s*bool\s*,\s*control\s*:\s*RunControl\s*,"
+        r"\s*exit_after_startup\s*:\s*bool\s*,\s*ephemeral_port\s*:\s*bool\s*,"
+        r"\s*control\s*:\s*RunControl\s*,"
         r"\s*desktop_settings\s*:\s*Option\s*<\s*DesktopRuntimeSettings\s*>\s*,?"
         r"\s*\)\s*->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
     )
@@ -5472,7 +5727,8 @@ pub use entrypoint::{MainError, run_cli};
             .settings
             .string("server.bind_address")?
             .parse::<IpAddr>()?;
-        let port = u16::try_from(loaded.settings.integer("server.port")?)?;
+        let configured_port = u16::try_from(loaded.settings.integer("server.port")?)?;
+        let port = if ephemeral_port { 0 } else { configured_port };
         let web_root = PathBuf::from(loaded.settings.string("server.web_dir")?);
         run_configured_controlled(
             AppOptions {
@@ -5496,7 +5752,8 @@ pub use entrypoint::{MainError, run_cli};
         entrypoint_source,
         r"\basync\s+fn\s+run_packaged_backend\s*\(\s*mut\s+request\s*:\s*PipelineRequest\s*,"
         r"\s*before_dynamic\s*:\s*LoadedSettings\s*,\s*ui_mode\s*:\s*UiMode\s*,"
-        r"\s*exit_after_startup\s*:\s*bool\s*,\s*control\s*:\s*RunControl\s*,"
+        r"\s*exit_after_startup\s*:\s*bool\s*,\s*ephemeral_port\s*:\s*bool\s*,"
+        r"\s*control\s*:\s*RunControl\s*,"
         r"\s*desktop_settings\s*:\s*Option\s*<\s*DesktopRuntimeSettings\s*>\s*,?"
         r"\s*\)\s*->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
     )
@@ -5511,6 +5768,7 @@ pub use entrypoint::{MainError, run_cli};
             before_dynamic,
             ui_mode,
             exit_after_startup,
+            ephemeral_port,
             control,
             desktop_settings,
         )
@@ -5532,7 +5790,8 @@ pub use entrypoint::{MainError, run_cli};
     run_desktop_body = rust_top_level_function_body(
         entrypoint_source,
         r"\basync\s+fn\s+run_desktop\s*\(\s*request\s*:\s*PipelineRequest\s*,"
-        r"\s*before_dynamic\s*:\s*LoadedSettings\s*,?\s*\)\s*"
+        r"\s*before_dynamic\s*:\s*LoadedSettings\s*,"
+        r"\s*ephemeral_port\s*:\s*bool\s*,?\s*\)\s*"
         r"->\s*Result\s*<\s*\(\s*\)\s*,\s*MainError\s*>",
     )
     assert compact_rust(run_desktop_body) == compact_rust(
@@ -5576,6 +5835,7 @@ pub use entrypoint::{MainError, run_cli};
                             before_dynamic,
                             UiMode::Desktop,
                             false,
+                            ephemeral_port,
                             control,
                             Some(runtime_settings),
                         )
@@ -7287,10 +7547,15 @@ def test_packaged_worker_gate_reuses_product_without_recompiling_tests() -> None
         "workerPackageCheck =",
         "\n          uiPackageSoftwareRenderer =",
     )
-    rust_ci_core = section(
+    rust_ci_check = section(
+        flake,
+        "rustCoreCheck = pkgs.stdenv.mkDerivation {",
+        "          contractSyncCheck =",
+    )
+    rust_ci_app = section(
         flake,
         "            rust-ci-core = mkTask {\n",
-        "            clippy = mkTask {\n",
+        "            ci-rust-contracts = mkTask {\n",
     )
 
     for required in (
@@ -7323,13 +7588,9 @@ def test_packaged_worker_gate_reuses_product_without_recompiling_tests() -> None
     ):
         assert forbidden not in gate
     assert "workerPackageTestHarness" not in flake
-    assert (
-        rust_ci_core.count(
-            "POKECON_RESOURCE_PROVENANCE=development cargo test --locked "
-            "--workspace --all-features"
-        )
-        == 1
-    )
+    assert rust_ci_check.count("cargo test --locked --workspace --all-features") == 1
+    assert rust_ci_app.count("${realizeRustCiCore}") == 1
+    assert "cargo " not in rust_ci_app
     assert gate.index("for worker_role in script dynamic; do") < gate.index(
         'product_marker="worker-package-check-lua-marker-AR-13.1-26"'
     )
@@ -10309,9 +10570,8 @@ fetch_openapi_method_probe() {
   unknown_body='{"error":{"code":"resource_not_found","fields":null,"message":"API resource was not found"}}'
   if [ "$method" = options ]; then
     local advertised_preflight=false
-    if jq -e --arg path "$path" --arg method "$preflight_for" \
-      'any(.[]; .path == $path and .method == $method)' \
-      "$openapi_operation_inventory" >/dev/null; then
+    local preflight_operation_key="$path:$preflight_for"
+    if [ -n "${fixture_advertised_operations[$preflight_operation_key]+present}" ]; then
       advertised_preflight=true
     fi
     if [ "$advertised_preflight" = true ] \
@@ -10548,12 +10808,7 @@ fetch_openapi_method_probe() {
     return
   fi
   local advertised_allow
-  advertised_allow="$(
-    jq -r --arg path "$path" '
-      [.[] | select(.path == $path) | .method | ascii_upcase]
-      | sort | join(", ")
-    ' "$openapi_operation_inventory"
-  )"
+  advertised_allow="${fixture_allow_by_path[$path]-}"
   if [ "${MISLEADING_ALLOW:-0}" = 1 ]; then
     advertised_allow='GET, HEAD, OPTIONS'
   fi
@@ -10619,9 +10874,8 @@ fetch_openapi_method_probe() {
     return
   fi
   local advertised=false
-  if jq -e --arg path "$path" --arg method "$method" \
-    'any(.[]; .path == $path and .method == $method)' \
-    "$openapi_operation_inventory" >/dev/null; then
+  local operation_key="$path:$method"
+  if [ -n "${fixture_advertised_operations[$operation_key]+present}" ]; then
     advertised=true
   fi
   printf '%s\n' 'Content-Type: application/json' >"$fetch_headers"
@@ -11899,7 +12153,47 @@ fetch_advertised_bare_options_probe() {
         strict_json_decoder.count("\n}\nreadonly -f validate_unique_json_object_keys")
         == 1
     )
+    methods_by_path: dict[str, list[str]] = {}
+    for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
+        methods_by_path.setdefault(path, []).append(method)
+    assert len(methods_by_path) == 15
+    assert sum(map(len, methods_by_path.values())) == 16
+    fixture_operation_lookup_declaration = (
+        "readonly -A fixture_advertised_operations=(\n"
+        + "".join(
+            f"  ['{path}:{method}']=1\n"
+            for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS
+        )
+        + ")\nreadonly -A fixture_allow_by_path=(\n"
+        + "".join(
+            f"  ['{path}']='{', '.join(sorted(method.upper() for method in methods))}'\n"
+            for path, methods in sorted(methods_by_path.items())
+        )
+        + ")"
+    )
+    assert fixture_operation_lookup_declaration.count("['") == 31
+    assert "jq " not in fake_fetch
+    assert "$openapi_operation_inventory" not in fake_fetch
+    assert fake_fetch.count("${fixture_advertised_operations[") == 2
+    assert fake_fetch.count("${fixture_allow_by_path[") == 1
+    mode_diagnostic_only_probes = (
+        preflight_policy_probe,
+        probe,
+        unknown_api_boundary_probe,
+        advertised_bare_options_probe,
+    )
+    for mode_diagnostic_only_probe in mode_diagnostic_only_probes:
+        assert mode_diagnostic_only_probe.count('local mode="$1"') == 1
+        without_mode_diagnostics = re.sub(
+            r'"\$mode [^"\n]+"',
+            "",
+            mode_diagnostic_only_probe,
+        )
+        assert "$mode" not in without_mode_diagnostics
+        assert "${mode}" not in mode_diagnostic_only_probe
     production_modes = ("web", "desktop")
+    fault_modes = (production_modes[0],)
+    assert set(fault_modes) < set(production_modes)
     program = (
         "set -euo pipefail\n"
         'project_python="$0"\n'
@@ -11910,6 +12204,8 @@ fetch_advertised_bare_options_probe() {
         "openapi_rest_path_count=14\nopenapi_websocket_path_count=1\n"
         "openapi_method_count=9\nopenapi_method_probe_count=135\n"
         "openapi_cors_preflight_count=15\nopenapi_rejected_method_count=104\n"
+        + fixture_operation_lookup_declaration
+        + "\n"
         + cors_success_forbidden_inventory_declaration
         + "\n"
         + "readonly -a advertised_bare_options_forbidden_response_headers=(Access-Control-Allow-Headers Access-Control-Allow-Methods Access-Control-Allow-Origin Allow Vary)\n"
@@ -12311,9 +12607,6 @@ fetch_advertised_bare_options_probe() {
     assert tuple(completed_baseline_modes) == production_modes
     result_root = result_roots["web"]
 
-    methods_by_path: dict[str, list[str]] = {}
-    for path, method, _operation_id in EXPECTED_OPENAPI_OPERATIONS:
-        methods_by_path.setdefault(path, []).append(method)
     method_matrix = (
         "get",
         "head",
@@ -12739,6 +13032,7 @@ fetch_advertised_bare_options_probe() {
     )
 
     existing_fault_mode = production_modes[0]
+    secondary_fault_mode = production_modes[1]
     fail_open_root = tmp_path / "fail-open-preflight-result"
     fail_open_root.mkdir()
     duplicate_cors_root = tmp_path / "duplicate-cors-header-result"
@@ -12755,7 +13049,7 @@ fetch_advertised_bare_options_probe() {
             (
                 program,
                 duplicate_cors_root,
-                existing_fault_mode,
+                secondary_fault_mode,
                 fault_probe_scope("cors"),
                 {"DUPLICATE_CORS_HEADER": "1"},
             ),
@@ -12765,6 +13059,7 @@ fetch_advertised_bare_options_probe() {
     assert "HTTP 204" in fail_open.stderr
     assert "unadvertised CORS preflight" in fail_open.stderr
     assert rejected_duplicate_cors.returncode != 0
+    assert rejected_duplicate_cors.stderr.startswith(f"{secondary_fault_mode} ")
     assert (
         "did not return exactly one Access-Control-Allow-Origin header"
         in rejected_duplicate_cors.stderr
@@ -12773,7 +13068,7 @@ fetch_advertised_bare_options_probe() {
     later_forbidden_fault_invocation = "/api/settings\toptions\tput"
     forbidden_envelope_fault_cases = tuple(
         (mode, selector, expected_diagnostic)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, expected_diagnostic in cors_preflight_forbidden_envelope_faults
     )
     rejected_forbidden_envelopes = run_fixture_probes(
@@ -12815,10 +13110,10 @@ fetch_advertised_bare_options_probe() {
         forbidden_envelope_fault_coverage.add((mode, selector))
     assert forbidden_envelope_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _expected_diagnostic in (cors_preflight_forbidden_envelope_faults)
     }
-    assert len(forbidden_envelope_fault_coverage) == len(production_modes) * 5 == 10
+    assert len(forbidden_envelope_fault_coverage) == len(fault_modes) * 5 == 5
 
     rejected_unknown_forbidden_envelopes = run_fixture_probes(
         tuple(
@@ -12828,12 +13123,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_PREFLIGHT_FORBIDDEN_ENVELOPE_FAULT": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_forbidden_envelope_modes: list[str] = []
     for mode, rejected_unknown_forbidden_envelope in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_forbidden_envelopes,
         strict=True,
     ):
@@ -12850,12 +13145,12 @@ fetch_advertised_bare_options_probe() {
             == later_forbidden_fault_invocation
         )
         completed_unknown_forbidden_envelope_modes.append(mode)
-    assert tuple(completed_unknown_forbidden_envelope_modes) == production_modes
+    assert tuple(completed_unknown_forbidden_envelope_modes) == fault_modes
 
     later_forbidden_document_fault_invocation = "/api/state\toptions\tdelete"
     forbidden_document_fault_cases = tuple(
         (mode, selector, expected_diagnostic)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, expected_diagnostic in cors_preflight_forbidden_document_faults
     )
     rejected_forbidden_documents = run_fixture_probes(
@@ -12897,10 +13192,10 @@ fetch_advertised_bare_options_probe() {
         forbidden_document_fault_coverage.add((mode, selector))
     assert forbidden_document_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _expected_diagnostic in cors_preflight_forbidden_document_faults
     }
-    assert len(forbidden_document_fault_coverage) == len(production_modes) * 4 == 8
+    assert len(forbidden_document_fault_coverage) == len(fault_modes) * 4 == 4
 
     rejected_unknown_forbidden_documents = run_fixture_probes(
         tuple(
@@ -12910,12 +13205,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_PREFLIGHT_FORBIDDEN_DOCUMENT_FAULT": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_forbidden_document_modes: list[str] = []
     for mode, rejected_unknown_forbidden_document in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_forbidden_documents,
         strict=True,
     ):
@@ -12932,12 +13227,12 @@ fetch_advertised_bare_options_probe() {
             == later_forbidden_document_fault_invocation
         )
         completed_unknown_forbidden_document_modes.append(mode)
-    assert tuple(completed_unknown_forbidden_document_modes) == production_modes
+    assert tuple(completed_unknown_forbidden_document_modes) == fault_modes
 
     later_forbidden_semantic_fault_invocation = "/api/state\toptions\tconnect"
     forbidden_semantic_fault_cases = tuple(
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector in cors_preflight_forbidden_semantic_faults
     )
     rejected_forbidden_semantics = run_fixture_probes(
@@ -12975,10 +13270,10 @@ fetch_advertised_bare_options_probe() {
         forbidden_semantic_fault_coverage.add((mode, selector))
     assert forbidden_semantic_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector in cors_preflight_forbidden_semantic_faults
     }
-    assert len(forbidden_semantic_fault_coverage) == len(production_modes) * 5 == 10
+    assert len(forbidden_semantic_fault_coverage) == len(fault_modes) * 5 == 5
 
     rejected_unknown_forbidden_semantics = run_fixture_probes(
         tuple(
@@ -12988,12 +13283,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_PREFLIGHT_FORBIDDEN_SEMANTIC_FAULT": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_forbidden_semantic_modes: list[str] = []
     for mode, rejected_unknown_forbidden_semantic in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_forbidden_semantics,
         strict=True,
     ):
@@ -13010,12 +13305,12 @@ fetch_advertised_bare_options_probe() {
             == later_forbidden_semantic_fault_invocation
         )
         completed_unknown_forbidden_semantic_modes.append(mode)
-    assert tuple(completed_unknown_forbidden_semantic_modes) == production_modes
+    assert tuple(completed_unknown_forbidden_semantic_modes) == fault_modes
 
     terminal_forbidden_header_fault_invocation = "/api/not-in-openapi\toptions\tget"
     rejected_preflight_header_fault_cases = tuple(
         (mode, selector, header_name)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, header_name, _response_header in (
             cors_preflight_forbidden_header_faults
         )
@@ -13053,14 +13348,12 @@ fetch_advertised_bare_options_probe() {
         rejected_preflight_header_fault_coverage.add((mode, selector))
     assert rejected_preflight_header_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _header_name, _response_header in (
             cors_preflight_forbidden_header_faults
         )
     }
-    assert (
-        len(rejected_preflight_header_fault_coverage) == len(production_modes) * 8 == 16
-    )
+    assert len(rejected_preflight_header_fault_coverage) == len(fault_modes) * 8 == 8
 
     rejected_unknown_forbidden_headers = run_fixture_probes(
         tuple(
@@ -13070,12 +13363,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_PREFLIGHT_FORBIDDEN_HEADER_FAULT": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_forbidden_header_modes: list[str] = []
     for mode, rejected_unknown_forbidden_header in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_forbidden_headers,
         strict=True,
     ):
@@ -13092,12 +13385,12 @@ fetch_advertised_bare_options_probe() {
             == terminal_forbidden_header_fault_invocation
         )
         completed_unknown_forbidden_header_modes.append(mode)
-    assert tuple(completed_unknown_forbidden_header_modes) == production_modes
+    assert tuple(completed_unknown_forbidden_header_modes) == fault_modes
 
     later_advertised_fault_invocation = "/api/settings\toptions\tget"
     required_header_fault_cases = tuple(
         (mode, selector, header_name, expected_value)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, header_name, expected_value, _fault_kind in (
             cors_success_required_header_faults
         )
@@ -13143,13 +13436,13 @@ fetch_advertised_bare_options_probe() {
         required_header_fault_coverage.add((mode, selector))
     expected_required_header_fault_coverage = {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _header_name, _expected_value, _fault_kind in (
             cors_success_required_header_faults
         )
     }
     assert required_header_fault_coverage == expected_required_header_fault_coverage
-    assert len(required_header_fault_coverage) == len(production_modes) * 12 == 24
+    assert len(required_header_fault_coverage) == len(fault_modes) * 12 == 12
 
     rejected_unknown_required_headers = run_fixture_probes(
         tuple(
@@ -13159,12 +13452,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_SUCCESS_REQUIRED_HEADER_FAULT": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_required_header_modes: list[str] = []
     for mode, rejected_unknown_required_header in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_required_headers,
         strict=True,
     ):
@@ -13181,11 +13474,11 @@ fetch_advertised_bare_options_probe() {
             == later_advertised_fault_invocation
         )
         completed_unknown_required_header_modes.append(mode)
-    assert tuple(completed_unknown_required_header_modes) == production_modes
+    assert tuple(completed_unknown_required_header_modes) == fault_modes
 
     forbidden_header_fault_cases = tuple(
         (mode, selector, forbidden_name)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, forbidden_name, _response_header in (
             cors_success_forbidden_header_faults
         )
@@ -13223,7 +13516,7 @@ fetch_advertised_bare_options_probe() {
         forbidden_header_fault_coverage.add((mode, selector))
     assert forbidden_header_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _forbidden_name, _response_header in (
             cors_success_forbidden_header_faults
         )
@@ -13237,12 +13530,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_SUCCESS_FORBIDDEN_HEADER_KIND": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_selector_modes: list[str] = []
     for mode, rejected_unknown_forbidden_header in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_selector_headers,
         strict=True,
     ):
@@ -13259,11 +13552,11 @@ fetch_advertised_bare_options_probe() {
             == later_advertised_fault_invocation
         )
         completed_unknown_selector_modes.append(mode)
-    assert tuple(completed_unknown_selector_modes) == production_modes
+    assert tuple(completed_unknown_selector_modes) == fault_modes
 
     envelope_fault_cases = tuple(
         (mode, selector, expected_diagnostic)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, expected_diagnostic in cors_success_preflight_envelope_faults
     )
     rejected_envelopes = run_fixture_probes(
@@ -13299,7 +13592,7 @@ fetch_advertised_bare_options_probe() {
         envelope_fault_coverage.add((mode, selector))
     assert envelope_fault_coverage == {
         (mode, selector)
-        for mode in production_modes
+        for mode in fault_modes
         for selector, _expected_diagnostic in cors_success_preflight_envelope_faults
     }
 
@@ -13311,12 +13604,12 @@ fetch_advertised_bare_options_probe() {
                 fault_probe_scope("cors"),
                 {"CORS_SUCCESS_PREFLIGHT_ENVELOPE_KIND": "unknown"},
             )
-            for mode in production_modes
+            for mode in fault_modes
         )
     )
     completed_unknown_envelope_modes: list[str] = []
     for mode, rejected_unknown_envelope in zip(
-        production_modes,
+        fault_modes,
         rejected_unknown_envelopes,
         strict=True,
     ):
@@ -13331,7 +13624,7 @@ fetch_advertised_bare_options_probe() {
             == later_advertised_fault_invocation
         )
         completed_unknown_envelope_modes.append(mode)
-    assert tuple(completed_unknown_envelope_modes) == production_modes
+    assert tuple(completed_unknown_envelope_modes) == fault_modes
 
     nonempty_head_root = tmp_path / "nonempty-head-result"
     nonempty_head_root.mkdir()
@@ -13562,11 +13855,11 @@ fetch_advertised_bare_options_probe() {
 
     assert fault_probe_scope_counts == {
         "bare-options": 9,
-        "cors": 103,
+        "cors": 53,
         "method": 10,
         "unknown": 10,
     }
-    assert sum(fault_probe_scope_counts.values()) == 132
+    assert sum(fault_probe_scope_counts.values()) == 82
 
     results = json.loads((result_root / "openapi-method-results.json").read_text())
     assert len(results) == 135
@@ -13818,9 +14111,9 @@ def test_production_routing_mutation_shard_contract(
         covered_indices = sorted(
             mutation_index
             for shard_index in range(shard_count)
-            for mutation_index in range(shard_index, 394, shard_count)
+            for mutation_index in range(shard_index, 395, shard_count)
         )
-        assert covered_indices == list(range(394))
+        assert covered_indices == list(range(395))
 
     for shard_index, shard_count in (("0", "1"), ("7", "8")):
         monkeypatch.setenv(PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV, shard_index)
@@ -13930,6 +14223,13 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
         "pub mod integration_test_support;",
         "#[doc(hidden)]\npub mod integration_test_support;",
     )
+    unconditional_ephemeral_port_cli = replace_once(
+        "entrypoint.rs",
+        '    #[cfg(feature = "integration-test-support")]\n'
+        "    #[arg(long, hide = true)]\n"
+        "    ephemeral_port: bool,",
+        "    #[arg(long, hide = true)]\n    ephemeral_port: bool,",
+    )
     integration_test_support_glob_reexport = replace_once(
         "integration_test_support.rs",
         "pub use crate::camera::{",
@@ -13957,9 +14257,9 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
         '              "--bin"\n',
     )
     contract_check_omits_integration_test_support = replace_once(
-        FLAKE_SOURCE,
-        "                  --features integration-test-support,contract-generator \\\n",
-        "                  --features contract-generator \\\n",
+        WORKSPACE_MANIFEST_SOURCES["rust/pokecon"],
+        'required-features = ["integration-test-support"]',
+        'required-features = ["contract-generator"]',
     )
     virtual_io_omits_integration_test_support = replace_once(
         VIRTUAL_IO_SMOKE_SOURCE,
@@ -15606,11 +15906,9 @@ runner = "scripts/attacker-runner.sh"
         FLAKE_SOURCE,
         '            cd "$workdir"\n'
         "            ${assertNoCargoConfigAncestors}\n"
-        "          '';\n\n"
-        "          linuxDesktopPackages =",
-        '            cd "$workdir"\n'
-        "          '';\n\n"
-        "          linuxDesktopPackages =",
+        "          '';\n"
+        "          setupQualityWorkdir =",
+        "            cd \"$workdir\"\n          '';\n          setupQualityWorkdir =",
     )
     changed_cargo_cache_directory_tag = replace_once(
         FLAKE_SOURCE,
@@ -16388,8 +16686,15 @@ runner = "scripts/attacker-runner.sh"
         "            test-production-routing-mutations = mkTask {\n"
         '              name = "test-production-routing-mutations";\n'
         "              text = ''\n"
-        '                exec "${productionRoutingMutationAuditRunner}/bin/'
+        "                ${setupSourceGateEnvironment}\n"
+        '                if [ "$#" -eq 0 ]; then\n'
+        "                  ${realizeProductionRoutingAudit}\n"
+        "                  ${realizeProductionRoutingMutationAudit}\n"
+        "                else\n"
+        "                  ${realizeProductionRoutingAudit}\n"
+        '                  "${productionRoutingMutationAuditRunner}/bin/'
         'pokecon-production-routing-mutation-audit" "$@"\n'
+        "                fi\n"
         "              '';\n"
         "            };\n",
         "            test-production-routing-mutations =\n"
@@ -16400,9 +16705,9 @@ runner = "scripts/attacker-runner.sh"
         FLAKE_SOURCE,
         "                  --next \\\n"
         "                  production-routing-mutation-audit \\\n"
-        '                  "${productionRoutingMutationAuditRunner}/bin/'
-        'pokecon-production-routing-mutation-audit" \\\n'
-        '                  --workers "$aggregate_mutation_workers"\n',
+        '                  "${pkgs.bash}/bin/bash" -euo pipefail -c \'\n'
+        "                    ${realizeProductionRoutingMutationAudit}\n"
+        "                  '\n",
         "",
     )
     dedicated_check_omits_mutation_audit = replace_once(
@@ -16706,6 +17011,10 @@ runner = "scripts/attacker-runner.sh"
         (
             "unconditional integration test support",
             unconditional_integration_test_support,
+        ),
+        (
+            "unconditional ephemeral port CLI",
+            unconditional_ephemeral_port_cli,
         ),
         (
             "integration test support glob reexport",
@@ -17607,7 +17916,7 @@ runner = "scripts/attacker-runner.sh"
         ),
         ("alternate desktop backend", alternate_desktop_backend),
     )
-    assert len(mutations) == 394
+    assert len(mutations) == 395
     mutation_labels = tuple(label for label, _mutated_sources in mutations)
     assert len(set(mutation_labels)) == len(mutation_labels)
     mutation_deltas = tuple(
@@ -17631,7 +17940,7 @@ runner = "scripts/attacker-runner.sh"
     for label, mutated_sources in shard_mutations:
         try:
             assert_closed_production_routing(mutated_sources)
-        except AssertionError:
+        except AssertionError, tomllib.TOMLDecodeError:
             continue
         diagnostic = f"production routing audit accepted {label}"
         raise AssertionError(diagnostic)
@@ -18309,6 +18618,11 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         "            ci-rust-contracts = mkTask {\n",
         "            clippy = mkTask {\n",
     )
+    rust_check = section(
+        flake,
+        "rustCoreCheck = pkgs.stdenv.mkDerivation {",
+        "          contractSyncCheck =",
+    )
     contract_check = section(
         flake,
         "            contract-check = mkTask {\n",
@@ -18316,6 +18630,8 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     )
 
     assert workflows.count("nix fmt -- --ci") == 1
+    assert normal.count("nix run .#ci-parallel") == 1
+    assert "treefmt" not in ci_fast
     for command in (
         "nix run .#ci-fast",
         "nix run .#ci-rust-contracts",
@@ -18346,11 +18662,13 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         assert ci_fast.count(static_check) == 1
         assert static_check not in contract_check
     for shared_rust_command in (
-        "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
-        "cargo build --locked --workspace --all-features",
+        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         "cargo test --locked --workspace --all-features",
     ):
-        assert combined_check.count(shared_rust_command) == 1
+        assert rust_check.count(shared_rust_command) == 1
+        assert shared_rust_command not in combined_check
+    assert "cargo build " not in rust_check
+    assert combined_check.count("${realizeRustCiCore}") == 1
     assert '"$CARGO_TARGET_DIR/debug/generate_contracts"' not in combined_check
     assert "POKECON_OPENAPI_GENERATOR" not in combined_check
     assert (
@@ -18358,15 +18676,88 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         == 1
     )
     assert "cargo build --locked --package pokecon" not in contract_check
-    assert (
-        contract_check.count("--features integration-test-support,contract-generator")
-        == 1
-    )
-    assert contract_check.count("--test contract_sync") == 1
+    assert "cargo test" not in contract_check
+    assert contract_check.count("${realizeContractSync}") == 1
     assert (
         contract_check.count("scripts/quality/generate-api-types.sh --check-types-only")
         == 1
     )
+
+
+def test_normal_ci_rust_contract_entrypoints_are_mutually_exclusive() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text()
+    rust_job = section(workflow, "  rust_contracts:\n", "  python_tests:\n")
+
+    assert rust_job.count("    needs: plan\n") == 1
+    assert (
+        rust_job.count(
+            "      needs.plan.outputs.rust == 'true' || "
+            "needs.plan.outputs.contracts == 'true'\n"
+        )
+        == 1
+    )
+    expected_steps = (
+        (
+            "nix run .#ci-rust-contracts",
+            (
+                "      needs.plan.outputs.rust == 'true' && "
+                "needs.plan.outputs.contracts == 'true'\n"
+            ),
+        ),
+        (
+            "nix run .#rust-ci-core",
+            (
+                "      needs.plan.outputs.rust == 'true' && "
+                "needs.plan.outputs.contracts != 'true'\n"
+            ),
+        ),
+        (
+            "nix run .#contract-check",
+            (
+                "      needs.plan.outputs.rust != 'true' && "
+                "needs.plan.outputs.contracts == 'true'\n"
+            ),
+        ),
+    )
+    for command, condition in expected_steps:
+        assert rust_job.count(command) == 1
+        command_index = rust_job.index(command)
+        condition_index = rust_job.rfind(condition, 0, command_index)
+        assert condition_index >= 0, command
+    assert "continue-on-error:" not in rust_job
+    assert "|| true" not in rust_job
+
+
+def test_routing_audit_has_one_declared_normal_ci_owner() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text()
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text()
+    registry = json.loads(
+        (REPOSITORY / "rust/pokecon/registry/ci.json").read_text(encoding="utf-8")
+    )
+    docs_region = next(
+        region for region in registry["regions"] if region["name"] == "docs"
+    )
+    routing_region = next(
+        region for region in registry["regions"] if region["name"] == "routing"
+    )
+    assert docs_region["normal_ci_owner_jobs"] == ["normal-ci/fast"]
+    assert routing_region["normal_ci_owner_jobs"] == ["normal-ci/routing_mutations"]
+    assert "normal-ci/fast" not in routing_region["normal_ci_owner_jobs"]
+
+    ci_fast = section(
+        flake,
+        "            ci-fast = mkTask {\n",
+        "            rust-ci-core = mkTask {\n",
+    )
+    mutation_app = section(
+        flake,
+        "            test-production-routing-mutations = mkTask {\n",
+        "            tauri-build =\n",
+    )
+    assert "productionRoutingAudit" not in ci_fast
+    assert mutation_app.count("${realizeProductionRoutingAudit}") == 2
+    assert mutation_app.count("${realizeProductionRoutingMutationAudit}") == 1
+    assert workflow.count("nix run .#test-production-routing-mutations") == 1
 
 
 def test_api_type_drift_reuses_the_contract_test_openapi_proof() -> None:

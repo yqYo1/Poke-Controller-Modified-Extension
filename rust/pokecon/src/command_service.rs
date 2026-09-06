@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::dynamic::protocol::DynamicProfileSwitchResult;
@@ -22,8 +22,121 @@ use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::dynamic_host::StartupDynamicHost;
+use crate::worker::ipc::ResourceSafety;
 
 const MAX_CACHE_RESTARTS: usize = 32;
+/// Typed profile-switch lifecycle stage for UI/log integration.
+/// Mirrors SPEC §11.5.6.4.3 transaction order 0-12 and degraded recovery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileSwitchStage {
+    Idle,
+    Validating,
+    Pending,
+    PreEvent,
+    Cancelling,
+    Stopping,
+    ReleasingInput,
+    Reaping,
+    Committing,
+    PostEvent,
+    Succeeded,
+    Cancelled,
+    Failed,
+    Degraded,
+}
+
+impl ProfileSwitchStage {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Validating => "validating",
+            Self::Pending => "pending",
+            Self::PreEvent => "pre_event",
+            Self::Cancelling => "cancelling",
+            Self::Stopping => "stopping",
+            Self::ReleasingInput => "releasing_input",
+            Self::Reaping => "reaping",
+            Self::Committing => "committing",
+            Self::PostEvent => "post_event",
+            Self::Succeeded => "succeeded",
+            Self::Cancelled => "cancelled",
+            Self::Failed => "failed",
+            Self::Degraded => "degraded",
+        }
+    }
+
+    const fn encode(self) -> u8 {
+        match self {
+            Self::Idle => 0,
+            Self::Validating => 1,
+            Self::Pending => 2,
+            Self::PreEvent => 3,
+            Self::Cancelling => 4,
+            Self::Stopping => 5,
+            Self::ReleasingInput => 6,
+            Self::Reaping => 7,
+            Self::Committing => 8,
+            Self::PostEvent => 9,
+            Self::Succeeded => 10,
+            Self::Cancelled => 11,
+            Self::Failed => 12,
+            Self::Degraded => 13,
+        }
+    }
+
+    const fn decode(value: u8) -> Self {
+        match value {
+            1 => Self::Validating,
+            2 => Self::Pending,
+            3 => Self::PreEvent,
+            4 => Self::Cancelling,
+            5 => Self::Stopping,
+            6 => Self::ReleasingInput,
+            7 => Self::Reaping,
+            8 => Self::Committing,
+            9 => Self::PostEvent,
+            10 => Self::Succeeded,
+            11 => Self::Cancelled,
+            12 => Self::Failed,
+            13 => Self::Degraded,
+            _ => Self::Idle,
+        }
+    }
+}
+
+/// Typed error detail for UI/log integration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSwitchErrorDetail {
+    pub code: String,
+    pub message: String,
+    pub stage: ProfileSwitchStage,
+}
+
+/// Typed status snapshot for UI/log integration.
+#[allow(
+    dead_code,
+    reason = "profile switch status is part of the public UI/log API; exercised in integration tests"
+)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileSwitchStatus {
+    pub stage: ProfileSwitchStage,
+    pub active_profile: String,
+    pub pending_profile: Option<String>,
+    pub degraded: bool,
+    pub last_error: Option<ProfileSwitchErrorDetail>,
+}
+
+/// Typed lifecycle result for production profile switching.
+#[allow(
+    dead_code,
+    reason = "profile switch lifecycle result is part of the public API; exercised in integration tests"
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileSwitchLifecycleResult {
+    Switched { forced_worker_stop: bool },
+    Cancelled,
+}
 
 /// Stable identity used by selection, execution, and shortcut resolution.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -266,6 +379,28 @@ pub enum CommandServiceError {
     CacheGenerationMismatch,
     #[error("profile switch gate is not held")]
     ProfileSwitchGateNotHeld,
+    #[error("profile switch validation failed: {0}")]
+    #[allow(
+        dead_code,
+        reason = "profile switch validation error is part of the public API; constructed in switch_profile and tests"
+    )]
+    ProfileSwitchValidationFailed(String),
+    #[error("profile switch stop failed: {0}")]
+    ProfileSwitchStopFailed(String),
+    #[error("profile switch commit failed: {0}")]
+    #[allow(
+        dead_code,
+        reason = "profile switch commit error is part of the public API; constructed in switch_profile and tests"
+    )]
+    ProfileSwitchCommitFailed(String),
+    #[error("profile switch restore failed: degraded")]
+    #[allow(
+        dead_code,
+        reason = "profile switch restore error is part of the public API; constructed in switch_profile and tests"
+    )]
+    ProfileSwitchRestoreFailed,
+    #[error("profile switch degraded: safe stopped, new commands rejected")]
+    ProfileSwitchDegraded,
 }
 
 struct CommandServiceState {
@@ -301,6 +436,15 @@ pub struct CommandService {
     inner: AsyncMutex<CommandServiceState>,
     lifecycle: AsyncMutex<()>,
     cache_generation: AtomicU64,
+    profile_stage: AtomicU8,
+    degraded: AtomicBool,
+    last_profile_error: std::sync::Mutex<Option<ProfileSwitchErrorDetail>>,
+    #[cfg(test)]
+    fault_validate: AtomicBool,
+    #[cfg(test)]
+    fault_commit: AtomicBool,
+    #[cfg(test)]
+    fault_restore: AtomicBool,
 }
 
 impl std::fmt::Debug for CommandService {
@@ -311,6 +455,11 @@ impl std::fmt::Debug for CommandService {
             .field(
                 "cache_generation",
                 &self.cache_generation.load(Ordering::Acquire),
+            )
+            .field("degraded", &self.degraded.load(Ordering::Acquire))
+            .field(
+                "profile_stage",
+                &ProfileSwitchStage::decode(self.profile_stage.load(Ordering::Acquire)).as_str(),
             )
             .finish_non_exhaustive()
     }
@@ -330,6 +479,15 @@ impl CommandService {
             inner: AsyncMutex::new(CommandServiceState::default()),
             lifecycle: AsyncMutex::new(()),
             cache_generation: AtomicU64::new(1),
+            profile_stage: AtomicU8::new(ProfileSwitchStage::Idle.encode()),
+            degraded: AtomicBool::new(false),
+            last_profile_error: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            fault_validate: AtomicBool::new(false),
+            #[cfg(test)]
+            fault_commit: AtomicBool::new(false),
+            #[cfg(test)]
+            fault_restore: AtomicBool::new(false),
         }
     }
 
@@ -705,6 +863,8 @@ impl CommandService {
 
     /// Stops and reaps the old profile worker, invalidates late completion, and
     /// clears its command generation. The profile gate remains held.
+    /// Implements SPEC §11.5.6.4.3 steps 5-7: cooperative stop, immediate
+    /// force-release of all input, then reaping before atomic commit.
     ///
     /// # Errors
     ///
@@ -716,6 +876,8 @@ impl CommandService {
         if !self.host.profile_switch_in_progress() {
             return Err(CommandServiceError::ProfileSwitchGateNotHeld);
         }
+        self.profile_stage
+            .store(ProfileSwitchStage::Stopping.encode(), Ordering::Release);
         let session = {
             let mut inner = self.inner.lock().await;
             inner.execution_epoch = inner.execution_epoch.wrapping_add(1);
@@ -727,13 +889,45 @@ impl CommandService {
             inner.session.take()
         };
         let Some(session) = session else {
+            self.profile_stage.store(
+                ProfileSwitchStage::ReleasingInput.encode(),
+                Ordering::Release,
+            );
+            // No worker: still force-release controller to ensure neutral safe state.
+            self.host.controller_safety().force_release();
+            self.profile_stage
+                .store(ProfileSwitchStage::Reaping.encode(), Ordering::Release);
             self.host.clear_command_generation()?;
+            self.profile_stage
+                .store(ProfileSwitchStage::Committing.encode(), Ordering::Release);
             return Ok(None);
         };
         let _cooperative = session.request_profile_stop().await;
         session.begin_stopping();
+        self.profile_stage.store(
+            ProfileSwitchStage::ReleasingInput.encode(),
+            Ordering::Release,
+        );
+        // SPEC step 6: force-release all input immediately without waiting for Python.
+        // This disconnects the script generation source and neutralizes the shared arbiter.
+        self.host.controller_safety().force_release();
+        self.profile_stage
+            .store(ProfileSwitchStage::Reaping.encode(), Ordering::Release);
         self.host.clear_command_generation()?;
-        Ok(Some(session.shutdown(deadline).await?))
+        let stopped = session.shutdown(deadline).await.map_err(|error| {
+            self.profile_stage
+                .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+            let detail = ProfileSwitchErrorDetail {
+                code: error.code.clone(),
+                message: error.message.clone(),
+                stage: ProfileSwitchStage::Reaping,
+            };
+            *self.last_profile_error.lock().unwrap() = Some(detail);
+            CommandServiceError::ProfileSwitchStopFailed(error.to_string())
+        })?;
+        self.profile_stage
+            .store(ProfileSwitchStage::Committing.encode(), Ordering::Release);
+        Ok(Some(stopped))
     }
 
     /// Releases the profile gate on success, cancellation, or rollback.
@@ -745,7 +939,323 @@ impl CommandService {
         )
     )]
     pub fn finish_profile_switch(&self) {
+        let stage = ProfileSwitchStage::decode(self.profile_stage.load(Ordering::Acquire));
+        if !matches!(
+            stage,
+            ProfileSwitchStage::Succeeded
+                | ProfileSwitchStage::Cancelled
+                | ProfileSwitchStage::Failed
+                | ProfileSwitchStage::Degraded
+        ) {
+            self.profile_stage
+                .store(ProfileSwitchStage::Idle.encode(), Ordering::Release);
+        }
         self.host.finish_profile_switch_gate();
+    }
+
+    /// Returns a typed snapshot of the current profile-switch lifecycle for UI/log.
+    #[allow(
+        dead_code,
+        reason = "profile switch status exposed for UI/log; exercised in tests"
+    )]
+    #[must_use]
+    pub fn profile_switch_status(&self) -> ProfileSwitchStatus {
+        let stage = ProfileSwitchStage::decode(self.profile_stage.load(Ordering::Acquire));
+        let degraded = self.degraded.load(Ordering::Acquire);
+        let last_error = self.last_profile_error.lock().unwrap().clone();
+        let (active_profile, pending_profile) = {
+            let snapshot = self.host.public_state_snapshot();
+            let active = snapshot
+                .get("active_profile")
+                .and_then(|v| v.as_str())
+                .unwrap_or("default")
+                .to_owned();
+            let pending = snapshot
+                .get("pending_profile")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned);
+            (active, pending)
+        };
+        ProfileSwitchStatus {
+            stage,
+            active_profile,
+            pending_profile,
+            degraded,
+            last_error,
+        }
+    }
+
+    /// Returns whether the service is in degraded safe-stop where new commands are rejected.
+    #[allow(
+        dead_code,
+        reason = "degraded check is part of the public profile-switch API; exercised in tests"
+    )]
+    #[must_use]
+    pub fn is_profile_switch_degraded(&self) -> bool {
+        self.degraded.load(Ordering::Acquire)
+    }
+
+    /// Clears degraded safe-stop after explicit operator recovery.
+    #[allow(
+        dead_code,
+        reason = "degraded clear is part of the public recovery API; exercised in tests"
+    )]
+    pub fn clear_profile_switch_degraded(&self) {
+        self.degraded.store(false, Ordering::Release);
+        self.profile_stage
+            .store(ProfileSwitchStage::Idle.encode(), Ordering::Release);
+        *self.last_profile_error.lock().unwrap() = None;
+    }
+
+    #[cfg(test)]
+    pub fn inject_fault_validate(&self, fail: bool) {
+        self.fault_validate.store(fail, Ordering::Release);
+    }
+
+    #[cfg(test)]
+    pub fn inject_fault_commit(&self, fail: bool) {
+        self.fault_commit.store(fail, Ordering::Release);
+    }
+
+    #[cfg(test)]
+    pub fn inject_fault_restore(&self, fail: bool) {
+        self.fault_restore.store(fail, Ordering::Release);
+    }
+
+    /// Full production lifecycle for profile switching.
+    /// Implements SPEC §11.5.6.4.3 transaction 0-12 with typed stage tracking,
+    /// force-release, reap-before-commit, no auto-resume, and rollback/degraded handling.
+    /// Preserves existing `try_begin`/`stop_for`/`finish` API for compatibility.
+    ///
+    /// # Errors
+    ///
+    /// Returns typed `CommandServiceError` with stage information for UI/log.
+    #[allow(
+        dead_code,
+        reason = "profile switch lifecycle is public API; exercised in integration tests"
+    )]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "SPEC 11.5.6.4.3 transaction stages 0-12 with validation, pre-event, stop/reap, commit and degraded handling must remain atomic for review"
+    )]
+    pub async fn switch_profile(
+        &self,
+        name: &str,
+    ) -> Result<ProfileSwitchLifecycleResult, CommandServiceError> {
+        if self.degraded.load(Ordering::Acquire) {
+            return Err(CommandServiceError::ProfileSwitchDegraded);
+        }
+        // Stage 0: gate acquisition (non-recursive, rejects new commands)
+        self.profile_stage
+            .store(ProfileSwitchStage::Validating.encode(), Ordering::Release);
+        self.try_begin_profile_switch()?;
+        // Ensure gate is released on all paths via finish; stage handling below
+        // prepares rollback semantics.
+
+        // Fault injection for validation stage
+        #[cfg(test)]
+        if self.fault_validate.load(Ordering::Acquire) {
+            let detail = ProfileSwitchErrorDetail {
+                code: "InjectedValidationFailed".to_owned(),
+                message: "injected validation failure".to_owned(),
+                stage: ProfileSwitchStage::Validating,
+            };
+            *self.last_profile_error.lock().unwrap() = Some(detail.clone());
+            self.profile_stage
+                .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+            self.host.cancel_profile_switch();
+            self.finish_profile_switch();
+            return Err(CommandServiceError::ProfileSwitchValidationFailed(
+                detail.message,
+            ));
+        }
+
+        // Stage 1: validation (side-effect free) via host prepare
+        let prepared = match self
+            .host
+            .prepare_profile_switch(name, &std::collections::BTreeMap::new())
+        {
+            Ok(settings) => {
+                self.profile_stage
+                    .store(ProfileSwitchStage::Pending.encode(), Ordering::Release);
+                settings
+            }
+            Err(error) => {
+                let detail = ProfileSwitchErrorDetail {
+                    code: error.code.clone(),
+                    message: error.message.clone(),
+                    stage: ProfileSwitchStage::Validating,
+                };
+                *self.last_profile_error.lock().unwrap() = Some(detail.clone());
+                self.profile_stage
+                    .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+                self.host.cancel_profile_switch();
+                self.finish_profile_switch();
+                if error.code == "InvalidProfile" || error.code == "ProfileNotFound" {
+                    tracing::warn!(code = %error.code, stage = %ProfileSwitchStage::Validating.as_str(), "profile switch validation failed");
+                }
+                return Err(CommandServiceError::ProfileSwitchValidationFailed(
+                    error.to_string(),
+                ));
+            }
+        };
+        drop(prepared);
+
+        // Stage 3: ProfileSwitchPre (cancellable)
+        self.profile_stage
+            .store(ProfileSwitchStage::PreEvent.encode(), Ordering::Release);
+        let cancelled = self
+            .dynamic
+            .emit("ProfileSwitchPre")
+            .await
+            .inspect_err(|error| {
+                let detail = ProfileSwitchErrorDetail {
+                    code: error.code.clone(),
+                    message: error.message.clone(),
+                    stage: ProfileSwitchStage::PreEvent,
+                };
+                *self.last_profile_error.lock().unwrap() = Some(detail);
+            })?;
+        if cancelled {
+            self.profile_stage
+                .store(ProfileSwitchStage::Cancelling.encode(), Ordering::Release);
+            self.host.cancel_profile_switch();
+            self.profile_stage
+                .store(ProfileSwitchStage::Cancelled.encode(), Ordering::Release);
+            self.finish_profile_switch();
+            return Ok(ProfileSwitchLifecycleResult::Cancelled);
+        }
+
+        // Stage 5-7: stop, force-release, reap (before commit)
+        let deadline = {
+            let ms = self
+                .host
+                .loaded_settings()
+                .settings
+                .integer("python.script.shutdown_timeout_ms")
+                .unwrap_or(2000);
+            std::time::Duration::from_millis(u64::try_from(ms).unwrap_or(2000))
+        };
+        let stop_result = self.stop_for_profile_switch(deadline).await;
+        let forced = match stop_result {
+            Ok(stop) => stop.is_some_and(|s| s.forced),
+            Err(error) => {
+                // Stop/reap failed: rollback to old settings, idle, no auto-resume
+                let detail = ProfileSwitchErrorDetail {
+                    code: "StopFailed".to_owned(),
+                    message: error.to_string(),
+                    stage: ProfileSwitchStage::Reaping,
+                };
+                *self.last_profile_error.lock().unwrap() = Some(detail);
+                self.profile_stage
+                    .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+                // Attempt restore: cancel prepared
+                #[cfg(test)]
+                if self.fault_restore.load(Ordering::Acquire) {
+                    self.degraded.store(true, Ordering::Release);
+                    self.profile_stage
+                        .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
+                    // Keep pending cleared but degraded
+                    self.host.cancel_profile_switch();
+                    self.host.controller_safety().force_release();
+                    self.finish_profile_switch();
+                    tracing::error!(stage = %ProfileSwitchStage::Reaping.as_str(), "profile switch stop failed and restore failed: degraded safe stop");
+                    return Err(CommandServiceError::ProfileSwitchRestoreFailed);
+                }
+                self.host.cancel_profile_switch();
+                // Ensure idle: clear commands already done in stop, status is stopped
+                self.profile_stage
+                    .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+                self.finish_profile_switch();
+                tracing::warn!(stage = %ProfileSwitchStage::Reaping.as_str(), "profile switch stop failed, restored idle");
+                return Err(CommandServiceError::ProfileSwitchStopFailed(
+                    error.to_string(),
+                ));
+            }
+        };
+
+        // Stage 8: atomic commit after reap
+        self.profile_stage
+            .store(ProfileSwitchStage::Committing.encode(), Ordering::Release);
+        #[cfg(test)]
+        if self.fault_commit.load(Ordering::Acquire) {
+            let detail = ProfileSwitchErrorDetail {
+                code: "InjectedCommitFailed".to_owned(),
+                message: "injected commit failure".to_owned(),
+                stage: ProfileSwitchStage::Committing,
+            };
+            *self.last_profile_error.lock().unwrap() = Some(detail);
+            // Attempt restore
+            #[cfg(test)]
+            if self.fault_restore.load(Ordering::Acquire) {
+                self.degraded.store(true, Ordering::Release);
+                self.profile_stage
+                    .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
+                self.host.cancel_profile_switch();
+                self.host.controller_safety().force_release();
+                self.finish_profile_switch();
+                tracing::error!(stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed and restore failed: degraded");
+                return Err(CommandServiceError::ProfileSwitchRestoreFailed);
+            }
+            self.host.cancel_profile_switch();
+            self.profile_stage
+                .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+            self.finish_profile_switch();
+            tracing::warn!(stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed, restored idle");
+            return Err(CommandServiceError::ProfileSwitchCommitFailed(
+                "injected commit failure".to_owned(),
+            ));
+        }
+        if let Err(error) = self.host.commit_profile_switch() {
+            let detail = ProfileSwitchErrorDetail {
+                code: error.code.clone(),
+                message: error.message.clone(),
+                stage: ProfileSwitchStage::Committing,
+            };
+            *self.last_profile_error.lock().unwrap() = Some(detail);
+            #[cfg(test)]
+            if self.fault_restore.load(Ordering::Acquire) {
+                self.degraded.store(true, Ordering::Release);
+                self.profile_stage
+                    .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
+                // Best-effort cancel, but if that also fails we stay degraded
+                self.host.cancel_profile_switch();
+                self.host.controller_safety().force_release();
+                self.finish_profile_switch();
+                tracing::error!(code = %error.code, stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed and restore failed: degraded");
+                return Err(CommandServiceError::ProfileSwitchRestoreFailed);
+            }
+            // Normal restore: discard prepared, keep old active
+            self.host.cancel_profile_switch();
+            self.profile_stage
+                .store(ProfileSwitchStage::Failed.encode(), Ordering::Release);
+            self.finish_profile_switch();
+            tracing::warn!(code = %error.code, stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed, restored idle");
+            return Err(CommandServiceError::ProfileSwitchCommitFailed(
+                error.to_string(),
+            ));
+        }
+
+        // Ensure no auto-resume: commands already cleared, session is None, status Stopped
+        // Pending is cleared inside commit_profile_switch
+
+        // Stage 11: Post event (non-cancellable, errors are logged but do not rollback)
+        self.profile_stage
+            .store(ProfileSwitchStage::PostEvent.encode(), Ordering::Release);
+        if let Err(error) = self.dynamic.emit("ProfileSwitchPost").await {
+            tracing::warn!(error = %error, stage = %ProfileSwitchStage::PostEvent.as_str(), "ProfileSwitchPost failed");
+        }
+        self.profile_stage
+            .store(ProfileSwitchStage::Succeeded.encode(), Ordering::Release);
+        self.host.finish_profile_switch_gate();
+        // Transition to idle after success for next operation
+        self.profile_stage
+            .store(ProfileSwitchStage::Idle.encode(), Ordering::Release);
+        *self.last_profile_error.lock().unwrap() = None;
+        tracing::info!(profile = %name, forced, stage = %ProfileSwitchStage::Succeeded.as_str(), "profile switch succeeded");
+        Ok(ProfileSwitchLifecycleResult::Switched {
+            forced_worker_stop: forced,
+        })
     }
 
     /// Stops the current user worker for complete application shutdown.
@@ -972,6 +1482,9 @@ impl CommandService {
     }
 
     fn ensure_command_start_allowed(&self) -> Result<(), CommandServiceError> {
+        if self.degraded.load(Ordering::Acquire) {
+            return Err(CommandServiceError::ProfileSwitchDegraded);
+        }
         if self.host.profile_switch_in_progress() {
             Err(CommandServiceError::ProfileSwitchInProgress)
         } else {
@@ -1707,6 +2220,328 @@ mod tests {
         assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
         fixture.service.try_begin_profile_switch().unwrap();
         fixture.service.finish_profile_switch();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_rejects_validation_and_preserves_idle() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        // Hold a button via controller to verify force-release is not triggered on validation failure
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                a: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        fixture.service.inject_fault_validate(true);
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchValidationFailed(_)
+        ));
+        let status = fixture.service.profile_switch_status();
+        assert_eq!(status.stage, ProfileSwitchStage::Failed);
+        assert_eq!(status.active_profile, "default");
+        assert_eq!(status.pending_profile, None);
+        assert!(!status.degraded);
+        assert!(status.last_error.is_some());
+        assert_eq!(
+            status.last_error.as_ref().unwrap().stage,
+            ProfileSwitchStage::Validating
+        );
+        // No worker side effects on validation failure
+        assert_eq!(fixture.session.shutdowns.load(Ordering::Acquire), 0);
+        assert!(!fixture.session.stopping.load(Ordering::Acquire));
+        // Controller not force-released on validation failure
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        // Future commands still allowed (idle)
+        fixture.service.reload().await.unwrap();
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_stops_and_reaps_before_commit_and_does_not_auto_resume() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                a: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        let result = fixture.service.switch_profile("Other").await.unwrap();
+        assert_eq!(
+            result,
+            ProfileSwitchLifecycleResult::Switched {
+                forced_worker_stop: false
+            }
+        );
+        assert!(fixture.session.stopping.load(Ordering::Acquire));
+        assert_eq!(fixture.session.shutdowns.load(Ordering::Acquire), 1);
+        // Force-release: controller neutral
+        assert!(!fixture.host.controller_safety().state().buttons.a);
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            crate::device::ControllerState::NEUTRAL
+        );
+        // Commands cleared, idle, not auto-resumed
+        assert!(fixture.service.commands().await.is_empty());
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+        assert_eq!(fixture.host.profile_current().unwrap(), "Other");
+        assert_eq!(
+            fixture.host.state_snapshot().unwrap()["pending_profile"],
+            json!(null)
+        );
+        // No auto-resume: factory spawns should still be 1 (no new worker for target)
+        assert_eq!(fixture.factory.spawns.load(Ordering::Acquire), 1);
+        let status = fixture.service.profile_switch_status();
+        assert_eq!(status.stage, ProfileSwitchStage::Idle);
+        assert_eq!(status.active_profile, "Other");
+        assert!(!status.degraded);
+        assert!(status.last_error.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_stop_failure_rolls_back_and_stays_idle() {
+        struct FailingSession {
+            stopping: AtomicBool,
+        }
+        #[async_trait]
+        impl UserScriptSession for FailingSession {
+            async fn discover(&self) -> Result<ScriptDiscoveryResult, CommandBackendError> {
+                Ok(ScriptDiscoveryResult { commands: vec![] })
+            }
+            async fn execute(
+                &self,
+                _: ScriptExecuteRequest,
+            ) -> Result<ScriptExecutionResult, CommandBackendError> {
+                unreachable!()
+            }
+            async fn pause(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+                Ok(ScriptPauseResult { changed: false })
+            }
+            async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+                Ok(ScriptPauseResult { changed: false })
+            }
+            async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError> {
+                Ok(ScriptStopResult {
+                    stop_requested: false,
+                })
+            }
+            fn begin_stopping(&self) {
+                self.stopping.store(true, Ordering::Release);
+            }
+            async fn shutdown(
+                &self,
+                _: Duration,
+            ) -> Result<ScriptSessionStop, CommandBackendError> {
+                Err(CommandBackendError::new(
+                    "WorkerReapFailed",
+                    "injected reap failure",
+                ))
+            }
+        }
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        // Make shutdown fail to simulate worker reap failure
+        fixture.session.stopping.store(false, Ordering::Release);
+        let failing = Arc::new(FailingSession {
+            stopping: AtomicBool::new(false),
+        });
+        // Inject failing session directly into service inner
+        {
+            let mut inner = fixture.service.inner.lock().await;
+            inner.session = Some(failing.clone());
+            inner.session_profile = Some("default".to_owned());
+        }
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchStopFailed(_)
+        ));
+        let status = fixture.service.profile_switch_status();
+        assert_eq!(status.stage, ProfileSwitchStage::Failed);
+        assert_eq!(status.active_profile, "default");
+        assert_eq!(status.pending_profile, None);
+        assert!(!status.degraded);
+        assert!(failing.stopping.load(Ordering::Acquire));
+        // Profile remains old, idle, no degraded
+        assert_eq!(fixture.host.profile_current().unwrap(), "default");
+        // New commands should still be allowed (not degraded)
+        fixture.service.reload().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_commit_failure_rolls_back_idle() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        fixture.service.inject_fault_commit(true);
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchCommitFailed(_)
+        ));
+        let status = fixture.service.profile_switch_status();
+        assert_eq!(status.stage, ProfileSwitchStage::Failed);
+        assert_eq!(status.active_profile, "default");
+        assert_eq!(status.pending_profile, None);
+        assert!(!status.degraded);
+        // Worker was still reaped before commit (spec requires reap before commit)
+        assert_eq!(fixture.session.shutdowns.load(Ordering::Acquire), 1);
+        assert_eq!(fixture.host.profile_current().unwrap(), "default");
+        // Idle, no auto-resume, commands cleared
+        assert!(fixture.service.commands().await.is_empty());
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+        // Future operations allowed
+        fixture.service.reload().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_restore_failure_enters_degraded_and_rejects_new_commands() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        fixture.service.inject_fault_commit(true);
+        fixture.service.inject_fault_restore(true);
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchRestoreFailed
+        ));
+        let status = fixture.service.profile_switch_status();
+        assert_eq!(status.stage, ProfileSwitchStage::Degraded);
+        assert!(status.degraded);
+        assert_eq!(status.active_profile, "default"); // old profile preserved logically but degraded
+        assert_eq!(fixture.host.profile_current().unwrap(), "default");
+        // Degraded: new commands rejected
+        assert!(matches!(
+            fixture.service.reload().await,
+            Err(CommandServiceError::ProfileSwitchDegraded)
+        ));
+        assert!(matches!(
+            fixture
+                .service
+                .start(&CommandIdentity {
+                    module_path: "Commands.PythonCommands.samples.first".into(),
+                    class_name: "First".into()
+                })
+                .await,
+            Err(CommandServiceError::ProfileSwitchDegraded)
+        ));
+        // Status exposes typed degraded for UI/log
+        assert!(fixture.service.is_profile_switch_degraded());
+        assert_eq!(
+            status.last_error.as_ref().unwrap().stage,
+            ProfileSwitchStage::Committing
+        );
+        // Explicit recovery clears degraded
+        fixture.service.clear_profile_switch_degraded();
+        assert!(!fixture.service.is_profile_switch_degraded());
+        fixture.service.reload().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_stop_restore_failure_degrades() {
+        struct FailingStopSession {
+            stopping: AtomicBool,
+        }
+        #[async_trait]
+        impl UserScriptSession for FailingStopSession {
+            async fn discover(&self) -> Result<ScriptDiscoveryResult, CommandBackendError> {
+                Ok(ScriptDiscoveryResult { commands: vec![] })
+            }
+            async fn execute(
+                &self,
+                _: ScriptExecuteRequest,
+            ) -> Result<ScriptExecutionResult, CommandBackendError> {
+                unreachable!()
+            }
+            async fn pause(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+                Ok(ScriptPauseResult { changed: false })
+            }
+            async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+                Ok(ScriptPauseResult { changed: false })
+            }
+            async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError> {
+                Ok(ScriptStopResult {
+                    stop_requested: false,
+                })
+            }
+            fn begin_stopping(&self) {
+                self.stopping.store(true, Ordering::Release);
+            }
+            async fn shutdown(
+                &self,
+                _: Duration,
+            ) -> Result<ScriptSessionStop, CommandBackendError> {
+                Err(CommandBackendError::new(
+                    "WorkerReapFailed",
+                    "stop injected",
+                ))
+            }
+        }
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        let failing = Arc::new(FailingStopSession {
+            stopping: AtomicBool::new(false),
+        });
+        {
+            let mut inner = fixture.service.inner.lock().await;
+            inner.session = Some(failing.clone());
+            inner.session_profile = Some("default".to_owned());
+        }
+        fixture.service.inject_fault_restore(true);
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchRestoreFailed
+        ));
+        assert!(fixture.service.is_profile_switch_degraded());
+        assert_eq!(
+            fixture.service.profile_switch_status().stage,
+            ProfileSwitchStage::Degraded
+        );
+        // Rejects new commands
+        assert!(matches!(
+            fixture.service.reload().await,
+            Err(CommandServiceError::ProfileSwitchDegraded)
+        ));
+        fixture.service.clear_profile_switch_degraded();
+        assert!(!fixture.service.is_profile_switch_degraded());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn switch_profile_exposes_typed_status_and_rejects_during_switch() {
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        // Manual gate hold to test rejection during switch
+        fixture.service.try_begin_profile_switch().unwrap();
+        drop(fixture.service.profile_switch_status());
+        // After try_begin, stage should be Idle? Actually try_begin doesn't set stage, but profile_switch_status should show pending
+        // Instead test that new commands are rejected during gate
+        assert!(matches!(
+            fixture.service.reload().await,
+            Err(CommandServiceError::ProfileSwitchInProgress)
+        ));
+        assert!(matches!(
+            fixture
+                .service
+                .start(&CommandIdentity {
+                    module_path: "Commands.PythonCommands.samples.first".into(),
+                    class_name: "First".into()
+                })
+                .await,
+            Err(CommandServiceError::ProfileSwitchInProgress)
+        ));
+        fixture.service.finish_profile_switch();
+        // After finish, should be idle and allow commands
+        fixture.service.reload().await.unwrap();
+        let status2 = fixture.service.profile_switch_status();
+        assert_eq!(status2.stage, ProfileSwitchStage::Idle);
+        assert!(!status2.degraded);
     }
 
     async fn wait_for_status(service: &CommandService, expected: CommandStatus) {

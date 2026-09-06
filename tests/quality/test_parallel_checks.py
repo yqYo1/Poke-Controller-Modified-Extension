@@ -53,7 +53,7 @@ def fake_command(label: str, status: int) -> list[str]:
     ("first_status", "second_status", "expected_status"),
     [(0, 0, 0), (7, 0, 7), (0, 9, 9), (7, 9, 7)],
 )
-def test_parallel_checks_replay_both_logs_and_propagate_status(
+def test_parallel_checks_replay_all_logs_and_propagate_status(
     tmp_path: Path,
     first_status: int,
     second_status: int,
@@ -74,6 +74,9 @@ def test_parallel_checks_replay_both_logs_and_propagate_status(
             "--next",
             "second",
             *fake_command("second", second_status),
+            "--next",
+            "third",
+            *fake_command("third", 0),
         ],
         check=False,
         capture_output=True,
@@ -88,12 +91,77 @@ def test_parallel_checks_replay_both_logs_and_propagate_status(
         "first-output\n"
         "\n=== aggregate second ===\n"
         "second-output\n"
+        "\n=== aggregate third ===\n"
+        "third-output\n"
     )
     assert completed.stderr == "".join(
         f"aggregate {label} failed with status {status}\n"
         for label, status in (("first", first_status), ("second", second_status))
         if status != 0
     )
+    assert list(temporary_root.iterdir()) == []
+
+
+def barrier_command(label: str, ready: Path, release: Path) -> list[str]:
+    source = (
+        "import sys, time; "
+        "from pathlib import Path; "
+        "label, ready, release = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]); "
+        "ready.write_text('ready', encoding='utf-8'); "
+        "deadline = time.monotonic() + 5; "
+        'exec("while not release.exists():\\n'
+        "    assert time.monotonic() < deadline, 'barrier timed out'\\n"
+        '    time.sleep(0.01)"); '
+        "print(f'{label}-output', flush=True)"
+    )
+    return [sys.executable, "-c", source, label, str(ready), str(release)]
+
+
+def test_parallel_checks_launch_all_commands_before_waiting(tmp_path: Path) -> None:
+    temporary_root = tmp_path / "tmp"
+    temporary_root.mkdir()
+    release = tmp_path / "release"
+    labels = ("first", "second", "third")
+    ready_files = tuple(tmp_path / f"{label}.ready" for label in labels)
+    environment = os.environ.copy()
+    environment["TMPDIR"] = str(temporary_root)
+    arguments: list[str] = [sys.executable, "-I", str(RUNNER)]
+    for index, (label, ready) in enumerate(zip(labels, ready_files, strict=True)):
+        if index:
+            arguments.append("--next")
+        arguments.extend((label, *barrier_command(label, ready, release)))
+
+    process = subprocess.Popen(  # noqa: S603 - fixed test runner and fake commands
+        arguments,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=environment,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not all(path.exists() for path in ready_files):
+            if process.poll() is not None:
+                stdout, stderr = process.communicate(timeout=5)
+                pytest.fail(
+                    "parallel runner exited before all commands reached the barrier: "
+                    f"{process.returncode}, {stdout!r}, {stderr!r}"
+                )
+            if time.monotonic() >= deadline:
+                pytest.fail("parallel runner did not launch all three commands")
+            time.sleep(0.01)
+        release.write_text("release", encoding="utf-8")
+        stdout, stderr = process.communicate(timeout=5)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+
+    assert process.returncode == 0, (stdout, stderr)
+    assert stdout == "".join(
+        f"\n=== aggregate {label} ===\n{label}-output\n" for label in labels
+    )
+    assert stderr == ""
     assert list(temporary_root.iterdir()) == []
 
 

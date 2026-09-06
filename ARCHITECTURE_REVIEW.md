@@ -620,23 +620,17 @@ CI短縮後の95パーセンタイルに30パーセント以上の余裕を加�
 
 同一入力からパッケージを二回生成する再現可能性検査は意図した重複であり、通常CIの重複削減対象には含めません。
 
-### 10.11 direnvと既定devShellを廃止してNix appへ統一する
+### 10.11 tool-only devShellと用途別Nix appを併用する
 
-現行の`.envrc`は`use flake`だけを実行し、repositoryへ移動したshellへ既定devShellを自動適用します。
+2026年8月9日の利用者指示により、以前の「direnvと既定devShellを廃止する」方針を置き換えます。Nixを利用できる開発hostでは、すべての開発作業をprojectの既定devShell内で行います。
 
-既定devShellはRust、Python、Bun、Tauri、品質検査用tool、ビルド用環境変数、pre-commit hook導入を一つの常駐環境として提供します。
+追跡対象の`.envrc`は`use flake`だけを実行し、repositoryへ移動したshellへ既定devShellを自動適用します。新しいworktreeでは`direnv allow`を一度実行し、自動読込みを使わない場合は`nix develop`で同じ環境へ入ります。
 
-一方、CI、format、lint、test、build、生成、互換性検査、packageの再現可能な操作は、すでに個別のflake appまたは`nix fmt`として定義されています。
+既定devShellは固定したRust、Python、Bun、Tauri、品質検査用toolと、対話的なdesktop開発に必要な環境変数を提供します。shellへ入るだけで製品build、依存更新、generator、test、hook導入を実行しません。hostへ直接導入した言語runtime、compiler、package manager、build／品質toolは使用しません。
 
-これらのtaskは必要なtoolと環境変数を自身で宣言しているため、実行前に`nix develop`またはdirenvでdevShellへ入る必要がありません。
+CI、format、lint、test、build、生成、互換性検査、packageの再現可能な完了操作は、引き続き個別のflake app、`nix fmt`、`nix flake check`が所有します。devShell内で直接実行した対象限定commandは対話的な調査には使えますが、完了証跡にはしません。完了gateはdevShellのambient PATH、cache、設定へ依存せず、必要なtoolと環境を自身で固定します。
 
-direnvとdevShellはCI runner間のNix成果物共有、derivationの再利用、検査時間短縮には寄与せず、常駐するPATHと環境変数によって未定義の直接commandを偶然成功させる経路を作ります。
-
-現行devShellだけに残る用途は、対象を絞った任意Cargo操作、frontend dev server、pre-commit hook導入、エディター向け環境変数です。
-
-ただし、現行devShellは`rust-analyzer`を明示的に含まず、対話的なdesktop buildに必要な`PKG_CONFIG_PATH`と`BINDGEN_EXTRA_CLANG_ARGS`も設定しないため、完全なIDE環境または対話ビルド環境ではありません。
-
-既定devShell、`.envrc`、direnvを必須とする開発経路を削除し、次のflake appへ置き換えます。
+次のflake appをdevShellと併用します。
 
 1. 任意のCargo subcommandと引数を、固定Rust toolchain、Python、uv、desktop native dependency、共有`CARGO_TARGET_DIR`を設定した上でcallerのworktreeに対して実行する`cargo` app
 2. 固定したBunとlock fileからfrontend依存を準備し、callerの`web/`を監視してhot reloadする`web-dev` app
@@ -647,13 +641,11 @@ direnvとdevShellはCI runner間のNix成果物共有、derivationの再利用�
 
 読み取り専用の完了gateは引き続きNix store上の正準sourceまたは隔離した一時copyを使用し、callerの未追跡fileやambient環境へ依存しません。
 
-`nix develop`、`nix develop --command`、direnv、自動devShellを正規の開発手順として残しません。
+`AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`を、tool-only devShellと用途別flake appを併用する記述へ同時に更新します。
 
-`AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`のdevShell前提を、flake appを唯一の開発入口とする記述へ同時に更新します。
+direnvが生成する`.direnv/`は非追跡cacheとし、version管理または配布の対象にはしません。
 
-移行作業を行う各worktreeでは、direnvが生成した非追跡の`.direnv/`cacheも削除し、version管理または配布の対象にはしません。
-
-Nix appで表現できない対話用途が後から生じた場合も、既定devShellを復活させず、用途と環境を限定したappとして追加します。
+新しい常駐環境、watch、hot reload、書込み、または長時間処理が必要な用途は、既定devShellを肥大化させず、用途と環境を限定したappとして追加します。
 
 ## 11. 実装変更へ渡す情報
 
@@ -706,7 +698,7 @@ Codexの実装計画と各変更の受入条件には、次の情報を使用し
 - PokeCon固有derivationを再利用するバイナリキャッシュの信頼境界
 - fast job、文書変更、製品コード変更のCI完了時間目標
 - CI時間をstep、derivation、cache substituteの単位で検証する受入条件
-- direnv、`.envrc`、既定devShellを削除し、flake appを唯一の開発入口とする構成
+- 追跡した`.envrc`、tool-only既定devShell、用途別flake appを併用し、host toolchainを使用しない構成
 - callerのworktreeを対象とするCargo、frontend dev server、hook導入、エディター連携app
 - 完了gateの隔離実行と、書き込みまたはwatchを行うappの明示的なcaller-worktree実行を区別する契約
 
@@ -855,7 +847,7 @@ cameraのbulk frameだけは、別途定義したshared-memory `SharedFrameRing`
 6. `tauri-shell`によるWeb専用ビルドを廃止して標準成果物を更新し、続いて`pokecon-pybindings`を削除してPython配布物を更新する
 7. 旧クレートのディレクトリーとworkspace memberを削除し、Cargo.lock、Nix、CI、リリース、インストーラー、文書内のパスとパッケージ名を更新する
 8. 通常CIを変更領域判定、重複のない領域別job、集約必須ゲート、分割したNix source、バイナリキャッシュへ移行し、実測時間と検査完全性を検証する
-9. Cargo、frontend dev server、hook導入、エディター連携のflake appを追加して対話用途を移行し、`.envrc`と既定devShellを削除した後、repository全体のdevShell前提を更新する
+9. Cargo、frontend dev server、hook導入、エディター連携のflake appを維持し、追跡した`.envrc`とtool-only既定devShellを追加した後、repository全体の開発手順を更新する
 10. この文書で確定した入力調停、通知隔離、動的設定切替、プロファイル切替の挙動変更を、構造統合とは別の変更として実装する
 
 各段階で、既存の互換性検査、Rustテスト、Clippy、ビルド、契約検査をNix taskから実行します。
@@ -891,7 +883,7 @@ rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時�
 
 直近10回相当の実行でfast job、文書変更、製品コード変更の時間目標を満たし、`ci-watch.sh`が正常なcritical pathを監視期限切れにしないことを確認します。
 
-devShell移行では、新しいworktreeでdirenvまたは`nix develop`を使用せず、flake appだけから開発を開始できることを確認します。
+devShell移行では、新しいworktreeで`direnv allow`または`nix develop`から固定toolchainへ入り、用途別flake appと完了gateを実行できることを確認します。
 
 `cargo` appで対象package、個別test、lock file更新、metadata確認をcallerのworktreeに対して実行でき、固定toolchainとビルド環境が既存のRust完了gateと一致することを確認します。
 
@@ -899,13 +891,13 @@ devShell移行では、新しいworktreeでdirenvまたは`nix develop`を使用
 
 `hooks-install` appを新しいworktreeで一度実行した後、git hookがNixで固定したpre-commit検査を実行することを確認します。
 
-`editor` appまたはNixが出力するlanguage server実行ファイルだけで、Rust、Python、TypeScriptの解析がhost toolchainとdirenvへ依存せず動作することを確認します。
+`editor` appまたはNixが出力するlanguage server実行ファイルだけで、Rust、Python、TypeScriptの解析がhost toolchainへ依存せず動作することを確認します。
 
-Git管理対象fileから`.envrc`、`direnv`、`nix develop`、`devShell`参照を検索し、履歴説明を除いて正規の開発手順に残っていないことを確認します。
+Git管理対象の`.envrc`が`use flake`だけを含み、文書のdirenv、`nix develop`、devShell参照が同じtool-only開発契約を示すことを確認します。
 
-移行を検証するworktreeに非追跡の`.direnv/`cacheが残っていないことを確認します。
+移行を検証するworktreeで`.direnv/`がGit管理または配布対象になっていないことを確認します。
 
-既存のflake taskをdevShell外から実行し、CI、format、lint、test、build、生成、互換性検査、packageの結果が移行前と一致することを確認します。
+既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性検査、packageの結果が移行前と一致し、完了gateがambient shell状態へ依存しないことを確認します。
 
 通常CIの再構成後も、Package CIとReleaseがOS別成果物、クリーンインストール、アップグレード、アンインストール、再現可能性を従来どおり検証することを確認します。
 

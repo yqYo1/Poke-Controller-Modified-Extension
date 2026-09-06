@@ -3648,6 +3648,9 @@
             "minimum": 0,
             "type": "integer"
           },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
+          },
           "input.keyboard_enabled": {
             "type": "boolean"
           },
@@ -4000,6 +4003,7 @@
           "input.left_stick_mouse_enabled",
           "input.right_stick_mouse_enabled",
           "input.touchscreen_area",
+          "input.allow_manual_intervention",
           "notifications.line_menu_behavior",
           "notifications.discord.webhook_url",
           "notifications.discord.username",
@@ -4176,6 +4180,9 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
+          },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
           },
           "input.keyboard_enabled": {
             "type": "boolean"

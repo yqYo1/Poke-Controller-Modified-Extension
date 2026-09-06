@@ -680,10 +680,17 @@ pub(crate) async fn create_peer_connection(
     register_preferred_video_codecs(&mut media_engine)?;
     let registry = register_default_interceptors(Registry::new(), &mut media_engine)
         .map_err(|_| WebRtcError::PeerCreationFailed)?;
-    let api = APIBuilder::new()
+    let api_builder = APIBuilder::new()
         .with_media_engine(media_engine)
-        .with_interceptor_registry(registry)
-        .build();
+        .with_interceptor_registry(registry);
+    #[cfg(test)]
+    let api_builder = {
+        let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
+        setting_engine.set_include_loopback_candidate(true);
+        setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback()));
+        api_builder.with_setting_engine(setting_engine)
+    };
+    let api = api_builder.build();
     let ice_servers = if config.stun_server.is_empty() {
         Vec::new()
     } else {

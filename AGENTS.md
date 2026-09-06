@@ -3,9 +3,9 @@
 ## Session Directives (Auto-captured)
 
 ### Development Environment
-- [2026-07-30] **All build, test, format, generation, watch, and language-server work MUST use project Nix flake outputs.** Use `nix run .#<task>` for purpose-specific apps, `nix fmt` for the formatter, and `nix flake check` for flake checks. Use `nix run .#cargo -- <subcommand>` for targeted Cargo work.
-- [2026-07-30] **Do not use direnv, `.envrc`, `nix develop`, or a default devShell.** Interactive workflows must be expressed as scoped flake apps such as `cargo`, `web-dev`, `hooks-install`, and `editor`.
-- [2026-07-30] **Do NOT run host language runtimes, compilers, build tools, package managers, or quality tools directly.** The `nix` CLI and VCS/worktree orchestration with `git` or `ghq` are allowed entrypoint operations; project work invoked by them must use the fixed flake outputs above.
+- [2026-08-09] **All development work MUST use the Nix devShell.** Enter with `nix develop`, or let direnv load the same shell from `.envrc` with `use flake`.
+- [2026-08-09] **direnv is available and configured.** Run `direnv allow` once for a new worktree when automatic loading is blocked.
+- [2026-08-09] **Do NOT run host language runtimes, compilers, build tools, package managers, or quality tools directly.** Use tools provided inside `nix develop`, or the fixed `nix run .#<task>`, `nix fmt`, and `nix flake check` entrypoints.
 - [2026-07-30] **These flake-output rules govern local work on Nix-capable development hosts.** Explicit Windows CI, packaging, and release jobs use the toolchains pinned by their workflows because native Windows Nix execution is not a supported gate.
 - [2026-05-09] **Python 3.14 is the target version.** Use PEP 695 type parameters and full type hints (basedpyright for checking).
 

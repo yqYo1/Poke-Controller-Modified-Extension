@@ -191,6 +191,7 @@ class _OptDynamic:
     callback_soft_timeout_ms: int
 
 class _OptInput:
+    allow_manual_intervention: bool
     keyboard_enabled: bool
     left_stick_mouse_enabled: bool
     right_stick_mouse_enabled: bool

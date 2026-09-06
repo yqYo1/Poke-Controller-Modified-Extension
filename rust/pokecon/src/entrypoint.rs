@@ -58,6 +58,10 @@ struct Cli {
     /// Exit successfully after the runtime boundaries have started.
     #[arg(long)]
     exit_after_startup: bool,
+    /// Bind an OS-assigned port without changing the canonical port setting.
+    #[cfg(feature = "integration-test-support")]
+    #[arg(long, hide = true)]
+    ephemeral_port: bool,
 }
 
 #[derive(Debug, Error)]
@@ -120,12 +124,17 @@ pub async fn run_cli() -> Result<(), MainError> {
         }
     }
 
+    #[cfg(feature = "integration-test-support")]
+    let ephemeral_port = cli.ephemeral_port;
+    #[cfg(not(feature = "integration-test-support"))]
+    let ephemeral_port = false;
+
     init_tracing("info")?;
     ScaffoldManager::new(before_dynamic.roots.clone())
         .ensure(before_dynamic.active_profile.as_str())?;
 
     if cli.ui == UiArgument::Desktop && !cli.exit_after_startup {
-        return run_desktop(request, before_dynamic).await;
+        return run_desktop(request, before_dynamic, ephemeral_port).await;
     }
 
     run_packaged_backend(
@@ -133,6 +142,7 @@ pub async fn run_cli() -> Result<(), MainError> {
         before_dynamic,
         cli.ui.into(),
         cli.exit_after_startup,
+        ephemeral_port,
         RunControl::new(ShutdownCoordinator::new()),
         None,
     )
@@ -1685,6 +1695,7 @@ async fn run_backend(
     before_dynamic: LoadedSettings,
     ui_mode: UiMode,
     exit_after_startup: bool,
+    ephemeral_port: bool,
     control: RunControl,
     desktop_settings: Option<DesktopRuntimeSettings>,
 ) -> Result<(), MainError> {
@@ -1708,7 +1719,8 @@ async fn run_backend(
         .settings
         .string("server.bind_address")?
         .parse::<IpAddr>()?;
-    let port = u16::try_from(loaded.settings.integer("server.port")?)?;
+    let configured_port = u16::try_from(loaded.settings.integer("server.port")?)?;
+    let port = if ephemeral_port { 0 } else { configured_port };
     let web_root = PathBuf::from(loaded.settings.string("server.web_dir")?);
     run_configured_controlled(
         AppOptions {
@@ -1732,6 +1744,7 @@ async fn run_packaged_backend(
     before_dynamic: LoadedSettings,
     ui_mode: UiMode,
     exit_after_startup: bool,
+    ephemeral_port: bool,
     control: RunControl,
     desktop_settings: Option<DesktopRuntimeSettings>,
 ) -> Result<(), MainError> {
@@ -1743,6 +1756,7 @@ async fn run_packaged_backend(
         before_dynamic,
         ui_mode,
         exit_after_startup,
+        ephemeral_port,
         control,
         desktop_settings,
     )
@@ -1784,6 +1798,7 @@ async fn supervise_desktop_backend_startup<ReadinessGuard>(
 async fn run_desktop(
     request: PipelineRequest,
     before_dynamic: LoadedSettings,
+    ephemeral_port: bool,
 ) -> Result<(), MainError> {
     let runtime_settings = DesktopRuntimeSettings::new(
         before_dynamic
@@ -1824,6 +1839,7 @@ async fn run_desktop(
                         before_dynamic,
                         UiMode::Desktop,
                         false,
+                        ephemeral_port,
                         control,
                         Some(runtime_settings),
                     )
@@ -1949,11 +1965,20 @@ mod tests {
         let default = super::Cli::try_parse_from(["pokecon"]).expect("default CLI");
         assert_eq!(default.ui, super::UiArgument::Web);
         assert_eq!(crate::UiMode::from(default.ui), crate::UiMode::Web);
+        #[cfg(feature = "integration-test-support")]
+        assert!(!default.ephemeral_port);
 
         let desktop =
             super::Cli::try_parse_from(["pokecon", "--ui", "desktop"]).expect("desktop CLI");
         assert_eq!(desktop.ui, super::UiArgument::Desktop);
         assert_eq!(crate::UiMode::from(desktop.ui), crate::UiMode::Desktop);
+
+        #[cfg(feature = "integration-test-support")]
+        {
+            let ephemeral = super::Cli::try_parse_from(["pokecon", "--ephemeral-port"])
+                .expect("ephemeral integration-test CLI");
+            assert!(ephemeral.ephemeral_port);
+        }
     }
 
     struct FatalBeforeReadinessDropGuard {

@@ -809,6 +809,58 @@
         }
       }
     },
+    "input.allow_manual_intervention": {
+      "default": true,
+      "type": "boolean",
+      "x-pokecon": {
+        "apply_trigger": null,
+        "default": {
+          "kind": "literal",
+          "value": true
+        },
+        "mutability": "runtime_immediate",
+        "path": null,
+        "scope": "profile",
+        "secret": false,
+        "spec_refs": [
+          "§10.3",
+          "§11.4.1.1",
+          "§11.4.2",
+          "§11.4.1.2"
+        ],
+        "surfaces": {
+          "cli": {
+            "discouraged": false,
+            "encoding": "scalar",
+            "flags": [
+              "--input-allow-manual-intervention"
+            ]
+          },
+          "dynamic": {
+            "name": "pokecon.opt.input.allow_manual_intervention",
+            "unsupported_reason": null
+          },
+          "env": {
+            "encoding": "scalar",
+            "name": "POKECON_INPUT_ALLOW_MANUAL_INTERVENTION"
+          },
+          "openapi": {
+            "access": "read_write",
+            "masked_read": false,
+            "unsupported_reason": null
+          },
+          "toml": {
+            "name": "input.allow_manual_intervention",
+            "unsupported_reason": null
+          },
+          "ui": {
+            "access": "read_write",
+            "control": "checkbox",
+            "unsupported_reason": null
+          }
+        }
+      }
+    },
     "input.keyboard_enabled": {
       "default": true,
       "type": "boolean",
@@ -4225,6 +4277,7 @@
     "input.left_stick_mouse_enabled",
     "input.right_stick_mouse_enabled",
     "input.touchscreen_area",
+    "input.allow_manual_intervention",
     "notifications.line_menu_behavior",
     "notifications.discord.webhook_url",
     "notifications.discord.username",

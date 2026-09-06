@@ -426,6 +426,32 @@ impl CommandRegistry {
         })
     }
 
+    /// Builds an *isolated reload candidate* for the complete command/tag
+    /// display cache without holding camera, serial, or script main-path
+    /// locks. The current generation remains live; the candidate snapshots
+    /// `CommandConfiguration` once, builds every finite tag strictly
+    /// sequentially in isolated memory, and returns only a complete cache or
+    /// an explicit `Superseded` marker. Callers must publish the cache only
+    /// via `StartupDynamicHost::commit_reload_candidate` after all Python/Lua
+    /// settings, callback registrations, and validation have succeeded, so
+    /// old callbacks drain in the prior generation and failure leaves the
+    /// current generation unchanged with a typed `dynamic_reload_failed`
+    /// diagnostic. This method reuses `build_display_cache` rather than
+    /// duplicating its staging/validation logic.
+    ///
+    /// # Errors
+    ///
+    /// Returns a settings, callback scheduler, or serialization failure. The
+    /// caller must retain its previous completed cache and emit a typed
+    /// failure on error; partial display lists are never returned.
+    pub async fn build_reload_candidate(
+        &self,
+        generation: u64,
+        candidates: Vec<CommandInfo>,
+    ) -> Result<CommandCacheBuildResult, CommandError> {
+        self.build_display_cache(generation, candidates).await
+    }
+
     fn configuration(&self) -> Result<CommandConfiguration, CommandError> {
         let settings = self.0.host.settings_snapshot()?;
         let global = callback_settings(&settings)?;
@@ -1011,6 +1037,172 @@ mod tests {
                 .unwrap()
                 .unwrap(),
             CommandCacheBuildResult::Superseded { generation: 23 }
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn reload_candidate_is_isolated_and_generation_traced() {
+        let (registry, host) = registry();
+        let first = command("First", "Commands.First", "First");
+        let second = command("Second", "Commands.Second", "Second");
+        let result = registry
+            .build_reload_candidate(7, vec![first.clone(), second.clone()])
+            .await
+            .unwrap();
+        let CommandCacheBuildResult::Complete { cache } = result else {
+            panic!("candidate must be complete");
+        };
+        assert_eq!(cache.generation, 7);
+        assert_eq!(cache.tags, ["-", "sample-fast"]);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new(Notify::new());
+        registry.set_callback(
+            CommandCallbackKind::Sort,
+            Some(Arc::new(BlockingCallback {
+                calls: calls.clone(),
+                release: release.clone(),
+            })),
+        );
+        let registry_clone = registry.clone();
+        let building = tokio::spawn(async move {
+            registry_clone
+                .build_reload_candidate(8, vec![first.clone()])
+                .await
+        });
+        timeout(Duration::from_secs(1), async {
+            while calls.load(Ordering::Acquire) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        registry
+            .set_option(
+                CommandCallbackKind::TagMatch,
+                CommandOptionField::Priority,
+                CommandOptionValue::Priority(5),
+            )
+            .unwrap();
+        release.notify_one();
+        let superseded = timeout(Duration::from_secs(1), building)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            superseded,
+            CommandCacheBuildResult::Superseded { generation: 8 }
+        );
+        assert!(
+            host.diagnostics()
+                .iter()
+                .all(|diagnostic| !diagnostic.code.is_empty())
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_reload_candidates_only_one_generation_wins() {
+        let (registry, _host) = registry();
+        let mut handles = Vec::new();
+        for i in 0..4u64 {
+            let registry = registry.clone();
+            let cmd = command(
+                &format!("Cmd{i}"),
+                &format!("Commands.Cmd{i}"),
+                &format!("Cmd{i}"),
+            );
+            handles.push(tokio::spawn(async move {
+                let gen_id = 100 + i;
+                let result = registry
+                    .build_reload_candidate(gen_id, vec![cmd])
+                    .await
+                    .unwrap();
+                (gen_id, result)
+            }));
+        }
+        let mut completed = Vec::new();
+        for handle in handles {
+            let (gen_id, result) = handle.await.unwrap();
+            match result {
+                CommandCacheBuildResult::Complete { cache } => {
+                    assert_eq!(cache.generation, gen_id);
+                    completed.push(gen_id);
+                }
+                CommandCacheBuildResult::Superseded { generation } => {
+                    assert_eq!(generation, gen_id);
+                }
+            }
+        }
+        assert!(
+            !completed.is_empty(),
+            "at least one candidate must complete"
+        );
+        completed.sort_unstable();
+        for window in completed.windows(2) {
+            assert!(window[0] < window[1]);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn old_callbacks_finish_in_old_generation_while_new_candidate_builds() {
+        let (registry, host) = registry();
+        let calls_old = Arc::new(AtomicUsize::new(0));
+        let release_old = Arc::new(Notify::new());
+        let old_revision = registry.set_callback(
+            CommandCallbackKind::Sort,
+            Some(Arc::new(BlockingCallback {
+                calls: calls_old.clone(),
+                release: release_old.clone(),
+            })),
+        );
+        assert!(old_revision.is_some());
+        let registry_clone = registry.clone();
+        let old_build = tokio::spawn(async move {
+            registry_clone
+                .sort(vec![command("Old", "Commands.Old", "Old")])
+                .await
+                .unwrap()
+        });
+        timeout(Duration::from_secs(1), async {
+            while calls_old.load(Ordering::Acquire) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let new_calls = Arc::new(AtomicUsize::new(0));
+        registry.set_callback(
+            CommandCallbackKind::Sort,
+            Some(Arc::new(ReturningCallback {
+                calls: new_calls.clone(),
+                returned: CallbackReturn::Value(json!([{
+                    "name": "New",
+                    "module_path": "Commands.New",
+                    "class_name": "New",
+                    "tags": []
+                }])),
+            })),
+        );
+        let fallback = vec![CommandDisplayItem::Command {
+            command: command("New", "Commands.New", "New"),
+        }];
+        let new_result = timeout(
+            Duration::from_secs(1),
+            registry.sort(vec![command("New", "Commands.New", "New")]),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(new_result, fallback);
+        release_old.notify_one();
+        let _old_result = timeout(Duration::from_secs(1), old_build)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            host.diagnostics()
+                .iter()
+                .any(|d| d.code == "dynamic_command_callback_fallback")
         );
     }
 }

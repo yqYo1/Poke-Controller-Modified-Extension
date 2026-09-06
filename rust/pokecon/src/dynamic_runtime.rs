@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::dynamic::protocol::{DynamicInitializeRequest, PYTHON_SITE_PACKAGES_ENV};
-use crate::dynamic::{DynamicConfigLanguage, DynamicHostError};
+use crate::dynamic::{CommandDisplayCache, DynamicConfigLanguage, DynamicHostError};
 use crate::settings::package::PythonWorker;
 use crate::settings::pipeline::{LoadedSettings, PipelineError, PipelineRequest, SettingSource};
 use crate::settings::python::{PythonError, prepare_managed_python};
@@ -626,6 +626,68 @@ async fn finish_worker_receivers(
     }
 }
 
+/// Result of one isolated dynamic-reload candidate transaction (AR-11-18).
+#[allow(
+    dead_code,
+    reason = "isolated reload status is test-driven for AR-11-18; production wiring follows candidate API"
+)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DynamicReloadStatus {
+    /// Candidate validated and atomically published; old callbacks drain in
+    /// the prior generation.
+    Committed { generation: u64 },
+    /// Candidate rejected; generation unchanged with typed code/message for
+    /// UI/log.
+    Rejected { code: String, message: String },
+}
+
+/// Executes an isolated reload candidate that builds Python/Lua settings,
+/// callbacks, and the *complete* command/tag cache offline, then atomically
+/// publishes only after all validation succeeds. The current generation and
+/// script execution remain live while the candidate builds; the publish holds
+/// only the host `Mutex` briefly and never holds camera, serial, or script
+/// main-path locks. This reuses `StartupDynamicHost::begin_reload_candidate`,
+/// `CommandDisplayCache`, and `ScriptLoadStage` rather than inventing
+/// duplicate APIs. Old callbacks finish in the old generation.
+///
+/// # Errors
+///
+/// Returns `Rejected` with a typed code when the cache mismatches the
+/// candidate, the generation is stale, or the host is stopping. Callers
+/// should surface the code/message to UI/log and leave the current generation
+/// unchanged.
+#[allow(
+    dead_code,
+    reason = "isolated reload commit helper is test-driven for AR-11-18; production wiring follows candidate API"
+)]
+pub fn try_commit_isolated_reload(
+    host: &StartupDynamicHost,
+    candidate: &crate::dynamic_host::DynamicReloadCandidate,
+    cache: &CommandDisplayCache,
+) -> DynamicReloadStatus {
+    match host.commit_reload_candidate(candidate, cache) {
+        Ok(generation) => DynamicReloadStatus::Committed { generation },
+        Err(error) => {
+            host.abort_reload_candidate(candidate, &error.code, &error.message);
+            DynamicReloadStatus::Rejected {
+                code: error.code,
+                message: error.message,
+            }
+        }
+    }
+}
+
+/// State transitions for an explicit candidate-generation reload:
+/// Idle --`begin_reload_candidate()`--> Evaluating (isolated, no host/camera/serial locks, current gen live, script running)
+/// Evaluating --build Python/Lua + `build_reload_candidate()`--> Validating
+/// Validating --all ok--> Publishing (single host Mutex swap, atomic, generation+1)
+/// Validating --any failure--> Failed (candidate discarded, generation unchanged, typed `DynamicReloadStatus::Rejected` -> UI/log)
+/// Publishing --> Committed (new gen live, old callbacks drain in prior gen, `host.notify_runtime_change()`)
+/// Failed --> Idle
+/// Committed --> Idle
+/// Reuses existing staging types: `ScriptLoadStage` for command/tag intent,
+/// `CommandState` for callback revisions, `CommandDisplayCache` for the
+/// complete atomic publish unit.
 async fn finish_receiver_task(task: Option<JoinHandle<()>>) {
     let Some(mut task) = task else {
         return;

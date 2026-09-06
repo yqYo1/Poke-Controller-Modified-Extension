@@ -423,10 +423,16 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     let broadcast_events = state.broker.subscribe();
     let script_ui = state.broker.subscribe_script_ui();
     let cancellation = CancellationToken::new();
-    let (high_sender, high_receiver) = mpsc::channel(state.config.state_queue_capacity);
+    // Bounded priority queues: control outranks display. Control (input acks,
+    // signaling, heartbeat) has a dedicated bounded queue so slow display
+    // delivery (state, script UI, motion JPEG, logs) cannot stall it. State
+    // and script UI are coalescing display queues, low is best-effort
+    // ephemeral (serial/log) with drop-on-full, motion JPEG is latest-only.
+    let (control_sender, control_receiver) = mpsc::channel(state.config.state_queue_capacity);
+    let (state_sender, state_receiver) = mpsc::channel(state.config.state_queue_capacity);
     let (low_sender, low_receiver) = mpsc::channel(state.config.ephemeral_queue_capacity);
     let (pong_sender, pong_receiver) = mpsc::channel(state.config.heartbeat_queue_capacity);
-    if high_sender
+    if control_sender
         .try_send(Outgoing::Json(ServerMessage::InputGeneration(
             MessageData { data: generation },
         )))
@@ -441,7 +447,8 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     let mut tasks = JoinSet::new();
     tasks.spawn(write_messages(
         socket_sender,
-        high_receiver,
+        control_receiver,
+        state_receiver,
         low_receiver,
         realtime.motion_jpeg,
         cancellation.clone(),
@@ -451,7 +458,7 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
         ReadMessageContext {
             backend: Arc::clone(&state.backend),
             connection,
-            outgoing: high_sender.clone(),
+            outgoing: control_sender.clone(),
             pong: pong_sender,
             backend_timeout: state.config.backend_timeout,
             realtime: realtime.messages,
@@ -460,7 +467,7 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     ));
     tasks.spawn(forward_state_changes(
         state_events,
-        high_sender.clone(),
+        state_sender.clone(),
         cancellation.clone(),
     ));
     tasks.spawn(forward_broadcasts(
@@ -471,12 +478,12 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     ));
     tasks.spawn(forward_script_ui(
         script_ui,
-        high_sender.clone(),
+        state_sender.clone(),
         cancellation.clone(),
     ));
     tasks.spawn(heartbeat(
         connection,
-        high_sender.clone(),
+        control_sender.clone(),
         pong_receiver,
         state.config.heartbeat_interval,
         state.config.pong_timeout,
@@ -488,7 +495,7 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
             RealtimeConnectionIo {
                 backend: Arc::clone(&state.backend),
                 connection,
-                outgoing_high: high_sender,
+                outgoing_high: control_sender,
                 outgoing_low: low_sender,
                 messages,
                 logs,
@@ -575,7 +582,8 @@ fn setup_realtime(state: &WebSocketState, connection: ConnectionId) -> RealtimeS
 
 async fn write_messages<S>(
     mut socket: S,
-    mut high: mpsc::Receiver<Outgoing>,
+    mut control: mpsc::Receiver<Outgoing>,
+    mut state: mpsc::Receiver<Outgoing>,
     mut low: mpsc::Receiver<Outgoing>,
     mut motion_jpeg: MotionJpegDelivery,
     cancellation: CancellationToken,
@@ -585,8 +593,9 @@ async fn write_messages<S>(
     loop {
         let next = tokio::select! {
             biased;
-            message = high.recv() => NextWrite::Queued(message),
+            message = control.recv() => NextWrite::Queued(message),
             () = cancellation.cancelled() => NextWrite::Cancelled,
+            message = state.recv() => NextWrite::Queued(message),
             event = next_motion_jpeg(&mut motion_jpeg) => NextWrite::MotionJpeg(event),
             message = low.recv() => NextWrite::Queued(message),
         };
@@ -782,29 +791,188 @@ fn protocol_close(reason: &'static str) -> CloseFrame {
     }
 }
 
+/// Merges a newer `RevisionedStateChange` into an existing pending one,
+/// keeping the latest revision and coalescing same-field patches so that
+/// display delivery never grows without bound and the latest complete value
+/// wins for each field.
+fn coalesce_optional<T>(existing: &mut Option<T>, incoming: Option<T>) {
+    if incoming.is_some() {
+        *existing = incoming;
+    }
+}
+
+fn coalesce_revisioned_state(
+    existing: &mut RevisionedStateChange,
+    incoming: RevisionedStateChange,
+) {
+    existing.revision = incoming.revision;
+    existing.data.cause = incoming.data.cause;
+    let existing_patch = &mut existing.data.state;
+    let incoming_patch = incoming.data.state;
+    coalesce_optional(&mut existing_patch.serial_port, incoming_patch.serial_port);
+    coalesce_optional(
+        &mut existing_patch.serial_baud_rate,
+        incoming_patch.serial_baud_rate,
+    );
+    coalesce_optional(
+        &mut existing_patch.serial_connected,
+        incoming_patch.serial_connected,
+    );
+    coalesce_optional(
+        &mut existing_patch.camera_opened,
+        incoming_patch.camera_opened,
+    );
+    coalesce_optional(&mut existing_patch.camera_fps, incoming_patch.camera_fps);
+    coalesce_optional(
+        &mut existing_patch.camera_resolution,
+        incoming_patch.camera_resolution,
+    );
+    coalesce_optional(
+        &mut existing_patch.camera_device,
+        incoming_patch.camera_device,
+    );
+    coalesce_optional(&mut existing_patch.is_running, incoming_patch.is_running);
+    coalesce_optional(
+        &mut existing_patch.command_state,
+        incoming_patch.command_state,
+    );
+    coalesce_optional(
+        &mut existing_patch.current_command,
+        incoming_patch.current_command,
+    );
+    coalesce_optional(
+        &mut existing_patch.command_candidates,
+        incoming_patch.command_candidates,
+    );
+    coalesce_optional(&mut existing_patch.tags, incoming_patch.tags);
+    coalesce_optional(
+        &mut existing_patch.active_profile,
+        incoming_patch.active_profile,
+    );
+    coalesce_optional(
+        &mut existing_patch.pending_profile,
+        incoming_patch.pending_profile,
+    );
+    coalesce_optional(
+        &mut existing_patch.available_profiles,
+        incoming_patch.available_profiles,
+    );
+    coalesce_optional(&mut existing_patch.last_input, incoming_patch.last_input);
+    coalesce_optional(
+        &mut existing_patch.holding_buttons,
+        incoming_patch.holding_buttons,
+    );
+    coalesce_optional(&mut existing_patch.pid, incoming_patch.pid);
+    coalesce_optional(
+        &mut existing_patch.command_display_lists,
+        incoming_patch.command_display_lists,
+    );
+    coalesce_optional(
+        &mut existing_patch.command_display_cache_loading,
+        incoming_patch.command_display_cache_loading,
+    );
+    match (&mut existing.data.settings, incoming.data.settings) {
+        (None, Some(incoming)) => existing.data.settings = Some(incoming),
+        (Some(existing_settings), Some(incoming_settings)) => {
+            for (key, value) in incoming_settings.values.0 {
+                existing_settings.values.0.insert(key, value);
+            }
+            for (key, value) in incoming_settings.pending_restart_values.0 {
+                existing_settings
+                    .pending_restart_values
+                    .0
+                    .insert(key, value);
+            }
+            // Latest change is authoritative for restart and failure sets
+            existing_settings.restart_required = incoming_settings.restart_required;
+            existing_settings.apply_failures = incoming_settings.apply_failures;
+        }
+        _ => {}
+    }
+}
+
 async fn forward_state_changes(
     mut events: broadcast::Receiver<Arc<RevisionedStateChange>>,
     outgoing: mpsc::Sender<Outgoing>,
     cancellation: CancellationToken,
 ) {
+    // Bounded coalescing: at most one pending display patch beyond the channel
+    // capacity. Same-field updates merge into the pending value so a slow client
+    // never accumulates an unbounded display backlog and the latest complete
+    // value wins. This keeps the critical control path (high queue) from
+    // stalling on display pressure.
+    let mut pending: Option<RevisionedStateChange> = None;
     loop {
+        if let Some(pending_change) = pending.take() {
+            let message = ServerMessage::UiStateChanged(Box::new(pending_change));
+            match outgoing.try_send(Outgoing::Json(message)) {
+                Ok(()) => continue,
+                Err(mpsc::error::TrySendError::Full(returned)) => {
+                    let Outgoing::Json(ServerMessage::UiStateChanged(boxed)) = returned else {
+                        unreachable!("state forwarder only sends UiStateChanged")
+                    };
+                    pending = Some(*boxed);
+                    // Coalesce further display updates while the bounded queue
+                    // remains full, otherwise keep retrying with backoff so a
+                    // slow consumer does not busy-loop.
+                    let event = tokio::select! {
+                        () = cancellation.cancelled() => return,
+                        event = events.recv() => event,
+                        () = tokio::time::sleep(Duration::from_millis(5)) => {
+                            continue;
+                        }
+                    };
+                    match event {
+                        Ok(event) => {
+                            let incoming = (*event).clone();
+                            if let Some(existing) = pending.as_mut() {
+                                coalesce_revisioned_state(existing, incoming);
+                            } else {
+                                pending = Some(incoming);
+                            }
+                            continue;
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => {
+                            cancellation.cancel();
+                            return;
+                        }
+                        Err(broadcast::error::RecvError::Closed) => return,
+                    }
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => return,
+            }
+        }
         let event = tokio::select! {
             () = cancellation.cancelled() => return,
             event = events.recv() => event,
         };
         match event {
             Ok(event) => {
-                let message = ServerMessage::UiStateChanged(Box::new((*event).clone()));
-                if outgoing.try_send(Outgoing::Json(message)).is_err() {
-                    cancellation.cancel();
-                    return;
+                let incoming = (*event).clone();
+                let message = ServerMessage::UiStateChanged(Box::new(incoming));
+                match outgoing.try_send(Outgoing::Json(message)) {
+                    Ok(()) => {}
+                    Err(mpsc::error::TrySendError::Full(returned)) => {
+                        let Outgoing::Json(ServerMessage::UiStateChanged(boxed)) = returned else {
+                            unreachable!("state forwarder only sends UiStateChanged")
+                        };
+                        pending = Some(*boxed);
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => return,
                 }
             }
-            Err(broadcast::error::RecvError::Lagged(_missed)) => {
+            Err(broadcast::error::RecvError::Lagged(_)) => {
                 cancellation.cancel();
                 return;
             }
-            Err(broadcast::error::RecvError::Closed) => return,
+            Err(broadcast::error::RecvError::Closed) => {
+                if let Some(pending_change) = pending.take() {
+                    let _ = outgoing.try_send(Outgoing::Json(ServerMessage::UiStateChanged(
+                        Box::new(pending_change),
+                    )));
+                }
+                return;
+            }
         }
     }
 }
@@ -852,8 +1020,47 @@ async fn forward_script_ui(
     outgoing: mpsc::Sender<Outgoing>,
     cancellation: CancellationToken,
 ) {
+    // Bounded latest-only delivery: the watch already coalesces to the
+    // latest complete snapshot, and the forwarder keeps at most one
+    // pending value beyond the bounded channel so slow displays never
+    // propagate backpressure to the control path.
     let mut initial = true;
+    let mut pending: Option<ScriptUiSnapshot> = None;
     loop {
+        if let Some(pending_snapshot) = pending.take() {
+            let message = ServerMessage::ScriptUi(MessageData {
+                data: pending_snapshot,
+            });
+            match outgoing.try_send(Outgoing::Json(message)) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(returned)) => {
+                    let Outgoing::Json(ServerMessage::ScriptUi(MessageData { data })) = returned
+                    else {
+                        unreachable!("script_ui forwarder only sends ScriptUi")
+                    };
+                    pending = Some(data);
+                    // Keep latest snapshot while bounded queue is full.
+                    let changed = tokio::select! {
+                        () = cancellation.cancelled() => return,
+                        changed = snapshots.changed() => changed,
+                        () = tokio::time::sleep(Duration::from_millis(5)) => {
+                            continue;
+                        }
+                    };
+                    if changed.is_err() {
+                        return;
+                    }
+                    let latest = snapshots.borrow_and_update().clone();
+                    if let Some(existing) = pending.as_mut() {
+                        *existing = latest;
+                    } else {
+                        pending = Some(latest);
+                    }
+                    continue;
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => return,
+            }
+        }
         let was_initial = initial;
         if was_initial {
             initial = false;
@@ -863,6 +1070,12 @@ async fn forward_script_ui(
                 changed = snapshots.changed() => changed,
             };
             if changed.is_err() {
+                if let Some(pending_snapshot) = pending.take() {
+                    let _ =
+                        outgoing.try_send(Outgoing::Json(ServerMessage::ScriptUi(MessageData {
+                            data: pending_snapshot,
+                        })));
+                }
                 return;
             }
         }
@@ -870,14 +1083,20 @@ async fn forward_script_ui(
         if was_initial && snapshot.generation.is_none() {
             continue;
         }
-        if outgoing
-            .try_send(Outgoing::Json(ServerMessage::ScriptUi(MessageData {
-                data: snapshot,
-            })))
-            .is_err()
-        {
-            cancellation.cancel();
-            return;
+        if let Some(existing) = pending.as_mut() {
+            *existing = snapshot;
+            continue;
+        }
+        let message = ServerMessage::ScriptUi(MessageData { data: snapshot });
+        match outgoing.try_send(Outgoing::Json(message)) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(returned)) => {
+                let Outgoing::Json(ServerMessage::ScriptUi(MessageData { data })) = returned else {
+                    unreachable!("script_ui forwarder only sends ScriptUi")
+                };
+                pending = Some(data);
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => return,
         }
     }
 }
@@ -2055,6 +2274,374 @@ mod tests {
         );
         backend.wait_for_disconnect().await;
         assert_eq!(backend.disconnected.load(Ordering::Acquire), 1);
+        stop_server(cancellation, task).await;
+    }
+
+    #[test]
+    fn coalesce_keeps_latest_same_field_value() {
+        let mut existing = RevisionedStateChange {
+            revision: DecimalString::from_u64(1),
+            data: UiStateChange {
+                cause: StateChangeCause::Camera,
+                state: StatePatch {
+                    camera_fps: Some(30.0),
+                    ..StatePatch::default()
+                },
+                settings: None,
+            },
+        };
+        let incoming = RevisionedStateChange {
+            revision: DecimalString::from_u64(2),
+            data: UiStateChange {
+                cause: StateChangeCause::Camera,
+                state: StatePatch {
+                    camera_fps: Some(60.0),
+                    camera_opened: Some(true),
+                    ..StatePatch::default()
+                },
+                settings: None,
+            },
+        };
+        coalesce_revisioned_state(&mut existing, incoming);
+        assert_eq!(existing.revision.as_str(), "2");
+        assert_eq!(existing.data.state.camera_fps, Some(60.0));
+        assert_eq!(existing.data.state.camera_opened, Some(true));
+    }
+
+    #[tokio::test]
+    async fn state_coalesces_same_field_under_backpressure() {
+        // Bounded display queue: capacity 1, coalescing keeps at most
+        // capacity + one pending. Flooding same field must not grow without
+        // bound and the latest complete value must win.
+        let (sender, receiver) = broadcast::channel(16);
+        let (outgoing, mut incoming) = mpsc::channel(1);
+        let cancellation = CancellationToken::new();
+        let forwarder = tokio::spawn(forward_state_changes(
+            receiver,
+            outgoing,
+            cancellation.clone(),
+        ));
+
+        // Fill the bounded channel so the forwarder must coalesce.
+        // First, occupy the channel with a state change that will not be
+        // consumed immediately (receiver not reading).
+        let hub = test_hub();
+        let rx = hub.subscribe();
+        // Use direct broadcast sends to the forwarder's source
+        for (revision, fps) in [
+            (1_u64, 1.0),
+            (2, 2.0),
+            (3, 3.0),
+            (4, 4.0),
+            (5, 5.0),
+            (6, 6.0),
+            (7, 7.0),
+            (8, 8.0),
+            (9, 9.0),
+            (10, 10.0),
+        ] {
+            let _ = sender.send(Arc::new(RevisionedStateChange {
+                revision: DecimalString::from_u64(revision),
+                data: UiStateChange {
+                    cause: StateChangeCause::Camera,
+                    state: StatePatch {
+                        camera_fps: Some(fps),
+                        ..StatePatch::default()
+                    },
+                    settings: None,
+                },
+            }));
+        }
+        // Allow forwarder to process and coalesce
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Now drain the bounded queue: first the initially queued,
+        // then after a short window the coalesced pending.
+        let mut collected = Vec::new();
+        while let Ok(msg) = incoming.try_recv() {
+            if let Outgoing::Json(ServerMessage::UiStateChanged(change)) = msg {
+                collected.push(change);
+            }
+        }
+        // Give the coalesced pending time to flush into the now-available slot
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        while let Ok(msg) = incoming.try_recv() {
+            if let Outgoing::Json(ServerMessage::UiStateChanged(change)) = msg {
+                collected.push(change);
+            }
+        }
+        // At most capacity + one pending (coalesced) should be queued
+        assert!(
+            collected.len() <= 2,
+            "coalesced display queue must remain bounded, got {}",
+            collected.len()
+        );
+        if let Some(last) = collected.last() {
+            assert_eq!(
+                last.data.state.camera_fps,
+                Some(10.0),
+                "latest same-field value must win after coalescing"
+            );
+            assert_eq!(last.revision.as_str(), "10");
+        }
+        cancellation.cancel();
+        let _ = forwarder.await;
+        let _ = hub;
+        let _ = rx;
+    }
+
+    #[tokio::test]
+    async fn log_delivery_is_bounded_drop_without_backpressure() {
+        let (sender, receiver) = broadcast::channel(16);
+        let (outgoing, mut low_incoming) = mpsc::channel(1);
+        let cancellation = CancellationToken::new();
+        let forwarder = tokio::spawn(forward_broadcasts(
+            receiver,
+            outgoing.clone(),
+            None,
+            cancellation.clone(),
+        ));
+        // Flood logs with capacity 1, low queue must drop, not block
+        for i in 0..20 {
+            let _ = sender.send(Arc::new(BroadcastEvent::Log(LogData {
+                level: LogLevel::Info,
+                message: format!("log-{i}"),
+                target: LogTarget::Log,
+                operation: crate::server::api::LogOperation::Append,
+            })));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Publisher must not have blocked; try_send should still succeed for new logs
+        let start = std::time::Instant::now();
+        let _ = sender.send(Arc::new(BroadcastEvent::Log(LogData {
+            level: LogLevel::Info,
+            message: "after-flood".to_owned(),
+            target: LogTarget::Log,
+            operation: crate::server::api::LogOperation::Append,
+        })));
+        assert!(
+            start.elapsed() < Duration::from_millis(100),
+            "log flood must not block publisher (bounded drop)"
+        );
+        // Low queue should have at most capacity messages, not 21
+        let mut count = 0;
+        while low_incoming.try_recv().is_ok() {
+            count += 1;
+        }
+        assert!(
+            count <= 2,
+            "log queue must be bounded with drop, got {count}"
+        );
+        cancellation.cancel();
+        let _ = forwarder.await;
+        let _ = outgoing;
+    }
+
+    #[tokio::test]
+    async fn slow_display_does_not_block_control_latency() {
+        let concrete = Arc::new(TestBackend::new());
+        let mut config = test_config();
+        config.state_queue_capacity = 2;
+        config.ephemeral_queue_capacity = 2;
+        config.heartbeat_interval = Duration::from_mins(1);
+        config.pong_timeout = Duration::from_secs(10);
+        let transport = WebSocketTransport::new(concrete.clone(), config).expect("transport");
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        let generation = initial_generation(&mut socket).await;
+        // Drain the initial script UI if any to have clean state
+        // Flood display path with many state changes on same field
+        // Keep flood within broadcast capacity (16) to avoid Lagged disconnect
+        for i in 1..8 {
+            let mut tx = StateTransaction::new(StateChangeCause::Camera);
+            tx.state.camera_fps = Some(f64::from(i));
+            let _ = concrete.hub.commit(tx).await;
+        }
+        // Concurrent control request must still be low latency
+        let start = tokio::time::Instant::now();
+        send_client(
+            &mut socket,
+            &ClientMessage::InputSnapshot(MessageData {
+                data: InputSnapshot {
+                    generation: generation.clone(),
+                    sequence: DecimalString::zero(),
+                    keyboard_keys: Vec::new(),
+                    mouse_buttons: MouseButtons::default(),
+                    buttons: ButtonState::default(),
+                    hat: Hat::Neutral,
+                    left_stick: StickPosition { x: 128, y: 128 },
+                    right_stick: StickPosition { x: 128, y: 128 },
+                    touch: None,
+                },
+            }),
+        )
+        .await;
+        // Control must outrank display: even with display flood queued,
+        // the input ack should arrive within 500ms. Drain coalesced state
+        // messages that may have been queued before the control reply.
+        let mut reply = None;
+        while start.elapsed() < Duration::from_secs(1) {
+            let msg = timeout(Duration::from_millis(200), receive_server(&mut socket)).await;
+            match msg {
+                Ok(m) if matches!(m, ServerMessage::InputSnapshotApplied(_)) => {
+                    reply = Some(m);
+                    break;
+                }
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+        let reply = reply.expect("control reply deadline");
+        assert!(
+            start.elapsed() < Duration::from_millis(500),
+            "control must outrank display: latency {:?}",
+            start.elapsed()
+        );
+        assert!(matches!(reply, ServerMessage::InputSnapshotApplied(_)));
+        // Ensure display queue was bounded: drain remaining state changes
+        // and verify at most a few coalesced messages remain
+        let mut state_count = 0;
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(200);
+        while tokio::time::Instant::now() < deadline {
+            match timeout(Duration::from_millis(20), socket.next()).await {
+                Ok(Some(Ok(ClientFrame::Text(text)))) => {
+                    if let Ok(ServerMessage::UiStateChanged(change)) =
+                        serde_json::from_str::<ServerMessage>(&text)
+                    {
+                        state_count += 1;
+                        let _ = change;
+                    }
+                }
+                _ => break,
+            }
+        }
+        assert!(
+            state_count <= 5,
+            "display queue must be coalesced and bounded, got {state_count} state messages"
+        );
+        socket.close(None).await.expect("close");
+        concrete.wait_for_disconnect().await;
+        stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    async fn disconnected_slow_client_does_not_block_other_clients() {
+        let backend = Arc::new(TestBackend::new());
+        let mut config = test_config();
+        config.state_queue_capacity = 2;
+        config.ephemeral_queue_capacity = 2;
+        config.heartbeat_interval = Duration::from_mins(1);
+        config.pong_timeout = Duration::from_secs(10);
+        let transport = WebSocketTransport::new(backend.clone(), config).expect("transport");
+        let broker = transport.broker();
+        let (address, cancellation, task) = start_server(&transport).await;
+        // First client: slow, never reads after connect (simulates disconnected/slow)
+        let mut slow_socket = connect(address).await;
+        let _slow_gen = initial_generation(&mut slow_socket).await;
+        // Flood from main path rapidly
+        for i in 0..50 {
+            broker.publish_log(LogData {
+                level: LogLevel::Info,
+                message: format!("flood-{i}"),
+                target: LogTarget::Log,
+                operation: crate::server::api::LogOperation::Append,
+            });
+            let mut tx = StateTransaction::new(StateChangeCause::Other);
+            tx.state.last_input = Some(Some(format!("input-{i}")));
+            let _ = backend.hub.commit(tx).await;
+        }
+        // Second client should still be able to connect and get control reply quickly
+        let mut fast_socket = connect(address).await;
+        let fast_gen = initial_generation(&mut fast_socket).await;
+        assert!(!fast_gen.is_empty());
+        let start = tokio::time::Instant::now();
+        send_client(
+            &mut fast_socket,
+            &ClientMessage::InputSnapshot(MessageData {
+                data: InputSnapshot {
+                    generation: fast_gen.clone(),
+                    sequence: DecimalString::zero(),
+                    keyboard_keys: Vec::new(),
+                    mouse_buttons: MouseButtons::default(),
+                    buttons: ButtonState::default(),
+                    hat: Hat::Neutral,
+                    left_stick: StickPosition { x: 128, y: 128 },
+                    right_stick: StickPosition { x: 128, y: 128 },
+                    touch: None,
+                },
+            }),
+        )
+        .await;
+        let reply = timeout(Duration::from_secs(1), receive_server(&mut fast_socket))
+            .await
+            .expect("fast client control deadline");
+        assert!(matches!(reply, ServerMessage::InputSnapshotApplied(_)));
+        assert!(
+            start.elapsed() < Duration::from_millis(500),
+            "other clients must not be blocked by slow client"
+        );
+        // Slow client should be lagged but not have blocked the hub:
+        // Verify hub can still commit and fast client can receive a new state
+        let mut tx = StateTransaction::new(StateChangeCause::Serial);
+        tx.state.serial_connected = Some(true);
+        let outcome = backend.hub.commit(tx).await.expect("hub still progresses");
+        assert_eq!(outcome.revision().as_str(), "51");
+        // Fast client should eventually see the new state (maybe coalesced)
+        let mut seen = false;
+        for _ in 0..5 {
+            if let Ok(ServerMessage::UiStateChanged(change)) =
+                timeout(Duration::from_millis(200), receive_server(&mut fast_socket)).await
+                && change.data.state.serial_connected == Some(true)
+            {
+                seen = true;
+                break;
+            }
+        }
+        assert!(seen, "fast client must receive state despite slow peer");
+        slow_socket.close(None).await.expect("close slow");
+        fast_socket.close(None).await.expect("close fast");
+        // Both disconnects should be observed without deadlock
+        timeout(Duration::from_secs(1), async {
+            while backend.disconnected.load(Ordering::Acquire) < 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("both clients disconnected");
+        stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    async fn motion_jpeg_slow_client_receives_latest_complete_frame() {
+        let feed = MotionJpegFeed::new();
+        let backend = Arc::new(TestBackend::with_motion_jpeg(Some(feed.clone())));
+        let mut config = test_config();
+        config.heartbeat_interval = Duration::from_mins(1);
+        config.pong_timeout = Duration::from_secs(10);
+        let transport = WebSocketTransport::new(backend.clone(), config).expect("transport");
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        let _generation = initial_generation(&mut socket).await;
+        // Publish many frames rapidly without reading (slow client)
+        for i in 1_u8..10 {
+            feed.publish(vec![0xff, 0xd8, i, 0xff, 0xd9]);
+        }
+        // The latest complete frame must win (coalesced)
+        feed.publish(vec![0xff, 0xd8, 0xaa, 0xff, 0xd9]);
+        let frame = receive_motion_jpeg(&mut socket).await;
+        assert_eq!(frame.as_ref(), [0xff, 0xd8, 0xaa, 0xff, 0xd9]);
+        // No intermediate frames should be queued beyond the latest
+        // Try to read another frame quickly - should be timeout because queue was coalesced
+        let next = timeout(Duration::from_millis(100), socket.next()).await;
+        // Either timeout or next is not a binary with old frame
+        if let Ok(Some(Ok(ClientFrame::Binary(bytes)))) = next {
+            assert_ne!(
+                bytes.as_ref(),
+                [0xff, 0xd8, 1, 0xff, 0xd9],
+                "intermediate frames must have been coalesced"
+            );
+        }
+        socket.close(None).await.expect("close");
+        backend.wait_for_disconnect().await;
         stop_server(cancellation, task).await;
     }
 }

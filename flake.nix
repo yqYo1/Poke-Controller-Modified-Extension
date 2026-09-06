@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "6d9f7ae9205fd8999510951088a2e5c0f74bfad1dfea021e44718cd50a1d07df";
+      canonicalFlakeHash = "8844062d39d7dadbf1bbd152feb37d0935623453b33efbff795f6467b16a6b5d";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -393,6 +393,18 @@
             mkdir -p "$out"
           '';
 
+          foundationRegistry = builtins.fromJSON (
+            builtins.readFile (inputs.self.outPath + "/rust/pokecon/registry/foundation.json")
+          );
+          resolvedRustTestTombstonePaths = lib.concatMap (
+            entry:
+            if entry.status == "resolved" then
+              builtins.filter (
+                path: !(lib.hasInfix "*" path) && (lib.hasInfix "/" path || entry.id == "legacy_release_crates")
+              ) entry.paths
+            else
+              [ ]
+          ) foundationRegistry.path_audit;
           sourceBoundaryPaths = rec {
             product = [
               "Cargo.lock"
@@ -414,6 +426,24 @@
               "rust/pokecon/signing-targets.json"
               "uv.lock"
             ];
+            rustCoreTest = product ++ [
+              "generated/lua"
+              "python/pokecon/typings"
+              "rust/pokecon/tests"
+              "rust-toolchain.toml"
+            ];
+            compatibilityCheck = [
+              "compatibility/candidates.json"
+              "compatibility/fixed-manifest.json"
+              "compatibility/fixed-results.json"
+              "compatibility/promotions.jsonl"
+              "rust/pokecon/registry/compatibility.json"
+              "scripts/__init__.py"
+              "scripts/compatibility/__init__.py"
+              "scripts/compatibility/inventory.py"
+              "scripts/compatibility/promote.py"
+              "scripts/compatibility/runner.py"
+            ];
             rustTest = product ++ [
               ".gitignore"
               ".github/workflows/compatibility-roll.yml"
@@ -428,9 +458,18 @@
               "flake.nix"
               "generated"
               "python/pokecon/typings"
+              "rust/pokecon/registry/acceptance-record.schema.json"
+              "rust/pokecon/registry/ci.json"
+              "rust/pokecon/registry/compatibility.json"
+              "rust/pokecon/registry/foundation.json"
+              "rust/pokecon/registry/generation.json"
               "rust/pokecon/tests"
               "rust-toolchain.toml"
-              "scripts"
+              "scripts/__init__.py"
+              "scripts/ci/aggregate.py"
+              "scripts/ci/regions.py"
+              "scripts/ci/timing.py"
+              "scripts/compatibility"
               "web/src/lib/api"
             ];
             web = [ "web" ];
@@ -487,10 +526,18 @@
               "rust/pokecon/capabilities"
               "rust/pokecon/permissions"
             ];
-            rustTest = [
+            rustCoreTest = [
               "rust/pokecon/capabilities"
               "rust/pokecon/permissions"
             ];
+            compatibilityCheck = [
+              "compatibility/results"
+            ];
+            rustTest = [
+              "rust/pokecon/capabilities"
+              "rust/pokecon/permissions"
+            ]
+            ++ resolvedRustTestTombstonePaths;
           };
           mkScopedSource =
             {
@@ -571,6 +618,18 @@
               optionalPaths = optionalSourceBoundaryPaths.release;
               paths = sourceBoundaryPaths.release;
             };
+          rustCoreTestSource =
+            assert workspaceCargoInputsAreCanonical;
+            mkScopedSource {
+              name = "pokecon-rust-core-test-source";
+              optionalPaths = optionalSourceBoundaryPaths.rustCoreTest;
+              paths = sourceBoundaryPaths.rustCoreTest;
+            };
+          compatibilityCheckSource = mkScopedSource {
+            name = "pokecon-compatibility-check-source";
+            optionalPaths = optionalSourceBoundaryPaths.compatibilityCheck;
+            paths = sourceBoundaryPaths.compatibilityCheck;
+          };
           rustTestSource =
             assert workspaceCargoInputsAreCanonical;
             mkScopedSource {
@@ -657,7 +716,6 @@
           productionRoutingAuditTest =
             let
               relativeAuditTest = "/tests/quality/test_ui_package_check.py";
-              expectedAuditTestHash = "c15b33ab4b635e165a031002aee372c41584c631c20a7c9ba39edfec9981b965";
               inputAuditTest = inputs.self.outPath + relativeAuditTest;
               filteredAuditTest = repositorySource + relativeAuditTest;
             in
@@ -667,10 +725,8 @@
             assert
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
-            assert
-              builtins.hashFile "sha256" filteredAuditTest == expectedAuditTestHash
-              || builtins.throw "filtered production routing audit test changed";
             filteredAuditTest;
+          expectedAuditTestHash = "87b267c27a364a5e1b6e806e971a93075e6be0df32376f42c907bb38c7a4d1b9";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -691,7 +747,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "72a4ffeeb40de1af2621a2c159b13f8886c5f35c7eed8bc716e77e8657def2da";
+            "rust/pokecon" = "2792deb76814f512fe15f39ca21a157b1a5a332013aec31f03909c128dca209e";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -929,13 +985,11 @@
           canonicalCargoLockText = builtins.readFile (inputs.self.outPath + "/Cargo.lock");
           canonicalPokeconManifest = workspaceMemberManifests."rust/pokecon";
           controlledPokeconManifestText =
-            replaceManifestString "pokecon implicit library target" "\n[features]\n"
+            replaceManifestString "pokecon library target" "[lib]\ndoctest = false\n"
               ''
-
                 [lib]
+                doctest = false
                 path = "${pokeconProductSource}/rust/pokecon/src/lib.rs"
-
-                [features]
               ''
               (
                 replaceManifestString "pokecon primary binary target"
@@ -951,7 +1005,7 @@
             package = canonicalPokeconManifest.package // {
               build = "${pokeconProductSource}/rust/pokecon/build.rs";
             };
-            lib = {
+            lib = canonicalPokeconManifest.lib // {
               path = "${pokeconProductSource}/rust/pokecon/src/lib.rs";
             };
             bin = [
@@ -1130,6 +1184,13 @@
                   artifact_directory_lock_contender_fd \
                   artifact_directory_lock_probe \
                   artifact_directory_lock_probe_fd
+                filtered_audit_hash="$("${pkgs.coreutils}/bin/sha256sum" -- "${productionRoutingAuditTest}")"
+                filtered_audit_hash="''${filtered_audit_hash%% *}"
+                if [ "$filtered_audit_hash" != "${expectedAuditTestHash}" ]; then
+                  echo "filtered production routing audit test changed" >&2
+                  exit 2
+                fi
+                unset filtered_audit_hash
                 cd "${repositorySource}"
                 "${pythonEnv}/bin/python" -I -m pytest \
                   -c "${auditPytestConfig}" \
@@ -1140,6 +1201,28 @@
                 mkdir -p "$out"
                 touch "$out/passed"
               '';
+          productionRoutingAuditDrvPath = builtins.unsafeDiscardOutputDependency productionRoutingAudit.drvPath;
+          realizeProductionRoutingAudit = ''
+            if ! production_routing_audit_output="$(
+              "${pkgs.nix}/bin/nix-store" --realise "${productionRoutingAuditDrvPath}"
+            )"; then
+              echo "production routing audit realization failed" >&2
+              exit 1
+            fi
+            production_routing_audit_output_count="$(
+              printf "%s\n" "$production_routing_audit_output" | wc -l
+            )"
+            if [ -z "$production_routing_audit_output" ] \
+              || [ "$production_routing_audit_output_count" -ne 1 ] \
+              || [ -L "$production_routing_audit_output" ] \
+              || [ ! -d "$production_routing_audit_output" ] \
+              || [ -L "$production_routing_audit_output/passed" ] \
+              || [ ! -f "$production_routing_audit_output/passed" ]; then
+              echo "production routing audit returned an invalid result: $production_routing_audit_output" >&2
+              exit 2
+            fi
+            unset production_routing_audit_output production_routing_audit_output_count
+          '';
           productionRoutingMutationAuditRunner = pkgs.writeShellApplication {
             name = "pokecon-production-routing-mutation-audit";
             excludeShellChecks = [ "SC2329" ];
@@ -1211,7 +1294,7 @@
               mutation_log_directory="$(mktemp -d -t pokecon-routing-mutations.XXXXXXXX)"
               mutation_test="${productionRoutingAuditTest}::test_production_routing_audit_fails_closed_under_registration_mutations"
 
-              echo "Running 394 production-routing mutations across $mutation_worker_count process shards"
+              echo "Running 395 production-routing mutations across $mutation_worker_count process shards"
               for ((mutation_shard_index = 0; mutation_shard_index < mutation_worker_count; mutation_shard_index++)); do
                 POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_INDEX="$mutation_shard_index" \
                   POKECON_PRODUCTION_ROUTING_MUTATION_SHARD_COUNT="$mutation_worker_count" \
@@ -1262,6 +1345,30 @@
                 mkdir -p "$out"
                 touch "$out/passed"
               '';
+          productionRoutingMutationAuditDrvPath = builtins.unsafeDiscardOutputDependency productionRoutingMutationAudit.drvPath;
+          realizeProductionRoutingMutationAudit = ''
+            if ! production_routing_mutation_audit_output="$(
+              "${pkgs.nix}/bin/nix-store" --realise "${productionRoutingMutationAuditDrvPath}"
+            )"; then
+              echo "production routing mutation audit realization failed" >&2
+              exit 1
+            fi
+            production_routing_mutation_audit_output_count="$(
+              printf "%s\n" "$production_routing_mutation_audit_output" | wc -l
+            )"
+            if [ -z "$production_routing_mutation_audit_output" ] \
+              || [ "$production_routing_mutation_audit_output_count" -ne 1 ] \
+              || [ -L "$production_routing_mutation_audit_output" ] \
+              || [ ! -d "$production_routing_mutation_audit_output" ] \
+              || [ -L "$production_routing_mutation_audit_output/passed" ] \
+              || [ ! -f "$production_routing_mutation_audit_output/passed" ]; then
+              echo "production routing mutation audit returned an invalid result: $production_routing_mutation_audit_output" >&2
+              exit 2
+            fi
+            unset \
+              production_routing_mutation_audit_output \
+              production_routing_mutation_audit_output_count
+          '';
 
           mkApp = program: {
             type = "app";
@@ -2123,6 +2230,36 @@
             cd "$workdir"
             ${assertNoCargoConfigAncestors}
           '';
+          setupQualityWorkdir = ''
+            ${setupSourceGateEnvironment}
+            workdir=
+            cleanup_quality_workdir() {
+              quality_status=$?
+              trap - EXIT
+              quality_cleanup_status=0
+              if [ -n "$workdir" ]; then
+                if ! "${pkgs.coreutils}/bin/rm" -rf -- "$workdir"; then
+                  echo "failed to remove the quality worktree: $workdir" >&2
+                  quality_cleanup_status=1
+                fi
+              fi
+              if [ -n "$gate_home" ]; then
+                if ! "${pkgs.coreutils}/bin/rm" -rf -- "$gate_home"; then
+                  echo "failed to remove the quality gate home: $gate_home" >&2
+                  quality_cleanup_status=1
+                fi
+              fi
+              if [ "$quality_status" -eq 0 ] && [ "$quality_cleanup_status" -ne 0 ]; then
+                quality_status=$quality_cleanup_status
+              fi
+              exit "$quality_status"
+            }
+            trap cleanup_quality_workdir EXIT
+            workdir="$(mktemp -d -t pokecon-quality-workdir.XXXXXXXX)"
+            cp -a "${repositorySource}/." "$workdir/"
+            chmod -R u+w "$workdir"
+            cd "$workdir"
+          '';
 
           linuxDesktopPackages = lib.optionals pkgs.stdenv.isLinux [
             pkgs.atk
@@ -2340,7 +2477,7 @@
             ];
             buildInputs = [ pythonEnv ] ++ linuxDesktopPackages ++ linuxApplicationRuntimePackages;
             cargoLock = {
-              lockFile = controlledCargoLock;
+              lockFileContents = canonicalCargoLockText;
               allowBuiltinFetchGit = true;
             };
             cargoBuildFlags = [
@@ -2419,7 +2556,6 @@
             '';
           };
           pokeconPackage = pkgs.runCommand "pokecon-${workspaceVersion}" { } ''
-            test -f "${productionRoutingAudit}/passed"
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
             "${pkgs.coreutils}/bin/cp" -a -- "${pokeconCorePackage}/." "$out/"
             "${pkgs.coreutils}/bin/chmod" -R u+w -- "$out"
@@ -2513,6 +2649,362 @@
           gateCargoHome = pkgs.runCommand "pokecon-gate-cargo-home" { } ''
             "${pkgs.coreutils}/bin/mkdir" -p "$out"
             "${pkgs.coreutils}/bin/ln" -s -- "${gateCargoConfig}" "$out/config.toml"
+          '';
+          yqyo1CompatibilitySource = pkgs.fetchgit {
+            name = "pokecon-compatibility-yqyo1-extension";
+            url = "https://github.com/yqYo1/Poke-Controller-Modified-Extension.git";
+            rev = "dfc13b82cb926b571351265a9333a7e4bc1f8aeb";
+            hash = "sha256-zMcizC/LelDv8jcwqxQg0At7T6yNzPwVC8TUl4fJbsk=";
+            leaveDotGit = true;
+          };
+          futo030CompatibilitySource = pkgs.fetchgit {
+            name = "pokecon-compatibility-futo030-extension";
+            url = "https://github.com/futo030/Poke-Controller-Modified-Extension.git";
+            rev = "b4d0eff04b1c525d78034ab47b87a7c7ef17089a";
+            hash = "sha256-05CeAU/i++sQWr5ohyEWwhZHPdSErehq+eHt55ngTJk=";
+            leaveDotGit = true;
+          };
+          moiCompatibilitySource = pkgs.fetchgit {
+            name = "pokecon-compatibility-moi-poke-modified";
+            url = "https://github.com/Moi-poke/Poke-Controller-Modified.git";
+            rev = "431d0e22dbc6b900efcfb9a72e722a8484c8e4bb";
+            hash = "sha256-IOTOmQGL9ZYEPz2RhO9o46zxInBu4HMvB5gW7R9SgrM=";
+            leaveDotGit = true;
+          };
+          rustCoreCheck = pkgs.stdenv.mkDerivation {
+            pname = "pokecon-rust-core-check";
+            version = workspaceVersion;
+            src = rustCoreTestSource;
+            sourceRoot = "pokecon-rust-core-test-source";
+            nativeBuildInputs = rustTaskInputs ++ [ pkgs.jq ];
+            dontConfigure = true;
+            __darwinAllowLocalNetworking = pkgs.stdenv.isDarwin;
+            buildPhase = ''
+              runHook preBuild
+              export HOME="$TMPDIR/home"
+              export CARGO_HOME="$HOME/cargo-home"
+              export CARGO_TARGET_DIR="$HOME/target"
+              export CARGO_INCREMENTAL=0
+              export XDG_CACHE_HOME="$HOME/.cache"
+              export XDG_CONFIG_HOME="$HOME/.config"
+              export XDG_RUNTIME_DIR="$HOME/runtime"
+              export XDG_STATE_HOME="$HOME/.local/state"
+              export UV_CACHE_DIR="$XDG_CACHE_HOME/uv"
+              export NPM_CONFIG_USERCONFIG=/dev/null
+              mkdir -p \
+                "$CARGO_HOME" \
+                "$CARGO_TARGET_DIR" \
+                "$XDG_CACHE_HOME" \
+                "$XDG_CONFIG_HOME" \
+                "$XDG_RUNTIME_DIR" \
+                "$XDG_STATE_HOME"
+              chmod 0700 "$XDG_RUNTIME_DIR"
+              ${setupUvLinks}
+              ln -s -- "${gateCargoConfig}" "$CARGO_HOME/config.toml"
+              ${rustEnvironmentExports}
+              ${desktopEnvironment}
+              export PYTHONDONTWRITEBYTECODE=1
+              export PYTHONNOUSERSITE=1
+              export PYTHONPATH="$PWD"
+              export CARGO_PROFILE_TEST_DEBUG=0
+              ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
+              export POKECON_RESOURCE_PROVENANCE=development
+              # Compile the complete test graph once. Contract data is loaded at
+              # execution time, so workflow/spec changes do not invalidate this
+              # expensive artifact producer.
+              cargo test --locked --workspace --all-features --no-run \
+                --message-format=json-render-diagnostics \
+                > "$TMPDIR/cargo-test-artifacts.jsonl"
+              ${pkgs.jq}/bin/jq -se --arg package_root "$PWD/rust/pokecon/" '
+                def expected_targets: [
+                  {
+                    name: "pokecon",
+                    kind: ["lib"],
+                    crate_types: ["lib"]
+                  },
+                  {
+                    name: "contract_sync",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "controller_serial_contract",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "cross_process",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "lifecycle",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "native_serial_pty",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "native_v4l2",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "script_runtime",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "startup",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "worker_startup",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  }
+                ];
+                [
+                  .[]
+                  | select(.reason == "compiler-artifact")
+                  | select(.profile.test == true)
+                  | select((.target.src_path | type) == "string")
+                  | select(.target.src_path | startswith($package_root))
+                  | {
+                      name: .target.name,
+                      kind: .target.kind,
+                      crate_types: .target.crate_types,
+                      executable: .executable
+                    }
+                ] as $actual
+                | expected_targets as $expected
+                | if ($actual | map(.name) | unique | length) != ($actual | length) then
+                    error("Cargo returned duplicate pokecon test target names")
+                  elif ($actual | map({ name, kind, crate_types }) | sort_by(.name))
+                    != ($expected | sort_by(.name)) then
+                    error(
+                      "Cargo pokecon test target inventory differed: "
+                      + ($actual | map(.name) | sort | join(", "))
+                    )
+                  elif any(
+                    $actual[];
+                    ((.executable | type) != "string") or (.executable == "")
+                  ) then
+                    error("Cargo returned an empty or non-string pokecon test executable")
+                  elif ($actual | map(.executable) | unique | length) != ($actual | length) then
+                    error("Cargo returned duplicate pokecon test executable paths")
+                  elif any($actual[]; (.executable | startswith("/") | not)) then
+                    error("Cargo returned a non-absolute pokecon test executable path")
+                  else
+                    $actual
+                  end
+              ' "$TMPDIR/cargo-test-artifacts.jsonl" \
+                > "$TMPDIR/pokecon-test-inventory.json"
+              contract_test_executable="$(${pkgs.jq}/bin/jq -er '
+                [
+                  .[]
+                  | select(.name == "contract_sync")
+                  | .executable
+                ]
+                | if length == 1 then
+                    .[0]
+                  else
+                    error("expected exactly one contract_sync executable")
+                  end
+              ' "$TMPDIR/pokecon-test-inventory.json")"
+              if [ ! -f "$contract_test_executable" ] \
+                || [ -L "$contract_test_executable" ] \
+                || [ ! -x "$contract_test_executable" ]; then
+                echo "Cargo returned an invalid contract test executable: $contract_test_executable" >&2
+                exit 2
+              fi
+              # Execute the lib harness and every non-contract integration harness
+              # directly, preserving the single compilation performed above.
+              executed_test_count=0
+              while IFS= read -r test_target; do
+                test_executable="$(${pkgs.jq}/bin/jq -er \
+                  --arg target_name "$test_target" '
+                    [
+                      .[]
+                      | select(.name == $target_name)
+                      | .executable
+                    ]
+                    | if length == 1 then
+                        .[0]
+                      else
+                        error("expected exactly one executable for " + $target_name)
+                      end
+                  ' "$TMPDIR/pokecon-test-inventory.json")"
+                if [ ! -f "$test_executable" ] \
+                  || [ -L "$test_executable" ] \
+                  || [ ! -x "$test_executable" ]; then
+                  echo "Cargo returned an invalid test executable for $test_target: $test_executable" >&2
+                  exit 2
+                fi
+                echo "Running compiled test target: $test_target"
+                (
+                  cd "$PWD/rust/pokecon"
+                  "$test_executable"
+                )
+                executed_test_count="$((executed_test_count + 1))"
+              done < <(
+                ${pkgs.jq}/bin/jq -r '
+                  .
+                  | sort_by([(.kind != ["lib"]), .name])
+                  | .[]
+                  | select(.name != "contract_sync")
+                  | .name
+                ' "$TMPDIR/pokecon-test-inventory.json"
+              )
+              if [ "$executed_test_count" -ne 9 ]; then
+                echo "Expected to execute 9 non-contract test targets, executed $executed_test_count" >&2
+                exit 2
+              fi
+              cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/libexec"
+              install -m 0555 "$contract_test_executable" "$out/libexec/contract-sync"
+              for binary in pokecon-compatibility pokecon-worker; do
+                binary_path="$CARGO_TARGET_DIR/debug/$binary"
+                if [ ! -f "$binary_path" ] || [ -L "$binary_path" ] || [ ! -x "$binary_path" ]; then
+                  echo "Cargo did not produce a regular executable: $binary_path" >&2
+                  exit 2
+                fi
+                install -m 0555 "$binary_path" "$out/libexec/$binary"
+              done
+              touch "$out/passed"
+              runHook postInstall
+            '';
+          };
+          contractSyncCheck = pkgs.stdenvNoCC.mkDerivation {
+            pname = "pokecon-contract-sync-check";
+            version = workspaceVersion;
+            src = rustTestSource;
+            sourceRoot = "pokecon-rust-test-source";
+            nativeBuildInputs = lib.optionals pkgs.stdenv.isLinux linuxDesktopPackages;
+            dontConfigure = true;
+            dontFixup = true;
+            buildPhase = ''
+              runHook preBuild
+              export POKECON_CONTRACT_TEST_ROOT="$PWD"
+              ${desktopEnvironment}
+              "${rustCoreCheck}/libexec/contract-sync"
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              touch "$out/passed"
+              runHook postInstall
+            '';
+          };
+          compatibilityCorpusCheck = pkgs.stdenvNoCC.mkDerivation {
+            pname = "pokecon-compatibility-corpus-check";
+            version = workspaceVersion;
+            src = compatibilityCheckSource;
+            sourceRoot = "pokecon-compatibility-check-source";
+            nativeBuildInputs = [
+              pythonEnv
+              pkgs.git
+            ];
+            dontConfigure = true;
+            dontFixup = true;
+            buildPhase = ''
+              runHook preBuild
+              export HOME="$TMPDIR/home"
+              export XDG_CACHE_HOME="$HOME/.cache"
+              export XDG_CONFIG_HOME="$HOME/.config"
+              export XDG_RUNTIME_DIR="$HOME/runtime"
+              export XDG_STATE_HOME="$HOME/.local/state"
+              mkdir -p \
+                "$HOME" \
+                "$XDG_CACHE_HOME" \
+                "$XDG_CONFIG_HOME" \
+                "$XDG_RUNTIME_DIR" \
+                "$XDG_STATE_HOME"
+              chmod 0700 "$XDG_RUNTIME_DIR"
+              export PYTHONDONTWRITEBYTECODE=1
+              export PYTHONNOUSERSITE=1
+              export PYTHONPATH="$PWD"
+              python -m scripts.compatibility.promote --check
+              export GIT_CONFIG_COUNT=3
+              export GIT_CONFIG_KEY_0=safe.directory
+              export GIT_CONFIG_VALUE_0="${yqyo1CompatibilitySource}"
+              export GIT_CONFIG_KEY_1=safe.directory
+              export GIT_CONFIG_VALUE_1="${futo030CompatibilitySource}"
+              export GIT_CONFIG_KEY_2=safe.directory
+              export GIT_CONFIG_VALUE_2="${moiCompatibilitySource}"
+              python -m scripts.compatibility.runner \
+                --check \
+                --compatibility-binary "${rustCoreCheck}/libexec/pokecon-compatibility" \
+                --worker "${rustCoreCheck}/libexec/pokecon-worker" \
+                --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}" \
+                --repository "yqyo1-extension=${yqyo1CompatibilitySource}" \
+                --repository "futo030-extension=${futo030CompatibilitySource}" \
+                --repository "moi-poke-modified=${moiCompatibilitySource}"
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              touch "$out/passed"
+              runHook postInstall
+            '';
+          };
+          rustCoreDrvPath = builtins.unsafeDiscardOutputDependency rustCoreCheck.drvPath;
+          contractSyncDrvPath = builtins.unsafeDiscardOutputDependency contractSyncCheck.drvPath;
+          compatibilityCorpusDrvPath = builtins.unsafeDiscardOutputDependency compatibilityCorpusCheck.drvPath;
+          realizeContractSync = ''
+            if ! contract_sync_output="$(
+              "${pkgs.nix}/bin/nix-store" --realise "${contractSyncDrvPath}"
+            )"; then
+              echo "contract-sync realization failed" >&2
+              exit 1
+            fi
+            if [ -z "$contract_sync_output" ] \
+              || [ "$(printf "%s\n" "$contract_sync_output" | wc -l)" -ne 1 ] \
+              || [ -L "$contract_sync_output" ] \
+              || [ ! -d "$contract_sync_output" ] \
+              || [ -L "$contract_sync_output/passed" ] \
+              || [ ! -f "$contract_sync_output/passed" ]; then
+              echo "contract-sync returned an invalid result: $contract_sync_output" >&2
+              exit 2
+            fi
+            unset contract_sync_output
+          '';
+          realizeRustCiCore = ''
+            if ! rust_ci_core_outputs="$(
+              "${pkgs.nix}/bin/nix-store" --realise \
+                "${rustCoreDrvPath}" \
+                "${contractSyncDrvPath}" \
+                "${compatibilityCorpusDrvPath}"
+            )"; then
+              echo "rust-ci-core realization failed" >&2
+              exit 1
+            fi
+            rust_ci_core_output_count="$(printf "%s\n" "$rust_ci_core_outputs" | wc -l)"
+            if [ -z "$rust_ci_core_outputs" ] || [ "$rust_ci_core_output_count" -ne 3 ]; then
+              echo "rust-ci-core returned an invalid result set: $rust_ci_core_outputs" >&2
+              exit 2
+            fi
+            while IFS= read -r rust_ci_core_output; do
+              if [ -z "$rust_ci_core_output" ] \
+                || [ -L "$rust_ci_core_output" ] \
+                || [ ! -d "$rust_ci_core_output" ] \
+                || [ -L "$rust_ci_core_output/passed" ] \
+                || [ ! -f "$rust_ci_core_output/passed" ]; then
+                echo "rust-ci-core returned an invalid result: $rust_ci_core_output" >&2
+                exit 2
+              fi
+            done <<< "$rust_ci_core_outputs"
+            unset rust_ci_core_output rust_ci_core_output_count rust_ci_core_outputs
           '';
           cliHelpCheck = mkTask {
             name = "cli-help-check";
@@ -2964,6 +3456,10 @@
           checks.pokecon-core = pokeconCorePackage;
           checks.production-routing-audit = productionRoutingAudit;
           checks.production-routing-mutation-audit = productionRoutingMutationAudit;
+          checks.rust-core-artifacts = rustCoreCheck;
+          checks.rust-ci-core = rustCoreCheck;
+          checks.contract-sync = contractSyncCheck;
+          checks.compatibility-corpus = compatibilityCorpusCheck;
           checks.web = webPackage;
 
           apps = {
@@ -3510,6 +4006,15 @@
               '';
             };
 
+            ci-parallel = mkTask {
+              name = "ci-parallel";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                exec "${pythonEnv}/bin/python" -I \
+                  "${repositorySource}/scripts/quality/run_parallel_checks.py" "$@"
+              '';
+            };
+
             ci-fast = mkTask {
               name = "ci-fast";
               runtimeInputs = [
@@ -3529,65 +4034,65 @@
                 cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
-                test -f "${productionRoutingAudit}/passed"
-                actionlint .github/workflows/*.yml
-                bun --bun "${basedpyrightCli}"
-                shellcheck scripts/*.sh scripts/*/*.sh
-                python -m scripts.quality.source_filter
-                python -m scripts.quality.source_guard rust --require-applicable
-                python -m scripts.release.gate
-                typos
-                mapfile -t markdown_files < <(rg --files -g '*.md')
-                bun --bun "${markdownlintCli}" --config .markdownlint.json "''${markdown_files[@]}"
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
-                mapfile -t text_files < <(rg --files -g '*.md' -g '*.txt')
-                bun --bun "${textlintCli}" --config .textlintrc.json "''${text_files[@]}"
+                # The quoted lane scripts intentionally expand arrays in their
+                # child shells instead of this generated wrapper.
+                # shellcheck disable=SC2016
+                "${pythonEnv}/bin/python" -I \
+                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \
+                  basedpyright \
+                  bun --bun "${basedpyrightCli}" \
+                  --next \
+                  shell-lint \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    actionlint .github/workflows/*.yml
+                    shellcheck scripts/*.sh scripts/*/*.sh
+                  ' \
+                  --next \
+                  source-identity \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    python -m scripts.quality.source_filter
+                    python -m scripts.quality.source_guard rust --require-applicable
+                    python -m scripts.release.gate
+                  ' \
+                  --next \
+                  prose \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    typos
+                    mapfile -t markdown_files < <(rg --files -g "*.md")
+                    bun --bun "${markdownlintCli}" --config .markdownlint.json "''${markdown_files[@]}"
+                    mapfile -t text_files < <(rg --files -g "*.md" -g "*.txt")
+                    bun --bun "${textlintCli}" --config .textlintrc.json "''${text_files[@]}"
+                  '
               '';
             };
 
             rust-ci-core = mkTask {
               name = "rust-ci-core";
-              runtimeInputs = rustTaskInputs;
               text = ''
-                ${setupWorkdir}
-                ${desktopEnvironment}
-                export PYTHONDONTWRITEBYTECODE=1
-                export PYTHONPATH="$PWD"
-                POKECON_RESOURCE_PROVENANCE=development \
-                cargo build --locked --workspace --all-features
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                POKECON_RESOURCE_PROVENANCE=development cargo test --locked --workspace --all-features
-                python -m scripts.compatibility.promote --check
-                python -m scripts.compatibility.runner \
-                  --check \
-                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
-                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
-                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                if [ "$#" -ne 0 ]; then
+                  echo "usage: nix run .#rust-ci-core" >&2
+                  exit 2
+                fi
+                ${setupSourceGateEnvironment}
+                ${realizeRustCiCore}
               '';
             };
 
             ci-rust-contracts = mkTask {
               name = "ci-rust-contracts";
-              runtimeInputs = rustTaskInputs ++ [
+              runtimeInputs = [
                 bun
+                pythonEnv
                 pkgs.check-jsonschema
                 pkgs.diffutils
               ];
               text = ''
-                ${setupWorkdir}
-                ${desktopEnvironment}
+                ${setupSourceGateEnvironment}
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
-                export POKECON_RESOURCE_PROVENANCE=development
-                cargo build --locked --workspace --all-features
-                cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                cargo test --locked --workspace --all-features
-                python -m scripts.compatibility.promote --check
-                python -m scripts.compatibility.runner \
-                  --check \
-                  --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
-                  --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
-                  --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                ${realizeRustCiCore}
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
@@ -3601,7 +4106,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features --no-deps -- -D warnings
               '';
             };
 
@@ -3656,20 +4161,18 @@
 
             contract-check = mkTask {
               name = "contract-check";
-              runtimeInputs = rustTaskInputs ++ [
+              runtimeInputs = [
                 bun
+                pythonEnv
                 pkgs.check-jsonschema
                 pkgs.diffutils
               ];
               text = ''
-                ${setupWorkdir}
-                ${desktopEnvironment}
+                ${setupSourceGateEnvironment}
+                cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
-                export POKECON_RESOURCE_PROVENANCE=development
-                cargo test --locked --package pokecon \
-                  --features integration-test-support,contract-generator \
-                  --test contract_sync
+                ${realizeContractSync}
                 check-jsonschema --check-metaschema generated/settings.schema.json
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
@@ -3922,7 +4425,14 @@
             test-production-routing-mutations = mkTask {
               name = "test-production-routing-mutations";
               text = ''
-                exec "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" "$@"
+                ${setupSourceGateEnvironment}
+                if [ "$#" -eq 0 ]; then
+                  ${realizeProductionRoutingAudit}
+                  ${realizeProductionRoutingMutationAudit}
+                else
+                  ${realizeProductionRoutingAudit}
+                  "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" "$@"
+                fi
               '';
             };
 
@@ -4198,7 +4708,6 @@
                     mv "$workdir" "$release_workdir"
                     workdir="$release_workdir"
                     cd "$workdir"
-                    test -f "${productionRoutingAudit}/passed"
                     export SOURCE_DATE_EPOCH=0
                     release_python="${linuxReleaseRuntime}/python"
                     release_wheelhouse="${linuxReleaseRuntime}/wheelhouse"
@@ -4888,14 +5397,17 @@
 
             check = mkTask {
               name = "check";
-              runtimeInputs = rustTaskInputs ++ [
+              runtimeInputs = [
                 pkgs.basedpyright
                 pkgs.actionlint
                 bun
                 pkgs.check-jsonschema
                 pkgs.diffutils
+                pkgs.git
+                pkgs.gnugrep
                 pkgs.jq
                 pkgs.markdownlint-cli
+                pythonEnv
                 pythonPackageBuildUv
                 pkgs.ripgrep
                 pkgs.shellcheck
@@ -4908,36 +5420,32 @@
                   echo "Run aggregate source verification gates; packaged CLI and UI use dedicated apps"
                   exit 0
                 fi
-                ${setupWorkdir}
-                ${desktopEnvironment}
+                ${setupQualityWorkdir}
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
                 export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"
-                export CARGO_PROFILE_DEV_DEBUG=line-tables-only
-                export CARGO_PROFILE_TEST_DEBUG=line-tables-only
-                ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
                 python -m scripts.quality.source_filter
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"
-                test -f "${productionRoutingAudit}/passed"
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
                 # shellcheck disable=SC2016
                 "${pythonEnv}/bin/python" -I \
                   "${repositorySource}/scripts/quality/run_parallel_checks.py" \
-                  rust-and-contracts \
+                  production-routing-audit \
                   "${pkgs.bash}/bin/bash" -euo pipefail -c '
-                    export POKECON_RESOURCE_PROVENANCE=development
-                    cargo build --locked --workspace --all-features
-                    cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-                    cargo test --locked --workspace --all-features
-                    python -m scripts.compatibility.promote --check
-                    python -m scripts.compatibility.runner \
-                      --check \
-                      --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
-                      --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
-                      --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}"
+                    ${realizeProductionRoutingAudit}
+                  ' \
+                  --next \
+                  rust-ci-core \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    ${realizeRustCiCore}
+                  ' \
+                  --next \
+                  contracts \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    ${realizeContractSync}
                     check-jsonschema --check-metaschema generated/settings.schema.json
                     python -m scripts.acceptance.records
                     scripts/quality/generate-api-types.sh --check-types-only
@@ -4956,16 +5464,8 @@
                     bun --bun "${markdownlintCli}" --config .markdownlint.json ./*.md docs/*.md
                     bun --bun "${textlintCli}" --config .textlintrc.json ./*.md docs/*.md docs/legacy/*.txt ./*.txt
                     typos
-                  '
-                aggregate_mutation_workers="$(nproc)"
-                if [ "$aggregate_mutation_workers" -gt 1 ]; then
-                  aggregate_mutation_workers="$((aggregate_mutation_workers - 1))"
-                fi
-                if [ "$aggregate_mutation_workers" -gt 3 ]; then
-                  aggregate_mutation_workers=3
-                fi
-                "${pythonEnv}/bin/python" -I \
-                  "${repositorySource}/scripts/quality/run_parallel_checks.py" \
+                  ' \
+                  --next \
                   pytest \
                   python -m pytest \
                   -p no:cacheprovider \
@@ -4975,8 +5475,9 @@
                   --tb=short \
                   --next \
                   production-routing-mutation-audit \
-                  "${productionRoutingMutationAuditRunner}/bin/pokecon-production-routing-mutation-audit" \
-                  --workers "$aggregate_mutation_workers"
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
+                    ${realizeProductionRoutingMutationAudit}
+                  '
               '';
             };
           };
@@ -4995,7 +5496,7 @@
                 };
                 clippy = {
                   enable = true;
-                  entry = "nix run .#cargo -- clippy --locked --workspace --all-targets --all-features -- -D warnings";
+                  entry = "nix run .#cargo -- clippy --locked --workspace --all-targets --all-features --no-deps -- -D warnings";
                   files = "(^|/)(Cargo\\.toml|Cargo\\.lock|flake\\.nix|flake\\.lock|rust-toolchain\\.toml)$|\\.rs$";
                   pass_filenames = false;
                 };

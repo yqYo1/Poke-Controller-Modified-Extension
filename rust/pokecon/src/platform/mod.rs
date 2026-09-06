@@ -1,11 +1,13 @@
 //! Platform-specific behavior is isolated behind this module.
 
+#[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "windows")]
 mod windows;
 
 use std::fmt::Debug;
 
+#[cfg(target_os = "linux")]
 pub use linux::LinuxAdapter;
 #[cfg(target_os = "windows")]
 pub use windows::WindowsAdapter;
@@ -14,6 +16,7 @@ pub use windows::WindowsAdapter;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PlatformKind {
     /// Linux desktop or server.
+    #[cfg(target_os = "linux")]
     Linux,
     /// Windows desktop or server.
     #[cfg(target_os = "windows")]

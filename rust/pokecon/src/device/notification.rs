@@ -476,6 +476,7 @@ async fn handle_queued_job(
                 );
                 break;
             }
+            #[cfg(not(target_os = "windows"))]
             Err(NotificationError::UnsupportedPlatform) => {
                 tracing::warn!(
                     diagnostic_id = "NOTIFICATION_UNSUPPORTED_PLATFORM",
@@ -1091,6 +1092,7 @@ pub enum NotificationError {
     #[error("notification delivery failed")]
     DeliveryFailed,
     #[error("native notifications are unsupported on this platform")]
+    #[cfg(not(target_os = "windows"))]
     UnsupportedPlatform,
     #[error("notification queue is full")]
     #[allow(

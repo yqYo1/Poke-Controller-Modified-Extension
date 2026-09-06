@@ -34,7 +34,9 @@ impl PortSelector {
 /// Linux selector stability class, in preferred display order.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum SelectorClass {
+    #[cfg(any(target_os = "linux", test))]
     ById,
+    #[cfg(any(target_os = "linux", test))]
     ByPath,
     Direct,
 }
@@ -65,6 +67,7 @@ impl PortCandidate {
 /// Deduplicates aliases by device identity, preferring by-id, then by-path,
 /// then a direct tty spelling. The result is stable across enumeration order.
 #[must_use]
+#[cfg(any(target_os = "linux", test))]
 pub fn select_linux_candidates(mut candidates: Vec<PortCandidate>) -> Vec<PortCandidate> {
     candidates.sort_by(|left, right| {
         left.class

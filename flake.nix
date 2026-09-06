@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "8844062d39d7dadbf1bbd152feb37d0935623453b33efbff795f6467b16a6b5d";
+      canonicalFlakeHash = "c16a6b8dcf51ea2a2eb5620ff30c22032cb9e257300a702b2ed1238d309fbda3";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -4008,7 +4008,10 @@
 
             ci-parallel = mkTask {
               name = "ci-parallel";
-              runtimeInputs = [ pythonEnv ];
+              runtimeInputs = [
+                pythonEnv
+                pkgs.nix
+              ];
               text = ''
                 exec "${pythonEnv}/bin/python" -I \
                   "${repositorySource}/scripts/quality/run_parallel_checks.py" "$@"

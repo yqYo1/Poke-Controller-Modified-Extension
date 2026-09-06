@@ -1,3 +1,4 @@
+#[cfg(any(target_os = "linux", test))]
 use std::collections::BTreeSet;
 use std::io;
 #[cfg(target_os = "linux")]

@@ -848,12 +848,9 @@ impl CommandService {
     /// # Errors
     ///
     /// Returns [`CommandServiceError::ProfileSwitchInProgress`] when held.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "profile switch entry awaits product profile coordination wiring"
-        )
+    #[allow(
+        dead_code,
+        reason = "profile switch entry awaits product profile coordination wiring"
     )]
     pub fn try_begin_profile_switch(&self) -> Result<(), CommandServiceError> {
         self.host
@@ -931,12 +928,9 @@ impl CommandService {
     }
 
     /// Releases the profile gate on success, cancellation, or rollback.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "profile switch completion awaits product profile coordination wiring"
-        )
+    #[allow(
+        dead_code,
+        reason = "profile switch completion awaits product profile coordination wiring"
     )]
     pub fn finish_profile_switch(&self) {
         let stage = ProfileSwitchStage::decode(self.profile_stage.load(Ordering::Acquire));

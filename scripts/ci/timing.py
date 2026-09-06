@@ -14,6 +14,7 @@ import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Final, Never, cast
 
 
@@ -1335,6 +1336,17 @@ def comparison_document(first: TimingReport, second: TimingReport) -> ResultDocu
     }
 
 
+def _read_json_argument(value: str) -> str:
+    """Accept JSON text or a path to a JSON file for CI shell interoperability."""
+    candidate = Path(value)
+    try:
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    return value
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1404,8 +1416,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             document = comparison_document(first, second)
         elif command == "collect":
             report = _collect_from_deterministic_jsons(
-                jobs_json=cast("str", arguments.jobs),
-                run_metadata_json=cast("str", arguments.run_metadata),
+                jobs_json=_read_json_argument(cast("str", arguments.jobs)),
+                run_metadata_json=_read_json_argument(
+                    cast("str", arguments.run_metadata)
+                ),
             )
             output_path = cast("str | None", arguments.output)
             if output_path is not None:

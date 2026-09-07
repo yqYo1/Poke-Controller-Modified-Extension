@@ -1635,7 +1635,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "119e31c394be6aa95c9a63966c9fe27dcf81b200fa48b0c65176762b00bc387a"
+            "d16d5f5238767729be33742560916e1ac482ee5236995d5b8e0861988537645a"
         ),
         "@release/nsis-reproducibility.nsh": (
             "5351b8d22b98bc15be0fe6842d0112ca833203261ab5c321b1250e4006e5adf3"
@@ -1647,7 +1647,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "04274ee342642e554d13d08b80977725ba5c33345e86a5a1f6c533a7329a2aa0"
         ),
         "@release/stage.py": (
-            "7f490a625e156fbc2bf38f1d31532234268f89a84084875ad9173644054f8fff"
+            "e9590c5985cd107288ee011fe1da37f735c239163f1c4a0bc0b3c566b98d9bae"
         ),
         "@tauri/linux/70-pokecon-controller.rules": (
             "d51f5162c4670cfa6ab5aafe02000a8b4e37973d9998a09e80ae532ed649fbe2"
@@ -2113,12 +2113,18 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "fbc841856d57da931a3cd9e08ebf6c5984ac21efc4b057c08ecc81ddc612a54b"
+        == "e85dde07d3392892ed0113a4a12f7662fa8ad8def86c7b670ee9704c12e46fbb"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
     )
-    assert "build" not in tauri_config
+    tauri_build = validated_json_object(tauri_config["build"], "build")
+    assert tauri_build == {
+        "beforeBundleCommand": (
+            "python ../../scripts/release/build_runtime.py "
+            "--normalize-pe ../../target/release/pokecon.exe"
+        )
+    }
     expected_debian_dependencies = [
         "libgl1",
         "libglib2.0-0",
@@ -2153,7 +2159,6 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert configured_debian_dependencies == expected_debian_dependencies
     forbidden_tauri_command_keys = {
         "beforebuildcommand",
-        "beforebundlecommand",
         "beforedevcommand",
     }
 

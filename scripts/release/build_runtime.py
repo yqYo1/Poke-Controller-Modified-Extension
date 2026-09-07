@@ -783,6 +783,197 @@ def _normalize_pe(path: Path) -> bool:
     return changed
 
 
+def normalize_pe(path: Path) -> bool:
+    """Production-safe PE normalization for Windows release binaries.
+
+    For a valid PE input, fixes COFF TimeDateStamp and removes/zeros the
+    IMAGE_DEBUG_DIRECTORY data directory, debug directory records, and their
+    raw payload (CodeView/VC_FEATURE/POGO). Fail-closed on malformed PE;
+    non-PE/ELF is a no-op for Linux.
+    """
+    data = path.read_bytes()
+    if len(data) < 2 or data[0:2] != b"MZ":
+        return False
+    if len(data) < 0x40:
+        message = f"PE file is truncated: missing DOS header: {path}"
+        raise ValueError(message)
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    if e_lfanew < 0 or e_lfanew + 6 > len(data):
+        message = f"PE file is truncated: invalid e_lfanew {e_lfanew}: {path}"
+        raise ValueError(message)
+    if data[e_lfanew : e_lfanew + 4] != b"PE\x00\x00":
+        message = f"PE file has invalid PE signature: {path}"
+        raise ValueError(message)
+    if e_lfanew + 4 + 20 > len(data):
+        message = f"PE file is truncated: missing COFF header: {path}"
+        raise ValueError(message)
+    coff_timestamp_offset = e_lfanew + 4 + 4
+    number_of_sections = int.from_bytes(
+        data[e_lfanew + 4 + 2 : e_lfanew + 4 + 4], "little"
+    )
+    size_of_optional_header = int.from_bytes(
+        data[e_lfanew + 4 + 16 : e_lfanew + 4 + 18], "little"
+    )
+    optional_header_offset = e_lfanew + 4 + 20
+    if optional_header_offset + size_of_optional_header > len(data):
+        message = f"PE file is truncated: missing optional header: {path}"
+        raise ValueError(message)
+    mutable = bytearray(data)
+    changed = False
+    fixed = PE_REPRODUCIBLE_TIMESTAMP.to_bytes(4, "little")
+    if mutable[coff_timestamp_offset : coff_timestamp_offset + 4] != fixed:
+        mutable[coff_timestamp_offset : coff_timestamp_offset + 4] = fixed
+        changed = True
+    if size_of_optional_header == 0:
+        message = f"PE file is truncated: missing optional header: {path}"
+        raise ValueError(message)
+    if size_of_optional_header < 2:
+        message = f"PE file is truncated: optional header too small: {path}"
+        raise ValueError(message)
+    magic = int.from_bytes(
+        mutable[optional_header_offset : optional_header_offset + 2], "little"
+    )
+    if magic not in (0x10B, 0x20B):
+        message = f"PE file has invalid optional header magic {magic:#x}: {path}"
+        raise ValueError(message)
+    section_headers_offset = optional_header_offset + size_of_optional_header
+    if (
+        number_of_sections != 0
+        and section_headers_offset + number_of_sections * 40 > len(data)
+    ):
+        message = f"PE file is truncated: missing section headers: {path}"
+        raise ValueError(message)
+    debug_rva_offset: int | None = None
+    if magic == 0x10B:
+        data_directory_offset = optional_header_offset + 96
+        number_of_rva_offset = optional_header_offset + 92
+        if size_of_optional_header < 96:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        if number_of_rva_offset + 4 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        number_of_rva = int.from_bytes(
+            mutable[number_of_rva_offset : number_of_rva_offset + 4], "little"
+        )
+        if number_of_rva > 6:
+            if size_of_optional_header < 96 + 8 * 7:
+                message = f"PE file is truncated: missing debug data directory: {path}"
+                raise ValueError(message)
+            debug_rva_offset = data_directory_offset + 6 * 8
+    elif magic == 0x20B:
+        data_directory_offset = optional_header_offset + 112
+        number_of_rva_offset = optional_header_offset + 108
+        if size_of_optional_header < 112:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        if number_of_rva_offset + 4 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        number_of_rva = int.from_bytes(
+            mutable[number_of_rva_offset : number_of_rva_offset + 4], "little"
+        )
+        if number_of_rva > 6:
+            if size_of_optional_header < 112 + 8 * 7:
+                message = f"PE file is truncated: missing debug data directory: {path}"
+                raise ValueError(message)
+            debug_rva_offset = data_directory_offset + 6 * 8
+    if debug_rva_offset is not None:
+        if debug_rva_offset + 8 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing debug data directory: {path}"
+            raise ValueError(message)
+        debug_rva = int.from_bytes(
+            mutable[debug_rva_offset : debug_rva_offset + 4], "little"
+        )
+        debug_size = int.from_bytes(
+            mutable[debug_rva_offset + 4 : debug_rva_offset + 8], "little"
+        )
+        if (debug_rva == 0) != (debug_size == 0):
+            message = f"PE file has inconsistent debug directory: {path}"
+            raise ValueError(message)
+        if debug_rva != 0 and debug_size != 0:
+            if debug_size % 28 != 0:
+                message = (
+                    f"PE file has invalid debug directory size {debug_size}: {path}"
+                )
+                raise ValueError(message)
+            sections: list[tuple[int, int, int, int]] = []
+            for index in range(number_of_sections):
+                offset = section_headers_offset + index * 40
+                virtual_size = int.from_bytes(
+                    mutable[offset + 8 : offset + 12], "little"
+                )
+                virtual_address = int.from_bytes(
+                    mutable[offset + 12 : offset + 16], "little"
+                )
+                size_of_raw_data = int.from_bytes(
+                    mutable[offset + 16 : offset + 20], "little"
+                )
+                pointer_to_raw_data = int.from_bytes(
+                    mutable[offset + 20 : offset + 24], "little"
+                )
+                sections.append(
+                    (
+                        virtual_address,
+                        virtual_size,
+                        pointer_to_raw_data,
+                        size_of_raw_data,
+                    )
+                )
+            file_offset = _pe_rva_to_file_offset(debug_rva, sections)
+            if file_offset is None:
+                message = f"PE debug directory RVA does not map to file offset: {path}"
+                raise ValueError(message)
+            if file_offset + debug_size > len(mutable):
+                message = (
+                    f"PE file is truncated: debug directory extends beyond file: {path}"
+                )
+                raise ValueError(message)
+            count = debug_size // 28
+            payload_ranges: list[tuple[int, int]] = []
+            for idx in range(count):
+                entry_offset = file_offset + idx * 28
+                if entry_offset + 28 > len(mutable):
+                    message = (
+                        f"PE file is truncated: debug entry extends beyond file: {path}"
+                    )
+                    raise ValueError(message)
+                size_of_data = int.from_bytes(
+                    mutable[entry_offset + 16 : entry_offset + 20], "little"
+                )
+                pointer_to_raw_data = int.from_bytes(
+                    mutable[entry_offset + 24 : entry_offset + 28], "little"
+                )
+                if size_of_data != 0:
+                    if pointer_to_raw_data == 0:
+                        message = f"PE debug entry has invalid payload pointer: {path}"
+                        raise ValueError(message)
+                    if pointer_to_raw_data + size_of_data > len(mutable):
+                        message = f"PE debug payload extends beyond file: {path}"
+                        raise ValueError(message)
+                    payload_ranges.append((pointer_to_raw_data, size_of_data))
+            for ptr, sz in payload_ranges:
+                if mutable[ptr : ptr + sz] != b"\x00" * sz:
+                    mutable[ptr : ptr + sz] = b"\x00" * sz
+                    changed = True
+            for idx in range(count):
+                entry_offset = file_offset + idx * 28
+                if mutable[entry_offset : entry_offset + 28] != b"\x00" * 28:
+                    mutable[entry_offset : entry_offset + 28] = b"\x00" * 28
+                    changed = True
+            if mutable[debug_rva_offset : debug_rva_offset + 8] != b"\x00" * 8:
+                mutable[debug_rva_offset : debug_rva_offset + 8] = b"\x00" * 8
+                changed = True
+    if changed:
+        path.write_bytes(mutable)
+    return changed
+
+
+# Backwards-compatible aliases for the production PE helper.
+normalize_pe_executable = normalize_pe
+normalize_pe_file = normalize_pe
+
+
 def safe_rpath(path: Path, patchelf: Path) -> None:
     rpath = run([patchelf, "--print-rpath", path], capture=True)
     entries = [
@@ -1182,12 +1373,49 @@ def build_release_runtime(
     return manifest
 
 
+def _resolve_pe_cli_path(raw: Path) -> Path:
+    text = str(raw)
+    if "://" in text:
+        message = f"PE normalization does not accept remote input: {raw!r}"
+        raise ValueError(message)
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        resolved = candidate
+    else:
+        resolved = (Path.cwd() / candidate).resolve(strict=False)
+    if resolved.exists():
+        return resolved
+    # Fallback: try repository root relative (handles Tauri cwd ambiguity).
+    repo_root = Path.cwd()
+    for parent in [Path.cwd(), *list(Path.cwd().parents)]:
+        if (parent / "Cargo.toml").exists():
+            repo_root = parent
+            break
+    # Also consider script location as repo hint (deterministic, no broad except)
+    script_parents = Path(__file__).resolve().parents
+    if len(script_parents) > 3:
+        script_root = script_parents[3]
+        if (script_root / "Cargo.toml").exists():
+            repo_root = script_root
+    alternative = (repo_root / candidate).resolve(strict=False)
+    if alternative.exists():
+        return alternative
+    # Also try ../../target style for rust/pokecon cwd
+    if not candidate.is_absolute():
+        for prefix in [Path("../../") / candidate, Path("../") / candidate]:
+            prefixed = (Path.cwd() / prefix).resolve(strict=False)
+            if prefixed.exists():
+                return prefixed
+    return resolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project", type=Path, required=True)
-    parser.add_argument("--uv", type=Path, required=True)
-    parser.add_argument("--runtime-output", type=Path, required=True)
-    parser.add_argument("--wheelhouse-output", type=Path, required=True)
+    parser.add_argument("--normalize-pe", type=str, dest="normalize_pe")
+    parser.add_argument("--project", type=Path, required=False)
+    parser.add_argument("--uv", type=Path, required=False)
+    parser.add_argument("--runtime-output", type=Path, required=False)
+    parser.add_argument("--wheelhouse-output", type=Path, required=False)
     parser.add_argument("--patchelf", type=Path)
     parser.add_argument("--strip", type=Path)
     parser.add_argument("--vcpkg-path", type=Path)
@@ -1195,6 +1423,42 @@ def main() -> int:
     parser.add_argument("--execution-loader", type=Path)
     parser.add_argument("--execution-library-path")
     arguments = parser.parse_args()
+    if arguments.normalize_pe is not None:
+        if any(
+            value is not None
+            for value in (
+                arguments.project,
+                arguments.uv,
+                arguments.runtime_output,
+                arguments.wheelhouse_output,
+            )
+        ):
+            parser.error(
+                "--normalize-pe cannot be combined with runtime build arguments"
+            )
+        raw_normalize_pe = arguments.normalize_pe
+        if "://" in raw_normalize_pe:
+            parser.error("--normalize-pe accepts only local paths")
+        target = _resolve_pe_cli_path(Path(raw_normalize_pe))
+        if not target.exists() and os.name != "nt":
+            return 0
+        if target.is_symlink() or target.is_junction():
+            message = f"PE target must be a regular file: {target}"
+            raise ValueError(message)
+        if not target.is_file():
+            message = f"PE target is not a regular file: {target}"
+            raise ValueError(message)
+        normalize_pe(target)
+        return 0
+    if (
+        arguments.project is None
+        or arguments.uv is None
+        or arguments.runtime_output is None
+        or arguments.wheelhouse_output is None
+    ):
+        parser.error(
+            "--project, --uv, --runtime-output, and --wheelhouse-output are required"
+        )
     build_release_runtime(
         arguments.project.resolve(),
         arguments.uv.resolve(),

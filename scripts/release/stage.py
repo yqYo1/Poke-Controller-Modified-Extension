@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from typing import Never
 
+from scripts.release.build_runtime import normalize_pe as _build_normalize_pe
 
 BYTECODE_SUFFIXES = {".pyc", ".pyo"}
 IGNORED_NAMES = {".pytest_cache", ".ruff_cache"}
@@ -104,6 +105,15 @@ def copy_tree(source: Path, destination: Path) -> None:
             os.utime(path, (0, 0))
     destination.chmod(0o755)
     os.utime(destination, (0, 0))
+
+
+def _normalize_staged_pe(path: Path) -> None:
+    """Normalize a staged Windows PE in place; non-PE is a no-op."""
+    # Fail-closed on malformed PE; non-PE/ELF must be no-op for Linux.
+    _build_normalize_pe(path)
+    # Preserve deterministic executable metadata after normalization.
+    path.chmod(0o755)
+    os.utime(path, (0, 0))
 
 
 def copy_executable(source: Path, destination: Path) -> None:
@@ -207,6 +217,7 @@ def stage_resources(
     worker_name = "pokecon-worker.exe" if windows else "pokecon-worker"
     uv_name = "uv.exe" if windows else "uv"
     copy_executable(worker, output / worker_name)
+    _normalize_staged_pe(output / worker_name)
     copy_executable(uv, output / "uv" / uv_name)
     copy_tree(wheelhouse, output / "python-wheels")
     copy_tree(python, output / "python")

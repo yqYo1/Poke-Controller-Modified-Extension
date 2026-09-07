@@ -8,6 +8,9 @@
       "csp": null
     }
   },
+  "build": {
+    "beforeBundleCommand": "python ../../scripts/release/build_runtime.py --normalize-pe ../../target/release/pokecon.exe"
+  },
   "bundle": {
     "active": true,
     "category": "Utility",

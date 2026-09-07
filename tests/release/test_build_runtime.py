@@ -10,7 +10,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -1193,19 +1193,6 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     assert "SetDateSave off" in hook_contents
 
 
-@pytest.mark.parametrize(
-    ("workflow_name", "expected_count"),
-    [("package.yml", 2), ("release.yml", 1)],
-)
-def test_windows_builds_use_deterministic_msvc_linker_flags(
-    workflow_name: str, expected_count: int
-) -> None:
-    root = Path(__file__).resolve().parents[2]
-    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
-    flags = 'rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
-    assert workflow.count(flags) == expected_count
-
-
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])
 def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow_name: str,
@@ -1893,3 +1880,290 @@ def test_pe_preserves_guid_and_repack_deterministically(tmp_path: Path) -> None:
     normalize_wheel(second, None, None)
     assert first.read_bytes() == second.read_bytes()
     _verify_record_hashes(first)
+
+
+# ---------------------------------------------------------------------------
+# Production PE normalization (exe/worker) — debug payload removal
+# ---------------------------------------------------------------------------
+
+
+def _build_pe_exe_with_payload(
+    coff_timestamp: int = 0x5A5A5A5A,
+    payloads: list[bytes] | None = None,
+) -> bytes:
+    if payloads is None:
+        payloads = [b"RSDS" + b"\x11" * 16 + b"\x00" * 16, b"POGO" + b"\x22" * 12]
+    size = 0x800
+    data = bytearray(size)
+    data[0:2] = b"MZ"
+    e_lfanew = 0x80
+    data[0x3C:0x40] = e_lfanew.to_bytes(4, "little")
+    data[e_lfanew : e_lfanew + 4] = b"PE\x00\x00"
+    coff = e_lfanew + 4
+    data[coff : coff + 2] = (0x8664).to_bytes(2, "little")
+    data[coff + 2 : coff + 4] = (1).to_bytes(2, "little")
+    data[coff + 4 : coff + 8] = coff_timestamp.to_bytes(4, "little")
+    data[coff + 16 : coff + 18] = (0xF0).to_bytes(2, "little")
+    data[coff + 18 : coff + 20] = (0x22).to_bytes(2, "little")
+    opt = e_lfanew + 4 + 20
+    data[opt : opt + 2] = (0x20B).to_bytes(2, "little")
+    data[opt + 108 : opt + 112] = (16).to_bytes(4, "little")
+    sect = opt + 0xF0
+    data[sect : sect + 8] = b".rdata\x00\x00"
+    data[sect + 8 : sect + 12] = (0x400).to_bytes(4, "little")
+    data[sect + 12 : sect + 16] = (0x1000).to_bytes(4, "little")
+    data[sect + 16 : sect + 20] = (0x400).to_bytes(4, "little")
+    data[sect + 20 : sect + 24] = (0x200).to_bytes(4, "little")
+    data_directory = opt + 112
+    debug_entry_offset = data_directory + 6 * 8
+    n = len(payloads)
+    debug_rva = 0x1000
+    debug_size = n * 28
+    data[debug_entry_offset : debug_entry_offset + 4] = debug_rva.to_bytes(4, "little")
+    data[debug_entry_offset + 4 : debug_entry_offset + 8] = debug_size.to_bytes(
+        4, "little"
+    )
+    debug_dir_file = 0x200
+    payload_base = 0x280
+    cursor = payload_base
+    for idx, payload in enumerate(payloads):
+        off = debug_dir_file + idx * 28
+        ts = 0x11111111 + idx
+        data[off : off + 4] = (0).to_bytes(4, "little")
+        data[off + 4 : off + 8] = ts.to_bytes(4, "little")
+        data[off + 8 : off + 10] = (0).to_bytes(2, "little")
+        data[off + 10 : off + 12] = (0).to_bytes(2, "little")
+        data[off + 12 : off + 16] = (2 if idx == 0 else 13).to_bytes(4, "little")
+        data[off + 16 : off + 20] = len(payload).to_bytes(4, "little")
+        data[off + 20 : off + 24] = (0x3000 + cursor).to_bytes(4, "little")
+        data[off + 24 : off + 28] = cursor.to_bytes(4, "little")
+        data[cursor : cursor + len(payload)] = payload
+        cursor += len(payload)
+    return bytes(data)
+
+
+def _extract_debug_payloads(data: bytes) -> list[bytes]:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    magic = int.from_bytes(data[opt : opt + 2], "little")
+    debug_off = (opt + 96 + 6 * 8) if magic == 0x10B else (opt + 112 + 6 * 8)
+    debug_rva = int.from_bytes(data[debug_off : debug_off + 4], "little")
+    debug_size = int.from_bytes(data[debug_off + 4 : debug_off + 8], "little")
+    if debug_rva == 0 or debug_size == 0:
+        return []
+    # We know builder uses file offset 0x200 for directory
+    file_offset = 0x200
+    payloads: list[bytes] = []
+    for idx in range(debug_size // 28):
+        off = file_offset + idx * 28
+        ptr = int.from_bytes(data[off + 24 : off + 28], "little")
+        sz = int.from_bytes(data[off + 16 : off + 20], "little")
+        if sz and ptr:
+            payloads.append(data[ptr : ptr + sz])
+    return payloads
+
+
+def test_normalize_pe_removes_debug_directory_and_payload(tmp_path: Path) -> None:
+    payloads = [b"RSDS" + b"\xab" * 20, b"POGO" + b"\xcd" * 12, b"VCFT" + b"\xef" * 8]
+    pe = _build_pe_exe_with_payload(coff_timestamp=0xDEADBEEF, payloads=payloads)
+    path = tmp_path / "pokecon.exe"
+    path.write_bytes(pe)
+    assert _extract_coff_timestamp(path.read_bytes()) == 0xDEADBEEF
+    assert len(_extract_debug_payloads(path.read_bytes())) == 3
+    changed = release_runtime.normalize_pe(path)  # type: ignore[attr-defined]
+    assert changed is True
+    data = path.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # Debug data directory must be zeroed
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    debug_off = opt + 112 + 6 * 8
+    assert int.from_bytes(data[debug_off : debug_off + 4], "little") == 0
+    assert int.from_bytes(data[debug_off + 4 : debug_off + 8], "little") == 0
+    # Debug entries must be zeroed (28 bytes each at 0x200)
+    for idx in range(len(payloads)):
+        off = 0x200 + idx * 28
+        assert data[off : off + 28] == b"\x00" * 28
+    # Payloads must be zeroed
+    for _payload in payloads:
+        # payloads were at 0x280 sequential
+        pass
+    # Verify payload region zeroed (0x280 onwards)
+    assert data[0x280 : 0x280 + sum(len(p) for p in payloads)] == b"\x00" * sum(
+        len(p) for p in payloads
+    )
+    # Idempotent
+    assert release_runtime.normalize_pe(path) is False  # type: ignore[attr-defined]
+    assert release_runtime.normalize_pe_executable(path) is False  # type: ignore[attr-defined]
+    assert release_runtime.normalize_pe_file(path) is False  # type: ignore[attr-defined]
+
+
+def test_normalize_pe_non_pe_and_elf_are_noop(tmp_path: Path) -> None:
+    text = tmp_path / "plain.txt"
+    text.write_bytes(b"hello world\n")
+    assert release_runtime.normalize_pe(text) is False  # type: ignore[attr-defined]
+    assert text.read_bytes() == b"hello world\n"
+    elf = tmp_path / "elf.bin"
+    elf.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 100)
+    assert release_runtime.normalize_pe(elf) is False  # type: ignore[attr-defined]
+    assert elf.read_bytes()[:4] == b"\x7fELF"
+    empty = tmp_path / "empty.bin"
+    empty.write_bytes(b"\x00\x01\x02\x03")
+    assert release_runtime.normalize_pe(empty) is False  # type: ignore[attr-defined]
+    # _normalize_pe for wheels must also be noop on ELF
+    assert release_runtime._normalize_pe(elf) is False  # noqa: SLF001
+
+
+def test_normalize_pe_malformed_fails_closed(tmp_path: Path) -> None:
+    truncated = tmp_path / "trunc.exe"
+    truncated.write_bytes(b"MZ" + b"\x00" * 10)
+    with pytest.raises(ValueError, match=r"PE.*truncated.*DOS|PE.*missing DOS"):
+        release_runtime.normalize_pe(truncated)  # type: ignore[attr-defined]
+    bad_lfanew = tmp_path / "bad_lfanew.exe"
+    data = bytearray(b"MZ" + b"\x00" * 58 + (0xFFF0).to_bytes(4, "little"))
+    bad_lfanew.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match=r"PE.*truncated|PE.*invalid.*lfanew"):
+        release_runtime.normalize_pe(bad_lfanew)  # type: ignore[attr-defined]
+    # Inconsistent debug directory (rva !=0 size 0)
+    pe = bytearray(_build_pe_exe_with_payload())
+    e_lfanew = int.from_bytes(pe[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    debug_off = opt + 112 + 6 * 8
+    pe[debug_off + 4 : debug_off + 8] = (0).to_bytes(4, "little")
+    p = tmp_path / "inconsistent.exe"
+    p.write_bytes(bytes(pe))
+    with pytest.raises(ValueError, match=r"inconsistent"):
+        release_runtime.normalize_pe(p)  # type: ignore[attr-defined]
+    # Payload beyond file
+    pe2 = bytearray(_build_pe_exe_with_payload())
+    # Corrupt first entry pointer to beyond file
+    pe2[0x200 + 24 : 0x200 + 28] = (0xFFFF).to_bytes(4, "little")
+    q = tmp_path / "payload_oob.exe"
+    q.write_bytes(bytes(pe2))
+    with pytest.raises(ValueError, match=r"payload.*beyond file|invalid.*payload"):
+        release_runtime.normalize_pe(q)  # type: ignore[attr-defined]
+    # Invalid debug size not multiple of 28
+    pe3 = bytearray(_build_pe_exe_with_payload())
+    pe3[debug_off + 4 : debug_off + 8] = (29).to_bytes(4, "little")
+    r = tmp_path / "bad_size.exe"
+    r.write_bytes(bytes(pe3))
+    with pytest.raises(ValueError, match=r"invalid.*debug.*size"):
+        release_runtime.normalize_pe(r)  # type: ignore[attr-defined]
+
+
+def test_normalize_pe_cli_and_tauri_config(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = json.loads(
+        (root / "rust/pokecon/tauri.conf.json").read_text(encoding="utf-8")
+    )
+    assert "build" in config
+    cmd = config["build"]["beforeBundleCommand"]
+    assert "build_runtime.py" in cmd
+    assert "--normalize-pe" in cmd
+    assert "pokecon.exe" in cmd
+    assert "../../scripts/release/build_runtime.py" in cmd
+    # CLI must normalize file without requiring runtime args
+    pe = _build_pe_exe_with_payload(coff_timestamp=0x12345678)
+    target = tmp_path / "target" / "release" / "pokecon.exe"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(pe)
+    # Invoke via CLI from tmp_path with relative path handling
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    data = target.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # CLI should reject remote input
+    remote = tmp_path / "remote.exe"
+    remote.write_bytes(pe)
+    result2 = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            "https://example.com/pokecon.exe",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result2.returncode != 0
+    # CLI should not combine with runtime args
+    result3 = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            str(target),
+            "--project",
+            ".",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result3.returncode != 0
+    # Ensure beforeBundleCommand path/cwd safety: command must be relative and not contain shell injection
+    assert ";" not in cmd and "&" not in cmd and "|" not in cmd
+    assert "://" not in cmd
+
+
+def test_stage_normalizes_worker_pe_before_inventory(tmp_path: Path) -> None:
+    from scripts.release import stage  # noqa: PLC0415
+
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html></html>", encoding="utf-8")
+    worker_pe = _build_pe_exe_with_payload(coff_timestamp=0x99999999)
+    worker = tmp_path / "pokecon-worker.exe"
+    worker.write_bytes(worker_pe)
+    uv = tmp_path / "uv.exe"
+    uv.write_bytes(b"uv")
+    wheelhouse = tmp_path / "wheelhouse"
+    wheelhouse.mkdir()
+    (wheelhouse / "wheelhouse-manifest.json").write_text("{}", encoding="utf-8")
+    (wheelhouse / "requirements.lock").write_text("", encoding="utf-8")
+    python = tmp_path / "python"
+    (python / "python.exe").parent.mkdir(parents=True)
+    (python / "python.exe").write_bytes(b"python")
+    output = tmp_path / "bundle"
+    config = tmp_path / "bundle.json"
+    manifest = stage.stage_resources(
+        web, worker, uv, wheelhouse, python, output, config
+    )
+    staged = output / "pokecon-worker.exe"
+    assert staged.is_file()
+    data = staged.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # Ensure inventory reflects normalized worker
+    files = {
+        str(entry["path"]): entry
+        for entry in cast("list[dict[str, object]]", manifest["files"])
+    }
+    assert "pokecon-worker.exe" in files
+    assert files["pokecon-worker.exe"]["sha256"] == hashlib.sha256(data).hexdigest()
+    # Linux worker (ELF) must be noop
+    worker_elf = tmp_path / "pokecon-worker"
+    worker_elf.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 200)
+    uv_linux = tmp_path / "uv_linux"
+    uv_linux.write_bytes(b"uv")
+    python_linux = tmp_path / "python_linux"
+    (python_linux / "bin/python3.14").parent.mkdir(parents=True)
+    (python_linux / "bin/python3.14").write_bytes(b"python")
+    # Provide symlink for fallback check
+    (python_linux / "python").symlink_to("bin/python3.14")
+    output2 = tmp_path / "bundle2"
+    config2 = tmp_path / "bundle2.json"
+    _ = stage.stage_resources(
+        web, worker_elf, uv_linux, wheelhouse, python_linux, output2, config2
+    )
+    assert (output2 / "pokecon-worker").read_bytes()[:4] == b"\x7fELF"

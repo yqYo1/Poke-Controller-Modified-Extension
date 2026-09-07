@@ -148,8 +148,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
-          # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Package builds are not lint gates; PE normalization runs at the build boundary.
+          rustflags: ""
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -272,8 +272,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
-          # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Package builds are not lint gates; PE normalization runs at the build boundary.
+          rustflags: ""
       - name: Install pinned package tools
         shell: pwsh
         run: |

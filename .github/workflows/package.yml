@@ -189,7 +189,7 @@ jobs:
           $releasePython = Join-Path $releaseRoot "python"
           $releaseWheelhouse = Join-Path $releaseRoot "wheelhouse"
           $bundleResources = Join-Path $env:GITHUB_WORKSPACE ".pokecon-bundle-resources-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $bundleConfig = Join-Path $releaseRoot "tauri.bundle.json"
+          $bundleConfig = Join-Path $env:GITHUB_WORKSPACE ".pokecon-bundle-config-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.json"
           python -m scripts.release.build_runtime `
             --project . `
             --uv $uv `
@@ -313,7 +313,7 @@ jobs:
           $releasePython = Join-Path $releaseRoot "python"
           $releaseWheelhouse = Join-Path $releaseRoot "wheelhouse"
           $bundleResources = Join-Path $env:GITHUB_WORKSPACE ".pokecon-bundle-resources-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $bundleConfig = Join-Path $releaseRoot "tauri.bundle.json"
+          $bundleConfig = Join-Path $env:GITHUB_WORKSPACE ".pokecon-bundle-config-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.json"
           python -m scripts.release.build_runtime `
             --project . `
             --uv $uv `

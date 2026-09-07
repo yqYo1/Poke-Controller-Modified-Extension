@@ -1193,6 +1193,19 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     assert "SetDateSave off" in hook_contents
 
 
+@pytest.mark.parametrize(
+    ("workflow_name", "expected_count"),
+    [("package.yml", 2), ("release.yml", 1)],
+)
+def test_windows_builds_use_deterministic_msvc_linker_flags(
+    workflow_name: str, expected_count: int
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+    flags = 'rustflags: "-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
+    assert workflow.count(flags) == expected_count
+
+
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])
 def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow_name: str,

@@ -2083,7 +2083,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "3ab5e0f7439deb5d363a563632d2db9cb57b685a47acc36632bebd833defc507"
+            "201d747cf6c50b9a87cc69392850c158c6766242e2bf794039174bc6ad4cf663"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -5132,6 +5132,14 @@ pub mod websocket;
     application_with_literals = rust_without_comments(sources["lib.rs"])
     application_source = rust_lexical_mask(sources["lib.rs"])
     expected_application_prelude = """
+#![cfg_attr(
+    target_os = "windows",
+    allow(
+        dead_code,
+        reason = "Windows CI compiles the shared Linux/runtime API surface without running it"
+    )
+)]
+
 mod application_backend;
 #[doc(hidden)]
 pub mod binary_entrypoints;

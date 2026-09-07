@@ -199,13 +199,21 @@ mod windows_acl {
 
     use crate::settings::hmac_key::HmacKeyError;
 
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type HANDLE = *mut c_void;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type DWORD = u32;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type BOOL = i32;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type PSID = *mut c_void;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type PACL = *mut c_void;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type PHANDLE = *mut HANDLE;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type PDWORD = *mut DWORD;
+    #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
     type LPVOID = *mut c_void;
 
     const TOKEN_QUERY: DWORD = 0x0008;
@@ -220,17 +228,20 @@ mod windows_acl {
     const PROTECTED_DACL_SECURITY_INFORMATION: DWORD = 0x8000_0000;
     const FILE_ALL_ACCESS: DWORD = 0x001F_01FF;
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[repr(C)]
     struct SID_AND_ATTRIBUTES {
         Sid: PSID,
         Attributes: DWORD,
     }
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[repr(C)]
     struct TOKEN_USER {
         User: SID_AND_ATTRIBUTES,
     }
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[repr(C)]
     struct TRUSTEE_W {
         pMultipleTrustee: *mut TRUSTEE_W,
@@ -240,6 +251,7 @@ mod windows_acl {
         ptstrName: *mut u16,
     }
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[repr(C)]
     struct EXPLICIT_ACCESS_W {
         grfAccessPermissions: DWORD,
@@ -248,6 +260,7 @@ mod windows_acl {
         Trustee: TRUSTEE_W,
     }
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[link(name = "advapi32")]
     unsafe extern "system" {
         fn OpenProcessToken(
@@ -279,6 +292,7 @@ mod windows_acl {
         ) -> DWORD;
     }
 
+    #[allow(non_snake_case, reason = "Windows ABI field/type names")]
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentProcess() -> HANDLE;
@@ -584,17 +598,22 @@ mod tests {
         use std::ffi::c_void;
         use std::os::windows::ffi::OsStrExt;
 
-        type HANDLE = *mut c_void;
+        #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
         type DWORD = u32;
+        #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
         type BOOL = i32;
+        #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
         type PSID = *mut c_void;
+        #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
         type PACL = *mut c_void;
+        #[allow(non_camel_case_types, reason = "Windows ABI field/type names")]
         type PSECURITY_DESCRIPTOR = *mut c_void;
 
         const DACL_SECURITY_INFORMATION: DWORD = 0x0000_0004;
         const PROTECTED_DACL_SECURITY_INFORMATION: DWORD = 0x8000_0000;
         const SE_FILE_OBJECT: DWORD = 1;
 
+        #[allow(non_snake_case, reason = "Windows ABI field/type names")]
         #[repr(C)]
         struct ACL {
             AclRevision: u8,
@@ -604,6 +623,7 @@ mod tests {
             Sbz2: u16,
         }
 
+        #[allow(non_snake_case, reason = "Windows ABI field/type names")]
         #[link(name = "advapi32")]
         unsafe extern "system" {
             fn GetNamedSecurityInfoW(
@@ -630,6 +650,7 @@ mod tests {
             fn IsValidSecurityDescriptor(pSecurityDescriptor: PSECURITY_DESCRIPTOR) -> BOOL;
         }
 
+        #[allow(non_snake_case, reason = "Windows ABI field/type names")]
         #[link(name = "kernel32")]
         unsafe extern "system" {
             fn LocalFree(hMem: *mut c_void) -> *mut c_void;

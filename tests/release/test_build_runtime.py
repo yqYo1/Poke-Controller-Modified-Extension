@@ -1183,8 +1183,10 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     config_path = root / "rust/pokecon/tauri.conf.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
+    nsis = config["bundle"]["windows"]["nsis"]
+    assert nsis["compression"] == "zlib"
     hook_name = "../../scripts/release/nsis-reproducibility.nsh"
-    assert config["bundle"]["windows"]["nsis"]["installerHooks"] == hook_name
+    assert nsis["installerHooks"] == hook_name
     hook_path = (config_path.parent / hook_name).resolve()
     assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
     assert "SetDateSave off" in hook_path.read_text(encoding="utf-8")

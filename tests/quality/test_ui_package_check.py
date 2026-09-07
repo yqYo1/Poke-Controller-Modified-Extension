@@ -2113,7 +2113,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "e92f37456c7f2a22d285ad8e686f3df3885d8cf3e275153104965c519005bdb2"
+        == "53323b3a9245c5c6d07cbbc2c9aaad3d72574ffb4056cf95a82ac455008c7cf5"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
@@ -2135,6 +2135,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_bundle = validated_json_object(tauri_config["bundle"], "bundle")
     tauri_windows_bundle = validated_json_object(tauri_bundle["windows"], "windows")
     tauri_nsis_bundle = validated_json_object(tauri_windows_bundle["nsis"], "nsis")
+    assert tauri_nsis_bundle["compression"] == "zlib"
     assert tauri_nsis_bundle["installerHooks"] == (
         "../../scripts/release/nsis-reproducibility.nsh"
     )

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "1db57de9dd9797579ffbaab5a81ca813426e21211885ef4c34a8282a6f2202aa";
+      canonicalFlakeHash = "317d628099efb7ba5719b8f2d060344b1c77cc32e1797ac57b75427a862a3790";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -420,6 +420,7 @@
               "rust/pokecon/registry/settings.json"
               "rust/pokecon/src"
               "rust/pokecon/tauri.conf.json"
+              "scripts/release/build_runtime.py"
             ];
             release = product ++ [
               "README.md"
@@ -727,7 +728,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "2b3cb2a60ba1e232f9cb1eaa185790af4621efdc0bc1ab4b3c3416e5520149f8";
+          expectedAuditTestHash = "12f28b6e8452fc3b5365534e67d8f715700ed2f3fbca8f03276acbd7b0bdb3b8";
 
           workspaceMemberPaths = [
             "rust/pokecon"

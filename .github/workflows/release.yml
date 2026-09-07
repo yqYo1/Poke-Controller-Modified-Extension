@@ -101,7 +101,7 @@ jobs:
         with:
           toolchain: '1.95.0'
           # Release builds require deterministic MSVC PE output before signing.
-          rustflags: "-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned release tools
         shell: pwsh
         run: |

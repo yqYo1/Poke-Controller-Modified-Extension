@@ -149,7 +149,7 @@ jobs:
         with:
           toolchain: '1.95.0'
           # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -273,7 +273,7 @@ jobs:
         with:
           toolchain: '1.95.0'
           # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned package tools
         shell: pwsh
         run: |

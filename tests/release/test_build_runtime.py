@@ -1202,7 +1202,7 @@ def test_windows_builds_use_deterministic_msvc_linker_flags(
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
-    flags = 'rustflags: "-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
+    flags = 'rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
     assert workflow.count(flags) == expected_count
 
 

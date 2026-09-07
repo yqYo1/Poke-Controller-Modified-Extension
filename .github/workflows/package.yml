@@ -148,6 +148,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
+          # Package builds are not lint gates; keep primary and reproduction inputs identical.
+          rustflags: ""
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -270,6 +272,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
+          # Package builds are not lint gates; keep primary and reproduction inputs identical.
+          rustflags: ""
       - name: Install pinned package tools
         shell: pwsh
         run: |

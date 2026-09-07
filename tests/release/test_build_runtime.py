@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import csv
+import hashlib
 import json
 import os
 import shlex
@@ -15,6 +18,7 @@ import scripts.release.build_runtime as release_runtime
 from scripts.release.build_runtime import (
     LINUX_PYTHON_INSTALL_REQUEST,
     LINUX_PYTHON_MINOR_REDIRECT,
+    PE_REPRODUCIBLE_TIMESTAMP,
     PORTABLE_BUILD_PREFIX,
     PORTABLE_PYTHON_RPATH,
     PORTABLE_SYSTEM_INTERPRETER,
@@ -1174,6 +1178,18 @@ def test_normalize_wheel_repacks_unchanged_members_deterministically(
     assert first.read_bytes() == second.read_bytes()
 
 
+def test_windows_nsis_reproducibility_hook_is_wired() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config_path = root / "rust/pokecon/tauri.conf.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+
+    hook_name = "../../scripts/release/nsis-reproducibility.nsh"
+    assert config["bundle"]["windows"]["nsis"]["installerHooks"] == hook_name
+    hook_path = (config_path.parent / hook_name).resolve()
+    assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
+    assert "SetDateSave off" in hook_path.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])
 def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow_name: str,
@@ -1567,3 +1583,297 @@ def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     assert '--application "$normalized_application"' in flake
     assert '--worker "$normalized_worker"' in flake
     assert 'cp -p "$application_backup" "$application"' in flake
+
+
+# ---------------------------------------------------------------------------
+# PE timestamp normalization (Windows wheel reproducibility)
+# ---------------------------------------------------------------------------
+
+
+def _build_minimal_pe(
+    coff_timestamp: int,
+    debug_timestamps: list[int] | None = None,
+) -> bytes:
+    size = 0x400
+    data = bytearray(size)
+    data[0:2] = b"MZ"
+    e_lfanew = 0x80
+    data[0x3C:0x40] = e_lfanew.to_bytes(4, "little")
+    data[e_lfanew : e_lfanew + 4] = b"PE\x00\x00"
+    coff = e_lfanew + 4
+    data[coff : coff + 2] = (0x8664).to_bytes(2, "little")
+    data[coff + 2 : coff + 4] = (1).to_bytes(2, "little")
+    data[coff + 4 : coff + 8] = coff_timestamp.to_bytes(4, "little")
+    data[coff + 16 : coff + 18] = (0xF0).to_bytes(2, "little")
+    data[coff + 18 : coff + 20] = (0x22).to_bytes(2, "little")
+    opt = e_lfanew + 4 + 20
+    data[opt : opt + 2] = (0x20B).to_bytes(2, "little")
+    data[opt + 108 : opt + 112] = (16).to_bytes(4, "little")
+    sect = opt + 0xF0
+    data[sect : sect + 8] = b".rdata\x00\x00"
+    data[sect + 8 : sect + 12] = (0x200).to_bytes(4, "little")
+    data[sect + 12 : sect + 16] = (0x1000).to_bytes(4, "little")
+    data[sect + 16 : sect + 20] = (0x200).to_bytes(4, "little")
+    data[sect + 20 : sect + 24] = (0x200).to_bytes(4, "little")
+    data_directory = opt + 112
+    debug_entry_offset = data_directory + 6 * 8
+    if debug_timestamps:
+        debug_rva = 0x1000
+        debug_size = len(debug_timestamps) * 28
+        data[debug_entry_offset : debug_entry_offset + 4] = debug_rva.to_bytes(
+            4, "little"
+        )
+        data[debug_entry_offset + 4 : debug_entry_offset + 8] = debug_size.to_bytes(
+            4, "little"
+        )
+        for idx, ts in enumerate(debug_timestamps):
+            off = 0x200 + idx * 28
+            data[off : off + 4] = (0x12345678).to_bytes(4, "little")
+            data[off + 4 : off + 8] = ts.to_bytes(4, "little")
+            data[off + 8 : off + 10] = (0x0102).to_bytes(2, "little")
+            data[off + 10 : off + 12] = (0x0304).to_bytes(2, "little")
+            data[off + 12 : off + 16] = (2).to_bytes(4, "little")
+            data[off + 16 : off + 20] = (0x99).to_bytes(4, "little")
+            data[off + 20 : off + 24] = (0x2000).to_bytes(4, "little")
+            data[off + 24 : off + 28] = (0x300).to_bytes(4, "little")
+    else:
+        data[debug_entry_offset : debug_entry_offset + 8] = (0).to_bytes(8, "little")
+    return bytes(data)
+
+
+def _extract_coff_timestamp(data: bytes) -> int:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    return int.from_bytes(data[e_lfanew + 8 : e_lfanew + 12], "little")
+
+
+def _extract_debug_timestamps(data: bytes) -> list[int]:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    magic = int.from_bytes(data[opt : opt + 2], "little")
+    if magic == 0x10B:
+        debug_off = opt + 96 + 6 * 8
+    elif magic == 0x20B:
+        debug_off = opt + 112 + 6 * 8
+    else:
+        return []
+    debug_rva = int.from_bytes(data[debug_off : debug_off + 4], "little")
+    debug_size = int.from_bytes(data[debug_off + 4 : debug_off + 8], "little")
+    if debug_rva == 0 or debug_size == 0:
+        return []
+    file_offset = 0x200
+    timestamps: list[int] = []
+    for idx in range(debug_size // 28):
+        off = file_offset + idx * 28
+        timestamps.append(int.from_bytes(data[off + 4 : off + 8], "little"))
+    return timestamps
+
+
+def _make_wheel(path: Path, members: dict[str, bytes]) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in members.items():
+            info = zipfile.ZipInfo(name, date_time=(2025, 6, 1, 12, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, content)
+
+
+def _verify_record_hashes(wheel: Path) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+        record_name = next(n for n in names if n.endswith(".dist-info/RECORD"))
+        record_data = archive.read(record_name).decode("utf-8")
+        rows = list(csv.reader(record_data.splitlines()))
+        record_map = {row[0]: (row[1], row[2]) for row in rows if len(row) == 3}
+        for name in names:
+            data = archive.read(name)
+            if name == record_name:
+                assert record_map[name] == ("", "")
+                continue
+            expected_hash, expected_size = record_map[name]
+            digest = hashlib.sha256(data).digest()
+            encoded = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+            assert expected_hash == f"sha256={encoded}"
+            assert expected_size == str(len(data))
+
+
+def test_pe_normalizes_coff_and_debug_timestamps(tmp_path: Path) -> None:
+    pe_bytes = _build_minimal_pe(
+        coff_timestamp=0x5A5A5A5A,
+        debug_timestamps=[0x11111111, 0x22222222],
+    )
+    assert _extract_coff_timestamp(pe_bytes) == 0x5A5A5A5A
+    assert _extract_debug_timestamps(pe_bytes) == [0x11111111, 0x22222222]
+    wheel = tmp_path / "example-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "pyaudio/_portaudio.cp314-win_amd64.pyd": pe_bytes,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    original_guid = pe_bytes[0x200 : 0x200 + 4]
+    normalize_wheel(wheel, None, None)
+    with zipfile.ZipFile(wheel) as archive:
+        normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == [
+        PE_REPRODUCIBLE_TIMESTAMP,
+        PE_REPRODUCIBLE_TIMESTAMP,
+    ]
+    assert normalized[0x200 : 0x200 + 4] == original_guid
+    assert normalized[0x200 + 8 : 0x200 + 12] == pe_bytes[0x200 + 8 : 0x200 + 12]
+    assert normalized[0x200 + 12 : 0x200 + 16] == pe_bytes[0x200 + 12 : 0x200 + 16]
+    assert normalized[0x200 + 16 : 0x200 + 28] == pe_bytes[0x200 + 16 : 0x200 + 28]
+    assert normalized[0x21C : 0x21C + 4] == pe_bytes[0x21C : 0x21C + 4]
+    _verify_record_hashes(wheel)
+
+
+def test_pe_two_wheels_normalize_byte_identically(tmp_path: Path) -> None:
+    pe_a = _build_minimal_pe(
+        coff_timestamp=1_000_000_000,
+        debug_timestamps=[1_000_000_000],
+    )
+    pe_b = _build_minimal_pe(
+        coff_timestamp=1_000_000_036,
+        debug_timestamps=[1_000_000_036],
+    )
+    assert pe_a != pe_b
+    assert _extract_coff_timestamp(pe_a) != _extract_coff_timestamp(pe_b)
+    wheel_a = tmp_path / "a.whl"
+    wheel_b = tmp_path / "b.whl"
+    for wheel, pe in [(wheel_a, pe_a), (wheel_b, pe_b)]:
+        _make_wheel(
+            wheel,
+            {
+                "pyaudio/_portaudio.cp314-win_amd64.pyd": pe,
+                "example-1.0.dist-info/RECORD": b"",
+                "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+            },
+        )
+    normalize_wheel(wheel_a, None, None)
+    normalize_wheel(wheel_b, None, None)
+    assert wheel_a.read_bytes() == wheel_b.read_bytes()
+    _verify_record_hashes(wheel_a)
+    _verify_record_hashes(wheel_b)
+    with zipfile.ZipFile(wheel_a) as archive:
+        normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == [PE_REPRODUCIBLE_TIMESTAMP]
+
+
+def test_pe_non_pe_files_remain_unchanged(tmp_path: Path) -> None:
+    content = b"hello world\n"
+    wheel = tmp_path / "example-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "example/__init__.py": content,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    with zipfile.ZipFile(wheel) as before:
+        before_data = before.read("example/__init__.py")
+    assert before_data == content
+    normalize_wheel(wheel, None, None)
+    with zipfile.ZipFile(wheel) as after:
+        after_data = after.read("example/__init__.py")
+        assert after_data == content
+    plain = tmp_path / "plain.bin"
+    plain.write_bytes(b"NOT_MZ_CONTENT")
+    assert release_runtime._normalize_pe(plain) is False  # noqa: SLF001
+    assert plain.read_bytes() == b"NOT_MZ_CONTENT"
+    non_pe = tmp_path / "nonpe.dat"
+    non_pe.write_bytes(b"\x00\x01\x02\x03")
+    assert release_runtime._normalize_pe(non_pe) is False  # noqa: SLF001
+
+
+def test_pe_without_debug_directory_only_coff_normalized(tmp_path: Path) -> None:
+    pe_bytes = _build_minimal_pe(coff_timestamp=0xDEADBEEF, debug_timestamps=None)
+    pe_path = tmp_path / "solo.pyd"
+    pe_path.write_bytes(pe_bytes)
+    changed = release_runtime._normalize_pe(pe_path)  # noqa: SLF001
+    assert changed is True
+    normalized = pe_path.read_bytes()
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == []
+    assert release_runtime._normalize_pe(pe_path) is False  # noqa: SLF001
+    assert pe_path.read_bytes() == normalized
+
+
+def test_pe_malformed_mz_fails_closed(tmp_path: Path) -> None:
+    truncated = tmp_path / "truncated.pyd"
+    truncated.write_bytes(b"MZ")
+    with pytest.raises(ValueError, match=r"PE.*truncated.*DOS"):
+        release_runtime._normalize_pe(truncated)  # noqa: SLF001
+    bad_lfanew = tmp_path / "bad_lfanew.pyd"
+    data = bytearray(b"MZ" + b"\x00" * 58 + (0x1000).to_bytes(4, "little"))
+    bad_lfanew.write_bytes(bytes(data))
+    with pytest.raises(
+        ValueError, match=r"PE.*truncated.*e_lfanew|PE.*invalid e_lfanew"
+    ):
+        release_runtime._normalize_pe(bad_lfanew)  # noqa: SLF001
+    bad_sig = tmp_path / "bad_sig.pyd"
+    data = bytearray(0x100)
+    data[0:2] = b"MZ"
+    data[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    data[0x80:0x84] = b"XX\x00\x00"
+    bad_sig.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match=r"PE.*invalid.*signature"):
+        release_runtime._normalize_pe(bad_sig)  # noqa: SLF001
+    wheel = tmp_path / "bad-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "broken.pyd": b"MZ\x00\x01",
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    with pytest.raises(ValueError, match=r"PE.*truncated|PE.*invalid"):
+        normalize_wheel(wheel, None, None)
+    good_pe = _build_minimal_pe(coff_timestamp=123, debug_timestamps=[456])
+    wheel_ok = tmp_path / "ok-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel_ok,
+        {
+            "good.pyd": good_pe,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    normalize_wheel(wheel_ok, None, None)
+    with zipfile.ZipFile(wheel_ok) as archive:
+        normalized = archive.read("good.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+
+
+def test_pe_preserves_guid_and_repack_deterministically(tmp_path: Path) -> None:
+    pe = _build_minimal_pe(coff_timestamp=0xAAAAAAAA, debug_timestamps=[0xBBBBBBBB])
+    first = tmp_path / "first.whl"
+    second = tmp_path / "second.whl"
+    members = {
+        "pyaudio/_portaudio.cp314-win_amd64.pyd": pe,
+        "example-1.0.dist-info/RECORD": b"",
+        "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+    }
+    for wheel_path, order in [
+        (first, list(members.keys())),
+        (second, list(reversed(members.keys()))),
+    ]:
+        with zipfile.ZipFile(wheel_path, "w") as archive:
+            for name in order:
+                info = zipfile.ZipInfo(
+                    name,
+                    date_time=(2025, 1, 2, 3, 4, 6)
+                    if wheel_path == first
+                    else (2026, 7, 8, 9, 10, 12),
+                )
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o644 << 16
+                archive.writestr(info, members[name])
+    normalize_wheel(first, None, None)
+    normalize_wheel(second, None, None)
+    assert first.read_bytes() == second.read_bytes()
+    _verify_record_hashes(first)

@@ -48,6 +48,9 @@
     },
     "windows": {
       "allowDowngrades": false,
+      "nsis": {
+        "installerHooks": "../../scripts/release/nsis-reproducibility.nsh"
+      },
       "webviewInstallMode": {
         "type": "offlineInstaller",
         "silent": true

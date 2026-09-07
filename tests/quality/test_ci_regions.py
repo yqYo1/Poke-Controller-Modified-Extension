@@ -123,6 +123,7 @@ def test_routing_exact_inputs_match_the_production_audit_inventory() -> None:
             "rust/pokecon/linux/reload-udev.sh",
             "scripts/integration/virtual-io-smoke.sh",
             "scripts/release/build_runtime.py",
+            "scripts/release/nsis-reproducibility.nsh",
             "scripts/release/normalize_debian_package.py",
             "scripts/release/normalize_linux_elf.py",
             "scripts/release/stage.py",

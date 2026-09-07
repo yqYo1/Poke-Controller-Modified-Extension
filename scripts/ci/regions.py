@@ -118,6 +118,7 @@ ROUTING_PATHS: Final = frozenset(
         "rust/pokecon/linux/reload-udev.sh",
         "scripts/integration/virtual-io-smoke.sh",
         "scripts/release/build_runtime.py",
+        "scripts/release/nsis-reproducibility.nsh",
         "scripts/release/normalize_debian_package.py",
         "scripts/release/normalize_linux_elf.py",
         "scripts/release/stage.py",

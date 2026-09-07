@@ -126,6 +126,7 @@ PRODUCTION_BUILD_INPUT_SOURCES: dict[str, str] = {
     "@LICENSE": "LICENSE",
     "@pyproject.toml": "pyproject.toml",
     "@release/build_runtime.py": "scripts/release/build_runtime.py",
+    "@release/nsis-reproducibility.nsh": "scripts/release/nsis-reproducibility.nsh",
     "@release/normalize_debian_package.py": (
         "scripts/release/normalize_debian_package.py"
     ),
@@ -1628,13 +1629,16 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": "617735bd436b0595b26081aa3128a3776f96278cc807c1277b738e44429029f4",
+        "@.gitignore": "2cde1acd3c4f2ecf9f8fe70988a264371c4a005b52bc97d650564ed814dc7b39",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "545de05ab40d040fea2b8c40d0f1c6586f1c475e08e55cab1a3026ad2d7cf333"
+            "119e31c394be6aa95c9a63966c9fe27dcf81b200fa48b0c65176762b00bc387a"
+        ),
+        "@release/nsis-reproducibility.nsh": (
+            "5351b8d22b98bc15be0fe6842d0112ca833203261ab5c321b1250e4006e5adf3"
         ),
         "@release/normalize_debian_package.py": (
             "eb52cfd61f91706afad0290964182bbacbd74b469e48d04f088c5ab8082cd576"
@@ -2109,7 +2113,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "da9e84c38519abdfbf9b2f64f4710108bd57ca571266b3152b2b412252f94dae"
+        == "e92f37456c7f2a22d285ad8e686f3df3885d8cf3e275153104965c519005bdb2"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
@@ -2129,6 +2133,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "libxrender1",
     ]
     tauri_bundle = validated_json_object(tauri_config["bundle"], "bundle")
+    tauri_windows_bundle = validated_json_object(tauri_bundle["windows"], "windows")
+    tauri_nsis_bundle = validated_json_object(tauri_windows_bundle["nsis"], "nsis")
+    assert tauri_nsis_bundle["installerHooks"] == (
+        "../../scripts/release/nsis-reproducibility.nsh"
+    )
+    assert "SetDateSave off" in sources["@release/nsis-reproducibility.nsh"]
     assert tauri_bundle["icon"] == [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -2286,7 +2296,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "9cdeb994ebc06e87d72e90ba764ac7f96eca34d905a91542f04a2fea79d29a38"
+        == "36188c103395f7d36235feaa26f62b3ee49064538cbdb93a46c8b01d524ce8e3"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2497,7 +2507,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "978936a7104aca0c862674285018c4a678e8507535551c67361142e8d8c73bbc"
+        == "c8491d0151859c87a2622578983cc2b472da4cc8b041fb5c250bd34a46bd8cd4"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")

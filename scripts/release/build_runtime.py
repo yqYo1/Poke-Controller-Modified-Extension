@@ -34,6 +34,7 @@ PORTABLE_BUILD_PREFIX = "/install"
 PORTABLE_SYSTEM_INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
 PORTABLE_PYTHON_RPATH = "$ORIGIN/../lib"
 REPRODUCIBLE_ZIP_EPOCH = 315_532_800
+PE_REPRODUCIBLE_TIMESTAMP = REPRODUCIBLE_ZIP_EPOCH
 WORKER_RUNTIME_SMOKE = """\
 import cv2, numpy, pandas, PIL, pyaudio, scipy
 
@@ -604,6 +605,184 @@ def is_elf(path: Path) -> bool:
         return source.read(4) == b"\x7fELF"
 
 
+def _pe_rva_to_file_offset(
+    rva: int,
+    sections: list[tuple[int, int, int, int]],
+) -> int | None:
+    for (
+        virtual_address,
+        virtual_size,
+        pointer_to_raw_data,
+        size_of_raw_data,
+    ) in sections:
+        if pointer_to_raw_data == 0:
+            continue
+        if virtual_size == 0 and size_of_raw_data == 0:
+            continue
+        extent = virtual_size if virtual_size != 0 else size_of_raw_data
+        if virtual_size != 0 and size_of_raw_data != 0:
+            extent = max(virtual_size, size_of_raw_data)
+        if virtual_address <= rva < virtual_address + extent:
+            return (rva - virtual_address) + pointer_to_raw_data
+    return None
+
+
+def _normalize_pe(path: Path) -> bool:
+    data = path.read_bytes()
+    if len(data) < 2 or data[0:2] != b"MZ":
+        return False
+    if len(data) < 0x40:
+        message = f"PE file is truncated: missing DOS header: {path}"
+        raise ValueError(message)
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    if e_lfanew < 0 or e_lfanew + 6 > len(data):
+        message = f"PE file is truncated: invalid e_lfanew {e_lfanew}: {path}"
+        raise ValueError(message)
+    if data[e_lfanew : e_lfanew + 4] != b"PE\x00\x00":
+        message = f"PE file has invalid PE signature: {path}"
+        raise ValueError(message)
+    if e_lfanew + 4 + 20 > len(data):
+        message = f"PE file is truncated: missing COFF header: {path}"
+        raise ValueError(message)
+    coff_timestamp_offset = e_lfanew + 4 + 4
+    number_of_sections = int.from_bytes(
+        data[e_lfanew + 4 + 2 : e_lfanew + 4 + 4], "little"
+    )
+    size_of_optional_header = int.from_bytes(
+        data[e_lfanew + 4 + 16 : e_lfanew + 4 + 18], "little"
+    )
+    optional_header_offset = e_lfanew + 4 + 20
+    if optional_header_offset + size_of_optional_header > len(data):
+        message = f"PE file is truncated: missing optional header: {path}"
+        raise ValueError(message)
+    mutable = bytearray(data)
+    changed = False
+    fixed = PE_REPRODUCIBLE_TIMESTAMP.to_bytes(4, "little")
+    if mutable[coff_timestamp_offset : coff_timestamp_offset + 4] != fixed:
+        mutable[coff_timestamp_offset : coff_timestamp_offset + 4] = fixed
+        changed = True
+    if size_of_optional_header == 0:
+        message = f"PE file is truncated: missing optional header: {path}"
+        raise ValueError(message)
+    if size_of_optional_header < 2:
+        message = f"PE file is truncated: optional header too small: {path}"
+        raise ValueError(message)
+    magic = int.from_bytes(
+        mutable[optional_header_offset : optional_header_offset + 2], "little"
+    )
+    if magic not in (0x10B, 0x20B):
+        message = f"PE file has invalid optional header magic {magic:#x}: {path}"
+        raise ValueError(message)
+    # Validate section table bounds for every PE with nonzero sections
+    section_headers_offset = optional_header_offset + size_of_optional_header
+    if (
+        number_of_sections != 0
+        and section_headers_offset + number_of_sections * 40 > len(data)
+    ):
+        message = f"PE file is truncated: missing section headers: {path}"
+        raise ValueError(message)
+    debug_rva_offset: int | None = None
+    if magic == 0x10B:
+        data_directory_offset = optional_header_offset + 96
+        number_of_rva_offset = optional_header_offset + 92
+        if size_of_optional_header < 96:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        if number_of_rva_offset + 4 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        number_of_rva = int.from_bytes(
+            mutable[number_of_rva_offset : number_of_rva_offset + 4], "little"
+        )
+        if number_of_rva > 6:
+            if size_of_optional_header < 96 + 8 * 7:
+                message = f"PE file is truncated: missing debug data directory: {path}"
+                raise ValueError(message)
+            debug_rva_offset = data_directory_offset + 6 * 8
+    elif magic == 0x20B:
+        data_directory_offset = optional_header_offset + 112
+        number_of_rva_offset = optional_header_offset + 108
+        if size_of_optional_header < 112:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        if number_of_rva_offset + 4 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing NumberOfRvaAndSizes: {path}"
+            raise ValueError(message)
+        number_of_rva = int.from_bytes(
+            mutable[number_of_rva_offset : number_of_rva_offset + 4], "little"
+        )
+        if number_of_rva > 6:
+            if size_of_optional_header < 112 + 8 * 7:
+                message = f"PE file is truncated: missing debug data directory: {path}"
+                raise ValueError(message)
+            debug_rva_offset = data_directory_offset + 6 * 8
+    if debug_rva_offset is not None:
+        if debug_rva_offset + 8 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing debug data directory: {path}"
+            raise ValueError(message)
+        debug_rva = int.from_bytes(
+            mutable[debug_rva_offset : debug_rva_offset + 4], "little"
+        )
+        debug_size = int.from_bytes(
+            mutable[debug_rva_offset + 4 : debug_rva_offset + 8], "little"
+        )
+        if (debug_rva == 0) != (debug_size == 0):
+            message = f"PE file has inconsistent debug directory: {path}"
+            raise ValueError(message)
+        if debug_rva != 0 and debug_size != 0:
+            if debug_size % 28 != 0:
+                message = (
+                    f"PE file has invalid debug directory size {debug_size}: {path}"
+                )
+                raise ValueError(message)
+            sections: list[tuple[int, int, int, int]] = []
+            for index in range(number_of_sections):
+                offset = section_headers_offset + index * 40
+                virtual_size = int.from_bytes(
+                    mutable[offset + 8 : offset + 12], "little"
+                )
+                virtual_address = int.from_bytes(
+                    mutable[offset + 12 : offset + 16], "little"
+                )
+                size_of_raw_data = int.from_bytes(
+                    mutable[offset + 16 : offset + 20], "little"
+                )
+                pointer_to_raw_data = int.from_bytes(
+                    mutable[offset + 20 : offset + 24], "little"
+                )
+                sections.append(
+                    (
+                        virtual_address,
+                        virtual_size,
+                        pointer_to_raw_data,
+                        size_of_raw_data,
+                    )
+                )
+            file_offset = _pe_rva_to_file_offset(debug_rva, sections)
+            if file_offset is None:
+                message = f"PE debug directory RVA does not map to file offset: {path}"
+                raise ValueError(message)
+            if file_offset + debug_size > len(mutable):
+                message = (
+                    f"PE file is truncated: debug directory extends beyond file: {path}"
+                )
+                raise ValueError(message)
+            count = debug_size // 28
+            for idx in range(count):
+                entry_offset = file_offset + idx * 28
+                if entry_offset + 28 > len(mutable):
+                    message = (
+                        f"PE file is truncated: debug entry extends beyond file: {path}"
+                    )
+                    raise ValueError(message)
+                if mutable[entry_offset + 4 : entry_offset + 8] != fixed:
+                    mutable[entry_offset + 4 : entry_offset + 8] = fixed
+                    changed = True
+    if changed:
+        path.write_bytes(mutable)
+    return changed
+
+
 def safe_rpath(path: Path, patchelf: Path) -> None:
     rpath = run([patchelf, "--print-rpath", path], capture=True)
     entries = [
@@ -671,28 +850,36 @@ def normalize_wheel(
             archive.extractall(root)
         changed = False
         for binary in sorted(path for path in root.rglob("*") if path.is_file()):
-            if not is_elf(binary):
+            if is_elf(binary):
+                if patchelf is None or strip is None:
+                    message = (
+                        f"native wheel normalization requires ELF tools: {wheel.name}"
+                    )
+                    raise ValueError(message)
+                rpath = run([patchelf, "--print-rpath", binary], capture=True)
+                unsafe = any(
+                    entry and not entry.startswith(("$ORIGIN", "${ORIGIN}"))
+                    for entry in rpath.split(":")
+                )
+                if not unsafe:
+                    continue
+                safe_rpath(binary, patchelf)
+                run([strip, "--strip-unneeded", binary])
+                normalized_rpath = run(
+                    [patchelf, "--print-rpath", binary], capture=True
+                )
+                if any(
+                    entry and not entry.startswith(("$ORIGIN", "${ORIGIN}"))
+                    for entry in normalized_rpath.split(":")
+                ):
+                    message = (
+                        f"native wheel member retains an unsafe RPATH: {wheel.name}"
+                    )
+                    raise ValueError(message)
+                changed = True
                 continue
-            if patchelf is None or strip is None:
-                message = f"native wheel normalization requires ELF tools: {wheel.name}"
-                raise ValueError(message)
-            rpath = run([patchelf, "--print-rpath", binary], capture=True)
-            unsafe = any(
-                entry and not entry.startswith(("$ORIGIN", "${ORIGIN}"))
-                for entry in rpath.split(":")
-            )
-            if not unsafe:
-                continue
-            safe_rpath(binary, patchelf)
-            run([strip, "--strip-unneeded", binary])
-            normalized_rpath = run([patchelf, "--print-rpath", binary], capture=True)
-            if any(
-                entry and not entry.startswith(("$ORIGIN", "${ORIGIN}"))
-                for entry in normalized_rpath.split(":")
-            ):
-                message = f"native wheel member retains an unsafe RPATH: {wheel.name}"
-                raise ValueError(message)
-            changed = True
+            if _normalize_pe(binary):
+                changed = True
         if changed:
             wheel_record(root)
         repack_wheel(root, wheel)

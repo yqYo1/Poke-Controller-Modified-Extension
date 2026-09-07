@@ -48,6 +48,7 @@
 !/scripts/**/*.sh
 !/scripts/**/*.py
 !/scripts/**/*.ps1
+!/scripts/**/*.nsh
 
 !/api/
 /api/*

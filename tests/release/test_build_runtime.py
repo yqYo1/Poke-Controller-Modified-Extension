@@ -1189,7 +1189,9 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     assert nsis["installerHooks"] == hook_name
     hook_path = (config_path.parent / hook_name).resolve()
     assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
-    assert "SetDateSave off" in hook_path.read_text(encoding="utf-8")
+    hook_contents = hook_path.read_text(encoding="utf-8")
+    assert "SetCompressor /FINAL /SOLID zlib" in hook_contents
+    assert "SetDateSave off" in hook_contents
 
 
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])

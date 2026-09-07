@@ -1638,7 +1638,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "119e31c394be6aa95c9a63966c9fe27dcf81b200fa48b0c65176762b00bc387a"
         ),
         "@release/nsis-reproducibility.nsh": (
-            "5351b8d22b98bc15be0fe6842d0112ca833203261ab5c321b1250e4006e5adf3"
+            "14c77860d8850e4c911cd5c6f5a7d4f7b2ef69a8fe51ae1fb92e47fe0242ca2f"
         ),
         "@release/normalize_debian_package.py": (
             "eb52cfd61f91706afad0290964182bbacbd74b469e48d04f088c5ab8082cd576"

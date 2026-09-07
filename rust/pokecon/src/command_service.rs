@@ -22,7 +22,6 @@ use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::dynamic_host::StartupDynamicHost;
-use crate::worker::ipc::ResourceSafety;
 
 const MAX_CACHE_RESTARTS: usize = 32;
 /// Typed profile-switch lifecycle stage for UI/log integration.
@@ -890,8 +889,11 @@ impl CommandService {
                 ProfileSwitchStage::ReleasingInput.encode(),
                 Ordering::Release,
             );
-            // No worker: still force-release controller to ensure neutral safe state.
-            self.host.controller_safety().force_release();
+            // No worker: still force-release ALL controller domains (holdEndSkip/sticks/touch)
+            // for SPEC step 6 and re-establish the persistent dynamic source.
+            self.host
+                .controller_safety()
+                .force_release_all_for_profile_switch();
             self.profile_stage
                 .store(ProfileSwitchStage::Reaping.encode(), Ordering::Release);
             self.host.clear_command_generation()?;
@@ -905,9 +907,13 @@ impl CommandService {
             ProfileSwitchStage::ReleasingInput.encode(),
             Ordering::Release,
         );
-        // SPEC step 6: force-release all input immediately without waiting for Python.
-        // This disconnects the script generation source and neutralizes the shared arbiter.
-        self.host.controller_safety().force_release();
+        // SPEC step 6: force-release ALL input immediately without waiting for Python.
+        // Neutralizes every ownership domain (manual/browser/hardware/script/dynamic
+        // holdEndSkip/sticks/touch) via InputArbiter::force_release_all and then
+        // re-establishes the persistent dynamic source so it remains alive.
+        self.host
+            .controller_safety()
+            .force_release_all_for_profile_switch();
         self.profile_stage
             .store(ProfileSwitchStage::Reaping.encode(), Ordering::Release);
         self.host.clear_command_generation()?;
@@ -1151,7 +1157,9 @@ impl CommandService {
                         .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
                     // Keep pending cleared but degraded
                     self.host.cancel_profile_switch();
-                    self.host.controller_safety().force_release();
+                    self.host
+                        .controller_safety()
+                        .force_release_all_for_profile_switch();
                     self.finish_profile_switch();
                     tracing::error!(stage = %ProfileSwitchStage::Reaping.as_str(), "profile switch stop failed and restore failed: degraded safe stop");
                     return Err(CommandServiceError::ProfileSwitchRestoreFailed);
@@ -1186,7 +1194,9 @@ impl CommandService {
                 self.profile_stage
                     .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
                 self.host.cancel_profile_switch();
-                self.host.controller_safety().force_release();
+                self.host
+                    .controller_safety()
+                    .force_release_all_for_profile_switch();
                 self.finish_profile_switch();
                 tracing::error!(stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed and restore failed: degraded");
                 return Err(CommandServiceError::ProfileSwitchRestoreFailed);
@@ -1214,7 +1224,9 @@ impl CommandService {
                     .store(ProfileSwitchStage::Degraded.encode(), Ordering::Release);
                 // Best-effort cancel, but if that also fails we stay degraded
                 self.host.cancel_profile_switch();
-                self.host.controller_safety().force_release();
+                self.host
+                    .controller_safety()
+                    .force_release_all_for_profile_switch();
                 self.finish_profile_switch();
                 tracing::error!(code = %error.code, stage = %ProfileSwitchStage::Committing.as_str(), "profile switch commit failed and restore failed: degraded");
                 return Err(CommandServiceError::ProfileSwitchRestoreFailed);
@@ -2536,6 +2548,656 @@ mod tests {
         let status2 = fixture.service.profile_switch_status();
         assert_eq!(status2.stage, ProfileSwitchStage::Idle);
         assert!(!status2.degraded);
+    }
+
+    // --- Adversarial profile-switch step-6: full input release & stale-input prevention ---
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "adversarial profile-switch ownership matrix intentionally remains in one test"
+    )]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_step6_neutralizes_every_ownership_domain_and_blocks_stale() {
+        use crate::device::controller::{Button, Hat, StickPosition, TouchPoint};
+        use crate::device::{
+            ControllerState, InputEvent, InputGeneration, InputPriority, InputSequence,
+            InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState, StickSide,
+        };
+
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+
+        // Establish non-dynamic sources via the shared arbiter, each holding
+        // a different continuous/union ownership (buttons, sticks, hat, touch).
+        // This simulates holdEndSkip visually held buttons as well — a pressed
+        // button that never received a release must still be neutralized.
+        let arbiter = fixture.host.controller_safety().arbiter();
+
+        let manual_browser = InputSourceId::new("adversarial-browser").unwrap();
+        let manual_browser_gen = InputGeneration::new("browser-gen-1").unwrap();
+        let hardware = InputSourceId::new("adversarial-hardware").unwrap();
+        let hardware_gen = InputGeneration::new("hardware-gen-1").unwrap();
+        let manual_keyboard = InputSourceId::new("adversarial-keyboard").unwrap();
+        let manual_keyboard_gen = InputGeneration::new("keyboard-gen-1").unwrap();
+        let script = InputSourceId::new("adversarial-script").unwrap();
+        let script_gen = InputGeneration::new("script-gen-1").unwrap();
+
+        {
+            let mut arb = arbiter.lock();
+            for (source, kind, priority, generation) in [
+                (
+                    manual_browser.clone(),
+                    InputSourceKind::BrowserGamepad,
+                    InputPriority::BROWSER_GAMEPAD,
+                    manual_browser_gen.clone(),
+                ),
+                (
+                    hardware.clone(),
+                    InputSourceKind::HardwareController,
+                    InputPriority::HARDWARE_CONTROLLER,
+                    hardware_gen.clone(),
+                ),
+                (
+                    manual_keyboard.clone(),
+                    InputSourceKind::Keyboard,
+                    InputPriority::KEYBOARD_MOUSE,
+                    manual_keyboard_gen.clone(),
+                ),
+                (
+                    script.clone(),
+                    InputSourceKind::UserScript,
+                    InputPriority::USER_SCRIPT,
+                    script_gen.clone(),
+                ),
+            ] {
+                arb.begin_generation(source.clone(), kind, priority, generation.clone());
+                let (res, ack) = arb
+                    .apply_snapshot(
+                        &source,
+                        InputSnapshot {
+                            generation: generation.clone(),
+                            sequence: InputSequence::zero(),
+                            keyboard_keys: Vec::new(),
+                            mouse_buttons: MouseButtons::default(),
+                            buttons: ControllerState::NEUTRAL.buttons,
+                            hat: ControllerState::NEUTRAL.hat,
+                            left_stick: ControllerState::NEUTRAL.left_stick,
+                            right_stick: ControllerState::NEUTRAL.right_stick,
+                            touch: None,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(res, crate::device::ApplyResult::Applied);
+                assert!(ack.is_some());
+            }
+            // Hold buttons (including holdEndSkip semantics: pressed with no release)
+            arb.apply_event(
+                &manual_browser,
+                &manual_browser_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+            arb.apply_event(
+                &hardware,
+                &hardware_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::Stick {
+                    stick: StickSide::Left,
+                    position: StickPosition { x: 10, y: 20 },
+                },
+            )
+            .unwrap();
+            arb.apply_event(
+                &hardware,
+                &hardware_gen,
+                InputSequence::new("2").unwrap(),
+                InputEvent::Hat(Hat::Up),
+            )
+            .unwrap();
+            arb.apply_event(
+                &manual_keyboard,
+                &manual_keyboard_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::B,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+            arb.apply_event(
+                &script,
+                &script_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::Touch(Some(TouchPoint::new(10, 20).unwrap())),
+            )
+            .unwrap();
+            arb.apply_event(
+                &script,
+                &script_gen,
+                InputSequence::new("2").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::X,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+        }
+
+        // Also hold a dynamic-config button via the host API so we prove the
+        // dynamic source is neutralized yet remains alive afterwards.
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                y: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+
+        // Verify non-neutral before switch
+        let before = fixture.host.controller_safety().state();
+        assert!(before.buttons.a, "browser A must be held before switch");
+        assert!(before.buttons.b, "keyboard B must be held before switch");
+        assert!(before.buttons.x, "script X must be held before switch");
+        assert!(before.buttons.y, "dynamic Y must be held before switch");
+        assert_eq!(before.left_stick, StickPosition { x: 10, y: 20 });
+        assert_eq!(before.hat, Hat::Up);
+        assert_eq!(before.touch, Some(TouchPoint::new(10, 20).unwrap()));
+        // holdEndSkip: A is conceptually held via software controller even if
+        // the frontend suppressed its release — our button-press above models it.
+
+        // Full profile switch (session-present path): validates, pre-event,
+        // stop (cooperative + immediate force-release ALL), reap, commit, post.
+        let result = fixture.service.switch_profile("Other").await.unwrap();
+        assert_eq!(
+            result,
+            ProfileSwitchLifecycleResult::Switched {
+                forced_worker_stop: false
+            }
+        );
+
+        // SPEC step 6: authoritative state must be strictly neutral across all domains.
+        let after = fixture.host.controller_safety().state();
+        assert_eq!(
+            after,
+            ControllerState::NEUTRAL,
+            "all buttons/sticks/touch must be neutral after profile switch"
+        );
+
+        // Stale late input from old generations must not resurrect.
+        {
+            let mut arb = arbiter.lock();
+            // Old browser generation: next sequence would be "2" (A already pressed).
+            // After force_release_all the source was removed, so this must be
+            // rejected and output must stay neutral.
+            let stale_browser = arb.apply_event(
+                &manual_browser,
+                &manual_browser_gen,
+                InputSequence::new("2").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            );
+            // UnknownSource (source removed) is acceptable; otherwise it must be
+            // ignored as old generation / duplicate.
+            if let Ok(res) = stale_browser {
+                assert_ne!(
+                    res,
+                    crate::device::ApplyResult::Applied,
+                    "stale browser late input must not be Applied"
+                );
+            }
+            let stale_hardware = arb.apply_event(
+                &hardware,
+                &hardware_gen,
+                InputSequence::new("3").unwrap(),
+                InputEvent::Stick {
+                    stick: StickSide::Left,
+                    position: StickPosition { x: 250, y: 250 },
+                },
+            );
+            if let Ok(res) = stale_hardware {
+                assert_ne!(res, crate::device::ApplyResult::Applied);
+            }
+            let stale_script_touch = arb.apply_event(
+                &script,
+                &script_gen,
+                InputSequence::new("3").unwrap(),
+                InputEvent::Touch(Some(TouchPoint::new(100, 100).unwrap())),
+            );
+            if let Ok(res) = stale_script_touch {
+                assert_ne!(res, crate::device::ApplyResult::Applied);
+            }
+            // Even a fake old dynamic generation must not resurrect.
+            let stale_dynamic = arb.apply_event(
+                &manual_browser,
+                &InputGeneration::new("old-dynamic").unwrap(),
+                InputSequence::new("99").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::Y,
+                    state: PressState::Pressed,
+                },
+            );
+            if let Ok(res) = stale_dynamic {
+                assert_ne!(res, crate::device::ApplyResult::Applied);
+            }
+            assert_eq!(
+                arb.output(),
+                ControllerState::NEUTRAL,
+                "stale late input must not resurrect pressed state"
+            );
+        }
+
+        // Dynamic source must remain alive without reinitialization.
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                b: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(
+            fixture.host.controller_safety().state().buttons.b,
+            "dynamic source must remain operational after profile switch"
+        );
+        // Clear dynamic again for clean next assertion
+        fixture
+            .host
+            .controller_safety()
+            .force_release_all_for_profile_switch();
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL
+        );
+
+        // Next profile/source generation must initialize correctly.
+        {
+            let mut arb = arbiter.lock();
+            let new_browser = InputSourceId::new("adversarial-browser-2").unwrap();
+            let new_gen = InputGeneration::new("browser-gen-2").unwrap();
+            arb.begin_generation(
+                new_browser.clone(),
+                InputSourceKind::BrowserGamepad,
+                InputPriority::BROWSER_GAMEPAD,
+                new_gen.clone(),
+            );
+            let (res, ack) = arb
+                .apply_snapshot(
+                    &new_browser,
+                    InputSnapshot {
+                        generation: new_gen.clone(),
+                        sequence: InputSequence::zero(),
+                        keyboard_keys: Vec::new(),
+                        mouse_buttons: MouseButtons::default(),
+                        buttons: ControllerState::NEUTRAL.buttons,
+                        hat: ControllerState::NEUTRAL.hat,
+                        left_stick: ControllerState::NEUTRAL.left_stick,
+                        right_stick: ControllerState::NEUTRAL.right_stick,
+                        touch: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(res, crate::device::ApplyResult::Applied);
+            assert!(ack.is_some());
+            arb.apply_event(
+                &new_browser,
+                &new_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::Y,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+            // New browser generation drives output; dynamic neutral remains but new input wins via union.
+            assert!(arb.output().buttons.y);
+            // Clean up
+            arb.disconnect_source(&new_browser);
+        }
+
+        // Profile must have committed and pending cleared.
+        assert_eq!(fixture.host.profile_current().unwrap(), "Other");
+        assert_eq!(
+            fixture.host.state_snapshot().unwrap()["pending_profile"],
+            json!(null)
+        );
+        assert_eq!(fixture.service.status().await, CommandStatus::Stopped);
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "adversarial profile-switch ownership matrix intentionally remains in one test"
+    )]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_no_session_neutralizes_and_next_generation_initializes() {
+        use crate::device::controller::{Button, StickPosition};
+        use crate::device::{
+            ControllerState, InputEvent, InputGeneration, InputPriority, InputSequence,
+            InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState, StickSide,
+        };
+
+        let fixture = fixture();
+        // Do NOT reload — no user-script session exists (no-session branch).
+        let arbiter = fixture.host.controller_safety().arbiter();
+        let browser = InputSourceId::new("no-session-browser").unwrap();
+        let br_gen = InputGeneration::new("no-session-gen").unwrap();
+        {
+            let mut arb = arbiter.lock();
+            arb.begin_generation(
+                browser.clone(),
+                InputSourceKind::BrowserGamepad,
+                InputPriority::BROWSER_GAMEPAD,
+                br_gen.clone(),
+            );
+            arb.apply_snapshot(
+                &browser,
+                InputSnapshot {
+                    generation: br_gen.clone(),
+                    sequence: InputSequence::zero(),
+                    keyboard_keys: Vec::new(),
+                    mouse_buttons: MouseButtons::default(),
+                    buttons: ControllerState::NEUTRAL.buttons,
+                    hat: ControllerState::NEUTRAL.hat,
+                    left_stick: ControllerState::NEUTRAL.left_stick,
+                    right_stick: ControllerState::NEUTRAL.right_stick,
+                    touch: None,
+                },
+            )
+            .unwrap();
+            arb.apply_event(
+                &browser,
+                &br_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+            arb.apply_event(
+                &browser,
+                &br_gen,
+                InputSequence::new("2").unwrap(),
+                InputEvent::Stick {
+                    stick: StickSide::Left,
+                    position: StickPosition { x: 50, y: 60 },
+                },
+            )
+            .unwrap();
+        }
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                x: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        assert!(fixture.host.controller_safety().state().buttons.x);
+
+        // No-session branch of stop_for_profile_switch must still force-release ALL.
+        fixture.service.try_begin_profile_switch().unwrap();
+        let stopped = fixture
+            .service
+            .stop_for_profile_switch(Duration::from_millis(20))
+            .await
+            .unwrap();
+        assert!(stopped.is_none(), "no session must return None");
+        // Even without a session, arbiter must be neutral and dynamic re-initialized.
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL
+        );
+        {
+            let mut arb = arbiter.lock();
+            let stale = arb.apply_event(
+                &browser,
+                &br_gen,
+                InputSequence::new("3").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            );
+            if let Ok(res) = stale {
+                assert_ne!(res, crate::device::ApplyResult::Applied);
+            }
+            assert_eq!(arb.output(), ControllerState::NEUTRAL);
+            // New generation (next profile) must still initialize.
+            let new_source = InputSourceId::new("no-session-browser-2").unwrap();
+            let new_gen = InputGeneration::new("no-session-gen-2").unwrap();
+            arb.begin_generation(
+                new_source.clone(),
+                InputSourceKind::HardwareController,
+                InputPriority::HARDWARE_CONTROLLER,
+                new_gen.clone(),
+            );
+            let (res, _) = arb
+                .apply_snapshot(
+                    &new_source,
+                    InputSnapshot {
+                        generation: new_gen.clone(),
+                        sequence: InputSequence::zero(),
+                        keyboard_keys: Vec::new(),
+                        mouse_buttons: MouseButtons::default(),
+                        buttons: ControllerState::NEUTRAL.buttons,
+                        hat: ControllerState::NEUTRAL.hat,
+                        left_stick: ControllerState::NEUTRAL.left_stick,
+                        right_stick: ControllerState::NEUTRAL.right_stick,
+                        touch: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(res, crate::device::ApplyResult::Applied);
+            arb.apply_event(
+                &new_source,
+                &new_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::B,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+            assert!(arb.output().buttons.b);
+        }
+        // Dynamic must still be usable after no-session path.
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                a: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        fixture.service.finish_profile_switch();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_degraded_still_neutralizes_all_inputs() {
+        use crate::device::{
+            ControllerState, InputEvent, InputGeneration, InputPriority, InputSequence,
+            InputSnapshot, InputSourceId, InputSourceKind, MouseButtons, PressState,
+        };
+
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        let arbiter = fixture.host.controller_safety().arbiter();
+        let manual = InputSourceId::new("degraded-manual").unwrap();
+        let deg_gen = InputGeneration::new("degraded-gen").unwrap();
+        {
+            let mut arb = arbiter.lock();
+            arb.begin_generation(
+                manual.clone(),
+                InputSourceKind::BrowserGamepad,
+                InputPriority::BROWSER_GAMEPAD,
+                deg_gen.clone(),
+            );
+            arb.apply_snapshot(
+                &manual,
+                InputSnapshot {
+                    generation: deg_gen.clone(),
+                    sequence: InputSequence::zero(),
+                    keyboard_keys: Vec::new(),
+                    mouse_buttons: MouseButtons::default(),
+                    buttons: {
+                        let mut s = ControllerState::NEUTRAL.buttons;
+                        s.set(crate::device::controller::Button::A, true);
+                        s
+                    },
+                    hat: ControllerState::NEUTRAL.hat,
+                    left_stick: ControllerState::NEUTRAL.left_stick,
+                    right_stick: ControllerState::NEUTRAL.right_stick,
+                    touch: None,
+                },
+            )
+            .unwrap();
+        }
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                b: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+        assert!(fixture.host.controller_safety().state().buttons.b);
+
+        // Force commit failure + restore failure => degraded. Even in degraded,
+        // SPEC step 6 requires neutral safe state.
+        fixture.service.inject_fault_commit(true);
+        fixture.service.inject_fault_restore(true);
+        let err = fixture.service.switch_profile("Other").await.unwrap_err();
+        assert!(matches!(
+            err,
+            CommandServiceError::ProfileSwitchRestoreFailed
+        ));
+        assert!(fixture.service.is_profile_switch_degraded());
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL,
+            "degraded path must still force-release ALL inputs"
+        );
+        // Stale must not resurrect even while degraded.
+        {
+            let mut arb = arbiter.lock();
+            let stale = arb.apply_event(
+                &manual,
+                &deg_gen,
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: crate::device::controller::Button::A,
+                    state: PressState::Pressed,
+                },
+            );
+            if let Ok(res) = stale {
+                assert_ne!(res, crate::device::ApplyResult::Applied);
+            }
+            assert_eq!(arb.output(), ControllerState::NEUTRAL);
+        }
+        // Dynamic must remain alive even in degraded (accepting stays true).
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                y: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        // After force_release_all_for_profile_switch in degraded, dynamic was
+        // re-initialized, so update must succeed and be visible until we query
+        // via arbiter? Actually our degraded path re-initialized dynamic, so
+        // controller_update applies on top of neutral.
+        // The output should show Y.
+        assert!(fixture.host.controller_safety().state().buttons.y);
+        fixture.service.clear_profile_switch_degraded();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn profile_switch_step6_fail_closed_when_dynamic_reinit_fails_and_next_explicit_reinit_recovers()
+     {
+        use crate::device::ControllerState;
+
+        let fixture = fixture();
+        fixture.service.reload().await.unwrap();
+        // Hold a dynamic button so we have non-neutral before first switch
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                a: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.a);
+
+        // Inject failure: force_release_all_for_profile_switch will clear all
+        // but fail to re-establish dynamic source, leaving `accepting == false`.
+        let injected = fixture
+            .host
+            .controller_safety()
+            .force_release_all_for_profile_switch_with_injection(true);
+        assert!(!injected, "injected failure must return false");
+        // Arbiter must be neutral even in failure
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL
+        );
+        // Dynamic updates must now fail cleanly (fail-closed) until explicit re-init.
+        let err = fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                b: Some(true),
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert_eq!(err.code, "HostStopping");
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL,
+            "failed dynamic re-init must keep neutral and not resurrect"
+        );
+
+        // Next explicit re-initialization (without injection) must recover:
+        // profile switch's next force-release will succeed and restore accepting.
+        let recovered = fixture
+            .host
+            .controller_safety()
+            .force_release_all_for_profile_switch();
+        assert!(recovered);
+        // Now dynamic must be operational again.
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                y: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.y);
+
+        // And a normal profile switch still succeeds (caller not broken by prior failure).
+        let result = fixture.service.switch_profile("Other").await.unwrap();
+        assert_eq!(
+            result,
+            ProfileSwitchLifecycleResult::Switched {
+                forced_worker_stop: false
+            }
+        );
+        assert_eq!(
+            fixture.host.controller_safety().state(),
+            ControllerState::NEUTRAL
+        );
+        // After successful switch, dynamic is again alive.
+        fixture
+            .host
+            .controller_update(crate::device::ControllerUpdate {
+                b: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(fixture.host.controller_safety().state().buttons.b);
     }
 
     async fn wait_for_status(service: &CommandService, expected: CommandStatus) {

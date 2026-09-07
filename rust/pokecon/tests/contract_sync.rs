@@ -503,7 +503,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     }
 
     let timing = &ci["timing_contract"];
-    assert_eq!(timing["schema_version"], 1);
+    assert_eq!(timing["schema_version"], 2);
     assert_eq!(timing["command"], "nix run .#ci-timing --");
     assert_eq!(
         timing["change_kind_threshold_seconds"],
@@ -514,16 +514,19 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     assert_eq!(timing["current_implementation"]["validator"], "implemented");
     assert_eq!(
         timing["current_implementation"]["workflow_evidence_collection"],
-        "implemented"
+        "implemented_with_upstream_completed_max"
     );
     assert_eq!(
         timing["current_implementation"]["workflow_p95_gate"],
-        "optional_baseline_gate"
+        "blocking_for_fail_closed"
     );
     assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
     assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
     assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 600.0"));
     assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
+    assert!(CI_TIMING.contains("COLLECTION_KIND_UPSTREAM_COMPLETED_MAX"));
+    assert!(CI_TIMING.contains("critical_path_wall_seconds"));
+    assert!(CI_TIMING.contains("upstream_completed_max"));
     let normal_ci = WORKFLOWS
         .iter()
         .find_map(|(workflow, source)| (*workflow == "normal-ci").then_some(source))
@@ -763,6 +766,8 @@ fn assert_ci_region_ownership_matrix(ci: &Value) {
                     "package/linux_repro",
                     "package/repro_check",
                     "package/windows",
+                    "package/windows_repro",
+                    "package/windows_repro_check",
                 ],
             },
             {

@@ -372,6 +372,21 @@ impl RestBackend for ApplicationBackend {
                 expected_revision,
             )
             .await?;
+        // SPEC runtime_immediate: reflect committed effective setting in the arbiter.
+        // Hold the mutation gate while updating so a failing commit never mutates the arbiter.
+        let allowed = outcome
+            .snapshots
+            .settings
+            .values
+            .0
+            .get("input.allow_manual_intervention")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+        self.set_manual_intervention(if allowed {
+            ManualInterventionPolicy::Allowed
+        } else {
+            ManualInterventionPolicy::Denied
+        });
         Ok(outcome.snapshots.settings)
     }
 

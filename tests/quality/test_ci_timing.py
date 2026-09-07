@@ -42,9 +42,13 @@ def _report(
     cache_write: bool = False,
     cache_actor: str = "octocat",
     cache_event: str = "pull_request",
+    run_status: str = "completed",
+    run_started_at: str = "2026-01-01T00:00:00Z",
+    run_conclusion: str | None = "success",
+    collection_kind: str = "upstream_completed_max",
 ) -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "sha": sha if sha is not None else f"{index:040x}",
         "attempt": attempt,
         "change_kind": change_kind,
@@ -58,10 +62,10 @@ def _report(
             {
                 "name": "fast",
                 "conclusion": "success",
-                "wall_seconds": 100.0,
+                "wall_seconds": 5.0,
                 "steps": [
-                    {"name": "test", "wall_seconds": 70.0},
-                    {"name": "checkout", "wall_seconds": 5.0},
+                    {"name": "test", "wall_seconds": 4.0},
+                    {"name": "checkout", "wall_seconds": 1.0},
                 ],
                 "built_derivations": list(built_derivations),
                 "substituted_store_paths": list(substituted_store_paths),
@@ -73,6 +77,12 @@ def _report(
             "actor": cache_actor,
             "event": cache_event,
         },
+        "run": {
+            "started_at": run_started_at,
+            "status": run_status,
+            "conclusion": run_conclusion,
+        },
+        "collection": {"kind": collection_kind},
     }
 
 
@@ -127,13 +137,13 @@ def test_validate_emits_complete_canonical_timing_evidence() -> None:
     assert document["conclusion"] == "success"
     validated = cast("dict[str, object]", document["report"])
     assert validated["sha"] == "a" * 40
-    assert validated["schema_version"] == 1
+    assert validated["schema_version"] == 2
     assert validated["measured_wall_seconds"] == 120.0
     assert validated["regions"] == ["contracts", "rust"]
     jobs = cast("list[dict[str, object]]", validated["jobs"])
     assert jobs[0]["steps"] == [
-        {"name": "checkout", "wall_seconds": 5.0},
-        {"name": "test", "wall_seconds": 70.0},
+        {"name": "checkout", "wall_seconds": 1.0},
+        {"name": "test", "wall_seconds": 4.0},
     ]
 
 
@@ -394,7 +404,7 @@ def test_cache_hit_flag_cannot_replace_concrete_substitution_evidence() -> None:
 @pytest.mark.parametrize(
     ("mutation", "diagnostic"),
     [
-        ("schema", "schema_version must equal 1"),
+        ("schema", "schema_version must equal 2"),
         ("sha", "exactly 40 hexadecimal"),
         ("attempt", "attempt must be an integer"),
         ("kind", "unsupported value"),
@@ -408,7 +418,7 @@ def test_cache_hit_flag_cannot_replace_concrete_substitution_evidence() -> None:
 def test_report_schema_errors_exit_two(mutation: str, diagnostic: str) -> None:
     report = _report()
     if mutation == "schema":
-        report["schema_version"] = 2
+        report["schema_version"] = 999
     elif mutation == "sha":
         report["sha"] = "short"
     elif mutation == "attempt":
@@ -514,12 +524,18 @@ def test_collect_builds_a_report_from_deterministic_github_json(tmp_path: Path) 
         "measured_wall_seconds": 5.0,
         "workflow": {"name": "Normal CI", "wall_seconds": 5.0},
         "cache": {
-            "read": False,
+            "read": True,
             "write": False,
             "actor": "octocat",
             "event": "pull_request",
         },
         "jobs_evidence": {},
+        "run": {
+            "started_at": "2026-01-01T00:00:00Z",
+            "status": "in_progress",
+            "conclusion": None,
+        },
+        "collection": {"kind": "upstream_completed_max"},
     }
     output = tmp_path / "timing-report.json"
     completed = subprocess.run(  # noqa: S603 - fixed repository script and fixture data
@@ -544,3 +560,223 @@ def test_collect_builds_a_report_from_deterministic_github_json(tmp_path: Path) 
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["sha"] == "a" * 40
     assert report["jobs"][0]["wall_seconds"] == 5.0
+
+
+def test_collect_rejects_in_progress_job_status(tmp_path: Path) -> None:
+    jobs: dict[str, object] = {
+        "jobs": [
+            {
+                "name": "Fast checks",
+                "conclusion": None,
+                "status": "in_progress",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": None,
+                "steps": [],
+            }
+        ]
+    }
+    metadata = {
+        "sha": "a" * 40,
+        "attempt": 1,
+        "change_kind": "fast",
+        "regions": ["contracts", "rust"],
+        "measured_wall_seconds": 5.0,
+        "workflow": {"name": "Normal CI", "wall_seconds": 5.0},
+        "cache": {
+            "read": True,
+            "write": False,
+            "actor": "octocat",
+            "event": "pull_request",
+        },
+        "jobs_evidence": {},
+        "run": {
+            "started_at": "2026-01-01T00:00:00Z",
+            "status": "in_progress",
+            "conclusion": None,
+        },
+        "collection": {"kind": "upstream_completed_max"},
+    }
+    output = tmp_path / "timing-report.json"
+    completed = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            str(TIMING),
+            "collect",
+            "--jobs",
+            json.dumps(jobs),
+            "--run-metadata",
+            json.dumps(metadata),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert completed.returncode == 2
+    assert "is not completed" in completed.stderr
+    assert not output.exists() or output.read_text(encoding="utf-8") == ""
+
+
+def test_collect_rejects_under_measured_critical_path(tmp_path: Path) -> None:
+    jobs = {
+        "jobs": [
+            {
+                "name": "Fast checks",
+                "conclusion": "success",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": "2026-01-01T00:00:05Z",
+                "steps": [
+                    {
+                        "name": "check",
+                        "started_at": "2026-01-01T00:00:00Z",
+                        "completed_at": "2026-01-01T00:00:05Z",
+                    }
+                ],
+            },
+            {
+                "name": "Rust and contracts (Linux)",
+                "conclusion": "success",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": "2026-01-01T00:00:10Z",
+                "steps": [
+                    {
+                        "name": "check",
+                        "started_at": "2026-01-01T00:00:00Z",
+                        "completed_at": "2026-01-01T00:00:10Z",
+                    }
+                ],
+            },
+        ]
+    }
+    metadata = {
+        "sha": "a" * 40,
+        "attempt": 1,
+        "change_kind": "fast",
+        "regions": ["contracts", "rust"],
+        "measured_wall_seconds": 5.0,
+        "workflow": {"name": "Normal CI", "wall_seconds": 5.0},
+        "cache": {
+            "read": True,
+            "write": False,
+            "actor": "octocat",
+            "event": "pull_request",
+        },
+        "jobs_evidence": {},
+        "run": {
+            "started_at": "2026-01-01T00:00:00Z",
+            "status": "in_progress",
+            "conclusion": None,
+        },
+        "collection": {"kind": "upstream_completed_max"},
+    }
+    output = tmp_path / "timing-report.json"
+    completed = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            str(TIMING),
+            "collect",
+            "--jobs",
+            json.dumps(jobs),
+            "--run-metadata",
+            json.dumps(metadata),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert completed.returncode == 2
+    assert "under-measures" in completed.stderr or "less than" in completed.stderr
+
+
+def test_collect_succeeds_with_completed_critical_path(tmp_path: Path) -> None:
+    jobs = {
+        "jobs": [
+            {
+                "name": "Fast checks",
+                "conclusion": "success",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": "2026-01-01T00:00:07Z",
+                "steps": [
+                    {
+                        "name": "check",
+                        "started_at": "2026-01-01T00:00:00Z",
+                        "completed_at": "2026-01-01T00:00:07Z",
+                    }
+                ],
+            },
+            {
+                "name": "Rust and contracts (Linux)",
+                "conclusion": "success",
+                "started_at": "2026-01-01T00:00:00Z",
+                "completed_at": "2026-01-01T00:00:12Z",
+                "steps": [
+                    {
+                        "name": "check",
+                        "started_at": "2026-01-01T00:00:00Z",
+                        "completed_at": "2026-01-01T00:00:12Z",
+                    }
+                ],
+            },
+        ]
+    }
+    metadata = {
+        "sha": "b" * 40,
+        "attempt": 2,
+        "change_kind": "fast",
+        "regions": ["contracts", "rust"],
+        "measured_wall_seconds": 12.0,
+        "workflow": {"name": "Normal CI", "wall_seconds": 12.0},
+        "cache": {
+            "read": True,
+            "write": False,
+            "actor": "octocat",
+            "event": "pull_request",
+        },
+        "jobs_evidence": {},
+        "run": {
+            "started_at": "2026-01-01T00:00:00Z",
+            "status": "completed",
+            "conclusion": "success",
+        },
+        "collection": {"kind": "upstream_completed_max"},
+    }
+    output = tmp_path / "timing-report.json"
+    completed = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-I",
+            str(TIMING),
+            "collect",
+            "--jobs",
+            json.dumps(jobs),
+            "--run-metadata",
+            json.dumps(metadata),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["measured_wall_seconds"] == 12.0
+    assert report["jobs"][1]["wall_seconds"] == 12.0
+    assert report["run"]["status"] == "completed"
+    assert report["collection"]["kind"] == "upstream_completed_max"
+
+
+def test_validate_rejects_measured_less_than_critical_path() -> None:
+    report = _report(measured_wall_seconds=4.0, workflow_wall_seconds=4.0)
+    completed = _run("validate", report)
+    assert completed.returncode == 1
+    assert "less than critical-path" in completed.stderr
+    assert _document(completed)["conclusion"] == "failure"

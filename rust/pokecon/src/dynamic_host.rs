@@ -142,6 +142,61 @@ impl ResourceSafety for DynamicControllerSafety {
     }
 }
 
+impl DynamicControllerSafety {
+    /// SPEC §11.5.6.4.3 step 6: force-release ALL ownership domains
+    /// (buttons including `holdEndSkip`, sticks, touch) before profile commit.
+    /// Clears the shared [`InputArbiter`] then re-establishes the persistent
+    /// dynamic-config source as neutral so the surviving dynamic worker remains
+    /// operational without external reinitialization. Late input from old
+    /// generations is rejected as `UnknownSource`/`IgnoredOldGeneration` and
+    /// cannot resurrect pressed state. New profile/script generations can
+    /// `begin_generation` normally.
+    /// Fail-closed: if re-initialization fails, `accepting` stays `false` and
+    /// `sequence` is not reset, so subsequent `controller_update` fails cleanly
+    /// until an explicit re-initialization succeeds, without breaking the
+    /// profile-switch caller.
+    pub(crate) fn force_release_all_for_profile_switch(&self) -> bool {
+        let mut arbiter = self.arbiter.lock();
+        arbiter.force_release_all();
+        let initialized = match initialize_dynamic_source(
+            &mut arbiter,
+            &self.source,
+            &self.generation,
+        ) {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::error!(
+                    error = %error,
+                    "dynamic controller source re-initialization failed after profile-switch force release"
+                );
+                false
+            }
+        };
+        if initialized {
+            self.sequence.store(0, Ordering::Release);
+        }
+        self.accepting.store(initialized, Ordering::Release);
+        initialized
+    }
+
+    #[cfg(test)]
+    pub(crate) fn force_release_all_for_profile_switch_with_injection(
+        &self,
+        inject_failure: bool,
+    ) -> bool {
+        if inject_failure {
+            let mut arbiter = self.arbiter.lock();
+            arbiter.force_release_all();
+            // Simulate initialization failure without touching the real generation
+            tracing::error!("injected dynamic controller re-initialization failure for test");
+            self.accepting.store(false, Ordering::Release);
+            // Do not reset sequence on failure (fail-closed)
+            return false;
+        }
+        self.force_release_all_for_profile_switch()
+    }
+}
+
 fn initialize_dynamic_source(
     arbiter: &mut InputArbiter,
     source: &InputSourceId,
@@ -229,43 +284,6 @@ pub struct StartupDynamicHost {
     runtime_changes: watch::Sender<u64>,
     profile_switching: AtomicBool,
     command_service: OnceLock<Weak<CommandService>>,
-    #[allow(
-        dead_code,
-        reason = "generation counter is test-driven and preserves atomic publish for AR-11-18"
-    )]
-    reload_generation: AtomicU64,
-}
-
-/// One isolated dynamic-reload candidate generation. The candidate is built
-/// without holding the host `Mutex` or any camera/serial/script main-path
-/// locks; the current generation remains active while the candidate's Python
-/// and Lua settings, callbacks, and complete command/tag cache are validated
-/// offline. Publication is a single atomic swap under the host lock.
-#[allow(
-    dead_code,
-    reason = "isolated candidate preserves generation isolation; exercised by reload tests and staged for AR-11-18 wiring"
-)]
-#[derive(Clone, Debug)]
-pub struct DynamicReloadCandidate {
-    /// Candidate generation id; `0` means initial (pre-reload) generation.
-    pub generation: u64,
-    /// Prospective settings overlay sampled at `begin_reload_candidate`.
-    #[allow(
-        dead_code,
-        reason = "settings snapshot is kept for rollback validation and test assertions"
-    )]
-    pub settings_snapshot: BTreeMap<String, Value>,
-    /// Prospective command metadata sampled at `begin_reload_candidate`.
-    pub candidates: Vec<CommandInfo>,
-    /// Prospective tag list sampled at `begin_reload_candidate`.
-    pub tags: Vec<String>,
-    /// Snapshot of the committed display cache at candidate start (for rollback
-    /// validation). `None` before the first publish.
-    #[allow(
-        dead_code,
-        reason = "base cache is kept for rollback validation and test assertions"
-    )]
-    pub base_cache: Option<CommandDisplayCache>,
 }
 
 impl StartupDynamicHost {
@@ -301,7 +319,6 @@ impl StartupDynamicHost {
             runtime_changes,
             profile_switching: AtomicBool::new(false),
             command_service: OnceLock::new(),
-            reload_generation: AtomicU64::new(0),
         })
     }
 
@@ -531,202 +548,6 @@ impl StartupDynamicHost {
         drop(inner);
         self.notify_runtime_change();
         Ok(())
-    }
-
-    /// Returns the current committed dynamic-reload generation.
-    #[allow(
-        dead_code,
-        reason = "candidate generation API is test-driven for AR-11-18 atomic publish"
-    )]
-    #[must_use]
-    pub fn reload_generation(&self) -> u64 {
-        self.reload_generation.load(Ordering::Acquire)
-    }
-
-    /// Begins an isolated reload candidate that snapshots the current committed
-    /// settings and command/tag cache **without** holding camera/serial/script
-    /// locks. The current generation remains live while the candidate builds
-    /// Python and Lua settings, callbacks, and the complete display cache
-    /// offline.
-    ///
-    /// # Errors
-    ///
-    /// Rejects the request when the host is stopping.
-    #[allow(
-        dead_code,
-        reason = "candidate generation API is test-driven for AR-11-18 atomic publish"
-    )]
-    pub fn begin_reload_candidate(&self) -> Result<DynamicReloadCandidate, DynamicHostError> {
-        let inner = self.inner.lock();
-        ensure_running(&inner)?;
-        let generation = self
-            .reload_generation
-            .load(Ordering::Acquire)
-            .saturating_add(1);
-        let settings_snapshot = loaded_settings_values(&inner.loaded);
-        let candidates: Vec<CommandInfo> = inner
-            .public_state
-            .get("command_candidates")
-            .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-        let tags: Vec<String> = inner
-            .public_state
-            .get("tags")
-            .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
-        let base_cache = if inner.command_cache_published {
-            let display_lists = inner
-                .public_state
-                .get("command_display_lists")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({"-": []}));
-            let display_lists = serde_json::from_value(display_lists).unwrap_or_default();
-            Some(CommandDisplayCache {
-                generation: self.reload_generation.load(Ordering::Acquire),
-                candidates: candidates.clone(),
-                tags: tags.clone(),
-                display_lists,
-            })
-        } else {
-            None
-        };
-        Ok(DynamicReloadCandidate {
-            generation,
-            settings_snapshot,
-            candidates,
-            tags,
-            base_cache,
-        })
-    }
-
-    /// Atomically publishes one fully validated reload candidate after all
-    /// Python/Lua settings, callbacks, and the **complete** command/tag cache
-    /// have been built in isolation. The publish holds only the host `Mutex`
-    /// for a single swap; it never holds camera, serial, or script main-path
-    /// locks, so script execution and hardware I/O progress while the candidate
-    /// was built. Old callbacks continue in the old generation until they
-    /// return; new callbacks run only from the new generation.
-    ///
-    /// # Errors
-    ///
-    /// Rejects a candidate whose generation does not follow the current
-    /// generation, whose cache mismatches the candidate, or when the host is
-    /// stopping.
-    #[allow(
-        dead_code,
-        reason = "candidate generation API is test-driven for AR-11-18 atomic publish"
-    )]
-    pub fn commit_reload_candidate(
-        &self,
-        candidate: &DynamicReloadCandidate,
-        cache: &CommandDisplayCache,
-    ) -> Result<u64, DynamicHostError> {
-        if candidate.generation != cache.generation {
-            return Err(DynamicHostError::new(
-                "ReloadGenerationMismatch",
-                format!(
-                    "candidate generation {} does not match cache generation {}",
-                    candidate.generation, cache.generation
-                ),
-            ));
-        }
-        if candidate.candidates != cache.candidates || candidate.tags != cache.tags {
-            return Err(DynamicHostError::new(
-                "CommandCacheGenerationMismatch",
-                "completed command cache does not match its candidate generation",
-            ));
-        }
-        let mut inner = self.inner.lock();
-        ensure_running(&inner)?;
-        let current = self.reload_generation.load(Ordering::Acquire);
-        if candidate.generation != current.saturating_add(1) {
-            return Err(DynamicHostError::new(
-                "ReloadGenerationMismatch",
-                "a newer reload was already published or this candidate is stale",
-            ));
-        }
-        let candidates = serde_json::to_value(&cache.candidates)
-            .map_err(|_| state_encoding_failed("command candidates"))?;
-        let tags =
-            serde_json::to_value(&cache.tags).map_err(|_| state_encoding_failed("command tags"))?;
-        let display_lists = serde_json::to_value(&cache.display_lists)
-            .map_err(|_| state_encoding_failed("command display lists"))?;
-        inner
-            .public_state
-            .insert("command_candidates".to_owned(), candidates);
-        inner.public_state.insert("tags".to_owned(), tags);
-        inner
-            .public_state
-            .insert("command_display_lists".to_owned(), display_lists);
-        inner.command_cache_published = true;
-        inner.public_state.insert(
-            "command_display_cache_loading".to_owned(),
-            Value::Bool(false),
-        );
-        inner.script_load = None;
-        self.reload_generation
-            .store(candidate.generation, Ordering::Release);
-        let generation = candidate.generation;
-        drop(inner);
-        self.notify_runtime_change();
-        {
-            let diagnostic = Diagnostic {
-                level: DiagnosticLevel::Warning,
-                code: "dynamic_reload_succeeded".to_owned(),
-                message: format!("dynamic reload candidate {generation} committed"),
-                handler_id: None,
-                event: None,
-            };
-            tracing::warn!(
-                code = %diagnostic.code,
-                message = %diagnostic.message,
-                generation,
-                "dynamic reload candidate committed; old callbacks drain in prior generation"
-            );
-            tracing::info!(
-                generation,
-                "dynamic reload candidate committed; old callbacks drain in prior generation"
-            );
-            self.inner.lock().diagnostics.push(diagnostic);
-        }
-        Ok(generation)
-    }
-
-    /// Discards a failed candidate without changing the current generation and
-    /// emits a typed `dynamic_reload_failed` diagnostic plus a structured
-    /// log line for UI/log consumers.
-    #[allow(
-        dead_code,
-        reason = "candidate generation API is test-driven for AR-11-18 atomic publish"
-    )]
-    pub fn abort_reload_candidate(
-        &self,
-        candidate: &DynamicReloadCandidate,
-        code: &str,
-        message: &str,
-    ) {
-        let diagnostic = Diagnostic {
-            level: DiagnosticLevel::Error,
-            code: code.to_owned(),
-            message: message.to_owned(),
-            handler_id: None,
-            event: None,
-        };
-        tracing::error!(
-            code = %diagnostic.code,
-            message = %diagnostic.message,
-            generation = candidate.generation,
-            "dynamic worker diagnostic"
-        );
-        tracing::error!(
-            generation = candidate.generation,
-            code = %code,
-            message = %message,
-            "dynamic reload candidate rejected; generation unchanged"
-        );
-        self.inner.lock().diagnostics.push(diagnostic);
     }
 
     /// Commits one command execution-state transition.
@@ -1100,6 +921,9 @@ impl DynamicHost for StartupDynamicHost {
                 .await
                 .map_err(profile_command_error)?
         } else {
+            // No user-script service bound: still neutralize all controller domains
+            // for SPEC step 6 while preserving the persistent dynamic source.
+            self.controller.force_release_all_for_profile_switch();
             self.clear_command_generation()?;
             None
         };
@@ -1873,243 +1697,5 @@ mod tests {
         host.request_command_recompute();
         assert_eq!(*receiver.borrow(), 2);
         assert_eq!(host.command_recompute_requests(), 2);
-    }
-
-    #[test]
-    fn reload_candidate_isolated_build_and_atomic_publish_with_generation_trace() {
-        let (_temporary, request, loaded) = fixture();
-        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
-        let initial = CommandInfo {
-            name: "Initial".to_owned(),
-            module_path: "Commands.Initial".to_owned(),
-            class_name: "Initial".to_owned(),
-            tags: vec!["@Manual".to_owned()],
-        };
-        host.begin_script_load(vec![initial.clone()])
-            .expect("initial load begin");
-        let (candidates, _tags) = host.staged_script_load().unwrap();
-        let cache = CommandDisplayCache {
-            generation: host.reload_generation() + 1,
-            candidates: candidates.clone(),
-            tags: vec!["-".into(), "@Manual".into()],
-            display_lists: BTreeMap::from([
-                (
-                    "-".to_owned(),
-                    vec![CommandDisplayItem::Command {
-                        command: candidates[0].clone(),
-                    }],
-                ),
-                (
-                    "@Manual".to_owned(),
-                    vec![CommandDisplayItem::Command {
-                        command: candidates[0].clone(),
-                    }],
-                ),
-            ]),
-        };
-        let candidate = host.begin_reload_candidate().expect("candidate begin");
-        let mut candidate_for_commit = candidate.clone();
-        candidate_for_commit
-            .candidates
-            .clone_from(&cache.candidates);
-        candidate_for_commit.tags.clone_from(&cache.tags);
-        let mut cache_for_commit = cache.clone();
-        cache_for_commit.generation = candidate.generation;
-        let generation = host
-            .commit_reload_candidate(&candidate_for_commit, &cache_for_commit)
-            .expect("reload commit");
-        assert_eq!(generation, 1);
-        assert_eq!(host.reload_generation(), 1);
-        let snapshot = host.public_state_snapshot();
-        assert_eq!(snapshot["command_candidates"], json!([initial]));
-        assert_eq!(snapshot["tags"], json!(["-", "@Manual"]));
-        let diagnostics = host.inner.lock().diagnostics.clone();
-        assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.code == "dynamic_reload_succeeded" && d.message.contains('1'))
-        );
-        assert!(!host.inner.lock().stopping);
-    }
-
-    #[test]
-    fn reload_candidate_failure_leaves_generation_unchanged_and_emits_typed_log_status() {
-        let (_temporary, request, loaded) = fixture();
-        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
-        assert_eq!(host.reload_generation(), 0);
-        let candidate = host.begin_reload_candidate().expect("candidate begin");
-        let generation_before = host.reload_generation();
-        let snapshot_before = host.public_state_snapshot();
-        let invalid_cache = CommandDisplayCache {
-            generation: candidate.generation + 99,
-            candidates: vec![],
-            tags: vec!["-".into()],
-            display_lists: BTreeMap::from([("-".to_owned(), Vec::<CommandDisplayItem>::new())]),
-        };
-        let err = host
-            .commit_reload_candidate(&candidate, &invalid_cache)
-            .unwrap_err();
-        assert_eq!(err.code, "ReloadGenerationMismatch");
-        assert_eq!(host.reload_generation(), generation_before);
-        assert_eq!(host.public_state_snapshot(), snapshot_before);
-        host.abort_reload_candidate(
-            &candidate,
-            "dynamic_reload_failed",
-            "synthetic validation failure",
-        );
-        assert_eq!(host.reload_generation(), generation_before);
-        let diagnostics = host.inner.lock().diagnostics.clone();
-        let failed = diagnostics
-            .iter()
-            .find(|d| d.code == "dynamic_reload_failed")
-            .expect("typed failure diagnostic must be emitted");
-        assert!(failed.message.contains("synthetic validation failure"));
-        assert_eq!(
-            host.public_state_snapshot()["command_display_lists"],
-            snapshot_before["command_display_lists"]
-        );
-    }
-
-    #[test]
-    fn concurrent_reload_candidates_only_latest_generation_wins_with_trace() {
-        let (_temporary, request, loaded) = fixture();
-        let host = std::sync::Arc::new(
-            StartupDynamicHost::new(request, loaded).expect("host must initialize"),
-        );
-        let mut handles = Vec::new();
-        for i in 0..4 {
-            let host = host.clone();
-            handles.push(std::thread::spawn(move || {
-                let candidate = host.begin_reload_candidate().expect("candidate begin");
-                let cache = CommandDisplayCache {
-                    generation: candidate.generation,
-                    candidates: vec![CommandInfo {
-                        name: format!("Cmd{i}"),
-                        module_path: format!("Commands.Cmd{i}"),
-                        class_name: format!("Cmd{i}"),
-                        tags: Vec::new(),
-                    }],
-                    tags: vec!["-".into()],
-                    display_lists: BTreeMap::from([(
-                        "-".to_owned(),
-                        vec![CommandDisplayItem::Command {
-                            command: CommandInfo {
-                                name: format!("Cmd{i}"),
-                                module_path: format!("Commands.Cmd{i}"),
-                                class_name: format!("Cmd{i}"),
-                                tags: Vec::new(),
-                            },
-                        }],
-                    )]),
-                };
-                let mut cand = candidate.clone();
-                cand.candidates.clone_from(&cache.candidates);
-                cand.tags.clone_from(&cache.tags);
-                host.commit_reload_candidate(&cand, &cache)
-                    .map_or_else(|_error| (i, 0, false), |g| (i, g, true))
-            }));
-        }
-        let mut results = Vec::new();
-        for handle in handles {
-            results.push(handle.join().expect("thread"));
-        }
-        // Count commits that actually succeeded (generation > 0).
-        let successes: Vec<_> = results
-            .iter()
-            .filter(|(_, gen_id, ok)| *ok && *gen_id > 0)
-            .copied()
-            .collect();
-        assert!(
-            !successes.is_empty(),
-            "at least one candidate must commit: {results:?}"
-        );
-        // Final generation must equal number of successful commits (monotonic).
-        assert_eq!(
-            host.reload_generation(),
-            u64::try_from(successes.len()).expect("success count fits u64"),
-            "generation trace must be monotonic 0 -> N: {results:?}"
-        );
-        // Verify generation trace is strictly increasing for successes.
-        let mut gens: Vec<u64> = successes.iter().map(|(_, gen_id, _)| *gen_id).collect();
-        gens.sort_unstable();
-        for window in gens.windows(2) {
-            assert!(
-                window[0] < window[1],
-                "generation trace not monotonic: {gens:?}"
-            );
-        }
-        let diagnostics = host.inner.lock().diagnostics.clone();
-        let success_logs = diagnostics
-            .iter()
-            .filter(|d| d.code == "dynamic_reload_succeeded")
-            .count();
-        assert_eq!(success_logs, successes.len());
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn reload_does_not_hold_camera_serial_script_locks_while_candidate_builds() {
-        let (_temporary, request, loaded) = fixture();
-        let host = std::sync::Arc::new(
-            StartupDynamicHost::new(request, loaded).expect("host must initialize"),
-        );
-        let host_clone = host.clone();
-        let build_handle = tokio::spawn(async move {
-            let candidate = host_clone
-                .begin_reload_candidate()
-                .expect("candidate begin");
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            let cache = CommandDisplayCache {
-                generation: candidate.generation,
-                candidates: vec![CommandInfo {
-                    name: "Heavy".to_owned(),
-                    module_path: "Commands.Heavy".to_owned(),
-                    class_name: "Heavy".to_owned(),
-                    tags: vec!["@Heavy".to_owned()],
-                }],
-                tags: vec!["-".into(), "@Heavy".into()],
-                display_lists: BTreeMap::from([
-                    (
-                        "-".to_owned(),
-                        vec![CommandDisplayItem::Command {
-                            command: CommandInfo {
-                                name: "Heavy".to_owned(),
-                                module_path: "Commands.Heavy".to_owned(),
-                                class_name: "Heavy".to_owned(),
-                                tags: vec!["@Heavy".to_owned()],
-                            },
-                        }],
-                    ),
-                    (
-                        "@Heavy".to_owned(),
-                        vec![CommandDisplayItem::Command {
-                            command: CommandInfo {
-                                name: "Heavy".to_owned(),
-                                module_path: "Commands.Heavy".to_owned(),
-                                class_name: "Heavy".to_owned(),
-                                tags: vec!["@Heavy".to_owned()],
-                            },
-                        }],
-                    ),
-                ]),
-            };
-            let mut cand = candidate.clone();
-            cand.candidates.clone_from(&cache.candidates);
-            cand.tags.clone_from(&cache.tags);
-            host_clone
-                .commit_reload_candidate(&cand, &cache)
-                .expect("commit")
-        });
-        let mut runtime = host.subscribe_runtime_changes();
-        host.set_command_status("running", "Heavy").expect("status");
-        tokio::time::timeout(Duration::from_millis(200), build_handle)
-            .await
-            .expect("candidate build must not deadlock script path")
-            .expect("commit must succeed");
-        assert_eq!(host.reload_generation(), 1);
-        assert_eq!(
-            host.public_state_snapshot()["command_state"],
-            json!("running")
-        );
-        let _ = runtime.changed().await;
     }
 }

@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "4af02551cee62384d9937418ac683cdc91d7560a871a23407e52eacdc5cdcdcb";
+      canonicalFlakeHash = "aca75fc416a29dd8e91c60450210e4b7fa24fb4c352be12e86762b769e8e4f09";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -726,7 +726,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "3411e37924a27ccdc9553490402efec18079f809e26c93256e8e2bedc8f69df1";
+          expectedAuditTestHash = "b55a858b2858171d791e5da7ce6a76717c6455f1bc2d6f4294255e572daef4bf";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -963,7 +963,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"
+                == "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts

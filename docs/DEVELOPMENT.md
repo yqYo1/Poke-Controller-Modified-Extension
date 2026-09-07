@@ -391,15 +391,13 @@ commit前にformat、対象gate、最終`check`を実行します。
 
 commitはprojectの署名方針に従って署名します。
 
-push後はlocal成功だけで完了とせず、対象branchで発見されたGitHub Actions runを安定窓の完了まで監視します。
+push後はlocal成功だけで完了とせず、対象branchのremote HEAD SHAに対する2つの必須context（`Normal CI Required`と`Package CI Required`）を安定窓の完了まで監視します。必須contextが対象SHAで`completed`/`success`となり、かつ必須contextの集合が安定窓の間変化しなければ完了します。必須context以外の任意のcheckは、必須contextが完了すれば無視します。必須contextの欠落、古いSHA、実行中（queued/in_progress）、skipped、neutral、cancelled、timed_out、action_required、failureはいずれも成功としません。
 
-CI監視appはbranchと任意のtimeoutをscriptへ渡し、必要なcommandをflakeから提供します。既定timeoutと安定窓は`nix run .#ci-watch -- --help`が表示するscript定義を正準とします。
+CI監視appはbranchと任意のtimeoutをscriptへ渡し、必要なcommandをflakeから提供します。既定timeoutと安定窓は`nix run .#ci-watch -- --help`が表示するscript定義を正準とします。終了statusは成功が0、必須contextの完了失敗が1、timeoutが124、usageが2で区別します。改ページや同一SHAの重複した歴史的check-runは最新idを採用しfail-closedに扱います。
 
 ```bash
 nix run .#ci-watch -- "$BRANCH"
 ```
-
-現段階では、remote branch HEADに対して発見されたworkflow runがすべて成功し、発見済みrunとstatusの集合が安定窓の間変化しなければ監視を完了します。通常CIを単一の集約workflowへ移行するまでは、安定窓の後で新しいworkflow runが出現しないことまでは保証しません。
 
 CIが失敗した場合は該当workflowのlogを確認し、同じNix taskで再現して修正します。
 

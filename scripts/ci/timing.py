@@ -103,6 +103,32 @@ class CacheAccess:
 
 
 @dataclass(frozen=True, slots=True)
+class RunInfo:
+    """Workflow run identity and completion state at collection time."""
+
+    started_at: datetime.datetime
+    status: str
+    conclusion: str | None
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "conclusion": self.conclusion,
+            "started_at": self.started_at.isoformat().replace("+00:00", "Z"),
+            "status": self.status,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionInfo:
+    """Explicit collection semantics for timing evidence."""
+
+    kind: str
+
+    def to_document(self) -> dict[str, object]:
+        return {"kind": self.kind}
+
+
+@dataclass(frozen=True, slots=True)
 class TimingReport:
     """Validated, canonical evidence from one workflow attempt."""
 
@@ -114,6 +140,8 @@ class TimingReport:
     workflow: WorkflowTiming
     jobs: tuple[JobTiming, ...]
     cache: CacheAccess
+    run: RunInfo
+    collection: CollectionInfo
 
     @property
     def built_derivation_count(self) -> int:
@@ -136,34 +164,62 @@ class TimingReport:
             "attempt": self.attempt,
             "cache": self.cache.to_document(),
             "change_kind": self.change_kind.value,
+            "collection": self.collection.to_document(),
             "jobs": [job.to_document() for job in self.jobs],
             "measured_wall_seconds": self.measured_wall_seconds,
             "regions": list(self.regions),
+            "run": self.run.to_document(),
             "schema_version": SCHEMA_VERSION,
             "sha": self.sha,
             "workflow": self.workflow.to_document(),
         }
+
+    @property
+    def run_status(self) -> str:
+        return self.run.status
+
+    @property
+    def collection_kind(self) -> str:
+        return self.collection.kind
+
+    @property
+    def critical_path_wall_seconds(self) -> float:
+        candidates = [
+            job.wall_seconds
+            for job in self.jobs
+            if job.conclusion is not Conclusion.SKIPPED
+        ]
+        return max(candidates) if candidates else 0.0
 
 
 type JsonDocument = dict[str, object]
 type ResultDocument = dict[str, object]
 type ReportSequence = Sequence[TimingReport]
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
 REPORT_KEYS: Final = frozenset(
     {
         "attempt",
         "cache",
         "change_kind",
+        "collection",
         "jobs",
         "measured_wall_seconds",
         "regions",
+        "run",
         "schema_version",
         "sha",
         "workflow",
     }
 )
 WORKFLOW_KEYS: Final = frozenset({"name", "wall_seconds"})
+RUN_KEYS: Final = frozenset({"conclusion", "started_at", "status"})
+COLLECTION_KEYS: Final = frozenset({"kind"})
+COLLECTION_KIND_UPSTREAM_COMPLETED_MAX: Final = "upstream_completed_max"
+ALLOWED_COLLECTION_KINDS: Final = frozenset({COLLECTION_KIND_UPSTREAM_COMPLETED_MAX})
+ALLOWED_RUN_STATUSES: Final = frozenset(
+    {"queued", "in_progress", "waiting", "requested", "pending", "completed"}
+)
 JOB_KEYS: Final = frozenset(
     {
         "built_derivations",
@@ -398,6 +454,43 @@ def _parse_cache(value: object) -> CacheAccess:
     )
 
 
+def _parse_run(value: object) -> RunInfo:
+    context = "report.run"
+    document = _require_object(value, context)
+    _require_exact_keys(document, RUN_KEYS, context)
+    started_at = _parse_github_timestamp(
+        document["started_at"], f"{context}.started_at"
+    )
+    status_raw = _require_string(document["status"], f"{context}.status")
+    status = status_raw.strip()
+    if status not in ALLOWED_RUN_STATUSES:
+        allowed = ", ".join(sorted(ALLOWED_RUN_STATUSES))
+        message = f"{context}.status has unsupported value {status_raw!r}; expected one of: {allowed}"
+        raise InputError(message)
+    conclusion_raw = document["conclusion"]
+    if conclusion_raw is None:
+        conclusion = None
+    else:
+        conclusion = _require_string(conclusion_raw, f"{context}.conclusion")
+        if not conclusion.strip():
+            message = f"{context}.conclusion must be a non-empty string or null"
+            raise InputError(message)
+    return RunInfo(started_at=started_at, status=status, conclusion=conclusion)
+
+
+def _parse_collection(value: object) -> CollectionInfo:
+    context = "report.collection"
+    document = _require_object(value, context)
+    _require_exact_keys(document, COLLECTION_KEYS, context)
+    kind_raw = _require_string(document["kind"], f"{context}.kind")
+    kind = kind_raw.strip()
+    if kind not in ALLOWED_COLLECTION_KINDS:
+        allowed = ", ".join(sorted(ALLOWED_COLLECTION_KINDS))
+        message = f"{context}.kind has unsupported value {kind_raw!r}; expected one of: {allowed}"
+        raise InputError(message)
+    return CollectionInfo(kind=kind)
+
+
 def parse_report(source: str) -> TimingReport:
     """Parse one strict timing report and normalize unordered evidence arrays."""
     try:
@@ -463,6 +556,9 @@ def parse_report(source: str) -> TimingReport:
         message = "report.jobs must have unique names"
         raise InputError(message)
 
+    run = _parse_run(document["run"])
+    collection = _parse_collection(document["collection"])
+
     return TimingReport(
         sha=sha.lower(),
         attempt=attempt,
@@ -474,6 +570,8 @@ def parse_report(source: str) -> TimingReport:
         workflow=_parse_workflow(document["workflow"]),
         jobs=jobs,
         cache=_parse_cache(document["cache"]),
+        run=run,
+        collection=collection,
     )
 
 
@@ -493,6 +591,27 @@ def report_violations(report: TimingReport) -> tuple[str, ...]:
         violations.append(
             "substituted store paths were recorded while cache.read is false"
         )
+    if report.collection.kind != COLLECTION_KIND_UPSTREAM_COMPLETED_MAX:
+        violations.append(
+            f"collection.kind must be {COLLECTION_KIND_UPSTREAM_COMPLETED_MAX!r}, got {report.collection.kind!r}"
+        )
+    if report.run.status not in ALLOWED_RUN_STATUSES:
+        violations.append(f"run.status has unsupported value {report.run.status!r}")
+    critical = report.critical_path_wall_seconds
+    if report.measured_wall_seconds + 1e-9 < critical:
+        violations.append(
+            f"measured_wall_seconds {report.measured_wall_seconds} is less than critical-path job wall {critical}"
+        )
+    if report.workflow.wall_seconds + 1e-9 < critical:
+        violations.append(
+            f"workflow wall_seconds {report.workflow.wall_seconds} is less than critical-path job wall {critical}"
+        )
+    if not report.cache.read:
+        violations.append(
+            "cache.read must be true for explicit timing evidence (was false)"
+        )
+    if not report.jobs or all(j.conclusion is Conclusion.SKIPPED for j in report.jobs):
+        violations.append("jobs evidence is empty or all skipped")
     return tuple(violations)
 
 
@@ -709,23 +828,35 @@ def _build_report_from_github(
     if isinstance(run_attempt, int) and run_attempt != attempt:
         message = f"GitHub run attempt {run_attempt!r} does not match requested attempt {attempt!r}"
         raise InputError(message)
-    # Workflow timing
+    # Workflow timing - completion-safe upstream completed max
     workflow_name_raw = (
         run_data.get("name") or run_data.get("displayTitle") or "Normal CI"
     )
     workflow_name = _require_string(workflow_name_raw, "github run name")
-    # Prefer run_started_at, fallback to created_at
     started_raw = run_data.get("run_started_at") or run_data.get("created_at")
-    updated_raw = run_data.get("updated_at")
-    if started_raw is None or updated_raw is None:
-        message = (
-            "GitHub run is missing run_started_at/created_at or updated_at timestamps"
-        )
+    if started_raw is None:
+        message = "GitHub run is missing run_started_at/created_at timestamp"
         raise InputError(message)
-    workflow_wall = _wall_seconds_between(started_raw, updated_raw, "github run")
-    # Measured is workflow wall; fail closed if non-finite already checked
-    measured_wall_seconds = workflow_wall
-    workflow_timing = WorkflowTiming(name=workflow_name, wall_seconds=workflow_wall)
+    status_raw = run_data.get("status")
+    if status_raw is None:
+        status_raw = "completed"
+    status = _require_string(status_raw, "github run status").strip()
+    if status not in ALLOWED_RUN_STATUSES:
+        allowed = ", ".join(sorted(ALLOWED_RUN_STATUSES))
+        message = f"github run status has unsupported value {status_raw!r}; expected one of: {allowed}"
+        raise InputError(message)
+    conclusion_raw = run_data.get("conclusion")
+    if conclusion_raw is None:
+        run_conclusion = None
+    else:
+        run_conclusion = (
+            _require_string(conclusion_raw, "github run conclusion").strip() or None
+        )
+    run_started_at = _parse_github_timestamp(started_raw, "github run started_at")
+    workflow_name_captured = workflow_name
+    run_status_captured = status
+    run_conclusion_captured = run_conclusion
+    run_started_captured = run_started_at
     # Cache
     cache = CacheAccess(
         read=cache_read, write=cache_write, actor=cache_actor, event=cache_event
@@ -828,6 +959,43 @@ def _build_report_from_github(
             raise InputError(message)
     # Sort jobs by name for canonicalization
     jobs_sorted = tuple(sorted(job_timings, key=lambda j: j.name))
+    completed_ends: list[datetime.datetime] = []
+    for raw_job in jobs_data:
+        c = raw_job.get("completed_at")
+        if isinstance(c, str) and c.strip():
+            try:
+                completed_ends.append(
+                    _parse_github_timestamp(c, "github job completed_at")
+                )
+            except InputError:
+                continue
+    if not completed_ends:
+        measured_wall_seconds = max(
+            (
+                j.wall_seconds
+                for j in jobs_sorted
+                if j.conclusion is not Conclusion.SKIPPED
+            ),
+            default=0.0,
+        )
+        workflow_wall = measured_wall_seconds
+    else:
+        max_completed = max(completed_ends)
+        delta = (max_completed - run_started_captured).total_seconds()
+        if not math.isfinite(delta) or delta < 0:
+            message = "github run has non-monotonic timing for upstream max"
+            raise InputError(message)
+        measured_wall_seconds = delta
+        workflow_wall = delta
+    workflow_timing = WorkflowTiming(
+        name=workflow_name_captured, wall_seconds=workflow_wall
+    )
+    run_info = RunInfo(
+        started_at=run_started_captured,
+        status=run_status_captured,
+        conclusion=run_conclusion_captured,
+    )
+    collection_info = CollectionInfo(kind=COLLECTION_KIND_UPSTREAM_COMPLETED_MAX)
     return TimingReport(
         sha=sha.lower(),
         attempt=attempt,
@@ -837,6 +1005,8 @@ def _build_report_from_github(
         workflow=workflow_timing,
         jobs=jobs_sorted,
         cache=cache,
+        run=run_info,
+        collection=collection_info,
     )
 
 
@@ -1035,6 +1205,8 @@ def _collect_from_deterministic_jsons(
             "measured_wall_seconds",
             "cache",
             "jobs_evidence",
+            "run",
+            "collection",
         }
     )
     _require_exact_keys(meta, expected_meta_keys, "run metadata")
@@ -1073,6 +1245,11 @@ def _collect_from_deterministic_jsons(
     jobs_evidence = _parse_jobs_evidence(
         meta["jobs_evidence"], "run metadata.jobs_evidence"
     )
+    run = _parse_run(meta["run"])
+    collection = _parse_collection(meta["collection"])
+    if collection.kind != COLLECTION_KIND_UPSTREAM_COMPLETED_MAX:
+        message = f"run metadata.collection.kind must be {COLLECTION_KIND_UPSTREAM_COMPLETED_MAX!r}"
+        raise InputError(message)
     job_timings: list[JobTiming] = []
     seen_names: set[str] = set()
     for raw_job in jobs_data:
@@ -1163,6 +1340,50 @@ def _collect_from_deterministic_jsons(
             message = f"run metadata.jobs_evidence contains unknown job {ev_name!r} not in jobs JSON"
             raise InputError(message)
     jobs_sorted = tuple(sorted(job_timings, key=lambda j: j.name))
+    completed_times: list[datetime.datetime] = []
+    for raw_job in jobs_data:
+        name = raw_job.get("name")
+        c = raw_job.get("completed_at")
+        s = raw_job.get("started_at")
+        if isinstance(c, str) and isinstance(s, str):
+            try:
+                c_dt = _parse_github_timestamp(
+                    c, f"jobs JSON job {name!r}.completed_at"
+                )
+                completed_times.append(c_dt)
+            except InputError:
+                continue
+    if completed_times:
+        max_completed = max(completed_times)
+        expected_upstream = (max_completed - run.started_at).total_seconds()
+        if not math.isfinite(expected_upstream) or expected_upstream < 0:
+            message = "run metadata has non-monotonic upstream timing"
+            raise InputError(message)
+        if measured + 1e-9 < expected_upstream:
+            message = f"measured_wall_seconds {measured} is less than upstream completed max {expected_upstream} (run started at {run.started_at.isoformat()}) - under-measures critical path"
+            raise InputError(message)
+    else:
+        critical = max(
+            (
+                j.wall_seconds
+                for j in jobs_sorted
+                if j.conclusion is not Conclusion.SKIPPED
+            ),
+            default=0.0,
+        )
+        if measured + 1e-9 < critical:
+            message = f"measured_wall_seconds {measured} is less than critical-path job wall {critical}"
+            raise InputError(message)
+    critical = max(
+        (j.wall_seconds for j in jobs_sorted if j.conclusion is not Conclusion.SKIPPED),
+        default=0.0,
+    )
+    if measured + 1e-9 < critical:
+        message = f"measured_wall_seconds {measured} is less than critical-path job wall {critical}"
+        raise InputError(message)
+    if workflow.wall_seconds + 1e-9 < critical:
+        message = f"workflow wall_seconds {workflow.wall_seconds} is less than critical-path job wall {critical}"
+        raise InputError(message)
     return TimingReport(
         sha=sha,
         attempt=attempt,
@@ -1172,6 +1393,8 @@ def _collect_from_deterministic_jsons(
         workflow=workflow,
         jobs=jobs_sorted,
         cache=cache,
+        run=run,
+        collection=collection,
     )
 
 

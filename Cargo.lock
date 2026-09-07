@@ -3806,8 +3806,8 @@ dependencies = [
  "v4l",
  "version-ranges",
  "webrtc",
- "winapi-util",
  "win32_notif",
+ "winapi-util",
 ]
 
 [[package]]

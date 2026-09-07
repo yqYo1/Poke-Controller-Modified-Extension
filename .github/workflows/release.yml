@@ -180,6 +180,49 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Preserve first Windows package build
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          $first = Join-Path $env:RUNNER_TEMP "pokecon-first.exe"
+          Copy-Item $installer $first -Force
+          $sha256 = (Get-FileHash $first -Algorithm SHA256).Hash.ToLower()
+          $size = (Get-Item $first).Length
+          Write-Host "Preserved first Windows installer: $first (sha256=$sha256, size=$size)"
+      - name: Rebuild Windows package from identical inputs
+        shell: pwsh
+        working-directory: rust/pokecon
+        run: >-
+          cargo tauri build --ci --bundles nsis
+          --config $env:POKECON_BUNDLE_CONFIG
+          -- --locked
+      - name: Verify byte-for-byte Windows NSIS reproducibility
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $first = Join-Path $env:RUNNER_TEMP "pokecon-first.exe"
+          $second = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          if (-not (Test-Path $first)) { throw "first Windows installer not preserved: $first" }
+          if (-not (Test-Path $second)) { throw "second Windows installer missing: $second" }
+          $firstSha256 = (Get-FileHash $first -Algorithm SHA256).Hash.ToLower()
+          $secondSha256 = (Get-FileHash $second -Algorithm SHA256).Hash.ToLower()
+          $firstSize = (Get-Item $first).Length
+          $secondSize = (Get-Item $second).Length
+          Write-Host "first:  $firstSha256 ($firstSize bytes) $first"
+          Write-Host "second: $secondSha256 ($secondSize bytes) $second"
+          if ($firstSha256 -ne $secondSha256) { throw "Windows NSIS reproducibility failed: SHA256 mismatch ($firstSha256 != $secondSha256)" }
+          if ($firstSize -ne $secondSize) { throw "Windows NSIS reproducibility failed: size mismatch ($firstSize != $secondSize)" }
+          $firstBytes = [System.IO.File]::ReadAllBytes($first)
+          $secondBytes = [System.IO.File]::ReadAllBytes($second)
+          if ($firstBytes.Length -ne $secondBytes.Length) { throw "Windows NSIS reproducibility failed: ReadAllBytes length mismatch" }
+          if (-not [System.Linq.Enumerable]::SequenceEqual($firstBytes, $secondBytes)) { throw "Windows NSIS reproducibility failed: ReadAllBytes byte mismatch" }
+          $fcOutput = & fc.exe /b $first $second 2>&1
+          $fcExit = $LASTEXITCODE
+          $fcOutput | ForEach-Object { Write-Host $_ }
+          if ($fcExit -ne 0) { throw "Windows NSIS reproducibility failed: fc.exe /b reported differences (exit $fcExit)" }
+          if ($fcOutput -notmatch "FC: no differences encountered") { Write-Host "fc.exe /b output did not contain no-differences phrase, but exit was 0; continuing" }
+          Write-Host "Windows NSIS byte-for-byte reproducibility verified"
       - name: Record Windows signing inputs
         shell: pwsh
         run: |

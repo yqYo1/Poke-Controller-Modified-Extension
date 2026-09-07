@@ -7,7 +7,10 @@
 //! with priority over retries. Failures are contained to the worker and do not
 //! propagate as blocking errors to the script thread beyond the enqueue result.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -527,11 +530,21 @@ async fn notification_worker(
     mut receiver: mpsc::Receiver<QueuedJob>,
     discord: Arc<dyn DiscordTransport>,
     shutdown: Arc<Notify>,
+    shutdown_pending: Arc<AtomicBool>,
     max_retries: u32,
     _retry_deadline: Duration,
     base_delay: Duration,
 ) {
     loop {
+        // Drain if a stop was requested while we were busy. Notify may have been
+        // consumed by the retry-sleep waiter, so check the persistent flag.
+        if shutdown_pending.swap(false, Ordering::AcqRel) {
+            tracing::info!(
+                diagnostic_id = "NOTIFICATION_STOP_DRAIN",
+                "notification stop: draining pending queue"
+            );
+            while receiver.try_recv().is_ok() {}
+        }
         let job = tokio::select! {
             biased;
             () = shutdown.notified() => {
@@ -539,6 +552,7 @@ async fn notification_worker(
                     diagnostic_id = "NOTIFICATION_STOP_DRAIN",
                     "notification stop: draining pending queue"
                 );
+                shutdown_pending.store(false, Ordering::Release);
                 while receiver.try_recv().is_ok() {}
                 continue;
             },
@@ -555,6 +569,16 @@ async fn notification_worker(
             base_delay,
         )
         .await;
+        // After each job, drain again if stop was requested during delivery/retry.
+        // This covers the race where `shutdown.notified()` was observed by the
+        // inner retry sleep instead of the outer select.
+        if shutdown_pending.swap(false, Ordering::AcqRel) {
+            tracing::info!(
+                diagnostic_id = "NOTIFICATION_STOP_DRAIN",
+                "notification stop: draining pending queue after job"
+            );
+            while receiver.try_recv().is_ok() {}
+        }
     }
 }
 
@@ -563,7 +587,10 @@ pub struct NotificationService {
     discord: Arc<dyn DiscordTransport>,
     native: Arc<dyn NativeNotificationTransport>,
     queue_tx: mpsc::Sender<QueuedJob>,
+    queue_max_capacity: usize,
+    pending_receiver: Mutex<Option<mpsc::Receiver<QueuedJob>>>,
     shutdown: Arc<Notify>,
+    shutdown_pending: Arc<AtomicBool>,
     #[allow(
         dead_code,
         reason = "introspection API for bounded retry bounds, exercised by unit tests"
@@ -579,10 +606,13 @@ pub struct NotificationService {
 
 impl std::fmt::Debug for NotificationService {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let max = self.queue_max_capacity;
+        let available = self.queue_tx.capacity();
+        let len = max.saturating_sub(available);
         formatter
             .debug_struct("NotificationService")
-            .field("queue_capacity", &NOTIFICATION_QUEUE_CAPACITY)
-            .field("queue_len", &self.queue_tx.capacity())
+            .field("queue_capacity", &max)
+            .field("queue_len", &len)
             .finish_non_exhaustive()
     }
 }
@@ -615,37 +645,45 @@ impl NotificationService {
         retry_deadline: Duration,
         base_delay: Duration,
     ) -> Self {
-        let (tx, rx) = mpsc::channel(capacity.max(1));
+        let bounded = capacity.max(1);
+        let (tx, rx) = mpsc::channel(bounded);
         let shutdown = Arc::new(Notify::new());
+        let shutdown_pending = Arc::new(AtomicBool::new(false));
         let discord_clone = Arc::clone(&discord);
         let shutdown_clone = Arc::clone(&shutdown);
-        // Spawn the isolated worker if a Tokio runtime is available. In tests the
-        // current runtime is present; in production `build` is async.
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        let shutdown_pending_clone = Arc::clone(&shutdown_pending);
+        let pending_receiver = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(notification_worker(
                 rx,
                 discord_clone,
                 shutdown_clone,
+                shutdown_pending_clone,
                 max_retries,
                 retry_deadline,
                 base_delay,
             ));
+            Mutex::new(None)
         } else {
-            // No runtime (e.g. sync construction in non-async context). The queue
-            // will still accept try_send and worker will be spawned lazily on
-            // first async use via `ensure_worker`. For now, spawn a detached
-            // thread that blocks on a runtime handle if needed. To keep it
-            // simple, drop the receiver – enqueue will then return Closed which
-            // surfaces as Failed. Tests always have a runtime, so this path is
-            // not exercised in normal use.
-            drop(rx);
-        }
+            // No runtime available (e.g. sync construction). Keep the receiver
+            // alive in a bounded pending slot so the channel stays open and
+            // `try_send` remains bounded rather than permanently closed. The
+            // worker will be spawned lazily on the first async send that finds
+            // a runtime.
+            tracing::warn!(
+                diagnostic_id = "NOTIFICATION_WORKER_DEFERRED",
+                "notification worker deferred: no Tokio runtime at construction; queue remains bounded"
+            );
+            Mutex::new(Some(rx))
+        };
         Self {
             config: RwLock::new(config),
             discord,
             native,
             queue_tx: tx,
+            queue_max_capacity: bounded,
+            pending_receiver,
             shutdown,
+            shutdown_pending,
             worker_max_retries: max_retries,
             worker_retry_deadline: retry_deadline,
             worker_base_delay: base_delay,
@@ -693,21 +731,125 @@ impl NotificationService {
         )
     }
 
+    fn ensure_worker(&self) {
+        // Lazy spawn if construction happened without a runtime. Bounded queue
+        // stays valid; we only spawn once when a runtime is available.
+        let Ok(mut guard) = self.pending_receiver.try_lock() else {
+            return;
+        };
+        if guard.is_none() {
+            return;
+        }
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        if let Some(receiver) = guard.take() {
+            let discord = Arc::clone(&self.discord);
+            let shutdown = Arc::clone(&self.shutdown);
+            let shutdown_pending = Arc::clone(&self.shutdown_pending);
+            let max_retries = self.worker_max_retries;
+            let retry_deadline = self.worker_retry_deadline;
+            let base_delay = self.worker_base_delay;
+            drop(guard);
+            handle.spawn(notification_worker(
+                receiver,
+                discord,
+                shutdown,
+                shutdown_pending,
+                max_retries,
+                retry_deadline,
+                base_delay,
+            ));
+        }
+    }
+
+    /// Attempts to start a deferred worker if one is pending and a runtime is
+    /// available. Returns true if a worker was spawned.
+    #[allow(dead_code, reason = "explicit API/test hook not yet wired")]
+    pub(crate) fn try_spawn_deferred_worker(&self) -> bool {
+        let Ok(mut guard) = self.pending_receiver.try_lock() else {
+            return false;
+        };
+        if guard.is_none() {
+            return false;
+        }
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return false;
+        };
+        if let Some(receiver) = guard.take() {
+            let discord = Arc::clone(&self.discord);
+            let shutdown = Arc::clone(&self.shutdown);
+            let shutdown_pending = Arc::clone(&self.shutdown_pending);
+            let max_retries = self.worker_max_retries;
+            let retry_deadline = self.worker_retry_deadline;
+            let base_delay = self.worker_base_delay;
+            drop(guard);
+            handle.spawn(notification_worker(
+                receiver,
+                discord,
+                shutdown,
+                shutdown_pending,
+                max_retries,
+                retry_deadline,
+                base_delay,
+            ));
+            return true;
+        }
+        false
+    }
+
+    /// Returns whether the channel is currently closed (receiver dropped).
+    #[allow(dead_code, reason = "diagnostic helper for closed-channel tests")]
+    pub(crate) fn is_channel_closed(&self) -> bool {
+        self.queue_tx.is_closed()
+    }
+
+    /// Returns the number of available permits (remaining capacity).
+    #[allow(dead_code, reason = "introspection for remaining capacity")]
+    pub fn queue_available(&self) -> usize {
+        self.queue_tx.capacity()
+    }
+
+    /// Returns the current queue length (queued messages not yet consumed).
+    #[allow(dead_code, reason = "introspection for queue length")]
+    pub fn queue_len(&self) -> usize {
+        self.queue_max_capacity
+            .saturating_sub(self.queue_tx.capacity())
+    }
+
+    /// Whether a deferred worker is still pending (constructed without runtime).
+    #[allow(dead_code, reason = "introspection for deferred worker tests")]
+    pub(crate) fn has_pending_worker(&self) -> bool {
+        self.pending_receiver.lock().is_ok_and(|g| g.is_some())
+    }
+
+    /// Test-only helper to simulate a closed channel by dropping the pending
+    /// receiver. If a worker is already running, this is a no-op (channel
+    /// remains open until service is dropped).
+    #[cfg(test)]
+    pub(crate) fn close_pending_for_test(&self) {
+        if let Ok(mut guard) = self.pending_receiver.lock() {
+            guard.take();
+        }
+    }
+
     /// Signals stop priority: cancels current retry sleep and drains pending
     /// queue. Worker remains alive for subsequent generations.
     #[allow(dead_code, reason = "public stop-priority API exercised by unit tests")]
     pub fn request_stop(&self) {
+        self.shutdown_pending.store(true, Ordering::Release);
         self.shutdown.notify_waiters();
     }
 
-    /// Returns current queue capacity for diagnostics.
+    /// Returns the configured maximum queue capacity (bounded size).
+    /// This is the total buffer capacity, not the current available permits.
     #[allow(
         dead_code,
         reason = "introspection API for bounded queue, exercised by unit tests"
     )]
     #[must_use]
     pub fn queue_capacity(&self) -> usize {
-        self.queue_tx.capacity()
+        self.queue_max_capacity
     }
 
     /// Returns worker retry config for introspection.
@@ -782,6 +924,7 @@ impl NotificationService {
     /// `RwLock` read), then `try_send`s to the bounded queue. No lock is held
     /// across provider I/O, and the call never blocks on network.
     pub async fn send_script_discord(&self, content: &str) -> NotificationOutcome {
+        self.ensure_worker();
         // Snapshot config without holding across I/O or queue wait.
         let snapshot = self.config.read().await.clone();
         let Some(webhook) = snapshot.discord.webhook.clone() else {
@@ -827,6 +970,7 @@ impl NotificationService {
         content_type: &str,
         encoded: &[u8],
     ) -> NotificationOutcome {
+        self.ensure_worker();
         let snapshot = self.config.read().await.clone();
         let Some(webhook) = snapshot.discord.webhook.clone() else {
             tracing::warn!(
@@ -874,6 +1018,7 @@ impl NotificationService {
         reason = "non-blocking host bypass API exercised by unit tests"
     )]
     pub fn try_send_script_discord(&self, content: &str) -> NotificationOutcome {
+        self.ensure_worker();
         let Ok(snapshot) = self.config.try_read() else {
             tracing::warn!(
                 diagnostic_id = "NOTIFICATION_CONFIG_CONTENDED",
@@ -914,6 +1059,7 @@ impl NotificationService {
         content_type: &str,
         encoded: &[u8],
     ) -> NotificationOutcome {
+        self.ensure_worker();
         let Ok(snapshot) = self.config.try_read() else {
             return NotificationOutcome::QueueFull;
         };
@@ -1076,6 +1222,51 @@ impl NotificationService {
             NotificationOutcome::Failed
         }
     }
+
+    /// Runtime-required constructor. Returns a typed error if no Tokio runtime
+    /// is available, instead of creating a permanently closed channel.
+    #[allow(dead_code, reason = "explicit API/test hook not yet wired")]
+    pub fn try_new(
+        config: NotificationConfig,
+        discord: Arc<dyn DiscordTransport>,
+        native: Arc<dyn NativeNotificationTransport>,
+    ) -> Result<Self, NotificationError> {
+        Self::try_new_with_limits(
+            config,
+            discord,
+            native,
+            NOTIFICATION_QUEUE_CAPACITY,
+            NOTIFICATION_MAX_RETRIES,
+            NOTIFICATION_RETRY_DEADLINE,
+            NOTIFICATION_RETRY_BASE_DELAY,
+        )
+    }
+
+    /// Runtime-required constructor with explicit limits. Fails with
+    /// `RuntimeUnavailable` if called outside a Tokio runtime.
+    #[allow(dead_code, reason = "explicit API/test hook not yet wired")]
+    pub(crate) fn try_new_with_limits(
+        config: NotificationConfig,
+        discord: Arc<dyn DiscordTransport>,
+        native: Arc<dyn NativeNotificationTransport>,
+        capacity: usize,
+        max_retries: u32,
+        retry_deadline: Duration,
+        base_delay: Duration,
+    ) -> Result<Self, NotificationError> {
+        if tokio::runtime::Handle::try_current().is_err() {
+            return Err(NotificationError::RuntimeUnavailable);
+        }
+        Ok(Self::new_with_limits(
+            config,
+            discord,
+            native,
+            capacity,
+            max_retries,
+            retry_deadline,
+            base_delay,
+        ))
+    }
 }
 
 impl Drop for NotificationService {
@@ -1100,6 +1291,12 @@ pub enum NotificationError {
         reason = "public error variant for bounded backpressure, used in tests"
     )]
     QueueFull,
+    #[error("notification runtime unavailable for worker spawn")]
+    #[allow(
+        dead_code,
+        reason = "typed error for async-runtime constructor, used in tests"
+    )]
+    RuntimeUnavailable,
 }
 
 #[cfg(test)]
@@ -1685,5 +1882,343 @@ mod tests {
             "expected QueueFull for bounded backpressure, got {o_full:?}"
         );
         sleep(Duration::from_millis(500)).await;
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression: runtime-absent construction, closed-channel, shutdown race
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn runtime_absent_construction_keeps_bounded_queue_not_closed() {
+        // Construct outside any Tokio runtime. Must not create a permanently
+        // closed channel; queue should remain bounded and accept try_send.
+        let discord: Arc<dyn DiscordTransport> = Arc::new(FakeDiscord::new_succeed());
+        let service = NotificationService::new(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord,
+            native_transport(false, false),
+        );
+        // Deferred worker pending, channel not closed.
+        assert!(
+            service.has_pending_worker(),
+            "worker should be deferred without runtime"
+        );
+        assert!(
+            !service.is_channel_closed(),
+            "channel must not be closed when runtime absent"
+        );
+        assert_eq!(
+            service.queue_capacity(),
+            crate::device::notification::NOTIFICATION_QUEUE_CAPACITY
+        );
+        // Bounded: try_send should succeed (queued) not Failed due to Closed.
+        let outcome = service.try_send_script_discord("deferred-msg");
+        assert_eq!(
+            outcome,
+            NotificationOutcome::Delivered,
+            "deferred construction must accept bounded enqueue"
+        );
+        assert_eq!(service.queue_len(), 1, "queue_len must reflect queued item");
+        assert_eq!(service.queue_available(), service.queue_capacity() - 1);
+        // Capacity semantics: queue_capacity is max, not remaining.
+        assert_eq!(service.queue_capacity(), 16);
+        // Close pending simulation returns Failed for next send after forced close
+        service.close_pending_for_test();
+        assert!(
+            service.is_channel_closed(),
+            "after dropping pending receiver channel must be closed"
+        );
+        let closed_outcome = service.try_send_script_discord("after-close");
+        assert_eq!(
+            closed_outcome,
+            NotificationOutcome::Failed,
+            "closed channel must map to Failed not QueueFull"
+        );
+    }
+
+    #[test]
+    fn try_new_requires_runtime_and_returns_typed_error() {
+        // try_new must fail with RuntimeUnavailable outside runtime
+        let discord: Arc<dyn DiscordTransport> = Arc::new(FakeDiscord::new_succeed());
+        let result = NotificationService::try_new(
+            NotificationConfig::default(),
+            discord,
+            native_transport(false, false),
+        );
+        assert_eq!(result.unwrap_err(), NotificationError::RuntimeUnavailable);
+    }
+
+    #[tokio::test]
+    async fn try_new_succeeds_inside_runtime() {
+        let discord: Arc<dyn DiscordTransport> = Arc::new(FakeDiscord::new_succeed());
+        let svc = NotificationService::try_new(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord,
+            native_transport(false, false),
+        )
+        .expect("try_new must succeed inside runtime");
+        assert!(!svc.has_pending_worker());
+        assert_eq!(
+            svc.queue_capacity(),
+            crate::device::notification::NOTIFICATION_QUEUE_CAPACITY
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_worker_spawns_lazily_on_first_send() {
+        // Build service outside runtime on a thread without a Tokio handle, then
+        // verify lazy spawn on first async send.
+        let discord = Arc::new(FakeDiscord::new_succeed());
+        let svc_discord: Arc<dyn DiscordTransport> = discord.clone();
+        let service: NotificationService = std::thread::spawn(move || {
+            NotificationService::new(
+                NotificationConfig {
+                    discord: DiscordNotificationConfig {
+                        webhook: Some(webhook()),
+                        ..Default::default()
+                    },
+                    windows: WindowsNotificationConfig::default(),
+                },
+                svc_discord,
+                native_transport(false, false),
+            )
+        })
+        .join()
+        .unwrap();
+        assert!(service.has_pending_worker());
+        // First async send should lazily spawn the worker
+        let o = service.send_script_discord("lazy-spawn").await;
+        assert_eq!(o, NotificationOutcome::Delivered);
+        // Give worker time to spawn and drain
+        sleep(Duration::from_millis(50)).await;
+        assert!(
+            !service.has_pending_worker(),
+            "deferred worker should have spawned"
+        );
+        assert!(!service.is_channel_closed());
+        // After spawn, queue should be drained (len 0)
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(service.queue_len(), 0);
+        assert_eq!(discord.calls.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn queue_capacity_semantics_are_max_not_available() {
+        let discord: Arc<dyn DiscordTransport> =
+            Arc::new(FakeDiscord::new_slow(Duration::from_millis(300)));
+        let service = NotificationService::new_for_test(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord,
+            native_transport(false, false),
+            4,
+        );
+        assert_eq!(
+            service.queue_capacity(),
+            4,
+            "queue_capacity must be max (configured) not remaining"
+        );
+        assert_eq!(service.queue_available(), 4);
+        assert_eq!(service.queue_len(), 0);
+        let _ = service.send_script_discord("a").await;
+        // After one enqueue (worker busy, not yet consumed), len should be >=0 and capacity stays 4
+        assert_eq!(service.queue_capacity(), 4);
+        // Available should have decreased
+        assert!(
+            service.queue_available() < 4,
+            "available should decrease after enqueue"
+        );
+        assert_eq!(service.queue_len(), 4 - service.queue_available());
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    #[tokio::test]
+    async fn closed_channel_distinct_from_queue_full() {
+        // Use runtime-absent deferred service, then force close to test Closed mapping.
+        let service = {
+            let discord: Arc<dyn DiscordTransport> = Arc::new(FakeDiscord::new_succeed());
+            // Create outside runtime via non-async block: but we are inside runtime,
+            // so need to spawn a blocking thread without runtime.
+            std::thread::spawn(move || {
+                NotificationService::new(
+                    NotificationConfig {
+                        discord: DiscordNotificationConfig {
+                            webhook: Some(webhook()),
+                            ..Default::default()
+                        },
+                        windows: WindowsNotificationConfig::default(),
+                    },
+                    discord,
+                    native_transport(false, false),
+                )
+            })
+            .join()
+            .unwrap()
+        };
+        // Service was created on a thread without runtime -> deferred
+        assert!(service.has_pending_worker());
+        // Force close
+        service.close_pending_for_test();
+        assert!(service.is_channel_closed());
+        // Still has webhook, so try_send should return Failed (Closed) not QueueFull
+        let outcome = service.try_send_script_discord("should-fail-closed");
+        assert_eq!(outcome, NotificationOutcome::Failed);
+        // Ensure QueueFull is still distinct: create a bounded service with slow worker
+        let discord2: Arc<dyn DiscordTransport> =
+            Arc::new(FakeDiscord::new_slow(Duration::from_millis(500)));
+        let svc2 = NotificationService::new_for_test(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord2,
+            native_transport(false, false),
+            1,
+        );
+        let o1 = svc2.send_script_discord("fill").await;
+        assert_eq!(o1, NotificationOutcome::Delivered);
+        // Fill queue while worker busy
+        let _ = svc2.send_script_discord("queue-fill").await;
+        let full = svc2.send_script_discord("queue-full-check").await;
+        assert_eq!(full, NotificationOutcome::QueueFull);
+        sleep(Duration::from_millis(700)).await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_retry_race_drains_pending_while_cancelling_retry() {
+        // Fails with long retry delay, stop requested during sleep should cancel
+        // retry and drain pending queue, but keep worker alive for next generation.
+        let fake = Arc::new(FakeDiscord {
+            calls: AtomicUsize::new(0),
+            fails: false,
+            delay: Duration::from_millis(5),
+            fail_remaining: AtomicUsize::new(100),
+        });
+        let discord: Arc<dyn DiscordTransport> = fake.clone();
+        let service = NotificationService::new_for_test_with_policy(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord,
+            native_transport(false, false),
+            16,
+            10,
+            Duration::from_secs(5),
+            Duration::from_millis(200),
+        );
+        // Enqueue first job that will enter retry sleep (fails)
+        let _ = service.send_script_discord("will-retry").await;
+        sleep(Duration::from_millis(30)).await; // let first attempt fail and enter sleep
+        let calls_before = fake.calls.load(Ordering::Acquire);
+        assert!(calls_before >= 1);
+        // Enqueue two more while first is sleeping (they will be pending)
+        let _ = service.send_script_discord("pending-2").await;
+        let _ = service.send_script_discord("pending-3").await;
+        // Request stop while retry sleep in progress – should cancel sleep and drain pending
+        service.request_stop();
+        // Wait a bit more than retry delay to see if retries continued or pending drained
+        sleep(Duration::from_millis(350)).await;
+        let calls_after = fake.calls.load(Ordering::Acquire);
+        // Should have cancelled retry quickly, not continued many times
+        assert!(
+            calls_after - calls_before <= 1,
+            "stop should cancel retries, before {calls_before} after {calls_after}"
+        );
+        // Pending jobs should have been drained, not delivered
+        // So total calls should be low (only the first job's initial attempt + maybe one retry)
+        assert!(
+            calls_after <= 2,
+            "pending queue should have been drained, total calls {calls_after}"
+        );
+        // Worker must stay alive: new enqueue after stop should still be processed
+        // Reset fake to succeed for next generation
+        fake.fail_remaining.store(0, Ordering::Release);
+        let o = service.send_script_discord("after-stop-race").await;
+        assert_eq!(o, NotificationOutcome::Delivered);
+        sleep(Duration::from_millis(50)).await;
+        let final_calls = fake.calls.load(Ordering::Acquire);
+        assert!(
+            final_calls > calls_after,
+            "worker remains alive after stop; final {final_calls} after {calls_after}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_pending_flag_survives_retry_sleep_consumption() {
+        // This specifically tests the race where shutdown notification is consumed
+        // by handle_queued_job's retry sleep select, not the outer worker select.
+        // The outer drain must still happen via the persistent flag.
+        let fake = Arc::new(FakeDiscord {
+            calls: AtomicUsize::new(0),
+            fails: false,
+            delay: Duration::from_millis(0),
+            fail_remaining: AtomicUsize::new(50),
+        });
+        let discord: Arc<dyn DiscordTransport> = fake.clone();
+        let service = NotificationService::new_for_test_with_policy(
+            NotificationConfig {
+                discord: DiscordNotificationConfig {
+                    webhook: Some(webhook()),
+                    ..Default::default()
+                },
+                windows: WindowsNotificationConfig::default(),
+            },
+            discord,
+            native_transport(false, false),
+            8,
+            5,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+        );
+        // Fill queue with 5 pending jobs after the first failing job
+        let _ = service.send_script_discord("first-fail").await;
+        sleep(Duration::from_millis(20)).await; // first job starts retry sleep
+        for i in 0..5 {
+            let _ = service.send_script_discord(&format!("pending-{i}")).await;
+        }
+        let pending_before = service.queue_len();
+        assert!(
+            pending_before >= 4,
+            "pending queue should have items before stop, got {pending_before}"
+        );
+        // Stop now – notification will be consumed by inner retry sleep
+        service.request_stop();
+        sleep(Duration::from_millis(250)).await;
+        // Queue should have been drained after job finished, even though outer missed notify
+        let pending_after = service.queue_len();
+        assert_eq!(
+            pending_after, 0,
+            "pending queue must be drained even when notify consumed by retry sleep"
+        );
+        // Only first job should have contributed calls, pending jobs not delivered
+        let calls = fake.calls.load(Ordering::Acquire);
+        assert!(
+            calls <= 2,
+            "pending jobs must not be delivered after drain, calls {calls}"
+        );
     }
 }

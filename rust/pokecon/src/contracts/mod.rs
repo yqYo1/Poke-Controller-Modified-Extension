@@ -3,13 +3,6 @@
 //! The JSON files in `registry/` are the single source of truth. This module is
 //! deliberately free of application/runtime dependencies so generators, CI,
 //! workers, the server, and the UI build can all consume the same contracts.
-#![cfg_attr(
-    target_os = "windows",
-    allow(
-        unused_imports,
-        reason = "contract exports are consumed by generators and Linux runtime"
-    )
-)]
 
 pub mod commands_typings;
 pub mod dynamic_typings;

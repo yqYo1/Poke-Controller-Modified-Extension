@@ -1257,27 +1257,70 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     )
 
     assert build_stage.count(error_preference) == 1
-    assert workflow.count(provenance_clear) == 2
-    assert workflow.count(provenance_development) == 1
-    assert workflow.count(no_bytecode_current_process) == 1
-    assert workflow.count(no_bytecode_later_steps) == 1
     assert build_stage.count(runtime_build) == 1
     assert build_stage.count(worker_build) == 1
-    assert workflow.count("scripts.release.stage") == 1
     assert "scripts/release/stage.py" not in workflow
     assert "stage.py" not in workflow.casefold()
     assert build_stage.count(stage_capture) == 1
     assert build_stage.count(stage_command) == 1
-    for identity_statement in (
-        stage_parse,
-        content_assignment,
-        content_validation,
-        invalid_content_diagnostic,
-        provenance_export,
-    ):
-        assert workflow.count(identity_statement) == 1
-    assert workflow.count(bundle_config_export) == 1
-    assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 4
+    assert build_stage.count(canonical_stage_identity_block) == 1
+    if workflow_name == "package.yml":
+        assert workflow.count(provenance_clear) == 4
+        assert workflow.count(provenance_development) == 2
+        assert workflow.count(no_bytecode_current_process) == 2
+        assert workflow.count(no_bytecode_later_steps) == 2
+        assert workflow.count("scripts.release.stage") == 2
+        for identity_statement in (
+            stage_parse,
+            content_assignment,
+            content_validation,
+            invalid_content_diagnostic,
+            provenance_export,
+        ):
+            assert workflow.count(identity_statement) == 2
+        assert workflow.count(bundle_config_export) == 2
+        assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 8
+        assert workflow.count("POKECON_BUNDLE_CONFIG") == 4
+        bundle_config_lines = tuple(
+            line.strip()
+            for line in workflow.splitlines()
+            if "POKECON_BUNDLE_CONFIG" in line
+        )
+        assert bundle_config_lines == (
+            bundle_config_export,
+            bundle_config_consumer,
+            bundle_config_export,
+            bundle_config_consumer,
+        )
+        assert workflow.count(bundle_config_consumer) == 2
+    else:
+        assert workflow.count(provenance_clear) == 2
+        assert workflow.count(provenance_development) == 1
+        assert workflow.count(no_bytecode_current_process) == 1
+        assert workflow.count(no_bytecode_later_steps) == 1
+        assert workflow.count("scripts.release.stage") == 1
+        for identity_statement in (
+            stage_parse,
+            content_assignment,
+            content_validation,
+            invalid_content_diagnostic,
+            provenance_export,
+        ):
+            assert workflow.count(identity_statement) == 1
+        assert workflow.count(bundle_config_export) == 1
+        assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 4
+        assert workflow.count("POKECON_BUNDLE_CONFIG") == 3
+        bundle_config_lines = tuple(
+            line.strip()
+            for line in workflow.splitlines()
+            if "POKECON_BUNDLE_CONFIG" in line
+        )
+        assert bundle_config_lines == (
+            bundle_config_export,
+            bundle_config_consumer,
+            bundle_config_consumer,
+        )
+        assert workflow.count(bundle_config_consumer) == 2
     provenance_lines = tuple(
         line.strip()
         for line in build_stage.splitlines()
@@ -1289,13 +1332,6 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         provenance_clear,
         provenance_export,
     )
-    assert workflow.count("POKECON_BUNDLE_CONFIG") == 2
-    bundle_config_lines = tuple(
-        line.strip()
-        for line in workflow.splitlines()
-        if "POKECON_BUNDLE_CONFIG" in line
-    )
-    assert bundle_config_lines == (bundle_config_export, bundle_config_consumer)
     assert tuple(
         line.strip()
         for line in build_stage.splitlines()
@@ -1319,8 +1355,26 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         f"          {no_bytecode_current_process}\n"
         f"          {no_bytecode_later_steps}\n" in build_stage
     )
-    assert build_stage.count(canonical_stage_identity_block) == 1
-    assert installer_stage == canonical_installer_stage
+    if workflow_name == "package.yml":
+        assert installer_stage == canonical_installer_stage
+    else:
+        assert "Preserve first Windows package build" in installer_stage
+        assert "Rebuild Windows package from identical inputs" in installer_stage
+        assert "Verify byte-for-byte Windows NSIS reproducibility" in installer_stage
+        assert installer_stage.count("cargo tauri build --ci --bundles nsis") == 2
+        assert installer_stage.count(bundle_config_consumer) == 2
+        assert "Get-FileHash" in installer_stage
+        assert ".Length" in installer_stage
+        assert "ReadAllBytes" in installer_stage
+        assert "fc.exe" in installer_stage
+        assert "fc.exe /b" in installer_stage
+        assert (
+            installer_stage.index(canonical_installer_stage.strip())
+            < installer_stage.index("Preserve first Windows package build")
+            < installer_stage.index("Rebuild Windows package from identical inputs")
+            < installer_stage.index("Verify byte-for-byte Windows NSIS reproducibility")
+        )
+        assert installer_stage.count(canonical_installer_stage) == 1
     assert "--features" not in installer_stage
     post_bundle_config_export = build_stage.split(bundle_config_export, maxsplit=1)[1]
     assert not post_bundle_config_export.strip()
@@ -1354,6 +1408,27 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         < build_stage.index(provenance_clear, build_stage.index(worker_build))
         < build_stage.index(stage_capture)
     )
+
+
+def test_package_ci_proves_windows_nsis_reproducibility() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/package.yml").read_text(encoding="utf-8")
+    repro_start = workflow.index("  windows_repro:")
+    check_start = workflow.index("  windows_repro_check:", repro_start)
+    required_start = workflow.index("  required:", check_start)
+    repro = workflow[repro_start:check_start]
+    check = workflow[check_start:required_start]
+
+    assert "toolchain: '1.95.0'" in repro
+    assert '"uv==0.11.8"' in repro
+    assert "tauri-cli --version 2.11.4" in repro
+    assert '"SOURCE_DATE_EPOCH=0"' in repro
+    assert repro.count("cargo tauri build --ci --bundles nsis") == 1
+    assert check.count("find -P") == 2
+    assert "expected exactly one primary and one reproduction NSIS bundle" in check
+    assert "sha256sum --" in check
+    assert "cmp --" in check
+    assert repro_start < check_start < required_start
 
 
 def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:

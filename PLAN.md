@@ -548,7 +548,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 4.4 動的設定の候補世代切替
 
-- [x] **AR-11-18** 動的設定を候補世代で構築し、全読込み／検証成功時だけ自動実行を止めずに一括切替する（証跡: concurrent candidate、generation、failure、old-callback、lock-isolation tests）。
+- [x] **AR-11-18** 動的設定を候補世代で構築し、全読込み／検証成功時だけ自動実行を止めずに一括切替する（証跡: 本番経路 `EvaluationTransaction::begin` → `commit_evaluation`/`commit_staged`（`rust/pokecon/src/worker_binary/dynamic/engine.rs`）の隔離評価と `EngineInner::generation` 原子世代管理、`CommandRegistry::build_display_cache` の完全キャッシュ逐次構築・`Superseded` 判定と `StartupDynamicHost::publish_command_cache`/`CommandDisplayCache` 原子一括公開（完全性）、失敗時 generation 不変と typed `dynamic_config_evaluation_failed` diagnostic、並行/superseded と `coordinator`（`AsyncMutex`）ロック隔離は `configuration_is_current` と `EngineInner::generation` で担保。`DynamicReloadCandidate`/`begin_reload_candidate`/`commit_reload_candidate`/`abort_reload_candidate`/`reload_generation`/`DynamicReloadStatus`/`try_commit_isolated_reload`/`build_reload_candidate` の別配線は不要で削除済み。既存テスト `dynamic/transaction` の隔離/rollback、`dynamic_host` の `publish_command_cache` 原子性、`dynamic/command` の `display_cache_is_complete_and_orders_manual_tags_before_automatic_tags`/`display_cache_discards_a_generation_changed_during_callback_execution`/`old_callbacks_finish_in_old_generation_while_new_candidate_builds` で網羅）。
 - [x] reload 中も現世代を有効に保ち、自動 script を停止しない。
 - [x] Python／Lua 設定、callback、command 一覧を候補世代として構築する。
 - [x] 読込みと検証が全成功した場合だけ原子的に切り替える。

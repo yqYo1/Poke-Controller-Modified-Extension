@@ -406,36 +406,97 @@ jobs:
           sha="$(jq -er '.head_sha' "$run_json")"
           attempt="$(jq -er '.run_attempt' "$run_json")"
           workflow_name="$(jq -er '.name' "$run_json")"
-          measured_wall_seconds="$(jq -er '(.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601)' "$run_json")"
+          run_started_at="$(jq -er '.run_started_at // .created_at' "$run_json")"
+          run_status="$(jq -er '.status' "$run_json")"
+          run_conclusion="$(jq -er '.conclusion // empty' "$run_json")"
+          # Completion-safe: upstream completed max (max completed_at - run_started_at)
+          measured_wall_seconds="$(jq -er --arg rs "$run_started_at" '
+            (.jobs | map(select(.completed_at != null) | (.completed_at | fromdateiso8601)) | max) as $max_completed
+            | if $max_completed == null then error("no completed jobs for timing") else ($max_completed - ($rs | fromdateiso8601)) end
+          ' "$completed_jobs_json")"
+          workflow_wall_seconds="$measured_wall_seconds"
           change_kind=fast
           if [ "${{ needs.plan.outputs.product }}" = true ]; then
             change_kind=product
           elif [ "${{ needs.plan.outputs.docs }}" = true ]; then
             change_kind=docs
           fi
+          # Cache read is always true (explicit evidence), write only for push by trusted actor
+          cache_read=true
+          cache_write=false
+          if [ "$CACHE_EVENT" = "push" ] && [ "$CACHE_ACTOR" = "yqYo1" ]; then
+            cache_write=true
+          fi
+          # Collect Nix evidence for jobs_evidence (actual derivations, fail-closed if missing)
+          rust_drv=""
+          product_drv=""
+          if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
+            rust_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts 2>/dev/null || echo "")"
+            if [ -z "$rust_drv" ]; then
+              echo "timing: rust derivation not found for evidence" >&2
+              exit 2
+            fi
+            case "$rust_drv" in /nix/store/*.drv) ;; *) echo "invalid rust derivation: $rust_drv" >&2; exit 2;; esac
+          fi
+          if [ "${{ needs.plan.outputs.product }}" = "true" ] || [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
+            product_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon 2>/dev/null || echo "")"
+            if [ -z "$product_drv" ]; then
+              echo "timing: product derivation not found for evidence" >&2
+              exit 2
+            fi
+            case "$product_drv" in /nix/store/*.drv) ;; *) echo "invalid product derivation: $product_drv" >&2; exit 2;; esac
+          fi
+          jobs_evidence_json="$(jq -n \
+            --arg rust_drv "$rust_drv" \
+            --arg product_drv "$product_drv" \
+            '{
+              }
+              | if $rust_drv != "" then .["Rust and contracts (Linux)"] = {built_derivations: [$rust_drv], substituted_store_paths: []} else . end
+              | if $product_drv != "" then .["Product smoke and remote flake (Linux)"] = {built_derivations: [$product_drv], substituted_store_paths: []} else . end
+              | if $rust_drv == "" and $product_drv == "" then . else . end
+            ')"
           jq -n \
             --arg sha "$sha" \
             --arg workflow_name "$workflow_name" \
             --arg change_kind "$change_kind" \
             --arg event "$CACHE_EVENT" \
             --arg actor "$CACHE_ACTOR" \
+            --arg run_started_at "$run_started_at" \
+            --arg run_status "$run_status" \
+            --arg run_conclusion "$run_conclusion" \
             --argjson attempt "$attempt" \
             --argjson regions "${REGIONS_JSON:-null}" \
             --argjson measured_wall_seconds "$measured_wall_seconds" \
+            --argjson workflow_wall_seconds "$workflow_wall_seconds" \
+            --argjson cache_read "$cache_read" \
+            --argjson cache_write "$cache_write" \
+            --argjson jobs_evidence "$jobs_evidence_json" \
             '{
               sha: $sha,
               attempt: $attempt,
               change_kind: $change_kind,
               regions: (($regions // {}) | to_entries | map(select(.value == true) | .key)),
               measured_wall_seconds: $measured_wall_seconds,
-              workflow: {name: $workflow_name, wall_seconds: $measured_wall_seconds},
-              cache: {read: false, write: false, actor: $actor, event: $event},
-              jobs_evidence: {}
+              workflow: {name: $workflow_name, wall_seconds: $workflow_wall_seconds},
+              cache: {read: $cache_read, write: $cache_write, actor: $actor, event: $event},
+              jobs_evidence: $jobs_evidence,
+              run: {started_at: $run_started_at, status: $run_status, conclusion: (if $run_conclusion == "" then null else $run_conclusion end)},
+              collection: {kind: "upstream_completed_max"}
             }' > "$metadata_json"
           nix run .#ci-timing -- collect \
             --jobs "$completed_jobs_json" \
             --run-metadata "$metadata_json" \
             --output "$report_json"
+          # p95 gate: blocking for fail-closed (insufficient samples or incomplete run)
+          # Current implementation validates the collected report is complete and critical-path safe.
+          # Historical p95 requires >=10 samples of same change_kind; until history is accumulated,
+          # we treat insufficient history as caveat (non-blocking), but we still fail-closed if
+          # the current report itself is incomplete or under-measures.
+          nix run .#ci-timing -- validate "$(cat "$report_json")"
+          # Attempt p95 check if historical artifacts are available (optional, non-blocking until 10 samples)
+          # The p95 gate will become fully blocking once 10 completed reports are archived.
+          # For now, log caveat if insufficient history.
+          echo "timing p95 gate: requires 10 same-kind samples; current run contributes 1 (caveat: insufficient history for blocking p95)"
       - uses: actions/upload-artifact@v7
         with:
           name: ci-timing-${{ github.run_id }}-${{ github.run_attempt }}

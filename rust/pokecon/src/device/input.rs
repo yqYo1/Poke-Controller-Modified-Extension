@@ -466,11 +466,23 @@ impl InputArbiter {
 
     /// Sets the manual intervention policy. Immediate effect from next input.
     /// `Denied` still allows neutral release and emergency `force_release_all`.
+    /// Denying neutralizes retained manual source state so re-enabling cannot
+    /// resurrect stale input, while script sources remain untouched.
     pub fn set_manual_policy(&mut self, policy: ManualInterventionPolicy) {
-        if self.manual_policy != policy {
-            self.manual_policy = policy;
-            self.recompute();
+        if self.manual_policy == policy {
+            return;
         }
+        self.manual_policy = policy;
+        if policy == ManualInterventionPolicy::Denied {
+            for state in self.sources.values_mut() {
+                if is_manual_kind(state.kind) {
+                    state.keyboard_keys.clear();
+                    state.mouse_buttons = MouseButtons::default();
+                    state.controller = ControllerState::NEUTRAL;
+                }
+            }
+        }
+        self.recompute();
     }
 
     /// Convenience for the canonical setting surface. Allowed by default.
@@ -1672,5 +1684,335 @@ mod tests {
             .unwrap();
         assert!(!arbiter.output().buttons.b);
         assert!(arbiter.output().buttons.a);
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "adversarial input safety matrix intentionally remains in one test"
+    )]
+    #[test]
+    fn denied_neutralizes_all_manual_kinds_and_prevents_resurrection() {
+        // Adversarial: establish non-neutral state for every manual kind, deny, then
+        // re-enable without fresh input – output must stay neutral and script must survive.
+        let bindings = InputBindings::new(
+            std::collections::BTreeMap::from([("KeyA".to_owned(), Button::A)]),
+            std::collections::BTreeMap::from([(super::MouseButton::Left, Button::B)]),
+        );
+        let mut arbiter = InputArbiter::new(bindings);
+        let script = id("script");
+        let keyboard = id("keyboard");
+        let mouse_src = id("mouse");
+        let browser = id("browser");
+        let hardware = id("hardware");
+
+        arbiter.begin_generation(
+            script.clone(),
+            InputSourceKind::UserScript,
+            InputPriority::USER_SCRIPT,
+            generation("s1"),
+        );
+        arbiter
+            .apply_snapshot(&script, snapshot("s1", ControllerState::NEUTRAL))
+            .unwrap();
+
+        // keyboard manual
+        arbiter.begin_generation(
+            keyboard.clone(),
+            InputSourceKind::Keyboard,
+            InputPriority::KEYBOARD_MOUSE,
+            generation("k1"),
+        );
+        arbiter
+            .apply_snapshot(&keyboard, snapshot("k1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter
+            .apply_event(
+                &keyboard,
+                &generation("k1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::Keyboard {
+                    key: "KeyA".to_owned(),
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+
+        // mouse manual
+        arbiter.begin_generation(
+            mouse_src.clone(),
+            InputSourceKind::Mouse,
+            InputPriority::KEYBOARD_MOUSE,
+            generation("mou1"),
+        );
+        arbiter
+            .apply_snapshot(&mouse_src, snapshot("mou1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter
+            .apply_event(
+                &mouse_src,
+                &generation("mou1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::MouseButton {
+                    button: super::MouseButton::Left,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+
+        // browser gamepad manual
+        arbiter.begin_generation(
+            browser.clone(),
+            InputSourceKind::BrowserGamepad,
+            InputPriority::BROWSER_GAMEPAD,
+            generation("b1"),
+        );
+        arbiter
+            .apply_snapshot(&browser, snapshot("b1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter
+            .apply_event(
+                &browser,
+                &generation("b1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::X,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+
+        // hardware manual
+        arbiter.begin_generation(
+            hardware.clone(),
+            InputSourceKind::HardwareController,
+            InputPriority::HARDWARE_CONTROLLER,
+            generation("h1"),
+        );
+        arbiter
+            .apply_snapshot(&hardware, snapshot("h1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter
+            .apply_event(
+                &hardware,
+                &generation("h1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::Stick {
+                    stick: StickSide::Left,
+                    position: StickPosition { x: 10, y: 10 },
+                },
+            )
+            .unwrap();
+
+        // Script-owned state that must survive denial.
+        arbiter
+            .apply_event(
+                &script,
+                &generation("s1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::Y,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+        arbiter
+            .apply_event(
+                &script,
+                &generation("s1"),
+                InputSequence::new("2").unwrap(),
+                InputEvent::Hat(Hat::Up),
+            )
+            .unwrap();
+        arbiter
+            .apply_event(
+                &script,
+                &generation("s1"),
+                InputSequence::new("3").unwrap(),
+                InputEvent::Touch(Some(TouchPoint::new(100, 100).unwrap())),
+            )
+            .unwrap();
+
+        // Manual contributions are visible before denial.
+        assert!(
+            arbiter.output().buttons.x || arbiter.output().buttons.a || arbiter.output().buttons.b
+        );
+        assert!(arbiter.output().buttons.y);
+        assert_eq!(arbiter.output().hat, Hat::Up);
+
+        // Deny – must immediately neutralize manual output and clear retained manual state.
+        arbiter.set_manual_policy(ManualInterventionPolicy::Denied);
+        // Only script-owned output should remain.
+        assert!(!arbiter.output().buttons.x);
+        assert!(!arbiter.output().buttons.a);
+        assert!(!arbiter.output().buttons.b);
+        assert!(arbiter.output().buttons.y);
+        assert_eq!(arbiter.output().hat, Hat::Up);
+        assert_eq!(
+            arbiter.output().touch,
+            Some(TouchPoint::new(100, 100).unwrap())
+        );
+        assert_eq!(arbiter.output().left_stick, StickPosition::CENTER);
+
+        // Release events while denied must still be accepted but keep neutral.
+        let rel = arbiter
+            .apply_event(
+                &keyboard,
+                &generation("k1"),
+                InputSequence::new("2").unwrap(),
+                InputEvent::Keyboard {
+                    key: "KeyA".to_owned(),
+                    state: PressState::Released,
+                },
+            )
+            .unwrap();
+        assert_eq!(rel, ApplyResult::Applied);
+        assert!(!arbiter.output().buttons.a);
+
+        // Re-enable without any fresh manual input – stale manual must NOT resurrect.
+        arbiter.set_manual_policy(ManualInterventionPolicy::Allowed);
+        assert!(!arbiter.output().buttons.x);
+        assert!(!arbiter.output().buttons.a);
+        assert!(!arbiter.output().buttons.b);
+        assert!(arbiter.output().buttons.y);
+        assert_eq!(arbiter.output().hat, Hat::Up);
+        assert_eq!(arbiter.output().left_stick, StickPosition::CENTER);
+        assert_eq!(
+            arbiter.output().touch,
+            Some(TouchPoint::new(100, 100).unwrap())
+        );
+
+        // Fresh manual input after re-enable must work again.
+        arbiter
+            .apply_event(
+                &browser,
+                &generation("b1"),
+                InputSequence::new("2").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::X,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+        assert!(arbiter.output().buttons.x);
+        assert!(arbiter.output().buttons.y);
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "adversarial input safety matrix intentionally remains in one test"
+    )]
+    #[test]
+    fn denied_reenable_needs_fresh_sequence_and_does_not_weaken_safety_release() {
+        let mut arbiter = InputArbiter::default();
+        let manual = id("manual");
+        let script = id("script");
+        arbiter.begin_generation(
+            script.clone(),
+            InputSourceKind::UserScript,
+            InputPriority::USER_SCRIPT,
+            generation("s1"),
+        );
+        arbiter
+            .apply_snapshot(&script, snapshot("s1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter.begin_generation(
+            manual.clone(),
+            InputSourceKind::BrowserGamepad,
+            InputPriority::BROWSER_GAMEPAD,
+            generation("m1"),
+        );
+        arbiter
+            .apply_snapshot(&manual, snapshot("m1", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+        assert!(arbiter.output().buttons.a);
+
+        arbiter.set_manual_policy(ManualInterventionPolicy::Denied);
+        assert!(!arbiter.output().buttons.a);
+        // Re-enable: same sequence should be duplicate, not resurrect.
+        arbiter.set_manual_policy(ManualInterventionPolicy::Allowed);
+        assert!(!arbiter.output().buttons.a);
+        let dup = arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("1").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Pressed,
+                },
+            )
+            .unwrap();
+        assert_eq!(dup, ApplyResult::IgnoredDuplicateOrOldSequence);
+        assert!(!arbiter.output().buttons.a);
+
+        // Safety release (center stick, neutral hat, null touch, button released) must remain allowed when denied.
+        arbiter.set_manual_policy(ManualInterventionPolicy::Denied);
+        let res = arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("2").unwrap(),
+                InputEvent::Stick {
+                    stick: StickSide::Left,
+                    position: StickPosition::CENTER,
+                },
+            )
+            .unwrap();
+        assert_eq!(res, ApplyResult::Applied);
+        let res = arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("3").unwrap(),
+                InputEvent::Hat(Hat::Neutral),
+            )
+            .unwrap();
+        assert_eq!(res, ApplyResult::Applied);
+        let res = arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("4").unwrap(),
+                InputEvent::Touch(None),
+            )
+            .unwrap();
+        assert_eq!(res, ApplyResult::Applied);
+        let res = arbiter
+            .apply_event(
+                &manual,
+                &generation("m1"),
+                InputSequence::new("5").unwrap(),
+                InputEvent::ControllerButton {
+                    button: Button::A,
+                    state: PressState::Released,
+                },
+            )
+            .unwrap();
+        assert_eq!(res, ApplyResult::Applied);
+        // Even after denied releases, force_release_all and disconnect remain unconditional.
+        assert!(arbiter.disconnect_source(&manual));
+        assert_eq!(arbiter.output(), ControllerState::NEUTRAL);
+        arbiter.begin_generation(
+            manual.clone(),
+            InputSourceKind::BrowserGamepad,
+            InputPriority::BROWSER_GAMEPAD,
+            generation("m2"),
+        );
+        arbiter
+            .apply_snapshot(&manual, snapshot("m2", ControllerState::NEUTRAL))
+            .unwrap();
+        arbiter.force_release_all();
+        assert_eq!(arbiter.output(), ControllerState::NEUTRAL);
     }
 }

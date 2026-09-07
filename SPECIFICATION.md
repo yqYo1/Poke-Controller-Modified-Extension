@@ -4678,7 +4678,7 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 ## 12. 環境変数
 
 本節の環境変数一覧は、正準設定レジストリ（§11.4.2参照）から生成される規範的な（normative）投影である。
-全78の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
+全79の拡張正準設定項目と `POKECON_UV_*` ブリッジを過不足なく列挙し、CIで正準設定レジストリとの同期を検証する。
 
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
@@ -4707,7 +4707,7 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 | `POKECON_INPUT_RIGHT_STICK_MOUSE_ENABLED` | 右スティックマウス駆動有効化。`true` / `false`。profile-capable。CLI: `--input-right-stick-mouse-enabled` | `false` |
 | `POKECON_INPUT_TOUCHSCREEN_AREA` | タッチスクリーン入力ソース領域。厳密JSONオブジェクト `{left: float, top: float, right: float, bottom: float}`。各値0.0〜1.0、`left<right`、`top<bottom`。`bool`非受理、閉じたオブジェクト。profile-capable。CLI: `--input-touchscreen-area`（JSON文字列）。§6.1.4、§10 `CaptureArea.setTouchscreenArea()` 参照 | `{left: 0.0, top: 0.0, right: 1.0, bottom: 1.0}` |
 | `POKECON_NOTIFICATIONS_LINE_MENU_BEHAVIOR` | LINEメニュー動作。閉じたenum `"message"` / `"noop"`（小文字正規化）。CLI: `--notifications-line-menu-behavior` | `"message"` |
-| `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL。**Secret**。空文字＝未設定。CLI対応するが非推奨（プロセスリスト露出）。getterは設定済み時に固定マスク `"********"` を返す。§11.4.3参照 | `""`（未設定） |
+| `POKECON_NOTIFICATIONS_DISCORD_WEBHOOK_URL` | Discord Webhook URL。**Secret**。空文字＝未設定。CLI: `--notifications-discord-webhook-url`（対応するが非推奨 — プロセスリスト・シェル履歴に露出する可能性があるため）。getterは設定済み時に固定マスク `"********"` を返す。§11.4.3参照 | `""`（未設定） |
 | `POKECON_NOTIFICATIONS_DISCORD_USERNAME` | Discord送信ユーザー名。空文字＝未設定。secret非該当。CLI: `--notifications-discord-username` | `""` |
 | `POKECON_NOTIFICATIONS_DISCORD_AVATAR_URL` | Discord送信アバターURL。空文字または有効なhttp/httpsURL。secret非該当。CLI: `--notifications-discord-avatar-url` | `""` |
 | `POKECON_NOTIFICATIONS_DISCORD_ON_SCRIPT_START` | スクリプト開始時Discord通知。`true` / `false`。profile-capable。Webhook URL設定済みの場合のみ送信。CLI: `--notifications-discord-on-script-start` | `false` |

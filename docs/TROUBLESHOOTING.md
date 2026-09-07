@@ -37,6 +37,16 @@ desktop windowを閉じてもbackendが残る`keep_backend`設定では、tray�
 
 processが残った状態で別versionを起動しません。
 
+## 開発環境が有効にならない問題を診断する
+
+本体開発では追跡対象の `.envrc` は `use flake` のみを含みます。
+
+新しいworktreeでは `direnv allow` を一度実行し、自動読込みを使わない場合は `nix develop` で tool-only な devShell へ入ります。
+
+hostのRust、Python、Bun、Node.jsなどの toolchain や `cargo`/`bun` を直接実行せず、`nix run .#<task>` / `nix fmt` / `nix flake check` を使用します。
+
+詳細は[本体開発ガイド](DEVELOPMENT.md)を参照してください。
+
 ## 起動しない問題を診断する
 
 installer利用者は同じ配布物を再導入し、application directoryの一部だけを手で移動しないでください。

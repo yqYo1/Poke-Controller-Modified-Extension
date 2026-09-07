@@ -254,6 +254,139 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  windows_repro:
+    name: Independent NSIS reproducibility build
+    needs: plan
+    if: needs.plan.outputs.product == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: web/package.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95.0'
+      - name: Install pinned package tools
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          choco install nasm -y --no-progress
+          python -m pip install --disable-pip-version-check "uv==0.11.8"
+          cargo install tauri-cli --version 2.11.4 --locked
+          vcpkg install portaudio:x64-windows-static
+      - name: Export package tool identity
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $uv = (Get-Command uv).Source
+          $sitePackages = python -c "import site; print(site.getsitepackages()[0])"
+          $version = python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])"
+          "POKECON_BUILD_UV_PATH=$uv" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_BUILD_UV_VERSION=0.11.8" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_INTERNAL_SCRIPT_SITE_PACKAGES=$sitePackages" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_WEB_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SOURCE_DATE_EPOCH=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build Web distribution
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          bun install --cwd web --frozen-lockfile --ignore-scripts --no-progress
+          bun run --cwd web --bun build
+      - name: Build and stage managed runtimes
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:POKECON_RESOURCE_PROVENANCE = $null
+          $env:PYTHONDONTWRITEBYTECODE = "1"
+          "PYTHONDONTWRITEBYTECODE=1" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $uv = (Get-Command uv).Source
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
+          $releaseRoot = Join-Path $env:RUNNER_TEMP "pokecon-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $releasePython = Join-Path $releaseRoot "python"
+          $releaseWheelhouse = Join-Path $releaseRoot "wheelhouse"
+          $bundleResources = Join-Path $releaseRoot "bundle-resources"
+          $bundleConfig = Join-Path $releaseRoot "tauri.bundle.json"
+          python -m scripts.release.build_runtime `
+            --project . `
+            --uv $uv `
+            --runtime-output $releasePython `
+            --wheelhouse-output $releaseWheelhouse `
+            --vcpkg-path $vcpkg
+          $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
+          "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $env:PYO3_PYTHON = $runtimePython
+          $env:POKECON_RESOURCE_PROVENANCE = "development"
+          cargo build --locked --release --package pokecon --bin pokecon-worker --features worker-binary
+          $env:POKECON_RESOURCE_PROVENANCE = $null
+          $stageJson = python -m scripts.release.stage `
+            --web web/dist `
+            --worker target/release/pokecon-worker.exe `
+            --uv $uv `
+            --wheelhouse $releaseWheelhouse `
+            --python $releasePython `
+            --output $bundleResources `
+            --config-output $bundleConfig
+          $stageReport = $stageJson | ConvertFrom-Json -ErrorAction Stop
+          $contentSha256 = $stageReport.content_sha256
+          if ($contentSha256 -isnot [string] -or $contentSha256 -cnotmatch '\A[0-9a-f]{64}\z') {
+            throw "release stage content_sha256 must be an exact lowercase SHA-256 digest"
+          }
+          "POKECON_RESOURCE_PROVENANCE=packaged:$contentSha256" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "POKECON_BUNDLE_CONFIG=$bundleConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build offline NSIS installer
+        shell: pwsh
+        working-directory: rust/pokecon
+        run: >-
+          cargo tauri build --ci --bundles nsis
+          --config $env:POKECON_BUNDLE_CONFIG
+          -- --locked
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-windows-x86_64-reproducibility
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 3
+
+  windows_repro_check:
+    name: Verify Windows NSIS reproducibility
+    runs-on: ubuntu-latest
+    needs: [plan, windows, windows_repro]
+    if: needs.plan.outputs.product == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-windows-x86_64
+          path: primary
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-windows-x86_64-reproducibility
+          path: reproduction
+      - name: Verify byte-for-byte NSIS reproducibility
+        run: |
+          set -euo pipefail
+          for dir in primary reproduction; do
+            if [ -L "$dir" ] || [ ! -d "$dir" ]; then
+              echo "package reproducibility input must be a real directory: $dir" >&2
+              exit 2
+            fi
+          done
+          mapfile -d "" -t primary_bundles < <(find -P primary -type f -name '*.exe' -print0)
+          mapfile -d "" -t reproduction_bundles < <(find -P reproduction -type f -name '*.exe' -print0)
+          if [ "${#primary_bundles[@]}" -ne 1 ] || [ "${#reproduction_bundles[@]}" -ne 1 ]; then
+            echo "expected exactly one primary and one reproduction NSIS bundle" >&2
+            exit 1
+          fi
+          sha256sum -- "${primary_bundles[0]}" "${reproduction_bundles[0]}"
+          cmp -- "${primary_bundles[0]}" "${reproduction_bundles[0]}"
+
   required:
     name: Package CI Required
     needs:
@@ -262,6 +395,8 @@ jobs:
       - linux_repro
       - repro_check
       - windows
+      - windows_repro
+      - windows_repro_check
     if: >-
       always() &&
       (github.event_name == 'push' ||
@@ -292,11 +427,15 @@ jobs:
             "linux":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "linux_repro":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "repro_check":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
-            "windows":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"}
+            "windows":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
+            "windows_repro":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
+            "windows_repro_check":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"}
             }}
         run: |
           nix run .#ci-aggregate -- "$PLAN_JSON" \
             linux=${{ needs.linux.result }} \
             linux_repro=${{ needs.linux_repro.result }} \
             repro_check=${{ needs.repro_check.result }} \
-            windows=${{ needs.windows.result }}
+            windows=${{ needs.windows.result }} \
+            windows_repro=${{ needs.windows_repro.result }} \
+            windows_repro_check=${{ needs.windows_repro_check.result }}

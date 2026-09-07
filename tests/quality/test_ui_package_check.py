@@ -1334,7 +1334,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"
+        == "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -2083,7 +2083,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "201d747cf6c50b9a87cc69392850c158c6766242e2bf794039174bc6ad4cf663"
+            "3ab5e0f7439deb5d363a563632d2db9cb57b685a47acc36632bebd833defc507"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
@@ -2286,7 +2286,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "97b9f3e5e491d3ebb104d2dc44326bc5231a49b94cdc4218ac40448896ec5ef5"
+        == "9cdeb994ebc06e87d72e90ba764ac7f96eca34d905a91542f04a2fea79d29a38"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2696,14 +2696,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "baa58d01acf676019c6a668c91266bc11139ac984b913bf92db7fb5b7afe51e3"
+        == "00cd23575985d82fcd045eb7118c2cfed34f0bb821f7441c513fb9cb8660a360"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "e2ee3588b851a88de300712ca0b00d7508f5f0ba1cba8acf92be26122531480b"',
+        '== "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -4938,7 +4938,10 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         if source_name.endswith(".rs")
         and re.search(r"\bunsafe\b", rust_lexical_mask(source)) is not None
     }
-    assert unsafe_sites == {"camera/shared_ring.rs": 8}
+    assert unsafe_sites == {
+        "camera/shared_ring.rs": 8,
+        "settings/hmac_key.rs": 5,
+    }
     shared_ring_source = rust_lexical_mask(sources["camera/shared_ring.rs"])
     assert shared_ring_source.count("#[allow(unsafe_code)]") == 1
     assert "#[allow(unsafe_code)]\nmod mapping {" in shared_ring_source
@@ -5132,14 +5135,6 @@ pub mod websocket;
     application_with_literals = rust_without_comments(sources["lib.rs"])
     application_source = rust_lexical_mask(sources["lib.rs"])
     expected_application_prelude = """
-#![cfg_attr(
-    target_os = "windows",
-    allow(
-        dead_code,
-        reason = "Windows CI compiles the shared Linux/runtime API surface without running it"
-    )
-)]
-
 mod application_backend;
 #[doc(hidden)]
 pub mod binary_entrypoints;
@@ -18529,7 +18524,7 @@ def test_ci_workflows_use_one_fail_closed_region_plan_and_required_aggregates() 
         assert not (workflow_root / retired_workflow).exists()
     for workflow in (normal, package):
         assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
-        assert "paths:" not in workflow
+        assert not re.search(r"(?m)^\s*paths\s*:", workflow)
         assert workflow.count("  plan:\n") == 1
         assert workflow.count("name: Plan changed regions") == 1
         assert workflow.count("fetch-depth: 0") == 1
@@ -18863,3 +18858,41 @@ def test_windows_rust_ci_binds_development_resource_provenance_to_final_check() 
     assert windows_job.count("POKECON_RESOURCE_PROVENANCE") == 1
     assert windows_job.count("POKECON_RESOURCE_PROVENANCE: development") == 1
     assert windows_job.count(run_command) == 1
+
+
+def test_platform_boundary_has_no_blanket_windows_allows() -> None:
+    forbidden = '#![cfg_attr(target_os = "windows", allow('
+    targets = [
+        "rust/pokecon/src/lib.rs",
+        "rust/pokecon/src/camera/mod.rs",
+        "rust/pokecon/src/contracts/mod.rs",
+        "rust/pokecon/src/device/serial/mod.rs",
+        "rust/pokecon/src/dynamic/mod.rs",
+        "rust/pokecon/src/worker/ipc/mod.rs",
+    ]
+    for relative in targets:
+        source = (REPOSITORY / relative).read_text(encoding="utf-8")
+        assert forbidden not in source, f"blanket Windows allow found in {relative}"
+    # Shared contracts must remain cross-platform: contracts, camera, serial, dynamic, ipc
+    # are documented as shared and must not be cfg-gated away on Windows.
+    # Verify they are present and not behind cfg(target_os="linux") at top level.
+    shared_modules = {
+        "rust/pokecon/src/contracts/mod.rs": "pub mod commands_typings;",
+        "rust/pokecon/src/camera/mod.rs": "pub mod backend;",
+        "rust/pokecon/src/device/serial/mod.rs": "pub use codec::{ControllerCodec",
+        "rust/pokecon/src/dynamic/mod.rs": "pub mod callback;",
+        "rust/pokecon/src/worker/ipc/mod.rs": "pub use connection::{",
+    }
+    for relative, anchor in shared_modules.items():
+        source = (REPOSITORY / relative).read_text(encoding="utf-8")
+        assert anchor in source, f"shared contract anchor missing in {relative}"
+        # Ensure no top-level cfg hiding the module on Windows
+        assert (
+            '#[cfg(target_os = "linux")]'
+            not in source.split(anchor)[0].split("\n")[-5:]
+        ), f"unexpected Linux gate before shared anchor in {relative}"
+    # lib.rs must not hide Linux runtime APIs behind silent Windows allow;
+    # platform-specific code must be behind explicit cfg or adapter, not blanket.
+    lib_source = (REPOSITORY / "rust/pokecon/src/lib.rs").read_text(encoding="utf-8")
+    assert 'allow(dead_code, reason = "Windows CI' not in lib_source
+    assert "Windows CI compiles the shared Linux/runtime API surface" not in lib_source

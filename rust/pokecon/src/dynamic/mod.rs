@@ -1,11 +1,4 @@
 //! Persistent dynamic-configuration contracts and main-process state.
-#![cfg_attr(
-    target_os = "windows",
-    allow(
-        unused_imports,
-        reason = "dynamic exports are consumed by the Linux worker runtime"
-    )
-)]
 
 pub mod callback;
 pub mod command;

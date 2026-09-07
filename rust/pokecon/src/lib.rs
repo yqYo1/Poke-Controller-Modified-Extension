@@ -1,11 +1,4 @@
 //! Top-level process orchestration for web and desktop modes.
-#![cfg_attr(
-    target_os = "windows",
-    allow(
-        dead_code,
-        reason = "Windows CI compiles the shared Linux/runtime API surface without running it"
-    )
-)]
 
 mod application_backend;
 #[doc(hidden)]

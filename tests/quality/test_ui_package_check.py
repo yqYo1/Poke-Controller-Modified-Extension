@@ -2296,7 +2296,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "36188c103395f7d36235feaa26f62b3ee49064538cbdb93a46c8b01d524ce8e3"
+        == "b6629de48bab83719d95406641c17cee4ffaa935c7e3256a66dce7922126ba7c"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3327,10 +3327,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     runtime_package_section = flake[runtime_package_start:runtime_package_end]
     assert (
         hashlib.sha256(runtime_package_section.strip().encode()).hexdigest()
-        == "48aa83a9478779710e4e9d7e90c50b1b530121c93e356f9e7af44154b0383f0e"
+        == "660ab3d6fe454d16d159fb59090e5c7ef684abdaab6589efc01792db5024c473"
     )
     runtime_output_hash = (
-        'outputHash = "sha256-/oX5m7mZkIwXl383NXN4qc2qGnfsJSlPMgVKMrurSmY=";'
+        'outputHash = "sha256-n7b1658wvxQBXdR7qHewa5yvReF5K61zi8MuxxNiayI=";'
     )
     assert runtime_package_section.count(runtime_output_hash) == 1
     assert flake.count(runtime_output_hash) == 1

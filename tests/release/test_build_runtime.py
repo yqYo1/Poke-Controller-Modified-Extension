@@ -1201,6 +1201,13 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
 
     assert "$env:RUNNER_TEMP" in workflow
+    bundle_resources_assignment = (
+        "$bundleResources = Join-Path $env:GITHUB_WORKSPACE "
+        '".pokecon-bundle-resources-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"'
+    )
+    assert workflow.count(bundle_resources_assignment) == (
+        2 if workflow_name == "package.yml" else 1
+    )
     assert "$PSNativeCommandUseErrorActionPreference = $true" in workflow
     assert "--runtime-output target/" not in workflow
     assert "--wheelhouse-output target/" not in workflow

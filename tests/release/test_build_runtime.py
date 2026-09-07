@@ -2060,8 +2060,8 @@ def test_normalize_pe_cli_and_tauri_config(tmp_path: Path) -> None:
     cmd = config["build"]["beforeBundleCommand"]
     assert "build_runtime.py" in cmd
     assert "--normalize-pe" in cmd
-    assert "pokecon.exe" in cmd
-    assert "../../scripts/release/build_runtime.py" in cmd
+    assert "scripts/release/build_runtime.py" in cmd
+    assert "target/release/pokecon.exe" in cmd
     # CLI must normalize file without requiring runtime args
     pe = _build_pe_exe_with_payload(coff_timestamp=0x12345678)
     target = tmp_path / "target" / "release" / "pokecon.exe"

@@ -8,13 +8,21 @@ import json
 import os
 import shutil
 import stat
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from typing import Never
 
-from scripts.release.build_runtime import normalize_pe as _build_normalize_pe
+_REPOSITORY_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPOSITORY_ROOT not in sys.path:
+    sys.path.insert(0, _REPOSITORY_ROOT)
+
+# Keep direct script execution from a Nix source root on the package import path.
+from scripts.release.build_runtime import (  # noqa: E402
+    normalize_pe as _build_normalize_pe,
+)
 
 BYTECODE_SUFFIXES = {".pyc", ".pyo"}
 IGNORED_NAMES = {".pytest_cache", ".ruff_cache"}

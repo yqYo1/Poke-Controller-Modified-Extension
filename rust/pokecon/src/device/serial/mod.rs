@@ -1,5 +1,12 @@
 //! Serial selectors, controller codecs, transactional connection management,
 //! and a deterministic virtual fixture.
+#![cfg_attr(
+    target_os = "windows",
+    allow(
+        unused_imports,
+        reason = "serial exports are consumed by platform adapters"
+    )
+)]
 
 mod codec;
 mod manager;

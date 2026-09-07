@@ -1,4 +1,11 @@
 //! Camera capture, shared-frame publication, screenshots, and media sources.
+#![cfg_attr(
+    target_os = "windows",
+    allow(
+        unused_imports,
+        reason = "shared camera API is consumed by platform adapters"
+    )
+)]
 
 pub mod backend;
 pub mod frame;

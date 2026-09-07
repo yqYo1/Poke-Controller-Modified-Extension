@@ -408,7 +408,7 @@ jobs:
           workflow_name="$(jq -er '.name' "$run_json")"
           run_started_at="$(jq -er '.run_started_at // .created_at' "$run_json")"
           run_status="$(jq -er '.status' "$run_json")"
-          run_conclusion="$(jq -er '.conclusion // empty' "$run_json")"
+          run_conclusion="$(jq -er '.conclusion // ""' "$run_json")"
           # Completion-safe: upstream completed max (max completed_at - run_started_at).
           # GitHub timestamps include fractional seconds; preserve them instead of passing
           # the raw value to jq's integer-only fromdateiso8601 parser.

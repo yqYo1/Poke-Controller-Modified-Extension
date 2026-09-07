@@ -49,7 +49,7 @@
     "windows": {
       "allowDowngrades": false,
       "nsis": {
-        "compression": "zlib",
+        "compression": "none",
         "installerHooks": "../../scripts/release/nsis-reproducibility.nsh"
       },
       "webviewInstallMode": {

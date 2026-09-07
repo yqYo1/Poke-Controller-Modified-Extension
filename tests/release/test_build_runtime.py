@@ -1184,13 +1184,12 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
     nsis = config["bundle"]["windows"]["nsis"]
-    assert nsis["compression"] == "zlib"
+    assert nsis["compression"] == "none"
     hook_name = "../../scripts/release/nsis-reproducibility.nsh"
     assert nsis["installerHooks"] == hook_name
     hook_path = (config_path.parent / hook_name).resolve()
     assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
     hook_contents = hook_path.read_text(encoding="utf-8")
-    assert "SetCompressor /FINAL /SOLID zlib" in hook_contents
     assert "SetDateSave off" in hook_contents
 
 

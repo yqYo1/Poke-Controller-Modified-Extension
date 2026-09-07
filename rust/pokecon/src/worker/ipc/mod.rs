@@ -1,4 +1,11 @@
 //! Typed `MessagePack` IPC over the worker stdin/stdout pipes.
+#![cfg_attr(
+    target_os = "windows",
+    allow(
+        unused_imports,
+        reason = "IPC schema exports are consumed by the Linux worker runtime"
+    )
+)]
 
 mod codec;
 mod connection;

@@ -16,6 +16,8 @@ extend-exclude = [
     "*.min.js",
     "*.min.css",
     "docs/legacy/CHANGELOG.txt",
+    # Preserve the exact upstream Tauri NSIS template; NSIS syntax and upstream comments are not prose.
+    "scripts/release/installer.nsi",
     "SerialController/db/pokedex.json",
 ]
 

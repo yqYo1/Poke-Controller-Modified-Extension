@@ -1191,6 +1191,21 @@ def test_windows_nsis_reproducibility_hook_is_wired() -> None:
     assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
     hook_contents = hook_path.read_text(encoding="utf-8")
     assert "SetDateSave off" in hook_contents
+    template_name = "../../scripts/release/installer.nsi"
+    assert nsis["template"] == template_name
+    template_path = (config_path.parent / template_name).resolve()
+    assert template_path == root / "scripts/release/installer.nsi"
+    template_contents = template_path.read_text(encoding="utf-8")
+    assert "{{#each resources_dirs}}" not in template_contents
+    assert "resources_dirs" not in template_contents
+    assert "{{#each resources}}" in template_contents
+    assert 'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"' in template_contents
+    assert template_contents.index(
+        'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"'
+    ) < template_contents.index('File /a "/oname={{this.[1]}}"')
+    assert template_contents.count('File /a "/oname={{this.[1]}}"') == 1
+    assert 'Delete "$INSTDIR\\\\{{this.[1]}}"' in template_contents
+    assert template_contents.count("resources_ancestors") == 1
 
 
 @pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])

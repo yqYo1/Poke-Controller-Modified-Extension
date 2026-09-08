@@ -53,7 +53,8 @@
       "allowDowngrades": false,
       "nsis": {
         "compression": "none",
-        "installerHooks": "../../scripts/release/nsis-reproducibility.nsh"
+        "installerHooks": "../../scripts/release/nsis-reproducibility.nsh",
+        "template": "../../scripts/release/installer.nsi"
       },
       "webviewInstallMode": {
         "type": "offlineInstaller",

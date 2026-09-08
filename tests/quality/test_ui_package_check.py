@@ -126,6 +126,7 @@ PRODUCTION_BUILD_INPUT_SOURCES: dict[str, str] = {
     "@LICENSE": "LICENSE",
     "@pyproject.toml": "pyproject.toml",
     "@release/build_runtime.py": "scripts/release/build_runtime.py",
+    "@release/installer.nsi": "scripts/release/installer.nsi",
     "@release/nsis-reproducibility.nsh": "scripts/release/nsis-reproducibility.nsh",
     "@release/normalize_debian_package.py": (
         "scripts/release/normalize_debian_package.py"
@@ -1629,13 +1630,16 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": "2cde1acd3c4f2ecf9f8fe70988a264371c4a005b52bc97d650564ed814dc7b39",
+        "@.gitignore": "d3a71d30f02f07934e55d2f3de3605240aa331ee58ed12b3bacf13f41828695f",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
             "d16d5f5238767729be33742560916e1ac482ee5236995d5b8e0861988537645a"
+        ),
+        "@release/installer.nsi": (
+            "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
         ),
         "@release/nsis-reproducibility.nsh": (
             "5351b8d22b98bc15be0fe6842d0112ca833203261ab5c321b1250e4006e5adf3"
@@ -2113,7 +2117,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "c9dd93559dbab6a7fcef17d0dafede1c88f8a06620215c469e7cf35ef29a7210"
+        == "7eccd0c4ab25a9ccc5be44ff913b97fd399fbcea209ba2069517358bd4c01e0c"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
@@ -2145,7 +2149,20 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert tauri_nsis_bundle["installerHooks"] == (
         "../../scripts/release/nsis-reproducibility.nsh"
     )
+    assert tauri_nsis_bundle["template"] == "../../scripts/release/installer.nsi"
     assert "SetDateSave off" in sources["@release/nsis-reproducibility.nsh"]
+    installer_template = sources["@release/installer.nsi"]
+    assert "{{#each resources_dirs}}" not in installer_template
+    assert "resources_dirs" not in installer_template
+    assert "{{#each resources}}" in installer_template
+    assert 'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"' in installer_template
+    # Deterministic directory creation must precede resource File commands
+    assert installer_template.index(
+        'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"'
+    ) < installer_template.index('File /a "/oname={{this.[1]}}"')
+    assert installer_template.count('File /a "/oname={{this.[1]}}"') == 1
+    assert installer_template.count("resources_ancestors") == 1
+    assert 'Delete "$INSTDIR\\\\{{this.[1]}}"' in installer_template
     assert tauri_bundle["icon"] == [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -2302,7 +2319,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "25f8922fb6ddfef76590109a54c12588c1b1804b76b717c58cbeaaa1bc568171"
+        == "6d845b0ac4d0d23433763810504c782d49b05ff96d5151eb18e903bc52219df2"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2513,7 +2530,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "c1ceee172f5438fe5743411045bacee3f84a9d3bdee55ddeb5677330ab8bdac1"
+        == "6a3a2dc5d28dc35e17f9a5c2d28173a951002b8dc53ddb690ab3475bc1a2ed39"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")
@@ -2579,6 +2596,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         '"rust/pokecon/registry/protocol.json"',
         '"rust/pokecon/registry/settings.json"',
         '"rust/pokecon/src"',
+        '"scripts/release/installer.nsi"',
     ):
         assert product_boundary.count(product_input) == 1, product_input
     for test_only_product_input in (

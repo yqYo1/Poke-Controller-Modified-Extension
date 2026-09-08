@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "317d628099efb7ba5719b8f2d060344b1c77cc32e1797ac57b75427a862a3790";
+      canonicalFlakeHash = "97b2f594e6b2e3c7b8d9210729219da07d9766171a892921a4e1d114c5e30575";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -421,6 +421,7 @@
               "rust/pokecon/src"
               "rust/pokecon/tauri.conf.json"
               "scripts/release/build_runtime.py"
+              "scripts/release/installer.nsi"
             ];
             release = product ++ [
               "README.md"
@@ -687,6 +688,7 @@
                     || lib.hasSuffix ".rules" sourcePath
                     || lib.hasSuffix ".sh" sourcePath
                     || lib.hasSuffix ".nsh" sourcePath
+                    || lib.hasSuffix ".nsi" sourcePath
                     || lib.hasSuffix ".nix" sourcePath
                     || lib.hasSuffix ".md" sourcePath
                     || lib.hasSuffix ".txt" sourcePath
@@ -728,7 +730,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "12f28b6e8452fc3b5365534e67d8f715700ed2f3fbca8f03276acbd7b0bdb3b8";
+          expectedAuditTestHash = "79b1221e3b479d3f2b9031d48f43259a1f8808ed74c3a967f1191f1c9ee6c74e";
 
           workspaceMemberPaths = [
             "rust/pokecon"

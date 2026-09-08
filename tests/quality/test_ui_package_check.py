@@ -1630,7 +1630,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": "d3a71d30f02f07934e55d2f3de3605240aa331ee58ed12b3bacf13f41828695f",
+        "@.gitignore": "11758b4850f1b5eb0545d61bc7c3af7146c3be022219e2777bcc440479e327c3",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
@@ -2319,7 +2319,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "6d845b0ac4d0d23433763810504c782d49b05ff96d5151eb18e903bc52219df2"
+        == "e3de4ce64cb8dbde61a29592196838b1dda72e854eec4c2ab7a50ed299be62ca"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2530,7 +2530,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "6a3a2dc5d28dc35e17f9a5c2d28173a951002b8dc53ddb690ab3475bc1a2ed39"
+        == "ddcc3644d5449466f3cb92f9fcd2b7d304a3e5ae5c56c2fcd097739077c6e203"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")
@@ -2543,6 +2543,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert "lib.hasSuffix" not in scoped_source_section
     assert repository_source_section.count('type == "directory"') == 1
     assert repository_source_section.count('type == "regular"') == 1
+    assert (
+        repository_source_section.count(
+            'direnvPath = "${inputs.self.outPath}/.direnv";'
+        )
+        == 1
+    )
+    assert repository_source_section.count("isDirenvPath") == 2
+    assert "!isDirenvPath" in repository_source_section
     assert repository_source_section.count('lib.hasSuffix ".json5" sourcePath') == 1
     assert (
         repository_source_section.count(
@@ -15762,7 +15770,7 @@ runner = "scripts/attacker-runner.sh"
     )
     accepted_symlinked_source = replace_once(
         FLAKE_SOURCE,
-        '                  type == "regular"\n                  && (\n',
+        '                    type == "regular"\n                    && (\n',
         '                  (type == "regular" || type == "symlink")\n'
         "                  && (\n",
     )

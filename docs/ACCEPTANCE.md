@@ -36,6 +36,18 @@ LinuxとWindowsは同じsource commitから作ったartifactを使用します�
 
 途中でcode、設定default、fixture、firmwareを変更した場合は新しい対象として最初から記録します。
 
+## Windows installerの再現性証跡
+
+Package workflowとRelease workflowは、署名入力を記録したうえで、primaryとreproductionを次の三層に分けて比較します。
+
+1. `windows-payload-manifest-*.json`：NSISへ渡すpayloadとresource provenanceの一致。
+2. `windows-install-tree-manifest-*.json`：各installerをclean installした後の展開後treeの一致。
+3. outer NSIS `.exe`：installer全体のbyte列とSHA-256の一致。
+
+payloadの一致だけ、または展開後treeの一致だけをouter installerの再現性と読み替えません。
+
+署名manifestとrequired aggregateを無効化した比較、PEを一律正規化した比較、実機artifactの代用品は受入証跡に使用しません。
+
 ## secretを証拠から除く
 
 受入記録へtoken、webhook URL、broker credential、生のserial number、個人path、任意code本文を保存しません。

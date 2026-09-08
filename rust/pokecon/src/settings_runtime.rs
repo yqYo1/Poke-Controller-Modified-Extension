@@ -18,6 +18,7 @@ use crate::device::{
 };
 use crate::dynamic::DynamicHost as _;
 use crate::server::realtime_connection::RealtimeRuntimeSettings;
+use crate::server::websocket::WebSocketRuntimeSettings;
 use crate::settings::pipeline::LoadedSettings;
 use crate::settings::service::{PatchClass, RuntimeSettingsApplier};
 use serde_json::Value;
@@ -310,6 +311,69 @@ impl RuntimeSettingsApplier for RealtimeSettingsApplier {
     }
 }
 
+pub(crate) struct WebSocketSettingsApplier {
+    sender: watch::Sender<WebSocketRuntimeSettings>,
+    values: BTreeMap<String, Value>,
+}
+
+impl WebSocketSettingsApplier {
+    /// Creates the live settings channel used by active WebSocket heartbeats.
+    ///
+    /// # Errors
+    ///
+    /// Returns a fixed diagnostic for invalid intervals or cross-setting violations.
+    pub(crate) fn new(
+        loaded: &LoadedSettings,
+    ) -> Result<(Self, watch::Receiver<WebSocketRuntimeSettings>), String> {
+        let values = raw_values(loaded);
+        let initial = websocket_settings(&values)?;
+        let (sender, receiver) = watch::channel(initial);
+        Ok((Self { sender, values }, receiver))
+    }
+}
+
+impl RuntimeSettingsApplier for WebSocketSettingsApplier {
+    fn apply(
+        &mut self,
+        class: PatchClass,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if class != PatchClass::Ordinary
+            || !changes.keys().any(|id| {
+                matches!(
+                    id.as_str(),
+                    "websocket.ping_interval_sec" | "websocket.pong_timeout_sec"
+                )
+            })
+        {
+            return Ok(());
+        }
+        let mut next = self.values.clone();
+        next.extend(changes.clone());
+        let settings = websocket_settings(&next)?;
+        self.sender.send_replace(settings);
+        self.values = next;
+        Ok(())
+    }
+
+    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
+        if class != PatchClass::Ordinary {
+            return;
+        }
+        let mut restored = self.values.clone();
+        restored.extend(previous.clone());
+        self.values = restored;
+        if let Ok(settings) = websocket_settings(&self.values) {
+            self.sender.send_replace(settings);
+        } else {
+            tracing::error!(
+                diagnostic_id = "WEBSOCKET_SETTINGS_ROLLBACK_FAILED",
+                "websocket settings could not be restored"
+            );
+        }
+    }
+}
+
 pub(crate) fn notification_config(
     values: &BTreeMap<String, Value>,
 ) -> Result<NotificationConfig, String> {
@@ -345,6 +409,16 @@ fn realtime_settings(values: &BTreeMap<String, Value>) -> Result<RealtimeRuntime
         Duration::from_secs(interval),
     )
     .map_err(|_error| "realtime settings are invalid".to_owned())
+}
+
+#[allow(clippy::similar_names)]
+fn websocket_settings(
+    values: &BTreeMap<String, Value>,
+) -> Result<WebSocketRuntimeSettings, String> {
+    let ping = positive_integer(values, "websocket.ping_interval_sec")?;
+    let pong = positive_integer(values, "websocket.pong_timeout_sec")?;
+    WebSocketRuntimeSettings::new(Duration::from_secs(ping), Duration::from_secs(pong))
+        .map_err(|_error| "websocket settings are invalid".to_owned())
 }
 
 fn raw_values(loaded: &LoadedSettings) -> BTreeMap<String, Value> {
@@ -462,5 +536,111 @@ mod tests {
             )]),
         );
         assert_eq!(settings.close_behavior(), CloseBehavior::Ask);
+    }
+
+    #[test]
+    fn websocket_settings_are_validated_and_runtime_channel_is_live() {
+        let temporary = TempDir::new().unwrap();
+        let loaded = loaded(&temporary);
+        let values = raw_values(&loaded);
+        let settings = websocket_settings(&values).unwrap();
+        assert_eq!(settings.ping_interval(), Duration::from_secs(15));
+        assert_eq!(settings.pong_timeout(), Duration::from_secs(10));
+
+        let (mut applier, receiver) = WebSocketSettingsApplier::new(&loaded).unwrap();
+        assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(15));
+
+        // Valid single-field change reschedules via live channel.
+        // Keep cross constraint valid: new ping 12 still >= pong 10.
+        applier
+            .apply(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "websocket.ping_interval_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(12)),
+                )]),
+            )
+            .unwrap();
+        assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(12));
+        assert_eq!(receiver.borrow().pong_timeout(), Duration::from_secs(10));
+
+        applier
+            .apply(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "websocket.pong_timeout_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(4)),
+                )]),
+            )
+            .unwrap();
+        assert_eq!(receiver.borrow().pong_timeout(), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn websocket_settings_reject_invalid_updates_without_changing_current_value() {
+        let temporary = TempDir::new().unwrap();
+        let loaded = loaded(&temporary);
+        let (mut applier, receiver) = WebSocketSettingsApplier::new(&loaded).unwrap();
+        let initial = receiver.borrow().clone();
+
+        // Zero duration must be rejected.
+        let zero = applier.apply(
+            PatchClass::Ordinary,
+            &BTreeMap::from([(
+                "websocket.ping_interval_sec".to_owned(),
+                Value::Number(serde_json::Number::from(0)),
+            )]),
+        );
+        assert!(zero.is_err());
+        assert_eq!(*receiver.borrow(), initial);
+
+        // Cross-setting violation (pong > ping) must be rejected atomically.
+        let cross = applier.apply(
+            PatchClass::Ordinary,
+            &BTreeMap::from([(
+                "websocket.pong_timeout_sec".to_owned(),
+                Value::Number(serde_json::Number::from(20)),
+            )]),
+        );
+        assert!(cross.is_err());
+        assert_eq!(*receiver.borrow(), initial);
+
+        // Paired update that violates pong <= ping must also be rejected.
+        let paired = applier.apply(
+            PatchClass::Ordinary,
+            &BTreeMap::from([
+                (
+                    "websocket.ping_interval_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(3)),
+                ),
+                (
+                    "websocket.pong_timeout_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(5)),
+                ),
+            ]),
+        );
+        assert!(paired.is_err());
+        assert_eq!(*receiver.borrow(), initial);
+
+        // Rollback restores previous snapshot.
+        applier
+            .apply(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "websocket.ping_interval_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(12)),
+                )]),
+            )
+            .unwrap();
+        assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(12));
+        applier.rollback(
+            PatchClass::Ordinary,
+            &BTreeMap::from([(
+                "websocket.ping_interval_sec".to_owned(),
+                Value::Number(serde_json::Number::from(15)),
+            )]),
+        );
+        assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(15));
+        assert_eq!(receiver.borrow().pong_timeout(), Duration::from_secs(10));
     }
 }

@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string] $Installer
+    [string] $Installer,
+    [Parameter(Mandatory = $false)]
+    [string] $EvidenceOutput
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,6 +46,30 @@ function Get-InstalledApplicationHash {
         throw "Installed application is missing: $application"
     }
     return ((Get-FileHash -LiteralPath $application -Algorithm SHA256).Hash).ToLowerInvariant()
+}
+
+function Get-InstalledTreeManifest {
+    $files = @(
+        Get-ChildItem -LiteralPath $installRoot -File -Recurse |
+            Sort-Object -Property FullName |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($installRoot.Length).TrimStart('\').Replace('\', '/')
+                [ordered]@{
+                    path = $relative
+                    sha256 = ((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash).ToLowerInvariant()
+                    size = [int64]$_.Length
+                }
+            }
+    )
+    $canonical = $files | ConvertTo-Json -Compress -Depth 10
+    $digest = [System.Security.Cryptography.SHA256]::HashData(
+        [System.Text.Encoding]::UTF8.GetBytes($canonical)
+    )
+    [ordered]@{
+        schema_version = 1
+        tree_sha256 = [Convert]::ToHexString($digest).ToLowerInvariant()
+        files = $files
+    }
 }
 
 function Assert-InstalledApplicationHash {
@@ -1109,6 +1135,7 @@ function Invoke-StartupProbe {
 try {
     Invoke-CheckedProcess -FilePath $installerPath -ArgumentList @('/S')
     $initialApplicationHash = Invoke-StartupProbe -ProbeDesktopWindow
+    $installedTreeManifest = Get-InstalledTreeManifest
 
     New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
     Set-Content -LiteralPath $sentinel -Value 'preserve-user-data' -NoNewline
@@ -1139,15 +1166,26 @@ try {
         throw 'Uninstall removed user data'
     }
 
-    [ordered]@{
+    $result = [ordered]@{
         installer = $installerPath
         application_sha256 = $initialApplicationHash
         desktop_window_probes = 1
+        installed_tree_sha256 = $installedTreeManifest.tree_sha256
         profile_preserved = $true
         startup_probes = 2
         user_data_preserved = $true
         web_startup_probes = 2
-    } | ConvertTo-Json
+    }
+    if ($EvidenceOutput) {
+        $evidenceParent = Split-Path -Parent $EvidenceOutput
+        if ($evidenceParent) {
+            New-Item -ItemType Directory -Force -Path $evidenceParent | Out-Null
+        }
+        $installedTreeManifest |
+            ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath $EvidenceOutput -Encoding utf8
+    }
+    $result | ConvertTo-Json
 }
 finally {
     if (Test-Path -LiteralPath $uninstaller -PathType Leaf) {

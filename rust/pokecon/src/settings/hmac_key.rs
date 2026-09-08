@@ -445,22 +445,24 @@ mod fake_windows_hardening {
 
 #[cfg(test)]
 mod test_hooks {
+    use std::cell::Cell;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use crate::settings::hmac_key::HmacKeyError;
 
-    static ENABLED: AtomicBool = AtomicBool::new(false);
-    static SHOULD_FAIL: AtomicBool = AtomicBool::new(false);
-    static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+    thread_local! {
+        static ENABLED: Cell<bool> = const { Cell::new(false) };
+        static SHOULD_FAIL: Cell<bool> = const { Cell::new(false) };
+        static CALL_COUNT: Cell<usize> = const { Cell::new(0) };
+    }
 
     pub fn is_mock_enabled() -> bool {
-        ENABLED.load(Ordering::SeqCst)
+        ENABLED.with(Cell::get)
     }
 
     pub fn mock_harden(path: &Path) -> Result<(), HmacKeyError> {
-        CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-        if SHOULD_FAIL.load(Ordering::SeqCst) {
+        CALL_COUNT.with(|count| count.set(count.get() + 1));
+        if SHOULD_FAIL.with(Cell::get) {
             Err(HmacKeyError::Io {
                 path: path.to_path_buf(),
                 source: std::io::Error::new(
@@ -482,13 +484,13 @@ mod test_hooks {
     }
 
     pub fn set_mock(enabled: bool, should_fail: bool) {
-        ENABLED.store(enabled, Ordering::SeqCst);
-        SHOULD_FAIL.store(should_fail, Ordering::SeqCst);
-        CALL_COUNT.store(0, Ordering::SeqCst);
+        ENABLED.with(|value| value.set(enabled));
+        SHOULD_FAIL.with(|value| value.set(should_fail));
+        CALL_COUNT.with(|count| count.set(0));
     }
 
     pub fn call_count() -> usize {
-        CALL_COUNT.load(Ordering::SeqCst)
+        CALL_COUNT.with(Cell::get)
     }
 }
 

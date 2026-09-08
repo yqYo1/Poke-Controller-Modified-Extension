@@ -27,7 +27,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "97b2f594e6b2e3c7b8d9210729219da07d9766171a892921a4e1d114c5e30575";
+      canonicalFlakeHash = "3b43978e8bf8f2c9726a8b093de6451ec267e60662ca168f723a768bffcba271";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -669,51 +669,56 @@
                 path: type:
                 let
                   sourcePath = toString path;
+                  direnvPath = "${inputs.self.outPath}/.direnv";
+                  isDirenvPath = sourcePath == direnvPath || lib.hasPrefix "${direnvPath}/" sourcePath;
                 in
-                type == "directory"
-                || (
-                  type == "regular"
-                  && (
-                    lib.hasSuffix "/.gitignore" sourcePath
-                    || sourcePath == "${inputs.self.outPath}/LICENSE"
-                    || lib.hasSuffix ".rs" sourcePath
-                    || lib.hasSuffix ".toml" sourcePath
-                    || lib.hasSuffix ".lock" sourcePath
-                    || lib.hasSuffix ".json" sourcePath
-                    || lib.hasSuffix ".json5" sourcePath
-                    || lib.hasSuffix ".jsonl" sourcePath
-                    || lib.hasSuffix ".py" sourcePath
-                    || lib.hasSuffix ".pyi" sourcePath
-                    || lib.hasSuffix ".ps1" sourcePath
-                    || lib.hasSuffix ".rules" sourcePath
-                    || lib.hasSuffix ".sh" sourcePath
-                    || lib.hasSuffix ".nsh" sourcePath
-                    || lib.hasSuffix ".nsi" sourcePath
-                    || lib.hasSuffix ".nix" sourcePath
-                    || lib.hasSuffix ".md" sourcePath
-                    || lib.hasSuffix ".txt" sourcePath
-                    || lib.hasSuffix ".yml" sourcePath
-                    || lib.hasSuffix ".yaml" sourcePath
-                    || lib.hasSuffix ".html" sourcePath
-                    || lib.hasSuffix ".css" sourcePath
-                    || lib.hasSuffix ".svelte" sourcePath
-                    # Keep legacy JavaScript visible so source_filter can reject it
-                    # instead of silently omitting it from the Nix source tree.
-                    || lib.hasSuffix ".js" sourcePath
-                    || lib.hasSuffix ".jsx" sourcePath
-                    || lib.hasSuffix ".mjs" sourcePath
-                    || lib.hasSuffix ".cjs" sourcePath
-                    || lib.hasSuffix ".ts" sourcePath
-                    || lib.hasSuffix ".tsx" sourcePath
-                    || lib.hasSuffix ".lua" sourcePath
-                    || lib.hasSuffix ".svg" sourcePath
-                    || lib.hasSuffix ".png" sourcePath
-                    || lib.hasSuffix ".ico" sourcePath
-                    || lib.hasSuffix ".icns" sourcePath
-                    || lib.hasSuffix ".woff" sourcePath
-                    || lib.hasSuffix ".woff2" sourcePath
-                    || lib.hasSuffix ".ttf" sourcePath
-                    || lib.hasSuffix ".eot" sourcePath
+                !isDirenvPath
+                && (
+                  type == "directory"
+                  || (
+                    type == "regular"
+                    && (
+                      lib.hasSuffix "/.gitignore" sourcePath
+                      || sourcePath == "${inputs.self.outPath}/LICENSE"
+                      || lib.hasSuffix ".rs" sourcePath
+                      || lib.hasSuffix ".toml" sourcePath
+                      || lib.hasSuffix ".lock" sourcePath
+                      || lib.hasSuffix ".json" sourcePath
+                      || lib.hasSuffix ".json5" sourcePath
+                      || lib.hasSuffix ".jsonl" sourcePath
+                      || lib.hasSuffix ".py" sourcePath
+                      || lib.hasSuffix ".pyi" sourcePath
+                      || lib.hasSuffix ".ps1" sourcePath
+                      || lib.hasSuffix ".rules" sourcePath
+                      || lib.hasSuffix ".sh" sourcePath
+                      || lib.hasSuffix ".nsh" sourcePath
+                      || lib.hasSuffix ".nsi" sourcePath
+                      || lib.hasSuffix ".nix" sourcePath
+                      || lib.hasSuffix ".md" sourcePath
+                      || lib.hasSuffix ".txt" sourcePath
+                      || lib.hasSuffix ".yml" sourcePath
+                      || lib.hasSuffix ".yaml" sourcePath
+                      || lib.hasSuffix ".html" sourcePath
+                      || lib.hasSuffix ".css" sourcePath
+                      || lib.hasSuffix ".svelte" sourcePath
+                      # Keep legacy JavaScript visible so source_filter can reject it
+                      # instead of silently omitting it from the Nix source tree.
+                      || lib.hasSuffix ".js" sourcePath
+                      || lib.hasSuffix ".jsx" sourcePath
+                      || lib.hasSuffix ".mjs" sourcePath
+                      || lib.hasSuffix ".cjs" sourcePath
+                      || lib.hasSuffix ".ts" sourcePath
+                      || lib.hasSuffix ".tsx" sourcePath
+                      || lib.hasSuffix ".lua" sourcePath
+                      || lib.hasSuffix ".svg" sourcePath
+                      || lib.hasSuffix ".png" sourcePath
+                      || lib.hasSuffix ".ico" sourcePath
+                      || lib.hasSuffix ".icns" sourcePath
+                      || lib.hasSuffix ".woff" sourcePath
+                      || lib.hasSuffix ".woff2" sourcePath
+                      || lib.hasSuffix ".ttf" sourcePath
+                      || lib.hasSuffix ".eot" sourcePath
+                    )
                   )
                 );
             };
@@ -730,7 +735,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "79b1221e3b479d3f2b9031d48f43259a1f8808ed74c3a967f1191f1c9ee6c74e";
+          expectedAuditTestHash = "d85c8d6525a78cef3a2d34a3bc45d7eaf4fe1cd4ffc4d07dc493bccf85b27bed";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3411,6 +3416,7 @@
               global.excludes = [
                 "*.lock"
                 ".git/**"
+                ".direnv/**"
                 ".venv/**"
                 "__pycache__/**"
                 "dist/**"

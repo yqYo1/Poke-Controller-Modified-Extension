@@ -173,8 +173,12 @@ jobs:
           if ($contentSha256 -isnot [string] -or $contentSha256 -cnotmatch '\A[0-9a-f]{64}\z') {
             throw "release stage content_sha256 must be an exact lowercase SHA-256 digest"
           }
+          Copy-Item `
+            (Join-Path $bundleResources "resource-manifest.json") `
+            (Join-Path $env:RUNNER_TEMP "pokecon-payload-primary.json")
           "POKECON_RESOURCE_PROVENANCE=packaged:$contentSha256" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "POKECON_BUNDLE_CONFIG=$bundleConfig" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "POKECON_BUNDLE_RESOURCES=$bundleResources" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build offline NSIS installer
         shell: pwsh
         working-directory: rust/pokecon
@@ -192,6 +196,14 @@ jobs:
           $sha256 = (Get-FileHash $first -Algorithm SHA256).Hash.ToLower()
           $size = (Get-Item $first).Length
           Write-Host "Preserved first Windows installer: $first (sha256=$sha256, size=$size)"
+      - name: Verify first Windows clean install tree
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          ./scripts/release/windows_install_smoke.ps1 `
+            -Installer $installer `
+            -EvidenceOutput (Join-Path $env:RUNNER_TEMP "pokecon-install-tree-primary.json")
       - name: Rebuild Windows package from identical inputs
         shell: pwsh
         working-directory: rust/pokecon
@@ -199,14 +211,42 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Verify second Windows clean install tree
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          ./scripts/release/windows_install_smoke.ps1 `
+            -Installer $installer `
+            -EvidenceOutput (Join-Path $env:RUNNER_TEMP "pokecon-install-tree-reproduction.json")
       - name: Verify byte-for-byte Windows NSIS reproducibility
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $first = Join-Path $env:RUNNER_TEMP "pokecon-first.exe"
           $second = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          $primaryPayload = Join-Path $env:RUNNER_TEMP "pokecon-payload-primary.json"
+          $secondPayload = Join-Path $env:RUNNER_TEMP "pokecon-payload-reproduction.json"
+          Copy-Item (Join-Path $env:POKECON_BUNDLE_RESOURCES "resource-manifest.json") $secondPayload -Force
+          $primaryTree = Join-Path $env:RUNNER_TEMP "pokecon-install-tree-primary.json"
+          $secondTree = Join-Path $env:RUNNER_TEMP "pokecon-install-tree-reproduction.json"
           if (-not (Test-Path $first)) { throw "first Windows installer not preserved: $first" }
           if (-not (Test-Path $second)) { throw "second Windows installer missing: $second" }
+          foreach ($path in @($primaryPayload, $secondPayload, $primaryTree, $secondTree)) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Windows reproducibility evidence missing: $path" }
+          }
+          function Assert-IdenticalFile {
+            param([string] $Left, [string] $Right, [string] $Label)
+            $leftHash = (Get-FileHash $Left -Algorithm SHA256).Hash.ToLowerInvariant()
+            $rightHash = (Get-FileHash $Right -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "${Label}: primary=$leftHash reproduction=$rightHash"
+            if ($leftHash -ne $rightHash) { throw "$Label SHA256 mismatch ($leftHash != $rightHash)" }
+            $leftBytes = [System.IO.File]::ReadAllBytes($Left)
+            $rightBytes = [System.IO.File]::ReadAllBytes($Right)
+            if (-not [System.Linq.Enumerable]::SequenceEqual($leftBytes, $rightBytes)) { throw "$Label byte mismatch" }
+          }
+          Assert-IdenticalFile $primaryPayload $secondPayload "staged resource payload"
+          Assert-IdenticalFile $primaryTree $secondTree "clean-install expanded tree"
           $firstSha256 = (Get-FileHash $first -Algorithm SHA256).Hash.ToLower()
           $secondSha256 = (Get-FileHash $second -Algorithm SHA256).Hash.ToLower()
           $firstSize = (Get-Item $first).Length
@@ -248,6 +288,10 @@ jobs:
           Copy-Item `
             target/release/bundle/nsis/signing-inputs.json `
             dist/signing-inputs-windows-x86_64.json
+          Copy-Item (Join-Path $env:RUNNER_TEMP "pokecon-payload-primary.json") dist/windows-payload-manifest-primary.json
+          Copy-Item (Join-Path $env:RUNNER_TEMP "pokecon-payload-reproduction.json") dist/windows-payload-manifest-reproduction.json
+          Copy-Item (Join-Path $env:RUNNER_TEMP "pokecon-install-tree-primary.json") dist/windows-install-tree-manifest-primary.json
+          Copy-Item (Join-Path $env:RUNNER_TEMP "pokecon-install-tree-reproduction.json") dist/windows-install-tree-manifest-reproduction.json
           $installer = (Get-ChildItem dist/*-setup.exe -File).FullName
           python -m scripts.release.signing_manifest `
             --platform windows `

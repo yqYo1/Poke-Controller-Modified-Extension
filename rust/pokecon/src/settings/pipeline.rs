@@ -1267,6 +1267,7 @@ pub fn normalize_value(
     Ok(value)
 }
 
+#[allow(clippy::similar_names)]
 pub(crate) fn validate_snapshot(
     values: &BTreeMap<String, ResolvedValue>,
 ) -> Result<(), PipelineError> {
@@ -1292,6 +1293,13 @@ pub(crate) fn validate_snapshot(
     if !options.iter().any(|option| option.as_i64() == Some(fps)) {
         return Err(PipelineError::CrossSetting(
             "ui.fps must be present in ui.fps_options".to_owned(),
+        ));
+    }
+    let ping = integer("websocket.ping_interval_sec")?;
+    let pong = integer("websocket.pong_timeout_sec")?;
+    if pong > ping {
+        return Err(PipelineError::CrossSetting(
+            "websocket.pong_timeout_sec must not exceed websocket.ping_interval_sec".to_owned(),
         ));
     }
     Ok(())

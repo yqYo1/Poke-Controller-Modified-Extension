@@ -257,7 +257,9 @@ def test_package_and_release_workflows_preserve_signing_manifests() -> None:
         assert (
             workflow.index("cargo tauri build --ci --bundles nsis")
             < workflow.index(windows_command)
-            < workflow.index("windows_install_smoke.ps1")
+            < workflow.index(
+                "windows_install_smoke.ps1", workflow.index(windows_command)
+            )
         )
     package_windows_verify = "--verify target/release/bundle/nsis/signing-inputs.json"
     assert (
@@ -290,3 +292,31 @@ def test_package_and_release_workflows_preserve_signing_manifests() -> None:
         'python -I "${repositorySource}/scripts/release/signing_manifest.py" "$@"'
         in flake
     )
+
+
+def test_package_and_release_windows_workflows_preserve_three_layer_evidence() -> None:
+    package = (REPOSITORY / ".github/workflows/package.yml").read_text()
+    release = (REPOSITORY / ".github/workflows/release.yml").read_text()
+
+    assert "windows-payload-manifest.json" in package
+    assert "windows-install-tree-manifest.json" in package
+    assert "payload manifest SHA-256 (staged resource payload):" in package
+    assert "expanded tree manifest SHA-256 (clean-install tree):" in package
+    assert "outer NSIS installer SHA-256:" in package
+    assert package.count("cmp --") >= 3
+
+    for marker in (
+        "pokecon-payload-primary.json",
+        "pokecon-payload-reproduction.json",
+        "pokecon-install-tree-primary.json",
+        "pokecon-install-tree-reproduction.json",
+        "Assert-IdenticalFile $primaryPayload $secondPayload",
+        "Assert-IdenticalFile $primaryTree $secondTree",
+        "Windows NSIS byte-for-byte reproducibility verified",
+    ):
+        assert marker in release
+    assert release.index(
+        "Assert-IdenticalFile $primaryPayload $secondPayload"
+    ) < release.index("Record Windows signing inputs")
+    assert release.count("windows-payload-manifest-") >= 2
+    assert release.count("windows-install-tree-manifest-") >= 2

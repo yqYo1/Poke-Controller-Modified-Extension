@@ -117,14 +117,24 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（予定証跡: direnv読込み後のGit inventory、Nix source、package manifestのnegative report）。
 - [ ] **AR-13.1-24** 既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性、packageがambient shell状態へ依存せず移行前と一致する（予定証跡: current checkpointの全task log、生成物Git object ID、package NAR hash）。
 
+### 現行refactor/rust-coreの追加実装と検証状態
+
+- [x] WebSocket heartbeatの`ping_interval_sec`／`pong_timeout_sec`をproduction runtime settings applierへ接続し、active connectionの待機取消と設定適用時点からの再スケジュールを実装した。
+- [x] heartbeatの正値・cross-setting（`pong_timeout_sec <= ping_interval_sec`）検証、invalid updateのatomic rejection、rollback、production wiringをRust testで検証した。
+- [x] Windows Package／Release workflowへ署名入力を保持したpayload manifest、clean-install expanded-tree manifest、outer NSIS `.exe`の独立比較とartifact保存を追加した。
+- [x] `.direnv/`をGit、Nix repository source、formatter入力から除外し、source-filter／routing／mutation契約を更新した。
+- [x] `nix run .#check`（production audit 1件、Web 74件、pytest 460件、Rust 414件、mutation 395件／4 shard）、`nix run .#web-check`、`nix run .#typos`、`nix run .#actionlint`、`nix flake check --no-build --show-trace`、`nix fmt -- --ci`、Clippyが成功した。
+- [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
+- [ ] GitHub上のfresh push後に、同一`change_kind`の10 completed timing artifact、実署名Windows runner、Release tag artifact、実機upgrade／uninstall／latency証跡を取得するまでは、外部受入を完了扱いにしない。
+
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）
 
-下表はflake appと隔離gateの履歴証跡である。2026-08-09に上書きされたdevShell／direnv項目の現在完了証跡には使用しない。
+下表はflake appと隔離gateの履歴証跡である。2026-08-09に上書きされたdevShell／direnv項目の現在完了証跡には使用しない。現行契約では`.envrc`は追跡対象の`use flake`だけを保持し、`.direnv/`は生成後もGit・Nix source・配布対象から除外する。
 
 | 対象 | 実測結果 |
 | --- | --- |
 | commit境界 | PLAN `93f8b6f`、実装 `23149e3`、受入 `1e0836b`、再現性修正 `7a01da0`。全commit objectにSSH `gpgsig`を確認 |
-| fresh worktree | `23149e3`から作成したdetached worktreeで`.envrc`／`.direnv`不在、format、4対話app、desktop、editor、aggregate checkが成功 |
+| fresh worktree | `23149e3`から作成したdetached worktreeで追跡対象の`.envrc`は`use flake`、生成物`.direnv/`はGit・Nix source・配布対象から除外する現行契約へ更新。format、4対話app、desktop、editor、aggregate checkの履歴結果は維持 |
 | 完了gate | `nix flake check --no-build`、`nix fmt -- --ci`、`contract-check`、`web-check`、`clippy`、`cargo-test`、`test`、`build-rust`、`compatibility`、個別lint／文書task、`nix run .#check`が終了コード0 |
 | test件数 | Web 74件、Python 60件、Rust全workspace test成功。V4L2実機test 1件だけは既定どおりignored |
 | package parity | 移行前`e20fad5`は`ih2419va26ikx0xjbq19kfpz4222svcb-pokecon-0.1.0`、移行後`23149e3`は`w40flwwp2fwjsl6haxmmd133zwiqpbyc-pokecon-0.1.0`。双方のNARは`sha256-jwKvZjYVhpnE0EaLW5/yADdlw5qn+dW/CW7BVy6WNME=`、135653616 bytes |

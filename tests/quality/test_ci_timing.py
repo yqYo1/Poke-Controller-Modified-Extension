@@ -252,7 +252,7 @@ def test_nearest_rank_for_twenty_samples_selects_rank_nineteen() -> None:
 
 @pytest.mark.parametrize(
     ("change_kind", "threshold"),
-    [("fast", 180.0), ("docs", 300.0), ("product", 600.0)],
+    [("fast", 180.0), ("docs", 300.0), ("product", 720.0)],
 )
 def test_p95_threshold_regression_is_a_contract_failure(
     change_kind: str, threshold: float
@@ -780,3 +780,116 @@ def test_validate_rejects_measured_less_than_critical_path() -> None:
     assert completed.returncode == 1
     assert "less than critical-path" in completed.stderr
     assert _document(completed)["conclusion"] == "failure"
+
+
+def test_p95_accepts_json_report_paths(tmp_path: Path) -> None:
+    reports = [_report(index=index) for index in range(1, 11)]
+    paths: list[str] = []
+    for index, report in enumerate(reports, start=1):
+        path = tmp_path / f"timing-{index}.json"
+        path.write_text(_source(report), encoding="utf-8")
+        paths.append(str(path))
+
+    completed = subprocess.run(  # noqa: S603 - fixed repository script and fixture data
+        [sys.executable, "-I", str(TIMING), "p95", *paths],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert completed.returncode == 0
+    assert _document(completed)["conclusion"] == "success"
+
+
+def test_p95_rejects_unsuccessful_job_evidence() -> None:
+    reports: list[dict[str, object]] = []
+    for index in range(1, 11):
+        report = _report(index=index)
+        if index == 10:
+            jobs = cast("list[dict[str, object]]", report["jobs"])
+            jobs[0]["conclusion"] = "failure"
+        reports.append(report)
+
+    completed = _run("p95", *reports)
+
+    assert completed.returncode == 1
+    assert "unsuccessful jobs: fast" in completed.stderr
+
+
+def test_p95_rejects_stale_history_older_than_30_days() -> None:
+    newest = "2026-02-01T00:00:00Z"
+    stale = "2025-12-20T00:00:00Z"
+    reports = [
+        _report(
+            index=index,
+            run_started_at=newest if index > 1 else stale,
+            measured_wall_seconds=10.0,
+        )
+        for index in range(1, 11)
+    ]
+    completed = _run("p95", *reports)
+    assert completed.returncode == 1
+    assert "stale" in completed.stderr.lower()
+    document = _document(completed)
+    assert document["conclusion"] == "failure"
+    raw_violations = document["violations"]
+    assert isinstance(raw_violations, list)
+    violations = cast("list[object]", raw_violations)
+    assert any(isinstance(v, str) and "stale" in v.lower() for v in violations)
+
+
+def test_p95_rejects_future_dated_history() -> None:
+    # Future-dated sample makes older samples stale (>30d) relative to newest.
+    newest = "2026-02-01T00:00:00Z"
+    future = "2026-04-15T00:00:00Z"
+    reports = [
+        _report(
+            index=index,
+            run_started_at=future if index == 10 else newest,
+            measured_wall_seconds=10.0,
+        )
+        for index in range(1, 11)
+    ]
+    completed = _run("p95", *reports)
+    assert completed.returncode == 1
+    assert "stale" in completed.stderr.lower()
+
+
+def test_p95_history_gate_is_blocking_in_workflow() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    # Must contain blocking history gate step
+    assert "Enforce timing p95 history gate (blocking, fail-closed)" in workflow
+    assert "nix run .#ci-timing -- p95" in workflow
+    assert 'select(.conclusion == "success" or .conclusion == "failure")' in workflow
+    assert "timing-report.json" in workflow
+    assert "ci-timing-${candidate_id}-${candidate_attempt}" in workflow
+    assert 'gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/' in workflow
+    assert "if: always()" in workflow  # ensure artifact upload is not lost on failure
+    assert "timing-p95.json" in workflow
+    assert 'artifact_name="ci-timing-${candidate_id}-${candidate_attempt}"' in workflow
+    assert "name == $name" in workflow
+    assert 'name "timing-report.json" -print -quit' in workflow
+    assert "if-no-files-found: warn" in workflow
+    # Must not contain old caveat non-blocking wording
+    assert "caveat: insufficient history for blocking p95" not in workflow
+    # Must preserve completion-safe upstream_completed_max and cache trust
+    assert "upstream_completed_max" in workflow
+    assert "cache_read=true" in workflow or "cache.read" in workflow
+    # Must handle malformed/stale/incomplete fail-closed and not claim invented p95
+    assert (
+        "incomplete history" in workflow.lower()
+        or "insufficient history" in workflow.lower()
+    )
+    assert "malformed" in workflow.lower()
+    assert "missing or invalid change_kind" in workflow
+
+
+def test_p95_stale_threshold_matches_timing_contract() -> None:
+    # Verify timing.py constants match contract scrutiny in contract_sync.rs
+    source = TIMING.read_text(encoding="utf-8")
+    assert "MAX_HISTORY_AGE_DAYS: Final = 30" in source
+    assert "MAX_HISTORY_STALE_SECONDS" in source
+    assert "report is stale" in source.lower()

@@ -1283,6 +1283,10 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         '"POKECON_BUNDLE_CONFIG=$bundleConfig" | '
         "Out-File -FilePath $env:GITHUB_ENV -Append"
     )
+    bundle_resources_export = (
+        '"POKECON_BUNDLE_RESOURCES=$bundleResources" | '
+        "Out-File -FilePath $env:GITHUB_ENV -Append"
+    )
     bundle_config_consumer = "--config $env:POKECON_BUNDLE_CONFIG"
     canonical_stage_identity_block = (
         stage_command + f"          {stage_parse}\n"
@@ -1292,6 +1296,35 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         "          }\n"
         f"          {provenance_export}\n"
         f"          {bundle_config_export}\n"
+    )
+    payload_manifest_copy = (
+        "          Copy-Item `\n"
+        '            (Join-Path $bundleResources "resource-manifest.json") `\n'
+        '            (Join-Path $env:GITHUB_WORKSPACE "windows-payload-manifest.json")\n'
+    )
+    package_stage_identity_block = (
+        stage_command + f"          {stage_parse}\n"
+        f"          {content_assignment}\n"
+        f"          {content_validation}\n"
+        f"            {invalid_content_diagnostic}\n"
+        "          }\n"
+        + payload_manifest_copy
+        + f"          {provenance_export}\n"
+        + f"          {bundle_config_export}\n"
+    )
+    release_payload_manifest_copy = (
+        "          Copy-Item `\n"
+        '            (Join-Path $bundleResources "resource-manifest.json") `\n'
+        '            (Join-Path $env:RUNNER_TEMP "pokecon-payload-primary.json")\n'
+    )
+    release_stage_identity_block = (
+        canonical_stage_identity_block[
+            : canonical_stage_identity_block.index(f"          {provenance_export}")
+        ]
+        + release_payload_manifest_copy
+        + f"          {provenance_export}\n"
+        + f"          {bundle_config_export}\n"
+        + f"          {bundle_resources_export}\n"
     )
     next_installer_step = "      - name: Build offline NSIS installer"
     canonical_installer_stage = (
@@ -1311,7 +1344,14 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     assert "stage.py" not in workflow.casefold()
     assert build_stage.count(stage_capture) == 1
     assert build_stage.count(stage_command) == 1
-    assert build_stage.count(canonical_stage_identity_block) == 1
+    assert (
+        build_stage.count(
+            package_stage_identity_block
+            if workflow_name == "package.yml"
+            else release_stage_identity_block
+        )
+        == 1
+    )
     if workflow_name == "package.yml":
         assert workflow.count(provenance_clear) == 4
         assert workflow.count(provenance_development) == 2
@@ -1356,6 +1396,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         ):
             assert workflow.count(identity_statement) == 1
         assert workflow.count(bundle_config_export) == 1
+        assert workflow.count(bundle_resources_export) == 1
         assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 4
         assert workflow.count("POKECON_BUNDLE_CONFIG") == 3
         bundle_config_lines = tuple(
@@ -1425,7 +1466,10 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         assert installer_stage.count(canonical_installer_stage) == 1
     assert "--features" not in installer_stage
     post_bundle_config_export = build_stage.split(bundle_config_export, maxsplit=1)[1]
-    assert not post_bundle_config_export.strip()
+    if workflow_name == "package.yml":
+        assert not post_bundle_config_export.strip()
+    else:
+        assert post_bundle_config_export.strip() == bundle_resources_export
     ordered_statements = (
         error_preference,
         provenance_clear,
@@ -1472,8 +1516,16 @@ def test_package_ci_proves_windows_nsis_reproducibility() -> None:
     assert "tauri-cli --version 2.11.4" in repro
     assert '"SOURCE_DATE_EPOCH=0"' in repro
     assert repro.count("cargo tauri build --ci --bundles nsis") == 1
-    assert check.count("find -P") == 2
+    assert check.count("find -P") == 6
     assert "expected exactly one primary and one reproduction NSIS bundle" in check
+    assert "expected exactly one primary and one reproduction payload manifest" in check
+    assert (
+        "expected exactly one primary and one reproduction expanded-tree manifest"
+        in check
+    )
+    assert "payload manifest SHA-256 (staged resource payload):" in check
+    assert "expanded tree manifest SHA-256 (clean-install tree):" in check
+    assert "outer NSIS installer SHA-256:" in check
     assert "sha256sum --" in check
     assert "cmp --" in check
     assert repro_start < check_start < required_start

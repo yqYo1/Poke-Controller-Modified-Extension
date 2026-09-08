@@ -230,6 +230,11 @@ def test_clean_install_proves_both_modes_and_upgrade_reuses_exact_binary() -> No
     assert upgraded_install in lifecycle
     assert "$upgradedApplicationHash -cne $initialApplicationHash" in lifecycle
     assert "application_sha256 = $initialApplicationHash" in lifecycle
+    assert "installed_tree_sha256 = $installedTreeManifest.tree_sha256" in lifecycle
     assert "desktop_window_probes = 1" in lifecycle
     assert "web_startup_probes = 2" in lifecycle
+    assert "[string] $EvidenceOutput" in SCRIPT
+    assert "function Get-InstalledTreeManifest" in SCRIPT
+    assert "tree_sha256 = [Convert]::ToHexString($digest).ToLowerInvariant()" in SCRIPT
+    assert "Set-Content -LiteralPath $EvidenceOutput -Encoding utf8" in lifecycle
     assert lifecycle.index(clean_install) < lifecycle.index(upgraded_install)

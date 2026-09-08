@@ -46,7 +46,7 @@ use crate::script_runtime::ManagedUserScriptFactory;
 use crate::settings_runtime::{
     CameraSettingsApplier, CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
     NotificationSettingsApplier, RealtimeSettingsApplier, SerialSettingsApplier,
-    notification_config, reconcile_desktop_settings,
+    WebSocketSettingsApplier, notification_config, reconcile_desktop_settings,
 };
 
 const STATE_HISTORY_CAPACITY: usize = 256;
@@ -143,6 +143,7 @@ impl ProductionRuntime {
         ));
 
         let (realtime_applier, realtime_settings) = RealtimeSettingsApplier::new(&loaded)?;
+        let (websocket_applier, websocket_settings) = WebSocketSettingsApplier::new(&loaded)?;
         let (realtime, motion_jpeg, fallback_media_task) = start_media(
             camera.frame_source(),
             screenshot_settings.clone(),
@@ -182,6 +183,7 @@ impl ProductionRuntime {
             &loaded,
         )?);
         applier.push(realtime_applier);
+        applier.push(websocket_applier);
         let settings = SettingsService::new(loaded.clone(), Box::new(applier));
         let settings_snapshot = initial_settings_snapshot(&settings);
         let state_snapshot = initial_state_snapshot(&host, &camera, &serial).await?;
@@ -205,7 +207,8 @@ impl ProductionRuntime {
         }));
         let websocket_backend: Arc<dyn WebSocketBackend> = backend.clone();
         let websocket = WebSocketTransport::new(websocket_backend, WebSocketConfig::default())
-            .map_err(|_error| "WebSocket transport initialization failed".to_owned())?;
+            .map_err(|_error| "WebSocket transport initialization failed".to_owned())?
+            .with_heartbeat_settings(websocket_settings);
         let broker = websocket.broker();
         script_ui.install_broker(broker.clone())?;
 

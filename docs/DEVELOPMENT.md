@@ -14,6 +14,8 @@ hostに入っているRust、Python、Bun、Node.jsを直接使用しません�
 
 repositoryへ入ると`.envrc`の`use flake`が既定のtool-only devShellを読み込みます。新しいworktreeでは`direnv allow`を一度実行し、自動読込みを使わない場合は`nix develop`で入ります。このshellは開発toolだけを提供し、入るだけで製品をbuildしません。
 
+`.direnv/`はdirenvが生成するlocal stateであり、Git、Nix source boundary、formatterの入力へ含めません。sourceへ必要な設定やtoolを追加する場合は、`.envrc`ではなくflakeの正本と専用taskへ反映します。
+
 CIと同じ完了gateは`nix run .#<task>`または`nix flake check`で、formatは`nix fmt`、callerのworktreeへ書き込む対話操作は専用appで実行します。
 
 代表的な入口は次のとおりです。
@@ -394,6 +396,8 @@ commitはprojectの署名方針に従って署名します。
 push後はlocal成功だけで完了とせず、対象branchのremote HEAD SHAに対する2つの必須context（`Normal CI Required`と`Package CI Required`）を安定窓の完了まで監視します。必須contextが対象SHAで`completed`/`success`となり、かつ必須contextの集合が安定窓の間変化しなければ完了します。必須context以外の任意のcheckは、必須contextが完了すれば無視します。必須contextの欠落、古いSHA、実行中（queued/in_progress）、skipped、neutral、cancelled、timed_out、action_required、failureはいずれも成功としません。
 
 CI監視appはbranchと任意のtimeoutをscriptへ渡し、必要なcommandをflakeから提供します。既定timeoutと安定窓は`nix run .#ci-watch -- --help`が表示するscript定義を正準とします。終了statusは成功が0、必須contextの完了失敗が1、timeoutが124、usageが2で区別します。改ページや同一SHAの重複した歴史的check-runは最新idを採用しfail-closedに扱います。
+
+Normal CIのtiming gateは、同じ`change_kind`のcompleted runから検証済み`timing-report.json`を集め、10サンプルのnearest-rank p95をblocking判定します。履歴不足、30日を超えるstale、malformed report、失敗jobを含む履歴、またはthreshold超過はfail-closedです。履歴不足の初期runでもcurrent reportはartifactへ保存し、次のrunで履歴を蓄積します。
 
 ```bash
 nix run .#ci-watch -- "$BRANCH"

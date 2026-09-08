@@ -493,18 +493,140 @@ jobs:
             --jobs "$completed_jobs_json" \
             --run-metadata "$metadata_json" \
             --output "$report_json"
-          # p95 gate: blocking for fail-closed (insufficient samples or incomplete run)
-          # Current implementation validates the collected report is complete and critical-path safe.
-          # Historical p95 requires >=10 samples of same change_kind; until history is accumulated,
-          # we treat insufficient history as caveat (non-blocking), but we still fail-closed if
-          # the current report itself is incomplete or under-measures.
+          # Validate current report is complete and critical-path safe (fail-closed).
+          # The subsequent history gate retrieves trusted prior ci-timing artifacts for the same
+          # change_kind and computes blocking p95 (nearest-rank, 10 samples). Fail-closed on
+          # malformed, stale (>30d), incomplete, or threshold breach.
           nix run .#ci-timing -- validate "$(cat "$report_json")"
-          # Attempt p95 check if historical artifacts are available (optional, non-blocking until 10 samples)
-          # The p95 gate will become fully blocking once 10 completed reports are archived.
-          # For now, log caveat if insufficient history.
-          echo "timing p95 gate: requires 10 same-kind samples; current run contributes 1 (caveat: insufficient history for blocking p95)"
+      - name: Enforce timing p95 history gate (blocking, fail-closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          timing_dir="$RUNNER_TEMP/pokecon-ci-timing"
+          report_json="$timing_dir/timing-report.json"
+          history_dir="$timing_dir/history"
+          mkdir -p "$history_dir"
+          if [ ! -f "$report_json" ]; then
+            echo "timing p95 gate: current report not found at $report_json" >&2
+            exit 2
+          fi
+          cp "$report_json" "$history_dir/00-current.json"
+          change_kind="$(jq -er '.change_kind' "$report_json")"
+          case "$change_kind" in
+            fast|docs|product) ;;
+            *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
+          esac
+          case "$change_kind" in
+            fast) threshold=180 ;;
+            docs) threshold=300 ;;
+            product) threshold=720 ;;
+            *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
+          esac
+          echo "timing p95 gate: change_kind=$change_kind threshold=${threshold}s"
+          workflow_id="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/normal-ci.yml" --jq '.id' 2>/dev/null || echo "")"
+          if [ -z "$workflow_id" ] || [ "$workflow_id" = "null" ]; then
+            echo "timing p95 gate: failed to resolve Normal CI workflow id" >&2
+            exit 2
+          fi
+          runs_json="$timing_dir/workflow-runs.json"
+          tmp_runs="$timing_dir/runs-page.json"
+          aggregated_runs="$timing_dir/aggregated-runs.json"
+          echo '{"workflow_runs":[]}' > "$aggregated_runs"
+          for page in 1 2 3 4 5; do
+            if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?status=completed&per_page=100&page=${page}" > "$tmp_runs"; then
+              echo "timing p95 gate: failed to fetch workflow runs page $page" >&2
+              exit 2
+            fi
+            count="$(jq '.workflow_runs | length' "$tmp_runs")"
+            if [ "$count" -eq 0 ]; then
+              break
+            fi
+            jq -s '.[0].workflow_runs += .[1].workflow_runs | .[0]' "$aggregated_runs" "$tmp_runs" > "$runs_json" && mv "$runs_json" "$aggregated_runs"
+            if [ "$count" -lt 100 ]; then
+              break
+            fi
+          done
+          mv "$aggregated_runs" "$runs_json"
+          tmp_download_dir="$timing_dir/tmp-download"
+          mkdir -p "$tmp_download_dir"
+          collected=1
+          index=1
+          candidate_lines="$(jq -r --arg cur "${GITHUB_RUN_ID}" '.workflow_runs[] | select((.id|tostring) != $cur) | select(.conclusion == "success" or .conclusion == "failure") | "\(.id) \(.run_attempt // 1)"' "$runs_json")"
+          while IFS=" " read -r candidate_id candidate_attempt; do
+            if [ "$collected" -ge 10 ]; then break; fi
+            if [ -z "$candidate_id" ] || [ -z "$candidate_attempt" ]; then continue; fi
+            artifacts_json="$timing_dir/artifacts-${candidate_id}.json"
+            if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_id}/artifacts?per_page=100" > "$artifacts_json"; then
+              echo "timing p95 gate: failed to fetch artifacts for run $candidate_id" >&2
+              exit 2
+            fi
+            artifact_name="ci-timing-${candidate_id}-${candidate_attempt}"
+            artifact_ids="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name) | .id' "$artifacts_json")"
+            if [ -z "$artifact_ids" ]; then
+              continue
+            fi
+            for artifact_id in $artifact_ids; do
+              if [ "$collected" -ge 10 ]; then break; fi
+              zip_path="$tmp_download_dir/${artifact_id}.zip"
+              if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path"; then
+                echo "timing p95 gate: failed to download artifact $artifact_id for run $candidate_id" >&2
+                exit 2
+              fi
+              unzip_dir="$tmp_download_dir/unzip-${artifact_id}"
+              rm -rf "$unzip_dir"
+              mkdir -p "$unzip_dir"
+              if ! unzip -q "$zip_path" -d "$unzip_dir"; then
+                echo "timing p95 gate: failed to unzip artifact $artifact_id (malformed history)" >&2
+                exit 2
+              fi
+              json_path="$(find "$unzip_dir" -type f -name "timing-report.json" -print -quit)"
+              if [ -z "$json_path" ] || [ ! -f "$json_path" ]; then
+                echo "timing p95 gate: artifact $artifact_id missing timing-report.json (malformed history)" >&2
+                exit 2
+              fi
+              if ! jq -e . "$json_path" >/dev/null 2>&1; then
+                echo "timing p95 gate: malformed JSON in artifact $artifact_id" >&2
+                exit 2
+              fi
+              if ! jq -e '(.change_kind | type) == "string" and (.change_kind | length) > 0' "$json_path" >/dev/null 2>&1; then
+                echo "timing p95 gate: malformed history in artifact $artifact_id (missing or invalid change_kind)" >&2
+                exit 2
+              fi
+              candidate_kind="$(jq -r '.change_kind' "$json_path")"
+              if [ "$candidate_kind" != "$change_kind" ]; then
+                continue
+              fi
+              dest="$history_dir/$(printf "%02d" "$index")-run-${candidate_id}.json"
+              cp "$json_path" "$dest"
+              collected=$((collected + 1))
+              index=$((index + 1))
+              break
+            done
+          done <<< "$candidate_lines"
+          echo "timing p95 gate: collected $collected samples (including current) for $change_kind, need 10"
+          if [ "$collected" -lt 10 ]; then
+            echo "timing p95 gate: insufficient history - requires 10 same-kind samples for $change_kind, got $collected (incomplete history)" >&2
+            echo "timing p95 gate: history is incomplete or stale; failing closed" >&2
+            exit 1
+          fi
+          set -- "$history_dir"/*.json
+          if [ "$#" -ne 10 ]; then
+            echo "timing p95 gate: history file count mismatch: expected 10, got $#" >&2
+            exit 2
+          fi
+          echo "timing p95 gate: computing p95 over 10 samples for $change_kind (threshold ${threshold}s)..."
+          if ! nix run .#ci-timing -- p95 "$@" > "$timing_dir/timing-p95.json"; then
+            echo "timing p95 gate: p95 threshold or history validation failed" >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: ci-timing-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/pokecon-ci-timing/timing-report.json
-          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pokecon-ci-timing/timing-report.json
+            ${{ runner.temp }}/pokecon-ci-timing/timing-p95.json
+          # p95 output is absent during initial fail-closed bootstrap runs;
+          # keep current timing-report.json uploadable so history can accumulate.
+          if-no-files-found: warn

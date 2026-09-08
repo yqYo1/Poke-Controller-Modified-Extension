@@ -239,6 +239,8 @@ mutating HTTP requestはJSON media typeと`X-Pokecon-Request: 1`を必要とし�
 
 WebSocketはOriginを必須とし、browser以外のclientにも同じ境界を適用します。
 
+heartbeatの`ping_interval_sec`と`pong_timeout_sec`はruntime settings applierが既存接続へ即時配布します。設定変更時は、現在のping待機またはpong待機を取り消し、新しい値でtimerを再スケジュールします。接続ごとのheartbeat timerはtransportが所有し、設定の永続化や他componentの状態をWebSocket側で重複定義しません。
+
 これらはcross-origin誤操作を減らしますが、利用者認証の代替ではありません。
 
 loopback以外へのbindは同一networkのclientへ完全操作権限を渡します。

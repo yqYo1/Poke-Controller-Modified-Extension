@@ -18,6 +18,8 @@
 # not ignore
 !/.gitignore
 !/.envrc
+/.direnv/
+/.direnv/**
 !/flake.lock
 !/uv.lock
 !/AGENTS.md

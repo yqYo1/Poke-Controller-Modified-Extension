@@ -211,6 +211,49 @@ impl Default for WebSocketConfig {
     }
 }
 
+/// Validated heartbeat intervals for one WebSocket connection.
+///
+/// Both durations are strictly positive and `pong_timeout` never exceeds
+/// `ping_interval` so that an overlapping wait cannot outlive the next ping.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WebSocketRuntimeSettings {
+    ping_interval: Duration,
+    pong_timeout: Duration,
+}
+
+impl WebSocketRuntimeSettings {
+    /// Creates a validated heartbeat setting snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Rejects zero durations or a pong timeout that exceeds the ping interval.
+    pub fn new(
+        ping_interval: Duration,
+        pong_timeout: Duration,
+    ) -> Result<Self, WebSocketBuildError> {
+        if ping_interval.is_zero() || pong_timeout.is_zero() {
+            return Err(WebSocketBuildError::ZeroDuration);
+        }
+        if pong_timeout > ping_interval {
+            return Err(WebSocketBuildError::PongTimeoutExceedsInterval);
+        }
+        Ok(Self {
+            ping_interval,
+            pong_timeout,
+        })
+    }
+
+    #[must_use]
+    pub const fn ping_interval(&self) -> Duration {
+        self.ping_interval
+    }
+
+    #[must_use]
+    pub const fn pong_timeout(&self) -> Duration {
+        self.pong_timeout
+    }
+}
+
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub enum WebSocketBuildError {
     #[error("WebSocket durations must be greater than zero")]
@@ -269,6 +312,7 @@ struct WebSocketState {
     backend: Arc<dyn WebSocketBackend>,
     broker: WebSocketBroker,
     config: WebSocketConfig,
+    heartbeat_settings: Option<watch::Receiver<WebSocketRuntimeSettings>>,
     next_connection: Arc<AtomicU64>,
 }
 
@@ -325,9 +369,22 @@ impl WebSocketTransport {
                 backend,
                 broker: WebSocketBroker { sender, script_ui },
                 config,
+                heartbeat_settings: None,
                 next_connection: Arc::new(AtomicU64::new(0)),
             },
         })
+    }
+
+    /// Subscribes this transport to live heartbeat settings. New connections
+    /// immediately see the latest snapshot and each active connection
+    /// restarts its current wait from the instant a new snapshot is applied.
+    #[must_use]
+    pub fn with_heartbeat_settings(
+        mut self,
+        heartbeat_settings: watch::Receiver<WebSocketRuntimeSettings>,
+    ) -> Self {
+        self.state.heartbeat_settings = Some(heartbeat_settings);
+        self
     }
 
     #[must_use]
@@ -405,6 +462,7 @@ pub(crate) enum Outgoing {
     Close(CloseFrame),
 }
 
+#[allow(clippy::too_many_lines)]
 async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connection: ConnectionId) {
     let generation = InputGeneration {
         generation: format!("ws-{}", connection.get()),
@@ -481,14 +539,24 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
         state_sender.clone(),
         cancellation.clone(),
     ));
-    tasks.spawn(heartbeat(
-        connection,
-        control_sender.clone(),
-        pong_receiver,
-        state.config.heartbeat_interval,
-        state.config.pong_timeout,
-        cancellation.clone(),
-    ));
+    if let Some(heartbeat_settings) = state.heartbeat_settings.clone() {
+        tasks.spawn(heartbeat_with_settings(
+            connection,
+            control_sender.clone(),
+            pong_receiver,
+            heartbeat_settings,
+            cancellation.clone(),
+        ));
+    } else {
+        tasks.spawn(heartbeat(
+            connection,
+            control_sender.clone(),
+            pong_receiver,
+            state.config.heartbeat_interval,
+            state.config.pong_timeout,
+            cancellation.clone(),
+        ));
+    }
     if let Some((config, messages, logs, motion_jpeg_enabled)) = realtime.task {
         tasks.spawn(run_realtime_connection(
             config,
@@ -1153,6 +1221,97 @@ async fn heartbeat(
             cancellation.cancel();
             return;
         }
+    }
+}
+
+async fn heartbeat_with_settings(
+    connection: ConnectionId,
+    outgoing: mpsc::Sender<Outgoing>,
+    mut pong: mpsc::Receiver<String>,
+    heartbeat_settings: watch::Receiver<WebSocketRuntimeSettings>,
+    cancellation: CancellationToken,
+) {
+    // Each active connection tracks the latest snapshot and restarts its wait
+    // from the instant the settings channel reports a new value.
+    let mut settings = heartbeat_settings;
+    let mut current = settings.borrow_and_update().clone();
+    let mut next_ping = tokio::time::Instant::now() + current.ping_interval();
+    let mut sequence = 0_u64;
+    loop {
+        // Wait for the next ping deadline, a settings update, or cancellation.
+        // Settings updates cancel the current heartbeat wait and restart it from now.
+        let settings_changed = async {
+            if settings.changed().await.is_ok() {
+                Some(settings.borrow_and_update().clone())
+            } else {
+                // Sender closed – disable future rescheduling by pending forever.
+                std::future::pending::<Option<WebSocketRuntimeSettings>>().await
+            }
+        };
+        tokio::select! {
+            () = cancellation.cancelled() => return,
+            () = tokio::time::sleep_until(next_ping) => {},
+            maybe = settings_changed => {
+                if let Some(updated) = maybe {
+                    current = updated;
+                    next_ping = tokio::time::Instant::now() + current.ping_interval();
+                }
+                continue;
+            }
+        }
+
+        let Some(next) = sequence.checked_add(1) else {
+            cancellation.cancel();
+            return;
+        };
+        sequence = next;
+        let nonce = format!("ws-{}-{sequence}", connection.get());
+        if outgoing
+            .try_send(Outgoing::Json(ServerMessage::Ping(MessageData {
+                data: Nonce {
+                    nonce: nonce.clone(),
+                },
+            })))
+            .is_err()
+        {
+            cancellation.cancel();
+            return;
+        }
+
+        let mut pong_deadline = tokio::time::Instant::now() + current.pong_timeout();
+        let matched = loop {
+            let pong_settings_changed = async {
+                if settings.changed().await.is_ok() {
+                    Some(settings.borrow_and_update().clone())
+                } else {
+                    std::future::pending::<Option<WebSocketRuntimeSettings>>().await
+                }
+            };
+            tokio::select! {
+                () = cancellation.cancelled() => return,
+                () = tokio::time::sleep_until(pong_deadline) => break false,
+                maybe = pong_settings_changed => {
+                    if let Some(updated) = maybe {
+                        current = updated;
+                        // Restart pong wait from the settings-application instant.
+                        pong_deadline = tokio::time::Instant::now() + current.pong_timeout();
+                    }
+                }
+                received = pong.recv() => match received {
+                    Some(received) if received == nonce => break true,
+                    Some(_stale) => {}
+                    None => break false,
+                }
+            }
+        };
+
+        if !matched {
+            cancellation.cancel();
+            return;
+        }
+        // Successful pong – schedule next ping from now with the latest interval.
+        current = settings.borrow().clone();
+        next_ping = tokio::time::Instant::now() + current.ping_interval();
     }
 }
 
@@ -2641,6 +2800,128 @@ mod tests {
             );
         }
         socket.close(None).await.expect("close");
+        backend.wait_for_disconnect().await;
+        stop_server(cancellation, task).await;
+    }
+
+    #[test]
+    fn websocket_runtime_settings_validate_intervals() {
+        assert_eq!(
+            WebSocketRuntimeSettings::new(Duration::ZERO, Duration::from_secs(1)),
+            Err(WebSocketBuildError::ZeroDuration)
+        );
+        assert_eq!(
+            WebSocketRuntimeSettings::new(Duration::from_secs(1), Duration::ZERO),
+            Err(WebSocketBuildError::ZeroDuration)
+        );
+        assert_eq!(
+            WebSocketRuntimeSettings::new(Duration::from_secs(1), Duration::from_secs(2)),
+            Err(WebSocketBuildError::PongTimeoutExceedsInterval)
+        );
+        let valid = WebSocketRuntimeSettings::new(Duration::from_secs(15), Duration::from_secs(10))
+            .expect("valid heartbeat settings");
+        assert_eq!(valid.ping_interval(), Duration::from_secs(15));
+        assert_eq!(valid.pong_timeout(), Duration::from_secs(10));
+    }
+
+    #[tokio::test]
+    async fn heartbeat_ping_interval_change_reschedules_active_wait_from_application_instant() {
+        let (sender, receiver) = tokio::sync::watch::channel(
+            WebSocketRuntimeSettings::new(Duration::from_secs(10), Duration::from_secs(5))
+                .expect("initial heartbeat settings"),
+        );
+        let backend = Arc::new(TestBackend::new());
+        let mut config = test_config();
+        // Keep config long so the initial wait would be 10 seconds if not rescheduled via watch.
+        config.heartbeat_interval = Duration::from_secs(10);
+        config.pong_timeout = Duration::from_secs(5);
+        let transport = WebSocketTransport::new(backend.clone(), config)
+            .expect("transport")
+            .with_heartbeat_settings(receiver);
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        let _generation = initial_generation(&mut socket).await;
+
+        // Active heartbeat wait is currently 10 seconds. Change it after a short delay;
+        // the next ping must be delivered ~250 ms after the settings-application instant.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let change_at = tokio::time::Instant::now();
+        sender.send_replace(
+            WebSocketRuntimeSettings::new(Duration::from_millis(250), Duration::from_millis(120))
+                .expect("updated heartbeat settings"),
+        );
+        let message = receive_server_within(&mut socket, Duration::from_secs(2)).await;
+        let elapsed = change_at.elapsed();
+        assert!(
+            matches!(message, ServerMessage::Ping(_)),
+            "expected ping after interval reschedule, got {message:?}"
+        );
+        assert!(
+            elapsed >= Duration::from_millis(150) && elapsed <= Duration::from_secs(1),
+            "ping must be rescheduled from settings-application instant, elapsed={elapsed:?}"
+        );
+        // Ensure no extra early ping; the pong path must remain functional.
+        if let ServerMessage::Ping(MessageData { data }) = message {
+            send_client(&mut socket, &ClientMessage::Pong(MessageData { data })).await;
+        }
+        socket.close(None).await.expect("close");
+        backend.wait_for_disconnect().await;
+        stop_server(cancellation, task).await;
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unnested_or_patterns, clippy::match_like_matches_macro)]
+    async fn heartbeat_pong_timeout_change_reschedules_active_pong_wait_from_application_instant() {
+        // Start with a moderate ping and short pong timeout. After the first ping is sent,
+        // the server waits for pong; changing pong_timeout must restart that wait from now.
+        let (sender, receiver) = tokio::sync::watch::channel(
+            WebSocketRuntimeSettings::new(Duration::from_millis(500), Duration::from_millis(200))
+                .expect("initial heartbeat settings"),
+        );
+        let backend = Arc::new(TestBackend::new());
+        let mut config = test_config();
+        config.heartbeat_interval = Duration::from_millis(500);
+        config.pong_timeout = Duration::from_millis(400);
+        let transport = WebSocketTransport::new(backend.clone(), config)
+            .expect("transport")
+            .with_heartbeat_settings(receiver);
+        let (address, cancellation, task) = start_server(&transport).await;
+        let mut socket = connect(address).await;
+        let _generation = initial_generation(&mut socket).await;
+
+        // First ping arrives quickly (500 ms). Do not answer it; instead shorten the pong timeout
+        // while the server is waiting for the pong.
+        let ServerMessage::Ping(MessageData { data: first_nonce }) =
+            receive_server_within(&mut socket, Duration::from_secs(2)).await
+        else {
+            panic!("first ping must be delivered");
+        };
+        // Shortly after the ping, extend the pong timeout from 200ms to 500ms.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let change_at = tokio::time::Instant::now();
+        sender.send_replace(
+            WebSocketRuntimeSettings::new(Duration::from_millis(500), Duration::from_millis(500))
+                .expect("extended pong timeout"),
+        );
+        // The connection must close ~500 ms after the settings-application instant,
+        // not ~150 ms after the original ping. Verify by waiting for the server to close.
+        let closed = timeout(Duration::from_secs(2), socket.next()).await;
+        let elapsed = change_at.elapsed();
+        let is_closed = match closed {
+            Ok(Some(Ok(ClientFrame::Close(_)))) | Ok(None) | Ok(Some(Err(_))) => true,
+            _ => false,
+        };
+        // The server's heartbeat timeout cancels the connection, which manifests as a closed
+        // WebSocket (Close frame or stream termination). Ensure it happened near the rescheduled deadline.
+        assert!(
+            is_closed,
+            "pong timeout reschedule must close connection after shortened timeout"
+        );
+        assert!(
+            elapsed >= Duration::from_millis(350) && elapsed <= Duration::from_secs(1),
+            "pong wait must be restarted from settings-application instant, elapsed={elapsed:?}"
+        );
+        let _ = first_nonce;
         backend.wait_for_disconnect().await;
         stop_server(cancellation, task).await;
     }

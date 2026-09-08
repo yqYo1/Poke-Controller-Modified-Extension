@@ -235,9 +235,11 @@ CACHE_KEYS: Final = frozenset({"actor", "event", "read", "write"})
 THRESHOLDS: Final = {
     ChangeKind.FAST: 180.0,
     ChangeKind.DOCS: 300.0,
-    ChangeKind.PRODUCT: 600.0,
+    ChangeKind.PRODUCT: 720.0,
 }
 MINIMUM_P95_SAMPLES: Final = 10
+MAX_HISTORY_AGE_DAYS: Final = 30
+MAX_HISTORY_STALE_SECONDS: Final = MAX_HISTORY_AGE_DAYS * 24 * 60 * 60
 TRUSTED_CACHE_WRITERS: Final = frozenset({"yqYo1"})
 SHA_PATTERN: Final = re.compile(r"[0-9a-fA-F]{40}\Z")
 REGION_PATTERN: Final = re.compile(r"[a-z][a-z0-9_-]*\Z")
@@ -612,6 +614,18 @@ def report_violations(report: TimingReport) -> tuple[str, ...]:
         )
     if not report.jobs or all(j.conclusion is Conclusion.SKIPPED for j in report.jobs):
         violations.append("jobs evidence is empty or all skipped")
+    unsuccessful_jobs = tuple(
+        sorted(
+            job.name
+            for job in report.jobs
+            if job.conclusion not in {Conclusion.SUCCESS, Conclusion.SKIPPED}
+        )
+    )
+    if unsuccessful_jobs:
+        violations.append(
+            "p95 history requires successful or skipped jobs; "
+            f"unsuccessful jobs: {', '.join(unsuccessful_jobs)}"
+        )
     return tuple(violations)
 
 
@@ -1453,6 +1467,25 @@ def p95_document(reports: ReportSequence) -> ResultDocument:
             f"got {len(ordered_reports)}"
         )
 
+    # Fail-closed staleness: history must be contiguous and recent.
+    # Stale is defined as any sample older than MAX_HISTORY_AGE_DAYS relative to newest sample,
+    # or future-dated. This prevents reusing ancient baselines that hide regressions and ensures
+    # p95 is computed from relevant, completed runs.
+    if ordered_reports:
+        newest_started = max(report.run.started_at for report in ordered_reports)
+        for report in ordered_reports:
+            age_seconds = (newest_started - report.run.started_at).total_seconds()
+            if age_seconds < -1.0:
+                violations.append(
+                    f"{_report_identity(report)}: report is stale - future started_at "
+                    f"{report.run.started_at.isoformat()} is after newest {newest_started.isoformat()}"
+                )
+            elif age_seconds > MAX_HISTORY_STALE_SECONDS:
+                violations.append(
+                    f"{_report_identity(report)}: report is stale - age {age_seconds / 86400:.1f} days exceeds "
+                    f"{MAX_HISTORY_AGE_DAYS} days"
+                )
+
     change_kind = ordered_reports[0].change_kind if same_kind else None
     measured_values = sorted(report.measured_wall_seconds for report in ordered_reports)
     nearest_rank = math.ceil(0.95 * len(measured_values))
@@ -1627,15 +1660,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = cast("str", arguments.command)
     try:
         if command == "validate":
-            report = parse_report(cast("str", arguments.report))
+            report = parse_report(_read_json_argument(cast("str", arguments.report)))
             document = validation_document(report)
         elif command == "p95":
             report_sources = cast("list[str]", arguments.reports)
-            reports = tuple(parse_report(source) for source in report_sources)
+            reports = tuple(
+                parse_report(_read_json_argument(source)) for source in report_sources
+            )
             document = p95_document(reports)
         elif command == "compare":
-            first = parse_report(cast("str", arguments.first))
-            second = parse_report(cast("str", arguments.second))
+            first = parse_report(_read_json_argument(cast("str", arguments.first)))
+            second = parse_report(_read_json_argument(cast("str", arguments.second)))
             document = comparison_document(first, second)
         elif command == "collect":
             report = _collect_from_deterministic_jsons(

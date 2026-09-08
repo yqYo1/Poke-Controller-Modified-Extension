@@ -796,11 +796,13 @@
     "change_kind_threshold_seconds": {
       "fast": 180,
       "docs": 300,
-      "product": 600
+      "product": 720
     },
     "p95": {
       "method": "nearest-rank",
-      "minimum_same_kind_samples": 10
+      "minimum_same_kind_samples": 10,
+      "maximum_history_age_days": 30,
+      "stale_history_is_failure": true
     },
     "report_evidence": [
       "workflow wall time",

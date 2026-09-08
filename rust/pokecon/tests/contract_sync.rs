@@ -507,7 +507,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     assert_eq!(timing["command"], "nix run .#ci-timing --");
     assert_eq!(
         timing["change_kind_threshold_seconds"],
-        serde_json::json!({"fast": 180, "docs": 300, "product": 600})
+        serde_json::json!({"fast": 180, "docs": 300, "product": 720})
     );
     assert_eq!(timing["p95"]["method"], "nearest-rank");
     assert_eq!(timing["p95"]["minimum_same_kind_samples"], 10);
@@ -522,7 +522,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     );
     assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
     assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
-    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 600.0"));
+    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 720.0"));
     assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
     assert!(CI_TIMING.contains("COLLECTION_KIND_UPSTREAM_COMPLETED_MAX"));
     assert!(CI_TIMING.contains("critical_path_wall_seconds"));

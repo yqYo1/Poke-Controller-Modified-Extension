@@ -15,7 +15,7 @@
 | **周辺機器開発者** | シリアル通信と対象MCUの電気的要件を理解している | [周辺機器開発ガイド](PERIPHERAL_DEVELOPMENT.md) |
 | **HTTPクライアント開発者** | REST、WebSocket、JSON、ブラウザーのOriginを理解している | [HTTP APIガイド](HTTP_API.md) |
 | **本体開発者** | Rust、TypeScript、Svelte、Nixの開発経験がある | [本体開発ガイド](DEVELOPMENT.md) |
-| **リリース検証担当者** | 実機試験と再現可能な証拠を管理できる | [外部受入ゲート](ACCEPTANCE.md) |
+| **リリース検証担当者** | 実機試験、実browser、再現可能な証拠を管理できる | [外部受入ゲート](ACCEPTANCE.md) |
 
 上級利用者向け文書は一般操作を説明し直さず、[利用ガイド](USER_GUIDE.md)を読了していることを前提にします。
 
@@ -39,7 +39,7 @@
 | 症状から原因を切り分ける | [トラブルシュート](TROUBLESHOOTING.md) |
 | process境界、所有権、状態transactionを理解する | [アーキテクチャ](ARCHITECTURE.md) |
 | 本体を変更し、生成、検査、CIを通す | [本体開発ガイド](DEVELOPMENT.md) |
-| 実機、実ブラウザー、性能、securityを判定する | [外部受入ゲート](ACCEPTANCE.md) |
+| 実機、実ブラウザー、securityを判定する | [外部受入ゲート](ACCEPTANCE.md) |
 
 ## 各文書の責務を区別する
 

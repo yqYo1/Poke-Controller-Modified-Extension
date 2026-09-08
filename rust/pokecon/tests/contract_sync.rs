@@ -1347,7 +1347,12 @@ fn external_acceptance_contract_closes_steps_and_release_matrix() {
         ])
     );
     for capability in capabilities {
-        assert_eq!(capability["release_required"], true);
+        let capability_id = string_at(capability, "id");
+        let expected_release_required = capability_id != "performance";
+        assert_eq!(
+            capability["release_required"], expected_release_required,
+            "only performance is CI-only"
+        );
         let steps = capability["required_steps"]
             .as_array()
             .expect("acceptance capability steps must be an array");

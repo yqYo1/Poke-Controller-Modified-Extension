@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pokecon.invalid/schemas/acceptance-record.schema.json",
-  "title": "PokeCon external acceptance record",
+  "title": "PokeCon acceptance record",
   "x-pokecon-release-matrix": {
     "specification_version": "2.2.0",
     "platforms": ["linux", "windows"],
@@ -74,7 +74,7 @@
           "sample_collection",
           "threshold_evaluation"
         ],
-        "release_required": true,
+        "release_required": false,
         "matrix_per_browser": false
       },
       {

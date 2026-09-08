@@ -179,8 +179,9 @@ def test_passed_record_requires_forward_elapsed_time() -> None:
 
 def test_release_candidate_requires_every_platform_and_browser_gate() -> None:
     contract = load_contract(SCHEMA)
+    assert not contract.capabilities["performance"].release_required
     records = release_matrix_records(contract)
-    assert len(records) == len(expected_release_gate_keys(contract)) == 24
+    assert len(records) == len(expected_release_gate_keys(contract)) == 22
     assert missing_release_gates(records, contract, SOURCE_COMMIT) == []
 
     removed = records.pop()
@@ -211,7 +212,7 @@ def test_release_candidate_cli_validates_the_complete_matrix(tmp_path: Path) -> 
         write_record(tmp_path / f"record-{index:02}.json", record)
     assert main(["--release-candidate", SOURCE_COMMIT, str(tmp_path)]) == 0
 
-    (tmp_path / "record-23.json").unlink()
+    (tmp_path / "record-21.json").unlink()
     with pytest.raises(SystemExit) as failure:
         main(["--release-candidate", SOURCE_COMMIT, str(tmp_path)])
     assert failure.value.code == 1

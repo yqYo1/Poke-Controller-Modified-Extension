@@ -1,16 +1,16 @@
 # 外部環境で受入判定を記録する
 
-この文書は、release candidateを実機、実browser、clean installationで判定するrelease担当者と本体開発者向けです。
+この文書は、release candidateを実機、実browser、clean installationで判定するrelease担当者と本体開発者向けです。性能はCI性能gateで判定し、この文書の外部platform受入には含めません。
 
 一般利用者の動作確認手順ではありません。
 
-CI fixtureだけでは証明できないUSB、MCU firmware、対象console、物理camera、browser、性能、desktop lifecycleを同じ形式で記録します。
+CI fixtureだけでは証明できないUSB、MCU firmware、対象console、物理camera、browser、desktop lifecycleを同じ形式で記録します。
 
 未実施のgateを成功として記録しません。
 
 ## CI、仮想I/O、外部受入を分ける
 
-**CI gate**は正準contract、unit test、integration fixture、build、lintを決定的に検査します。
+**CI gate**は正準contract、unit test、integration fixture、build、lint、mock／virtual I/Oによる性能回帰を決定的に検査します。
 
 **仮想I/O gate**はLinux kernelのPTYとV4L2 loopbackを使い、productionのnative OS APIまでを検査します。
 
@@ -21,6 +21,8 @@ CI fixtureだけでは証明できないUSB、MCU firmware、対象console、物
 CIや仮想I/Oの成功を、外部受入の成功へ読み替えません。
 
 実機failureを回避するCI専用backendやproduction外のprotocolで合格させません。
+
+性能のp50、p95、maximum、throughputはCI上のmock／virtual I/Oだけで計測します。実機のdriver、firmware、物理signalを含むend-to-end性能を測るためのhardware計測環境は作成しません。物理境界そのものの動作確認は、性能値とは別の外部受入gateとして残します。
 
 ## 対象commitとartifactを固定する
 
@@ -70,6 +72,8 @@ screen captureやpacket captureにもsecretがないことを保存前に確認�
 
 一つのrecordは一つのplatformとcapabilityを表します。
 
+`performance` recordはCI artifactとして保存し、`artifacts/hardware/`の外部受入recordおよびrelease candidateのexternal matrixとは別に扱います。
+
 `source_commit`には40桁の対象commitを記録します。
 
 `build_identity`にはartifact hashまたはNix store pathを記録します。
@@ -79,7 +83,7 @@ screen captureやpacket captureにもsecretがないことを保存前に確認�
 schemaとsemantic ruleは次で検証します。
 
 ```bash
-nix run .#acceptance-record-check -- /absolute/path/to/artifacts/hardware/linux/performance/2026-01-01T000000Z.json
+nix run .#acceptance-record-check -- /absolute/path/to/artifacts/ci/performance/linux/2026-01-01T000000Z.json
 ```
 
 同じsource commitに必要なrelease matrix全体は次で検証します。
@@ -207,11 +211,11 @@ browser version、backend platform、input device、zoom、accessibility modeを
 
 一つのChromium browser成功を別browserの成功へ流用しません。
 
-## 性能gate
+## CI性能gate
 
-LinuxとWindowsのrelease buildを別々に測定します。
+性能の受入判定は実機では行わず、LinuxとWindowsのrelease buildをCI上で別々に測定します。
 
-1920×1080既知frame、接続済みloopback controller、他の高負荷processを停止したclean machineを使用します。
+1920×1080既知frame、mockまたはloopback controller、PTY／V4L2 loopback等のvirtual I/O、他の高負荷processを停止したclean CI runnerを使用します。物理camera、MCU、対象consoleは接続しません。
 
 60秒warm-up後に単調時計で各metricを300 sample以上取得します。
 
@@ -219,7 +223,7 @@ LinuxとWindowsのrelease buildを別々に測定します。
 
 capabilityは`performance`です。
 
-1. `measurement_environment`：build、artifact hash、device、browser、clock、frame fixture、loopback経路を記録します。
+1. `measurement_environment`：build、artifact hash、CI runner、browser、clock、frame fixture、mock／loopback経路を記録します。physical deviceは記録対象にしません。
 2. `warmup`：60秒warm-upし、resolution、FPS、接続経路が安定したことを確認します。
 3. `sample_collection`：次の5 metricを同じ条件で各300 sample以上取得します。
 4. `threshold_evaluation`：raw sampleからp50、p95、maximumを再計算し、閾値と一致することを確認します。
@@ -241,6 +245,8 @@ UI入力遅延はevent timestampから次のpaintまでを測ります。
 `performance` recordには5 metricすべてを含めます。
 
 debug build、異なるresolution、sample不足の結果を閾値判定へ使用しません。
+
+このrecordはrequired CI gateの証跡であり、外部platform受入recordや実機性能の代用品ではありません。
 
 ## desktop lifecycle
 
@@ -301,9 +307,10 @@ LAN code executionが成功することは現在の信頼modelの確認であり
 
 同じsource commitについて、次のrecordが揃うまで外部platform gateは未完了です。
 
+CI性能recordは別のrequired CI gateで検証し、以下の外部platform matrixには含めません。
+
 - LinuxとWindowsのMCUとserial。
 - LinuxとWindowsのcamera。
-- LinuxとWindowsのperformance。
 - LinuxとWindowsのdesktop lifecycle。
 - LinuxとWindowsのaudio。
 - LinuxとWindowsのcredential付き外部service。

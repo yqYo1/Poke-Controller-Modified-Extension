@@ -1,4 +1,4 @@
-"""Validate external acceptance records and the complete release matrix."""
+"""Validate acceptance records and the complete external release matrix."""
 
 from __future__ import annotations
 

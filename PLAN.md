@@ -66,7 +66,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-11-36** 禁止する内部依存方向を確定する（予定証跡: forbidden-edge fixture付きdependency check）。
 - [ ] **AR-11-39** 各移行前に移動／削除する型、trait、moduleをinventory化する（予定証跡: `nix run .#check`の段階別inventoryと許可済みVCS入口`git grep`の移行後残存参照log）。
 - [ ] **AR-11-40** 移行段階、監督／資源service実行ファイル、共通workerごとの検証commandを確定する（予定証跡: 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7ごとのNix command／期待結果表と実行log）。
-- [ ] **AR-11-10** 主経路のlatency、throughput、停止、復旧の受入条件を定義する（予定証跡: 測定fixture、閾値、移行前baseline、移行後report）。
+- [ ] **AR-11-10** 主経路のlatency、throughput、停止、復旧の受入条件を定義する（予定証跡: CI上のmock／virtual I/O測定fixture、閾値、移行前baseline、移行後report。実機の性能測定環境は作成しない）。
 - [ ] **AR-11-37** 別processと同一processの境界を確定する（予定証跡: process／module deployment diagramとIPC境界test）。
 - [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
 
@@ -125,7 +125,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] `.direnv/`をGit、Nix repository source、formatter入力から除外し、source-filter／routing／mutation契約を更新した。
 - [x] `nix run .#check`（production audit 1件、Web 74件、pytest 460件、Rust 414件、mutation 395件／4 shard）、`nix run .#web-check`、`nix run .#typos`、`nix run .#actionlint`、`nix flake check --no-build --show-trace`、`nix fmt -- --ci`、Clippyが成功した。
 - [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
-- [ ] GitHub上のfresh push後に、同一`change_kind`の10 completed timing artifact、実署名Windows runner、Release tag artifact、実機upgrade／uninstall／latency証跡を取得するまでは、外部受入を完了扱いにしない。
+- [ ] GitHub上のfresh push後に、同一`change_kind`の10 completed timing artifact、CI性能artifact、実署名Windows runner、Release tag artifact、実機upgrade／uninstall証跡を取得するまでは、該当する受入を完了扱いにしない。実機latency／throughput証跡は要求しない。
 
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）
 
@@ -525,7 +525,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 ### 4.1 主経路と優先順位
 
 - [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に`SPECIFICATION.md`の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
-- [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: 非競合時の機能別latency／throughput／stability report）。
+- [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: CI上のmock／virtual I/Oによる非競合時の機能別latency／throughput／stability report）。
 - [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
 - [x] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（証跡: `cargo test --locked --workspace --all-targets --all-features` の input／notification／worker lifecycle fault tests）。

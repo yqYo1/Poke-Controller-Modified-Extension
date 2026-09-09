@@ -18,8 +18,19 @@
 - [x] 開始時の作業ツリーがcleanで、HEADが`e20fad5a`、`origin/refactor-rust-core`との差が0/0であることを変更前の`git status --short --branch`と`git rev-list --left-right --count`で記録した（2026-07-30 JST）。
 - [x] 旧実装の不在を前提にした旧 `PLAN.md` を廃止し、本チェックリストへ置き換えた。
 - [x] 2026-07-30時点の旧フェーズ1「flake appへの開発入口移行」を完了した（実装`23149e3`、受入`1e0836b`、再現性修正`7a01da0`。最終GitHub Actions 9/9 success）。
-- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を再受入する。
-- [ ] 全フェーズ完了後の要件別監査を通過する。
+- [x] 現行実装を含む署名commit `d1de87c86e000192b85bb576736b115a94a06255`を`refactor/rust-core`へpushし、worktree cleanおよびlocal／remote SHA一致を確認した。
+- [x] 同commitのNormal CI run `34272925506`とPackage CI run `34272925529`がcompleted／successとなり、required aggregateを通過した。
+- [x] timing artifact `ci-timing-34272925506-1`（artifact ID `10075004892`）を保存し、同一`change_kind`の履歴を使うblocking／fail-closed p95 gateをfresh CIで通過した。
+
+### 現行の残タスク（アシスタント担当）
+
+- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を、clean worktreeと4 systemの証跡で再受入する。
+- [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。実機latency／throughput計測環境は作成しない。
+- [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
+
+### 担当外の外部操作
+
+- Release tag（`v*`）の作成・pushは利用者担当とする。tag作成およびtagを起点とするRelease公開は本計画のアシスタント残タスク／完了条件に含めず、利用者から明示指示があった場合だけ実施する。
 
 ## レビュー要件トレーサビリティ
 
@@ -125,7 +136,8 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] `.direnv/`をGit、Nix repository source、formatter入力から除外し、source-filter／routing／mutation契約を更新した。
 - [x] `nix run .#check`（production audit 1件、Web 74件、pytest 460件、Rust 414件、mutation 395件／4 shard）、`nix run .#web-check`、`nix run .#typos`、`nix run .#actionlint`、`nix flake check --no-build --show-trace`、`nix fmt -- --ci`、Clippyが成功した。
 - [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
-- [ ] GitHub上のfresh push後に、同一`change_kind`の10 completed timing artifact、CI性能artifact、実署名Windows runner、Release tag artifact、実機upgrade／uninstall証跡を取得するまでは、該当する受入を完了扱いにしない。実機latency／throughput証跡は要求しない。
+- [x] fresh push後のNormal CIで同一`change_kind`のcompleted timing artifactを保存し、10-sample p95履歴gateをblocking／fail-closedで通過した。Package CIでは実署名Windows runnerのclean install／startup／upgrade／uninstall、payload／expanded tree／outer NSIS installerの三層一致を確認した（Normal `34272925506`、Package `34272925529`）。
+- [ ] CI上のmock／virtual I/O性能artifactを実装し、latency／throughputのp50／p95／p99、throughput、固定測定条件、baseline／thresholdを保存してrequired gateへ接続する。実機latency／throughput証跡は要求しない。
 
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）
 
@@ -407,7 +419,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 #### 2.5／2.6 checkpoint証跡（2026-08-06、部分完了）
 
-下表はdesktop配布境界、`tauri-shell`廃止、およびPython native extension削除の実装／通常CI証跡である。AR-10.9-07、AR-11-21とその2子項目は完了した。AR-13.1-28は`v*` tagで起動するRelease CIのartifact manifestが未取得のため未完了のままとする。
+下表はdesktop配布境界、`tauri-shell`廃止、およびPython native extension削除の実装／通常CI証跡である。AR-10.9-07、AR-11-21とその2子項目、およびAR-13.1-28の実装条件は完了した。tagを起点とするRelease artifactの取得は利用者担当の外部操作であり、本計画のアシスタント残タスクには含めない。
 
 | 対象 | 実測結果 |
 | --- | --- |
@@ -436,7 +448,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] **AR-11-21** `pokecon-pybindings`とnative wheelを削除する移行手順を実施する（証跡: `nix run .#check`のfull aggregate実測600.9s、Python import／wheel negative test、Nix app 51→49のartifact差分と上記checkpoint）。
 - [x] Python packageから`_native`のimport、registry、maturin、native wheel生成を削除する（証跡: pure-Python wheel／`ModuleNotFoundError` negative test、active marker 0件）。
 - [x] Nix、release gate、成果物一覧からnative wheel参照を削除する（証跡: Nix app／Release workflow差分、first-party wheelを拒否するrelease／package negative test、Package CIのOS別2-file manifest）。
-- [ ] **AR-13.1-28** Python packageから`_native`のimportとwheel生成を削除し、Nix、maturin、release gate、成果物一覧にnative wheel参照が残っていない（実装済み部分証跡: 許可済み`git grep`のactive marker 0件、`nix run .#test`のPython import／wheel negative test、`nix run .#check`のfull aggregate実測600.9s。未完了証跡: `Release`は`v*` tag専用で、`8726b23142345bc702655ced24f35240f96acbb4`のrunは通常CI 5件だけであり、実Releaseのartifact manifestは未取得）。
+- [x] **AR-13.1-28** Python packageから`_native`のimportとwheel生成を削除し、Nix、maturin、release gate、成果物一覧にnative wheel参照が残っていない（証跡: 許可済み`git grep`のactive marker 0件、`nix run .#test`のPython import／wheel negative test、`nix run .#check`のfull aggregate、release／package negative test、Package CI `34272925529`のOS別manifest。tagを起点とするRelease artifactの取得はこの実装条件の証跡とは分離し、利用者担当の外部操作として扱う）。
 
 ### 2.7 旧crateとworkspace参照の削除
 
@@ -578,13 +590,13 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ## フェーズ 5 — 配布、文書、最終監査
 
-- [ ] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む。
-- [ ] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する。
+- [x] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む（証跡: Package CI `34272925529`のLinux／Windows bundle、clean-install smoke、runtime／resource manifest）。
+- [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
 - [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
 - [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
-- [ ] 最終 push 後の GitHub CI を完了まで監視し、全 required gate の成功を確認する。
-- [ ] `PLAN.md` の全項目を証拠に基づいて `[x]` に更新する。
+- [x] 最終 push 後のGitHub CIを完了まで監視し、Normal／Packageのrequired aggregate成功を確認した（Normal `34272925506`、Package `34272925529`）。
+- [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。Release tagの作成・pushはこの監査対象のアシスタントタスクに含めない。

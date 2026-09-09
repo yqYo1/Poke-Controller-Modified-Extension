@@ -33,6 +33,8 @@ ZERO_SHA = "0" * 40
     ("path", "expected_regions"),
     [
         ("README.md", {Region.DOCS}),
+        ("PLAN.md", set[Region]()),
+        ("TASK.md", set[Region]()),
         ("generated/settings.schema.json", {Region.CONTRACTS}),
         (
             "rust/pokecon/src/lib.rs",

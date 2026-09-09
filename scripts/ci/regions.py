@@ -55,6 +55,7 @@ DOC_PATHS: Final = frozenset(
         "LICENSE",
     }
 )
+PLANNING_PATHS: Final = frozenset({"PLAN.md", "TASK.md"})
 CONTRACT_PATHS: Final = frozenset(
     {
         "SPECIFICATION.md",
@@ -270,6 +271,10 @@ def regions_for_path(path: str) -> frozenset[Region]:
     """Return every directly affected region for one normalized path."""
     if is_ci_control_path(path):
         return frozenset(REGIONS)
+    # Planning metadata is checked by the always-on fast lane, but it is not
+    # user-facing documentation and must not consume the docs timing history.
+    if path in PLANNING_PATHS:
+        return frozenset()
 
     regions: set[Region] = set()
     suffix = PurePosixPath(path).suffix.lower()

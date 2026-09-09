@@ -21,6 +21,7 @@
 - [x] 現行実装を含む署名commit `d1de87c86e000192b85bb576736b115a94a06255`を`refactor/rust-core`へpushし、worktree cleanおよびlocal／remote SHA一致を確認した。
 - [x] 同commitのNormal CI run `34272925506`とPackage CI run `34272925529`がcompleted／successとなり、required aggregateを通過した。
 - [x] timing artifact `ci-timing-34272925506-1`（artifact ID `10075004892`）を保存し、同一`change_kind`の履歴を使うblocking／fail-closed p95 gateをfresh CIで通過した。
+- [x] `PLAN.md`／将来の`TASK.md`を作業追跡用メタデータとしてCIのdocs領域分類から除外し、常時実行のfast checksでlintする契約を追加した（`scripts/ci/regions.py`、`tests/quality/test_ci_regions.py`）。
 
 ### 現行の残タスク（アシスタント担当）
 
@@ -598,5 +599,5 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
-- [x] 最終 push 後のGitHub CIを完了まで監視し、Normal／Packageのrequired aggregate成功を確認した（Normal `34272925506`、Package `34272925529`）。
-- [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。Release tagの作成・pushはこの監査対象のアシスタントタスクに含めない。
+- [x] 直近の実装commit後のGitHub CIを完了まで監視し、Normal／Packageのrequired aggregate成功を確認した（Normal `34272925506`、Package `34272925529`）。
+- [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない。

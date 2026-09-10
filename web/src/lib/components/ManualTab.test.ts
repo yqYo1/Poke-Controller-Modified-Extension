@@ -35,7 +35,10 @@ describe('ManualTab', () => {
       ['KeyA', true],
       ['KeyA', false]
     ]);
-    expect(screen.getByRole('region', { name: 'Software controller' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Software controller' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Focus software controller' })
+    ).toBeTruthy();
   });
 
   it('writes input-source toggles and ignores disabled keyboard input', async () => {

@@ -1125,7 +1125,7 @@
       "control": "radio_group",
       "default": {
         "kind": "literal",
-        "value": "top"
+        "value": "bottom"
       },
       "id": "ui.controller_position",
       "mutability": "runtime_immediate",

@@ -3444,7 +3444,7 @@
       }
     },
     "ui.controller_position": {
-      "default": "top",
+      "default": "bottom",
       "enum": [
         "top",
         "bottom"
@@ -3454,7 +3454,7 @@
         "apply_trigger": null,
         "default": {
           "kind": "literal",
-          "value": "top"
+          "value": "bottom"
         },
         "mutability": "runtime_immediate",
         "path": null,

@@ -3,7 +3,6 @@
 
   import type { SettingsWriteValues } from '../api';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
-  import ControllerPanel from './ControllerPanel.svelte';
 
   interface Props {
     runtime: ApplicationRuntime;
@@ -58,6 +57,13 @@
   function neutralize(): void {
     pressedKeys.splice(0);
     runtime.neutralizeInput();
+  }
+
+  function focusController(): void {
+    const panel = document.getElementById('software-controller');
+    if (panel === null) return;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    panel.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
   }
 
   $effect(() => {
@@ -133,8 +139,11 @@
 
   <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs">
     <span class="text-slate-400">Active keyboard codes: {view.input.snapshot.keyboard_keys.length === 0 ? 'none' : view.input.snapshot.keyboard_keys.join(', ')}</span>
-    <button type="button" class="rounded-lg bg-red-400/10 px-3 py-2 font-medium text-red-200" onclick={neutralize}>Release all input</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button" class="rounded-lg bg-white/5 px-3 py-2 font-medium text-slate-200 hover:bg-white/10" onclick={focusController}>Focus software controller</button>
+      <button type="button" class="rounded-lg bg-red-400/10 px-3 py-2 font-medium text-red-200" onclick={neutralize}>Release all input</button>
+    </div>
   </div>
 
-  <ControllerPanel runtime={runtime} view={view} />
+  <p class="text-xs text-slate-500">Live controller input uses the single Software-Controller in the right column.</p>
 </div>

@@ -148,7 +148,7 @@
   }
 </script>
 
-<section class="overflow-hidden rounded-2xl border border-white/10 bg-ink-900/90" aria-label="Software controller">
+<section id="software-controller" class="shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-ink-900/90" aria-label="Software controller">
   <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
     <div>
       <p class="text-xs font-semibold tracking-[0.16em] text-cyan-300 uppercase">Joy-Con</p>

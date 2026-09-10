@@ -62,7 +62,7 @@ export function settingsValues(
     'ui.camera.guide_visible': false,
     'ui.camera.live_view_enabled': true,
     'ui.camera.pixel_values_visible': false,
-    'ui.controller_position': 'top',
+    'ui.controller_position': 'bottom',
     'ui.desktop.close_behavior': 'ask',
     'ui.desktop.disable_compositing': false,
     'ui.dialog_button_position': 'bottom',

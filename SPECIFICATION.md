@@ -424,12 +424,12 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 **値**:
 - 閉じたenum値。正準値はすべて小文字ASCII。ランタイムはASCII大文字小文字不問で正規化する（§11.4.1.3のenum正規化規則に従う）。
-- デフォルト正準値: `top`。
+- デフォルト正準値: `bottom`。
 
 | # | 正準値（canonical） | 表示ラベル（display label） | 説明 |
 |---|-------------------|---------------------------|-------------|
-| 1 | `top` | `TOP (default)` | 右パネル上部にソフトウェアコントローラーを表示（デフォルト） |
-| 2 | `bottom` | `BOTTOM` | 右パネル下部にソフトウェアコントローラーを表示 |
+| 1 | `top` | `TOP` | 右パネル上部にソフトウェアコントローラーを表示 |
+| 2 | `bottom` | `BOTTOM (default)` | 右パネル下部にソフトウェアコントローラーを表示（デフォルト） |
 
 ---
 
@@ -463,7 +463,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 
 ### 5.8 出力分割比率（output_split_ratio）
 
-出力#1と出力#2の幅比率を制御するスライダー。スライダー値は出力#1の割合に線形マッピングされる。
+右パネルに縦積みする出力#1と出力#2の高さ比率を制御するスライダー。スライダー値は出力#1の割合に線形マッピングされる。
 
 **設定表面**:
 - **正準ID**: `ui.output_split_ratio`
@@ -472,7 +472,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 - **CLI**: `--ui-output-split-ratio <値>`（正準IDからのデフォルト生成ルールにより自動生成）
 - **環境変数**: `POKECON_UI_OUTPUT_SPLIT_RATIO=<値>`（正準IDからのデフォルト生成ルールにより自動生成）
 - **OpenAPI**: 読み取り／書き込み対応
-- **UI**: その他タブのスライダー（§6.6.1参照）。書き込みはUIスライダーから整数値を送信し、即座に出力#1/出力#2の幅比率を更新する
+- **UI**: その他タブのスライダー（§6.6.1参照）。書き込みはUIスライダーから整数値を送信し、即座に出力#1/出力#2の高さ比率を更新する
 
 **プロファイル対応**: プロファイル対応（profile-capable）。プロファイル切替時は有効なプロファイル値を適用する。UIスライダーからの変更は、現在有効なプロファイル対応設定を更新し、正準設定サービス（§11.4.1.1）を介して現在のプロファイルsettings.tomlへ永続化する。
 
@@ -481,7 +481,7 @@ UIは、その他タブのコンボボックスで選択可能な、右側パネ
 - 範囲: 0～100（閉区間）
 - デフォルト: `20`（旧 `area_size` の値に相当）
 
-**出力幅計算式**:
+**出力高さ計算式**:
 - `output1_percent = 10 + 0.8 * value`（出力#1の割合: 10%〜90%）
 - `output2_percent = 100 - output1_percent`（出力#2の割合: 90%〜10%）
 - value=0 → output1=10%, output2=90%
@@ -915,7 +915,7 @@ Commands/
 
 | セクション | コントロール | 種類 |
 |---------|----------|------|
-| **出力サイズ調整** | 出力#1と出力#2の幅比率を制御するスライダー（0～100）。スライダー値は§5.8の計算式に従い出力#1の幅10%～90%に線形マッピング。最小でも各出力は10%の幅を確保。正準ID: `ui.output_split_ratio` | Scale/Slider |
+| **出力サイズ調整** | 出力#1と出力#2の高さ比率を制御するスライダー（0～100）。スライダー値は§5.8の計算式に従い出力#1の高さ10%～90%に線形マッピング。最小でも各出力は10%の高さを確保。正準ID: `ui.output_split_ratio` | Scale/Slider |
 | **stdout出力先** (`stdout_destination`) | stdout出力の出力先を選択する出力#1/出力#2ラジオボタン。正準値: `output_1`（出力#1）/ `output_2`（出力#2）。レガシー値 `"1"` / `"2"` は旧互換用エイリアスであり、UIラジオボタンは正準値のみ送信する。正準ID: `ui.stdout_destination` | Radio button |
 | **出力をクリア** | 両方の出力パネルをクリアするボタン（アクション＝非設定） | Button |
 | **FPS** | UI表示用フレームレート選択コンボボックス。選択肢は `ui.fps_options` のリストから生成され、選択された値は `ui.fps` に即時反映される。正準ID: `ui.fps` | Combobox |
@@ -3032,9 +3032,9 @@ UIカメラキャンバス上でのポインター（マウス/タッチ）位�
 | `ui.fps_options` | `[ui]` | `ui_fps_options` | `pokecon.opt.ui.fps_options` | `list[int]` | profile | runtime_immediate | —（候補生成用）| R/W | デフォルト `[5, 15, 30, 60]`。1個以上の重複しない正の整数を入力順のまま保持する。最終実効値では現在の`ui.fps`を必ず含まなければならない。更新後の候補から現在値が外れる場合は、候補一覧の更新全体を検証エラーとして拒否し、値の丸め・最近傍選択・デフォルトへの暗黙復帰を行わない。プロファイル読み込み／切替では`ui_fps_options`と`ui.fps`を同一トランザクションで検証し、組み合わせが不正なら切替をロールバックする。 |
 | `ui.fps` | `[ui]` | `ui_fps` | `pokecon.opt.ui.fps` | `int` | profile | runtime_immediate | R/W | R/W | UI表示用FPS（カメラキャプチャFPS `camera.capture_fps` とは独立）。デフォルト `30`。有効な正の整数かつ最終実効`ui.fps_options`のメンバーでなければならない。既存FPSコンボボックス（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。UIコンボボックスからの変更は即座にUI表示FPSを更新する（カメラキャプチャFPSは変更しない）。CLI: `--ui-fps`。環境変数: `POKECON_UI_FPS`。OpenAPI R/W。TOML: `[ui].ui_fps`。 |
 | `ui.widget_mode` | `[ui]` | `widget_mode` | `pokecon.opt.ui.widget_mode` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `all`（デフォルト）/ `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIコンボボックスで提供（§5.5参照）。プロファイル対応（profile-capable）。動的代入は即時反映されUIレイアウトを更新する。CLI: `--ui-widget-mode`。環境変数: `POKECON_UI_WIDGET_MODE`。OpenAPI R/W |
-| `ui.output_split_ratio` | `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | profile | runtime_immediate | R/W | R/W | 出力#1と出力#2の幅比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力幅計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの幅比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
+| `ui.output_split_ratio` | `[ui]` | `output_split_ratio` | `pokecon.opt.ui.output_split_ratio` | `int` | profile | runtime_immediate | R/W | R/W | 出力#1と出力#2の高さ比率制御。0～100、デフォルト `20`（旧 `area_size` 互換）。出力高さ計算式: `output1_percent = 10 + 0.8 * value`、`output2_percent = 100 - output1_percent`。UIスライダー（§6.6.1参照）は本設定の必須UI表面。プロファイル対応（profile-capable）。スライダー変更は即座に出力パネルの高さ比率を更新する。CLI/環境変数は正準IDからのデフォルト生成ルールにより自動生成（`--ui-output-split-ratio` / `POKECON_UI_OUTPUT_SPLIT_RATIO`）。OpenAPI R/W。§5.8参照 |
 | `ui.stdout_destination` | `[ui]` | `stdout_destination` | `pokecon.opt.ui.stdout_destination` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `output_1`（デフォルト）/ `output_2`。レガシー格納値 `1` / `2` は旧互換用エイリアス。UIラジオボタン（§6.6.1参照）は本設定の必須UI表面、表示ラベル 出力#1/出力#2。プロファイル対応（profile-capable）。変更は即座にstdout出力先ルーティングを更新する。CLI/環境変数は自動生成（`--ui-stdout-destination` / `POKECON_UI_STDOUT_DESTINATION`）。OpenAPI R/W。§5.9参照 |
-| `ui.controller_position` | `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `top`（デフォルト）/ `bottom`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
+| `ui.controller_position` | `[ui]` | `controller_position` | `pokecon.opt.ui.controller_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `top` / `bottom`（デフォルト）。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.6参照）。プロファイル対応（profile-capable）。動的代入は即時反映されソフトウェアコントローラーのレイアウト位置を更新する。既存UIのTOP/BOTTOMラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-controller-position`。環境変数: `POKECON_UI_CONTROLLER_POSITION`。OpenAPI R/W。 |
 | `ui.dialog_button_position` | `[ui]` | `dialog_button_position` | `pokecon.opt.ui.dialog_button_position` | `str` | profile | runtime_immediate | R/W | R/W | 閉じたenum。正準値（小文字）: `bottom`（デフォルト）/ `top` / `both`。§11.4.1.3のenum正規化規則に従う（ASCII大文字小文字不問）。表示ラベルはUIラジオボタンで提供（§5.7参照）。プロファイル対応（profile-capable）。動的代入は即時反映されダイアログボタンのレイアウト位置を更新する。既存UIのTOP/BOTTOM/BOTHラジオボタン（§6.6.1参照）は本設定の必須UI表面。CLI: `--ui-dialog-button-position`。環境変数: `POKECON_UI_DIALOG_BUTTON_POSITION`。OpenAPI R/W。 |
 | `ui.camera.live_view_enabled` | `[ui.camera]` | `live_view_enabled` | `pokecon.opt.ui.camera.live_view_enabled` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `true`。`false` 時はライブフレームレンダリングを停止、最後に表示されたフレームを保持。キャプチャ/公開は継続。`true` に戻した時点で最新フレームを再開。§6.1.3参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
 | `ui.camera.pixel_values_visible` | `[ui.camera]` | `pixel_values_visible` | `pokecon.opt.ui.camera.pixel_values_visible` | `bool` | profile | runtime_immediate | R/W | R/W | デフォルト `false`。`true` でカーソル位置のピクセルRGB/HSV/座標オーバーレイを表示。§6.1.3参照。§11.4.1.2のbool値直列化規則に従う。CLI/環境変数は正準IDから自動生成。 |
@@ -3319,10 +3319,10 @@ button_10 = ""
 [ui]
 ui_fps_options = [5, 15, 30, 60]  # ラベルは自動生成（例: "5 FPS"）
 ui_fps = 30  # UI表示用FPS（デフォルト: 30）。有効な正の整数かつ ui_fps_options のメンバー
-output_split_ratio = 20  # 出力#1と出力#2の幅比率（0～100、デフォルト: 20）。計算式: output1% = 10 + 0.8 * value
+output_split_ratio = 20  # 出力#1と出力#2の高さ比率（0～100、デフォルト: 20）。計算式: output1% = 10 + 0.8 * value
 stdout_destination = "output_1"  # stdout出力先（正準値: output_1 / output_2）。レガシー "1"/"2" は保存専用
 widget_mode = "all"  # 正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
-controller_position = "top"  # top（上部、デフォルト）/ bottom（下部）
+controller_position = "bottom"  # top（上部）/ bottom（下部、デフォルト）
 dialog_button_position = "bottom"  # bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
 
 # カメラ表示設定（プロファイル対応）
@@ -3437,7 +3437,7 @@ pokecon.opt.notifications.discord.username = ""  # カスタムユーザー名�
 pokecon.opt.ui.widget_mode = "all"  # §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
 
 # ソフトウェアコントローラー位置（階層: ui名前空間）
-pokecon.opt.ui.controller_position = "top"  # §5.6参照。top（上部、デフォルト）/ bottom（下部）
+pokecon.opt.ui.controller_position = "bottom"  # §5.6参照。top（上部）/ bottom（下部、デフォルト）
 
 # ダイアログボタン位置（階層: ui名前空間）
 pokecon.opt.ui.dialog_button_position = "bottom"  # §5.7参照。bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
@@ -3571,7 +3571,7 @@ pokecon.opt.ui.fps = 30
 pokecon.opt.webrtc.auto_recover = true
 pokecon.opt.webrtc.recovery_probe_interval_sec = 30
 pokecon.opt.ui.widget_mode = "all"  -- §5.5参照。正準値（小文字）: all / outputs / output_1_controller / output_2_controller / output_1 / output_2 / controller
-pokecon.opt.ui.controller_position = "top"  -- §5.6参照。top（上部、デフォルト）/ bottom（下部）
+pokecon.opt.ui.controller_position = "bottom"  -- §5.6参照。top（上部）/ bottom（下部、デフォルト）
 pokecon.opt.ui.dialog_button_position = "bottom"  -- §5.7参照。bottom（下部、デフォルト）/ top（上部）/ both（上下両方）
 
 -- 出力分割比率（§5.8参照）
@@ -4730,9 +4730,9 @@ pokecon.commands.tag_match.hard_timeout_ms: int | None
 | `POKECON_UI_FPS_OPTIONS` | FPS選択肢一覧。厳密JSON配列 `[5,15,30,60]`。1個以上の重複しない正の整数。現在の`ui.fps`を常に含む必要あり。CLI: `--ui-fps-options` | `[5, 15, 30, 60]` |
 | `POKECON_UI_FPS` | UI表示FPS。`ui.fps_options`の有効メンバーであること。カメラキャプチャFPSとは独立。profile-capable。CLI: `--ui-fps` | `30` |
 | `POKECON_UI_WIDGET_MODE` | ウィジェットモード。閉じたenum `all`(default) / `outputs` / `output_1_controller` / `output_2_controller` / `output_1` / `output_2` / `controller`（大文字小文字不問）。profile-capable。CLI: `--ui-widget-mode` | `all` |
-| `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1/#2幅比率。0～100。計算式: output1%=10+0.8×値。profile-capable。CLI: `--ui-output-split-ratio` | `20` |
+| `POKECON_UI_OUTPUT_SPLIT_RATIO` | 出力#1/#2高さ比率。0～100。計算式: output1%=10+0.8×値。profile-capable。CLI: `--ui-output-split-ratio` | `20` |
 | `POKECON_UI_STDOUT_DESTINATION` | stdout出力先。閉じたenum `output_1`(default) / `output_2`。レガシー値 `1`/`2`互換。profile-capable。CLI: `--ui-stdout-destination` | `output_1` |
-| `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置。閉じたenum `top`(default) / `bottom`（大文字小文字不問）。profile-capable。CLI: `--ui-controller-position` | `top` |
+| `POKECON_UI_CONTROLLER_POSITION` | ソフトウェアコントローラー位置。閉じたenum `top` / `bottom`(default)（大文字小文字不問）。profile-capable。CLI: `--ui-controller-position` | `bottom` |
 | `POKECON_UI_DIALOG_BUTTON_POSITION` | ダイアログボタン位置。閉じたenum `bottom`(default) / `top` / `both`（大文字小文字不問）。profile-capable。CLI: `--ui-dialog-button-position` | `bottom` |
 | `POKECON_UI_CAMERA_LIVE_VIEW_ENABLED` | カメラライブビュー表示。`true` / `false`。profile-capable。CLI: `--ui-camera-live-view-enabled` | `true` |
 | `POKECON_UI_CAMERA_PIXEL_VALUES_VISIBLE` | ピクセル値オーバーレイ表示。`true` / `false`。profile-capable。CLI: `--ui-camera-pixel-values-visible` | `false` |

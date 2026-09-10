@@ -6,8 +6,6 @@
     DownloadResult,
     OperationResult,
     SavedScreenshot,
-    ScriptUiAction,
-    ScriptUiActionResult,
     ScreenshotRequest
   } from '../actions';
   import type { SettingsWriteValues } from '../api';
@@ -15,20 +13,17 @@
   import { triggerDownload } from '../download';
   import type { components } from '../api/openapi';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
-  import CameraViewport from './CameraViewport.svelte';
 
   type DownloadRequest = Extract<ScreenshotRequest, { destination: 'download' }>;
   type SavedRequest = Exclude<ScreenshotRequest, DownloadRequest>;
   type ImageFormat = components['schemas']['ImageFormat'];
   type NormalizedRegion = components['schemas']['NormalizedRegion'];
-  type TouchscreenArea = NonNullable<SettingsWriteValues['input.touchscreen_area']>;
 
   interface CameraActions {
     cameras(): Promise<readonly CameraDevice[]>;
     downloadScreenshot(request: DownloadRequest): Promise<DownloadResult>;
     retryCamera(): Promise<OperationResult>;
     saveScreenshot(request: SavedRequest): Promise<SavedScreenshot>;
-    scriptUiAction(request: ScriptUiAction): Promise<ScriptUiActionResult>;
   }
 
   interface Props {
@@ -222,16 +217,10 @@
     }
   }
 
-  function updateTouchArea(area: TouchscreenArea): void {
-    void write({ 'input.touchscreen_area': area });
-  }
-
-  function captureRegion(region: NormalizedRegion): void {
-    void saveCapture(region);
-  }
-
-  function downloadRegion(region: NormalizedRegion): void {
-    void downloadCapture(region);
+  function focusPreview(): void {
+    const preview = document.getElementById('main-camera-preview');
+    if (preview === null) return;
+    preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 </script>
 
@@ -263,20 +252,7 @@
     <div class="rounded-lg border border-lime-300/20 bg-lime-300/10 px-3 py-2 text-sm text-lime-200" role="status">{notice}</div>
   {/if}
 
-  <CameraViewport
-    {actions}
-    fps={values?.['ui.fps'] ?? 30}
-    guideVisible={values?.['ui.camera.guide_visible'] ?? false}
-    leftStickEnabled={values?.['input.left_stick_mouse_enabled'] ?? false}
-    liveViewEnabled={values?.['ui.camera.live_view_enabled'] ?? true}
-    oncapture={captureRegion}
-    ondownload={downloadRegion}
-    ontoucharea={updateTouchArea}
-    pixelValuesVisible={values?.['ui.camera.pixel_values_visible'] ?? false}
-    rightStickEnabled={values?.['input.right_stick_mouse_enabled'] ?? false}
-    {runtime}
-    {view}
-  />
+  <p class="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">Live preview stays mounted in the Main Panel above. Region capture, pixel sampling, stick, and touch gestures run there.<button type="button" class="ml-2 rounded-md bg-white/10 px-2 py-1 text-xs text-slate-200 hover:bg-white/20" onclick={focusPreview}>Focus preview</button></p>
 
   <fieldset class="grid gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4 sm:grid-cols-2 xl:grid-cols-3" disabled={busy !== null}>
     <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Capture settings</legend>

@@ -78,8 +78,8 @@
   }
 </script>
 
-<section class="flex min-h-48 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25" aria-label={label}>
-  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+<section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25" aria-label={label}>
+  <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
     <h3 class="text-xs font-semibold tracking-[0.14em] text-slate-200 uppercase">{label}</h3>
     <div class="flex items-center gap-1">
       <label class="sr-only" for={`${storageKey}-level`}>Minimum log level</label>

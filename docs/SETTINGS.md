@@ -273,7 +273,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `ui.widget_mode` | `all` | outputとcontrollerの表示組合せ | I | あり |
 | `ui.output_split_ratio` | `20` | 0から100 | I | あり |
 | `ui.stdout_destination` | `output_1` | `output_1`、`output_2` | I | あり |
-| `ui.controller_position` | `top` | `top`、`bottom` | I | あり |
+| `ui.controller_position` | `bottom` | `top`、`bottom` | I | あり |
 | `ui.dialog_button_position` | `bottom` | `bottom`、`top`、`both` | I | あり |
 | `ui.camera.live_view_enabled` | `true` | camera表示の有効化 | I | あり |
 | `ui.camera.pixel_values_visible` | `false` | pixel inspectorの表示 | I | あり |

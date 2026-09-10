@@ -426,6 +426,10 @@ jobs:
             change_kind=product
           elif [ "${{ needs.plan.outputs.docs }}" = true ]; then
             change_kind=docs
+          elif [ "${{ needs.plan.outputs.contracts }}" != "true" ] && [ "${{ needs.plan.outputs.rust }}" != "true" ] && [ "${{ needs.plan.outputs.python }}" != "true" ] && [ "${{ needs.plan.outputs.routing }}" != "true" ] && [ "${{ needs.plan.outputs.web }}" != "true" ] && [ "${{ needs.plan.outputs.remote_flake }}" != "true" ]; then
+            # Planning-only runs (PLAN.md/TASK.md classify to zero regions and stay
+            # outside docs timing): explicit none kind with no p95 history/threshold.
+            change_kind=none
           fi
           # Cache read is always true (explicit evidence), write only for push by trusted actor
           cache_read=true
@@ -497,6 +501,7 @@ jobs:
           # The subsequent history gate retrieves trusted prior ci-timing artifacts for the same
           # change_kind and computes blocking p95 (nearest-rank, 10 samples). Fail-closed on
           # malformed, stale (>30d), incomplete, or threshold breach.
+          # change_kind none (zero applicable timing regions) skips only the p95 gate.
           nix run .#ci-timing -- validate "$(cat "$report_json")"
       - name: Enforce timing p95 history gate (blocking, fail-closed)
         env:
@@ -514,9 +519,13 @@ jobs:
           cp "$report_json" "$history_dir/00-current.json"
           change_kind="$(jq -er '.change_kind' "$report_json")"
           case "$change_kind" in
-            fast|docs|product) ;;
+            fast|docs|product|none) ;;
             *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
           esac
+          if [ "$change_kind" = "none" ]; then
+            echo "timing p95 gate: change_kind=none has zero applicable timing regions; skipping p95 history/threshold gate (report already validated and uploaded)"
+            exit 0
+          fi
           case "$change_kind" in
             fast) threshold=180 ;;
             docs) threshold=300 ;;

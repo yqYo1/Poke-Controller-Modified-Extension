@@ -28,6 +28,7 @@ class ChangeKind(StrEnum):
     FAST = "fast"
     DOCS = "docs"
     PRODUCT = "product"
+    NONE = "none"
 
 
 class Conclusion(StrEnum):
@@ -580,6 +581,16 @@ def parse_report(source: str) -> TimingReport:
 def report_violations(report: TimingReport) -> tuple[str, ...]:
     """Return trust and evidence contradictions within one valid report."""
     violations: list[str] = []
+    if report.change_kind is ChangeKind.NONE and report.regions:
+        violations.append(
+            f"change_kind 'none' requires empty regions for runs with zero "
+            f"applicable timing regions, got {list(report.regions)!r}"
+        )
+    if report.change_kind is not ChangeKind.NONE and not report.regions:
+        violations.append(
+            f"change_kind {report.change_kind.value!r} requires non-empty regions; "
+            f"runs with zero applicable timing regions must use change_kind 'none'"
+        )
     if report.cache.write and report.cache.event != "push":
         violations.append(
             "cache writes are permitted only for push events, "
@@ -1487,12 +1498,22 @@ def p95_document(reports: ReportSequence) -> ResultDocument:
                 )
 
     change_kind = ordered_reports[0].change_kind if same_kind else None
+    if any(report.change_kind is ChangeKind.NONE for report in ordered_reports):
+        violations.append(
+            "p95 is not defined for change_kind 'none'; "
+            "runs with zero applicable timing regions skip the p95 history/threshold gate"
+        )
     measured_values = sorted(report.measured_wall_seconds for report in ordered_reports)
     nearest_rank = math.ceil(0.95 * len(measured_values))
     p95_wall_seconds = measured_values[nearest_rank - 1]
-    threshold_seconds = None if change_kind is None else THRESHOLDS[change_kind]
+    threshold_seconds = (
+        None
+        if change_kind is None or change_kind is ChangeKind.NONE
+        else THRESHOLDS[change_kind]
+    )
     if (
         change_kind is not None
+        and change_kind is not ChangeKind.NONE
         and threshold_seconds is not None
         and p95_wall_seconds > threshold_seconds
     ):

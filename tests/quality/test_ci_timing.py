@@ -893,3 +893,94 @@ def test_p95_stale_threshold_matches_timing_contract() -> None:
     assert "MAX_HISTORY_AGE_DAYS: Final = 30" in source
     assert "MAX_HISTORY_STALE_SECONDS" in source
     assert "report is stale" in source.lower()
+
+
+def test_validate_accepts_none_with_empty_regions() -> None:
+    completed = _run("validate", _report(change_kind="none", regions=()))
+
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+    _assert_canonical_stdout(completed)
+    document = _document(completed)
+    assert document["conclusion"] == "success"
+    validated = cast("dict[str, object]", document["report"])
+    assert validated["change_kind"] == "none"
+    assert validated["regions"] == []
+
+
+def test_validate_rejects_none_with_nonempty_regions() -> None:
+    completed = _run("validate", _report(change_kind="none"))
+
+    assert completed.returncode == 1
+    assert "change_kind 'none' requires empty regions" in completed.stderr
+    assert _document(completed)["conclusion"] == "failure"
+
+
+@pytest.mark.parametrize("change_kind", ["fast", "docs", "product"])
+def test_validate_rejects_timed_kind_with_empty_regions(change_kind: str) -> None:
+    completed = _run("validate", _report(change_kind=change_kind, regions=()))
+
+    assert completed.returncode == 1
+    assert "must use change_kind 'none'" in completed.stderr
+    assert _document(completed)["conclusion"] == "failure"
+
+
+def test_p95_rejects_none_without_silent_threshold() -> None:
+    reports = [
+        _report(index=index, change_kind="none", regions=()) for index in range(1, 11)
+    ]
+
+    completed = _run("p95", *reports)
+
+    assert completed.returncode == 1
+    assert "p95 is not defined for change_kind 'none'" in completed.stderr
+    document = _document(completed)
+    assert document["conclusion"] == "failure"
+    assert document["change_kind"] == "none"
+    assert document["threshold_seconds"] is None
+
+
+def test_p95_rejects_mixed_none_and_fast_history() -> None:
+    reports = [
+        _report(
+            index=index,
+            change_kind="none" if index == 10 else "fast",
+            regions=() if index == 10 else ("contracts", "rust"),
+        )
+        for index in range(1, 11)
+    ]
+
+    completed = _run("p95", *reports)
+
+    assert completed.returncode == 1
+    assert "p95 is not defined for change_kind 'none'" in completed.stderr
+    assert _document(completed)["conclusion"] == "failure"
+
+
+def test_none_change_kind_has_no_p95_threshold() -> None:
+    source = TIMING.read_text(encoding="utf-8")
+    assert 'NONE = "none"' in source
+    assert "ChangeKind.NONE" in source
+    # none must stay outside the threshold table so p95 can never silently
+    # calculate a threshold for zero-region runs.
+    assert "NONE: " not in source
+    assert "NONE:" not in source
+
+
+def test_planning_only_runs_use_none_and_skip_p95_gate() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    # none is derived only when no region output is true; product/docs keep
+    # priority and every other region keeps the fast default.
+    assert "change_kind=none" in workflow
+    assert "fast|docs|product|none" in workflow
+    assert "skipping p95 history/threshold gate" in workflow
+    # validate/upload still runs for none (only the p95 step exits early).
+    assert "nix run .#ci-timing -- validate" in workflow
+    assert "timing-report.json" in workflow
+    # fail-closed gates for real timing kinds are unchanged.
+    assert "fast) threshold=180" in workflow
+    assert "docs) threshold=300" in workflow
+    assert "product) threshold=720" in workflow
+    assert "unknown change_kind" in workflow

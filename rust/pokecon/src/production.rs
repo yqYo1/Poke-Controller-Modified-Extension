@@ -258,6 +258,10 @@ impl ProductionRuntime {
             host.subscribe_runtime_changes(),
             desktop_settings,
         ));
+        tasks.push(spawn_dynamic_controller_publisher(
+            Arc::clone(&backend),
+            host.subscribe_controller_outputs(),
+        ));
         tasks.push(spawn_command_recompute(
             Arc::clone(&backend),
             Arc::clone(&commands),
@@ -455,6 +459,28 @@ fn spawn_runtime_reconciler(
                 .await
             {
                 tracing::error!(error = ?error.error(), "runtime state reconciliation failed");
+            }
+        }
+    })
+}
+
+/// Forwards pending dynamic controller outputs to hardware in arrival order.
+///
+/// Each wake publishes the authoritative merged arbiter output under the
+/// backend mutation gate, so dynamic frames serialize with browser/script
+/// mutations. The receiver is marked changed once up front to flush any
+/// dynamic output that landed before this subscription (dynamic startup runs
+/// before the production runtime subscribes). Later state commits only bump
+/// the runtime generation, so the publisher never self-triggers.
+fn spawn_dynamic_controller_publisher(
+    backend: Arc<ApplicationBackend>,
+    mut outputs: tokio::sync::watch::Receiver<u64>,
+) -> JoinHandle<()> {
+    outputs.mark_changed();
+    tokio::spawn(async move {
+        while outputs.changed().await.is_ok() {
+            if let Err(error) = backend.publish_dynamic_controller().await {
+                tracing::error!(error = ?error.error(), "dynamic controller output publication failed");
             }
         }
     })

@@ -138,6 +138,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] `nix run .#check`（production audit 1件、Web 74件、pytest 460件、Rust 414件、mutation 395件／4 shard）、`nix run .#web-check`、`nix run .#typos`、`nix run .#actionlint`、`nix flake check --no-build --show-trace`、`nix fmt -- --ci`、Clippyが成功した。
 - [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
 - [x] fresh push後のNormal CIで同一`change_kind`のcompleted timing artifactを保存し、10-sample p95履歴gateをblocking／fail-closedで通過した。Package CIでは実署名Windows runnerのclean install／startup／upgrade／uninstall、payload／expanded tree／outer NSIS installerの三層一致を確認した（Normal `34272925506`、Package `34272925529`）。
+- [x] 2026-09-10のAstraレビューで検出されたnative serial close、dynamic controller update／resetのhardware投影、reconnect retry中の明示Disconnectの3件を修正し、Nix経由の`cargo check`、`cargo-test`、native PTY test、Clippy、aggregate check、format、flake checkを成功させ、通常サブエージェントの独立レビューでactionable finding 0を確認した（CI push／run証跡の追記待ち）。
 - [ ] CI上のmock／virtual I/O性能artifactを実装し、latency／throughputのp50／p95／p99、throughput、固定測定条件、baseline／thresholdを保存してrequired gateへ接続する。実機latency／throughput証跡は要求しない。
 
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）

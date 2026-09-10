@@ -282,6 +282,7 @@ pub struct StartupDynamicHost {
     controller: Arc<DynamicControllerSafety>,
     command_recompute: watch::Sender<u64>,
     runtime_changes: watch::Sender<u64>,
+    controller_outputs: watch::Sender<u64>,
     profile_switching: AtomicBool,
     command_service: OnceLock<Weak<CommandService>>,
 }
@@ -298,6 +299,7 @@ impl StartupDynamicHost {
         let public_state = startup_state(&loaded)?;
         let (command_recompute, _receiver) = watch::channel(0);
         let (runtime_changes, _receiver) = watch::channel(0);
+        let (controller_outputs, _receiver) = watch::channel(0);
         Ok(Self {
             inner: Mutex::new(StartupHostState {
                 dynamic_values: request.dynamic_values.clone(),
@@ -317,6 +319,7 @@ impl StartupDynamicHost {
             controller: Arc::new(DynamicControllerSafety::new()),
             command_recompute,
             runtime_changes,
+            controller_outputs,
             profile_switching: AtomicBool::new(false),
             command_service: OnceLock::new(),
         })
@@ -392,6 +395,16 @@ impl StartupDynamicHost {
         self.runtime_changes.subscribe()
     }
 
+    /// Subscribes to pending dynamic controller outputs that still require a
+    /// serial publish. This generation is distinct from
+    /// [`Self::subscribe_runtime_changes`]: external-source publishes
+    /// (browser, script) only bump the runtime generation, so the serial
+    /// publisher never observes its own committed output as new work.
+    #[must_use]
+    pub fn subscribe_controller_outputs(&self) -> watch::Receiver<u64> {
+        self.controller_outputs.subscribe()
+    }
+
     /// Returns only the committed UI-visible state. Dynamic callback staging
     /// remains private until a complete command-cache generation is published.
     #[must_use]
@@ -427,6 +440,17 @@ impl StartupDynamicHost {
     fn notify_runtime_change(&self) {
         self.runtime_changes
             .send_modify(|generation| *generation = generation.saturating_add(1));
+    }
+
+    /// Signals one pending dynamic controller output plus the state
+    /// projection describing it. The dedicated output generation lets the
+    /// production publisher serialize the serial write with normal
+    /// application mutations without re-firing on already-published
+    /// external-source outputs.
+    fn notify_controller_output(&self) {
+        self.controller_outputs
+            .send_modify(|generation| *generation = generation.saturating_add(1));
+        self.notify_runtime_change();
     }
 
     /// Starts an isolated `ScriptLoadPre` staging generation. Dynamic state
@@ -947,14 +971,14 @@ impl DynamicHost for StartupDynamicHost {
     fn controller_update(&self, update: ControllerUpdate) -> Result<(), DynamicHostError> {
         ensure_running(&self.inner.lock())?;
         self.controller.update(update)?;
-        self.notify_runtime_change();
+        self.notify_controller_output();
         Ok(())
     }
 
     fn controller_reset(&self) -> Result<(), DynamicHostError> {
         ensure_running(&self.inner.lock())?;
         self.controller.reset()?;
-        self.notify_runtime_change();
+        self.notify_controller_output();
         Ok(())
     }
 
@@ -1543,6 +1567,155 @@ mod tests {
         assert_eq!(
             host.state_snapshot().unwrap()["holding_buttons"],
             json!(["B"])
+        );
+    }
+
+    #[test]
+    fn dynamic_controller_outputs_use_a_dedicated_generation_without_self_trigger() {
+        let (_temporary, request, loaded) = fixture();
+        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
+        let mut runtime = host.subscribe_runtime_changes();
+        let mut outputs = host.subscribe_controller_outputs();
+        assert!(
+            !runtime
+                .has_changed()
+                .expect("runtime channel must stay open")
+        );
+        assert!(
+            !outputs
+                .has_changed()
+                .expect("output channel must stay open")
+        );
+
+        host.controller_update(ControllerUpdate {
+            a: Some(true),
+            ..ControllerUpdate::default()
+        })
+        .expect("controller update must apply");
+        assert!(
+            runtime
+                .has_changed()
+                .expect("runtime channel must stay open")
+        );
+        assert!(
+            outputs
+                .has_changed()
+                .expect("output channel must stay open"),
+            "controller update must pend serial output"
+        );
+        runtime.mark_unchanged();
+        outputs.mark_unchanged();
+
+        host.controller_reset()
+            .expect("controller reset must apply");
+        assert!(
+            runtime
+                .has_changed()
+                .expect("runtime channel must stay open")
+        );
+        assert!(
+            outputs
+                .has_changed()
+                .expect("output channel must stay open"),
+            "controller reset must pend serial output"
+        );
+        runtime.mark_unchanged();
+        outputs.mark_unchanged();
+
+        // External-source publishes only bump the runtime generation, so the
+        // serial publisher never observes its own committed output as new work.
+        host.notify_controller_change();
+        assert!(
+            runtime
+                .has_changed()
+                .expect("runtime channel must stay open")
+        );
+        assert!(
+            !outputs
+                .has_changed()
+                .expect("output channel must stay open"),
+            "external-source publish must not pend serial output"
+        );
+    }
+
+    #[tokio::test]
+    async fn dynamic_controller_updates_and_resets_reach_serial() {
+        use std::sync::Arc;
+
+        use crate::device::serial::{ControllerCodec, ControllerFormat};
+        use crate::device::{
+            SerialConfig, SerialManager, VirtualOpenPlan, VirtualSerialBackend,
+            VirtualSerialEndpoint,
+        };
+
+        let (_temporary, request, loaded) = fixture();
+        let host = StartupDynamicHost::new(request, loaded).expect("host must initialize");
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let serial = SerialManager::new(Arc::new(backend));
+        serial
+            .apply_config(
+                SerialConfig::new("test-port", 9600, ControllerFormat::Default)
+                    .expect("serial config must be valid"),
+            )
+            .await
+            .expect("virtual serial must connect");
+        // `apply_config` emits its own connection frame; measure dynamic
+        // frames relative to this baseline.
+        let baseline = endpoint.written().await.len();
+        let mut outputs = host.subscribe_controller_outputs();
+
+        // Publish exactly as the production dynamic-output publisher does:
+        // await the dedicated generation, then send the authoritative merged
+        // arbiter output.
+        host.controller_update(ControllerUpdate {
+            a: Some(true),
+            ..ControllerUpdate::default()
+        })
+        .expect("controller update must apply");
+        outputs
+            .changed()
+            .await
+            .expect("dynamic update must pend serial output");
+        let pressed = host.controller_safety().arbiter().lock().output();
+        assert!(pressed.buttons.a);
+        serial
+            .send_controller_state(pressed)
+            .await
+            .expect("virtual serial must accept the pressed frame");
+        let pressed_bytes = endpoint.written().await;
+        assert_eq!(
+            &pressed_bytes[baseline..],
+            ControllerCodec::new(ControllerFormat::Default)
+                .encode(pressed)
+                .as_slice(),
+            "update must emit the pressed frame"
+        );
+
+        // Reset must emit a second, neutral frame so a previously transmitted
+        // hold is never stuck on hardware.
+        host.controller_reset()
+            .expect("controller reset must apply");
+        outputs
+            .changed()
+            .await
+            .expect("dynamic reset must pend serial output");
+        let released = host.controller_safety().arbiter().lock().output();
+        assert_eq!(released, ControllerState::NEUTRAL);
+        serial
+            .send_controller_state(released)
+            .await
+            .expect("virtual serial must accept the neutral frame");
+        let delivered = endpoint.written().await;
+        let expected_neutral =
+            ControllerCodec::new(ControllerFormat::Default).encode(ControllerState::NEUTRAL);
+        assert_eq!(
+            &delivered[pressed_bytes.len()..],
+            expected_neutral.as_slice(),
+            "reset must emit a neutral frame so the held button is released"
         );
     }
 

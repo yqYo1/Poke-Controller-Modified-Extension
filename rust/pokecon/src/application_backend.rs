@@ -186,6 +186,19 @@ impl ApplicationBackend {
             .map(|_outcome| ())
     }
 
+    /// Publishes one pending dynamic controller output to hardware.
+    ///
+    /// Holds the mutation gate while sending the authoritative merged arbiter
+    /// output and committing the state projection, so a dynamic frame
+    /// serializes with browser/script mutations. Only the dedicated
+    /// dynamic-output publisher calls this; `publish_controller`
+    /// (browser/script path) bumps only the runtime generation, so the
+    /// post-publish state commit never re-triggers this path.
+    pub(crate) async fn publish_dynamic_controller(&self) -> ApiResult<()> {
+        let _gate = self.mutation_gate.lock().await;
+        self.publish_controller(None).await
+    }
+
     async fn ensure_expected(&self, expected: Option<&DecimalString>) -> ApiResult<()> {
         let Some(expected) = expected else {
             return Ok(());
@@ -497,7 +510,6 @@ impl RestBackend for ApplicationBackend {
             SerialControlRequest::Connect {} => {
                 self.serial.reconnect().await.map_err(serial_failure)?;
             }
-            SerialControlRequest::Disconnect {} if !before => {}
             SerialControlRequest::Disconnect {} => {
                 self.serial.disconnect().await.map_err(serial_failure)?;
             }

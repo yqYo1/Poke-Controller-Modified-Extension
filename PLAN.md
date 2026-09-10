@@ -139,6 +139,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
 - [x] fresh push後のNormal CIで同一`change_kind`のcompleted timing artifactを保存し、10-sample p95履歴gateをblocking／fail-closedで通過した。Package CIでは実署名Windows runnerのclean install／startup／upgrade／uninstall、payload／expanded tree／outer NSIS installerの三層一致を確認した（Normal `34272925506`、Package `34272925529`）。
 - [x] 2026-09-10のAstraレビューで検出されたnative serial close、dynamic controller update／resetのhardware投影、reconnect retry中の明示Disconnectの3件を修正し、Nix経由の`cargo check`、`cargo-test`、native PTY test、Clippy、aggregate check、format、flake checkを成功させ、通常サブエージェントの独立レビューでactionable finding 0を確認した。commit `bec64921ca8d27fbf07bf18f4cea85d9030614cd`のNormal CI（`34453366968`、`34453372575`）とPackage CI（`34453367054` attempt 2、`34453372441`）のrequired checksも全てpassした（attempt 1はNSIS依存取得の一過性`os error 10054`で失敗後、再実行で成功）。
+- [x] `PLAN.md`／`TASK.md`だけのplanning-only変更はtiming対象regionなしの`none`として記録し、`ci-timing validate`は継続する一方、p95履歴gateは適用しない。`fast`／`docs`／`product`の履歴数・threshold・fail-closed条件は変更しない。
 - [ ] CI上のmock／virtual I/O性能artifactを実装し、latency／throughputのp50／p95／p99、throughput、固定測定条件、baseline／thresholdを保存してrequired gateへ接続する。実機latency／throughput証跡は要求しない。
 
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）

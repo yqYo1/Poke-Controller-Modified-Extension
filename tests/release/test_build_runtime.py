@@ -1,0 +1,2250 @@
+from __future__ import annotations
+
+import base64
+import csv
+import hashlib
+import json
+import os
+import shlex
+import subprocess
+import sys
+import zipfile
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
+
+import pytest
+
+import scripts.release.build_runtime as release_runtime
+from scripts.release.build_runtime import (
+    LINUX_PYTHON_INSTALL_REQUEST,
+    LINUX_PYTHON_MINOR_REDIRECT,
+    PE_REPRODUCIBLE_TIMESTAMP,
+    PORTABLE_BUILD_PREFIX,
+    PORTABLE_PYTHON_RPATH,
+    PORTABLE_SYSTEM_INTERPRETER,
+    REPRODUCIBLE_ZIP_EPOCH,
+    WINDOWS_PYTHON_INSTALL_REQUEST,
+    WINDOWS_PYTHON_MINOR_REDIRECT,
+    audit_python_bytecode,
+    build_release_runtime,
+    install_python,
+    managed_python_install_prefix,
+    normalize_python_bytecode,
+    normalize_python_sysconfig,
+    normalize_wheel,
+    prepare_python_execution_copy,
+    python_executable,
+    python_install_request,
+    python_minor_redirect_name,
+    run,
+    verify_python,
+    wheel_build_environment,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+
+def create_managed_python_layout(
+    install_root: Path, platform_name: str
+) -> tuple[Path, Path, str]:
+    if platform_name == "linux":
+        full_name = LINUX_PYTHON_INSTALL_REQUEST
+        minor_name = LINUX_PYTHON_MINOR_REDIRECT
+    elif platform_name == "win32":
+        full_name = WINDOWS_PYTHON_INSTALL_REQUEST
+        minor_name = WINDOWS_PYTHON_MINOR_REDIRECT
+    else:
+        raise AssertionError(platform_name)
+    install_root.mkdir()
+    (install_root / ".gitignore").write_bytes(b"*")
+    (install_root / ".lock").write_bytes(b"")
+    (install_root / ".temp").mkdir()
+    full_install = install_root / full_name
+    full_install.mkdir()
+    minor_redirect = install_root / minor_name
+    minor_redirect.mkdir()
+    return full_install, minor_redirect, full_name
+
+
+def emulate_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+    redirects: Mapping[Path, tuple[str, Path]],
+) -> None:
+    original_is_symlink = Path.is_symlink
+    original_is_junction = Path.is_junction
+    original_resolve = Path.resolve
+
+    def fake_is_symlink(path: Path) -> bool:
+        redirect = redirects.get(path)
+        if redirect is not None:
+            return redirect[0] == "symlink"
+        return original_is_symlink(path)
+
+    def fake_is_junction(path: Path) -> bool:
+        redirect = redirects.get(path)
+        if redirect is not None:
+            return redirect[0] == "junction"
+        return original_is_junction(path)
+
+    def fake_resolve(path: Path, strict: bool = False) -> Path:
+        redirect = redirects.get(path)
+        if redirect is not None:
+            return original_resolve(redirect[1], strict=strict)
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "is_symlink", fake_is_symlink)
+    monkeypatch.setattr(Path, "is_junction", fake_is_junction)
+    monkeypatch.setattr(Path, "resolve", fake_resolve)
+
+
+@pytest.mark.parametrize(
+    ("host_bytecode", "supplied_environment"),
+    [
+        (None, None),
+        ("host-disabled", None),
+        (
+            "host-disabled",
+            {"PYTHONDONTWRITEBYTECODE": "supplied-disabled", "SUPPLIED": "yes"},
+        ),
+    ],
+)
+def test_run_forces_no_bytecode_for_every_child_process(
+    monkeypatch: pytest.MonkeyPatch,
+    host_bytecode: str | None,
+    supplied_environment: Mapping[str, str] | None,
+) -> None:
+    monkeypatch.setenv("HOST_SENTINEL", "inherited")
+    if host_bytecode is None:
+        monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
+    else:
+        monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", host_bytecode)
+    captured_environments: list[dict[str, str]] = []
+
+    def fake_subprocess_run(
+        command: Sequence[str],
+        *,
+        check: bool,
+        env: Mapping[str, str],
+        stdin: int,
+        stdout: int | None,
+        stderr: int | None,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert list(command) == ["fixture", "argument"]
+        assert check
+        assert stdin == subprocess.DEVNULL
+        assert stdout == subprocess.PIPE
+        assert stderr == subprocess.PIPE
+        assert text
+        captured_environments.append(dict(env))
+        return subprocess.CompletedProcess(command, 0, stdout=" captured\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    assert (
+        run(
+            ["fixture", Path("argument")],
+            environment=supplied_environment,
+            capture=True,
+        )
+        == "captured"
+    )
+    assert len(captured_environments) == 1
+    child_environment = captured_environments[0]
+    assert child_environment["PYTHONDONTWRITEBYTECODE"] == "1"
+    if supplied_environment is None:
+        assert child_environment["HOST_SENTINEL"] == "inherited"
+    else:
+        assert child_environment == {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "SUPPLIED": "yes",
+        }
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "expected"),
+    [
+        ("linux", "cpython-3.14.3-linux-x86_64-gnu"),
+        ("win32", "cpython-3.14.3-windows-x86_64-none"),
+    ],
+)
+def test_python_install_request_is_exact_for_supported_platforms(
+    platform_name: str, expected: str
+) -> None:
+    assert python_install_request(platform_name) == expected
+
+
+def test_python_install_request_reads_platform_constants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        release_runtime,
+        "LINUX_PYTHON_INSTALL_REQUEST",
+        "sentinel-linux-request",
+    )
+    monkeypatch.setattr(
+        release_runtime,
+        "WINDOWS_PYTHON_INSTALL_REQUEST",
+        "sentinel-windows-request",
+    )
+
+    assert python_install_request("linux") == "sentinel-linux-request"
+    assert python_install_request("win32") == "sentinel-windows-request"
+
+
+@pytest.mark.parametrize("platform_name", ["darwin", "freebsd", "linux2", "cygwin"])
+def test_python_install_request_rejects_unknown_platform(platform_name: str) -> None:
+    with pytest.raises(ValueError, match="does not support"):
+        python_install_request(platform_name)
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "expected"),
+    [
+        ("linux", "cpython-3.14-linux-x86_64-gnu"),
+        ("win32", "cpython-3.14-windows-x86_64-none"),
+    ],
+)
+def test_python_minor_redirect_name_is_exact_for_supported_platforms(
+    platform_name: str, expected: str
+) -> None:
+    assert python_minor_redirect_name(platform_name) == expected
+
+
+@pytest.mark.parametrize("platform_name", ["darwin", "freebsd", "linux2", "cygwin"])
+def test_python_minor_redirect_name_rejects_unknown_platform(
+    platform_name: str,
+) -> None:
+    with pytest.raises(ValueError, match="does not support"):
+        python_minor_redirect_name(platform_name)
+
+
+def test_normalize_python_sysconfig_replaces_temporary_prefix(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    sysconfig = runtime / "lib/python3.14/_sysconfigdata__linux_fixture.py"
+    sysconfig.parent.mkdir(parents=True)
+    installed_prefix = tmp_path / "temporary/python-install"
+    sysconfig.write_text(
+        f"build_time_vars = {{'prefix': {str(installed_prefix)!r}, "
+        f"'BINDIR': {str(installed_prefix / 'bin')!r}}}\n",
+        encoding="utf-8",
+    )
+
+    normalize_python_sysconfig(runtime, installed_prefix)
+
+    content = sysconfig.read_text(encoding="utf-8")
+    assert str(installed_prefix) not in content
+    assert content.count(PORTABLE_BUILD_PREFIX) == 2
+
+
+def test_normalize_python_sysconfig_rejects_unrelated_prefix(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    sysconfig = runtime / "lib/python3.14/_sysconfigdata__linux_fixture.py"
+    sysconfig.parent.mkdir(parents=True)
+    sysconfig.write_text(
+        "build_time_vars = {'prefix': '/somewhere/else'}\n", encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="does not contain its install prefix"):
+        normalize_python_sysconfig(runtime, tmp_path / "temporary/python-install")
+
+
+def test_normalize_python_bytecode_removes_nested_caches_and_preserves_other_files(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "runtime"
+    package = runtime / "lib/python3.14/package"
+    first_cache = runtime / "lib/python3.14/__pycache__"
+    second_cache = package / "__pycache__"
+    nested_cache = second_cache / "__pycache__"
+    first_cache.mkdir(parents=True)
+    nested_cache.mkdir(parents=True)
+    bytecode_files = (
+        first_cache / "aliases.cpython-314.pyc",
+        second_cache / "module.cpython-314.pyc",
+        nested_cache / "nested.cpython-314.pyc",
+    )
+    for bytecode_file in bytecode_files:
+        bytecode_file.write_bytes(b"upstream-bytecode")
+    source = package / "module.py"
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    unrelated = runtime / "share/data.bin"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_bytes(b"preserve")
+
+    normalize_python_bytecode(runtime)
+
+    assert all(not bytecode_file.exists() for bytecode_file in bytecode_files)
+    assert all(
+        not cache_directory.exists()
+        for cache_directory in (first_cache, second_cache, nested_cache)
+    )
+    assert source.read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert unrelated.read_bytes() == b"preserve"
+
+
+def test_normalize_python_bytecode_rejects_loose_pyc_without_changes(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "runtime"
+    cache = runtime / "lib/python3.14/__pycache__"
+    cache.mkdir(parents=True)
+    cached_bytecode = cache / "module.cpython-314.pyc"
+    cached_bytecode.write_bytes(b"cached")
+    loose_bytecode = runtime / "loose.pyc"
+    loose_bytecode.write_bytes(b"loose")
+
+    with pytest.raises(ValueError, match="outside a real __pycache__ directory"):
+        normalize_python_bytecode(runtime)
+
+    assert cached_bytecode.read_bytes() == b"cached"
+    assert loose_bytecode.read_bytes() == b"loose"
+    assert cache.is_dir()
+
+
+@pytest.mark.parametrize(
+    ("entry_kind", "redirect_kind"),
+    [
+        ("cache", "symlink"),
+        ("cache", "junction"),
+        ("bytecode", "symlink"),
+        ("bytecode", "junction"),
+    ],
+)
+def test_normalize_python_bytecode_rejects_redirected_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    entry_kind: str,
+    redirect_kind: str,
+) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    entry = runtime / ("__pycache__" if entry_kind == "cache" else "module.pyc")
+    outside = tmp_path / f"outside-{entry_kind}"
+    if entry_kind == "cache":
+        entry.mkdir()
+        outside.mkdir()
+        outside_sentinel = outside / "sentinel"
+        outside_sentinel.write_bytes(b"outside")
+    else:
+        entry.write_bytes(b"upstream-bytecode")
+        outside_sentinel = outside
+        outside_sentinel.write_bytes(b"outside")
+    emulate_redirects(monkeypatch, {entry: (redirect_kind, outside)})
+
+    with pytest.raises(ValueError, match="portable Python bytecode"):
+        normalize_python_bytecode(runtime)
+
+    assert entry.exists()
+    assert outside_sentinel.read_bytes() == b"outside"
+
+
+def test_normalize_python_bytecode_rejects_nonregular_pyc(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    nonregular_bytecode = runtime / "module.pyc"
+    nonregular_bytecode.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="is not one real file"):
+        normalize_python_bytecode(runtime)
+
+    assert nonregular_bytecode.is_dir()
+
+
+def test_normalize_python_bytecode_rejects_non_pyc_cache_residue(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "runtime/lib/python3.14/__pycache__"
+    cache.mkdir(parents=True)
+    bytecode = cache / "module.cpython-314.pyc"
+    bytecode.write_bytes(b"upstream-bytecode")
+    residue = cache / "README"
+    residue.write_text("preserve\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="contains non-bytecode residue"):
+        normalize_python_bytecode(tmp_path / "runtime")
+
+    assert bytecode.read_bytes() == b"upstream-bytecode"
+    assert cache.is_dir()
+    assert residue.read_text(encoding="utf-8") == "preserve\n"
+
+
+def test_audit_python_bytecode_accepts_a_clean_runtime(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    source = runtime / "lib/python3.14/module.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+
+    audit_python_bytecode(runtime)
+
+    assert source.read_text(encoding="utf-8") == "VALUE = 1\n"
+
+
+@pytest.mark.parametrize("artifact_kind", ["cache", "bytecode", "optimized-bytecode"])
+def test_audit_python_bytecode_rejects_and_preserves_artifacts(
+    tmp_path: Path,
+    artifact_kind: str,
+) -> None:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    artifact_name = {
+        "cache": "__pycache__",
+        "bytecode": "loose.pyc",
+        "optimized-bytecode": "loose.pyo",
+    }[artifact_kind]
+    artifact = runtime / artifact_name
+    if artifact_kind == "cache":
+        artifact.mkdir()
+    else:
+        artifact.write_bytes(b"late-bytecode")
+
+    with pytest.raises(ValueError, match="contains a bytecode artifact"):
+        audit_python_bytecode(runtime)
+
+    assert artifact.exists()
+
+
+def test_build_release_runtime_final_audit_rejects_late_bytecode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = tmp_path / "runtime"
+    wheelhouse = tmp_path / "wheelhouse"
+    late_bytecode = runtime / "Lib/__pycache__/late.cpython-314.pyc"
+    event_order: list[str] = []
+
+    def fake_install_python(_uv: Path, output: Path, _workspace: Path) -> Path:
+        event_order.append("install")
+        python = output / "bin/python3.14"
+        python.parent.mkdir(parents=True)
+        python.write_bytes(b"portable-python")
+        return python
+
+    def fake_verify_python(_python: Path, _root: Path) -> None:
+        event_order.append("verify-python")
+
+    def fake_export_requirements(_uv: Path, _project: Path, output: Path) -> None:
+        event_order.append("export")
+        output.write_text("fixture==1 --hash=sha256:00\n", encoding="utf-8")
+
+    def fake_build_wheels(
+        _uv: Path,
+        _python: Path,
+        _requirements: Path,
+        output: Path,
+        _runtime_root: Path,
+        _workspace: Path,
+        _patchelf: Path | None,
+        _strip: Path | None,
+        _vcpkg_path: Path | None,
+    ) -> None:
+        event_order.append("build-wheels")
+        (output / "fixture.whl").write_bytes(b"wheel")
+
+    def fake_verify_wheelhouse(
+        _uv: Path,
+        _python: Path,
+        _project: Path,
+        _wheelhouse: Path,
+        _workspace: Path,
+        _runtime_library_path: Path | None,
+    ) -> list[dict[str, str]]:
+        event_order.append("verify-wheelhouse")
+        late_bytecode.parent.mkdir(parents=True)
+        late_bytecode.write_bytes(b"late-bytecode")
+        return []
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(release_runtime, "install_python", fake_install_python)
+    monkeypatch.setattr(release_runtime, "verify_python", fake_verify_python)
+    monkeypatch.setattr(
+        release_runtime,
+        "export_requirements",
+        fake_export_requirements,
+    )
+    monkeypatch.setattr(release_runtime, "build_wheels", fake_build_wheels)
+    monkeypatch.setattr(
+        release_runtime,
+        "verify_wheelhouse",
+        fake_verify_wheelhouse,
+    )
+
+    with pytest.raises(ValueError, match="contains a bytecode artifact"):
+        build_release_runtime(
+            tmp_path / "project",
+            Path("uv"),
+            runtime,
+            wheelhouse,
+        )
+
+    assert event_order == [
+        "install",
+        "verify-python",
+        "export",
+        "build-wheels",
+        "verify-wheelhouse",
+    ]
+    assert late_bytecode.read_bytes() == b"late-bytecode"
+
+
+def test_install_python_inventories_the_requested_uv_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output = tmp_path / "runtime"
+    commands: list[list[str]] = []
+    selected_platforms: list[str] = []
+    inventory_calls: list[tuple[Path, str, str]] = []
+    normalization_calls: list[tuple[str, Path, Path | None]] = []
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        command = [str(argument) for argument in arguments]
+        commands.append(command)
+        assert "install" in command
+        assert environment is None
+        assert not capture
+        install_root = Path(command[command.index("--install-dir") + 1])
+        installed = install_root / "sentinel-qualified-install-request"
+        executable = (
+            installed / "python.exe"
+            if os.name == "nt"
+            else installed / "bin/python3.14"
+        )
+        executable.parent.mkdir(parents=True)
+        executable.write_bytes(b"fixture")
+        return ""
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+
+    def fake_python_install_request(platform_name: str) -> str:
+        selected_platforms.append(platform_name)
+        return "sentinel-qualified-install-request"
+
+    monkeypatch.setattr(
+        release_runtime,
+        "python_install_request",
+        fake_python_install_request,
+    )
+
+    def fake_managed_python_install_prefix(
+        install_root: Path,
+        install_request: str,
+        *,
+        platform_name: str,
+    ) -> Path:
+        inventory_calls.append((install_root, install_request, platform_name))
+        return install_root / install_request
+
+    monkeypatch.setattr(
+        release_runtime,
+        "managed_python_install_prefix",
+        fake_managed_python_install_prefix,
+    )
+
+    def record_bytecode_normalization(root: Path) -> None:
+        assert root.is_dir()
+        normalization_calls.append(("bytecode", root, None))
+
+    monkeypatch.setattr(
+        release_runtime,
+        "normalize_python_bytecode",
+        record_bytecode_normalization,
+    )
+
+    def record_sysconfig_normalization(root: Path, prefix: Path) -> None:
+        assert root.is_dir()
+        normalization_calls.append(("sysconfig", root, prefix))
+
+    monkeypatch.setattr(
+        release_runtime,
+        "normalize_python_sysconfig",
+        record_sysconfig_normalization,
+    )
+
+    installed = install_python(Path("uv"), output, workspace)
+
+    assert installed == python_executable(output)
+    assert len(commands) == 1
+    command = commands[0]
+    assert "find" not in command
+    assert LINUX_PYTHON_INSTALL_REQUEST == "cpython-3.14.3-linux-x86_64-gnu"
+    assert WINDOWS_PYTHON_INSTALL_REQUEST == "cpython-3.14.3-windows-x86_64-none"
+    assert release_runtime.PYTHON_VERSION == "3.14.3"
+    assert selected_platforms == [sys.platform]
+    assert inventory_calls == [
+        (
+            workspace / "python-installs",
+            "sentinel-qualified-install-request",
+            sys.platform,
+        )
+    ]
+    assert normalization_calls == [
+        ("bytecode", output, None),
+        (
+            "sysconfig",
+            output,
+            workspace / "python-installs/sentinel-qualified-install-request",
+        ),
+    ]
+    assert command[:5] == [
+        "uv",
+        "--no-config",
+        "python",
+        "install",
+        "sentinel-qualified-install-request",
+    ]
+    assert command.count("sentinel-qualified-install-request") == 1
+    assert release_runtime.PYTHON_VERSION not in command
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "redirect_kind"),
+    [("linux", "symlink"), ("win32", "junction")],
+)
+def test_managed_python_install_prefix_accepts_exact_platform_layout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    platform_name: str,
+    redirect_kind: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, platform_name
+    )
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: (redirect_kind, full_install)},
+    )
+
+    assert managed_python_install_prefix(
+        install_root,
+        full_name,
+        platform_name=platform_name,
+    ) == full_install.resolve(strict=True)
+
+
+@pytest.mark.parametrize(
+    "inventory_change", ["missing", "minor-missing", "extra", "first-fallback"]
+)
+def test_managed_python_install_prefix_rejects_nonexact_inventory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    inventory_change: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    redirect_target = full_install
+    if inventory_change == "missing":
+        (install_root / ".lock").unlink()
+    elif inventory_change == "minor-missing":
+        minor_redirect.rmdir()
+    elif inventory_change == "extra":
+        (install_root / "extra").mkdir()
+    elif inventory_change == "first-fallback":
+        full_install.rmdir()
+        redirect_target = install_root / "aaa-first-directory"
+        redirect_target.mkdir()
+    else:
+        raise AssertionError(inventory_change)
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: ("symlink", redirect_target)},
+    )
+
+    with pytest.raises(ValueError, match="inventory differs"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize(
+    ("support_name", "redirect_kind"),
+    [(".gitignore", "symlink"), (".lock", "junction")],
+)
+def test_managed_python_install_prefix_rejects_redirected_support_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    support_name: str,
+    redirect_kind: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    support = install_root / support_name
+    outside_support = tmp_path / f"outside-{support_name.removeprefix('.')}"
+    outside_support.write_bytes(support.read_bytes())
+    emulate_redirects(
+        monkeypatch,
+        {
+            support: (redirect_kind, outside_support),
+            minor_redirect: ("symlink", full_install),
+        },
+    )
+
+    with pytest.raises(ValueError, match="must be one real"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize("support_name", [".gitignore", ".lock"])
+def test_managed_python_install_prefix_rejects_nonregular_support_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    support_name: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    support = install_root / support_name
+    support.unlink()
+    support.mkdir()
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: ("symlink", full_install)},
+    )
+
+    with pytest.raises(ValueError, match="must be one real"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize(
+    ("support_name", "content"),
+    [(".gitignore", b"*\n"), (".lock", b"locked")],
+)
+def test_managed_python_install_prefix_rejects_support_file_content(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    support_name: str,
+    content: bytes,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    (install_root / support_name).write_bytes(content)
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: ("symlink", full_install)},
+    )
+
+    with pytest.raises(ValueError, match="must be one real"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize("temporary_change", ["file", "residue", "redirect"])
+def test_managed_python_install_prefix_rejects_nonempty_or_redirected_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    temporary_change: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    temporary = install_root / ".temp"
+    redirects: dict[Path, tuple[str, Path]] = {
+        minor_redirect: ("symlink", full_install)
+    }
+    if temporary_change == "file":
+        temporary.rmdir()
+        temporary.write_bytes(b"")
+    elif temporary_change == "residue":
+        (temporary / "partial-download").mkdir()
+    elif temporary_change == "redirect":
+        outside_temp = tmp_path / "outside-temp"
+        outside_temp.mkdir()
+        redirects[temporary] = ("junction", outside_temp)
+    else:
+        raise AssertionError(temporary_change)
+    emulate_redirects(monkeypatch, redirects)
+
+    with pytest.raises(ValueError, match=r"\.temp must be one real empty directory"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize("redirect_kind", ["symlink", "junction"])
+def test_managed_python_install_prefix_rejects_redirected_full_install(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    redirect_kind: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    outside_install = tmp_path / "outside-install"
+    outside_install.mkdir()
+    emulate_redirects(
+        monkeypatch,
+        {
+            full_install: (redirect_kind, outside_install),
+            minor_redirect: ("symlink", outside_install),
+        },
+    )
+
+    with pytest.raises(ValueError, match="full installation is redirected"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize(
+    ("platform_name", "wrong_kind"),
+    [("linux", "junction"), ("win32", "symlink")],
+)
+def test_managed_python_install_prefix_rejects_wrong_minor_redirect_kind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    platform_name: str,
+    wrong_kind: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, platform_name
+    )
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: (wrong_kind, full_install)},
+    )
+
+    with pytest.raises(ValueError, match="wrong platform-specific kind"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name=platform_name,
+        )
+
+
+def test_managed_python_install_prefix_rejects_wrong_minor_redirect_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    _full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    wrong_target = tmp_path / "wrong-target"
+    wrong_target.mkdir()
+    emulate_redirects(
+        monkeypatch,
+        {minor_redirect: ("symlink", wrong_target)},
+    )
+
+    with pytest.raises(ValueError, match="does not target the full installation"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+@pytest.mark.parametrize("redirect_kind", ["symlink", "junction"])
+def test_managed_python_install_prefix_rejects_redirected_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    redirect_kind: str,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    full_install, minor_redirect, full_name = create_managed_python_layout(
+        install_root, "linux"
+    )
+    emulate_redirects(
+        monkeypatch,
+        {
+            install_root: (redirect_kind, install_root),
+            minor_redirect: ("symlink", full_install),
+        },
+    )
+
+    with pytest.raises(ValueError, match="installation root is redirected"):
+        managed_python_install_prefix(
+            install_root,
+            full_name,
+            platform_name="linux",
+        )
+
+
+def test_managed_python_install_prefix_rejects_missing_root(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="installation root is redirected"):
+        managed_python_install_prefix(
+            tmp_path / "missing",
+            LINUX_PYTHON_INSTALL_REQUEST,
+            platform_name="linux",
+        )
+
+
+def test_managed_python_install_prefix_normalizes_root_stat_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    install_root.mkdir()
+    original_stat = Path.stat
+
+    def denied_stat(path: Path, *, follow_symlinks: bool = True) -> os.stat_result:
+        if path == install_root:
+            raise PermissionError(install_root)
+        return original_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", denied_stat)
+
+    with pytest.raises(ValueError, match="installation root is redirected"):
+        managed_python_install_prefix(
+            install_root,
+            LINUX_PYTHON_INSTALL_REQUEST,
+            platform_name="linux",
+        )
+
+
+def test_managed_python_install_prefix_rejects_unknown_platform(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="does not support"):
+        managed_python_install_prefix(
+            tmp_path / "python-installs",
+            "cpython-3.14.3-unknown-x86_64-none",
+            platform_name="unknown",
+        )
+
+
+def test_managed_python_install_prefix_rejects_mismatched_full_request(
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "python-installs"
+    create_managed_python_layout(install_root, "linux")
+
+    with pytest.raises(ValueError, match=r"install request .* differs"):
+        managed_python_install_prefix(
+            install_root,
+            WINDOWS_PYTHON_INSTALL_REQUEST,
+            platform_name="linux",
+        )
+
+
+def test_verify_python_uses_runtime_version_not_install_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime = tmp_path / "runtime"
+    qualified_install_request = "sentinel-qualified-install-request"
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        _ = arguments
+        assert environment is None
+        assert capture
+        return json.dumps(
+            {
+                "version": qualified_install_request,
+                "prefix": str(runtime),
+                "config_prefix": str(runtime),
+                "include": str(runtime / "include"),
+            }
+        )
+
+    def fake_python_install_request(_platform_name: str) -> str:
+        return qualified_install_request
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+    monkeypatch.setattr(
+        release_runtime,
+        "python_install_request",
+        fake_python_install_request,
+    )
+
+    with pytest.raises(ValueError, match=r"differs from 3\.14\.3"):
+        verify_python(runtime / "bin/python3.14", runtime)
+
+
+def test_python_execution_copy_preserves_the_raw_portable_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime = tmp_path / "runtime"
+    raw_python = runtime / "bin/python3.14"
+    raw_python.parent.mkdir(parents=True)
+    raw_python.write_bytes(b"portable-python")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    patchelf = tmp_path / "patchelf"
+    patchelf.write_bytes(b"fixture")
+    loader = tmp_path / "release/lib/ld-linux-x86-64.so.2"
+    loader.parent.mkdir(parents=True)
+    loader.write_bytes(b"fixture")
+    glibc = tmp_path / "release/lib"
+    libgcc = tmp_path / "gcc/lib"
+    libgcc.mkdir(parents=True)
+    metadata: dict[Path, tuple[str, str]] = {}
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        _ = environment
+        command = [str(argument) for argument in arguments]
+        executable = Path(command[-1])
+        current = metadata.get(
+            executable,
+            (PORTABLE_SYSTEM_INTERPRETER, PORTABLE_PYTHON_RPATH),
+        )
+        if "--print-interpreter" in command:
+            assert capture
+            return current[0]
+        if "--print-rpath" in command:
+            assert capture
+            return current[1]
+        if "--set-interpreter" in command:
+            metadata[executable] = (
+                command[command.index("--set-interpreter") + 1],
+                current[1],
+            )
+            return ""
+        if "--set-rpath" in command:
+            metadata[executable] = (
+                current[0],
+                command[command.index("--set-rpath") + 1],
+            )
+            return ""
+        raise AssertionError(command)
+
+    def fake_verify_python(_executable: Path, _root: Path) -> None:
+        pass
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+    monkeypatch.setattr(
+        release_runtime,
+        "verify_python",
+        fake_verify_python,
+    )
+
+    execution_python, execution_root, raw_digest = prepare_python_execution_copy(
+        runtime,
+        workspace,
+        patchelf,
+        loader,
+        os.pathsep.join((str(glibc), str(libgcc))),
+    )
+
+    assert execution_root == workspace / "python-execution"
+    assert execution_python == execution_root / "bin/python3.14"
+    assert metadata[execution_python] == (
+        str(loader),
+        os.pathsep.join((PORTABLE_PYTHON_RPATH, str(glibc), str(libgcc))),
+    )
+    assert raw_python.read_bytes() == b"portable-python"
+    assert raw_digest == release_runtime.sha256_file(raw_python)
+
+
+def test_python_executable_accepts_the_windows_venv_layout(tmp_path: Path) -> None:
+    executable = tmp_path / "Scripts/python.exe"
+    executable.parent.mkdir()
+    executable.write_bytes(b"fixture")
+
+    assert python_executable(tmp_path, platform_name="nt") == executable
+
+
+def test_wheel_build_environment_maps_the_portable_python_prefix(
+    tmp_path: Path,
+) -> None:
+    runtime = tmp_path / "portable python"
+    environment = wheel_build_environment(runtime, None, {"CFLAGS": "-O2"})
+
+    assert environment["SOURCE_DATE_EPOCH"] == str(REPRODUCIBLE_ZIP_EPOCH)
+    if os.name == "nt":
+        assert (
+            f"/pathmap:{runtime.resolve()}={PORTABLE_BUILD_PREFIX}" in environment["CL"]
+        )
+    else:
+        assert shlex.split(environment["CFLAGS"]) == [
+            "-O2",
+            f"-ffile-prefix-map={runtime.resolve()}={PORTABLE_BUILD_PREFIX}",
+        ]
+        assert environment["LDFLAGS"] == "-Wl,--build-id=none"
+
+
+def test_wheel_bootstrap_uses_a_zip_compatible_reproducible_epoch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output = tmp_path / "wheelhouse"
+    output.mkdir()
+    environments: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        _ = capture
+        command = [str(argument) for argument in arguments]
+        assert environment is not None
+        environments.append((command, dict(environment)))
+        if "venv" in command:
+            venv = Path(command[command.index("venv") + 1])
+            executable = (
+                venv / "Scripts/python.exe"
+                if os.name == "nt"
+                else venv / "bin/python3.14"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"fixture")
+        if "wheel" in command:
+            (output / "fixture-1.0-py3-none-any.whl").write_bytes(b"fixture")
+        return ""
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+
+    def ignore_normalize_wheel(
+        _wheel: Path, _patchelf: Path | None, _strip: Path | None
+    ) -> None:
+        return
+
+    monkeypatch.setattr(release_runtime, "normalize_wheel", ignore_normalize_wheel)
+
+    release_runtime.build_wheels(
+        Path("uv"),
+        Path("python"),
+        tmp_path / "requirements.lock",
+        output,
+        tmp_path / "runtime",
+        workspace,
+        None,
+        None,
+        None,
+    )
+
+    ensurepip_environment = next(
+        environment for command, environment in environments if "ensurepip" in command
+    )
+    assert ensurepip_environment["SOURCE_DATE_EPOCH"] == str(REPRODUCIBLE_ZIP_EPOCH)
+
+
+def test_normalize_wheel_repacks_unchanged_members_deterministically(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.whl"
+    second = tmp_path / "second.whl"
+    members = {
+        "example/__init__.py": b"VALUE = 1\n",
+        "example-1.0.dist-info/RECORD": b"",
+    }
+    for wheel, date_time, names in [
+        (first, (2025, 1, 2, 3, 4, 6), list(members)),
+        (second, (2026, 7, 8, 9, 10, 12), list(reversed(members))),
+    ]:
+        with zipfile.ZipFile(wheel, "w") as archive:
+            for name in names:
+                info = zipfile.ZipInfo(name, date_time=date_time)
+                archive.writestr(info, members[name])
+
+    normalize_wheel(first, None, None)
+    normalize_wheel(second, None, None)
+
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_windows_nsis_reproducibility_hook_is_wired() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config_path = root / "rust/pokecon/tauri.conf.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+
+    nsis = config["bundle"]["windows"]["nsis"]
+    assert nsis["compression"] == "none"
+    hook_name = "../../scripts/release/nsis-reproducibility.nsh"
+    assert nsis["installerHooks"] == hook_name
+    hook_path = (config_path.parent / hook_name).resolve()
+    assert hook_path == root / "scripts/release/nsis-reproducibility.nsh"
+    hook_contents = hook_path.read_text(encoding="utf-8")
+    assert "SetDateSave off" in hook_contents
+    template_name = "../../scripts/release/installer.nsi"
+    assert nsis["template"] == template_name
+    template_path = (config_path.parent / template_name).resolve()
+    assert template_path == root / "scripts/release/installer.nsi"
+    template_contents = template_path.read_text(encoding="utf-8")
+    assert "{{#each resources_dirs}}" not in template_contents
+    assert "resources_dirs" not in template_contents
+    assert "{{#each resources}}" in template_contents
+    assert 'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"' in template_contents
+    assert template_contents.index(
+        'CreateDirectory "$INSTDIR\\\\{{this.[0]}}"'
+    ) < template_contents.index('File /a "/oname={{this.[1]}}"')
+    assert template_contents.count('File /a "/oname={{this.[1]}}"') == 1
+    assert 'Delete "$INSTDIR\\\\{{this.[1]}}"' in template_contents
+    assert template_contents.count("resources_ancestors") == 1
+
+
+@pytest.mark.parametrize("workflow_name", ["package.yml", "release.yml"])
+def test_windows_release_resources_are_isolated_from_cargo_cache(
+    workflow_name: str,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows" / workflow_name).read_text(encoding="utf-8")
+
+    assert "$env:RUNNER_TEMP" in workflow
+    bundle_resources_assignment = (
+        "$bundleResources = Join-Path $env:GITHUB_WORKSPACE "
+        '".pokecon-bundle-resources-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"'
+    )
+    assert workflow.count(bundle_resources_assignment) == (
+        2 if workflow_name == "package.yml" else 1
+    )
+    bundle_config_assignment = (
+        "$bundleConfig = Join-Path $env:GITHUB_WORKSPACE "
+        '".pokecon-bundle-config-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT.json"'
+    )
+    assert workflow.count(bundle_config_assignment) == (
+        2 if workflow_name == "package.yml" else 1
+    )
+    assert "$PSNativeCommandUseErrorActionPreference = $true" in workflow
+    assert "--runtime-output target/" not in workflow
+    assert "--wheelhouse-output target/" not in workflow
+    assert "--config $env:POKECON_BUNDLE_CONFIG" in workflow
+    build_stage_start = workflow.index("      - name: Build and stage managed runtimes")
+    build_stage_end = workflow.index(
+        "      - name: Build offline NSIS installer", build_stage_start
+    )
+    build_stage = workflow[build_stage_start:build_stage_end]
+    installer_stage_end = workflow.index(
+        "      - name: Record Windows signing inputs", build_stage_end
+    )
+    installer_stage = workflow[build_stage_end:installer_stage_end]
+    error_preference = "$PSNativeCommandUseErrorActionPreference = $true"
+    provenance_clear = "$env:POKECON_RESOURCE_PROVENANCE = $null"
+    provenance_development = '$env:POKECON_RESOURCE_PROVENANCE = "development"'
+    no_bytecode_current_process = '$env:PYTHONDONTWRITEBYTECODE = "1"'
+    no_bytecode_later_steps = (
+        '"PYTHONDONTWRITEBYTECODE=1" | Out-File -FilePath $env:GITHUB_ENV -Append'
+    )
+    runtime_build = "python -m scripts.release.build_runtime `"
+    worker_build = (
+        "cargo build --locked --release --package pokecon --bin pokecon-worker "
+        "--features worker-binary"
+    )
+    stage_capture = "$stageJson = python -m scripts.release.stage `"
+    stage_command = (
+        "          $stageJson = python -m scripts.release.stage `\n"
+        "            --web web/dist `\n"
+        "            --worker target/release/pokecon-worker.exe `\n"
+        "            --uv $uv `\n"
+        "            --wheelhouse $releaseWheelhouse `\n"
+        "            --python $releasePython `\n"
+        "            --output $bundleResources `\n"
+        "            --config-output $bundleConfig\n"
+    )
+    stage_parse = "$stageReport = $stageJson | ConvertFrom-Json -ErrorAction Stop"
+    content_assignment = "$contentSha256 = $stageReport.content_sha256"
+    content_validation = (
+        r"if ($contentSha256 -isnot [string] -or "
+        r"$contentSha256 -cnotmatch '\A[0-9a-f]{64}\z') {"
+    )
+    invalid_content_diagnostic = (
+        'throw "release stage content_sha256 must be an exact lowercase SHA-256 digest"'
+    )
+    provenance_export = (
+        '"POKECON_RESOURCE_PROVENANCE=packaged:$contentSha256" | '
+        "Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append"
+    )
+    bundle_config_export = (
+        '"POKECON_BUNDLE_CONFIG=$bundleConfig" | '
+        "Out-File -FilePath $env:GITHUB_ENV -Append"
+    )
+    bundle_resources_export = (
+        '"POKECON_BUNDLE_RESOURCES=$bundleResources" | '
+        "Out-File -FilePath $env:GITHUB_ENV -Append"
+    )
+    bundle_config_consumer = "--config $env:POKECON_BUNDLE_CONFIG"
+    canonical_stage_identity_block = (
+        stage_command + f"          {stage_parse}\n"
+        f"          {content_assignment}\n"
+        f"          {content_validation}\n"
+        f"            {invalid_content_diagnostic}\n"
+        "          }\n"
+        f"          {provenance_export}\n"
+        f"          {bundle_config_export}\n"
+    )
+    payload_manifest_copy = (
+        "          Copy-Item `\n"
+        '            (Join-Path $bundleResources "resource-manifest.json") `\n'
+        '            (Join-Path $env:GITHUB_WORKSPACE "windows-payload-manifest.json")\n'
+    )
+    package_stage_identity_block = (
+        stage_command + f"          {stage_parse}\n"
+        f"          {content_assignment}\n"
+        f"          {content_validation}\n"
+        f"            {invalid_content_diagnostic}\n"
+        "          }\n"
+        + payload_manifest_copy
+        + f"          {provenance_export}\n"
+        + f"          {bundle_config_export}\n"
+    )
+    release_payload_manifest_copy = (
+        "          Copy-Item `\n"
+        '            (Join-Path $bundleResources "resource-manifest.json") `\n'
+        '            (Join-Path $env:RUNNER_TEMP "pokecon-payload-primary.json")\n'
+    )
+    release_stage_identity_block = (
+        canonical_stage_identity_block[
+            : canonical_stage_identity_block.index(f"          {provenance_export}")
+        ]
+        + release_payload_manifest_copy
+        + f"          {provenance_export}\n"
+        + f"          {bundle_config_export}\n"
+        + f"          {bundle_resources_export}\n"
+    )
+    next_installer_step = "      - name: Build offline NSIS installer"
+    canonical_installer_stage = (
+        "      - name: Build offline NSIS installer\n"
+        "        shell: pwsh\n"
+        "        working-directory: rust/pokecon\n"
+        "        run: >-\n"
+        "          cargo tauri build --ci --bundles nsis\n"
+        "          --config $env:POKECON_BUNDLE_CONFIG\n"
+        "          -- --locked\n"
+    )
+
+    assert build_stage.count(error_preference) == 1
+    assert build_stage.count(runtime_build) == 1
+    assert build_stage.count(worker_build) == 1
+    assert "scripts/release/stage.py" not in workflow
+    assert "stage.py" not in workflow.casefold()
+    assert build_stage.count(stage_capture) == 1
+    assert build_stage.count(stage_command) == 1
+    assert (
+        build_stage.count(
+            package_stage_identity_block
+            if workflow_name == "package.yml"
+            else release_stage_identity_block
+        )
+        == 1
+    )
+    if workflow_name == "package.yml":
+        assert workflow.count(provenance_clear) == 4
+        assert workflow.count(provenance_development) == 2
+        assert workflow.count(no_bytecode_current_process) == 2
+        assert workflow.count(no_bytecode_later_steps) == 2
+        assert workflow.count("scripts.release.stage") == 2
+        for identity_statement in (
+            stage_parse,
+            content_assignment,
+            content_validation,
+            invalid_content_diagnostic,
+            provenance_export,
+        ):
+            assert workflow.count(identity_statement) == 2
+        assert workflow.count(bundle_config_export) == 2
+        assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 8
+        assert workflow.count("POKECON_BUNDLE_CONFIG") == 4
+        bundle_config_lines = tuple(
+            line.strip()
+            for line in workflow.splitlines()
+            if "POKECON_BUNDLE_CONFIG" in line
+        )
+        assert bundle_config_lines == (
+            bundle_config_export,
+            bundle_config_consumer,
+            bundle_config_export,
+            bundle_config_consumer,
+        )
+        assert workflow.count(bundle_config_consumer) == 2
+    else:
+        assert workflow.count(provenance_clear) == 2
+        assert workflow.count(provenance_development) == 1
+        assert workflow.count(no_bytecode_current_process) == 1
+        assert workflow.count(no_bytecode_later_steps) == 1
+        assert workflow.count("scripts.release.stage") == 1
+        for identity_statement in (
+            stage_parse,
+            content_assignment,
+            content_validation,
+            invalid_content_diagnostic,
+            provenance_export,
+        ):
+            assert workflow.count(identity_statement) == 1
+        assert workflow.count(bundle_config_export) == 1
+        assert workflow.count(bundle_resources_export) == 1
+        assert workflow.count("POKECON_RESOURCE_PROVENANCE") == 4
+        assert workflow.count("POKECON_BUNDLE_CONFIG") == 3
+        bundle_config_lines = tuple(
+            line.strip()
+            for line in workflow.splitlines()
+            if "POKECON_BUNDLE_CONFIG" in line
+        )
+        assert bundle_config_lines == (
+            bundle_config_export,
+            bundle_config_consumer,
+            bundle_config_consumer,
+        )
+        assert workflow.count(bundle_config_consumer) == 2
+    provenance_lines = tuple(
+        line.strip()
+        for line in build_stage.splitlines()
+        if "POKECON_RESOURCE_PROVENANCE" in line
+    )
+    assert provenance_lines == (
+        provenance_clear,
+        provenance_development,
+        provenance_clear,
+        provenance_export,
+    )
+    assert tuple(
+        line.strip()
+        for line in build_stage.splitlines()
+        if line.strip().startswith("$stageJson =")
+    ) == (stage_capture,)
+    assert tuple(
+        line.strip()
+        for line in build_stage.splitlines()
+        if line.strip().startswith("$stageReport =")
+    ) == (stage_parse,)
+    assert tuple(
+        line.strip()
+        for line in build_stage.splitlines()
+        if line.strip().startswith("$contentSha256 =")
+    ) == (content_assignment,)
+    assert "$env:PATH" not in build_stage
+    assert ".Substring(" not in build_stage
+    assert (
+        f"{error_preference}\n"
+        f"          {provenance_clear}\n"
+        f"          {no_bytecode_current_process}\n"
+        f"          {no_bytecode_later_steps}\n" in build_stage
+    )
+    if workflow_name == "package.yml":
+        assert installer_stage == canonical_installer_stage
+    else:
+        assert "Preserve first Windows package build" in installer_stage
+        assert "Rebuild Windows package from identical inputs" in installer_stage
+        assert "Verify byte-for-byte Windows NSIS reproducibility" in installer_stage
+        assert installer_stage.count("cargo tauri build --ci --bundles nsis") == 2
+        assert installer_stage.count(bundle_config_consumer) == 2
+        assert "Get-FileHash" in installer_stage
+        assert ".Length" in installer_stage
+        assert "ReadAllBytes" in installer_stage
+        assert "fc.exe" in installer_stage
+        assert "fc.exe /b" in installer_stage
+        assert (
+            installer_stage.index(canonical_installer_stage.strip())
+            < installer_stage.index("Preserve first Windows package build")
+            < installer_stage.index("Rebuild Windows package from identical inputs")
+            < installer_stage.index("Verify byte-for-byte Windows NSIS reproducibility")
+        )
+        assert installer_stage.count(canonical_installer_stage) == 1
+    assert "--features" not in installer_stage
+    post_bundle_config_export = build_stage.split(bundle_config_export, maxsplit=1)[1]
+    if workflow_name == "package.yml":
+        assert not post_bundle_config_export.strip()
+    else:
+        assert post_bundle_config_export.strip() == bundle_resources_export
+    ordered_statements = (
+        error_preference,
+        provenance_clear,
+        runtime_build,
+        provenance_development,
+        worker_build,
+        stage_capture,
+        stage_parse,
+        content_assignment,
+        content_validation,
+        invalid_content_diagnostic,
+        provenance_export,
+        bundle_config_export,
+        next_installer_step,
+    )
+    statement_positions = tuple(
+        workflow.index(statement, build_stage_start) for statement in ordered_statements
+    )
+    assert statement_positions == tuple(sorted(statement_positions))
+    assert statement_positions[-1] == build_stage_end
+    assert (
+        build_stage.index(no_bytecode_current_process)
+        < build_stage.index(no_bytecode_later_steps)
+        < build_stage.index(runtime_build)
+        < build_stage.index("$env:PYO3_PYTHON = $runtimePython")
+        < build_stage.index(provenance_development)
+        < build_stage.index(worker_build)
+        < build_stage.index(provenance_clear, build_stage.index(worker_build))
+        < build_stage.index(stage_capture)
+    )
+
+
+def test_package_ci_proves_windows_nsis_reproducibility() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/package.yml").read_text(encoding="utf-8")
+    repro_start = workflow.index("  windows_repro:")
+    check_start = workflow.index("  windows_repro_check:", repro_start)
+    required_start = workflow.index("  required:", check_start)
+    repro = workflow[repro_start:check_start]
+    check = workflow[check_start:required_start]
+
+    assert "toolchain: '1.95.0'" in repro
+    assert '"uv==0.11.8"' in repro
+    assert "tauri-cli --version 2.11.4" in repro
+    assert '"SOURCE_DATE_EPOCH=0"' in repro
+    assert repro.count("cargo tauri build --ci --bundles nsis") == 1
+    assert check.count("find -P") == 6
+    assert "expected exactly one primary and one reproduction NSIS bundle" in check
+    assert "expected exactly one primary and one reproduction payload manifest" in check
+    assert (
+        "expected exactly one primary and one reproduction expanded-tree manifest"
+        in check
+    )
+    assert "payload manifest SHA-256 (staged resource payload):" in check
+    assert "expanded tree manifest SHA-256 (clean-install tree):" in check
+    assert "outer NSIS installer SHA-256:" in check
+    assert "sha256sum --" in check
+    assert "cmp --" in check
+    assert repro_start < check_start < required_start
+
+
+def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
+    root = Path(__file__).resolve().parents[2]
+    flake = (root / "flake.nix").read_text(encoding="utf-8")
+    runtime_output_hash = (
+        'outputHash = "sha256-n7b1658wvxQBXdR7qHewa5yvReF5K61zi8MuxxNiayI=";'
+    )
+
+    assert flake.count(runtime_output_hash) == 1
+    assert "lib.fakeHash" not in flake
+    assert 'linux-release-nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";' in flake
+    assert 'linuxReleaseMaximumGlibc = "2.39";' in flake
+    assert "lib.versionAtLeast linuxReleaseMaximumGlibc releaseGlibcVersion" in flake
+    assert (
+        "portableUvExecutionLoader = linuxReleasePkgs.stdenv.cc.bintools.dynamicLinker;"
+    ) in flake
+    assert (
+        "portableUvExecutionLibraryPath = linuxReleasePkgs.lib.makeLibraryPath" in flake
+    )
+    assert "linuxReleasePkgs.glibc" in flake
+    assert "linuxReleaseCc.cc.lib" in flake
+    assert "linuxReleasePkgs.zlib" in flake
+    assert "linuxReleasePkgs.xorg.libxcb" in flake
+    assert "linuxReleasePkgs.libglvnd" in flake
+    assert "linuxReleasePkgs.glib.out" in flake
+    assert "linuxReleasePkgs.xorg.libSM" in flake
+    assert "linuxReleasePkgs.xorg.libXext" in flake
+    assert "linuxReleasePkgs.xorg.libXrender" in flake
+    assert 'portableUvFileSha256 = "646adf5c' in flake
+    assert 'portableUvSystemInterpreter = "/lib64/ld-linux-x86-64.so.2";' in flake
+    assert 'portableUvVersionOutput = "uv 0.11.8 (x86_64-unknown-linux-gnu)";' in flake
+    assert '"libgcc_s.so.1"' in flake
+    assert '"${linuxReleasePkgs.patchelf}/bin/patchelf" --print-needed' in flake
+    assert '--set-interpreter "${portableUvExecutionLoader}"' in flake
+    assert '--set-rpath "${portableUvExecutionLibraryPath}"' in flake
+    assert (
+        'if ! actual_portable_uv_version_output="$("$out/bin/uv" --version)"; then'
+        in flake
+    )
+    assert (
+        'if [ "$actual_portable_uv_version_output" != "${portableUvVersionOutput}" ]; then'
+        in flake
+    )
+    assert (
+        "portable uv execution copy version probe failed; actual output: "
+        "$actual_portable_uv_version_output"
+    ) in flake
+    assert (
+        "portable uv execution copy reports an unexpected version; expected: "
+        "${portableUvVersionOutput}; actual: $actual_portable_uv_version_output"
+    ) in flake
+    assert '"${pkgs.coreutils}/bin/env" -i' in flake
+    assert 'CC="${linuxReleaseCc}/bin/gcc"' in flake
+    assert 'CFLAGS="-I${linuxReleasePortaudio}/include"' in flake
+    assert 'LDFLAGS="-L${linuxReleasePortaudio}/lib"' in flake
+    assert 'PKG_CONFIG_PATH="${linuxReleasePortaudio}/lib/pkgconfig"' in flake
+    assert 'PKG_CONFIG_LIBDIR="${linuxReleasePortaudio}/lib/pkgconfig"' in flake
+    assert (
+        "          linuxReleaseRuntimeLibraries = linuxReleasePkgs.symlinkJoin {\n"
+        '            name = "pokecon-linux-release-runtime-libraries";\n'
+        "            paths = [\n"
+        "              linuxReleasePortaudio\n"
+        "              linuxReleaseCc.cc.lib\n"
+        "              linuxReleasePkgs.zlib\n"
+        "              linuxReleasePkgs.xorg.libxcb\n"
+        "              linuxReleasePkgs.libglvnd\n"
+        "              linuxReleasePkgs.glib.out\n"
+        "              linuxReleasePkgs.xorg.libSM\n"
+        "              linuxReleasePkgs.xorg.libXext\n"
+        "              linuxReleasePkgs.xorg.libXrender\n"
+        "            ];\n"
+        "          };\n" in flake
+    )
+    assert flake.count("linuxReleaseRuntimeLibraries") == 4
+    assert "[build_ecodes]" in flake
+    assert "${linuxReleasePkgs.linuxHeaders}/include/linux/input.h" in flake
+    assert "linuxReleaseRuntime =" in flake
+    assert 'if system == "x86_64-linux" then' in flake
+    assert (
+        'cp "${linuxReleaseEvdevConfig}" "$TMPDIR/release-home/.pydistutils.cfg"'
+        in flake
+    )
+    assert 'HOME="$TMPDIR/release-home"' in flake
+    assert "PIP_CONFIG_FILE=/dev/null" in flake
+    linux_python_libc = LINUX_PYTHON_INSTALL_REQUEST.rsplit("-", 1)[1]
+    assert linux_python_libc == "gnu"
+    assert flake.count(f"                    UV_LIBC={linux_python_libc} \\\n") == 1
+    assert flake.count("UV_LIBC") == 1
+    assert "UV_NO_CONFIG=1" in flake
+    assert "PYTHONDONTWRITEBYTECODE=1" in flake
+    assert "PYTHONNOUSERSITE=1" in flake
+    assert "PYTHONSAFEPATH=1" in flake
+    assert (
+        '"${pythonEnv}/bin/python" -I "${repositorySource}/scripts/release/build_runtime.py"'
+        in flake
+    )
+    assert '--project "${controlledCargoSource}"' in flake
+    assert flake.count('--uv "${portableUvExecutionBinary}"') == 1
+    assert flake.count('--uv "${portableUvBinary}"') == 1
+    assert flake.count('POKECON_BUILD_UV_PATH="${portableUvBinary}"') == 1
+    assert '--execution-loader "${portableUvExecutionLoader}"' in flake
+    assert '--execution-library-path "${portableUvExecutionLibraryPath}"' in flake
+    assert '--runtime-output "$out/python"' in flake
+    assert '--wheelhouse-output "$out/wheelhouse"' in flake
+    assert "fixed release runtime contains Python bytecode cache artifacts" in flake
+    assert 'release_python="${linuxReleaseRuntime}/python"' in flake
+    assert 'release_wheelhouse="${linuxReleaseRuntime}/wheelhouse"' in flake
+    assert 'release_build_home="$gate_home/release-home"' not in flake
+    assert '[ "$2" = deb ]' in flake
+    assert "bundle_args=(--bundles deb)" in flake
+    assert "appimage" not in flake.casefold()
+    assert "rpm" not in flake.casefold()
+    assert (
+        flake.count('--runtime-library-path "${linuxReleaseRuntimeLibraries}/lib"') == 2
+    )
+    assert '--runtime-library-path "${linuxReleasePortaudio}/lib"' not in flake
+    assert flake.count("unset LD_LIBRARY_PATH") == 1
+    assert "LD_LIBRARY_PATH=" not in flake
+    assert 'CFLAGS="-I${linuxReleaseRuntimeLibraries}' not in flake
+    assert 'LDFLAGS="-L${linuxReleaseRuntimeLibraries}' not in flake
+    assert 'CFLAGS="-I${pkgs.portaudio}/include' not in flake
+    assert 'LDFLAGS="-L${pkgs.portaudio}/lib' not in flake
+    assert 'cp -a "${repositorySource}/." "$workdir/"' in flake
+    assert 'release_workdir="$gate_home/pokecon-release-workdir"' in flake
+    assert 'export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
+    assert 'export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon' in flake
+    assert 'export POKECON_RUST_REMAP_SOURCE="${controlledCargoSource}"' in flake
+    assert 'export POKECON_RUST_REMAP_PYTHON="$release_python"' in flake
+    assert 'export RUSTC_WRAPPER="${reproducibleRustcWrapper}"' in flake
+    assert "--remap-path-prefix=${pokeconProductSource}=/build/pokecon" in flake
+    assert "--remap-path-prefix=${controlledCargoSource}=/build/pokecon" in flake
+    assert "--remap-path-prefix=$POKECON_RUST_REMAP_SOURCE=/build/pokecon" in flake
+    assert "--remap-path-prefix=$POKECON_RUST_REMAP_PYTHON=/build/python" in flake
+    assert "-Lnative=$POKECON_RUST_REMAP_PYTHON/lib" in flake
+    assert '--application "$normalized_application"' in flake
+    assert '--worker "$normalized_worker"' in flake
+    assert 'cp -p "$application_backup" "$application"' in flake
+
+
+# ---------------------------------------------------------------------------
+# PE timestamp normalization (Windows wheel reproducibility)
+# ---------------------------------------------------------------------------
+
+
+def _build_minimal_pe(
+    coff_timestamp: int,
+    debug_timestamps: list[int] | None = None,
+) -> bytes:
+    size = 0x400
+    data = bytearray(size)
+    data[0:2] = b"MZ"
+    e_lfanew = 0x80
+    data[0x3C:0x40] = e_lfanew.to_bytes(4, "little")
+    data[e_lfanew : e_lfanew + 4] = b"PE\x00\x00"
+    coff = e_lfanew + 4
+    data[coff : coff + 2] = (0x8664).to_bytes(2, "little")
+    data[coff + 2 : coff + 4] = (1).to_bytes(2, "little")
+    data[coff + 4 : coff + 8] = coff_timestamp.to_bytes(4, "little")
+    data[coff + 16 : coff + 18] = (0xF0).to_bytes(2, "little")
+    data[coff + 18 : coff + 20] = (0x22).to_bytes(2, "little")
+    opt = e_lfanew + 4 + 20
+    data[opt : opt + 2] = (0x20B).to_bytes(2, "little")
+    data[opt + 108 : opt + 112] = (16).to_bytes(4, "little")
+    sect = opt + 0xF0
+    data[sect : sect + 8] = b".rdata\x00\x00"
+    data[sect + 8 : sect + 12] = (0x200).to_bytes(4, "little")
+    data[sect + 12 : sect + 16] = (0x1000).to_bytes(4, "little")
+    data[sect + 16 : sect + 20] = (0x200).to_bytes(4, "little")
+    data[sect + 20 : sect + 24] = (0x200).to_bytes(4, "little")
+    data_directory = opt + 112
+    debug_entry_offset = data_directory + 6 * 8
+    if debug_timestamps:
+        debug_rva = 0x1000
+        debug_size = len(debug_timestamps) * 28
+        data[debug_entry_offset : debug_entry_offset + 4] = debug_rva.to_bytes(
+            4, "little"
+        )
+        data[debug_entry_offset + 4 : debug_entry_offset + 8] = debug_size.to_bytes(
+            4, "little"
+        )
+        for idx, ts in enumerate(debug_timestamps):
+            off = 0x200 + idx * 28
+            data[off : off + 4] = (0x12345678).to_bytes(4, "little")
+            data[off + 4 : off + 8] = ts.to_bytes(4, "little")
+            data[off + 8 : off + 10] = (0x0102).to_bytes(2, "little")
+            data[off + 10 : off + 12] = (0x0304).to_bytes(2, "little")
+            data[off + 12 : off + 16] = (2).to_bytes(4, "little")
+            data[off + 16 : off + 20] = (0x99).to_bytes(4, "little")
+            data[off + 20 : off + 24] = (0x2000).to_bytes(4, "little")
+            data[off + 24 : off + 28] = (0x300).to_bytes(4, "little")
+    else:
+        data[debug_entry_offset : debug_entry_offset + 8] = (0).to_bytes(8, "little")
+    return bytes(data)
+
+
+def _extract_coff_timestamp(data: bytes) -> int:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    return int.from_bytes(data[e_lfanew + 8 : e_lfanew + 12], "little")
+
+
+def _extract_debug_timestamps(data: bytes) -> list[int]:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    magic = int.from_bytes(data[opt : opt + 2], "little")
+    if magic == 0x10B:
+        debug_off = opt + 96 + 6 * 8
+    elif magic == 0x20B:
+        debug_off = opt + 112 + 6 * 8
+    else:
+        return []
+    debug_rva = int.from_bytes(data[debug_off : debug_off + 4], "little")
+    debug_size = int.from_bytes(data[debug_off + 4 : debug_off + 8], "little")
+    if debug_rva == 0 or debug_size == 0:
+        return []
+    file_offset = 0x200
+    timestamps: list[int] = []
+    for idx in range(debug_size // 28):
+        off = file_offset + idx * 28
+        timestamps.append(int.from_bytes(data[off + 4 : off + 8], "little"))
+    return timestamps
+
+
+def _make_wheel(path: Path, members: dict[str, bytes]) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in members.items():
+            info = zipfile.ZipInfo(name, date_time=(2025, 6, 1, 12, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, content)
+
+
+def _verify_record_hashes(wheel: Path) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        names = archive.namelist()
+        record_name = next(n for n in names if n.endswith(".dist-info/RECORD"))
+        record_data = archive.read(record_name).decode("utf-8")
+        rows = list(csv.reader(record_data.splitlines()))
+        record_map = {row[0]: (row[1], row[2]) for row in rows if len(row) == 3}
+        for name in names:
+            data = archive.read(name)
+            if name == record_name:
+                assert record_map[name] == ("", "")
+                continue
+            expected_hash, expected_size = record_map[name]
+            digest = hashlib.sha256(data).digest()
+            encoded = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+            assert expected_hash == f"sha256={encoded}"
+            assert expected_size == str(len(data))
+
+
+def test_pe_normalizes_coff_and_debug_timestamps(tmp_path: Path) -> None:
+    pe_bytes = _build_minimal_pe(
+        coff_timestamp=0x5A5A5A5A,
+        debug_timestamps=[0x11111111, 0x22222222],
+    )
+    assert _extract_coff_timestamp(pe_bytes) == 0x5A5A5A5A
+    assert _extract_debug_timestamps(pe_bytes) == [0x11111111, 0x22222222]
+    wheel = tmp_path / "example-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "pyaudio/_portaudio.cp314-win_amd64.pyd": pe_bytes,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    original_guid = pe_bytes[0x200 : 0x200 + 4]
+    normalize_wheel(wheel, None, None)
+    with zipfile.ZipFile(wheel) as archive:
+        normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == [
+        PE_REPRODUCIBLE_TIMESTAMP,
+        PE_REPRODUCIBLE_TIMESTAMP,
+    ]
+    assert normalized[0x200 : 0x200 + 4] == original_guid
+    assert normalized[0x200 + 8 : 0x200 + 12] == pe_bytes[0x200 + 8 : 0x200 + 12]
+    assert normalized[0x200 + 12 : 0x200 + 16] == pe_bytes[0x200 + 12 : 0x200 + 16]
+    assert normalized[0x200 + 16 : 0x200 + 28] == pe_bytes[0x200 + 16 : 0x200 + 28]
+    assert normalized[0x21C : 0x21C + 4] == pe_bytes[0x21C : 0x21C + 4]
+    _verify_record_hashes(wheel)
+
+
+def test_pe_two_wheels_normalize_byte_identically(tmp_path: Path) -> None:
+    pe_a = _build_minimal_pe(
+        coff_timestamp=1_000_000_000,
+        debug_timestamps=[1_000_000_000],
+    )
+    pe_b = _build_minimal_pe(
+        coff_timestamp=1_000_000_036,
+        debug_timestamps=[1_000_000_036],
+    )
+    assert pe_a != pe_b
+    assert _extract_coff_timestamp(pe_a) != _extract_coff_timestamp(pe_b)
+    wheel_a = tmp_path / "a.whl"
+    wheel_b = tmp_path / "b.whl"
+    for wheel, pe in [(wheel_a, pe_a), (wheel_b, pe_b)]:
+        _make_wheel(
+            wheel,
+            {
+                "pyaudio/_portaudio.cp314-win_amd64.pyd": pe,
+                "example-1.0.dist-info/RECORD": b"",
+                "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+            },
+        )
+    normalize_wheel(wheel_a, None, None)
+    normalize_wheel(wheel_b, None, None)
+    assert wheel_a.read_bytes() == wheel_b.read_bytes()
+    _verify_record_hashes(wheel_a)
+    _verify_record_hashes(wheel_b)
+    with zipfile.ZipFile(wheel_a) as archive:
+        normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == [PE_REPRODUCIBLE_TIMESTAMP]
+
+
+def test_pe_non_pe_files_remain_unchanged(tmp_path: Path) -> None:
+    content = b"hello world\n"
+    wheel = tmp_path / "example-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "example/__init__.py": content,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    with zipfile.ZipFile(wheel) as before:
+        before_data = before.read("example/__init__.py")
+    assert before_data == content
+    normalize_wheel(wheel, None, None)
+    with zipfile.ZipFile(wheel) as after:
+        after_data = after.read("example/__init__.py")
+        assert after_data == content
+    plain = tmp_path / "plain.bin"
+    plain.write_bytes(b"NOT_MZ_CONTENT")
+    assert release_runtime._normalize_pe(plain) is False  # noqa: SLF001
+    assert plain.read_bytes() == b"NOT_MZ_CONTENT"
+    non_pe = tmp_path / "nonpe.dat"
+    non_pe.write_bytes(b"\x00\x01\x02\x03")
+    assert release_runtime._normalize_pe(non_pe) is False  # noqa: SLF001
+
+
+def test_pe_without_debug_directory_only_coff_normalized(tmp_path: Path) -> None:
+    pe_bytes = _build_minimal_pe(coff_timestamp=0xDEADBEEF, debug_timestamps=None)
+    pe_path = tmp_path / "solo.pyd"
+    pe_path.write_bytes(pe_bytes)
+    changed = release_runtime._normalize_pe(pe_path)  # noqa: SLF001
+    assert changed is True
+    normalized = pe_path.read_bytes()
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+    assert _extract_debug_timestamps(normalized) == []
+    assert release_runtime._normalize_pe(pe_path) is False  # noqa: SLF001
+    assert pe_path.read_bytes() == normalized
+
+
+def test_pe_malformed_mz_fails_closed(tmp_path: Path) -> None:
+    truncated = tmp_path / "truncated.pyd"
+    truncated.write_bytes(b"MZ")
+    with pytest.raises(ValueError, match=r"PE.*truncated.*DOS"):
+        release_runtime._normalize_pe(truncated)  # noqa: SLF001
+    bad_lfanew = tmp_path / "bad_lfanew.pyd"
+    data = bytearray(b"MZ" + b"\x00" * 58 + (0x1000).to_bytes(4, "little"))
+    bad_lfanew.write_bytes(bytes(data))
+    with pytest.raises(
+        ValueError, match=r"PE.*truncated.*e_lfanew|PE.*invalid e_lfanew"
+    ):
+        release_runtime._normalize_pe(bad_lfanew)  # noqa: SLF001
+    bad_sig = tmp_path / "bad_sig.pyd"
+    data = bytearray(0x100)
+    data[0:2] = b"MZ"
+    data[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    data[0x80:0x84] = b"XX\x00\x00"
+    bad_sig.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match=r"PE.*invalid.*signature"):
+        release_runtime._normalize_pe(bad_sig)  # noqa: SLF001
+    wheel = tmp_path / "bad-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel,
+        {
+            "broken.pyd": b"MZ\x00\x01",
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    with pytest.raises(ValueError, match=r"PE.*truncated|PE.*invalid"):
+        normalize_wheel(wheel, None, None)
+    good_pe = _build_minimal_pe(coff_timestamp=123, debug_timestamps=[456])
+    wheel_ok = tmp_path / "ok-1.0-py3-none-any.whl"
+    _make_wheel(
+        wheel_ok,
+        {
+            "good.pyd": good_pe,
+            "example-1.0.dist-info/RECORD": b"",
+            "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+        },
+    )
+    normalize_wheel(wheel_ok, None, None)
+    with zipfile.ZipFile(wheel_ok) as archive:
+        normalized = archive.read("good.pyd")
+    assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
+
+
+def test_pe_preserves_guid_and_repack_deterministically(tmp_path: Path) -> None:
+    pe = _build_minimal_pe(coff_timestamp=0xAAAAAAAA, debug_timestamps=[0xBBBBBBBB])
+    first = tmp_path / "first.whl"
+    second = tmp_path / "second.whl"
+    members = {
+        "pyaudio/_portaudio.cp314-win_amd64.pyd": pe,
+        "example-1.0.dist-info/RECORD": b"",
+        "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
+    }
+    for wheel_path, order in [
+        (first, list(members.keys())),
+        (second, list(reversed(members.keys()))),
+    ]:
+        with zipfile.ZipFile(wheel_path, "w") as archive:
+            for name in order:
+                info = zipfile.ZipInfo(
+                    name,
+                    date_time=(2025, 1, 2, 3, 4, 6)
+                    if wheel_path == first
+                    else (2026, 7, 8, 9, 10, 12),
+                )
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o644 << 16
+                archive.writestr(info, members[name])
+    normalize_wheel(first, None, None)
+    normalize_wheel(second, None, None)
+    assert first.read_bytes() == second.read_bytes()
+    _verify_record_hashes(first)
+
+
+# ---------------------------------------------------------------------------
+# Production PE normalization (exe/worker) — debug payload removal
+# ---------------------------------------------------------------------------
+
+
+def _build_pe_exe_with_payload(
+    coff_timestamp: int = 0x5A5A5A5A,
+    payloads: list[bytes] | None = None,
+) -> bytes:
+    if payloads is None:
+        payloads = [b"RSDS" + b"\x11" * 16 + b"\x00" * 16, b"POGO" + b"\x22" * 12]
+    size = 0x800
+    data = bytearray(size)
+    data[0:2] = b"MZ"
+    e_lfanew = 0x80
+    data[0x3C:0x40] = e_lfanew.to_bytes(4, "little")
+    data[e_lfanew : e_lfanew + 4] = b"PE\x00\x00"
+    coff = e_lfanew + 4
+    data[coff : coff + 2] = (0x8664).to_bytes(2, "little")
+    data[coff + 2 : coff + 4] = (1).to_bytes(2, "little")
+    data[coff + 4 : coff + 8] = coff_timestamp.to_bytes(4, "little")
+    data[coff + 16 : coff + 18] = (0xF0).to_bytes(2, "little")
+    data[coff + 18 : coff + 20] = (0x22).to_bytes(2, "little")
+    opt = e_lfanew + 4 + 20
+    data[opt : opt + 2] = (0x20B).to_bytes(2, "little")
+    data[opt + 108 : opt + 112] = (16).to_bytes(4, "little")
+    sect = opt + 0xF0
+    data[sect : sect + 8] = b".rdata\x00\x00"
+    data[sect + 8 : sect + 12] = (0x400).to_bytes(4, "little")
+    data[sect + 12 : sect + 16] = (0x1000).to_bytes(4, "little")
+    data[sect + 16 : sect + 20] = (0x400).to_bytes(4, "little")
+    data[sect + 20 : sect + 24] = (0x200).to_bytes(4, "little")
+    data_directory = opt + 112
+    debug_entry_offset = data_directory + 6 * 8
+    n = len(payloads)
+    debug_rva = 0x1000
+    debug_size = n * 28
+    data[debug_entry_offset : debug_entry_offset + 4] = debug_rva.to_bytes(4, "little")
+    data[debug_entry_offset + 4 : debug_entry_offset + 8] = debug_size.to_bytes(
+        4, "little"
+    )
+    debug_dir_file = 0x200
+    payload_base = 0x280
+    cursor = payload_base
+    for idx, payload in enumerate(payloads):
+        off = debug_dir_file + idx * 28
+        ts = 0x11111111 + idx
+        data[off : off + 4] = (0).to_bytes(4, "little")
+        data[off + 4 : off + 8] = ts.to_bytes(4, "little")
+        data[off + 8 : off + 10] = (0).to_bytes(2, "little")
+        data[off + 10 : off + 12] = (0).to_bytes(2, "little")
+        data[off + 12 : off + 16] = (2 if idx == 0 else 13).to_bytes(4, "little")
+        data[off + 16 : off + 20] = len(payload).to_bytes(4, "little")
+        data[off + 20 : off + 24] = (0x3000 + cursor).to_bytes(4, "little")
+        data[off + 24 : off + 28] = cursor.to_bytes(4, "little")
+        data[cursor : cursor + len(payload)] = payload
+        cursor += len(payload)
+    return bytes(data)
+
+
+def _extract_debug_payloads(data: bytes) -> list[bytes]:
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    magic = int.from_bytes(data[opt : opt + 2], "little")
+    debug_off = (opt + 96 + 6 * 8) if magic == 0x10B else (opt + 112 + 6 * 8)
+    debug_rva = int.from_bytes(data[debug_off : debug_off + 4], "little")
+    debug_size = int.from_bytes(data[debug_off + 4 : debug_off + 8], "little")
+    if debug_rva == 0 or debug_size == 0:
+        return []
+    # We know builder uses file offset 0x200 for directory
+    file_offset = 0x200
+    payloads: list[bytes] = []
+    for idx in range(debug_size // 28):
+        off = file_offset + idx * 28
+        ptr = int.from_bytes(data[off + 24 : off + 28], "little")
+        sz = int.from_bytes(data[off + 16 : off + 20], "little")
+        if sz and ptr:
+            payloads.append(data[ptr : ptr + sz])
+    return payloads
+
+
+def test_normalize_pe_removes_debug_directory_and_payload(tmp_path: Path) -> None:
+    payloads = [b"RSDS" + b"\xab" * 20, b"POGO" + b"\xcd" * 12, b"VCFT" + b"\xef" * 8]
+    pe = _build_pe_exe_with_payload(coff_timestamp=0xDEADBEEF, payloads=payloads)
+    path = tmp_path / "pokecon.exe"
+    path.write_bytes(pe)
+    assert _extract_coff_timestamp(path.read_bytes()) == 0xDEADBEEF
+    assert len(_extract_debug_payloads(path.read_bytes())) == 3
+    changed = release_runtime.normalize_pe(path)  # type: ignore[attr-defined]
+    assert changed is True
+    data = path.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # Debug data directory must be zeroed
+    e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    debug_off = opt + 112 + 6 * 8
+    assert int.from_bytes(data[debug_off : debug_off + 4], "little") == 0
+    assert int.from_bytes(data[debug_off + 4 : debug_off + 8], "little") == 0
+    # Debug entries must be zeroed (28 bytes each at 0x200)
+    for idx in range(len(payloads)):
+        off = 0x200 + idx * 28
+        assert data[off : off + 28] == b"\x00" * 28
+    # Payloads must be zeroed
+    for _payload in payloads:
+        # payloads were at 0x280 sequential
+        pass
+    # Verify payload region zeroed (0x280 onwards)
+    assert data[0x280 : 0x280 + sum(len(p) for p in payloads)] == b"\x00" * sum(
+        len(p) for p in payloads
+    )
+    # Idempotent
+    assert release_runtime.normalize_pe(path) is False  # type: ignore[attr-defined]
+    assert release_runtime.normalize_pe_executable(path) is False  # type: ignore[attr-defined]
+    assert release_runtime.normalize_pe_file(path) is False  # type: ignore[attr-defined]
+
+
+def test_normalize_pe_non_pe_and_elf_are_noop(tmp_path: Path) -> None:
+    text = tmp_path / "plain.txt"
+    text.write_bytes(b"hello world\n")
+    assert release_runtime.normalize_pe(text) is False  # type: ignore[attr-defined]
+    assert text.read_bytes() == b"hello world\n"
+    elf = tmp_path / "elf.bin"
+    elf.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 100)
+    assert release_runtime.normalize_pe(elf) is False  # type: ignore[attr-defined]
+    assert elf.read_bytes()[:4] == b"\x7fELF"
+    empty = tmp_path / "empty.bin"
+    empty.write_bytes(b"\x00\x01\x02\x03")
+    assert release_runtime.normalize_pe(empty) is False  # type: ignore[attr-defined]
+    # _normalize_pe for wheels must also be noop on ELF
+    assert release_runtime._normalize_pe(elf) is False  # noqa: SLF001
+
+
+def test_normalize_pe_malformed_fails_closed(tmp_path: Path) -> None:
+    truncated = tmp_path / "trunc.exe"
+    truncated.write_bytes(b"MZ" + b"\x00" * 10)
+    with pytest.raises(ValueError, match=r"PE.*truncated.*DOS|PE.*missing DOS"):
+        release_runtime.normalize_pe(truncated)  # type: ignore[attr-defined]
+    bad_lfanew = tmp_path / "bad_lfanew.exe"
+    data = bytearray(b"MZ" + b"\x00" * 58 + (0xFFF0).to_bytes(4, "little"))
+    bad_lfanew.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match=r"PE.*truncated|PE.*invalid.*lfanew"):
+        release_runtime.normalize_pe(bad_lfanew)  # type: ignore[attr-defined]
+    # Inconsistent debug directory (rva !=0 size 0)
+    pe = bytearray(_build_pe_exe_with_payload())
+    e_lfanew = int.from_bytes(pe[0x3C:0x40], "little")
+    opt = e_lfanew + 4 + 20
+    debug_off = opt + 112 + 6 * 8
+    pe[debug_off + 4 : debug_off + 8] = (0).to_bytes(4, "little")
+    p = tmp_path / "inconsistent.exe"
+    p.write_bytes(bytes(pe))
+    with pytest.raises(ValueError, match=r"inconsistent"):
+        release_runtime.normalize_pe(p)  # type: ignore[attr-defined]
+    # Payload beyond file
+    pe2 = bytearray(_build_pe_exe_with_payload())
+    # Corrupt first entry pointer to beyond file
+    pe2[0x200 + 24 : 0x200 + 28] = (0xFFFF).to_bytes(4, "little")
+    q = tmp_path / "payload_oob.exe"
+    q.write_bytes(bytes(pe2))
+    with pytest.raises(ValueError, match=r"payload.*beyond file|invalid.*payload"):
+        release_runtime.normalize_pe(q)  # type: ignore[attr-defined]
+    # Invalid debug size not multiple of 28
+    pe3 = bytearray(_build_pe_exe_with_payload())
+    pe3[debug_off + 4 : debug_off + 8] = (29).to_bytes(4, "little")
+    r = tmp_path / "bad_size.exe"
+    r.write_bytes(bytes(pe3))
+    with pytest.raises(ValueError, match=r"invalid.*debug.*size"):
+        release_runtime.normalize_pe(r)  # type: ignore[attr-defined]
+
+
+def test_normalize_pe_cli_and_tauri_config(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = json.loads(
+        (root / "rust/pokecon/tauri.conf.json").read_text(encoding="utf-8")
+    )
+    assert "build" in config
+    cmd = config["build"]["beforeBundleCommand"]
+    assert "build_runtime.py" in cmd
+    assert "--normalize-pe" in cmd
+    assert "../scripts/release/build_runtime.py" in cmd
+    assert "../target/release/pokecon.exe" in cmd
+    # CLI must normalize file without requiring runtime args
+    pe = _build_pe_exe_with_payload(coff_timestamp=0x12345678)
+    target = tmp_path / "target" / "release" / "pokecon.exe"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(pe)
+    # Invoke via CLI from tmp_path with relative path handling
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    data = target.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # CLI should reject remote input
+    remote = tmp_path / "remote.exe"
+    remote.write_bytes(pe)
+    result2 = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            "https://example.com/pokecon.exe",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result2.returncode != 0
+    # CLI should not combine with runtime args
+    result3 = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(root / "scripts/release/build_runtime.py"),
+            "--normalize-pe",
+            str(target),
+            "--project",
+            ".",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result3.returncode != 0
+    # Ensure beforeBundleCommand path/cwd safety: command must be relative and not contain shell injection
+    assert ";" not in cmd and "&" not in cmd and "|" not in cmd
+    assert "://" not in cmd
+
+
+def test_stage_normalizes_worker_pe_before_inventory(tmp_path: Path) -> None:
+    from scripts.release import stage  # noqa: PLC0415
+
+    web = tmp_path / "web"
+    web.mkdir()
+    (web / "index.html").write_text("<html></html>", encoding="utf-8")
+    worker_pe = _build_pe_exe_with_payload(coff_timestamp=0x99999999)
+    worker = tmp_path / "pokecon-worker.exe"
+    worker.write_bytes(worker_pe)
+    uv = tmp_path / "uv.exe"
+    uv.write_bytes(b"uv")
+    wheelhouse = tmp_path / "wheelhouse"
+    wheelhouse.mkdir()
+    (wheelhouse / "wheelhouse-manifest.json").write_text("{}", encoding="utf-8")
+    (wheelhouse / "requirements.lock").write_text("", encoding="utf-8")
+    python = tmp_path / "python"
+    (python / "python.exe").parent.mkdir(parents=True)
+    (python / "python.exe").write_bytes(b"python")
+    output = tmp_path / "bundle"
+    config = tmp_path / "bundle.json"
+    manifest = stage.stage_resources(
+        web, worker, uv, wheelhouse, python, output, config
+    )
+    staged = output / "pokecon-worker.exe"
+    assert staged.is_file()
+    data = staged.read_bytes()
+    assert _extract_coff_timestamp(data) == PE_REPRODUCIBLE_TIMESTAMP
+    # Ensure inventory reflects normalized worker
+    files = {
+        str(entry["path"]): entry
+        for entry in cast("list[dict[str, object]]", manifest["files"])
+    }
+    assert "pokecon-worker.exe" in files
+    assert files["pokecon-worker.exe"]["sha256"] == hashlib.sha256(data).hexdigest()
+    # Linux worker (ELF) must be noop
+    worker_elf = tmp_path / "pokecon-worker"
+    worker_elf.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 200)
+    uv_linux = tmp_path / "uv_linux"
+    uv_linux.write_bytes(b"uv")
+    python_linux = tmp_path / "python_linux"
+    (python_linux / "bin/python3.14").parent.mkdir(parents=True)
+    (python_linux / "bin/python3.14").write_bytes(b"python")
+    # Provide symlink for fallback check
+    (python_linux / "python").symlink_to("bin/python3.14")
+    output2 = tmp_path / "bundle2"
+    config2 = tmp_path / "bundle2.json"
+    _ = stage.stage_resources(
+        web, worker_elf, uv_linux, wheelhouse, python_linux, output2, config2
+    )
+    assert (output2 / "pokecon-worker").read_bytes()[:4] == b"\x7fELF"

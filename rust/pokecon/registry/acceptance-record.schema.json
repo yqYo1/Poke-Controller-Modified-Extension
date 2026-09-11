@@ -1,0 +1,748 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pokecon.invalid/schemas/acceptance-record.schema.json",
+  "title": "PokeCon acceptance record",
+  "x-pokecon-release-matrix": {
+    "specification_version": "2.2.0",
+    "platforms": ["linux", "windows"],
+    "browsers": ["chrome", "edge", "firefox", "safari"],
+    "capabilities": [
+      {
+        "id": "mcu_serial_device_and_target_console",
+        "required_steps": [
+          "protocol_frames",
+          "control_mapping",
+          "reconnect_and_partial_write",
+          "neutral_shutdown",
+          "selector_rollback"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "capture_device_with_known_frame_fixture",
+        "required_steps": [
+          "known_frame_processing",
+          "resolution_pin_consistency",
+          "screenshot_destinations",
+          "media_fallback_recovery",
+          "device_loss_identity"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "audio_input_device",
+        "required_steps": [
+          "audio_device_selection",
+          "audio_capture_processing",
+          "audio_disconnect_recovery",
+          "application_continuity"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "credentialed_network_notification_endpoints",
+        "required_steps": [
+          "notification_success",
+          "notification_timeout",
+          "notification_rejection",
+          "application_continuity"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "browser_matrix",
+        "required_steps": [
+          "keyboard_workflows",
+          "accessibility_layout",
+          "webrtc_channels",
+          "fallback_recovery",
+          "reconnect_snapshot_recovery",
+          "feature_workflows"
+        ],
+        "release_required": true,
+        "matrix_per_browser": true
+      },
+      {
+        "id": "performance",
+        "required_steps": [
+          "measurement_environment",
+          "warmup",
+          "sample_collection",
+          "threshold_evaluation"
+        ],
+        "release_required": false,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "desktop_lifecycle",
+        "required_steps": [
+          "close_policies",
+          "tray_and_single_instance",
+          "os_shutdown_and_repeated_close",
+          "hung_resource_shutdown",
+          "neutralization_and_mapping_lifetime"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "integrated_load_stress",
+        "required_steps": [
+          "concurrent_topology",
+          "sustained_load",
+          "queue_pressure",
+          "reconnect_and_profile_cycles",
+          "faulted_shutdown",
+          "resource_leak_audit"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      },
+      {
+        "id": "security_acceptance",
+        "required_steps": [
+          "lan_trust_warning",
+          "lan_dynamic_code_execution",
+          "secret_non_disclosure",
+          "path_jail",
+          "request_boundary_controls"
+        ],
+        "release_required": true,
+        "matrix_per_browser": false
+      }
+    ]
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "specification_version",
+    "source_commit",
+    "capability",
+    "platform",
+    "started_at",
+    "completed_at",
+    "operator",
+    "environment",
+    "requirement_ids",
+    "steps",
+    "measurements",
+    "result",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "specification_version": {
+      "const": "2.2.0"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "capability": {
+      "enum": [
+        "mcu_serial_device_and_target_console",
+        "capture_device_with_known_frame_fixture",
+        "audio_input_device",
+        "credentialed_network_notification_endpoints",
+        "browser_matrix",
+        "performance",
+        "desktop_lifecycle",
+        "integrated_load_stress",
+        "security_acceptance"
+      ]
+    },
+    "platform": {
+      "enum": ["linux", "windows"]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "operator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_name",
+        "os_version",
+        "app_mode",
+        "build_identity",
+        "device_inventory"
+      ],
+      "properties": {
+        "os_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app_mode": {
+          "enum": ["web", "desktop", "headless"]
+        },
+        "build_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "device_inventory": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version", "client_os"],
+          "properties": {
+            "name": {
+              "enum": ["chrome", "edge", "firefox", "safari"]
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "client_os": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^§[0-9]"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "result", "evidence"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "result": {
+            "enum": ["passed", "failed", "not_applicable"]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "unit", "sample_count", "p50", "p95", "maximum"],
+        "properties": {
+          "metric": {
+            "enum": [
+              "webrtc_video_latency",
+              "mjpeg_video_latency",
+              "controller_input_latency",
+              "ui_frame_rate",
+              "ui_input_latency"
+            ]
+          },
+          "unit": {
+            "enum": ["ms", "fps"]
+          },
+          "sample_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "p50": {
+            "type": "number",
+            "minimum": 0
+          },
+          "p95": {
+            "type": "number",
+            "minimum": 0
+          },
+          "maximum": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "result": {
+      "enum": ["passed", "failed"]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "diagnostic_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$defs": {
+    "mcu_serial_device_and_target_console_steps": {
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "properties": { "id": { "const": "protocol_frames" } } },
+        { "properties": { "id": { "const": "control_mapping" } } },
+        { "properties": { "id": { "const": "reconnect_and_partial_write" } } },
+        { "properties": { "id": { "const": "neutral_shutdown" } } },
+        { "properties": { "id": { "const": "selector_rollback" } } }
+      ]
+    },
+    "capture_device_with_known_frame_fixture_steps": {
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "properties": { "id": { "const": "known_frame_processing" } } },
+        { "properties": { "id": { "const": "resolution_pin_consistency" } } },
+        { "properties": { "id": { "const": "screenshot_destinations" } } },
+        { "properties": { "id": { "const": "media_fallback_recovery" } } },
+        { "properties": { "id": { "const": "device_loss_identity" } } }
+      ]
+    },
+    "audio_input_device_steps": {
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "properties": { "id": { "const": "audio_device_selection" } } },
+        { "properties": { "id": { "const": "audio_capture_processing" } } },
+        { "properties": { "id": { "const": "audio_disconnect_recovery" } } },
+        { "properties": { "id": { "const": "application_continuity" } } }
+      ]
+    },
+    "credentialed_network_notification_endpoints_steps": {
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "properties": { "id": { "const": "notification_success" } } },
+        { "properties": { "id": { "const": "notification_timeout" } } },
+        { "properties": { "id": { "const": "notification_rejection" } } },
+        { "properties": { "id": { "const": "application_continuity" } } }
+      ]
+    },
+    "browser_matrix_steps": {
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        { "properties": { "id": { "const": "keyboard_workflows" } } },
+        { "properties": { "id": { "const": "accessibility_layout" } } },
+        { "properties": { "id": { "const": "webrtc_channels" } } },
+        { "properties": { "id": { "const": "fallback_recovery" } } },
+        { "properties": { "id": { "const": "reconnect_snapshot_recovery" } } },
+        { "properties": { "id": { "const": "feature_workflows" } } }
+      ]
+    },
+    "performance_steps": {
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "properties": { "id": { "const": "measurement_environment" } } },
+        { "properties": { "id": { "const": "warmup" } } },
+        { "properties": { "id": { "const": "sample_collection" } } },
+        { "properties": { "id": { "const": "threshold_evaluation" } } }
+      ]
+    },
+    "desktop_lifecycle_steps": {
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "properties": { "id": { "const": "close_policies" } } },
+        { "properties": { "id": { "const": "tray_and_single_instance" } } },
+        { "properties": { "id": { "const": "os_shutdown_and_repeated_close" } } },
+        { "properties": { "id": { "const": "hung_resource_shutdown" } } },
+        {
+          "properties": {
+            "id": { "const": "neutralization_and_mapping_lifetime" }
+          }
+        }
+      ]
+    },
+    "integrated_load_stress_steps": {
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        { "properties": { "id": { "const": "concurrent_topology" } } },
+        { "properties": { "id": { "const": "sustained_load" } } },
+        { "properties": { "id": { "const": "queue_pressure" } } },
+        { "properties": { "id": { "const": "reconnect_and_profile_cycles" } } },
+        { "properties": { "id": { "const": "faulted_shutdown" } } },
+        { "properties": { "id": { "const": "resource_leak_audit" } } }
+      ]
+    },
+    "security_acceptance_steps": {
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "properties": { "id": { "const": "lan_trust_warning" } } },
+        { "properties": { "id": { "const": "lan_dynamic_code_execution" } } },
+        { "properties": { "id": { "const": "secret_non_disclosure" } } },
+        { "properties": { "id": { "const": "path_jail" } } },
+        { "properties": { "id": { "const": "request_boundary_controls" } } }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "enum": [
+              "browser_matrix",
+              "performance",
+              "integrated_load_stress",
+              "security_acceptance"
+            ]
+          }
+        },
+        "required": ["capability"]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "required": ["browser"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["result"]
+      },
+      "then": {
+        "oneOf": [
+          {
+            "properties": {
+              "capability": {
+                "const": "mcu_serial_device_and_target_console"
+              },
+              "steps": {
+                "$ref": "#/$defs/mcu_serial_device_and_target_console_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "capture_device_with_known_frame_fixture"
+              },
+              "steps": {
+                "$ref": "#/$defs/capture_device_with_known_frame_fixture_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "audio_input_device"
+              },
+              "steps": {
+                "$ref": "#/$defs/audio_input_device_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "credentialed_network_notification_endpoints"
+              },
+              "steps": {
+                "$ref": "#/$defs/credentialed_network_notification_endpoints_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "browser_matrix"
+              },
+              "steps": {
+                "$ref": "#/$defs/browser_matrix_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "performance"
+              },
+              "steps": {
+                "$ref": "#/$defs/performance_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "desktop_lifecycle"
+              },
+              "steps": {
+                "$ref": "#/$defs/desktop_lifecycle_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "integrated_load_stress"
+              },
+              "steps": {
+                "$ref": "#/$defs/integrated_load_stress_steps"
+              }
+            }
+          },
+          {
+            "properties": {
+              "capability": {
+                "const": "security_acceptance"
+              },
+              "steps": {
+                "$ref": "#/$defs/security_acceptance_steps"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "const": "performance"
+          }
+        },
+        "required": ["capability"]
+      },
+      "else": {
+        "properties": {
+          "measurements": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["result"]
+      },
+      "then": {
+        "properties": {
+          "source_commit": {
+            "not": {
+              "const": "0000000000000000000000000000000000000000"
+            }
+          },
+          "operator": {
+            "not": {
+              "const": "example-only-not-acceptance-evidence"
+            }
+          },
+          "environment": {
+            "properties": {
+              "build_identity": {
+                "not": {
+                  "const": "example-only"
+                }
+              },
+              "artifact_sha256": {
+                "not": {
+                  "const": "0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              }
+            }
+          },
+          "steps": {
+            "items": {
+              "properties": {
+                "result": {
+                  "const": "passed"
+                },
+                "evidence": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "capability": {
+            "const": "performance"
+          },
+          "result": {
+            "const": "passed"
+          }
+        },
+        "required": ["capability", "result"]
+      },
+      "then": {
+        "properties": {
+          "measurements": {
+            "minItems": 5,
+            "maxItems": 5,
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "webrtc_video_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 100
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "mjpeg_video_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "maximum": 150
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "controller_input_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 50
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "ui_frame_rate"
+                    },
+                    "unit": {
+                      "const": "fps"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p50": {
+                      "minimum": 60
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p50"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "metric": {
+                      "const": "ui_input_latency"
+                    },
+                    "unit": {
+                      "const": "ms"
+                    },
+                    "sample_count": {
+                      "minimum": 300
+                    },
+                    "p95": {
+                      "exclusiveMaximum": 16
+                    }
+                  },
+                  "required": ["metric", "unit", "sample_count", "p95"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

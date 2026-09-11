@@ -1,0 +1,835 @@
+{
+  "schema_version": 3,
+  "workflows": [
+    {
+      "id": "compatibility-roll",
+      "file": ".github/workflows/compatibility-roll.yml",
+      "display_name": "Rolling compatibility",
+      "kind": "scheduled",
+      "plan_job": null,
+      "required_job": null,
+      "required_context": null
+    },
+    {
+      "id": "normal-ci",
+      "file": ".github/workflows/normal-ci.yml",
+      "display_name": "Normal CI",
+      "kind": "normal",
+      "plan_job": "plan",
+      "required_job": "required",
+      "required_context": "Normal CI Required"
+    },
+    {
+      "id": "package",
+      "file": ".github/workflows/package.yml",
+      "display_name": "Package CI",
+      "kind": "package",
+      "plan_job": "plan",
+      "required_job": "required",
+      "required_context": "Package CI Required"
+    },
+    {
+      "id": "release",
+      "file": ".github/workflows/release.yml",
+      "display_name": "Release",
+      "kind": "release",
+      "plan_job": null,
+      "required_job": null,
+      "required_context": null
+    }
+  ],
+  "regions": [
+    {
+      "name": "docs",
+      "normal_ci_owner_jobs": [
+        "normal-ci/fast"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "contracts",
+      "normal_ci_owner_jobs": [
+        "normal-ci/rust_contracts"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "rust",
+      "normal_ci_owner_jobs": [
+        "normal-ci/rust_contracts",
+        "normal-ci/windows"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "python",
+      "normal_ci_owner_jobs": [
+        "normal-ci/python_tests"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "routing",
+      "normal_ci_owner_jobs": [
+        "normal-ci/routing_mutations"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "web",
+      "normal_ci_owner_jobs": [
+        "normal-ci/web"
+      ],
+      "package_ci_owner_jobs": []
+    },
+    {
+      "name": "product",
+      "normal_ci_owner_jobs": [
+        "normal-ci/product_flake"
+      ],
+      "package_ci_owner_jobs": [
+        "package/linux",
+        "package/linux_repro",
+        "package/repro_check",
+        "package/windows",
+        "package/windows_repro",
+        "package/windows_repro_check"
+      ]
+    },
+    {
+      "name": "remote_flake",
+      "normal_ci_owner_jobs": [
+        "normal-ci/product_flake"
+      ],
+      "package_ci_owner_jobs": []
+    }
+  ],
+  "classification_contract": {
+    "schema_version": 1,
+    "command": "nix run .#ci-regions --",
+    "region_names": [
+      "docs",
+      "contracts",
+      "rust",
+      "python",
+      "routing",
+      "web",
+      "product",
+      "remote_flake"
+    ],
+    "github_outputs": {
+      "structured": "regions_json",
+      "scalars": [
+        "docs",
+        "contracts",
+        "rust",
+        "python",
+        "routing",
+        "web",
+        "product",
+        "remote_flake"
+      ],
+      "scalar_values": [
+        "false",
+        "true"
+      ],
+      "structured_value": "JSON object with exactly eight boolean properties"
+    },
+    "fail_closed": {
+      "paths": [
+        "flake.lock",
+        "flake.nix",
+        "rust/pokecon/registry/ci.json",
+        "scripts/ci-watch.sh",
+        "tests/quality/test_ci_aggregate.py",
+        "tests/quality/test_ci_regions.py",
+        "tests/quality/test_ci_timing.py"
+      ],
+      "prefixes": [
+        ".github/",
+        "scripts/ci/",
+        "scripts/quality/"
+      ],
+      "selected_regions": [
+        "docs",
+        "contracts",
+        "rust",
+        "python",
+        "routing",
+        "web",
+        "product",
+        "remote_flake"
+      ]
+    },
+    "compatibility": {
+      "prefixes": [
+        "compatibility/",
+        "scripts/compatibility/",
+        "tests/compatibility/"
+      ],
+      "forced_regions": [
+        "contracts",
+        "rust",
+        "product"
+      ],
+      "python_sources_also_select": "python"
+    },
+    "routing_audit": {
+      "direct_paths": [
+        ".gitignore",
+        "Cargo.lock",
+        "Cargo.toml",
+        "LICENSE",
+        "flake.lock",
+        "flake.nix",
+        "pyproject.toml",
+        "rust-toolchain.toml",
+        "rust/pokecon/Cargo.toml",
+        "rust/pokecon/build.rs",
+        "rust/pokecon/icons/32x32.png",
+        "rust/pokecon/icons/128x128.png",
+        "rust/pokecon/icons/128x128@2x.png",
+        "rust/pokecon/icons/icon.icns",
+        "rust/pokecon/icons/icon.ico",
+        "rust/pokecon/linux/70-pokecon-controller.rules",
+        "rust/pokecon/linux/reload-udev.sh",
+        "scripts/integration/virtual-io-smoke.sh",
+        "scripts/release/build_runtime.py",
+        "scripts/release/nsis-reproducibility.nsh",
+        "scripts/release/normalize_debian_package.py",
+        "scripts/release/normalize_linux_elf.py",
+        "scripts/release/stage.py",
+        "tests/quality/test_ui_package_check.py",
+        "uv.lock"
+      ],
+      "rust_source_prefix": "rust/pokecon/src/",
+      "rust_source_suffix": ".rs",
+      "acl_prefixes": [
+        "rust/pokecon/capabilities/",
+        "rust/pokecon/permissions/"
+      ],
+      "excluded_prefixes": [
+        "rust/pokecon/permissions/autogenerated/"
+      ],
+      "tauri_config_parent": "rust/pokecon",
+      "tauri_config_pattern": "(?:tauri(?:\\.[^.]+)?\\.conf\\.(?:json|json5)|Tauri(?:\\.[^.]+)?\\.toml)",
+      "cargo_config_names": [
+        "config",
+        "config.toml"
+      ],
+      "cargo_config_excluded_parts": [
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        ".worktree",
+        "node_modules",
+        "target"
+      ],
+      "uncertain_ci_control_policy": "select every region"
+    },
+    "openapi_contract_paths": [
+      "rust/pokecon/src/server/api.rs",
+      "rust/pokecon/src/server/openapi.rs",
+      "rust/pokecon/src/server/paths.rs",
+      "web/src/lib/api/openapi.json",
+      "web/src/lib/api/openapi.ts"
+    ]
+  },
+  "event_contract": {
+    "workflows": [
+      "normal-ci",
+      "package"
+    ],
+    "integration_branches": [
+      "main",
+      "master",
+      "refactor/rust-core"
+    ],
+    "canonical_events": [
+      {
+        "source": "push to a configured integration branch",
+        "event": "push"
+      },
+      {
+        "source": "same-repository pull request from a non-integration branch",
+        "event": "pull_request"
+      },
+      {
+        "source": "fork pull request",
+        "event": "pull_request"
+      }
+    ],
+    "suppressed_event": {
+      "source": "same-repository pull request from the main or master integration branch",
+      "event": "pull_request",
+      "canonical_event": "push"
+    },
+    "elected_jobs": {
+      "normal-ci": [
+        "plan",
+        "fast",
+        "required"
+      ],
+      "package": [
+        "plan",
+        "required"
+      ]
+    },
+    "sha": {
+      "base": {
+        "push": "github.event.before",
+        "pull_request": "github.event.pull_request.base.sha"
+      },
+      "head": {
+        "push": "github.sha",
+        "pull_request": "github.sha"
+      },
+      "pull_request_head_semantics": "GitHub pull-request merge commit SHA"
+    },
+    "concurrency": [
+      {
+        "workflow": "normal-ci",
+        "group": "normal-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}"
+      },
+      {
+        "workflow": "package",
+        "group": "package-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}"
+      }
+    ],
+    "cancel_in_progress": true
+  },
+  "jobs": [
+    {
+      "name": "compatibility-roll/evaluate",
+      "workflow": "compatibility-roll",
+      "job": "evaluate",
+      "command": "nix run .#compatibility-roll && nix run .#compatibility",
+      "selected_by_regions": [],
+      "owns": [
+        "rolling compatibility evaluation and candidate promotion"
+      ],
+      "aggregate_role": "none",
+      "applicable_when": "the weekly schedule or a manual compatibility evaluation is triggered",
+      "not_applicable": "workflow is not triggered outside its schedule or explicit dispatch",
+      "phase": 14,
+      "implementation_status": "immutable candidates are promoted or quarantined through a signed review pull request"
+    },
+    {
+      "name": "normal-ci/plan",
+      "workflow": "normal-ci",
+      "job": "plan",
+      "command": "nix run .#ci-regions -- --base <base-sha> --head <head-sha> --github-output <path>",
+      "selected_by_regions": [],
+      "owns": [
+        "changed-path classification for all eight regions"
+      ],
+      "aggregate_role": "plan",
+      "applicable_when": "the Normal CI push or pull-request event is elected as canonical for the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/fast",
+      "workflow": "normal-ci",
+      "job": "fast",
+      "command": "nix run .#ci-parallel -- formatting nix fmt -- --ci --next static nix run .#ci-fast",
+      "selected_by_regions": [],
+      "owns": [
+        "repository formatting",
+        "Ruff lint and format checks through treefmt",
+        "GitHub Actions syntax",
+        "Basedpyright",
+        "shell lint",
+        "Nix source-filter validation",
+        "Rust source presence",
+        "release identity",
+        "typos",
+        "Markdown lint",
+        "text lint"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the Normal CI push or pull-request event is elected as canonical for the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/rust_contracts",
+      "workflow": "normal-ci",
+      "job": "rust_contracts",
+      "command": "nix run .#ci-rust-contracts for Rust and contract changes; nix run .#rust-ci-core for Rust-only changes; nix run .#contract-check for contract-only changes",
+      "selected_by_regions": [
+        "contracts",
+        "rust"
+      ],
+      "owns": [
+        "Rust Clippy, build, tests, and compatibility checks",
+        "contract generation and generated-output drift",
+        "contract schemas and acceptance records"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the rust or contracts region is selected",
+      "not_applicable": "the planning job records both rust and contracts as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/python_tests",
+      "workflow": "normal-ci",
+      "job": "python_tests",
+      "command": "nix run .#test",
+      "selected_by_regions": [
+        "python"
+      ],
+      "owns": [
+        "Python test suite"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the python region is selected",
+      "not_applicable": "the planning job records python as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/routing_mutations",
+      "workflow": "normal-ci",
+      "job": "routing_mutations",
+      "command": "nix run .#test-production-routing-mutations -- --workers 4",
+      "selected_by_regions": [
+        "routing"
+      ],
+      "owns": [
+        "baseline production-routing audit",
+        "production-routing mutation audit"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the routing region is selected",
+      "not_applicable": "the planning job records routing as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/web",
+      "workflow": "normal-ci",
+      "job": "web",
+      "command": "nix run .#web-check",
+      "selected_by_regions": [
+        "web"
+      ],
+      "owns": [
+        "Web type, test, and static-build checks"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the web region is selected",
+      "not_applicable": "the planning job records web as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/product_flake",
+      "workflow": "normal-ci",
+      "job": "product_flake",
+      "command": "nix run .#product-smoke for product changes; nix flake check --no-build plus remote metadata and default-app help for remote_flake changes",
+      "selected_by_regions": [
+        "product",
+        "remote_flake"
+      ],
+      "owns": [
+        "immutable worker, UI, SPA, and CLI product smoke checks",
+        "local flake-output evaluation",
+        "remote SHA metadata and default-app help"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product or remote_flake region is selected",
+      "not_applicable": "the planning job records both product and remote_flake as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/windows",
+      "workflow": "normal-ci",
+      "job": "windows",
+      "command": "cargo check --locked --workspace --all-targets --all-features",
+      "selected_by_regions": [
+        "rust"
+      ],
+      "owns": [
+        "Windows-native workspace check"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the rust region is selected",
+      "not_applicable": "the planning job records rust as false and GitHub concludes skipped",
+      "phase": 3,
+      "execution_environment": "windows-native"
+    },
+    {
+      "name": "normal-ci/required",
+      "workflow": "normal-ci",
+      "job": "required",
+      "command": "nix run .#ci-aggregate -- <plan-json> <job-results>",
+      "selected_by_regions": [],
+      "owns": [
+        "Normal CI Required aggregate context"
+      ],
+      "aggregate_role": "required_gate",
+      "applicable_when": "always for the elected Normal CI event, including when dependencies fail or are skipped",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
+      "phase": 3
+    },
+    {
+      "name": "package/plan",
+      "workflow": "package",
+      "job": "plan",
+      "command": "nix run .#ci-regions -- --base <base-sha> --head <head-sha> --github-output <path>",
+      "selected_by_regions": [],
+      "owns": [
+        "Package CI changed-path classification for all eight regions"
+      ],
+      "aggregate_role": "plan",
+      "applicable_when": "the Package CI push or pull-request event is elected as canonical for the SHA",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
+      "phase": 13
+    },
+    {
+      "name": "package/linux",
+      "workflow": "package",
+      "job": "linux",
+      "command": "nix run .#tauri-build -- --bundles deb && nix run .#package-smoke -- dist/tauri/*.deb && nix run .#package-install-smoke -- dist/tauri/*.deb",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "Debian bundle and packaged-runtime audit",
+        "Linux clean install, offline startup, upgrade, and uninstall",
+        "Linux signing-input handoff"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped",
+      "phase": 13
+    },
+    {
+      "name": "package/linux_repro",
+      "workflow": "package",
+      "job": "linux_repro",
+      "command": "nix run .#tauri-build -- --bundles deb",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "independent Debian reproducibility build"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped",
+      "phase": 13
+    },
+    {
+      "name": "package/repro_check",
+      "workflow": "package",
+      "job": "repro_check",
+      "command": "nix run .#package-reproducibility-check -- primary reproduction",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "byte-for-byte comparison of independently built Debian artifacts"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected and both Debian builds succeed",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped; a failed prerequisite is an aggregate failure",
+      "phase": 13
+    },
+    {
+      "name": "package/windows",
+      "workflow": "package",
+      "job": "windows",
+      "command": "cargo tauri build --ci --bundles nsis",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "offline NSIS installer",
+        "Windows clean install, startup, upgrade, and uninstall",
+        "Windows signing-input handoff"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped",
+      "phase": 13,
+      "execution_environment": "windows-native"
+    },
+    {
+      "name": "package/windows_repro",
+      "workflow": "package",
+      "job": "windows_repro",
+      "command": "cargo tauri build --ci --bundles nsis",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "independent NSIS reproducibility build"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped",
+      "phase": 13,
+      "execution_environment": "windows-native"
+    },
+    {
+      "name": "package/windows_repro_check",
+      "workflow": "package",
+      "job": "windows_repro_check",
+      "command": "nix shell -p coreutils diffutils --command bash -c 'sha256sum and cmp byte-for-byte comparison of independently built NSIS artifacts'",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "byte-for-byte comparison of independently built NSIS artifacts"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected and both NSIS builds succeed",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped; a failed prerequisite is an aggregate failure",
+      "phase": 13
+    },
+    {
+      "name": "package/required",
+      "workflow": "package",
+      "job": "required",
+      "command": "nix run .#ci-aggregate -- <plan-json> <job-results>",
+      "selected_by_regions": [],
+      "owns": [
+        "Package CI Required aggregate context"
+      ],
+      "aggregate_role": "required_gate",
+      "applicable_when": "always for the elected Package CI event, including when package jobs fail or are skipped",
+      "not_applicable": "a same-repository pull request from the main or master integration branch is suppressed because its push event owns the SHA",
+      "phase": 13
+    },
+    {
+      "name": "release/linux",
+      "workflow": "release",
+      "job": "linux",
+      "command": "nix run .#release-check -- --tag <tag> && nix run .#check && nix run .#tauri-build -- --bundles deb",
+      "selected_by_regions": [],
+      "owns": [
+        "Linux release package, reproducibility, checksums, and signing inputs"
+      ],
+      "aggregate_role": "none",
+      "applicable_when": "a v* tag is pushed and its version matches every release artifact",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15
+    },
+    {
+      "name": "release/windows",
+      "workflow": "release",
+      "job": "windows",
+      "command": "cargo tauri build --ci --bundles nsis",
+      "selected_by_regions": [],
+      "owns": [
+        "Windows release installer, reproducibility, checksums, and signing inputs"
+      ],
+      "aggregate_role": "none",
+      "applicable_when": "a v* tag is pushed and its version matches every release artifact",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15,
+      "execution_environment": "windows-native"
+    },
+    {
+      "name": "release/github-release",
+      "workflow": "release",
+      "job": "github-release",
+      "command": "nix run .#release-check -- --component github",
+      "selected_by_regions": [],
+      "owns": [
+        "immutable checksummed GitHub release publication"
+      ],
+      "aggregate_role": "none",
+      "applicable_when": "a v* tag is pushed and all package jobs and signed artifact checks succeed",
+      "not_applicable": "workflow is not triggered outside v* tags; missing artifacts on a tag is an error",
+      "phase": 15
+    }
+  ],
+  "aggregate_contract": {
+    "command": "nix run .#ci-aggregate --",
+    "plan_keys": [
+      "jobs",
+      "plan_status",
+      "region_outputs",
+      "regions"
+    ],
+    "planned_job_keys": [
+      "applicable",
+      "reason"
+    ],
+    "region_keys": [
+      "docs",
+      "contracts",
+      "rust",
+      "python",
+      "routing",
+      "web",
+      "product",
+      "remote_flake"
+    ],
+    "region_value_type": "boolean",
+    "region_output_values": [
+      "false",
+      "true"
+    ],
+    "region_outputs_must_match_regions": true,
+    "report_keys": [
+      "conclusion",
+      "extra_results",
+      "jobs",
+      "plan_status",
+      "region_outputs",
+      "regions",
+      "violations"
+    ],
+    "job_report_keys": [
+      "applicable",
+      "expected_result",
+      "name",
+      "reason",
+      "result"
+    ],
+    "canonical_serialization": {
+      "sort_keys": true,
+      "ensure_ascii": false,
+      "separators": [
+        ",",
+        ":"
+      ]
+    },
+    "accepted_results": [
+      "success",
+      "skipped",
+      "failure",
+      "cancelled",
+      "timed_out"
+    ],
+    "required_plan_result": "success",
+    "applicable_job_result": "success",
+    "inapplicable_job_result": "skipped",
+    "missing_results_are_errors": true,
+    "extra_results_are_errors": true,
+    "workflows": [
+      {
+        "workflow": "normal-ci",
+        "plan_job": "normal-ci/plan",
+        "input_jobs": [
+          "normal-ci/fast",
+          "normal-ci/rust_contracts",
+          "normal-ci/python_tests",
+          "normal-ci/routing_mutations",
+          "normal-ci/web",
+          "normal-ci/product_flake",
+          "normal-ci/windows"
+        ],
+        "required_job": "normal-ci/required",
+        "required_context": "Normal CI Required"
+      },
+      {
+        "workflow": "package",
+        "plan_job": "package/plan",
+        "input_jobs": [
+          "package/linux",
+          "package/linux_repro",
+          "package/repro_check",
+          "package/windows",
+          "package/windows_repro",
+          "package/windows_repro_check"
+        ],
+        "required_job": "package/required",
+        "required_context": "Package CI Required"
+      }
+    ],
+    "implementation_status": "exact dual region evidence and job results are implemented in Normal CI and Package CI"
+  },
+  "binary_cache_contract": {
+    "scope": "PokeCon-specific Nix derivations",
+    "desired_permissions": [
+      {
+        "event": "pull_request",
+        "actor": "any pull-request actor",
+        "read": true,
+        "write": false
+      },
+      {
+        "event": "push",
+        "actor": "trusted repository writer",
+        "read": true,
+        "write": true
+      }
+    ],
+    "required_evidence": [
+      "actor",
+      "event",
+      "read",
+      "write",
+      "built_derivations",
+      "substituted_store_paths"
+    ],
+    "current_implementation": {
+      "status": "signed_file_cache_optional",
+      "pokecon_specific_read": true,
+      "pokecon_specific_write": true,
+      "installer_action": "cachix/install-nix-action@v31",
+      "installer_action_role": "installs Nix; it does not configure a PokeCon-specific binary cache",
+      "cache_store": "file://$RUNNER_TEMP/pokecon-nix-cache?priority=20",
+      "trust_boundary": "cryptographic Nix signature verification when the repository public-key secret is configured; otherwise the optional substituter is not enabled",
+      "public_key_id": "POKECON_NIX_CACHE_PUBLIC_KEY",
+      "public_key": "GitHub Actions secret POKECON_NIX_CACHE_PUBLIC_KEY (not stored in the repository)",
+      "secret_key_variable": "POKECON_NIX_CACHE_SECRET_KEY",
+      "secret_key_source": "GitHub Actions secret POKECON_NIX_CACHE_SECRET_KEY (repository secret, never printed)",
+      "writer_condition": "github.event_name == 'push' && contains(fromJSON('[\"yqYo1\"]'), github.actor) && cache-hit != 'true' && signing and public keys are configured",
+      "reader_condition": "unrestricted restore via actions/cache/restore; the Nix substituter is enabled only with require-sigs=true and the configured public key",
+      "trusted_writer_flow": "sign store paths before nix copy with the secret key; no trusted=true file-store option",
+      "validator_enforces_push_only_writes": true,
+      "validator_enforces_trusted_actor_allowlist": true,
+      "validator_rejects_trusted_equals_true": true,
+      "validator_requires_require_sigs": true,
+      "required_jobs_run_on_refactor_pr": true,
+      "head_ref_exclusion_removed": "github.head_ref != 'refactor/rust-core' removed from plan/fast/required gating so PRs from refactor/rust-core execute required aggregates (no bypass)"
+    }
+  },
+  "timing_contract": {
+    "schema_version": 2,
+    "command": "nix run .#ci-timing --",
+    "change_kind_threshold_seconds": {
+      "fast": 180,
+      "docs": 300,
+      "product": 720
+    },
+    "p95": {
+      "method": "nearest-rank",
+      "minimum_same_kind_samples": 10,
+      "maximum_history_age_days": 30,
+      "stale_history_is_failure": true
+    },
+    "report_evidence": [
+      "workflow wall time",
+      "measured critical-path wall time",
+      "job wall time and conclusion",
+      "step wall time",
+      "built derivation store paths",
+      "substituted store paths",
+      "cache actor, event, read, and write permissions",
+      "run status and started_at",
+      "collection kind (upstream_completed_max)"
+    ],
+    "same_sha_comparison_requires": [
+      "later attempt",
+      "fewer built derivations",
+      "lower measured wall time",
+      "at least one substituted PokeCon store path"
+    ],
+    "current_implementation": {
+      "validator": "implemented",
+      "workflow_evidence_collection": "implemented_with_upstream_completed_max",
+      "workflow_p95_gate": "blocking_for_fail_closed",
+      "collection_kind": "upstream_completed_max",
+      "run_status_enforced": true,
+      "critical_path_enforced": true,
+      "cache_evidence_enforced": true,
+      "jobs_evidence_enforced": true
+    }
+  }
+}

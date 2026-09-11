@@ -1,0 +1,197 @@
+[package]
+name = "pokecon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+build = "build.rs"
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "pokecon"
+path = "src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "pokecon-worker"
+path = "src/bin/worker.rs"
+test = false
+bench = false
+required-features = ["worker-binary"]
+
+[[bin]]
+name = "pokecon-compatibility"
+path = "src/bin/compatibility.rs"
+test = false
+bench = false
+required-features = ["compatibility-tool"]
+
+[[bin]]
+name = "pokecon-worker-fault-fixture"
+path = "tests/fixtures/fault_worker.rs"
+test = false
+bench = false
+required-features = ["worker-test-fixture"]
+
+[[bin]]
+name = "generate_contracts"
+path = "src/bin/generate_contracts.rs"
+test = false
+bench = false
+required-features = ["contract-generator"]
+
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"
+test = false
+bench = false
+required-features = ["contract-generator"]
+
+[[test]]
+name = "contract_sync"
+path = "tests/contract_sync.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "controller_serial_contract"
+path = "tests/controller_serial_contract.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "cross_process"
+path = "tests/cross_process.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "lifecycle"
+path = "tests/lifecycle.rs"
+required-features = [
+  "integration-test-support",
+  "worker-binary",
+  "worker-test-fixture",
+]
+
+[[test]]
+name = "native_serial_pty"
+path = "tests/native_serial_pty.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "native_v4l2"
+path = "tests/native_v4l2.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "script_runtime"
+path = "tests/script_runtime.rs"
+required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
+name = "startup"
+path = "tests/startup.rs"
+required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
+name = "worker_startup"
+path = "tests/worker_startup.rs"
+required-features = ["worker-binary"]
+
+[features]
+default = []
+compatibility-tool = []
+contract-generator = []
+integration-test-support = []
+worker-binary = []
+worker-test-fixture = []
+
+[dependencies]
+async-trait.workspace = true
+atomic-write-file.workspace = true
+axum = { workspace = true, features = ["ws"] }
+base64.workspace = true
+chrono.workspace = true
+clap.workspace = true
+fs4.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+gilrs.workspace = true
+hex.workspace = true
+hmac.workspace = true
+image.workspace = true
+mime_guess.workspace = true
+mlua.workspace = true
+opener.workspace = true
+openh264.workspace = true
+parking_lot.workspace = true
+pep440_rs.workspace = true
+pyo3.workspace = true
+reqwest.workspace = true
+rfd.workspace = true
+rmp-serde.workspace = true
+rumqttc.workspace = true
+rustls.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+shared_memory.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
+tokio.workspace = true
+tokio-serial.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+utoipa.workspace = true
+version-ranges.workspace = true
+webrtc.workspace = true
+
+[build-dependencies]
+dunce = "1.0.5"
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tauri-build = { version = "2.5.4", features = [] }
+toml.workspace = true
+
+[dev-dependencies]
+proc-macro2 = "1"
+regex.workspace = true
+syn = { version = "2", features = ["full", "visit"] }
+tokio-tungstenite.workspace = true
+tower.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, features = ["fs"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+nix.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nokhwa = { workspace = true, features = ["input-v4l"] }
+v4l.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+nokhwa = { workspace = true, features = ["input-msmf"] }
+winapi-util = "0.1.11"
+win32_notif = { version = "0.15.3", default-features = false }
+
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

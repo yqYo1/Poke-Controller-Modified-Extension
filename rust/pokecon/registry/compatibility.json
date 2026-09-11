@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "specification_version": "2.2.0",
+  "fixed_baselines": [
+    {
+      "id": "yqyo1-extension",
+      "repository": "https://github.com/yqYo1/Poke-Controller-Modified-Extension.git",
+      "reference_branch": "main",
+      "commit": "dfc13b82cb926b571351265a9333a7e4bc1f8aeb",
+      "script_roots": [
+        "SerialController/Commands/PythonCommands",
+        "SerialController/Commands/McuCommands"
+      ],
+      "public_import_roots": ["SerialController/Commands"],
+      "expectations": {
+        "source_mutation": "forbidden",
+        "imports": "all_resolve",
+        "class_discovery": "all_candidates_preserve_order",
+        "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+      }
+    },
+    {
+      "id": "futo030-extension",
+      "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git",
+      "reference_branch": "master",
+      "commit": "b4d0eff04b1c525d78034ab47b87a7c7ef17089a",
+      "script_roots": [
+        "SerialController/Commands/PythonCommands",
+        "SerialController/Commands/McuCommands"
+      ],
+      "public_import_roots": ["SerialController/Commands"],
+      "expectations": {
+        "source_mutation": "forbidden",
+        "imports": "all_resolve",
+        "class_discovery": "all_candidates_preserve_order",
+        "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+      }
+    },
+    {
+      "id": "moi-poke-modified",
+      "repository": "https://github.com/Moi-poke/Poke-Controller-Modified.git",
+      "reference_branch": "master",
+      "commit": "431d0e22dbc6b900efcfb9a72e722a8484c8e4bb",
+      "script_roots": [
+        "SerialController/Commands/PythonCommands",
+        "SerialController/Commands/McuCommands"
+      ],
+      "public_import_roots": ["SerialController/Commands"],
+      "expectations": {
+        "source_mutation": "forbidden",
+        "imports": "all_resolve",
+        "class_discovery": "all_candidates_preserve_order",
+        "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+      }
+    }
+  ],
+  "rolling_candidates": {
+    "storage": "compatibility/candidates.json",
+    "promotion_history": "compatibility/promotions.jsonl",
+    "append_only": true,
+    "requires_full_three_repository_chain": true,
+    "requires_runtime_tests": true,
+    "requires_api_surface_comparison": true,
+    "breaking_changes": [
+      "public_api_removed",
+      "public_api_renamed",
+      "argument_removed",
+      "optional_argument_made_required",
+      "accepted_input_narrowed",
+      "default_behavior_broken",
+      "observable_behavior_broken"
+    ],
+    "non_promotable_results": [
+      "breaking",
+      "environment_dependent_failure",
+      "unverified"
+    ]
+  },
+  "inventory": {
+    "fixed_manifest": "compatibility/fixed-manifest.json",
+    "fixed_results": "compatibility/fixed-results.json",
+    "rolling_results": "compatibility/results/<candidate-id>.json",
+    "content_hash": "sha256",
+    "extract": "nix run .#compatibility-inventory",
+    "execute": "nix run .#compatibility",
+    "verify": "nix run .#compatibility -- --check",
+    "promotion_check": "python -m scripts.compatibility.promote --check",
+    "rolling_evaluate": "nix run .#compatibility-roll",
+    "rolling_monitor": ".github/workflows/compatibility-roll.yml"
+  }
+}

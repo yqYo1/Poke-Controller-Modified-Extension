@@ -1,0 +1,641 @@
+name: Normal CI
+
+on:
+  push:
+    branches: [main, master, refactor/rust-core]
+  pull_request:
+    branches: [main, master, refactor/rust-core]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: >-
+    normal-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan changed regions
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master')
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.regions.outputs.docs }}
+      contracts: ${{ steps.regions.outputs.contracts }}
+      rust: ${{ steps.regions.outputs.rust }}
+      python: ${{ steps.regions.outputs.python }}
+      routing: ${{ steps.regions.outputs.routing }}
+      web: ${{ steps.regions.outputs.web }}
+      product: ${{ steps.regions.outputs.product }}
+      remote_flake: ${{ steps.regions.outputs.remote_flake }}
+      regions_json: ${{ steps.regions.outputs.regions_json }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Classify changed regions
+        id: regions
+        env:
+          BASE_SHA: >-
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: >-
+            ${{ github.sha }}
+        run: >-
+          nix run .#ci-regions --
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --github-output "$GITHUB_OUTPUT"
+
+  fast:
+    name: Fast checks
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run formatting and fast static checks in parallel
+        run: >-
+          nix run .#ci-parallel --
+          formatting nix fmt -- --ci
+          --next static nix run .#ci-fast
+
+  rust_contracts:
+    name: Rust and contracts (Linux)
+    needs: plan
+    if: >-
+      needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the Rust-check cache identity
+        id: rust_cache_key
+        run: |
+          target_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid Rust-check derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-rust-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore the PokeCon Rust binary cache
+        id: rust_cache_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.rust_cache_key.outputs.key }}
+      - name: Enable the PokeCon Rust binary cache (signed, fail-closed)
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
+      - name: Run combined Rust and contract checks
+        if: >-
+          needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts == 'true'
+        run: nix run .#ci-rust-contracts
+      - name: Run Rust checks
+        if: >-
+          needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts != 'true'
+        run: nix run .#rust-ci-core
+      - name: Run contract checks
+        if: >-
+          needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
+        run: nix run .#contract-check
+      - name: Export the PokeCon Rust check to the binary cache (signed)
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.rust_cache_restore.outputs.cache-hit != 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
+            echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            exit 0
+          fi
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
+          chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
+          nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#checks.x86_64-linux.rust-core-artifacts)"
+          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
+          rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
+      - name: Save the PokeCon Rust binary cache
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.rust_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.rust_cache_key.outputs.key }}
+
+  python_tests:
+    name: Python tests
+    needs: plan
+    if: needs.plan.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Python tests
+        run: nix run .#test
+
+  routing_mutations:
+    name: Production-routing mutation audit
+    needs: plan
+    if: needs.plan.outputs.routing == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run production-routing mutation audit
+        run: nix run .#test-production-routing-mutations -- --workers 4
+
+  web:
+    name: Web checks
+    needs: plan
+    if: needs.plan.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Web checks
+        run: nix run .#web-check
+
+  product_flake:
+    name: Product smoke and remote flake (Linux)
+    needs: plan
+    if: >-
+      needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the product cache identity
+        id: product_cache_key
+        if: needs.plan.outputs.product == 'true'
+        run: |
+          target_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid product derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-product-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore the PokeCon product binary cache
+        id: product_cache_restore
+        if: needs.plan.outputs.product == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.product_cache_key.outputs.key }}
+      - name: Enable the PokeCon product binary cache (signed, fail-closed)
+        if: needs.plan.outputs.product == 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
+      - name: Run product smoke checks
+        if: needs.plan.outputs.product == 'true'
+        run: nix run .#product-smoke
+      - name: Evaluate all local flake outputs
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: nix flake check --no-build
+      - name: Validate remote flake metadata
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: >-
+          nix flake metadata --refresh
+          github:${{ github.repository }}/${{ github.sha }}
+      - name: Run default app help from remote
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: >-
+          nix run --refresh
+          github:${{ github.repository }}/${{ github.sha }}
+          -- --help
+      - name: Export the PokeCon product roots to the binary cache (signed)
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.product_cache_restore.outputs.cache-hit != 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
+            echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            exit 0
+          fi
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
+          chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
+          for attr in "pokecon" "pokecon-core" "web"; do nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#packages.x86_64-linux.$attr)"; done
+          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
+          rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
+      - name: Save the PokeCon product binary cache
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.product_cache_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.product_cache_key.outputs.key }}
+
+  windows:
+    name: Check workspace (Windows)
+    needs: plan
+    if: needs.plan.outputs.rust == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: '1.95.0'
+      - name: Check all Windows targets and features
+        env:
+          POKECON_RESOURCE_PROVENANCE: development
+        run: cargo check --locked --workspace --all-targets --all-features
+
+  required:
+    name: Normal CI Required
+    needs:
+      - plan
+      - fast
+      - rust_contracts
+      - python_tests
+      - routing_mutations
+      - web
+      - product_flake
+      - windows
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository ||
+      (github.head_ref != 'main' &&
+      github.head_ref != 'master'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Aggregate required job results
+        env:
+          PLAN_JSON: >-
+            {"plan_status":"${{ needs.plan.result }}",
+            "regions":${{ needs.plan.outputs.regions_json || 'null' }},
+            "region_outputs":{
+            "docs":"${{ needs.plan.outputs.docs }}",
+            "contracts":"${{ needs.plan.outputs.contracts }}",
+            "rust":"${{ needs.plan.outputs.rust }}",
+            "python":"${{ needs.plan.outputs.python }}",
+            "routing":"${{ needs.plan.outputs.routing }}",
+            "web":"${{ needs.plan.outputs.web }}",
+            "product":"${{ needs.plan.outputs.product }}",
+            "remote_flake":"${{ needs.plan.outputs.remote_flake }}"
+            },"jobs":{
+            "fast":{"applicable":true,"reason":"always required"},
+            "rust_contracts":{"applicable":${{ needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true' }},"reason":"Rust or contract paths changed"},
+            "python_tests":{"applicable":${{ needs.plan.outputs.python == 'true' }},"reason":"Python paths changed"},
+            "routing_mutations":{"applicable":${{ needs.plan.outputs.routing == 'true' }},"reason":"production-routing audit inputs changed"},
+            "web":{"applicable":${{ needs.plan.outputs.web == 'true' }},"reason":"Web paths changed"},
+            "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true' }},"reason":"product or remote-flake paths changed"},
+            "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
+            }}
+        run: |
+          nix run .#ci-aggregate -- "$PLAN_JSON" \
+            fast=${{ needs.fast.result }} \
+            rust_contracts=${{ needs.rust_contracts.result }} \
+            python_tests=${{ needs.python_tests.result }} \
+            routing_mutations=${{ needs.routing_mutations.result }} \
+            web=${{ needs.web.result }} \
+            product_flake=${{ needs.product_flake.result }} \
+            windows=${{ needs.windows.result }}
+      - name: Collect CI timing evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REGIONS_JSON: ${{ needs.plan.outputs.regions_json || '[]' }}
+          CACHE_EVENT: ${{ github.event_name }}
+          CACHE_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          timing_dir="$RUNNER_TEMP/pokecon-ci-timing"
+          mkdir -p "$timing_dir"
+          run_json="$timing_dir/run.json"
+          jobs_json="$timing_dir/jobs.json"
+          completed_jobs_json="$timing_dir/completed-jobs.json"
+          metadata_json="$timing_dir/run-metadata.json"
+          report_json="$timing_dir/timing-report.json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > "$run_json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+            > "$jobs_json"
+          jq '{jobs: [.jobs[] | select(.status == "completed")]}' \
+            "$jobs_json" > "$completed_jobs_json"
+          sha="$(jq -er '.head_sha' "$run_json")"
+          attempt="$(jq -er '.run_attempt' "$run_json")"
+          workflow_name="$(jq -er '.name' "$run_json")"
+          run_started_at="$(jq -er '.run_started_at // .created_at' "$run_json")"
+          run_status="$(jq -er '.status' "$run_json")"
+          run_conclusion="$(jq -er '.conclusion // ""' "$run_json")"
+          # Completion-safe: upstream completed max (max completed_at - run_started_at).
+          # GitHub timestamps include fractional seconds; preserve them instead of passing
+          # the raw value to jq's integer-only fromdateiso8601 parser.
+          measured_wall_seconds="$(jq -er --arg rs "$run_started_at" '
+            def github_epoch:
+              capture("^(?<whole>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?<fraction>\\.[0-9]+)?Z$")
+              | ((.whole + "Z") | fromdateiso8601)
+                + ((.fraction // ".0") | tonumber);
+            (.jobs | map(select(.completed_at != null) | (.completed_at | github_epoch)) | max) as $max_completed
+            | if $max_completed == null then error("no completed jobs for timing") else ($max_completed - ($rs | github_epoch)) end
+          ' "$completed_jobs_json")"
+          workflow_wall_seconds="$measured_wall_seconds"
+          change_kind=fast
+          if [ "${{ needs.plan.outputs.product }}" = true ]; then
+            change_kind=product
+          elif [ "${{ needs.plan.outputs.docs }}" = true ]; then
+            change_kind=docs
+          elif [ "${{ needs.plan.outputs.contracts }}" != "true" ] && [ "${{ needs.plan.outputs.rust }}" != "true" ] && [ "${{ needs.plan.outputs.python }}" != "true" ] && [ "${{ needs.plan.outputs.routing }}" != "true" ] && [ "${{ needs.plan.outputs.web }}" != "true" ] && [ "${{ needs.plan.outputs.remote_flake }}" != "true" ]; then
+            # Planning-only runs (PLAN.md/TASK.md classify to zero regions and stay
+            # outside docs timing): explicit none kind with no p95 history/threshold.
+            change_kind=none
+          fi
+          # Cache read is always true (explicit evidence), write only for push by trusted actor
+          cache_read=true
+          cache_write=false
+          if [ "$CACHE_EVENT" = "push" ] && [ "$CACHE_ACTOR" = "yqYo1" ]; then
+            cache_write=true
+          fi
+          # Collect Nix evidence for jobs_evidence (actual derivations, fail-closed if missing)
+          rust_drv=""
+          product_drv=""
+          if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
+            rust_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts 2>/dev/null || echo "")"
+            if [ -z "$rust_drv" ]; then
+              echo "timing: rust derivation not found for evidence" >&2
+              exit 2
+            fi
+            case "$rust_drv" in /nix/store/*.drv) ;; *) echo "invalid rust derivation: $rust_drv" >&2; exit 2;; esac
+          fi
+          if [ "${{ needs.plan.outputs.product }}" = "true" ] || [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
+            product_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon 2>/dev/null || echo "")"
+            if [ -z "$product_drv" ]; then
+              echo "timing: product derivation not found for evidence" >&2
+              exit 2
+            fi
+            case "$product_drv" in /nix/store/*.drv) ;; *) echo "invalid product derivation: $product_drv" >&2; exit 2;; esac
+          fi
+          jobs_evidence_json="$(jq -n \
+            --arg rust_drv "$rust_drv" \
+            --arg product_drv "$product_drv" \
+            '{
+              }
+              | if $rust_drv != "" then .["Rust and contracts (Linux)"] = {built_derivations: [$rust_drv], substituted_store_paths: []} else . end
+              | if $product_drv != "" then .["Product smoke and remote flake (Linux)"] = {built_derivations: [$product_drv], substituted_store_paths: []} else . end
+              | if $rust_drv == "" and $product_drv == "" then . else . end
+            ')"
+          jq -n \
+            --arg sha "$sha" \
+            --arg workflow_name "$workflow_name" \
+            --arg change_kind "$change_kind" \
+            --arg event "$CACHE_EVENT" \
+            --arg actor "$CACHE_ACTOR" \
+            --arg run_started_at "$run_started_at" \
+            --arg run_status "$run_status" \
+            --arg run_conclusion "$run_conclusion" \
+            --argjson attempt "$attempt" \
+            --argjson regions "${REGIONS_JSON:-null}" \
+            --argjson measured_wall_seconds "$measured_wall_seconds" \
+            --argjson workflow_wall_seconds "$workflow_wall_seconds" \
+            --argjson cache_read "$cache_read" \
+            --argjson cache_write "$cache_write" \
+            --argjson jobs_evidence "$jobs_evidence_json" \
+            '{
+              sha: $sha,
+              attempt: $attempt,
+              change_kind: $change_kind,
+              regions: (($regions // {}) | to_entries | map(select(.value == true) | .key)),
+              measured_wall_seconds: $measured_wall_seconds,
+              workflow: {name: $workflow_name, wall_seconds: $workflow_wall_seconds},
+              cache: {read: $cache_read, write: $cache_write, actor: $actor, event: $event},
+              jobs_evidence: $jobs_evidence,
+              run: {started_at: $run_started_at, status: $run_status, conclusion: (if $run_conclusion == "" then null else $run_conclusion end)},
+              collection: {kind: "upstream_completed_max"}
+            }' > "$metadata_json"
+          nix run .#ci-timing -- collect \
+            --jobs "$completed_jobs_json" \
+            --run-metadata "$metadata_json" \
+            --output "$report_json"
+          # Validate current report is complete and critical-path safe (fail-closed).
+          # The subsequent history gate retrieves trusted prior ci-timing artifacts for the same
+          # change_kind and computes blocking p95 (nearest-rank, 10 samples). Fail-closed on
+          # malformed, stale (>30d), incomplete, or threshold breach.
+          # change_kind none (zero applicable timing regions) skips only the p95 gate.
+          nix run .#ci-timing -- validate "$(cat "$report_json")"
+      - name: Enforce timing p95 history gate (blocking, fail-closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          timing_dir="$RUNNER_TEMP/pokecon-ci-timing"
+          report_json="$timing_dir/timing-report.json"
+          history_dir="$timing_dir/history"
+          mkdir -p "$history_dir"
+          if [ ! -f "$report_json" ]; then
+            echo "timing p95 gate: current report not found at $report_json" >&2
+            exit 2
+          fi
+          cp "$report_json" "$history_dir/00-current.json"
+          change_kind="$(jq -er '.change_kind' "$report_json")"
+          case "$change_kind" in
+            fast|docs|product|none) ;;
+            *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
+          esac
+          if [ "$change_kind" = "none" ]; then
+            echo "timing p95 gate: change_kind=none has zero applicable timing regions; skipping p95 history/threshold gate (report already validated and uploaded)"
+            exit 0
+          fi
+          case "$change_kind" in
+            fast) threshold=180 ;;
+            docs) threshold=300 ;;
+            product) threshold=720 ;;
+            *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
+          esac
+          echo "timing p95 gate: change_kind=$change_kind threshold=${threshold}s"
+          workflow_id="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/normal-ci.yml" --jq '.id' 2>/dev/null || echo "")"
+          if [ -z "$workflow_id" ] || [ "$workflow_id" = "null" ]; then
+            echo "timing p95 gate: failed to resolve Normal CI workflow id" >&2
+            exit 2
+          fi
+          runs_json="$timing_dir/workflow-runs.json"
+          tmp_runs="$timing_dir/runs-page.json"
+          aggregated_runs="$timing_dir/aggregated-runs.json"
+          echo '{"workflow_runs":[]}' > "$aggregated_runs"
+          for page in 1 2 3 4 5; do
+            if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/runs?status=completed&per_page=100&page=${page}" > "$tmp_runs"; then
+              echo "timing p95 gate: failed to fetch workflow runs page $page" >&2
+              exit 2
+            fi
+            count="$(jq '.workflow_runs | length' "$tmp_runs")"
+            if [ "$count" -eq 0 ]; then
+              break
+            fi
+            jq -s '.[0].workflow_runs += .[1].workflow_runs | .[0]' "$aggregated_runs" "$tmp_runs" > "$runs_json" && mv "$runs_json" "$aggregated_runs"
+            if [ "$count" -lt 100 ]; then
+              break
+            fi
+          done
+          mv "$aggregated_runs" "$runs_json"
+          tmp_download_dir="$timing_dir/tmp-download"
+          mkdir -p "$tmp_download_dir"
+          collected=1
+          index=1
+          candidate_lines="$(jq -r --arg cur "${GITHUB_RUN_ID}" '.workflow_runs[] | select((.id|tostring) != $cur) | select(.conclusion == "success" or .conclusion == "failure") | "\(.id) \(.run_attempt // 1)"' "$runs_json")"
+          while IFS=" " read -r candidate_id candidate_attempt; do
+            if [ "$collected" -ge 10 ]; then break; fi
+            if [ -z "$candidate_id" ] || [ -z "$candidate_attempt" ]; then continue; fi
+            artifacts_json="$timing_dir/artifacts-${candidate_id}.json"
+            if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_id}/artifacts?per_page=100" > "$artifacts_json"; then
+              echo "timing p95 gate: failed to fetch artifacts for run $candidate_id" >&2
+              exit 2
+            fi
+            artifact_name="ci-timing-${candidate_id}-${candidate_attempt}"
+            artifact_ids="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name) | .id' "$artifacts_json")"
+            if [ -z "$artifact_ids" ]; then
+              continue
+            fi
+            for artifact_id in $artifact_ids; do
+              if [ "$collected" -ge 10 ]; then break; fi
+              zip_path="$tmp_download_dir/${artifact_id}.zip"
+              if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$zip_path"; then
+                echo "timing p95 gate: failed to download artifact $artifact_id for run $candidate_id" >&2
+                exit 2
+              fi
+              unzip_dir="$tmp_download_dir/unzip-${artifact_id}"
+              rm -rf "$unzip_dir"
+              mkdir -p "$unzip_dir"
+              if ! unzip -q "$zip_path" -d "$unzip_dir"; then
+                echo "timing p95 gate: failed to unzip artifact $artifact_id (malformed history)" >&2
+                exit 2
+              fi
+              json_path="$(find "$unzip_dir" -type f -name "timing-report.json" -print -quit)"
+              if [ -z "$json_path" ] || [ ! -f "$json_path" ]; then
+                echo "timing p95 gate: artifact $artifact_id missing timing-report.json (malformed history)" >&2
+                exit 2
+              fi
+              if ! jq -e . "$json_path" >/dev/null 2>&1; then
+                echo "timing p95 gate: malformed JSON in artifact $artifact_id" >&2
+                exit 2
+              fi
+              if ! jq -e '(.change_kind | type) == "string" and (.change_kind | length) > 0' "$json_path" >/dev/null 2>&1; then
+                echo "timing p95 gate: malformed history in artifact $artifact_id (missing or invalid change_kind)" >&2
+                exit 2
+              fi
+              candidate_kind="$(jq -r '.change_kind' "$json_path")"
+              if [ "$candidate_kind" != "$change_kind" ]; then
+                continue
+              fi
+              dest="$history_dir/$(printf "%02d" "$index")-run-${candidate_id}.json"
+              cp "$json_path" "$dest"
+              collected=$((collected + 1))
+              index=$((index + 1))
+              break
+            done
+          done <<< "$candidate_lines"
+          echo "timing p95 gate: collected $collected samples (including current) for $change_kind, need 10"
+          if [ "$collected" -lt 10 ]; then
+            echo "timing p95 gate: insufficient history - requires 10 same-kind samples for $change_kind, got $collected (incomplete history)" >&2
+            echo "timing p95 gate: history is incomplete or stale; failing closed" >&2
+            exit 1
+          fi
+          set -- "$history_dir"/*.json
+          if [ "$#" -ne 10 ]; then
+            echo "timing p95 gate: history file count mismatch: expected 10, got $#" >&2
+            exit 2
+          fi
+          echo "timing p95 gate: computing p95 over 10 samples for $change_kind (threshold ${threshold}s)..."
+          if ! nix run .#ci-timing -- p95 "$@" > "$timing_dir/timing-p95.json"; then
+            echo "timing p95 gate: p95 threshold or history validation failed" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-timing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/pokecon-ci-timing/timing-report.json
+            ${{ runner.temp }}/pokecon-ci-timing/timing-p95.json
+          # p95 output is absent during initial fail-closed bootstrap runs;
+          # keep current timing-report.json uploadable so history can accumulate.
+          if-no-files-found: warn

@@ -1,0 +1,35 @@
+# Typos spell checker configuration
+# Backward-compatible aliases are intentionally named with typos
+
+[files]
+extend-exclude = [
+    "target/",
+    "dist/",
+    "result",
+    "result-*",
+    "*.lock",
+    "Cargo.lock",
+    "src-tauri/Cargo.lock",
+    "node_modules/",
+    "__pycache__/",
+    ".venv/",
+    "*.min.js",
+    "*.min.css",
+    "docs/legacy/CHANGELOG.txt",
+    # Preserve the exact upstream Tauri NSIS template; NSIS syntax and upstream comments are not prose.
+    "scripts/release/installer.nsi",
+    "SerialController/db/pokedex.json",
+]
+
+[default]
+extend-ignore-identifiers-re = [
+    "opneImage",
+    "bf_show_informations",
+    "controllButtons",
+    "sendWinNotfication",
+    # nokhwa 0.10 exposes this misspelled public API on Windows.
+    "set_camera_requset",
+    "cros-libva",
+    "cros-codecs",
+]
+extend-ignore-words-re = ["^ser$"]

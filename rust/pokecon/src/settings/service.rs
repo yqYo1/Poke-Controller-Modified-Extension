@@ -625,6 +625,12 @@ impl SettingsService {
             .settings
             .iter()
             .filter(|setting| setting.mutability == Mutability::StartupOnly)
+            .filter(|setting| {
+                matches!(
+                    setting.surfaces.openapi.access,
+                    Access::Write | Access::ReadWrite
+                )
+            })
             .filter_map(|setting| {
                 let saved = self.saved.get(&setting.id)?;
                 let current = self.current.get(&setting.id)?;
@@ -650,6 +656,12 @@ fn public_snapshot(
         .registry()
         .settings
         .iter()
+        .filter(|setting| {
+            matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            )
+        })
         .filter_map(|setting| {
             values
                 .get(&setting.id)
@@ -747,6 +759,7 @@ mod tests {
     use super::{
         NoopSettingsApplier, PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService,
     };
+    use crate::contracts::model::Access;
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -845,6 +858,31 @@ mod tests {
         assert_eq!(response.pending_restart_values["server.port"], json!(9000));
         assert!(response.restart_required);
         assert_eq!(service.revision(), 1);
+    }
+
+    #[test]
+    fn public_snapshot_contains_only_openapi_readable_settings() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let service = service(&temp, RecordingApplier::default());
+        let snapshot = service.public_snapshot();
+        let registry = service.loaded.settings.registry();
+
+        for setting in &registry.settings {
+            let readable = matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            );
+            assert_eq!(
+                snapshot.contains_key(&setting.id),
+                readable,
+                "{}",
+                setting.id
+            );
+        }
+        assert_eq!(
+            snapshot["notifications.discord.webhook_url"],
+            json!({"configured": false})
+        );
     }
 
     #[test]

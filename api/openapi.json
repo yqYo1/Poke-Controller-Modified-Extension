@@ -3724,8 +3724,17 @@
             "type": "string"
           },
           "notifications.discord.webhook_url": {
-            "description": "Secret-safe masked value; configured secrets are returned as ********",
-            "type": "string"
+            "additionalProperties": false,
+            "description": "Secret-safe status; the secret value is never returned",
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configured"
+            ],
+            "type": "object"
           },
           "notifications.line_menu_behavior": {
             "enum": [

@@ -247,8 +247,13 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
         }
         let schema = if setting.secret && matches!(projection, SettingProjection::Read) {
             json!({
-                "type": "string",
-                "description": "Secret-safe masked value; configured secrets are returned as ********"
+                "type": "object",
+                "properties": {
+                    "configured": {"type": "boolean"}
+                },
+                "required": ["configured"],
+                "additionalProperties": false,
+                "description": "Secret-safe status; the secret value is never returned"
             })
         } else {
             value_json_schema(&setting.value)
@@ -303,6 +308,7 @@ pub enum OpenApiError {
 #[cfg(test)]
 mod tests {
     use crate::contracts::model::Access;
+    use serde_json::json;
 
     use super::document;
 
@@ -341,6 +347,24 @@ mod tests {
                 setting.id
             );
         }
+    }
+
+    #[test]
+    fn secret_read_schemas_describe_the_secret_safe_status_object() {
+        let document = document().unwrap();
+        let read = document
+            .pointer("/components/schemas/SettingsReadValues")
+            .unwrap();
+        assert_eq!(
+            read["properties"]["notifications.discord.webhook_url"],
+            json!({
+                "type": "object",
+                "properties": {"configured": {"type": "boolean"}},
+                "required": ["configured"],
+                "additionalProperties": false,
+                "description": "Secret-safe status; the secret value is never returned"
+            })
+        );
     }
 
     #[test]

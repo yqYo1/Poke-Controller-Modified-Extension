@@ -1043,8 +1043,10 @@ export interface components {
             "notifications.discord.on_script_start": boolean;
             /** Format: free */
             "notifications.discord.username": string;
-            /** @description Secret-safe masked value; configured secrets are returned as ******** */
-            "notifications.discord.webhook_url": string;
+            /** @description Secret-safe status; the secret value is never returned */
+            "notifications.discord.webhook_url": {
+                configured: boolean;
+            };
             /** @enum {string} */
             "notifications.line_menu_behavior": "message" | "noop";
             "notifications.windows.on_script_end": boolean;

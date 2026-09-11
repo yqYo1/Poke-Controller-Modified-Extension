@@ -30,7 +30,7 @@ export function settingsValues(
     'notifications.discord.on_script_end': false,
     'notifications.discord.on_script_start': false,
     'notifications.discord.username': '',
-    'notifications.discord.webhook_url': '',
+    'notifications.discord.webhook_url': { configured: false },
     'notifications.line_menu_behavior': 'message',
     'notifications.windows.on_script_end': false,
     'notifications.windows.on_script_start': false,

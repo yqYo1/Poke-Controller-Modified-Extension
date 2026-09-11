@@ -3568,6 +3568,11 @@
             "minLength": 1,
             "type": "string"
           },
+          "app_name": {
+            "format": "app_name",
+            "minLength": 1,
+            "type": "string"
+          },
           "auto_reload_config": {
             "type": "boolean"
           },
@@ -3647,6 +3652,14 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
+          },
+          "dynamic_config_language": {
+            "enum": [
+              "python",
+              "lua",
+              "none"
+            ],
+            "type": "string"
           },
           "input.allow_manual_intervention": {
             "type": "boolean"
@@ -3748,6 +3761,59 @@
           },
           "notifications.windows.on_script_start": {
             "type": "boolean"
+          },
+          "python.dynamic.packages.list": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "extras": {
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "version": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array",
+            "uniqueItems": false
+          },
+          "python.dynamic.packages.override_application_constraints": {
+            "type": "boolean"
+          },
+          "python.dynamic.packages.override_package_metadata_constraints": {
+            "type": "boolean"
+          },
+          "python.dynamic.packages.revalidate_mutable_sources": {
+            "type": "boolean"
+          },
+          "python.dynamic.packages.uv_config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "python.dynamic.venv": {
+            "minLength": 1,
+            "type": "string"
           },
           "python.script.packages.list": {
             "items": {
@@ -3993,6 +4059,7 @@
         "required": [
           "language",
           "auto_reload_config",
+          "dynamic_config_language",
           "dynamic.callback_soft_timeout_ms",
           "dynamic.callback_soft_timeout_grace_ms",
           "dynamic.callback_hard_timeout_ms",
@@ -4000,6 +4067,7 @@
           "dynamic.callback_queue_capacity",
           "report_ignored_profile_global_settings",
           "active_profile",
+          "app_name",
           "camera.capture_fps",
           "camera.capture_resolution",
           "camera.device",
@@ -4061,7 +4129,13 @@
           "python.script.packages.override_application_constraints",
           "python.script.packages.override_package_metadata_constraints",
           "python.script.packages.uv_config",
-          "python.script.packages.revalidate_mutable_sources"
+          "python.script.packages.revalidate_mutable_sources",
+          "python.dynamic.venv",
+          "python.dynamic.packages.list",
+          "python.dynamic.packages.override_application_constraints",
+          "python.dynamic.packages.override_package_metadata_constraints",
+          "python.dynamic.packages.uv_config",
+          "python.dynamic.packages.revalidate_mutable_sources"
         ],
         "type": "object"
       },

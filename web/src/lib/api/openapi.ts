@@ -997,6 +997,8 @@ export interface components {
         SettingsReadValues: {
             /** Format: profile_name */
             active_profile: string;
+            /** Format: app_name */
+            app_name: string;
             auto_reload_config: boolean;
             /** Format: int64 */
             "camera.capture_fps": number;
@@ -1019,6 +1021,8 @@ export interface components {
             "dynamic.callback_soft_timeout_grace_ms": number;
             /** Format: int64 */
             "dynamic.callback_soft_timeout_ms": number;
+            /** @enum {string} */
+            dynamic_config_language: "python" | "lua" | "none";
             "input.allow_manual_intervention": boolean;
             "input.keyboard_enabled": boolean;
             "input.left_stick_mouse_enabled": boolean;
@@ -1051,6 +1055,16 @@ export interface components {
             "notifications.line_menu_behavior": "message" | "noop";
             "notifications.windows.on_script_end": boolean;
             "notifications.windows.on_script_start": boolean;
+            "python.dynamic.packages.list": {
+                extras?: string[];
+                name: string;
+                version?: string;
+            }[];
+            "python.dynamic.packages.override_application_constraints": boolean;
+            "python.dynamic.packages.override_package_metadata_constraints": boolean;
+            "python.dynamic.packages.revalidate_mutable_sources": boolean;
+            "python.dynamic.packages.uv_config": null | string;
+            "python.dynamic.venv": string;
             "python.script.packages.list": {
                 extras?: string[];
                 name: string;

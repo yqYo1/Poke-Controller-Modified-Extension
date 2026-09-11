@@ -656,12 +656,6 @@ fn public_snapshot(
         .registry()
         .settings
         .iter()
-        .filter(|setting| {
-            matches!(
-                setting.surfaces.openapi.access,
-                Access::Read | Access::ReadWrite
-            )
-        })
         .filter_map(|setting| {
             values
                 .get(&setting.id)
@@ -759,7 +753,6 @@ mod tests {
     use super::{
         NoopSettingsApplier, PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService,
     };
-    use crate::contracts::model::Access;
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -861,23 +854,14 @@ mod tests {
     }
 
     #[test]
-    fn public_snapshot_contains_only_openapi_readable_settings() {
+    fn public_snapshot_contains_all_registry_settings_and_masks_secrets() {
         let temp = TempDir::new().expect("temporary directory must exist");
         let service = service(&temp, RecordingApplier::default());
         let snapshot = service.public_snapshot();
         let registry = service.loaded.settings.registry();
 
         for setting in &registry.settings {
-            let readable = matches!(
-                setting.surfaces.openapi.access,
-                Access::Read | Access::ReadWrite
-            );
-            assert_eq!(
-                snapshot.contains_key(&setting.id),
-                readable,
-                "{}",
-                setting.id
-            );
+            assert!(snapshot.contains_key(&setting.id), "{}", setting.id);
         }
         assert_eq!(
             snapshot["notifications.discord.webhook_url"],

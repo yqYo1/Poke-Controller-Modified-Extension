@@ -233,10 +233,7 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
     let mut required = Vec::new();
     for setting in settings {
         let included = match projection {
-            SettingProjection::Read => matches!(
-                setting.surfaces.openapi.access,
-                Access::Read | Access::ReadWrite
-            ),
+            SettingProjection::Read => true,
             SettingProjection::Write => matches!(
                 setting.surfaces.openapi.access,
                 Access::Write | Access::ReadWrite
@@ -313,7 +310,7 @@ mod tests {
     use super::document;
 
     #[test]
-    fn setting_schemas_are_literal_closed_and_access_aware() {
+    fn setting_schemas_are_literal_closed_and_write_access_aware() {
         let document = document().unwrap();
         let read = document
             .pointer("/components/schemas/SettingsReadValues")
@@ -326,10 +323,7 @@ mod tests {
 
         let registry = crate::contracts::settings_registry().unwrap();
         for setting in registry.settings() {
-            let readable = matches!(
-                setting.surfaces.openapi.access,
-                Access::Read | Access::ReadWrite
-            );
+            let readable = true;
             let writable = matches!(
                 setting.surfaces.openapi.access,
                 Access::Write | Access::ReadWrite

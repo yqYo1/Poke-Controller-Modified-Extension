@@ -8,6 +8,7 @@ export function settingsValues(
 ): SettingsReadValues {
   const values: SettingsReadValues = {
     active_profile: 'default',
+    app_name: 'pokecon',
     auto_reload_config: false,
     'camera.capture_fps': 60,
     'camera.capture_resolution': '1280x720',
@@ -15,6 +16,7 @@ export function settingsValues(
     'camera.flip_mode': 'none',
     'camera.screenshot_format': 'png',
     'commands.tag_match_mode': 'exact',
+    dynamic_config_language: 'lua',
     'dynamic.callback_hard_timeout_ms': 5000,
     'dynamic.callback_max_concurrency': 8,
     'dynamic.callback_queue_capacity': 1024,
@@ -34,6 +36,12 @@ export function settingsValues(
     'notifications.line_menu_behavior': 'message',
     'notifications.windows.on_script_end': false,
     'notifications.windows.on_script_start': false,
+    'python.dynamic.packages.list': [],
+    'python.dynamic.packages.override_application_constraints': false,
+    'python.dynamic.packages.override_package_metadata_constraints': false,
+    'python.dynamic.packages.revalidate_mutable_sources': false,
+    'python.dynamic.packages.uv_config': null,
+    'python.dynamic.venv': '/tmp/pokecon-python-dynamic',
     'python.script.packages.list': [],
     'python.script.packages.override_application_constraints': false,
     'python.script.packages.override_package_metadata_constraints': false,

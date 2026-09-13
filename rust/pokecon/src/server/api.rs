@@ -1047,7 +1047,7 @@ pub struct ScriptUiActionResult {
 #[serde(deny_unknown_fields)]
 pub struct SessionDescription {
     pub sdp: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub negotiation_id: Option<String>,
 }
 
@@ -1055,7 +1055,7 @@ pub struct SessionDescription {
 #[serde(deny_unknown_fields)]
 pub struct IceCandidate {
     pub candidate: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub negotiation_id: Option<String>,
     #[serde(deserialize_with = "deserialize_required_option")]
     #[schema(required = true)]
@@ -1404,9 +1404,9 @@ mod tests {
 
     use super::{
         ClientMessage, CommandControlRequest, DecimalString, DynamicConfigControlRequest,
-        GamepadInput, LauncherDestination, NotificationTestRequest, RevisionedStateChange,
-        ScreenshotRequest, SerialControlRequest, ServerMessage, StateChangeCause, StatePatch,
-        UiStateChange,
+        GamepadInput, IceCandidate, LauncherDestination, NotificationTestRequest,
+        RevisionedStateChange, ScreenshotRequest, SerialControlRequest, ServerMessage,
+        SessionDescription, StateChangeCause, StatePatch, UiStateChange,
     };
 
     #[test]
@@ -1417,6 +1417,35 @@ mod tests {
         for invalid in ["", "00", "01", "+1", "-1", "1.0", " 1"] {
             assert!(invalid.parse::<DecimalString>().is_err(), "{invalid}");
         }
+    }
+
+    #[test]
+    fn negotiation_ids_are_omitted_for_legacy_signaling_and_serialized_when_set() {
+        let legacy_offer = serde_json::to_value(SessionDescription {
+            negotiation_id: None,
+            sdp: "offer".to_owned(),
+        })
+        .expect("legacy offer serializes");
+        assert_eq!(legacy_offer, json!({"sdp": "offer"}));
+
+        let tagged_candidate = serde_json::to_value(IceCandidate {
+            candidate: "candidate".to_owned(),
+            negotiation_id: Some("n1".to_owned()),
+            sdp_mid: None,
+            sdp_mline_index: None,
+            username_fragment: None,
+        })
+        .expect("tagged candidate serializes");
+        assert_eq!(
+            tagged_candidate,
+            json!({
+                "candidate": "candidate",
+                "negotiation_id": "n1",
+                "sdp_mid": null,
+                "sdp_mline_index": null,
+                "username_fragment": null
+            })
+        );
     }
 
     #[test]

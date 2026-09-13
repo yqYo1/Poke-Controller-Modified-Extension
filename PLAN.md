@@ -22,7 +22,8 @@
 - [x] 同commitのNormal CI run `34272925506`とPackage CI run `34272925529`がcompleted／successとなり、required aggregateを通過した。
 - [x] timing artifact `ci-timing-34272925506-1`（artifact ID `10075004892`）を保存し、同一`change_kind`の履歴を使うblocking／fail-closed p95 gateをfresh CIで通過した。
 - [x] `PLAN.md`／将来の`TASK.md`を作業追跡用メタデータとしてCIのdocs領域分類から除外し、常時実行のfast checksでlintする契約を追加した（`scripts/ci/regions.py`、`tests/quality/test_ci_regions.py`）。
-- [x] 最新実装commit `50bd589ba67ec801f9be4579c7062984d9577b2f`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。Normal CI `34784110190`、Package CI `34784110188`のrun-levelとrequired aggregate success、独立review `CODEX VERDICT: LGTM`を確認した。ブラウザbackendは途中で`410 Gone`となったため、今回の追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
+- [x] commit `50bd589ba67ec801f9be4579c7062984d9577b2f`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。ブラウザbackendは途中で`410 Gone`となったため、追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
+- [x] commit `5c740398da8c345e3abe612cc72cc94adc226e36`でx86_64-darwin専用のlocked `nixpkgs-darwin`（26.05-darwin）を追加し、main Linux nixpkgs／uv 0.11.28を維持したまま4 systemのpackages、devShells、checks、appsを`nix flake check --no-build --all-systems`で評価した。`nix run .#check`、`nix build .#pokecon --no-link`、`nix build .#web --no-link`、`nix run .#web-check`、`nix run .#actionlint`も成功した。同commitのpush Normal CI `34788294682`、PR Normal CI attempt 3 `34788296839`、Package CI `34788294683`がsuccess、PR required contextsもSUCCESSとなった（PR Normal attempt 1／2のproduct p95は729秒／721秒でthreshold 720秒を超えたため採用せず、attempt 3で再検証）。
 
 ### 現行の残タスク（アシスタント担当）
 

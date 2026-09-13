@@ -363,13 +363,13 @@ export class MediaTransport implements RoutedMessageTransport {
   private async acceptIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     const peer = this.peer;
     const token = this.peerToken;
-    if (peer === undefined || peer.remoteDescription == null) {
+    if (peer?.remoteDescription == null) {
       this.pendingIce.push({ candidate, token: peer === undefined ? null : token });
       return;
     }
     try {
       await peer.addIceCandidate(candidate);
-    } catch (_error: unknown) {
+    } catch {
       // A stale or malformed remote candidate must not tear down an otherwise
       // usable peer. The signaling stream may contain candidates for a peer
       // that was replaced while the browser was awaiting its description.
@@ -387,7 +387,7 @@ export class MediaTransport implements RoutedMessageTransport {
       }
       try {
         await peer.addIceCandidate(candidate);
-      } catch (_error: unknown) {
+      } catch {
         // Continue flushing the remaining candidates. One bad candidate is not
         // sufficient evidence that the negotiated peer is unusable.
       }

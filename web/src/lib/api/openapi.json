@@ -3518,7 +3518,7 @@
             "type": "object"
           },
           "pending_restart_values": {
-            "$ref": "#/components/schemas/SettingsWriteValues"
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
           },
           "restart_required": {
             "items": {
@@ -3527,7 +3527,7 @@
             "type": "array"
           },
           "values": {
-            "$ref": "#/components/schemas/SettingsWriteValues"
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
           }
         },
         "required": [
@@ -3560,16 +3560,11 @@
         ],
         "type": "object"
       },
-      "SettingsReadValues": {
+      "SettingsReadPatchValues": {
         "additionalProperties": false,
         "properties": {
           "active_profile": {
             "format": "profile_name",
-            "minLength": 1,
-            "type": "string"
-          },
-          "app_name": {
-            "format": "app_name",
             "minLength": 1,
             "type": "string"
           },
@@ -3652,14 +3647,6 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
-          },
-          "dynamic_config_language": {
-            "enum": [
-              "python",
-              "lua",
-              "none"
-            ],
-            "type": "string"
           },
           "input.allow_manual_intervention": {
             "type": "boolean"
@@ -3762,7 +3749,7 @@
           "notifications.windows.on_script_start": {
             "type": "boolean"
           },
-          "python.dynamic.packages.list": {
+          "python.script.packages.list": {
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -3791,16 +3778,16 @@
             "type": "array",
             "uniqueItems": false
           },
-          "python.dynamic.packages.override_application_constraints": {
+          "python.script.packages.override_application_constraints": {
             "type": "boolean"
           },
-          "python.dynamic.packages.override_package_metadata_constraints": {
+          "python.script.packages.override_package_metadata_constraints": {
             "type": "boolean"
           },
-          "python.dynamic.packages.revalidate_mutable_sources": {
+          "python.script.packages.revalidate_mutable_sources": {
             "type": "boolean"
           },
-          "python.dynamic.packages.uv_config": {
+          "python.script.packages.uv_config": {
             "oneOf": [
               {
                 "type": "null"
@@ -3811,9 +3798,389 @@
               }
             ]
           },
-          "python.dynamic.venv": {
+          "python.script.shutdown_timeout_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "python.script.venv": {
             "minLength": 1,
             "type": "string"
+          },
+          "report_ignored_profile_global_settings": {
+            "type": "boolean"
+          },
+          "serial.baud_rate": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "serial.data_format": {
+            "enum": [
+              "default",
+              "qingpi",
+              "3ds"
+            ],
+            "type": "string"
+          },
+          "serial.port": {
+            "format": "free",
+            "type": "string"
+          },
+          "server.bind_address": {
+            "format": "ip_literal_non_wildcard",
+            "minLength": 1,
+            "type": "string"
+          },
+          "server.port": {
+            "format": "int64",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "server.web_dir": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "shortcuts.button_1": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_10": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_2": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_3": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_4": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_5": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_6": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_7": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_8": {
+            "format": "free",
+            "type": "string"
+          },
+          "shortcuts.button_9": {
+            "format": "free",
+            "type": "string"
+          },
+          "stun_server": {
+            "format": "stun_uri_or_empty",
+            "type": "string"
+          },
+          "ui.camera.guide_visible": {
+            "type": "boolean"
+          },
+          "ui.camera.live_view_enabled": {
+            "type": "boolean"
+          },
+          "ui.camera.pixel_values_visible": {
+            "type": "boolean"
+          },
+          "ui.controller_position": {
+            "enum": [
+              "top",
+              "bottom"
+            ],
+            "type": "string"
+          },
+          "ui.desktop.close_behavior": {
+            "enum": [
+              "ask",
+              "shutdown",
+              "keep_backend"
+            ],
+            "type": "string"
+          },
+          "ui.desktop.disable_compositing": {
+            "type": "boolean"
+          },
+          "ui.dialog_button_position": {
+            "enum": [
+              "bottom",
+              "top",
+              "both"
+            ],
+            "type": "string"
+          },
+          "ui.fps": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ui.fps_options": {
+            "items": {
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "ui.output_split_ratio": {
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ui.stdout_destination": {
+            "enum": [
+              "output_1",
+              "output_2"
+            ],
+            "type": "string"
+          },
+          "ui.widget_mode": {
+            "enum": [
+              "all",
+              "outputs",
+              "output_1_controller",
+              "output_2_controller",
+              "output_1",
+              "output_2",
+              "controller"
+            ],
+            "type": "string"
+          },
+          "webrtc.auto_recover": {
+            "type": "boolean"
+          },
+          "webrtc.recovery_probe_interval_sec": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "websocket.ping_interval_sec": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "websocket.pong_timeout_sec": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "websocket.reconnect_interval_sec": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "websocket.reconnect_max_retries": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "SettingsReadValues": {
+        "additionalProperties": false,
+        "properties": {
+          "active_profile": {
+            "format": "profile_name",
+            "minLength": 1,
+            "type": "string"
+          },
+          "auto_reload_config": {
+            "type": "boolean"
+          },
+          "camera.capture_fps": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "camera.capture_resolution": {
+            "enum": [
+              "640x360",
+              "1280x720",
+              "1920x1080"
+            ],
+            "type": "string"
+          },
+          "camera.device": {
+            "oneOf": [
+              {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "non_empty_no_nul",
+                "minLength": 1,
+                "type": "string"
+              }
+            ]
+          },
+          "camera.flip_mode": {
+            "enum": [
+              "none",
+              "vertical",
+              "horizontal",
+              "both"
+            ],
+            "type": "string"
+          },
+          "camera.screenshot_format": {
+            "enum": [
+              "png",
+              "jpeg"
+            ],
+            "type": "string"
+          },
+          "commands.tag_match_mode": {
+            "enum": [
+              "exact",
+              "partial",
+              "prefix",
+              "suffix"
+            ],
+            "type": "string"
+          },
+          "dynamic.callback_hard_timeout_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dynamic.callback_max_concurrency": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "dynamic.callback_queue_capacity": {
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "dynamic.callback_soft_timeout_grace_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dynamic.callback_soft_timeout_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
+          },
+          "input.keyboard_enabled": {
+            "type": "boolean"
+          },
+          "input.left_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.right_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.touchscreen_area": {
+            "additionalProperties": false,
+            "properties": {
+              "bottom": {
+                "format": "double",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "left": {
+                "format": "double",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "right": {
+                "format": "double",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "top": {
+                "format": "double",
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "bottom",
+              "left",
+              "right",
+              "top"
+            ],
+            "type": "object"
+          },
+          "jpeg_quality": {
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "language": {
+            "enum": [
+              "ja",
+              "en"
+            ],
+            "type": "string"
+          },
+          "notifications.discord.avatar_url": {
+            "format": "http_url_or_empty",
+            "type": "string"
+          },
+          "notifications.discord.on_script_end": {
+            "type": "boolean"
+          },
+          "notifications.discord.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.discord.username": {
+            "format": "free",
+            "type": "string"
+          },
+          "notifications.discord.webhook_url": {
+            "additionalProperties": false,
+            "description": "Secret-safe status; the secret value is never returned",
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configured"
+            ],
+            "type": "object"
+          },
+          "notifications.line_menu_behavior": {
+            "enum": [
+              "message",
+              "noop"
+            ],
+            "type": "string"
+          },
+          "notifications.windows.on_script_end": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_start": {
+            "type": "boolean"
           },
           "python.script.packages.list": {
             "items": {
@@ -4059,7 +4426,6 @@
         "required": [
           "language",
           "auto_reload_config",
-          "dynamic_config_language",
           "dynamic.callback_soft_timeout_ms",
           "dynamic.callback_soft_timeout_grace_ms",
           "dynamic.callback_hard_timeout_ms",
@@ -4067,7 +4433,6 @@
           "dynamic.callback_queue_capacity",
           "report_ignored_profile_global_settings",
           "active_profile",
-          "app_name",
           "camera.capture_fps",
           "camera.capture_resolution",
           "camera.device",
@@ -4129,13 +4494,7 @@
           "python.script.packages.override_application_constraints",
           "python.script.packages.override_package_metadata_constraints",
           "python.script.packages.uv_config",
-          "python.script.packages.revalidate_mutable_sources",
-          "python.dynamic.venv",
-          "python.dynamic.packages.list",
-          "python.dynamic.packages.override_application_constraints",
-          "python.dynamic.packages.override_package_metadata_constraints",
-          "python.dynamic.packages.uv_config",
-          "python.dynamic.packages.revalidate_mutable_sources"
+          "python.script.packages.revalidate_mutable_sources"
         ],
         "type": "object"
       },
@@ -4152,7 +4511,7 @@
             "type": "object"
           },
           "pending_restart_values": {
-            "$ref": "#/components/schemas/SettingsWriteValues"
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
           },
           "restart_required": {
             "items": {
@@ -5107,7 +5466,7 @@
                 "type": "object"
               },
               "pending_restart_values": {
-                "$ref": "#/components/schemas/SettingsWriteValues"
+                "$ref": "#/components/schemas/SettingsReadPatchValues"
               },
               "restart_required": {
                 "items": {

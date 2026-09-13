@@ -986,19 +986,151 @@ export interface components {
             apply_failures: {
                 [key: string]: string;
             };
-            pending_restart_values: components["schemas"]["SettingsWriteValues"];
+            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
             restart_required: string[];
-            values: components["schemas"]["SettingsWriteValues"];
+            values: components["schemas"]["SettingsReadPatchValues"];
         };
         SettingsPatchRequest: {
             expected_revision?: null | components["schemas"]["DecimalString"];
             values: components["schemas"]["SettingsWriteValues"];
         };
+        SettingsReadPatchValues: {
+            /** Format: profile_name */
+            active_profile?: string;
+            auto_reload_config?: boolean;
+            /** Format: int64 */
+            "camera.capture_fps"?: number;
+            /** @enum {string} */
+            "camera.capture_resolution"?: "640x360" | "1280x720" | "1920x1080";
+            "camera.device"?: number | string;
+            /** @enum {string} */
+            "camera.flip_mode"?: "none" | "vertical" | "horizontal" | "both";
+            /** @enum {string} */
+            "camera.screenshot_format"?: "png" | "jpeg";
+            /** @enum {string} */
+            "commands.tag_match_mode"?: "exact" | "partial" | "prefix" | "suffix";
+            /** Format: int64 */
+            "dynamic.callback_hard_timeout_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_max_concurrency"?: number;
+            /** Format: int64 */
+            "dynamic.callback_queue_capacity"?: number;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_grace_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_ms"?: number;
+            "input.allow_manual_intervention"?: boolean;
+            "input.keyboard_enabled"?: boolean;
+            "input.left_stick_mouse_enabled"?: boolean;
+            "input.right_stick_mouse_enabled"?: boolean;
+            "input.touchscreen_area"?: {
+                /** Format: double */
+                bottom: number;
+                /** Format: double */
+                left: number;
+                /** Format: double */
+                right: number;
+                /** Format: double */
+                top: number;
+            };
+            /** Format: int64 */
+            jpeg_quality?: number;
+            /** @enum {string} */
+            language?: "ja" | "en";
+            /** Format: http_url_or_empty */
+            "notifications.discord.avatar_url"?: string;
+            "notifications.discord.on_script_end"?: boolean;
+            "notifications.discord.on_script_start"?: boolean;
+            /** Format: free */
+            "notifications.discord.username"?: string;
+            /** @description Secret-safe status; the secret value is never returned */
+            "notifications.discord.webhook_url"?: {
+                configured: boolean;
+            };
+            /** @enum {string} */
+            "notifications.line_menu_behavior"?: "message" | "noop";
+            "notifications.windows.on_script_end"?: boolean;
+            "notifications.windows.on_script_start"?: boolean;
+            "python.script.packages.list"?: {
+                extras?: string[];
+                name: string;
+                version?: string;
+            }[];
+            "python.script.packages.override_application_constraints"?: boolean;
+            "python.script.packages.override_package_metadata_constraints"?: boolean;
+            "python.script.packages.revalidate_mutable_sources"?: boolean;
+            "python.script.packages.uv_config"?: null | string;
+            /** Format: int64 */
+            "python.script.shutdown_timeout_ms"?: number;
+            "python.script.venv"?: string;
+            report_ignored_profile_global_settings?: boolean;
+            /** Format: int64 */
+            "serial.baud_rate"?: number;
+            /** @enum {string} */
+            "serial.data_format"?: "default" | "qingpi" | "3ds";
+            /** Format: free */
+            "serial.port"?: string;
+            /** Format: ip_literal_non_wildcard */
+            "server.bind_address"?: string;
+            /** Format: int64 */
+            "server.port"?: number;
+            "server.web_dir"?: string;
+            /** Format: free */
+            "shortcuts.button_1"?: string;
+            /** Format: free */
+            "shortcuts.button_10"?: string;
+            /** Format: free */
+            "shortcuts.button_2"?: string;
+            /** Format: free */
+            "shortcuts.button_3"?: string;
+            /** Format: free */
+            "shortcuts.button_4"?: string;
+            /** Format: free */
+            "shortcuts.button_5"?: string;
+            /** Format: free */
+            "shortcuts.button_6"?: string;
+            /** Format: free */
+            "shortcuts.button_7"?: string;
+            /** Format: free */
+            "shortcuts.button_8"?: string;
+            /** Format: free */
+            "shortcuts.button_9"?: string;
+            /** Format: stun_uri_or_empty */
+            stun_server?: string;
+            "ui.camera.guide_visible"?: boolean;
+            "ui.camera.live_view_enabled"?: boolean;
+            "ui.camera.pixel_values_visible"?: boolean;
+            /** @enum {string} */
+            "ui.controller_position"?: "top" | "bottom";
+            /** @enum {string} */
+            "ui.desktop.close_behavior"?: "ask" | "shutdown" | "keep_backend";
+            "ui.desktop.disable_compositing"?: boolean;
+            /** @enum {string} */
+            "ui.dialog_button_position"?: "bottom" | "top" | "both";
+            /** Format: int64 */
+            "ui.fps"?: number;
+            "ui.fps_options"?: number[];
+            /** Format: int64 */
+            "ui.output_split_ratio"?: number;
+            /** @enum {string} */
+            "ui.stdout_destination"?: "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.widget_mode"?: "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
+            "webrtc.auto_recover"?: boolean;
+            /** Format: int64 */
+            "webrtc.recovery_probe_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.ping_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.pong_timeout_sec"?: number;
+            /** Format: int64 */
+            "websocket.reconnect_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.reconnect_max_retries"?: number;
+        };
         SettingsReadValues: {
             /** Format: profile_name */
             active_profile: string;
-            /** Format: app_name */
-            app_name: string;
             auto_reload_config: boolean;
             /** Format: int64 */
             "camera.capture_fps": number;
@@ -1021,8 +1153,6 @@ export interface components {
             "dynamic.callback_soft_timeout_grace_ms": number;
             /** Format: int64 */
             "dynamic.callback_soft_timeout_ms": number;
-            /** @enum {string} */
-            dynamic_config_language: "python" | "lua" | "none";
             "input.allow_manual_intervention": boolean;
             "input.keyboard_enabled": boolean;
             "input.left_stick_mouse_enabled": boolean;
@@ -1055,16 +1185,6 @@ export interface components {
             "notifications.line_menu_behavior": "message" | "noop";
             "notifications.windows.on_script_end": boolean;
             "notifications.windows.on_script_start": boolean;
-            "python.dynamic.packages.list": {
-                extras?: string[];
-                name: string;
-                version?: string;
-            }[];
-            "python.dynamic.packages.override_application_constraints": boolean;
-            "python.dynamic.packages.override_package_metadata_constraints": boolean;
-            "python.dynamic.packages.revalidate_mutable_sources": boolean;
-            "python.dynamic.packages.uv_config": null | string;
-            "python.dynamic.venv": string;
             "python.script.packages.list": {
                 extras?: string[];
                 name: string;
@@ -1146,7 +1266,7 @@ export interface components {
             apply_failures: {
                 [key: string]: string;
             };
-            pending_restart_values: components["schemas"]["SettingsWriteValues"];
+            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
             restart_required: string[];
             revision: components["schemas"]["DecimalString"];
             values: components["schemas"]["SettingsReadValues"];
@@ -1397,7 +1517,7 @@ export interface components {
                 apply_failures: {
                     [key: string]: string;
                 };
-                pending_restart_values: components["schemas"]["SettingsWriteValues"];
+                pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
                 restart_required: string[];
                 revision: components["schemas"]["DecimalString"];
                 values: components["schemas"]["SettingsReadValues"];

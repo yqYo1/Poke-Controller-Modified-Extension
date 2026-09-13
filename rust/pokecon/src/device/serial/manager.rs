@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use thiserror::Error;
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{Mutex, broadcast, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::device::controller::ControllerState;
@@ -90,6 +90,7 @@ struct ManagerInner {
     reconnecting: AtomicBool,
     next_connection_id: AtomicU64,
     receive_events: broadcast::Sender<Vec<u8>>,
+    connection_events: watch::Sender<bool>,
     reconnect_policy: ReconnectPolicy,
 }
 
@@ -123,6 +124,7 @@ impl SerialManager {
         reconnect_policy: ReconnectPolicy,
     ) -> Self {
         let (receive_events, _) = broadcast::channel(64);
+        let (connection_events, _) = watch::channel(false);
         Self {
             inner: Arc::new(ManagerInner {
                 backend,
@@ -139,6 +141,7 @@ impl SerialManager {
                 reconnecting: AtomicBool::new(false),
                 next_connection_id: AtomicU64::new(1),
                 receive_events,
+                connection_events,
                 reconnect_policy,
             }),
         }
@@ -206,6 +209,9 @@ impl SerialManager {
             let mut state = self.inner.state.lock().await;
             (state.config.clone(), state.io.take(), state.codec.clone())
         };
+        if previous_io.is_some() {
+            self.publish_connection_status(false);
+        }
         if replacement == previous_config && previous_io.is_some() {
             let mut state = self.inner.state.lock().await;
             state.io = previous_io;
@@ -323,6 +329,8 @@ impl SerialManager {
         state.io = Some(io);
         state.codec = codec;
         state.connection_id = connection_id;
+        drop(state);
+        self.publish_connection_status(true);
         connection_id
     }
 
@@ -410,6 +418,7 @@ impl SerialManager {
         let Some(io) = io else {
             return Ok(());
         };
+        self.publish_connection_status(false);
         let write_result = write_all(&io, &neutral).await;
         let close_result = io.close().await;
         if write_result.is_err() || close_result.is_err() {
@@ -495,6 +504,10 @@ impl SerialManager {
         self.inner.receive_events.subscribe()
     }
 
+    pub fn subscribe_connection_status(&self) -> watch::Receiver<bool> {
+        self.inner.connection_events.subscribe()
+    }
+
     #[must_use]
     pub async fn current_config(&self) -> Option<SerialConfig> {
         self.inner.state.lock().await.config.clone()
@@ -503,6 +516,10 @@ impl SerialManager {
     #[must_use]
     pub async fn is_connected(&self) -> bool {
         self.inner.state.lock().await.io.is_some()
+    }
+
+    fn publish_connection_status(&self, connected: bool) {
+        self.inner.connection_events.send_replace(connected);
     }
 
     fn spawn_receive_monitor(&self, io: Arc<dyn SerialIo>, connection_id: u64) {
@@ -541,6 +558,7 @@ impl SerialManager {
         if !active {
             return;
         }
+        self.publish_connection_status(false);
         self.cancel_write_epoch();
         let _ = io.close().await;
         if self.inner.explicit_disconnect.load(Ordering::Acquire) {
@@ -646,6 +664,24 @@ mod tests {
 
     fn config(port: &str) -> SerialConfig {
         SerialConfig::new(port, 9600, ControllerFormat::Default).unwrap()
+    }
+
+    #[tokio::test]
+    async fn connection_status_events_follow_install_and_disconnect() {
+        let backend = VirtualSerialBackend::default();
+        backend
+            .push_plan(VirtualOpenPlan::Success(VirtualSerialEndpoint::new()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend));
+        let mut events = manager.subscribe_connection_status();
+
+        manager.apply_config(config("virtual")).await.unwrap();
+        events.changed().await.unwrap();
+        assert!(*events.borrow());
+
+        manager.disconnect().await.unwrap();
+        events.changed().await.unwrap();
+        assert!(!*events.borrow());
     }
 
     #[tokio::test]

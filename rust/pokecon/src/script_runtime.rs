@@ -102,6 +102,23 @@ impl ManagedUserScriptFactory {
         }
     }
 
+    fn command_root_is_empty(&self) -> Result<bool, CommandBackendError> {
+        let mut entries = std::fs::read_dir(&self.command_root).map_err(|_error| {
+            CommandBackendError::new(
+                "CommandRootUnavailable",
+                "user command root is not readable",
+            )
+        })?;
+        match entries.next() {
+            None => Ok(true),
+            Some(Ok(_entry)) => Ok(false),
+            Some(Err(_error)) => Err(CommandBackendError::new(
+                "CommandRootUnavailable",
+                "user command root is not readable",
+            )),
+        }
+    }
+
     async fn prepare(
         &self,
         settings: &LoadedSettings,
@@ -239,6 +256,9 @@ impl UserScriptFactory for ManagedUserScriptFactory {
         &self,
         settings: LoadedSettings,
     ) -> Result<Arc<dyn UserScriptSession>, CommandBackendError> {
+        if self.command_root_is_empty()? {
+            return Ok(Arc::new(EmptyUserScriptSession));
+        }
         let prepared = self.prepare(&settings).await?;
         let resources = self.hosts.create(&settings)?;
         let launch = python_worker_launch(
@@ -287,6 +307,54 @@ impl UserScriptFactory for ManagedUserScriptFactory {
             return Err(runtime_environment_error(error));
         }
         Ok(session)
+    }
+}
+
+struct EmptyUserScriptSession;
+
+#[async_trait]
+impl UserScriptSession for EmptyUserScriptSession {
+    async fn discover(&self) -> Result<ScriptDiscoveryResult, CommandBackendError> {
+        Ok(ScriptDiscoveryResult {
+            commands: Vec::new(),
+        })
+    }
+
+    async fn execute(
+        &self,
+        _request: ScriptExecuteRequest,
+    ) -> Result<ScriptExecutionResult, CommandBackendError> {
+        Err(CommandBackendError::new(
+            "NoCommands",
+            "no user commands are installed",
+        ))
+    }
+
+    async fn pause(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+        Ok(ScriptPauseResult { changed: false })
+    }
+
+    async fn resume(&self) -> Result<ScriptPauseResult, CommandBackendError> {
+        Ok(ScriptPauseResult { changed: false })
+    }
+
+    async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError> {
+        Ok(ScriptStopResult {
+            stop_requested: false,
+        })
+    }
+
+    fn is_empty_placeholder(&self) -> bool {
+        true
+    }
+
+    fn begin_stopping(&self) {}
+
+    async fn shutdown(
+        &self,
+        _deadline: Duration,
+    ) -> Result<ScriptSessionStop, CommandBackendError> {
+        Ok(ScriptSessionStop { forced: false })
     }
 }
 

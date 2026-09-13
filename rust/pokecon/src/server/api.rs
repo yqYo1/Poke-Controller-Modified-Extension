@@ -224,6 +224,11 @@ pub struct SettingsReadValues(pub BTreeMap<String, Value>);
 #[serde(transparent)]
 pub struct SettingsWriteValues(pub BTreeMap<String, Value>);
 
+/// Placeholder runtime type for a sparse, read-safe setting change.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, ToSchema)]
+#[serde(transparent)]
+pub struct SettingsReadPatchValues(pub BTreeMap<String, Value>);
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsPatchRequest {
@@ -237,7 +242,7 @@ pub struct SettingsPatchRequest {
 pub struct SettingsSnapshot {
     pub revision: DecimalString,
     pub values: SettingsReadValues,
-    pub pending_restart_values: SettingsWriteValues,
+    pub pending_restart_values: SettingsReadPatchValues,
     pub restart_required: Vec<String>,
     pub apply_failures: BTreeMap<String, String>,
 }
@@ -421,8 +426,8 @@ pub struct StatePatch {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsChange {
-    pub values: SettingsWriteValues,
-    pub pending_restart_values: SettingsWriteValues,
+    pub values: SettingsReadPatchValues,
+    pub pending_restart_values: SettingsReadPatchValues,
     pub restart_required: Vec<String>,
     pub apply_failures: BTreeMap<String, String>,
 }

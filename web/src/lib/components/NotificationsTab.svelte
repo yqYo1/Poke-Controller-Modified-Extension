@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+
   import type {
     NotificationTestRequest,
     NotificationTestResult
@@ -13,7 +15,6 @@
     | 'notifications.discord.on_script_start'
     | 'notifications.discord.on_script_end';
   type TextSetting =
-    | 'notifications.discord.webhook_url'
     | 'notifications.discord.username'
     | 'notifications.discord.avatar_url';
 
@@ -43,18 +44,25 @@
     return reason instanceof Error ? reason.message : 'Notification operation failed';
   }
 
-  async function write(settings: SettingsWriteValues): Promise<void> {
+  async function write(settings: SettingsWriteValues): Promise<boolean> {
     busy = 'settings';
     error = null;
     notice = null;
     try {
       await runtime.writeSettings(settings);
+      return true;
     } catch (reason: unknown) {
       error = errorMessage(reason);
+      return false;
     } finally {
       busy = null;
     }
   }
+
+  let webhookDraft = $state('');
+  const webhookConfigured = $derived(
+    values?.['notifications.discord.webhook_url']?.configured === true
+  );
 
   async function changeBoolean(event: Event, setting: BooleanSetting): Promise<void> {
     await write({ [setting]: (event.currentTarget as HTMLInputElement).checked });
@@ -62,6 +70,24 @@
 
   async function changeText(event: Event, setting: TextSetting): Promise<void> {
     await write({ [setting]: (event.currentTarget as HTMLInputElement).value });
+  }
+
+  async function changeWebhook(event: Event): Promise<void> {
+    const value = (event.currentTarget as HTMLInputElement).value;
+    webhookDraft = value;
+    if (await write({ 'notifications.discord.webhook_url': value })) {
+      // Never keep the secret in component state after a successful write. The
+      // next settings snapshot contains only `{ configured: boolean }`.
+      webhookDraft = '';
+      await tick();
+    }
+  }
+
+  async function clearWebhook(): Promise<void> {
+    if (await write({ 'notifications.discord.webhook_url': '' })) {
+      webhookDraft = '';
+      await tick();
+    }
   }
 
   async function testChannel(channel: Channel): Promise<void> {
@@ -166,16 +192,34 @@
     </div>
 
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
-      <label class="sm:col-span-2">
+      <label class="sm:col-span-2" for="notifications-discord-webhook-url">
         <span class="text-xs font-medium text-slate-300">Webhook URL</span>
-        <input
-          type="password"
-          autocomplete="new-password"
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
-          value={values?.['notifications.discord.webhook_url'] ?? ''}
-          disabled={busy !== null}
-          onchange={(event) => void changeText(event, 'notifications.discord.webhook_url')}
-        />
+        <div class="mt-1 flex gap-2">
+          <input
+            id="notifications-discord-webhook-url"
+            type="password"
+            aria-label="Webhook URL"
+            autocomplete="new-password"
+            class="min-w-0 flex-1 rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
+            placeholder={webhookConfigured ? t('Saved webhook (enter to replace)', '保存済み（置き換える場合に入力）') : t('Enter webhook URL', 'Webhook URL を入力')}
+            value={webhookDraft}
+            disabled={busy !== null}
+            onchange={(event) => void changeWebhook(event)}
+          />
+          {#if webhookConfigured}
+            <button
+              type="button"
+              class="rounded-lg border border-red-300/30 bg-red-300/10 px-3 py-2 text-xs text-red-200 disabled:opacity-40"
+              disabled={busy !== null}
+              onclick={() => void clearWebhook()}
+            >{t('Clear', '消去')}</button>
+          {/if}
+        </div>
+        <span class="mt-1 block text-xs text-slate-500">
+          {webhookConfigured
+            ? t('A saved value is not readable. Enter a new value only to replace it.', '保存済みの値は読み出せません。置き換える場合だけ新しい値を入力してください。')
+            : t('The value is stored without being returned to the browser.', '値は保存されますが、ブラウザーへ返されません。')}
+        </span>
       </label>
       <label>
         <span class="text-xs font-medium text-slate-300">{t('Username', 'ユーザー名')}</span>

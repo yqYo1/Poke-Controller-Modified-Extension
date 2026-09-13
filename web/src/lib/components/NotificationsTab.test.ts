@@ -15,7 +15,12 @@ function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
   if (initial === undefined) throw new Error('runtime did not publish its initial view');
   return {
     runtime,
-    view: { ...initial, settings: settingsSnapshot('1') }
+    view: {
+      ...initial,
+      settings: settingsSnapshot('1', {
+        'notifications.discord.webhook_url': { configured: true }
+      })
+    }
   };
 }
 
@@ -46,7 +51,18 @@ describe('NotificationsTab', () => {
       });
     });
     expect(screen.queryByText(/LINE/)).toBeNull();
-    expect(screen.getByLabelText('Webhook URL').getAttribute('type')).toBe('password');
+    const webhook = screen.getByLabelText('Webhook URL');
+    if (!(webhook instanceof HTMLInputElement)) throw new Error('webhook input is not an input');
+    expect(webhook.type).toBe('password');
+    expect(webhook.value).toBe('');
+    expect(webhook.placeholder).toContain('置き換える');
+    await fireEvent.change(webhook, { target: { value: 'dummy-webhook-value' } });
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({
+        'notifications.discord.webhook_url': 'dummy-webhook-value'
+      });
+    });
+    expect(webhook.value).toBe('');
   });
 
   it('sends typed test requests and reports delivery', async () => {

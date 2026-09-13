@@ -76,6 +76,19 @@ impl RuntimeSettingsApplier for CompositeSettingsApplier {
         Ok(())
     }
 
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        let mut first_error = None;
+        for adapter in &mut self.adapters {
+            if let Err(error) = adapter.reconcile(changes)
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
+        }
+        self.current.extend(changes.clone());
+        first_error.map_or(Ok(()), Err)
+    }
+
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
         for adapter in self.adapters.iter_mut().rev() {
             adapter.rollback(class, previous);
@@ -143,6 +156,10 @@ impl RuntimeSettingsApplier for DesktopSettingsApplier {
                 .set_close_behavior(parse_close_behavior(value)?);
         }
         Ok(())
+    }
+
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        self.apply(PatchClass::Ordinary, changes)
     }
 
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
@@ -229,6 +246,18 @@ impl RuntimeSettingsApplier for NotificationSettingsApplier {
         Ok(())
     }
 
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        if !changes.keys().any(|id| id.starts_with("notifications.")) {
+            return Ok(());
+        }
+        let mut next = self.values.clone();
+        next.extend(changes.clone());
+        self.update(&next)
+            .map_err(|_| "notification runtime reconciliation failed".to_owned())?;
+        self.values = next;
+        Ok(())
+    }
+
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
         if class != PatchClass::Ordinary
             || !previous.keys().any(|id| id.starts_with("notifications."))
@@ -293,6 +322,24 @@ impl RuntimeSettingsApplier for RealtimeSettingsApplier {
         Ok(())
     }
 
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        if !changes.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "stun_server" | "webrtc.auto_recover" | "webrtc.recovery_probe_interval_sec"
+            )
+        }) {
+            return Ok(());
+        }
+        let mut next = self.values.clone();
+        next.extend(changes.clone());
+        let settings = realtime_settings(&next)
+            .map_err(|_| "realtime runtime reconciliation failed".to_owned())?;
+        self.sender.send_replace(settings);
+        self.values = next;
+        Ok(())
+    }
+
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
         if class != PatchClass::Ordinary {
             return;
@@ -351,6 +398,24 @@ impl RuntimeSettingsApplier for WebSocketSettingsApplier {
         let mut next = self.values.clone();
         next.extend(changes.clone());
         let settings = websocket_settings(&next)?;
+        self.sender.send_replace(settings);
+        self.values = next;
+        Ok(())
+    }
+
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        if !changes.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "websocket.ping_interval_sec" | "websocket.pong_timeout_sec"
+            )
+        }) {
+            return Ok(());
+        }
+        let mut next = self.values.clone();
+        next.extend(changes.clone());
+        let settings = websocket_settings(&next)
+            .map_err(|_| "websocket runtime reconciliation failed".to_owned())?;
         self.sender.send_replace(settings);
         self.values = next;
         Ok(())

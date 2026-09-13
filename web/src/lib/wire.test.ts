@@ -33,6 +33,37 @@ describe('generated wire schema validation', () => {
     ).toThrow(WireValidationError);
   });
 
+  it('accepts secret-safe setting changes on the realtime wire', () => {
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'ui.state.changed',
+          revision: '1',
+          data: {
+            cause: 'settings',
+            state: {},
+            settings: {
+              apply_failures: {},
+              pending_restart_values: {},
+              restart_required: [],
+              values: {
+                'notifications.discord.webhook_url': { configured: true }
+              }
+            }
+          }
+        })
+      )
+    ).toMatchObject({
+      data: {
+        settings: {
+          values: {
+            'notifications.discord.webhook_url': { configured: true }
+          }
+        }
+      }
+    });
+  });
+
   it('validates nested ranges before sending client input', () => {
     expect(() =>
       serializeClientMessage({

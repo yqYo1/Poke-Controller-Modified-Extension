@@ -67,6 +67,28 @@ describe('CameraTab', () => {
     });
   });
 
+  it('prefers an available index over an equivalent unavailable saved path', async () => {
+    const { runtime, view: initialView } = runtimeView();
+    const actions = cameraActions();
+    actions.cameras.mockResolvedValue([
+      { available: true, label: 'Camera 10', selector: 10 },
+      { available: false, label: '/dev/video10', selector: '/dev/video10' }
+    ]);
+    const view = {
+      ...initialView,
+      settings: settingsSnapshot('1', { 'camera.device': '/dev/video10' })
+    };
+    render(CameraTab, { actions, autoLoad: false, runtime, view });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const selector = screen.getByLabelText('Camera device');
+    if (!(selector instanceof HTMLSelectElement)) throw new Error('camera selector is not a select');
+    expect(selector.value).toBe('number:10');
+    expect(
+      [...selector.options].some((option) => option.textContent.includes('/dev/video10'))
+    ).toBe(false);
+  });
+
   it('saves the current frame through the captures API', async () => {
     const { runtime, view } = runtimeView();
     const actions = cameraActions();

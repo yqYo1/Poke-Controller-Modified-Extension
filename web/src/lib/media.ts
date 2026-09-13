@@ -124,6 +124,7 @@ export class MediaTransport implements RoutedMessageTransport {
   private readonly mediaSubscribers = new Set<MediaSubscriber>();
   private readonly messageSubscribers = new Set<RoutedMessageSubscriber>();
   private peer: RTCPeerConnection | undefined;
+  private peerRole: 'manual' | 'remote' | undefined;
   private peerToken = 0;
   private pendingIce: RTCIceCandidateInit[] = [];
   private pendingOffer: string | undefined;
@@ -303,7 +304,7 @@ export class MediaTransport implements RoutedMessageTransport {
   }
 
   private async acceptOffer(sdp: string): Promise<void> {
-    const { peer, token } = this.beginPeer();
+    const { peer, token } = this.beginPeer('remote');
     try {
       await peer.setRemoteDescription({ sdp, type: 'offer' });
       preferVideoCodecs(peer);
@@ -324,7 +325,7 @@ export class MediaTransport implements RoutedMessageTransport {
 
   private async createManualOffer(): Promise<void> {
     this.pendingIce = [];
-    const { peer, token } = this.beginPeer();
+    const { peer, token } = this.beginPeer('manual');
     try {
       peer.addTransceiver('video', { direction: 'recvonly' });
       this.bootstrapChannel = peer.createDataChannel(BOOTSTRAP_CHANNEL, { ordered: true });
@@ -346,7 +347,7 @@ export class MediaTransport implements RoutedMessageTransport {
   private async acceptAnswer(sdp: string): Promise<void> {
     const peer = this.peer;
     const token = this.peerToken;
-    if (peer === undefined) {
+    if (peer === undefined || this.peerRole !== 'manual') {
       return;
     }
     try {
@@ -382,9 +383,11 @@ export class MediaTransport implements RoutedMessageTransport {
     }
   }
 
-  private beginPeer(): { peer: RTCPeerConnection; token: number } {
+  private beginPeer(role: 'manual' | 'remote'): { peer: RTCPeerConnection; token: number } {
     const previousMode = this.view.mode;
+    const preOfferIce = role === 'remote' && this.peer === undefined ? this.pendingIce : [];
     this.closePeer();
+    this.pendingIce = preOfferIce;
     const token = this.peerToken + 1;
     this.peerToken = token;
     const stunServer = this.realtimeView?.settings?.values.stun_server ?? '';
@@ -392,6 +395,7 @@ export class MediaTransport implements RoutedMessageTransport {
       iceServers: stunServer === '' ? [] : [{ urls: stunServer }]
     });
     this.peer = peer;
+    this.peerRole = role;
     this.installPeerHandlers(peer, token);
     this.updateView({
       lastError: null,
@@ -625,6 +629,8 @@ export class MediaTransport implements RoutedMessageTransport {
     }
     const peer = this.peer;
     this.peer = undefined;
+    this.peerRole = undefined;
+    this.pendingIce = [];
     if (peer !== undefined) {
       peer.onconnectionstatechange = null;
       peer.ondatachannel = null;

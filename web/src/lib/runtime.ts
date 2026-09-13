@@ -175,13 +175,18 @@ function boundedAppend<T>(items: readonly T[], item: T, maximum: number): readon
   return [...items.slice(start), item];
 }
 
-function decodeSerialData(base64: string, byteLength: number): string {
+function decodeSerialData(
+  decoder: TextDecoder,
+  base64: string,
+  byteLength: number,
+  stream = true
+): string {
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   if (bytes.byteLength !== byteLength) {
     throw new Error('serial payload byte length does not match its envelope');
   }
-  return new TextDecoder().decode(bytes);
+  return decoder.decode(bytes, { stream });
 }
 
 function safeMessage(error: unknown): string {
@@ -195,6 +200,7 @@ export class ApplicationRuntime {
   private previousConnectionStatus: RealtimeView['status'] = 'idle';
   private started = false;
   private readonly subscribers = new Set<RuntimeSubscriber>();
+  private serialDecoder = new TextDecoder();
   private unsubscribers: (() => void)[] = [];
   private view: RuntimeView = {
     actionError: null,
@@ -259,6 +265,7 @@ export class ApplicationRuntime {
     this.bundle.input.stop();
     this.bundle.media.stop();
     this.bundle.realtime.stop();
+    this.serialDecoder = new TextDecoder();
     for (const unsubscribe of this.unsubscribers) {
       unsubscribe();
     }
@@ -345,6 +352,7 @@ export class ApplicationRuntime {
     this.previousConnectionStatus = realtime.status;
     if (disconnected) {
       this.bundle.input.transportDisconnected();
+      this.serialDecoder = new TextDecoder();
     }
     if (realtime.settings !== null) {
       this.bundle.settings.acceptSnapshot(realtime.settings);
@@ -363,7 +371,11 @@ export class ApplicationRuntime {
           base64: message.data.data,
           byteLength: message.data.byte_length,
           id: this.nextLineId(),
-          text: decodeSerialData(message.data.data, message.data.byte_length)
+          text: decodeSerialData(
+            this.serialDecoder,
+            message.data.data,
+            message.data.byte_length
+          )
         };
         this.updateView({
           serial: boundedAppend(this.view.serial, serial, MAX_SERIAL_LINES)

@@ -156,19 +156,21 @@
         </nav>
 
         <div bind:this={panelElement} id={`panel-${activeTab}`} class="min-h-[20rem] min-w-0 flex-1 overflow-auto rounded-2xl border border-white/10 bg-ink-900/80 p-4 shadow-2xl shadow-black/20" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-          {#if activeTab === 'camera'}
-            <CameraTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
-          {:else if activeTab === 'serial'}
-            <SerialTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
-          {:else if activeTab === 'manual'}
-            <ManualTab {runtime} {view} />
-          {:else if activeTab === 'commands'}
-            <CommandsTab {actions} {runtime} {view} />
-          {:else if activeTab === 'notifications'}
-            <NotificationsTab {actions} {runtime} {view} />
-          {:else}
-            <OtherTab {runtime} {view} />
-          {/if}
+          {#key activeTab}
+            {#if activeTab === 'camera'}
+              <CameraTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
+            {:else if activeTab === 'serial'}
+              <SerialTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />
+            {:else if activeTab === 'manual'}
+              <ManualTab {runtime} {view} />
+            {:else if activeTab === 'commands'}
+              <CommandsTab {actions} {runtime} {view} />
+            {:else if activeTab === 'notifications'}
+              <NotificationsTab {actions} {runtime} {view} />
+            {:else}
+              <OtherTab {runtime} {view} />
+            {/if}
+          {/key}
         </div>
       </div>
 

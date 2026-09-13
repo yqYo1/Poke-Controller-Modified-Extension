@@ -244,6 +244,27 @@ describe('ApplicationRuntime', () => {
     expect(view.actionError).toContain('byte length');
   });
 
+  it('preserves a UTF-8 code point split across serial envelopes', () => {
+    const fake = fakeBundle();
+    const runtime = new ApplicationRuntime(fake.bundle);
+    let view!: RuntimeView;
+    runtime.subscribe((next) => {
+      view = next;
+    });
+    runtime.start();
+
+    fake.emitMessage('websocket', {
+      data: { byte_length: 1, data: '4g==', encoding: 'base64' },
+      type: 'serial.data'
+    });
+    fake.emitMessage('websocket', {
+      data: { byte_length: 2, data: 'gqw=', encoding: 'base64' },
+      type: 'serial.data'
+    });
+
+    expect(view.serial.at(-2)?.text).toBe('');
+    expect(view.serial.at(-1)?.text).toBe('€');
+  });
   it('surfaces conflict recovery and runtime apply failures from settings writes', async () => {
     const fake = fakeBundle();
     const runtime = new ApplicationRuntime(fake.bundle);

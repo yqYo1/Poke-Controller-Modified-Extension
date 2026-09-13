@@ -255,6 +255,12 @@ pub trait UserScriptSession: Send + Sync {
 
     async fn stop_command(&self) -> Result<ScriptStopResult, CommandBackendError>;
 
+    /// Returns true only for a temporary no-command placeholder that must not
+    /// be retained after a discovery pass.
+    fn is_empty_placeholder(&self) -> bool {
+        false
+    }
+
     async fn tk_event(&self, _event: &ScriptTkEvent) -> Result<(), CommandBackendError> {
         Err(CommandBackendError::new(
             "TkEventUnavailable",
@@ -502,6 +508,7 @@ impl CommandService {
         let _lifecycle = self.lifecycle.lock().await;
         self.ensure_command_start_allowed()?;
         let session = self.ensure_session().await?;
+        let empty_placeholder = session.is_empty_placeholder();
         let discovered = session.discover().await?.commands;
         let automatic = canonical_discovery(&discovered);
         let initial = automatic
@@ -531,7 +538,12 @@ impl CommandService {
         rollback.disarm();
 
         let command_count = commands.len();
-        self.inner.lock().await.commands = commands;
+        let mut inner = self.inner.lock().await;
+        inner.commands = commands;
+        if empty_placeholder {
+            inner.session = None;
+            inner.session_profile = None;
+        }
         Ok(CommandReloadResult::Published {
             generation: cache.generation,
             command_count,

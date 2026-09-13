@@ -192,6 +192,8 @@ pub enum CameraError {
     RollbackFailed,
     #[error("camera command channel is closed")]
     CommandChannelClosed,
+    #[error("camera command did not complete before the deadline")]
+    CommandTimedOut,
     #[error("camera is not open")]
     NotOpen,
     #[error("no valid camera frame is published")]

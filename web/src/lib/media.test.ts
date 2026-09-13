@@ -383,6 +383,29 @@ describe('MediaTransport signaling', () => {
     });
   });
 
+  it('does not apply a late manual answer to a peer replaced by a remote offer', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.media.reconnectWebRtc();
+    await settle();
+    const manualPeer = peerAt(harness.peers);
+
+    harness.realtime.emitMessage(offer('remote-offer'));
+    await settle();
+    const remotePeer = peerAt(harness.peers, 1);
+    harness.realtime.emitMessage({
+      data: { sdp: 'late-manual-answer' },
+      type: 'webrtc.answer'
+    });
+    await settle();
+
+    expect(manualPeer.closed).toBe(true);
+    expect(remotePeer.remoteDescription).toMatchObject({
+      sdp: 'remote-offer',
+      type: 'offer'
+    });
+  });
+
   it('creates a recvonly manual offer with a bootstrap channel', async () => {
     const harness = makeHarness();
     harness.media.start();

@@ -8,8 +8,8 @@ use thiserror::Error;
 use tokio::sync::{Mutex, broadcast};
 
 use crate::server::api::{
-    DecimalString, RevisionedStateChange, SettingsChange, SettingsSnapshot, SettingsWriteValues,
-    StateChangeCause, StatePatch, StateSnapshot, UiStateChange,
+    DecimalString, RevisionedStateChange, SettingsChange, SettingsReadPatchValues,
+    SettingsSnapshot, StateChangeCause, StatePatch, StateSnapshot, UiStateChange,
 };
 
 /// One consistent view of both REST snapshot domains.
@@ -414,8 +414,8 @@ fn apply_settings_change(
 
     (!values.is_empty() || pending_changed || restart_changed || failures_changed).then_some(
         SettingsChange {
-            values: SettingsWriteValues(values),
-            pending_restart_values: SettingsWriteValues(pending_restart_values),
+            values: SettingsReadPatchValues(values),
+            pending_restart_values: SettingsReadPatchValues(pending_restart_values),
             restart_required: change.restart_required,
             apply_failures: change.apply_failures,
         },
@@ -433,7 +433,8 @@ mod tests {
     use super::{Replay, StateHub, StateTransaction, StateTransactionError, VisibleSnapshots};
     use crate::server::api::{
         CameraSelector, CommandInfo, CommandState, DecimalString, SettingsChange,
-        SettingsReadValues, SettingsSnapshot, SettingsWriteValues, StateChangeCause, StateSnapshot,
+        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
+        StateSnapshot,
     };
 
     fn snapshots() -> VisibleSnapshots {
@@ -444,7 +445,7 @@ mod tests {
                     "sample.mode".to_owned(),
                     json!("old"),
                 )])),
-                pending_restart_values: SettingsWriteValues::default(),
+                pending_restart_values: SettingsReadPatchValues::default(),
                 restart_required: Vec::new(),
                 apply_failures: BTreeMap::new(),
             },
@@ -487,7 +488,10 @@ mod tests {
         transaction.expected_revision = Some(DecimalString::zero());
         transaction.state.camera_opened = Some(true);
         transaction.settings = Some(SettingsChange {
-            values: SettingsWriteValues(BTreeMap::from([("sample.mode".to_owned(), json!("new"))])),
+            values: SettingsReadPatchValues(BTreeMap::from([(
+                "sample.mode".to_owned(),
+                json!("new"),
+            )])),
             ..SettingsChange::default()
         });
 
@@ -575,7 +579,7 @@ mod tests {
         let hub = hub(8);
         let mut add = StateTransaction::new(StateChangeCause::Settings);
         add.settings = Some(SettingsChange {
-            pending_restart_values: SettingsWriteValues(BTreeMap::from([(
+            pending_restart_values: SettingsReadPatchValues(BTreeMap::from([(
                 "server.bind_address".to_owned(),
                 json!("0.0.0.0:8080"),
             )])),

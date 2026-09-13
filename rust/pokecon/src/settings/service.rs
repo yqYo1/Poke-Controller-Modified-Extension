@@ -76,6 +76,13 @@ pub trait RuntimeSettingsApplier: Send {
     fn apply(&mut self, class: PatchClass, changes: &BTreeMap<String, Value>)
     -> Result<(), String>;
 
+    /// Reconciles a settings generation loaded outside the PATCH transaction.
+    /// Implementations must update their live adapter without writing back to
+    /// the dynamic host; the host projection is already the source of truth.
+    fn reconcile(&mut self, _changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Restores a prior transaction after persistence fails.
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>);
 }
@@ -191,13 +198,23 @@ impl SettingsService {
         let previous_current = self.current.clone();
         let saved = loaded.settings.values().clone();
         let mut current = saved.clone();
+        let mut changes = BTreeMap::new();
         for setting in &loaded.settings.registry().settings {
-            if setting.mutability == Mutability::StartupOnly
-                && let Some(previous) = previous_current.get(&setting.id)
+            if setting.mutability == Mutability::StartupOnly {
+                if let Some(previous) = previous_current.get(&setting.id) {
+                    current.insert(setting.id.clone(), previous.clone());
+                }
+                continue;
+            }
+            if let Some(next) = current.get(&setting.id)
+                && previous_current
+                    .get(&setting.id)
+                    .is_none_or(|previous| previous.value != next.value)
             {
-                current.insert(setting.id.clone(), previous.clone());
+                changes.insert(setting.id.clone(), next.value.clone());
             }
         }
+        self.reconcile_adopted_values(&changes);
         self.loaded = loaded;
         self.saved = saved;
         self.current = current;
@@ -208,6 +225,7 @@ impl SettingsService {
     /// TOML projection and any startup-only restart request.
     pub fn adopt_runtime_loaded(&mut self, loaded: LoadedSettings) {
         let mut changed = self.loaded.active_profile != loaded.active_profile;
+        let mut runtime_changes = BTreeMap::new();
         for setting in &loaded.settings.registry().settings {
             if setting.mutability == Mutability::StartupOnly {
                 continue;
@@ -221,12 +239,26 @@ impl SettingsService {
                 .is_none_or(|current| current.value != next.value)
             {
                 self.current.insert(setting.id.clone(), next.clone());
+                runtime_changes.insert(setting.id.clone(), next.value.clone());
                 changed = true;
             }
         }
+        self.reconcile_adopted_values(&runtime_changes);
         self.loaded = loaded;
         if changed {
             self.bump_revision();
+        }
+    }
+
+    fn reconcile_adopted_values(&mut self, changes: &BTreeMap<String, Value>) {
+        if changes.is_empty() {
+            return;
+        }
+        if let Err(_error) = self.applier.reconcile(changes) {
+            tracing::error!(
+                diagnostic_id = "EXTERNAL_SETTINGS_RECONCILE_FAILED",
+                "runtime adapters rejected an externally loaded settings generation"
+            );
         }
     }
 
@@ -656,6 +688,12 @@ fn public_snapshot(
         .registry()
         .settings
         .iter()
+        .filter(|setting| {
+            matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            )
+        })
         .filter_map(|setting| {
             values
                 .get(&setting.id)
@@ -753,6 +791,7 @@ mod tests {
     use super::{
         NoopSettingsApplier, PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService,
     };
+    use crate::contracts::model::Access;
     use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -763,6 +802,7 @@ mod tests {
         calls: Arc<Mutex<Vec<RecordedCall>>>,
         fail_ids: Arc<Mutex<Vec<String>>>,
         rollbacks: Arc<Mutex<usize>>,
+        reconciles: Arc<Mutex<Vec<BTreeMap<String, serde_json::Value>>>>,
     }
 
     impl RuntimeSettingsApplier for RecordingApplier {
@@ -785,6 +825,17 @@ mod tests {
             } else {
                 Ok(())
             }
+        }
+
+        fn reconcile(
+            &mut self,
+            changes: &BTreeMap<String, serde_json::Value>,
+        ) -> Result<(), String> {
+            self.reconciles
+                .lock()
+                .expect("reconcile lock must work")
+                .push(changes.clone());
+            Ok(())
         }
 
         fn rollback(
@@ -854,14 +905,57 @@ mod tests {
     }
 
     #[test]
-    fn public_snapshot_contains_all_registry_settings_and_masks_secrets() {
+    fn external_runtime_load_reconciles_adapters_before_publishing_projection() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let applier = RecordingApplier::default();
+        let reconcile_records = applier.reconciles.clone();
+        let mut service = service(&temp, applier);
+        let base = temp.path();
+        let bases = BaseDirectories::linux(&RootEnvironment::from_values([
+            ("HOME", base.as_os_str().to_os_string()),
+            ("XDG_CONFIG_HOME", base.join("config").into_os_string()),
+            ("XDG_DATA_HOME", base.join("data").into_os_string()),
+            ("XDG_CACHE_HOME", base.join("cache").into_os_string()),
+            ("XDG_STATE_HOME", base.join("state").into_os_string()),
+        ]))
+        .expect("bases must resolve");
+        let loaded = SettingsPipeline::new(PipelineRequest {
+            arguments: vec![OsString::from("pokecon")],
+            environment: RootEnvironment::from_values([("HOME", base.as_os_str())]),
+            startup_cwd: base.to_path_buf(),
+            resource_root: base.join("resources"),
+            base_directories: Some(bases),
+            dynamic_values: BTreeMap::from([("ui.fps".to_owned(), json!(15))]),
+        })
+        .load()
+        .expect("dynamic settings must load");
+
+        service.adopt_runtime_loaded(loaded);
+
+        let records = reconcile_records.lock().expect("reconcile lock must work");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0]["ui.fps"], json!(15));
+        assert_eq!(service.public_snapshot()["ui.fps"], json!(15));
+    }
+
+    #[test]
+    fn public_snapshot_contains_readable_registry_settings_and_masks_secrets() {
         let temp = TempDir::new().expect("temporary directory must exist");
         let service = service(&temp, RecordingApplier::default());
         let snapshot = service.public_snapshot();
         let registry = service.loaded.settings.registry();
 
         for setting in &registry.settings {
-            assert!(snapshot.contains_key(&setting.id), "{}", setting.id);
+            let readable = matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            );
+            assert_eq!(
+                snapshot.contains_key(&setting.id),
+                readable,
+                "{}",
+                setting.id
+            );
         }
         assert_eq!(
             snapshot["notifications.discord.webhook_url"],

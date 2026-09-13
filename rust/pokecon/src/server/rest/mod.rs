@@ -254,9 +254,9 @@ mod tests {
         DecimalString, DynamicConfigControlRequest, DynamicConfigResult, DynamicLanguage,
         GenerateLauncherRequest, GenerateLauncherResult, ImageFormat, NotificationTestRequest,
         NotificationTestResult, OperationResult, SavedScreenshot, ScreenshotRequest,
-        SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest, SettingsReadValues,
-        SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot,
-        UpdateCheckResult,
+        SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest,
+        SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause,
+        StatePatch, StateSnapshot, UpdateCheckResult,
     };
     use crate::server::backend::{
         ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload,
@@ -316,7 +316,7 @@ mod tests {
             let mut transaction = StateTransaction::new(StateChangeCause::Settings);
             transaction.expected_revision = request.expected_revision;
             transaction.settings = Some(SettingsChange {
-                values: request.values,
+                values: SettingsReadPatchValues(request.values.0),
                 ..SettingsChange::default()
             });
             self.hub
@@ -455,7 +455,7 @@ mod tests {
         let settings = SettingsSnapshot {
             revision: DecimalString::zero(),
             values: SettingsReadValues(BTreeMap::from([("sample.mode".to_owned(), json!("old"))])),
-            pending_restart_values: SettingsWriteValues::default(),
+            pending_restart_values: SettingsReadPatchValues::default(),
             restart_required: Vec::new(),
             apply_failures: BTreeMap::new(),
         };

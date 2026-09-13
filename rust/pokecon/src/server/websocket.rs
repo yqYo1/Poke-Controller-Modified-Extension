@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 use crate::server::api::{
     ApiError, ApiErrorCode, ClientMessage, ErrorEnvelope, IceCandidate, InputApplied,
     InputGeneration, LogData, MessageData, Nonce, RevisionedStateChange, ScriptUiSnapshot,
-    SerialData, ServerMessage, SessionDescription,
+    SerialData, ServerMessage, SessionDescription, StateChangeCause,
 };
 use crate::server::backend::{ApiFailure, ApiResult};
 use crate::server::realtime_connection::{
@@ -172,6 +172,13 @@ pub trait WebSocketBackend: Send + Sync + 'static {
     /// Enables native WebRTC orchestration for this connection. Backends that
     /// return `None` retain the JSON/Motion JPEG-only behavior.
     fn realtime(&self, _connection: ConnectionId) -> Option<RealtimeConnectionConfig> {
+        None
+    }
+
+    /// Returns a replacement input generation after a profile transaction. The
+    /// connection loop sends it on the control queue so a browser can resync
+    /// its local snapshot without reconnecting.
+    async fn profile_input_generation(&self, _connection: ConnectionId) -> Option<InputGeneration> {
         None
     }
 
@@ -526,6 +533,9 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     tasks.spawn(forward_state_changes(
         state_events,
         state_sender.clone(),
+        control_sender.clone(),
+        Arc::clone(&state.backend),
+        connection,
         cancellation.clone(),
     ));
     tasks.spawn(forward_broadcasts(
@@ -959,9 +969,31 @@ fn coalesce_revisioned_state(
     }
 }
 
+async fn send_profile_input_generation(
+    event: &RevisionedStateChange,
+    control: &mpsc::Sender<Outgoing>,
+    backend: &Arc<dyn WebSocketBackend>,
+    connection: ConnectionId,
+) -> bool {
+    if event.data.cause != StateChangeCause::Profile {
+        return true;
+    }
+    let Some(generation) = backend.profile_input_generation(connection).await else {
+        return true;
+    };
+    control
+        .try_send(Outgoing::Json(ServerMessage::InputGeneration(
+            MessageData { data: generation },
+        )))
+        .is_ok()
+}
+
 async fn forward_state_changes(
     mut events: broadcast::Receiver<Arc<RevisionedStateChange>>,
     outgoing: mpsc::Sender<Outgoing>,
+    control: mpsc::Sender<Outgoing>,
+    backend: Arc<dyn WebSocketBackend>,
+    connection: ConnectionId,
     cancellation: CancellationToken,
 ) {
     // Bounded coalescing: at most one pending display patch beyond the channel
@@ -992,7 +1024,18 @@ async fn forward_state_changes(
                     };
                     match event {
                         Ok(event) => {
-                            let incoming = (*event).clone();
+                            if !send_profile_input_generation(
+                                event.as_ref(),
+                                &control,
+                                &backend,
+                                connection,
+                            )
+                            .await
+                            {
+                                cancellation.cancel();
+                                return;
+                            }
+                            let incoming = event.as_ref().clone();
                             if let Some(existing) = pending.as_mut() {
                                 coalesce_revisioned_state(existing, incoming);
                             } else {
@@ -1016,7 +1059,13 @@ async fn forward_state_changes(
         };
         match event {
             Ok(event) => {
-                let incoming = (*event).clone();
+                if !send_profile_input_generation(event.as_ref(), &control, &backend, connection)
+                    .await
+                {
+                    cancellation.cancel();
+                    return;
+                }
+                let incoming = event.as_ref().clone();
                 let message = ServerMessage::UiStateChanged(Box::new(incoming));
                 match outgoing.try_send(Outgoing::Json(message)) {
                     Ok(()) => {}
@@ -1350,7 +1399,7 @@ mod tests {
         LogTarget, MouseButtons, StateChangeCause, StatePatch, StateSnapshot, StickPosition,
         UiStateChange,
     };
-    use crate::server::api::{SettingsReadValues, SettingsSnapshot, SettingsWriteValues};
+    use crate::server::api::{SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot};
     use crate::server::realtime::RealtimeTransportConfig;
     use crate::server::realtime_connection::RealtimeConnectionConfig;
     use crate::server::router::public_router;
@@ -1446,6 +1495,7 @@ mod tests {
         received: Mutex<Vec<ClientMessage>>,
         motion_jpeg: Option<MotionJpegFeed>,
         realtime: Option<RealtimeConnectionConfig>,
+        profile_generation: Option<InputGeneration>,
         disconnected: AtomicUsize,
         disconnect_notify: Notify,
     }
@@ -1462,6 +1512,7 @@ mod tests {
                 received: Mutex::new(Vec::new()),
                 motion_jpeg,
                 realtime: None,
+                profile_generation: None,
                 disconnected: AtomicUsize::new(0),
                 disconnect_notify: Notify::new(),
             }
@@ -1474,9 +1525,18 @@ mod tests {
                 received: Mutex::new(Vec::new()),
                 motion_jpeg: None,
                 realtime: Some(realtime),
+                profile_generation: None,
                 disconnected: AtomicUsize::new(0),
                 disconnect_notify: Notify::new(),
             }
+        }
+
+        fn with_profile_generation(generation: &str) -> Self {
+            let mut backend = Self::new();
+            backend.profile_generation = Some(InputGeneration {
+                generation: generation.to_owned(),
+            });
+            backend
         }
 
         async fn wait_for_disconnect(&self) {
@@ -1539,6 +1599,13 @@ mod tests {
             self.realtime.clone()
         }
 
+        async fn profile_input_generation(
+            &self,
+            _connection: ConnectionId,
+        ) -> Option<InputGeneration> {
+            self.profile_generation.clone()
+        }
+
         async fn disconnected(&self, _connection: ConnectionId) {
             self.disconnected.fetch_add(1, Ordering::AcqRel);
             self.disconnect_notify.notify_one();
@@ -1549,7 +1616,7 @@ mod tests {
         let settings = SettingsSnapshot {
             revision: DecimalString::zero(),
             values: SettingsReadValues(BTreeMap::new()),
-            pending_restart_values: SettingsWriteValues::default(),
+            pending_restart_values: SettingsReadPatchValues::default(),
             restart_required: Vec::new(),
             apply_failures: BTreeMap::new(),
         };
@@ -2341,6 +2408,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn profile_state_change_queues_connection_generation_on_control_path() {
+        let backend: Arc<dyn WebSocketBackend> =
+            Arc::new(TestBackend::with_profile_generation("profile-2"));
+        let (control, mut messages) = mpsc::channel(1);
+        let event = RevisionedStateChange {
+            revision: DecimalString::from_u64(2),
+            data: UiStateChange {
+                cause: StateChangeCause::Profile,
+                state: StatePatch::default(),
+                settings: None,
+            },
+        };
+
+        assert!(send_profile_input_generation(&event, &control, &backend, ConnectionId(1)).await);
+        assert!(matches!(
+            messages.try_recv().expect("generation message"),
+            Outgoing::Json(ServerMessage::InputGeneration(MessageData {
+                data: InputGeneration { generation }
+            })) if generation == "profile-2"
+        ));
+    }
+
+    #[tokio::test]
     async fn revision_broadcast_gap_disconnects_instead_of_guessing() {
         let (sender, receiver) = broadcast::channel(1);
         for revision in [1, 2] {
@@ -2356,9 +2446,19 @@ mod tests {
                 .expect("subscribed state receiver");
         }
         let (outgoing, mut messages) = mpsc::channel(4);
+        let (control, _control_messages) = mpsc::channel(4);
+        let backend: Arc<dyn WebSocketBackend> = Arc::new(TestBackend::new());
         let cancellation = CancellationToken::new();
 
-        forward_state_changes(receiver, outgoing, cancellation.clone()).await;
+        forward_state_changes(
+            receiver,
+            outgoing,
+            control,
+            backend,
+            ConnectionId(1),
+            cancellation.clone(),
+        )
+        .await;
 
         assert!(cancellation.is_cancelled());
         assert!(messages.try_recv().is_err());
@@ -2474,10 +2574,15 @@ mod tests {
         // bound and the latest complete value must win.
         let (sender, receiver) = broadcast::channel(16);
         let (outgoing, mut incoming) = mpsc::channel(1);
+        let (control, _control_messages) = mpsc::channel(4);
+        let backend: Arc<dyn WebSocketBackend> = Arc::new(TestBackend::new());
         let cancellation = CancellationToken::new();
         let forwarder = tokio::spawn(forward_state_changes(
             receiver,
             outgoing,
+            control,
+            backend,
+            ConnectionId(1),
             cancellation.clone(),
         ));
 

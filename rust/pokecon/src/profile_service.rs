@@ -1,12 +1,16 @@
 //! Exact, non-reentrant profile switching transaction.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::dynamic::protocol::DynamicProfileSwitchResult;
 use thiserror::Error;
 
 use crate::command_service::{CommandBackendError, CommandService, DynamicCommandBridge};
+use crate::dynamic::host::DynamicHost as _;
 use crate::dynamic_host::StartupDynamicHost;
+
+const PROFILE_SWITCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Successful or explicitly cancelled transaction result.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,6 +23,8 @@ pub enum ProfileSwitchResult {
 /// complete new snapshot visible.
 #[derive(Debug, Error)]
 pub enum ProfileSwitchError {
+    #[error("profile switch exceeded its deadline")]
+    TimedOut,
     #[error(transparent)]
     Dynamic(#[from] CommandBackendError),
 }
@@ -64,7 +70,17 @@ impl ProfileService {
     /// Rejects reentry, invalid target settings, event transport failure, or a
     /// worker that cannot be reaped. Every error releases the internal gate.
     pub async fn switch(&self, name: &str) -> Result<ProfileSwitchResult, ProfileSwitchError> {
-        match self.dynamic.switch_profile(name).await? {
+        let switched =
+            match tokio::time::timeout(PROFILE_SWITCH_TIMEOUT, self.dynamic.switch_profile(name))
+                .await
+            {
+                Ok(result) => result?,
+                Err(_elapsed) => {
+                    let _ = self.host.profile_switch_abort().await;
+                    return Err(ProfileSwitchError::TimedOut);
+                }
+            };
+        match switched {
             DynamicProfileSwitchResult::Switched { forced_worker_stop } => {
                 Ok(ProfileSwitchResult::Switched { forced_worker_stop })
             }

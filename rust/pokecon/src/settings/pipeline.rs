@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -938,6 +938,28 @@ fn resolve_layers(
     })
 }
 
+fn validate_toml_keys(
+    registry: &SettingsRegistry,
+    document: &SettingsDocument,
+    source: SettingSource,
+) -> Result<(), PipelineError> {
+    let known = registry
+        .settings
+        .iter()
+        .filter_map(|setting| setting.surfaces.toml.name.as_deref())
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    for path in document.leaf_paths(&known) {
+        if !known.contains(path.as_str()) {
+            return Err(PipelineError::UnknownTomlKey {
+                surface: source,
+                path,
+            });
+        }
+    }
+    Ok(())
+}
+
 fn apply_toml(
     context: &LayerContext<'_>,
     document: &SettingsDocument,
@@ -946,6 +968,7 @@ fn apply_toml(
     ignored: &mut Vec<String>,
     mut package_sources: Option<&mut PackageSources>,
 ) -> Result<(), PipelineError> {
+    validate_toml_keys(context.registry, document, source)?;
     for setting in &context.registry.settings {
         let Some(path) = setting.surfaces.toml.name.as_deref() else {
             continue;
@@ -1369,6 +1392,11 @@ pub enum PipelineError {
         surface: SettingSource,
         reason: String,
     },
+    #[error("unknown TOML setting key {path} from {surface:?}")]
+    UnknownTomlKey {
+        surface: SettingSource,
+        path: String,
+    },
     #[error("dynamic settings surface does not support {0}")]
     UnsupportedDynamic(String),
     #[error("canonical package list {0} is structurally invalid")]
@@ -1399,7 +1427,7 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
 
-    use super::{PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
+    use super::{PipelineError, PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
     use crate::settings::package::{PackageSourceKind, PythonWorker, VersionSelector};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -1473,6 +1501,19 @@ mod tests {
                 .ignored_profile_global_settings
                 .contains(&"language".to_owned())
         );
+    }
+
+    #[test]
+    fn unknown_toml_leaf_is_rejected_instead_of_silently_ignored() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/App");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        fs::write(config.join("settings.toml"), "[unknown]\nvalue = true\n")
+            .expect("global fixture must be writable");
+        let error = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
+            .load()
+            .expect_err("unknown TOML keys must fail startup");
+        assert!(matches!(error, PipelineError::UnknownTomlKey { .. }));
     }
 
     fn staged_request(temp: &TempDir) -> PipelineRequest {

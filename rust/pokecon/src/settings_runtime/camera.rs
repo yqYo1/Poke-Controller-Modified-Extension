@@ -154,6 +154,31 @@ impl RuntimeSettingsApplier for CameraSettingsApplier {
         Ok(())
     }
 
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        let relevant = changes.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "camera.device"
+                    | "camera.capture_fps"
+                    | "camera.capture_resolution"
+                    | "camera.flip_mode"
+                    | "camera.screenshot_format"
+                    | "jpeg_quality"
+            )
+        });
+        if !relevant {
+            return Ok(());
+        }
+        let next = self
+            .current
+            .overlay(changes)
+            .map_err(|_| "camera runtime reconciliation failed".to_owned())?;
+        self.apply_values(PatchClass::Camera, &next)
+            .map_err(|_| "camera runtime reconciliation failed".to_owned())?;
+        self.current = next;
+        Ok(())
+    }
+
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
         let Ok(restored) = self.current.overlay(previous) else {
             tracing::error!(

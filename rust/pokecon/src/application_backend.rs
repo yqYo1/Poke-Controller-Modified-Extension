@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use crate::camera::{
@@ -25,9 +26,9 @@ use crate::server::api::{
     GamepadButton, GamepadHat, GamepadInput, GenerateLauncherRequest, GenerateLauncherResult,
     ImageFormat, InputApplied, InputGeneration, LauncherDestination, NotificationTestRequest,
     NotificationTestResult, OperationResult, ScriptUiAction, ScriptUiActionResult,
-    SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest, SettingsReadValues,
-    SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch, StateSnapshot,
-    UpdateCheckResult,
+    SerialControlRequest, SerialPort, SettingsChange, SettingsPatchRequest,
+    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, StateChangeCause, StatePatch,
+    StateSnapshot, UpdateCheckResult,
 };
 use crate::server::backend::{
     ApiFailure, ApiFailureStatus, ApiResult, DownloadMediaType, DownloadPayload, LauncherOutput,
@@ -92,6 +93,8 @@ pub(crate) struct ApplicationBackend {
     screenshot_mode: ScreenshotMode,
     script_ui: ScriptUiCoordinator,
     arbiter: Arc<ParkingMutex<InputArbiter>>,
+    browser_generations: ParkingMutex<BTreeMap<ConnectionId, InputGeneration>>,
+    next_profile_generation: AtomicU64,
     mutation_gate: Mutex<()>,
     commands: OnceLock<Arc<CommandService>>,
     profiles: OnceLock<Arc<ProfileService>>,
@@ -125,6 +128,8 @@ impl ApplicationBackend {
             screenshot_mode: parts.screenshot_mode,
             script_ui: parts.script_ui,
             arbiter,
+            browser_generations: ParkingMutex::new(BTreeMap::new()),
+            next_profile_generation: AtomicU64::new(0),
             mutation_gate: Mutex::new(()),
             commands: OnceLock::new(),
             profiles: OnceLock::new(),
@@ -166,6 +171,33 @@ impl ApplicationBackend {
     #[must_use]
     pub fn is_manual_allowed(&self) -> bool {
         self.arbiter.lock().is_manual_allowed()
+    }
+
+    pub(crate) async fn reconcile_device_state(&self, cause: StateChangeCause) -> ApiResult<()> {
+        let _gate = self.mutation_gate.lock().await;
+        self.commit_projection(cause, false, None)
+            .await
+            .map(|_outcome| ())
+    }
+
+    fn reset_browser_input_generations(&self) {
+        let epoch = self.next_profile_generation.fetch_add(1, Ordering::Relaxed) + 1;
+        let mut generations = self.browser_generations.lock();
+        let mut arbiter = self.arbiter.lock();
+        for (connection, generation) in generations.iter_mut() {
+            let next = InputGeneration {
+                generation: format!("ws-{}-profile-{}", connection.get(), epoch),
+            };
+            let runtime_generation = RuntimeInputGeneration::new(next.generation.clone())
+                .expect("generated browser input generations are valid");
+            arbiter.begin_generation(
+                Self::source(*connection),
+                InputSourceKind::BrowserGamepad,
+                InputPriority::BROWSER_GAMEPAD,
+                runtime_generation,
+            );
+            *generation = next;
+        }
     }
 
     pub(crate) async fn reconcile_host(&self, cause: StateChangeCause) -> ApiResult<()> {
@@ -358,6 +390,7 @@ impl RestBackend for ApplicationBackend {
                             .lock()
                             .await
                             .adopt_loaded(self.host.loaded_settings());
+                        self.reset_browser_input_generations();
                     }
                     ProfileSwitchResult::Cancelled => {}
                 }
@@ -854,6 +887,12 @@ impl WebSocketBackend for ApplicationBackend {
         let _gate = self.mutation_gate.lock().await;
         let generation = RuntimeInputGeneration::new(generation.generation.clone())
             .map_err(|_error| invalid_input())?;
+        self.browser_generations.lock().insert(
+            connection,
+            InputGeneration {
+                generation: generation.as_str().to_owned(),
+            },
+        );
         self.arbiter.lock().begin_generation(
             Self::source(connection),
             InputSourceKind::BrowserGamepad,
@@ -976,8 +1015,13 @@ impl WebSocketBackend for ApplicationBackend {
         self.realtime.clone()
     }
 
+    async fn profile_input_generation(&self, connection: ConnectionId) -> Option<InputGeneration> {
+        self.browser_generations.lock().get(&connection).cloned()
+    }
+
     async fn disconnected(&self, connection: ConnectionId) {
         let _gate = self.mutation_gate.lock().await;
+        self.browser_generations.lock().remove(&connection);
         if self
             .arbiter
             .lock()
@@ -996,8 +1040,8 @@ fn settings_change(response: PatchResponse) -> SettingsChange {
         .cloned()
         .collect::<Vec<_>>();
     SettingsChange {
-        values: SettingsWriteValues(response.values),
-        pending_restart_values: SettingsWriteValues(response.pending_restart_values),
+        values: SettingsReadPatchValues(response.values),
+        pending_restart_values: SettingsReadPatchValues(response.pending_restart_values),
         restart_required,
         apply_failures: response.apply_failures,
     }
@@ -1009,7 +1053,7 @@ pub(crate) fn initial_settings_snapshot(service: &SettingsService) -> SettingsSn
         revision: DecimalString::zero(),
         values: SettingsReadValues(response.values),
         restart_required: response.pending_restart_values.keys().cloned().collect(),
-        pending_restart_values: SettingsWriteValues(response.pending_restart_values),
+        pending_restart_values: SettingsReadPatchValues(response.pending_restart_values),
         apply_failures: response.apply_failures,
     }
 }

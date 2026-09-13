@@ -252,6 +252,11 @@ impl ProductionRuntime {
         if let Some(task) = fallback_media_task {
             tasks.push(task);
         }
+        tasks.extend(spawn_device_state_events(
+            Arc::clone(&backend),
+            &camera,
+            &serial,
+        ));
         tasks.push(spawn_serial_events(&serial, broker));
         tasks.push(spawn_runtime_reconciler(
             Arc::clone(&backend),
@@ -439,6 +444,40 @@ fn spawn_serial_events(
             }
         }
     })
+}
+
+fn spawn_device_state_events(
+    backend: Arc<ApplicationBackend>,
+    camera: &CameraManager,
+    serial: &SerialManager,
+) -> Vec<JoinHandle<()>> {
+    let mut camera_status = camera.subscribe_status();
+    let camera_backend = Arc::clone(&backend);
+    let camera_task = tokio::spawn(async move {
+        while camera_status.changed().await.is_ok() {
+            if let Err(error) = camera_backend
+                .reconcile_device_state(StateChangeCause::Camera)
+                .await
+            {
+                tracing::error!(error = ?error.error(), "camera state reconciliation failed");
+            }
+        }
+    });
+
+    let mut serial_status = serial.subscribe_connection_status();
+    let serial_backend = backend;
+    let serial_task = tokio::spawn(async move {
+        while serial_status.changed().await.is_ok() {
+            if let Err(error) = serial_backend
+                .reconcile_device_state(StateChangeCause::Serial)
+                .await
+            {
+                tracing::error!(error = ?error.error(), "serial state reconciliation failed");
+            }
+        }
+    });
+
+    vec![camera_task, serial_task]
 }
 
 fn spawn_runtime_reconciler(

@@ -1,10 +1,11 @@
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 
 use crate::camera::backend::{
     CameraBackend, CameraConfig, CameraError, CameraSession, EffectiveCameraConfig,
@@ -13,6 +14,8 @@ use crate::camera::frame::{BgrFrame, FlipMode};
 use crate::camera::media::LatestFrameSource;
 use crate::camera::selector::{CameraDevice, CameraSelector};
 use crate::camera::shared_ring::{MappingDescriptor, RingError, SharedFrameRing};
+
+const CAMERA_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Public camera fields used by the canonical state snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,12 +54,15 @@ enum WriterCommand {
     Apply {
         config: CameraConfig,
         response: SyncSender<Result<(), CameraError>>,
+        cancelled: Arc<AtomicBool>,
     },
     Retry {
         response: SyncSender<Result<(), CameraError>>,
+        cancelled: Arc<AtomicBool>,
     },
     Close {
         response: SyncSender<Result<(), CameraError>>,
+        cancelled: Arc<AtomicBool>,
     },
     Shutdown,
 }
@@ -71,6 +77,7 @@ struct ManagerInner {
     ring: SharedFrameRing,
     commands: Sender<WriterCommand>,
     status: Arc<Mutex<CameraRuntimeStatus>>,
+    status_events: watch::Sender<CameraRuntimeStatus>,
     flip: Arc<AtomicU8>,
     frames: LatestFrameSource,
     writer: Mutex<WriterOwnership>,
@@ -123,6 +130,8 @@ impl CameraManager {
         let ring = SharedFrameRing::create(config.resolution())
             .map_err(|_| CameraError::PublicationFailed)?;
         let status = Arc::new(Mutex::new(CameraRuntimeStatus::closed(&config)));
+        let (status_events, _status_receiver) =
+            watch::channel(CameraRuntimeStatus::closed(&config));
         let flip = Arc::new(AtomicU8::new(encode_flip(flip)));
         let frames = LatestFrameSource::new();
         let (commands, command_receiver) = std::sync::mpsc::channel();
@@ -131,6 +140,7 @@ impl CameraManager {
         let writer_backend = backend.clone();
         let writer_ring = ring.clone();
         let writer_status = status.clone();
+        let writer_status_events = status_events.clone();
         let writer_flip = flip.clone();
         let writer_frames = frames.clone();
         let join = std::thread::Builder::new()
@@ -142,6 +152,7 @@ impl CameraManager {
                     backend: writer_backend,
                     ring: writer_ring,
                     status: writer_status,
+                    status_events: writer_status_events,
                     flip: writer_flip,
                     frames: writer_frames,
                     desired: config,
@@ -162,6 +173,7 @@ impl CameraManager {
                 ring,
                 commands,
                 status,
+                status_events,
                 flip,
                 frames,
                 writer: Mutex::new(WriterOwnership {
@@ -199,6 +211,10 @@ impl CameraManager {
         self.inner.lock_status().clone()
     }
 
+    pub fn subscribe_status(&self) -> watch::Receiver<CameraRuntimeStatus> {
+        self.inner.status_events.subscribe()
+    }
+
     /// Re-enumerates cameras and includes the current raw selector if missing.
     ///
     /// # Errors
@@ -217,7 +233,11 @@ impl CameraManager {
     ///
     /// Distinguishes successful rollback from rollback failure.
     pub fn apply_config(&self, config: CameraConfig) -> Result<(), CameraError> {
-        self.request(|response| WriterCommand::Apply { config, response })
+        self.request(|response, cancelled| WriterCommand::Apply {
+            config,
+            response,
+            cancelled,
+        })
     }
 
     /// Reopens only the current raw selector when closed or errored. Calling
@@ -227,7 +247,10 @@ impl CameraManager {
     ///
     /// Returns the exact selector's open or first-frame failure.
     pub fn retry(&self) -> Result<(), CameraError> {
-        self.request(|response| WriterCommand::Retry { response })
+        self.request(|response, cancelled| WriterCommand::Retry {
+            response,
+            cancelled,
+        })
     }
 
     /// Closes the active capture session while retaining the desired selector
@@ -237,7 +260,10 @@ impl CameraManager {
     ///
     /// Returns a fixed command-channel failure if the writer has stopped.
     pub fn close(&self) -> Result<(), CameraError> {
-        self.request(|response| WriterCommand::Close { response })
+        self.request(|response, cancelled| WriterCommand::Close {
+            response,
+            cancelled,
+        })
     }
 
     /// Updates live flip processing for the next complete frame.
@@ -290,16 +316,22 @@ impl CameraManager {
 
     fn request(
         &self,
-        command: impl FnOnce(SyncSender<Result<(), CameraError>>) -> WriterCommand,
+        command: impl FnOnce(SyncSender<Result<(), CameraError>>, Arc<AtomicBool>) -> WriterCommand,
     ) -> Result<(), CameraError> {
         let (response, receiver) = sync_channel(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
         self.inner
             .commands
-            .send(command(response))
+            .send(command(response, Arc::clone(&cancelled)))
             .map_err(|_| CameraError::CommandChannelClosed)?;
-        receiver
-            .recv()
-            .map_err(|_| CameraError::CommandChannelClosed)?
+        match receiver.recv_timeout(CAMERA_COMMAND_TIMEOUT) {
+            Ok(result) => result,
+            Err(RecvTimeoutError::Disconnected) => Err(CameraError::CommandChannelClosed),
+            Err(RecvTimeoutError::Timeout) => {
+                cancelled.store(true, Ordering::Release);
+                Err(CameraError::CommandTimedOut)
+            }
+        }
     }
 }
 
@@ -354,6 +386,7 @@ struct WriterState {
     backend: Arc<dyn CameraBackend>,
     ring: SharedFrameRing,
     status: Arc<Mutex<CameraRuntimeStatus>>,
+    status_events: watch::Sender<CameraRuntimeStatus>,
     flip: Arc<AtomicU8>,
     frames: LatestFrameSource,
     desired: CameraConfig,
@@ -585,7 +618,8 @@ impl WriterState {
     }
 
     fn set_status(&self, status: CameraRuntimeStatus) {
-        *self.lock_status() = status;
+        *self.lock_status() = status.clone();
+        self.status_events.send_replace(status);
     }
 }
 
@@ -614,15 +648,40 @@ fn writer_main(
         };
         if let Some(command) = command {
             match command {
-                WriterCommand::Apply { config, response } => {
-                    let _ = response.send(writer.apply(config));
+                WriterCommand::Apply {
+                    config,
+                    response,
+                    cancelled,
+                } => {
+                    let result = if cancelled.load(Ordering::Acquire) {
+                        Err(CameraError::CommandTimedOut)
+                    } else {
+                        writer.apply(config)
+                    };
+                    let _ = response.send(result);
                 }
-                WriterCommand::Retry { response } => {
-                    let _ = response.send(writer.retry());
+                WriterCommand::Retry {
+                    response,
+                    cancelled,
+                } => {
+                    let result = if cancelled.load(Ordering::Acquire) {
+                        Err(CameraError::CommandTimedOut)
+                    } else {
+                        writer.retry()
+                    };
+                    let _ = response.send(result);
                 }
-                WriterCommand::Close { response } => {
-                    writer.close();
-                    let _ = response.send(Ok(()));
+                WriterCommand::Close {
+                    response,
+                    cancelled,
+                } => {
+                    let result = if cancelled.load(Ordering::Acquire) {
+                        Err(CameraError::CommandTimedOut)
+                    } else {
+                        writer.close();
+                        Ok(())
+                    };
+                    let _ = response.send(result);
                 }
                 WriterCommand::Shutdown => {
                     writer.shutdown();
@@ -716,6 +775,10 @@ mod tests {
             manager.ring().read_published().unwrap().unwrap().pixels()[..3],
             [1, 2, 3]
         );
+        let status_events = manager.subscribe_status();
+        manager.close().unwrap();
+        assert!(status_events.has_changed().unwrap());
+        assert!(!status_events.borrow().camera_opened);
         manager.shutdown(Duration::from_secs(1)).unwrap();
         assert!(!manager.status().camera_opened);
         assert!(manager.ring().read_published().unwrap().is_none());

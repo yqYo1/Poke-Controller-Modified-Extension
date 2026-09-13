@@ -122,6 +122,25 @@ impl RuntimeSettingsApplier for SerialSettingsApplier {
         Ok(())
     }
 
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        if !changes.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "serial.port" | "serial.baud_rate" | "serial.data_format"
+            )
+        }) {
+            return Ok(());
+        }
+        let next = self
+            .current
+            .overlay(changes)
+            .map_err(|_| "serial runtime reconciliation failed".to_owned())?;
+        self.apply_values(&next)
+            .map_err(|_| "serial runtime reconciliation failed".to_owned())?;
+        self.current = next;
+        Ok(())
+    }
+
     fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
         if class != PatchClass::Serial {
             return;

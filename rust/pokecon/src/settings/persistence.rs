@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io::Write;
@@ -93,8 +94,49 @@ impl SettingsDocument {
         Some(value)
     }
 
-    /// Returns the format-preserved serialization for contract tests. The
-    /// content can contain secrets and must never enter diagnostics.
+    /// Returns dotted paths for every scalar/array leaf in the document.
+    #[must_use]
+    pub fn leaf_paths(&self, known: &BTreeSet<String>) -> Vec<String> {
+        fn visit(
+            value: &TomlValue,
+            prefix: &str,
+            known: &BTreeSet<String>,
+            paths: &mut Vec<String>,
+        ) {
+            if !prefix.is_empty() && known.contains(prefix) {
+                paths.push(prefix.to_owned());
+                return;
+            }
+            match value {
+                TomlValue::Table(table) => {
+                    if table.is_empty() && !prefix.is_empty() {
+                        paths.push(prefix.to_owned());
+                    }
+                    for (key, child) in table {
+                        let path = if prefix.is_empty() {
+                            key.clone()
+                        } else {
+                            format!("{prefix}.{key}")
+                        };
+                        visit(child, &path, known, paths);
+                    }
+                }
+                TomlValue::Array(_)
+                | TomlValue::String(_)
+                | TomlValue::Integer(_)
+                | TomlValue::Float(_)
+                | TomlValue::Boolean(_)
+                | TomlValue::Datetime(_) => paths.push(prefix.to_owned()),
+            }
+        }
+
+        let mut paths = Vec::new();
+        visit(&self.parsed, "", known, &mut paths);
+        paths
+    }
+
+    /// Returns the format-preserving serialization for contract tests.
+    /// The content can contain secrets and must never enter diagnostics.
     #[cfg(test)]
     #[must_use]
     pub(crate) fn source(&self) -> String {

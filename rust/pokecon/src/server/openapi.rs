@@ -24,8 +24,9 @@ use crate::server::api::{
     ScriptTkButton, ScriptTkLabel, ScriptTkScale, ScriptTkWidget, ScriptTkWindow, ScriptUiAction,
     ScriptUiActionResult, ScriptUiSnapshot, SerialControlRequest, SerialData, SerialEncoding,
     SerialPort, ServerMessage, SessionDescription, SettingsChange, SettingsPatchRequest,
-    SettingsReadValues, SettingsSnapshot, SettingsWriteValues, StateChangeCause, StatePatch,
-    StateSnapshot, StickName, StickPosition, Success, TouchPoint, UiStateChange, UpdateCheckResult,
+    SettingsReadPatchValues, SettingsReadValues, SettingsSnapshot, SettingsWriteValues,
+    StateChangeCause, StatePatch, StateSnapshot, StickName, StickPosition, Success, TouchPoint,
+    UiStateChange, UpdateCheckResult,
 };
 
 #[derive(OpenApi)]
@@ -113,6 +114,7 @@ use crate::server::api::{
         SessionDescription,
         SettingsChange,
         SettingsPatchRequest,
+        SettingsReadPatchValues,
         SettingsReadValues,
         SettingsSnapshot,
         SettingsWriteValues,
@@ -175,6 +177,10 @@ pub fn document() -> Result<Value, OpenApiError> {
         settings_object(registry.settings(), SettingProjection::Read),
     );
     schemas.insert(
+        "SettingsReadPatchValues".to_owned(),
+        settings_object(registry.settings(), SettingProjection::ReadPatch),
+    );
+    schemas.insert(
         "SettingsWriteValues".to_owned(),
         settings_object(registry.settings(), SettingProjection::Write),
     );
@@ -225,6 +231,7 @@ pub fn document_json() -> Result<String, OpenApiError> {
 #[derive(Clone, Copy)]
 enum SettingProjection {
     Read,
+    ReadPatch,
     Write,
 }
 
@@ -233,7 +240,14 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
     let mut required = Vec::new();
     for setting in settings {
         let included = match projection {
-            SettingProjection::Read => true,
+            SettingProjection::Read => matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            ),
+            SettingProjection::ReadPatch => matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            ),
             SettingProjection::Write => matches!(
                 setting.surfaces.openapi.access,
                 Access::Write | Access::ReadWrite
@@ -242,7 +256,11 @@ fn settings_object(settings: &[Setting], projection: SettingProjection) -> Value
         if !included {
             continue;
         }
-        let schema = if setting.secret && matches!(projection, SettingProjection::Read) {
+        let schema = if setting.secret
+            && matches!(
+                projection,
+                SettingProjection::Read | SettingProjection::ReadPatch
+            ) {
             json!({
                 "type": "object",
                 "properties": {
@@ -323,7 +341,10 @@ mod tests {
 
         let registry = crate::contracts::settings_registry().unwrap();
         for setting in registry.settings() {
-            let readable = true;
+            let readable = matches!(
+                setting.surfaces.openapi.access,
+                Access::Read | Access::ReadWrite
+            );
             let writable = matches!(
                 setting.surfaces.openapi.access,
                 Access::Write | Access::ReadWrite
@@ -349,6 +370,9 @@ mod tests {
         let read = document
             .pointer("/components/schemas/SettingsReadValues")
             .unwrap();
+        let patch = document
+            .pointer("/components/schemas/SettingsReadPatchValues")
+            .unwrap();
         assert_eq!(
             read["properties"]["notifications.discord.webhook_url"],
             json!({
@@ -359,6 +383,11 @@ mod tests {
                 "description": "Secret-safe status; the secret value is never returned"
             })
         );
+        assert_eq!(
+            patch["properties"]["notifications.discord.webhook_url"],
+            read["properties"]["notifications.discord.webhook_url"]
+        );
+        assert_eq!(patch["required"], json!([]));
     }
 
     #[test]

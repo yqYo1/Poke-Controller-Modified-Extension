@@ -12,6 +12,10 @@
   import { chooseNativeSavePath, isDesktopShell } from '../desktop';
   import { triggerDownload } from '../download';
   import type { components } from '../api/openapi';
+  import {
+    cameraSelectorKey,
+    sameCameraSelector
+  } from '../camera-selector';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   type DownloadRequest = Extract<ScreenshotRequest, { destination: 'download' }>;
@@ -47,28 +51,32 @@
   const values = $derived(view.settings?.values);
   const currentDevice = $derived(values?.['camera.device'] ?? 0);
   const deviceOptions = $derived.by<readonly DeviceOption[]>(() => {
-    const options = [...devices];
-    if (!options.some((device) => sameSelector(device.selector, currentDevice))) {
+    let options = [...devices];
+    const availableEquivalent = options.some(
+      (device) => device.available && sameCameraSelector(device.selector, currentDevice)
+    );
+    if (availableEquivalent) {
+      options = options.filter(
+        (device) => device.available || !sameCameraSelector(device.selector, currentDevice)
+      );
+    } else if (!options.some((device) => sameCameraSelector(device.selector, currentDevice))) {
       options.unshift({
         available: false,
         label: `${String(currentDevice)} (configured, unavailable)`,
         selector: currentDevice
       });
     }
-    return options.map((device) => ({ ...device, key: selectorKey(device.selector) }));
+    return options.map((device) => ({ ...device, key: cameraSelectorKey(device.selector) }));
   });
+  const selectedDeviceKey = $derived(
+    deviceOptions.find(
+      (device) => device.available && sameCameraSelector(device.selector, currentDevice)
+    )?.key ?? cameraSelectorKey(currentDevice)
+  );
 
   onMount(() => {
     if (autoLoad) void refreshDevices();
   });
-
-  function sameSelector(left: number | string, right: number | string): boolean {
-    return typeof left === typeof right && left === right;
-  }
-
-  function selectorKey(selector: number | string): string {
-    return `${typeof selector}:${String(selector)}`;
-  }
 
   function errorMessage(reason: unknown): string {
     return reason instanceof Error ? reason.message : 'Camera operation failed';
@@ -259,7 +267,7 @@
     <label class="sm:col-span-2 xl:col-span-3">
       <span class="text-xs text-slate-400">Camera device</span>
       <div class="mt-1 flex gap-2">
-        <select class="min-w-0 flex-1 rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" value={selectorKey(currentDevice)} onchange={(event) => void changeDevice(event)}>
+        <select class="min-w-0 flex-1 rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" value={selectedDeviceKey} onchange={(event) => void changeDevice(event)}>
           {#each deviceOptions as device (device.key)}
             <option value={device.key}>{device.label}{device.available ? '' : ' (unavailable)'}</option>
           {/each}

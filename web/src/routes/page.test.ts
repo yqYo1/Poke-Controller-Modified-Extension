@@ -62,6 +62,25 @@ describe('application shell', () => {
     expect(outputGroup?.getAttribute('style')).toContain('grid-template-rows');
   });
 
+  it('renders the panel that corresponds to every selected main tab', async () => {
+    render(Page);
+    const cases = [
+      ['シリアル', 'シリアルモニター'],
+      ['手動制御', '入力制御'],
+      ['コマンド', 'コマンドワークスペース'],
+      ['通知', 'Windows / Discord 通知'],
+      ['その他', 'アプリケーション設定']
+    ] as const;
+
+    for (const [tab, heading] of cases) {
+      const selected = screen.getByRole('tab', { name: tab });
+      await fireEvent.click(selected);
+      const panelId = selected.getAttribute('aria-controls');
+      const panel = panelId === null ? null : document.getElementById(panelId);
+      expect(panel?.textContent.includes(heading)).toBe(true);
+    }
+  });
+
   it('orders the right column Output #1, Output #2, Software-Controller by default', () => {
     render(Page);
 

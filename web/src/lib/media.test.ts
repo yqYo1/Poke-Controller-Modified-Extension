@@ -422,6 +422,28 @@ describe('MediaTransport signaling', () => {
     });
   });
 
+  it('drops tagged ICE sent to a legacy untagged peer', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.realtime.emitMessage(offer('legacy-offer'));
+    await settle();
+
+    const peer = peerAt(harness.peers);
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'wrong-generation',
+        negotiation_id: 'new-peer',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+    await settle();
+
+    expect(peer.addedIce).toHaveLength(0);
+  });
+
   it('ignores an answer for another negotiation id', async () => {
     const harness = makeHarness();
     harness.media.start();

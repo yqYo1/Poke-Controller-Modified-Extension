@@ -656,7 +656,8 @@ impl Coordinator {
     fn matches_negotiation_id(&self, actual: Option<&String>) -> bool {
         match (&self.peer_negotiation_id, actual) {
             (Some(expected), Some(actual)) => expected == actual,
-            _ => true,
+            (None, Some(_)) => false,
+            (_, None) => true,
         }
     }
 

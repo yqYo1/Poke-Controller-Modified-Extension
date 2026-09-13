@@ -608,7 +608,7 @@ export class MediaTransport implements RoutedMessageTransport {
   }
 
   private matchesNegotiationId(actual: string | null): boolean {
-    return this.negotiationId === null || actual === null || this.negotiationId === actual;
+    return actual === null || this.negotiationId === actual;
   }
 
   private isCurrentPeer(peer: RTCPeerConnection, token: number): boolean {

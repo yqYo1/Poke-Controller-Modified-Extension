@@ -1325,9 +1325,17 @@ fn list_profiles(loaded: &LoadedSettings) -> Result<Vec<String>, DynamicHostErro
         {
             continue;
         }
-        let name = entry.file_name().into_string().map_err(|_| {
-            DynamicHostError::new("ProfileListFailed", "profile name is not valid Unicode")
-        })?;
+        let name = match entry.file_name().into_string() {
+            Ok(name) => name,
+            Err(_name) => {
+                tracing::warn!("ignoring profile directory with a non-Unicode name");
+                continue;
+            }
+        };
+        if SafeComponent::new(&name).is_err() {
+            tracing::warn!("ignoring profile directory with an unsafe name");
+            continue;
+        }
         profiles.push(name);
     }
     profiles.sort();
@@ -1413,6 +1421,8 @@ fn holding_buttons(state: ControllerState) -> Value {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt;
 
     use crate::device::ControllerUpdate;
     use crate::dynamic::{CommandDisplayItem, DynamicHost};
@@ -1769,6 +1779,21 @@ mod tests {
                 .code,
             "HostStopping"
         );
+    }
+
+    #[test]
+    fn profile_list_skips_invalid_directory_names_without_hiding_valid_profiles() {
+        let (_temporary, _request, loaded) = fixture();
+        let directory = loaded.roots.config.join("profiles");
+        fs::create_dir(directory.join("bad:name")).expect("unsafe profile fixture must exist");
+        #[cfg(unix)]
+        fs::create_dir(directory.join(std::ffi::OsString::from_vec(vec![0xff, 0xfe])))
+            .expect("non-Unicode profile fixture must exist");
+
+        let profiles = list_profiles(&loaded).expect("invalid entries must not fail listing");
+        assert!(profiles.contains(&"default".to_owned()));
+        assert!(profiles.contains(&"Other".to_owned()));
+        assert!(!profiles.contains(&"bad:name".to_owned()));
     }
 
     #[test]

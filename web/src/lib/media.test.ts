@@ -420,6 +420,32 @@ describe('MediaTransport signaling', () => {
     });
   });
 
+  it('does not flush a candidate queued for a replaced peer into the new peer', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.realtime.emitMessage(offer('first-offer'));
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'stale-candidate',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+    harness.realtime.emitMessage(offer('second-offer'));
+
+    await settle();
+
+    expect(harness.peers[0]?.closed).toBe(true);
+    expect(peerAt(harness.peers, 1).addedIce).not.toContainEqual({
+      candidate: 'stale-candidate',
+      sdpMLineIndex: 0,
+      sdpMid: 'video',
+      usernameFragment: 'remote-user'
+    });
+  });
+
   it('skips a rejected ICE candidate without failing the peer or dropping later candidates', async () => {
     const harness = makeHarness();
     harness.media.start();

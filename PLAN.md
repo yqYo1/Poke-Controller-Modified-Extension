@@ -22,13 +22,21 @@
 - [x] 同commitのNormal CI run `34272925506`とPackage CI run `34272925529`がcompleted／successとなり、required aggregateを通過した。
 - [x] timing artifact `ci-timing-34272925506-1`（artifact ID `10075004892`）を保存し、同一`change_kind`の履歴を使うblocking／fail-closed p95 gateをfresh CIで通過した。
 - [x] `PLAN.md`／将来の`TASK.md`を作業追跡用メタデータとしてCIのdocs領域分類から除外し、常時実行のfast checksでlintする契約を追加した（`scripts/ci/regions.py`、`tests/quality/test_ci_regions.py`）。
-- [x] 最新実装commit `915af6300cb2f0a25121a0401d67caf2dfb95aaa`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。Normal CI `34780733169`／`34780730901` attempt 2、Package CI `34780733167`のrequired aggregate successと独立review `CODEX VERDICT: LGTM`を確認した。ブラウザbackendは途中で`410 Gone`となったため、今回の追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
+- [x] 最新実装commit `50bd589ba67ec801f9be4579c7062984d9577b2f`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。Normal CI `34784110190`、Package CI `34784110188`のrun-levelとrequired aggregate success、独立review `CODEX VERDICT: LGTM`を確認した。ブラウザbackendは途中で`410 Gone`となったため、今回の追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
 
 ### 現行の残タスク（アシスタント担当）
 
 - [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を、clean worktreeと4 systemの証跡で再受入する。
 - [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。実機latency／throughput計測環境は作成しない。
 - [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
+
+### 2026-09-14 要件別監査の結果
+
+- [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
+- [ ] **devShell／direnv再受入**: Linux 2 systemと`aarch64-darwin`のdevShell attribute評価は成功したが、`x86_64-darwin`はlocked nixpkgsがサポートをdropしてexit 1。clean detached worktree、tracked `.envrc`のread-back、direnv入室副作用0、hostile PATHの一式は未証明であり、4 system契約を[x]にしない。
+- [ ] **CI性能gate**: `performance` recordの5 metric（各300 sample以上、warm-up、p50／p95／maximum、baseline／threshold、artifact、required blocking gate）は未実装。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
+- [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
+- [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、`SPECIFICATION.md`の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
 
 ### 担当外の外部操作
 
@@ -597,12 +605,12 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 - [x] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む（証跡: Package CI `34272925529`のLinux／Windows bundle、clean-install smoke、runtime／resource manifest）。
 - [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
-- [x] 2026-09-14の最新commitで隔離Web runtimeの外部I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
+- [x] 2026-09-14の最新commit `50bd589ba67ec801f9be4579c7062984d9577b2f`で隔離Web runtimeの外部hardware I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
 - [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
 - [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
-- [x] 直近の実装commit後のGitHub CIを完了まで監視し、同一SHAの最新Normal／Package required aggregate成功を確認した（Normal `34780733169`、Package `34780733167`。先行Package failure `34780730862`は成功証跡に採用せず、正準`ci-watch`の最新check-run判定でsettlement window後にexit 0）。
+- [x] 直近の実装commit後のGitHub CIを完了まで監視し、同一SHAのNormal `34784110190`／Package `34784110188` required aggregate successを確認した（正準`ci-watch`がNormal job `103796556818`、Package job `103796445654`をsettlement window後にsuccess判定。別eventの重複runは成功証跡へ二重計上しない）。
 - [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない。

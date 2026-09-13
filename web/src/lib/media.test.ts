@@ -138,11 +138,19 @@ class FakePeer {
   ondatachannel: RTCPeerConnection['ondatachannel'] = null;
   onicecandidate: RTCPeerConnection['onicecandidate'] = null;
   ontrack: RTCPeerConnection['ontrack'] = null;
+  readonly rejectedIce = new Set<string>();
   remoteDescription: RTCSessionDescription | null = null;
 
   constructor(readonly configuration: RTCConfiguration) {}
 
   addIceCandidate(candidate?: RTCIceCandidateInit | RTCIceCandidate | null): Promise<void> {
+    if (
+      candidate !== undefined &&
+      candidate !== null &&
+      this.rejectedIce.has(candidate.candidate ?? '')
+    ) {
+      return Promise.reject(new Error('candidate rejected'));
+    }
     if (candidate !== undefined && candidate !== null) {
       this.addedIce.push(candidate);
     }
@@ -381,6 +389,71 @@ describe('MediaTransport signaling', () => {
       },
       type: 'webrtc.ice_candidate'
     });
+  });
+
+  it('keeps ICE queued before a manual offer and flushes it to that peer', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'pre-offer-candidate',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+
+    harness.media.reconnectWebRtc();
+    await settle();
+    harness.realtime.emitMessage({
+      data: { sdp: 'server-answer' },
+      type: 'webrtc.answer'
+    });
+    await settle();
+
+    expect(peerAt(harness.peers).addedIce).toContainEqual({
+      candidate: 'pre-offer-candidate',
+      sdpMLineIndex: 0,
+      sdpMid: 'video',
+      usernameFragment: 'remote-user'
+    });
+  });
+
+  it('skips a rejected ICE candidate without failing the peer or dropping later candidates', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.realtime.emitMessage(offer());
+    const peer = peerAt(harness.peers);
+    peer.rejectedIce.add('bad-candidate');
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'bad-candidate',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'good-candidate',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+
+    await settle();
+
+    expect(peer.addedIce).toContainEqual({
+      candidate: 'good-candidate',
+      sdpMLineIndex: 0,
+      sdpMid: 'video',
+      usernameFragment: 'remote-user'
+    });
+    expect(harness.view().lastError).toBeNull();
   });
 
   it('does not apply a late manual answer to a peer replaced by a remote offer', async () => {

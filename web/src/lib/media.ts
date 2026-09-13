@@ -126,7 +126,7 @@ export class MediaTransport implements RoutedMessageTransport {
   private peer: RTCPeerConnection | undefined;
   private peerRole: 'manual' | 'remote' | undefined;
   private peerToken = 0;
-  private pendingIce: RTCIceCandidateInit[] = [];
+  private pendingIce: { candidate: RTCIceCandidateInit; token: number | null }[] = [];
   private pendingOffer: string | undefined;
   private pendingStream: MediaStream | null = null;
   private realtimeView: RealtimeView | undefined;
@@ -324,7 +324,9 @@ export class MediaTransport implements RoutedMessageTransport {
   }
 
   private async createManualOffer(): Promise<void> {
-    this.pendingIce = [];
+    if (this.peer !== undefined || this.view.negotiating) {
+      return;
+    }
     const { peer, token } = this.beginPeer('manual');
     try {
       peer.addTransceiver('video', { direction: 'recvonly' });
@@ -361,35 +363,47 @@ export class MediaTransport implements RoutedMessageTransport {
   private async acceptIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     const peer = this.peer;
     const token = this.peerToken;
-    if (peer?.remoteDescription == null) {
-      this.pendingIce.push(candidate);
+    if (peer === undefined || peer.remoteDescription == null) {
+      this.pendingIce.push({ candidate, token: peer === undefined ? null : token });
       return;
     }
     try {
       await peer.addIceCandidate(candidate);
-    } catch (error: unknown) {
-      this.failPeer(safeError(error), token);
+    } catch (_error: unknown) {
+      // A stale or malformed remote candidate must not tear down an otherwise
+      // usable peer. The signaling stream may contain candidates for a peer
+      // that was replaced while the browser was awaiting its description.
     }
   }
 
   private async flushIce(peer: RTCPeerConnection, token: number): Promise<void> {
-    const candidates = this.pendingIce;
-    this.pendingIce = [];
+    const candidates = this.pendingIce
+      .filter((pending) => pending.token === token)
+      .map((pending) => pending.candidate);
+    this.pendingIce = this.pendingIce.filter((pending) => pending.token !== token);
     for (const candidate of candidates) {
       if (this.peer !== peer || this.peerToken !== token) {
         return;
       }
-      await peer.addIceCandidate(candidate);
+      try {
+        await peer.addIceCandidate(candidate);
+      } catch (_error: unknown) {
+        // Continue flushing the remaining candidates. One bad candidate is not
+        // sufficient evidence that the negotiated peer is unusable.
+      }
     }
   }
 
   private beginPeer(role: 'manual' | 'remote'): { peer: RTCPeerConnection; token: number } {
     const previousMode = this.view.mode;
-    const preOfferIce = role === 'remote' && this.peer === undefined ? this.pendingIce : [];
+    const preOfferIce =
+      this.peer === undefined
+        ? this.pendingIce.filter((pending) => pending.token === null).map((pending) => pending.candidate)
+        : [];
     this.closePeer();
-    this.pendingIce = preOfferIce;
     const token = this.peerToken + 1;
     this.peerToken = token;
+    this.pendingIce = preOfferIce.map((candidate) => ({ candidate, token }));
     const stunServer = this.realtimeView?.settings?.values.stun_server ?? '';
     const peer = this.dependencies.createPeer({
       iceServers: stunServer === '' ? [] : [{ urls: stunServer }]

@@ -1023,6 +1023,12 @@
           "candidate": {
             "type": "string"
           },
+          "negotiation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sdp_mid": {
             "type": [
               "string",
@@ -1415,6 +1421,12 @@
             "properties": {
               "candidate": {
                 "type": "string"
+              },
+              "negotiation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "sdp_mid": {
                 "type": [
@@ -1836,6 +1848,12 @@
           "data": {
             "additionalProperties": false,
             "properties": {
+              "negotiation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "sdp": {
                 "type": "string"
               }
@@ -3496,6 +3514,12 @@
       "SessionDescription": {
         "additionalProperties": false,
         "properties": {
+          "negotiation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sdp": {
             "type": "string"
           }

@@ -200,6 +200,7 @@ struct Coordinator {
     controller: RealtimeTransportController,
     peer: Option<WebRtcPeer>,
     pending_remote_offer: Option<SessionDescription>,
+    peer_negotiation_id: Option<String>,
     pending_rtc_input: Option<PendingRtcInput>,
     websocket_generation_sequence: u64,
 }
@@ -250,6 +251,7 @@ impl Coordinator {
             controller: RealtimeTransportController::new(transport, Instant::now()),
             peer: None,
             pending_remote_offer: None,
+            peer_negotiation_id: None,
             pending_rtc_input: None,
             websocket_generation_sequence: 0,
         }
@@ -302,6 +304,9 @@ impl Coordinator {
                 }
             }
             ClientMessage::WebRtcAnswer(MessageData { data }) => {
+                if !self.matches_negotiation_id(data.negotiation_id.as_ref()) {
+                    return Ok(());
+                }
                 let Some(peer) = self.peer.as_ref() else {
                     return Ok(());
                 };
@@ -311,6 +316,9 @@ impl Coordinator {
                 }
             }
             ClientMessage::WebRtcIceCandidate(MessageData { data }) => {
+                if !self.matches_negotiation_id(data.negotiation_id.as_ref()) {
+                    return Ok(());
+                }
                 let Some(peer) = self.peer.as_ref() else {
                     return Ok(());
                 };
@@ -334,7 +342,8 @@ impl Coordinator {
     ) -> Result<(), ConnectionError> {
         let attempt = event.attempt;
         match event.event {
-            Some(WebRtcPeerEvent::IceCandidate(data)) => {
+            Some(WebRtcPeerEvent::IceCandidate(mut data)) => {
+                data.negotiation_id.clone_from(&self.peer_negotiation_id);
                 self.send_high(ServerMessage::WebRtcIceCandidate(MessageData { data }))?;
             }
             Some(WebRtcPeerEvent::VideoReady) => {
@@ -530,6 +539,10 @@ impl Coordinator {
         let peer = WebRtcPeer::new(attempt, &self.media, peer_config)
             .await
             .map_err(|_| StartPeerError::Peer)?;
+        let negotiation_id = self
+            .pending_remote_offer
+            .as_ref()
+            .and_then(|offer| offer.negotiation_id.clone());
         let signaling = if let Some(offer) = self.pending_remote_offer.take() {
             peer.accept_offer(offer)
                 .await
@@ -551,6 +564,7 @@ impl Coordinator {
             return Err(StartPeerError::Outgoing);
         }
         self.peer = Some(peer);
+        self.peer_negotiation_id = negotiation_id;
         Ok(())
     }
 
@@ -639,7 +653,15 @@ impl Coordinator {
         }
     }
 
+    fn matches_negotiation_id(&self, actual: Option<&String>) -> bool {
+        match (&self.peer_negotiation_id, actual) {
+            (Some(expected), Some(actual)) => expected == actual,
+            _ => true,
+        }
+    }
+
     async fn close_peer(&mut self) {
+        self.peer_negotiation_id = None;
         if let Some(peer) = self.peer.take() {
             peer.close().await;
         }

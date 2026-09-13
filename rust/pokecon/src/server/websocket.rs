@@ -1584,6 +1584,7 @@ mod tests {
                 }
                 ClientMessage::WebRtcOffer(MessageData { data }) => {
                     Ok(vec![WebSocketReply::WebRtcAnswer(SessionDescription {
+                        negotiation_id: data.negotiation_id,
                         sdp: format!("answer: {}", data.sdp),
                     })])
                 }
@@ -1756,7 +1757,10 @@ mod tests {
         send_client(
             socket,
             &ClientMessage::WebRtcAnswer(MessageData {
-                data: SessionDescription { sdp: answer.sdp },
+                data: SessionDescription {
+                    negotiation_id: None,
+                    sdp: answer.sdp,
+                },
             }),
         )
         .await;
@@ -1775,6 +1779,7 @@ mod tests {
                             &ClientMessage::WebRtcIceCandidate(MessageData {
                                 data: IceCandidate {
                                     candidate: candidate.candidate,
+                                    negotiation_id: None,
                                     sdp_mid: candidate.sdp_mid,
                                     sdp_mline_index: candidate.sdp_mline_index,
                                     username_fragment: candidate.username_fragment,
@@ -2333,6 +2338,7 @@ mod tests {
             &mut socket,
             &ClientMessage::WebRtcOffer(MessageData {
                 data: SessionDescription {
+                    negotiation_id: Some("client-offer-1".to_owned()),
                     sdp: "offer".to_owned(),
                 },
             }),

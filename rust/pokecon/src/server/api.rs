@@ -1047,12 +1047,16 @@ pub struct ScriptUiActionResult {
 #[serde(deny_unknown_fields)]
 pub struct SessionDescription {
     pub sdp: String,
+    #[serde(default)]
+    pub negotiation_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IceCandidate {
     pub candidate: String,
+    #[serde(default)]
+    pub negotiation_id: Option<String>,
     #[serde(deserialize_with = "deserialize_required_option")]
     #[schema(required = true)]
     pub sdp_mid: Option<String>,

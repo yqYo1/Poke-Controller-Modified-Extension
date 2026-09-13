@@ -1,3 +1,4 @@
+import type { components } from './api/openapi';
 import type {
   InputRoute,
   RoutedMessageSubscriber,
@@ -48,6 +49,13 @@ export interface MediaDependencies {
 
 type MediaSubscriber = (view: MediaView) => void;
 type FallbackFrameSubscriber = (frame: ArrayBuffer | Blob) => void;
+type SessionDescription = components['schemas']['SessionDescription'];
+
+interface PendingIce {
+  readonly candidate: RTCIceCandidateInit;
+  readonly negotiationId: string | null;
+  readonly token: number | null;
+}
 
 const defaultDependencies: MediaDependencies = {
   clearTimeout: (timer) => {
@@ -126,8 +134,9 @@ export class MediaTransport implements RoutedMessageTransport {
   private peer: RTCPeerConnection | undefined;
   private peerRole: 'manual' | 'remote' | undefined;
   private peerToken = 0;
-  private pendingIce: { candidate: RTCIceCandidateInit; token: number | null }[] = [];
-  private pendingOffer: string | undefined;
+  private negotiationId: string | null = null;
+  private pendingIce: PendingIce[] = [];
+  private pendingOffer: SessionDescription | undefined;
   private pendingStream: MediaStream | null = null;
   private realtimeView: RealtimeView | undefined;
   private rtcGeneration: string | null = null;
@@ -275,20 +284,23 @@ export class MediaTransport implements RoutedMessageTransport {
     switch (message.type) {
       case 'webrtc.offer':
         if (this.realtimeView?.settings === null || this.realtimeView?.settings === undefined) {
-          this.pendingOffer = message.data.sdp;
+          this.pendingOffer = message.data;
         } else {
-          void this.acceptOffer(message.data.sdp);
+          void this.acceptOffer(message.data);
         }
         return;
       case 'webrtc.answer':
-        void this.acceptAnswer(message.data.sdp);
+        void this.acceptAnswer(message.data);
         return;
       case 'webrtc.ice_candidate':
         void this.acceptIceCandidate({
-          candidate: message.data.candidate,
-          sdpMLineIndex: message.data.sdp_mline_index,
-          sdpMid: message.data.sdp_mid,
-          usernameFragment: message.data.username_fragment
+          candidate: {
+            candidate: message.data.candidate,
+            sdpMLineIndex: message.data.sdp_mline_index,
+            sdpMid: message.data.sdp_mid,
+            usernameFragment: message.data.username_fragment
+          },
+          negotiationId: message.data.negotiation_id ?? null
         });
         return;
       case 'input.generation':
@@ -303,10 +315,10 @@ export class MediaTransport implements RoutedMessageTransport {
     this.publishMessage('websocket', message);
   }
 
-  private async acceptOffer(sdp: string): Promise<void> {
-    const { peer, token } = this.beginPeer('remote');
+  private async acceptOffer(description: SessionDescription): Promise<void> {
+    const { peer, token } = this.beginPeer('remote', description.negotiation_id ?? null);
     try {
-      await peer.setRemoteDescription({ sdp, type: 'offer' });
+      await peer.setRemoteDescription({ sdp: description.sdp, type: 'offer' });
       preferVideoCodecs(peer);
       await this.flushIce(peer, token);
       const answer = await peer.createAnswer();
@@ -315,7 +327,14 @@ export class MediaTransport implements RoutedMessageTransport {
         return;
       }
       const localSdp = peer.localDescription?.sdp;
-      if (localSdp === undefined || !this.realtime.send({ data: { sdp: localSdp }, type: 'webrtc.answer' })) {
+      if (localSdp === undefined) {
+        throw new Error('WebRTC answer has no SDP');
+      }
+      const answerData: SessionDescription = { sdp: localSdp };
+      if (this.negotiationId !== null) {
+        answerData.negotiation_id = this.negotiationId;
+      }
+      if (!this.realtime.send({ data: answerData, type: 'webrtc.answer' })) {
         throw new Error('WebRTC answer could not be sent');
       }
     } catch (error: unknown) {
@@ -338,7 +357,14 @@ export class MediaTransport implements RoutedMessageTransport {
         return;
       }
       const localSdp = peer.localDescription?.sdp;
-      if (localSdp === undefined || !this.realtime.send({ data: { sdp: localSdp }, type: 'webrtc.offer' })) {
+      if (localSdp === undefined) {
+        throw new Error('WebRTC offer has no SDP');
+      }
+      const offerData: SessionDescription = { sdp: localSdp };
+      if (this.negotiationId !== null) {
+        offerData.negotiation_id = this.negotiationId;
+      }
+      if (!this.realtime.send({ data: offerData, type: 'webrtc.offer' })) {
         throw new Error('WebRTC offer could not be sent');
       }
     } catch (error: unknown) {
@@ -346,29 +372,43 @@ export class MediaTransport implements RoutedMessageTransport {
     }
   }
 
-  private async acceptAnswer(sdp: string): Promise<void> {
+  private async acceptAnswer(description: SessionDescription): Promise<void> {
     const peer = this.peer;
     const token = this.peerToken;
-    if (peer === undefined || this.peerRole !== 'manual') {
+    if (
+      peer === undefined ||
+      this.peerRole !== 'manual' ||
+      !this.matchesNegotiationId(description.negotiation_id ?? null)
+    ) {
       return;
     }
     try {
-      await peer.setRemoteDescription({ sdp, type: 'answer' });
+      await peer.setRemoteDescription({ sdp: description.sdp, type: 'answer' });
       await this.flushIce(peer, token);
     } catch (error: unknown) {
       this.failPeer(safeError(error), token);
     }
   }
 
-  private async acceptIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
+  private async acceptIceCandidate(pending: {
+    candidate: RTCIceCandidateInit;
+    negotiationId: string | null;
+  }): Promise<void> {
     const peer = this.peer;
     const token = this.peerToken;
+    if (peer !== undefined && !this.matchesNegotiationId(pending.negotiationId)) {
+      return;
+    }
     if (peer?.remoteDescription == null) {
-      this.pendingIce.push({ candidate, token: peer === undefined ? null : token });
+      this.pendingIce.push({
+        candidate: pending.candidate,
+        negotiationId: pending.negotiationId,
+        token: peer === undefined ? null : token
+      });
       return;
     }
     try {
-      await peer.addIceCandidate(candidate);
+      await peer.addIceCandidate(pending.candidate);
     } catch {
       // A stale or malformed remote candidate must not tear down an otherwise
       // usable peer. The signaling stream may contain candidates for a peer
@@ -378,7 +418,10 @@ export class MediaTransport implements RoutedMessageTransport {
 
   private async flushIce(peer: RTCPeerConnection, token: number): Promise<void> {
     const candidates = this.pendingIce
-      .filter((pending) => pending.token === token)
+      .filter(
+        (pending) =>
+          pending.token === token && this.matchesNegotiationId(pending.negotiationId)
+      )
       .map((pending) => pending.candidate);
     this.pendingIce = this.pendingIce.filter((pending) => pending.token !== token);
     for (const candidate of candidates) {
@@ -394,16 +437,20 @@ export class MediaTransport implements RoutedMessageTransport {
     }
   }
 
-  private beginPeer(role: 'manual' | 'remote'): { peer: RTCPeerConnection; token: number } {
+  private beginPeer(
+    role: 'manual' | 'remote',
+    negotiationId: string | null = null
+  ): { peer: RTCPeerConnection; token: number } {
     const previousMode = this.view.mode;
     const preOfferIce =
       this.peer === undefined
-        ? this.pendingIce.filter((pending) => pending.token === null).map((pending) => pending.candidate)
+        ? this.pendingIce.filter((pending) => pending.token === null)
         : [];
     this.closePeer();
     const token = this.peerToken + 1;
     this.peerToken = token;
-    this.pendingIce = preOfferIce.map((candidate) => ({ candidate, token }));
+    this.negotiationId = role === 'manual' ? String(token) : negotiationId;
+    this.pendingIce = preOfferIce.map((pending) => ({ ...pending, token }));
     const stunServer = this.realtimeView?.settings?.values.stun_server ?? '';
     const peer = this.dependencies.createPeer({
       iceServers: stunServer === '' ? [] : [{ urls: stunServer }]
@@ -436,6 +483,7 @@ export class MediaTransport implements RoutedMessageTransport {
         !this.realtime.send({
           data: {
             candidate: candidate.candidate,
+            ...(this.negotiationId === null ? {} : { negotiation_id: this.negotiationId }),
             sdp_mid: candidate.sdpMid ?? null,
             sdp_mline_index: candidate.sdpMLineIndex ?? null,
             username_fragment: candidate.usernameFragment ?? null
@@ -559,6 +607,10 @@ export class MediaTransport implements RoutedMessageTransport {
     }
   }
 
+  private matchesNegotiationId(actual: string | null): boolean {
+    return this.negotiationId === null || actual === null || this.negotiationId === actual;
+  }
+
   private isCurrentPeer(peer: RTCPeerConnection, token: number): boolean {
     return this.peer === peer && this.peerToken === token;
   }
@@ -644,6 +696,7 @@ export class MediaTransport implements RoutedMessageTransport {
     const peer = this.peer;
     this.peer = undefined;
     this.peerRole = undefined;
+    this.negotiationId = null;
     this.pendingIce = [];
     if (peer !== undefined) {
       peer.onconnectionstatechange = null;

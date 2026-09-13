@@ -291,8 +291,11 @@ function parsedSentAt(channel: FakeDataChannel, index: number): unknown {
   return JSON.parse(sentAt(channel, index)) as unknown;
 }
 
-function offer(sdp = 'server-offer'): ServerMessage {
-  return { data: { sdp }, type: 'webrtc.offer' };
+function offer(sdp = 'server-offer', negotiation_id?: string): ServerMessage {
+  return {
+    data: negotiation_id === undefined ? { sdp } : { negotiation_id, sdp },
+    type: 'webrtc.offer'
+  };
 }
 
 function generation(value = 'generation-1'): ServerMessage {
@@ -391,6 +394,55 @@ describe('MediaTransport signaling', () => {
     });
   });
 
+  it('echoes a remote negotiation id in the answer and local ICE', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.realtime.emitMessage(offer('server-offer-with-id', 'remote-1'));
+    await settle();
+
+    expect(harness.realtime.sent).toContainEqual({
+      data: { negotiation_id: 'remote-1', sdp: 'browser-answer' },
+      type: 'webrtc.answer'
+    });
+    peerAt(harness.peers).emitCandidate({
+      candidate: 'local-candidate',
+      sdpMLineIndex: 0,
+      sdpMid: 'video',
+      usernameFragment: 'local-user'
+    });
+    expect(harness.realtime.sent).toContainEqual({
+      data: {
+        candidate: 'local-candidate',
+        negotiation_id: 'remote-1',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'local-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+  });
+
+  it('ignores an answer for another negotiation id', async () => {
+    const harness = makeHarness();
+    harness.media.start();
+    harness.media.reconnectWebRtc();
+    await settle();
+
+    const peer = peerAt(harness.peers);
+    harness.realtime.emitMessage({
+      data: { negotiation_id: 'other-peer', sdp: 'stale-answer' },
+      type: 'webrtc.answer'
+    });
+    await settle();
+    expect(peer.remoteDescription).toBeNull();
+
+    harness.realtime.emitMessage({
+      data: { negotiation_id: '1', sdp: 'current-answer' },
+      type: 'webrtc.answer'
+    });
+    await settle();
+    expect(peer.remoteDescription).toMatchObject({ sdp: 'current-answer', type: 'answer' });
+  });
   it('keeps ICE queued before a manual offer and flushes it to that peer', async () => {
     const harness = makeHarness();
     harness.media.start();
@@ -517,7 +569,7 @@ describe('MediaTransport signaling', () => {
     ]);
     expect(peer.createdChannels[0]?.label).toBe('pokecon-bootstrap');
     expect(harness.realtime.sent).toContainEqual({
-      data: { sdp: 'browser-offer' },
+      data: { negotiation_id: '1', sdp: 'browser-offer' },
       type: 'webrtc.offer'
     });
   });

@@ -445,6 +445,7 @@ export interface components {
         Hat: "up" | "down" | "left" | "right" | "up_right" | "up_left" | "down_right" | "down_left" | "neutral";
         IceCandidate: {
             candidate: string;
+            negotiation_id?: string | null;
             sdp_mid: string | null;
             /** Format: int32 */
             sdp_mline_index: number | null;
@@ -524,6 +525,7 @@ export interface components {
         MessageData_IceCandidate: {
             data: {
                 candidate: string;
+                negotiation_id?: string | null;
                 sdp_mid: string | null;
                 /** Format: int32 */
                 sdp_mline_index: number | null;
@@ -622,6 +624,7 @@ export interface components {
         };
         MessageData_SessionDescription: {
             data: {
+                negotiation_id?: string | null;
                 sdp: string;
             };
         };
@@ -980,6 +983,7 @@ export interface components {
             type: "ping";
         });
         SessionDescription: {
+            negotiation_id?: string | null;
             sdp: string;
         };
         SettingsChange: {

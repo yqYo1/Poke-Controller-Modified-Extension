@@ -589,6 +589,7 @@ impl WebRtcPeer {
         &self,
         offer: SessionDescription,
     ) -> Result<SessionDescription, WebRtcError> {
+        let negotiation_id = offer.negotiation_id.clone();
         let offer = RTCSessionDescription::offer(offer.sdp)
             .map_err(|_| WebRtcError::InvalidSessionDescription)?;
         self.peer
@@ -604,7 +605,10 @@ impl WebRtcPeer {
             .set_local_description(answer)
             .await
             .map_err(|_| WebRtcError::PeerOperationFailed)?;
-        local_description(&self.peer).await
+        local_description(&self.peer).await.map(|mut description| {
+            description.negotiation_id = negotiation_id;
+            description
+        })
     }
 
     /// Installs the answer to a previously emitted local offer.
@@ -812,6 +816,7 @@ fn install_ice_handler(
                 &cancellation,
                 WebRtcPeerEvent::IceCandidate(IceCandidate {
                     candidate: candidate.candidate,
+                    negotiation_id: None,
                     sdp_mid: candidate.sdp_mid,
                     sdp_mline_index: candidate.sdp_mline_index,
                     username_fragment: candidate.username_fragment,
@@ -965,6 +970,7 @@ async fn local_description(peer: &RTCPeerConnection) -> Result<SessionDescriptio
     peer.local_description()
         .await
         .map(|description| SessionDescription {
+            negotiation_id: None,
             sdp: description.sdp,
         })
         .ok_or(WebRtcError::PeerOperationFailed)
@@ -1093,7 +1099,10 @@ mod tests {
             .expect("client ICE gathering deadline");
         let answer = client.local_description().await.expect("gathered answer");
         server
-            .accept_answer(SessionDescription { sdp: answer.sdp })
+            .accept_answer(SessionDescription {
+                negotiation_id: None,
+                sdp: answer.sdp,
+            })
             .await
             .expect("server accepts answer");
     }

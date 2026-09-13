@@ -1125,9 +1125,9 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   | `serial.data` | サーバー → クライアント | なし | `{"encoding":"base64","data":string,"byte_length":int}`。`data`は受信した生バイト列の標準Base64 |
   | `log` | サーバー → クライアント | なし | `{"level":"debug"|"info"|"warning"|"error"|"critical","message":string,"target":"stdout"|"panel1"|"panel2"|"log","operation":"append"|"replace"|"clear"}`。`clear`では`message`を空文字とする |
   | `script.ui` | サーバー → クライアント | なし | アクティブなユーザースクリプト世代が所有するダイアログ、Tk互換ウィンドウ、描画オーバーレイ、画像ポップアップの完全スナップショット。非アクティブ時は`generation=null` |
-  | `webrtc.offer` | 双方向 | なし | `{"sdp":string}` |
-  | `webrtc.answer` | 双方向 | なし | `{"sdp":string}` |
-  | `webrtc.ice_candidate` | 双方向 | なし | `{"candidate":string,"sdp_mid":string|null,"sdp_mline_index":int|null,"username_fragment":string|null}` |
+  | `webrtc.offer` | 双方向 | なし | `{"sdp":string,"negotiation_id"?:string|null}`。クライアント起点のmanual offerでは一意な不透明IDを付与し、serverは同じIDをanswer/ICEへ引き継ぐ |
+  | `webrtc.answer` | 双方向 | なし | `{"sdp":string,"negotiation_id"?:string|null}`。offerのIDがある場合は同じ値を返す。受信側は現在のnegotiationと一致しないIDを破棄する |
+  | `webrtc.ice_candidate` | 双方向 | なし | `{"candidate":string,"negotiation_id"?:string|null,"sdp_mid":string|null,"sdp_mline_index":int|null,"username_fragment":string|null}`。offer/answerと同じnegotiationに属する候補だけを適用する |
   | `input.generation` | サーバー → クライアント | なし | `{"generation":string}`。制御経路確立・切替時にサーバーが割り当てる不透明な非空ASCII識別子 |
   | `input.snapshot` | クライアント → サーバー | なし | 現在のボタン・キー・両スティック・タッチ全状態、`generation`、`sequence` |
   | `input.snapshot.applied` | サーバー → クライアント | なし | `{"generation":string,"sequence":string}`。指定スナップショットの原子的適用完了確認 |

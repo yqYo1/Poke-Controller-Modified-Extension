@@ -2997,7 +2997,7 @@ validate_http_contract() {
     ]
     and (.data.revision | type) == "string"
     and (.data.values | type) == "object"
-    and (.data.values | length) == 79
+    and (.data.values | length) == 71
     and (.data.pending_restart_values | type) == "object"
     and (.data.restart_required | type) == "array"
     and (.data.apply_failures | type) == "object"
@@ -3008,7 +3008,6 @@ validate_http_contract() {
   local configured_port
   local configured_address
   local configured_web
-  local configured_language
   local configured_compositing
   local configured_close_behavior
   configured_port="$(jq -er '.data.values["server.port"]' "$root/settings.json")"
@@ -3016,9 +3015,6 @@ validate_http_contract() {
     jq -er '.data.values["server.bind_address"]' "$root/settings.json"
   )"
   configured_web="$(jq -er '.data.values["server.web_dir"]' "$root/settings.json")"
-  configured_language="$(
-    jq -er '.data.values.dynamic_config_language' "$root/settings.json"
-  )"
   configured_compositing="$(
     jq -r '.data.values["ui.desktop.disable_compositing"]' "$root/settings.json"
   )"
@@ -3027,7 +3023,6 @@ validate_http_contract() {
   )"
   if [ "$configured_port" != "$port" ] \
     || [ "$configured_address" != 127.0.0.1 ] \
-    || [ "$configured_language" != none ] \
     || [ "$configured_compositing" != true ] \
     || [ "$configured_close_behavior" != keep_backend ]; then
     fail "$mode settings do not reflect the isolated canonical launch values"

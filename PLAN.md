@@ -22,6 +22,7 @@
 - [x] 同commitのNormal CI run `34272925506`とPackage CI run `34272925529`がcompleted／successとなり、required aggregateを通過した。
 - [x] timing artifact `ci-timing-34272925506-1`（artifact ID `10075004892`）を保存し、同一`change_kind`の履歴を使うblocking／fail-closed p95 gateをfresh CIで通過した。
 - [x] `PLAN.md`／将来の`TASK.md`を作業追跡用メタデータとしてCIのdocs領域分類から除外し、常時実行のfast checksでlintする契約を追加した（`scripts/ci/regions.py`、`tests/quality/test_ci_regions.py`）。
+- [x] 最新実装commit `915af6300cb2f0a25121a0401d67caf2dfb95aaa`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。Normal CI `34780733169`／`34780730901` attempt 2、Package CI `34780733167`のrequired aggregate successと独立review `CODEX VERDICT: LGTM`を確認した。ブラウザbackendは途中で`410 Gone`となったため、今回の追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
 
 ### 現行の残タスク（アシスタント担当）
 
@@ -564,7 +565,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 4.3 profile切替
 
-- [x] **AR-11-16** 新規command受付停止、実行中script停止、全入力解放、旧worker終了後にprofile／関連設定を一括切替し、旧commandを自動再開しない（証跡: profile switch lifecycle、stop/reap、idle/no-auto-restart integration tests）。
+- [x] **AR-11-16** 新規command受付停止、実行中script停止、全入力解放、旧worker終了後にprofile／関連設定を一括切替し、旧commandを自動再開しない（証跡: profile switch lifecycle、stop/reap、idle/no-auto-restart integration tests。追加で最新commitの隔離Web runtimeに対し、`active_profile` PATCHの`default`→`Other`→`default`、`revision` 3→4→5、`available_profiles` read-back、profile設定`ui.fps=60`／`ui.fps_options=[5,15,60]`を確認）。
 - [x] 新規 command 受付停止 → 実行中 script 停止 → 全入力解放 → 旧 worker 終了の順序を保証する。
 - [x] profile と関連設定を一括切替し、新 worker 環境を初期化する。
 - [x] 切替後は旧 command を自動再開せず idle で明示実行を待つ。
@@ -596,11 +597,12 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 - [x] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む（証跡: Package CI `34272925529`のLinux／Windows bundle、clean-install smoke、runtime／resource manifest）。
 - [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
+- [x] 2026-09-14の最新commitで隔離Web runtimeの外部I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
 - [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
 - [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
-- [x] 直近の実装commit後のGitHub CIを完了まで監視し、Normal／Packageのrequired aggregate成功を確認した（Normal `34272925506`、Package `34272925529`）。
+- [x] 直近の実装commit後のGitHub CIを完了まで監視し、同一SHAの最新Normal／Package required aggregate成功を確認した（Normal `34780733169`、Package `34780733167`。先行Package failure `34780730862`は成功証跡に採用せず、正準`ci-watch`の最新check-run判定でsettlement window後にexit 0）。
 - [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない。

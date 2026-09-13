@@ -2195,7 +2195,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     }
     assert (
         hashlib.sha256(sources[FLAKE_LOCK_SOURCE].encode()).hexdigest()
-        == "2d04f1fe263a629759c18a3f37ac016b488477404b4197f37bb6f5fb633ba2ee"
+        == "09c6e7bafc26a0791585d6401549022da7c23cf5f8d8268ffca250d8aabb4447"
     )
     flake_lock = json.loads(sources[FLAKE_LOCK_SOURCE])
     assert flake_lock["version"] == 7
@@ -2205,6 +2205,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "git-hooks": "git-hooks",
         "linux-release-nixpkgs": "linux-release-nixpkgs",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-darwin": "nixpkgs-darwin",
         "rust-overlay": "rust-overlay",
         "systems": "systems",
         "treefmt-nix": "treefmt-nix",
@@ -2319,7 +2320,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "e3de4ce64cb8dbde61a29592196838b1dda72e854eec4c2ab7a50ed299be62ca"
+        == "8e45796462a313eeca7a3d0fec4f900ef913ab5afd4332e7ea66fba8eb6d3de9"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2389,10 +2390,12 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(toolchain_construction.strip().encode()).hexdigest()
-        == "2b63f19035ba06a6aa5459a68f0eda5722f3d89fdd60747dce8c089eafc95e27"
+        == "60dacec16bd2345882dc40450876a7cb0bbaa8c5f1f01cd307c5e7907913196d"
     )
     for toolchain_proof in (
-        "import inputs.nixpkgs",
+        "import (",
+        "inputs.nixpkgs",
+        "inputs.nixpkgs-darwin",
         "overlays = [ (import rust-overlay) ];",
         '(builtins.readDir inputs.self.outPath)."rust-toolchain.toml" == "regular"',
         '== "d3ceb1cb2217972a209e49ca1ac585998f21a2dabf96e6ceda03e9442e34ee29"',
@@ -2410,7 +2413,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     python_build_inputs = flake[python_build_inputs_start:python_build_inputs_end]
     assert (
         hashlib.sha256(python_build_inputs.strip().encode()).hexdigest()
-        == "b1e14a0907dcef949c36a46821b1b852b2cfde6c04b43f0093d8c96bb65c8af0"
+        == "73754cd7d9dd2975e2650c5285ac2ff8e20839195836dad75e65e22436e47c44"
     )
     for python_build_input_proof in (
         "pythonEnv = pkgs.python314.withPackages",
@@ -18395,7 +18398,10 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
         "\n          uiPackageCheck = mkTask {",
     )
     gate = section(flake, "uiPackageCheck = mkTask {", "\n        in\n")
-    runtime_inputs = section(gate, "runtimeInputs = [", "\n            ];")
+    runtime_inputs_start = "runtimeInputs = ["
+    if runtime_inputs_start not in gate:
+        runtime_inputs_start = "runtimeInputs = lib.optionals pkgs.stdenv.isLinux ["
+    runtime_inputs = section(gate, runtime_inputs_start, "\n            ];")
 
     for required in (
         'destination = "/share/dbus-1/session.conf";',

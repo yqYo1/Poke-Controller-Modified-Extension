@@ -33,7 +33,7 @@
 ### 2026-09-14 要件別監査の結果
 
 - [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
-- [ ] **devShell／direnv再受入**: Linux 2 systemと`aarch64-darwin`のdevShell attribute評価は成功したが、`x86_64-darwin`はlocked nixpkgsがサポートをdropしてexit 1。clean detached worktree、tracked `.envrc`のread-back、direnv入室副作用0、hostile PATHの一式は未証明であり、4 system契約を[x]にしない。
+- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。ただしclean detached worktree、tracked `.envrc`のread-back、direnv入室副作用0、hostile PATHの一式は未証明であり、RUN3全体は[x]にしない。
 - [ ] **CI性能gate**: `performance` recordの5 metric（各300 sample以上、warm-up、p50／p95／maximum、baseline／threshold、artifact、required blocking gate）は未実装。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
 - [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
 - [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、`SPECIFICATION.md`の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。

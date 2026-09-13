@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs-darwin.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
     # Ubuntu 24.04 is the Linux package baseline, so native release artifacts
     # must be built and exercised against its glibc 2.39 ABI ceiling.
     linux-release-nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
@@ -27,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "3b43978e8bf8f2c9726a8b093de6451ec267e60662ca168f723a768bffcba271";
+      canonicalFlakeHash = "2eb4111c360a76c30abdf299ec2c485d2027451bb292848fc5be4af8a46fdd21";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -57,6 +58,12 @@
           value = inputs.nixpkgs;
           rev = "e2587caef70cea85dd97d7daab492899902dbf5d";
           narHash = "sha256-wWFrV5/Qbm+lyt5x20E/bSbfJiGKMo4RCxZV8cl/WZI=";
+        }
+        {
+          name = "nixpkgs-darwin";
+          value = inputs.nixpkgs-darwin;
+          rev = "8029b6c369415ee1ef02a86f352806348f104db9";
+          narHash = "sha256-cTHZTeYRV42p62ss3ZEFnBXrW3WpLgDpYWYyat4V2b8=";
         }
         {
           name = "rust-overlay";
@@ -105,12 +112,12 @@
       perSystem =
         {
           config,
-          pkgs,
           self',
           system,
           ...
         }:
         let
+          pkgs = config.allModuleArgs.pkgs;
           lib = pkgs.lib;
           linuxReleaseMaximumGlibc = "2.39";
           linuxReleasePkgs =
@@ -156,10 +163,12 @@
               ''
             else
               pkgs.writeText "pokecon-non-linux-release-distutils.cfg" "";
-          pkgsWithOverlays = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ (import rust-overlay) ];
-          };
+          pkgsWithOverlays =
+            import (if system == "x86_64-darwin" then inputs.nixpkgs-darwin else inputs.nixpkgs)
+              {
+                inherit system;
+                overlays = [ (import rust-overlay) ];
+              };
           rustToolchain =
             assert lib.assertMsg (
               (builtins.readDir inputs.self.outPath)."rust-toolchain.toml" == "regular"
@@ -200,9 +209,15 @@
           portableUvVersionOutput = "uv 0.11.8 (x86_64-unknown-linux-gnu)";
           pythonPackageBuildUvVersion = "0.11.28";
           pythonPackageBuildUv =
-            assert lib.assertMsg (pkgs.uv.version == pythonPackageBuildUvVersion)
-              "Nix provides uv ${pkgs.uv.version}; the Python package build requires ${pythonPackageBuildUvVersion}";
-            pkgs.uv;
+            if system == "x86_64-darwin" then
+              pkgs.writeShellScriptBin "uv" ''
+                echo "the pinned Python package build toolchain is not available on x86_64-darwin" >&2
+                exit 2
+              ''
+            else
+              assert lib.assertMsg (pkgs.uv.version == pythonPackageBuildUvVersion)
+                "Nix provides uv ${pkgs.uv.version}; the Python package build requires ${pythonPackageBuildUvVersion}";
+              pkgs.uv;
           portableUv =
             if system == "x86_64-linux" then
               pkgs.fetchzip {
@@ -735,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "d85c8d6525a78cef3a2d34a3bc45d7eaf4fe1cd4ffc4d07dc493bccf85b27bed";
+          expectedAuditTestHash = "4244b179f7df5c5a8794c50a6fc3a2be17e508b0476ddef4694df2449b451615";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3341,7 +3356,7 @@
           };
           uiPackageCheck = mkTask {
             name = "ui-package-check";
-            runtimeInputs = [
+            runtimeInputs = lib.optionals pkgs.stdenv.isLinux [
               pkgs.python314
               pkgs.curl
               pkgs.dbus
@@ -3391,6 +3406,9 @@
           };
         in
         {
+          _module.args.pkgs = import (
+            if system == "x86_64-darwin" then inputs.nixpkgs-darwin else inputs.nixpkgs
+          ) { inherit system; };
           devShells.default = pkgs.mkShell {
             packages = rustTaskInputs ++ [
               bun

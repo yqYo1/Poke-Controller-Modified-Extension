@@ -451,6 +451,7 @@ impl SettingsService {
                 if configured {
                     continue;
                 }
+                return Err(PatchError::InvalidSetting(id.clone()));
             }
             normalized.insert(
                 id.clone(),
@@ -792,7 +793,7 @@ mod tests {
         NoopSettingsApplier, PatchClass, PatchRequest, RuntimeSettingsApplier, SettingsService,
     };
     use crate::contracts::model::Access;
-    use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+    use crate::settings::pipeline::{PipelineRequest, SECRET_MASK, SettingsPipeline};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
     type RecordedCall = (PatchClass, BTreeMap<String, serde_json::Value>);
@@ -1034,6 +1035,26 @@ mod tests {
             json!({"configured": true})
         );
         assert!(!format!("{response:?}").contains("example_token"));
+    }
+
+    #[test]
+    fn unconfigured_secret_mask_is_rejected_instead_of_being_saved() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let mut service = service(&temp, RecordingApplier::default());
+        let error = service.patch(&PatchRequest {
+            expected_revision: Some("0".to_owned()),
+            values: BTreeMap::from([(
+                "notifications.discord.webhook_url".to_owned(),
+                json!(SECRET_MASK),
+            )]),
+        });
+        assert_eq!(
+            error
+                .expect_err("mask must not configure an unset secret")
+                .status_code(),
+            422
+        );
+        assert_eq!(service.revision(), 0);
     }
 
     #[test]

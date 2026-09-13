@@ -864,6 +864,9 @@ def test_p95_history_gate_is_blocking_in_workflow() -> None:
     assert "Enforce timing p95 history gate (blocking, fail-closed)" in workflow
     assert "nix run .#ci-timing -- p95" in workflow
     assert 'select(.conclusion == "success" or .conclusion == "failure")' in workflow
+    assert "actions/runs/${candidate_id}/jobs?per_page=100" in workflow
+    assert 'select(.name == "Normal CI Required")' in workflow
+    assert "required_conclusion" in workflow
     assert "timing-report.json" in workflow
     assert "ci-timing-${candidate_id}-${candidate_attempt}" in workflow
     assert 'gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/' in workflow

@@ -565,6 +565,16 @@ jobs:
           while IFS=" " read -r candidate_id candidate_attempt; do
             if [ "$collected" -ge 10 ]; then break; fi
             if [ -z "$candidate_id" ] || [ -z "$candidate_attempt" ]; then continue; fi
+            required_jobs_json="$timing_dir/required-jobs-${candidate_id}.json"
+            if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_id}/jobs?per_page=100" > "$required_jobs_json"; then
+              echo "timing p95 gate: failed to fetch required job status for run $candidate_id" >&2
+              exit 2
+            fi
+            required_conclusion="$(jq -r '[.jobs[] | select(.name == "Normal CI Required") | .conclusion] | .[0] // ""' "$required_jobs_json")"
+            if [ "$required_conclusion" != "success" ]; then
+              echo "timing p95 gate: skipping run $candidate_id because Normal CI Required conclusion is ${required_conclusion:-missing}"
+              continue
+            fi
             artifacts_json="$timing_dir/artifacts-${candidate_id}.json"
             if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_id}/artifacts?per_page=100" > "$artifacts_json"; then
               echo "timing p95 gate: failed to fetch artifacts for run $candidate_id" >&2

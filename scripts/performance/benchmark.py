@@ -78,6 +78,8 @@ PAGE_TEMPLATE: Final = r"""<!doctype html>
 const SAMPLE_COUNT = __SAMPLE_COUNT__;
 const FRAME_WIDTH = 1920;
 const FRAME_HEIGHT = 1080;
+const MARKER_WIDTH = 640;
+const MARKER_HEIGHT = 240;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const now = () => performance.now();
 
@@ -108,7 +110,7 @@ async function makeWebRtcLoopback() {
   let frameColor = "rgb(32,32,200)";
   const captureTimer = setInterval(() => {
     sourceContext.fillStyle = frameColor;
-    sourceContext.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+    sourceContext.fillRect(0, 0, MARKER_WIDTH, MARKER_HEIGHT);
   }, 1000 / 60);
   const sender = new RTCPeerConnection({ iceServers: [] });
   const receiver = new RTCPeerConnection({ iceServers: [] });
@@ -173,8 +175,8 @@ async function collectWebRtc(loopback) {
   const { sourceContext, track, captureTrack, setFrameColor } = loopback;
 
   const decode = document.createElement("canvas");
-  decode.width = 640;
-  decode.height = 240;
+  decode.width = 1;
+  decode.height = 1;
   const decodeContext = decode.getContext("2d", { willReadFrequently: true });
   if (!window.MediaStreamTrackProcessor) {
     throw new Error("MediaStreamTrackProcessor is unavailable");
@@ -189,7 +191,7 @@ async function collectWebRtc(loopback) {
       const redFrame = samples.length % 2 === 0;
       setFrameColor(redFrame ? "rgb(200,32,32)" : "rgb(32,32,200)");
       sourceContext.fillStyle = redFrame ? "rgb(200,32,32)" : "rgb(32,32,200)";
-      sourceContext.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+      sourceContext.fillRect(0, 0, MARKER_WIDTH, MARKER_HEIGHT);
       const sampleStarted = now();
       if (typeof captureTrack.requestFrame === "function") captureTrack.requestFrame();
       while (true) {

@@ -4534,6 +4534,10 @@
             },
             "type": "object"
           },
+          "instance_id": {
+            "description": "Random identity shared by all snapshots from one backend process.",
+            "type": "string"
+          },
           "pending_restart_values": {
             "$ref": "#/components/schemas/SettingsReadPatchValues"
           },
@@ -4551,6 +4555,7 @@
           }
         },
         "required": [
+          "instance_id",
           "revision",
           "values",
           "pending_restart_values",
@@ -5489,6 +5494,10 @@
                 },
                 "type": "object"
               },
+              "instance_id": {
+                "description": "Random identity shared by all snapshots from one backend process.",
+                "type": "string"
+              },
               "pending_restart_values": {
                 "$ref": "#/components/schemas/SettingsReadPatchValues"
               },
@@ -5506,6 +5515,7 @@
               }
             },
             "required": [
+              "instance_id",
               "revision",
               "values",
               "pending_restart_values",

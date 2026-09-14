@@ -1155,7 +1155,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
 
 1. SPAは最初にWebSocketへ接続し、`ui.state.changed`を一時保持する
 2. 接続後に`GET /api/settings`と`GET /api/state`を並行取得し、それぞれのスナップショットrevisionを記録する
-3. 保持イベントをrevision順に処理し、`settings`差分は設定スナップショットrevisionより新しい場合だけ、`state`差分は状態スナップショットrevisionより新しい場合だけ適用する。片方だけ新しい場合はその領域だけ適用する
+3. 保持イベントをrevision順に処理し、同一`instance_id`内では`settings`差分を設定スナップショットrevisionより新しい場合だけ、`state`差分を状態スナップショットrevisionより新しい場合だけ適用する。片方だけ新しい場合はその領域だけ適用する。再取得した設定snapshotの`instance_id`が現在の基準と異なる場合はrevision比較をリセットして新しいsnapshotを基準にし、退役済みinstanceから遅れて届いたsnapshotは適用しない
 4. 保持イベントのrevisionに欠落がある、同revisionが複数ある、または差分を型検証できない場合は推測せず、両GETを再実行して新しい基準を作る
 5. WebSocket再接続時も同じ手順を使用する。`serial.data`、`log`、シグナリング等のrevisionなしイベントはスナップショット再生対象にしない。`script.ui`だけはイベントではなく最新完全値であるため、上記の独立した世代付きスナップショットを再送する
 
@@ -1229,7 +1229,7 @@ API呼び出し:    HTTP REST（axum）     ──→ （フォールバック�
   - 表示一覧キャッシュの`CommandDisplayItem` OpenAPI wire型は`kind`を判別子とするunionとし、コマンド行は`{"kind":"command","command":<CommandInfo>}`、セパレーター行は`{"kind":"separator","label":string|null}`で表す。このwire表現はHTTP／WebSocket境界専用であり、動的設定callbackの`CommandInfo | CommandSeparator`インターフェースへラッパーを要求しない
   - 設定レジストリの値は重複して完全収録せず`GET /api/settings`から取得する。上記状態フィールドは§11.5.6.3と同じ値契約を使用する
   - 取得後のUI可視状態変化は`ui.state.changed`で通知し、`data.state`に当該トランザクションの疎な`StatePatch`を含める。全体再取得は§7.3.2の初期化・再接続手順に従う
-  - `GET /api/settings`、`PATCH /api/settings`、`GET /api/state`の応答、および`ui.state.changed`は、UI可視状態の原子的トランザクションごとに1回増加する単一のプロセス内グローバル`revision`カウンターを共有する。サーバープロセス起動時に`0`から開始し、同一プロセス内では減少・再利用・周回させない。JSON/OpenAPI上は非負10進整数文字列として表現し、クライアントは10進整数として比較する。文字列の辞書順比較やJavaScript `Number`の安全整数範囲へ依存せず、`BigInt`または桁数＋同桁辞書順等の正確な整数比較を使用する
+  - `GET /api/settings`、`PATCH /api/settings`、`GET /api/state`の応答、および`ui.state.changed`は、UI可視状態の原子的トランザクションごとに1回増加する単一のプロセス内グローバル`revision`カウンターを共有する。サーバープロセス起動時に`0`から開始し、同一プロセス内では減少・再利用・周回させない。JSON/OpenAPI上は非負10進整数文字列として表現し、クライアントは10進整数として比較する。文字列の辞書順比較やJavaScript `Number`の安全整数範囲へ依存せず、`BigInt`または桁数＋同桁辞書順等の正確な整数比較を使用する。設定snapshotはさらにプロセス起動ごとに生成する`instance_id`を必須で持つ。同一プロセスの全settings snapshotでは不変とし、プロセス再起動時はrevisionが`0`へ戻っても新しい`instance_id`を使用する。クライアントはinstance IDが変わった場合だけ新しいrevision基準へ切り替え、旧instanceから遅れて届いたsnapshotを適用しない
   - SPAの初期化・WebSocket再接続・revision欠落時の再取得と差分再生は§7.3.2の規範手順だけを使用し、本節で別の順序を定義しない
 - **デバイスAPI**:
 

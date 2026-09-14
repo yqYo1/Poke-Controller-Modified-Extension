@@ -106,6 +106,8 @@ clientはstatusだけでなく`Content-Type`と`Content-Disposition`も確認し
 
 状態と設定のrevisionはJavaScriptの整数精度に依存しない10進文字列です。
 
+設定snapshotにはプロセス起動ごとに変わる`instance_id`も含まれます。同じbackendプロセスのsnapshotでは不変で、再起動後にrevisionが低く戻ったsnapshotもinstance IDが変われば新しい基準として扱えます。旧instanceから遅れて届いたsnapshotは適用しません。
+
 先頭zeroのない非負整数として比較し、`Number`へ変換しません。
 
 設定更新では、読み取ったrevisionを`expected_revision`へ渡せます。

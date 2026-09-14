@@ -1047,15 +1047,21 @@ fn settings_change(response: PatchResponse) -> SettingsChange {
     }
 }
 
-pub(crate) fn initial_settings_snapshot(service: &SettingsService) -> SettingsSnapshot {
+pub(crate) fn initial_settings_snapshot(
+    service: &SettingsService,
+) -> Result<SettingsSnapshot, String> {
+    let mut instance_id = [0_u8; 16];
+    getrandom::fill(&mut instance_id)
+        .map_err(|_error| "backend instance identity generation failed".to_owned())?;
     let response = service.public_response();
-    SettingsSnapshot {
+    Ok(SettingsSnapshot {
+        instance_id: hex::encode(instance_id),
         revision: DecimalString::zero(),
         values: SettingsReadValues(response.values),
         restart_required: response.pending_restart_values.keys().cloned().collect(),
         pending_restart_values: SettingsReadPatchValues(response.pending_restart_values),
         apply_failures: response.apply_failures,
-    }
+    })
 }
 
 pub(crate) async fn initial_state_snapshot(

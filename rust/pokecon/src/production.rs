@@ -185,7 +185,7 @@ impl ProductionRuntime {
         applier.push(realtime_applier);
         applier.push(websocket_applier);
         let settings = SettingsService::new(loaded.clone(), Box::new(applier));
-        let settings_snapshot = initial_settings_snapshot(&settings);
+        let settings_snapshot = initial_settings_snapshot(&settings)?;
         let state_snapshot = initial_state_snapshot(&host, &camera, &serial).await?;
         let hub = StateHub::new(settings_snapshot, state_snapshot, STATE_HISTORY_CAPACITY)
             .map_err(|_error| "application state initialization failed".to_owned())?;

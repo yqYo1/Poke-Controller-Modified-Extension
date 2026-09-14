@@ -1615,6 +1615,7 @@ mod tests {
 
     fn test_hub() -> StateHub {
         let settings = SettingsSnapshot {
+            instance_id: "test-instance".to_owned(),
             revision: DecimalString::zero(),
             values: SettingsReadValues(BTreeMap::new()),
             pending_restart_values: SettingsReadPatchValues::default(),

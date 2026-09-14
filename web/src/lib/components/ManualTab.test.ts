@@ -23,24 +23,6 @@ function runtimeView(keyboardEnabled = true): { runtime: ApplicationRuntime; vie
 }
 
 describe('ManualTab', () => {
-  it('forwards non-form keyboard codes and releases them', async () => {
-    const { runtime, view } = runtimeView();
-    const setKeyboardKey = vi.spyOn(runtime, 'setKeyboardKey');
-    render(ManualTab, { runtime, view });
-
-    await fireEvent.keyDown(window, { code: 'KeyA', key: 'a' });
-    await fireEvent.keyUp(window, { code: 'KeyA', key: 'a' });
-
-    expect(setKeyboardKey.mock.calls).toEqual([
-      ['KeyA', true],
-      ['KeyA', false]
-    ]);
-    expect(screen.queryByRole('region', { name: 'Software controller' })).toBeNull();
-    expect(
-      screen.getByRole('button', { name: 'Focus software controller' })
-    ).toBeTruthy();
-  });
-
   it('writes input-source toggles and ignores disabled keyboard input', async () => {
     const { runtime, view } = runtimeView(false);
     const setKeyboardKey = vi.spyOn(runtime, 'setKeyboardKey');

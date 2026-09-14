@@ -240,6 +240,8 @@ pub struct SettingsPatchRequest {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsSnapshot {
+    /// Random identity shared by all snapshots from one backend process.
+    pub instance_id: String,
     pub revision: DecimalString,
     pub values: SettingsReadValues,
     pub pending_restart_values: SettingsReadPatchValues,

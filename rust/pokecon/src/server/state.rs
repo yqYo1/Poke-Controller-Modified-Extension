@@ -440,6 +440,7 @@ mod tests {
     fn snapshots() -> VisibleSnapshots {
         VisibleSnapshots {
             settings: SettingsSnapshot {
+                instance_id: "test-instance".to_owned(),
                 revision: DecimalString::zero(),
                 values: SettingsReadValues(BTreeMap::from([(
                     "sample.mode".to_owned(),
@@ -499,6 +500,7 @@ mod tests {
         assert!(outcome.changed());
         assert_eq!(outcome.revision().as_str(), "1");
         assert_eq!(outcome.snapshots.settings.revision, *outcome.revision());
+        assert_eq!(outcome.snapshots.settings.instance_id, "test-instance");
         assert_eq!(
             outcome.snapshots.settings.values.0["sample.mode"],
             json!("new")
@@ -679,6 +681,7 @@ mod tests {
             hub.snapshots().await,
             VisibleSnapshots {
                 settings: SettingsSnapshot {
+                    instance_id: "test-instance".to_owned(),
                     revision: DecimalString::from_u64(u64::MAX),
                     ..snapshots().settings
                 },

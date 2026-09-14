@@ -9,6 +9,7 @@
   import { BackendActions } from '$lib/actions';
   import CameraTab from '$lib/components/CameraTab.svelte';
   import CommandsTab from '$lib/components/CommandsTab.svelte';
+  import InputSafety from '$lib/components/InputSafety.svelte';
   import ManualTab from '$lib/components/ManualTab.svelte';
   import MainPanel from '$lib/components/MainPanel.svelte';
   import NotificationsTab from '$lib/components/NotificationsTab.svelte';
@@ -103,6 +104,7 @@
 </script>
 
 {#if view !== undefined}
+  <InputSafety {runtime} {view} />
   <main bind:this={workspaceElement} class="mx-auto flex h-screen min-h-0 w-full max-w-[1920px] flex-col overflow-auto p-3 sm:p-5 lg:p-6">
     <header class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-1 pb-4">
       <div class="flex items-center gap-3">

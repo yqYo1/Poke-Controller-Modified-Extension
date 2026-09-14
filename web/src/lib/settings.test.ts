@@ -92,7 +92,7 @@ describe('SettingsWriter', () => {
     expect(patch).toHaveBeenCalledTimes(2);
   });
 
-  it('publishes only snapshots at or after the current revision', () => {
+  it('publishes only snapshots at or after the current revision within one backend', () => {
     const writer = new SettingsWriter();
     const revisions: (string | null)[] = [];
     writer.subscribe((snapshot) => revisions.push(snapshot?.revision ?? null));
@@ -102,5 +102,44 @@ describe('SettingsWriter', () => {
     writer.acceptSnapshot(settingsSnapshot('6'));
 
     expect(revisions).toEqual([null, '5', '6']);
+  });
+
+  it('accepts a lower revision for a new backend and rejects retired instances', () => {
+    const writer = new SettingsWriter();
+    const revisions: string[] = [];
+    writer.subscribe((snapshot) => {
+      if (snapshot !== null) revisions.push(`${snapshot.instance_id}:${snapshot.revision}`);
+    });
+
+    writer.acceptSnapshot(settingsSnapshot('9', {}, 'backend-a'));
+    writer.acceptSnapshot(settingsSnapshot('2', {}, 'backend-b'));
+    writer.acceptSnapshot(settingsSnapshot('8', {}, 'backend-a'));
+    writer.acceptSnapshot(settingsSnapshot('1', {}, 'backend-b'));
+
+    expect(revisions).toEqual(['backend-a:9', 'backend-b:2']);
+  });
+
+  it('replays a write when an old-instance response arrives after reconnect', async () => {
+    const oldPatch = deferred<SettingsSnapshot>();
+    const patch = vi
+      .fn<(request: SettingsPatchRequest) => Promise<SettingsSnapshot>>()
+      .mockImplementationOnce(() => oldPatch.promise)
+      .mockResolvedValueOnce(settingsSnapshot('1', {}, 'backend-b'));
+    const writer = new SettingsWriter({
+      load: vi.fn().mockResolvedValue(settingsSnapshot('0', {}, 'backend-b')),
+      patch
+    });
+    writer.acceptSnapshot(settingsSnapshot('5', {}, 'backend-a'));
+
+    const write = writer.write({ language: 'en' });
+    await vi.waitFor(() => expect(patch).toHaveBeenCalledTimes(1));
+    writer.acceptSnapshot(settingsSnapshot('0', {}, 'backend-b'));
+    oldPatch.resolve(settingsSnapshot('6', {}, 'backend-a'));
+
+    await expect(write).resolves.toEqual({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('1', {}, 'backend-b')
+    });
+    expect(patch.mock.calls.map(([request]) => request.expected_revision)).toEqual(['5', '0']);
   });
 });

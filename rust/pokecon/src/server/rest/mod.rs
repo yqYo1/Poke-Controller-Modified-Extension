@@ -453,6 +453,7 @@ mod tests {
 
     fn test_hub() -> StateHub {
         let settings = SettingsSnapshot {
+            instance_id: "test-instance".to_owned(),
             revision: DecimalString::zero(),
             values: SettingsReadValues(BTreeMap::from([("sample.mode".to_owned(), json!("old"))])),
             pending_restart_values: SettingsReadPatchValues::default(),

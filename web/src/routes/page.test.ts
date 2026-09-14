@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ApplicationRuntime } from '$lib/runtime';
 import Page from './+page.svelte';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('application shell', () => {
   it('exposes the six canonical main tabs and the right-side widgets', () => {
@@ -15,6 +20,15 @@ describe('application shell', () => {
     expect(screen.getByRole('region', { name: 'Software controller' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Output #1' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Output #2' })).toBeTruthy();
+  });
+
+  it('keeps keyboard input active while Camera tab is selected', async () => {
+    const setKeyboardKey = vi.spyOn(ApplicationRuntime.prototype, 'setKeyboardKey');
+    render(Page);
+
+    await fireEvent.keyDown(window, { code: 'KeyA', key: 'a' });
+
+    expect(setKeyboardKey).toHaveBeenCalledWith('KeyA', true);
   });
 
   it('supports keyboard navigation across the tab list', async () => {

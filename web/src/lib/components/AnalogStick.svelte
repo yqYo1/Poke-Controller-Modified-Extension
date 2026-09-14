@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   import type { components } from '../api/openapi';
+  import { onInputNeutralized } from '../input-safety';
 
   type StickName = components['schemas']['StickName'];
   type StickPosition = components['schemas']['StickPosition'];
@@ -75,6 +76,13 @@
     onchange(stick, 128, 128);
   }
 
+  function neutralize(): void {
+    activePointer = null;
+    pendingPosition = null;
+    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  }
+
   function handleKeydown(event: KeyboardEvent): void {
     const step = event.shiftKey ? 32 : 8;
     let { x, y } = position;
@@ -102,8 +110,10 @@
     onchange(stick, x, y);
   }
 
+  onMount(() => onInputNeutralized(neutralize));
+
   onDestroy(() => {
-    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    neutralize();
   });
 </script>
 

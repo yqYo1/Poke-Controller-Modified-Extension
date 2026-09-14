@@ -88,10 +88,12 @@ export function settingsValues(
 
 export function settingsSnapshot(
   revision: string,
-  overrides: Partial<SettingsReadValues> = {}
+  overrides: Partial<SettingsReadValues> = {},
+  instanceId = 'test-instance'
 ): SettingsSnapshot {
   return validateWireValue('SettingsSnapshot', {
     apply_failures: {},
+    instance_id: instanceId,
     pending_restart_values: {},
     restart_required: [],
     revision,

@@ -4,6 +4,7 @@
   import type { ScriptUiAction, ScriptUiActionResult } from '../actions';
   import type { SettingsWriteValues } from '../api';
   import type { components } from '../api/openapi';
+  import { onInputNeutralized } from '../input-safety';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
 
   type NormalizedRegion = components['schemas']['NormalizedRegion'];
@@ -433,17 +434,26 @@
     current = null;
   }
 
+  function neutralizeLocalInput(): void {
+    const completed = drag;
+    cancelPendingStick();
+    cancelPendingScript();
+    if (completed?.mode === 'script') {
+      sendScriptPointer('released', current ?? completed.start, completed);
+    }
+    drag = null;
+    current = null;
+  }
+
   onMount(() => {
+    const unsubscribeNeutralization = onInputNeutralized(neutralizeLocalInput);
     const unsubscribe = runtime.onFallbackFrame(receiveFallback);
     renderFrame = requestAnimationFrame(render);
     return () => {
+      unsubscribeNeutralization();
       unsubscribe();
       if (renderFrame !== null) cancelAnimationFrame(renderFrame);
-      cancelPendingStick();
-      if (drag?.mode === 'script') {
-        sendScriptPointer('released', current ?? drag.start, drag);
-      }
-      cancelPendingScript();
+      neutralizeLocalInput();
       if (fallbackUrl !== null) URL.revokeObjectURL(fallbackUrl);
     };
   });

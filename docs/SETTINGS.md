@@ -173,6 +173,8 @@ token、Webhook URL、passwordを移行記録、受入記録、issue、terminal�
 
 設定snapshotの`revision`はcanonicalな非負10進文字列です。
 
+設定snapshotの`instance_id`はbackendプロセスの世代を識別します。同一プロセスの更新では変わらず、backend再起動時にはrevisionが`0`へ戻っても新しいinstance IDになります。clientはinstance IDの変更を検出した場合だけrevision基準を切り替え、旧プロセスから遅れて届いた応答を採用しません。
+
 HTTP APIで更新するときは、読取時のrevisionを`expected_revision`へ指定できます。
 
 ```json

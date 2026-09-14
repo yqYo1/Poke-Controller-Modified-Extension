@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
 
   import type { components } from '../api/openapi';
+  import { onInputNeutralized } from '../input-safety';
   import type { ApplicationRuntime, RuntimeView } from '../runtime';
   import AnalogStick from './AnalogStick.svelte';
   import TouchPad from './TouchPad.svelte';
@@ -146,6 +148,13 @@
   function changeTouch(touch: components['schemas']['TouchPoint'] | null): void {
     runtime.setGamepadTouch(touch);
   }
+
+  onMount(() =>
+    onInputNeutralized(() => {
+      visuallyReleased.clear();
+      hatVisuallyReleased = false;
+    })
+  );
 </script>
 
 <section id="software-controller" class="shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-ink-900/90" aria-label="Software controller">

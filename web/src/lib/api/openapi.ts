@@ -1270,6 +1270,8 @@ export interface components {
             apply_failures: {
                 [key: string]: string;
             };
+            /** @description Random identity shared by all snapshots from one backend process. */
+            instance_id: string;
             pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
             restart_required: string[];
             revision: components["schemas"]["DecimalString"];
@@ -1521,6 +1523,8 @@ export interface components {
                 apply_failures: {
                     [key: string]: string;
                 };
+                /** @description Random identity shared by all snapshots from one backend process. */
+                instance_id: string;
                 pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
                 restart_required: string[];
                 revision: components["schemas"]["DecimalString"];

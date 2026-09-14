@@ -6,6 +6,7 @@ import {
   type InputView,
   type RoutedMessageTransport
 } from './input';
+import { dispatchInputNeutralized } from './input-safety';
 import { MediaTransport, type MediaView } from './media';
 import { RealtimeClient, type RealtimeView } from './realtime';
 import { SettingsWriter, type SettingsWriteResult } from './settings';
@@ -263,6 +264,7 @@ export class ApplicationRuntime {
       return;
     }
     this.bundle.input.stop();
+    dispatchInputNeutralized();
     this.bundle.media.stop();
     this.bundle.realtime.stop();
     this.serialDecoder = new TextDecoder();
@@ -341,17 +343,16 @@ export class ApplicationRuntime {
 
   neutralizeInput(): void {
     this.bundle.input.neutralize();
+    dispatchInputNeutralized();
   }
 
   private handleRealtimeView(realtime: RealtimeView): void {
     const disconnected =
-      this.previousConnectionStatus !== 'idle' &&
-      (realtime.status === 'idle' ||
-        realtime.status === 'waiting' ||
-        realtime.status === 'exhausted');
+      this.previousConnectionStatus === 'connected' && realtime.status !== 'connected';
     this.previousConnectionStatus = realtime.status;
     if (disconnected) {
       this.bundle.input.transportDisconnected();
+      dispatchInputNeutralized();
       this.serialDecoder = new TextDecoder();
     }
     if (realtime.settings !== null) {

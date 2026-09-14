@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
+
   import type { components } from '../api/openapi';
+  import { onInputNeutralized } from '../input-safety';
 
   type TouchPoint = components['schemas']['TouchPoint'];
 
@@ -42,6 +45,13 @@
     activePointer = null;
     onchange(null);
   }
+
+  function neutralize(): void {
+    activePointer = null;
+  }
+
+  onMount(() => onInputNeutralized(neutralize));
+  onDestroy(neutralize);
 </script>
 
 <button

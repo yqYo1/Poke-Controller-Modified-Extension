@@ -309,7 +309,7 @@ jobs:
 
   performance:
     name: Browser primitive performance smoke (Linux)
-    needs: plan
+    needs: [plan, product_flake]
     if: needs.plan.outputs.product == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -380,12 +380,11 @@ jobs:
           else
             echo "No previous passing Linux performance baseline; this run is bootstrap"
           fi
-      - name: Build the release product used for the fixture identity
+      - name: Resolve the release product derivation identity
         id: product
         run: |
           set -euo pipefail
-          nix build .#packages.x86_64-linux.pokecon --no-link
-          build_identity="$(nix path-info .#packages.x86_64-linux.pokecon)"
+          build_identity="$(nix path-info --derivation .#packages.x86_64-linux.pokecon)"
           printf 'build_identity=%s\n' "$build_identity" >> "$GITHUB_OUTPUT"
       - name: Run the browser loopback performance gate
         env:

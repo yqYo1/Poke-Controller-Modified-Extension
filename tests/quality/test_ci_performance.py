@@ -18,7 +18,9 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
 
     assert "name: Browser primitive performance smoke (Linux)" in job
     assert "if: needs.plan.outputs.product == 'true'" in job
-    assert "nix build .#packages.x86_64-linux.pokecon --no-link" in job
+    assert "needs: [plan, product_flake]" in job
+    assert "nix path-info --derivation .#packages.x86_64-linux.pokecon" in job
+    assert "Build the release product used for the fixture identity" not in job
     assert "nix run .#performance-check --" in job
     assert "--samples 300" in job
     assert "--warmup-seconds 60" in job

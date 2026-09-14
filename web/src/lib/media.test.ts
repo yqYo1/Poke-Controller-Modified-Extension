@@ -394,6 +394,47 @@ describe('MediaTransport signaling', () => {
     });
   });
 
+  it('drops a queued offer when input generation invalidates the peer', async () => {
+    const harness = makeHarness(
+      realtimeView({ settings: null, status: 'synchronizing' })
+    );
+    harness.media.start();
+    harness.realtime.emitMessage(offer('stale-offer'));
+    harness.realtime.emitMessage(generation('new-generation'));
+
+    harness.realtime.emitView(realtimeView());
+    await settle();
+
+    expect(harness.peers).toHaveLength(0);
+    expect(harness.view()).toMatchObject({
+      mode: 'fallback',
+      negotiating: false,
+      stream: null
+    });
+  });
+
+  it('drops queued ICE when input generation invalidates the peer', async () => {
+    const harness = makeHarness(
+      realtimeView({ settings: null, status: 'synchronizing' })
+    );
+    harness.media.start();
+    harness.realtime.emitMessage({
+      data: {
+        candidate: 'stale-candidate',
+        sdp_mid: 'video',
+        sdp_mline_index: 0,
+        username_fragment: 'remote-user'
+      },
+      type: 'webrtc.ice_candidate'
+    });
+    harness.realtime.emitMessage(generation('new-generation'));
+    harness.realtime.emitView(realtimeView());
+    harness.realtime.emitMessage(offer('fresh-offer'));
+    await settle();
+
+    expect(peerAt(harness.peers).addedIce).toHaveLength(0);
+  });
+
   it('echoes a remote negotiation id in the answer and local ICE', async () => {
     const harness = makeHarness();
     harness.media.start();

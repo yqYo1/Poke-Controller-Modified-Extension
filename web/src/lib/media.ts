@@ -306,6 +306,8 @@ export class MediaTransport implements RoutedMessageTransport {
         });
         return;
       case 'input.generation':
+        this.pendingOffer = undefined;
+        this.pendingIce = [];
         if (this.peer !== undefined) {
           this.closePeer();
         }

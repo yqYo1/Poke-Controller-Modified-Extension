@@ -688,6 +688,21 @@ describe('MediaTransport routing and failover', () => {
     expect(harness.view().mode).toBe('fallback');
   });
 
+  it('does not demote an active WebRTC primary when a fallback frame arrives', async () => {
+    const harness = makeHarness();
+    const { peer } = await makePrimary(harness);
+    const frame = new ArrayBuffer(3);
+
+    harness.realtime.emitFrame(frame);
+
+    expect(peer.closed).toBe(false);
+    expect(harness.view()).toMatchObject({
+      mode: 'webrtc',
+      negotiating: false,
+      stream: harness.stream
+    });
+  });
+
   it('closes the old peer when WebSocket signaling starts a new connection', async () => {
     const harness = makeHarness();
     const { peer } = await makePrimary(harness);

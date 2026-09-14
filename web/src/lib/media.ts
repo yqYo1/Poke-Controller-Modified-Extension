@@ -195,7 +195,9 @@ export class MediaTransport implements RoutedMessageTransport {
         this.handleWebSocketMessage(message);
       }),
       this.realtime.onFrame((frame) => {
-        this.activateFallback(null);
+        if (this.view.mode !== 'webrtc') {
+          this.activateFallback(null);
+        }
         for (const subscriber of this.fallbackSubscribers) {
           subscriber(frame);
         }

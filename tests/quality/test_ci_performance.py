@@ -26,6 +26,11 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "--samples 300" in job
     assert "--warmup-seconds 60" in job
     assert "--timeout-seconds 600" in job
+    assert (
+        'gh api \\\n              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \\\n              > "$zip_path"'
+        in job
+    )
+    assert "gh api --output" not in job
     assert "if: always()" in job
     assert "performance-record.json" in job
     assert "path: ${{ github.workspace }}/performance-evidence/" in job

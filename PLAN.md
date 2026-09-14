@@ -34,8 +34,10 @@
 ### 2026-09-14 要件別監査の結果
 
 - [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
-- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。ただしclean detached worktree、tracked `.envrc`のread-back、direnv入室副作用0、hostile PATHの一式は未証明であり、RUN3全体は[x]にしない。
-- [ ] **CI性能gate**: `performance-check`とrequired blocking jobは実装済み。5 metric（各300 sample以上、60秒warm-up、p50／p95／maximum、baseline／threshold、artifact）の実CI runとbaseline比較、production主経路のlatency／throughput／stabilityは未完了。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
+- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。現行worktreeではtracked `.envrc`が一行の`use flake`であること、`direnv allow`／`direnv exec .`、hostile PATH下の`nix develop`、source-filter／SPA guard、入室前後のtracked worktree無変更を確認した（2026-09-14）。ただしclean detached worktreeでの同一証跡は、既存worktreeのみを使う制約により未証明であり、RUN3全体は[x]にしない。
+- [ ] **CI性能gate**: `performance-check`とrequired blocking jobは実装済み。既存artifact `10334767608`のreportは5 metric（各300 sample、60秒warm-up、p50／p95／maximum）条件を満たしていたが、run `34846200611`のbaseline解決stepはrunner非対応の`gh api --output`でartifact取得に失敗しbootstrapへ落ちていた（2026-09-14）。`.github/workflows/normal-ci.yml`を標準出力の`> "$zip_path"`へ修正し、quality test 2件、actionlint、formatを通過した。post-fix CIでのbaseline比較とproduction主経路のlatency／throughput／stabilityは未完了。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
+- [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 101 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
+
 - [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
 - [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、`SPECIFICATION.md`の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
 

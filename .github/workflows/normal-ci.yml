@@ -335,8 +335,8 @@ jobs:
             zip_path="$baseline_root/$artifact_id.zip"
             candidate_dir="$baseline_root/$artifact_id"
             if ! gh api \
-              --output "$zip_path" \
-              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"; then
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              > "$zip_path"; then
               rm -f "$zip_path"
               continue
             fi

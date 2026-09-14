@@ -309,7 +309,7 @@ jobs:
 
   performance:
     name: Browser primitive performance smoke (Linux)
-    needs: [plan, product_flake]
+    needs: plan
     if: needs.plan.outputs.product == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15

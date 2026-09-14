@@ -1065,6 +1065,20 @@ def run(args: argparse.Namespace) -> int:
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     if not all_passed:
+        failed_metrics = {
+            metric: evaluations[metric]
+            for metric in METRIC_ORDER
+            if not evaluations[metric]["absolute"]["passed"]
+            or not evaluations[metric]["regression"]["passed"]
+        }
+        print(
+            "performance gate evaluations: "
+            + json.dumps(
+                {"failed_metrics": failed_metrics, "report": str(report_path)},
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
         raise PerformanceError("performance threshold or regression gate failed")
     return 0
 

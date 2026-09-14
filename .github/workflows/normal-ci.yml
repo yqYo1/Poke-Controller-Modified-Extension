@@ -390,19 +390,38 @@ jobs:
       - name: Run the browser loopback performance gate
         env:
           POKECON_PERFORMANCE_BUILD_IDENTITY: ${{ steps.product.outputs.build_identity }}
-          POKECON_PERFORMANCE_OUTPUT: ${{ runner.temp }}/pokecon-performance/performance-record.json
+          POKECON_PERFORMANCE_OUTPUT: ${{ github.workspace }}/performance-evidence/performance-record.json
           POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}
         run: |
           nix run .#performance-check -- \
             --samples 300 \
             --warmup-seconds 60 \
             --timeout-seconds 600
+      - name: Inspect performance evidence directory
+        if: always()
+        run: |
+          evidence_dir="${{ github.workspace }}/performance-evidence"
+          if [ ! -d "$evidence_dir" ]; then
+            echo "performance evidence directory is missing: $evidence_dir"
+          else
+            for evidence_file in \
+              performance-record.json \
+              performance-report.json \
+              performance-samples.json \
+              performance-browser.log; do
+              if [ -f "$evidence_dir/$evidence_file" ]; then
+                stat --format='%n %s bytes' "$evidence_dir/$evidence_file"
+              else
+                echo "performance evidence file is missing: $evidence_file"
+              fi
+            done
+          fi
       - name: Upload performance evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: pokecon-performance-linux-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/pokecon-performance/
+          path: ${{ github.workspace }}/performance-evidence/
           if-no-files-found: error
 
   windows:

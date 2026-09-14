@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "212639a4bc292c60ea7c7d8052aa9d17865f7953c43f81c28d2e42521f092546";
+      canonicalFlakeHash = "fa284f843843f1c28601e01eacc423ac1bc4aae27948ca69810c4b69a6dca0d0";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "e1d6f584200bc93ab67d7b697c0771f89fbd2b7c210fdfe4e5a766aef54aeec8";
+          expectedAuditTestHash = "307f0f3c3f0268091c44dd312a77cb5af3e71e345613b1fe96f1b1e4e201972d";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3425,15 +3425,17 @@
                 echo "performance-check requires the Linux Chromium fixture runner" >&2
                 exit 2
               fi
-              ${setupSourceGateEnvironment}
               output_path="''${POKECON_PERFORMANCE_OUTPUT:-$PWD/performance-record.json}"
               source_commit="''${POKECON_PERFORMANCE_SOURCE_COMMIT:-$("${pkgs.git}/bin/git" -C "$PWD" rev-parse HEAD)}"
               build_identity="''${POKECON_PERFORMANCE_BUILD_IDENTITY:-source:$source_commit}"
+              baseline_path="''${POKECON_PERFORMANCE_BASELINE:-}"
+              require_baseline="''${POKECON_PERFORMANCE_REQUIRE_BASELINE:-0}"
+              ${setupSourceGateEnvironment}
               baseline_args=()
-              if [ -n "''${POKECON_PERFORMANCE_BASELINE:-}" ]; then
-                baseline_args+=(--baseline "$POKECON_PERFORMANCE_BASELINE")
+              if [ -n "$baseline_path" ]; then
+                baseline_args+=(--baseline "$baseline_path")
               fi
-              if [ "''${POKECON_PERFORMANCE_REQUIRE_BASELINE:-0}" = 1 ]; then
+              if [ "$require_baseline" = 1 ]; then
                 baseline_args+=(--require-baseline)
               fi
               exec "${pkgs.python314}/bin/python" -I \

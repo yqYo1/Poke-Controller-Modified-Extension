@@ -170,7 +170,7 @@ async function makeWebRtcLoopback() {
 }
 
 async function collectWebRtc(loopback) {
-  const { sourceContext, track, setFrameColor } = loopback;
+  const { sourceContext, track, captureTrack, setFrameColor } = loopback;
 
   const decode = document.createElement("canvas");
   decode.width = 640;
@@ -191,6 +191,7 @@ async function collectWebRtc(loopback) {
       sourceContext.fillStyle = redFrame ? "rgb(200,32,32)" : "rgb(32,32,200)";
       sourceContext.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
       const sampleStarted = now();
+      if (typeof captureTrack.requestFrame === "function") captureTrack.requestFrame();
       while (true) {
         const { value, done } = await reader.read();
         if (done) throw new Error("WebRTC video track ended during collection");

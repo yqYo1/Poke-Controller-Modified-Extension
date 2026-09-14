@@ -2993,8 +2993,10 @@ validate_http_contract() {
   if ! jq -e '
     keys == ["data"]
     and (.data | keys) == [
-      "apply_failures", "pending_restart_values", "restart_required", "revision", "values"
+      "apply_failures", "instance_id", "pending_restart_values", "restart_required", "revision", "values"
     ]
+    and (.data.instance_id | type) == "string"
+    and (.data.instance_id | length) > 0
     and (.data.revision | type) == "string"
     and (.data.values | type) == "object"
     and (.data.values | length) == 71
@@ -3065,6 +3067,7 @@ validate_http_contract() {
   ' "$root/state.json" >"$root/state.normalized.json"
   jq --sort-keys --arg root "$root" '
     del(
+      .data.instance_id,
       .data.revision,
       .data.values["server.port"],
       .data.values["server.bind_address"],

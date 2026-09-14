@@ -1,14 +1,19 @@
 {
   "include": [
-    "SerialController"
+    "python",
+    "scripts",
+    "tests"
   ],
   "exclude": [
     "**/__pycache__"
   ],
+  "extraPaths": [
+    "python/pokecon/typings"
+  ],
   "defineConstant": {
     "DEBUG": true
   },
-  "pythonVersion": "3.12",
+  "pythonVersion": "3.14",
   "pythonPlatform": "All",
   "analyzeUnannotatedFunctions": true,
   "deprecateTypingAliases": true,

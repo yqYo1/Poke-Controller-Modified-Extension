@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PokeCon Controller",
+  "identifier": "com.yqyo1.pokecon",
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "build": {
+    "beforeBundleCommand": "python ../scripts/release/build_runtime.py --normalize-pe ../target/release/pokecon.exe"
+  },
+  "bundle": {
+    "active": true,
+    "category": "Utility",
+    "copyright": "Copyright © yqYo1",
+    "licenseFile": "../../LICENSE",
+    "longDescription": "Local-first controller automation runtime with a Rust backend and native desktop shell.",
+    "publisher": "yqYo1",
+    "shortDescription": "PokeCon controller automation runtime",
+    "useLocalToolsDir": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libgl1",
+          "libglib2.0-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1",
+          "libportaudio2",
+          "libsm6",
+          "libudev1",
+          "libwebkit2gtk-4.1-0",
+          "libxcb1",
+          "libxext6",
+          "libxrender1"
+        ],
+        "files": {
+          "/usr/lib/udev/rules.d/70-pokecon-controller.rules": "linux/70-pokecon-controller.rules"
+        },
+        "postInstallScript": "linux/reload-udev.sh",
+        "postRemoveScript": "linux/reload-udev.sh"
+      }
+    },
+    "windows": {
+      "allowDowngrades": false,
+      "nsis": {
+        "compression": "none",
+        "installerHooks": "../../scripts/release/nsis-reproducibility.nsh",
+        "template": "../../scripts/release/installer.nsi"
+      },
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
+      }
+    }
+  }
+}

@@ -644,33 +644,37 @@ def _regression_evaluation(
     if metric == "ui_frame_rate":
         field = "p50"
         factor = REGRESSION_FACTOR_FPS
-        threshold = (
-            _finite_number(
-                baseline_measurement.get(field), f"baseline.{metric}.{field}"
-            )
-            * factor
-        )
-        observed = float(summary[field])
-        passed = observed >= threshold
         operator = ">="
     else:
         field = "p95"
         factor = REGRESSION_FACTOR_LATENCY
-        threshold = (
-            _finite_number(
-                baseline_measurement.get(field), f"baseline.{metric}.{field}"
-            )
-            * factor
-        )
-        observed = float(summary[field])
-        passed = observed <= threshold
         operator = "<="
+    baseline_value = _finite_number(
+        baseline_measurement.get(field), f"baseline.{metric}.{field}"
+    )
+    observed = float(summary[field])
+    if baseline_value == 0.0:
+        # A zero baseline cannot define a meaningful multiplicative threshold.
+        # Keep the gate fail-closed by using the metric's absolute threshold.
+        _, absolute = _absolute_passes(summary)
+        return {
+            "kind": "absolute_zero_baseline",
+            "field": field,
+            "operator": absolute["operator"],
+            "factor": factor,
+            "baseline": baseline_value,
+            "threshold": absolute["threshold"],
+            "observed": observed,
+            "passed": absolute["passed"],
+        }
+    threshold = baseline_value * factor
+    passed = observed >= threshold if operator == ">=" else observed <= threshold
     return {
         "kind": "relative",
         "field": field,
         "operator": operator,
         "factor": factor,
-        "baseline": float(baseline_measurement[field]),
+        "baseline": baseline_value,
         "threshold": threshold,
         "observed": observed,
         "passed": passed,

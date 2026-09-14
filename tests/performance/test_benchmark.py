@@ -63,6 +63,19 @@ def test_latency_regression_is_limited_to_ten_percent() -> None:
     )["passed"]
 
 
+def test_zero_latency_baseline_uses_absolute_threshold() -> None:
+    baseline = {"ui_input_latency": {"p95": 0.0}}
+    accepted = _regression_evaluation(
+        {"metric": "ui_input_latency", "p95": 0.1}, baseline
+    )
+    assert accepted["kind"] == "absolute_zero_baseline"
+    assert accepted["threshold"] == 16.0
+    assert accepted["passed"]
+    assert not _regression_evaluation(
+        {"metric": "ui_input_latency", "p95": 16.0}, baseline
+    )["passed"]
+
+
 def test_frame_rate_regression_is_limited_to_five_percent() -> None:
     baseline = {"ui_frame_rate": {"p50": 60.0}}
     assert _regression_evaluation({"metric": "ui_frame_rate", "p50": 57.1}, baseline)[

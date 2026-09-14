@@ -167,6 +167,7 @@ PRODUCT_ROOT_PATHS: Final = frozenset(
 PRODUCT_PREFIXES: Final = (
     "python/",
     "scripts/integration/",
+    "scripts/performance/",
     "scripts/release/",
     "tests/fixtures/cli-help/",
     "web/",

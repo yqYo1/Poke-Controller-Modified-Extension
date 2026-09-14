@@ -28,14 +28,14 @@
 ### 現行の残タスク（アシスタント担当）
 
 - [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を、clean worktreeと4 systemの証跡で再受入する。
-- [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。実機latency／throughput計測環境は作成しない。
+- [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。browser primitive smokeとそのblocking jobは実装済みだが、production主経路のCI証跡は未完了。実機latency／throughput計測環境は作成しない。
 - [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
 
 ### 2026-09-14 要件別監査の結果
 
 - [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
 - [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。ただしclean detached worktree、tracked `.envrc`のread-back、direnv入室副作用0、hostile PATHの一式は未証明であり、RUN3全体は[x]にしない。
-- [ ] **CI性能gate**: `performance` recordの5 metric（各300 sample以上、warm-up、p50／p95／maximum、baseline／threshold、artifact、required blocking gate）は未実装。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
+- [ ] **CI性能gate**: `performance-check`とrequired blocking jobは実装済み。5 metric（各300 sample以上、60秒warm-up、p50／p95／maximum、baseline／threshold、artifact）の実CI runとbaseline比較、production主経路のlatency／throughput／stabilityは未完了。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
 - [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
 - [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、`SPECIFICATION.md`の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
 
@@ -89,6 +89,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-11-39** 各移行前に移動／削除する型、trait、moduleをinventory化する（予定証跡: `nix run .#check`の段階別inventoryと許可済みVCS入口`git grep`の移行後残存参照log）。
 - [ ] **AR-11-40** 移行段階、監督／資源service実行ファイル、共通workerごとの検証commandを確定する（予定証跡: 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7ごとのNix command／期待結果表と実行log）。
 - [ ] **AR-11-10** 主経路のlatency、throughput、停止、復旧の受入条件を定義する（予定証跡: CI上のmock／virtual I/O測定fixture、閾値、移行前baseline、移行後report。実機の性能測定環境は作成しない）。
+  - 実装済み: `performance-check`がbrowser primitiveのloopback sample、統計、絶対閾値、prior-passing baseline比較、raw/report artifactを生成する。60秒／300件のCI実run、production backendの主経路、停止／復旧、実機I/Oの受入証跡は未完了のまま残す。
 - [ ] **AR-11-37** 別processと同一processの境界を確定する（予定証跡: process／module deployment diagramとIPC境界test）。
 - [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
 
@@ -551,7 +552,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 ### 4.1 主経路と優先順位
 
 - [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に`SPECIFICATION.md`の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
-- [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: CI上のmock／virtual I/Oによる非競合時の機能別latency／throughput／stability report）。
+- [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: CI上のmock／virtual I/Oによる非競合時の機能別latency／throughput／stability report）。browser primitive smokeは実装済みだが、production主経路の機能別latency／throughput／stability reportは未完了。
 - [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
 - [x] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（証跡: `cargo test --locked --workspace --all-targets --all-features` の input／notification／worker lifecycle fault tests）。
@@ -606,7 +607,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 - [x] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む（証跡: Package CI `34272925529`のLinux／Windows bundle、clean-install smoke、runtime／resource manifest）。
 - [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
-- [x] 2026-09-14の最新commit `50bd589ba67ec801f9be4579c7062984d9577b2f`で隔離Web runtimeの外部hardware I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
+- [x] 2026-09-14のcommit `50bd589ba67ec801f9be4579c7062984d9577b2f`で隔離Web runtimeの外部hardware I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
 - [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。

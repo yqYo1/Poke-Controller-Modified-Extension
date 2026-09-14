@@ -24,6 +24,19 @@ CIや仮想I/Oの成功を、外部受入の成功へ読み替えません。
 
 性能のp50、p95、maximum、throughputはCI上のmock／virtual I/Oだけで計測します。実機のdriver、firmware、物理signalを含むend-to-end性能を測るためのhardware計測環境は作成しません。物理境界そのものの動作確認は、性能値とは別の外部受入gateとして残します。
 
+## CI browser primitive性能smoke gate
+
+`nix run .#performance-check`は、実行したbrowser processのloopback fixtureから実測sampleを収集します。これはCIのbrowser／transport primitive回帰smokeであり、production backendの性能受入を置き換えません。
+
+- WebRTCはCanvasの既知frameを`RTCPeerConnection`のlocal loopbackへ送り、receiverの`MediaStreamTrackProcessor`でframe到着を測定します。
+- Motion JPEGはbrowserが生成したJPEGをlocal HTTP serverへ送り、serverのmultipart responseをbrowserでparse／decodeします。
+- controller inputはbrowserの`MessageChannel` loopback、UI frame rateは`requestAnimationFrame`、UI input latencyはevent handler到着を測定します。
+- 既定条件は60秒のwarm-up、各5 metric 300 sample、nearest-rankのp50／p95／p99／maximum、metric別throughputです。`--samples`と`--warmup-seconds`の短縮はfixture debugging専用で、受入recordには使いません。
+- `performance-record.json`はacceptance schema、`performance-report.json`は閾値／baseline判定、`performance-samples.json`は集計前raw sample、`performance-browser.log`はbrowser process出力です。threshold failure、sample不足、baseline malformedはfail-closedです。
+- `performance-check`は絶対閾値を毎回評価し、前回のpassed reportを`--baseline`で渡した場合はlatency 10%増加またはFPS 5%低下をregression failureとします。前回reportがない初回は`bootstrap`と記録し、regression成功とは扱いません。
+
+このCI性能recordをPokeCon production backend、physical camera／serial／console、Windows release build、実browser外部受入、tailnet越しWebRTCの成功証跡へ読み替えません。Linux／Windows release buildの最終性能受入条件は、このsmoke gateとは別の未完了gateです。
+
 ## 対象commitとartifactを固定する
 
 受入開始前に次を満たします。
@@ -211,7 +224,7 @@ browser version、backend platform、input device、zoom、accessibility modeを
 
 一つのChromium browser成功を別browserの成功へ流用しません。
 
-## CI性能gate
+## CI性能gateの実行
 
 性能の受入判定は実機では行わず、LinuxとWindowsのrelease buildをCI上で別々に測定します。
 

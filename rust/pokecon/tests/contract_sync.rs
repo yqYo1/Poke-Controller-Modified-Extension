@@ -760,7 +760,7 @@ fn assert_ci_region_ownership_matrix(ci: &Value) {
             },
             {
                 "name": "product",
-                "normal_ci_owner_jobs": ["normal-ci/product_flake"],
+                "normal_ci_owner_jobs": ["normal-ci/product_flake", "normal-ci/performance"],
                 "package_ci_owner_jobs": [
                     "package/linux",
                     "package/linux_repro",

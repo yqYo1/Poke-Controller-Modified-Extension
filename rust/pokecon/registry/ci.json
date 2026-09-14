@@ -85,7 +85,8 @@
     {
       "name": "product",
       "normal_ci_owner_jobs": [
-        "normal-ci/product_flake"
+        "normal-ci/product_flake",
+        "normal-ci/performance"
       ],
       "package_ci_owner_jobs": [
         "package/linux",
@@ -442,6 +443,23 @@
       "phase": 3
     },
     {
+      "name": "normal-ci/performance",
+      "workflow": "normal-ci",
+      "job": "performance",
+      "command": "nix run .#performance-check -- --samples 300 --warmup-seconds 60 --timeout-seconds 600",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "Linux browser loopback performance smoke measurements",
+        "raw sample, aggregate statistic, absolute threshold, and prior-passing-baseline artifacts"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped; final production-backend and physical-I/O performance acceptance is separate",
+      "phase": 3
+    },
+    {
       "name": "normal-ci/windows",
       "workflow": "normal-ci",
       "job": "windows",
@@ -721,6 +739,7 @@
           "normal-ci/routing_mutations",
           "normal-ci/web",
           "normal-ci/product_flake",
+          "normal-ci/performance",
           "normal-ci/windows"
         ],
         "required_job": "normal-ci/required",

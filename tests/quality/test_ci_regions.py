@@ -41,6 +41,7 @@ ZERO_SHA = "0" * 40
             {Region.RUST, Region.ROUTING, Region.PRODUCT},
         ),
         ("python/pokecon/__init__.py", {Region.PYTHON, Region.PRODUCT}),
+        ("scripts/performance/benchmark.py", {Region.PYTHON, Region.PRODUCT}),
         ("web/src/routes/+page.svelte", {Region.WEB, Region.PRODUCT}),
     ],
 )

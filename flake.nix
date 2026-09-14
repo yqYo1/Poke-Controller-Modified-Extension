@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "2eb4111c360a76c30abdf299ec2c485d2027451bb292848fc5be4af8a46fdd21";
+      canonicalFlakeHash = "212639a4bc292c60ea7c7d8052aa9d17865f7953c43f81c28d2e42521f092546";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "4244b179f7df5c5a8794c50a6fc3a2be17e508b0476ddef4694df2449b451615";
+          expectedAuditTestHash = "e1d6f584200bc93ab67d7b697c0771f89fbd2b7c210fdfe4e5a766aef54aeec8";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3404,6 +3404,49 @@
                 ''
             );
           };
+          performanceCheckPackages =
+            if pkgs.stdenv.isLinux then
+              [
+                pkgs.git
+                pkgs.python314
+                pkgs.chromium
+              ]
+            else
+              [
+                pkgs.git
+                pkgs.python314
+              ];
+
+          performanceCheck = mkTask {
+            name = "performance-check";
+            runtimeInputs = performanceCheckPackages;
+            text = ''
+              if [ "$(uname -s)" != Linux ]; then
+                echo "performance-check requires the Linux Chromium fixture runner" >&2
+                exit 2
+              fi
+              ${setupSourceGateEnvironment}
+              output_path="''${POKECON_PERFORMANCE_OUTPUT:-$PWD/performance-record.json}"
+              source_commit="''${POKECON_PERFORMANCE_SOURCE_COMMIT:-$("${pkgs.git}/bin/git" -C "$PWD" rev-parse HEAD)}"
+              build_identity="''${POKECON_PERFORMANCE_BUILD_IDENTITY:-source:$source_commit}"
+              baseline_args=()
+              if [ -n "''${POKECON_PERFORMANCE_BASELINE:-}" ]; then
+                baseline_args+=(--baseline "$POKECON_PERFORMANCE_BASELINE")
+              fi
+              if [ "''${POKECON_PERFORMANCE_REQUIRE_BASELINE:-0}" = 1 ]; then
+                baseline_args+=(--require-baseline)
+              fi
+              exec "${pkgs.python314}/bin/python" -I \
+                "${repositorySource}/scripts/performance/benchmark.py" \
+                --output "$output_path" \
+                --source-commit "$source_commit" \
+                --platform linux \
+                --build-identity "$build_identity" \
+                --browser "${if pkgs.stdenv.isLinux then "${pkgs.chromium}/bin/chromium" else "/bin/false"}" \
+                "''${baseline_args[@]}" \
+                "$@"
+            '';
+          };
         in
         {
           _module.args.pkgs = import (
@@ -3496,6 +3539,7 @@
             cli-help-check = cliHelpCheck;
             ui-package-check = uiPackageCheck;
             worker-package-check = workerPackageCheck;
+            performance-check = performanceCheck;
 
             product-smoke = mkTask {
               name = "product-smoke";

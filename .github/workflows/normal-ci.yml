@@ -307,6 +307,104 @@ jobs:
           path: ${{ runner.temp }}/pokecon-nix-cache
           key: ${{ steps.product_cache_key.outputs.key }}
 
+  performance:
+    name: Browser primitive performance smoke (Linux)
+    needs: plan
+    if: needs.plan.outputs.product == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the previous passing performance baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          baseline_root="$RUNNER_TEMP/pokecon-performance-baseline"
+          mkdir -p "$baseline_root"
+          artifacts_json="$baseline_root/artifacts.json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            > "$artifacts_json"
+          found=false
+          while IFS= read -r artifact_id; do
+            [ -n "$artifact_id" ] || continue
+            zip_path="$baseline_root/$artifact_id.zip"
+            candidate_dir="$baseline_root/$artifact_id"
+            if ! gh api \
+              --output "$zip_path" \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"; then
+              rm -f "$zip_path"
+              continue
+            fi
+            mkdir -p "$candidate_dir"
+            if ! unzip -q "$zip_path" -d "$candidate_dir"; then
+              rm -rf "$candidate_dir" "$zip_path"
+              continue
+            fi
+            report_path=""
+            for candidate_report in \
+              "$candidate_dir/performance-report.json" \
+              "$candidate_dir/pokecon-performance/performance-report.json"; do
+              if [ -f "$candidate_report" ]; then
+                report_path="$candidate_report"
+                break
+              fi
+            done
+            if [ -n "$report_path" ] && jq -e \
+              '.result == "passed" and
+               .platform == "linux" and
+               .sample_count_required >= 300 and
+               .warmup_seconds_required >= 60 and
+               (.measurements | length) == 5' \
+              "$report_path" > /dev/null; then
+              printf 'POKECON_PERFORMANCE_BASELINE=%s\n' "$report_path" >> "$GITHUB_ENV"
+              found=true
+              break
+            fi
+            rm -rf "$candidate_dir" "$zip_path"
+          done < <(
+            jq -er --arg current_run "$GITHUB_RUN_ID" '
+              [.artifacts[]
+               | select(.expired == false)
+               | select(.workflow_run.id != ($current_run | tonumber))
+               | select(.name | startswith("pokecon-performance-linux-"))]
+              | sort_by(.created_at) | reverse | .[].id
+            ' "$artifacts_json"
+          )
+          if [ "$found" = true ]; then
+            echo "A previous passing Linux performance baseline was selected"
+          else
+            echo "No previous passing Linux performance baseline; this run is bootstrap"
+          fi
+      - name: Build the release product used for the fixture identity
+        id: product
+        run: |
+          set -euo pipefail
+          nix build .#packages.x86_64-linux.pokecon --no-link
+          build_identity="$(nix path-info .#packages.x86_64-linux.pokecon)"
+          printf 'build_identity=%s\n' "$build_identity" >> "$GITHUB_OUTPUT"
+      - name: Run the browser loopback performance gate
+        env:
+          POKECON_PERFORMANCE_BUILD_IDENTITY: ${{ steps.product.outputs.build_identity }}
+          POKECON_PERFORMANCE_OUTPUT: ${{ runner.temp }}/pokecon-performance/performance-record.json
+          POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          nix run .#performance-check -- \
+            --samples 300 \
+            --warmup-seconds 60 \
+            --timeout-seconds 600
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pokecon-performance-linux-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pokecon-performance/
+          if-no-files-found: error
+
   windows:
     name: Check workspace (Windows)
     needs: plan
@@ -335,6 +433,7 @@ jobs:
       - routing_mutations
       - web
       - product_flake
+      - performance
       - windows
     if: >-
       always() &&
@@ -369,6 +468,7 @@ jobs:
             "routing_mutations":{"applicable":${{ needs.plan.outputs.routing == 'true' }},"reason":"production-routing audit inputs changed"},
             "web":{"applicable":${{ needs.plan.outputs.web == 'true' }},"reason":"Web paths changed"},
             "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true' }},"reason":"product or remote-flake paths changed"},
+            "performance":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
             }}
         run: |
@@ -379,6 +479,7 @@ jobs:
             routing_mutations=${{ needs.routing_mutations.result }} \
             web=${{ needs.web.result }} \
             product_flake=${{ needs.product_flake.result }} \
+            performance=${{ needs.performance.result }} \
             windows=${{ needs.windows.result }}
       - name: Collect CI timing evidence
         env:

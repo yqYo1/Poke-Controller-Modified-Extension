@@ -103,13 +103,13 @@ async function makeWebRtcLoopback() {
   const sourceContext = source.getContext("2d", { alpha: false });
   sourceContext.fillStyle = "rgb(32,32,32)";
   sourceContext.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-  const stream = source.captureStream(30);
+  const stream = source.captureStream(60);
   const captureTrack = stream.getVideoTracks()[0];
   let frameColor = "rgb(32,32,200)";
   const captureTimer = setInterval(() => {
     sourceContext.fillStyle = frameColor;
     sourceContext.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-  }, 33);
+  }, 1000 / 60);
   const sender = new RTCPeerConnection({ iceServers: [] });
   const receiver = new RTCPeerConnection({ iceServers: [] });
   let receivedTrack;
@@ -351,7 +351,7 @@ async function main() {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      fixture: { width: FRAME_WIDTH, height: FRAME_HEIGHT, stream_fps: 30 },
+      fixture: { width: FRAME_WIDTH, height: FRAME_HEIGHT, stream_fps: 60 },
       warmup: warmupResult,
       metrics,
     }),

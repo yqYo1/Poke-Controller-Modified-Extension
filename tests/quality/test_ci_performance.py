@@ -36,6 +36,8 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
         "performance-browser.log",
     ):
         assert artifact_name in runner
+    assert "captureStream(60)" in runner
+    assert "stream_fps: 60" in runner
     assert "if-no-files-found: error" in job
 
 

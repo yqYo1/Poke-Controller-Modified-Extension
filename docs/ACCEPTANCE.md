@@ -28,7 +28,7 @@ CIや仮想I/Oの成功を、外部受入の成功へ読み替えません。
 
 `nix run .#performance-check`は、実行したbrowser processのloopback fixtureから実測sampleを収集します。これはCIのbrowser／transport primitive回帰smokeであり、production backendの性能受入を置き換えません。
 
-- WebRTCはCanvasの既知frameを`RTCPeerConnection`のlocal loopbackへ送り、receiverの`MediaStreamTrackProcessor`でframe到着を測定します。
+- WebRTCは1920×1080のCanvas既知frameを固定60fpsで`RTCPeerConnection`のlocal loopbackへ送り、receiverの`MediaStreamTrackProcessor`でframe到着を測定します。
 - Motion JPEGはbrowserが生成したJPEGをlocal HTTP serverへ送り、serverのmultipart responseをbrowserでparse／decodeします。
 - controller inputはbrowserの`MessageChannel` loopback、UI frame rateは`requestAnimationFrame`、UI input latencyはevent handler到着を測定します。
 - 既定条件は60秒のwarm-up、各5 metric 300 sample、nearest-rankのp50／p95／p99／maximum、metric別throughputです。`--samples`と`--warmup-seconds`の短縮はfixture debugging専用で、受入recordには使いません。

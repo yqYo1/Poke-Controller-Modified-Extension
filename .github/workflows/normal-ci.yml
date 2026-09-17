@@ -312,11 +312,12 @@ jobs:
           set -euo pipefail
           test_root="$(mktemp -d "$HOME/pokecon-remote-flake-ci.XXXXXX")"
           cd "$test_root"
+          remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           nix run --refresh \
-            "github:${{ github.repository }}/${{ github.sha }}#remote-flake-smoke" \
+            "github:${{ github.repository }}/$remote_revision#remote-flake-smoke" \
             -- \
             --repository "${{ github.repository }}" \
-            --revision "${{ github.sha }}"
+            --revision "$remote_revision"
 
   performance:
     name: Browser primitive performance smoke (Linux)
@@ -591,7 +592,8 @@ jobs:
             case "$product_drv" in /nix/store/*.drv) ;; *) echo "invalid product derivation: $product_drv" >&2; exit 2;; esac
           fi
           if [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
-            remote_drv="$(nix path-info --derivation --refresh "github:${GITHUB_REPOSITORY}/${sha}#pokecon" 2>/dev/null || echo "")"
+            remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+            remote_drv="$(nix path-info --derivation --refresh "github:${GITHUB_REPOSITORY}/${remote_revision}#pokecon" 2>/dev/null || echo "")"
             if [ -z "$remote_drv" ]; then
               echo "timing: remote flake derivation not found for evidence" >&2
               exit 2

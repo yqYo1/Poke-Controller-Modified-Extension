@@ -287,7 +287,11 @@
         "push": "github.sha",
         "pull_request": "github.sha"
       },
-      "pull_request_head_semantics": "GitHub pull-request merge commit SHA"
+      "pull_request_head_semantics": "GitHub pull-request merge commit SHA",
+      "remote_flake_head": {
+        "push": "github.sha",
+        "pull_request": "github.event.pull_request.head.sha"
+      }
     },
     "concurrency": [
       {

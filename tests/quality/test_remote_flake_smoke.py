@@ -30,11 +30,15 @@ def test_remote_flake_job_is_checkout_free_and_sha_pinned() -> None:
 
     assert "actions/checkout" not in remote_job
     assert (
-        "github:${{ github.repository }}/${{ github.sha }}#remote-flake-smoke"
+        "remote_revision=\"${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}\""
+        in remote_job
+    )
+    assert (
+        '"github:${{ github.repository }}/$remote_revision#remote-flake-smoke"'
         in remote_job
     )
     assert '--repository "${{ github.repository }}"' in remote_job
-    assert '--revision "${{ github.sha }}"' in remote_job
+    assert '--revision "$remote_revision"' in remote_job
     assert "nix run ." not in remote_job
     assert "actions/checkout@v6" in product_job
 
@@ -49,7 +53,7 @@ def test_required_aggregate_tracks_remote_flake_job_separately() -> None:
         in required
     )
     assert "remote_flake=${{ needs.remote_flake.result }}" in required
-    assert "github:${GITHUB_REPOSITORY}/${sha}#pokecon" in required
+    assert "github:${GITHUB_REPOSITORY}/${remote_revision}#pokecon" in required
 
 
 def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None:

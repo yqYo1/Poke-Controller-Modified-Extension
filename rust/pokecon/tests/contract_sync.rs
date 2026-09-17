@@ -368,6 +368,10 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
                 "pull_request": "github.sha",
             },
             "pull_request_head_semantics": "GitHub pull-request merge commit SHA",
+            "remote_flake_head": {
+                "push": "github.sha",
+                "pull_request": "github.event.pull_request.head.sha",
+            },
         })
     );
     assert_eq!(event["cancel_in_progress"], true);
@@ -397,7 +401,13 @@ fn ci_event_registry_elects_one_canonical_sha_and_scopes_cancellation() {
             "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
         ));
         assert!(source.contains("HEAD_SHA: >-\n            ${{ github.sha }}"));
-        assert!(!source.contains("github.event.pull_request.head.sha"));
+        if workflow == "normal-ci" {
+            assert!(source.contains(
+                "github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha"
+            ));
+        } else {
+            assert!(!source.contains("github.event.pull_request.head.sha"));
+        }
 
         let elected_jobs = event["elected_jobs"][workflow]
             .as_array()

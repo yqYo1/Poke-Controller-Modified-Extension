@@ -326,6 +326,7 @@ def test_openapi_inputs_and_outputs_select_contract_drift_checks(
         "scripts/ci/regions.py",
         "scripts/quality/generate-api-types.sh",
         "rust/pokecon/registry/ci.json",
+        "tests/quality/test_remote_flake_smoke.py",
     ],
 )
 def test_ci_control_paths_fail_closed_to_every_region(control_path: str) -> None:

@@ -78,6 +78,8 @@ def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None
     assert 'nix build --refresh "$flake_ref#pokecon"' in script
     assert "nix path-info ./result" in script
     assert 'nix run --refresh "$flake_ref" -- --help' in script
+    assert '[ -s "$test_root/help.txt" ]' in script
+    assert "grep -q '^Usage: pokecon' \"$test_root/help.txt\"" in script
     assert '"$base_url/"' in script
     assert '"$base_url/api/settings"' in script
     assert "grep -oE '/_app/" in script

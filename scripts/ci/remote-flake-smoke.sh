@@ -126,6 +126,14 @@ env "${app_environment[@]}" nix build --refresh "$flake_ref#pokecon"
 }
 
 env "${app_environment[@]}" nix run --refresh "$flake_ref" -- --help > "$test_root/help.txt"
+[ -s "$test_root/help.txt" ] || {
+  printf 'remote pokecon --help returned an empty response\n' >&2
+  exit 1
+}
+if ! grep -q '^Usage: pokecon' "$test_root/help.txt"; then
+  printf 'remote pokecon --help response has no usage line\n' >&2
+  exit 1
+fi
 
 env "${app_environment[@]}" timeout --signal=TERM --kill-after=5s 90s \
   nix run --refresh "$flake_ref" -- \

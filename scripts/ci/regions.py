@@ -44,6 +44,7 @@ CI_CONTROL_PATHS: Final = frozenset(
         "tests/quality/test_ci_aggregate.py",
         "tests/quality/test_ci_regions.py",
         "tests/quality/test_ci_timing.py",
+        "tests/quality/test_remote_flake_smoke.py",
     }
 )
 CI_CONTROL_PREFIXES: Final = (".github/", "scripts/ci/", "scripts/quality/")

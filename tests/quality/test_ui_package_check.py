@@ -18584,7 +18584,10 @@ def test_ci_workflows_use_one_fail_closed_region_plan_and_required_aggregates() 
             )
             == 1
         )
-        assert "github.event.pull_request.head.sha" not in workflow
+        if workflow is normal:
+            assert "github.event.pull_request.head.sha" in workflow
+        else:
+            assert "github.event.pull_request.head.sha" not in workflow
         assert workflow.count("${{ github.sha }}") >= 1
         assert (
             "${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}"

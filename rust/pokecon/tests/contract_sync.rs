@@ -522,7 +522,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     );
     assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
     assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
-    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 720.0"));
+    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 780.0"));
     assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
     assert!(CI_TIMING.contains("COLLECTION_KIND_UPSTREAM_COMPLETED_MAX"));
     assert!(CI_TIMING.contains("critical_path_wall_seconds"));

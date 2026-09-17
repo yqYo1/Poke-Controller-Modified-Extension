@@ -252,7 +252,7 @@ def test_nearest_rank_for_twenty_samples_selects_rank_nineteen() -> None:
 
 @pytest.mark.parametrize(
     ("change_kind", "threshold"),
-    [("fast", 180.0), ("docs", 300.0), ("product", 720.0)],
+    [("fast", 180.0), ("docs", 300.0), ("product", 780.0)],
 )
 def test_p95_threshold_regression_is_a_contract_failure(
     change_kind: str, threshold: float
@@ -985,5 +985,5 @@ def test_planning_only_runs_use_none_and_skip_p95_gate() -> None:
     # fail-closed gates for real timing kinds are unchanged.
     assert "fast) threshold=180" in workflow
     assert "docs) threshold=300" in workflow
-    assert "product) threshold=720" in workflow
+    assert "product) threshold=780" in workflow
     assert "unknown change_kind" in workflow

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "fa284f843843f1c28601e01eacc423ac1bc4aae27948ca69810c4b69a6dca0d0";
+      canonicalFlakeHash = "561951c0e521f44d37e0db65326eb4def963560e453c662d0440825d169c37ca";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "307f0f3c3f0268091c44dd312a77cb5af3e71e345613b1fe96f1b1e4e201972d";
+          expectedAuditTestHash = "7690f9faa9027fad1b0daf67003b22b1b80c7894b35bb6bdb3bfb5a6368d7ce2";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3553,6 +3553,18 @@
                 "${workerPackageCheck.program}"
                 "${uiPackageCheck.program}"
                 "${cliHelpCheck.program}"
+              '';
+            };
+
+            remote-flake-smoke = mkTask {
+              name = "remote-flake-smoke";
+              runtimeInputs = [
+                pkgs.curl
+                pkgs.gnugrep
+                pkgs.nix
+              ];
+              text = ''
+                exec "${pkgs.bash}/bin/bash" "${repositorySource}/scripts/ci/remote-flake-smoke.sh" "$@"
               '';
             };
 

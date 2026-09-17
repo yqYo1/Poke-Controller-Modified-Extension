@@ -100,7 +100,7 @@
     {
       "name": "remote_flake",
       "normal_ci_owner_jobs": [
-        "normal-ci/product_flake"
+        "normal-ci/remote_flake"
       ],
       "package_ci_owner_jobs": []
     }
@@ -427,19 +427,35 @@
       "name": "normal-ci/product_flake",
       "workflow": "normal-ci",
       "job": "product_flake",
-      "command": "nix run .#product-smoke for product changes; nix flake check --no-build plus remote metadata and default-app help for remote_flake changes",
+      "command": "nix run .#product-smoke and nix flake check --no-build for product changes",
       "selected_by_regions": [
-        "product",
+        "product"
+      ],
+      "owns": [
+        "immutable worker, UI, SPA, and CLI product smoke checks"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected",
+      "not_applicable": "the planning job records product as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/remote_flake",
+      "workflow": "normal-ci",
+      "job": "remote_flake",
+      "command": "nix run --refresh github:<repository>/<commit-sha>#remote-flake-smoke -- --repository <repository> --revision <commit-sha>",
+      "selected_by_regions": [
         "remote_flake"
       ],
       "owns": [
-        "immutable worker, UI, SPA, and CLI product smoke checks",
-        "local flake-output evaluation",
-        "remote SHA metadata and default-app help"
+        "checkout-free GitHub SHA-pinned Nix build",
+        "packaged CLI startup",
+        "web frontend HTTP, API, and static asset smoke"
       ],
       "aggregate_role": "input",
-      "applicable_when": "the product or remote_flake region is selected",
-      "not_applicable": "the planning job records both product and remote_flake as false and GitHub concludes skipped",
+      "applicable_when": "the remote_flake region is selected",
+      "not_applicable": "the planning job records remote_flake as false and GitHub concludes skipped",
+      "execution_environment": "checkout-free GitHub flake reference",
       "phase": 3
     },
     {
@@ -739,6 +755,7 @@
           "normal-ci/routing_mutations",
           "normal-ci/web",
           "normal-ci/product_flake",
+          "normal-ci/remote_flake",
           "normal-ci/performance",
           "normal-ci/windows"
         ],

@@ -206,10 +206,9 @@ jobs:
         run: nix run .#web-check
 
   product_flake:
-    name: Product smoke and remote flake (Linux)
+    name: Product smoke (Linux)
     needs: plan
-    if: >-
-      needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true'
+    if: needs.plan.outputs.product == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -261,19 +260,8 @@ jobs:
         if: needs.plan.outputs.product == 'true'
         run: nix run .#product-smoke
       - name: Evaluate all local flake outputs
-        if: needs.plan.outputs.remote_flake == 'true'
+        if: needs.plan.outputs.product == 'true'
         run: nix flake check --no-build
-      - name: Validate remote flake metadata
-        if: needs.plan.outputs.remote_flake == 'true'
-        run: >-
-          nix flake metadata --refresh
-          github:${{ github.repository }}/${{ github.sha }}
-      - name: Run default app help from remote
-        if: needs.plan.outputs.remote_flake == 'true'
-        run: >-
-          nix run --refresh
-          github:${{ github.repository }}/${{ github.sha }}
-          -- --help
       - name: Export the PokeCon product roots to the binary cache (signed)
         if: >-
           success() &&
@@ -306,6 +294,29 @@ jobs:
         with:
           path: ${{ runner.temp }}/pokecon-nix-cache
           key: ${{ steps.product_cache_key.outputs.key }}
+
+  remote_flake:
+    name: Remote GitHub flake smoke (Linux)
+    needs: plan
+    if: needs.plan.outputs.remote_flake == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # This job intentionally has no checkout. The tested source and the
+      # commit identity must both come from GitHub's pinned flake reference.
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run default app help from remote, then build and web smoke without checkout
+        run: |
+          set -euo pipefail
+          test_root="$(mktemp -d "$HOME/pokecon-remote-flake-ci.XXXXXX")"
+          cd "$test_root"
+          nix run --refresh \
+            "github:${{ github.repository }}/${{ github.sha }}#remote-flake-smoke" \
+            -- \
+            --repository "${{ github.repository }}" \
+            --revision "${{ github.sha }}"
 
   performance:
     name: Browser primitive performance smoke (Linux)
@@ -451,6 +462,7 @@ jobs:
       - routing_mutations
       - web
       - product_flake
+      - remote_flake
       - performance
       - windows
     if: >-
@@ -485,7 +497,8 @@ jobs:
             "python_tests":{"applicable":${{ needs.plan.outputs.python == 'true' }},"reason":"Python paths changed"},
             "routing_mutations":{"applicable":${{ needs.plan.outputs.routing == 'true' }},"reason":"production-routing audit inputs changed"},
             "web":{"applicable":${{ needs.plan.outputs.web == 'true' }},"reason":"Web paths changed"},
-            "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' || needs.plan.outputs.remote_flake == 'true' }},"reason":"product or remote-flake paths changed"},
+            "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
+            "remote_flake":{"applicable":${{ needs.plan.outputs.remote_flake == 'true' }},"reason":"remote flake paths changed"},
             "performance":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
             }}
@@ -497,6 +510,7 @@ jobs:
             routing_mutations=${{ needs.routing_mutations.result }} \
             web=${{ needs.web.result }} \
             product_flake=${{ needs.product_flake.result }} \
+            remote_flake=${{ needs.remote_flake.result }} \
             performance=${{ needs.performance.result }} \
             windows=${{ needs.windows.result }}
       - name: Collect CI timing evidence
@@ -559,6 +573,7 @@ jobs:
           # Collect Nix evidence for jobs_evidence (actual derivations, fail-closed if missing)
           rust_drv=""
           product_drv=""
+          remote_drv=""
           if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
             rust_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts 2>/dev/null || echo "")"
             if [ -z "$rust_drv" ]; then
@@ -567,7 +582,7 @@ jobs:
             fi
             case "$rust_drv" in /nix/store/*.drv) ;; *) echo "invalid rust derivation: $rust_drv" >&2; exit 2;; esac
           fi
-          if [ "${{ needs.plan.outputs.product }}" = "true" ] || [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
+          if [ "${{ needs.plan.outputs.product }}" = "true" ]; then
             product_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon 2>/dev/null || echo "")"
             if [ -z "$product_drv" ]; then
               echo "timing: product derivation not found for evidence" >&2
@@ -575,14 +590,23 @@ jobs:
             fi
             case "$product_drv" in /nix/store/*.drv) ;; *) echo "invalid product derivation: $product_drv" >&2; exit 2;; esac
           fi
+          if [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
+            remote_drv="$(nix path-info --derivation --refresh "github:${GITHUB_REPOSITORY}/${sha}#pokecon" 2>/dev/null || echo "")"
+            if [ -z "$remote_drv" ]; then
+              echo "timing: remote flake derivation not found for evidence" >&2
+              exit 2
+            fi
+            case "$remote_drv" in /nix/store/*.drv) ;; *) echo "invalid remote flake derivation: $remote_drv" >&2; exit 2;; esac
+          fi
           jobs_evidence_json="$(jq -n \
             --arg rust_drv "$rust_drv" \
             --arg product_drv "$product_drv" \
+            --arg remote_drv "$remote_drv" \
             '{
               }
               | if $rust_drv != "" then .["Rust and contracts (Linux)"] = {built_derivations: [$rust_drv], substituted_store_paths: []} else . end
-              | if $product_drv != "" then .["Product smoke and remote flake (Linux)"] = {built_derivations: [$product_drv], substituted_store_paths: []} else . end
-              | if $rust_drv == "" and $product_drv == "" then . else . end
+              | if $product_drv != "" then .["Product smoke (Linux)"] = {built_derivations: [$product_drv], substituted_store_paths: []} else . end
+              | if $remote_drv != "" then .["Remote GitHub flake smoke (Linux)"] = {built_derivations: [$remote_drv], substituted_store_paths: []} else . end
             ')"
           jq -n \
             --arg sha "$sha" \

@@ -772,7 +772,7 @@ fn assert_ci_region_ownership_matrix(ci: &Value) {
             },
             {
                 "name": "remote_flake",
-                "normal_ci_owner_jobs": ["normal-ci/product_flake"],
+                "normal_ci_owner_jobs": ["normal-ci/remote_flake"],
                 "package_ci_owner_jobs": [],
             },
         ])

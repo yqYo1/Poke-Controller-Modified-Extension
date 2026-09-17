@@ -52,6 +52,28 @@ repositoryの状態確認、commit、worktree作成にはGit／ghqをorchestrati
 
 このlocal開発規則はNixを利用できるhostを対象にします。native WindowsのCI、package、releaseは明示的なplatform gateであり、各workflowが固定するWindows toolchainを使用します。
 
+`local`の検査だけでremote flakeのsource、生成物、依存解決を検証したことにはなりません。push後は、対象commitをGitHubから直接取得するremote smokeを必ず実行します。
+
+```bash
+repository=yqYo1/Poke-Controller-Modified-Extension
+revision="$(git rev-parse HEAD)"
+test_root="$(mktemp -d "$HOME/pokecon-remote-flake-check.XXXXXX")"
+cd "$test_root"
+nix run --refresh "github:${repository}/${revision}#remote-flake-smoke" -- \
+  --repository "$repository" \
+  --revision "$revision"
+```
+
+このcommandはghq管理下のdirectoryをcwdにせず、`$HOME`配下のtest directoryから実行します。`remote-flake-smoke`はさらに専用の`HOME`、XDG Config/Data/Cache/State、runtime directoryを作成し、次を順に検証します。
+
+1. GitHubの指定commitから`nix build ...#pokecon`を実行し、package binaryを確認する。
+2. 同じremote flakeの`nix run -- --help`を実行する。
+3. 同じremote flakeをWeb modeで起動し、Web root、`/api/settings`、index.htmlが参照する全JS／CSS assetをHTTPで確認する。
+
+このsmokeは既存のuser config、local `target`、`web/node_modules`、ghq checkoutを成功条件へ含めません。通常のPokeCon起動が既存configのunknown keyで失敗する場合は、現行schemaに合わせて設定を移行します。unknown keyを無視する実装へ変更して設定破損を隠してはいけません。
+
+Normal CIの`remote_flake` jobも同じremote appを、`actions/checkout`なしで`github:${{ github.repository }}/${{ github.sha }}`から実行します。checkoutを使うproduct smokeとは別jobであり、local checkoutの成功をremote flakeの起動証跡として代用しません。
+
 ## 対象toolchainを理解する
 
 Rust workspaceはedition 2024、Rust 1.95を対象にします。

@@ -265,7 +265,7 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Commands</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Commands</p>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-2xl font-semibold text-text">コマンドワークスペース</h2>
       <span class={`rounded-full px-3 py-1 text-xs ${backendState?.command_state === 'running' ? 'bg-green/15 text-green' : backendState?.command_state === 'paused' ? 'bg-yellow/15 text-yellow' : backendState?.command_state === 'error' ? 'bg-red/10 text-red' : 'bg-text/5 text-subtext1'}`}>

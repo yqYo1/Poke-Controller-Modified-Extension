@@ -234,7 +234,7 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Camera</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Camera</p>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-2xl font-semibold text-text">ライブキャプチャ</h2>
       <div class="flex items-center gap-2 text-xs">

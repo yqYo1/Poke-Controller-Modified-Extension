@@ -128,7 +128,7 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Serial</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Serial</p>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-2xl font-semibold text-text">シリアルモニター</h2>
       <span class={`rounded-full px-3 py-1 text-xs ${connected ? 'bg-green/15 text-green' : 'bg-text/5 text-subtext1'}`}>

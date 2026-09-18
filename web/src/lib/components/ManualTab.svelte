@@ -48,7 +48,7 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Manual Control</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Manual Control</p>
     <h2 class="mt-2 text-2xl font-semibold text-text">入力制御</h2>
     <p class="mt-2 text-sm text-subtext1">ブラウザのキーコードとポインター操作を、現在の {view.input.route ?? 'standby'} input generation へ送信します。</p>
   </div>

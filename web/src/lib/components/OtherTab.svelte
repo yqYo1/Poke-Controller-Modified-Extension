@@ -159,7 +159,7 @@
 
 <div class="space-y-5">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Other</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Other</p>
     <h2 class="mt-2 text-2xl font-semibold text-text">
       {t('Application settings', 'アプリケーション設定')}
     </h2>

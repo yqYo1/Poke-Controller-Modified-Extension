@@ -112,7 +112,7 @@
 
 <div class="space-y-5">
   <div>
-    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Notifications</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">Notifications</p>
     <h2 class="mt-2 text-2xl font-semibold text-text">
       {t('Windows / Discord notifications', 'Windows / Discord 通知')}
     </h2>

@@ -125,7 +125,9 @@ venvとpackage設定は[上級利用ガイド](ADVANCED_USAGE.md#user-script専�
 
 新しいWeb UIまたは生成済みTOMLへ、確認できた項目だけを入力します。
 
-旧設定fileのsection名や未認識fieldをそのまま残しません。
+旧設定ファイルのsection名や未認識キーをそのまま残しません。
+
+これはリファクタリング前のPython/Tkinter prototypeをRust版へ移す手順に限った記述です。Rust版以降のloaderが未知キーを保持したまま警告して継続する契約とは別です。
 
 主な移行先は次のとおりです。
 

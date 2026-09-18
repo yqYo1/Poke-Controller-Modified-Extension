@@ -414,9 +414,11 @@ jobs:
               | sort_by(.created_at) | reverse | .[].id
             ' "$artifacts_json"
           )
-          if [ "$selected_count" -gt 0 ]; then
+          if [ "$selected_count" -ge "$baseline_limit" ]; then
             printf 'POKECON_PERFORMANCE_BASELINE=%s\n' "$selected_dir" >> "$GITHUB_ENV"
             echo "Selected $selected_count recent passing Linux performance baselines"
+          elif [ "$selected_count" -gt 0 ]; then
+            echo "Only $selected_count recent passing Linux performance baselines; this run is bootstrap until $baseline_limit are available"
           else
             echo "No previous passing Linux performance baseline; this run is bootstrap"
           fi

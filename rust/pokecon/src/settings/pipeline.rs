@@ -1855,6 +1855,39 @@ mod tests {
     }
 
     #[test]
+    fn prototype_keys_are_nonfatal_but_are_not_migrated_implicitly() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/App");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        fs::write(
+            config.join("settings.toml"),
+            "script_dir = \"scripts\"\nprofile_dir = \"profiles\"\nauto_connect = true\nlog_level = \"INFO\"\n[serial]\nport = \"/dev/null\"\nbaud_rate = 9600\ntimeout_ms = 1000\n[camera]\ndevice_index = 0\nwidth = 1280\nheight = 720\nfps = 30\n[notify]\nwindows_enabled = false\ndiscord_enabled = false\n",
+        )
+        .expect("prototype fixture must be writable");
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
+            .load()
+            .expect("prototype-only keys must not block the Rust loader");
+        for expected in [
+            "script_dir",
+            "profile_dir",
+            "auto_connect",
+            "serial.port",
+            "camera.device_index",
+            "notify.discord_enabled",
+        ] {
+            assert!(
+                loaded.configuration_warnings.iter().any(|warning| {
+                    matches!(
+                        warning,
+                        super::ConfigurationWarning::UnknownTomlKey { key, .. } if key == expected
+                    )
+                }),
+                "missing warning for prototype key {expected}"
+            );
+        }
+    }
+
+    #[test]
     fn invalid_safe_toml_value_falls_back_and_reports_the_used_default() {
         let temp = TempDir::new().expect("temporary directory must exist");
         let config = temp.path().join("config/App");

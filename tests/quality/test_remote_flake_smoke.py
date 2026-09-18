@@ -40,7 +40,7 @@ def test_remote_flake_job_is_checkout_free_and_sha_pinned() -> None:
     assert '--repository "${{ github.repository }}"' in remote_job
     assert '--revision "$remote_revision"' in remote_job
     assert "--option download-attempts 10" in remote_job
-    assert "--option http-connections 8" in remote_job
+    assert "http-connections" not in remote_job
     assert "nix run ." not in remote_job
     assert "actions/checkout@v6" in product_job
 
@@ -78,7 +78,7 @@ def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None
     assert 'app_environment+=("POKECON_PORT=$port")' in script
     assert "nix_network_options=(" in script
     assert "--option download-attempts 10" in script
-    assert "--option http-connections 8" in script
+    assert "http-connections" not in script
     assert "curl --silent --output /dev/null --connect-timeout 1" in script
     assert (
         'nix build --refresh \\\n  "${nix_network_options[@]}" "$flake_ref#pokecon"'

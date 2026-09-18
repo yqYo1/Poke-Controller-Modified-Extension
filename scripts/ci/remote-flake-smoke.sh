@@ -116,7 +116,6 @@ done
 app_environment+=("POKECON_PORT=$port")
 nix_network_options=(
   --option download-attempts 10
-  --option http-connections 8
 )
 
 printf 'remote_flake=%s\n' "$flake_ref"

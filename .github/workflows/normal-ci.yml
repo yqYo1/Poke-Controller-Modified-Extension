@@ -330,18 +330,21 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Resolve the previous passing performance baseline
+      - name: Resolve recent passing performance baselines
         env:
           GH_TOKEN: ${{ github.token }}
+          CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           baseline_root="$RUNNER_TEMP/pokecon-performance-baseline"
-          mkdir -p "$baseline_root"
+          selected_dir="$baseline_root/selected"
+          mkdir -p "$selected_dir"
           artifacts_json="$baseline_root/artifacts.json"
           gh api \
             "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
             > "$artifacts_json"
-          found=false
+          selected_count=0
+          baseline_limit=5
           while IFS= read -r artifact_id; do
             [ -n "$artifact_id" ] || continue
             zip_path="$baseline_root/$artifact_id.zip"
@@ -367,15 +370,21 @@ jobs:
               fi
             done
             if [ -n "$report_path" ] && jq -e \
-              '.result == "passed" and
-               .platform == "linux" and
-               .sample_count_required >= 300 and
-               .warmup_seconds_required >= 60 and
-               (.measurements | length) == 5' \
+              --arg current_revision "$CURRENT_REVISION" \
+              '(.source_commit // "") as $source_commit
+               | ($source_commit | test("^[0-9a-f]{40}$"))
+               and ($source_commit != $current_revision)
+               and .result == "passed"
+               and .platform == "linux"
+               and .sample_count_required >= 300
+               and .warmup_seconds_required >= 60
+               and (.measurements | length) == 5' \
               "$report_path" > /dev/null; then
-              printf 'POKECON_PERFORMANCE_BASELINE=%s\n' "$report_path" >> "$GITHUB_ENV"
-              found=true
-              break
+              cp "$report_path" "$selected_dir/$(printf '%02d' "$selected_count").json"
+              selected_count=$((selected_count + 1))
+              if [ "$selected_count" -ge "$baseline_limit" ]; then
+                break
+              fi
             fi
             rm -rf "$candidate_dir" "$zip_path"
           done < <(
@@ -387,8 +396,9 @@ jobs:
               | sort_by(.created_at) | reverse | .[].id
             ' "$artifacts_json"
           )
-          if [ "$found" = true ]; then
-            echo "A previous passing Linux performance baseline was selected"
+          if [ "$selected_count" -gt 0 ]; then
+            printf 'POKECON_PERFORMANCE_BASELINE=%s\n' "$selected_dir" >> "$GITHUB_ENV"
+            echo "Selected $selected_count recent passing Linux performance baselines"
           else
             echo "No previous passing Linux performance baseline; this run is bootstrap"
           fi
@@ -402,7 +412,7 @@ jobs:
         env:
           POKECON_PERFORMANCE_BUILD_IDENTITY: ${{ steps.product.outputs.build_identity }}
           POKECON_PERFORMANCE_OUTPUT: ${{ github.workspace }}/performance-evidence/performance-record.json
-          POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}
+          POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           nix run .#performance-check -- \
             --samples 300 \

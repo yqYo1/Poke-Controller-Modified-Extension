@@ -33,7 +33,7 @@ CIや仮想I/Oの成功を、外部受入の成功へ読み替えません。
 - controller inputはbrowserの`MessageChannel` loopback、UI frame rateは`requestAnimationFrame`、UI input latencyはevent handler到着を測定します。
 - 既定条件は60秒のwarm-up、各5 metric 300 sample、nearest-rankのp50／p95／p99／maximum、metric別throughputです。`--samples`と`--warmup-seconds`の短縮はfixture debugging専用で、受入recordには使いません。
 - `performance-record.json`はacceptance schema、`performance-report.json`は閾値／baseline判定、`performance-samples.json`は集計前raw sample、`performance-browser.log`はbrowser process出力です。threshold failure、sample不足、baseline malformedはfail-closedです。
-- `performance-check`は絶対閾値を毎回評価し、前回のpassed reportを`--baseline`で渡した場合はlatency 10%増加またはFPS 5%低下をregression failureとします。前回reportがない初回は`bootstrap`と記録し、regression成功とは扱いません。
+- `performance-check`は絶対閾値を毎回評価し、直近最大5件の検証済みpassed reportをbaselineとして各metricのnearest-rank中央値を求めます。その中央値に対してlatency 10%増加またはFPS 5%低下をregression failureとします。同一対象commitの別runはbaselineへ再利用しません。過去reportがない初回は`bootstrap`と記録し、regression成功とは扱いません。
 
 このCI性能recordをPokeCon production backend、physical camera／serial／console、Windows release build、実browser外部受入、tailnet越しWebRTCの成功証跡へ読み替えません。Linux／Windows release buildの最終性能受入条件は、このsmoke gateとは別の未完了gateです。
 

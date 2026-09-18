@@ -472,7 +472,7 @@
       ],
       "owns": [
         "Linux browser loopback performance smoke measurements",
-        "raw sample, aggregate statistic, absolute threshold, and prior-passing-baseline artifacts"
+        "raw sample, aggregate statistic, absolute threshold, and recent passing-baseline history artifacts"
       ],
       "aggregate_role": "input",
       "applicable_when": "the product region is selected",

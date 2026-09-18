@@ -589,49 +589,96 @@ def _absolute_passes(summary: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     }
 
 
+def _baseline_report_paths(path: Path) -> tuple[Path, ...]:
+    if path.is_dir():
+        paths = tuple(sorted(path.glob("*.json")))
+        if not paths:
+            raise PerformanceError("baseline directory contains no JSON reports")
+        return paths
+    return (path,)
+
+
 def _load_baseline(
     path: Path | None, platform_name: str
 ) -> dict[str, dict[str, Any]] | None:
     if path is None:
         return None
-    try:
-        document_value: object = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise PerformanceError(f"unable to read baseline {path}: {error}") from error
-    if not isinstance(document_value, dict):
-        raise PerformanceError("baseline must be an object")
-    document = cast("JsonObject", document_value)
-    if document.get("result") != "passed":
-        raise PerformanceError("baseline result must be passed")
-    if document.get("platform") != platform_name:
-        raise PerformanceError("baseline platform does not match the current run")
-    sample_count = document.get("sample_count_required")
-    if not isinstance(sample_count, int) or sample_count < MIN_ACCEPTANCE_SAMPLE_COUNT:
-        raise PerformanceError("baseline does not contain 300 samples per metric")
-    warmup_seconds = document.get("warmup_seconds_required")
-    if (
-        not isinstance(warmup_seconds, int)
-        or warmup_seconds < MIN_ACCEPTANCE_WARMUP_SECONDS
-    ):
-        raise PerformanceError("baseline does not contain a 60 second warm-up")
-    measurements = document.get("measurements")
-    if not isinstance(measurements, list):
-        raise PerformanceError("baseline must contain a measurements array")
-    measurements_list = cast("list[object]", measurements)
-    result: dict[str, dict[str, Any]] = {}
-    for measurement_value in measurements_list:
-        if not isinstance(measurement_value, dict):
-            raise PerformanceError("baseline contains an invalid measurement")
-        measurement = cast("JsonObject", measurement_value)
-        metric = measurement.get("metric")
-        if not isinstance(metric, str):
-            raise PerformanceError("baseline contains an invalid measurement metric")
-        result[metric] = measurement
-    if len(measurements_list) != len(METRIC_ORDER) or set(result) != set(METRIC_ORDER):
-        raise PerformanceError(
-            "baseline must contain exactly the five performance metrics"
-        )
-    return result
+    reports: list[dict[str, dict[str, Any]]] = []
+    sample_counts: list[int] = []
+    for report_path in _baseline_report_paths(path):
+        try:
+            document_value: object = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise PerformanceError(
+                f"unable to read baseline {report_path}: {error}"
+            ) from error
+        if not isinstance(document_value, dict):
+            raise PerformanceError("baseline must be an object")
+        document = cast("JsonObject", document_value)
+        if document.get("result") != "passed":
+            raise PerformanceError("baseline result must be passed")
+        if document.get("platform") != platform_name:
+            raise PerformanceError("baseline platform does not match the current run")
+        sample_count = document.get("sample_count_required")
+        if (
+            not isinstance(sample_count, int)
+            or sample_count < MIN_ACCEPTANCE_SAMPLE_COUNT
+        ):
+            raise PerformanceError("baseline does not contain 300 samples per metric")
+        sample_counts.append(sample_count)
+        warmup_seconds = document.get("warmup_seconds_required")
+        if (
+            not isinstance(warmup_seconds, int)
+            or warmup_seconds < MIN_ACCEPTANCE_WARMUP_SECONDS
+        ):
+            raise PerformanceError("baseline does not contain a 60 second warm-up")
+        measurements = document.get("measurements")
+        if not isinstance(measurements, list):
+            raise PerformanceError("baseline must contain a measurements array")
+        measurements_list = cast("list[object]", measurements)
+        report: dict[str, dict[str, Any]] = {}
+        for measurement_value in measurements_list:
+            if not isinstance(measurement_value, dict):
+                raise PerformanceError("baseline contains an invalid measurement")
+            measurement = cast("JsonObject", measurement_value)
+            metric = measurement.get("metric")
+            if not isinstance(metric, str):
+                raise PerformanceError(
+                    "baseline contains an invalid measurement metric"
+                )
+            if (
+                metric not in METRIC_UNITS
+                or measurement.get("unit") != METRIC_UNITS[metric]
+            ):
+                raise PerformanceError("baseline contains an invalid measurement unit")
+            for field in ("p50", "p95", "maximum"):
+                _finite_number(measurement.get(field), f"baseline.{metric}.{field}")
+            report[metric] = measurement
+        if len(measurements_list) != len(METRIC_ORDER) or set(report) != set(
+            METRIC_ORDER
+        ):
+            raise PerformanceError(
+                "baseline must contain exactly the five performance metrics"
+            )
+        reports.append(report)
+
+    aggregated: dict[str, dict[str, Any]] = {}
+    for metric in METRIC_ORDER:
+        aggregated[metric] = {
+            "metric": metric,
+            "unit": METRIC_UNITS[metric],
+            "sample_count": min(sample_counts),
+            "p50": nearest_rank(
+                [float(report[metric]["p50"]) for report in reports], 0.5
+            ),
+            "p95": nearest_rank(
+                [float(report[metric]["p95"]) for report in reports], 0.5
+            ),
+            "maximum": nearest_rank(
+                [float(report[metric]["maximum"]) for report in reports], 0.5
+            ),
+        }
+    return aggregated
 
 
 def _regression_evaluation(
@@ -893,9 +940,11 @@ def run(args: argparse.Namespace) -> int:
     browser_log_path = output.with_name("performance-browser.log")
     started_at = _utc_now()
     build_identity = args.build_identity or source_commit
-    baseline = _load_baseline(
-        Path(args.baseline) if args.baseline else None, args.platform
+    baseline_path = Path(args.baseline) if args.baseline else None
+    baseline_paths = (
+        _baseline_report_paths(baseline_path) if baseline_path is not None else ()
     )
+    baseline = _load_baseline(baseline_path, args.platform)
     if args.require_baseline and baseline is None:
         raise PerformanceError("--require-baseline needs --baseline")
     browser = _find_browser(args.browser)
@@ -990,6 +1039,12 @@ def run(args: argparse.Namespace) -> int:
         "baseline": {
             "status": "compared" if baseline is not None else "bootstrap",
             "path": args.baseline,
+            "report_count": len(baseline_paths),
+            "aggregation": (
+                "nearest-rank median"
+                if len(baseline_paths) > 1
+                else ("single report" if baseline_paths else None)
+            ),
         },
         "result": (
             "debug_only" if short_run else ("passed" if all_passed else "failed")
@@ -1060,7 +1115,7 @@ def run(args: argparse.Namespace) -> int:
             + (
                 "Baseline comparison was bootstrapped because no prior report was supplied."
                 if baseline is None
-                else "Baseline regression thresholds were evaluated."
+                else f"Baseline regression thresholds used the nearest-rank median of {len(baseline_paths)} passing report(s)."
             )
         ),
     }

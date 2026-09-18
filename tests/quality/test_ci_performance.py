@@ -26,6 +26,18 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "--samples 300" in job
     assert "--warmup-seconds 60" in job
     assert "--timeout-seconds 600" in job
+    assert "Resolve recent passing performance baselines" in job
+    assert (
+        "CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in job
+    )
+    assert "baseline_limit=5" in job
+    assert "selected_dir/$(printf '%02d' \"$selected_count\").json" in job
+    assert "($source_commit != $current_revision)" in job
+    assert (
+        "POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in job
+    )
     assert (
         'gh api \\\n              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \\\n              > "$zip_path"'
         in job

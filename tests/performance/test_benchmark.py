@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,9 +24,88 @@ def test_acceptance_minimums_match_the_ci_contract() -> None:
     assert MIN_ACCEPTANCE_WARMUP_SECONDS == 60
 
 
+def _write_baseline(path: Path, *, mjpeg_p95: float, webrtc_p95: float) -> None:
+    measurements = [
+        {
+            "metric": "webrtc_video_latency",
+            "unit": "ms",
+            "sample_count": 300,
+            "p50": webrtc_p95 - 5.0,
+            "p95": webrtc_p95,
+            "maximum": webrtc_p95 + 5.0,
+        },
+        {
+            "metric": "mjpeg_video_latency",
+            "unit": "ms",
+            "sample_count": 300,
+            "p50": mjpeg_p95 - 1.0,
+            "p95": mjpeg_p95,
+            "maximum": mjpeg_p95 + 1.0,
+        },
+        {
+            "metric": "controller_input_latency",
+            "unit": "ms",
+            "sample_count": 300,
+            "p50": 0.0,
+            "p95": 0.1,
+            "maximum": 0.2,
+        },
+        {
+            "metric": "ui_frame_rate",
+            "unit": "fps",
+            "sample_count": 300,
+            "p50": 60.0,
+            "p95": 60.0,
+            "maximum": 60.0,
+        },
+        {
+            "metric": "ui_input_latency",
+            "unit": "ms",
+            "sample_count": 300,
+            "p50": 0.0,
+            "p95": 0.1,
+            "maximum": 0.2,
+        },
+    ]
+    path.write_text(
+        json.dumps(
+            {
+                "result": "passed",
+                "platform": "linux",
+                "sample_count_required": 300,
+                "warmup_seconds_required": 60,
+                "measurements": measurements,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_nearest_rank_uses_contract_nearest_rank() -> None:
     assert nearest_rank([4.0, 1.0, 3.0, 2.0], 0.5) == 2.0
     assert nearest_rank([4.0, 1.0, 3.0, 2.0], 0.95) == 4.0
+
+
+def test_baseline_directory_uses_nearest_rank_median(tmp_path: Path) -> None:
+    baseline_dir = tmp_path / "baselines"
+    baseline_dir.mkdir()
+    for index, mjpeg_p95 in enumerate((6.2, 8.0, 8.1, 8.5, 8.9)):
+        _write_baseline(
+            baseline_dir / f"{index:02d}.json",
+            mjpeg_p95=mjpeg_p95,
+            webrtc_p95=50.0 + index,
+        )
+
+    baseline = _load_baseline(baseline_dir, "linux")
+
+    assert baseline is not None
+    assert baseline["mjpeg_video_latency"]["p95"] == 8.1
+    assert _regression_evaluation(
+        {"metric": "mjpeg_video_latency", "p95": 8.9}, baseline
+    )["passed"]
+    assert not _regression_evaluation(
+        {"metric": "mjpeg_video_latency", "p95": 9.0}, baseline
+    )["passed"]
 
 
 def test_metric_summary_requires_exact_sample_count() -> None:

@@ -122,14 +122,14 @@ printf 'remote_flake=%s\n' "$flake_ref"
 printf 'test_root=%s\n' "$test_root"
 
 cd "$test_root"
-env "${app_environment[@]}" nix build --refresh \
+env "${app_environment[@]}" nix build \
   "${nix_network_options[@]}" "$flake_ref#pokecon"
 [ -x result/bin/pokecon ] || {
   printf 'remote pokecon build has no executable result/bin/pokecon\n' >&2
   exit 1
 }
 
-env "${app_environment[@]}" nix run --refresh \
+env "${app_environment[@]}" nix run \
   "${nix_network_options[@]}" "$flake_ref" -- --help > "$test_root/help.txt"
 [ -s "$test_root/help.txt" ] || {
   printf 'remote pokecon --help returned an empty response\n' >&2
@@ -141,7 +141,7 @@ if ! grep -q '^Usage: pokecon' "$test_root/help.txt"; then
 fi
 
 env "${app_environment[@]}" timeout --signal=TERM --kill-after=5s 90s \
-  nix run --refresh "${nix_network_options[@]}" "$flake_ref" -- \
+  nix run "${nix_network_options[@]}" "$flake_ref" -- \
   --ui web \
   --port "$port" \
   --bind-address 127.0.0.1 > "$app_log" 2>&1 &

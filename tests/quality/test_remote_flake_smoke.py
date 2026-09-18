@@ -80,15 +80,9 @@ def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None
     assert "--option download-attempts 10" in script
     assert "http-connections" not in script
     assert "curl --silent --output /dev/null --connect-timeout 1" in script
-    assert (
-        'nix build --refresh \\\n  "${nix_network_options[@]}" "$flake_ref#pokecon"'
-        in script
-    )
+    assert 'nix build \\\n  "${nix_network_options[@]}" "$flake_ref#pokecon"' in script
     assert "nix path-info ./result" in script
-    assert (
-        'nix run --refresh \\\n  "${nix_network_options[@]}" "$flake_ref" -- --help'
-        in script
-    )
+    assert 'nix run \\\n  "${nix_network_options[@]}" "$flake_ref" -- --help' in script
     assert '[ -s "$test_root/help.txt" ]' in script
     assert "grep -q '^Usage: pokecon' \"$test_root/help.txt\"" in script
     assert '"$base_url/"' in script

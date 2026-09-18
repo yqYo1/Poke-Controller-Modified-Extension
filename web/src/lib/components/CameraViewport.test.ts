@@ -36,11 +36,66 @@ function prepareCanvas(canvas: HTMLElement): void {
 }
 
 describe('CameraViewport', () => {
-  it('uses the configured camera resolution for the preview drawing size', async () => {
+  it('updates the source drawing size when the camera resolution changes', async () => {
     const initial = runtimeView();
     const view: RuntimeView = {
       ...initial.view,
-      state: stateSnapshot('2', { camera_resolution: '640x360' })
+      state: stateSnapshot('2', { camera_resolution: '1280x720' })
+    };
+    const rendered = render(CameraViewport, {
+      actions: { scriptUiAction: vi.fn().mockResolvedValue({ accepted: true }) },
+      fps: 30,
+      guideVisible: false,
+      leftStickEnabled: false,
+      liveViewEnabled: true,
+      oncapture: vi.fn(),
+      ondownload: vi.fn(),
+      ontoucharea: vi.fn(),
+      pixelValuesVisible: false,
+      rightStickEnabled: false,
+      runtime: initial.runtime,
+      view
+    });
+
+    const canvas = screen.getByLabelText('Camera capture area');
+    const frame = canvas.parentElement;
+    expect(frame).not.toBeNull();
+    await waitFor(() => {
+      expect(frame?.dataset.previewWidth).toBe('1280');
+      expect(frame?.dataset.previewHeight).toBe('720');
+      expect(canvas.getAttribute('width')).toBe('1280');
+      expect(canvas.getAttribute('height')).toBe('720');
+    });
+
+    await rendered.rerender({
+      view: {
+        ...view,
+        state: stateSnapshot('3', { camera_resolution: '640x360' })
+      }
+    });
+    await waitFor(() => {
+      expect(frame?.dataset.previewWidth).toBe('640');
+      expect(frame?.dataset.previewHeight).toBe('360');
+      expect(canvas.getAttribute('width')).toBe('640');
+      expect(canvas.getAttribute('height')).toBe('360');
+      expect(frame?.getAttribute('style')).toContain('--camera-width: 640px');
+    });
+  });
+
+  it('keeps an active script display size independent from capture resolution', async () => {
+    const initial = runtimeView();
+    const view: RuntimeView = {
+      ...initial.view,
+      scriptUi: {
+        ...initial.view.scriptUi,
+        generation: 'script-1',
+        overlay: {
+          ...initial.view.scriptUi.overlay,
+          show_height: 360,
+          show_width: 640
+        }
+      },
+      state: stateSnapshot('2', { camera_resolution: '1920x1080' })
     };
     render(CameraViewport, {
       actions: { scriptUiAction: vi.fn().mockResolvedValue({ accepted: true }) },
@@ -63,9 +118,8 @@ describe('CameraViewport', () => {
     await waitFor(() => {
       expect(frame?.dataset.previewWidth).toBe('640');
       expect(frame?.dataset.previewHeight).toBe('360');
-      expect(canvas.getAttribute('width')).toBe('640');
-      expect(canvas.getAttribute('height')).toBe('360');
-      expect(frame?.getAttribute('style')).toContain('--camera-width: 640px');
+      expect(canvas.getAttribute('width')).toBe('1920');
+      expect(canvas.getAttribute('height')).toBe('1080');
     });
   });
 

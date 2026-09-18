@@ -119,10 +119,18 @@
     const width = Number(widthText);
     const height = Number(heightText);
     if (Number.isSafeInteger(width) && Number.isSafeInteger(height) && width > 0 && height > 0) {
-      displayWidth = width;
-      displayHeight = height;
       sourceWidth = width;
       sourceHeight = height;
+    }
+  });
+
+  $effect(() => {
+    if (view.scriptUi.generation !== null) {
+      displayWidth = Math.max(1, view.scriptUi.overlay.show_width);
+      displayHeight = Math.max(1, view.scriptUi.overlay.show_height);
+    } else {
+      displayWidth = sourceWidth;
+      displayHeight = sourceHeight;
     }
   });
 

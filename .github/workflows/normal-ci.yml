@@ -370,10 +370,8 @@ jobs:
               fi
             done
             if [ -n "$report_path" ] && jq -e \
-              --arg current_revision "$CURRENT_REVISION" \
               '(.source_commit // "") as $source_commit
                | ($source_commit | test("^[0-9a-f]{40}$"))
-               and ($source_commit != $current_revision)
                and .result == "passed"
                and .platform == "linux"
                and .sample_count_required >= 300
@@ -388,10 +386,14 @@ jobs:
             fi
             rm -rf "$candidate_dir" "$zip_path"
           done < <(
-            jq -er --arg current_run "$GITHUB_RUN_ID" '
+            jq -er \
+              --arg current_revision "$CURRENT_REVISION" \
+              --arg current_run "$GITHUB_RUN_ID" \
+              '
               [.artifacts[]
                | select(.expired == false)
                | select(.workflow_run.id != ($current_run | tonumber))
+               | select((.workflow_run.head_sha // "") != $current_revision)
                | select(.name | startswith("pokecon-performance-linux-"))]
               | sort_by(.created_at) | reverse | .[].id
             ' "$artifacts_json"
@@ -412,7 +414,7 @@ jobs:
         env:
           POKECON_PERFORMANCE_BUILD_IDENTITY: ${{ steps.product.outputs.build_identity }}
           POKECON_PERFORMANCE_OUTPUT: ${{ github.workspace }}/performance-evidence/performance-record.json
-          POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}
         run: |
           nix run .#performance-check -- \
             --samples 300 \

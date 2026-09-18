@@ -81,7 +81,17 @@ OS別の既定pathは[インストールガイド](INSTALL.md#初回起動で作
 
 保存先に書込み権限がない場合は、applicationを管理者として常用せず、利用者が所有するdirectoryへrootを設定します。
 
-`UnknownTomlKey`で`auto_connect`などが報告される場合は、旧prototypeの設定fileを現行Rust版が読んでいます。旧設定を丸ごとcopyせず、新しいConfig rootで一度起動してから、現行の[設定リファレンス](SETTINGS.md)に存在するfieldだけを意味ごとに移します。unknown fieldを実装側で黙って無視して起動することはしません。
+`auto_connect`などのprototype由来keyが報告される場合は、リファクタリング前の設定fileを現行Rust版が読んでいます。prototypeからRust版への自動移行は保証していないため、旧設定を丸ごとcopyせず、新しいConfig rootで一度起動してから、現行の[設定リファレンス](SETTINGS.md)に存在するfieldだけを意味ごとに移します。
+
+現在のRust版以降の設定fileにある無関係な未知keyは、loaderが警告を出して保持したまま無視し、起動を妨げない契約です。
+
+移動または廃止されたRust版のkeyは、警告に移行先または廃止理由が含まれます。
+
+既知keyの不正値は、安全なdefaultへ置換できる場合は警告して継続します。
+
+安全な代替値がない場合だけ起動を停止し、errorにはfile、key、値、期待形式、修正方法を表示します。
+
+したがって、旧prototype keyの自動移行と、Rust版以降の未知keyおよび廃止keyの扱いを同じ問題として調査しません。
 
 remote flakeとWeb frontendの配布物だけを確認する場合は、既存user configを使わず、[本体開発ガイド](DEVELOPMENT.md)のGitHub SHA固定remote smokeを実行します。
 

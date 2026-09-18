@@ -16,6 +16,16 @@ Rust版は旧repositoryや旧保存directoryを直接更新しません。
 
 旧Python sourceへ一括置換をかけません。
 
+この章でいう「旧設定file」は、リファクタリング前のPython/Tkinter prototypeが使用していた設定fileです。
+
+`SPECIFICATION.md`の設定file形式の非互換方針は、このprototypeから現在のRust版へ移行する境界に適用されます。
+
+prototypeの`auto_connect`、`script_dir`、旧`serial.*`、旧`camera.*`、旧`notify.*`などを、現行Rust版の設定keyとして自動移行することは保証しません。
+
+一方、現在のRust版が生成した設定fileと、将来のRust版が読み込む設定fileの扱いは別の契約です。
+
+Rust版以降でkeyを移動または廃止するときは、[設定リファレンス](SETTINGS.md)の設定互換性契約に従い、警告、移行先、または廃止理由を示します。
+
 最初にcommand discovery、次に仮想I/O、最後に実機という順で範囲を広げます。
 
 各段階で戻せるように、旧環境と新環境を別directory、別shortcut、別portで識別します。

@@ -114,18 +114,24 @@ done
   exit 1
 }
 app_environment+=("POKECON_PORT=$port")
+nix_network_options=(
+  --option download-attempts 10
+  --option http-connections 8
+)
 
 printf 'remote_flake=%s\n' "$flake_ref"
 printf 'test_root=%s\n' "$test_root"
 
 cd "$test_root"
-env "${app_environment[@]}" nix build --refresh "$flake_ref#pokecon"
+env "${app_environment[@]}" nix build --refresh \
+  "${nix_network_options[@]}" "$flake_ref#pokecon"
 [ -x result/bin/pokecon ] || {
   printf 'remote pokecon build has no executable result/bin/pokecon\n' >&2
   exit 1
 }
 
-env "${app_environment[@]}" nix run --refresh "$flake_ref" -- --help > "$test_root/help.txt"
+env "${app_environment[@]}" nix run --refresh \
+  "${nix_network_options[@]}" "$flake_ref" -- --help > "$test_root/help.txt"
 [ -s "$test_root/help.txt" ] || {
   printf 'remote pokecon --help returned an empty response\n' >&2
   exit 1
@@ -136,7 +142,7 @@ if ! grep -q '^Usage: pokecon' "$test_root/help.txt"; then
 fi
 
 env "${app_environment[@]}" timeout --signal=TERM --kill-after=5s 90s \
-  nix run --refresh "$flake_ref" -- \
+  nix run --refresh "${nix_network_options[@]}" "$flake_ref" -- \
   --ui web \
   --port "$port" \
   --bind-address 127.0.0.1 > "$app_log" 2>&1 &

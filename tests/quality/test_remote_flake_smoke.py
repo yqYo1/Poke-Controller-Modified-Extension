@@ -39,6 +39,8 @@ def test_remote_flake_job_is_checkout_free_and_sha_pinned() -> None:
     )
     assert '--repository "${{ github.repository }}"' in remote_job
     assert '--revision "$remote_revision"' in remote_job
+    assert "--option download-attempts 10" in remote_job
+    assert "--option http-connections 8" in remote_job
     assert "nix run ." not in remote_job
     assert "actions/checkout@v6" in product_job
 
@@ -74,10 +76,19 @@ def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None
     assert "XDG_CACHE_HOME=$test_root/cache" in script
     assert "XDG_STATE_HOME=$test_root/state" in script
     assert 'app_environment+=("POKECON_PORT=$port")' in script
+    assert "nix_network_options=(" in script
+    assert "--option download-attempts 10" in script
+    assert "--option http-connections 8" in script
     assert "curl --silent --output /dev/null --connect-timeout 1" in script
-    assert 'nix build --refresh "$flake_ref#pokecon"' in script
+    assert (
+        'nix build --refresh \\\n  "${nix_network_options[@]}" "$flake_ref#pokecon"'
+        in script
+    )
     assert "nix path-info ./result" in script
-    assert 'nix run --refresh "$flake_ref" -- --help' in script
+    assert (
+        'nix run --refresh \\\n  "${nix_network_options[@]}" "$flake_ref" -- --help'
+        in script
+    )
     assert '[ -s "$test_root/help.txt" ]' in script
     assert "grep -q '^Usage: pokecon' \"$test_root/help.txt\"" in script
     assert '"$base_url/"' in script

@@ -400,14 +400,18 @@ jobs:
               --arg current_run "$GITHUB_RUN_ID" \
               '
               ($runs[0].workflow_runs
-               | map({key: (.id | tostring), value: .event})
+               | map({key: (.id | tostring), value: {event: .event, conclusion: .conclusion}})
                | from_entries) as $events
               | [.artifacts[]
                | select(.expired == false)
                | select(.workflow_run.id != ($current_run | tonumber))
                | select((.workflow_run.head_sha // "") != $current_revision)
-               | select($events[(.workflow_run.id | tostring)] == $current_event)
+               | (.workflow_run.id | tostring) as $run_id
+               | select(($events[$run_id].event // "") == $current_event)
+               | select(($events[$run_id].conclusion // "") == "success")
                | select(.name | startswith("pokecon-performance-linux-"))]
+              | group_by(.workflow_run.head_sha)
+              | map(max_by(.created_at))
               | sort_by(.created_at) | reverse | .[].id
             ' "$artifacts_json"
           )

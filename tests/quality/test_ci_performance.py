@@ -31,7 +31,9 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert 'runs_json="$baseline_root/runs.json"' in job
     assert '--slurpfile runs "$runs_json"' in job
     assert "($runs[0].workflow_runs" in job
-    assert "select($events[(.workflow_run.id | tostring)] == $current_event)" in job
+    assert 'select(($events[$run_id].event // "") == $current_event)' in job
+    assert 'select(($events[$run_id].conclusion // "") == "success")' in job
+    assert "group_by(.workflow_run.head_sha)" in job
     assert "baseline_limit=5" in job
     assert "selected_dir/$(printf '%02d' \"$selected_count\").json" in job
     assert 'select((.workflow_run.head_sha // "") != $current_revision)' in job

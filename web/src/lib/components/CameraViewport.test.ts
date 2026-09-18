@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ScriptUiAction, ScriptUiActionResult } from '../actions';
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
+import { stateSnapshot } from '../test-fixtures';
 import CameraViewport from './CameraViewport.svelte';
 
 function runtimeView(): { runtime: ApplicationRuntime; view: RuntimeView } {
@@ -35,6 +36,39 @@ function prepareCanvas(canvas: HTMLElement): void {
 }
 
 describe('CameraViewport', () => {
+  it('uses the configured camera resolution for the preview drawing size', async () => {
+    const initial = runtimeView();
+    const view: RuntimeView = {
+      ...initial.view,
+      state: stateSnapshot('2', { camera_resolution: '640x360' })
+    };
+    render(CameraViewport, {
+      actions: { scriptUiAction: vi.fn().mockResolvedValue({ accepted: true }) },
+      fps: 30,
+      guideVisible: false,
+      leftStickEnabled: false,
+      liveViewEnabled: true,
+      oncapture: vi.fn(),
+      ondownload: vi.fn(),
+      ontoucharea: vi.fn(),
+      pixelValuesVisible: false,
+      rightStickEnabled: false,
+      runtime: initial.runtime,
+      view
+    });
+
+    const canvas = screen.getByLabelText('Camera capture area');
+    const frame = canvas.parentElement;
+    expect(frame).not.toBeNull();
+    await waitFor(() => {
+      expect(frame?.dataset.previewWidth).toBe('640');
+      expect(frame?.dataset.previewHeight).toBe('360');
+      expect(canvas.getAttribute('width')).toBe('640');
+      expect(canvas.getAttribute('height')).toBe('360');
+      expect(frame?.getAttribute('style')).toContain('--camera-width: 640px');
+    });
+  });
+
   it('normalizes crop and touch-area drag gestures', async () => {
     const { runtime, view } = runtimeView();
     const oncapture = vi.fn();

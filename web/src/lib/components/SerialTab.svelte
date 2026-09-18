@@ -128,46 +128,46 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Serial</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Serial</p>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-2xl font-semibold text-white">シリアルモニター</h2>
-      <span class={`rounded-full px-3 py-1 text-xs ${connected ? 'bg-lime-300/15 text-lime-300' : 'bg-white/5 text-slate-400'}`}>
+      <h2 class="text-2xl font-semibold text-text">シリアルモニター</h2>
+      <span class={`rounded-full px-3 py-1 text-xs ${connected ? 'bg-green/15 text-green' : 'bg-text/5 text-subtext1'}`}>
         {connected ? 'Connected' : 'Disconnected'}
       </span>
     </div>
   </div>
 
   {#if error !== null}
-    <div class="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200" role="alert">{error}</div>
+    <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</div>
   {/if}
 
-  <fieldset class="grid gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4 sm:grid-cols-2" disabled={busy !== null}>
-    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Connection</legend>
+  <fieldset class="grid gap-4 rounded-lg border border-text/10 bg-text/[0.025] p-4 sm:grid-cols-2" disabled={busy !== null}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">Connection</legend>
     <label class="sm:col-span-2">
-      <span class="text-xs text-slate-400">Port selector</span>
+      <span class="text-xs text-subtext1">Port selector</span>
       <div class="mt-1 flex gap-2">
-        <input class="min-w-0 flex-1 rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" list="serial-port-options" bind:value={portInput} onchange={() => void writePort()} placeholder="/dev/ttyACM0 or COM3" />
+        <input class="min-w-0 flex-1 rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" list="serial-port-options" bind:value={portInput} onchange={() => void writePort()} placeholder="/dev/ttyACM0 or COM3" />
         <datalist id="serial-port-options">
           {#each ports as port (port.selector)}
             <option value={port.selector}>{port.label}{port.available ? '' : ' (unavailable)'}</option>
           {/each}
         </datalist>
-        <button type="button" class="rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-300 hover:bg-white/10" onclick={() => void refreshPorts()}>Refresh</button>
+        <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1 hover:bg-text/10" onclick={() => void refreshPorts()}>Refresh</button>
       </div>
       {#if connected && view.state?.serial_port !== null}
-        <span class="mt-1 block text-xs text-slate-500">Active: {view.state?.serial_port}</span>
+        <span class="mt-1 block text-xs text-subtext0">Active: {view.state?.serial_port}</span>
       {/if}
     </label>
 
     <label>
-      <span class="text-xs text-slate-400">Baud rate</span>
-      <input class="mt-1 w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" type="number" min="1" step="1" list="serial-baud-options" value={baudRate} onchange={(event) => void writeBaud(event)} />
+      <span class="text-xs text-subtext1">Baud rate</span>
+      <input class="mt-1 w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" type="number" min="1" step="1" list="serial-baud-options" value={baudRate} onchange={(event) => void writeBaud(event)} />
       <datalist id="serial-baud-options"><option value="4800"></option><option value="9600"></option><option value="115200"></option></datalist>
     </label>
 
     <label>
-      <span class="text-xs text-slate-400">Data format</span>
-      <select class="mt-1 w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" value={dataFormat} onchange={(event) => void writeFormat(event)}>
+      <span class="text-xs text-subtext1">Data format</span>
+      <select class="mt-1 w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" value={dataFormat} onchange={(event) => void writeFormat(event)}>
         <option value="default">Default</option>
         <option value="qingpi">Qingpi</option>
         <option value="3ds">3DS Controller</option>
@@ -175,25 +175,25 @@
     </label>
 
     <div class="flex gap-2 sm:col-span-2">
-      <button type="button" class="rounded-lg bg-cyan-300/15 px-4 py-2 text-sm font-medium text-cyan-200 disabled:opacity-40" disabled={connected || effectivePort.length === 0} onclick={() => void control('connect')}>Connect</button>
-      <button type="button" class="rounded-lg bg-red-400/10 px-4 py-2 text-sm font-medium text-red-200 disabled:opacity-40" disabled={!connected} onclick={() => void control('disconnect')}>Disconnect</button>
+      <button type="button" class="rounded-lg bg-blue/15 px-4 py-2 text-sm font-medium text-blue disabled:opacity-40" disabled={connected || effectivePort.length === 0} onclick={() => void control('connect')}>Connect</button>
+      <button type="button" class="rounded-lg bg-red/10 px-4 py-2 text-sm font-medium text-red disabled:opacity-40" disabled={!connected} onclick={() => void control('disconnect')}>Disconnect</button>
     </div>
   </fieldset>
 
-  <section class="overflow-hidden rounded-xl border border-white/10 bg-black/25" aria-label="Serial data monitor">
-    <div class="flex items-center justify-between border-b border-white/10 px-3 py-2">
-      <h3 class="text-xs font-semibold tracking-[0.14em] text-slate-300 uppercase">Raw receive data</h3>
+  <section class="overflow-hidden rounded-lg border border-text/10 bg-crust/25" aria-label="Serial data monitor">
+    <div class="flex items-center justify-between border-b border-text/10 px-3 py-2">
+      <h3 class="text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">Raw receive data</h3>
       <div class="flex gap-1">
-        <button type="button" class={`rounded-md px-2 py-1 text-[11px] ${autoScroll ? 'bg-cyan-300/15 text-cyan-200' : 'bg-white/5 text-slate-400'}`} aria-pressed={autoScroll} onclick={() => (autoScroll = !autoScroll)}>Auto</button>
-        <button type="button" class="rounded-md bg-white/5 px-2 py-1 text-[11px] text-slate-300" onclick={() => runtime.clearSerial()}>Clear</button>
+        <button type="button" class={`rounded-md px-2 py-1 text-[11px] ${autoScroll ? 'bg-blue/15 text-blue' : 'bg-text/5 text-subtext1'}`} aria-pressed={autoScroll} onclick={() => (autoScroll = !autoScroll)}>Auto</button>
+        <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1" onclick={() => runtime.clearSerial()}>Clear</button>
       </div>
     </div>
-    <div bind:this={monitor} class="h-64 overflow-auto p-3 font-mono text-xs leading-5 text-slate-300" aria-live="polite">
+    <div bind:this={monitor} class="h-64 overflow-auto p-3 font-mono text-xs leading-5 text-subtext1" aria-live="polite">
       {#if view.serial.length === 0}
-        <p class="text-slate-600">No serial data</p>
+        <p class="text-subtext0">No serial data</p>
       {:else}
         {#each view.serial as line (line.id)}
-          <div><span class="mr-2 select-none text-slate-600">{String(line.byteLength)} B</span>{line.text}</div>
+          <div><span class="mr-2 select-none text-subtext0">{String(line.byteLength)} B</span>{line.text}</div>
         {/each}
       {/if}
     </div>

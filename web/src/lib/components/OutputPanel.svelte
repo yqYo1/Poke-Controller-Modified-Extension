@@ -78,27 +78,27 @@
   }
 </script>
 
-<section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/25" aria-label={label}>
-  <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
-    <h3 class="text-xs font-semibold tracking-[0.14em] text-slate-200 uppercase">{label}</h3>
+<section class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-text/10 bg-crust/25" aria-label={label}>
+  <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-text/10 px-3 py-2">
+    <h3 class="text-xs font-semibold tracking-[0.14em] text-text uppercase">{label}</h3>
     <div class="flex items-center gap-1">
       <label class="sr-only" for={`${storageKey}-level`}>Minimum log level</label>
-      <select id={`${storageKey}-level`} class="rounded-md border border-white/10 bg-ink-800 px-2 py-1 text-[11px] text-slate-300" bind:value={minimumLevel}>
+      <select id={`${storageKey}-level`} class="rounded-md border border-text/10 bg-surface1 px-2 py-1 text-[11px] text-subtext1" bind:value={minimumLevel}>
         {#each levels as level (level)}
           <option value={level}>{level.toUpperCase()}</option>
         {/each}
       </select>
-      <button type="button" class={`rounded-md px-2 py-1 text-[11px] ${autoScroll ? 'bg-cyan-300/15 text-cyan-200' : 'bg-white/5 text-slate-400'}`} aria-pressed={autoScroll} onclick={() => (autoScroll = !autoScroll)}>Auto</button>
-      <button type="button" class="rounded-md bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10" onclick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
-      <button type="button" class="rounded-md bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10" onclick={onclear}>Clear</button>
+      <button type="button" class={`rounded-md px-2 py-1 text-[11px] ${autoScroll ? 'bg-blue/15 text-blue' : 'bg-text/5 text-subtext1'}`} aria-pressed={autoScroll} onclick={() => (autoScroll = !autoScroll)}>Auto</button>
+      <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1 hover:bg-text/10" onclick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</button>
+      <button type="button" class="rounded-md bg-text/5 px-2 py-1 text-[11px] text-subtext1 hover:bg-text/10" onclick={onclear}>Clear</button>
     </div>
   </div>
   <div bind:this={outputElement} class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-5" aria-live="polite" aria-relevant="additions text">
     {#if filteredLines.length === 0}
-      <p class="text-slate-600">No output</p>
+      <p class="text-subtext0">No output</p>
     {:else}
       {#each filteredLines as line (line.id)}
-        <div class={line.level === 'critical' || line.level === 'error' ? 'text-red-300' : line.level === 'warning' ? 'text-amber-300' : line.level === 'debug' ? 'text-slate-500' : 'text-slate-300'}>
+        <div class={line.level === 'critical' || line.level === 'error' ? 'text-red' : line.level === 'warning' ? 'text-yellow' : line.level === 'debug' ? 'text-subtext0' : 'text-subtext1'}>
           <span class="mr-2 select-none text-[10px] uppercase opacity-60">{line.level}</span>{line.message}
         </div>
       {/each}

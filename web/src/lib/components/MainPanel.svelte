@@ -144,44 +144,44 @@
 
 <section
   aria-label="Main Panel"
-  class="min-w-0 rounded-2xl border border-white/10 bg-ink-900/80 p-4 shadow-2xl shadow-black/20"
+  class="min-w-0 rounded-lg border border-text/10 bg-mantle/80 p-4 shadow-md shadow-crust/20"
 >
   <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Quick actions">
     <button
       type="button"
-      class="rounded-lg bg-lime-300/15 px-4 py-2 text-sm font-medium text-lime-200 disabled:opacity-40"
+      class="rounded-lg bg-green/15 px-4 py-2 text-sm font-medium text-green disabled:opacity-40"
       disabled={busy !== null}
       title="Open the Commands tab to start the selected command"
       onclick={() => onnavigate?.('commands')}
     >Start</button>
     <button
       type="button"
-      class="rounded-lg bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+      class="rounded-lg bg-text/5 px-4 py-2 text-sm text-text hover:bg-text/10"
       title="Focus the Software-Controller in the right column"
       onclick={focusController}
     >Controller</button>
     <button
       type="button"
-      class="rounded-lg bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+      class="rounded-lg bg-text/5 px-4 py-2 text-sm text-text hover:bg-text/10"
       title="Clear Output #1 and Output #2"
       onclick={() => runtime.clearOutputs()}
     >Clear Outputs</button>
     <button
       type="button"
-      class="rounded-lg bg-cyan-300/15 px-4 py-2 text-sm font-medium text-cyan-200 disabled:opacity-40"
+      class="rounded-lg bg-blue/15 px-4 py-2 text-sm font-medium text-blue disabled:opacity-40"
       disabled={busy !== null}
       title="Save the current frame to Captures"
       onclick={() => void saveCapture(null)}
     >Capture</button>
     <button
       type="button"
-      class="rounded-lg bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+      class="rounded-lg bg-text/5 px-4 py-2 text-sm text-text hover:bg-text/10"
       title="Open Camera settings (no folder-open API in Web mode)"
       onclick={() => onnavigate?.('camera')}
     >Capture folder</button>
     <button
       type="button"
-      class="rounded-lg bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10"
+      class="rounded-lg bg-text/5 px-4 py-2 text-sm text-text hover:bg-text/10"
       title="Open notification settings (Discord image send has no Web API)"
       onclick={() => onnavigate?.('notifications')}
     >Discord</button>
@@ -189,11 +189,11 @@
 
   <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
     <span
-      class={`rounded-full px-3 py-1 ${view.state?.camera_opened ? 'bg-lime-300/15 text-lime-300' : 'bg-red-400/10 text-red-200'}`}
+      class={`rounded-full px-3 py-1 ${view.state?.camera_opened ? 'bg-green/15 text-green' : 'bg-red/10 text-red'}`}
     >
       {view.state?.camera_opened ? 'Camera open' : 'Camera closed'}
     </span>
-    <span class="rounded-full bg-white/5 px-3 py-1 text-slate-400">{view.media.mode}</span>
+    <span class="rounded-full bg-text/5 px-3 py-1 text-subtext1">{view.media.mode}</span>
   </div>
 
   <div id="main-camera-preview" class="mt-3 min-w-0">
@@ -215,21 +215,21 @@
 
   {#if error !== null || view.media.lastError !== null}
     <div
-      class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200"
+      class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red"
       role="alert"
     >
       <span>{error ?? view.media.lastError}</span>
       <div class="flex gap-2">
         <button
           type="button"
-          class="rounded-md bg-white/10 px-2 py-1 text-xs"
+          class="rounded-md bg-text/10 px-2 py-1 text-xs"
           disabled={busy !== null}
           onclick={() => void retry()}
         >Retry camera</button>
         {#if view.media.mode !== 'webrtc'}
           <button
             type="button"
-            class="rounded-md bg-white/10 px-2 py-1 text-xs"
+            class="rounded-md bg-text/10 px-2 py-1 text-xs"
             onclick={() => runtime.reconnectWebRtc()}
           >Retry WebRTC</button>
         {/if}
@@ -237,7 +237,7 @@
     </div>
   {:else if notice !== null}
     <div
-      class="mt-3 rounded-lg border border-lime-300/20 bg-lime-300/10 px-3 py-2 text-sm text-lime-200"
+      class="mt-3 rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-sm text-green"
       role="status"
     >{notice}</div>
   {/if}

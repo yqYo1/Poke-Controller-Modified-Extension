@@ -304,25 +304,25 @@
 
 <div class="relative z-30 flex flex-wrap items-center justify-end gap-2">
   <details class="group relative">
-    <summary class="cursor-pointer list-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10">
+    <summary class="cursor-pointer list-none rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs font-medium text-text hover:bg-text/10">
       {t('Menu', 'メニュー')}
     </summary>
-    <div class="absolute right-0 mt-2 w-[min(92vw,28rem)] space-y-4 rounded-xl border border-white/10 bg-ink-900 p-4 shadow-2xl shadow-black/60">
+    <div class="absolute right-0 mt-2 w-[min(92vw,28rem)] space-y-4 rounded-lg border border-text/10 bg-mantle p-4 shadow-md shadow-crust/60">
       {#if error !== null}
-        <div class="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-200" role="alert">{error}</div>
+        <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-xs text-red" role="alert">{error}</div>
       {:else if notice !== null}
-        <div class="rounded-lg border border-lime-300/20 bg-lime-300/10 px-3 py-2 text-xs text-lime-200" role="status">{notice}</div>
+        <div class="rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-xs text-green" role="status">{notice}</div>
       {/if}
 
       <section aria-labelledby="profile-menu-heading">
-        <h2 id="profile-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-cyan-200 uppercase">
+        <h2 id="profile-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">
           {t('Profile', 'プロファイル')}
         </h2>
         <div class="mt-2 flex gap-2">
           <label class="min-w-0 flex-1">
             <span class="sr-only">{t('Selected profile', '選択プロファイル')}</span>
             <select
-              class="w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+              class="w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
               bind:value={selectedProfile}
               disabled={busy !== null || view.state?.pending_profile !== null}
             >
@@ -333,24 +333,24 @@
           </label>
           <button
             type="button"
-            class="rounded-lg bg-cyan-300/15 px-3 py-2 text-sm font-medium text-cyan-200 disabled:opacity-40"
+            class="rounded-lg bg-blue/15 px-3 py-2 text-sm font-medium text-blue disabled:opacity-40"
             disabled={busy !== null || selectedProfile === activeProfile || view.state?.pending_profile !== null}
             onclick={() => void switchProfile()}
           >{busy === 'profile' ? t('Switching…', '切替中…') : t('Switch', '切替')}</button>
         </div>
         {#if view.state?.pending_profile !== null && view.state?.pending_profile !== undefined}
-          <p class="mt-2 text-xs text-amber-200" aria-live="polite">
+          <p class="mt-2 text-xs text-yellow" aria-live="polite">
             {t('Pending', '切替先')}: {view.state.pending_profile}
           </p>
         {/if}
       </section>
 
-      <section class="border-t border-white/10 pt-4" aria-labelledby="dynamic-menu-heading">
-        <h2 id="dynamic-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-cyan-200 uppercase">
+      <section class="border-t border-text/10 pt-4" aria-labelledby="dynamic-menu-heading">
+        <h2 id="dynamic-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">
           {t('Dynamic configuration', '動的設定')}
         </h2>
         <div class="mt-2 flex flex-wrap gap-2">
-          <label class="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 hover:bg-white/10">
+          <label class="cursor-pointer rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs text-text hover:bg-text/10">
             {busy === 'dynamic' ? t('Loading…', '読込中…') : t('Load .py / .lua', '.py / .lua を読み込む')}
             <input
               type="file"
@@ -362,17 +362,17 @@
           </label>
           <button
             type="button"
-            class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40"
+            class="rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs text-text hover:bg-text/10 disabled:opacity-40"
             disabled={busy !== null}
             onclick={() => void reloadDynamicConfig()}
           >{t('Reload', '再読み込み')}</button>
         </div>
-        <div class="mt-3 rounded-lg bg-black/15 p-3 text-xs text-slate-400">
-          <p class="font-medium text-slate-300">{desktopMode ? t('Config directory', '設定ディレクトリ') : t('Config directory (Web mode)', '設定ディレクトリ（Web モード）')}</p>
+        <div class="mt-3 rounded-lg bg-crust/15 p-3 text-xs text-subtext1">
+          <p class="font-medium text-subtext1">{desktopMode ? t('Config directory', '設定ディレクトリ') : t('Config directory (Web mode)', '設定ディレクトリ（Web モード）')}</p>
           {#if desktopMode}
             <button
               type="button"
-              class="mt-2 rounded bg-white/5 px-2 py-1 text-slate-200"
+              class="mt-2 rounded bg-text/5 px-2 py-1 text-text"
               disabled={busy !== null}
               onclick={() => void accessConfigDirectory()}
             >{t('Open directory', 'ディレクトリを開く')}</button>
@@ -382,15 +382,15 @@
             <p class="mt-1 break-all font-mono">{configDirectory}</p>
             <button
               type="button"
-              class="mt-2 rounded bg-white/5 px-2 py-1 text-slate-200"
+              class="mt-2 rounded bg-text/5 px-2 py-1 text-text"
               onclick={() => void accessConfigDirectory()}
             >{copied ? t('Copied', 'コピー済み') : t('Copy path', 'パスをコピー')}</button>
           {/if}
         </div>
       </section>
 
-      <section class="border-t border-white/10 pt-4" aria-labelledby="launcher-menu-heading">
-        <h2 id="launcher-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-cyan-200 uppercase">
+      <section class="border-t border-text/10 pt-4" aria-labelledby="launcher-menu-heading">
+        <h2 id="launcher-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">
           {t('Windows launcher and profile', 'Windows ランチャーとプロファイル')}
         </h2>
         <div class="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -398,24 +398,24 @@
             <span class="sr-only">{t('Launcher profile name', 'ランチャーのプロファイル名')}</span>
             <input
               type="text"
-              class="w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+              class="w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
               bind:value={launcherProfile}
               disabled={!windows || busy !== null}
             />
           </label>
           <button
             type="button"
-            class="rounded-lg bg-cyan-300/15 px-3 py-2 text-xs font-medium text-cyan-200 disabled:opacity-40"
+            class="rounded-lg bg-blue/15 px-3 py-2 text-xs font-medium text-blue disabled:opacity-40"
             disabled={!windows || busy !== null}
             onclick={() => void generateLauncher()}
           >{busy === 'launcher' ? t('Generating…', '作成中…') : desktopMode ? t('Save .bat', '.bat を保存') : t('Download .bat', '.bat をダウンロード')}</button>
         </div>
-        <label class="mt-2 flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" class="accent-cyan-300" bind:checked={copyCurrent} disabled={!windows || busy !== null} />
+        <label class="mt-2 flex items-center gap-2 text-xs text-subtext1">
+          <input type="checkbox" class="accent-blue" bind:checked={copyCurrent} disabled={!windows || busy !== null} />
           {t('Copy the current profile when creating a new profile', '新規プロファイル作成時に現在の内容をコピー')}
         </label>
         {#if !windows}
-          <p class="mt-2 text-xs text-amber-200">
+          <p class="mt-2 text-xs text-yellow">
             {t('Launcher generation is available only on Windows.', 'ランチャー生成は Windows でのみ利用できます。')}
           </p>
         {/if}
@@ -423,34 +423,34 @@
 
       <button
         type="button"
-        class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10"
+        class="w-full rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-left text-xs text-text hover:bg-text/10"
         onclick={resetView}
       >{t('Reset view size and position', '画面サイズと位置をリセット')}</button>
     </div>
   </details>
 
   <details class="group relative">
-    <summary class="cursor-pointer list-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10">
+    <summary class="cursor-pointer list-none rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs font-medium text-text hover:bg-text/10">
       {t('Help', 'ヘルプ')}
     </summary>
-    <div class="absolute right-0 mt-2 w-72 space-y-2 rounded-xl border border-white/10 bg-ink-900 p-3 text-xs shadow-2xl shadow-black/60">
-      <p class="px-2 py-1 text-slate-400">PokeCon {openapi.info.version}</p>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension" target="_blank" rel="noreferrer">GitHub</a>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/KawaSwitch/Poke-Controller/wiki" target="_blank" rel="noreferrer">Poke-Controller Guide</a>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/issues/new/choose" target="_blank" rel="noreferrer">{t('Question template', '質問テンプレート')}</a>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/docs/legacy/CHANGELOG.txt" target="_blank" rel="noreferrer">{t('Change log', '更新履歴')}</a>
-      <a class="block rounded-lg px-2 py-2 text-slate-200 hover:bg-white/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/LICENSE" target="_blank" rel="noreferrer">LICENSE</a>
+    <div class="absolute right-0 mt-2 w-72 space-y-2 rounded-lg border border-text/10 bg-mantle p-3 text-xs shadow-md shadow-crust/60">
+      <p class="px-2 py-1 text-subtext1">PokeCon {openapi.info.version}</p>
+      <a class="block rounded-lg px-2 py-2 text-text hover:bg-text/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension" target="_blank" rel="noreferrer">GitHub</a>
+      <a class="block rounded-lg px-2 py-2 text-text hover:bg-text/5" href="https://github.com/KawaSwitch/Poke-Controller/wiki" target="_blank" rel="noreferrer">Poke-Controller Guide</a>
+      <a class="block rounded-lg px-2 py-2 text-text hover:bg-text/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/issues/new/choose" target="_blank" rel="noreferrer">{t('Question template', '質問テンプレート')}</a>
+      <a class="block rounded-lg px-2 py-2 text-text hover:bg-text/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/docs/legacy/CHANGELOG.txt" target="_blank" rel="noreferrer">{t('Change log', '更新履歴')}</a>
+      <a class="block rounded-lg px-2 py-2 text-text hover:bg-text/5" href="https://github.com/yqYo1/Poke-Controller-Modified-Extension/blob/refactor/rust-core/LICENSE" target="_blank" rel="noreferrer">LICENSE</a>
       <button
         type="button"
-        class="w-full rounded-lg bg-cyan-300/15 px-2 py-2 text-left text-cyan-200 disabled:opacity-40"
+        class="w-full rounded-lg bg-blue/15 px-2 py-2 text-left text-blue disabled:opacity-40"
         disabled={busy !== null}
         onclick={() => void checkUpdate()}
       >{busy === 'update' ? t('Checking…', '確認中…') : t('Check for updates', 'アップデート確認')}</button>
       {#if updateResult !== null}
-        <div class="rounded-lg bg-black/15 p-2 text-slate-400" aria-live="polite">
+        <div class="rounded-lg bg-crust/15 p-2 text-subtext1" aria-live="polite">
           <p>{updateResult.current_version} → {updateResult.latest_version}</p>
           {#if updateResult.update_available}
-            <button type="button" class="mt-1 text-cyan-200 underline" onclick={openRelease}>{t('Open release', 'リリースを開く')}</button>
+            <button type="button" class="mt-1 text-blue underline" onclick={openRelease}>{t('Open release', 'リリースを開く')}</button>
           {/if}
         </div>
       {/if}

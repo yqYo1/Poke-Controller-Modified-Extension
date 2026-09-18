@@ -157,24 +157,24 @@
   );
 </script>
 
-<section id="software-controller" class="shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-ink-900/90" aria-label="Software controller">
-  <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+<section id="software-controller" class="shrink-0 overflow-hidden rounded-lg border border-text/10 bg-mantle/90" aria-label="Software controller">
+  <div class="flex items-center justify-between border-b border-text/10 px-4 py-3">
     <div>
-      <p class="text-xs font-semibold tracking-[0.16em] text-cyan-300 uppercase">Joy-Con</p>
-      <h2 class="text-sm font-semibold text-white">Software Controller</h2>
+      <p class="text-xs font-semibold tracking-[0.16em] text-blue uppercase">Joy-Con</p>
+      <h2 class="text-sm font-semibold text-text">Software Controller</h2>
     </div>
-    <span class={`rounded-full px-2 py-1 text-[11px] font-medium ${view.input.ready ? 'bg-lime-300/15 text-lime-300' : 'bg-white/5 text-slate-400'}`}>
+    <span class={`rounded-full px-2 py-1 text-[11px] font-medium ${view.input.ready ? 'bg-green/15 text-green' : 'bg-text/5 text-subtext1'}`}>
       {view.input.ready ? view.input.route : 'standby'}
     </span>
   </div>
 
   <div class={`grid gap-3 p-3 ${compact ? 'grid-cols-[1fr_1.35fr_1fr]' : 'grid-cols-1 sm:grid-cols-[1fr_1.4fr_1fr]'}`}>
-    <div class="rounded-[1.7rem] bg-[#56CCF2] p-2 text-slate-950 shadow-lg shadow-cyan-950/30">
+    <div class="rounded-lg bg-blue/80 p-2 text-crust shadow-md shadow-blue/20">
       <div class="grid grid-cols-2 gap-1">
         {#each leftButtons as button (button)}
           <button
             type="button"
-            class={`touch-none rounded-lg border border-black/15 px-1 py-2 text-xs font-black transition ${active(button) ? 'bg-[#FFD800]' : 'bg-white/55 hover:bg-white/75'}`}
+            class={`touch-none rounded-lg border border-crust/15 px-1 py-2 text-xs font-bold transition ${active(button) ? 'bg-yellow' : 'bg-text/55 hover:bg-text/75'}`}
             aria-pressed={active(button)}
             onpointercancel={(event) => cancel(event, button)}
             onpointerdown={(event) => press(event, button)}
@@ -191,7 +191,7 @@
         />
         <button
           type="button"
-          class={`mt-2 rounded-full px-3 py-1 text-[10px] font-black ${active('LCLICK') ? 'bg-[#FFD800]' : 'bg-white/60'}`}
+          class={`mt-2 rounded-full px-3 py-1 text-[10px] font-bold ${active('LCLICK') ? 'bg-yellow' : 'bg-text/60'}`}
           aria-pressed={active('LCLICK')}
           onpointercancel={(event) => cancel(event, 'LCLICK')}
           onpointerdown={(event) => press(event, 'LCLICK')}
@@ -202,7 +202,7 @@
         {#each hats as hat (hat.value)}
           <button
             type="button"
-            class={`touch-none rounded-md py-1 text-sm font-black ${hatPosition(hat.value)} ${hatActive(hat.value) ? 'bg-[#FFD800]' : 'bg-slate-800 text-white'}`}
+            class={`touch-none rounded-md py-1 text-sm font-bold ${hatPosition(hat.value)} ${hatActive(hat.value) ? 'bg-yellow' : 'bg-surface2 text-text'}`}
             aria-pressed={hatActive(hat.value)}
             aria-label={`D-pad ${hat.value.toLowerCase()}`}
             onpointercancel={cancelHat}
@@ -213,20 +213,20 @@
       </div>
     </div>
 
-    <div class="flex min-w-0 flex-col justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-2">
+    <div class="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-text/10 bg-crust/20 p-2">
       <TouchPad
         onchange={changeTouch}
         touch={view.input.snapshot.touch}
       />
-      <p class="text-center text-[10px] tracking-[0.12em] text-slate-500 uppercase">320 × 240 touch</p>
+      <p class="text-center text-[10px] tracking-[0.12em] text-subtext0 uppercase">320 × 240 touch</p>
     </div>
 
-    <div class="rounded-[1.7rem] bg-[#E9514E] p-2 text-slate-950 shadow-lg shadow-red-950/30">
+    <div class="rounded-lg bg-red/80 p-2 text-crust shadow-md shadow-red/20">
       <div class="grid grid-cols-2 gap-1">
         {#each rightButtons as button (button)}
           <button
             type="button"
-            class={`touch-none rounded-lg border border-black/15 px-1 py-2 text-xs font-black transition ${active(button) ? 'bg-[#FFD800]' : 'bg-white/55 hover:bg-white/75'}`}
+            class={`touch-none rounded-lg border border-crust/15 px-1 py-2 text-xs font-bold transition ${active(button) ? 'bg-yellow' : 'bg-text/55 hover:bg-text/75'}`}
             aria-pressed={active(button)}
             onpointercancel={(event) => cancel(event, button)}
             onpointerdown={(event) => press(event, button)}
@@ -238,7 +238,7 @@
         {#each faceButtons as button, index (button)}
           <button
             type="button"
-            class={`touch-none rounded-full py-1 text-xs font-black ${facePosition(index)} ${active(button) ? 'bg-[#FFD800]' : 'bg-slate-800 text-white'}`}
+            class={`touch-none rounded-full py-1 text-xs font-bold ${facePosition(index)} ${active(button) ? 'bg-yellow' : 'bg-surface2 text-text'}`}
             aria-pressed={active(button)}
             onpointercancel={(event) => cancel(event, button)}
             onpointerdown={(event) => press(event, button)}
@@ -255,7 +255,7 @@
         />
         <button
           type="button"
-          class={`mt-2 rounded-full px-3 py-1 text-[10px] font-black ${active('RCLICK') ? 'bg-[#FFD800]' : 'bg-white/60'}`}
+          class={`mt-2 rounded-full px-3 py-1 text-[10px] font-bold ${active('RCLICK') ? 'bg-yellow' : 'bg-text/60'}`}
           aria-pressed={active('RCLICK')}
           onpointercancel={(event) => cancel(event, 'RCLICK')}
           onpointerdown={(event) => press(event, 'RCLICK')}

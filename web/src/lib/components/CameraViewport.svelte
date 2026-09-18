@@ -87,6 +87,8 @@
   let renderFrame: number | null = null;
   let scriptFrame: number | null = null;
   let lastScriptAt = 0;
+  let displayHeight = $state(720);
+  let displayWidth = $state(1280);
   let sourceHeight = $state(720);
   let sourceWidth = $state(1280);
   let video: HTMLVideoElement | undefined;
@@ -117,6 +119,8 @@
     const width = Number(widthText);
     const height = Number(heightText);
     if (Number.isSafeInteger(width) && Number.isSafeInteger(height) && width > 0 && height > 0) {
+      displayWidth = width;
+      displayHeight = height;
       sourceWidth = width;
       sourceHeight = height;
     }
@@ -460,11 +464,16 @@
 </script>
 
 <div class="space-y-2">
-  <div class="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-inner shadow-black/60">
+  <div
+    class="camera-frame relative overflow-hidden rounded-lg border border-text/10 bg-crust"
+    data-preview-height={displayHeight}
+    data-preview-width={displayWidth}
+    style={`--camera-width: ${String(displayWidth)}px; --camera-aspect: ${String(displayWidth)} / ${String(displayHeight)}`}
+  >
     <video bind:this={video} class="pointer-events-none absolute size-px opacity-0" autoplay muted playsinline aria-hidden="true" onloadeddata={() => runtime.markVideoActivity()}></video>
     <canvas
       bind:this={canvas}
-      class="block aspect-video w-full touch-none bg-[radial-gradient(circle_at_center,#172033,#080b12)] object-contain"
+      class="block touch-none bg-crust object-contain"
       width={sourceWidth}
       height={sourceHeight}
       aria-label="Camera capture area"
@@ -511,23 +520,23 @@
     {/if}
     {#if selection !== null}
       <div
-        class="pointer-events-none absolute border border-yellow-300 bg-yellow-300/10"
+        class="pointer-events-none absolute border border-yellow bg-yellow/10"
         style={`left: ${String(selection.left * 100)}%; top: ${String(selection.top * 100)}%; width: ${String(selection.width * 100)}%; height: ${String(selection.height * 100)}%`}
         aria-hidden="true"
       ></div>
     {/if}
     {#if !liveViewEnabled}
-      <span class="absolute top-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs text-slate-300">Live view paused</span>
+      <span class="absolute top-3 left-3 rounded-md bg-crust/60 px-2 py-1 text-xs text-subtext1">Live view paused</span>
     {:else if !(view.state?.camera_opened ?? false)}
-      <span class="absolute inset-0 grid place-items-center text-sm text-slate-500">Camera unavailable</span>
+      <span class="absolute inset-0 grid place-items-center text-sm text-subtext0">Camera unavailable</span>
     {/if}
-    <span class="absolute right-3 bottom-3 rounded-md bg-black/60 px-2 py-1 text-[10px] tracking-wider text-slate-400 uppercase">{view.media.mode} · {String(sourceWidth)}×{String(sourceHeight)}</span>
+    <span class="absolute right-3 bottom-3 rounded-md bg-crust/60 px-2 py-1 text-[10px] tracking-wider text-subtext1 uppercase">{view.media.mode} · {String(sourceWidth)}×{String(sourceHeight)}</span>
   </div>
 
   {#if pixelValuesVisible && pixelSample !== null}
-    <output class="block rounded-lg bg-black/20 px-3 py-2 font-mono text-xs text-slate-300">
+    <output class="block rounded-lg bg-crust/20 px-3 py-2 font-mono text-xs text-subtext1">
       ({String(pixelSample.x)}, {String(pixelSample.y)}) RGB {String(pixelSample.red)}, {String(pixelSample.green)}, {String(pixelSample.blue)} · HSV {pixelSample.hue.toFixed(1)}°, {(pixelSample.saturation * 100).toFixed(1)}%, {(pixelSample.value * 100).toFixed(1)}%
     </output>
   {/if}
-  <p class="text-[11px] text-slate-500">Ctrl+click: pixel · Ctrl+Shift+drag: captures · Ctrl+Alt+drag: download · Ctrl+right-drag: touch area</p>
+  <p class="text-[11px] text-subtext0">Ctrl+click: pixel · Ctrl+Shift+drag: captures · Ctrl+Alt+drag: download · Ctrl+right-drag: touch area</p>
 </div>

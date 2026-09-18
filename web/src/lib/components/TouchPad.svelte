@@ -56,7 +56,7 @@
 
 <button
   type="button"
-  class="relative aspect-[4/3] w-full touch-none overflow-hidden rounded-lg border border-white/15 bg-black/30"
+  class="relative aspect-[4/3] w-full touch-none overflow-hidden rounded-lg border border-text/15 bg-crust/30"
   aria-label={touch === null ? 'Touchscreen 320 × 240' : `Touchscreen X ${String(touch.x)} Y ${String(touch.y)}`}
   onpointercancel={release}
   onpointerdown={handlePointerDown}
@@ -66,7 +66,7 @@
   <span class="absolute inset-0 bg-[linear-gradient(90deg,transparent_49%,rgba(255,255,255,.06)_50%,transparent_51%),linear-gradient(0deg,transparent_49%,rgba(255,255,255,.06)_50%,transparent_51%)] bg-[size:25%_25%]" aria-hidden="true"></span>
   {#if touch !== null}
     <span
-      class="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-300 shadow-[0_0_16px_rgba(253,224,71,.8)]"
+      class="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow shadow-[0_0_8px_rgb(224_175_104_/_0.45)]"
       style={`left: ${String((touch.x / 319) * 100)}%; top: ${String((touch.y / 239) * 100)}%`}
       aria-hidden="true"
     ></span>

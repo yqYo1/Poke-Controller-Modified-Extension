@@ -159,27 +159,27 @@
 
 <div class="space-y-5">
   <div>
-    <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Other</p>
-    <h2 class="mt-2 text-2xl font-semibold text-white">
+    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Other</p>
+    <h2 class="mt-2 text-2xl font-semibold text-text">
       {t('Application settings', 'アプリケーション設定')}
     </h2>
-    <p class="mt-2 text-sm text-slate-400">
+    <p class="mt-2 text-sm text-subtext1">
       {t('Revision', 'リビジョン')} {view.settings?.revision ?? '—'} · {t('Profile', 'プロファイル')}
       {view.state?.active_profile ?? '—'}
     </p>
   </div>
 
   {#if error !== null}
-    <div class="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200" role="alert">{error}</div>
+    <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</div>
   {/if}
 
-  <fieldset class="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4" disabled={busy}>
-    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+  <fieldset class="space-y-4 rounded-lg border border-text/10 bg-text/[0.025] p-4" disabled={busy}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">
       {t('Output and display', '出力と表示')}
     </legend>
 
     <label class="block">
-      <span class="flex items-center justify-between text-xs font-medium text-slate-300">
+      <span class="flex items-center justify-between text-xs font-medium text-subtext1">
         <span>{t('Output size split', '出力サイズ調整')}</span>
         <output for="output-split">{values?.['ui.output_split_ratio'] ?? 20}</output>
       </span>
@@ -190,10 +190,10 @@
         max="100"
         step="1"
         value={values?.['ui.output_split_ratio'] ?? 20}
-        class="mt-2 w-full accent-cyan-300"
+        class="mt-2 w-full accent-blue"
         onchange={(event) => void changeSplit(event)}
       />
-      <span class="mt-1 flex justify-between text-[0.7rem] text-slate-500">
+      <span class="mt-1 flex justify-between text-[0.7rem] text-subtext0">
         <span>{t('Output #1: 10%', '出力 #1: 10%')}</span>
         <span>{t('Output #1: 90%', '出力 #1: 90%')}</span>
       </span>
@@ -201,16 +201,16 @@
 
     <div class="grid gap-4 sm:grid-cols-2">
       <fieldset>
-        <legend class="text-xs font-medium text-slate-300">{t('stdout destination', 'stdout 出力先')}</legend>
+        <legend class="text-xs font-medium text-subtext1">{t('stdout destination', 'stdout 出力先')}</legend>
         <div class="mt-2 flex gap-2">
           {#each [['output_1', 'Output #1'], ['output_2', 'Output #2']] as destination (destination[0])}
-            <label class="flex flex-1 items-center gap-2 rounded-lg bg-black/15 px-3 py-2 text-sm text-slate-200">
+            <label class="flex flex-1 items-center gap-2 rounded-lg bg-crust/15 px-3 py-2 text-sm text-text">
               <input
                 type="radio"
                 name="stdout-destination"
                 value={destination[0]}
                 checked={(values?.['ui.stdout_destination'] ?? 'output_1') === destination[0]}
-                class="accent-cyan-300"
+                class="accent-blue"
                 onchange={(event) => void changeSelect(event, 'ui.stdout_destination')}
               />
               {destination[1]}
@@ -220,10 +220,10 @@
       </fieldset>
 
       <label>
-        <span class="text-xs font-medium text-slate-300">FPS</span>
+        <span class="text-xs font-medium text-subtext1">FPS</span>
         <select
           aria-label="UI FPS"
-          class="mt-2 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+          class="mt-2 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
           value={values?.['ui.fps'] ?? 30}
           onchange={(event) => void changeFps(event)}
         >
@@ -236,9 +236,9 @@
 
     <div class="grid gap-4 sm:grid-cols-2">
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Widget mode', 'ウィジェットモード')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Widget mode', 'ウィジェットモード')}</span>
         <select
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
           value={values?.['ui.widget_mode'] ?? 'all'}
           onchange={(event) => void changeSelect(event, 'ui.widget_mode')}
         >
@@ -248,10 +248,10 @@
         </select>
       </label>
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Language', '表示言語')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Language', '表示言語')}</span>
         <select
           aria-label={t('Language', '表示言語')}
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
           value={values?.language ?? 'ja'}
           onchange={(event) => void changeSelect(event, 'language')}
         >
@@ -263,20 +263,20 @@
 
     <button
       type="button"
-      class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10"
+      class="rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-sm text-text hover:bg-text/10"
       onclick={() => runtime.clearOutputs()}
     >{t('Clear both outputs', '両方の出力をクリア')}</button>
   </fieldset>
 
-  <fieldset class="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4" disabled={busy}>
-    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+  <fieldset class="space-y-4 rounded-lg border border-text/10 bg-text/[0.025] p-4" disabled={busy}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">
       {t('Layout', 'レイアウト')}
     </legend>
     <div class="grid gap-4 sm:grid-cols-2">
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Controller position', 'コントローラーの位置')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Controller position', 'コントローラーの位置')}</span>
         <select
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
           value={values?.['ui.controller_position'] ?? 'top'}
           onchange={(event) => void changeSelect(event, 'ui.controller_position')}
         >
@@ -285,9 +285,9 @@
         </select>
       </label>
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Dialog button position', 'ダイアログボタンの位置')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Dialog button position', 'ダイアログボタンの位置')}</span>
         <select
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
           value={values?.['ui.dialog_button_position'] ?? 'bottom'}
           onchange={(event) => void changeSelect(event, 'ui.dialog_button_position')}
         >
@@ -299,27 +299,27 @@
     </div>
   </fieldset>
 
-  <fieldset class="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4" disabled={busy}>
-    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+  <fieldset class="space-y-4 rounded-lg border border-text/10 bg-text/[0.025] p-4" disabled={busy}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">
       {t('Runtime and desktop', 'ランタイムとデスクトップ')}
     </legend>
-    <label class="flex items-start gap-3 rounded-lg bg-black/15 p-3 text-sm text-slate-200">
+    <label class="flex items-start gap-3 rounded-lg bg-crust/15 p-3 text-sm text-text">
       <input
         type="checkbox"
-        class="mt-0.5 size-4 accent-cyan-300"
+        class="mt-0.5 size-4 accent-blue"
         checked={values?.auto_reload_config ?? false}
         onchange={(event) => void changeBoolean(event, 'auto_reload_config')}
       />
       <span>
         <strong class="block font-medium">{t('Auto-reload dynamic configuration', '動的設定の自動リロード')}</strong>
-        <span class="mt-1 block text-xs text-slate-400">init.py / init.lua</span>
+        <span class="mt-1 block text-xs text-subtext1">init.py / init.lua</span>
       </span>
     </label>
 
     <label>
-      <span class="text-xs font-medium text-slate-300">{t('When the final window closes', '最終ウィンドウを閉じる動作')}</span>
+      <span class="text-xs font-medium text-subtext1">{t('When the final window closes', '最終ウィンドウを閉じる動作')}</span>
       <select
-        class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white"
+        class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
         value={values?.['ui.desktop.close_behavior'] ?? 'ask'}
         onchange={(event) => void changeSelect(event, 'ui.desktop.close_behavior')}
       >
@@ -329,26 +329,26 @@
       </select>
     </label>
 
-    <label class="flex items-start gap-3 rounded-lg bg-black/15 p-3 text-sm text-slate-200">
+    <label class="flex items-start gap-3 rounded-lg bg-crust/15 p-3 text-sm text-text">
       <input
         type="checkbox"
-        class="mt-0.5 size-4 accent-cyan-300"
+        class="mt-0.5 size-4 accent-blue"
         checked={savedCompositing}
         onchange={(event) => void changeBoolean(event, 'ui.desktop.disable_compositing')}
       />
       <span class="min-w-0">
         <strong class="block font-medium">{t('Disable desktop compositing', 'デスクトップコンポジット無効化')}</strong>
-        <span class="mt-1 block text-xs text-slate-400">
+        <span class="mt-1 block text-xs text-subtext1">
           {desktopMode
             ? t('Applied when the desktop app next starts.', 'デスクトップアプリの次回起動時に反映されます。')
             : t('Stored in Web mode but has no effect.', 'Web モードでは値だけを保持し、効果はありません。')}
         </span>
-        <span class="mt-2 block font-mono text-[0.7rem] text-slate-500">
+        <span class="mt-2 block font-mono text-[0.7rem] text-subtext0">
           {t('Current', '現在')}: {values?.['ui.desktop.disable_compositing'] ? 'true' : 'false'} ·
           {t('Saved', '保存')}: {savedCompositing ? 'true' : 'false'}
         </span>
         {#if compositingRestart}
-          <span class="mt-2 inline-flex rounded-full bg-amber-300/10 px-2 py-1 text-[0.7rem] font-semibold text-amber-200">
+          <span class="mt-2 inline-flex rounded-full bg-yellow/10 px-2 py-1 text-[0.7rem] font-semibold text-yellow">
             {t('Restart required', '再起動後に反映')}
           </span>
         {/if}
@@ -356,11 +356,11 @@
     </label>
   </fieldset>
 
-  <fieldset class="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4" disabled={busy}>
-    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+  <fieldset class="space-y-4 rounded-lg border border-text/10 bg-text/[0.025] p-4" disabled={busy}>
+    <legend class="px-2 text-xs font-semibold tracking-[0.14em] text-subtext1 uppercase">
       {t('Server and network', 'サーバーとネットワーク')}
     </legend>
-    <p class="text-xs text-slate-400">
+    <p class="text-xs text-subtext1">
       {t(
         'Server root, port, and bind address are saved now and applied after restart.',
         'Web UI ディレクトリ、ポート、待受アドレスは保存後、再起動時に反映されます。'
@@ -368,18 +368,18 @@
     </p>
 
     <label class="block">
-      <span class="text-xs font-medium text-slate-300">{t('Saved Web UI directory', '保存する Web UI ディレクトリ')}</span>
+      <span class="text-xs font-medium text-subtext1">{t('Saved Web UI directory', '保存する Web UI ディレクトリ')}</span>
       <input
         type="text"
         value={savedWebDirectory}
-        class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+        class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 font-mono text-sm text-text outline-none focus:border-blue/60"
         onchange={(event) => void changeServerText(event, 'server.web_dir')}
       />
-      <span class="mt-2 flex flex-wrap items-center gap-2 text-[0.7rem] text-slate-500">
+      <span class="mt-2 flex flex-wrap items-center gap-2 text-[0.7rem] text-subtext0">
         <span class="min-w-0 break-all">{t('Current', '現在')}: {values?.['server.web_dir'] ?? '—'}</span>
         <button
           type="button"
-          class="rounded bg-white/5 px-2 py-1 text-slate-300"
+          class="rounded bg-text/5 px-2 py-1 text-subtext1"
           onclick={() => void copyValue('server.web_dir', values?.['server.web_dir'] ?? '')}
         >{copied === 'server.web_dir' ? t('Copied', 'コピー済み') : t('Copy', 'コピー')}</button>
       </span>
@@ -387,37 +387,37 @@
 
     <div class="grid gap-4 sm:grid-cols-2">
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Saved server port', '保存するサーバーポート')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Saved server port', '保存するサーバーポート')}</span>
         <input
           type="number"
           min="1"
           max="65535"
           step="1"
           value={savedPort}
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-300/60"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text outline-none focus:border-blue/60"
           onchange={(event) => void changePort(event)}
         />
-        <span class="mt-1 block text-[0.7rem] text-slate-500">
+        <span class="mt-1 block text-[0.7rem] text-subtext0">
           {t('Current', '現在')}: {values?.['server.port'] ?? '—'}
         </span>
       </label>
       <label>
-        <span class="text-xs font-medium text-slate-300">{t('Saved bind address', '保存するバインドアドレス')}</span>
+        <span class="text-xs font-medium text-subtext1">{t('Saved bind address', '保存するバインドアドレス')}</span>
         <input
           type="text"
           inputmode="decimal"
           value={savedBindAddress}
-          class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 font-mono text-sm text-text outline-none focus:border-blue/60"
           onchange={(event) => void changeServerText(event, 'server.bind_address')}
         />
-        <span class="mt-1 block text-[0.7rem] text-slate-500">
+        <span class="mt-1 block text-[0.7rem] text-subtext0">
           {t('Current', '現在')}: {values?.['server.bind_address'] ?? '—'}
         </span>
       </label>
     </div>
 
     {#if lanExposed}
-      <div class="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-100" role="alert">
+      <div class="rounded-lg border border-red/30 bg-red/10 px-3 py-2 text-xs text-red" role="alert">
         {t(
           'This address exposes every REST and WebSocket operation to trusted LAN clients without authentication, including dynamic Python/Lua loading.',
           'このアドレスは、動的 Python/Lua 読み込みを含む全 REST／WebSocket 操作を、認証なしで信頼済み LAN クライアントへ公開します。'
@@ -426,15 +426,15 @@
     {/if}
 
     <label class="block">
-      <span class="text-xs font-medium text-slate-300">{t('WebRTC STUN URI', 'WebRTC STUN URI')}</span>
+      <span class="text-xs font-medium text-subtext1">{t('WebRTC STUN URI', 'WebRTC STUN URI')}</span>
       <input
         type="text"
         placeholder="stun:stun.example.com:3478"
         value={values?.stun_server ?? ''}
-        class="mt-1 w-full rounded-lg border border-white/10 bg-ink-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-300/60"
+        class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 font-mono text-sm text-text outline-none focus:border-blue/60"
         onchange={(event) => void changeServerText(event, 'stun_server')}
       />
-      <span class="mt-1 block text-[0.7rem] text-slate-500">
+      <span class="mt-1 block text-[0.7rem] text-subtext0">
         {t(
           'Empty disables STUN. Changes affect future WebRTC connections.',
           '空文字で無効。変更は以後の WebRTC 接続から使用されます。'
@@ -444,16 +444,16 @@
   </fieldset>
 
   {#if (view.settings?.restart_required.length ?? 0) > 0 || Object.keys(view.settings?.apply_failures ?? {}).length > 0}
-    <section class="rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4" aria-labelledby="settings-status">
-      <h3 id="settings-status" class="text-sm font-semibold text-amber-100">{t('Settings status', '設定ステータス')}</h3>
+    <section class="rounded-lg border border-yellow/20 bg-yellow/[0.06] p-4" aria-labelledby="settings-status">
+      <h3 id="settings-status" class="text-sm font-semibold text-yellow">{t('Settings status', '設定ステータス')}</h3>
       {#if (view.settings?.restart_required.length ?? 0) > 0}
-        <p class="mt-2 text-xs text-amber-100/80">
+        <p class="mt-2 text-xs text-yellow/80">
           {t('Restart required:', '再起動が必要:')}
           <code>{view.settings?.restart_required.join(', ')}</code>
         </p>
       {/if}
       {#each Object.entries(view.settings?.apply_failures ?? {}) as [setting, message] (setting)}
-        <p class="mt-2 text-xs text-red-200"><code>{setting}</code>: {message}</p>
+        <p class="mt-2 text-xs text-red"><code>{setting}</code>: {message}</p>
       {/each}
     </section>
   {/if}

@@ -265,22 +265,22 @@
 
 <div class="space-y-4">
   <div>
-    <p class="text-xs font-semibold tracking-[0.2em] text-lime-300 uppercase">Commands</p>
+    <p class="text-xs font-semibold tracking-[0.12em] text-green uppercase">Commands</p>
     <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-2xl font-semibold text-white">コマンドワークスペース</h2>
-      <span class={`rounded-full px-3 py-1 text-xs ${backendState?.command_state === 'running' ? 'bg-lime-300/15 text-lime-300' : backendState?.command_state === 'paused' ? 'bg-amber-300/15 text-amber-200' : backendState?.command_state === 'error' ? 'bg-red-400/10 text-red-200' : 'bg-white/5 text-slate-400'}`}>
+      <h2 class="text-2xl font-semibold text-text">コマンドワークスペース</h2>
+      <span class={`rounded-full px-3 py-1 text-xs ${backendState?.command_state === 'running' ? 'bg-green/15 text-green' : backendState?.command_state === 'paused' ? 'bg-yellow/15 text-yellow' : backendState?.command_state === 'error' ? 'bg-red/10 text-red' : 'bg-text/5 text-subtext1'}`}>
         {backendState?.command_state ?? 'stopped'}
       </span>
     </div>
   </div>
 
   {#if error !== null}
-    <div class="rounded-lg border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200" role="alert">{error}</div>
+    <div class="rounded-lg border border-red/20 bg-red/10 px-3 py-2 text-sm text-red" role="alert">{error}</div>
   {:else if notice !== null}
-    <div class="rounded-lg border border-lime-300/20 bg-lime-300/10 px-3 py-2 text-sm text-lime-200" role="status">{notice}</div>
+    <div class="rounded-lg border border-green/20 bg-green/10 px-3 py-2 text-sm text-green" role="status">{notice}</div>
   {/if}
 
-  <div class="flex gap-1 overflow-x-auto border-b border-white/10" role="tablist" aria-label="Command views">
+  <div class="flex gap-1 overflow-x-auto border-b border-text/10" role="tablist" aria-label="Command views">
     {#each subtabs as tab (tab.id)}
       <button
         id={`command-tab-${tab.id}`}
@@ -289,7 +289,7 @@
         aria-selected={activeSubtab === tab.id}
         aria-controls={`command-panel-${tab.id}`}
         tabindex={activeSubtab === tab.id ? 0 : -1}
-        class={`border-b-2 px-3 py-2 text-sm ${activeSubtab === tab.id ? 'border-cyan-300 text-cyan-200' : 'border-transparent text-slate-400'}`}
+        class={`border-b-2 px-3 py-2 text-sm ${activeSubtab === tab.id ? 'border-blue text-blue' : 'border-transparent text-subtext1'}`}
         onclick={() => (activeSubtab = tab.id)}
         onkeydown={subtabKeydown}
       >{tab.label}</button>
@@ -301,34 +301,34 @@
       <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {#each shortcutIndexes as index (index)}
           {@const assigned = shortcutCommand(index)}
-          <div class={`rounded-xl border p-2 ${assigningSlot === index ? 'border-yellow-300/50 bg-yellow-300/10' : 'border-white/10 bg-black/15'}`}>
+          <div class={`rounded-lg border p-2 ${assigningSlot === index ? 'border-yellow/50 bg-yellow/10' : 'border-text/10 bg-crust/15'}`}>
             <button
               type="button"
-              class="min-h-14 w-full rounded-lg px-2 py-2 text-left text-sm text-slate-200 hover:bg-white/5"
+              class="min-h-14 w-full rounded-lg px-2 py-2 text-left text-sm text-text hover:bg-text/5"
               aria-label={`Shortcut ${String(index)}: ${shortcutLabel(index)}`}
               oncontextmenu={(event) => contextShortcut(event, index)}
               onclick={(event) => beginShortcutAssignment(event, index)}
             >
-              <span class="block text-[10px] text-slate-500">#{String(index)}</span>
+              <span class="block text-[10px] text-subtext0">#{String(index)}</span>
               <span class="line-clamp-2">{shortcutLabel(index)}</span>
             </button>
             {#if assigned !== null}
-              <button type="button" class="mt-1 w-full rounded-md bg-lime-300/10 px-2 py-1 text-xs text-lime-200" disabled={busy} onclick={() => void start(assigned)}>Run</button>
+              <button type="button" class="mt-1 w-full rounded-md bg-green/10 px-2 py-1 text-xs text-green" disabled={busy} onclick={() => void start(assigned)}>Run</button>
             {/if}
           </div>
         {/each}
       </div>
-      <p class="text-xs text-slate-500">Click a slot, then choose a command. Shift+click or right-click clears it.</p>
+      <p class="text-xs text-subtext0">Click a slot, then choose a command. Shift+click or right-click clears it.</p>
       {#if assigningSlot !== null}
-        <section class="rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-3" aria-label={`Assign shortcut ${String(assigningSlot)}`}>
+        <section class="rounded-lg border border-yellow/20 bg-yellow/5 p-3" aria-label={`Assign shortcut ${String(assigningSlot)}`}>
           <div class="flex items-center justify-between gap-3">
-            <h3 class="text-sm font-medium text-yellow-100">Choose command for shortcut #{String(assigningSlot)}</h3>
-            <button type="button" class="text-xs text-slate-400" onclick={() => (assigningSlot = null)}>Cancel</button>
+            <h3 class="text-sm font-medium text-yellow">Choose command for shortcut #{String(assigningSlot)}</h3>
+            <button type="button" class="text-xs text-subtext1" onclick={() => (assigningSlot = null)}>Cancel</button>
           </div>
           <div class="mt-3 grid gap-2 sm:grid-cols-2">
             {#each backendState?.command_candidates ?? [] as command (identity(command))}
-              <button type="button" class="rounded-lg bg-black/20 px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/5" aria-label={`Assign ${command.name} to shortcut ${String(assigningSlot)}`} onclick={() => void assignShortcut(command)}>
-                <span class="block font-medium">{command.name}</span><span class="block truncate text-xs text-slate-500">{command.module_path}</span>
+              <button type="button" class="rounded-lg bg-crust/20 px-3 py-2 text-left text-sm text-text hover:bg-text/5" aria-label={`Assign ${command.name} to shortcut ${String(assigningSlot)}`} onclick={() => void assignShortcut(command)}>
+                <span class="block font-medium">{command.name}</span><span class="block truncate text-xs text-subtext0">{command.module_path}</span>
               </button>
             {/each}
           </div>
@@ -340,43 +340,43 @@
       <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
         <label>
           <span class="sr-only">Search commands</span>
-          <input class="w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" type="search" bind:value={search} placeholder="Search commands" />
+          <input class="w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" type="search" bind:value={search} placeholder="Search commands" />
         </label>
         <label>
           <span class="sr-only">Command tag</span>
-          <select class="w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" bind:value={selectedTag}>
+          <select class="w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" bind:value={selectedTag}>
             {#each orderedTags as tag (tag)}<option value={tag}>{tag === '-' ? 'All tags' : tag}</option>{/each}
           </select>
         </label>
         <label>
           <span class="sr-only">Tag match mode</span>
-          <select class="w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-white" value={settings?.['commands.tag_match_mode'] ?? 'exact'} onchange={(event) => void changeMatchMode(event)}>
+          <select class="w-full rounded-lg border border-text/10 bg-surface1 px-3 py-2 text-sm text-text" value={settings?.['commands.tag_match_mode'] ?? 'exact'} onchange={(event) => void changeMatchMode(event)}>
             <option value="exact">Exact</option><option value="partial">Partial</option><option value="prefix">Prefix</option><option value="suffix">Suffix</option>
           </select>
         </label>
       </div>
 
-      <div class="max-h-[26rem] overflow-auto rounded-xl border border-white/10 bg-black/20 p-2" aria-busy={backendState?.command_display_cache_loading ?? false}>
+      <div class="max-h-[26rem] overflow-auto rounded-lg border border-text/10 bg-crust/20 p-2" aria-busy={backendState?.command_display_cache_loading ?? false}>
         {#if backendState?.command_display_cache_loading && visibleItems.length === 0}
-          <p class="p-4 text-sm text-slate-500">Building command display cache…</p>
+          <p class="p-4 text-sm text-subtext0">Building command display cache…</p>
         {:else if visibleItems.length === 0}
-          <p class="p-4 text-sm text-slate-500">No matching commands</p>
+          <p class="p-4 text-sm text-subtext0">No matching commands</p>
         {:else}
           {#each visibleItems as item, index (`${item.kind}-${String(index)}`)}
             {@const command = displayCommand(item)}
             {#if command === null}
-              <div class="my-2 flex items-center gap-2 text-[10px] tracking-[0.14em] text-slate-600 uppercase" role="separator"><span class="h-px flex-1 bg-white/10"></span>{separatorLabel(item)}<span class="h-px flex-1 bg-white/10"></span></div>
+              <div class="my-2 flex items-center gap-2 text-[10px] tracking-[0.14em] text-subtext0 uppercase" role="separator"><span class="h-px flex-1 bg-text/10"></span>{separatorLabel(item)}<span class="h-px flex-1 bg-text/10"></span></div>
             {:else}
               <button
                 type="button"
-                class={`mb-1 w-full rounded-lg border px-3 py-2 text-left ${selectedIdentity === identity(command) ? 'border-cyan-300/40 bg-cyan-300/10' : 'border-transparent bg-white/[0.025] hover:bg-white/5'}`}
+                class={`mb-1 w-full rounded-lg border px-3 py-2 text-left ${selectedIdentity === identity(command) ? 'border-blue/40 bg-blue/10' : 'border-transparent bg-text/[0.025] hover:bg-text/5'}`}
                 aria-label={`Select ${command.name}`}
                 onclick={() => selectCommand(command)}
                 ondblclick={() => void start(command)}
               >
-                <span class="flex items-start justify-between gap-3"><span class="font-medium text-slate-200">{command.name}</span><span class="text-[10px] text-slate-500">{command.class_name}</span></span>
-                <span class="mt-1 block truncate text-xs text-slate-500">{command.module_path}</span>
-                {#if command.tags.length > 0}<span class="mt-2 flex flex-wrap gap-1">{#each command.tags as tag (tag)}<span class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-slate-400">{tag}</span>{/each}</span>{/if}
+                <span class="flex items-start justify-between gap-3"><span class="font-medium text-text">{command.name}</span><span class="text-[10px] text-subtext0">{command.class_name}</span></span>
+                <span class="mt-1 block truncate text-xs text-subtext0">{command.module_path}</span>
+                {#if command.tags.length > 0}<span class="mt-2 flex flex-wrap gap-1">{#each command.tags as tag (tag)}<span class="rounded bg-text/5 px-1.5 py-0.5 text-[10px] text-subtext1">{tag}</span>{/each}</span>{/if}
               </button>
             {/if}
           {/each}
@@ -385,12 +385,12 @@
     </div>
   {/if}
 
-  <div class="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
-    <button type="button" class="rounded-lg bg-lime-300/15 px-3 py-2 text-sm font-medium text-lime-200 disabled:opacity-40" disabled={busy || selectedCommand === null || backendState?.command_state === 'running' || backendState?.command_state === 'paused'} onclick={() => void start()}>Start</button>
-    <button type="button" class="rounded-lg bg-amber-300/10 px-3 py-2 text-sm text-amber-200 disabled:opacity-40" disabled={busy || backendState?.command_state !== 'running'} onclick={() => void control({ action: 'pause' })}>Pause</button>
-    <button type="button" class="rounded-lg bg-cyan-300/10 px-3 py-2 text-sm text-cyan-200 disabled:opacity-40" disabled={busy || backendState?.command_state !== 'paused'} onclick={() => void control({ action: 'resume' })}>Resume</button>
-    <button type="button" class="rounded-lg bg-red-400/10 px-3 py-2 text-sm text-red-200 disabled:opacity-40" disabled={busy || (backendState?.command_state !== 'running' && backendState?.command_state !== 'paused')} onclick={() => void control({ action: 'stop' })}>Stop</button>
-    <button type="button" class="rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-300 disabled:opacity-40" disabled={busy} onclick={() => void reload()}>Reload</button>
-    <span class="ml-auto text-xs text-slate-500">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
+  <div class="flex flex-wrap items-center gap-2 rounded-lg border border-text/10 bg-crust/20 p-3">
+    <button type="button" class="rounded-lg bg-green/15 px-3 py-2 text-sm font-medium text-green disabled:opacity-40" disabled={busy || selectedCommand === null || backendState?.command_state === 'running' || backendState?.command_state === 'paused'} onclick={() => void start()}>Start</button>
+    <button type="button" class="rounded-lg bg-yellow/10 px-3 py-2 text-sm text-yellow disabled:opacity-40" disabled={busy || backendState?.command_state !== 'running'} onclick={() => void control({ action: 'pause' })}>Pause</button>
+    <button type="button" class="rounded-lg bg-blue/10 px-3 py-2 text-sm text-blue disabled:opacity-40" disabled={busy || backendState?.command_state !== 'paused'} onclick={() => void control({ action: 'resume' })}>Resume</button>
+    <button type="button" class="rounded-lg bg-red/10 px-3 py-2 text-sm text-red disabled:opacity-40" disabled={busy || (backendState?.command_state !== 'running' && backendState?.command_state !== 'paused')} onclick={() => void control({ action: 'stop' })}>Stop</button>
+    <button type="button" class="rounded-lg bg-text/5 px-3 py-2 text-sm text-subtext1 disabled:opacity-40" disabled={busy} onclick={() => void reload()}>Reload</button>
+    <span class="ml-auto text-xs text-subtext0">{selectedCommand?.name ?? backendState?.current_command ?? 'No command selected'}</span>
   </div>
 </div>

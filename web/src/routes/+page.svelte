@@ -106,22 +106,22 @@
 {#if view !== undefined}
   <InputSafety {runtime} {view} />
   <main bind:this={workspaceElement} class="mx-auto flex h-screen min-h-0 w-full max-w-[1920px] flex-col overflow-auto p-3 sm:p-5 lg:p-6">
-    <header class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-1 pb-4">
+    <header class="flex flex-wrap items-center justify-between gap-4 border-b border-text/10 px-1 pb-4">
       <div class="flex items-center gap-3">
-        <div class="grid size-10 place-items-center rounded-xl border border-cyan-300/30 bg-cyan-300/10 font-black text-cyan-300" aria-hidden="true">PC</div>
+        <div class="grid size-10 place-items-center rounded-lg border border-blue/30 bg-blue/10 font-bold text-blue" aria-hidden="true">PC</div>
         <div>
-          <p class="text-xs font-semibold tracking-[0.22em] text-cyan-300 uppercase">PokeCon</p>
-          <h1 class="text-lg font-semibold text-white">Controller workspace</h1>
+          <p class="text-xs font-semibold tracking-[0.12em] text-blue uppercase">PokeCon</p>
+          <h1 class="text-lg font-semibold text-text">Controller workspace</h1>
         </div>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-3">
         <div class="flex flex-wrap items-center justify-end gap-2 text-xs" aria-live="polite">
-          <span class={`size-2 rounded-full ${view.realtime.status === 'connected' ? 'bg-lime-300' : view.realtime.status === 'exhausted' ? 'bg-red-400' : 'bg-amber-300'}`}></span>
-          <span class="text-slate-300">{view.realtime.status}</span>
-          <span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">Media: {view.media.mode}</span>
-          {#if view.state !== null}<span class="rounded-full bg-white/5 px-2 py-1 text-slate-400">PID {view.state.pid}</span>{/if}
+          <span class={`size-2 rounded-full ${view.realtime.status === 'connected' ? 'bg-green' : view.realtime.status === 'exhausted' ? 'bg-red' : 'bg-yellow'}`}></span>
+          <span class="text-subtext1">{view.realtime.status}</span>
+          <span class="rounded-full bg-text/5 px-2 py-1 text-subtext1">Media: {view.media.mode}</span>
+          {#if view.state !== null}<span class="rounded-full bg-text/5 px-2 py-1 text-subtext1">PID {view.state.pid}</span>{/if}
           {#if view.realtime.status === 'exhausted'}
-            <button type="button" class="rounded-md bg-cyan-300/15 px-2 py-1 text-cyan-200" onclick={() => runtime.reconnectWebSocket()}>Reconnect</button>
+            <button type="button" class="rounded-md bg-blue/15 px-2 py-1 text-blue" onclick={() => runtime.reconnectWebSocket()}>Reconnect</button>
           {/if}
         </div>
         <WorkspaceMenu {actions} onresetview={resetView} {runtime} {view} />
@@ -129,7 +129,7 @@
     </header>
 
     {#if view.actionError !== null || view.notice !== null}
-      <div class={`mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${view.actionError === null ? 'border-lime-300/20 bg-lime-300/10 text-lime-200' : 'border-red-400/20 bg-red-400/10 text-red-200'}`} role="status">
+      <div class={`mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${view.actionError === null ? 'border-green/20 bg-green/10 text-green' : 'border-red/20 bg-red/10 text-red'}`} role="status">
         <span>{view.actionError ?? view.notice}</span>
         <button type="button" class="text-xs opacity-70 hover:opacity-100" aria-label="Dismiss message" onclick={() => runtime.dismissFeedback()}>Dismiss</button>
       </div>
@@ -149,7 +149,7 @@
                 aria-selected={activeTab === tab.id}
                 aria-controls={`panel-${tab.id}`}
                 tabindex={activeTab === tab.id ? 0 : -1}
-                class={`rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-white/5 hover:text-white ${activeTab === tab.id ? 'border-cyan-300/40 bg-cyan-300/10 text-cyan-200' : 'border-transparent text-slate-400'}`}
+                class={`rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-text/5 hover:text-text ${activeTab === tab.id ? 'border-blue/40 bg-blue/10 text-blue' : 'border-transparent text-subtext1'}`}
                 onclick={() => (activeTab = tab.id)}
                 onkeydown={handleTabKeydown}
               >{label(tab)}</button>
@@ -157,7 +157,7 @@
           </div>
         </nav>
 
-        <div bind:this={panelElement} id={`panel-${activeTab}`} class="min-h-[20rem] min-w-0 flex-1 overflow-auto rounded-2xl border border-white/10 bg-ink-900/80 p-4 shadow-2xl shadow-black/20" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
+        <div bind:this={panelElement} id={`panel-${activeTab}`} class="min-h-[20rem] min-w-0 flex-1 overflow-auto rounded-lg border border-text/10 bg-mantle/80 p-4 shadow-md shadow-crust/20" role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
           {#key activeTab}
             {#if activeTab === 'camera'}
               <CameraTab {actions} autoLoad={autoLoadDevices} {runtime} {view} />

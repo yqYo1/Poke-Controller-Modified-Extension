@@ -119,7 +119,7 @@
 
 <button
   type="button"
-  class="relative aspect-square w-full max-w-24 touch-none rounded-full border border-white/15 bg-black/25 shadow-inner shadow-black/50"
+  class="relative aspect-square w-full max-w-24 touch-none rounded-full border border-text/15 bg-crust/25 shadow-inner shadow-crust/50"
   aria-label={`${label} X ${String(position.x)} Y ${String(position.y)}`}
   onkeydown={handleKeydown}
   onpointercancel={release}
@@ -128,7 +128,7 @@
   onpointerup={release}
 >
   <span
-    class="absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-slate-600 shadow-lg transition-[left,top] duration-75"
+    class="absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-text/20 bg-overlay0 shadow-md transition-[left,top] duration-75"
     style={`left: ${String((position.x / 255) * 100)}%; top: ${String((position.y / 255) * 100)}%`}
     aria-hidden="true"
   ></span>

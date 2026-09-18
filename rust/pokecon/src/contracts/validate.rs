@@ -624,10 +624,51 @@ mod string_format_tests {
 mod toml_migration_tests {
     use super::{ContractError, ValidatedSettingsRegistry};
     use crate::contracts::SETTINGS_REGISTRY_JSON;
-    use crate::contracts::model::{SettingsRegistry, TomlMigration};
+    use crate::contracts::model::{InvalidTomlValuePolicy, SettingsRegistry, TomlMigration};
 
     fn registry() -> SettingsRegistry {
         serde_json::from_str(SETTINGS_REGISTRY_JSON).expect("canonical registry must parse")
+    }
+
+    #[test]
+    fn canonical_registry_declares_invalid_toml_policy_for_every_setting() {
+        let document: serde_json::Value =
+            serde_json::from_str(SETTINGS_REGISTRY_JSON).expect("registry must be valid JSON");
+        let settings = document
+            .get("settings")
+            .and_then(serde_json::Value::as_array)
+            .expect("registry settings must be an array");
+        assert!(settings.iter().all(|setting| {
+            setting
+                .as_object()
+                .is_some_and(|setting| setting.contains_key("invalid_toml_value"))
+        }));
+        let serialized = serde_json::to_value(registry()).expect("registry must serialize");
+        let serialized_settings = serialized
+            .get("settings")
+            .and_then(serde_json::Value::as_array)
+            .expect("serialized settings must be an array");
+        assert!(serialized_settings.iter().all(|setting| {
+            setting
+                .as_object()
+                .is_some_and(|setting| setting.contains_key("invalid_toml_value"))
+        }));
+    }
+
+    #[test]
+    fn missing_invalid_toml_policy_fails_closed_to_reject() {
+        let mut document: serde_json::Value =
+            serde_json::from_str(SETTINGS_REGISTRY_JSON).expect("registry must be valid JSON");
+        document["settings"][0]
+            .as_object_mut()
+            .expect("setting must be an object")
+            .remove("invalid_toml_value");
+        let parsed: SettingsRegistry =
+            serde_json::from_value(document).expect("missing policy remains backward readable");
+        assert_eq!(
+            parsed.settings[0].invalid_toml_value,
+            InvalidTomlValuePolicy::Reject
+        );
     }
 
     #[test]

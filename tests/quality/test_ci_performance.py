@@ -27,10 +27,11 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "--warmup-seconds 60" in job
     assert "--timeout-seconds 600" in job
     assert "Resolve recent passing performance baselines" in job
-    assert (
-        "CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-        in job
-    )
+    assert "CURRENT_EVENT: ${{ github.event_name }}" in job
+    assert 'runs_json="$baseline_root/runs.json"' in job
+    assert '--slurpfile runs "$runs_json"' in job
+    assert "($runs[0].workflow_runs" in job
+    assert "select($events[(.workflow_run.id | tostring)] == $current_event)" in job
     assert "baseline_limit=5" in job
     assert "selected_dir/$(printf '%02d' \"$selected_count\").json" in job
     assert 'select((.workflow_run.head_sha // "") != $current_revision)' in job

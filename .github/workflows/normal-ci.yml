@@ -333,6 +333,7 @@ jobs:
       - name: Resolve recent passing performance baselines
         env:
           GH_TOKEN: ${{ github.token }}
+          CURRENT_EVENT: ${{ github.event_name }}
           CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
@@ -343,6 +344,10 @@ jobs:
           gh api \
             "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
             > "$artifacts_json"
+          runs_json="$baseline_root/runs.json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            > "$runs_json"
           selected_count=0
           baseline_limit=5
           while IFS= read -r artifact_id; do
@@ -387,13 +392,19 @@ jobs:
             rm -rf "$candidate_dir" "$zip_path"
           done < <(
             jq -er \
+              --slurpfile runs "$runs_json" \
+              --arg current_event "$CURRENT_EVENT" \
               --arg current_revision "$CURRENT_REVISION" \
               --arg current_run "$GITHUB_RUN_ID" \
               '
-              [.artifacts[]
+              ($runs[0].workflow_runs
+               | map({key: (.id | tostring), value: .event})
+               | from_entries) as $events
+              | [.artifacts[]
                | select(.expired == false)
                | select(.workflow_run.id != ($current_run | tonumber))
                | select((.workflow_run.head_sha // "") != $current_revision)
+               | select($events[(.workflow_run.id | tostring)] == $current_event)
                | select(.name | startswith("pokecon-performance-linux-"))]
               | sort_by(.created_at) | reverse | .[].id
             ' "$artifacts_json"

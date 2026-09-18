@@ -52,6 +52,7 @@ MIN_ACCEPTANCE_SAMPLE_COUNT: Final = SAMPLE_COUNT
 MIN_ACCEPTANCE_WARMUP_SECONDS: Final = WARMUP_SECONDS
 FRAME_WIDTH: Final = 1920
 FRAME_HEIGHT: Final = 1080
+PERFORMANCE_FIXTURE_ID: Final = "browser-loopback-v2"
 REGRESSION_FACTOR_LATENCY: Final = 1.10
 REGRESSION_FACTOR_FPS: Final = 0.95
 SOURCE_COMMIT_PATTERN: Final = re.compile(r"^[0-9a-f]{40}$")
@@ -610,7 +611,10 @@ def _baseline_report_paths(path: Path) -> tuple[Path, ...]:
 
 
 def _load_baseline(
-    path: Path | None, platform_name: str
+    path: Path | None,
+    platform_name: str,
+    *,
+    fixture_id: str | None = None,
 ) -> dict[str, dict[str, Any]] | None:
     if path is None:
         return None
@@ -630,6 +634,8 @@ def _load_baseline(
             raise PerformanceError("baseline result must be passed")
         if document.get("platform") != platform_name:
             raise PerformanceError("baseline platform does not match the current run")
+        if fixture_id is not None and document.get("fixture_id") != fixture_id:
+            raise PerformanceError("baseline fixture does not match the current run")
         sample_count = document.get("sample_count_required")
         if (
             not isinstance(sample_count, int)
@@ -952,12 +958,12 @@ def run(args: argparse.Namespace) -> int:
     started_at = _utc_now()
     build_identity = args.build_identity or source_commit
     baseline_path = Path(args.baseline) if args.baseline else None
+    fixture_id = os.environ.get(
+        "POKECON_PERFORMANCE_FIXTURE_ID", PERFORMANCE_FIXTURE_ID
+    )
     baseline_paths = (
         _baseline_report_paths(baseline_path) if baseline_path is not None else ()
     )
-    baseline = _load_baseline(baseline_path, args.platform)
-    if args.require_baseline and baseline is None:
-        raise PerformanceError("--require-baseline needs --baseline")
     browser = _find_browser(args.browser)
     browser_name = _browser_name(browser)
     stdout = ""
@@ -975,6 +981,13 @@ def run(args: argparse.Namespace) -> int:
         ).strip() or "unknown"
     except (OSError, subprocess.SubprocessError) as error:
         raise PerformanceError(f"unable to query browser version: {error}") from error
+    baseline = _load_baseline(
+        baseline_path,
+        args.platform,
+        fixture_id=fixture_id,
+    )
+    if args.require_baseline and baseline is None:
+        raise PerformanceError("--require-baseline needs --baseline")
     page = PAGE_TEMPLATE.replace("__SAMPLE_COUNT__", str(args.samples)).replace(
         "__WARMUP_SECONDS__", str(args.warmup_seconds)
     )
@@ -1039,6 +1052,7 @@ def run(args: argparse.Namespace) -> int:
         "schema_version": 1,
         "source_commit": source_commit,
         "platform": args.platform,
+        "fixture_id": fixture_id,
         "browser": {"name": browser_name, "version": browser_version},
         "fixture": browser_result.get("fixture", {}),
         "warmup": browser_result.get("warmup", {}),
@@ -1085,6 +1099,7 @@ def run(args: argparse.Namespace) -> int:
             "os_version": platform_module.platform() or "unknown",
             "app_mode": "headless",
             "build_identity": build_identity,
+            "fixture_id": fixture_id,
             "device_inventory": [
                 "local multipart MJPEG server",
                 "Canvas WebRTC loopback",

@@ -8,6 +8,7 @@ import pytest
 from scripts.performance.benchmark import (
     MIN_ACCEPTANCE_SAMPLE_COUNT,
     MIN_ACCEPTANCE_WARMUP_SECONDS,
+    PERFORMANCE_FIXTURE_ID,
     PerformanceError,
     _load_baseline,
     _metric_summary,
@@ -72,6 +73,7 @@ def _write_baseline(path: Path, *, mjpeg_p95: float, webrtc_p95: float) -> None:
             {
                 "result": "passed",
                 "platform": "linux",
+                "fixture_id": PERFORMANCE_FIXTURE_ID,
                 "sample_count_required": 300,
                 "warmup_seconds_required": 60,
                 "measurements": measurements,
@@ -106,6 +108,18 @@ def test_baseline_directory_uses_nearest_rank_median(tmp_path: Path) -> None:
     assert not _regression_evaluation(
         {"metric": "mjpeg_video_latency", "p95": 9.0}, baseline
     )["passed"]
+
+
+def test_baseline_fixture_identity_is_validated(tmp_path: Path) -> None:
+    baseline_path = tmp_path / "performance-report.json"
+    _write_baseline(baseline_path, mjpeg_p95=8.0, webrtc_p95=50.0)
+
+    assert (
+        _load_baseline(baseline_path, "linux", fixture_id=PERFORMANCE_FIXTURE_ID)
+        is not None
+    )
+    with pytest.raises(PerformanceError, match="fixture"):
+        _load_baseline(baseline_path, "linux", fixture_id="different-fixture")
 
 
 def test_metric_summary_requires_exact_sample_count() -> None:

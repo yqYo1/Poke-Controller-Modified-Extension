@@ -28,17 +28,25 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "--timeout-seconds 600" in job
     assert "Resolve recent passing performance baselines" in job
     assert "CURRENT_EVENT: ${{ github.event_name }}" in job
+    assert "CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}" in job
+    assert "CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}" in job
+    assert "CURRENT_FIXTURE_ID: browser-loopback-v2" in job
     assert 'runs_json="$baseline_root/runs.json"' in job
     assert '--slurpfile runs "$runs_json"' in job
     assert "($runs[0].workflow_runs" in job
     assert 'select(($events[$run_id].event // "") == $current_event)' in job
     assert 'select(($events[$run_id].conclusion // "") == "success")' in job
+    assert 'select(($events[$run_id].head_branch // "") == $current_branch)' in job
+    assert "pull_request_numbers" in job
+    assert "$current_pr_number | tonumber" in job
+    assert "and .fixture_id == $current_fixture_id" in job
     assert "group_by(.workflow_run.head_sha)" in job
     assert "baseline_limit=5" in job
     assert "selected_dir/$(printf '%02d' \"$selected_count\").json" in job
     assert 'if [ "$selected_count" -ge "$baseline_limit" ]' in job
     assert "until $baseline_limit are available" in job
     assert 'select((.workflow_run.head_sha // "") != $current_revision)' in job
+    assert "POKECON_PERFORMANCE_FIXTURE_ID: browser-loopback-v2" in job
     assert "POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}" in job
     assert (
         'gh api \\\n              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \\\n              > "$zip_path"'

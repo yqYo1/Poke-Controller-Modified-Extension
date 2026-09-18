@@ -336,6 +336,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CURRENT_EVENT: ${{ github.event_name }}
           CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}
+          CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CURRENT_FIXTURE_ID: browser-loopback-v2
         run: |
           set -euo pipefail
           baseline_root="$RUNNER_TEMP/pokecon-performance-baseline"
@@ -376,10 +379,12 @@ jobs:
               fi
             done
             if [ -n "$report_path" ] && jq -e \
+              --arg current_fixture_id "$CURRENT_FIXTURE_ID" \
               '(.source_commit // "") as $source_commit
                | ($source_commit | test("^[0-9a-f]{40}$"))
                and .result == "passed"
                and .platform == "linux"
+               and .fixture_id == $current_fixture_id
                and .sample_count_required >= 300
                and .warmup_seconds_required >= 60
                and (.measurements | length) == 5' \
@@ -396,10 +401,18 @@ jobs:
               --slurpfile runs "$runs_json" \
               --arg current_event "$CURRENT_EVENT" \
               --arg current_revision "$CURRENT_REVISION" \
+              --arg current_branch "$CURRENT_BRANCH" \
+              --arg current_pr_number "$CURRENT_PR_NUMBER" \
+              --arg current_fixture_id "$CURRENT_FIXTURE_ID" \
               --arg current_run "$GITHUB_RUN_ID" \
               '
               ($runs[0].workflow_runs
-               | map({key: (.id | tostring), value: {event: .event, conclusion: .conclusion}})
+               | map({key: (.id | tostring), value: {
+                   event: .event,
+                   conclusion: .conclusion,
+                   head_branch: .head_branch,
+                   pull_request_numbers: ((.pull_requests // []) | map(.number))
+                 }})
                | from_entries) as $events
               | [.artifacts[]
                | select(.expired == false)
@@ -408,6 +421,13 @@ jobs:
                | (.workflow_run.id | tostring) as $run_id
                | select(($events[$run_id].event // "") == $current_event)
                | select(($events[$run_id].conclusion // "") == "success")
+               | select(($events[$run_id].head_branch // "") == $current_branch)
+               | select(
+                   if $current_event == "pull_request" then
+                     (($events[$run_id].pull_request_numbers // [])
+                      | index($current_pr_number | tonumber)) != null
+                   else true end
+                 )
                | select(.name | startswith("pokecon-performance-linux-"))]
               | group_by(.workflow_run.head_sha)
               | map(max_by(.created_at))
@@ -431,6 +451,7 @@ jobs:
       - name: Run the browser loopback performance gate
         env:
           POKECON_PERFORMANCE_BUILD_IDENTITY: ${{ steps.product.outputs.build_identity }}
+          POKECON_PERFORMANCE_FIXTURE_ID: browser-loopback-v2
           POKECON_PERFORMANCE_OUTPUT: ${{ github.workspace }}/performance-evidence/performance-record.json
           POKECON_PERFORMANCE_SOURCE_COMMIT: ${{ github.sha }}
         run: |

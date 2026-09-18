@@ -57,6 +57,16 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
         assert artifact_name in runner
     assert "captureStream(60)" in runner
     assert "stream_fps: 60" in runner
+    webrtc_index = runner.index(
+        "metrics.webrtc_video_latency = await collectWebRtc(loopback);"
+    )
+    close_index = runner.index("closeWebRtcLoopback(loopback);")
+    mjpeg_index = runner.index("metrics.mjpeg_video_latency = await collectMjpeg();")
+    assert webrtc_index < close_index < mjpeg_index
+    assert "loopback.captureTrack.stop();" in runner
+    assert "loopback.track.stop();" in runner
+    assert runner.count("loopback.sender.close();") == 1
+    assert runner.count("loopback.receiver.close();") == 1
     assert "if-no-files-found: error" in job
 
 

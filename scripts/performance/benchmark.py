@@ -171,6 +171,15 @@ async function makeWebRtcLoopback() {
   };
 }
 
+function closeWebRtcLoopback(loopback) {
+  loopback.stopCapture();
+  loopback.captureTrack.stop();
+  loopback.track.stop();
+  loopback.sender.close();
+  loopback.receiver.close();
+  loopback.remote.srcObject = null;
+}
+
 async function collectWebRtc(loopback) {
   const { sourceContext, track, captureTrack, setFrameColor } = loopback;
 
@@ -342,13 +351,15 @@ async function main() {
   const loopback = await makeWebRtcLoopback();
   const warmupResult = await warmup(__WARMUP_SECONDS__);
   const metrics = {};
-  metrics.webrtc_video_latency = await collectWebRtc(loopback);
+  try {
+    metrics.webrtc_video_latency = await collectWebRtc(loopback);
+  } finally {
+    closeWebRtcLoopback(loopback);
+  }
   metrics.mjpeg_video_latency = await collectMjpeg();
   metrics.controller_input_latency = await collectController();
   metrics.ui_frame_rate = await collectFrameRate();
   metrics.ui_input_latency = await collectUiInput();
-  loopback.sender.close();
-  loopback.receiver.close();
   await fetch("/result", {
     method: "POST",
     headers: { "content-type": "application/json" },

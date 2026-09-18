@@ -5678,6 +5678,7 @@ pub use entrypoint::{MainError, run_cli};
         let ephemeral_port = false;
 
         init_tracing("info")?;
+        log_configuration_warnings(&before_dynamic);
         ScaffoldManager::new(before_dynamic.roots.clone())
             .ensure(before_dynamic.active_profile.as_str())?;
 

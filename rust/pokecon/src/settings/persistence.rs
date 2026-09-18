@@ -323,7 +323,9 @@ fn sync_parent(_parent: &Path) -> Result<(), PersistenceError> {
 pub enum PersistenceError {
     #[error(transparent)]
     Lock(#[from] LockError),
-    #[error("settings file is not valid TOML: {0}")]
+    #[error(
+        "設定ファイル {0} のTOML構文が正しくありません。table、key、quote、arrayを確認して修正してください。"
+    )]
     InvalidToml(PathBuf),
     #[error("invalid dotted TOML path {0}")]
     InvalidPath(String),

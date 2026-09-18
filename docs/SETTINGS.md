@@ -56,6 +56,16 @@ Rust版以降の設定loaderは、設定fileの内容を次の分類で扱いま
 
 この分類はTOMLだけでなく、将来同じ設定registryを利用するCLI、環境変数、動的設定の診断にも適用します。
 
+設定registryの`invalid_toml_value`は、既知TOML値を不正と判定した場合の安全性契約です。
+
+`use_default`はregistryの既定値へ戻して継続し、`reject`は既定値へ戻すと意味または安全性を損なうため停止します。
+
+`toml_migrations`は現行Rust版以降の旧keyだけを列挙するmetadataであり、リファクタリング前Python prototypeのkeyを追加する場所ではありません。
+
+## 設定値の由来と診断を確認する
+
+設定snapshotのprovenanceは、どのlayerが現在値を供給したかを示します。
+
 ## bootstrap、global、profileのscopeを区別する
 
 **scope**は値を解決する時期と保存先を表します。

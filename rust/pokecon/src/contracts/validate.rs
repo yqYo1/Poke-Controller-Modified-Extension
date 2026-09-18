@@ -79,6 +79,62 @@ impl TryFrom<SettingsRegistry> for ValidatedSettingsRegistry {
             }
         }
 
+        let mut migration_sources = BTreeSet::new();
+        let mut migration_targets = BTreeSet::new();
+        for migration in &registry.toml_migrations {
+            if !valid_toml_path(&migration.from) {
+                return Err(invariant(format!(
+                    "TOML migration source {} is not a valid dotted path",
+                    migration.from
+                )));
+            }
+            if migration
+                .to
+                .as_deref()
+                .is_some_and(|target| !valid_toml_path(target))
+            {
+                return Err(invariant(format!(
+                    "TOML migration {} has an invalid target",
+                    migration.from
+                )));
+            }
+            if migration.to.is_none() && migration.reason.as_deref().is_none_or(str::is_empty) {
+                return Err(invariant(format!(
+                    "removed TOML migration {} must explain why it was removed",
+                    migration.from
+                )));
+            }
+            if migration.to.as_deref() == Some(migration.from.as_str()) {
+                return Err(invariant(format!(
+                    "TOML migration {} maps to itself",
+                    migration.from
+                )));
+            }
+            insert_unique(
+                &mut migration_sources,
+                &migration.from,
+                "TOML migration source",
+            )?;
+            if toml_names.contains(migration.from.as_str()) {
+                return Err(invariant(format!(
+                    "TOML migration source {} is already a canonical TOML path",
+                    migration.from
+                )));
+            }
+            if let Some(target) = &migration.to {
+                if !toml_names.contains(target.as_str()) {
+                    return Err(invariant(format!(
+                        "TOML migration target {target} is not a canonical TOML path"
+                    )));
+                }
+                if !migration_targets.insert(target.clone()) {
+                    return Err(invariant(format!(
+                        "duplicate TOML migration target: {target}"
+                    )));
+                }
+            }
+        }
+
         Ok(Self(registry))
     }
 }
@@ -462,6 +518,16 @@ fn compare_f64(
         .ok_or_else(|| format!("{left} must be less than {right}"))
 }
 
+fn valid_toml_path(path: &str) -> bool {
+    !path.is_empty()
+        && path.split('.').all(|segment| {
+            !segment.is_empty()
+                && segment.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || character == '_' || character == '-'
+                })
+        })
+}
+
 fn valid_canonical_id(id: &str) -> bool {
     !id.is_empty()
         && id.split('.').all(|segment| {
@@ -551,5 +617,42 @@ mod string_format_tests {
         ] {
             assert!(validate_string_format(invalid, Some("stun_uri_or_empty")).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod toml_migration_tests {
+    use super::{ContractError, ValidatedSettingsRegistry};
+    use crate::contracts::SETTINGS_REGISTRY_JSON;
+    use crate::contracts::model::{SettingsRegistry, TomlMigration};
+
+    fn registry() -> SettingsRegistry {
+        serde_json::from_str(SETTINGS_REGISTRY_JSON).expect("canonical registry must parse")
+    }
+
+    #[test]
+    fn accepts_a_rust_version_migration_to_one_canonical_key() {
+        let mut registry = registry();
+        registry.toml_migrations.push(TomlMigration {
+            from: "server.legacy_port".to_owned(),
+            to: Some("server.port".to_owned()),
+            reason: Some("the Rust server surface was renamed".to_owned()),
+        });
+        assert!(ValidatedSettingsRegistry::try_from(registry).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_removed_key_without_a_reason() {
+        let mut registry = registry();
+        registry.toml_migrations.push(TomlMigration {
+            from: "server.removed_port".to_owned(),
+            to: None,
+            reason: None,
+        });
+        let error = ValidatedSettingsRegistry::try_from(registry)
+            .expect_err("removed migrations need a reason");
+        assert!(
+            matches!(error, ContractError::Invariant(message) if message.contains("removed TOML migration"))
+        );
     }
 }

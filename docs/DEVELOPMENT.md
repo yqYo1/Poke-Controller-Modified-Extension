@@ -70,7 +70,7 @@ nix run --refresh "github:${repository}/${revision}#remote-flake-smoke" -- \
 2. 同じremote flakeの`nix run -- --help`を実行する。
 3. 同じremote flakeをWeb modeで起動し、Web root、`/api/settings`、index.htmlが参照する全JS／CSS assetをHTTPで確認する。
 
-このsmokeは既存のuser config、local `target`、`web/node_modules`、ghq checkoutを成功条件へ含めません。通常のPokeCon起動が既存configのunknown keyで失敗する場合は、現行schemaに合わせて設定を移行します。unknown keyを無視する実装へ変更して設定破損を隠してはいけません。
+このsmokeは既存のuser config、local `target`、`web/node_modules`、ghq checkoutを成功条件へ含めません。リファクタリング前のprototype設定を現行Rust版へ自動移行することも要求しません。prototype由来の設定で起動できない場合は、現行schemaに合わせて新しいConfig rootへ設定を移します。現行Rust版以降の設定に含まれるunknown keyは、loaderが警告して保持したまま無視する契約であり、読み込み時に削除してはいけません。
 
 Normal CIの`remote_flake` jobも同じremote appを、`actions/checkout`なしで`github:${{ github.repository }}/${{ github.sha }}`から実行します。checkoutを使うproduct smokeとは別jobであり、local checkoutの成功をremote flakeの起動証跡として代用しません。
 

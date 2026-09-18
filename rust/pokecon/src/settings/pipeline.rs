@@ -4,12 +4,13 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::contracts::model::{
-    DefaultValue, Mutability, Scope, Setting, ValueSchema, WireEncoding,
+    DefaultValue, InvalidTomlValuePolicy, Mutability, Scope, Setting, ValueSchema, WireEncoding,
 };
 use crate::contracts::{ContractError, SettingsRegistry, settings_registry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+use toml::Value as TomlValue;
 
 use crate::settings::lock::LockManager;
 use crate::settings::package::{
@@ -35,6 +36,7 @@ struct LayerResolution {
     values: BTreeMap<String, ResolvedValue>,
     package_sources: PackageSources,
     ignored: Vec<String>,
+    warnings: Vec<ConfigurationWarning>,
 }
 
 struct BootstrapResolution {
@@ -74,6 +76,109 @@ impl SettingSource {
             Self::Dynamic => Some(PathSource::Dynamic),
             Self::CommandLine => Some(PathSource::CommandLine),
             Self::OpenApi => Some(PathSource::OpenApi),
+        }
+    }
+}
+
+impl fmt::Display for SettingSource {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Default => "既定値",
+            Self::GlobalToml => "global TOML",
+            Self::ProfileToml => "profile TOML",
+            Self::Environment => "環境変数",
+            Self::Dynamic => "動的設定",
+            Self::CommandLine => "コマンドライン",
+            Self::OpenApi => "OpenAPI",
+        };
+        formatter.write_str(label)
+    }
+}
+
+/// A non-fatal settings issue retained for startup diagnostics.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfigurationWarning {
+    UnknownTomlKey {
+        surface: SettingSource,
+        file: PathBuf,
+        key: String,
+        suggestion: Option<String>,
+    },
+    DeprecatedTomlKey {
+        surface: SettingSource,
+        file: PathBuf,
+        key: String,
+        replacement: Option<String>,
+        reason: Option<String>,
+    },
+    InvalidTomlValueFallback {
+        surface: SettingSource,
+        file: PathBuf,
+        key: String,
+        value: String,
+        expected: String,
+        reason: String,
+    },
+}
+
+impl ConfigurationWarning {
+    #[must_use]
+    pub fn message(&self) -> String {
+        match self {
+            Self::UnknownTomlKey {
+                file,
+                key,
+                suggestion,
+                ..
+            } => {
+                let suggestion = suggestion.as_ref().map_or_else(
+                    || "設定リファレンスを確認してください".to_owned(),
+                    |candidate| format!("もしかすると {candidate} です"),
+                );
+                format!(
+                    "設定ファイル {} の未知キー {key} は本体では使用せず保持しました。{suggestion}。",
+                    file.display()
+                )
+            }
+            Self::DeprecatedTomlKey {
+                file,
+                key,
+                replacement,
+                reason,
+                ..
+            } => {
+                let destination = replacement.as_deref().map_or_else(
+                    || "このキーは廃止され、値は適用しません".to_owned(),
+                    |target| format!("現行key {target} へ読み替えます"),
+                );
+                let reason = reason
+                    .as_deref()
+                    .map_or_else(String::new, |reason| format!("理由: {reason}。"));
+                format!(
+                    "設定ファイル {} の旧キー {key} は非推奨です。{destination}。{reason}",
+                    file.display()
+                )
+            }
+            Self::InvalidTomlValueFallback {
+                file,
+                key,
+                value,
+                expected,
+                reason,
+                ..
+            } => format!(
+                "設定ファイル {} のキー {key} の値 {value} は使用できないため、既定値へ戻しました。期待形式: {expected}。理由: {reason}。",
+                file.display()
+            ),
+        }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            Self::UnknownTomlKey { .. } => "unknown_toml_key",
+            Self::DeprecatedTomlKey { .. } => "deprecated_toml_key",
+            Self::InvalidTomlValueFallback { .. } => "invalid_toml_value_fallback",
         }
     }
 }
@@ -296,6 +401,7 @@ pub struct LoadedSettings {
     pub global_settings_path: PathBuf,
     pub profile_settings_path: PathBuf,
     pub ignored_profile_global_settings: Vec<String>,
+    pub configuration_warnings: Vec<ConfigurationWarning>,
     pub(crate) recipe: ResolutionRecipe,
 }
 
@@ -434,6 +540,10 @@ impl fmt::Debug for LoadedSettings {
                 "ignored_profile_global_settings",
                 &self.ignored_profile_global_settings,
             )
+            .field(
+                "configuration_warning_count",
+                &self.configuration_warnings.len(),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -557,6 +667,7 @@ impl SettingsPipeline {
             global_settings_path: bootstrap.global_settings_path,
             profile_settings_path,
             ignored_profile_global_settings: resolution.ignored,
+            configuration_warnings: resolution.warnings,
             recipe,
         })
     }
@@ -787,6 +898,7 @@ fn resolve_bootstrap(
     let global = TomlStore::new(LockManager::new(&roots)).read(&global_settings_path)?;
     let mut values = defaults(registry, &roots, &request.resource_root)?;
     let mut ignored = Vec::new();
+    let mut warnings = Vec::new();
     let context = LayerContext {
         registry,
         roots: &roots,
@@ -798,6 +910,7 @@ fn resolve_bootstrap(
         SettingSource::GlobalToml,
         &mut values,
         &mut ignored,
+        &mut warnings,
         None,
     )?;
     apply_environment(
@@ -861,6 +974,7 @@ fn resolve_layers(
     let mut values = defaults(registry, roots, &request.resource_root)?;
     let mut package_sources = PackageSources::new();
     let mut ignored = Vec::new();
+    let mut warnings = Vec::new();
     let context = LayerContext {
         registry,
         roots,
@@ -872,6 +986,7 @@ fn resolve_layers(
         SettingSource::GlobalToml,
         &mut values,
         &mut ignored,
+        &mut warnings,
         Some(&mut package_sources),
     )?;
     apply_toml(
@@ -880,6 +995,7 @@ fn resolve_layers(
         SettingSource::ProfileToml,
         &mut values,
         &mut ignored,
+        &mut warnings,
         Some(&mut package_sources),
     )?;
     apply_environment(
@@ -935,29 +1051,93 @@ fn resolve_layers(
         values,
         package_sources,
         ignored,
+        warnings,
     })
 }
 
-fn validate_toml_keys(
+fn collect_toml_warnings(
     registry: &SettingsRegistry,
     document: &SettingsDocument,
     source: SettingSource,
-) -> Result<(), PipelineError> {
+) -> Vec<ConfigurationWarning> {
     let known = registry
         .settings
         .iter()
         .filter_map(|setting| setting.surfaces.toml.name.as_deref())
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
+    let mut warnings = Vec::new();
     for path in document.leaf_paths(&known) {
-        if !known.contains(path.as_str()) {
-            return Err(PipelineError::UnknownTomlKey {
+        if known.contains(path.as_str()) {
+            continue;
+        }
+        if let Some(migration) = registry
+            .toml_migrations
+            .iter()
+            .find(|migration| migration.from == path)
+        {
+            warnings.push(ConfigurationWarning::DeprecatedTomlKey {
                 surface: source,
-                path,
+                file: document.path().clone(),
+                key: path,
+                replacement: migration.to.clone(),
+                reason: migration.reason.clone(),
+            });
+        } else {
+            warnings.push(ConfigurationWarning::UnknownTomlKey {
+                surface: source,
+                file: document.path().clone(),
+                key: path.clone(),
+                suggestion: suggested_toml_key(&path, &known),
             });
         }
     }
-    Ok(())
+    warnings
+}
+
+fn suggested_toml_key(path: &str, known: &BTreeSet<String>) -> Option<String> {
+    let limit = 2.max(path.chars().count() / 3);
+    known
+        .iter()
+        .filter_map(|candidate| {
+            let distance = levenshtein_distance(path, candidate);
+            (distance <= limit).then(|| (distance, candidate.clone()))
+        })
+        .min_by(Ord::cmp)
+        .map(|(_, candidate)| candidate)
+}
+
+fn levenshtein_distance(left: &str, right: &str) -> usize {
+    let right = right.chars().collect::<Vec<_>>();
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+    for (left_index, left_character) in left.chars().enumerate() {
+        let mut current = vec![left_index + 1];
+        for (right_index, right_character) in right.iter().enumerate() {
+            let substitution =
+                previous[right_index] + usize::from(left_character != *right_character);
+            current.push(
+                (previous[right_index + 1] + 1)
+                    .min(current[right_index] + 1)
+                    .min(substitution),
+            );
+        }
+        previous = current;
+    }
+    previous[right.len()]
+}
+
+fn toml_value_for_setting<'a>(
+    registry: &'a SettingsRegistry,
+    document: &'a SettingsDocument,
+    path: &str,
+) -> Option<&'a TomlValue> {
+    document.get(path).or_else(|| {
+        registry
+            .toml_migrations
+            .iter()
+            .find(|migration| migration.to.as_deref() == Some(path))
+            .and_then(|migration| document.get(&migration.from))
+    })
 }
 
 fn apply_toml(
@@ -966,27 +1146,69 @@ fn apply_toml(
     source: SettingSource,
     values: &mut BTreeMap<String, ResolvedValue>,
     ignored: &mut Vec<String>,
+    warnings: &mut Vec<ConfigurationWarning>,
     mut package_sources: Option<&mut PackageSources>,
 ) -> Result<(), PipelineError> {
-    validate_toml_keys(context.registry, document, source)?;
+    warnings.extend(collect_toml_warnings(context.registry, document, source));
     for setting in &context.registry.settings {
         let Some(path) = setting.surfaces.toml.name.as_deref() else {
             continue;
         };
-        let Some(toml_value) = document.get(path) else {
+        let Some(toml_value) = toml_value_for_setting(context.registry, document, path) else {
             continue;
         };
         if source == SettingSource::ProfileToml && setting.scope != Scope::Profile {
             ignored.push(setting.id.clone());
             continue;
         }
-        let raw = serde_json::to_value(toml_value)
-            .map_err(|_| invalid(&setting.id, source, "TOML value conversion failed"))?;
-        let normalized = normalize_value(setting, raw, source, context.roots, context.request)?;
+        let raw = serde_json::to_value(toml_value).map_err(|_| {
+            toml_value_error(
+                setting,
+                document,
+                path,
+                toml_value,
+                "TOML値を内部形式へ変換できませんでした",
+            )
+        })?;
+        let (normalized, value_source) =
+            match normalize_value(setting, raw, source, context.roots, context.request) {
+                Ok(normalized) => (normalized, source),
+                Err(error) if setting.invalid_toml_value == InvalidTomlValuePolicy::UseDefault => {
+                    let fallback = default_value(
+                    setting,
+                    Some(context.roots),
+                    &context.request.resource_root,
+                    SettingSource::Default,
+                )
+                .map_err(|fallback_error| {
+                    toml_value_error(
+                        setting,
+                        document,
+                        path,
+                        toml_value,
+                        format!(
+                            "設定値が不正で、安全な既定値も使用できませんでした: {fallback_error}"
+                        ),
+                    )
+                })?;
+                    warnings.push(ConfigurationWarning::InvalidTomlValueFallback {
+                        surface: source,
+                        file: document.path().clone(),
+                        key: path.to_owned(),
+                        value: diagnostic_toml_value(setting, toml_value),
+                        expected: expected_toml_value(setting),
+                        reason: diagnostic_error_reason(setting, &error),
+                    });
+                    (fallback, SettingSource::Default)
+                }
+                Err(error) => {
+                    return Err(toml_value_error(setting, document, path, toml_value, error));
+                }
+            };
         insert_resolved(
             setting,
             normalized,
-            source,
+            value_source,
             context.roots,
             context.request,
             values,
@@ -994,6 +1216,85 @@ fn apply_toml(
         )?;
     }
     Ok(())
+}
+
+fn diagnostic_toml_value(setting: &Setting, value: &TomlValue) -> String {
+    if setting.secret {
+        "[REDACTED]".to_owned()
+    } else {
+        value.to_string()
+    }
+}
+
+fn diagnostic_error_reason(setting: &Setting, error: &PipelineError) -> String {
+    if setting.secret {
+        "secret設定の値が型または制約に一致しません".to_owned()
+    } else {
+        error.to_string()
+    }
+}
+
+fn expected_toml_value(setting: &Setting) -> String {
+    expected_value_schema(&setting.value)
+}
+
+fn expected_value_schema(schema: &ValueSchema) -> String {
+    match schema {
+        ValueSchema::Null => "null".to_owned(),
+        ValueSchema::Boolean => "true または false".to_owned(),
+        ValueSchema::String { format, .. } => format.as_deref().map_or_else(
+            || "文字列".to_owned(),
+            |format| format!("文字列（{format}）"),
+        ),
+        ValueSchema::Integer { minimum, maximum } => {
+            format_numeric_expectation("整数", *minimum, *maximum)
+        }
+        ValueSchema::Number { minimum, maximum } => {
+            format_numeric_expectation("有限数", *minimum, *maximum)
+        }
+        ValueSchema::Enum { values, .. } => format!("次のいずれか: {}", values.join(", ")),
+        ValueSchema::Union { variants } => variants
+            .iter()
+            .map(expected_value_schema)
+            .collect::<Vec<_>>()
+            .join(" または "),
+        ValueSchema::Array { .. } => "配列".to_owned(),
+        ValueSchema::Object { .. } => "テーブル".to_owned(),
+    }
+}
+
+fn format_numeric_expectation<T: fmt::Display>(
+    label: &str,
+    minimum: Option<T>,
+    maximum: Option<T>,
+) -> String {
+    match (minimum, maximum) {
+        (Some(minimum), Some(maximum)) => format!("{label}（{minimum}以上{maximum}以下）"),
+        (Some(minimum), None) => format!("{label}（{minimum}以上）"),
+        (None, Some(maximum)) => format!("{label}（{maximum}以下）"),
+        (None, None) => label.to_owned(),
+    }
+}
+
+fn toml_value_error(
+    setting: &Setting,
+    document: &SettingsDocument,
+    path: &str,
+    value: &TomlValue,
+    reason: impl fmt::Display,
+) -> PipelineError {
+    PipelineError::InvalidTomlValue(Box::new(InvalidTomlValueDetails {
+        file: document.path().clone(),
+        id: setting.id.clone(),
+        key: path.to_owned(),
+        value: diagnostic_toml_value(setting, value),
+        expected: expected_toml_value(setting),
+        reason: if setting.secret {
+            "secret設定の値が型または制約に一致しません".to_owned()
+        } else {
+            reason.to_string()
+        },
+    }))
 }
 
 fn apply_environment(
@@ -1364,6 +1665,32 @@ fn invalid(
     }
 }
 
+/// Human-readable context for one invalid TOML value.
+#[derive(Debug)]
+pub struct InvalidTomlValueDetails {
+    file: PathBuf,
+    id: String,
+    key: String,
+    value: String,
+    expected: String,
+    reason: String,
+}
+
+impl fmt::Display for InvalidTomlValueDetails {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "設定ファイル {} のキー {}（設定ID: {}）の値 {} は使用できません。期待形式: {}。理由: {}。設定リファレンスを確認して修正してください。",
+            self.file.display(),
+            self.key,
+            self.id,
+            self.value,
+            self.expected,
+            self.reason
+        )
+    }
+}
+
 /// Registry-driven settings resolution failures. Raw setting input is never
 /// stored, which prevents secret values from entering error/debug surfaces.
 #[derive(Debug, Error)]
@@ -1386,22 +1713,21 @@ pub enum PipelineError {
     MissingCanonicalSetting(String),
     #[error("bootstrap default requires resolved roots for {0}")]
     BootstrapDefault(String),
-    #[error("invalid {id} value from {surface:?}: {reason}")]
+    #[error("設定 {id} の{surface}の値が不正です。{reason}。設定リファレンスを確認してください。")]
     InvalidValue {
         id: String,
         surface: SettingSource,
         reason: String,
     },
-    #[error("unknown TOML setting key {path} from {surface:?}")]
-    UnknownTomlKey {
-        surface: SettingSource,
-        path: String,
-    },
+    #[error("{0}")]
+    InvalidTomlValue(Box<InvalidTomlValueDetails>),
     #[error("dynamic settings surface does not support {0}")]
     UnsupportedDynamic(String),
     #[error("canonical package list {0} is structurally invalid")]
     InvalidPackageList(String),
-    #[error("cross-setting validation failed: {0}")]
+    #[error(
+        "設定値の組み合わせが不正です: {0}。関連する設定keyを設定リファレンスに従って修正してください。"
+    )]
     CrossSetting(String),
     #[error("canonical setting {0} has an unexpected resolved type")]
     TypedLookup(String),
@@ -1427,7 +1753,7 @@ mod tests {
     use serde_json::json;
     use tempfile::TempDir;
 
-    use super::{PipelineError, PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
+    use super::{PipelineRequest, ResolvedValue, SettingSource, SettingsPipeline};
     use crate::settings::package::{PackageSourceKind, PythonWorker, VersionSelector};
     use crate::settings::roots::{BaseDirectories, RootEnvironment};
 
@@ -1504,16 +1830,100 @@ mod tests {
     }
 
     #[test]
-    fn unknown_toml_leaf_is_rejected_instead_of_silently_ignored() {
+    fn unknown_toml_leaf_is_retained_and_reported_without_blocking_startup() {
         let temp = TempDir::new().expect("temporary directory must exist");
         let config = temp.path().join("config/App");
         fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
         fs::write(config.join("settings.toml"), "[unknown]\nvalue = true\n")
             .expect("global fixture must be writable");
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
+            .load()
+            .expect("unrelated unknown TOML keys must not fail startup");
+        assert!(loaded.configuration_warnings.iter().any(|warning| {
+            matches!(
+                warning,
+                super::ConfigurationWarning::UnknownTomlKey { key, suggestion, .. }
+                    if key == "unknown.value" && suggestion.is_none()
+            )
+        }));
+        assert!(
+            loaded
+                .configuration_warnings
+                .iter()
+                .all(|warning| !warning.message().contains("true"))
+        );
+    }
+
+    #[test]
+    fn invalid_safe_toml_value_falls_back_and_reports_the_used_default() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/App");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        fs::write(
+            config.join("settings.toml"),
+            "[server]\nport = \"not-a-port\"\n",
+        )
+        .expect("global fixture must be writable");
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
+            .load()
+            .expect("a safe server port default must permit startup");
+        assert_eq!(
+            loaded
+                .settings
+                .integer("server.port")
+                .expect("server port default must resolve"),
+            8020
+        );
+        assert!(loaded.configuration_warnings.iter().any(|warning| {
+            matches!(
+                warning,
+                super::ConfigurationWarning::InvalidTomlValueFallback {
+                    key, value, ..
+                } if key == "server.port" && value == "\"not-a-port\""
+            )
+        }));
+    }
+
+    #[test]
+    fn invalid_unsafe_toml_value_has_a_file_key_value_and_fix_diagnostic() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/App");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        fs::write(
+            config.join("settings.toml"),
+            "[global]\ndynamic_config_language = \"not-a-language\"\n",
+        )
+        .expect("global fixture must be writable");
         let error = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
             .load()
-            .expect_err("unknown TOML keys must fail startup");
-        assert!(matches!(error, PipelineError::UnknownTomlKey { .. }));
+            .expect_err("unsafe bootstrap values must stop startup");
+        let message = error.to_string();
+        assert!(message.contains("settings.toml"));
+        assert!(message.contains("global.dynamic_config_language"));
+        assert!(message.contains("not-a-language"));
+        assert!(message.contains("期待形式"));
+        assert!(message.contains("設定リファレンス"));
+    }
+
+    #[test]
+    fn secret_toml_diagnostics_never_include_the_raw_value() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/App");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        let secret = "https://example.invalid/hook";
+        fs::write(
+            config.join("settings.toml"),
+            format!("[notifications]\ndiscord_webhook_url = {secret:?}\n"),
+        )
+        .expect("global fixture must be writable");
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon", "--app-name", "App"], &[]))
+            .load()
+            .expect("secret webhook URL is a valid value");
+        let resolved = loaded
+            .settings
+            .get("notifications.discord.webhook_url")
+            .expect("webhook setting must exist");
+        assert!(!format!("{resolved:?}").contains(secret));
     }
 
     fn staged_request(temp: &TempDir) -> PipelineRequest {
@@ -1997,7 +2407,7 @@ mod tests {
     #[test]
     fn debug_surfaces_redact_cli_environment_dynamic_and_resolved_values() {
         let temp = TempDir::new().expect("temporary directory must exist");
-        let secret = "super-secret-token";
+        let secret = "sensitive-fixture-value";
         let mut pipeline_request = request(
             &temp,
             &["pokecon", "--notifications-discord-webhook-url", secret],

@@ -142,6 +142,7 @@
         }
       },
       "secret": false,
+      "invalid_toml_value": "reject",
       "spec_refs": [
         "§11.4.1.1",
         "§11.4.2"
@@ -657,6 +658,7 @@
         }
       },
       "secret": false,
+      "invalid_toml_value": "reject",
       "spec_refs": [
         "§11.4.1.1",
         "§11.4.2"

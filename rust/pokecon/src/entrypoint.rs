@@ -130,6 +130,7 @@ pub async fn run_cli() -> Result<(), MainError> {
     let ephemeral_port = false;
 
     init_tracing("info")?;
+    log_configuration_warnings(&before_dynamic);
     ScaffoldManager::new(before_dynamic.roots.clone())
         .ensure(before_dynamic.active_profile.as_str())?;
 
@@ -147,6 +148,16 @@ pub async fn run_cli() -> Result<(), MainError> {
         None,
     )
     .await
+}
+
+fn log_configuration_warnings(settings: &LoadedSettings) {
+    for warning in &settings.configuration_warnings {
+        tracing::warn!(
+            diagnostic_kind = warning.kind(),
+            message = %warning.message(),
+            "設定ファイルを読み込みましたが、修正可能な警告があります"
+        );
+    }
 }
 
 fn packaged_resource_root(current: &Path) -> Result<SelectedResourceRoot, ResourceManifestError> {

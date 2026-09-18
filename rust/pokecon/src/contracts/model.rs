@@ -10,6 +10,8 @@ pub struct SettingsRegistry {
     pub specification_version: String,
     pub expected_setting_count: usize,
     pub settings: Vec<Setting>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toml_migrations: Vec<TomlMigration>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -27,7 +29,38 @@ pub struct Setting {
     pub secret: bool,
     #[serde(default)]
     pub path: Option<PathMetadata>,
+    #[serde(
+        default,
+        skip_serializing_if = "InvalidTomlValuePolicy::is_use_default"
+    )]
+    pub invalid_toml_value: InvalidTomlValuePolicy,
     pub spec_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TomlMigration {
+    pub from: String,
+    #[serde(default)]
+    pub to: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvalidTomlValuePolicy {
+    #[default]
+    UseDefault,
+    Reject,
+}
+
+impl InvalidTomlValuePolicy {
+    #[must_use]
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub const fn is_use_default(&self) -> bool {
+        matches!(self, Self::UseDefault)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

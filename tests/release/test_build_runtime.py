@@ -1233,6 +1233,12 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     assert "$PSNativeCommandUseErrorActionPreference = $true" in workflow
     assert "--runtime-output target/" not in workflow
     assert "--wheelhouse-output target/" not in workflow
+    assert workflow.count("      - name: Normalize NSIS PE metadata\n") == (
+        2 if workflow_name == "package.yml" else 1
+    )
+    assert workflow.count(
+        "      - name: Normalize NSIS PE metadata for reproduction\n"
+    ) == (0 if workflow_name == "package.yml" else 1)
     assert "--config $env:POKECON_BUNDLE_CONFIG" in workflow
     build_stage_start = workflow.index("      - name: Build and stage managed runtimes")
     build_stage_end = workflow.index(
@@ -1335,6 +1341,12 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         "          cargo tauri build --ci --bundles nsis\n"
         "          --config $env:POKECON_BUNDLE_CONFIG\n"
         "          -- --locked\n"
+        "      - name: Normalize NSIS PE metadata\n"
+        "        shell: pwsh\n"
+        "        run: |\n"
+        "          $PSNativeCommandUseErrorActionPreference = $true\n"
+        "          $env:POKECON_NSIS_INSTALLER = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName\n"
+        "          python -c \"import os; from pathlib import Path; from scripts.release.build_runtime import normalize_pe; normalize_pe(Path(os.environ['POKECON_NSIS_INSTALLER']))\"\n"
     )
 
     assert build_stage.count(error_preference) == 1
@@ -1516,6 +1528,8 @@ def test_package_ci_proves_windows_nsis_reproducibility() -> None:
     assert "tauri-cli --version 2.11.4" in repro
     assert '"SOURCE_DATE_EPOCH=0"' in repro
     assert repro.count("cargo tauri build --ci --bundles nsis") == 1
+    assert repro.count("Normalize NSIS PE metadata") == 1
+    assert "normalize_pe" in repro
     assert check.count("find -P") == 6
     assert "expected exactly one primary and one reproduction NSIS bundle" in check
     assert "expected exactly one primary and one reproduction payload manifest" in check

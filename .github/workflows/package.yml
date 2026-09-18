@@ -227,6 +227,12 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Normalize NSIS PE metadata
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:POKECON_NSIS_INSTALLER = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -c "import os; from pathlib import Path; from scripts.release.build_runtime import normalize_pe; normalize_pe(Path(os.environ['POKECON_NSIS_INSTALLER']))"
       - name: Record Windows signing inputs
         shell: pwsh
         run: |
@@ -357,6 +363,12 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Normalize NSIS PE metadata
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:POKECON_NSIS_INSTALLER = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -c "import os; from pathlib import Path; from scripts.release.build_runtime import normalize_pe; normalize_pe(Path(os.environ['POKECON_NSIS_INSTALLER']))"
       - name: Verify clean install tree for reproduction build
         shell: pwsh
         run: >-

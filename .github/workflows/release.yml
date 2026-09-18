@@ -186,6 +186,12 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Normalize NSIS PE metadata
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:POKECON_NSIS_INSTALLER = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -c "import os; from pathlib import Path; from scripts.release.build_runtime import normalize_pe; normalize_pe(Path(os.environ['POKECON_NSIS_INSTALLER']))"
       - name: Preserve first Windows package build
         shell: pwsh
         run: |
@@ -211,6 +217,12 @@ jobs:
           cargo tauri build --ci --bundles nsis
           --config $env:POKECON_BUNDLE_CONFIG
           -- --locked
+      - name: Normalize NSIS PE metadata for reproduction
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:POKECON_NSIS_INSTALLER = (Get-ChildItem target/release/bundle/nsis/*.exe -File).FullName
+          python -c "import os; from pathlib import Path; from scripts.release.build_runtime import normalize_pe; normalize_pe(Path(os.environ['POKECON_NSIS_INSTALLER']))"
       - name: Verify second Windows clean install tree
         shell: pwsh
         run: |

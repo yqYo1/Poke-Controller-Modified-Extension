@@ -50,7 +50,7 @@
 | 51 | `rust/pokecon/src/device/serial/mod.rs` | 2 | major,major | Wave 1 | 未着手 | — |
 | 54 | `rust/pokecon/src/device/serial/virtual_port.rs` | 1 | high | Wave 1 | 修正済み・検証済み | virtual serial module compile passed; close race rechecks cancellation after delayed write |
 | 57 | `rust/pokecon/src/dynamic/command.rs` | 3 | medium,medium,medium | Wave 1 | 未着手 | — |
-| 59 | `rust/pokecon/src/dynamic/event.rs` | 5 | high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
+| 59 | `rust/pokecon/src/dynamic/event.rs` | 5 | high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | dynamic::event focused test 5 passed; once registration atomically consumed at snapshot, F2-F5 pending |
 | 60 | `rust/pokecon/src/dynamic/host.rs` | 2 | high,high | Wave 1 | 未着手 | — |
 | 63 | `rust/pokecon/src/dynamic/source.rs` | 1 | High | Wave 1 | 未着手 | — |
 | 64 | `rust/pokecon/src/dynamic/transaction.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |

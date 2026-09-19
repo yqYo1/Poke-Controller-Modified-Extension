@@ -432,7 +432,7 @@ impl EventBus {
     pub async fn emit(&self, event: &str) -> Result<EventResult, EventError> {
         validate_event_name(event)?;
         let (registrations, cancellable) = {
-            let registry = self.registry.lock();
+            let mut registry = self.registry.lock();
             if !registry.defined.contains(event) {
                 return Err(EventError::UndefinedEvent(event.to_owned()));
             }
@@ -447,32 +447,29 @@ impl EventBus {
                 .iter()
                 .find(|builtin| builtin.name == event)
                 .is_some_and(|builtin| builtin.cancellable);
+            for registration in registrations
+                .iter()
+                .filter(|registration| registration.once)
+            {
+                registry.registrations.remove(&registration.id);
+            }
             (registrations, cancellable)
         };
         let sequence = self.next_event_sequence.fetch_add(1, Ordering::Relaxed);
         let invocations = registrations
             .iter()
-            .map(|registration| {
-                let registry = self.registry.clone();
-                let id = registration.id;
-                let on_start = registration.once.then(|| {
-                    Arc::new(move || {
-                        registry.lock().registrations.remove(&id);
-                    }) as Arc<dyn Fn() + Send + Sync>
-                });
-                Invocation {
-                    handler_id: registration.id,
-                    priority: registration.priority,
-                    event_sequence: sequence,
-                    registration_order: registration.order,
-                    event: Some(event.to_owned()),
-                    arguments: Vec::new(),
-                    limits: registration.limits,
-                    callback: registration.callback.clone(),
-                    on_start,
-                    reject_if_lane_busy: false,
-                    on_late_return: None,
-                }
+            .map(|registration| Invocation {
+                handler_id: registration.id,
+                priority: registration.priority,
+                event_sequence: sequence,
+                registration_order: registration.order,
+                event: Some(event.to_owned()),
+                arguments: Vec::new(),
+                limits: registration.limits,
+                callback: registration.callback.clone(),
+                on_start: None,
+                reject_if_lane_busy: false,
+                on_late_return: None,
             })
             .collect::<Vec<_>>();
         let handles = self.executor.submit_batch(invocations).await?;

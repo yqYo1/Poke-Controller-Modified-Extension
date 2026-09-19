@@ -145,6 +145,32 @@ where
     Ok(y)
 }
 
+fn deserialize_normalized_coordinate<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = f64::deserialize(deserializer)?;
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return Err(D::Error::custom(
+            "normalized coordinate must be finite and between 0 and 1",
+        ));
+    }
+    Ok(value)
+}
+
+fn deserialize_normalized_extent<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = deserialize_normalized_coordinate(deserializer)?;
+    if value == 0.0 {
+        return Err(D::Error::custom(
+            "normalized extent must be greater than zero",
+        ));
+    }
+    Ok(value)
+}
+
 fn pressed_touch_schema() -> utoipa::openapi::schema::Object {
     utoipa::openapi::schema::ObjectBuilder::new()
         .schema_type(utoipa::openapi::schema::Type::Boolean)
@@ -517,12 +543,16 @@ pub enum ImageFormat {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NormalizedRegion {
+    #[serde(deserialize_with = "deserialize_normalized_coordinate")]
     #[schema(minimum = 0.0, maximum = 1.0)]
     pub x: f64,
+    #[serde(deserialize_with = "deserialize_normalized_coordinate")]
     #[schema(minimum = 0.0, maximum = 1.0)]
     pub y: f64,
+    #[serde(deserialize_with = "deserialize_normalized_extent")]
     #[schema(minimum = 0.0, maximum = 1.0)]
     pub width: f64,
+    #[serde(deserialize_with = "deserialize_normalized_extent")]
     #[schema(minimum = 0.0, maximum = 1.0)]
     pub height: f64,
 }
@@ -1004,33 +1034,40 @@ pub enum ScriptPointerPhase {
 #[serde(deny_unknown_fields, rename_all = "snake_case", tag = "action")]
 pub enum ScriptUiAction {
     DialogConfirm {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         dialog_id: DecimalString,
         values: Vec<ScriptDialogValue>,
     },
     DialogAbort {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         dialog_id: DecimalString,
         reason: ScriptDialogAbortReason,
     },
     TkScaleChanged {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         widget_id: DecimalString,
         value: f64,
     },
     TkButtonInvoked {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         widget_id: DecimalString,
     },
     TkWindowClosed {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         window_id: DecimalString,
     },
     PopupClosed {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         popup_id: DecimalString,
     },
     Pointer {
+        #[serde(deserialize_with = "deserialize_input_generation")]
         generation: String,
         button: ScriptPointerButton,
         phase: ScriptPointerPhase,

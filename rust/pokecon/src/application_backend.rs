@@ -43,13 +43,16 @@ use crate::settings::roots::SafeComponent;
 use crate::settings::service::{
     PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
 };
-use crate::worker::dynamic::DynamicWorkerClient;
+use crate::worker::dynamic::{DynamicClientError, DynamicWorkerClient};
+use crate::worker::ipc::ConnectionError;
+use crate::worker::supervisor::WorkerRequestError;
 use async_trait::async_trait;
 use parking_lot::Mutex as ParkingMutex;
 use semver::Version;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use tokio::sync::Mutex;
+use tokio::time::{Duration, timeout};
 
 use crate::command_service::{
     CommandActionResult, CommandIdentity, CommandReloadResult, CommandService, CommandServiceError,
@@ -61,6 +64,7 @@ use crate::script_host::ScriptUiCoordinator;
 const RELEASES_URL: &str = "https://github.com/yqYo1/Poke-Controller-Modified-Extension/releases";
 const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/yqYo1/Poke-Controller-Modified-Extension/releases/latest";
+const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// All already-created services needed by the transport adapter.
 pub(crate) struct ApplicationBackendParts {
@@ -686,13 +690,10 @@ impl RestBackend for ApplicationBackend {
             },
             DynamicConfigControlRequest::Reload {} => DynamicConfigControl::Reload {},
         };
-        let result = client.control(&control).await.map_err(|_error| {
-            ApiFailure::new(
-                ApiFailureStatus::Conflict,
-                ApiErrorCode::DynamicConfigUnavailable,
-                "dynamic configuration operation failed",
-            )
-        })?;
+        let result = client
+            .control(&control)
+            .await
+            .map_err(dynamic_control_failure)?;
         self.settings
             .lock()
             .await
@@ -841,16 +842,17 @@ impl RestBackend for ApplicationBackend {
 
         let client = reqwest::Client::builder()
             .user_agent(concat!("pokecon/", env!("CARGO_PKG_VERSION")))
+            .timeout(UPDATE_CHECK_TIMEOUT)
             .build()
             .map_err(|_error| backend_unavailable("update check is unavailable"))?;
-        let release = client
-            .get(LATEST_RELEASE_URL)
-            .send()
+        let response = timeout(UPDATE_CHECK_TIMEOUT, client.get(LATEST_RELEASE_URL).send())
             .await
+            .map_err(|_elapsed| backend_unavailable("update check timed out"))?
             .and_then(reqwest::Response::error_for_status)
-            .map_err(|_error| backend_unavailable("update check failed"))?
-            .json::<LatestRelease>()
+            .map_err(|_error| backend_unavailable("update check failed"))?;
+        let release = timeout(UPDATE_CHECK_TIMEOUT, response.json::<LatestRelease>())
             .await
+            .map_err(|_elapsed| backend_unavailable("update response timed out"))?
             .map_err(|_error| backend_unavailable("update response was invalid"))?;
         let current = Version::parse(env!("CARGO_PKG_VERSION"))
             .map_err(|_error| internal_failure("application version is invalid"))?;
@@ -1464,6 +1466,39 @@ fn screenshot_failure(error: crate::camera::ScreenshotError) -> ApiFailure {
         ScreenshotError::EncodingFailed
         | ScreenshotError::IoFailed
         | ScreenshotError::ClockFailed => internal_failure("screenshot operation failed"),
+    }
+}
+
+fn dynamic_control_failure(error: DynamicClientError) -> ApiFailure {
+    match error {
+        DynamicClientError::Payload(_) => ApiFailure::new(
+            ApiFailureStatus::UnprocessableEntity,
+            ApiErrorCode::InvalidRequest,
+            "dynamic configuration request payload is invalid",
+        ),
+        DynamicClientError::Worker(WorkerRequestError::Generation(_)) => ApiFailure::new(
+            ApiFailureStatus::Conflict,
+            ApiErrorCode::DynamicConfigUnavailable,
+            "dynamic configuration generation is no longer active",
+        ),
+        DynamicClientError::Worker(WorkerRequestError::Connection(ConnectionError::Remote {
+            code,
+            ..
+        })) if code == "NoCurrentSource" => ApiFailure::new(
+            ApiFailureStatus::Conflict,
+            ApiErrorCode::DynamicConfigUnavailable,
+            "dynamic configuration has no loaded source",
+        ),
+        DynamicClientError::Worker(WorkerRequestError::Connection(ConnectionError::Remote {
+            code,
+            ..
+        })) if code == "DynamicSourceError" => ApiFailure::new(
+            ApiFailureStatus::UnprocessableEntity,
+            ApiErrorCode::InvalidRequest,
+            "dynamic configuration source is invalid",
+        ),
+        DynamicClientError::Worker(_) => backend_unavailable("dynamic configuration worker failed"),
+        DynamicClientError::WrongWorkerKind => internal_failure("dynamic worker kind is invalid"),
     }
 }
 

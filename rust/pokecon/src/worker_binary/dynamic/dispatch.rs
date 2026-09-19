@@ -13,6 +13,7 @@ use crate::dynamic::protocol::{
     HostProfileSwitchBeginRequest, HostProfileSwitchBeginResult, HostProfileSwitchCommitResult,
     HostSetStateValueRequest, HostSettings, HostSettingsChanges, HostState,
 };
+use crate::dynamic::source::SourceError;
 use crate::dynamic::{
     CommandInfo, Diagnostic, DynamicConfigControl, DynamicHost, DynamicHostError,
 };
@@ -44,7 +45,13 @@ impl DispatchError {
     fn engine(error: DynamicEngineError) -> Self {
         match error {
             DynamicEngineError::Host(error) => Self::new(error.code, error.message),
-            DynamicEngineError::Source(error) => Self::new("DynamicSourceError", error.to_string()),
+            DynamicEngineError::Source(error) => match error {
+                SourceError::NoCurrentSource => Self::new(
+                    "NoCurrentSource",
+                    "dynamic configuration has no loaded source",
+                ),
+                error => Self::new("DynamicSourceError", error.to_string()),
+            },
             DynamicEngineError::Transaction(error) => {
                 Self::new("DynamicTransactionError", error.to_string())
             }

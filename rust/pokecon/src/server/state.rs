@@ -391,7 +391,7 @@ fn apply_settings_change(
 ) -> Option<SettingsChange> {
     let values = merge_changes(&mut snapshot.values.0, change.values.0);
     let previous_pending = snapshot.pending_restart_values.0.clone();
-    let pending_restart_values = merge_changes(
+    merge_changes(
         &mut snapshot.pending_restart_values.0,
         change.pending_restart_values.0,
     );
@@ -404,7 +404,17 @@ fn apply_settings_change(
         .pending_restart_values
         .0
         .retain(|id, _value| restart_ids.contains(id));
-    let pending_changed = snapshot.pending_restart_values.0 != previous_pending;
+    let mut pending_restart_values = BTreeMap::new();
+    for id in previous_pending
+        .keys()
+        .chain(snapshot.pending_restart_values.0.keys())
+    {
+        let after = snapshot.pending_restart_values.0.get(id);
+        if previous_pending.get(id) != after {
+            pending_restart_values.insert(id.clone(), after.cloned().unwrap_or(Value::Null));
+        }
+    }
+    let pending_changed = !pending_restart_values.is_empty();
     let restart_changed = snapshot.restart_required != change.restart_required;
     let failures_changed = snapshot.apply_failures != change.apply_failures;
     snapshot

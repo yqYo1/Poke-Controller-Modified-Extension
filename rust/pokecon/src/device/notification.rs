@@ -30,6 +30,8 @@ pub const NOTIFICATION_MAX_RETRIES: u32 = 3;
 pub const NOTIFICATION_RETRY_DEADLINE: Duration = Duration::from_secs(5);
 /// Base backoff between retries, doubled each attempt (exponential).
 pub const NOTIFICATION_RETRY_BASE_DELAY: Duration = Duration::from_millis(200);
+/// Per-request timeout for Discord HTTP operations.
+pub const NOTIFICATION_HTTP_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Strictly validated Discord webhook secret.
 #[derive(Clone)]
@@ -223,6 +225,7 @@ impl ReqwestDiscordTransport {
     pub fn new() -> Result<Self, NotificationError> {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let client = reqwest::Client::builder()
+            .timeout(NOTIFICATION_HTTP_TIMEOUT)
             .build()
             .map_err(|_| NotificationError::DeliveryFailed)?;
         Ok(Self { client })
@@ -470,7 +473,17 @@ async fn handle_queued_job(
     let deadline = job.deadline;
     let mut attempt: u32 = 0;
     loop {
-        let result = deliver_queued_job(&job.kind, &discord).await;
+        let result = tokio::select! {
+            biased;
+            () = shutdown.notified() => {
+                tracing::info!(
+                    diagnostic_id = "NOTIFICATION_STOP_CANCEL_DELIVERY",
+                    "notification delivery cancelled by stop"
+                );
+                return;
+            }
+            result = deliver_queued_job(&job.kind, &discord) => result,
+        };
         match result {
             Ok(()) => {
                 tracing::debug!(

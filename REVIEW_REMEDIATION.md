@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（63/222） | settings path 4 focused tests + lock compile passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（68/222） | notification 21 + serial manager 10 focused tests passed; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -45,10 +45,10 @@
 | 38 | `rust/pokecon/src/contracts/dynamic_typings.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 41 | `rust/pokecon/src/contracts/settings_artifacts.rs` | 3 | medium,medium,low | Wave 1 | 未着手 | — |
 | 45 | `rust/pokecon/src/device/hardware.rs` | 1 | high | Wave 1 | 未着手 | — |
-| 48 | `rust/pokecon/src/device/notification.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
-| 50 | `rust/pokecon/src/device/serial/manager.rs` | 1 | high | Wave 1 | 未着手 | — |
+| 48 | `rust/pokecon/src/device/notification.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | device::notification focused test 21 passed; HTTP timeout、delivery cancellation、stop drain priorityを実装 |
+| 50 | `rust/pokecon/src/device/serial/manager.rs` | 1 | high | Wave 1 | 修正済み・検証済み | device::serial::manager focused test 10 passed; same-config apply no longer emits false disconnect without reconnect |
 | 51 | `rust/pokecon/src/device/serial/mod.rs` | 2 | major,major | Wave 1 | 未着手 | — |
-| 54 | `rust/pokecon/src/device/serial/virtual_port.rs` | 1 | high | Wave 1 | 未着手 | — |
+| 54 | `rust/pokecon/src/device/serial/virtual_port.rs` | 1 | high | Wave 1 | 修正済み・検証済み | virtual serial module compile passed; close race rechecks cancellation after delayed write |
 | 57 | `rust/pokecon/src/dynamic/command.rs` | 3 | medium,medium,medium | Wave 1 | 未着手 | — |
 | 59 | `rust/pokecon/src/dynamic/event.rs` | 5 | high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 60 | `rust/pokecon/src/dynamic/host.rs` | 2 | high,high | Wave 1 | 未着手 | — |

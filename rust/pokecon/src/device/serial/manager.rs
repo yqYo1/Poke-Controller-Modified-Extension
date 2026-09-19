@@ -205,6 +205,15 @@ impl SerialManager {
         self.cancel_write_epoch();
         let _write = self.inner.write_gate.lock().await;
 
+        let same_connected = {
+            let state = self.inner.state.lock().await;
+            replacement == state.config && state.io.is_some()
+        };
+        if same_connected {
+            self.replace_write_epoch();
+            return Ok(());
+        }
+
         let (previous_config, previous_io, previous_codec) = {
             let mut state = self.inner.state.lock().await;
             (state.config.clone(), state.io.take(), state.codec.clone())
@@ -212,14 +221,6 @@ impl SerialManager {
         if previous_io.is_some() {
             self.publish_connection_status(false);
         }
-        if replacement == previous_config && previous_io.is_some() {
-            let mut state = self.inner.state.lock().await;
-            state.io = previous_io;
-            state.codec = previous_codec;
-            self.replace_write_epoch();
-            return Ok(());
-        }
-
         let mut disconnect_failure = None;
         if let Some(io) = &previous_io {
             let neutral = previous_codec.encode(ControllerState::NEUTRAL);

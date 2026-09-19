@@ -217,8 +217,14 @@ impl SerialIo for VirtualSerialEndpoint {
         if !delay.is_zero() {
             tokio::time::sleep(delay).await;
         }
+        if self.inner.closed.is_cancelled() {
+            return Err(Self::closed_error());
+        }
         if let Some(kind) = self.inner.next_write_error.lock().await.take() {
             return Err(io::Error::new(kind, "virtual serial write failure"));
+        }
+        if self.inner.closed.is_cancelled() {
+            return Err(Self::closed_error());
         }
         let count = bytes
             .len()

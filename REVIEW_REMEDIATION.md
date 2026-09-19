@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **103 / 455 finding、36 / 139 finding-file**（Wave 1/2を継続中）。
-- Wave 1: **95 / 222 finding、31ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
+- 現在の検証済み修正: **104 / 455 finding、37 / 139 finding-file**（Wave 1/2を継続中）。
+- Wave 1: **96 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
 
 ## 3. 修正wave
 
@@ -83,7 +83,7 @@
 | 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 修正済み・focused検証済み | settings_runtime tests passed; bounded runtime bridge、rollback Result、reconcile baseline、Profile adaptersを修正 |
 | 121 | `rust/pokecon/src/tests/ui_boundary_acceptance.rs` | 7 | high,high,medium,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
-| 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
+| 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | ScriptExecutionOutcome now deny_unknown_fields; payload bounds F2/F3 pending |
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
 | 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guardを実装。残り4件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |

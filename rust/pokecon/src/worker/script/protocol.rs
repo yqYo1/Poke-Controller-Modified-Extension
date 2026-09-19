@@ -128,7 +128,7 @@ pub struct ScriptPauseResult {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "status")]
+#[serde(deny_unknown_fields, rename_all = "snake_case", tag = "status")]
 pub enum ScriptExecutionOutcome {
     Completed,
     Finished,

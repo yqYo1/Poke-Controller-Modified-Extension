@@ -15,14 +15,14 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **100 / 455 finding、35 / 139 finding-file**（Wave 1/2を継続中）。
-- Wave 1: **92 / 222 finding、30ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
+- 現在の検証済み修正: **103 / 455 finding、36 / 139 finding-file**（Wave 1/2を継続中）。
+- Wave 1: **95 / 222 finding、31ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（92/222） | signed commits through `bfd38b0`; focused/full Nix gates passed |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（95/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -62,7 +62,7 @@
 | 81 | `rust/pokecon/src/server/api.rs` | 2 | medium,medium | Wave 1 | 修正済み・検証済み | server::api focused test 7 passed; NormalizedRegion deserialize boundsとScriptUiAction generation validationを実装 |
 | 82 | `rust/pokecon/src/server/backend.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 84 | `rust/pokecon/src/server/openapi.rs` | 3 | medium,medium,low | Wave 1 | 修正済み・検証済み | server::openapi 5 tests passed; all 13 discriminators and every properties node are closed; REST route binding test covers parity |
-| 87 | `rust/pokecon/src/server/realtime_connection.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
+| 87 | `rust/pokecon/src/server/realtime_connection.rs` | 3 | high,medium,medium | Wave 1 | 修正済み・検証済み | realtime_connection focused compile/test passed; offer retention/consume ordering and cancellation-raced backend fixed |
 | 90 | `rust/pokecon/src/server/rest/dynamic_config.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 94 | `rust/pokecon/src/server/rest/script_ui.rs` | 1 | medium | Wave 1 | 修正済み・検証済み | application_backend::script_ui_failure maps TkObjectNotFound to 409 conflict; full lib gate pending |
 | 100 | `rust/pokecon/src/server/state.rs` | 1 | high | Wave 1 | 修正済み・検証済み | server::state focused test 9 passed; pending_restart_values retain後deltaと削除nullを実装 |

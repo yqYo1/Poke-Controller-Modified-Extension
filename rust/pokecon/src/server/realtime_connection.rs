@@ -293,13 +293,14 @@ impl Coordinator {
     ) -> Result<(), ConnectionError> {
         match message {
             ClientMessage::WebRtcOffer(MessageData { data }) => {
-                if let Some(attempt) = self.peer.as_ref().map(WebRtcPeer::attempt) {
+                let active_attempt = self.peer.as_ref().map(WebRtcPeer::attempt);
+                if let Some(attempt) = active_attempt {
                     self.controller.peer_failed(attempt, now);
                 }
+                self.pending_remote_offer = Some(data);
                 if self.controller.route() == RealtimeRoute::WebSocketFallback
                     && self.controller.active_attempt().is_none()
                 {
-                    self.pending_remote_offer = Some(data);
                     self.controller.manual_reconnect(now);
                 }
             }
@@ -406,12 +407,12 @@ impl Coordinator {
         route: InputRoute,
         now: Instant,
     ) -> Result<(), ConnectionError> {
-        let replies = match time::timeout(
-            self.io.backend_timeout,
-            self.io.backend.message(self.io.connection, message),
-        )
-        .await
-        {
+        let replies = tokio::select! {
+            () = self.io.cancellation.cancelled() => return Ok(()),
+            result = time::timeout(
+                self.io.backend_timeout,
+                self.io.backend.message(self.io.connection, message),
+            ) => match result {
             Ok(Ok(replies)) => replies,
             Ok(Err(error)) => {
                 log_backend_failure(self.io.connection, &error);
@@ -423,6 +424,7 @@ impl Coordinator {
                     "realtime backend operation timed out"
                 );
                 return Err(ConnectionError::BackendUnavailable);
+            }
             }
         };
         self.forward_backend_replies(replies, route, now).await;
@@ -543,10 +545,11 @@ impl Coordinator {
             .pending_remote_offer
             .as_ref()
             .and_then(|offer| offer.negotiation_id.clone());
-        let signaling = if let Some(offer) = self.pending_remote_offer.take() {
-            peer.accept_offer(offer)
-                .await
-                .map(|data| ServerMessage::WebRtcAnswer(MessageData { data }))
+        let signaling = if let Some(offer) = self.pending_remote_offer.clone() {
+            peer.accept_offer(offer).await.map(|data| {
+                self.pending_remote_offer = None;
+                ServerMessage::WebRtcAnswer(MessageData { data })
+            })
         } else {
             peer.create_offer()
                 .await

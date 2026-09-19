@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（54/222） | WebRTC 4 + WebSocket 23 focused tests passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（63/222） | settings path 4 focused tests + lock compile passed; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -68,10 +68,10 @@
 | 100 | `rust/pokecon/src/server/state.rs` | 1 | high | Wave 1 | 修正済み・検証済み | server::state focused test 9 passed; pending_restart_values retain後deltaと削除nullを実装 |
 | 102 | `rust/pokecon/src/server/webrtc.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | server::webrtc focused test 4 passed; peer failure cleanup、activity drop、broadcast lag resyncを実装 |
 | 103 | `rust/pokecon/src/server/websocket.rs` | 3 | medium,medium,medium | Wave 1 | 修正済み・検証済み | server::websocket focused test 23 passed; latest-only Pong、native Ping forwarding、protocol closeを実装 |
-| 105 | `rust/pokecon/src/settings/lock.rs` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
+| 105 | `rust/pokecon/src/settings/lock.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・検証済み | settings lock compile passed; bounded try_lock timeout、0700/0600 permissionsを実装 |
 | 106 | `rust/pokecon/src/settings/manifest.rs` | 2 | low,low | Wave 1 | 未着手 | — |
 | 108 | `rust/pokecon/src/settings/package.rs` | 5 | medium,medium,low,low,low | Wave 1 | 未着手 | — |
-| 109 | `rust/pokecon/src/settings/path.rs` | 5 | high,high,medium,medium,medium | Wave 1 | 未着手 | — |
+| 109 | `rust/pokecon/src/settings/path.rs` | 5 | high,high,medium,medium,medium | Wave 1 | 修正済み・検証済み | settings::path focused test 4 passed; relative base escape、foreign Windows/device syntax、non-Unicode home、canonicalize-before-metadataを実装 |
 | 110 | `rust/pokecon/src/settings/persistence.rs` | 9 | high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 修正済み・focused検証済み | persistence tests passed; semantic prevalidation、owner-only mode、quoted path、inline table、array/u64変換を修正 |
 | 111 | `rust/pokecon/src/settings/pipeline.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・focused検証済み | pipeline tests passed; raw non-Unicode passthrough、package resolution、resource-root staging、warning mergeを修正 |
 | 112 | `rust/pokecon/src/settings/python.rs` | 8 | medium,medium,medium,low,low,low,low,low | Wave 1 | 未着手 | — |

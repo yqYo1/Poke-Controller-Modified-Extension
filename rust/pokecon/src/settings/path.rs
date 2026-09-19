@@ -67,11 +67,15 @@ pub fn resolve_path(
         | PathSource::Dynamic
         | PathSource::OpenApi => &roots.config,
     };
+    let path_is_relative = !path.is_absolute();
     let normalized = lexical_normalize(if path.is_absolute() {
         path
     } else {
         base.join(path)
     });
+    if path_is_relative && !normalized.starts_with(lexical_normalize(base)) {
+        return Err(PathError::EscapesBase(normalized));
+    }
     apply_metadata(normalized, metadata)
 }
 
@@ -199,7 +203,7 @@ fn expand_tilde(raw: &str, environment: &RootEnvironment) -> Result<String, Path
         environment.get("HOME")
     }
     .and_then(OsStr::to_str)
-    .ok_or(PathError::MissingHome)?;
+    .ok_or(PathError::NonUnicodeHome)?;
     if suffix.is_empty() {
         Ok(home.to_owned())
     } else {
@@ -209,11 +213,10 @@ fn expand_tilde(raw: &str, environment: &RootEnvironment) -> Result<String, Path
 
 fn foreign_absolute_path(raw: &str) -> bool {
     let bytes = raw.as_bytes();
-    (bytes.len() >= 3
-        && bytes[0].is_ascii_alphabetic()
-        && bytes[1] == b':'
-        && matches!(bytes[2], b'/' | b'\\'))
+    (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
         || raw.starts_with("\\\\")
+        || raw.starts_with("\\\\?\\")
+        || raw.starts_with("\\\\.\\")
 }
 
 /// Performs purely lexical dot/dot-dot normalization without resolving links.
@@ -313,11 +316,17 @@ fn apply_metadata(mut path: PathBuf, metadata: &PathMetadata) -> Result<PathBuf,
             source,
         })?;
     }
+    if metadata.resolve_symlink && path.exists() {
+        path = fs::canonicalize(&path).map_err(|source| PathError::Io {
+            path: path.clone(),
+            source,
+        })?;
+    }
     if metadata.must_exist && !path.exists() {
         return Err(PathError::Missing(path));
     }
     if path.exists() {
-        let file_type = fs::metadata(&path)
+        let file_type = fs::symlink_metadata(&path)
             .map_err(|source| PathError::Io {
                 path: path.clone(),
                 source,
@@ -344,12 +353,6 @@ fn apply_metadata(mut path: PathBuf, metadata: &PathMetadata) -> Result<PathBuf,
                 })?;
             }
         }
-        if metadata.resolve_symlink {
-            path = fs::canonicalize(&path).map_err(|source| PathError::Io {
-                path: path.clone(),
-                source,
-            })?;
-        }
     }
     Ok(path)
 }
@@ -367,10 +370,14 @@ pub enum PathError {
     NonUnicodeVariable(String),
     #[error("current-user home directory is unavailable")]
     MissingHome,
+    #[error("current-user home directory is not valid Unicode")]
+    NonUnicodeHome,
     #[error("~other-user path expansion is unsupported")]
     OtherUserTilde,
     #[error("path uses an absolute syntax from a different host platform")]
     ForeignAbsolute,
+    #[error("relative path escapes its configured base: {0}")]
+    EscapesBase(PathBuf),
     #[error("required path does not exist: {0}")]
     Missing(PathBuf),
     #[error("path has the wrong filesystem type: {0}")]
@@ -416,6 +423,14 @@ mod tests {
             "%OTHER%"
         );
         assert!(expand_environment("$MISSING", &environment, ExpansionStyle::Unix).is_err());
+    }
+
+    #[test]
+    fn foreign_absolute_forms_are_rejected_before_native_parsing() {
+        assert!(super::foreign_absolute_path("C:relative"));
+        assert!(super::foreign_absolute_path("\\\\?\\C:\\temp"));
+        assert!(super::foreign_absolute_path("\\\\.\\pipe\\pokecon"));
+        assert!(super::foreign_absolute_path("\\\\server\\share"));
     }
 
     #[test]

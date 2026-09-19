@@ -1,12 +1,16 @@
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, Instant};
 
-use fs4::FileExt;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::settings::path::{PathError, canonical_identity};
 use crate::settings::roots::EffectiveRoots;
+
+const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+const LOCK_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// Domain-separated settings and venv lock paths.
 #[derive(Clone, Debug)]
@@ -68,6 +72,7 @@ impl LockManager {
             path: directory.to_path_buf(),
             source,
         })?;
+        set_private_permissions(directory, true)?;
         let lock_path = directory.join(format!("{}.lock", identity_hash(domain, target)?));
         let file = OpenOptions::new()
             .read(true)
@@ -79,15 +84,47 @@ impl LockManager {
                 path: lock_path.clone(),
                 source,
             })?;
-        FileExt::lock(&file).map_err(|source| LockError::Io {
-            path: lock_path.clone(),
-            source,
-        })?;
+        set_private_permissions(&lock_path, false)?;
+        let deadline = Instant::now() + LOCK_TIMEOUT;
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    if Instant::now() >= deadline {
+                        return Err(LockError::Timeout { path: lock_path });
+                    }
+                    thread::sleep(LOCK_POLL_INTERVAL);
+                }
+                Err(std::fs::TryLockError::Error(source)) => {
+                    return Err(LockError::Io {
+                        path: lock_path.clone(),
+                        source,
+                    });
+                }
+            }
+        }
         Ok(FileLockGuard {
             _file: file,
             path: lock_path,
         })
     }
+}
+
+fn set_private_permissions(path: &Path, directory: bool) -> Result<(), LockError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = if directory { 0o700 } else { 0o600 };
+        fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|source| {
+            LockError::Io {
+                path: path.to_path_buf(),
+                source,
+            }
+        })?;
+    }
+    #[cfg(not(unix))]
+    let _ = (path, directory);
+    Ok(())
 }
 
 fn identity_hash(domain: &str, target: &Path) -> Result<String, LockError> {
@@ -145,4 +182,6 @@ pub enum LockError {
         #[source]
         source: std::io::Error,
     },
+    #[error("timed out waiting for lock {path}")]
+    Timeout { path: PathBuf },
 }

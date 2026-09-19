@@ -113,7 +113,7 @@ impl CameraSettingsApplier {
         class: PatchClass,
         next: &CameraSettingsValues,
     ) -> Result<(), CameraError> {
-        if class == PatchClass::Camera {
+        if matches!(class, PatchClass::Camera | PatchClass::Profile) {
             self.manager.apply_config(next.config.clone())?;
         }
         self.manager.set_flip(next.flip);
@@ -179,21 +179,27 @@ impl RuntimeSettingsApplier for CameraSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
         let Ok(restored) = self.current.overlay(previous) else {
             tracing::error!(
                 diagnostic_id = "CAMERA_SETTINGS_ROLLBACK_INVALID",
                 "camera settings rollback values were invalid"
             );
-            return;
+            return Err("camera settings rollback values were invalid".to_owned());
         };
         if self.apply_values(class, &restored).is_ok() {
             self.current = restored;
+            Ok(())
         } else {
             tracing::error!(
                 diagnostic_id = "CAMERA_SETTINGS_ROLLBACK_FAILED",
                 "camera settings rollback could not restore the previous capture state"
             );
+            Err("camera settings rollback failed".to_owned())
         }
     }
 }
@@ -250,13 +256,15 @@ mod tests {
         applier.apply(PatchClass::Camera, &capture).unwrap();
         assert_eq!(manager.status().camera_fps, 24);
         assert_eq!(manager.status().camera_resolution, "1280x720");
-        applier.rollback(
-            PatchClass::Camera,
-            &BTreeMap::from([
-                ("camera.capture_fps".to_owned(), json!(30)),
-                ("camera.capture_resolution".to_owned(), json!("640x360")),
-            ]),
-        );
+        applier
+            .rollback(
+                PatchClass::Camera,
+                &BTreeMap::from([
+                    ("camera.capture_fps".to_owned(), json!(30)),
+                    ("camera.capture_resolution".to_owned(), json!("640x360")),
+                ]),
+            )
+            .expect("camera rollback must succeed");
         assert_eq!(manager.status().camera_resolution, "640x360");
 
         applier

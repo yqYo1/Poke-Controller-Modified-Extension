@@ -202,6 +202,11 @@ enum ActorCommand {
     },
 }
 
+struct StopOutcome {
+    result: Result<StopReport, ActorFailure>,
+    reaper: Option<JoinHandle<()>>,
+}
+
 /// One supervised worker generation. The process actor always owns and reaps
 /// the child, even when every external handle is dropped.
 pub struct ManagedWorker {
@@ -350,6 +355,7 @@ impl ManagedWorker {
 pub struct WorkerSupervisor {
     generations: Arc<GenerationManager>,
     workers: tokio::sync::Mutex<HashMap<WorkerKind, Arc<ManagedWorker>>>,
+    spawn_gates: tokio::sync::Mutex<HashMap<WorkerKind, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 impl WorkerSupervisor {
@@ -383,17 +389,28 @@ impl WorkerSupervisor {
         launch: WorkerLaunch,
         resources: Arc<dyn ResourceSafety>,
     ) -> Result<Arc<ManagedWorker>, SupervisorError> {
-        let mut workers = self.workers.lock().await;
-        if let Some(existing) = workers.get(&launch.kind) {
-            match existing.generation.phase() {
-                GenerationPhase::Running => return Ok(existing.clone()),
-                GenerationPhase::Stopping => return Err(SupervisorError::AlreadyStopping),
-                GenerationPhase::Stopped if launch.kind == WorkerKind::Dynamic => {
-                    return Err(SupervisorError::Generation(
-                        GenerationError::DynamicRestartForbidden,
-                    ));
+        let spawn_gate = {
+            let mut gates = self.spawn_gates.lock().await;
+            Arc::clone(
+                gates
+                    .entry(launch.kind)
+                    .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))),
+            )
+        };
+        let _spawn_guard = spawn_gate.lock().await;
+        {
+            let workers = self.workers.lock().await;
+            if let Some(existing) = workers.get(&launch.kind) {
+                match existing.generation.phase() {
+                    GenerationPhase::Running => return Ok(existing.clone()),
+                    GenerationPhase::Stopping => return Err(SupervisorError::AlreadyStopping),
+                    GenerationPhase::Stopped if launch.kind == WorkerKind::Dynamic => {
+                        return Err(SupervisorError::Generation(
+                            GenerationError::DynamicRestartForbidden,
+                        ));
+                    }
+                    GenerationPhase::Stopped => {}
                 }
-                GenerationPhase::Stopped => {}
             }
         }
 
@@ -428,8 +445,15 @@ impl WorkerSupervisor {
             }
         };
         let connection =
-            IpcConnection::spawn(stdout, stdin, ConnectionConfig::default(), resources)
-                .map_err(|error| SupervisorError::Process(error.to_string()))?;
+            match IpcConnection::spawn(stdout, stdin, ConnectionConfig::default(), resources) {
+                Ok(connection) => connection,
+                Err(error) => {
+                    self.generations
+                        .rollback_activation(launch.kind, &generation);
+                    reap_failed_launch(&mut child).await;
+                    return Err(SupervisorError::Process(error.to_string()));
+                }
+            };
         let (diagnostic_sender, diagnostic_receiver) = mpsc::channel(OOB_QUEUE_CAPACITY);
         let dropped_diagnostics = Arc::new(AtomicUsize::new(0));
         let stderr_task = tokio::spawn(read_stderr(
@@ -456,7 +480,10 @@ impl WorkerSupervisor {
             diagnostics: Mutex::new(Some(diagnostic_receiver)),
             dropped_diagnostics,
         });
-        workers.insert(launch.kind, worker.clone());
+        self.workers
+            .lock()
+            .await
+            .insert(launch.kind, worker.clone());
         Ok(worker)
     }
 
@@ -476,9 +503,10 @@ impl WorkerSupervisor {
             .cloned()
             .collect::<Vec<_>>();
         let mut tasks = JoinSet::new();
+        let mut task_kinds = HashMap::new();
         for worker in workers {
-            tasks.spawn(async move {
-                let kind = worker.kind();
+            let kind = worker.kind();
+            let task = tasks.spawn(async move {
                 let deadline = if kind == WorkerKind::Dynamic {
                     Duration::from_secs(2)
                 } else {
@@ -491,15 +519,19 @@ impl WorkerSupervisor {
                         .await,
                 )
             });
+            task_kinds.insert(task.id(), kind);
         }
         let mut reports = Vec::new();
-        while let Some(result) = tasks.join_next().await {
+        while let Some(result) = tasks.join_next_with_id().await {
             match result {
-                Ok(report) => reports.push(report),
-                Err(error) => reports.push((
-                    WorkerKind::Script,
-                    Err(SupervisorError::Process(error.to_string())),
-                )),
+                Ok((id, report)) => {
+                    task_kinds.remove(&id);
+                    reports.push(report);
+                }
+                Err(error) => {
+                    let kind = task_kinds.remove(&error.id()).unwrap_or(WorkerKind::Script);
+                    reports.push((kind, Err(SupervisorError::Process(error.to_string()))));
+                }
             }
         }
         reports
@@ -517,7 +549,7 @@ fn build_command(launch: &WorkerLaunch) -> Command {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(false);
+        .kill_on_drop(true);
     if let Some(directory) = &launch.current_directory {
         command.current_dir(directory);
     }
@@ -526,7 +558,7 @@ fn build_command(launch: &WorkerLaunch) -> Command {
 
 async fn reap_failed_launch(child: &mut Child) {
     let _kill_result = child.start_kill();
-    let _wait_result = child.wait().await;
+    let _wait_result = timeout(Duration::from_secs(2), child.wait()).await;
 }
 
 async fn read_stderr(
@@ -568,11 +600,19 @@ async fn process_actor(
         }
         command = commands.recv() => {
             let Some(ActorCommand::Stop { purpose, deadline, response }) = command else {
+                let stop = stop_child(
+                    child,
+                    &connection,
+                    &generation,
+                    StopPurpose::ApplicationShutdown,
+                    Duration::from_secs(2),
+                )
+                .await;
+                if let Some(reaper) = stop.reaper {
+                    let _ = reaper.await;
+                }
                 return finish_process_actor(
-                    child.wait()
-                        .await
-                        .map(ExitReport::from)
-                        .map_err(|error| ActorFailure(error.to_string())),
+                    stop.result.map(|report| report.exit),
                     connection,
                     generation,
                     exit_sender,
@@ -580,15 +620,23 @@ async fn process_actor(
                 )
                 .await;
             };
-            match stop_child(
-                &mut child,
-                &connection,
-                &generation,
-                purpose,
-                deadline,
-            )
-            .await
-            {
+            let stop = stop_child(child, &connection, &generation, purpose, deadline).await;
+            if let Some(reaper) = stop.reaper {
+                let failure = stop.result.err().unwrap_or_else(|| {
+                    ActorFailure("worker could not be reaped after forced termination".to_owned())
+                });
+                let _response_result = response.send(Err(failure.clone()));
+                let _ = reaper.await;
+                return finish_process_actor(
+                    Err(failure),
+                    connection,
+                    generation,
+                    exit_sender,
+                    stderr_task,
+                )
+                .await;
+            }
+            match stop.result {
                 Ok(report) => {
                     let exit = report.exit.clone();
                     let _response_result = response.send(Ok(report));
@@ -621,16 +669,19 @@ async fn finish_process_actor(
 }
 
 async fn stop_child(
-    child: &mut Child,
+    mut child: Child,
     connection: &IpcConnection,
     generation: &WorkerGeneration,
     purpose: StopPurpose,
     deadline: Duration,
-) -> Result<StopReport, ActorFailure> {
+) -> StopOutcome {
     if generation.kind() == WorkerKind::Dynamic && purpose == StopPurpose::ProfileSwitch {
-        return Err(ActorFailure(
-            "profile switching cannot stop the dynamic worker".to_owned(),
-        ));
+        return StopOutcome {
+            result: Err(ActorFailure(
+                "profile switching cannot stop the dynamic worker".to_owned(),
+            )),
+            reaper: None,
+        };
     }
     generation.begin_stopping();
     connection.force_release_resources();
@@ -652,41 +703,79 @@ async fn stop_child(
     // work for this stopping generation and guarantees that read observes EOF.
     connection.close().await;
 
-    if let Some(status) = child
-        .try_wait()
-        .map_err(|error| ActorFailure(error.to_string()))?
-    {
-        return Ok(StopReport {
-            exit: status.into(),
-            cooperative_acknowledged,
-            forced: false,
-        });
+    match child.try_wait() {
+        Ok(Some(status)) => {
+            return StopOutcome {
+                result: Ok(StopReport {
+                    exit: status.into(),
+                    cooperative_acknowledged,
+                    forced: false,
+                }),
+                reaper: None,
+            };
+        }
+        Ok(None) => {}
+        Err(error) => {
+            return StopOutcome {
+                result: Err(ActorFailure(error.to_string())),
+                reaper: None,
+            };
+        }
     }
 
-    if Instant::now() < deadline_at
-        && let Ok(status) = timeout_at(deadline_at, child.wait()).await
-    {
-        return status
-            .map(|status| StopReport {
+    if Instant::now() < deadline_at {
+        match timeout_at(deadline_at, child.wait()).await {
+            Ok(Ok(status)) => {
+                return StopOutcome {
+                    result: Ok(StopReport {
+                        exit: status.into(),
+                        cooperative_acknowledged,
+                        forced: false,
+                    }),
+                    reaper: None,
+                };
+            }
+            Ok(Err(error)) => {
+                return StopOutcome {
+                    result: Err(ActorFailure(error.to_string())),
+                    reaper: None,
+                };
+            }
+            Err(_) => {}
+        }
+    }
+
+    if let Err(error) = child.start_kill() {
+        return StopOutcome {
+            result: Err(ActorFailure(error.to_string())),
+            reaper: None,
+        };
+    }
+    match timeout(Duration::from_secs(2), child.wait()).await {
+        Ok(Ok(status)) => StopOutcome {
+            result: Ok(StopReport {
                 exit: status.into(),
                 cooperative_acknowledged,
-                forced: false,
-            })
-            .map_err(|error| ActorFailure(error.to_string()));
+                forced: true,
+            }),
+            reaper: None,
+        },
+        Ok(Err(error)) => StopOutcome {
+            result: Err(ActorFailure(error.to_string())),
+            reaper: None,
+        },
+        Err(_) => {
+            let reaper = tokio::spawn(async move {
+                let _ = child.wait().await;
+            });
+            StopOutcome {
+                result: Err(ActorFailure(
+                    "worker did not exit after forced termination deadline".to_owned(),
+                )),
+                reaper: Some(reaper),
+            }
+        }
     }
-
-    child
-        .start_kill()
-        .map_err(|error| ActorFailure(error.to_string()))?;
-    let status = child
-        .wait()
-        .await
-        .map_err(|error| ActorFailure(error.to_string()))?;
-    Ok(StopReport {
-        exit: status.into(),
-        cooperative_acknowledged,
-        forced: true,
-    })
 }
 
 async fn finish_stderr_task(mut task: JoinHandle<()>) {

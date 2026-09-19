@@ -66,8 +66,20 @@ impl RuntimeSettingsApplier for CompositeSettingsApplier {
             .collect::<BTreeMap<_, _>>();
         for index in 0..self.adapters.len() {
             if let Err(error) = self.adapters[index].apply(class, changes) {
+                let mut rollback_error = None;
                 for applied in (0..index).rev() {
-                    self.adapters[applied].rollback(class, &previous);
+                    if let Err(error) = self.adapters[applied].rollback(class, &previous)
+                        && rollback_error.is_none()
+                    {
+                        rollback_error = Some(error);
+                    }
+                }
+                if let Some(error) = rollback_error {
+                    tracing::error!(
+                        diagnostic_id = "SETTINGS_COMPOSITE_ROLLBACK_FAILED",
+                        error = %error,
+                        "a runtime settings adapter could not be rolled back"
+                    );
                 }
                 return Err(error);
             }
@@ -85,15 +97,30 @@ impl RuntimeSettingsApplier for CompositeSettingsApplier {
                 first_error = Some(error);
             }
         }
+        if let Some(error) = first_error {
+            return Err(error);
+        }
         self.current.extend(changes.clone());
-        first_error.map_or(Ok(()), Err)
+        Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        let mut first_error = None;
         for adapter in self.adapters.iter_mut().rev() {
-            adapter.rollback(class, previous);
+            if let Err(error) = adapter.rollback(class, previous)
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
         }
-        self.current.extend(previous.clone());
+        if first_error.is_none() {
+            self.current.extend(previous.clone());
+        }
+        first_error.map_or(Ok(()), Err)
     }
 }
 
@@ -113,7 +140,7 @@ impl RuntimeSettingsApplier for HostSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class == PatchClass::Profile {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
             return Ok(());
         }
         self.host
@@ -122,13 +149,22 @@ impl RuntimeSettingsApplier for HostSettingsApplier {
             .map_err(|_error| "application settings projection failed".to_owned())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Profile && self.host.apply_settings(previous).is_err() {
-            tracing::error!(
-                diagnostic_id = "HOST_SETTINGS_ROLLBACK_FAILED",
-                "application settings projection could not be restored"
-            );
+    fn reconcile(&mut self, changes: &BTreeMap<String, Value>) -> Result<(), String> {
+        self.apply(PatchClass::Profile, changes)
+    }
+
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
+            return Ok(());
         }
+        self.host
+            .apply_settings(previous)
+            .map(|_| ())
+            .map_err(|_error| "application settings projection rollback failed".to_owned())
     }
 }
 
@@ -148,7 +184,7 @@ impl RuntimeSettingsApplier for DesktopSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class != PatchClass::Ordinary {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
             return Ok(());
         }
         if let Some(value) = changes.get("ui.desktop.close_behavior") {
@@ -162,16 +198,23 @@ impl RuntimeSettingsApplier for DesktopSettingsApplier {
         self.apply(PatchClass::Ordinary, changes)
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Ordinary {
-            return;
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
+            return Ok(());
         }
-        if let Some(behavior) = previous
+        let Some(behavior) = previous
             .get("ui.desktop.close_behavior")
-            .and_then(|value| parse_close_behavior(value).ok())
-        {
-            self.settings.set_close_behavior(behavior);
-        }
+            .map(parse_close_behavior)
+            .transpose()?
+        else {
+            return Ok(());
+        };
+        self.settings.set_close_behavior(behavior);
+        Ok(())
     }
 }
 
@@ -223,7 +266,11 @@ impl NotificationSettingsApplier {
 
     fn update(&self, values: &BTreeMap<String, Value>) -> Result<(), String> {
         let config = notification_config(values)?;
-        run_sync(&self.runtime, self.service.update_config(config));
+        let service = Arc::clone(&self.service);
+        run_sync(
+            &self.runtime,
+            async move { service.update_config(config).await },
+        )?;
         Ok(())
     }
 }
@@ -234,7 +281,7 @@ impl RuntimeSettingsApplier for NotificationSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class != PatchClass::Ordinary
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile)
             || !changes.keys().any(|id| id.starts_with("notifications."))
         {
             return Ok(());
@@ -258,22 +305,28 @@ impl RuntimeSettingsApplier for NotificationSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Ordinary
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile)
             || !previous.keys().any(|id| id.starts_with("notifications."))
         {
-            return;
+            return Ok(());
         }
         let mut restored = self.values.clone();
         restored.extend(previous.clone());
-        if self.update(&restored).is_ok() {
-            self.values = restored;
-        } else {
-            tracing::error!(
-                diagnostic_id = "NOTIFICATION_SETTINGS_ROLLBACK_FAILED",
-                "notification settings could not be restored"
-            );
-        }
+        self.update(&restored)
+            .map(|()| self.values = restored)
+            .map_err(|error| {
+                tracing::error!(
+                    diagnostic_id = "NOTIFICATION_SETTINGS_ROLLBACK_FAILED",
+                    error = %error,
+                    "notification settings could not be restored"
+                );
+                error
+            })
     }
 }
 
@@ -304,7 +357,7 @@ impl RuntimeSettingsApplier for RealtimeSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class != PatchClass::Ordinary
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile)
             || !changes.keys().any(|id| {
                 matches!(
                     id.as_str(),
@@ -340,20 +393,37 @@ impl RuntimeSettingsApplier for RealtimeSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Ordinary {
-            return;
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
+            return Ok(());
+        }
+        if !previous.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "stun_server" | "webrtc.auto_recover" | "webrtc.recovery_probe_interval_sec"
+            )
+        }) {
+            return Ok(());
         }
         let mut restored = self.values.clone();
         restored.extend(previous.clone());
-        if let Ok(settings) = realtime_settings(&restored) {
-            self.sender.send_replace(settings);
-            self.values = restored;
-        } else {
-            tracing::error!(
-                diagnostic_id = "REALTIME_SETTINGS_ROLLBACK_FAILED",
-                "realtime settings could not be restored"
-            );
+        match realtime_settings(&restored) {
+            Ok(settings) => {
+                self.sender.send_replace(settings);
+                self.values = restored;
+                Ok(())
+            }
+            Err(_error) => {
+                tracing::error!(
+                    diagnostic_id = "REALTIME_SETTINGS_ROLLBACK_FAILED",
+                    "realtime settings could not be restored"
+                );
+                Err("realtime settings rollback failed".to_owned())
+            }
         }
     }
 }
@@ -385,7 +455,7 @@ impl RuntimeSettingsApplier for WebSocketSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class != PatchClass::Ordinary
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile)
             || !changes.keys().any(|id| {
                 matches!(
                     id.as_str(),
@@ -421,20 +491,37 @@ impl RuntimeSettingsApplier for WebSocketSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Ordinary {
-            return;
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Ordinary | PatchClass::Profile) {
+            return Ok(());
+        }
+        if !previous.keys().any(|id| {
+            matches!(
+                id.as_str(),
+                "websocket.ping_interval_sec" | "websocket.pong_timeout_sec"
+            )
+        }) {
+            return Ok(());
         }
         let mut restored = self.values.clone();
         restored.extend(previous.clone());
-        self.values = restored;
-        if let Ok(settings) = websocket_settings(&self.values) {
-            self.sender.send_replace(settings);
-        } else {
-            tracing::error!(
-                diagnostic_id = "WEBSOCKET_SETTINGS_ROLLBACK_FAILED",
-                "websocket settings could not be restored"
-            );
+        match websocket_settings(&restored) {
+            Ok(settings) => {
+                self.sender.send_replace(settings);
+                self.values = restored;
+                Ok(())
+            }
+            Err(_error) => {
+                tracing::error!(
+                    diagnostic_id = "WEBSOCKET_SETTINGS_ROLLBACK_FAILED",
+                    "websocket settings could not be restored"
+                );
+                Err("websocket settings rollback failed".to_owned())
+            }
         }
     }
 }
@@ -522,15 +609,24 @@ fn positive_integer(values: &BTreeMap<String, Value>, id: &str) -> Result<u64, S
         .ok_or_else(|| "runtime setting has an invalid value".to_owned())
 }
 
-fn run_sync<F>(runtime: &Handle, future: F)
+fn run_sync<F>(runtime: &Handle, future: F) -> Result<(), String>
 where
-    F: Future<Output = ()>,
+    F: Future<Output = ()> + Send + 'static,
 {
-    if Handle::try_current().is_ok() && runtime.runtime_flavor() == RuntimeFlavor::MultiThread {
-        tokio::task::block_in_place(|| runtime.block_on(future));
+    const TIMEOUT: Duration = Duration::from_secs(10);
+    let result = if Handle::try_current().is_ok()
+        && runtime.runtime_flavor() == RuntimeFlavor::MultiThread
+    {
+        tokio::task::block_in_place(|| runtime.block_on(tokio::time::timeout(TIMEOUT, future)))
+    } else if Handle::try_current().is_ok() {
+        let runtime = runtime.clone();
+        std::thread::spawn(move || runtime.block_on(tokio::time::timeout(TIMEOUT, future)))
+            .join()
+            .map_err(|_| "notification runtime bridge panicked".to_owned())?
     } else {
-        runtime.block_on(future);
-    }
+        runtime.block_on(tokio::time::timeout(TIMEOUT, future))
+    };
+    result.map_err(|_| "notification runtime update timed out".to_owned())
 }
 
 #[cfg(test)]
@@ -593,13 +689,15 @@ mod tests {
             .unwrap();
         assert_eq!(settings.close_behavior(), CloseBehavior::KeepBackend);
 
-        applier.rollback(
-            PatchClass::Ordinary,
-            &BTreeMap::from([(
-                "ui.desktop.close_behavior".to_owned(),
-                Value::String("ask".to_owned()),
-            )]),
-        );
+        applier
+            .rollback(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "ui.desktop.close_behavior".to_owned(),
+                    Value::String("ask".to_owned()),
+                )]),
+            )
+            .expect("desktop rollback must succeed");
         assert_eq!(settings.close_behavior(), CloseBehavior::Ask);
     }
 
@@ -698,13 +796,15 @@ mod tests {
             )
             .unwrap();
         assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(12));
-        applier.rollback(
-            PatchClass::Ordinary,
-            &BTreeMap::from([(
-                "websocket.ping_interval_sec".to_owned(),
-                Value::Number(serde_json::Number::from(15)),
-            )]),
-        );
+        applier
+            .rollback(
+                PatchClass::Ordinary,
+                &BTreeMap::from([(
+                    "websocket.ping_interval_sec".to_owned(),
+                    Value::Number(serde_json::Number::from(15)),
+                )]),
+            )
+            .expect("websocket rollback must succeed");
         assert_eq!(receiver.borrow().ping_interval(), Duration::from_secs(15));
         assert_eq!(receiver.borrow().pong_timeout(), Duration::from_secs(10));
     }

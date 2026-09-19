@@ -88,6 +88,8 @@ pub enum DynamicStartupError {
     Supervisor(#[from] SupervisorError),
     #[error(transparent)]
     Client(#[from] DynamicClientError),
+    #[error("dynamic worker initialization timed out")]
+    InitializationTimedOut,
 }
 
 /// Live handles for the sole persistent dynamic worker generation.
@@ -134,7 +136,25 @@ impl DynamicRuntime {
         let Some(client) = self.client.as_ref() else {
             return Ok(());
         };
-        let result = client.emit("AppStartupPost").await?;
+        let result = match timeout(DYNAMIC_EVENT_TIMEOUT, client.emit("AppStartupPost")).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(error)) => {
+                tracing::error!(
+                    event = "AppStartupPost",
+                    error = %error,
+                    "dynamic startup-post event failed"
+                );
+                return Ok(());
+            }
+            Err(_) => {
+                tracing::error!(
+                    event = "AppStartupPost",
+                    timeout_ms = DYNAMIC_EVENT_TIMEOUT.as_millis(),
+                    "dynamic startup-post event timed out"
+                );
+                return Ok(());
+            }
+        };
         if result.cancelled {
             tracing::warn!(
                 event = "AppStartupPost",
@@ -172,6 +192,7 @@ impl DynamicRuntime {
 
     /// Reaps the already-stopping dynamic worker by the fixed deadline.
     pub async fn shutdown_worker(mut self) {
+        self.host.begin_stopping();
         log_stop_result(
             self.worker
                 .stop(StopPurpose::ApplicationShutdown, DYNAMIC_STOP_TIMEOUT)
@@ -304,18 +325,24 @@ async fn start_dynamic(
     };
     let log_task = client.take_logs().map(spawn_log_receiver);
 
-    let initialized = match client
-        .initialize(&DynamicInitializeRequest {
+    let initialized = match timeout(
+        DYNAMIC_EVENT_TIMEOUT,
+        client.initialize(&DynamicInitializeRequest {
             config_root: before_dynamic.roots.config.clone(),
             home: dynamic_home(&request.environment),
             primary,
-        })
-        .await
+        }),
+    )
+    .await
     {
-        Ok(initialized) => initialized,
-        Err(error) => {
+        Ok(Ok(initialized)) => initialized,
+        Ok(Err(error)) => {
             stop_failed_startup(&worker, &host, Some(client), log_task, diagnostic_task).await;
             return Err(error.into());
+        }
+        Err(_) => {
+            stop_failed_startup(&worker, &host, Some(client), log_task, diagnostic_task).await;
+            return Err(DynamicStartupError::InitializationTimedOut);
         }
     };
     if let Some(load) = initialized.startup_load.as_ref()
@@ -613,9 +640,9 @@ async fn finish_worker_receivers(
         .as_ref()
         .map_or(0, |client| client.dropped_log_count());
     let dropped_diagnostics = worker.dropped_diagnostic_count();
-    drop(client);
     finish_receiver_task(log_task).await;
     finish_receiver_task(diagnostic_task).await;
+    drop(client);
     if dropped_logs > 0 || dropped_diagnostics > 0 {
         tracing::warn!(
             worker_kind = "dynamic",

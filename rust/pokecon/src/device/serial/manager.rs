@@ -646,6 +646,8 @@ pub enum SerialError {
     ReconnectExhausted,
     #[error("serial reconnect is already in progress")]
     ReconnectInProgress,
+    #[error("synchronous serial settings operation timed out")]
+    SynchronousBridgeTimedOut,
     #[error("synchronous settings bridge requires the multithread Tokio runtime")]
     SynchronousBridgeUnavailable,
 }

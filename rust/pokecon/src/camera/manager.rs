@@ -1,5 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError, sync_channel};
+use std::sync::mpsc::{
+    Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError, sync_channel,
+};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -75,7 +77,7 @@ struct WriterOwnership {
 struct ManagerInner {
     backend: Arc<dyn CameraBackend>,
     ring: SharedFrameRing,
-    commands: Sender<WriterCommand>,
+    commands: SyncSender<WriterCommand>,
     status: Arc<Mutex<CameraRuntimeStatus>>,
     status_events: watch::Sender<CameraRuntimeStatus>,
     flip: Arc<AtomicU8>,
@@ -134,7 +136,9 @@ impl CameraManager {
             watch::channel(CameraRuntimeStatus::closed(&config));
         let flip = Arc::new(AtomicU8::new(encode_flip(flip)));
         let frames = LatestFrameSource::new();
-        let (commands, command_receiver) = std::sync::mpsc::channel();
+        // A command that timed out at the caller must not remain in an
+        // unbounded queue and retain its response channel indefinitely.
+        let (commands, command_receiver) = sync_channel(1);
         let (stopped_sender, stopped) = std::sync::mpsc::channel();
         let (startup_sender, startup) = sync_channel(1);
         let writer_backend = backend.clone();
@@ -162,12 +166,7 @@ impl CameraManager {
                 let _ = stopped_sender.send(());
             })
             .map_err(|_| CameraError::CommandChannelClosed)?;
-        // The inner result is intentionally status-only: camera-open failure
-        // must not abort application startup.
-        let _startup_result = startup
-            .recv()
-            .map_err(|_| CameraError::CommandChannelClosed)?;
-        Ok(Self {
+        let manager = Self {
             inner: Arc::new(ManagerInner {
                 backend,
                 ring,
@@ -181,7 +180,13 @@ impl CameraManager {
                     stopped: Some(stopped),
                 }),
             }),
-        })
+        };
+        // The inner result is intentionally status-only: camera-open failure
+        // must not abort application startup. A native open/read that exceeds
+        // the startup deadline also must not block the application forever; the
+        // writer publishes the eventual status when it completes.
+        let _ = startup.recv_timeout(CAMERA_COMMAND_TIMEOUT);
+        Ok(manager)
     }
 
     #[must_use]
@@ -285,20 +290,25 @@ impl CameraManager {
     /// Returns [`UnstoppedCameraWriter`] when the writer remains alive.
     pub fn shutdown(&self, timeout: Duration) -> Result<(), UnstoppedCameraWriter> {
         let mut ownership = self.inner.lock_writer();
-        let Some(join) = ownership.join.take() else {
+        if ownership.join.is_none() && ownership.stopped.is_none() {
             return Ok(());
-        };
-        let Some(stopped) = ownership.stopped.take() else {
+        }
+        if let Err(TrySendError::Full(_)) = self.inner.commands.try_send(WriterCommand::Shutdown) {
             return Err(UnstoppedCameraWriter {
-                ring: self.inner.ring.clone(),
-                join: Some(join),
-                stopped: None,
+                manager: Arc::clone(&self.inner),
+            });
+        }
+        let Some(stopped) = ownership.stopped.as_ref() else {
+            return Err(UnstoppedCameraWriter {
+                manager: Arc::clone(&self.inner),
             });
         };
-        let _ = self.inner.commands.send(WriterCommand::Shutdown);
         match stopped.recv_timeout(timeout) {
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {
-                if join.join().is_err() {
+                let _ = ownership.stopped.take();
+                let join = ownership.join.take();
+                drop(ownership);
+                if join.is_some_and(|join| join.join().is_err()) {
                     tracing::error!(
                         diagnostic_id = "CAMERA_WRITER_PANICKED",
                         "camera writer terminated unexpectedly"
@@ -307,9 +317,7 @@ impl CameraManager {
                 Ok(())
             }
             Err(RecvTimeoutError::Timeout) => Err(UnstoppedCameraWriter {
-                ring: self.inner.ring.clone(),
-                join: Some(join),
-                stopped: Some(stopped),
+                manager: Arc::clone(&self.inner),
             }),
         }
     }
@@ -322,8 +330,11 @@ impl CameraManager {
         let cancelled = Arc::new(AtomicBool::new(false));
         self.inner
             .commands
-            .send(command(response, Arc::clone(&cancelled)))
-            .map_err(|_| CameraError::CommandChannelClosed)?;
+            .try_send(command(response, Arc::clone(&cancelled)))
+            .map_err(|error| match error {
+                TrySendError::Full(_) => CameraError::CommandTimedOut,
+                TrySendError::Disconnected(_) => CameraError::CommandChannelClosed,
+            })?;
         match receiver.recv_timeout(CAMERA_COMMAND_TIMEOUT) {
             Ok(result) => result,
             Err(RecvTimeoutError::Disconnected) => Err(CameraError::CommandChannelClosed),
@@ -337,13 +348,7 @@ impl CameraManager {
 
 /// Ownership returned when a driver read prevents bounded shutdown.
 pub struct UnstoppedCameraWriter {
-    ring: SharedFrameRing,
-    join: Option<JoinHandle<()>>,
-    #[allow(
-        dead_code,
-        reason = "the receiver is retained for the explicit wait API even when callers only keep the mapping guard"
-    )]
-    stopped: Option<Receiver<()>>,
+    manager: Arc<ManagerInner>,
 }
 
 impl std::fmt::Debug for UnstoppedCameraWriter {
@@ -351,7 +356,7 @@ impl std::fmt::Debug for UnstoppedCameraWriter {
         formatter
             .debug_struct("UnstoppedCameraWriter")
             .field("writer_finished", &self.is_finished())
-            .field("mapping", &self.ring.descriptor())
+            .field("mapping", &self.manager.ring.descriptor())
             .finish_non_exhaustive()
     }
 }
@@ -359,12 +364,16 @@ impl std::fmt::Debug for UnstoppedCameraWriter {
 impl UnstoppedCameraWriter {
     #[must_use]
     pub fn mapping_descriptor(&self) -> MappingDescriptor {
-        self.ring.descriptor()
+        self.manager.ring.descriptor()
     }
 
     #[must_use]
     pub fn is_finished(&self) -> bool {
-        self.join.as_ref().is_none_or(JoinHandle::is_finished)
+        self.manager
+            .lock_writer()
+            .join
+            .as_ref()
+            .is_none_or(JoinHandle::is_finished)
     }
 
     /// Waits without a deadline after an external driver/device recovery.
@@ -372,11 +381,12 @@ impl UnstoppedCameraWriter {
         dead_code,
         reason = "callers may choose retention-only shutdown while this explicit blocking recovery API remains available"
     )]
-    pub fn wait(mut self) {
-        if let Some(stopped) = self.stopped.take() {
+    pub fn wait(self) {
+        let mut ownership = self.manager.lock_writer();
+        if let Some(stopped) = ownership.stopped.take() {
             let _ = stopped.recv();
         }
-        if let Some(join) = self.join.take() {
+        if let Some(join) = ownership.join.take() {
             let _ = join.join();
         }
     }
@@ -526,12 +536,18 @@ impl WriterState {
             });
         if let Ok((effective, mut frame)) = attempt {
             frame.apply_flip(decode_flip(self.flip.load(Ordering::Acquire)));
-            if let Ok(publication) = self.ring.publish(&frame) {
-                self.frames.publish(publication.frame_sequence, frame);
-                self.desired = replacement;
-                self.set_status(CameraRuntimeStatus::opened(&effective, None));
-                return Ok(());
+            match self.ring.publish(&frame) {
+                Ok(publication) => self.frames.publish(publication.frame_sequence, frame),
+                Err(RingError::NoWritableSlot) => {
+                    // The driver transaction succeeded. A transient reader
+                    // lease must not cause a successful reconfigure to be
+                    // rolled back; the next frame will publish normally.
+                }
+                Err(_) => return self.rollback_same_handle(&previous),
             }
+            self.desired = replacement;
+            self.set_status(CameraRuntimeStatus::opened(&effective, None));
+            return Ok(());
         }
         self.rollback_same_handle(&previous)
     }

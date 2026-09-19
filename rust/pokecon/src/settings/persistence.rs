@@ -8,7 +8,7 @@ use atomic_write_file::OpenOptions;
 use serde_json::Value as JsonValue;
 use thiserror::Error;
 use toml::Value as TomlValue;
-use toml_edit::{Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
+use toml_edit::{Array, ArrayOfTables, DocumentMut, InlineTable, Item, Key, Table, Value};
 
 use crate::settings::lock::{LockError, LockManager};
 
@@ -53,8 +53,12 @@ impl TomlStore {
         for (dotted_path, value) in updates {
             update_leaf(&mut document.document, dotted_path, value)?;
         }
+        let serialized = document.document.to_string();
+        // Validate the complete post-update document before replacing the
+        // previous file. A format-preserving parse alone accepts documents
+        // that the semantic TOML deserializer rejects.
+        document.parsed = parse_document(path, &serialized, document.document.clone())?;
         write_document(path, &document.document)?;
-        document.parsed = parse_toml_value(path, &document.document.to_string())?;
         Ok(document)
     }
 }
@@ -88,8 +92,8 @@ impl SettingsDocument {
     #[must_use]
     pub fn get(&self, dotted_path: &str) -> Option<&TomlValue> {
         let mut value = &self.parsed;
-        for segment in dotted_path.split('.') {
-            value = value.get(segment)?;
+        for segment in Key::parse(dotted_path).ok()? {
+            value = value.get(segment.get())?;
         }
         Some(value)
     }
@@ -114,15 +118,29 @@ impl SettingsDocument {
                     }
                     for (key, child) in table {
                         let path = if prefix.is_empty() {
-                            key.clone()
+                            format_key_segment(key)
                         } else {
-                            format!("{prefix}.{key}")
+                            format!("{prefix}.{}", format_key_segment(key))
                         };
                         visit(child, &path, known, paths);
                     }
                 }
-                TomlValue::Array(_)
-                | TomlValue::String(_)
+                TomlValue::Array(values) => {
+                    let mut visited_table = false;
+                    for (index, child) in values.iter().enumerate() {
+                        if matches!(child, TomlValue::Table(_)) {
+                            visited_table = true;
+                            visit(child, &format!("{prefix}[{index}]"), known, paths);
+                        } else {
+                            paths.push(prefix.to_owned());
+                            return;
+                        }
+                    }
+                    if !visited_table && !prefix.is_empty() {
+                        paths.push(prefix.to_owned());
+                    }
+                }
+                TomlValue::String(_)
                 | TomlValue::Integer(_)
                 | TomlValue::Float(_)
                 | TomlValue::Boolean(_)
@@ -157,8 +175,8 @@ fn read_document(path: &Path) -> Result<SettingsDocument, PersistenceError> {
     };
     let document = source
         .parse::<DocumentMut>()
-        .map_err(|_| PersistenceError::InvalidToml(path.to_path_buf()))?;
-    let parsed = parse_toml_value(path, &source)?;
+        .map_err(|error| invalid_toml(path, &source, error.span()))?;
+    let parsed = parse_document(path, &source, document.clone())?;
     Ok(SettingsDocument {
         path: path.to_path_buf(),
         document,
@@ -166,13 +184,40 @@ fn read_document(path: &Path) -> Result<SettingsDocument, PersistenceError> {
     })
 }
 
-fn parse_toml_value(path: &Path, source: &str) -> Result<TomlValue, PersistenceError> {
+fn parse_document(
+    path: &Path,
+    source: &str,
+    document: DocumentMut,
+) -> Result<TomlValue, PersistenceError> {
     if source.trim().is_empty() {
         return Ok(TomlValue::Table(toml::map::Map::new()));
     }
-    source
-        .parse::<TomlValue>()
-        .map_err(|_| PersistenceError::InvalidToml(path.to_path_buf()))
+    toml_edit::de::from_document(document).map_err(|error| invalid_toml(path, source, error.span()))
+}
+
+fn invalid_toml(
+    path: &Path,
+    source: &str,
+    span: Option<std::ops::Range<usize>>,
+) -> PersistenceError {
+    let location = span
+        .map(|span| {
+            let offset = span.start.min(source.len());
+            let line = source[..offset]
+                .bytes()
+                .filter(|byte| *byte == b'\n')
+                .count()
+                + 1;
+            let column = source[..offset]
+                .rsplit_once('\n')
+                .map_or(offset + 1, |(_, remainder)| remainder.len() + 1);
+            format!(" (line {line}, column {column})")
+        })
+        .unwrap_or_default();
+    PersistenceError::InvalidToml {
+        path: path.to_path_buf(),
+        location,
+    }
 }
 
 fn update_leaf(
@@ -180,37 +225,85 @@ fn update_leaf(
     dotted_path: &str,
     value: &JsonValue,
 ) -> Result<(), PersistenceError> {
-    let segments = dotted_path.split('.').collect::<Vec<_>>();
-    let (leaf, parents) = segments
-        .split_last()
-        .ok_or_else(|| PersistenceError::InvalidPath(dotted_path.to_owned()))?;
-    if leaf.is_empty() || parents.iter().any(|segment| segment.is_empty()) {
+    let segments = Key::parse(dotted_path)
+        .map_err(|_| PersistenceError::InvalidPath(dotted_path.to_owned()))?
+        .into_iter()
+        .map(|segment| segment.get().to_owned())
+        .collect::<Vec<_>>();
+    if segments.is_empty() {
         return Err(PersistenceError::InvalidPath(dotted_path.to_owned()));
     }
-    let mut table = document.as_table_mut();
-    for segment in parents {
-        if !table.contains_key(segment) {
-            let mut nested = Table::new();
-            nested.set_implicit(true);
-            table.insert(segment, Item::Table(nested));
+    update_table(document.as_table_mut(), &segments, dotted_path, value)
+}
+
+fn update_table(
+    table: &mut Table,
+    segments: &[String],
+    dotted_path: &str,
+    value: &JsonValue,
+) -> Result<(), PersistenceError> {
+    let (head, rest) = segments
+        .split_first()
+        .ok_or_else(|| PersistenceError::InvalidPath(dotted_path.to_owned()))?;
+    if rest.is_empty() {
+        if value.is_null() {
+            table.remove(head);
+        } else if let Some(existing) = table.get_mut(head) {
+            replace_item(existing, value)?;
+        } else {
+            table.insert(head, json_to_item(value)?);
         }
-        table = table
-            .get_mut(segment)
-            .and_then(Item::as_table_mut)
-            .ok_or_else(|| PersistenceError::PathCollision(dotted_path.to_owned()))?;
+        return Ok(());
     }
-    if value.is_null() {
-        table.remove(leaf);
-    } else if let Some(existing) = table.get_mut(leaf) {
+    if !table.contains_key(head) {
+        let mut nested = Table::new();
+        nested.set_implicit(true);
+        table.insert(head, Item::Table(nested));
+    }
+    let item = table
+        .get_mut(head)
+        .ok_or_else(|| PersistenceError::PathCollision(dotted_path.to_owned()))?;
+    if let Some(child) = item.as_table_mut() {
+        return update_table(child, rest, dotted_path, value);
+    }
+    if let Some(inline) = item.as_value().and_then(Value::as_inline_table).cloned() {
+        let mut promoted = Table::new();
+        for (key, child) in &inline {
+            promoted.insert(key, Item::Value(child.clone()));
+        }
+        *item = Item::Table(promoted);
+        return update_table(
+            item.as_table_mut()
+                .ok_or_else(|| PersistenceError::PathCollision(dotted_path.to_owned()))?,
+            rest,
+            dotted_path,
+            value,
+        );
+    }
+    Err(PersistenceError::PathCollision(dotted_path.to_owned()))
+}
+
+fn replace_item(existing: &mut Item, value: &JsonValue) -> Result<(), PersistenceError> {
+    {
         let mut replacement = json_to_item(value)?;
         if let (Some(current), Some(next)) = (existing.as_value(), replacement.as_value_mut()) {
             *next.decor_mut() = current.decor().clone();
         }
         *existing = replacement;
-    } else {
-        table.insert(leaf, json_to_item(value)?);
     }
     Ok(())
+}
+
+fn format_key_segment(key: &str) -> String {
+    if !key.is_empty()
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        key.to_owned()
+    } else {
+        format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+    }
 }
 
 fn json_to_item(value: &JsonValue) -> Result<Item, PersistenceError> {
@@ -220,6 +313,10 @@ fn json_to_item(value: &JsonValue) -> Result<Item, PersistenceError> {
         JsonValue::Number(value) => {
             if let Some(integer) = value.as_i64() {
                 Ok(Item::Value(Value::from(integer)))
+            } else if let Some(unsigned) = value.as_u64() {
+                i64::try_from(unsigned)
+                    .map(|integer| Item::Value(Value::from(integer)))
+                    .map_err(|_| PersistenceError::UnsupportedValue)
             } else if let Some(float) = value.as_f64() {
                 Ok(Item::Value(Value::from(float)))
             } else {
@@ -228,7 +325,7 @@ fn json_to_item(value: &JsonValue) -> Result<Item, PersistenceError> {
         }
         JsonValue::String(value) => Ok(Item::Value(Value::from(value.as_str()))),
         JsonValue::Array(values) => {
-            if values.iter().all(JsonValue::is_object) {
+            if !values.is_empty() && values.iter().all(JsonValue::is_object) {
                 let mut array = ArrayOfTables::new();
                 for value in values {
                     let object = value.as_object().expect("array item was checked as object");
@@ -268,7 +365,8 @@ fn json_to_item(value: &JsonValue) -> Result<Item, PersistenceError> {
 fn write_document(path: &Path, document: &DocumentMut) -> Result<(), PersistenceError> {
     let parent = path
         .parent()
-        .ok_or_else(|| PersistenceError::InvalidPath(path.display().to_string()))?;
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|source| PersistenceError::Io {
         path: parent.to_path_buf(),
         source,
@@ -278,10 +376,9 @@ fn write_document(path: &Path, document: &DocumentMut) -> Result<(), Persistence
         use atomic_write_file::unix::OpenOptionsExt as AtomicOpenOptionsExt;
         use std::os::unix::fs::OpenOptionsExt as StdOpenOptionsExt;
 
-        let existed = path.exists();
         let mut options = OpenOptions::new();
         options.mode(0o600);
-        options.preserve_mode(existed);
+        options.preserve_mode(false);
         options
     };
     #[cfg(not(unix))]
@@ -324,9 +421,9 @@ pub enum PersistenceError {
     #[error(transparent)]
     Lock(#[from] LockError),
     #[error(
-        "設定ファイル {0} のTOML構文が正しくありません。table、key、quote、arrayを確認して修正してください。"
+        "設定ファイル {path} のTOML構文が正しくありません。table、key、quote、arrayを確認して修正してください。{location}"
     )]
-    InvalidToml(PathBuf),
+    InvalidToml { path: PathBuf, location: String },
     #[error("invalid dotted TOML path {0}")]
     InvalidPath(String),
     #[error("TOML path collides with a non-table value: {0}")]
@@ -343,12 +440,13 @@ pub enum PersistenceError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::fs;
 
     use serde_json::json;
     use tempfile::TempDir;
 
-    use super::TomlStore;
+    use super::{PersistenceError, TomlStore, TomlValue};
     use crate::settings::lock::LockManager;
     use crate::settings::roots::{BaseDirectories, EffectiveRoots, SafeComponent};
 
@@ -411,5 +509,103 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn updating_an_existing_settings_file_resets_insecure_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temp);
+        roots.ensure().expect("roots must be created");
+        let path = roots.config.join("settings.toml");
+        fs::write(&path, "[global]\nlanguage = \"ja\"\n").expect("fixture must be writable");
+        let mut permissions = fs::metadata(&path)
+            .expect("metadata must be readable")
+            .permissions();
+        permissions.set_mode(0o644);
+        fs::set_permissions(&path, permissions).expect("fixture mode must be writable");
+
+        TomlStore::new(LockManager::new(&roots))
+            .update(&path, &[("global.language".to_owned(), json!("en"))])
+            .expect("update must succeed");
+        let mode = fs::metadata(path)
+            .expect("metadata must be readable")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn arrays_inline_tables_and_quoted_keys_round_trip() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temp);
+        roots.ensure().expect("roots must be created");
+        let path = roots.config.join("settings.toml");
+        let store = TomlStore::new(LockManager::new(&roots));
+
+        let document = store
+            .update(&path, &[("items".to_owned(), json!([]))])
+            .expect("empty arrays must be representable");
+        assert!(matches!(
+            document.get("items"),
+            Some(TomlValue::Array(values)) if values.is_empty()
+        ));
+
+        let _document = store
+            .update(&path, &[("profile".to_owned(), json!({"language": "ja"}))])
+            .expect("inline tables must be representable");
+        let document = store
+            .update(&path, &[("profile.region".to_owned(), json!("JP"))])
+            .expect("nested updates must promote inline tables safely");
+        assert_eq!(
+            document.get("profile.language").and_then(TomlValue::as_str),
+            Some("ja")
+        );
+        assert_eq!(
+            document.get("profile.region").and_then(TomlValue::as_str),
+            Some("JP")
+        );
+
+        let document = store
+            .update(&path, &[("\"a.b\".\"c.d\"".to_owned(), json!(1))])
+            .expect("quoted TOML keys must be addressable");
+        assert_eq!(
+            document
+                .get("\"a.b\".\"c.d\"")
+                .and_then(TomlValue::as_integer),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn unsupported_unsigned_integer_is_rejected_without_precision_loss() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temp);
+        roots.ensure().expect("roots must be created");
+        let path = roots.config.join("settings.toml");
+        let result = TomlStore::new(LockManager::new(&roots))
+            .update(&path, &[("large".to_owned(), json!(u64::MAX))]);
+        assert!(matches!(result, Err(PersistenceError::UnsupportedValue)));
+        assert!(!path.exists(), "rejected values must not create a file");
+    }
+
+    #[test]
+    fn leaf_paths_include_unknown_keys_inside_array_tables() {
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temp);
+        roots.ensure().expect("roots must be created");
+        let path = roots.config.join("settings.toml");
+        let document = TomlStore::new(LockManager::new(&roots))
+            .update(&path, &[("items".to_owned(), json!([{"unknown": 1}]))])
+            .expect("array tables must be representable");
+        assert!(
+            document
+                .leaf_paths(&BTreeSet::new())
+                .iter()
+                .any(|path| path == "items[0].unknown")
+        );
     }
 }

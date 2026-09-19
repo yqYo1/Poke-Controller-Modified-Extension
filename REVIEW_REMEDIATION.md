@@ -15,14 +15,14 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 実装開始時点: **未着手**
+- Wave 1先行実装済み: **38件**（7ファイル）。残り417件は未着手。
 - 完了数は各waveの検証証跡とcommit SHAを確認して更新する。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 未着手 | — |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（38/222） | focused各module + pokecon lib 437 passed; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -38,7 +38,7 @@
 | 17 | `rust/pokecon/linux/reload-udev.sh` | 2 | medium,low | Wave 1 | 未着手 | — |
 | 18 | `rust/pokecon/src/application_backend.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 20 | `rust/pokecon/src/bin/generate_contracts.rs` | 3 | medium,medium,low | Wave 1 | 未着手 | — |
-| 26 | `rust/pokecon/src/camera/manager.rs` | 4 | high,high,high,medium | Wave 1 | 未着手 | — |
+| 26 | `rust/pokecon/src/camera/manager.rs` | 4 | high,high,high,medium | Wave 1 | 修正済み・検証済み | camera manager tests: 5 passed; startup deadline、bounded queue、NoWritableSlot、timeout後shutdown所有権を修正 |
 | 29 | `rust/pokecon/src/camera/native.rs` | 1 | major | Wave 1 | 未着手 | — |
 | 34 | `rust/pokecon/src/command_service.rs` | 1 | high | Wave 1 | 未着手 | — |
 | 36 | `rust/pokecon/src/contract_generator.rs` | 2 | low,low | Wave 1 | 未着手 | — |
@@ -54,7 +54,7 @@
 | 60 | `rust/pokecon/src/dynamic/host.rs` | 2 | high,high | Wave 1 | 未着手 | — |
 | 63 | `rust/pokecon/src/dynamic/source.rs` | 1 | High | Wave 1 | 未着手 | — |
 | 64 | `rust/pokecon/src/dynamic/transaction.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
-| 66 | `rust/pokecon/src/dynamic_runtime.rs` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
+| 66 | `rust/pokecon/src/dynamic_runtime.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・focused検証済み | dynamic runtime tests passed; startup-post/initialize deadlines, HostStopping ordering、receiver drain orderingを修正 |
 | 71 | `rust/pokecon/src/openapi_generator.rs` | 3 | medium,low,low | Wave 1 | 未着手 | — |
 | 75 | `rust/pokecon/src/production.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
 | 79 | `rust/pokecon/src/script_host.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
@@ -72,19 +72,19 @@
 | 106 | `rust/pokecon/src/settings/manifest.rs` | 2 | low,low | Wave 1 | 未着手 | — |
 | 108 | `rust/pokecon/src/settings/package.rs` | 5 | medium,medium,low,low,low | Wave 1 | 未着手 | — |
 | 109 | `rust/pokecon/src/settings/path.rs` | 5 | high,high,medium,medium,medium | Wave 1 | 未着手 | — |
-| 110 | `rust/pokecon/src/settings/persistence.rs` | 9 | high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 未着手 | — |
-| 111 | `rust/pokecon/src/settings/pipeline.rs` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
+| 110 | `rust/pokecon/src/settings/persistence.rs` | 9 | high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 修正済み・focused検証済み | persistence tests passed; semantic prevalidation、owner-only mode、quoted path、inline table、array/u64変換を修正 |
+| 111 | `rust/pokecon/src/settings/pipeline.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・focused検証済み | pipeline tests passed; raw non-Unicode passthrough、package resolution、resource-root staging、warning mergeを修正 |
 | 112 | `rust/pokecon/src/settings/python.rs` | 8 | medium,medium,medium,low,low,low,low,low | Wave 1 | 未着手 | — |
 | 113 | `rust/pokecon/src/settings/roots.rs` | 2 | medium,low | Wave 1 | 未着手 | — |
 | 114 | `rust/pokecon/src/settings/scaffold.rs` | 6 | medium,low,low,low,low,low | Wave 1 | 未着手 | — |
-| 115 | `rust/pokecon/src/settings/service.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
+| 115 | `rust/pokecon/src/settings/service.rs` | 3 | high,high,medium | Wave 1 | 修正済み・focused検証済み | service tests passed; persisted document direct commit、error propagation、profile path staging/live adapter rollbackを修正 |
 | 116 | `rust/pokecon/src/settings/uv.rs` | 8 | medium,medium,medium,low,low,medium,low,low | Wave 1 | 未着手 | — |
 | 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 未着手 | — |
-| 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 未着手 | — |
+| 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 修正済み・focused検証済み | settings_runtime tests passed; bounded runtime bridge、rollback Result、reconcile baseline、Profile adaptersを修正 |
 | 121 | `rust/pokecon/src/tests/ui_boundary_acceptance.rs` | 7 | high,high,medium,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
-| 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 未着手 | — |
+| 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
 | 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 未着手 | — |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |

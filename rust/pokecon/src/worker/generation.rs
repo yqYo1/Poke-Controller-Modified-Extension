@@ -237,6 +237,17 @@ impl GenerationManager {
         current.insert(kind, generation.clone());
         Ok(generation)
     }
+
+    pub(crate) fn rollback_activation(&self, kind: WorkerKind, generation: &Arc<WorkerGeneration>) {
+        let mut current = self.lock_current();
+        if current
+            .get(&kind)
+            .is_some_and(|active| Arc::ptr_eq(active, generation))
+        {
+            current.remove(&kind);
+            generation.mark_stopped();
+        }
+    }
 }
 
 #[cfg(test)]

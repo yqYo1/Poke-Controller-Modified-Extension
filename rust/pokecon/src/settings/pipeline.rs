@@ -420,13 +420,14 @@ impl LoadedSettings {
     /// Returns an error if a canonical resource-path default is missing or no
     /// longer satisfies its declared value schema.
     pub fn with_resource_root(mut self, resource_root: PathBuf) -> Result<Self, PipelineError> {
-        self.recipe.request.resource_root = resource_root;
+        let mut next_request = self.recipe.request.clone();
+        next_request.resource_root = resource_root;
+        let mut next_settings = self.settings.clone();
         for setting in &self.recipe.registry.settings {
             if !matches!(&setting.default, DefaultValue::ResourcePath { .. }) {
                 continue;
             }
-            let resolved = self
-                .settings
+            let resolved = next_settings
                 .values
                 .get_mut(&setting.id)
                 .ok_or_else(|| PipelineError::MissingCanonicalSetting(setting.id.clone()))?;
@@ -434,12 +435,14 @@ impl LoadedSettings {
                 resolved.value = default_value(
                     setting,
                     Some(&self.roots),
-                    &self.recipe.request.resource_root,
+                    &next_request.resource_root,
                     SettingSource::Default,
                 )?;
             }
         }
-        validate_snapshot(&self.settings.values)?;
+        validate_snapshot(&next_settings.values)?;
+        self.recipe.request = next_request;
+        self.settings = next_settings;
         Ok(self)
     }
 
@@ -629,7 +632,8 @@ impl SettingsPipeline {
         if active_profile != bootstrap.active_profile {
             let final_profile =
                 store.read(&bootstrap.roots.profile_settings(active_profile.as_str())?)?;
-            resolution = resolve_layers(
+            let initial_warnings = std::mem::take(&mut resolution.warnings);
+            let mut final_resolution = resolve_layers(
                 stage,
                 &registry,
                 &bootstrap.global,
@@ -638,13 +642,15 @@ impl SettingsPipeline {
                 &self.request,
                 &parsed_cli,
             )?;
-            validate_snapshot(&resolution.values)?;
-            let resolved_profile = resolution
+            final_resolution.warnings.splice(0..0, initial_warnings);
+            validate_snapshot(&final_resolution.values)?;
+            let resolved_profile = final_resolution
                 .values
                 .get("active_profile")
                 .and_then(|resolved| resolved.value.as_str())
                 .ok_or_else(|| PipelineError::TypedLookup("active_profile".to_owned()))?;
             active_profile = SafeComponent::new(resolved_profile)?;
+            resolution = final_resolution;
         }
         let profile_settings_path = bootstrap.roots.profile_settings(active_profile.as_str())?;
         let roots = bootstrap.roots;
@@ -695,10 +701,8 @@ impl fmt::Debug for ResolutionRecipe {
 }
 
 impl ResolutionRecipe {
-    pub(crate) fn refresh_global(&mut self) -> Result<(), PipelineError> {
-        self.global = TomlStore::new(LockManager::new(&self.roots))
-            .read(&self.roots.config.join("settings.toml"))?;
-        Ok(())
+    pub(crate) fn replace_global(&mut self, document: SettingsDocument) {
+        self.global = document;
     }
 
     pub(crate) fn resolve_profile(
@@ -771,9 +775,13 @@ impl ParsedCli {
         }
         let mut cursor = 1;
         while cursor < arguments.len() {
-            let argument = arguments[cursor]
-                .to_str()
-                .ok_or(PipelineError::NonUnicodeArgument)?;
+            let Some(argument) = arguments[cursor].to_str() else {
+                // Unknown/passthrough arguments are not settings input. Keep
+                // their original bytes instead of rejecting a valid argv.
+                remaining.push(arguments[cursor].clone());
+                cursor += 1;
+                continue;
+            };
             if argument == "--" {
                 remaining.extend(arguments[cursor..].iter().cloned());
                 break;
@@ -1420,7 +1428,6 @@ fn insert_resolved(
                 .cloned()
                 .unwrap_or_default();
             prospective.push(package_source);
-            ConstraintResolver::resolve(PythonWorker::Dynamic, prospective.clone(), true, false)?;
             package_sources.insert(setting.id.clone(), prospective);
         }
     }

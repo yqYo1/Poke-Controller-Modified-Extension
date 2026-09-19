@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::future::Future;
+use std::time::Duration;
 
 use serde_json::Value;
 use tokio::runtime::{Handle, RuntimeFlavor};
@@ -89,9 +90,15 @@ impl SerialSettingsApplier {
             if self.runtime.runtime_flavor() != RuntimeFlavor::MultiThread {
                 return Err(SerialError::SynchronousBridgeUnavailable);
             }
-            tokio::task::block_in_place(|| self.runtime.block_on(future))
+            tokio::task::block_in_place(|| {
+                self.runtime
+                    .block_on(tokio::time::timeout(Duration::from_secs(10), future))
+            })
+            .map_err(|_| SerialError::SynchronousBridgeTimedOut)?
         } else {
-            self.runtime.block_on(future)
+            self.runtime
+                .block_on(tokio::time::timeout(Duration::from_secs(10), future))
+                .map_err(|_| SerialError::SynchronousBridgeTimedOut)?
         }
     }
 
@@ -109,7 +116,7 @@ impl RuntimeSettingsApplier for SerialSettingsApplier {
         class: PatchClass,
         changes: &BTreeMap<String, Value>,
     ) -> Result<(), String> {
-        if class != PatchClass::Serial {
+        if !matches!(class, PatchClass::Serial | PatchClass::Profile) {
             return Ok(());
         }
         let next = self
@@ -141,24 +148,30 @@ impl RuntimeSettingsApplier for SerialSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>) {
-        if class != PatchClass::Serial {
-            return;
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        if !matches!(class, PatchClass::Serial | PatchClass::Profile) {
+            return Ok(());
         }
         let Ok(restored) = self.current.overlay(previous) else {
             tracing::error!(
                 diagnostic_id = "SERIAL_SETTINGS_ROLLBACK_INVALID",
                 "serial settings rollback values were invalid"
             );
-            return;
+            return Err("serial settings rollback values were invalid".to_owned());
         };
         if self.apply_values(&restored).is_ok() {
             self.current = restored;
+            Ok(())
         } else {
             tracing::error!(
                 diagnostic_id = "SERIAL_SETTINGS_ROLLBACK_FAILED",
                 "serial settings rollback could not restore the previous connection"
             );
+            Err("serial settings rollback failed".to_owned())
         }
     }
 }

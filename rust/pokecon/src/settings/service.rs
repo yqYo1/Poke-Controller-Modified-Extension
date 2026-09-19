@@ -8,7 +8,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::settings::lock::LockManager;
-use crate::settings::persistence::{PersistenceError, TomlStore};
+use crate::settings::persistence::{PersistenceError, SettingsDocument, TomlStore};
 use crate::settings::pipeline::{
     LoadedSettings, PipelineError, ResolvedSettings, ResolvedValue, SECRET_MASK, SettingSource,
     normalize_value, public_value, validate_snapshot,
@@ -84,7 +84,11 @@ pub trait RuntimeSettingsApplier: Send {
     }
 
     /// Restores a prior transaction after persistence fails.
-    fn rollback(&mut self, class: PatchClass, previous: &BTreeMap<String, Value>);
+    fn rollback(
+        &mut self,
+        class: PatchClass,
+        previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String>;
 }
 
 /// No-op runtime adapter for startup and isolated contract tests.
@@ -107,7 +111,13 @@ impl RuntimeSettingsApplier for NoopSettingsApplier {
         Ok(())
     }
 
-    fn rollback(&mut self, _class: PatchClass, _previous: &BTreeMap<String, Value>) {}
+    fn rollback(
+        &mut self,
+        _class: PatchClass,
+        _previous: &BTreeMap<String, Value>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// Canonical saved/current settings state and transactional persistence layer.
@@ -479,11 +489,8 @@ impl SettingsService {
         let _gate = acquire_switch_gate(&self.switch_gate)?;
         let previous = self.loaded.active_profile.clone();
         ScaffoldManager::new(self.loaded.roots.clone()).ensure(target.as_str())?;
-        self.persist(changes, Scope::Global)?;
-        if let Err(error) = self.loaded.recipe.refresh_global() {
-            self.rollback_profile(&previous)?;
-            return Err(PatchError::Pipeline(error));
-        }
+        let global_document = self.persist(changes, Scope::Global)?;
+        self.loaded.recipe.replace_global(global_document);
         let next = match self.loaded.recipe.resolve_profile(target.as_str()) {
             Ok(next) => next,
             Err(error) => {
@@ -491,12 +498,39 @@ impl SettingsService {
                 return Err(PatchError::Pipeline(error));
             }
         };
+        let next_profile_settings_path = self.loaded.roots.profile_settings(target.as_str())?;
         let previous_current = self.current.clone();
+        let previous_values = previous_current
+            .iter()
+            .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let mut profile_values = next
+            .values()
+            .iter()
+            .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
+            .collect::<BTreeMap<_, _>>();
+        for setting in &next.registry().settings {
+            if setting.mutability == Mutability::StartupOnly
+                && let Some(previous) = previous_values.get(&setting.id)
+            {
+                profile_values.insert(setting.id.clone(), previous.clone());
+            }
+        }
+        if let Err(_error) = self.applier.apply(PatchClass::Profile, &profile_values) {
+            if let Err(rollback_error) =
+                self.applier.rollback(PatchClass::Profile, &previous_values)
+            {
+                tracing::error!(
+                    diagnostic_id = "PROFILE_RUNTIME_ROLLBACK_FAILED",
+                    error = %rollback_error,
+                    "profile runtime adapters could not be restored"
+                );
+            }
+            self.rollback_profile(&previous)?;
+            return Err(PatchError::DeviceConflict);
+        }
         self.loaded.active_profile = target;
-        self.loaded.profile_settings_path = self
-            .loaded
-            .roots
-            .profile_settings(self.loaded.active_profile.as_str())?;
+        self.loaded.profile_settings_path = next_profile_settings_path;
         self.loaded.settings = next;
         self.saved = self.loaded.settings.values().clone();
         self.current.clone_from(&self.saved);
@@ -516,12 +550,11 @@ impl SettingsService {
             "active_profile".to_owned(),
             Value::String(previous.as_str().to_owned()),
         )]);
-        self.persist(&rollback, Scope::Global)
+        let global_document = self
+            .persist(&rollback, Scope::Global)
             .map_err(|_| PatchError::ProfileRollback)?;
-        self.loaded
-            .recipe
-            .refresh_global()
-            .map_err(|_| PatchError::ProfileRollback)
+        self.loaded.recipe.replace_global(global_document);
+        Ok(())
     }
 
     fn patch_runtime_transaction(
@@ -545,12 +578,21 @@ impl SettingsService {
         self.applier
             .apply(class, changes)
             .map_err(|_| PatchError::DeviceConflict)?;
-        if self.persist(changes, Scope::Global).is_err() {
-            self.applier.rollback(class, &previous);
-            return Err(PatchError::DeviceConflict);
-        }
+        let global_document = match self.persist(changes, Scope::Global) {
+            Ok(document) => document,
+            Err(error) => {
+                if let Err(rollback_error) = self.applier.rollback(class, &previous) {
+                    tracing::error!(
+                        diagnostic_id = "SETTINGS_RUNTIME_ROLLBACK_FAILED",
+                        error = %rollback_error,
+                        "runtime settings rollback failed after persistence error"
+                    );
+                }
+                return Err(error);
+            }
+        };
+        self.loaded.recipe.replace_global(global_document);
         self.commit_saved_and_current(changes);
-        self.loaded.recipe.refresh_global()?;
         self.bump_revision();
         Ok(self.response(BTreeMap::new()))
     }
@@ -565,7 +607,10 @@ impl SettingsService {
             .map(|id| self.setting(id).map(|setting| setting.scope))
             .transpose()?
             .unwrap_or(Scope::Global);
-        self.persist(changes, scope)?;
+        let document = self.persist(changes, scope)?;
+        if scope == Scope::Global {
+            self.loaded.recipe.replace_global(document);
+        }
         for (id, value) in changes {
             self.saved.insert(
                 id.clone(),
@@ -595,14 +640,15 @@ impl SettingsService {
                 }
             }
         }
-        if scope == Scope::Global {
-            self.loaded.recipe.refresh_global()?;
-        }
         self.bump_revision();
         Ok(self.response(failures))
     }
 
-    fn persist(&self, changes: &BTreeMap<String, Value>, scope: Scope) -> Result<(), PatchError> {
+    fn persist(
+        &self,
+        changes: &BTreeMap<String, Value>,
+        scope: Scope,
+    ) -> Result<SettingsDocument, PatchError> {
         let path = match scope {
             Scope::Global => &self.loaded.global_settings_path,
             Scope::Profile => &self.loaded.profile_settings_path,
@@ -621,8 +667,9 @@ impl SettingsService {
                 Ok((toml_path, value.clone()))
             })
             .collect::<Result<Vec<_>, PatchError>>()?;
-        TomlStore::new(LockManager::new(&self.loaded.roots)).update(path, &updates)?;
-        Ok(())
+        TomlStore::new(LockManager::new(&self.loaded.roots))
+            .update(path, &updates)
+            .map_err(PatchError::from)
     }
 
     fn commit_saved_and_current(&mut self, changes: &BTreeMap<String, Value>) {
@@ -843,8 +890,9 @@ mod tests {
             &mut self,
             _class: PatchClass,
             _previous: &BTreeMap<String, serde_json::Value>,
-        ) {
+        ) -> Result<(), String> {
             *self.rollbacks.lock().expect("rollback lock must work") += 1;
+            Ok(())
         }
     }
 
@@ -853,7 +901,9 @@ mod tests {
         let mut applier = NoopSettingsApplier;
         let changes = BTreeMap::new();
         assert!(applier.apply(PatchClass::Ordinary, &changes).is_ok());
-        applier.rollback(PatchClass::Ordinary, &changes);
+        applier
+            .rollback(PatchClass::Ordinary, &changes)
+            .expect("noop rollback must succeed");
     }
 
     fn service(temp: &TempDir, applier: RecordingApplier) -> SettingsService {

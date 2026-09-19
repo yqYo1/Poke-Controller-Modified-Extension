@@ -15,15 +15,15 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- Wave 1先行実装済み: **38件**（7ファイル）。残り417件は未着手。
-- 完了数は各waveの検証証跡とcommit SHAを確認して更新する。
+- 現在の検証済み修正: **100 / 455 finding、35 / 139 finding-file**（Wave 1/2を継続中）。
+- Wave 1: **92 / 222 finding、30ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（84/222） | TkObjectNotFound REST mapping added; commit待ち |
-| Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（92/222） | signed commits through `bfd38b0`; focused/full Nix gates passed |
+| Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
 ## 4. ファイル別対応状態

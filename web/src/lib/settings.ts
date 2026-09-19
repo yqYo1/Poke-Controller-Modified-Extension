@@ -26,6 +26,7 @@ const defaultGateway: SettingsGateway = {
 };
 
 const INSTANCE_RECOVERY_LIMIT = 3;
+const RETIRED_INSTANCE_LIMIT = 32;
 
 /**
  * Owns the browser's optimistic settings revision and serializes all writes.
@@ -35,6 +36,7 @@ const INSTANCE_RECOVERY_LIMIT = 3;
 export class SettingsWriter {
   private snapshot: SettingsSnapshot | null = null;
   private readonly retiredInstanceIds = new Set<string>();
+  private readonly retiredInstanceOrder: string[] = [];
   private readonly subscribers = new Set<SettingsSubscriber>();
   private tail: Promise<void> = Promise.resolve();
 
@@ -42,7 +44,11 @@ export class SettingsWriter {
 
   subscribe(subscriber: SettingsSubscriber): () => void {
     this.subscribers.add(subscriber);
-    subscriber(this.snapshot);
+    try {
+      subscriber(this.snapshot);
+    } catch {
+      console.error('PokeCon settings subscriber failed during initial synchronization');
+    }
     return () => {
       this.subscribers.delete(subscriber);
     };
@@ -69,8 +75,10 @@ export class SettingsWriter {
   refresh(): Promise<SettingsSnapshot> {
     return this.enqueue(async () => {
       const snapshot = await this.gateway.load();
-      this.acceptSnapshot(snapshot);
-      return snapshot;
+      if (!this.acceptSnapshot(snapshot)) {
+        throw new Error('backend returned a stale settings snapshot');
+      }
+      return this.snapshot ?? snapshot;
     });
   }
 
@@ -136,7 +144,17 @@ export class SettingsWriter {
   }
 
   private retireInstance(instanceId: string): void {
+    if (this.retiredInstanceIds.has(instanceId)) {
+      return;
+    }
     this.retiredInstanceIds.add(instanceId);
+    this.retiredInstanceOrder.push(instanceId);
+    while (this.retiredInstanceOrder.length > RETIRED_INSTANCE_LIMIT) {
+      const retired = this.retiredInstanceOrder.shift();
+      if (retired !== undefined) {
+        this.retiredInstanceIds.delete(retired);
+      }
+    }
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -151,7 +169,11 @@ export class SettingsWriter {
   private publish(snapshot: SettingsSnapshot): void {
     this.snapshot = snapshot;
     for (const subscriber of this.subscribers) {
-      subscriber(snapshot);
+      try {
+        subscriber(snapshot);
+      } catch {
+        console.error('PokeCon settings subscriber failed');
+      }
     }
   }
 }

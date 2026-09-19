@@ -16,7 +16,7 @@ use tokio::sync::Notify;
 use crate::settings::lock::LockManager;
 use crate::settings::manifest::{
     FingerprintInput, FingerprintRecord, InstalledDistribution, ManifestOutput, ManifestRead,
-    ManifestStore, SecretFingerprintInput, SignedManifest,
+    ManifestStore, SecretFingerprintInput, SignedManifest, canonical_path_token,
 };
 use crate::settings::package::{
     ApplicationRequirements, PackageResolution, PythonWorker, VersionSelector,
@@ -486,7 +486,7 @@ fn fingerprint(
             .override_package_metadata_constraints,
         application_build_id: context.request.application_build_id.clone(),
         package_source_build_id: context.request.package_source_build_id.clone(),
-        canonical_venv_path: context.canonical_venv.to_string_lossy().into_owned(),
+        canonical_venv_path: canonical_path_token(&context.canonical_venv),
         revalidate_mutable_sources: context.request.revalidate_mutable_sources,
         normalized_extras,
     };

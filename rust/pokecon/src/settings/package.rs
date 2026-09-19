@@ -11,6 +11,8 @@ use version_ranges::Ranges;
 use crate::settings::APPLICATION_REQUIREMENTS_JSON;
 use crate::settings::path::lexical_normalize;
 
+const MAX_CONFLICT_CLAUSES: usize = 64;
+
 /// Python worker whose application requirement group is selected.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -504,11 +506,15 @@ fn parse_entry(
             extras,
         });
     };
-    let (specifier_text, marker) = version
-        .split_once(';')
-        .map_or((version, None), |(specifiers, marker)| {
-            (specifiers, Some(format!(";{marker}")))
-        });
+    let (specifier_text, marker) = if direct_source_syntax(version.trim()) {
+        (version, None)
+    } else {
+        version
+            .split_once(';')
+            .map_or((version, None), |(specifiers, marker)| {
+                (specifiers, Some(format!(";{marker}")))
+            })
+    };
     let (specifier_text, direct_text) = split_direct_selector(specifier_text, &normalized_name)?;
     let mut clauses = Vec::new();
     let mut opaque = Vec::new();
@@ -551,7 +557,11 @@ fn parse_entry(
             },
         });
     }
-    let direct_clause_index = specifier_text.split(',').count();
+    let direct_clause_index = if specifier_text.trim().is_empty() {
+        0
+    } else {
+        specifier_text.split(',').count()
+    };
     let mut selectors = Vec::new();
     if !clauses.is_empty() {
         selectors.push(ParsedSelector::Analyzed(clauses));
@@ -635,6 +645,14 @@ fn parse_direct_source(
     if direct_part.is_empty() {
         return Err(PackageError::InvalidDirectSource(outer_name.to_owned()));
     }
+    if (direct_part.starts_with("./")
+        || direct_part.starts_with("../")
+        || direct_part.starts_with(".\\")
+        || direct_part.starts_with("..\\"))
+        && source.relative_base.as_os_str().is_empty()
+    {
+        return Err(PackageError::InvalidDirectSource(outer_name.to_owned()));
+    }
     let identity = direct_identity(direct_part, &source.relative_base);
     let mutable = mutable_direct_source(direct_part);
     Ok(Some(DirectSourceClause {
@@ -665,8 +683,13 @@ fn direct_source_syntax(value: &str) -> bool {
 }
 
 fn direct_identity(source: &str, relative_base: &Path) -> String {
-    if source.starts_with('/') || source.starts_with("./") || source.starts_with("../") {
-        let path = PathBuf::from(source);
+    if source.starts_with('/')
+        || source.starts_with("./")
+        || source.starts_with("../")
+        || source.starts_with(".\\")
+        || source.starts_with("..\\")
+    {
+        let path = PathBuf::from(source.replace('\\', "/"));
         lexical_normalize(if path.is_absolute() {
             path
         } else {
@@ -810,6 +833,11 @@ fn low_clauses_in_all_minimal_conflicts(
     high: &[AnalyzedClause],
 ) -> Result<BTreeSet<usize>, PackageError> {
     let combined = low.iter().chain(high).cloned().collect::<Vec<_>>();
+    if combined.len() > MAX_CONFLICT_CLAUSES {
+        return Err(PackageError::InternalResolution(
+            "too many package clauses to analyze conflicts".to_owned(),
+        ));
+    }
     let mut minimal_sets = Vec::<Vec<usize>>::new();
     for cardinality in 1..=combined.len() {
         let mut selected = Vec::with_capacity(cardinality);

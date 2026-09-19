@@ -16,6 +16,10 @@ use crate::settings::roots::EffectiveRoots;
 
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
 
+pub(crate) fn canonical_path_token(path: &Path) -> String {
+    hex::encode(path_bytes(path))
+}
+
 /// Non-secret identities participating in a venv input fingerprint.
 #[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -253,8 +257,9 @@ impl ManifestStore {
         Ok(self.directory.join(format!("{}.json", hex::encode(digest))))
     }
 
-    /// Reads and authenticates a manifest. Parse/signature/schema failures are
-    /// classified as corrupt so callers rebuild rather than trust them.
+    /// Reads and authenticates a manifest. Path identity resolution errors,
+    /// parse/signature/schema failures are classified separately: only a
+    /// missing or corrupt manifest is eligible for a rebuild.
     ///
     /// # Errors
     ///

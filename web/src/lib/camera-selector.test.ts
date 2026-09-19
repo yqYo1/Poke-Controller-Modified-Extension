@@ -17,8 +17,8 @@ describe('camera selector identity', () => {
     expect(sameCameraSelector('camera-10', 10)).toBe(false);
   });
 
-  it('keeps selector option keys type-sensitive', () => {
-    expect(cameraSelectorKey(10)).toBe('number:10');
-    expect(cameraSelectorKey('/dev/video10')).toBe('string:/dev/video10');
+  it('uses the normalized identity for selector option keys', () => {
+    expect(cameraSelectorKey(10)).toBe('index:10');
+    expect(cameraSelectorKey('/dev/video10')).toBe('index:10');
   });
 });

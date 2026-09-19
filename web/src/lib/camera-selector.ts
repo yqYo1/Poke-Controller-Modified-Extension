@@ -27,5 +27,5 @@ export function sameCameraSelector(left: CameraSelector, right: CameraSelector):
 }
 
 export function cameraSelectorKey(selector: CameraSelector): string {
-  return `${typeof selector}:${String(selector)}`;
+  return cameraSelectorIdentity(selector);
 }

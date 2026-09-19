@@ -130,8 +130,8 @@
 | 218 | `tests/release/test_windows_install_smoke.py` | 5 | medium,medium,high,medium,medium | Wave 3 | 未着手 | — |
 | 223 | `web/src/app.html` | 1 | medium | Wave 2 | 未着手 | — |
 | 225 | `web/src/lib/actions.ts` | 2 | high,low | Wave 2 | 未着手 | — |
-| 228 | `web/src/lib/camera-selector.test.ts` | 1 | major | Wave 2 | 未着手 | — |
-| 229 | `web/src/lib/camera-selector.ts` | 1 | high | Wave 2 | 未着手 | — |
+| 228 | `web/src/lib/camera-selector.test.ts` | 1 | major | Wave 2 | 修正済み・検証済み | Nix devShell Bun camera-selector test 3 passed; tests assert index/path equivalent option keys |
+| 229 | `web/src/lib/camera-selector.ts` | 1 | high | Wave 2 | 修正済み・検証済み | Nix devShell Bun camera-selector test 3 passed; option key now uses normalized camera identity |
 | 230 | `web/src/lib/components/AnalogStick.svelte` | 5 | high,medium,medium,medium,low | Wave 2 | 未着手 | — |
 | 231 | `web/src/lib/components/CameraTab.svelte` | 5 | high,high,medium,medium,low | Wave 2 | 未着手 | — |
 | 232 | `web/src/lib/components/CameraTab.test.ts` | 3 | high,medium,medium | Wave 2 | 未着手 | — |

@@ -142,6 +142,17 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（予定証跡: direnv読込み後のGit inventory、Nix source、package manifestのnegative report）。
 - [ ] **AR-13.1-24** 既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性、packageがambient shell状態へ依存せず移行前と一致する（予定証跡: current checkpointの全task log、生成物Git object ID、package NAR hash）。
 
+### 2026-09-20 全finding対応
+
+- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する。
+- [ ] Wave 1: Rust runtime、settings、worker、server、contracts、Rust tests（222件・65ファイル）。
+- [ ] Wave 2: API、Python typings、Web、frontend tests（110件・37ファイル）。
+- [ ] Wave 3: flake、CI、scripts、release、Python/tests（123件・37ファイル）。
+- [ ] 各findingは実装、証拠付き非該当、または外部blockedの明示状態へ遷移させ、レビューmatrixとtracked台帳の両方を更新する。
+- [ ] 各waveはNix経由のfocused test、必要なadversarial/no-network test、format、diff-check、署名commit、push、最新SHAのCI監視を完了してから次へ進む。
+
+`REVIEW_REMEDIATION.md`はレビュー対応のtracked進捗台帳、`CURRENT_IMPLEMENTATION_REVIEW.md`は326ファイル単位の詳細finding記録である。後者はignoredだが、両者を同じ作業境界で更新する。
+
 ### 現行refactor/rust-coreの追加実装と検証状態
 
 - [x] WebSocket heartbeatの`ping_interval_sec`／`pong_timeout_sec`をproduction runtime settings applierへ接続し、active connectionの待機取消と設定適用時点からの再スケジュールを実装した。

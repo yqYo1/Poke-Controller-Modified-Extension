@@ -89,7 +89,7 @@
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
-| 142 | `rust/pokecon/tests/contract_sync.rs` | 2 | high,medium | Wave 1 | 未着手 | — |
+| 142 | `rust/pokecon/tests/contract_sync.rs` | 2 | high,medium | Wave 1 | 修正済み・検証済み | contract_sync with integration-test-support: 12 passed; canonical inventory JSON and CI timing threshold cross-check aligned |
 | 144 | `rust/pokecon/tests/cross_process.rs` | 2 | medium,low | Wave 1 | 未着手 | — |
 | 146 | `rust/pokecon/tests/lifecycle.rs` | 2 | high,high | Wave 1 | 未着手 | — |
 | 147 | `rust/pokecon/tests/native_serial_pty.rs` | 2 | medium,low | Wave 1 | 未着手 | — |

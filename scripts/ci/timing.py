@@ -236,7 +236,7 @@ CACHE_KEYS: Final = frozenset({"actor", "event", "read", "write"})
 THRESHOLDS: Final = {
     ChangeKind.FAST: 180.0,
     ChangeKind.DOCS: 300.0,
-    ChangeKind.PRODUCT: 780.0,
+    ChangeKind.PRODUCT: 720.0,
 }
 MINIMUM_P95_SAMPLES: Final = 10
 MAX_HISTORY_AGE_DAYS: Final = 30

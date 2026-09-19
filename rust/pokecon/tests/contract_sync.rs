@@ -11,7 +11,7 @@ use pokecon::integration_test_support::contracts::generator::{
 use pokecon::integration_test_support::contracts::model::{Access, Mutability, Scope, Setting};
 use pokecon::integration_test_support::contracts::{PROTOCOL_REGISTRY_JSON, settings_registry};
 use regex::Regex;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 static SPECIFICATION: LazyLock<String> = LazyLock::new(|| repository_text("SPECIFICATION.md"));
@@ -280,7 +280,8 @@ fn fixed_compatibility_inventory_is_complete_and_content_addressed() {
         .collect::<BTreeSet<_>>();
     assert_eq!(actual, expected);
 
-    let canonical = serde_json::to_vec(baselines).expect("inventory must serialize");
+    let canonical = serde_json::to_vec(&canonical_json(&Value::Array(baselines.clone())))
+        .expect("inventory must serialize");
     let digest = format!("{:x}", Sha256::digest(canonical));
     assert_eq!(inventory["inventory_sha256"], digest);
 
@@ -532,7 +533,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     );
     assert!(CI_TIMING.contains("ChangeKind.FAST: 180.0"));
     assert!(CI_TIMING.contains("ChangeKind.DOCS: 300.0"));
-    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 780.0"));
+    assert!(CI_TIMING.contains("ChangeKind.PRODUCT: 720.0"));
     assert!(CI_TIMING.contains("MINIMUM_P95_SAMPLES: Final = 10"));
     assert!(CI_TIMING.contains("COLLECTION_KIND_UPSTREAM_COMPLETED_MAX"));
     assert!(CI_TIMING.contains("critical_path_wall_seconds"));
@@ -1587,6 +1588,22 @@ fn parse_access(value: &str) -> Access {
 
 fn parse_json(source: &str) -> Value {
     serde_json::from_str(source).expect("embedded registry must be valid JSON")
+}
+
+fn canonical_json(value: &Value) -> Value {
+    match value {
+        Value::Array(values) => Value::Array(values.iter().map(canonical_json).collect()),
+        Value::Object(object) => {
+            let mut keys = object.keys().cloned().collect::<Vec<_>>();
+            keys.sort_unstable();
+            let mut sorted = Map::new();
+            for key in keys {
+                sorted.insert(key.clone(), canonical_json(&object[&key]));
+            }
+            Value::Object(sorted)
+        }
+        scalar => scalar.clone(),
+    }
 }
 
 fn string_at<'a>(value: &'a Value, key: &str) -> &'a str {

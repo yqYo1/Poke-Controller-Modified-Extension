@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **104 / 455 finding、37 / 139 finding-file**（Wave 1/2を継続中）。
-- Wave 1: **96 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
+- 現在の検証済み修正: **103 / 455 finding、37 / 139 finding-file**（Wave 1/2を継続中）。
+- Wave 1: **95 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
 
 ## 3. 修正wave
 

@@ -461,7 +461,6 @@ export class RealtimeClient {
     }
 
     this.synchronizing = true;
-    this.bufferedChanges = [];
     this.bufferInvalid = false;
     this.updateView({ status: 'synchronizing' });
     const socket = this.socket;

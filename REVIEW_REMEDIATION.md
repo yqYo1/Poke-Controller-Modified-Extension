@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（68/222） | notification 21 + serial manager 10 focused tests passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（69/222） | Lua sandbox F1 + notification/serial focused tests passed; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -86,7 +86,7 @@
 | 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
 | 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 未着手 | — |
-| 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
+| 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 142 | `rust/pokecon/tests/contract_sync.rs` | 2 | high,medium | Wave 1 | 未着手 | — |

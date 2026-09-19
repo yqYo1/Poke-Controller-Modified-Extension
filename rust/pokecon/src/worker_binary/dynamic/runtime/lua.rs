@@ -2,8 +2,8 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use mlua::{
-    Error as LuaError, ExternalError, Function, HookTriggers, Lua, LuaSerdeExt, MultiValue, Table,
-    Value as LuaValue, VmState,
+    Error as LuaError, ExternalError, Function, HookTriggers, Lua, LuaOptions, LuaSerdeExt,
+    MultiValue, StdLib, Table, Value as LuaValue, VmState,
 };
 use serde_json::Value;
 
@@ -800,7 +800,11 @@ pub(crate) struct LuaRuntime {
 
 impl LuaRuntime {
     pub(crate) fn new(engine: &Weak<EngineInner>) -> Result<Self, DynamicEngineError> {
-        let lua = Lua::new();
+        let lua = Lua::new_with(
+            StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::BIT,
+            LuaOptions::default(),
+        )
+        .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
         lua.set_hook(HookTriggers::new().every_nth_instruction(100), |_, _| {
             match deadline_checkpoint() {
                 None => Ok(VmState::Continue),

@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::settings::MANAGED_UV_SOURCE_JSON;
-use crate::settings::roots::{EffectiveRoots, RootEnvironment};
+use crate::settings::roots::{EffectiveRoots, RootEnvironment, SafeComponent};
 
 #[cfg_attr(
     not(test),
@@ -152,13 +152,23 @@ impl ManagedUvSource {
     pub fn bundled_at(resource_root: &Path) -> Result<Option<Self>, UvError> {
         let mut source: Option<Self> =
             serde_json::from_str(MANAGED_UV_SOURCE_JSON).map_err(UvError::EmbeddedMetadata)?;
-        if let Some(source) = source.as_mut()
-            && source.path.is_relative()
-        {
-            source.path = resource_root.join(&source.path);
+        if let Some(source) = source.as_mut() {
+            if SafeComponent::new(source.version.clone()).is_err()
+                || source.path.as_os_str().is_empty()
+                || !is_sha256(&source.sha256)
+            {
+                return Err(UvError::InvalidManagedPath(source.path.clone()));
+            }
+            if source.path.is_relative() {
+                source.path = resource_root.join(&source.path);
+            }
         }
         Ok(source)
     }
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Prepared managed uv identity under the effective Data root.
@@ -177,7 +187,12 @@ impl ManagedUv {
     /// Returns an error if the source is missing/non-regular, its digest does
     /// not match, or the managed copy cannot be committed.
     pub fn prepare(roots: &EffectiveRoots, source: &ManagedUvSource) -> Result<Self, UvError> {
-        if !source.path.is_file() {
+        if SafeComponent::new(source.version.clone()).is_err()
+            || !is_sha256(&source.sha256)
+            || !fs::symlink_metadata(&source.path).is_ok_and(|metadata| {
+                metadata.file_type().is_file() && !metadata.file_type().is_symlink()
+            })
+        {
             return Err(UvError::MissingManagedUv(source.path.clone()));
         }
         let source_digest = digest_file(&source.path)?;

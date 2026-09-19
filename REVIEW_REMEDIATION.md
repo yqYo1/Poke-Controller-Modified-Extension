@@ -78,7 +78,7 @@
 | 113 | `rust/pokecon/src/settings/roots.rs` | 2 | medium,low | Wave 1 | 未着手 | — |
 | 114 | `rust/pokecon/src/settings/scaffold.rs` | 6 | medium,low,low,low,low,low | Wave 1 | 未着手 | — |
 | 115 | `rust/pokecon/src/settings/service.rs` | 3 | high,high,medium | Wave 1 | 修正済み・focused検証済み | service tests passed; persisted document direct commit、error propagation、profile path staging/live adapter rollbackを修正 |
-| 116 | `rust/pokecon/src/settings/uv.rs` | 8 | medium,medium,medium,low,low,medium,low,low | Wave 1 | 未着手 | — |
+| 116 | `rust/pokecon/src/settings/uv.rs` | 8 | medium,medium,medium,low,low,medium,low,low | Wave 1 | 一部修正・検証済み | settings::uv focused test 5 passed; SafeComponent version/path, metadata sha256 and symlink source validation fixed, remaining 5 findings pending |
 | 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 未着手 | — |
 | 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 修正済み・focused検証済み | settings_runtime tests passed; bounded runtime bridge、rollback Result、reconcile baseline、Profile adaptersを修正 |
 | 121 | `rust/pokecon/src/tests/ui_boundary_acceptance.rs` | 7 | high,high,medium,medium,medium,low,low | Wave 1 | 未着手 | — |

@@ -1,0 +1,18 @@
+{
+  "platforms": {
+    "linux": {
+      "bundle": {
+        "format": "deb",
+        "suffix": ".deb"
+      }
+    },
+    "windows": {
+      "bundle": {
+        "format": "nsis",
+        "suffix": "-setup.exe"
+      }
+    }
+  },
+  "schema_version": 1,
+  "tauri_root": "rust/pokecon"
+}

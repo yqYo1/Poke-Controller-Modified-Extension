@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（83/222） | OpenAPI 5 tests passed with all discriminators/closures; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（84/222） | TkObjectNotFound REST mapping added; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -64,7 +64,7 @@
 | 84 | `rust/pokecon/src/server/openapi.rs` | 3 | medium,medium,low | Wave 1 | 修正済み・検証済み | server::openapi 5 tests passed; all 13 discriminators and every properties node are closed; REST route binding test covers parity |
 | 87 | `rust/pokecon/src/server/realtime_connection.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 90 | `rust/pokecon/src/server/rest/dynamic_config.rs` | 1 | medium | Wave 1 | 未着手 | — |
-| 94 | `rust/pokecon/src/server/rest/script_ui.rs` | 1 | medium | Wave 1 | 未着手 | — |
+| 94 | `rust/pokecon/src/server/rest/script_ui.rs` | 1 | medium | Wave 1 | 修正済み・検証済み | application_backend::script_ui_failure maps TkObjectNotFound to 409 conflict; full lib gate pending |
 | 100 | `rust/pokecon/src/server/state.rs` | 1 | high | Wave 1 | 修正済み・検証済み | server::state focused test 9 passed; pending_restart_values retain後deltaと削除nullを実装 |
 | 102 | `rust/pokecon/src/server/webrtc.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | server::webrtc focused test 4 passed; peer failure cleanup、activity drop、broadcast lag resyncを実装 |
 | 103 | `rust/pokecon/src/server/websocket.rs` | 3 | medium,medium,medium | Wave 1 | 修正済み・検証済み | server::websocket focused test 23 passed; latest-only Pong、native Ping forwarding、protocol closeを実装 |

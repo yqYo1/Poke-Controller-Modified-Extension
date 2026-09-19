@@ -1398,7 +1398,10 @@ fn command_failure(error: &CommandServiceError) -> ApiFailure {
 
 fn script_ui_failure(error: &crate::worker::script::ScriptHostError) -> ApiFailure {
     let (status, code) = match error.code.as_str() {
-        "StaleScriptUiGeneration" | "ScriptUiObjectNotFound" | "WorkerStopping" => (
+        "StaleScriptUiGeneration"
+        | "ScriptUiObjectNotFound"
+        | "TkObjectNotFound"
+        | "WorkerStopping" => (
             ApiFailureStatus::Conflict,
             ApiErrorCode::CommandStateConflict,
         ),

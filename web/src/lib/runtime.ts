@@ -223,7 +223,11 @@ export class ApplicationRuntime {
 
   subscribe(subscriber: RuntimeSubscriber): () => void {
     this.subscribers.add(subscriber);
-    subscriber(this.view);
+    try {
+      subscriber(this.view);
+    } catch {
+      console.error('PokeCon runtime subscriber failed during initial synchronization');
+    }
     return () => {
       this.subscribers.delete(subscriber);
     };
@@ -248,7 +252,11 @@ export class ApplicationRuntime {
       this.bundle.media.onMessage((route, message) => this.handleMessage(route, message)),
       this.bundle.media.onFallbackFrame((frame) => {
         for (const subscriber of this.fallbackFrameSubscribers) {
-          subscriber(frame);
+          try {
+            subscriber(frame);
+          } catch {
+            console.error('PokeCon fallback-frame subscriber failed');
+          }
         }
       }),
       this.bundle.settings.subscribe((settings) => this.updateView({ settings }))
@@ -417,7 +425,11 @@ export class ApplicationRuntime {
   private updateView(update: Partial<RuntimeView>): void {
     this.view = { ...this.view, ...update };
     for (const subscriber of this.subscribers) {
-      subscriber(this.view);
+      try {
+        subscriber(this.view);
+      } catch {
+        console.error('PokeCon runtime subscriber failed');
+      }
     }
   }
 }

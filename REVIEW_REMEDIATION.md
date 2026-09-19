@@ -156,7 +156,7 @@
 | 268 | `web/src/lib/input.ts` | 1 | medium | Wave 2 | 未着手 | — |
 | 272 | `web/src/lib/realtime.ts` | 1 | high | Wave 2 | 修正済み・検証済み | Nix devShell Bun realtime test 7 passed; revision-gap trigger change preserved through resync |
 | 275 | `web/src/lib/runtime.test.ts` | 5 | medium,medium,medium,low,low | Wave 2 | 未着手 | — |
-| 276 | `web/src/lib/runtime.ts` | 5 | high,medium,medium,medium,medium | Wave 2 | 未着手 | — |
+| 276 | `web/src/lib/runtime.ts` | 5 | high,medium,medium,medium,medium | Wave 2 | 一部修正・検証済み | Nix devShell Bun runtime test 5 passed; subscriber isolation F1/F2 fixed, lifecycle F3-F5 remain |
 | 278 | `web/src/lib/settings.ts` | 4 | high,medium,medium,medium | Wave 2 | 未着手 | — |
 | 280 | `web/src/lib/vite-config.test.ts` | 3 | medium,medium,low | Wave 2 | 未着手 | — |
 | 286 | `web/src/routes/page.test.ts` | 4 | medium,medium,medium,low | Wave 2 | 未着手 | — |

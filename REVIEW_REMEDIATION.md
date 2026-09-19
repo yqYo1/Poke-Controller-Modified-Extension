@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（48/222） | camera/settings/runtime/worker/dynamic/production/script/application/server focused tests passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（54/222） | WebRTC 4 + WebSocket 23 focused tests passed; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -66,8 +66,8 @@
 | 90 | `rust/pokecon/src/server/rest/dynamic_config.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 94 | `rust/pokecon/src/server/rest/script_ui.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 100 | `rust/pokecon/src/server/state.rs` | 1 | high | Wave 1 | 修正済み・検証済み | server::state focused test 9 passed; pending_restart_values retain後deltaと削除nullを実装 |
-| 102 | `rust/pokecon/src/server/webrtc.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
-| 103 | `rust/pokecon/src/server/websocket.rs` | 3 | medium,medium,medium | Wave 1 | 未着手 | — |
+| 102 | `rust/pokecon/src/server/webrtc.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | server::webrtc focused test 4 passed; peer failure cleanup、activity drop、broadcast lag resyncを実装 |
+| 103 | `rust/pokecon/src/server/websocket.rs` | 3 | medium,medium,medium | Wave 1 | 修正済み・検証済み | server::websocket focused test 23 passed; latest-only Pong、native Ping forwarding、protocol closeを実装 |
 | 105 | `rust/pokecon/src/settings/lock.rs` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
 | 106 | `rust/pokecon/src/settings/manifest.rs` | 2 | low,low | Wave 1 | 未着手 | — |
 | 108 | `rust/pokecon/src/settings/package.rs` | 5 | medium,medium,low,low,low | Wave 1 | 未着手 | — |

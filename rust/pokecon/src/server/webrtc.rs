@@ -515,14 +515,26 @@ impl WebRtcPeer {
             protocol: Some("pokecon-json-v1".to_owned()),
             negotiated: None,
         });
-        let control = peer
+        let Ok(control) = peer
             .create_data_channel(CONTROL_DATA_CHANNEL, channel_options.clone())
             .await
-            .map_err(|_| WebRtcError::PeerCreationFailed)?;
-        let log = peer
+        else {
+            cancellation.cancel();
+            video_task.abort();
+            rtcp_task.abort();
+            let _result = peer.close().await;
+            return Err(WebRtcError::PeerCreationFailed);
+        };
+        let Ok(log) = peer
             .create_data_channel(LOG_DATA_CHANNEL, channel_options)
             .await
-            .map_err(|_| WebRtcError::PeerCreationFailed)?;
+        else {
+            cancellation.cancel();
+            video_task.abort();
+            rtcp_task.abort();
+            let _result = peer.close().await;
+            return Err(WebRtcError::PeerCreationFailed);
+        };
         let readiness = Arc::new(DataChannelReadiness {
             opened: AtomicU8::new(0),
             emitted: AtomicBool::new(false),
@@ -899,8 +911,19 @@ fn spawn_video_writer(
             let frame = match frame {
                 Ok(frame) => frame,
                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                    publish_event(&events, &cancellation, WebRtcPeerEvent::Failed);
-                    return;
+                    let mut latest = None;
+                    loop {
+                        match frames.try_recv() {
+                            Ok(frame) => latest = Some(frame),
+                            Err(broadcast::error::TryRecvError::Empty) => break,
+                            Err(broadcast::error::TryRecvError::Lagged(_)) => {}
+                            Err(broadcast::error::TryRecvError::Closed) => return,
+                        }
+                    }
+                    let Some(frame) = latest else {
+                        continue;
+                    };
+                    frame
                 }
                 Err(broadcast::error::RecvError::Closed) => return,
             };
@@ -961,8 +984,11 @@ fn publish_event(
     cancellation: &CancellationToken,
     event: WebRtcPeerEvent,
 ) {
-    if events.try_send(event).is_err() {
-        cancellation.cancel();
+    match events.try_send(event) {
+        Ok(()) | Err(mpsc::error::TrySendError::Full(WebRtcPeerEvent::MediaActivity)) => {}
+        Err(mpsc::error::TrySendError::Full(_) | mpsc::error::TrySendError::Closed(_)) => {
+            cancellation.cancel();
+        }
     }
 }
 

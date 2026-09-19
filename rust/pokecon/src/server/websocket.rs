@@ -466,6 +466,7 @@ fn http_error(status: StatusCode, code: ApiErrorCode, message: &str) -> Response
 #[derive(Debug)]
 pub(crate) enum Outgoing {
     Json(ServerMessage),
+    Pong(Bytes),
     Close(CloseFrame),
 }
 
@@ -496,7 +497,7 @@ async fn serve_connection(mut socket: WebSocket, state: WebSocketState, connecti
     let (control_sender, control_receiver) = mpsc::channel(state.config.state_queue_capacity);
     let (state_sender, state_receiver) = mpsc::channel(state.config.state_queue_capacity);
     let (low_sender, low_receiver) = mpsc::channel(state.config.ephemeral_queue_capacity);
-    let (pong_sender, pong_receiver) = mpsc::channel(state.config.heartbeat_queue_capacity);
+    let (pong_sender, pong_receiver) = watch::channel::<Option<String>>(None);
     if control_sender
         .try_send(Outgoing::Json(ServerMessage::InputGeneration(
             MessageData { data: generation },
@@ -684,6 +685,7 @@ async fn write_messages<S>(
                 };
                 (Message::Text(encoded.into()), false)
             }
+            NextWrite::Queued(Some(Outgoing::Pong(payload))) => (Message::Pong(payload), false),
             NextWrite::Queued(Some(Outgoing::Close(frame))) => (Message::Close(Some(frame)), true),
             NextWrite::Queued(None) => return,
             NextWrite::Cancelled => {
@@ -768,7 +770,7 @@ struct ReadMessageContext {
     backend: Arc<dyn WebSocketBackend>,
     connection: ConnectionId,
     outgoing: mpsc::Sender<Outgoing>,
-    pong: mpsc::Sender<String>,
+    pong: watch::Sender<Option<String>>,
     backend_timeout: Duration,
     realtime: Option<mpsc::Sender<ClientMessage>>,
     cancellation: CancellationToken,
@@ -783,14 +785,26 @@ where
             () = context.cancellation.cancelled() => return,
             next = socket.next() => next,
         };
-        let Some(Ok(message)) = next else {
+        let Some(next) = next else {
+            return;
+        };
+        let Ok(message) = next else {
+            close_for_protocol(&context.outgoing, "websocket stream failed");
+            context.cancellation.cancel();
             return;
         };
         let Message::Text(text) = message else {
             if matches!(message, Message::Close(_)) {
                 return;
             }
-            if matches!(message, Message::Ping(_) | Message::Pong(_)) {
+            if let Message::Ping(payload) = message {
+                if context.outgoing.try_send(Outgoing::Pong(payload)).is_err() {
+                    context.cancellation.cancel();
+                    return;
+                }
+                continue;
+            }
+            if matches!(message, Message::Pong(_)) {
                 continue;
             }
             close_for_protocol(&context.outgoing, "client messages must be JSON text");
@@ -803,10 +817,7 @@ where
             return;
         };
         if let ClientMessage::Pong(MessageData { data }) = message {
-            if context.pong.try_send(data.nonce).is_err() {
-                context.cancellation.cancel();
-                return;
-            }
+            let _ = context.pong.send(Some(data.nonce));
             continue;
         }
         if let Some(realtime) = &context.realtime {
@@ -1221,7 +1232,7 @@ async fn forward_script_ui(
 async fn heartbeat(
     connection: ConnectionId,
     outgoing: mpsc::Sender<Outgoing>,
-    mut pong: mpsc::Receiver<String>,
+    mut pong: watch::Receiver<Option<String>>,
     interval_duration: Duration,
     pong_timeout: Duration,
     cancellation: CancellationToken,
@@ -1254,12 +1265,14 @@ async fn heartbeat(
         }
         let matched = time::timeout(pong_timeout, async {
             loop {
+                if pong.borrow().as_deref() == Some(nonce.as_str()) {
+                    return true;
+                }
                 tokio::select! {
                     () = cancellation.cancelled() => return false,
-                    received = pong.recv() => match received {
-                        Some(received) if received == nonce => return true,
-                        Some(_stale) => {}
-                        None => return false,
+                    changed = pong.changed() => match changed {
+                        Ok(()) => {}
+                        Err(_) => return false,
                     }
                 }
             }
@@ -1276,7 +1289,7 @@ async fn heartbeat(
 async fn heartbeat_with_settings(
     connection: ConnectionId,
     outgoing: mpsc::Sender<Outgoing>,
-    mut pong: mpsc::Receiver<String>,
+    mut pong: watch::Receiver<Option<String>>,
     heartbeat_settings: watch::Receiver<WebSocketRuntimeSettings>,
     cancellation: CancellationToken,
 ) {
@@ -1346,10 +1359,10 @@ async fn heartbeat_with_settings(
                         pong_deadline = tokio::time::Instant::now() + current.pong_timeout();
                     }
                 }
-                received = pong.recv() => match received {
-                    Some(received) if received == nonce => break true,
-                    Some(_stale) => {}
-                    None => break false,
+                changed = pong.changed() => match changed {
+                    Ok(()) if pong.borrow().as_deref() == Some(nonce.as_str()) => break true,
+                    Ok(()) => {}
+                    Err(_) => break false,
                 }
             }
         };

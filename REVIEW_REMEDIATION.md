@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（38/222） | focused各module + pokecon lib 437 passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（44/222） | camera/settings/runtime/worker/dynamic/production/script focused + pokecon lib 437 passed; commit済みSHA 6d6996d、次commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -56,9 +56,9 @@
 | 64 | `rust/pokecon/src/dynamic/transaction.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 66 | `rust/pokecon/src/dynamic_runtime.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・focused検証済み | dynamic runtime tests passed; startup-post/initialize deadlines, HostStopping ordering、receiver drain orderingを修正 |
 | 71 | `rust/pokecon/src/openapi_generator.rs` | 3 | medium,low,low | Wave 1 | 未着手 | — |
-| 75 | `rust/pokecon/src/production.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
+| 75 | `rust/pokecon/src/production.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | production focused test passed; BuildCleanupでbuild失敗cleanup、abort後join、error source保持を実装 |
 | 79 | `rust/pokecon/src/script_host.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
-| 80 | `rust/pokecon/src/script_runtime.rs` | 3 | high,high,medium | Wave 1 | 未着手 | — |
+| 80 | `rust/pokecon/src/script_runtime.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | script_runtime focused compile/test passed; generation reuse拒否、initialize deadline、receiver cleanup、stderr safe warningを実装 |
 | 81 | `rust/pokecon/src/server/api.rs` | 2 | medium,medium | Wave 1 | 未着手 | — |
 | 82 | `rust/pokecon/src/server/backend.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 84 | `rust/pokecon/src/server/openapi.rs` | 3 | medium,medium,low | Wave 1 | 未着手 | — |

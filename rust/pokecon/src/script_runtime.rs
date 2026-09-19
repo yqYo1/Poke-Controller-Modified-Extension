@@ -256,6 +256,12 @@ impl UserScriptFactory for ManagedUserScriptFactory {
         &self,
         settings: LoadedSettings,
     ) -> Result<Arc<dyn UserScriptSession>, CommandBackendError> {
+        if self.supervisor.current(WorkerKind::Script).await.is_some() {
+            return Err(CommandBackendError::new(
+                "ScriptWorkerAlreadyRunning",
+                "a previous user-script worker generation is still running",
+            ));
+        }
         if self.command_root_is_empty()? {
             return Ok(Arc::new(EmptyUserScriptSession));
         }
@@ -293,18 +299,27 @@ impl UserScriptFactory for ManagedUserScriptFactory {
             log_task: Mutex::new(log_task),
             diagnostic_task: Mutex::new(diagnostic_task),
         });
-        let initialize = session
-            .client
-            .initialize(&ScriptInitializeRequest {
+        let initialize = timeout(
+            FAILED_STARTUP_STOP_TIMEOUT,
+            session.client.initialize(&ScriptInitializeRequest {
                 profile: settings.active_profile.as_str().to_owned(),
                 command_root: self.command_root.clone(),
                 data_root: settings.roots.data.clone(),
-            })
-            .await;
-        if let Err(error) = initialize {
-            session.begin_stopping();
-            let _stop = session.shutdown(FAILED_STARTUP_STOP_TIMEOUT).await;
-            return Err(runtime_environment_error(error));
+            }),
+        )
+        .await;
+        match initialize {
+            Ok(Ok(_initialized)) => {}
+            Ok(Err(error)) => {
+                session.begin_stopping();
+                let _stop = session.shutdown(FAILED_STARTUP_STOP_TIMEOUT).await;
+                return Err(runtime_stage_error("initialize", error));
+            }
+            Err(error) => {
+                session.begin_stopping();
+                let _stop = session.shutdown(FAILED_STARTUP_STOP_TIMEOUT).await;
+                return Err(runtime_stage_error("initialize", error));
+            }
         }
         Ok(session)
     }
@@ -432,13 +447,10 @@ impl UserScriptSession for ManagedUserScriptSession {
     }
 
     async fn shutdown(&self, deadline: Duration) -> Result<ScriptSessionStop, CommandBackendError> {
-        let report = self
-            .worker
-            .stop(StopPurpose::ProfileSwitch, deadline)
-            .await
-            .map_err(runtime_environment_error)?;
+        let stop = self.worker.stop(StopPurpose::ProfileSwitch, deadline).await;
         finish_receiver(take_task(&self.log_task)).await;
         finish_receiver(take_task(&self.diagnostic_task)).await;
+        let report = stop.map_err(|error| runtime_stage_error("shutdown", error))?;
         Ok(ScriptSessionStop {
             forced: report.forced,
         })
@@ -453,7 +465,14 @@ fn setting_bool(settings: &LoadedSettings, id: &str) -> Result<bool, CommandBack
 }
 
 fn runtime_environment_error(error: impl std::fmt::Display) -> CommandBackendError {
-    CommandBackendError::new("ScriptWorkerUnavailable", error.to_string())
+    runtime_stage_error("environment", error)
+}
+
+fn runtime_stage_error(stage: &str, error: impl std::fmt::Display) -> CommandBackendError {
+    CommandBackendError::new(
+        "ScriptWorkerUnavailable",
+        format!("script runtime {stage} stage failed: {error}"),
+    )
 }
 
 fn take_task(task: &Mutex<Option<JoinHandle<()>>>) -> Option<JoinHandle<()>> {
@@ -500,10 +519,10 @@ fn spawn_diagnostic_receiver(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(diagnostic) = receiver.recv().await {
-            tracing::debug!(
+            tracing::warn!(
                 worker_kind = "script",
                 byte_count = diagnostic.bytes.len(),
-                "captured out-of-band user-script diagnostic"
+                "user-script worker emitted out-of-band diagnostics; content redacted"
             );
         }
     })

@@ -52,6 +52,47 @@ use crate::settings_runtime::{
 const STATE_HISTORY_CAPACITY: usize = 256;
 const SERVICE_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
+#[derive(Default)]
+struct BuildCleanup {
+    camera: Option<CameraManager>,
+    serial: Option<SerialManager>,
+    tasks: Vec<JoinHandle<()>>,
+}
+
+impl BuildCleanup {
+    async fn cleanup(mut self) {
+        for mut task in self.tasks.drain(..) {
+            task.abort();
+            if timeout(SERVICE_STOP_TIMEOUT, &mut task).await.is_err() {
+                tracing::error!("production build cleanup task did not stop before its deadline");
+            }
+        }
+        if let Some(serial) = self.serial.take() {
+            match timeout(SERVICE_STOP_TIMEOUT, serial.disconnect()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::error!(%error, "production build serial cleanup failed"),
+                Err(_) => tracing::error!("production build serial cleanup timed out"),
+            }
+        }
+        if let Some(camera) = self.camera.take() {
+            let result =
+                tokio::task::spawn_blocking(move || camera.shutdown(SERVICE_STOP_TIMEOUT)).await;
+            if let Err(error) = result {
+                tracing::error!(%error, "production build camera cleanup task failed");
+            }
+        }
+    }
+
+    fn take_tasks(&mut self) -> Vec<JoinHandle<()>> {
+        std::mem::take(&mut self.tasks)
+    }
+
+    fn disarm(&mut self) {
+        self.camera = None;
+        self.serial = None;
+    }
+}
+
 /// Fully connected API router and every resource whose lifetime is bounded by
 /// one application run.
 pub(crate) struct ProductionRuntime {
@@ -79,7 +120,6 @@ impl ProductionRuntime {
     /// lazy user-script orchestration from the final startup snapshot.
     // The composition root is deliberately linear so initialization and
     // ownership order can be compared directly with the shutdown contract.
-    #[allow(clippy::too_many_lines)]
     pub(crate) async fn build(
         request: PipelineRequest,
         loaded: LoadedSettings,
@@ -88,7 +128,42 @@ impl ProductionRuntime {
         screenshot_mode: ScreenshotMode,
         desktop_settings: Option<DesktopRuntimeSettings>,
     ) -> Result<Self, String> {
+        let mut cleanup = BuildCleanup::default();
+        match Self::build_inner(
+            request,
+            loaded,
+            host,
+            dynamic,
+            screenshot_mode,
+            desktop_settings,
+            &mut cleanup,
+        )
+        .await
+        {
+            Ok(runtime) => {
+                cleanup.disarm();
+                Ok(runtime)
+            }
+            Err(error) => {
+                cleanup.cleanup().await;
+                Err(error)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn build_inner(
+        request: PipelineRequest,
+        loaded: LoadedSettings,
+        host: Arc<StartupDynamicHost>,
+        dynamic: Option<Arc<DynamicWorkerClient>>,
+        screenshot_mode: ScreenshotMode,
+        desktop_settings: Option<DesktopRuntimeSettings>,
+        cleanup: &mut BuildCleanup,
+    ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::current();
+        let script_shutdown_timeout =
+            Duration::from_millis(setting_u64(&loaded, "python.script.shutdown_timeout_ms")?);
         let camera_config = camera_config(&loaded)?;
         let flip = FlipMode::from_str(setting_text(&loaded, "camera.flip_mode")?)
             .map_err(|_error| "camera flip setting is invalid".to_owned())?;
@@ -98,9 +173,23 @@ impl ProductionRuntime {
         let jpeg_quality = setting_u8(&loaded, "jpeg_quality")?;
         let screenshot_settings = ScreenshotRuntimeSettings::new(screenshot_format, jpeg_quality)
             .map_err(|_error| "screenshot settings are invalid".to_owned())?;
+        let serial_port = setting_text(&loaded, "serial.port")?.to_owned();
+        let serial_baud_rate = setting_u32(&loaded, "serial.baud_rate")?;
+        let serial_format = ControllerFormat::parse(setting_text(&loaded, "serial.data_format")?)
+            .ok_or_else(|| "serial format setting is invalid".to_owned())?;
+        let serial_config = if serial_port.is_empty() {
+            None
+        } else {
+            Some(
+                SerialConfig::new(serial_port.clone(), serial_baud_rate, serial_format)
+                    .map_err(|_error| "serial settings are invalid".to_owned())?,
+            )
+        };
+        let initial_notification_config = notification_config(&raw_values(&loaded))?;
         let camera =
             CameraManager::start(Arc::new(NativeCameraBackend), camera_config.clone(), flip)
-                .map_err(|_error| "camera runtime initialization failed".to_owned())?;
+                .map_err(|error| format!("camera runtime initialization failed: {error}"))?;
+        cleanup.camera = Some(camera.clone());
         let screenshots = ScreenshotService::new(
             camera.frame_source(),
             loaded.roots.data.clone(),
@@ -109,18 +198,12 @@ impl ProductionRuntime {
         );
 
         let serial = SerialManager::new(Arc::new(NativeSerialBackend));
-        let serial_port = setting_text(&loaded, "serial.port")?.to_owned();
-        let serial_baud_rate = setting_u32(&loaded, "serial.baud_rate")?;
-        let serial_format = ControllerFormat::parse(setting_text(&loaded, "serial.data_format")?)
-            .ok_or_else(|| "serial format setting is invalid".to_owned())?;
-        if !serial_port.is_empty() {
+        cleanup.serial = Some(serial.clone());
+        if let Some(serial_config) = serial_config {
             serial
-                .update_config(
-                    SerialConfig::new(serial_port.clone(), serial_baud_rate, serial_format)
-                        .map_err(|_error| "serial settings are invalid".to_owned())?,
-                )
+                .update_config(serial_config)
                 .await
-                .map_err(|_error| "serial runtime initialization failed".to_owned())?;
+                .map_err(|error| format!("serial runtime initialization failed: {error}"))?;
         }
 
         let notification_transport: Arc<dyn DiscordTransport> = match ReqwestDiscordTransport::new()
@@ -135,7 +218,6 @@ impl ProductionRuntime {
                 Arc::new(UnavailableDiscordTransport)
             }
         };
-        let initial_notification_config = notification_config(&raw_values(&loaded))?;
         let notifications = Arc::new(NotificationService::new(
             initial_notification_config,
             notification_transport,
@@ -165,7 +247,7 @@ impl ProductionRuntime {
                 jpeg_quality,
                 screenshot_settings.clone(),
             )
-            .map_err(|_error| "camera settings adapter initialization failed".to_owned())?,
+            .map_err(|error| format!("camera settings adapter initialization failed: {error}"))?,
         );
         applier.push(
             SerialSettingsApplier::new(
@@ -175,7 +257,7 @@ impl ProductionRuntime {
                 serial_baud_rate,
                 serial_format,
             )
-            .map_err(|_error| "serial settings adapter initialization failed".to_owned())?,
+            .map_err(|error| format!("serial settings adapter initialization failed: {error}"))?,
         );
         applier.push(NotificationSettingsApplier::new(
             Arc::clone(&notifications),
@@ -188,7 +270,7 @@ impl ProductionRuntime {
         let settings_snapshot = initial_settings_snapshot(&settings)?;
         let state_snapshot = initial_state_snapshot(&host, &camera, &serial).await?;
         let hub = StateHub::new(settings_snapshot, state_snapshot, STATE_HISTORY_CAPACITY)
-            .map_err(|_error| "application state initialization failed".to_owned())?;
+            .map_err(|error| format!("application state initialization failed: {error}"))?;
 
         let script_ui = ScriptUiCoordinator::new();
         let backend = Arc::new(ApplicationBackend::new(ApplicationBackendParts {
@@ -207,7 +289,7 @@ impl ProductionRuntime {
         }));
         let websocket_backend: Arc<dyn WebSocketBackend> = backend.clone();
         let websocket = WebSocketTransport::new(websocket_backend, WebSocketConfig::default())
-            .map_err(|_error| "WebSocket transport initialization failed".to_owned())?
+            .map_err(|error| format!("WebSocket transport initialization failed: {error}"))?
             .with_heartbeat_settings(websocket_settings);
         let broker = websocket.broker();
         script_ui.install_broker(broker.clone())?;
@@ -223,7 +305,7 @@ impl ProductionRuntime {
         ));
         let command_root = loaded.roots.data.join("Commands");
         std::fs::create_dir_all(&command_root)
-            .map_err(|_error| "user command root initialization failed".to_owned())?;
+            .map_err(|error| format!("user command root initialization failed: {error}"))?;
         let factory = Arc::new(ManagedUserScriptFactory::new(
             request,
             &loaded,
@@ -248,26 +330,25 @@ impl ProductionRuntime {
 
         let rest_backend: Arc<dyn RestBackend> = backend.clone();
         let router = rest::router(rest_backend).merge(websocket.router());
-        let mut tasks = Vec::new();
         if let Some(task) = fallback_media_task {
-            tasks.push(task);
+            cleanup.tasks.push(task);
         }
-        tasks.extend(spawn_device_state_events(
+        cleanup.tasks.extend(spawn_device_state_events(
             Arc::clone(&backend),
             &camera,
             &serial,
         ));
-        tasks.push(spawn_serial_events(&serial, broker));
-        tasks.push(spawn_runtime_reconciler(
+        cleanup.tasks.push(spawn_serial_events(&serial, broker));
+        cleanup.tasks.push(spawn_runtime_reconciler(
             Arc::clone(&backend),
             host.subscribe_runtime_changes(),
             desktop_settings,
         ));
-        tasks.push(spawn_dynamic_controller_publisher(
+        cleanup.tasks.push(spawn_dynamic_controller_publisher(
             Arc::clone(&backend),
             host.subscribe_controller_outputs(),
         ));
-        tasks.push(spawn_command_recompute(
+        cleanup.tasks.push(spawn_command_recompute(
             Arc::clone(&backend),
             Arc::clone(&commands),
             host.subscribe_command_recompute(),
@@ -279,11 +360,8 @@ impl ProductionRuntime {
             commands,
             camera,
             serial,
-            tasks,
-            script_shutdown_timeout: Duration::from_millis(setting_u64(
-                &loaded,
-                "python.script.shutdown_timeout_ms",
-            )?),
+            tasks: cleanup.take_tasks(),
+            script_shutdown_timeout,
         })
     }
 
@@ -294,8 +372,12 @@ impl ProductionRuntime {
     /// Executes shutdown steps 1 through 3 after `AppShutdownPre` has closed
     /// dynamic mutations.
     pub(crate) async fn stop_inputs_camera_and_scripts(&mut self) {
-        for task in &self.tasks {
+        let tasks = std::mem::take(&mut self.tasks);
+        for mut task in tasks {
             task.abort();
+            if timeout(SERVICE_STOP_TIMEOUT, &mut task).await.is_err() {
+                tracing::error!("production shutdown task did not join before its deadline");
+            }
         }
         let controller = {
             let arbiter = self.backend.host().controller_safety().arbiter();

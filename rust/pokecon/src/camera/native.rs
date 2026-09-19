@@ -295,8 +295,10 @@ mod platform {
             if let Ok(candidate) =
                 Camera::with_backend(index.clone(), requested, ApiBackend::MediaFoundation)
             {
-                camera = Some(candidate);
-                break;
+                if validate_format(config.clone(), candidate.camera_format()).is_ok() {
+                    camera = Some(candidate);
+                    break;
+                }
             }
         }
         let camera = camera.ok_or(CameraError::OpenFailed)?;

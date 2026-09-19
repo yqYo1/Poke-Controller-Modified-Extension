@@ -22,7 +22,7 @@
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（69/222） | Lua sandbox F1 + notification/serial focused tests passed; commit待ち |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（73/222） | OpenAPI 5 focused tests + Windows candidate source validation; commit待ち |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 未着手 | — |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
 
@@ -39,7 +39,7 @@
 | 18 | `rust/pokecon/src/application_backend.rs` | 1 | medium | Wave 1 | 修正済み・検証済み | application_backend focused test 3 passed; update-check HTTP/JSON deadlinesとdynamic-config error分類を実装 |
 | 20 | `rust/pokecon/src/bin/generate_contracts.rs` | 3 | medium,medium,low | Wave 1 | 未着手 | — |
 | 26 | `rust/pokecon/src/camera/manager.rs` | 4 | high,high,high,medium | Wave 1 | 修正済み・検証済み | camera manager tests: 5 passed; startup deadline、bounded queue、NoWritableSlot、timeout後shutdown所有権を修正 |
-| 29 | `rust/pokecon/src/camera/native.rs` | 1 | major | Wave 1 | 未着手 | — |
+| 29 | `rust/pokecon/src/camera/native.rs` | 1 | major | Wave 1 | 修正済み・検証済み | Windows MediaFoundation source validation added: Closest candidate is accepted only after effective format/fps/resolution validation; Linux cfg compile unaffected |
 | 34 | `rust/pokecon/src/command_service.rs` | 1 | high | Wave 1 | 未着手 | — |
 | 36 | `rust/pokecon/src/contract_generator.rs` | 2 | low,low | Wave 1 | 未着手 | — |
 | 38 | `rust/pokecon/src/contracts/dynamic_typings.rs` | 1 | medium | Wave 1 | 未着手 | — |
@@ -55,7 +55,7 @@
 | 63 | `rust/pokecon/src/dynamic/source.rs` | 1 | High | Wave 1 | 未着手 | — |
 | 64 | `rust/pokecon/src/dynamic/transaction.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 66 | `rust/pokecon/src/dynamic_runtime.rs` | 4 | high,high,medium,medium | Wave 1 | 修正済み・focused検証済み | dynamic runtime tests passed; startup-post/initialize deadlines, HostStopping ordering、receiver drain orderingを修正 |
-| 71 | `rust/pokecon/src/openapi_generator.rs` | 3 | medium,low,low | Wave 1 | 未着手 | — |
+| 71 | `rust/pokecon/src/openapi_generator.rs` | 3 | medium,low,low | Wave 1 | 修正済み・検証済み | server::openapi focused test 5 passed; try_parse、artifact path IO context、bare filename parent handlingを実装 |
 | 75 | `rust/pokecon/src/production.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | production focused test passed; BuildCleanupでbuild失敗cleanup、abort後join、error source保持を実装 |
 | 79 | `rust/pokecon/src/script_host.rs` | 3 | high,medium,medium | Wave 1 | 未着手 | — |
 | 80 | `rust/pokecon/src/script_runtime.rs` | 3 | high,high,medium | Wave 1 | 修正済み・検証済み | script_runtime focused compile/test passed; generation reuse拒否、initialize deadline、receiver cleanup、stderr safe warningを実装 |

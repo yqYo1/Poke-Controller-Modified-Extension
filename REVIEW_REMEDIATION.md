@@ -85,7 +85,7 @@
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
-| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 未着手 | — |
+| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guardを実装。残り4件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |

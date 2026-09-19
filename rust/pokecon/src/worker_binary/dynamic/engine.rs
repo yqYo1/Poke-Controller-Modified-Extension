@@ -375,8 +375,7 @@ impl DynamicEngine {
         &self,
         candidates: Vec<CommandInfo>,
     ) -> Result<Vec<CommandDisplayItem>, DynamicEngineError> {
-        let coordinator = self.0.coordinator.lock().await;
-        drop(coordinator);
+        let _coordinator = self.0.coordinator.lock().await;
         Ok(self.0.command_registry.sort(candidates).await?)
     }
 
@@ -391,8 +390,7 @@ impl DynamicEngine {
         selected_tag: &str,
         command: &CommandInfo,
     ) -> Result<bool, DynamicEngineError> {
-        let coordinator = self.0.coordinator.lock().await;
-        drop(coordinator);
+        let _coordinator = self.0.coordinator.lock().await;
         Ok(self
             .0
             .command_registry
@@ -411,8 +409,10 @@ impl DynamicEngine {
         generation: u64,
         candidates: Vec<CommandInfo>,
     ) -> Result<CommandCacheBuildResult, DynamicEngineError> {
-        let coordinator = self.0.coordinator.lock().await;
-        drop(coordinator);
+        let _coordinator = self.0.coordinator.lock().await;
+        if generation != self.0.generation.load(Ordering::Acquire) {
+            return Ok(CommandCacheBuildResult::Superseded { generation });
+        }
         Ok(self
             .0
             .command_registry
@@ -679,8 +679,7 @@ impl EngineInner {
     }
 
     async fn emit(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
-        let coordinator = self.coordinator.lock().await;
-        drop(coordinator);
+        let _coordinator = self.coordinator.lock().await;
         Ok(self.event_bus.emit(event).await?)
     }
 

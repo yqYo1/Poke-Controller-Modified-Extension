@@ -295,7 +295,7 @@ fn close_named_and_inline_objects(value: &mut Value) {
         }
         Value::Object(object) => {
             let has_properties = object.get("properties").is_some_and(Value::is_object);
-            if object.get("type").and_then(Value::as_str) == Some("object") && has_properties {
+            if has_properties {
                 object
                     .entry("additionalProperties")
                     .or_insert(Value::Bool(false));
@@ -396,10 +396,9 @@ mod tests {
             match value {
                 serde_json::Value::Array(values) => values.iter().for_each(visit),
                 serde_json::Value::Object(object) => {
-                    if object.get("type").and_then(serde_json::Value::as_str) == Some("object")
-                        && object
-                            .get("properties")
-                            .is_some_and(serde_json::Value::is_object)
+                    if object
+                        .get("properties")
+                        .is_some_and(serde_json::Value::is_object)
                     {
                         assert_eq!(object.get("additionalProperties"), Some(&false.into()));
                     }
@@ -424,6 +423,9 @@ mod tests {
             ("LauncherDestination", "kind"),
             ("NotificationTestRequest", "channel"),
             ("ScreenshotRequest", "destination"),
+            ("ScriptOverlayShape", "kind"),
+            ("ScriptTkWidget", "kind"),
+            ("ScriptUiAction", "action"),
             ("SerialControlRequest", "action"),
             ("ServerMessage", "type"),
         ] {

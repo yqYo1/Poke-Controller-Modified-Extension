@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **159 / 455 finding、53 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの38件を完了）。
-- Wave 3: **38 / 123 finding、13ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py、test_signing_manifest.py、rust-toolchain.toml、compatibility runner部分完了）**。
+- 現在の検証済み修正: **161 / 455 finding、53 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの40件を完了）。
+- Wave 3: **40 / 123 finding、13ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py、test_signing_manifest.py、rust-toolchain.toml、compatibility runner部分完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
@@ -25,7 +25,7 @@
 |---|---|---:|---:|---|---|
 | Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（114/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
-| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（38/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke/signing/toolchain/compatibility boundaries、contract-sync・mutation・Nix contract passed |
+| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（40/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke/signing/toolchain/compatibility boundaries、contract-sync・mutation・Nix contract passed |
 
 ## 4. ファイル別対応状態
 
@@ -101,7 +101,7 @@
 | 162 | `scripts/compatibility/inventory.py` | 4 | medium,low,low,low | Wave 3 | 未着手 | — |
 | 163 | `scripts/compatibility/promote.py` | 5 | high,high,medium,medium,medium | Wave 3 | 未着手 | — |
 | 164 | `scripts/compatibility/roll.py` | 2 | high,medium | Wave 3 | 未着手 | — |
-| 165 | `scripts/compatibility/runner.py` | 6 | high,high,medium,medium,medium,low | Wave 3 | 一部修正・検証済み | F1 timeout/failed_runtime、F2 sandbox path、F3 empty/incompatible rootsを`df89249`で実装。compatibility tests 8 passed、ruff check/format passed。F4/F5/F6未着手。 |
+| 165 | `scripts/compatibility/runner.py` | 6 | high,high,medium,medium,medium,low | Wave 3 | 修正済み・検証済み | F1/F2/F3 timeout+sandbox/root validation、F4 override threading、F5 atomic results writeを実装。compatibility tests 8 passed、ruff check/format passed。F6未着手。 |
 | 166 | `scripts/integration/editor_lsp_smoke.py` | 2 | high,medium | Wave 3 | 未着手 | — |
 | 168 | `scripts/integration/pidfd_signal.py` | 1 | Medium | Wave 3 | 未着手 | — |
 | 169 | `scripts/integration/proc_socket_evidence.py` | 1 | medium | Wave 3 | 未着手 | — |

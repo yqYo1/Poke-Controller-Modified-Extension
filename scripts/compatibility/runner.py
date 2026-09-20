@@ -433,6 +433,7 @@ def verify_promoted_corpora(
     compatibility_binary: Path,
     worker: Path,
     site_packages: Path,
+    repository_overrides: Mapping[str, Path],
 ) -> None:
     candidates = load_candidates(candidates_path)
     records = load_history(history_path)
@@ -469,7 +470,7 @@ def verify_promoted_corpora(
             commit=require_string(candidate.get("commit"), "candidate commit"),
             script_roots=baseline.script_roots,
         )
-        with materialize_repository(promoted, {}) as repository:
+        with materialize_repository(promoted, repository_overrides) as repository:
             actual_execution = verify_baseline(
                 promoted,
                 manifest,
@@ -482,6 +483,28 @@ def verify_promoted_corpora(
             failed_runtime(
                 f"promoted compatibility execution drift detected: {candidate_id}"
             )
+
+
+def write_results_atomic(path: Path, serialized: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as output:
+            temporary_path = Path(output.name)
+            output.write(serialized)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -532,8 +555,7 @@ def main() -> int:
         ):
             failed_runtime(f"compatibility result drift detected: {arguments.output}")
     else:
-        arguments.output.parent.mkdir(parents=True, exist_ok=True)
-        arguments.output.write_text(serialized, encoding="utf-8")
+        write_results_atomic(arguments.output, serialized)
     verify_promoted_corpora(
         arguments.registry,
         arguments.candidates,
@@ -542,6 +564,7 @@ def main() -> int:
         arguments.compatibility_binary,
         arguments.worker,
         arguments.site_packages,
+        parse_repository_overrides(arguments.repository),
     )
     return 0
 

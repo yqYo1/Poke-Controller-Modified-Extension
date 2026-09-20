@@ -109,7 +109,7 @@
 | 172 | `scripts/performance/benchmark.py` | 6 | high,high,medium,medium,medium,medium | Wave 3 | 未着手 | — |
 | 176 | `scripts/quality/run_parallel_checks.py` | 4 | medium,low,medium,low | Wave 3 | 未着手 | — |
 | 177 | `scripts/quality/source_filter.py` | 4 | high,medium,medium,low | Wave 3 | 未着手 | — |
-| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 safe ZIP member extraction、F3 production `normalize_pe`、F4 sysconfig regular-file/real-parent guards、F5 missing `--normalize-pe` failure、F6 literal CLI path redirect rejection、F8 symlink-aware wheel traversalを実装。release tests 88 passed、ruff check/format passed。F2/F7/F9/F10は未着手。 |
+| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 safe ZIP member extraction、F3 production `normalize_pe`、F4 sysconfig regular-file/real-parent guards、F5 missing `--normalize-pe` failure、F6 literal CLI path redirect rejection、F8 symlink-aware wheel traversalを`c5d5419`で実装。release tests 88 passed、ruff check/format passed。F2/F7/F9/F10は未着手。 |
 | 182 | `scripts/release/debian_install_smoke.sh` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 185 | `scripts/release/normalize_linux_elf.py` | 3 | medium,medium,medium | Wave 3 | 未着手 | — |
 | 187 | `scripts/release/package_smoke.py` | 4 | high,medium,medium,medium | Wave 3 | 未着手 | — |

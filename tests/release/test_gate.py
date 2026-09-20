@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,12 @@ RELEASE_FIXTURE_FILES = (
     "compatibility/fixed-manifest.json",
     "compatibility/fixed-results.json",
 )
+
+
+def repository_version(root: Path) -> str:
+    with (root / "Cargo.toml").open("rb") as source:
+        document = tomllib.load(source)
+    return str(document["workspace"]["package"]["version"])
 
 
 def workflow_section(document: str, start: str, end: str) -> str:
@@ -68,9 +75,10 @@ def copy_release_fixture(root: Path, fixture: Path) -> None:
 
 def test_repository_release_versions_and_contracts_match() -> None:
     root = Path(__file__).resolve().parents[2]
-    assert validate_release(root, "v0.1.0") == "0.1.0"
+    version = repository_version(root)
+    assert validate_release(root, f"v{version}") == version
     with pytest.raises(ValueError, match="must equal"):
-        validate_release(root, "v0.1.1")
+        validate_release(root, "v999.999.999")
 
 
 @pytest.mark.parametrize(
@@ -86,14 +94,15 @@ def test_release_requires_matching_static_python_project_version(
     root = Path(__file__).resolve().parents[2]
     fixture = tmp_path / "release"
     copy_release_fixture(root, fixture)
+    version = repository_version(root)
     pyproject_path = fixture / "pyproject.toml"
     pyproject = pyproject_path.read_text(encoding="utf-8")
-    current = 'version = "0.1.0"'
+    current = f'version = "{version}"'
     assert pyproject.count(current) == 1
     pyproject_path.write_text(pyproject.replace(current, replacement), encoding="utf-8")
 
     with pytest.raises(ValueError, match=error):
-        validate_release(fixture, "v0.1.0")
+        validate_release(fixture, f"v{version}")
 
 
 @pytest.mark.parametrize("features", [[], ["contract-generator"]])
@@ -103,6 +112,7 @@ def test_release_rejects_tauri_cargo_feature_selection(
     root = Path(__file__).resolve().parents[2]
     fixture = tmp_path / "release"
     copy_release_fixture(root, fixture)
+    version = repository_version(root)
 
     config_path = fixture / "rust/pokecon/tauri.conf.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -110,7 +120,7 @@ def test_release_rejects_tauri_cargo_feature_selection(
     config_path.write_text(json.dumps(config), encoding="utf-8")
 
     with pytest.raises(ValueError, match="must not select Cargo features"):
-        validate_release(fixture, "v0.1.0")
+        validate_release(fixture, f"v{version}")
 
 
 def test_checksums_cover_sorted_relative_artifacts(tmp_path: Path) -> None:
@@ -132,13 +142,15 @@ def test_checksums_cover_sorted_relative_artifacts(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "wheel_name",
     [
-        "poke_controller_modified_extension-0.1.0-cp314-abi3-manylinux_2_17_x86_64.whl",
-        "poke_controller_modified_extension-0.1.0-cp314-abi3-win_amd64.whl",
+        "poke_controller_modified_extension-{version}-cp314-abi3-manylinux_2_17_x86_64.whl",
+        "poke_controller_modified_extension-{version}-cp314-abi3-win_amd64.whl",
     ],
 )
 def test_checksums_reject_top_level_first_party_python_wheels(
     tmp_path: Path, wheel_name: str
 ) -> None:
+    version = repository_version(Path(__file__).resolve().parents[2])
+    wheel_name = wheel_name.format(version=version)
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir()
     (artifacts / wheel_name).write_bytes(b"obsolete first-party wheel")
@@ -148,11 +160,12 @@ def test_checksums_reject_top_level_first_party_python_wheels(
 
 
 def test_checksums_allow_nested_and_generic_third_party_wheels(tmp_path: Path) -> None:
+    version = repository_version(Path(__file__).resolve().parents[2])
     artifacts = tmp_path / "artifacts"
     wheelhouse = artifacts / "python-wheels"
     wheelhouse.mkdir(parents=True)
     nested_first_party = (
-        wheelhouse / "poke_controller_modified_extension-0.1.0-py3-none-any.whl"
+        wheelhouse / f"poke_controller_modified_extension-{version}-py3-none-any.whl"
     )
     third_party = artifacts / "numpy-2.2.6-cp314-cp314-manylinux_2_17_x86_64.whl"
     nested_first_party.write_bytes(b"nested wheelhouse member")

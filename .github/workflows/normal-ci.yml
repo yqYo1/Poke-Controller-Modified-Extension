@@ -711,6 +711,9 @@ jobs:
       - name: Enforce timing p95 history gate (blocking, fail-closed)
         env:
           GH_TOKEN: ${{ github.token }}
+          CURRENT_EVENT: ${{ github.event_name }}
+          CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}
+          CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -euo pipefail
           timing_dir="$RUNNER_TEMP/pokecon-ci-timing"
@@ -768,7 +771,26 @@ jobs:
           mkdir -p "$tmp_download_dir"
           collected=1
           index=1
-          candidate_lines="$(jq -r --arg cur "${GITHUB_RUN_ID}" '.workflow_runs[] | select((.id|tostring) != $cur) | select(.conclusion == "success" or .conclusion == "failure") | "\(.id) \(.run_attempt // 1)"' "$runs_json")"
+          candidate_lines="$(jq -r \
+            --arg cur "${GITHUB_RUN_ID}" \
+            --arg current_event "$CURRENT_EVENT" \
+            --arg current_branch "$CURRENT_BRANCH" \
+            --arg current_pr_number "$CURRENT_PR_NUMBER" \
+            '
+            .workflow_runs[]
+            | select((.id | tostring) != $cur)
+            | select(.conclusion == "success" or .conclusion == "failure")
+            | select(.event == $current_event)
+            | select(.head_branch == $current_branch)
+            | select(
+                if $current_event == "pull_request" then
+                  ((.pull_requests // [])
+                   | map(.number)
+                   | index($current_pr_number | tonumber)) != null
+                else true end
+              )
+            | "\(.id) \(.run_attempt // 1)"
+            ' "$runs_json")"
           while IFS=" " read -r candidate_id candidate_attempt; do
             if [ "$collected" -ge 10 ]; then break; fi
             if [ -z "$candidate_id" ] || [ -z "$candidate_attempt" ]; then continue; fi
@@ -821,6 +843,11 @@ jobs:
               fi
               candidate_kind="$(jq -r '.change_kind' "$json_path")"
               if [ "$candidate_kind" != "$change_kind" ]; then
+                continue
+              fi
+              candidate_event="$(jq -r '.cache.event // ""' "$json_path")"
+              if [ "$candidate_event" != "$CURRENT_EVENT" ]; then
+                echo "timing p95 gate: skipping run $candidate_id because report event is ${candidate_event:-missing}, expected $CURRENT_EVENT"
                 continue
               fi
               dest="$history_dir/$(printf "%02d" "$index")-run-${candidate_id}.json"

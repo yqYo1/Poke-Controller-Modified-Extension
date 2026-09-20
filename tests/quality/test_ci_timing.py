@@ -864,6 +864,14 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     assert "Enforce timing p95 history gate (blocking, fail-closed)" in workflow
     assert "nix run .#ci-timing -- p95" in workflow
     assert 'select(.conclusion == "success" or .conclusion == "failure")' in workflow
+    assert "CURRENT_EVENT: ${{ github.event_name }}" in workflow
+    assert "CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}" in workflow
+    assert (
+        "CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}" in workflow
+    )
+    assert "select(.event == $current_event)" in workflow
+    assert "select(.head_branch == $current_branch)" in workflow
+    assert "index($current_pr_number | tonumber)" in workflow
     assert "actions/runs/${candidate_id}/jobs?per_page=100" in workflow
     assert 'select(.name == "Normal CI Required")' in workflow
     assert "required_conclusion" in workflow
@@ -876,6 +884,11 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     assert "name == $name" in workflow
     assert 'name "timing-report.json" -print -quit' in workflow
     assert "if-no-files-found: warn" in workflow
+    assert "jq -r '.cache.event // \"\"'" in workflow
+    assert (
+        "report event is ${candidate_event:-missing}, expected $CURRENT_EVENT"
+        in workflow
+    )
     # Must not contain old caveat non-blocking wording
     assert "caveat: insufficient history for blocking p95" not in workflow
     # Must preserve completion-safe upstream_completed_max and cache trust

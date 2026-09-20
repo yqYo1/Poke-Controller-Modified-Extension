@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "58d792c1305e51452678ab4f90a3ff0be4bfa7d28d836ca9a30bcf8a14f5ac38";
+      canonicalFlakeHash = "d95a4b56ce4dcf9fecbc4f3548fb57235df15883c3896a2e4fd7e65a72a0782f";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "c5dc1dbbb9cf5d43d0fbd82826cf961a5c227f2e78abb6968bab8a53411abd6b";
+          expectedAuditTestHash = "8e907a9a64c9baccdb3f35fe8608612ec845b62474d082475516b8677a5ae8ee";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -4115,6 +4115,7 @@
                 pythonEnv
                 pkgs.actionlint
                 pkgs.basedpyright
+                pkgs.git
                 pkgs.markdownlint-cli
                 pkgs.ripgrep
                 pkgs.shellcheck
@@ -4124,6 +4125,8 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
+                source_gate_root="$(pwd -P)"
+                export POKECON_SOURCE_GATE_ROOT="$source_gate_root"
                 cd "${repositorySource}"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
@@ -4143,11 +4146,11 @@
                   ' \
                   --next \
                   source-identity \
-                  "${pkgs.bash}/bin/bash" -euo pipefail -c '
-                    python -m scripts.quality.source_filter
-                    python -m scripts.quality.source_guard rust --require-applicable
-                    python -m scripts.release.gate
-                  ' \
+                  "${pkgs.bash}/bin/bash" -euo pipefail -c "
+                    python -m scripts.quality.source_filter --root \"$source_gate_root\"
+                    python -m scripts.quality.source_guard rust --root \"$source_gate_root\" --require-applicable
+                    python -m scripts.release.gate --root \"$source_gate_root\"
+                  " \
                   --next \
                   prose \
                   "${pkgs.bash}/bin/bash" -euo pipefail -c '
@@ -4352,8 +4355,9 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 ${setupSourceGateEnvironment}
+                source_gate_root="$(pwd -P)"
                 cd "${repositorySource}"
-                python -m scripts.quality.source_guard "$@"
+                python -m scripts.quality.source_guard --root "$source_gate_root" "$@"
               '';
             };
 
@@ -4365,8 +4369,9 @@
               ];
               text = ''
                 ${setupSourceGateEnvironment}
+                source_gate_root="$(pwd -P)"
                 cd "${repositorySource}"
-                python -m scripts.quality.source_filter "$@"
+                python -m scripts.quality.source_filter --root "$source_gate_root" "$@"
               '';
             };
 
@@ -4375,8 +4380,9 @@
               runtimeInputs = [ pythonEnv ];
               text = ''
                 ${setupSourceGateEnvironment}
+                source_gate_root="$(pwd -P)"
                 cd "${repositorySource}"
-                python -m scripts.release.gate "$@"
+                python -m scripts.release.gate --root "$source_gate_root" "$@"
               '';
             };
 

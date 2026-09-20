@@ -1646,7 +1646,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "487d912a0c058e2e2a5be928100898c93fcf015b45f6a961af89e072dbd53702"
+            "ad09723a5ef490d127f531ad3f2f8079f1a25af270fc94b9050b2150e26ae7e4"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
@@ -2330,7 +2330,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "f8b0f34f66a8ce0c72930e5070a1a5ee1eea217b49e80edafd20235dae7d0249"
+        == "f2b147d100ece442a6f897f619f1297e80298f78a37b4a9508ebd094dafbe8ec"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (

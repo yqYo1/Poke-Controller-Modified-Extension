@@ -11,7 +11,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NoReturn, cast
 
 import pytest
 
@@ -1266,10 +1266,19 @@ def test_wheel_bootstrap_uses_a_zip_compatible_reproducible_epoch(
 def test_build_wheels_validates_native_tools_before_uv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    def fail_run(
+        _arguments: Sequence[str | Path],
+        *,
+        _environment: Mapping[str, str] | None = None,
+        _capture: bool = False,
+    ) -> NoReturn:
+        message = "uv must not run before tool validation"
+        raise AssertionError(message)
+
     monkeypatch.setattr(
         release_runtime,
         "run",
-        lambda *_args, **_kwargs: pytest.fail("uv must not run before tool validation"),
+        fail_run,
     )
     with pytest.raises(
         ValueError, match="patchelf must be one executable regular file"
@@ -2029,23 +2038,23 @@ def test_pe_non_pe_files_remain_unchanged(tmp_path: Path) -> None:
         assert after_data == content
     plain = tmp_path / "plain.bin"
     plain.write_bytes(b"NOT_MZ_CONTENT")
-    assert release_runtime._normalize_pe(plain) is False  # noqa: SLF001
+    assert release_runtime.normalize_pe(plain) is False
     assert plain.read_bytes() == b"NOT_MZ_CONTENT"
     non_pe = tmp_path / "nonpe.dat"
     non_pe.write_bytes(b"\x00\x01\x02\x03")
-    assert release_runtime._normalize_pe(non_pe) is False  # noqa: SLF001
+    assert release_runtime.normalize_pe(non_pe) is False
 
 
 def test_pe_without_debug_directory_only_coff_normalized(tmp_path: Path) -> None:
     pe_bytes = _build_minimal_pe(coff_timestamp=0xDEADBEEF, debug_timestamps=None)
     pe_path = tmp_path / "solo.pyd"
     pe_path.write_bytes(pe_bytes)
-    changed = release_runtime._normalize_pe(pe_path)  # noqa: SLF001
+    changed = release_runtime.normalize_pe(pe_path)
     assert changed is True
     normalized = pe_path.read_bytes()
     assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
     assert _extract_debug_timestamps(normalized) == []
-    assert release_runtime._normalize_pe(pe_path) is False  # noqa: SLF001
+    assert release_runtime.normalize_pe(pe_path) is False
     assert pe_path.read_bytes() == normalized
 
 
@@ -2053,14 +2062,14 @@ def test_pe_malformed_mz_fails_closed(tmp_path: Path) -> None:
     truncated = tmp_path / "truncated.pyd"
     truncated.write_bytes(b"MZ")
     with pytest.raises(ValueError, match=r"PE.*truncated.*DOS"):
-        release_runtime._normalize_pe(truncated)  # noqa: SLF001
+        release_runtime.normalize_pe(truncated)
     bad_lfanew = tmp_path / "bad_lfanew.pyd"
     data = bytearray(b"MZ" + b"\x00" * 58 + (0x1000).to_bytes(4, "little"))
     bad_lfanew.write_bytes(bytes(data))
     with pytest.raises(
         ValueError, match=r"PE.*truncated.*e_lfanew|PE.*invalid e_lfanew"
     ):
-        release_runtime._normalize_pe(bad_lfanew)  # noqa: SLF001
+        release_runtime.normalize_pe(bad_lfanew)
     bad_sig = tmp_path / "bad_sig.pyd"
     data = bytearray(0x100)
     data[0:2] = b"MZ"
@@ -2068,7 +2077,7 @@ def test_pe_malformed_mz_fails_closed(tmp_path: Path) -> None:
     data[0x80:0x84] = b"XX\x00\x00"
     bad_sig.write_bytes(bytes(data))
     with pytest.raises(ValueError, match=r"PE.*invalid.*signature"):
-        release_runtime._normalize_pe(bad_sig)  # noqa: SLF001
+        release_runtime.normalize_pe(bad_sig)
     wheel = tmp_path / "bad-1.0-py3-none-any.whl"
     _make_wheel(
         wheel,
@@ -2253,9 +2262,9 @@ def test_normalize_pe_non_pe_and_elf_are_noop(tmp_path: Path) -> None:
     assert elf.read_bytes()[:4] == b"\x7fELF"
     empty = tmp_path / "empty.bin"
     empty.write_bytes(b"\x00\x01\x02\x03")
-    assert release_runtime.normalize_pe(empty) is False  # type: ignore[attr-defined]
-    # _normalize_pe for wheels must also be noop on ELF
-    assert release_runtime._normalize_pe(elf) is False  # noqa: SLF001
+    assert release_runtime.normalize_pe(empty) is False
+    # normalize_pe must also be a noop on ELF
+    assert release_runtime.normalize_pe(elf) is False
 
 
 def test_normalize_pe_malformed_fails_closed(tmp_path: Path) -> None:

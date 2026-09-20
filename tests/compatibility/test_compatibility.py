@@ -112,9 +112,13 @@ def test_compatibility_runner_rejects_manifest_paths_outside_sandbox(
         return command_root
 
     monkeypatch.setattr("scripts.compatibility.runner.materialize_scripts", materialize)
+
+    def fake_run_managed_discovery(*_args: object) -> dict[str, object]:
+        return {"commands": []}
+
     monkeypatch.setattr(
         "scripts.compatibility.runner.run_managed_discovery",
-        lambda *_args: {"commands": []},
+        fake_run_managed_discovery,
     )
     manifest = {
         "id": "fixture",

@@ -7,7 +7,7 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DETERMINISTIC_MSVS_RUSTFLAGS = (
     'rustflags: "-C debuginfo=0 -C strip=debuginfo '
-    '-C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
+    '-C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"'
 )
 
 

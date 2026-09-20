@@ -15,17 +15,17 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **155 / 455 finding、50 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの34件を完了）。
-- Wave 3: **34 / 123 finding、11ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py、test_signing_manifest.py部分完了）**。
+- 現在の検証済み修正: **156 / 455 finding、52 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの35件を完了）。
+- Wave 1: **114 / 222 finding、35ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **35 / 123 finding、12ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py、test_signing_manifest.py、rust-toolchain.toml部分完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（113/222） | realtime_connection focused compile/test passed; signed commits continue |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（114/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
-| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（34/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke/signing boundaries、contract-sync・mutation・Nix contract passed |
+| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（35/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke/signing/toolchain boundaries、contract-sync・mutation・Nix contract passed |
 
 ## 4. ファイル別対応状態
 
@@ -164,8 +164,8 @@
 | 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `5471e53`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
-| 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 未着手 | — |
-| 311 | `rust/pokecon/Cargo.toml` | 3 | high,medium,low | Wave 1 | 未着手 | — |
+| 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 修正済み・検証済み | Rust 1.95.0 pin＋flake rust-toolchain hash同期、Nix native_serial_pty compile（integration-test-support）成功。 |
+| 311 | `rust/pokecon/Cargo.toml` | 3 | high,medium,low | Wave 1 | 一部修正・検証済み | F1 nix 0.30.1 helpで`pty` feature不存在＋既存`term` featureとnative_serial_pty compile成功を確認し、証拠付き非該当。F2/F3未着手。 |
 | 313 | `rust/pokecon/registry/acceptance-record.schema.json` | 4 | medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 314 | `rust/pokecon/registry/ci.json` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
 | 317 | `rust/pokecon/registry/generation.json` | 1 | major | Wave 1 | 未着手 | — |

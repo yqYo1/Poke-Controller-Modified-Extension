@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "829bf94e041bfc010d0bf718892a91a76e35f1b5dd46f103e0bd5658d994e161";
+      canonicalFlakeHash = "e1d0db0fefc781885682ab904e0371cbf918fac931775efcacbda11c80e23bb2";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -174,7 +174,7 @@
               (builtins.readDir inputs.self.outPath)."rust-toolchain.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/rust-toolchain.toml")
-                == "d3ceb1cb2217972a209e49ca1ac585998f21a2dabf96e6ceda03e9442e34ee29"
+                == "ebaf11fbd4a554b7c212f1f9529cdf4afc4f5dae0ae0c8166caa5a967239958b"
             ) "Rust toolchain file changed or is not a regular file";
             pkgsWithOverlays.rust-bin.fromRustupToolchainFile (inputs.self.outPath + "/rust-toolchain.toml");
           rustPlatform = pkgs.makeRustPlatform {

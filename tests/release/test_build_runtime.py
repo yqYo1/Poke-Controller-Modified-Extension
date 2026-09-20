@@ -99,6 +99,11 @@ def emulate_redirects(
     monkeypatch.setattr(Path, "resolve", fake_resolve)
 
 
+def test_default_worker_smoke_is_headless_and_hardware_check_is_explicit() -> None:
+    assert "get_device_count" not in release_runtime.WORKER_RUNTIME_SMOKE
+    assert "get_device_count" in release_runtime.WORKER_RUNTIME_AUDIO_HARDWARE_SMOKE
+
+
 @pytest.mark.parametrize(
     ("host_bytecode", "supplied_environment"),
     [

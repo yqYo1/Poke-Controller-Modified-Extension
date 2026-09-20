@@ -39,6 +39,12 @@ WORKER_RUNTIME_SMOKE = """\
 import cv2, numpy, pandas, PIL, pyaudio, scipy
 
 audio = pyaudio.PyAudio()
+audio.terminate()
+"""
+WORKER_RUNTIME_AUDIO_HARDWARE_SMOKE = """\
+import cv2, numpy, pandas, PIL, pyaudio, scipy
+
+audio = pyaudio.PyAudio()
 stream = None
 try:
     inputs = [
@@ -1268,6 +1274,8 @@ def verify_wheelhouse(
     wheelhouse: Path,
     workspace: Path,
     runtime_library_path: Path | None,
+    *,
+    require_audio_hardware: bool = False,
 ) -> list[dict[str, str]]:
     direct = workspace / "requirements-direct.txt"
     compiled = workspace / "requirements-compiled.txt"
@@ -1310,7 +1318,12 @@ def verify_wheelhouse(
             if not current
             else os.pathsep.join((str(runtime_library_path), current))
         )
-    run([verify_python, "-c", WORKER_RUNTIME_SMOKE], environment=smoke_environment)
+    smoke = (
+        WORKER_RUNTIME_AUDIO_HARDWARE_SMOKE
+        if require_audio_hardware
+        else WORKER_RUNTIME_SMOKE
+    )
+    run([verify_python, "-c", smoke], environment=smoke_environment)
     inventory = run(
         [
             uv,
@@ -1360,6 +1373,7 @@ def build_release_runtime(
     runtime_library_path: Path | None = None,
     execution_loader: Path | None = None,
     execution_library_path: str | None = None,
+    require_audio_hardware: bool = False,
 ) -> dict[str, object]:
     if _path_exists_including_dangling(
         runtime_output
@@ -1389,6 +1403,7 @@ def build_release_runtime(
             runtime_library_path,
             execution_loader,
             execution_library_path,
+            require_audio_hardware,
         )
         _publish_staged_directory(runtime_stage, runtime_output)
         published.append(runtime_output)
@@ -1422,6 +1437,7 @@ def _build_release_runtime_direct(
     runtime_library_path: Path | None = None,
     execution_loader: Path | None = None,
     execution_library_path: str | None = None,
+    require_audio_hardware: bool = False,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(
         prefix="pokecon-release-runtime-", dir=runtime_output.parent
@@ -1473,14 +1489,25 @@ def _build_release_runtime_direct(
             strip,
             vcpkg_path,
         )
-        inventory = verify_wheelhouse(
-            uv,
-            execution_python,
-            project,
-            wheelhouse_output,
-            workspace,
-            runtime_library_path,
-        )
+        if require_audio_hardware:
+            inventory = verify_wheelhouse(
+                uv,
+                execution_python,
+                project,
+                wheelhouse_output,
+                workspace,
+                runtime_library_path,
+                require_audio_hardware=True,
+            )
+        else:
+            inventory = verify_wheelhouse(
+                uv,
+                execution_python,
+                project,
+                wheelhouse_output,
+                workspace,
+                runtime_library_path,
+            )
         if sha256_file(raw_python) != raw_python_digest:
             message = "release build changed the raw portable Python executable"
             raise ValueError(message)
@@ -1590,6 +1617,11 @@ def main() -> int:
     parser.add_argument("--runtime-library-path", type=Path)
     parser.add_argument("--execution-loader", type=Path)
     parser.add_argument("--execution-library-path")
+    parser.add_argument(
+        "--require-audio-hardware",
+        action="store_true",
+        help="require a physical audio input device during the release smoke test",
+    )
     arguments = parser.parse_args()
     if arguments.normalize_pe is not None:
         if any(
@@ -1635,6 +1667,7 @@ def main() -> int:
         if arguments.execution_loader is None
         else arguments.execution_loader.resolve(),
         arguments.execution_library_path,
+        arguments.require_audio_hardware,
     )
     return 0
 

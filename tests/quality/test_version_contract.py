@@ -46,39 +46,54 @@ def test_pure_python_package_builds_offline_without_native_payload(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    uv = Path(os.environ["POKECON_TEST_UV"])
-    assert uv.is_file()
+    uv_value = os.environ.get("POKECON_TEST_UV")
+    if not uv_value:
+        message = "POKECON_TEST_UV must be set by the Nix quality task"
+        raise RuntimeError(message)
+    uv = Path(uv_value)
+    if not uv.is_file():
+        message = f"POKECON_TEST_UV is not a regular file: {uv}"
+        raise RuntimeError(message)
     output = tmp_path / "wheel"
     isolated_home = tmp_path / "home"
     isolated_tmp = tmp_path / "tmp"
     isolated_cache = tmp_path / "cache"
     for directory in (output, isolated_home, isolated_tmp, isolated_cache):
         directory.mkdir()
+    path_value = os.environ.get("PATH")
+    if not path_value:
+        message = "PATH must be set by the Nix quality task"
+        raise RuntimeError(message)
     environment = {
         "HOME": str(isolated_home),
-        "PATH": os.environ["PATH"],
+        "PATH": path_value,
         "TMPDIR": str(isolated_tmp),
         "UV_CACHE_DIR": str(isolated_cache),
         "UV_NO_CONFIG": "1",
         "UV_OFFLINE": "1",
     }
-    subprocess.run(  # noqa: S603 - executable path is injected by the pinned Nix task
-        (
-            str(uv),
-            "--no-config",
-            "build",
-            "--offline",
-            "--no-cache",
-            "--wheel",
-            "--out-dir",
-            str(output),
-        ),
-        cwd=root,
-        env=environment,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(  # noqa: S603 - executable path is injected by the pinned Nix task
+            (
+                str(uv),
+                "--no-config",
+                "build",
+                "--offline",
+                "--no-cache",
+                "--wheel",
+                "--out-dir",
+                str(output),
+            ),
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as error:
+        message = "uv pure-Python package build exceeded 120 seconds"
+        raise AssertionError(message) from error
 
     wheels = tuple(output.glob("*.whl"))
     assert tuple(wheel.name for wheel in wheels) == (

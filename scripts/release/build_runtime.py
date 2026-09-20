@@ -1111,6 +1111,7 @@ def repack_wheel(root: Path, output: Path) -> None:
             relative = path.relative_to(root).as_posix()
             info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
             mode = stat.S_IMODE(path.stat().st_mode)
             info.external_attr = mode << 16
             archive.writestr(info, path.read_bytes(), compresslevel=9)

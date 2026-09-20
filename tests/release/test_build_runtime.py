@@ -1876,6 +1876,9 @@ def test_pe_normalizes_coff_and_removes_debug_records(tmp_path: Path) -> None:
     normalize_wheel(wheel, None, None)
     with zipfile.ZipFile(wheel) as archive:
         normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
+        assert (
+            archive.getinfo("pyaudio/_portaudio.cp314-win_amd64.pyd").create_system == 3
+        )
     assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
     assert _extract_debug_timestamps(normalized) == []
     assert normalized[0x200 : 0x200 + 56] == b"\x00" * 56

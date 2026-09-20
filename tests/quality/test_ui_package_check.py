@@ -2320,7 +2320,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "91922c47f9a058b31ebfccd4510f9f52fbd916b2ea848853269facfc5ea50f8e"
+        == "359218f3c7e3a19f3ba62497b9c3fcfd4fbd7f45418b7cc746ad06f4098fe668"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -5119,7 +5119,7 @@ pub mod websocket;
         rust_impl_method_body(
             sources["production.rs"],
             "ProductionRuntime",
-            r"\bpub\s*\(\s*crate\s*\)\s+async\s+fn\s+build\s*\(",
+            r"\basync\s+fn\s+build_inner\s*\(",
             attributes=("#[allow(clippy::too_many_lines)]",),
         )
     )
@@ -5609,13 +5609,14 @@ pub use entrypoint::{MainError, run_cli};
     )
     assert compact_rust(resource_root_retarget_body) == compact_rust(
         """
-        self.recipe.request.resource_root = resource_root;
+        let mut next_request = self.recipe.request.clone();
+        next_request.resource_root = resource_root;
+        let mut next_settings = self.settings.clone();
         for setting in &self.recipe.registry.settings {
             if !matches!(&setting.default, DefaultValue::ResourcePath { .. }) {
                 continue;
             }
-            let resolved = self
-                .settings
+            let resolved = next_settings
                 .values
                 .get_mut(&setting.id)
                 .ok_or_else(|| PipelineError::MissingCanonicalSetting(setting.id.clone()))?;
@@ -5623,12 +5624,14 @@ pub use entrypoint::{MainError, run_cli};
                 resolved.value = default_value(
                     setting,
                     Some(&self.roots),
-                    &self.recipe.request.resource_root,
+                    &next_request.resource_root,
                     SettingSource::Default,
                 )?;
             }
         }
-        validate_snapshot(&self.settings.values)?;
+        validate_snapshot(&next_settings.values)?;
+        self.recipe.request = next_request;
+        self.settings = next_settings;
         Ok(self)
         """
     )
@@ -15187,7 +15190,7 @@ impl BoundServer {{"""
     )
     resource_root_retarget_recipe_omitted = replace_once(
         "settings/pipeline.rs",
-        "        self.recipe.request.resource_root = resource_root;",
+        "        next_request.resource_root = resource_root;",
         "        let _resource_root = resource_root;",
     )
     resource_root_retarget_default_kind_guard_omitted = replace_once(

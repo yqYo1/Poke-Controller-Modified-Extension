@@ -15,8 +15,9 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **105 / 455 finding、39 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timingの2件を完了）。
-- Wave 1: **95 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **2 / 123 finding、2ファイル（timing.py完了、normal-ci.yml F1のみ）**。
+- 現在の検証済み修正: **108 / 455 finding、39 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
+- Wave 1: **95 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
+- 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
 
@@ -24,7 +25,7 @@
 |---|---|---:|---:|---|---|
 | Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（95/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
-| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 未着手 | — |
+| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（5/123） | timing p95 bootstrap、normal-ci timeout/action SHA、contract-sync・mutation・Nix contract passed |
 
 ## 4. ファイル別対応状態
 
@@ -85,7 +86,7 @@
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | ScriptExecutionOutcome now deny_unknown_fields; payload bounds F2/F3 pending |
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
-| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guard、callback内sourceのbounded defer/drainを実装。`nix run .#cargo -- test -p pokecon --all-features --lib` 453 passed、残り4件は未着手 |
+| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guard、callback内source/profile switchのbounded defer/drainを実装。dynamic lifecycle bidirectional IPC、engine回帰、`nix run .#cargo -- test -p pokecon --all-features --lib` 453 passed。残り4件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
@@ -160,7 +161,7 @@
 | 278 | `web/src/lib/settings.ts` | 4 | high,medium,medium,medium | Wave 2 | 一部修正・検証済み | Nix devShell Bun settings test 6 passed; subscriber isolation/stale refresh/bounded retired IDs fixed, F4 pending |
 | 280 | `web/src/lib/vite-config.test.ts` | 3 | medium,medium,low | Wave 2 | 未着手 | — |
 | 286 | `web/src/routes/page.test.ts` | 4 | medium,medium,medium,low | Wave 2 | 未着手 | — |
-| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | `fb62a63`; 10件未満のtiming historyはwarning付きでgate未適用とし、p95を捏造せずbootstrap deadlockを解消。job timeoutとaction SHA固定は未着手。 |
+| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `pending`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
 | 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 未着手 | — |

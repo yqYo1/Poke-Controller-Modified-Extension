@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
 use parking_lot::Mutex;
@@ -30,6 +30,7 @@ use crate::worker_binary::dynamic::runtime::python::PythonRuntime;
 
 const FIRST_PUBLIC_HANDLER_ID: u64 = 3;
 const MAX_DEFERRED_SOURCES: usize = 64;
+const MAX_DEFERRED_PROFILE_SWITCHES: usize = 1;
 
 thread_local! {
     static CURRENT_EVALUATION: RefCell<Option<Arc<EvaluationSession>>> = const { RefCell::new(None) };
@@ -176,6 +177,22 @@ impl Drop for InvocationScope {
     }
 }
 
+#[derive(Clone, Debug)]
+struct DeferredProfileSwitch {
+    name: String,
+    changes: BTreeMap<String, Value>,
+}
+
+struct ProfileSwitchRunningGuard<'a> {
+    running: &'a AtomicBool,
+}
+
+impl Drop for ProfileSwitchRunningGuard<'_> {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::Release);
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DeadlineCheckpoint {
     Soft {
@@ -245,6 +262,8 @@ pub(crate) struct EngineInner {
     command_registry: CommandRegistry,
     coordinator: Arc<AsyncMutex<()>>,
     deferred_sources: Mutex<Vec<ResolvedSource>>,
+    deferred_profile_switches: Mutex<Vec<DeferredProfileSwitch>>,
+    profile_switch_running: AtomicBool,
     runtimes: Mutex<RuntimeSet>,
     runtime_handle: Handle,
     generation: AtomicU64,
@@ -301,6 +320,8 @@ impl DynamicEngine {
             command_registry,
             coordinator: Arc::new(AsyncMutex::new(())),
             deferred_sources: Mutex::new(Vec::new()),
+            deferred_profile_switches: Mutex::new(Vec::new()),
+            profile_switch_running: AtomicBool::new(false),
             runtimes: Mutex::new(RuntimeSet::default()),
             runtime_handle,
             generation: AtomicU64::new(0),
@@ -358,7 +379,7 @@ impl DynamicEngine {
             .0
             .load_resolved_locked(source, true, true, coordinator)
             .await?;
-        self.0.drain_deferred_sources().await?;
+        self.0.drain_deferred_work().await?;
         Ok(result)
     }
 
@@ -490,7 +511,7 @@ impl EngineInner {
         let result = self
             .load_resolved_once(source, replace_generation, mark_current)
             .await?;
-        self.drain_deferred_sources().await?;
+        self.drain_deferred_work().await?;
         Ok(result)
     }
 
@@ -703,7 +724,7 @@ impl EngineInner {
             let _coordinator = self.coordinator.clone().lock_owned().await;
             self.event_bus.emit(event).await?
         };
-        self.drain_deferred_sources().await?;
+        self.drain_deferred_work().await?;
         Ok(result)
     }
 
@@ -727,6 +748,56 @@ impl EngineInner {
                 }
             }
         }
+    }
+
+    async fn drain_deferred_work(self: &Arc<Self>) -> Result<(), DynamicEngineError> {
+        loop {
+            self.drain_deferred_sources().await?;
+            let deferred = self.deferred_profile_switches.lock().pop();
+            let Some(deferred) = deferred else {
+                return Ok(());
+            };
+            let result = self
+                .switch_profile(&deferred.name, &deferred.changes)
+                .await?;
+            if !matches!(result, DynamicProfileSwitchResult::Switched { .. }) {
+                self.record_evaluation_failure(&format!(
+                    "deferred profile switch was not applied: {result:?}"
+                ));
+            }
+        }
+    }
+
+    fn defer_profile_switch(
+        &self,
+        name: &str,
+        changes: &BTreeMap<String, Value>,
+    ) -> Result<bool, DynamicEngineError> {
+        if self.profile_switch_running.load(Ordering::Acquire) {
+            let _ = self.profile_switch_rejected(DynamicHostError::new(
+                "ProfileSwitchBusy",
+                "another profile switch is already in progress",
+            ));
+            return Ok(false);
+        }
+        let mut deferred = self.deferred_profile_switches.lock();
+        if deferred.len() >= MAX_DEFERRED_PROFILE_SWITCHES {
+            return Err(DynamicEngineError::Evaluation(
+                "deferred profile switch queue is full".to_owned(),
+            ));
+        }
+        if !deferred.is_empty() {
+            let _ = self.profile_switch_rejected(DynamicHostError::new(
+                "ProfileSwitchBusy",
+                "another profile switch is already queued",
+            ));
+            return Ok(false);
+        }
+        deferred.push(DeferredProfileSwitch {
+            name: name.to_owned(),
+            changes: changes.clone(),
+        });
+        Ok(true)
     }
 
     fn record_evaluation_failure(&self, message: &str) {
@@ -1000,6 +1071,9 @@ impl EngineInner {
                 Ok(true)
             });
         }
+        if CURRENT_INVOCATION.with(|current| current.borrow().is_some()) {
+            return self.defer_profile_switch(name, &BTreeMap::new());
+        }
         let result = self
             .runtime_handle
             .block_on(self.switch_profile(name, &BTreeMap::new()))?;
@@ -1014,6 +1088,19 @@ impl EngineInner {
         name: &str,
         changes: &BTreeMap<String, Value>,
     ) -> Result<DynamicProfileSwitchResult, DynamicEngineError> {
+        if self
+            .profile_switch_running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Ok(self.profile_switch_rejected(DynamicHostError::new(
+                "ProfileSwitchBusy",
+                "another profile switch is already in progress",
+            )));
+        }
+        let _running = ProfileSwitchRunningGuard {
+            running: &self.profile_switch_running,
+        };
         let prepared = match self.host.profile_switch_begin(name, changes).await {
             Ok(prepared) => prepared,
             Err(error) => return Ok(self.profile_switch_rejected(error)),

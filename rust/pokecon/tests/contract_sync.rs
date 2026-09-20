@@ -504,14 +504,21 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         4
     );
     assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 7);
-    for workflow in ["normal-ci", "package"] {
-        let source = WORKFLOWS
-            .iter()
-            .find_map(|(name, source)| (*name == workflow).then_some(source.as_str()))
-            .expect("normal and package workflows must exist");
-        assert!(source.contains("uses: cachix/install-nix-action@v31"));
-        assert!(!source.contains("uses: cachix/cachix-action@"));
-    }
+    let normal_source = WORKFLOWS
+        .iter()
+        .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))
+        .expect("Normal CI workflow must exist");
+    assert!(normal_source.contains(
+        "uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31"
+    ));
+    assert!(!normal_source.contains("uses: cachix/install-nix-action@v31"));
+    assert!(!normal_source.contains("uses: cachix/cachix-action@"));
+    let package_source = WORKFLOWS
+        .iter()
+        .find_map(|(name, source)| (*name == "package").then_some(source.as_str()))
+        .expect("Package workflow must exist");
+    assert!(package_source.contains("uses: cachix/install-nix-action@v31"));
+    assert!(!package_source.contains("uses: cachix/cachix-action@"));
 
     let timing = &ci["timing_contract"];
     assert_eq!(timing["schema_version"], 2);

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "c9550fffb1bde0fb0e17820c67adbc0f7017eba999bb624047cbbc49c04ad567";
+      canonicalFlakeHash = "829bf94e041bfc010d0bf718892a91a76e35f1b5dd46f103e0bd5658d994e161";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "a76f56283079812bb7c0f9bafe4a5a40c1594c2e1492df63b0a3a727bba87029";
+          expectedAuditTestHash = "17420b31b688ff6f98dda3c49e1bf9e0afd397e368bfcb6402b9bda1273777b3";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -2058,21 +2058,15 @@
             fi
             canonical_cargo_target="$(readlink -f "$CARGO_TARGET_DIR")"
             while IFS= read -r -d "" cargo_symlink; do
-              case "$cargo_symlink" in
-                "$CARGO_TARGET_DIR/debug/uv/uv" | "$CARGO_TARGET_DIR/release/uv/uv")
-                  ;;
+              if ! cargo_symlink_target="$(readlink -f "$cargo_symlink")"; then
+                echo "Cargo target contains a broken symlink: $cargo_symlink" >&2
+                exit 2
+              fi
+              case "$cargo_symlink_target" in
+                "$canonical_cargo_target"/*) ;;
                 *)
-                  if ! cargo_symlink_target="$(readlink -f "$cargo_symlink")"; then
-                    echo "Cargo target contains a broken symlink: $cargo_symlink" >&2
-                    exit 2
-                  fi
-                  case "$cargo_symlink_target" in
-                    "$canonical_cargo_target"/*) ;;
-                    *)
-                      echo "Cargo target contains an escaping symlink: $cargo_symlink -> $cargo_symlink_target" >&2
-                      exit 2
-                      ;;
-                  esac
+                  echo "Cargo target contains an escaping symlink: $cargo_symlink -> $cargo_symlink_target" >&2
+                  exit 2
                   ;;
               esac
             done < <("${pkgs.findutils}/bin/find" "$CARGO_TARGET_DIR" -type l -print0)
@@ -2100,17 +2094,27 @@
                 esac
               done
               cargo_uv_link="$cargo_uv_dir/uv"
-              if [ -e "$cargo_uv_link" ] && [ ! -L "$cargo_uv_link" ]; then
-                echo "refusing to replace a non-symlink Cargo uv launcher: $cargo_uv_link" >&2
+              if [ -L "$cargo_uv_link" ]; then
+                echo "refusing a symlinked Cargo uv launcher: $cargo_uv_link" >&2
                 exit 2
               fi
-              ln -sfn "${pkgs.uv}/bin/uv" "$cargo_uv_link"
-              if [ "$(readlink "$cargo_uv_link")" != "${pkgs.uv}/bin/uv" ]; then
-                echo "failed to install the fixed Cargo uv launcher: $cargo_uv_link" >&2
+              if [ -e "$cargo_uv_link" ] && [ ! -f "$cargo_uv_link" ]; then
+                echo "Cargo uv launcher is not a regular file: $cargo_uv_link" >&2
+                exit 2
+              fi
+              cargo_uv_tmp="$cargo_uv_dir/.uv.tmp"
+              if [ -e "$cargo_uv_tmp" ] || [ -L "$cargo_uv_tmp" ]; then
+                echo "refusing to replace an existing Cargo uv staging path: $cargo_uv_tmp" >&2
+                exit 2
+              fi
+              install -m 0555 -- "${pkgs.uv}/bin/uv" "$cargo_uv_tmp"
+              mv -- "$cargo_uv_tmp" "$cargo_uv_link"
+              if [ -L "$cargo_uv_link" ] || [ ! -f "$cargo_uv_link" ]; then
+                echo "failed to install a regular Cargo uv launcher: $cargo_uv_link" >&2
                 exit 1
               fi
             done
-            unset canonical_cargo_target cargo_directory cargo_profile cargo_profile_dir cargo_symlink cargo_symlink_target cargo_uv_dir cargo_uv_link
+            unset canonical_cargo_target cargo_directory cargo_profile cargo_profile_dir cargo_symlink cargo_symlink_target cargo_uv_dir cargo_uv_link cargo_uv_tmp
           '';
 
           restoreGateCargoConfig = ''

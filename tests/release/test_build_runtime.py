@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import shlex
+import stat
 import subprocess
 import sys
 import zipfile
@@ -248,6 +249,47 @@ def test_normalize_python_sysconfig_rejects_unrelated_prefix(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="does not contain its install prefix"):
         normalize_python_sysconfig(runtime, tmp_path / "temporary/python-install")
+
+
+def test_normalize_python_sysconfig_rejects_redirected_file(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime"
+    sysconfig = runtime / "lib/python3.14/_sysconfigdata__linux_fixture.py"
+    sysconfig.parent.mkdir(parents=True)
+    outside = tmp_path / "outside.py"
+    outside.write_text("prefix = '/temporary/python-install'\n", encoding="utf-8")
+    try:
+        sysconfig.symlink_to(outside)
+    except NotImplementedError, OSError:
+        pytest.skip("symbolic links are unavailable")
+
+    with pytest.raises(ValueError, match="redirected"):
+        normalize_python_sysconfig(runtime, tmp_path / "temporary/python-install")
+
+
+def test_normalize_pe_cli_rejects_missing_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "missing.exe"
+    monkeypatch.setattr(
+        sys, "argv", ["build_runtime.py", "--normalize-pe", str(missing)]
+    )
+    with pytest.raises(ValueError, match="regular file"):
+        release_runtime.main()
+
+
+def test_normalize_pe_cli_rejects_symlink_before_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "real.exe"
+    target.write_bytes(b"not a PE")
+    link = tmp_path / "link.exe"
+    try:
+        link.symlink_to(target)
+    except NotImplementedError, OSError:
+        pytest.skip("symbolic links are unavailable")
+    monkeypatch.setattr(sys, "argv", ["build_runtime.py", "--normalize-pe", str(link)])
+    with pytest.raises(ValueError, match="regular file"):
+        release_runtime.main()
 
 
 def test_normalize_python_bytecode_removes_nested_caches_and_preserves_other_files(
@@ -1775,6 +1817,27 @@ def _make_wheel(path: Path, members: dict[str, bytes]) -> None:
             archive.writestr(info, content)
 
 
+@pytest.mark.parametrize("member", ["../escape", "/escape", "C:/escape", "dir\\escape"])
+def test_normalize_wheel_rejects_unsafe_member_paths(
+    tmp_path: Path, member: str
+) -> None:
+    wheel = tmp_path / "unsafe.whl"
+    _make_wheel(wheel, {member: b"payload"})
+    with pytest.raises(ValueError, match=r"unsafe|absolute|traversal"):
+        normalize_wheel(wheel, None, None)
+
+
+def test_normalize_wheel_rejects_symlink_members(tmp_path: Path) -> None:
+    wheel = tmp_path / "symlink.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        info = zipfile.ZipInfo("link")
+        info.create_system = 3
+        info.external_attr = (stat.S_IFLNK | 0o777) << 16
+        archive.writestr(info, "target")
+    with pytest.raises(ValueError, match="symlink"):
+        normalize_wheel(wheel, None, None)
+
+
 def _verify_record_hashes(wheel: Path) -> None:
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
@@ -1794,7 +1857,7 @@ def _verify_record_hashes(wheel: Path) -> None:
             assert expected_size == str(len(data))
 
 
-def test_pe_normalizes_coff_and_debug_timestamps(tmp_path: Path) -> None:
+def test_pe_normalizes_coff_and_removes_debug_records(tmp_path: Path) -> None:
     pe_bytes = _build_minimal_pe(
         coff_timestamp=0x5A5A5A5A,
         debug_timestamps=[0x11111111, 0x22222222],
@@ -1810,20 +1873,12 @@ def test_pe_normalizes_coff_and_debug_timestamps(tmp_path: Path) -> None:
             "example-1.0.dist-info/METADATA": b"Name: example\nVersion: 1.0\n",
         },
     )
-    original_guid = pe_bytes[0x200 : 0x200 + 4]
     normalize_wheel(wheel, None, None)
     with zipfile.ZipFile(wheel) as archive:
         normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
     assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
-    assert _extract_debug_timestamps(normalized) == [
-        PE_REPRODUCIBLE_TIMESTAMP,
-        PE_REPRODUCIBLE_TIMESTAMP,
-    ]
-    assert normalized[0x200 : 0x200 + 4] == original_guid
-    assert normalized[0x200 + 8 : 0x200 + 12] == pe_bytes[0x200 + 8 : 0x200 + 12]
-    assert normalized[0x200 + 12 : 0x200 + 16] == pe_bytes[0x200 + 12 : 0x200 + 16]
-    assert normalized[0x200 + 16 : 0x200 + 28] == pe_bytes[0x200 + 16 : 0x200 + 28]
-    assert normalized[0x21C : 0x21C + 4] == pe_bytes[0x21C : 0x21C + 4]
+    assert _extract_debug_timestamps(normalized) == []
+    assert normalized[0x200 : 0x200 + 56] == b"\x00" * 56
     _verify_record_hashes(wheel)
 
 
@@ -1857,7 +1912,7 @@ def test_pe_two_wheels_normalize_byte_identically(tmp_path: Path) -> None:
     with zipfile.ZipFile(wheel_a) as archive:
         normalized = archive.read("pyaudio/_portaudio.cp314-win_amd64.pyd")
     assert _extract_coff_timestamp(normalized) == PE_REPRODUCIBLE_TIMESTAMP
-    assert _extract_debug_timestamps(normalized) == [PE_REPRODUCIBLE_TIMESTAMP]
+    assert _extract_debug_timestamps(normalized) == []
 
 
 def test_pe_non_pe_files_remain_unchanged(tmp_path: Path) -> None:

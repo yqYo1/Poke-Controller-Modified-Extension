@@ -16,7 +16,7 @@ import sys
 import tempfile
 import tomllib
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -291,8 +291,26 @@ def audit_python_bytecode(root: Path) -> None:
                 pending_directories.append(entry)
 
 
+def _assert_real_parent_chain(root: Path, path: Path) -> None:
+    current = path.parent
+    while True:
+        if current == root:
+            return
+        if not _is_real_directory(current):
+            message = f"path leaves the real runtime directory: {path}"
+            raise ValueError(message)
+        parent = current.parent
+        if parent == current:
+            message = f"path is not below the runtime root: {path}"
+            raise ValueError(message)
+        current = parent
+
+
 def normalize_python_sysconfig(root: Path, installed_prefix: Path) -> None:
     """Remove uv's temporary install prefix from POSIX sysconfig data."""
+    if not _is_real_directory(root):
+        message = f"portable Python runtime root is redirected: {root}"
+        raise ValueError(message)
     sysconfig_files = sorted(root.rglob("_sysconfigdata__*.py"))
     if not sysconfig_files:
         if os.name == "nt":
@@ -303,10 +321,22 @@ def normalize_python_sysconfig(root: Path, installed_prefix: Path) -> None:
     source_prefix = str(installed_prefix)
     replacements = 0
     for path in sysconfig_files:
+        _assert_real_parent_chain(root, path)
+        if not _is_real_regular_file(path):
+            message = (
+                f"portable Python sysconfig file is redirected or non-regular: {path}"
+            )
+            raise ValueError(message)
         content = path.read_text(encoding="utf-8")
         occurrences = content.count(source_prefix)
         if occurrences == 0:
             continue
+        _assert_real_parent_chain(root, path)
+        if not _is_real_regular_file(path):
+            message = (
+                f"portable Python sysconfig file was redirected before write: {path}"
+            )
+            raise ValueError(message)
         path.write_text(
             content.replace(source_prefix, PORTABLE_BUILD_PREFIX),
             encoding="utf-8",
@@ -1010,6 +1040,65 @@ def wheel_record(root: Path) -> None:
         csv.writer(output, lineterminator="\n").writerows(rows)
 
 
+def _wheel_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for candidate in sorted(root.rglob("*")):
+        if candidate.is_symlink() or candidate.is_junction():
+            message = (
+                f"wheel contains a redirected member after extraction: {candidate}"
+            )
+            raise ValueError(message)
+        if candidate.is_file():
+            files.append(candidate)
+    return files
+
+
+def _safe_zip_member_target(root: Path, info: zipfile.ZipInfo) -> tuple[Path, bool]:
+    filename = info.filename
+    if not filename or "\\" in filename:
+        message = f"wheel contains an unsafe member filename: {filename!r}"
+        raise ValueError(message)
+    path = PurePosixPath(filename)
+    if path.is_absolute() or (len(filename) >= 2 and filename[1] == ":"):
+        message = f"wheel contains an absolute member filename: {filename!r}"
+        raise ValueError(message)
+    parts = path.parts
+    if any(part in {"", ".", ".."} for part in parts):
+        message = f"wheel contains a traversal member filename: {filename!r}"
+        raise ValueError(message)
+    mode = (info.external_attr >> 16) & 0xFFFF
+    if stat.S_ISLNK(mode):
+        message = f"wheel contains a symlink member: {filename!r}"
+        raise ValueError(message)
+    target = root.joinpath(*parts)
+    root_resolved = root.resolve()
+    target_resolved = target.resolve(strict=False)
+    if (
+        target_resolved != root_resolved
+        and root_resolved not in target_resolved.parents
+    ):
+        message = f"wheel member escapes its extraction root: {filename!r}"
+        raise ValueError(message)
+    return target, info.is_dir() or filename.endswith("/")
+
+
+def _extract_wheel_safely(archive: zipfile.ZipFile, root: Path) -> None:
+    for info in archive.infolist():
+        target, is_directory = _safe_zip_member_target(root, info)
+        if is_directory:
+            if target.exists() and not target.is_dir():
+                message = f"wheel member collides with a file: {info.filename!r}"
+                raise ValueError(message)
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        if target.exists() or target.is_symlink() or target.is_junction():
+            message = f"wheel contains duplicate or colliding member: {info.filename!r}"
+            raise ValueError(message)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open(info, "r") as source, target.open("xb") as destination:
+            shutil.copyfileobj(source, destination)
+
+
 def repack_wheel(root: Path, output: Path) -> None:
     temporary = output.with_suffix(".normalized.whl")
     with zipfile.ZipFile(
@@ -1018,9 +1107,7 @@ def repack_wheel(root: Path, output: Path) -> None:
         compression=zipfile.ZIP_DEFLATED,
         compresslevel=9,
     ) as archive:
-        for path in sorted(
-            candidate for candidate in root.rglob("*") if candidate.is_file()
-        ):
+        for path in _wheel_files(root):
             relative = path.relative_to(root).as_posix()
             info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -1038,9 +1125,9 @@ def normalize_wheel(
     with tempfile.TemporaryDirectory(prefix="pokecon-wheel-") as directory:
         root = Path(directory)
         with zipfile.ZipFile(wheel) as archive:
-            archive.extractall(root)
+            _extract_wheel_safely(archive, root)
         changed = False
-        for binary in sorted(path for path in root.rglob("*") if path.is_file()):
+        for binary in _wheel_files(root):
             if is_elf(binary):
                 if patchelf is None or strip is None:
                     message = (
@@ -1069,7 +1156,7 @@ def normalize_wheel(
                     raise ValueError(message)
                 changed = True
                 continue
-            if _normalize_pe(binary):
+            if normalize_pe(binary):
                 changed = True
         if changed:
             wheel_record(root)
@@ -1373,40 +1460,52 @@ def build_release_runtime(
     return manifest
 
 
+def _path_has_redirected_component(path: Path) -> bool:
+    current = path
+    components = list(path.parents)
+    for component in reversed(components):
+        if component == component.parent:
+            break
+        if component.is_symlink() or component.is_junction():
+            return True
+    return current.is_symlink() or current.is_junction()
+
+
 def _resolve_pe_cli_path(raw: Path) -> Path:
     text = str(raw)
     if "://" in text:
         message = f"PE normalization does not accept remote input: {raw!r}"
         raise ValueError(message)
-    candidate = Path(raw)
-    if candidate.is_absolute():
-        resolved = candidate
-    else:
-        resolved = (Path.cwd() / candidate).resolve(strict=False)
-    if resolved.exists():
-        return resolved
-    # Fallback: try repository root relative (handles Tauri cwd ambiguity).
-    repo_root = Path.cwd()
-    for parent in [Path.cwd(), *list(Path.cwd().parents)]:
-        if (parent / "Cargo.toml").exists():
-            repo_root = parent
-            break
-    # Also consider script location as repo hint (deterministic, no broad except)
-    script_parents = Path(__file__).resolve().parents
-    if len(script_parents) > 3:
-        script_root = script_parents[3]
-        if (script_root / "Cargo.toml").exists():
-            repo_root = script_root
-    alternative = (repo_root / candidate).resolve(strict=False)
-    if alternative.exists():
-        return alternative
-    # Also try ../../target style for rust/pokecon cwd
-    if not candidate.is_absolute():
-        for prefix in [Path("../../") / candidate, Path("../") / candidate]:
-            prefixed = (Path.cwd() / prefix).resolve(strict=False)
-            if prefixed.exists():
-                return prefixed
-    return resolved
+    candidate = raw if raw.is_absolute() else Path.cwd() / raw
+    candidates = [candidate]
+    if not candidate.exists() and not os.path.lexists(str(candidate)):
+        repo_root = Path.cwd()
+        for parent in [Path.cwd(), *list(Path.cwd().parents)]:
+            if (parent / "Cargo.toml").exists():
+                repo_root = parent
+                break
+        script_parents = Path(__file__).absolute().parents
+        if len(script_parents) > 3:
+            script_root = script_parents[3]
+            if (script_root / "Cargo.toml").exists():
+                repo_root = script_root
+        candidates.extend(
+            [
+                repo_root / raw,
+                Path.cwd() / (Path("../../") / raw),
+                Path.cwd() / (Path("../") / raw),
+            ]
+        )
+    for alternative in candidates:
+        if alternative.exists() or os.path.lexists(str(alternative)):
+            return alternative
+    return candidate
+
+
+def _validate_pe_cli_target(target: Path) -> None:
+    if _path_has_redirected_component(target) or not _is_real_regular_file(target):
+        message = f"PE target must be one real regular file: {target}"
+        raise ValueError(message)
 
 
 def main() -> int:
@@ -1440,14 +1539,7 @@ def main() -> int:
         if "://" in raw_normalize_pe:
             parser.error("--normalize-pe accepts only local paths")
         target = _resolve_pe_cli_path(Path(raw_normalize_pe))
-        if not target.exists() and os.name != "nt":
-            return 0
-        if target.is_symlink() or target.is_junction():
-            message = f"PE target must be a regular file: {target}"
-            raise ValueError(message)
-        if not target.is_file():
-            message = f"PE target is not a regular file: {target}"
-            raise ValueError(message)
+        _validate_pe_cli_target(target)
         normalize_pe(target)
         return 0
     if (

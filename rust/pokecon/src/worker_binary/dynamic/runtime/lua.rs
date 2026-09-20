@@ -5,6 +5,7 @@ use mlua::{
     Error as LuaError, ExternalError, Function, HookTriggers, Lua, LuaOptions, LuaSerdeExt,
     MultiValue, StdLib, Table, Value as LuaValue, VmState,
 };
+use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::dynamic::callback::{
@@ -444,15 +445,22 @@ fn install_setting_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> ml
     Ok(())
 }
 
-fn install_event_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua::Result<()> {
+fn install_event_api(
+    lua: &Lua,
+    api: &Table,
+    engine: &Weak<EngineInner>,
+    access: &Arc<Mutex<()>>,
+) -> mlua::Result<()> {
     let weak = engine.clone();
     let callback_lua = lua.clone();
+    let callback_access = access.clone();
     api.set(
         "register",
         lua.create_function(move |lua, (event, options, once): (String, Table, bool)| {
             let (callback, options) = registration_options(lua, &options)?;
             let callback: Arc<dyn Callback> = Arc::new(LuaCallback {
                 lua: callback_lua.clone(),
+                access: callback_access.clone(),
                 callback,
                 return_mode: LuaReturnMode::Any,
             });
@@ -624,9 +632,14 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
     Ok(())
 }
 
-fn install_command_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua::Result<()> {
+fn install_command_api(
+    lua: &Lua,
+    api: &Table,
+    engine: &Weak<EngineInner>,
+    access: &Arc<Mutex<()>>,
+) -> mlua::Result<()> {
     install_command_read_api(lua, api, engine)?;
-    install_command_write_api(lua, api, engine)
+    install_command_write_api(lua, api, engine, access)
 }
 
 fn install_command_read_api(
@@ -679,6 +692,7 @@ fn install_command_write_api(
     lua: &Lua,
     api: &Table,
     engine: &Weak<EngineInner>,
+    access: &Arc<Mutex<()>>,
 ) -> mlua::Result<()> {
     let weak = engine.clone();
     api.set(
@@ -715,6 +729,7 @@ fn install_command_write_api(
 
     let weak = engine.clone();
     let callback_lua = lua.clone();
+    let callback_access = access.clone();
     api.set(
         "set_command_callback",
         lua.create_function(move |lua, (name, value): (String, LuaValue)| {
@@ -728,6 +743,7 @@ fn install_command_write_api(
                     }
                     Some(Arc::new(LuaCallback {
                         lua: callback_lua.clone(),
+                        access: callback_access.clone(),
                         callback,
                         return_mode: match kind {
                             CommandCallbackKind::Sort => LuaReturnMode::SortList,
@@ -782,13 +798,13 @@ fn install_timeout_api(lua: &Lua, api: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-fn install_api(lua: &Lua, engine: &Weak<EngineInner>) -> mlua::Result<()> {
+fn install_api(lua: &Lua, engine: &Weak<EngineInner>, access: &Arc<Mutex<()>>) -> mlua::Result<()> {
     let api = lua.create_table()?;
     api.set("array_metatable", lua.array_metatable())?;
     install_setting_api(lua, &api, engine)?;
-    install_event_api(lua, &api, engine)?;
+    install_event_api(lua, &api, engine, access)?;
     install_host_api(lua, &api, engine)?;
-    install_command_api(lua, &api, engine)?;
+    install_command_api(lua, &api, engine, access)?;
     install_timeout_api(lua, &api)?;
     lua.globals().set("_pokecon_api", api)?;
     Ok(())
@@ -796,10 +812,12 @@ fn install_api(lua: &Lua, engine: &Weak<EngineInner>) -> mlua::Result<()> {
 
 pub(crate) struct LuaRuntime {
     lua: Lua,
+    access: Arc<Mutex<()>>,
 }
 
 impl LuaRuntime {
     pub(crate) fn new(engine: &Weak<EngineInner>) -> Result<Self, DynamicEngineError> {
+        let access = Arc::new(Mutex::new(()));
         let lua = Lua::new_with(
             StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::BIT,
             LuaOptions::default(),
@@ -821,7 +839,8 @@ impl LuaRuntime {
                 Some(DeadlineCheckpoint::Hard) => Err(LuaHardTimeoutError.into_lua_err()),
             }
         });
-        install_api(&lua, engine).map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        install_api(&lua, engine, &access)
+            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
         lua.load(LUA_BOOTSTRAP)
             .set_name("@pokecon-bootstrap")
             .exec()
@@ -835,7 +854,7 @@ impl LuaRuntime {
         lua.globals()
             .set("_pokecon_invoke_callback", LuaValue::Nil)
             .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
-        Ok(Self { lua })
+        Ok(Self { lua, access })
     }
 
     pub(crate) fn evaluate(
@@ -843,6 +862,7 @@ impl LuaRuntime {
         source: &str,
         display_path: &str,
     ) -> Result<(), DynamicEngineError> {
+        let _access = self.access.lock();
         self.lua
             .load(source)
             .set_name(format!("@{display_path}"))
@@ -859,6 +879,7 @@ enum LuaReturnMode {
 
 struct LuaCallback {
     lua: Lua,
+    access: Arc<Mutex<()>>,
     callback: Function,
     return_mode: LuaReturnMode,
 }
@@ -867,9 +888,11 @@ struct LuaCallback {
 impl Callback for LuaCallback {
     async fn invoke(&self, context: InvocationContext) -> Result<CallbackReturn, CallbackError> {
         let lua = self.lua.clone();
+        let access = self.access.clone();
         let callback = self.callback.clone();
         let return_mode = self.return_mode;
         tokio::task::spawn_blocking(move || {
+            let _access = access.lock();
             let _scope = InvocationScope::enter(context.clone());
             let arguments = context
                 .arguments

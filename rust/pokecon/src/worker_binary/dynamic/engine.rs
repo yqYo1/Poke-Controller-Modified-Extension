@@ -502,6 +502,29 @@ impl EngineInner {
         }
     }
 
+    async fn evaluate_source_async(
+        self: &Arc<Self>,
+        source: ResolvedSource,
+        session: Arc<EvaluationSession>,
+    ) -> Result<(), DynamicEngineError> {
+        if source.language == DynamicConfigLanguage::Python {
+            let engine = self.clone();
+            tokio::task::spawn_blocking(move || {
+                let _scope = EvaluationScope::enter(session);
+                engine.evaluate_source(&source)
+            })
+            .await
+            .map_err(|error| {
+                DynamicEngineError::Evaluation(format!(
+                    "dynamic source evaluation task failed: {error}"
+                ))
+            })?
+        } else {
+            let _scope = EvaluationScope::enter(session);
+            self.evaluate_source(&source)
+        }
+    }
+
     async fn load_resolved(
         self: &Arc<Self>,
         source: ResolvedSource,
@@ -548,12 +571,20 @@ impl EngineInner {
             self.command_registry.state_snapshot()
         };
         let session = Arc::new(EvaluationSession::new(transaction, commands));
-        let evaluation = {
-            let _scope = EvaluationScope::enter(session.clone());
-            self.evaluate_source(&source)
-        };
+        let evaluation_generation = self.generation.load(Ordering::Acquire);
+        drop(coordinator.take());
+        let evaluation = self
+            .evaluate_source_async(source.clone(), session.clone())
+            .await;
         if let Err(error) = evaluation {
             return Ok(self.rejected_load(&source, error.to_string()));
+        }
+        coordinator = Some(self.coordinator.clone().lock_owned().await);
+        if evaluation_generation != self.generation.load(Ordering::Acquire) {
+            return Ok(self.rejected_load(
+                &source,
+                "dynamic source evaluation was superseded by a newer generation".to_owned(),
+            ));
         }
         let (transaction, commands) = session.take()?;
         let committed = match self
@@ -1671,6 +1702,60 @@ raise RuntimeError("reload sentinel")
         let state = host.state_snapshot().unwrap();
         assert_eq!(state["tags"], json!(["python"]));
         assert_eq!(state["command_candidates"][0]["name"], json!("Example"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn python_evaluation_releases_coordinator_before_user_code() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("init.py"),
+            "import time\npokecon.state.tags = [\"python-started\"]\ntime.sleep(0.25)\npokecon.opt.ui.fps = 60\n",
+        )
+        .unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let loading = {
+            let engine = engine.clone();
+            tokio::spawn(async move {
+                engine
+                    .control(DynamicConfigControl::LoadPath {
+                        path: "init.py".to_owned(),
+                    })
+                    .await
+            })
+        };
+        tokio::time::timeout(Duration::from_millis(500), async {
+            loop {
+                if host.state_snapshot().unwrap()["tags"] == json!(["python-started"]) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("Python evaluation did not reach the blocking section");
+        let cache = tokio::time::timeout(
+            Duration::from_millis(100),
+            engine.build_command_cache(0, Vec::new()),
+        )
+        .await
+        .expect("coordinator was held during Python evaluation")
+        .unwrap();
+        assert!(matches!(
+            cache,
+            CommandCacheBuildResult::Complete { .. } | CommandCacheBuildResult::Superseded { .. }
+        ));
+        let result = loading.await.unwrap().unwrap();
+        assert!(result.loaded, "{:?}", result.diagnostic);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

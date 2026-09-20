@@ -83,12 +83,16 @@ def _deadline_monitor(_code, _offset):
     raise _CallbackHardTimeoutError()
 
 
-_tool_id = _sys.monitoring.OPTIMIZER_ID
-try:
-    _sys.monitoring.free_tool_id(_tool_id)
-except ValueError:
-    pass
-_sys.monitoring.use_tool_id(_tool_id, "pokecon.callback.deadline")
+_tool_id = None
+for _candidate in range(6):
+    try:
+        _sys.monitoring.use_tool_id(_candidate, "pokecon.callback.deadline")
+    except ValueError:
+        continue
+    _tool_id = _candidate
+    break
+if _tool_id is None:
+    raise RuntimeError("no Python monitoring tool id is available")
 _sys.monitoring.register_callback(
     _tool_id, _sys.monitoring.events.INSTRUCTION, _deadline_monitor
 )

@@ -80,7 +80,7 @@
 | 114 | `rust/pokecon/src/settings/scaffold.rs` | 6 | medium,low,low,low,low,low | Wave 1 | 未着手 | — |
 | 115 | `rust/pokecon/src/settings/service.rs` | 3 | high,high,medium | Wave 1 | 修正済み・focused検証済み | service tests passed; persisted document direct commit、error propagation、profile path staging/live adapter rollbackを修正 |
 | 116 | `rust/pokecon/src/settings/uv.rs` | 8 | medium,medium,medium,low,low,medium,low,low | Wave 1 | 一部修正・検証済み | settings::uv focused test 5 passed; SafeComponent version/path, metadata sha256 and symlink source validation fixed, remaining 5 findings pending |
-| 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 一部修正・検証済み | F1 UserSpecifiedを含む全ownershipのstaging/backup commit、F2 rename後parent fsync＋startup staging/backup reaper、F4 regular executable `venv_python`＋`pyvenv.cfg`検証を`00d769e`で実装。F3 managed uv child waitは`ebb074e`の15分deadline＋kill_on_drop。venv tests 5 passed、通常feature lib 440 passed、clippy passed。F5/F6/F7/F8/F9/F10/F11は未着手。 |
+| 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 一部修正・検証済み | F1 UserSpecifiedを含む全ownershipのstaging/backup commit、F2 rename後parent fsync＋startup staging/backup reaper、F4 regular executable `venv_python`＋`pyvenv.cfg`検証を`00d769e`で実装。F3 managed uv child waitは`ebb074e`の15分deadline＋kill_on_drop。uv標準`version_info =`とUnix symlink Pythonを受け入れるlayout検証を`58ca103`で修正し、dynamic startup test 1 passed。venv tests 5 passed、通常feature lib 440 passed、clippy passed。F5/F6/F7/F8/F9/F10/F11は未着手。 |
 | 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 修正済み・focused検証済み | settings_runtime tests passed; bounded runtime bridge、rollback Result、reconcile baseline、Profile adaptersを修正 |
 | 121 | `rust/pokecon/src/tests/ui_boundary_acceptance.rs` | 7 | high,high,medium,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
@@ -109,7 +109,7 @@
 | 172 | `scripts/performance/benchmark.py` | 6 | high,high,medium,medium,medium,medium | Wave 3 | 未着手 | — |
 | 176 | `scripts/quality/run_parallel_checks.py` | 4 | medium,low,medium,low | Wave 3 | 修正済み・検証済み | F1 round-robin reap、F2 grace中poll、F3 exception cleanup、F4 fd open orderingを`434284a`で実装。quality tests 12 passed、ruff check/format passed。 |
 | 177 | `scripts/quality/source_filter.py` | 4 | high,medium,medium,low | Wave 3 | 修正済み・検証済み | F1 root-relative ignored dirs、F2 extensionless source report with LICENSE/.gitignore allowlist、F3 non-git + .gitignore fail-closed、F4 bytes-safe git inventoryを`04a549d`で実装。quality tests 10 passed、ruff check/format passed。 |
-| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanup、pre-build patchelf/strip validationを`2d8e21d`で実装。F10を`316e63b`でdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。atomic staging導入後にCIで判明した既存空directoryへの`copytree`失敗を、空のreal directory検証＋`dirs_exist_ok=True`で修正し、`8984fbf`へ反映。既存空directoryを実際に通る回帰testを`049b509`で追加。release tests 91 passed、quality UI/package tests 31、Ruff check/format、Nix fmt/actionlint passed。 |
+| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanup、pre-build patchelf/strip validationを`2d8e21d`で実装。F10を`316e63b`でdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。atomic staging導入後にCIで判明した既存空directoryへの`copytree`失敗を、空のreal directory検証＋`dirs_exist_ok=True`で修正し、`8984fbf`へ反映。既存空directoryを実際に通る回帰testを`049b509`で追加。release tests 125 passed、quality UI/package tests 34、Ruff check/format、Nix fmt/actionlint passed。fixed-output runtime hashをactual CI outputへ更新し、Normal/Package CI Requiredを`8c8da2b`で両方success。 |
 | 182 | `scripts/release/debian_install_smoke.sh` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 185 | `scripts/release/normalize_linux_elf.py` | 3 | medium,medium,medium | Wave 3 | 未着手 | — |
 | 187 | `scripts/release/package_smoke.py` | 4 | high,medium,medium,medium | Wave 3 | 未着手 | — |
@@ -121,7 +121,7 @@
 | 202 | `tests/quality/test_parallel_checks.py` | 3 | high,medium,medium | Wave 3 | 未着手 | — |
 | 203 | `tests/quality/test_pidfd_signal.py` | 2 | high,medium | Wave 3 | 未着手 | — |
 | 206 | `tests/quality/test_source_filter.py` | 2 | medium,high | Wave 3 | 修正済み・検証済み | F1 complete git argv/root/source-root assertion、F2 controlled tmp_path inventory testを`4b16c71`で実装。quality tests 10 passed、ruff check/format passed。 |
-| 208 | `tests/quality/test_ui_package_check.py` | 7 | high,high,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F2 shard validationを明示ValueErrorへ変更し、canonical build_runtime hashを現行sourceへ更新（`6968637`）。quality tests 31 passed、ruff check/format passed。F1/F3/F4/F5/F6/F7は未着手。 |
+| 208 | `tests/quality/test_ui_package_check.py` | 7 | high,high,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F2 shard validationを明示ValueErrorへ変更し、canonical build_runtime／cargo provenance／fixed-output hashを現行sourceへ更新（`6968637`、`58ca103`）。quality tests 34 passed、remote smoke 3 passed、Ruff check/format passed。F1/F3/F4/F5/F6/F7は未着手。 |
 | 209 | `tests/quality/test_version_contract.py` | 4 | high,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 bounded uv build with TimeoutExpired diagnostics、F2 explicit env contractを`4ee45db`で実装。version contract tests 10 passed、ruff check/format passed。F3/F4未着手。 |
 | 211 | `tests/release/test_debian_install_smoke.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | F1/F2 workflow needsをsemantic token set比較へ`4682704`、F3 version source-of-truth導出を`bc3751f`で追加。release gate tests 14 passed、ruff check/format passed。 |
@@ -135,7 +135,7 @@
 | 229 | `web/src/lib/camera-selector.ts` | 1 | high | Wave 2 | 修正済み・検証済み | Nix devShell Bun camera-selector test 3 passed; option key now uses normalized camera identity |
 | 230 | `web/src/lib/components/AnalogStick.svelte` | 5 | high,medium,medium,medium,low | Wave 2 | 未着手 | — |
 | 231 | `web/src/lib/components/CameraTab.svelte` | 5 | high,high,medium,medium,low | Wave 2 | 未着手 | — |
-| 232 | `web/src/lib/components/CameraTab.test.ts` | 3 | high,medium,medium | Wave 2 | 未着手 | — |
+| 232 | `web/src/lib/components/CameraTab.test.ts` | 3 | high,medium,medium | Wave 2 | 未着手 | CIで判明した現行`index:` selector identity／settings payloadとの期待値ずれだけを`58ca103`で同期。`nix run .#web-check`: 105 tests passed、build成功。review finding 3件の完了数には加算しない。 |
 | 233 | `web/src/lib/components/CameraViewport.svelte` | 3 | high,high,medium | Wave 2 | 未着手 | — |
 | 235 | `web/src/lib/components/CommandsTab.svelte` | 6 | high,high,medium,medium,medium,low | Wave 2 | 未着手 | — |
 | 237 | `web/src/lib/components/ControllerPanel.svelte` | 5 | high,medium,medium,medium,medium | Wave 2 | 未着手 | — |
@@ -161,7 +161,7 @@
 | 278 | `web/src/lib/settings.ts` | 4 | high,medium,medium,medium | Wave 2 | 一部修正・検証済み | Nix devShell Bun settings test 6 passed; subscriber isolation/stale refresh/bounded retired IDs fixed, F4 pending |
 | 280 | `web/src/lib/vite-config.test.ts` | 3 | medium,medium,low | Wave 2 | 未着手 | — |
 | 286 | `web/src/routes/page.test.ts` | 4 | medium,medium,medium,low | Wave 2 | 未着手 | — |
-| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `5471e53`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
+| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `5471e53`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`e1c9919`でci-fastのsource identity laneへcaller worktree rootを明示し、`pkgs.git`をruntimeInputsへ追加。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功、Normal/Package CI Required successを`8c8da2b`で確認。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
 | 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 修正済み・検証済み | Rust 1.95.0 pin＋flake rust-toolchain hash同期、Nix native_serial_pty compile（integration-test-support）成功を`82865b5`で記録。 |
@@ -170,6 +170,13 @@
 | 314 | `rust/pokecon/registry/ci.json` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |
 | 317 | `rust/pokecon/registry/generation.json` | 1 | major | Wave 1 | 未着手 | — |
 | 323 | `web/src/lib/api/openapi.json` | 2 | high,high | Wave 2 | 未着手 | — |
+
+## 4. 最新CI失敗の修正履歴
+
+- `e1c9919`のPackage CI failureでは、atomic staging変更後のfixed-output runtime actual hashとflakeの`outputHash`が不一致だったため、CIログのactual hashを固定値とsource inventory testへ反映した。
+- 同じ`e1c9919`のNormal CI failureでは、ci-fastのNix store source snapshotで`git`がruntimeInputsから欠落していたほか、pinned action／camera selector／uv `version_info`／Unix symlink Pythonの古い契約を修正した。
+- `58ca103`でNormalのRust、Python、Web、Windows workspace、Packageの各実失敗を修正し、focused gateを通過させた。
+- `8c8da2b`でrelease testのfixed-output hash期待値を同期した。これに対する`Normal CI Required`と`Package CI Required`は、watcher exit code 0で両方successとなった。
 
 ## 5. 完了判定
 

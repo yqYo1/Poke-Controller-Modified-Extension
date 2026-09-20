@@ -144,8 +144,8 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2026-09-20 全finding対応
 
-- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する（現時点の検証済み修正: 116/455 finding、40/139 finding-file）。
-- [ ] Wave 1: Rust runtime、settings、worker、server、contracts、Rust tests（222件・65ファイル、現時点で103 findings/33 filesを修正または部分修正）。
+- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する（現時点の検証済み修正: 117/455 finding、40/139 finding-file）。
+- [ ] Wave 1: Rust runtime、settings、worker、server、contracts、Rust tests（222件・65ファイル、現時点で104 findings/33 filesを修正または部分修正）。
 - [ ] Wave 2: API、Python typings、Web、frontend tests（110件・37ファイル）。
 - [ ] Wave 3: flake、CI、scripts、release、Python/tests（123件・37ファイル、現時点で5 findings/2 filesを修正）。
 - [ ] 各findingは実装、証拠付き非該当、または外部blockedの明示状態へ遷移させ、レビューmatrixとtracked台帳の両方を更新する。

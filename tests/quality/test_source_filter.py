@@ -3,12 +3,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 from shutil import which
-from typing import TYPE_CHECKING
+
+import pytest
 
 from scripts.quality.source_filter import check_source_filter
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def test_source_filter_accepts_a_covered_extension(tmp_path: Path) -> None:
@@ -35,6 +33,52 @@ def test_source_filter_rejects_an_uncovered_extension(tmp_path: Path) -> None:
 
     report = check_source_filter(tmp_path, ["rust"])
     assert report.missing_extensions == frozenset({"new"})
+
+
+def test_source_filter_ignored_directories_are_root_relative(tmp_path: Path) -> None:
+    root = tmp_path / "dist" / "checkout"
+    (root / "flake.nix").parent.mkdir(parents=True)
+    (root / "flake.nix").write_text(
+        'pkgs.lib.hasSuffix ".rs" path',
+        encoding="utf-8",
+    )
+    source = root / "rust/example/src/lib.rs"
+    source.parent.mkdir(parents=True)
+    source.touch()
+
+    report = check_source_filter(root, ["rust"])
+    assert report.source_extensions == frozenset({"rs"})
+
+
+def test_source_filter_reports_extensionless_non_allowlisted_sources(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "flake.nix").write_text(
+        'pkgs.lib.hasSuffix ".rs" path',
+        encoding="utf-8",
+    )
+    source = tmp_path / "rust/example/NOTICE"
+    source.parent.mkdir(parents=True)
+    source.touch()
+
+    report = check_source_filter(tmp_path, ["rust"])
+    assert report.extensionless_sources == ("rust/example/NOTICE",)
+
+
+def test_source_filter_fallback_respects_gitignore(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("rust/generated/\n", encoding="utf-8")
+    (tmp_path / "flake.nix").write_text(
+        'pkgs.lib.hasSuffix ".rs" path',
+        encoding="utf-8",
+    )
+    generated = tmp_path / "rust/generated/NOTICE"
+    generated.parent.mkdir(parents=True)
+    generated.touch()
+    kept = tmp_path / "rust/NOTICE"
+    kept.touch()
+
+    with pytest.raises(RuntimeError, match="requires a Git checkout"):
+        check_source_filter(tmp_path, ["rust"])
 
 
 def test_source_filter_reports_javascript_build_sources(tmp_path: Path) -> None:
@@ -70,12 +114,12 @@ def test_source_filter_uses_git_inventory_in_a_worktree(
     def fake_run(
         arguments: list[str],
         **_kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
+    ) -> subprocess.CompletedProcess[bytes]:
         assert "--exclude-standard" in arguments
         return subprocess.CompletedProcess(
             arguments,
             returncode=0,
-            stdout="web/src/app.ts\0",
+            stdout=b"web/src/app.ts\0",
         )
 
     monkeypatch.setattr("scripts.quality.source_filter.subprocess.run", fake_run)

@@ -120,7 +120,7 @@
 | 195 | `tests/quality/test_bun_toolchain.py` | 4 | high,medium,medium,low | Wave 3 | 未着手 | — |
 | 202 | `tests/quality/test_parallel_checks.py` | 3 | high,medium,medium | Wave 3 | 未着手 | — |
 | 203 | `tests/quality/test_pidfd_signal.py` | 2 | high,medium | Wave 3 | 未着手 | — |
-| 206 | `tests/quality/test_source_filter.py` | 2 | medium,high | Wave 3 | 修正済み・検証済み | F1 complete git argv/root/source-root assertion、F2 controlled tmp_path inventory testを実装。quality tests 10 passed、ruff check/format passed。 |
+| 206 | `tests/quality/test_source_filter.py` | 2 | medium,high | Wave 3 | 修正済み・検証済み | F1 complete git argv/root/source-root assertion、F2 controlled tmp_path inventory testを`4b16c71`で実装。quality tests 10 passed、ruff check/format passed。 |
 | 208 | `tests/quality/test_ui_package_check.py` | 7 | high,high,medium,medium,medium,medium,medium | Wave 3 | 未着手 | — |
 | 209 | `tests/quality/test_version_contract.py` | 4 | high,medium,medium,medium | Wave 3 | 未着手 | — |
 | 211 | `tests/release/test_debian_install_smoke.py` | 2 | medium,medium | Wave 3 | 未着手 | — |

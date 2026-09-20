@@ -15,15 +15,15 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **109 / 455 finding、40 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
-- Wave 1: **96 / 222 finding、33ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
+- 現在の検証済み修正: **110 / 455 finding、40 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
+- Wave 1: **97 / 222 finding、33ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（96/222） | realtime_connection focused compile/test passed; signed commits continue |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（97/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（5/123） | timing p95 bootstrap、normal-ci timeout/action SHA、contract-sync・mutation・Nix contract passed |
 
@@ -88,7 +88,7 @@
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
 | 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guard、callback内source/profile switchのbounded defer/drainを実装。dynamic lifecycle bidirectional IPC、engine回帰、`nix run .#cargo -- test -p pokecon --all-features --lib` 453 passed。残り4件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
-| 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | F3を`e649bfd`で修正。Python source evaluationを`spawn_blocking`へ移し、EvaluationScopeを伝搬、coordinatorを評価中に解放、generation再検証を追加。adversarial coordinator test、engine 8 tests、full lib 454 passed、contract-check成功。F1/F2/F4/F5/F6/F7は未着手。 |
+| 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | F1をtrusted-code契約として`docs/DYNAMIC_CONFIGURATION.md`へ明示、F3を`e649bfd`で修正。Python source evaluationを`spawn_blocking`へ移し、EvaluationScopeを伝搬、coordinatorを評価中に解放、generation再検証を追加。adversarial coordinator test、engine 8 tests、full lib 454 passed、contract-check成功。F2/F4/F5/F6/F7は未着手。 |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 142 | `rust/pokecon/tests/contract_sync.rs` | 2 | high,medium | Wave 1 | 修正済み・検証済み | contract_sync with integration-test-support: 12 passed; canonical inventory JSON and CI timing threshold cross-check aligned |
 | 144 | `rust/pokecon/tests/cross_process.rs` | 2 | medium,low | Wave 1 | 未着手 | — |

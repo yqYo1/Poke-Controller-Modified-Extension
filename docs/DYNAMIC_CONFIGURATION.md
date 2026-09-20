@@ -24,6 +24,19 @@
 
 両workerはvenv、lifecycle、停止条件、公開APIが異なります。
 
+## 動的設定はtrusted codeとして扱う
+
+動的設定workerはsandboxではありません。
+
+`init.py`と`source()`で読み込むPython codeはtrusted codeとして扱い、標準Pythonのfilesystem、network、`ctypes`などの機能、およびPython process内のimport stateへアクセスできる前提です。
+Rust mainが所有するcamera、serial、controller、filesystemの設定保存、worker管理はworker内のPython objectへ直接公開せず、Rust管理のIPC host APIを経由しますが、動的設定worker自身の終了やPython runtime stateの破壊を防ぐsandboxではありません。
+
+したがって、未確認のdownload、他者から受け取ったsource、信頼できないLAN clientからの`load_content`／`load_path`／`reload`を実行しません。
+非loopbackへbindする場合は、同じnetwork上のclientへ動的Python／Lua code実行権限を渡す完全信頼の選択です。
+
+Python callbackとtop-level evaluationのtimeoutは、cooperativeな期限検査とRust側のevent／coordinator保護を提供しますが、Python C extensionがcontrolを返さない場合に同一process内で安全にkillするsandboxではありません。
+その場合は動的workerを再生成せず、callback laneとdiagnosticで停止状態を扱います。
+
 ## Config rootのinit fileから始める
 
 初回起動時にConfig rootへ`init.py`と`init.lua`を作成します。

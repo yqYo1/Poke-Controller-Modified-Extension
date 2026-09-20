@@ -259,7 +259,7 @@ def test_normalize_python_sysconfig_rejects_redirected_file(tmp_path: Path) -> N
     outside.write_text("prefix = '/temporary/python-install'\n", encoding="utf-8")
     try:
         sysconfig.symlink_to(outside)
-    except NotImplementedError, OSError:
+    except OSError:
         pytest.skip("symbolic links are unavailable")
 
     with pytest.raises(ValueError, match="redirected"):
@@ -285,7 +285,7 @@ def test_normalize_pe_cli_rejects_symlink_before_resolution(
     link = tmp_path / "link.exe"
     try:
         link.symlink_to(target)
-    except NotImplementedError, OSError:
+    except OSError:
         pytest.skip("symbolic links are unavailable")
     monkeypatch.setattr(sys, "argv", ["build_runtime.py", "--normalize-pe", str(link)])
     with pytest.raises(ValueError, match="regular file"):
@@ -452,11 +452,12 @@ def test_build_release_runtime_final_audit_rejects_late_bytecode(
 ) -> None:
     runtime = tmp_path / "runtime"
     wheelhouse = tmp_path / "wheelhouse"
-    late_bytecode = runtime / "Lib/__pycache__/late.cpython-314.pyc"
+    staged_runtime: list[Path] = []
     event_order: list[str] = []
 
     def fake_install_python(_uv: Path, output: Path, _workspace: Path) -> Path:
         event_order.append("install")
+        staged_runtime.append(output)
         python = output / "bin/python3.14"
         python.parent.mkdir(parents=True)
         python.write_bytes(b"portable-python")
@@ -492,6 +493,7 @@ def test_build_release_runtime_final_audit_rejects_late_bytecode(
         _runtime_library_path: Path | None,
     ) -> list[dict[str, str]]:
         event_order.append("verify-wheelhouse")
+        late_bytecode = staged_runtime[0] / "Lib/__pycache__/late.cpython-314.pyc"
         late_bytecode.parent.mkdir(parents=True)
         late_bytecode.write_bytes(b"late-bytecode")
         return []
@@ -526,7 +528,8 @@ def test_build_release_runtime_final_audit_rejects_late_bytecode(
         "build-wheels",
         "verify-wheelhouse",
     ]
-    assert late_bytecode.read_bytes() == b"late-bytecode"
+    assert not runtime.exists()
+    assert not wheelhouse.exists()
 
 
 def test_install_python_inventories_the_requested_uv_installation(

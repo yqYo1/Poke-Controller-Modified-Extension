@@ -1338,6 +1338,17 @@ def verify_wheelhouse(
     ]
 
 
+def _path_exists_including_dangling(path: Path) -> bool:
+    return path.exists() or os.path.lexists(os.fspath(path))
+
+
+def _publish_staged_directory(stage: Path, destination: Path) -> None:
+    if _path_exists_including_dangling(destination):
+        message = f"release runtime output appeared during publication: {destination}"
+        raise ValueError(message)
+    stage.rename(destination)
+
+
 def build_release_runtime(
     project: Path,
     uv: Path,
@@ -1350,11 +1361,68 @@ def build_release_runtime(
     execution_loader: Path | None = None,
     execution_library_path: str | None = None,
 ) -> dict[str, object]:
-    if runtime_output.exists() or wheelhouse_output.exists():
+    if _path_exists_including_dangling(
+        runtime_output
+    ) or _path_exists_including_dangling(wheelhouse_output):
         message = "release runtime outputs must not already exist"
         raise ValueError(message)
     runtime_output.parent.mkdir(parents=True, exist_ok=True)
-    wheelhouse_output.mkdir(parents=True)
+    wheelhouse_output.parent.mkdir(parents=True, exist_ok=True)
+    runtime_stage = Path(
+        tempfile.mkdtemp(prefix=".pokecon-runtime-stage-", dir=runtime_output.parent)
+    )
+    wheelhouse_stage = Path(
+        tempfile.mkdtemp(
+            prefix=".pokecon-wheelhouse-stage-", dir=wheelhouse_output.parent
+        )
+    )
+    published: list[Path] = []
+    try:
+        manifest = _build_release_runtime_direct(
+            project,
+            uv,
+            runtime_stage,
+            wheelhouse_stage,
+            patchelf,
+            strip,
+            vcpkg_path,
+            runtime_library_path,
+            execution_loader,
+            execution_library_path,
+        )
+        _publish_staged_directory(runtime_stage, runtime_output)
+        published.append(runtime_output)
+        _publish_staged_directory(wheelhouse_stage, wheelhouse_output)
+        published.append(wheelhouse_output)
+        return manifest
+    except BaseException:
+        for destination in reversed(published):
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination, ignore_errors=True)
+            else:
+                destination.unlink(missing_ok=True)
+        raise
+    finally:
+        for stage in (runtime_stage, wheelhouse_stage):
+            if stage.exists() or stage.is_symlink():
+                if stage.is_dir() and not stage.is_symlink():
+                    shutil.rmtree(stage, ignore_errors=True)
+                else:
+                    stage.unlink(missing_ok=True)
+
+
+def _build_release_runtime_direct(
+    project: Path,
+    uv: Path,
+    runtime_output: Path,
+    wheelhouse_output: Path,
+    patchelf: Path | None = None,
+    strip: Path | None = None,
+    vcpkg_path: Path | None = None,
+    runtime_library_path: Path | None = None,
+    execution_loader: Path | None = None,
+    execution_library_path: str | None = None,
+) -> dict[str, object]:
     with tempfile.TemporaryDirectory(
         prefix="pokecon-release-runtime-", dir=runtime_output.parent
     ) as directory:

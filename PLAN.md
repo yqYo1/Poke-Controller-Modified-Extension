@@ -144,10 +144,10 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 2026-09-20 全finding対応
 
-- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する。
+- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する（現時点の検証済み修正: 105/455 finding、39/139 finding-file）。
 - [ ] Wave 1: Rust runtime、settings、worker、server、contracts、Rust tests（222件・65ファイル）。
 - [ ] Wave 2: API、Python typings、Web、frontend tests（110件・37ファイル）。
-- [ ] Wave 3: flake、CI、scripts、release、Python/tests（123件・37ファイル）。
+- [ ] Wave 3: flake、CI、scripts、release、Python/tests（123件・37ファイル、現時点で2 findings/2 filesを修正または部分修正）。
 - [ ] 各findingは実装、証拠付き非該当、または外部blockedの明示状態へ遷移させ、レビューmatrixとtracked台帳の両方を更新する。
 - [ ] 各waveはNix経由のfocused test、必要なadversarial/no-network test、format、diff-check、署名commit、push、最新SHAのCI監視を完了してから次へ進む。
 
@@ -163,7 +163,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] product timingの10-sample nearest-rank p95はGitHub run `34184269204`で実測`710.0s`となった。既定thresholdは実測値を60秒単位へ切り上げる導出（`ceil(710/60)*60 = 720`）としてregistry／workflow／contractへ更新し、次のfresh runで再評価する。
 - [x] fresh push後のNormal CIで同一`change_kind`のcompleted timing artifactを保存し、10-sample p95履歴gateをblocking／fail-closedで通過した。Package CIでは実署名Windows runnerのclean install／startup／upgrade／uninstall、payload／expanded tree／outer NSIS installerの三層一致を確認した（Normal `34272925506`、Package `34272925529`）。
 - [x] 2026-09-10のAstraレビューで検出されたnative serial close、dynamic controller update／resetのhardware投影、reconnect retry中の明示Disconnectの3件を修正し、Nix経由の`cargo check`、`cargo-test`、native PTY test、Clippy、aggregate check、format、flake checkを成功させ、通常サブエージェントの独立レビューでactionable finding 0を確認した。commit `bec64921ca8d27fbf07bf18f4cea85d9030614cd`のNormal CI（`34453366968`、`34453372575`）とPackage CI（`34453367054` attempt 2、`34453372441`）のrequired checksも全てpassした（attempt 1はNSIS依存取得の一過性`os error 10054`で失敗後、再実行で成功）。
-- [x] `PLAN.md`／`TASK.md`だけのplanning-only変更はtiming対象regionなしの`none`として記録し、`ci-timing validate`は継続する一方、p95履歴gateは適用しない。`fast`／`docs`／`product`の履歴数・threshold・fail-closed条件は変更しない。
+- [x] `PLAN.md`／`TASK.md`だけのplanning-only変更はtiming対象regionなしの`none`として記録し、`ci-timing validate`は継続する。`fast`／`docs`／`product`の履歴が10件以上ある場合はp95 gateをblocking／fail-closedで適用し、10件未満のbootstrap期間はwarning付きでgateを未適用とする（p95の成功証拠には数えない）。
 - [x] Windows package／release buildはMSVCの`/Brepro`、debug strip、`/DEBUG:NONE`をbuild boundaryで固定し、既存PE normalizerとpayload／expanded tree／outer NSIS installerの三層比較を維持する。
 - [ ] CI上のmock／virtual I/O性能artifactを実装し、latency／throughputのp50／p95／p99、throughput、固定測定条件、baseline／thresholdを保存してrequired gateへ接続する。実機latency／throughput証跡は要求しない。
 

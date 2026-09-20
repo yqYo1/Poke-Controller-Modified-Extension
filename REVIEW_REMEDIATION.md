@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **103 / 455 finding、37 / 139 finding-file**（Wave 1/2を継続中）。
-- Wave 1: **95 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **0 / 123 finding**。
+- 現在の検証済み修正: **105 / 455 finding、39 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timingの2件を完了）。
+- Wave 1: **95 / 222 finding、32ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **2 / 123 finding、2ファイル（timing.py完了、normal-ci.yml F1のみ）**。
 
 ## 3. 修正wave
 
@@ -85,7 +85,7 @@
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 130 | `rust/pokecon/src/worker/script/protocol.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | ScriptExecutionOutcome now deny_unknown_fields; payload bounds F2/F3 pending |
 | 131 | `rust/pokecon/src/worker/supervisor.rs` | 6 | high,medium,medium,medium,medium,low | Wave 1 | 修正済み・focused検証済み | supervisor tests compiled; role spawn gate、failed-launch rollback/reap、bounded stop/reaper、JoinSet role trackingを修正 |
-| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guardを実装。残り4件は未着手 |
+| 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持とcaller generation Superseded guard、callback内sourceのbounded defer/drainを実装。`nix run .#cargo -- test -p pokecon --all-features --lib` 453 passed、残り4件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | Lua restricted stdlib sandboxを実装、残り6件は未着手 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
@@ -96,7 +96,7 @@
 | 149 | `rust/pokecon/tests/script_runtime.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 151 | `rust/pokecon/tests/support/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |
 | 155 | `scripts/acceptance/records.py` | 2 | high,medium | Wave 3 | 未着手 | — |
-| 160 | `scripts/ci/timing.py` | 2 | medium,low | Wave 3 | 未着手 | — |
+| 160 | `scripts/ci/timing.py` | 2 | medium,low | Wave 3 | 修正済み・検証済み | `fb62a63`; `nix develop -c ... pytest -q tests/quality/test_ci_timing.py`: 51 passed、empty p95 failure document、720s contract、bootstrap workflow assertionsを検証。 |
 | 162 | `scripts/compatibility/inventory.py` | 4 | medium,low,low,low | Wave 3 | 未着手 | — |
 | 163 | `scripts/compatibility/promote.py` | 5 | high,high,medium,medium,medium | Wave 3 | 未着手 | — |
 | 164 | `scripts/compatibility/roll.py` | 2 | high,medium | Wave 3 | 未着手 | — |
@@ -160,7 +160,7 @@
 | 278 | `web/src/lib/settings.ts` | 4 | high,medium,medium,medium | Wave 2 | 一部修正・検証済み | Nix devShell Bun settings test 6 passed; subscriber isolation/stale refresh/bounded retired IDs fixed, F4 pending |
 | 280 | `web/src/lib/vite-config.test.ts` | 3 | medium,medium,low | Wave 2 | 未着手 | — |
 | 286 | `web/src/routes/page.test.ts` | 4 | medium,medium,medium,low | Wave 2 | 未着手 | — |
-| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 未着手 | — |
+| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | `fb62a63`; 10件未満のtiming historyはwarning付きでgate未適用とし、p95を捏造せずbootstrap deadlockを解消。job timeoutとaction SHA固定は未着手。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
 | 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 未着手 | — |

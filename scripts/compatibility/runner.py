@@ -97,8 +97,15 @@ def load_manifest(path: Path) -> dict[str, object]:
 
 
 def command_root_for(baseline: Baseline) -> PurePosixPath:
+    if not baseline.script_roots:
+        invalid_value(f"{baseline.identifier}: script roots must not be empty")
     roots = [PurePosixPath(root) for root in baseline.script_roots]
-    common = PurePosixPath(os.path.commonpath([str(root) for root in roots]))
+    try:
+        common = PurePosixPath(os.path.commonpath([str(root) for root in roots]))
+    except ValueError as error:
+        invalid_value(
+            f"{baseline.identifier}: script roots have incompatible paths: {error}"
+        )
     if common.name in {"McuCommands", "PythonCommands"}:
         common = common.parent
     if common.name != "Commands" or not all(
@@ -140,26 +147,35 @@ def run_managed_discovery(
     data_root: Path,
     site_packages: Path,
 ) -> dict[str, object]:
-    process = subprocess.run(  # noqa: S603 - validated direct executable, never a shell
-        [
-            str(compatibility_binary),
-            "--worker",
-            str(worker),
-            "--command-root",
-            str(command_root),
-            "--data-root",
-            str(data_root),
-            "--site-packages",
-            str(site_packages),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        process = subprocess.run(  # noqa: S603 - validated direct executable, never a shell
+            [
+                str(compatibility_binary),
+                "--worker",
+                str(worker),
+                "--command-root",
+                str(command_root),
+                "--data-root",
+                str(data_root),
+                "--site-packages",
+                str(site_packages),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        failed_runtime("managed worker discovery exceeded 120 seconds")
+    except OSError as error:
+        failed_runtime(f"managed worker discovery could not start: {error}")
     if process.returncode != 0:
         diagnostic = process.stderr.strip()
         failed_runtime(f"managed worker discovery failed: {diagnostic}")
-    raw: object = json.loads(process.stdout)
+    try:
+        raw: object = json.loads(process.stdout)
+    except json.JSONDecodeError as error:
+        failed_runtime(f"managed worker discovery returned malformed JSON: {error}")
     return require_mapping(raw, "managed worker discovery result")
 
 
@@ -283,8 +299,24 @@ def verify_baseline(
         ):
             script = require_mapping(raw_script, f"manifest scripts[{index}]")
             path = require_string(script.get("path"), "script path")
+            relative_path = PurePosixPath(path)
+            if relative_path.is_absolute() or any(
+                part in {"", ".", ".."} for part in relative_path.parts
+            ):
+                invalid_value(
+                    f"{baseline.identifier}: manifest script path is not a safe relative path: {path}"
+                )
             known_paths.add(path)
-            source = directory.joinpath(*PurePosixPath(path).parts)
+            source = directory.joinpath(*relative_path.parts)
+            resolved_source = source.resolve(strict=False)
+            resolved_directory = directory.resolve()
+            if (
+                resolved_source != resolved_directory
+                and resolved_directory not in resolved_source.parents
+            ):
+                invalid_value(
+                    f"{baseline.identifier}: manifest script path escapes its sandbox: {path}"
+                )
             expected_sha = require_string(script.get("sha256"), "script sha256")
             if not source.is_file() or sha256_file(source) != expected_sha:
                 failed_runtime(

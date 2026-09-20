@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import TYPE_CHECKING
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -18,10 +19,12 @@ from scripts.compatibility.promote import (
     validate_history,
 )
 from scripts.compatibility.roll import changed_script_paths, discover_candidates
-from scripts.compatibility.runner import command_root_for, script_domains
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from scripts.compatibility.runner import (
+    command_root_for,
+    run_managed_discovery,
+    script_domains,
+    verify_baseline,
+)
 
 
 def test_command_root_and_domain_classification_are_closed() -> None:
@@ -58,6 +61,74 @@ def test_command_root_and_domain_classification_are_closed() -> None:
         "audio_device",
         "mcu_device",
     ]
+
+
+def test_compatibility_runner_rejects_empty_or_incompatible_script_roots() -> None:
+    empty = Baseline("empty", "https://example.invalid/repository.git", "a" * 40, ())
+    with pytest.raises(ValueError, match="must not be empty"):
+        command_root_for(empty)
+    incompatible = Baseline(
+        "incompatible",
+        "https://example.invalid/repository.git",
+        "a" * 40,
+        ("/Commands/PythonCommands", "relative/McuCommands"),
+    )
+    with pytest.raises(ValueError, match="incompatible paths"):
+        command_root_for(incompatible)
+
+
+def test_compatibility_runner_maps_discovery_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def timeout(*_args: object, **_kwargs: object) -> object:
+        command = "compatibility"
+        raise subprocess.TimeoutExpired(command, 120)
+
+    monkeypatch.setattr("scripts.compatibility.runner.subprocess.run", timeout)
+    with pytest.raises(RuntimeError, match="exceeded 120 seconds"):
+        run_managed_discovery(
+            Path("compatibility"),
+            Path("worker"),
+            Path("Commands"),
+            Path("Data"),
+            Path("site-packages"),
+        )
+
+
+def test_compatibility_runner_rejects_manifest_paths_outside_sandbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline = Baseline(
+        "fixture",
+        "https://example.invalid/repository.git",
+        "a" * 40,
+        ("Commands/PythonCommands",),
+    )
+
+    def materialize(_repository: Path, _baseline: Baseline, destination: Path) -> Path:
+        command_root = destination / "Commands"
+        command_root.mkdir()
+        return command_root
+
+    monkeypatch.setattr("scripts.compatibility.runner.materialize_scripts", materialize)
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.run_managed_discovery",
+        lambda *_args: {"commands": []},
+    )
+    manifest = {
+        "id": "fixture",
+        "scripts": [{"path": "../escape.py", "sha256": "0" * 64}],
+    }
+    with pytest.raises(ValueError, match="safe relative path"):
+        verify_baseline(
+            baseline,
+            manifest,
+            tmp_path,
+            Path("compatibility"),
+            Path("worker"),
+            tmp_path,
+        )
 
 
 def candidate_document() -> dict[str, object]:

@@ -164,7 +164,7 @@
 | 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `5471e53`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
-| 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 修正済み・検証済み | Rust 1.95.0 pin＋flake rust-toolchain hash同期、Nix native_serial_pty compile（integration-test-support）成功。 |
+| 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 修正済み・検証済み | Rust 1.95.0 pin＋flake rust-toolchain hash同期、Nix native_serial_pty compile（integration-test-support）成功を`82865b5`で記録。 |
 | 311 | `rust/pokecon/Cargo.toml` | 3 | high,medium,low | Wave 1 | 一部修正・検証済み | F1 nix 0.30.1 helpで`pty` feature不存在＋既存`term` featureとnative_serial_pty compile成功を確認し、証拠付き非該当。F2/F3未着手。 |
 | 313 | `rust/pokecon/registry/acceptance-record.schema.json` | 4 | medium,medium,medium,medium | Wave 1 | 未着手 | — |
 | 314 | `rust/pokecon/registry/ci.json` | 4 | high,high,medium,medium | Wave 1 | 未着手 | — |

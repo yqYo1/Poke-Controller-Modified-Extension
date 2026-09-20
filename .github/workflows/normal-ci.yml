@@ -779,19 +779,21 @@ jobs:
             --arg current_branch "$CURRENT_BRANCH" \
             --arg current_pr_number "$CURRENT_PR_NUMBER" \
             '
-            .workflow_runs[]
-            | select((.id | tostring) != $cur)
-            | select(.conclusion == "success" or .conclusion == "failure")
-            | select((.head_sha // "") != "")
-            | select((.head_sha // "") != $current_revision)
-            | select(.event == $current_event)
-            | select(.head_branch == $current_branch)
-            | select(
-                if $current_event == "pull_request" then
-                  ((.pull_requests // [])
-                   | map(.number)
-                   | index($current_pr_number | tonumber)) != null
-                else true end
+            .workflow_runs
+            | map(
+                select((.id | tostring) != $cur)
+                | select(.conclusion == "success" or .conclusion == "failure")
+                | select((.head_sha // "") != "")
+                | select((.head_sha // "") != $current_revision)
+                | select(.event == $current_event)
+                | select(.head_branch == $current_branch)
+                | select(
+                    if $current_event == "pull_request" then
+                      ((.pull_requests // [])
+                       | map(.number)
+                       | index($current_pr_number | tonumber)) != null
+                    else true end
+                  )
               )
             | sort_by([.head_sha, .created_at])
             | group_by(.head_sha)

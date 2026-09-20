@@ -104,8 +104,12 @@ def ignore_termination_signals() -> None:
 
 def start_check(spec: CheckSpec, log_directory: Path) -> RunningCheck:
     log_path = log_directory / f"{spec.label}.log"
-    log_descriptor = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     null_descriptor = os.open(os.devnull, os.O_RDONLY)
+    try:
+        log_descriptor = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except BaseException:
+        os.close(null_descriptor)
+        raise
     try:
         pid = os.posix_spawnp(
             spec.command[0],
@@ -181,6 +185,25 @@ def wait_for_check(check: RunningCheck) -> int:
     return check.returncode
 
 
+def wait_for_checks(checks: Sequence[RunningCheck]) -> tuple[int, ...]:
+    pending = list(checks)
+    while pending:
+        progressed = False
+        for check in tuple(pending):
+            if poll_check(check):
+                pending.remove(check)
+                progressed = True
+        if not progressed and pending:
+            time.sleep(TERMINATION_POLL_SECONDS)
+    statuses: list[int] = []
+    for check in checks:
+        if check.returncode is None:
+            message = f"check status was not recorded after wait: {check.spec.label}"
+            raise RuntimeError(message)
+        statuses.append(check.returncode)
+    return tuple(statuses)
+
+
 def terminate_checks(checks: Sequence[RunningCheck]) -> None:
     ignore_termination_signals()
     for check in checks:
@@ -188,7 +211,12 @@ def terminate_checks(checks: Sequence[RunningCheck]) -> None:
         signal_process_group(check, signal.SIGCONT)
 
     grace_deadline = time.monotonic() + TERMINATION_GRACE_SECONDS
-    while any(process_group_exists(check) for check in checks):
+    while True:
+        for check in checks:
+            if check.returncode is None:
+                poll_check(check)
+        if not any(process_group_exists(check) for check in checks):
+            break
         remaining = grace_deadline - time.monotonic()
         if remaining <= 0:
             break
@@ -261,13 +289,18 @@ def run_checks(specs: Sequence[CheckSpec]) -> int:
                 terminate_checks(running)
                 return 127
 
-            statuses = [normalized_status(wait_for_check(check)) for check in running]
+            statuses = [
+                normalized_status(status) for status in wait_for_checks(running)
+            ]
             ignore_termination_signals()
             replay_logs(running, statuses)
             return next((status for status in statuses if status != 0), 0)
         except TerminationRequested as termination:
             terminate_checks(running)
             return termination.status
+        except BaseException:
+            terminate_checks(running)
+            raise
 
 
 def main(arguments: Sequence[str] | None = None) -> int:

@@ -369,6 +369,12 @@ Luaでは`pcall`と`pokecon.errors.is_callback_soft_timeout(error)`で判定で�
 
 hard timeoutへ達したcallbackはgenerationの健全性を損なうため、長時間処理をcallback内へ置きません。
 
+Rust側のcallback schedulerはPython／Luaの命令hookとは独立したouter timerも持ちます。
+soft timeoutとgraceの合計、またはhard timeoutへ達した場合、event callerへlogical timeoutを返して後続処理を進めます。
+ただし実際のcallback taskを同一process内でkillすることはできないため、callbackが戻るまで同じhandlerのlaneと実行slotは保持します。
+これにより、論理完了後に同じhandlerを重ねて実行せず、blocking C extensionが戻らない場合もslot数を過大に見積もりません。
+Python C extensionまたはLua FFIが戻らない場合でも、動的workerを強制終了・再生成せず、late returnをdiagnosticへ記録します。
+
 ## `pokecon.profile`で切替を要求する
 
 `pokecon.profile.current()`は現在のactive profile名を返します。

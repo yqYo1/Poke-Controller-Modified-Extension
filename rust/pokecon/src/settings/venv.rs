@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs;
+use std::fs::{self, File};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -130,6 +131,7 @@ impl UvExecutor for CommandUvExecutor {
         run_invocation(&plan.create_venv, VenvStage::Create).await?;
         run_invocation(&plan.sync, VenvStage::ExactSync).await?;
         run_invocation(&plan.check, VenvStage::Check).await?;
+        validate_venv_layout(&target, VenvStage::Check)?;
         let inventory = run_invocation_output(&plan.inventory, VenvStage::Inventory).await?;
         let distributions = parse_inventory(&inventory)?;
         let compiled_identity = digest_file(&compiled)?;
@@ -148,12 +150,7 @@ impl UvExecutor for CommandUvExecutor {
     }
 
     async fn inspect(&self, context: &UvExecutionContext) -> Result<ManifestOutput, VenvError> {
-        if !venv_python(&context.canonical_venv).is_file() {
-            return Err(VenvError::new(
-                VenvStage::Inspect,
-                VenvFailure::EnvironmentMissing,
-            ));
-        }
+        validate_venv_layout(&context.canonical_venv, VenvStage::Inspect)?;
         let workspace = create_workspace(&context.cache_root)?;
         let placeholder = workspace.path().join("placeholder.txt");
         write_lines(&placeholder, &[])?;
@@ -449,6 +446,45 @@ impl VenvManager {
     }
 }
 
+fn validate_venv_layout(venv: &Path, stage: VenvStage) -> Result<(), VenvError> {
+    let python = venv_python(venv);
+    let python_metadata = fs::symlink_metadata(&python)
+        .map_err(|_| VenvError::new(stage, VenvFailure::EnvironmentMissing))?;
+    if !python_metadata.file_type().is_file() {
+        return Err(VenvError::new(stage, VenvFailure::InconsistentEnvironment));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        if python_metadata.permissions().mode() & 0o111 == 0 {
+            return Err(VenvError::new(
+                VenvStage::Inspect,
+                VenvFailure::InconsistentEnvironment,
+            ));
+        }
+    }
+
+    let config = venv.join("pyvenv.cfg");
+    let config_metadata = fs::symlink_metadata(&config)
+        .map_err(|_| VenvError::new(stage, VenvFailure::EnvironmentMissing))?;
+    if !config_metadata.file_type().is_file() {
+        return Err(VenvError::new(stage, VenvFailure::InconsistentEnvironment));
+    }
+    let config = fs::read_to_string(&config)
+        .map_err(|_| VenvError::new(VenvStage::Inspect, VenvFailure::InconsistentEnvironment))?;
+    let has_home = config
+        .lines()
+        .any(|line| line.trim_start().starts_with("home = "));
+    let has_version = config
+        .lines()
+        .any(|line| line.trim_start().starts_with("version = "));
+    if !has_home || !has_version {
+        return Err(VenvError::new(stage, VenvFailure::InconsistentEnvironment));
+    }
+    Ok(())
+}
+
 fn fingerprint(
     context: &UvExecutionContext,
     key: &crate::settings::hmac_key::HmacKey,
@@ -556,9 +592,6 @@ struct VenvStaging {
 fn staging_target(
     context: &UvExecutionContext,
 ) -> Result<(PathBuf, Option<VenvStaging>), VenvError> {
-    if context.request.ownership != VenvOwnership::AppManaged {
-        return Ok((context.canonical_venv.clone(), None));
-    }
     if context.canonical_venv.exists() && !context.canonical_venv.is_dir() {
         return Err(VenvError::new(VenvStage::Create, VenvFailure::Filesystem));
     }
@@ -568,6 +601,7 @@ fn staging_target(
         .ok_or_else(|| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
     fs::create_dir_all(parent)
         .map_err(|_| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
+    reap_interrupted_staging(parent)?;
     let staging = tempfile::Builder::new()
         .prefix(".venv-stage-")
         .tempdir_in(parent)
@@ -582,18 +616,47 @@ fn staging_target(
     ))
 }
 
+fn reap_interrupted_staging(parent: &Path) -> Result<(), VenvError> {
+    let entries = fs::read_dir(parent)
+        .map_err(|_| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
+    for entry in entries {
+        let entry =
+            entry.map_err(|_| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !name.starts_with(".venv-stage-") && !name.starts_with(".venv-backup-") {
+            continue;
+        }
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|_| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
+        if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() {
+            fs::remove_dir_all(&path)
+        } else {
+            fs::remove_file(&path)
+        }
+        .map_err(|_| VenvError::new(VenvStage::Create, VenvFailure::Filesystem))?;
+    }
+    Ok(())
+}
+
 fn commit_staging(staging: VenvStaging, destination: &Path) -> Result<(), VenvError> {
     if !staging.target.is_dir() {
         return Err(VenvError::new(VenvStage::Commit, VenvFailure::Filesystem));
     }
-    if !destination.exists() {
-        return fs::rename(&staging.target, destination)
-            .map_err(|_| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem));
-    }
-
     let parent = destination
         .parent()
         .ok_or_else(|| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem))?;
+    if !destination.exists() {
+        fs::rename(&staging.target, destination)
+            .map_err(|_| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem))?;
+        sync_directory(parent)?;
+        drop(staging.container);
+        return Ok(());
+    }
+
     let backup = tempfile::Builder::new()
         .prefix(".venv-backup-")
         .tempdir_in(parent)
@@ -601,6 +664,17 @@ fn commit_staging(staging: VenvStaging, destination: &Path) -> Result<(), VenvEr
     let previous = backup.path().join("previous");
     fs::rename(destination, &previous)
         .map_err(|_| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem))?;
+    if sync_directory(parent).is_err() {
+        if fs::rename(&previous, destination).is_err() {
+            let _preserved_previous = backup.keep();
+            return Err(VenvError::new(
+                VenvStage::Commit,
+                VenvFailure::ConcurrentMutation,
+            ));
+        }
+        let _ = sync_directory(parent);
+        return Err(VenvError::new(VenvStage::Commit, VenvFailure::Filesystem));
+    }
     if let Err(error) = fs::rename(&staging.target, destination) {
         if fs::rename(&previous, destination).is_err() {
             let _preserved_previous = backup.keep();
@@ -609,6 +683,7 @@ fn commit_staging(staging: VenvStaging, destination: &Path) -> Result<(), VenvEr
                 VenvFailure::ConcurrentMutation,
             ));
         }
+        let _ = sync_directory(parent);
         return Err(VenvError::new(
             VenvStage::Commit,
             if error.kind() == std::io::ErrorKind::AlreadyExists {
@@ -618,10 +693,26 @@ fn commit_staging(staging: VenvStaging, destination: &Path) -> Result<(), VenvEr
             },
         ));
     }
+    sync_directory(parent)?;
     backup
         .close()
         .map_err(|_| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem))?;
+    sync_directory(parent)?;
     drop(staging.container);
+    Ok(())
+}
+
+fn sync_directory(path: &Path) -> Result<(), VenvError> {
+    sync_directory_io(path).map_err(|_| VenvError::new(VenvStage::Commit, VenvFailure::Filesystem))
+}
+
+#[cfg(unix)]
+fn sync_directory_io(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_directory_io(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
@@ -787,7 +878,7 @@ mod tests {
     use super::{
         ManifestOutput, PreparationDisposition, UvExecutionContext, UvExecutor, VenvError,
         VenvFailure, VenvManager, VenvOwnership, VenvPreparationRequest, VenvStage, commit_staging,
-        staging_target,
+        staging_target, validate_venv_layout,
     };
     use crate::settings::package::{ConstraintResolver, PythonWorker};
     use crate::settings::roots::{BaseDirectories, EffectiveRoots, RootEnvironment, SafeComponent};
@@ -966,5 +1057,42 @@ mod tests {
             fs::read(destination.join("new-marker")).expect("new marker must be readable"),
             b"new"
         );
+    }
+
+    #[test]
+    fn user_specified_rebuild_stages_and_reaps_interrupted_transactions() {
+        let temporary = TempDir::new().expect("temporary directory must exist");
+        let roots = roots(&temporary);
+        roots.ensure().expect("roots must exist");
+        let destination = roots.data.join("venv-user");
+        let stale_stage = roots.data.join(".venv-stage-stale");
+        let stale_backup = roots.data.join(".venv-backup-stale");
+        fs::create_dir_all(&stale_stage).expect("stale stage must exist");
+        fs::create_dir_all(&stale_backup).expect("stale backup must exist");
+        let mut request = request(&roots);
+        request.ownership = VenvOwnership::UserSpecified;
+        let context = UvExecutionContext {
+            request,
+            canonical_venv: destination.clone(),
+            cache_root: roots.cache.clone(),
+        };
+        let (target, staging) = staging_target(&context).expect("staging must be created");
+        assert!(staging.is_some());
+        assert_ne!(target, destination);
+        assert!(!stale_stage.exists());
+        assert!(!stale_backup.exists());
+    }
+
+    #[test]
+    fn venv_layout_rejects_non_executable_or_malformed_interpreter() {
+        let temporary = TempDir::new().expect("temporary directory must exist");
+        let venv = temporary.path().join("venv");
+        let bin = venv.join("bin");
+        fs::create_dir_all(&bin).expect("bin must exist");
+        fs::write(bin.join("python"), b"not executable").expect("python must exist");
+        fs::write(venv.join("pyvenv.cfg"), b"home = /python\n").expect("pyvenv.cfg must exist");
+        let error = validate_venv_layout(&venv, VenvStage::Inspect)
+            .expect_err("invalid venv must be rejected");
+        assert_eq!(error.failure, VenvFailure::InconsistentEnvironment);
     }
 }

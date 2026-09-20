@@ -15,15 +15,15 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **123 / 455 finding、41 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
-- Wave 1: **110 / 222 finding、34ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
+- 現在の検証済み修正: **126 / 455 finding、41 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
+- Wave 1: **113 / 222 finding、34ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
 
 | Wave | 対象 | ファイル数 | finding数 | 状態 | 完了証跡 |
 |---|---|---:|---:|---|---|
-| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（110/222） | realtime_connection focused compile/test passed; signed commits continue |
+| Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（113/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
 | Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（5/123） | timing p95 bootstrap、normal-ci timeout/action SHA、contract-sync・mutation・Nix contract passed |
 
@@ -80,7 +80,7 @@
 | 114 | `rust/pokecon/src/settings/scaffold.rs` | 6 | medium,low,low,low,low,low | Wave 1 | 未着手 | — |
 | 115 | `rust/pokecon/src/settings/service.rs` | 3 | high,high,medium | Wave 1 | 修正済み・focused検証済み | service tests passed; persisted document direct commit、error propagation、profile path staging/live adapter rollbackを修正 |
 | 116 | `rust/pokecon/src/settings/uv.rs` | 8 | medium,medium,medium,low,low,medium,low,low | Wave 1 | 一部修正・検証済み | settings::uv focused test 5 passed; SafeComponent version/path, metadata sha256 and symlink source validation fixed, remaining 5 findings pending |
-| 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 一部修正・検証済み | F3を`ebb074e`で修正。managed uv child waitは15分deadline＋kill_on_drop。venv tests 3 passed/clippy passed。F1/F2/F4/F5/F6/F7/F8/F9/F10/F11は未着手。 |
+| 117 | `rust/pokecon/src/settings/venv.rs` | 11 | high,high,high,medium,medium,medium,medium,medium,low,low,low | Wave 1 | 一部修正・検証済み | F1 UserSpecifiedを含む全ownershipのstaging/backup commit、F2 rename後parent fsync＋startup staging/backup reaper、F4 regular executable `venv_python`＋`pyvenv.cfg`検証を実装。F3 managed uv child waitは`ebb074e`の15分deadline＋kill_on_drop。venv tests 5 passed、clippy passed。F5/F6/F7/F8/F9/F10/F11は未着手。 |
 | 118 | `rust/pokecon/src/settings_runtime.rs` | 8 | high,medium,medium,medium,medium,medium,low,low | Wave 1 | 修正済み・focused検証済み | settings_runtime tests passed; bounded runtime bridge、rollback Result、reconcile baseline、Profile adaptersを修正 |
 | 121 | `rust/pokecon/src/tests/ui_boundary_acceptance.rs` | 7 | high,high,medium,medium,medium,low,low | Wave 1 | 未着手 | — |
 | 129 | `rust/pokecon/src/worker/script/mod.rs` | 1 | medium | Wave 1 | 未着手 | — |

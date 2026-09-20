@@ -84,15 +84,28 @@ def test_windows_manifest_records_exact_nsis_signing_input(tmp_path: Path) -> No
 
     manifest = signing_inputs(REPOSITORY, "windows", installer)
 
-    assert manifest["targets"] == [
-        {
-            "file_name": installer.name,
-            "format": "nsis",
-            "role": "bundle",
-            "sha256": hashlib.sha256(b"installer").hexdigest(),
-            "size": 9,
+    output = tmp_path / "signing-inputs.json"
+    write_signing_inputs(output, manifest)
+    assert manifest == {
+        "platform": "windows",
+        "policy": {
+            "canonical_sha256": load_policy(REPOSITORY, "windows")[1],
+            "path": "rust/pokecon/signing-targets.json",
         },
-    ]
+        "schema_version": 1,
+        "targets": [
+            {
+                "file_name": installer.name,
+                "format": "nsis",
+                "role": "bundle",
+                "sha256": hashlib.sha256(b"installer").hexdigest(),
+                "size": 9,
+            },
+        ],
+        "tauri_root": "rust/pokecon",
+    }
+    assert json.loads(output.read_text(encoding="utf-8")) == manifest
+    verify_signing_inputs(output, manifest)
 
 
 def test_windows_path_fstat_ctime_difference_is_not_a_file_change(
@@ -118,7 +131,15 @@ def test_windows_path_fstat_ctime_difference_is_not_a_file_change(
 
     manifest = signing_inputs(REPOSITORY, "windows", installer)
 
-    assert manifest["targets"]
+    assert manifest["targets"] == [
+        {
+            "file_name": installer.name,
+            "format": "nsis",
+            "role": "bundle",
+            "sha256": hashlib.sha256(b"installer").hexdigest(),
+            "size": 9,
+        }
+    ]
 
 
 def test_windows_handle_ctime_change_during_read_is_rejected(

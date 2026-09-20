@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **152 / 455 finding、49 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの31件を完了）。
-- Wave 3: **31 / 123 finding、10ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py部分完了）**。
+- 現在の検証済み修正: **154 / 455 finding、50 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの33件を完了）。
+- Wave 3: **33 / 123 finding、11ファイル（timing.py、normal-ci.yml、build_runtime.py、source_filter.py、run_parallel_checks.py、test_source_filter.py、test_ui_package_check.py、test_version_contract.py、test_gate.py、test_package_smoke.py、test_signing_manifest.py部分完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
@@ -25,7 +25,7 @@
 |---|---|---:|---:|---|---|
 | Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（113/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
-| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（31/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke boundaries、contract-sync・mutation・Nix contract passed |
+| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（33/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime/source_filter/parallel-checks/UI-package/version-contract/release-gate/package-smoke/signing boundaries、contract-sync・mutation・Nix contract passed |
 
 ## 4. ファイル別対応状態
 
@@ -127,7 +127,7 @@
 | 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1/F2 workflow needsをsemantic token set比較へ`4682704`で変更。release gate tests 14 passed、ruff check/format passed。F3未着手。 |
 | 213 | `tests/release/test_normalize_debian_package.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 215 | `tests/release/test_package_smoke.py` | 1 | high | Wave 3 | 修正済み・検証済み | F1 independent literal worker package set/count and inventory assertionを`3f194a4`で実装。package smoke tests 8 passed、ruff check/format passed。 |
-| 216 | `tests/release/test_signing_manifest.py` | 3 | high,medium,medium | Wave 3 | 未着手 | — |
+| 216 | `tests/release/test_signing_manifest.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1 Windows manifest全field/policy exact assertion、F2 ctime toleranceでもtarget name/format/role/sha256/size exact assertionを追加。signing manifest tests 14 passed、ruff check/format passed。F3未着手。 |
 | 218 | `tests/release/test_windows_install_smoke.py` | 5 | medium,medium,high,medium,medium | Wave 3 | 未着手 | — |
 | 223 | `web/src/app.html` | 1 | medium | Wave 2 | 未着手 | — |
 | 225 | `web/src/lib/actions.ts` | 2 | high,low | Wave 2 | 未着手 | — |

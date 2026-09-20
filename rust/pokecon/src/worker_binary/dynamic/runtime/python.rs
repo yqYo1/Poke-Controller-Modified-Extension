@@ -52,17 +52,30 @@ class _CallbackHardTimeoutError(BaseException):
     pass
 
 
+_MAX_OUTPUT_BUFFER_CHARS = 64 * 1024
+_OUTPUT_TRUNCATION_MARKER = "... [output truncated]"
+
+
 class _PokeconStdout:
     def __init__(self):
         self._buffer = ""
 
     def write(self, text):
         text = str(text)
+        length = len(text)
+        truncated = len(text) > _MAX_OUTPUT_BUFFER_CHARS
+        if truncated:
+            text = text[:_MAX_OUTPUT_BUFFER_CHARS]
         self._buffer += text
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             _api.record_output(line)
-        return len(text)
+        if len(self._buffer) > _MAX_OUTPUT_BUFFER_CHARS or truncated:
+            _api.record_output(
+                self._buffer[:_MAX_OUTPUT_BUFFER_CHARS] + _OUTPUT_TRUNCATION_MARKER
+            )
+            self._buffer = ""
+        return length
 
     def flush(self):
         if self._buffer:
@@ -346,6 +359,7 @@ controller = _Controller()
 commands = _Commands()
 source = _api.source
 _sys.stdout = _PokeconStdout()
+_sys.stderr = _PokeconStdout()
 "#;
 
 fn python_error(error: &DynamicEngineError) -> PyErr {

@@ -1733,6 +1733,44 @@ raise RuntimeError("reload sentinel")
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn python_output_and_stderr_are_bounded() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("init.py"),
+            "import sys\nprint(\"o\" * 70000, end=\"\")\nsys.stderr.write(\"e\" * 70000)\n",
+        )
+        .unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let result = engine
+            .control(DynamicConfigControl::LoadPath {
+                path: "init.py".to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(result.loaded, "{:?}", result.diagnostic);
+        let outputs = host.outputs();
+        assert!(outputs.len() >= 2);
+        assert!(outputs.iter().all(|output| output.len() <= 65_536 + 24));
+        assert!(
+            outputs
+                .iter()
+                .filter(|output| output.contains("output truncated"))
+                .count()
+                >= 2
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn python_evaluation_releases_coordinator_before_user_code() {
         let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();

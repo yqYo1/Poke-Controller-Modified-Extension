@@ -124,7 +124,7 @@
 | 208 | `tests/quality/test_ui_package_check.py` | 7 | high,high,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F2 shard validationを明示ValueErrorへ変更し、canonical build_runtime hashを現行sourceへ更新（`6968637`）。quality tests 31 passed、ruff check/format passed。F1/F3/F4/F5/F6/F7は未着手。 |
 | 209 | `tests/quality/test_version_contract.py` | 4 | high,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 bounded uv build with TimeoutExpired diagnostics、F2 explicit env contractを`4ee45db`で実装。version contract tests 10 passed、ruff check/format passed。F3/F4未着手。 |
 | 211 | `tests/release/test_debian_install_smoke.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
-| 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | F1/F2 workflow needsをsemantic token set比較へ`4682704`、F3 version source-of-truth導出を追加。release gate tests 14 passed、ruff check/format passed。 |
+| 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | F1/F2 workflow needsをsemantic token set比較へ`4682704`、F3 version source-of-truth導出を`bc3751f`で追加。release gate tests 14 passed、ruff check/format passed。 |
 | 213 | `tests/release/test_normalize_debian_package.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 215 | `tests/release/test_package_smoke.py` | 1 | high | Wave 3 | 修正済み・検証済み | F1 independent literal worker package set/count and inventory assertionを`3f194a4`で実装。package smoke tests 8 passed、ruff check/format passed。 |
 | 216 | `tests/release/test_signing_manifest.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1 Windows manifest全field/policy exact assertion、F2 ctime toleranceでもtarget name/format/role/sha256/size exact assertionを`8457a4b`で追加。signing manifest tests 14 passed、ruff check/format passed。F3未着手。 |

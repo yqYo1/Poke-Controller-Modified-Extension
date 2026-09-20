@@ -101,7 +101,7 @@
 | 162 | `scripts/compatibility/inventory.py` | 4 | medium,low,low,low | Wave 3 | 未着手 | — |
 | 163 | `scripts/compatibility/promote.py` | 5 | high,high,medium,medium,medium | Wave 3 | 未着手 | — |
 | 164 | `scripts/compatibility/roll.py` | 2 | high,medium | Wave 3 | 未着手 | — |
-| 165 | `scripts/compatibility/runner.py` | 6 | high,high,medium,medium,medium,low | Wave 3 | 一部修正・検証済み | F1 timeout/failed_runtime、F2 sandbox path、F3 empty/incompatible rootsを実装。compatibility tests 8 passed、ruff check/format passed。F4/F5/F6未着手。 |
+| 165 | `scripts/compatibility/runner.py` | 6 | high,high,medium,medium,medium,low | Wave 3 | 一部修正・検証済み | F1 timeout/failed_runtime、F2 sandbox path、F3 empty/incompatible rootsを`df89249`で実装。compatibility tests 8 passed、ruff check/format passed。F4/F5/F6未着手。 |
 | 166 | `scripts/integration/editor_lsp_smoke.py` | 2 | high,medium | Wave 3 | 未着手 | — |
 | 168 | `scripts/integration/pidfd_signal.py` | 1 | Medium | Wave 3 | 未着手 | — |
 | 169 | `scripts/integration/proc_socket_evidence.py` | 1 | medium | Wave 3 | 未着手 | — |

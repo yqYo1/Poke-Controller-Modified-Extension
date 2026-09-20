@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
@@ -6,10 +7,11 @@ use mlua::{
     MultiValue, StdLib, Table, Value as LuaValue, VmState,
 };
 use parking_lot::Mutex;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::dynamic::callback::{
-    Callback, CallbackError, CallbackLimits, CallbackReturn, InvocationContext,
+    Callback, CallbackError, CallbackErrorKind, CallbackLimits, CallbackReturn, InvocationContext,
 };
 use crate::dynamic::command::{CommandCallbackKind, CommandOptionField, CommandOptionValue};
 use crate::dynamic::event::{HandlerId, RegistrationOptions};
@@ -18,9 +20,14 @@ use crate::worker_binary::dynamic::engine::{
 };
 
 const LUA_CALLBACK_INVOKER_REGISTRY_KEY: &str = "pokecon.callback_invoker";
+const MAX_LUA_VALUE_DEPTH: usize = 64;
+const MAX_LUA_VALUE_ENTRIES: usize = 65_536;
+const MAX_LUA_SORT_ENTRIES: usize = 4_096;
+const MAX_LUA_SERIALIZED_BYTES: usize = 1_048_576;
 
 const LUA_BOOTSTRAP: &str = r##"
 local api = _pokecon_api
+local MAX_VALUE_DEPTH = api.max_value_depth
 local array_metatable = api.array_metatable
 local raw_pcall = pcall
 local raw_require = require
@@ -56,6 +63,24 @@ local function normalize_soft_timeout(error)
     return setmetatable(fields, soft_timeout_metatable)
 end
 
+local BridgeError = {
+    __name = "DynamicBridgeError",
+}
+local bridge_error_metatable = {
+    __index = BridgeError,
+    __tostring = function(error)
+        return error.message
+    end,
+}
+
+local function normalize_bridge_error(error)
+    local fields = api.bridge_error_fields(error)
+    if fields == nil then
+        return error
+    end
+    return setmetatable(fields, bridge_error_metatable)
+end
+
 local function pack(...)
     return {n = select("#", ...), ...}
 end
@@ -64,6 +89,7 @@ function pcall(...)
     local result = pack(raw_pcall(...))
     if not result[1] then
         result[2] = normalize_soft_timeout(result[2])
+        result[2] = normalize_bridge_error(result[2])
     end
     return unpack_values(result, 1, result.n)
 end
@@ -97,9 +123,13 @@ end
 
 local state_context_stack = {}
 
-local function deep_copy(value, copies)
+local function deep_copy(value, copies, depth)
     if type(value) ~= "table" then
         return value
+    end
+    depth = (depth or 0) + 1
+    if depth > MAX_VALUE_DEPTH then
+        error("Lua state exceeds the maximum nesting depth", 2)
     end
     copies = copies or {}
     if copies[value] ~= nil then
@@ -108,7 +138,7 @@ local function deep_copy(value, copies)
     local copied = {}
     copies[value] = copied
     for key, item in pairs(value) do
-        copied[deep_copy(key, copies)] = deep_copy(item, copies)
+        copied[deep_copy(key, copies, depth)] = deep_copy(item, copies, depth)
     end
     local metatable = debug and debug.getmetatable(value) or getmetatable(value)
     if type(metatable) == "table" then
@@ -120,7 +150,7 @@ local function deep_copy(value, copies)
     return copied
 end
 
-local function deep_equal(left, right, seen)
+local function deep_equal(left, right, seen, depth)
     if rawequal(left, right) then
         return true
     end
@@ -130,13 +160,17 @@ local function deep_equal(left, right, seen)
     if type(left) ~= "table" then
         return false
     end
+    depth = (depth or 0) + 1
+    if depth > MAX_VALUE_DEPTH then
+        error("Lua state exceeds the maximum nesting depth", 2)
+    end
     seen = seen or {}
     if seen[left] ~= nil then
         return seen[left] == right
     end
     seen[left] = right
     for key, value in pairs(left) do
-        if not deep_equal(value, right[key], seen) then
+        if not deep_equal(value, right[key], seen, depth) then
             return false
         end
     end
@@ -242,12 +276,31 @@ local controller = {
 
 local errors = {
     CallbackSoftTimeoutError = CallbackSoftTimeoutError,
+    DynamicBridgeError = BridgeError,
 }
 function errors.is_callback_soft_timeout(error)
     return (
         type(error) == "table"
         and error.__pokecon_callback_soft_timeout__ == true
     ) or api.is_callback_soft_timeout(error)
+end
+function errors.code(error)
+    if type(error) == "table" and error.__pokecon_bridge_error__ == true then
+        return error.code
+    end
+    return api.bridge_error_field(error, "code")
+end
+function errors.kind(error)
+    if type(error) == "table" and error.__pokecon_bridge_error__ == true then
+        return error.kind
+    end
+    return api.bridge_error_field(error, "kind")
+end
+function errors.message(error)
+    if type(error) == "table" and error.__pokecon_bridge_error__ == true then
+        return error.message
+    end
+    return api.bridge_error_field(error, "message") or tostring(error)
 end
 
 local function command_options(name)
@@ -349,8 +402,201 @@ struct LuaSoftTimeoutError {
 #[error("callback exceeded its hard timeout")]
 struct LuaHardTimeoutError;
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct LuaBindingError {
+    code: String,
+    kind: CallbackErrorKind,
+    message: String,
+}
+
+impl LuaBindingError {
+    fn from_engine(error: &DynamicEngineError) -> Self {
+        let (code, kind) = match error {
+            DynamicEngineError::Host(error) => (error.code.clone(), host_error_kind(&error.code)),
+            DynamicEngineError::Source(_) => {
+                ("SourceError".to_owned(), CallbackErrorKind::Internal)
+            }
+            DynamicEngineError::Transaction(_) => (
+                "TransactionError".to_owned(),
+                CallbackErrorKind::Configuration,
+            ),
+            DynamicEngineError::Event(_) => {
+                ("EventError".to_owned(), CallbackErrorKind::Configuration)
+            }
+            DynamicEngineError::Command(_) => {
+                ("CommandError".to_owned(), CallbackErrorKind::Configuration)
+            }
+            DynamicEngineError::Python(_) => ("PythonRuntime".to_owned(), CallbackErrorKind::User),
+            DynamicEngineError::Lua(_) => ("LuaRuntime".to_owned(), CallbackErrorKind::User),
+            DynamicEngineError::LuaBridge { code, kind, .. } => (code.clone(), *kind),
+            DynamicEngineError::Evaluation(_) => {
+                ("EvaluationError".to_owned(), CallbackErrorKind::User)
+            }
+            DynamicEngineError::NoActiveEvaluation => {
+                ("NoActiveEvaluation".to_owned(), CallbackErrorKind::Internal)
+            }
+            DynamicEngineError::NoTokioRuntime => {
+                ("NoTokioRuntime".to_owned(), CallbackErrorKind::Internal)
+            }
+        };
+        Self {
+            code,
+            kind,
+            message: error.to_string(),
+        }
+    }
+}
+
+fn host_error_kind(code: &str) -> CallbackErrorKind {
+    if code.starts_with("Ipc")
+        || code.ends_with("Disconnected")
+        || code.ends_with("Timeout")
+        || code == "StateEncodingFailed"
+        || code == "UserWorkerStopFailed"
+    {
+        CallbackErrorKind::Internal
+    } else {
+        CallbackErrorKind::Configuration
+    }
+}
+
 fn lua_error(error: &DynamicEngineError) -> LuaError {
-    LuaError::runtime(error.to_string())
+    LuaBindingError::from_engine(error).into_lua_err()
+}
+
+fn map_lua_engine_error(error: &LuaError) -> DynamicEngineError {
+    if let Some(error) = lua_error_downcast::<LuaBindingError>(error) {
+        DynamicEngineError::LuaBridge {
+            code: error.code.clone(),
+            kind: error.kind,
+            message: error.message.clone(),
+        }
+    } else {
+        DynamicEngineError::Lua(error.to_string())
+    }
+}
+
+#[derive(Default)]
+struct LuaValueBudget {
+    entries: usize,
+    string_bytes: usize,
+}
+
+fn validate_lua_value(value: &LuaValue) -> mlua::Result<()> {
+    let mut budget = LuaValueBudget::default();
+    let mut active_tables = HashSet::new();
+    validate_lua_value_inner(value, 0, &mut budget, &mut active_tables)
+}
+
+fn validate_lua_value_inner(
+    value: &LuaValue,
+    depth: usize,
+    budget: &mut LuaValueBudget,
+    active_tables: &mut HashSet<usize>,
+) -> mlua::Result<()> {
+    if depth > MAX_LUA_VALUE_DEPTH {
+        return Err(LuaError::runtime(format!(
+            "Lua value exceeds the maximum nesting depth of {MAX_LUA_VALUE_DEPTH}"
+        )));
+    }
+    match value {
+        LuaValue::Nil | LuaValue::Boolean(_) | LuaValue::Integer(_) => Ok(()),
+        LuaValue::Number(number) if number.is_finite() => Ok(()),
+        LuaValue::Number(_) => Err(LuaError::runtime("Lua numbers must be finite")),
+        LuaValue::String(string) => {
+            budget.string_bytes = budget
+                .string_bytes
+                .checked_add(string.as_bytes().len())
+                .ok_or_else(|| LuaError::runtime("Lua value string size overflow"))?;
+            if budget.string_bytes > MAX_LUA_SERIALIZED_BYTES {
+                return Err(LuaError::runtime(
+                    "Lua value exceeds the maximum serialized payload size",
+                ));
+            }
+            Ok(())
+        }
+        LuaValue::Table(table) => {
+            let pointer = table.to_pointer() as usize;
+            if !active_tables.insert(pointer) {
+                return Err(LuaError::runtime("cyclic Lua tables are not supported"));
+            }
+            let mut integer_keys = 0_usize;
+            let mut string_keys = 0_usize;
+            let mut largest_integer_key = 0_i64;
+            for pair in table.clone().pairs::<LuaValue, LuaValue>() {
+                let (key, item) = pair?;
+                budget.entries = budget
+                    .entries
+                    .checked_add(1)
+                    .ok_or_else(|| LuaError::runtime("Lua value entry count overflow"))?;
+                if budget.entries > MAX_LUA_VALUE_ENTRIES {
+                    return Err(LuaError::runtime(format!(
+                        "Lua value exceeds the maximum entry count of {MAX_LUA_VALUE_ENTRIES}"
+                    )));
+                }
+                match key {
+                    LuaValue::String(string) => {
+                        string_keys += 1;
+                        budget.string_bytes = budget
+                            .string_bytes
+                            .checked_add(string.as_bytes().len())
+                            .ok_or_else(|| LuaError::runtime("Lua table key size overflow"))?;
+                    }
+                    LuaValue::Integer(index) if index > 0 => {
+                        integer_keys += 1;
+                        largest_integer_key = largest_integer_key.max(index);
+                    }
+                    _ => {
+                        return Err(LuaError::runtime(
+                            "Lua table keys must be strings or positive contiguous integers",
+                        ));
+                    }
+                }
+                validate_lua_value_inner(&item, depth + 1, budget, active_tables)?;
+            }
+            active_tables.remove(&pointer);
+            if budget.string_bytes > MAX_LUA_SERIALIZED_BYTES {
+                return Err(LuaError::runtime(
+                    "Lua value exceeds the maximum serialized payload size",
+                ));
+            }
+            if integer_keys > 0 && string_keys > 0 {
+                return Err(LuaError::runtime(
+                    "Lua tables cannot mix object keys and array indices",
+                ));
+            }
+            if integer_keys > 0 && usize::try_from(largest_integer_key).ok() != Some(integer_keys) {
+                return Err(LuaError::runtime(
+                    "Lua array tables must have contiguous integer indices",
+                ));
+            }
+            Ok(())
+        }
+        LuaValue::Function(_)
+        | LuaValue::Thread(_)
+        | LuaValue::UserData(_)
+        | LuaValue::LightUserData(_)
+        | LuaValue::Error(_) => Err(LuaError::runtime(
+            "Lua functions, threads, userdata, lightuserdata, and errors cannot cross the value boundary",
+        )),
+        LuaValue::Other(_) => Err(LuaError::runtime("unsupported Lua value type")),
+    }
+}
+
+fn from_lua_value<T>(lua: &Lua, value: LuaValue) -> mlua::Result<T>
+where
+    T: DeserializeOwned,
+{
+    validate_lua_value(&value)?;
+    let json = lua.from_value::<Value>(value)?;
+    let encoded = serde_json::to_vec(&json).map_err(LuaError::external)?;
+    if encoded.len() > MAX_LUA_SERIALIZED_BYTES {
+        return Err(LuaError::runtime(
+            "Lua value exceeds the maximum serialized payload size",
+        ));
+    }
+    serde_json::from_slice(&encoded).map_err(LuaError::external)
 }
 
 fn engine_from_weak(engine: &Weak<EngineInner>) -> mlua::Result<Arc<EngineInner>> {
@@ -441,7 +687,7 @@ fn install_setting_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> ml
     api.set(
         "set_setting",
         lua.create_function(move |lua, (path, value): (String, LuaValue)| {
-            let value = lua.from_value::<Value>(value)?;
+            let value = from_lua_value::<Value>(lua, value)?;
             engine_from_weak(&weak)?
                 .set_setting(&path, value)
                 .map_err(|error| lua_error(&error))
@@ -554,7 +800,7 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
     api.set(
         "set_state",
         lua.create_function(move |lua, (name, value): (String, LuaValue)| {
-            let value = lua.from_value::<Value>(value)?;
+            let value = from_lua_value::<Value>(lua, value)?;
             engine_from_weak(&weak)?
                 .set_state(&name, value)
                 .map_err(|error| lua_error(&error))
@@ -566,8 +812,8 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
         "merge_state",
         lua.create_function(
             move |lua, (name, before, value): (String, LuaValue, LuaValue)| {
-                let before = lua.from_value::<Value>(before)?;
-                let value = lua.from_value::<Value>(value)?;
+                let before = from_lua_value::<Value>(lua, before)?;
+                let value = from_lua_value::<Value>(lua, value)?;
                 engine_from_weak(&weak)?
                     .merge_state(&name, before, value)
                     .map_err(|error| lua_error(&error))
@@ -609,7 +855,7 @@ fn install_host_api(lua: &Lua, api: &Table, engine: &Weak<EngineInner>) -> mlua:
     api.set(
         "controller_update",
         lua.create_function(move |lua, value: LuaValue| {
-            let value = lua.from_value::<Value>(value)?;
+            let value = from_lua_value::<Value>(lua, value)?;
             engine_from_weak(&weak)?
                 .controller_update(value)
                 .map_err(|error| lua_error(&error))
@@ -771,6 +1017,17 @@ fn install_command_write_api(
     Ok(())
 }
 
+fn callback_error_kind_name(kind: CallbackErrorKind) -> &'static str {
+    match kind {
+        CallbackErrorKind::User => "user",
+        CallbackErrorKind::SoftTimeout => "soft_timeout",
+        CallbackErrorKind::HardTimeout => "hard_timeout",
+        CallbackErrorKind::Configuration => "configuration",
+        CallbackErrorKind::Disconnected => "disconnected",
+        CallbackErrorKind::Internal => "internal",
+    }
+}
+
 fn install_timeout_api(lua: &Lua, api: &Table) -> mlua::Result<()> {
     api.set(
         "callback_soft_timeout_fields",
@@ -800,11 +1057,48 @@ fn install_timeout_api(lua: &Lua, api: &Table) -> mlua::Result<()> {
             ))
         })?,
     )?;
+
+    api.set(
+        "bridge_error_fields",
+        lua.create_function(|lua, value: LuaValue| {
+            let LuaValue::Error(error) = value else {
+                return Ok(None);
+            };
+            let Some(error) = lua_error_downcast::<LuaBindingError>(&error) else {
+                return Ok(None);
+            };
+            let fields = lua.create_table()?;
+            fields.set("__pokecon_bridge_error__", true)?;
+            fields.set("code", error.code.clone())?;
+            fields.set("kind", callback_error_kind_name(error.kind))?;
+            fields.set("message", error.message.clone())?;
+            Ok(Some(fields))
+        })?,
+    )?;
+
+    api.set(
+        "bridge_error_field",
+        lua.create_function(|_, (value, field): (LuaValue, String)| {
+            let LuaValue::Error(error) = value else {
+                return Ok(None);
+            };
+            let Some(error) = lua_error_downcast::<LuaBindingError>(&error) else {
+                return Ok(None);
+            };
+            let value = match field.as_str() {
+                "code" => Some(error.code.clone()),
+                "kind" => Some(callback_error_kind_name(error.kind).to_owned()),
+                "message" => Some(error.message.clone()),
+                _ => None,
+            };
+            Ok(value)
+        })?,
+    )?;
     Ok(())
 }
-
 fn install_api(lua: &Lua, engine: &Weak<EngineInner>, access: &Arc<Mutex<()>>) -> mlua::Result<()> {
     let api = lua.create_table()?;
+    api.set("max_value_depth", MAX_LUA_VALUE_DEPTH)?;
     api.set("array_metatable", lua.array_metatable())?;
     install_setting_api(lua, &api, engine)?;
     install_event_api(lua, &api, engine, access)?;
@@ -827,7 +1121,7 @@ impl LuaRuntime {
             StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::BIT,
             LuaOptions::default(),
         )
-        .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        .map_err(|error| map_lua_engine_error(&error))?;
         lua.set_hook(HookTriggers::new().every_nth_instruction(100), |_, _| {
             match deadline_checkpoint() {
                 None => Ok(VmState::Continue),
@@ -844,21 +1138,20 @@ impl LuaRuntime {
                 Some(DeadlineCheckpoint::Hard) => Err(LuaHardTimeoutError.into_lua_err()),
             }
         });
-        install_api(&lua, engine, &access)
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+        install_api(&lua, engine, &access).map_err(|error| map_lua_engine_error(&error))?;
         lua.load(LUA_BOOTSTRAP)
             .set_name("@pokecon-bootstrap")
             .exec()
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+            .map_err(|error| map_lua_engine_error(&error))?;
         let callback_invoker = lua
             .globals()
             .get::<Function>("_pokecon_invoke_callback")
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+            .map_err(|error| map_lua_engine_error(&error))?;
         lua.set_named_registry_value(LUA_CALLBACK_INVOKER_REGISTRY_KEY, callback_invoker)
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+            .map_err(|error| map_lua_engine_error(&error))?;
         lua.globals()
             .set("_pokecon_invoke_callback", LuaValue::Nil)
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))?;
+            .map_err(|error| map_lua_engine_error(&error))?;
         Ok(Self { lua, access })
     }
 
@@ -872,7 +1165,7 @@ impl LuaRuntime {
             .load(source)
             .set_name(format!("@{display_path}"))
             .exec()
-            .map_err(|error| DynamicEngineError::Lua(error.to_string()))
+            .map_err(|error| map_lua_engine_error(&error))
     }
 }
 
@@ -903,21 +1196,32 @@ impl Callback for LuaCallback {
                 .arguments
                 .iter()
                 .map(|argument| lua.to_value(argument))
-                .collect::<mlua::Result<Vec<_>>>()?;
+                .collect::<mlua::Result<Vec<_>>>()
+                .map_err(|error| {
+                    CallbackError::internal(format!(
+                        "Lua callback argument serialization failed: {error}"
+                    ))
+                })?;
             let mut invocation = Vec::with_capacity(arguments.len() + 1);
             invocation.push(LuaValue::Function(callback));
             invocation.extend(arguments);
-            let callback_invoker: Function =
-                lua.named_registry_value(LUA_CALLBACK_INVOKER_REGISTRY_KEY)?;
-            let value = callback_invoker.call::<LuaValue>(MultiValue::from_vec(invocation))?;
+            let callback_invoker: Function = lua
+                .named_registry_value(LUA_CALLBACK_INVOKER_REGISTRY_KEY)
+                .map_err(|error| {
+                    CallbackError::internal(format!("Lua callback invoker lookup failed: {error}"))
+                })?;
+            let value = callback_invoker
+                .call::<LuaValue>(MultiValue::from_vec(invocation))
+                .map_err(|error| classify_lua_callback_error(&error))?;
             match return_mode {
-                LuaReturnMode::Any => callback_return_from_lua(&lua, value),
-                LuaReturnMode::SortList => command_sort_return_from_lua(&lua, value),
+                LuaReturnMode::Any => callback_return_from_lua(&lua, value)
+                    .map_err(|error| classify_lua_return_error(&error)),
+                LuaReturnMode::SortList => command_sort_return_from_lua(&lua, value)
+                    .map_err(|error| classify_lua_return_error(&error)),
             }
         })
         .await
         .map_err(|error| CallbackError::internal(format!("Lua callback task failed: {error}")))?
-        .map_err(|error| classify_lua_callback_error(&error))
     }
 }
 
@@ -928,7 +1232,12 @@ fn command_sort_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<Call
         ));
     };
     let length = table.raw_len();
-    let mut entry_count = 0_usize;
+    if length > MAX_LUA_SORT_ENTRIES {
+        return Err(LuaError::runtime(format!(
+            "command sort callback returned more than the maximum of {MAX_LUA_SORT_ENTRIES} entries"
+        )));
+    }
+    validate_lua_value(&LuaValue::Table(table.clone()))?;
     for pair in table.clone().pairs::<LuaValue, LuaValue>() {
         let (key, _value) = pair?;
         let index = match key {
@@ -940,12 +1249,6 @@ fn command_sort_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<Call
                 "command sort callback must return a contiguous array table",
             ));
         }
-        entry_count += 1;
-    }
-    if entry_count != length {
-        return Err(LuaError::runtime(
-            "command sort callback must return a contiguous array table",
-        ));
     }
     let mut values = Vec::with_capacity(length);
     for index in 1..=length {
@@ -955,7 +1258,7 @@ fn command_sort_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<Call
                 "command sort callback must return a contiguous array table",
             ));
         }
-        values.push(lua.from_value(value)?);
+        values.push(from_lua_value(lua, value)?);
     }
     Ok(CallbackReturn::Value(Value::Array(values)))
 }
@@ -964,7 +1267,18 @@ fn callback_return_from_lua(lua: &Lua, value: LuaValue) -> mlua::Result<Callback
     match value {
         LuaValue::Nil => Ok(CallbackReturn::None),
         LuaValue::Boolean(value) => Ok(CallbackReturn::Boolean(value)),
-        value => Ok(CallbackReturn::Value(lua.from_value(value)?)),
+        value => Ok(CallbackReturn::Value(from_lua_value(lua, value)?)),
+    }
+}
+
+fn classify_lua_return_error(error: &LuaError) -> CallbackError {
+    if lua_error_contains::<LuaSoftTimeoutError>(error)
+        || lua_error_contains::<LuaHardTimeoutError>(error)
+        || lua_error_contains::<LuaBindingError>(error)
+    {
+        classify_lua_callback_error(error)
+    } else {
+        CallbackError::user(format!("unsupported Lua callback return value: {error}"))
     }
 }
 
@@ -973,6 +1287,11 @@ fn classify_lua_callback_error(error: &LuaError) -> CallbackError {
         CallbackError::soft_timeout(error.to_string())
     } else if lua_error_contains::<LuaHardTimeoutError>(error) {
         CallbackError::hard_timeout("callback exceeded its hard timeout")
+    } else if let Some(error) = lua_error_downcast::<LuaBindingError>(error) {
+        CallbackError {
+            kind: error.kind,
+            message: error.message.clone(),
+        }
     } else {
         CallbackError::user(error.to_string())
     }
@@ -990,4 +1309,66 @@ fn lua_error_downcast<T: std::error::Error + Send + Sync + 'static>(
             .parent()
             .and_then(|parent| lua_error_downcast::<T>(parent))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use mlua::{UserData, UserDataMethods};
+
+    use super::{
+        Lua, LuaError, LuaValue, MAX_LUA_SERIALIZED_BYTES, MAX_LUA_SORT_ENTRIES,
+        command_sort_return_from_lua, validate_lua_value,
+    };
+
+    struct TestUserData;
+
+    impl UserData for TestUserData {
+        fn add_methods<M: UserDataMethods<Self>>(_methods: &mut M) {}
+    }
+
+    #[test]
+    fn lua_value_boundary_rejects_non_json_values_and_cycles() {
+        let lua = Lua::new();
+        let function = lua.create_function(|_, ()| Ok(())).unwrap();
+        assert!(validate_lua_value(&LuaValue::Function(function)).is_err());
+        let userdata = lua.create_userdata(TestUserData).unwrap();
+        assert!(validate_lua_value(&LuaValue::UserData(userdata)).is_err());
+        assert!(validate_lua_value(&LuaValue::Number(f64::NAN)).is_err());
+        assert!(validate_lua_value(&LuaValue::Number(f64::INFINITY)).is_err());
+        assert!(
+            validate_lua_value(&LuaValue::Error(Box::new(LuaError::runtime("error")))).is_err()
+        );
+
+        let table = lua.create_table().unwrap();
+        table.set("self", table.clone()).unwrap();
+        assert!(validate_lua_value(&LuaValue::Table(table)).is_err());
+    }
+
+    #[test]
+    fn lua_value_boundary_rejects_depth_and_payload_overflow() {
+        let lua = Lua::new();
+        let root = lua.create_table().unwrap();
+        let mut cursor = root.clone();
+        for _ in 0..65 {
+            let child = lua.create_table().unwrap();
+            cursor.set(1, child.clone()).unwrap();
+            cursor = child;
+        }
+        assert!(validate_lua_value(&LuaValue::Table(root)).is_err());
+
+        let string = lua
+            .create_string(vec![b'x'; MAX_LUA_SERIALIZED_BYTES + 1])
+            .unwrap();
+        assert!(validate_lua_value(&LuaValue::String(string)).is_err());
+    }
+
+    #[test]
+    fn lua_sort_boundary_rejects_oversized_arrays_before_allocation() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        for index in 1..=MAX_LUA_SORT_ENTRIES + 1 {
+            table.set(index, index).unwrap();
+        }
+        assert!(command_sort_return_from_lua(&lua, LuaValue::Table(table)).is_err());
+    }
 }

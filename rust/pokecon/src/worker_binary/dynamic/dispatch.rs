@@ -61,6 +61,11 @@ impl DispatchError {
             }
             DynamicEngineError::Python(error) => Self::new("PythonError", error),
             DynamicEngineError::Lua(error) => Self::new("LuaError", error),
+            DynamicEngineError::LuaBridge {
+                code,
+                kind,
+                message,
+            } => Self::new(code, format!("{message} (kind={kind:?})")),
             DynamicEngineError::Evaluation(error) => Self::new("DynamicEvaluationError", error),
             DynamicEngineError::NoActiveEvaluation => Self::new(
                 "NoActiveEvaluation",

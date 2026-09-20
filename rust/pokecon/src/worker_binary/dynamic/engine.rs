@@ -10,7 +10,8 @@ use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use crate::dynamic::callback::{
-    Callback, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext, TimeoutStage,
+    Callback, CallbackErrorKind, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext,
+    TimeoutStage,
 };
 use crate::dynamic::command::{
     CommandCacheBuildResult, CommandCallbackKind, CommandDisplayItem, CommandError, CommandInfo,
@@ -54,6 +55,12 @@ pub enum DynamicEngineError {
     Python(String),
     #[error("Lua dynamic runtime failed: {0}")]
     Lua(String),
+    #[error("Lua bridge error [{code}] ({kind:?}): {message}")]
+    LuaBridge {
+        code: String,
+        kind: CallbackErrorKind,
+        message: String,
+    },
     #[error("dynamic source evaluation failed: {0}")]
     Evaluation(String),
     #[error("dynamic API requires an active evaluation")]
@@ -1545,6 +1552,60 @@ raise RuntimeError("reload sentinel")
         assert_eq!(timeout[0], json!(3));
         assert!(timeout[1].as_u64().is_some_and(|elapsed| elapsed >= 1));
         assert_eq!(timeout[2], json!(1));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn lua_api_boundaries_reject_invalid_values_and_preserve_bridge_codes() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("init.lua"),
+            r#"
+local ok, error = pcall(function()
+    pokecon.state.__unknown_state__ = 1
+end)
+assert(not ok)
+assert(pokecon.errors.code(error) == "ReadOnlyState")
+
+local function rejected(value)
+    local accepted = pcall(function()
+        pokecon.state.tags = value
+    end)
+    assert(not accepted)
+end
+
+rejected(function() end)
+rejected(math.huge)
+rejected(0 / 0)
+rejected(string.rep("x", 1024 * 1024 + 1))
+
+local nested = {}
+local cursor = nested
+for _ = 1, 65 do
+    cursor[1] = {}
+    cursor = cursor[1]
+end
+rejected(nested)
+"#,
+        )
+        .unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Lua),
+            host,
+        )
+        .unwrap();
+        let result = engine
+            .control(DynamicConfigControl::LoadPath {
+                path: "init.lua".to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(result.loaded, "{:?}", result.diagnostic);
     }
 
     async fn assert_cross_language_nested_state_mutations(

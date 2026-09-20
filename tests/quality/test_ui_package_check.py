@@ -1012,19 +1012,29 @@ def load_production_routing_sources() -> dict[str, str]:
 def production_routing_mutation_shard() -> tuple[int, int]:
     shard_index_text = os.environ.get(PRODUCTION_ROUTING_MUTATION_SHARD_INDEX_ENV)
     shard_count_text = os.environ.get(PRODUCTION_ROUTING_MUTATION_SHARD_COUNT_ENV)
-    assert (shard_index_text is None) == (shard_count_text is None), (
-        "production routing mutation shard index and count must be set together"
-    )
+    if (shard_index_text is None) != (shard_count_text is None):
+        message = (
+            "production routing mutation shard index and count must be set together"
+        )
+        raise ValueError(message)
     if shard_index_text is None or shard_count_text is None:
         return 0, 1
 
     canonical_decimal = re.compile(r"(?:0|[1-9][0-9]*)")
-    assert canonical_decimal.fullmatch(shard_index_text) is not None
-    assert canonical_decimal.fullmatch(shard_count_text) is not None
+    if canonical_decimal.fullmatch(shard_index_text) is None:
+        message = "production routing mutation shard index must be canonical decimal"
+        raise ValueError(message)
+    if canonical_decimal.fullmatch(shard_count_text) is None:
+        message = "production routing mutation shard count must be canonical decimal"
+        raise ValueError(message)
     shard_index = int(shard_index_text)
     shard_count = int(shard_count_text)
-    assert 1 <= shard_count <= PRODUCTION_ROUTING_MUTATION_MAX_SHARDS
-    assert 0 <= shard_index < shard_count
+    if not 1 <= shard_count <= PRODUCTION_ROUTING_MUTATION_MAX_SHARDS:
+        message = "production routing mutation shard count is outside the allowed range"
+        raise ValueError(message)
+    if not 0 <= shard_index < shard_count:
+        message = "production routing mutation shard index is outside the shard count"
+        raise ValueError(message)
     return shard_index, shard_count
 
 
@@ -1636,7 +1646,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "d16d5f5238767729be33742560916e1ac482ee5236995d5b8e0861988537645a"
+            "a16b6464a44dacc0e4e5c4c5cffdfd6d4b4de136aae9a83f8d48f8fbd408b68b"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
@@ -14198,7 +14208,7 @@ def test_production_routing_mutation_shard_contract(
             )
         else:
             monkeypatch.setenv(PRODUCTION_ROUTING_MUTATION_SHARD_COUNT_ENV, shard_count)
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             production_routing_mutation_shard()
 
 

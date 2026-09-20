@@ -109,7 +109,7 @@
 | 172 | `scripts/performance/benchmark.py` | 6 | high,high,medium,medium,medium,medium | Wave 3 | 未着手 | — |
 | 176 | `scripts/quality/run_parallel_checks.py` | 4 | medium,low,medium,low | Wave 3 | 未着手 | — |
 | 177 | `scripts/quality/source_filter.py` | 4 | high,medium,medium,low | Wave 3 | 未着手 | — |
-| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanupを`b14308c`で追加（pre-build patchelf/strip preflightは未解決）。F10はdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。 |
+| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanupを`b14308c`で追加（pre-build patchelf/strip preflightは未解決）。F10を`316e63b`でdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。 |
 | 182 | `scripts/release/debian_install_smoke.sh` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 185 | `scripts/release/normalize_linux_elf.py` | 3 | medium,medium,medium | Wave 3 | 未着手 | — |
 | 187 | `scripts/release/package_smoke.py` | 4 | high,medium,medium,medium | Wave 3 | 未着手 | — |

@@ -282,6 +282,18 @@ def test_normalize_pe_cli_rejects_missing_target(
         release_runtime.main()
 
 
+def test_normalize_pe_if_present_cli_skips_missing_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "missing.exe"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["build_runtime.py", "--normalize-pe-if-present", str(missing)],
+    )
+    assert release_runtime.main() == 0
+
+
 def test_normalize_pe_cli_rejects_symlink_before_resolution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2312,7 +2324,7 @@ def test_normalize_pe_cli_and_tauri_config(tmp_path: Path) -> None:
     assert "build" in config
     cmd = config["build"]["beforeBundleCommand"]
     assert "build_runtime.py" in cmd
-    assert "--normalize-pe" in cmd
+    assert "--normalize-pe-if-present" in cmd
     assert "../scripts/release/build_runtime.py" in cmd
     assert "../target/release/pokecon.exe" in cmd
     # CLI must normalize file without requiring runtime args

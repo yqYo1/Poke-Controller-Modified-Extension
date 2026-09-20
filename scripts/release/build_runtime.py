@@ -1473,6 +1473,9 @@ def _validate_pe_cli_target(target: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--normalize-pe", type=str, dest="normalize_pe")
+    parser.add_argument(
+        "--normalize-pe-if-present", type=str, dest="normalize_pe_if_present"
+    )
     parser.add_argument("--project", type=Path, required=False)
     parser.add_argument("--uv", type=Path, required=False)
     parser.add_argument("--runtime-output", type=Path, required=False)
@@ -1489,7 +1492,15 @@ def main() -> int:
         help="require a physical audio input device during the release smoke test",
     )
     arguments = parser.parse_args()
-    if arguments.normalize_pe is not None:
+    if (
+        arguments.normalize_pe is not None
+        or arguments.normalize_pe_if_present is not None
+    ):
+        if (
+            arguments.normalize_pe is not None
+            and arguments.normalize_pe_if_present is not None
+        ):
+            parser.error("--normalize-pe flags are mutually exclusive")
         if any(
             value is not None
             for value in (
@@ -1500,12 +1511,21 @@ def main() -> int:
             )
         ):
             parser.error(
-                "--normalize-pe cannot be combined with runtime build arguments"
+                "--normalize-pe flags cannot be combined with runtime build arguments"
             )
-        raw_normalize_pe = arguments.normalize_pe
+        optional_normalize_pe = arguments.normalize_pe_if_present is not None
+        raw_normalize_pe = (
+            arguments.normalize_pe
+            if arguments.normalize_pe is not None
+            else arguments.normalize_pe_if_present
+        )
+        if raw_normalize_pe is None:
+            parser.error("a PE normalization path is required")
         if "://" in raw_normalize_pe:
             parser.error("--normalize-pe accepts only local paths")
         target = _resolve_pe_cli_path(Path(raw_normalize_pe))
+        if optional_normalize_pe and not os.path.lexists(str(target)):
+            return 0
         _validate_pe_cli_target(target)
         normalize_pe(target)
         return 0

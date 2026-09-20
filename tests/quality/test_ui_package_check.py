@@ -1646,7 +1646,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "ad09723a5ef490d127f531ad3f2f8079f1a25af270fc94b9050b2150e26ae7e4"
+            "b2edfbd3c3fa2a9a28251605ff859952afa22fd5477faa165793fed62184aad6"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
@@ -2127,7 +2127,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     tauri_config_source_name = "@rust/pokecon/tauri.conf.json"
     assert (
         hashlib.sha256(sources[tauri_config_source_name].encode()).hexdigest()
-        == "7eccd0c4ab25a9ccc5be44ff913b97fd399fbcea209ba2069517358bd4c01e0c"
+        == "b1861b1ab38ddca446b2ee5cb5634204a1005aebf347fcecc1a3aff750ef5d62"
     )
     tauri_config = validated_json_object(
         json.loads(sources[tauri_config_source_name]), tauri_config_source_name
@@ -2136,7 +2136,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert tauri_build == {
         "beforeBundleCommand": (
             "python ../scripts/release/build_runtime.py "
-            "--normalize-pe ../target/release/pokecon.exe"
+            "--normalize-pe-if-present ../target/release/pokecon.exe"
         )
     }
     expected_debian_dependencies = [

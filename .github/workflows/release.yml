@@ -102,6 +102,8 @@ jobs:
           toolchain: '1.95.0'
           # Release builds require deterministic MSVC PE/debug/codegen output before signing.
           rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Release reproducibility must not reuse compiled target objects from another run.
+          cache-targets: false
       - name: Install pinned release tools
         shell: pwsh
         run: |

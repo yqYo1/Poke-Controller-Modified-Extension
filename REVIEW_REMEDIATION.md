@@ -185,6 +185,7 @@
 - 直前のrustflags契約test同期commitでは、全Python suite、actionlint、Nix format、diff-checkがsuccessした。Normal run `35529577593`はNormal CI Required success、Package run `35529577546`はNSIS primary／independent build、clean-install smoke、Windows byte-for-byte reproducibility、Debian build／reproducibilityを全てsuccessした。NSIS primaryの実行時間は37m8sだが、job timeoutには達していない。
 - 追加のread-only調査で、既に修正済みのproduct-smoke直列実行とevent／branch／PR未限定の指摘は現行ソースに残っていないことを確認した。一方、remote flake smokeの外側`--refresh`は同一SHA固定検証に不要な強制再取得だったため削除し、p95履歴は現行revisionを除外したうえで同一head SHAごとに最新runを1件だけ採用するよう変更した。閾値720秒、nearest-rank、10サンプル、fail-closed条件は維持し、remote smokeの`--option download-attempts 10`も維持した。
 - `d60cb30`のpush由来Normal CIでは、上記p95変更の初版にjqの配列化漏れがあり、`Cannot index number with string "head_sha"`で履歴収集が停止した。`.workflow_runs | map(...) | sort/group`へ修正し、同じobject/array境界を検出するquality契約を追加した。Rust／product／remote等の実jobはsuccessで、failureはこのp95収集stepだけだった。
+- `35537270200`のPackage CIでは、staged payload inventoryは2586ファイルで一致したが、`pokecon-worker.exe`だけが158 bytes異なり、`Verify Windows NSIS reproducibility`がfailした。両runnerのRust／LLVM／MSVC identityは一致し、両方が`Swatinem/rust-cache`でcompiled `target/`をfull restoreしていたため、独立再現性buildの外部target再利用を止める`cache-targets: false`をPackage／ReleaseのWindows jobへ追加した。閾値・artifact比較・failure判定は変更していない。
 
 ## 5. 完了判定
 

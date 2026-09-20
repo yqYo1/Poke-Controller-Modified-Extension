@@ -150,6 +150,8 @@ jobs:
           toolchain: '1.95.0'
           # Package builds are not lint gates; make MSVC PE/debug/codegen output deterministic.
           rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Independent reproducibility builds must not reuse compiled target objects from another run.
+          cache-targets: false
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -287,6 +289,8 @@ jobs:
           toolchain: '1.95.0'
           # Package builds are not lint gates; make MSVC PE/debug/codegen output deterministic.
           rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Independent reproducibility builds must not reuse compiled target objects from another run.
+          cache-targets: false
       - name: Install pinned package tools
         shell: pwsh
         run: |

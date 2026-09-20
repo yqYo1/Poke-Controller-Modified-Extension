@@ -100,8 +100,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
-          # Release builds require deterministic MSVC PE output before signing.
-          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Release builds require deterministic MSVC PE/debug/codegen output before signing.
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned release tools
         shell: pwsh
         run: |
@@ -122,6 +122,7 @@ jobs:
           $version = python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])"
           "POKECON_WEB_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "SOURCE_DATE_EPOCH=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CARGO_INCREMENTAL=0" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Validate release identity
         shell: pwsh
         run: python -m scripts.release.gate --tag $env:GITHUB_REF_NAME
@@ -157,7 +158,7 @@ jobs:
           $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
-          $env:POKECON_RESOURCE_PROVENANCE = "development"
+          $env:POKECON_RESOURCE_PROVENANCE = "nix-exact"
           cargo build --locked --release --package pokecon --bin pokecon-worker --features worker-binary
           $env:POKECON_RESOURCE_PROVENANCE = $null
           $stageJson = python -m scripts.release.stage `

@@ -1405,7 +1405,11 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     installer_stage = workflow[build_stage_end:installer_stage_end]
     error_preference = "$PSNativeCommandUseErrorActionPreference = $true"
     provenance_clear = "$env:POKECON_RESOURCE_PROVENANCE = $null"
-    provenance_development = '$env:POKECON_RESOURCE_PROVENANCE = "development"'
+    provenance_worker = '$env:POKECON_RESOURCE_PROVENANCE = "nix-exact"'
+    deterministic_codegen = (
+        '"CARGO_INCREMENTAL=0" | Out-File -FilePath $env:GITHUB_ENV -Append'
+    )
+    deterministic_rust_codegen = "-C codegen-units=1"
     no_bytecode_current_process = '$env:PYTHONDONTWRITEBYTECODE = "1"'
     no_bytecode_later_steps = (
         '"PYTHONDONTWRITEBYTECODE=1" | Out-File -FilePath $env:GITHUB_ENV -Append'
@@ -1520,7 +1524,9 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     )
     if workflow_name == "package.yml":
         assert workflow.count(provenance_clear) == 4
-        assert workflow.count(provenance_development) == 2
+        assert workflow.count(provenance_worker) == 2
+        assert workflow.count(deterministic_codegen) == 2
+        assert workflow.count(deterministic_rust_codegen) == 2
         assert workflow.count(no_bytecode_current_process) == 2
         assert workflow.count(no_bytecode_later_steps) == 2
         assert workflow.count("scripts.release.stage") == 2
@@ -1549,7 +1555,9 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         assert workflow.count(bundle_config_consumer) == 2
     else:
         assert workflow.count(provenance_clear) == 2
-        assert workflow.count(provenance_development) == 1
+        assert workflow.count(provenance_worker) == 1
+        assert workflow.count(deterministic_codegen) == 1
+        assert workflow.count(deterministic_rust_codegen) == 1
         assert workflow.count(no_bytecode_current_process) == 1
         assert workflow.count(no_bytecode_later_steps) == 1
         assert workflow.count("scripts.release.stage") == 1
@@ -1583,7 +1591,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
     )
     assert provenance_lines == (
         provenance_clear,
-        provenance_development,
+        provenance_worker,
         provenance_clear,
         provenance_export,
     )
@@ -1640,7 +1648,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         error_preference,
         provenance_clear,
         runtime_build,
-        provenance_development,
+        provenance_worker,
         worker_build,
         stage_capture,
         stage_parse,
@@ -1661,7 +1669,7 @@ def test_windows_release_resources_are_isolated_from_cargo_cache(
         < build_stage.index(no_bytecode_later_steps)
         < build_stage.index(runtime_build)
         < build_stage.index("$env:PYO3_PYTHON = $runtimePython")
-        < build_stage.index(provenance_development)
+        < build_stage.index(provenance_worker)
         < build_stage.index(worker_build)
         < build_stage.index(provenance_clear, build_stage.index(worker_build))
         < build_stage.index(stage_capture)

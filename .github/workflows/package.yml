@@ -148,8 +148,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
-          # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Package builds are not lint gates; make MSVC PE/debug/codegen output deterministic.
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -170,6 +170,7 @@ jobs:
           "POKECON_INTERNAL_SCRIPT_SITE_PACKAGES=$sitePackages" | Out-File -FilePath $env:GITHUB_ENV -Append
           "POKECON_WEB_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "SOURCE_DATE_EPOCH=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CARGO_INCREMENTAL=0" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build Web distribution
         shell: pwsh
         run: |
@@ -199,7 +200,7 @@ jobs:
           $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
-          $env:POKECON_RESOURCE_PROVENANCE = "development"
+          $env:POKECON_RESOURCE_PROVENANCE = "nix-exact"
           cargo build --locked --release --package pokecon --bin pokecon-worker --features worker-binary
           $env:POKECON_RESOURCE_PROVENANCE = $null
           $stageJson = python -m scripts.release.stage `
@@ -284,8 +285,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: '1.95.0'
-          # Package builds are not lint gates; make MSVC PE/debug output deterministic.
-          rustflags: "-C debuginfo=0 -C strip=debuginfo -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
+          # Package builds are not lint gates; make MSVC PE/debug/codegen output deterministic.
+          rustflags: "-C debuginfo=0 -C strip=debuginfo -C codegen-units=1 -C link-arg=/Brepro -C link-arg=/DEBUG:NONE"
       - name: Install pinned package tools
         shell: pwsh
         run: |
@@ -306,6 +307,7 @@ jobs:
           "POKECON_INTERNAL_SCRIPT_SITE_PACKAGES=$sitePackages" | Out-File -FilePath $env:GITHUB_ENV -Append
           "POKECON_WEB_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "SOURCE_DATE_EPOCH=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CARGO_INCREMENTAL=0" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build Web distribution
         shell: pwsh
         run: |
@@ -335,7 +337,7 @@ jobs:
           $runtimePython = (Resolve-Path (Join-Path $releasePython "python.exe")).Path
           "PYO3_PYTHON=$runtimePython" | Out-File -FilePath $env:GITHUB_ENV -Append
           $env:PYO3_PYTHON = $runtimePython
-          $env:POKECON_RESOURCE_PROVENANCE = "development"
+          $env:POKECON_RESOURCE_PROVENANCE = "nix-exact"
           cargo build --locked --release --package pokecon --bin pokecon-worker --features worker-binary
           $env:POKECON_RESOURCE_PROVENANCE = $null
           $stageJson = python -m scripts.release.stage `

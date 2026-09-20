@@ -122,7 +122,7 @@
 | 203 | `tests/quality/test_pidfd_signal.py` | 2 | high,medium | Wave 3 | 未着手 | — |
 | 206 | `tests/quality/test_source_filter.py` | 2 | medium,high | Wave 3 | 修正済み・検証済み | F1 complete git argv/root/source-root assertion、F2 controlled tmp_path inventory testを`4b16c71`で実装。quality tests 10 passed、ruff check/format passed。 |
 | 208 | `tests/quality/test_ui_package_check.py` | 7 | high,high,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F2 shard validationを明示ValueErrorへ変更し、canonical build_runtime hashを現行sourceへ更新（`6968637`）。quality tests 31 passed、ruff check/format passed。F1/F3/F4/F5/F6/F7は未着手。 |
-| 209 | `tests/quality/test_version_contract.py` | 4 | high,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 bounded uv build with TimeoutExpired diagnostics、F2 explicit env contractを実装。version contract tests 10 passed、ruff check/format passed。F3/F4未着手。 |
+| 209 | `tests/quality/test_version_contract.py` | 4 | high,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1 bounded uv build with TimeoutExpired diagnostics、F2 explicit env contractを`4ee45db`で実装。version contract tests 10 passed、ruff check/format passed。F3/F4未着手。 |
 | 211 | `tests/release/test_debian_install_smoke.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 未着手 | — |
 | 213 | `tests/release/test_normalize_debian_package.py` | 2 | medium,medium | Wave 3 | 未着手 | — |

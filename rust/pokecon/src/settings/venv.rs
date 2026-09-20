@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs::{self, File};
+use std::fs;
+#[cfg(unix)]
+use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -448,7 +450,7 @@ impl VenvManager {
 
 fn validate_venv_layout(venv: &Path, stage: VenvStage) -> Result<(), VenvError> {
     let python = venv_python(venv);
-    let python_metadata = fs::symlink_metadata(&python)
+    let python_metadata = fs::metadata(&python)
         .map_err(|_| VenvError::new(stage, VenvFailure::EnvironmentMissing))?;
     if !python_metadata.file_type().is_file() {
         return Err(VenvError::new(stage, VenvFailure::InconsistentEnvironment));
@@ -476,9 +478,10 @@ fn validate_venv_layout(venv: &Path, stage: VenvStage) -> Result<(), VenvError> 
     let has_home = config
         .lines()
         .any(|line| line.trim_start().starts_with("home = "));
-    let has_version = config
-        .lines()
-        .any(|line| line.trim_start().starts_with("version = "));
+    let has_version = config.lines().any(|line| {
+        let line = line.trim_start();
+        line.starts_with("version = ") || line.starts_with("version_info = ")
+    });
     if !has_home || !has_version {
         return Err(VenvError::new(stage, VenvFailure::InconsistentEnvironment));
     }

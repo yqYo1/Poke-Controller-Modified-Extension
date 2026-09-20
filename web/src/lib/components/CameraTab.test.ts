@@ -59,7 +59,7 @@ describe('CameraTab', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByRole('option', { name: 'Camera 1' });
     await fireEvent.change(screen.getByLabelText('Camera device'), {
-      target: { value: 'number:1' }
+      target: { value: 'index:1' }
     });
 
     await waitFor(() => {
@@ -83,7 +83,7 @@ describe('CameraTab', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     const selector = screen.getByLabelText('Camera device');
     if (!(selector instanceof HTMLSelectElement)) throw new Error('camera selector is not a select');
-    expect(selector.value).toBe('number:10');
+    expect(selector.value).toBe('index:10');
     expect(
       [...selector.options].some((option) => option.textContent.includes('/dev/video10'))
     ).toBe(false);

@@ -42,7 +42,7 @@ def test_remote_flake_job_is_checkout_free_and_sha_pinned() -> None:
     assert "--option download-attempts 10" in remote_job
     assert "http-connections" not in remote_job
     assert "nix run ." not in remote_job
-    assert "actions/checkout@v6" in product_job
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in product_job
 
 
 def test_required_aggregate_tracks_remote_flake_job_separately() -> None:

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "d95a4b56ce4dcf9fecbc4f3548fb57235df15883c3896a2e4fd7e65a72a0782f";
+      canonicalFlakeHash = "251a00a9ab1668e33e4de2f5ff98a165b07c4c37b9cb02c0be23fb03a33240dd";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "8e907a9a64c9baccdb3f35fe8608612ec845b62474d082475516b8677a5ae8ee";
+          expectedAuditTestHash = "a04880712093e1144b7a38a5de9bdde430c6c7adb68aa10768b61086919b190b";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -2485,7 +2485,7 @@
                   runHook postBuild
                 '';
                 dontFixup = true;
-                outputHash = "sha256-n7b1658wvxQBXdR7qHewa5yvReF5K61zi8MuxxNiayI=";
+                outputHash = "sha256-h+mgNMekNvnlMfIuCc+YbqtQSCag7LiOIGmu+lxm2pY=";
                 outputHashMode = "recursive";
               }
             else

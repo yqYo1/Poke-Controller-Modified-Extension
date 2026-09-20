@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -657,9 +658,10 @@ async fn run(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    command
-        .output()
+    let output = command.kill_on_drop(true).output();
+    tokio::time::timeout(Duration::from_mins(15), output)
         .await
+        .map_err(|_| VenvError::new(stage, VenvFailure::UvFailed))?
         .map_err(|_| VenvError::new(stage, VenvFailure::UvFailed))
 }
 

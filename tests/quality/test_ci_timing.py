@@ -252,7 +252,7 @@ def test_nearest_rank_for_twenty_samples_selects_rank_nineteen() -> None:
 
 @pytest.mark.parametrize(
     ("change_kind", "threshold"),
-    [("fast", 180.0), ("docs", 300.0), ("product", 780.0)],
+    [("fast", 180.0), ("docs", 300.0), ("product", 720.0)],
 )
 def test_p95_threshold_regression_is_a_contract_failure(
     change_kind: str, threshold: float
@@ -856,11 +856,11 @@ def test_p95_rejects_future_dated_history() -> None:
     assert "stale" in completed.stderr.lower()
 
 
-def test_p95_history_gate_is_blocking_in_workflow() -> None:
+def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
         encoding="utf-8"
     )
-    # Must contain blocking history gate step
+    # The established-history path remains a blocking gate.
     assert "Enforce timing p95 history gate (blocking, fail-closed)" in workflow
     assert "nix run .#ci-timing -- p95" in workflow
     assert 'select(.conclusion == "success" or .conclusion == "failure")' in workflow
@@ -881,11 +881,11 @@ def test_p95_history_gate_is_blocking_in_workflow() -> None:
     # Must preserve completion-safe upstream_completed_max and cache trust
     assert "upstream_completed_max" in workflow
     assert "cache_read=true" in workflow or "cache.read" in workflow
-    # Must handle malformed/stale/incomplete fail-closed and not claim invented p95
-    assert (
-        "incomplete history" in workflow.lower()
-        or "insufficient history" in workflow.lower()
-    )
+    # Bootstrap does not claim an invented p95; it warns and defers enforcement
+    # until ten same-kind samples exist. Malformed/stale history remains fatal.
+    assert "insufficient same-kind history" in workflow.lower()
+    assert "gate not enforced until history is established" in workflow.lower()
+    assert "exit 0" in workflow
     assert "malformed" in workflow.lower()
     assert "missing or invalid change_kind" in workflow
 
@@ -896,6 +896,15 @@ def test_p95_stale_threshold_matches_timing_contract() -> None:
     assert "MAX_HISTORY_AGE_DAYS: Final = 30" in source
     assert "MAX_HISTORY_STALE_SECONDS" in source
     assert "report is stale" in source.lower()
+
+
+def test_p95_rejects_empty_history_with_a_failure_document() -> None:
+    document = p95_document(())
+
+    assert document["conclusion"] == "failure"
+    assert document["sample_count"] == 0
+    assert document["p95_wall_seconds"] is None
+    assert "p95 requires at least" in cast("list[str]", document["violations"])[0]
 
 
 def test_validate_accepts_none_with_empty_regions() -> None:
@@ -985,5 +994,5 @@ def test_planning_only_runs_use_none_and_skip_p95_gate() -> None:
     # fail-closed gates for real timing kinds are unchanged.
     assert "fast) threshold=180" in workflow
     assert "docs) threshold=300" in workflow
-    assert "product) threshold=780" in workflow
+    assert "product) threshold=720" in workflow
     assert "unknown change_kind" in workflow

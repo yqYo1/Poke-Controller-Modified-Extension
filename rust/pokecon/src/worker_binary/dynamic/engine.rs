@@ -7,7 +7,7 @@ use std::sync::{Arc, Weak};
 use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::runtime::Handle;
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use crate::dynamic::callback::{
     Callback, Diagnostic, DiagnosticLevel, DiagnosticSink, InvocationContext, TimeoutStage,
@@ -29,6 +29,7 @@ use crate::worker_binary::dynamic::runtime::lua::LuaRuntime;
 use crate::worker_binary::dynamic::runtime::python::PythonRuntime;
 
 const FIRST_PUBLIC_HANDLER_ID: u64 = 3;
+const MAX_DEFERRED_SOURCES: usize = 64;
 
 thread_local! {
     static CURRENT_EVALUATION: RefCell<Option<Arc<EvaluationSession>>> = const { RefCell::new(None) };
@@ -242,7 +243,8 @@ pub(crate) struct EngineInner {
     source_store: SourceStore,
     event_bus: EventBus,
     command_registry: CommandRegistry,
-    coordinator: AsyncMutex<()>,
+    coordinator: Arc<AsyncMutex<()>>,
+    deferred_sources: Mutex<Vec<ResolvedSource>>,
     runtimes: Mutex<RuntimeSet>,
     runtime_handle: Handle,
     generation: AtomicU64,
@@ -297,7 +299,8 @@ impl DynamicEngine {
             source_store,
             event_bus,
             command_registry,
-            coordinator: AsyncMutex::new(()),
+            coordinator: Arc::new(AsyncMutex::new(())),
+            deferred_sources: Mutex::new(Vec::new()),
             runtimes: Mutex::new(RuntimeSet::default()),
             runtime_handle,
             generation: AtomicU64::new(0),
@@ -343,7 +346,7 @@ impl DynamicEngine {
         &self,
         operation: DynamicConfigControl,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
-        let coordinator = self.0.coordinator.lock().await;
+        let coordinator = self.0.coordinator.clone().lock_owned().await;
         let source = match operation {
             DynamicConfigControl::LoadPath { path } => self.0.source_store.resolve(&path)?,
             DynamicConfigControl::LoadContent { language, content } => {
@@ -351,9 +354,12 @@ impl DynamicEngine {
             }
             DynamicConfigControl::Reload {} => self.0.source_store.reload_source()?,
         };
-        self.0
+        let result = self
+            .0
             .load_resolved_locked(source, true, true, coordinator)
-            .await
+            .await?;
+        self.0.drain_deferred_sources().await?;
+        Ok(result)
     }
 
     /// Emits an external canonical event after waiting for any in-flight
@@ -375,7 +381,7 @@ impl DynamicEngine {
         &self,
         candidates: Vec<CommandInfo>,
     ) -> Result<Vec<CommandDisplayItem>, DynamicEngineError> {
-        let _coordinator = self.0.coordinator.lock().await;
+        let _coordinator = self.0.coordinator.clone().lock_owned().await;
         Ok(self.0.command_registry.sort(candidates).await?)
     }
 
@@ -390,7 +396,7 @@ impl DynamicEngine {
         selected_tag: &str,
         command: &CommandInfo,
     ) -> Result<bool, DynamicEngineError> {
-        let _coordinator = self.0.coordinator.lock().await;
+        let _coordinator = self.0.coordinator.clone().lock_owned().await;
         Ok(self
             .0
             .command_registry
@@ -409,7 +415,7 @@ impl DynamicEngine {
         generation: u64,
         candidates: Vec<CommandInfo>,
     ) -> Result<CommandCacheBuildResult, DynamicEngineError> {
-        let _coordinator = self.0.coordinator.lock().await;
+        let _coordinator = self.0.coordinator.clone().lock_owned().await;
         if generation != self.0.generation.load(Ordering::Acquire) {
             return Ok(CommandCacheBuildResult::Superseded { generation });
         }
@@ -481,17 +487,30 @@ impl EngineInner {
         replace_generation: bool,
         mark_current: bool,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
-        let coordinator = self.coordinator.lock().await;
+        let result = self
+            .load_resolved_once(source, replace_generation, mark_current)
+            .await?;
+        self.drain_deferred_sources().await?;
+        Ok(result)
+    }
+
+    async fn load_resolved_once(
+        self: &Arc<Self>,
+        source: ResolvedSource,
+        replace_generation: bool,
+        mark_current: bool,
+    ) -> Result<DynamicLoadResult, DynamicEngineError> {
+        let coordinator = self.coordinator.clone().lock_owned().await;
         self.load_resolved_locked(source, replace_generation, mark_current, coordinator)
             .await
     }
 
-    async fn load_resolved_locked<'a>(
-        self: &'a Arc<Self>,
+    async fn load_resolved_locked(
+        self: &Arc<Self>,
         source: ResolvedSource,
         replace_generation: bool,
         mark_current: bool,
-        coordinator: tokio::sync::MutexGuard<'a, ()>,
+        coordinator: OwnedMutexGuard<()>,
     ) -> Result<DynamicLoadResult, DynamicEngineError> {
         let mut coordinator = Some(coordinator);
         let mut transaction = EvaluationTransaction::begin(
@@ -540,8 +559,9 @@ impl EngineInner {
         }
         for event in committed.pending_emits {
             let engine = self.clone();
-            self.runtime_handle.spawn(async move {
-                if let Err(error) = engine.emit(&event).await {
+            let runtime_handle = self.runtime_handle.clone();
+            self.runtime_handle.spawn_blocking(move || {
+                if let Err(error) = runtime_handle.block_on(engine.emit(&event)) {
                     engine.record_evaluation_failure(&error.to_string());
                 }
             });
@@ -554,11 +574,11 @@ impl EngineInner {
         })
     }
 
-    async fn commit_evaluation<'a>(
-        self: &'a Arc<Self>,
+    async fn commit_evaluation(
+        self: &Arc<Self>,
         transaction: EvaluationTransaction,
         commands: CommandState,
-        coordinator: &mut Option<tokio::sync::MutexGuard<'a, ()>>,
+        coordinator: &mut Option<OwnedMutexGuard<()>>,
     ) -> Result<EvaluationCommitOutcome, DynamicEngineError> {
         if let Some(profile_switch) = transaction.staged_profile_switch()? {
             return self
@@ -587,12 +607,12 @@ impl EngineInner {
         }
     }
 
-    async fn commit_profile_evaluation<'a>(
-        self: &'a Arc<Self>,
+    async fn commit_profile_evaluation(
+        self: &Arc<Self>,
         transaction: EvaluationTransaction,
         commands: CommandState,
         profile_switch: StagedProfileSwitch,
-        coordinator: &mut Option<tokio::sync::MutexGuard<'a, ()>>,
+        coordinator: &mut Option<OwnedMutexGuard<()>>,
     ) -> Result<EvaluationCommitOutcome, DynamicEngineError> {
         let generation = self.generation.load(Ordering::Acquire);
         let prepared = match self
@@ -635,7 +655,7 @@ impl EngineInner {
             ));
         }
 
-        *coordinator = Some(self.coordinator.lock().await);
+        *coordinator = Some(self.coordinator.clone().lock_owned().await);
         if self.generation.load(Ordering::Acquire) != generation {
             self.host.profile_switch_abort().await?;
             return Ok(EvaluationCommitOutcome::Rejected(
@@ -679,8 +699,34 @@ impl EngineInner {
     }
 
     async fn emit(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
-        let _coordinator = self.coordinator.lock().await;
-        Ok(self.event_bus.emit(event).await?)
+        let result = {
+            let _coordinator = self.coordinator.clone().lock_owned().await;
+            self.event_bus.emit(event).await?
+        };
+        self.drain_deferred_sources().await?;
+        Ok(result)
+    }
+
+    async fn drain_deferred_sources(self: &Arc<Self>) -> Result<(), DynamicEngineError> {
+        loop {
+            let sources = {
+                let mut deferred = self.deferred_sources.lock();
+                std::mem::take(&mut *deferred)
+            };
+            if sources.is_empty() {
+                return Ok(());
+            }
+            for source in sources {
+                let result = self.load_resolved_once(source, false, false).await?;
+                if !result.loaded {
+                    return Err(DynamicEngineError::Evaluation(
+                        result
+                            .diagnostic
+                            .unwrap_or_else(|| "dynamic source failed".to_owned()),
+                    ));
+                }
+            }
+        }
     }
 
     fn record_evaluation_failure(&self, message: &str) {
@@ -770,7 +816,7 @@ impl EngineInner {
             return Ok(());
         }
         self.runtime_handle.block_on(async {
-            let _coordinator = self.coordinator.lock().await;
+            let _coordinator = self.coordinator.clone().lock_owned().await;
             let mut transaction = EvaluationTransaction::begin(
                 self.host.as_ref(),
                 self.settings_registry.clone(),
@@ -877,8 +923,9 @@ impl EngineInner {
         }
         let event = event.to_owned();
         let engine = self.clone();
-        self.runtime_handle.spawn(async move {
-            if let Err(error) = engine.emit(&event).await {
+        let runtime_handle = self.runtime_handle.clone();
+        self.runtime_handle.spawn_blocking(move || {
+            if let Err(error) = runtime_handle.block_on(engine.emit(&event)) {
                 engine.record_evaluation_failure(&error.to_string());
             }
         });
@@ -892,6 +939,17 @@ impl EngineInner {
         let source = self.source_store.resolve(path)?;
         if current_evaluation().is_some() {
             return self.evaluate_source(&source);
+        }
+        let in_callback = CURRENT_INVOCATION.with(|current| current.borrow().is_some());
+        if in_callback {
+            let mut deferred = self.deferred_sources.lock();
+            if deferred.len() >= MAX_DEFERRED_SOURCES {
+                return Err(DynamicEngineError::Evaluation(
+                    "deferred dynamic source queue is full".to_owned(),
+                ));
+            }
+            deferred.push(source);
+            return Ok(());
         }
         let result = self
             .runtime_handle
@@ -985,7 +1043,7 @@ impl EngineInner {
                 error.to_string(),
             )));
         }
-        let coordinator = self.coordinator.lock().await;
+        let coordinator = self.coordinator.clone().lock_owned().await;
         drop(coordinator);
 
         let pre = match self.event_bus.emit("ProfileSwitchPre").await {

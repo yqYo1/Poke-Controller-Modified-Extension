@@ -1459,6 +1459,20 @@ def p95_document(reports: ReportSequence) -> ResultDocument:
             ),
         )
     )
+    if not ordered_reports:
+        return {
+            "change_kind": None,
+            "command": "p95",
+            "conclusion": "failure",
+            "nearest_rank": None,
+            "p95_wall_seconds": None,
+            "sample_count": 0,
+            "samples": [],
+            "threshold_seconds": None,
+            "violations": [
+                f"p95 requires at least {MINIMUM_P95_SAMPLES} reports; got 0"
+            ],
+        }
     violations: list[str] = []
     for report in ordered_reports:
         violations.extend(

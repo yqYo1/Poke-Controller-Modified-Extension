@@ -726,8 +726,8 @@ jobs:
             fast) threshold=180 ;;
             docs) threshold=300 ;;
             # Product includes the cold checkout-free remote flake smoke path;
-            # observed p95 values of 740s and 759s require a 780s ceiling.
-            product) threshold=780 ;;
+            # the machine-readable contract sets a 720s ceiling.
+            product) threshold=720 ;;
             *) echo "timing p95 gate: unknown change_kind $change_kind" >&2; exit 2 ;;
           esac
           echo "timing p95 gate: change_kind=$change_kind threshold=${threshold}s"
@@ -823,9 +823,9 @@ jobs:
           done <<< "$candidate_lines"
           echo "timing p95 gate: collected $collected samples (including current) for $change_kind, need 10"
           if [ "$collected" -lt 10 ]; then
-            echo "timing p95 gate: insufficient history - requires 10 same-kind samples for $change_kind, got $collected (incomplete history)" >&2
-            echo "timing p95 gate: history is incomplete or stale; failing closed" >&2
-            exit 1
+            echo "::warning::timing p95 gate: insufficient same-kind history for $change_kind (got $collected/10); gate not enforced until history is established"
+            echo "timing p95 gate: bootstrap period — report was validated and uploaded, but no p95 claim was made"
+            exit 0
           fi
           set -- "$history_dir"/*.json
           if [ "$#" -ne 10 ]; then

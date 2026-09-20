@@ -610,13 +610,9 @@ impl EngineInner {
             }
         }
         for event in committed.pending_emits {
-            let engine = self.clone();
-            let runtime_handle = self.runtime_handle.clone();
-            self.runtime_handle.spawn_blocking(move || {
-                if let Err(error) = runtime_handle.block_on(engine.emit(&event)) {
-                    engine.record_evaluation_failure(&error.to_string());
-                }
-            });
+            if let Err(error) = self.emit_once(&event).await {
+                self.record_evaluation_failure(&error.to_string());
+            }
         }
         Ok(DynamicLoadResult {
             display_path: source.display_path,
@@ -750,11 +746,13 @@ impl EngineInner {
         }
     }
 
+    async fn emit_once(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
+        let _coordinator = self.coordinator.clone().lock_owned().await;
+        Ok(self.event_bus.emit(event).await?)
+    }
+
     async fn emit(self: &Arc<Self>, event: &str) -> Result<EventResult, DynamicEngineError> {
-        let result = {
-            let _coordinator = self.coordinator.clone().lock_owned().await;
-            self.event_bus.emit(event).await?
-        };
+        let result = self.emit_once(event).await?;
         self.drain_deferred_work().await?;
         Ok(result)
     }

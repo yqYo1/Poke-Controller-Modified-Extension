@@ -182,7 +182,7 @@
 - timing p95候補を同じ`event`・head branch・PR番号へ限定し、artifactの`cache.event`もcurrent eventと再照合する修正を追加した。`tests/quality/test_ci_timing.py` 51 passed、actionlint、Nix format、diff-checkが成功。GitHub CIで再計測する。
 - `f989013`の772秒artifactは最長jobが643秒で、run開始からのrunner待ちを含むworkflow wallだけが772秒だった。`bbdfa09`もworkflow wall 704秒に対し最長job647秒だったため、p95の閾値判定をworkflow wallから`critical_path_wall_seconds`へ変更し、workflow wallは引き続きreport／検証証拠として保持する。`p95_metric`とregistry契約を追加し、timing 51 passed、contract-check 14 passed、Nix format、diff-checkが成功した。
 - `9a6a4fc`のNormal CI run `35525625555`はworkflow wall 728秒、current critical path 673秒、critical-path 10-run p95 694秒、violationsなしで`Normal CI Required`がsuccessした。Package CI run `35525625565`もDebian／NSIS build、clean-install smoke、両reproducibility、`Package CI Required`がsuccessした。
-- docs-onlyの`3bdefe6`ではPackage `windows_repro_check`がprimary/reproductionのworker payload hash mismatch（primary `897a8e...`、reproduction `95a47b...`）でfailureし、同一SHAのfailed-job rerunでも再現した。workerを抽出して比較するとPE timestampは一致し、差分は158 bytesのRust codegen配置差だった。Windows package/release workflowへ`-C codegen-units=1`、`CARGO_INCREMENTAL=0`、stage workerの`nix-exact` provenanceを追加し、release workflow tests 92 passed、CI再検証待ち。
+- `e2f54ba`では前commitのrustflags契約testを同期し、全Python suite、actionlint、Nix format、diff-checkがsuccessした。Normal run `35529577593`はNormal CI Required success、Package run `35529577546`はNSIS primary／independent build、clean-install smoke、Windows byte-for-byte reproducibility、Debian build／reproducibilityを全てsuccessした。NSIS primaryの実行時間は37m8sだが、job timeoutには達していない。
 
 ## 5. 完了判定
 

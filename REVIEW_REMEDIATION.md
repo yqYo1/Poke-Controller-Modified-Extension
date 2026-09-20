@@ -161,7 +161,7 @@
 | 278 | `web/src/lib/settings.ts` | 4 | high,medium,medium,medium | Wave 2 | 一部修正・検証済み | Nix devShell Bun settings test 6 passed; subscriber isolation/stale refresh/bounded retired IDs fixed, F4 pending |
 | 280 | `web/src/lib/vite-config.test.ts` | 3 | medium,medium,low | Wave 2 | 未着手 | — |
 | 286 | `web/src/routes/page.test.ts` | 4 | medium,medium,medium,low | Wave 2 | 未着手 | — |
-| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `pending`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
+| 292 | `.github/workflows/normal-ci.yml` | 3 | high,medium,medium | Wave 3 | 修正済み・検証済み | `5471e53`; 10件未満のtiming historyはwarning付きでgate未適用、9 jobにtimeout-minutes、mutable actionをcommit SHA固定。`nix run .#actionlint`、quality 39 passed、contract-sync 14 passed、contract-check成功。 |
 | 293 | `.github/workflows/package.yml` | 1 | medium | Wave 3 | 未着手 | — |
 | 299 | `api/openapi.json` | 1 | major | Wave 2 | 未着手 | — |
 | 310 | `rust-toolchain.toml` | 1 | high | Wave 3 | 未着手 | — |

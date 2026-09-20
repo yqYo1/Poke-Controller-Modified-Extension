@@ -178,8 +178,9 @@
 - `58ca103`でNormalのRust、Python、Web、Windows workspace、Packageの各実失敗を修正し、focused gateを通過させた。
 - `8c8da2b`でrelease testのfixed-output hash期待値を同期した。これに対する`Normal CI Required`と`Package CI Required`は、watcher exit code 0で両方successとなった。
 - `346d39b`ではLinux Debian bundleのPE optional normalizationを修正し、Package CI Requiredはreproducibilityを含めsuccessした。一方Normalのproduct timing p95は772.0秒でthreshold 720.0秒を超過し、性能failureは未解決のまま保持している。
-- 最新のp95超過に対し、`flake.nix`の`product-smoke`がworker／UI／CLIの3検査を直列実行していたため、各検査を隔離ログへ並列実行し、全PIDをwaitして失敗を伝播する構造へ修正した。`nix run .#product-smoke`はexit 0、quality UI/package contract 31 passed、production-routing mutation audit 395件／4 shardがexit 0、contract-check 14 passed、source-filter-check、actionlint、Nix format、diff-checkが成功。`b5c8c14`のNormal CI実測は687秒まで改善したが、同一SHAのNormal jobは成功しているにもかかわらず、push／pull_requestと同一SHA重複を混在させた既存p95母集団の772秒が残り、gateがfailureとなった。
+- 最新のp95超過に対し、`flake.nix`の`product-smoke`がworker／UI／CLIの3検査を直列実行していたため、各検査を隔離ログへ並列実行し、全PIDをwaitして失敗を伝播する構造へ修正した。`nix run .#product-smoke`はexit 0、quality UI/package contract 31 passed、production-routing mutation audit 395件／4 shardがexit 0、contract-check 14 passed、source-filter-check、actionlint、Nix format、diff-checkが成功。`b5c8c14`のNormal CI実測は687秒（threshold未満）だったが、同一SHAのNormal jobは成功しているにもかかわらず、push／pull_requestと同一SHA重複を混在させた既存p95母集団の772秒が残り、gateがfailureとなった。
 - timing p95候補を同じ`event`・head branch・PR番号へ限定し、artifactの`cache.event`もcurrent eventと再照合する修正を追加した。`tests/quality/test_ci_timing.py` 51 passed、actionlint、Nix format、diff-checkが成功。GitHub CIで再計測する。
+- `f989013`の772秒artifactは最長jobが643秒で、run開始からのrunner待ちを含むworkflow wallだけが772秒だった。`bbdfa09`もworkflow wall 704秒に対し最長job647秒だったため、p95の閾値判定をworkflow wallから`critical_path_wall_seconds`へ変更し、workflow wallは引き続きreport／検証証拠として保持する。`p95_metric`とregistry契約を追加し、timing 51 passed、contract-check 14 passed、Nix format、diff-checkが成功した。
 
 ## 5. 完了判定
 

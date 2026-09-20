@@ -1448,7 +1448,7 @@ def _report_identity(report: TimingReport) -> str:
 
 
 def p95_document(reports: ReportSequence) -> ResultDocument:
-    """Calculate nearest-rank p95 for at least ten reports of one kind."""
+    """Calculate nearest-rank p95 of critical-path time for one change kind."""
     ordered_reports = tuple(
         sorted(
             reports,
@@ -1517,9 +1517,11 @@ def p95_document(reports: ReportSequence) -> ResultDocument:
             "p95 is not defined for change_kind 'none'; "
             "runs with zero applicable timing regions skip the p95 history/threshold gate"
         )
-    measured_values = sorted(report.measured_wall_seconds for report in ordered_reports)
-    nearest_rank = math.ceil(0.95 * len(measured_values))
-    p95_wall_seconds = measured_values[nearest_rank - 1]
+    critical_path_values = sorted(
+        report.critical_path_wall_seconds for report in ordered_reports
+    )
+    nearest_rank = math.ceil(0.95 * len(critical_path_values))
+    p95_wall_seconds = critical_path_values[nearest_rank - 1]
     threshold_seconds = (
         None
         if change_kind is None or change_kind is ChangeKind.NONE
@@ -1541,11 +1543,13 @@ def p95_document(reports: ReportSequence) -> ResultDocument:
         "command": "p95",
         "conclusion": "failure" if violations else "success",
         "nearest_rank": nearest_rank,
+        "p95_metric": "critical_path_wall_seconds",
         "p95_wall_seconds": p95_wall_seconds,
         "sample_count": len(ordered_reports),
         "samples": [
             {
                 "attempt": report.attempt,
+                "critical_path_wall_seconds": report.critical_path_wall_seconds,
                 "measured_wall_seconds": report.measured_wall_seconds,
                 "sha": report.sha,
             }

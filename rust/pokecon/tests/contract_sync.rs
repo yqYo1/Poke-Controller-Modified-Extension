@@ -528,6 +528,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         serde_json::json!({"fast": 180, "docs": 300, "product": 720})
     );
     assert_eq!(timing["p95"]["method"], "nearest-rank");
+    assert_eq!(timing["p95"]["metric"], "critical_path_wall_seconds");
     assert_eq!(timing["p95"]["minimum_same_kind_samples"], 10);
     assert_eq!(timing["current_implementation"]["validator"], "implemented");
     assert_eq!(

@@ -36,6 +36,7 @@ def _report(
     regions: Sequence[str] = ("contracts", "rust"),
     measured_wall_seconds: float = 120.0,
     workflow_wall_seconds: float = 125.0,
+    job_wall_seconds: float = 5.0,
     built_derivations: Sequence[str] = (),
     substituted_store_paths: Sequence[str] = (),
     cache_read: bool = True,
@@ -62,7 +63,7 @@ def _report(
             {
                 "name": "fast",
                 "conclusion": "success",
-                "wall_seconds": 5.0,
+                "wall_seconds": job_wall_seconds,
                 "steps": [
                     {"name": "test", "wall_seconds": 4.0},
                     {"name": "checkout", "wall_seconds": 1.0},
@@ -186,12 +187,13 @@ def test_validate_rejects_substitution_when_cache_read_is_false() -> None:
     assert "cache.read is false" in completed.stderr
 
 
-def test_p95_uses_nearest_rank_and_only_top_level_measured_wall_time() -> None:
+def test_p95_uses_nearest_rank_and_critical_path_wall_time() -> None:
     reports = [
         _report(
             index=index,
             measured_wall_seconds=float(value),
             workflow_wall_seconds=9999.0,
+            job_wall_seconds=float(value),
         )
         for index, value in enumerate(
             (10, 20, 30, 40, 50, 60, 70, 80, 90, 180),
@@ -210,11 +212,13 @@ def test_p95_uses_nearest_rank_and_only_top_level_measured_wall_time() -> None:
         "command": "p95",
         "conclusion": "success",
         "nearest_rank": 10,
+        "p95_metric": "critical_path_wall_seconds",
         "p95_wall_seconds": 180.0,
         "sample_count": 10,
         "samples": [
             {
                 "attempt": 1,
+                "critical_path_wall_seconds": float(value),
                 "measured_wall_seconds": float(value),
                 "sha": f"{index:040x}",
             }
@@ -237,6 +241,7 @@ def test_nearest_rank_for_twenty_samples_selects_rank_nineteen() -> None:
                     change_kind="docs",
                     regions=("docs",),
                     measured_wall_seconds=float(index),
+                    job_wall_seconds=float(index),
                 )
             )
         )
@@ -262,6 +267,7 @@ def test_p95_threshold_regression_is_a_contract_failure(
             index=index,
             change_kind=change_kind,
             measured_wall_seconds=threshold + (1.0 if index == 10 else 0.0),
+            job_wall_seconds=threshold + (1.0 if index == 10 else 0.0),
         )
         for index in range(1, 11)
     ]
@@ -292,7 +298,7 @@ def test_p95_requires_one_change_kind() -> None:
     assert "p95 requires reports of exactly one change_kind" in completed.stderr
     document = _document(completed)
     assert document["change_kind"] is None
-    assert document["p95_wall_seconds"] == 120.0
+    assert document["p95_wall_seconds"] == 5.0
     assert document["threshold_seconds"] is None
 
 

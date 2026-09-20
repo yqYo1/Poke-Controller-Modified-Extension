@@ -839,6 +839,7 @@
       "product": 720
     },
     "p95": {
+      "metric": "critical_path_wall_seconds",
       "method": "nearest-rank",
       "minimum_same_kind_samples": 10,
       "maximum_history_age_days": 30,

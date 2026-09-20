@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "4724a6f931240d6cee6cf0111ebec7e861cc425b5e827878794f45f85a4d8da4";
+      canonicalFlakeHash = "bd8591e50900fadd05c5cc96041c0747309349eef7fa389f66583c9a50bd261e";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -750,7 +750,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "c7c8f9540762aed77583d1735402ec4d766e686681093979a5cd12eb01cbd720";
+          expectedAuditTestHash = "5d97d5fc266d0a1c227ee435ef31482341b28628d6dc2c1cb25365185c175277";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3554,9 +3554,40 @@
                   echo "usage: nix run .#product-smoke" >&2
                   exit 2
                 fi
-                "${workerPackageCheck.program}"
-                "${uiPackageCheck.program}"
-                "${cliHelpCheck.program}"
+                product_smoke_root="$(mktemp -d -t pokecon-product-smoke.XXXXXXXX)"
+                cleanup_product_smoke() {
+                  product_smoke_status=$?
+                  trap - EXIT
+                  rm -rf -- "$product_smoke_root"
+                  exit "$product_smoke_status"
+                }
+                trap cleanup_product_smoke EXIT
+
+                run_product_check() {
+                  local label=$1
+                  shift
+                  "$@" >"$product_smoke_root/$label.log" 2>&1
+                }
+
+                run_product_check worker "${workerPackageCheck.program}" &
+                worker_pid=$!
+                run_product_check ui "${uiPackageCheck.program}" &
+                ui_pid=$!
+                run_product_check cli "${cliHelpCheck.program}" &
+                cli_pid=$!
+
+                product_smoke_status=0
+                for product_smoke_pid in "$worker_pid" "$ui_pid" "$cli_pid"; do
+                  if ! wait "$product_smoke_pid"; then
+                    product_smoke_status=1
+                  fi
+                done
+                for product_smoke_log in "$product_smoke_root"/*.log; do
+                  cat "$product_smoke_log"
+                done
+                if [ "$product_smoke_status" -ne 0 ]; then
+                  exit "$product_smoke_status"
+                fi
               '';
             };
 

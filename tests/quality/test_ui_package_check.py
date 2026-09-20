@@ -2330,7 +2330,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "e2446c3ada5b3c2191d6dfffb3f40dcbce5570f38f97e64ab3423952865925a8"
+        == "3062dca0d9f59f4d9389c5433de342bb28f19b037b4c697674d2f30874505ddf"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -18676,6 +18676,11 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     )
     normal = (workflow_root / "normal-ci.yml").read_text()
     flake = (REPOSITORY / "flake.nix").read_text()
+    product_smoke = section(
+        flake,
+        "            product-smoke = mkTask {\n",
+        "            remote-flake-smoke = mkTask {\n",
+    )
     ci_fast = section(
         flake,
         "            ci-fast = mkTask {\n",
@@ -18710,6 +18715,16 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         "Run default app help from remote",
     ):
         assert normal.count(command) == 1
+    assert product_smoke.count("run_product_check ") == 3
+    for product_check in (
+        'run_product_check worker "${workerPackageCheck.program}" &',
+        'run_product_check ui "${uiPackageCheck.program}" &',
+        'run_product_check cli "${cliHelpCheck.program}" &',
+        'if ! wait "$product_smoke_pid"; then',
+        'exit "$product_smoke_status"',
+    ):
+        assert product_check in product_smoke
+
     for superseded_command in (
         "nix run .#clippy",
         "nix run .#build-rust",

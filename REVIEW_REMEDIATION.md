@@ -178,6 +178,7 @@
 - `58ca103`でNormalのRust、Python、Web、Windows workspace、Packageの各実失敗を修正し、focused gateを通過させた。
 - `8c8da2b`でrelease testのfixed-output hash期待値を同期した。これに対する`Normal CI Required`と`Package CI Required`は、watcher exit code 0で両方successとなった。
 - `346d39b`ではLinux Debian bundleのPE optional normalizationを修正し、Package CI Requiredはreproducibilityを含めsuccessした。一方Normalのproduct timing p95は772.0秒でthreshold 720.0秒を超過し、性能failureは未解決のまま保持している。
+- 最新のp95超過に対し、`flake.nix`の`product-smoke`がworker／UI／CLIの3検査を直列実行していたため、各検査を隔離ログへ並列実行し、全PIDをwaitして失敗を伝播する構造へ修正した。`nix run .#product-smoke`はexit 0、quality UI/package contract 31 passed、contract-check 14 passed、source-filter-check、actionlint、Nix format、diff-checkが成功。GitHub CI上の10-run p95再計測はpush後に確認する。
 
 ## 5. 完了判定
 

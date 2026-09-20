@@ -320,7 +320,7 @@ jobs:
           test_root="$(mktemp -d "$HOME/pokecon-remote-flake-ci.XXXXXX")"
           cd "$test_root"
           remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-          nix run --refresh \
+          nix run \
             --option download-attempts 10 \
             "github:${{ github.repository }}/$remote_revision#remote-flake-smoke" \
             -- \
@@ -712,6 +712,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CURRENT_EVENT: ${{ github.event_name }}
+          CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}
           CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
@@ -774,12 +775,15 @@ jobs:
           candidate_lines="$(jq -r \
             --arg cur "${GITHUB_RUN_ID}" \
             --arg current_event "$CURRENT_EVENT" \
+            --arg current_revision "$CURRENT_REVISION" \
             --arg current_branch "$CURRENT_BRANCH" \
             --arg current_pr_number "$CURRENT_PR_NUMBER" \
             '
             .workflow_runs[]
             | select((.id | tostring) != $cur)
             | select(.conclusion == "success" or .conclusion == "failure")
+            | select((.head_sha // "") != "")
+            | select((.head_sha // "") != $current_revision)
             | select(.event == $current_event)
             | select(.head_branch == $current_branch)
             | select(
@@ -789,6 +793,11 @@ jobs:
                    | index($current_pr_number | tonumber)) != null
                 else true end
               )
+            | sort_by([.head_sha, .created_at])
+            | group_by(.head_sha)
+            | map(max_by(.created_at))
+            | sort_by(.created_at) | reverse
+            | .[]
             | "\(.id) \(.run_attempt // 1)"
             ' "$runs_json")"
           while IFS=" " read -r candidate_id candidate_attempt; do

@@ -447,7 +447,7 @@
       "name": "normal-ci/remote_flake",
       "workflow": "normal-ci",
       "job": "remote_flake",
-      "command": "nix run --refresh github:<repository>/<commit-sha>#remote-flake-smoke -- --repository <repository> --revision <commit-sha>",
+      "command": "nix run github:<repository>/<commit-sha>#remote-flake-smoke -- --repository <repository> --revision <commit-sha>",
       "selected_by_regions": [
         "remote_flake"
       ],
@@ -843,7 +843,14 @@
       "method": "nearest-rank",
       "minimum_same_kind_samples": 10,
       "maximum_history_age_days": 30,
-      "stale_history_is_failure": true
+      "stale_history_is_failure": true,
+      "history_scope": [
+        "same workflow event",
+        "same head branch",
+        "same pull request number for pull_request events",
+        "one latest completed run per head SHA",
+        "current revision excluded"
+      ]
     },
     "report_evidence": [
       "workflow wall time",

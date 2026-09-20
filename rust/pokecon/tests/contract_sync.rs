@@ -530,6 +530,16 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
     assert_eq!(timing["p95"]["method"], "nearest-rank");
     assert_eq!(timing["p95"]["metric"], "critical_path_wall_seconds");
     assert_eq!(timing["p95"]["minimum_same_kind_samples"], 10);
+    assert_eq!(
+        timing["p95"]["history_scope"],
+        serde_json::json!([
+            "same workflow event",
+            "same head branch",
+            "same pull request number for pull_request events",
+            "one latest completed run per head SHA",
+            "current revision excluded",
+        ])
+    );
     assert_eq!(timing["current_implementation"]["validator"], "implemented");
     assert_eq!(
         timing["current_implementation"]["workflow_evidence_collection"],

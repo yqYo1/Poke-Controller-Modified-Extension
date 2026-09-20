@@ -183,6 +183,7 @@
 - `f989013`の772秒artifactは最長jobが643秒で、run開始からのrunner待ちを含むworkflow wallだけが772秒だった。`bbdfa09`もworkflow wall 704秒に対し最長job647秒だったため、p95の閾値判定をworkflow wallから`critical_path_wall_seconds`へ変更し、workflow wallは引き続きreport／検証証拠として保持する。`p95_metric`とregistry契約を追加し、timing 51 passed、contract-check 14 passed、Nix format、diff-checkが成功した。
 - `9a6a4fc`のNormal CI run `35525625555`はworkflow wall 728秒、current critical path 673秒、critical-path 10-run p95 694秒、violationsなしで`Normal CI Required`がsuccessした。Package CI run `35525625565`もDebian／NSIS build、clean-install smoke、両reproducibility、`Package CI Required`がsuccessした。
 - 直前のrustflags契約test同期commitでは、全Python suite、actionlint、Nix format、diff-checkがsuccessした。Normal run `35529577593`はNormal CI Required success、Package run `35529577546`はNSIS primary／independent build、clean-install smoke、Windows byte-for-byte reproducibility、Debian build／reproducibilityを全てsuccessした。NSIS primaryの実行時間は37m8sだが、job timeoutには達していない。
+- 追加のread-only調査で、既に修正済みのproduct-smoke直列実行とevent／branch／PR未限定の指摘は現行ソースに残っていないことを確認した。一方、remote flake smokeの外側`--refresh`は同一SHA固定検証に不要な強制再取得だったため削除し、p95履歴は現行revisionを除外したうえで同一head SHAごとに最新runを1件だけ採用するよう変更した。閾値720秒、nearest-rank、10サンプル、fail-closed条件は維持し、remote smokeの`--option download-attempts 10`も維持した。
 
 ## 5. 完了判定
 

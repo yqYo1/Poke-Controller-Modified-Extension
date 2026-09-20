@@ -871,6 +871,10 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     assert "nix run .#ci-timing -- p95" in workflow
     assert 'select(.conclusion == "success" or .conclusion == "failure")' in workflow
     assert "CURRENT_EVENT: ${{ github.event_name }}" in workflow
+    assert (
+        "CURRENT_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in workflow
+    )
     assert "CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}" in workflow
     assert (
         "CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}" in workflow
@@ -878,6 +882,9 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     assert "select(.event == $current_event)" in workflow
     assert "select(.head_branch == $current_branch)" in workflow
     assert "index($current_pr_number | tonumber)" in workflow
+    assert 'select((.head_sha // "") != $current_revision)' in workflow
+    assert "group_by(.head_sha)" in workflow
+    assert "map(max_by(.created_at))" in workflow
     assert "actions/runs/${candidate_id}/jobs?per_page=100" in workflow
     assert 'select(.name == "Normal CI Required")' in workflow
     assert "required_conclusion" in workflow

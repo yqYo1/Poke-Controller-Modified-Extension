@@ -1771,6 +1771,35 @@ raise RuntimeError("reload sentinel")
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn python_api_boundaries_reject_invalid_values() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("init.py"),
+            "import pokecon\n\ndef expect_type_error(callback):\n    try:\n        callback()\n    except TypeError:\n        return\n    raise AssertionError(\"expected TypeError\")\n\nexpect_type_error(lambda: setattr(pokecon.commands.sort, \"priority\", True))\nexpect_type_error(lambda: pokecon.commands.separator(1))\npokecon.state.tags = (1, 2)\n",
+        )
+        .unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host.clone(),
+        )
+        .unwrap();
+        let result = engine
+            .control(DynamicConfigControl::LoadPath {
+                path: "init.py".to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(result.loaded, "{:?}", result.diagnostic);
+        assert_eq!(host.state_snapshot().unwrap()["tags"], json!([1, 2]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn python_evaluation_releases_coordinator_before_user_code() {
         let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();

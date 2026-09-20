@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **135 / 455 finding、42 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの14件を完了）。
-- Wave 1: **113 / 222 finding、34ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **14 / 123 finding、3ファイル（timing.py、normal-ci.yml、build_runtime.py部分完了）**。
+- 現在の検証済み修正: **136 / 455 finding、42 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの15件を完了）。
+- Wave 1: **113 / 222 finding、34ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **15 / 123 finding、3ファイル（timing.py、normal-ci.yml、build_runtime.py部分完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
@@ -25,7 +25,7 @@
 |---|---|---:|---:|---|---|
 | Wave 1 | Rust runtime、settings、worker、server、contracts、Rust tests | 65 | 222 | 部分完了（113/222） | realtime_connection focused compile/test passed; signed commits continue |
 | Wave 2 | API、Python typings、Web、frontend tests | 37 | 110 | 部分完了（8/110） | camera-selector/realtime/runtime/settings Web packets; Bun tests/lint passed |
-| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（14/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime artifact boundary、contract-sync・mutation・Nix contract passed |
+| Wave 3 | flake、CI、scripts、release、Python/tests | 37 | 123 | 部分完了（15/123） | timing p95 bootstrap、normal-ci timeout/action SHA、build_runtime artifact boundary、contract-sync・mutation・Nix contract passed |
 
 ## 4. ファイル別対応状態
 
@@ -109,7 +109,7 @@
 | 172 | `scripts/performance/benchmark.py` | 6 | high,high,medium,medium,medium,medium | Wave 3 | 未着手 | — |
 | 176 | `scripts/quality/run_parallel_checks.py` | 4 | medium,low,medium,low | Wave 3 | 未着手 | — |
 | 177 | `scripts/quality/source_filter.py` | 4 | high,medium,medium,low | Wave 3 | 未着手 | — |
-| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanupを`b14308c`で追加（pre-build patchelf/strip preflightは未解決）。F10を`316e63b`でdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。 |
+| 180 | `scripts/release/build_runtime.py` | 10 | high,high,high,high,medium,medium,medium,medium,medium,medium | Wave 3 | 一部修正・検証済み | F1/F3/F4/F5/F6/F8を`c5d5419`で実装。F2は現行uv export PoCで256行中221行が`--hash=`を含み、`pip --require-hashes`契約と整合するため証拠付き非該当。F7をUnix `ZipInfo.create_system=3`とtestで`3b421c5`に修正。release tests 88 passed、ruff check/format passed。F9のlexists出力guard、別directory staging、成功時publish、失敗時stage/公開済みoutput cleanup、pre-build patchelf/strip validationを実装。F10を`316e63b`でdefault smokeからhardware enumerationを除外し、`--require-audio-hardware`明示flag時のみ実行する分岐とtestを追加。 |
 | 182 | `scripts/release/debian_install_smoke.sh` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 185 | `scripts/release/normalize_linux_elf.py` | 3 | medium,medium,medium | Wave 3 | 未着手 | — |
 | 187 | `scripts/release/package_smoke.py` | 4 | high,medium,medium,medium | Wave 3 | 未着手 | — |

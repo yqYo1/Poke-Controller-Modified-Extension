@@ -1204,6 +1204,30 @@ def test_wheel_bootstrap_uses_a_zip_compatible_reproducible_epoch(
     assert ensurepip_environment["SOURCE_DATE_EPOCH"] == str(REPRODUCIBLE_ZIP_EPOCH)
 
 
+def test_build_wheels_validates_native_tools_before_uv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        release_runtime,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("uv must not run before tool validation"),
+    )
+    with pytest.raises(
+        ValueError, match="patchelf must be one executable regular file"
+    ):
+        release_runtime.build_wheels(
+            Path("uv"),
+            Path("python"),
+            tmp_path / "requirements.lock",
+            tmp_path / "wheelhouse",
+            tmp_path / "runtime",
+            tmp_path / "workspace",
+            tmp_path / "missing-patchelf",
+            tmp_path / "missing-strip",
+            None,
+        )
+
+
 def test_normalize_wheel_repacks_unchanged_members_deterministically(
     tmp_path: Path,
 ) -> None:

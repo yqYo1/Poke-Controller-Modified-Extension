@@ -1216,6 +1216,17 @@ def build_wheels(
     strip: Path | None,
     vcpkg_path: Path | None,
 ) -> None:
+    if (patchelf is None) != (strip is None):
+        message = "--patchelf and --strip must be provided together"
+        raise ValueError(message)
+    for label, tool in (("patchelf", patchelf), ("strip", strip)):
+        if tool is None:
+            continue
+        if not _is_real_regular_file(tool) or (
+            os.name != "nt" and not os.access(tool, os.X_OK)
+        ):
+            message = f"{label} must be one executable regular file: {tool}"
+            raise ValueError(message)
     build_venv = workspace / "build-venv"
     environment = wheel_build_environment(runtime_root, vcpkg_path)
     run(
@@ -1259,9 +1270,6 @@ def build_wheels(
     wheels = sorted(output.glob("*.whl"))
     if not wheels:
         message = "worker-script wheelhouse is empty"
-        raise ValueError(message)
-    if (patchelf is None) != (strip is None):
-        message = "--patchelf and --strip must be provided together"
         raise ValueError(message)
     for wheel in wheels:
         normalize_wheel(wheel, patchelf, strip)

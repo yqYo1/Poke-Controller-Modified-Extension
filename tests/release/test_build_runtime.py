@@ -617,6 +617,7 @@ def test_install_python_inventories_the_requested_uv_installation(
         record_sysconfig_normalization,
     )
 
+    output.mkdir()
     installed = install_python(Path("uv"), output, workspace)
 
     assert installed == python_executable(output)

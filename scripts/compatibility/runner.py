@@ -372,8 +372,8 @@ def build_results(
         ("compatibility binary", compatibility_binary),
         ("managed worker", worker),
     ):
-        if not path.is_file():
-            invalid_value(f"{label} is not a regular file: {path}")
+        if not path.is_file() or (os.name != "nt" and not os.access(path, os.X_OK)):
+            invalid_value(f"{label} is not an executable regular file: {path}")
     if not site_packages.is_dir():
         invalid_value(f"site-packages is not a directory: {site_packages}")
 

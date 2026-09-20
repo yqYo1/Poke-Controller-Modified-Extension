@@ -18,6 +18,24 @@ from scripts.release.package_smoke import (
     validate_wheelhouse,
 )
 
+EXPECTED_WORKER_PACKAGES = frozenset(
+    {
+        "icecream",
+        "loguru",
+        "numpy",
+        "opencv-python",
+        "pandas",
+        "pillow",
+        "pyaudio",
+        "pygubu",
+        "pynput",
+        "pyserial",
+        "pythonnet",
+        "requests",
+        "scipy",
+    }
+)
+
 
 def write_resource_manifest(root: Path) -> None:
     files = [
@@ -158,7 +176,7 @@ def write_wheelhouse_fixture(
                 else f"{package.replace('-', '_')}-1.0-py3-none-any.whl"
             ),
         )
-        for package in sorted(REQUIRED_WORKER_PACKAGES)
+        for package in sorted(EXPECTED_WORKER_PACKAGES)
     ]
     distribution_wheels.extend(extra_distributions)
     for package, filename in distribution_wheels:
@@ -194,8 +212,9 @@ def test_wheelhouse_manifest_covers_fixed_worker_packages(tmp_path: Path) -> Non
 
     inventory, wheel_paths = validate_wheelhouse(tmp_path)
 
-    assert len(inventory) == len(REQUIRED_WORKER_PACKAGES)
-    assert len(wheel_paths) == len(REQUIRED_WORKER_PACKAGES)
+    assert len(inventory) == len(EXPECTED_WORKER_PACKAGES)
+    assert len(wheel_paths) == len(EXPECTED_WORKER_PACKAGES)
+    assert {item["name"] for item in inventory} >= EXPECTED_WORKER_PACKAGES
 
 
 def test_wheelhouse_rejects_retired_first_party_distribution(tmp_path: Path) -> None:

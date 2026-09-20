@@ -110,12 +110,25 @@ def test_source_filter_uses_git_inventory_in_a_worktree(
     generated = tmp_path / "web/build/generated.js"
     generated.parent.mkdir(parents=True)
     generated.touch()
+    git = which("git")
+    assert git is not None
 
     def fake_run(
         arguments: list[str],
         **_kwargs: object,
     ) -> subprocess.CompletedProcess[bytes]:
-        assert "--exclude-standard" in arguments
+        assert arguments == [
+            git,
+            "-C",
+            str(tmp_path),
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "web",
+        ]
         return subprocess.CompletedProcess(
             arguments,
             returncode=0,
@@ -208,9 +221,18 @@ def test_repository_generated_direnv_is_excluded_from_source_and_formatting() ->
     assert '".direnv/**"' in flake
 
 
-def test_repository_build_sources_are_typescript_only() -> None:
-    root = Path(__file__).resolve().parents[2]
+def test_repository_build_sources_are_typescript_only(tmp_path: Path) -> None:
+    repository = Path(__file__).resolve().parents[2]
     for config_name in ("eslint.config.ts", "svelte.config.ts", "vite.config.ts"):
-        assert (root / "web" / config_name).is_file()
-    report = check_source_filter(root)
-    assert not report.javascript_sources, ", ".join(report.javascript_sources)
+        assert (repository / "web" / config_name).is_file()
+
+    (tmp_path / "flake.nix").write_text(
+        'pkgs.lib.hasSuffix ".ts" path',
+        encoding="utf-8",
+    )
+    source = tmp_path / "web/src/app.ts"
+    source.parent.mkdir(parents=True)
+    source.touch()
+
+    report = check_source_filter(tmp_path, ["web"])
+    assert not report.javascript_sources

@@ -4,6 +4,7 @@ use std::str::FromStr as _;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use crate::camera::{
     BgrFrame, CaptureResolution, LatestFrameSource, RingReader, ScreenshotFormat, ScreenshotMode,
@@ -15,6 +16,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyModule, PyModuleMethods};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
+use tokio_util::sync::CancellationToken;
 
 use crate::worker::ipc::{ConnectionError, IpcConnection, deserialize_value, serialize_value};
 
@@ -70,6 +73,11 @@ impl StopCause {
         }
     }
 }
+
+const HOST_IPC_TIMEOUT: Duration = Duration::from_secs(5);
+const STARTUP_HOST_IPC_TIMEOUT: Duration = Duration::from_secs(5);
+const ACTOR_SHUTDOWN_ACK_TIMEOUT: Duration = Duration::from_millis(500);
+const ACTOR_SHUTDOWN_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug)]
 struct ExecutionState {
@@ -393,20 +401,29 @@ impl PythonActor {
     }
 
     /// Stops active execution and waits for the actor to accept shutdown.
-    pub(super) async fn begin_shutdown(&mut self) {
+    pub(super) async fn begin_shutdown(&mut self) -> bool {
         self.state.request_stop();
-        if let Some(commands) = self.commands.take() {
-            let (sender, receiver) = oneshot::channel();
-            if commands.send(ActorCommand::Shutdown(sender)).is_ok() {
-                let _result = receiver.await;
-            }
+        let Some(commands) = self.commands.take() else {
+            return false;
+        };
+        let (sender, receiver) = oneshot::channel();
+        if commands.send(ActorCommand::Shutdown(sender)).is_err() {
+            return false;
         }
+        matches!(
+            timeout(ACTOR_SHUTDOWN_ACK_TIMEOUT, receiver).await,
+            Ok(Ok(()))
+        )
     }
 
     /// Reaps local Python threads after the worker has acknowledged shutdown.
     pub(super) async fn finish_shutdown(&mut self) {
         if let Some(thread) = self.thread.take() {
-            let _result = tokio::task::spawn_blocking(move || thread.join()).await;
+            let _result = timeout(
+                ACTOR_SHUTDOWN_JOIN_TIMEOUT,
+                tokio::task::spawn_blocking(move || thread.join()),
+            )
+            .await;
         }
     }
 }
@@ -480,11 +497,12 @@ fn initialize_python(
     config: &PythonActorConfig,
     state: Arc<ExecutionState>,
 ) -> Result<(), PythonActorError> {
-    let camera = request_host::<_, HostCameraInitializeResult>(
+    let camera = request_host_with_timeout::<_, HostCameraInitializeResult>(
         &config.connection,
         &config.runtime_handle,
         protocol::HOST_CAMERA_INITIALIZE,
         &(),
+        STARTUP_HOST_IPC_TIMEOUT,
     )
     .map_err(|error| PythonActorError::new("CameraInitializeError", error))?;
     let camera_reader = camera
@@ -1069,14 +1087,48 @@ where
     Request: serde::Serialize,
     Response: serde::de::DeserializeOwned,
 {
+    request_host_with_timeout(
+        connection,
+        runtime_handle,
+        operation,
+        request,
+        HOST_IPC_TIMEOUT,
+    )
+}
+
+fn request_host_with_timeout<Request, Response>(
+    connection: &IpcConnection,
+    runtime_handle: &Handle,
+    operation: &'static str,
+    request: &Request,
+    timeout_duration: Duration,
+) -> Result<Response, String>
+where
+    Request: serde::Serialize,
+    Response: serde::de::DeserializeOwned,
+{
     let payload = serialize_value(request).map_err(|error| error.to_string())?;
-    let future = connection.request(operation, payload);
+    let cancellation = CancellationToken::new();
+    let future = async {
+        timeout(
+            timeout_duration,
+            connection.request_with_cancellation(operation, payload, cancellation.clone()),
+        )
+        .await
+    };
     let response = if Handle::try_current().is_ok() {
         tokio::task::block_in_place(|| runtime_handle.block_on(future))
     } else {
         runtime_handle.block_on(future)
-    }
-    .map_err(connection_error)?;
+    };
+    let response = if let Ok(response) = response {
+        response.map_err(connection_error)?
+    } else {
+        cancellation.cancel();
+        return Err(format!(
+            "HostTimeout: operation `{operation}` exceeded {timeout_duration:?}"
+        ));
+    };
     deserialize_value(&response).map_err(|error| error.to_string())
 }
 

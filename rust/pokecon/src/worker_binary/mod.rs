@@ -294,8 +294,21 @@ async fn run_protocol(
                     .await?;
             }
             "worker.shutdown" => {
-                if let Some(runtime) = &mut script {
-                    runtime.begin_shutdown().await;
+                let cooperative_acknowledged = if let Some(runtime) = &mut script {
+                    runtime.begin_shutdown().await
+                } else {
+                    true
+                };
+                if !cooperative_acknowledged {
+                    // Keep the worker alive without acknowledging shutdown. The
+                    // parent supervisor owns the forced-termination path once
+                    // its shutdown deadline expires; acknowledging here would
+                    // falsely report a quiescent Python actor.
+                    tracing::warn!(
+                        diagnostic_id = "SCRIPT_SHUTDOWN_ACK_TIMEOUT",
+                        "script worker did not reach a quiescent shutdown state"
+                    );
+                    return std::future::pending::<Result<(), WorkerError>>().await;
                 }
                 // Acknowledge once the actor is quiescent. Auxiliary Python
                 // thread finalization remains bounded by the parent's process

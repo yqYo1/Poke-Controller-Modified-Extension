@@ -15,8 +15,8 @@
 
 - 確定finding: **455件**、findingを含むファイル: **139件**
 - LGTMファイルとcredential-bearing `.envrc`のsafe-static reviewにはfinding対応を作らない。
-- 現在の検証済み修正: **120 / 455 finding、40 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
-- Wave 1: **107 / 222 finding、33ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
+- 現在の検証済み修正: **121 / 455 finding、41 / 139 finding-file**（Wave 1/2を継続中、Wave 3はCI timing／normal-ciの5件を完了）。
+- Wave 1: **108 / 222 finding、34ファイル**。Wave 2: **8 / 110 finding、5ファイル**。Wave 3: **5 / 123 finding、2ファイル（timing.py、normal-ci.yml完了）**。
 - 追加の実行契約修正: `flake.nix`のCargo target uv launcherをsymlinkからregular fileへ変更し、`settings::uv`のsymlink拒否とNix `contract-check`のdynamic startup fixtureを一致させた。これはflake行#1の5 finding完了数には加算しない。
 
 ## 3. 修正wave
@@ -89,7 +89,7 @@
 | 133 | `rust/pokecon/src/worker_binary/dynamic/engine.rs` | 6 | medium,medium,medium,high,medium,low | Wave 1 | 一部修正・検証済み | coordinator barrier保持、caller generation Superseded guard、callback内source/profile switch bounded defer/drain、pending eventのtracked awaitを実装。`5590399`; dynamic lifecycle、engine 12 tests、clippy passed。残り3件は未着手 |
 | 135 | `rust/pokecon/src/worker_binary/dynamic/runtime/lua.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | F1 restricted stdlib sandbox、F2 shared Lua state access serializationを`8f3faa2`、F3 non-preemptive C/FFI timeout semanticsを`docs/DYNAMIC_CONFIGURATION.md`、F4 callback failure state rollbackを`49097bd`で修正、残り3件は未着手。engine 12 tests/clippy passed。 |
 | 137 | `rust/pokecon/src/worker_binary/dynamic/runtime/python.rs` | 7 | high,high,high,medium,medium,medium,medium | Wave 1 | 一部修正・検証済み | F1をtrusted-code契約として`docs/DYNAMIC_CONFIGURATION.md`へ明示、F2をscheduler timeout/lane retention契約として同docsへ明示、F3を`e649bfd`、F4を`77d7c25`、F5を`533de70`、F6を`880fc7f`、F7を`9809b8c`で修正。Python source evaluationを`spawn_blocking`へ移し、EvaluationScopeを伝搬、coordinatorを評価中に解放、generation再検証、Python monitoring tool idの非強制割当とDrop cleanup、callback revision cacheの上限8、stdout/stderrの64KiB bounded proxy、priority/label/tuple boundary testsを追加。adversarial tests、engine 11 tests、full lib 454 passed、contract-check成功。 |
-| 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 未着手 | — |
+| 140 | `rust/pokecon/src/worker_binary/script/python.rs` | 6 | medium,high,medium,medium,low,low | Wave 1 | 修正済み・検証済み | F2をhost IPC 5秒deadline＋CancellationToken、shutdown ack 500ms、Python thread join 500ms、ack不能時のsupervisor forced-kill経路へ修正。`script_runtime`: 18 passed、`pokecon --lib`: 438 passed、clippy成功。`e5ad51b`。 |
 | 142 | `rust/pokecon/tests/contract_sync.rs` | 2 | high,medium | Wave 1 | 修正済み・検証済み | contract_sync with integration-test-support: 12 passed; canonical inventory JSON and CI timing threshold cross-check aligned |
 | 144 | `rust/pokecon/tests/cross_process.rs` | 2 | medium,low | Wave 1 | 未着手 | — |
 | 146 | `rust/pokecon/tests/lifecycle.rs` | 2 | high,high | Wave 1 | 未着手 | — |

@@ -50,6 +50,7 @@ struct RecordingScriptHost {
     tk_requests: Mutex<Vec<HostTkRequest>>,
     tk_scales: Mutex<BTreeMap<u64, f64>>,
     block_tk_title: AtomicBool,
+    block_tk_title_until_released: AtomicBool,
     tk_title_blocked: AtomicBool,
     tk_title_released: Mutex<bool>,
     tk_title_release: Condvar,
@@ -195,10 +196,17 @@ impl ScriptHost for RecordingScriptHost {
             self.tk_title_blocked.store(true, Ordering::Release);
             self.activity.notify_one();
             let released = self.tk_title_released.lock().unwrap();
-            let _wait_result = self
-                .tk_title_release
-                .wait_timeout_while(released, Duration::from_secs(5), |released| !*released)
-                .unwrap();
+            if self.block_tk_title_until_released.load(Ordering::Acquire) {
+                let _released = self
+                    .tk_title_release
+                    .wait_while(released, |released| !*released)
+                    .unwrap();
+            } else {
+                let _wait_result = self
+                    .tk_title_release
+                    .wait_timeout_while(released, Duration::from_secs(5), |released| !*released)
+                    .unwrap();
+            }
         }
         let result = match &request {
             HostTkRequest::CreateScale {
@@ -1849,6 +1857,112 @@ class TkGilBridge(ImageProcPythonCommand):
     assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
 
     stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn blocked_host_request_times_out_before_late_host_release() {
+    const SOURCE: &str = r#"
+import tkinter as tk
+
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class HostTimeout(ImageProcPythonCommand):
+    def do(self):
+        self.window = tk.Toplevel(self.gui)
+        self.window.title("Host timeout")
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("host_timeout.py"), SOURCE)
+        .expect("host timeout fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    host.block_tk_title.store(true, Ordering::Release);
+    host.block_tk_title_until_released
+        .store(true, Ordering::Release);
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "host_timeout.py".into(),
+                class_name: "HostTimeout".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let activity = host.activity.notified();
+            if host.tk_title_blocked.load(Ordering::Acquire) {
+                break;
+            }
+            activity.await;
+        }
+    })
+    .await
+    .expect("host request reaches the deliberately blocked boundary");
+    std::thread::sleep(Duration::from_secs(6));
+    host.release_tk_title();
+    let result = tokio::time::timeout(Duration::from_secs(4), execution)
+        .await
+        .expect("timed-out host request completes after the host is released")
+        .expect("execution task joins")
+        .expect("execution response is returned");
+    let ScriptExecutionOutcome::Failed { message } = result.outcome else {
+        panic!("blocked host request must fail with a typed timeout: {result:?}");
+    };
+    assert!(message.contains("HostTimeout"), "{message}");
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shutdown_during_c_level_python_block_is_forced_without_ack() {
+    const SOURCE: &str = r"
+import time
+
+from Commands.PythonCommandBase import PythonCommand
+
+
+class BlockedShutdown(PythonCommand):
+    def do(self):
+        time.sleep(60.0)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("blocked_shutdown.py"), SOURCE)
+        .expect("blocked shutdown fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let execution_client = client.clone();
+    let execution = tokio::spawn(async move {
+        execution_client
+            .execute(&ScriptExecuteRequest {
+                path: "blocked_shutdown.py".into(),
+                class_name: "BlockedShutdown".to_owned(),
+                tags: Vec::new(),
+            })
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(1))
+        .await
+        .expect("blocked worker is reaped by the supervisor deadline");
+    assert!(!report.cooperative_acknowledged, "{report:?}");
+    assert!(report.forced, "{report:?}");
+    assert!(!report.exit.success, "{report:?}");
+
+    let _execution_result = tokio::time::timeout(Duration::from_secs(2), execution)
+        .await
+        .expect("execution waiter observes worker termination")
+        .expect("execution task joins");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

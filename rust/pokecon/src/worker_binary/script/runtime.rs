@@ -137,9 +137,11 @@ impl ScriptWorkerRuntime {
         }
     }
 
-    pub(crate) async fn begin_shutdown(&mut self) {
+    pub(crate) async fn begin_shutdown(&mut self) -> bool {
         if let Some(actor) = &mut self.actor {
-            actor.begin_shutdown().await;
+            actor.begin_shutdown().await
+        } else {
+            true
         }
     }
 

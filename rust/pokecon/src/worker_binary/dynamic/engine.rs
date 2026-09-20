@@ -1800,6 +1800,41 @@ raise RuntimeError("reload sentinel")
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn callback_failure_discards_staged_lua_state() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Lua),
+            host.clone(),
+        )
+        .unwrap();
+        let loaded = engine
+            .control(DynamicConfigControl::LoadContent {
+                language: DynamicConfigLanguage::Lua,
+                content: r#"pokecon.autocmd.on("CameraOpenPost", function()
+    pokecon.state.tags = {"failed"}
+    error("callback sentinel")
+end)
+"#
+                .to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+        let emitted = engine.emit("CameraOpenPost").await.unwrap();
+        assert!(emitted.outcomes.iter().any(|(_, outcome)| matches!(
+            outcome,
+            crate::dynamic::callback::CallbackOutcome::Failed(_)
+        )));
+        assert_eq!(host.state_snapshot().unwrap()["tags"], json!([]));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn python_evaluation_releases_coordinator_before_user_code() {
         let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();

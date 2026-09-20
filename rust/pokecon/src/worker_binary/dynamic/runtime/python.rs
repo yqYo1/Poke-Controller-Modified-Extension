@@ -166,14 +166,7 @@ def _invoke_callback(callback, arguments):
     cache = {}
     stack.append(cache)
     try:
-        try:
-            value = callback(*arguments)
-        except BaseException as error:
-            try:
-                _flush_state_cache(cache)
-            except Exception as flush_error:
-                error.add_note(f"state mutation flush failed: {flush_error}")
-            raise
+        value = callback(*arguments)
         _flush_state_cache(cache)
         return value
     finally:
@@ -193,10 +186,14 @@ class _State:
         return cache[name][1]
 
     def __setattr__(self, name, value):
-        _api.set_state(name, value)
         cache = _active_state_cache()
-        if cache is not None:
-            cache.pop(name, None)
+        if cache is None:
+            _api.set_state(name, value)
+            return
+        if name not in cache:
+            cache[name] = (_copy.deepcopy(_api.get_state(name)), value)
+        else:
+            cache[name] = (cache[name][0], value)
 
 
 class _Autocmd:

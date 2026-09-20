@@ -165,10 +165,10 @@ local function invoke_callback(callback, ...)
     state_context_stack[#state_context_stack + 1] = cache
     local result = pack(raw_pcall(callback, ...))
     state_context_stack[#state_context_stack] = nil
-    local flush_result = pack(raw_pcall(flush_state_cache, cache))
     if not result[1] then
         error(result[2], 0)
     end
+    local flush_result = pack(raw_pcall(flush_state_cache, cache))
     if not flush_result[1] then
         error(flush_result[2], 0)
     end
@@ -190,10 +190,15 @@ local state = setmetatable({}, {
         return cache[name].value
     end,
     __newindex = function(_, name, value)
-        api.set_state(name, value)
         local cache = active_state_cache()
-        if cache ~= nil then
-            cache[name] = nil
+        if cache == nil then
+            api.set_state(name, value)
+            return
+        end
+        if cache[name] == nil then
+            cache[name] = {before = deep_copy(api.get_state(name)), value = value}
+        else
+            cache[name].value = value
         end
     end,
 })

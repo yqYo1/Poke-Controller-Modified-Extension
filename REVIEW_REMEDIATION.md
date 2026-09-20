@@ -127,7 +127,7 @@
 | 212 | `tests/release/test_gate.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1/F2 workflow needsをsemantic token set比較へ`4682704`で変更。release gate tests 14 passed、ruff check/format passed。F3未着手。 |
 | 213 | `tests/release/test_normalize_debian_package.py` | 2 | medium,medium | Wave 3 | 未着手 | — |
 | 215 | `tests/release/test_package_smoke.py` | 1 | high | Wave 3 | 修正済み・検証済み | F1 independent literal worker package set/count and inventory assertionを`3f194a4`で実装。package smoke tests 8 passed、ruff check/format passed。 |
-| 216 | `tests/release/test_signing_manifest.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1 Windows manifest全field/policy exact assertion、F2 ctime toleranceでもtarget name/format/role/sha256/size exact assertionを追加。signing manifest tests 14 passed、ruff check/format passed。F3未着手。 |
+| 216 | `tests/release/test_signing_manifest.py` | 3 | high,medium,medium | Wave 3 | 一部修正・検証済み | F1 Windows manifest全field/policy exact assertion、F2 ctime toleranceでもtarget name/format/role/sha256/size exact assertionを`8457a4b`で追加。signing manifest tests 14 passed、ruff check/format passed。F3未着手。 |
 | 218 | `tests/release/test_windows_install_smoke.py` | 5 | medium,medium,high,medium,medium | Wave 3 | 未着手 | — |
 | 223 | `web/src/app.html` | 1 | medium | Wave 2 | 未着手 | — |
 | 225 | `web/src/lib/actions.ts` | 2 | high,low | Wave 2 | 未着手 | — |

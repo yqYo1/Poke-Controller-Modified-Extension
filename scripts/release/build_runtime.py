@@ -519,7 +519,21 @@ def install_python(uv: Path, output: Path, workspace: Path) -> Path:
     if installed_prefix not in resolved_installed_python.parents:
         message = "uv installed a managed CPython executable outside its runtime root"
         raise ValueError(message)
-    shutil.copytree(installed_prefix, output, symlinks=True)
+    if _path_exists_including_dangling(output):
+        if not _is_real_directory(output):
+            message = f"Python runtime output must be one real directory: {output}"
+            raise ValueError(message)
+        with os.scandir(output) as entries:
+            try:
+                next(entries)
+            except StopIteration:
+                pass
+            else:
+                message = (
+                    f"Python runtime output must be empty before installation: {output}"
+                )
+                raise ValueError(message)
+    shutil.copytree(installed_prefix, output, symlinks=True, dirs_exist_ok=True)
     normalize_python_bytecode(output)
     normalize_python_sysconfig(output, installed_prefix)
     return python_executable(output)

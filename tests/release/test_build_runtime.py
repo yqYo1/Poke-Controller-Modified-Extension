@@ -653,6 +653,64 @@ def test_install_python_inventories_the_requested_uv_installation(
     assert release_runtime.PYTHON_VERSION not in command
 
 
+def test_install_python_rejects_nonempty_existing_output_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output = tmp_path / "runtime"
+    output.mkdir()
+    stale = output / "stale"
+    stale.write_text("must not be replaced\n", encoding="utf-8")
+
+    def fake_run(
+        arguments: Sequence[str | Path],
+        *,
+        environment: Mapping[str, str] | None = None,
+        capture: bool = False,
+    ) -> str:
+        command = [str(argument) for argument in arguments]
+        assert environment is None
+        assert not capture
+        install_root = Path(command[command.index("--install-dir") + 1])
+        installed = install_root / "sentinel-qualified-install-request"
+        executable = installed / "bin/python3.14"
+        executable.parent.mkdir(parents=True)
+        executable.write_bytes(b"fixture")
+        return ""
+
+    monkeypatch.setattr(release_runtime, "run", fake_run)
+
+    def fake_python_install_request(_platform_name: str) -> str:
+        return "sentinel-qualified-install-request"
+
+    monkeypatch.setattr(
+        release_runtime,
+        "python_install_request",
+        fake_python_install_request,
+    )
+
+    def fake_managed_python_install_prefix(
+        install_root: Path,
+        _install_request: str,
+        *,
+        platform_name: str,
+    ) -> Path:
+        assert platform_name == sys.platform
+        return install_root / "sentinel-qualified-install-request"
+
+    monkeypatch.setattr(
+        release_runtime,
+        "managed_python_install_prefix",
+        fake_managed_python_install_prefix,
+    )
+
+    with pytest.raises(ValueError, match="must be empty"):
+        install_python(Path("uv"), output, workspace)
+
+    assert stale.read_text(encoding="utf-8") == "must not be replaced\n"
+
+
 @pytest.mark.parametrize(
     ("platform_name", "redirect_kind"),
     [("linux", "symlink"), ("win32", "junction")],

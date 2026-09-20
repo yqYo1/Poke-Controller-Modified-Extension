@@ -1646,7 +1646,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "a16b6464a44dacc0e4e5c4c5cffdfd6d4b4de136aae9a83f8d48f8fbd408b68b"
+            "487d912a0c058e2e2a5be928100898c93fcf015b45f6a961af89e072dbd53702"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
@@ -2029,7 +2029,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     assert install_python_source.count("managed_python_install_prefix") == 1
     assert install_python_source.count("install_request") == 4
     assert (
-        "    shutil.copytree(installed_prefix, output, symlinks=True)\n"
+        "    shutil.copytree(installed_prefix, output, symlinks=True, dirs_exist_ok=True)\n"
         "    normalize_python_bytecode(output)\n"
         "    normalize_python_sysconfig(output, installed_prefix)\n"
         in install_python_source
@@ -2289,14 +2289,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     }
     assert tomllib.loads(sources[RUST_TOOLCHAIN_SOURCE]) == {
         "toolchain": {
-            "channel": "stable",
+            "channel": "1.95.0",
             "components": ["rustfmt", "clippy", "rust-src"],
             "targets": [],
         }
     }
     assert (
         hashlib.sha256(sources[RUST_TOOLCHAIN_SOURCE].encode()).hexdigest()
-        == "d3ceb1cb2217972a209e49ca1ac585998f21a2dabf96e6ceda03e9442e34ee29"
+        == "ebaf11fbd4a554b7c212f1f9529cdf4afc4f5dae0ae0c8166caa5a967239958b"
     )
 
     flake = sources[FLAKE_SOURCE]
@@ -2330,7 +2330,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "359218f3c7e3a19f3ba62497b9c3fcfd4fbd7f45418b7cc746ad06f4098fe668"
+        == "f8b0f34f66a8ce0c72930e5070a1a5ee1eea217b49e80edafd20235dae7d0249"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2400,7 +2400,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(toolchain_construction.strip().encode()).hexdigest()
-        == "60dacec16bd2345882dc40450876a7cb0bbaa8c5f1f01cd307c5e7907913196d"
+        == "99f7396df1e8e090c2ab26ebf80954b642a8a30fe503a5be1bd11fd01f9119df"
     )
     for toolchain_proof in (
         "import (",
@@ -2408,7 +2408,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         "inputs.nixpkgs-darwin",
         "overlays = [ (import rust-overlay) ];",
         '(builtins.readDir inputs.self.outPath)."rust-toolchain.toml" == "regular"',
-        '== "d3ceb1cb2217972a209e49ca1ac585998f21a2dabf96e6ceda03e9442e34ee29"',
+        '== "ebaf11fbd4a554b7c212f1f9529cdf4afc4f5dae0ae0c8166caa5a967239958b"',
         "pkgsWithOverlays.rust-bin.fromRustupToolchainFile",
         'inputs.self.outPath + "/rust-toolchain.toml"',
         "rustPlatform = pkgs.makeRustPlatform",
@@ -15793,7 +15793,7 @@ runner = "scripts/attacker-runner.sh"
     )
     changed_rust_toolchain = replace_once(
         RUST_TOOLCHAIN_SOURCE,
-        'channel = "stable"',
+        'channel = "1.95.0"',
         'channel = "nightly"',
     )
     symlinked_rust_toolchain = sources.copy()

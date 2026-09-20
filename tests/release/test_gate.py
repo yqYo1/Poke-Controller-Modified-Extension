@@ -28,6 +28,36 @@ def workflow_section(document: str, start: str, end: str) -> str:
     return body
 
 
+def workflow_needs(section: str) -> frozenset[str]:
+    lines = section.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("needs:"):
+            continue
+        value = stripped.removeprefix("needs:").strip()
+        if value:
+            if value.startswith("[") and value.endswith("]"):
+                return frozenset(
+                    item.strip().strip("'\"")
+                    for item in value[1:-1].split(",")
+                    if item.strip()
+                )
+            return frozenset({value.strip("'\"")})
+        dependencies: list[str] = []
+        base_indent = len(line) - len(line.lstrip())
+        for continuation in lines[index + 1 :]:
+            if not continuation.strip():
+                continue
+            indent = len(continuation) - len(continuation.lstrip())
+            item = continuation.strip()
+            if indent <= base_indent or not item.startswith("-"):
+                break
+            dependencies.append(item[1:].strip().strip("'\""))
+        return frozenset(dependencies)
+    message = "workflow section has no needs field"
+    raise AssertionError(message)
+
+
 def copy_release_fixture(root: Path, fixture: Path) -> None:
     for relative in RELEASE_FIXTURE_FILES:
         source = root / relative
@@ -184,11 +214,9 @@ def test_package_ci_builds_debian_reproducibility_proof_in_parallel() -> None:
     assert primary.count(build_command) == 1
     assert reproduction.count(build_command) == 1
     assert comparison.count(build_command) == 0
-    assert primary.count("needs: plan") == 1
-    assert reproduction.count("needs: plan") == 1
-    assert "needs: linux" not in reproduction
-    assert "needs: linux_repro" not in primary
-    assert comparison.count("needs: [plan, linux, linux_repro]") == 1
+    assert workflow_needs(primary) == frozenset({"plan"})
+    assert workflow_needs(reproduction) == frozenset({"plan"})
+    assert workflow_needs(comparison) == frozenset({"plan", "linux", "linux_repro"})
     assert "Preserve first package build" not in workflow
     assert "Rebuild Debian package from identical inputs" not in workflow
 

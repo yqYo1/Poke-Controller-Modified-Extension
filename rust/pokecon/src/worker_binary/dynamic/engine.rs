@@ -1705,6 +1705,34 @@ raise RuntimeError("reload sentinel")
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn python_callback_revision_cache_is_bounded() {
+        let _runtime = runtime_test_lock().lock().await;
+        let temporary = TempDir::new().unwrap();
+        let config = temporary.path().join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("init.py"),
+            "import pokecon\nfor _ in range(16):\n    pokecon.commands.sort.callback = lambda commands: []\nassert len(pokecon.commands.sort._callbacks) <= 8\n",
+        )
+        .unwrap();
+        let host = Arc::new(InMemoryDynamicHost::new(initial_settings(), profile_state()).unwrap());
+        let engine = DynamicEngine::new(
+            &config,
+            Some(temporary.path().to_path_buf()),
+            Some(DynamicConfigLanguage::Python),
+            host,
+        )
+        .unwrap();
+        let result = engine
+            .control(DynamicConfigControl::LoadPath {
+                path: "init.py".to_owned(),
+            })
+            .await
+            .unwrap();
+        assert!(result.loaded, "{:?}", result.diagnostic);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn python_evaluation_releases_coordinator_before_user_code() {
         let _runtime = runtime_test_lock().lock().await;
         let temporary = TempDir::new().unwrap();

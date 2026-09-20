@@ -262,6 +262,9 @@ class CommandSeparator:
         self.__pokecon_separator__ = True
 
 
+_MAX_CALLBACK_REVISIONS = 8
+
+
 class _CommandOptions:
     __slots__ = ("_name", "_callbacks")
 
@@ -281,8 +284,12 @@ class _CommandOptions:
         if value is not None and not callable(value):
             raise TypeError("command callback must be callable or None")
         revision = _api.set_command_callback(self._name, value)
-        if revision is not None:
+        if value is None:
+            self._callbacks.clear()
+        elif revision is not None:
             self._callbacks[revision] = value
+            while len(self._callbacks) > _MAX_CALLBACK_REVISIONS:
+                self._callbacks.pop(next(iter(self._callbacks)))
 
     @property
     def priority(self):
@@ -638,13 +645,29 @@ impl PyApi {
 
 pub(crate) struct PythonRuntime {
     module_name: &'static str,
+    monitoring_tool_id: u8,
+}
+
+impl Drop for PythonRuntime {
+    fn drop(&mut self) {
+        Python::attach(|py| {
+            let Ok(sys) = py.import("sys") else {
+                return;
+            };
+            let Ok(monitoring) = sys.getattr("monitoring") else {
+                return;
+            };
+            let _ = monitoring.call_method1("set_events", (self.monitoring_tool_id, 0));
+            let _ = monitoring.call_method1("free_tool_id", (self.monitoring_tool_id,));
+        });
+    }
 }
 
 impl PythonRuntime {
     pub(crate) fn new(engine: Weak<EngineInner>) -> Result<Self, DynamicEngineError> {
         let module_name = "pokecon";
         Python::initialize();
-        Python::attach(|py| -> PyResult<()> {
+        let monitoring_tool_id = Python::attach(|py| -> PyResult<u8> {
             add_worker_site_packages(py)?;
             let module = PyModule::new(py, module_name)?;
             module.add("_api", Py::new(py, PyApi { engine })?)?;
@@ -656,11 +679,15 @@ impl PythonRuntime {
                 Some(&module.dict()),
             )?;
             let modules = py.import("sys")?.getattr("modules")?;
+            let monitoring_tool_id = module.getattr("_tool_id")?.extract::<u8>()?;
             modules.set_item(module_name, module)?;
-            Ok(())
+            Ok(monitoring_tool_id)
         })
         .map_err(|error| DynamicEngineError::Python(error.to_string()))?;
-        Ok(Self { module_name })
+        Ok(Self {
+            module_name,
+            monitoring_tool_id,
+        })
     }
 
     pub(crate) fn evaluate(

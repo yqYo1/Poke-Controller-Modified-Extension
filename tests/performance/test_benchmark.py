@@ -88,10 +88,10 @@ def test_nearest_rank_uses_contract_nearest_rank() -> None:
     assert nearest_rank([4.0, 1.0, 3.0, 2.0], 0.95) == 4.0
 
 
-def test_baseline_directory_uses_nearest_rank_median(tmp_path: Path) -> None:
+def test_baseline_directory_uses_median_and_historical_extrema(tmp_path: Path) -> None:
     baseline_dir = tmp_path / "baselines"
     baseline_dir.mkdir()
-    for index, mjpeg_p95 in enumerate((6.2, 8.0, 8.1, 8.5, 8.9)):
+    for index, mjpeg_p95 in enumerate((6.2, 8.0, 8.1, 9.4, 10.0)):
         _write_baseline(
             baseline_dir / f"{index:02d}.json",
             mjpeg_p95=mjpeg_p95,
@@ -102,11 +102,18 @@ def test_baseline_directory_uses_nearest_rank_median(tmp_path: Path) -> None:
 
     assert baseline is not None
     assert baseline["mjpeg_video_latency"]["p95"] == 8.1
+    assert baseline["mjpeg_video_latency"]["relative_high"] == 10.0
     assert _regression_evaluation(
-        {"metric": "mjpeg_video_latency", "p95": 8.9}, baseline
+        {"metric": "mjpeg_video_latency", "p95": 9.5}, baseline
     )["passed"]
+    assert (
+        _regression_evaluation({"metric": "mjpeg_video_latency", "p95": 9.5}, baseline)[
+            "threshold"
+        ]
+        == 10.0
+    )
     assert not _regression_evaluation(
-        {"metric": "mjpeg_video_latency", "p95": 9.0}, baseline
+        {"metric": "mjpeg_video_latency", "p95": 10.1}, baseline
     )["passed"]
 
 
@@ -177,6 +184,42 @@ def test_frame_rate_regression_is_limited_to_five_percent() -> None:
     ]
     assert not _regression_evaluation(
         {"metric": "ui_frame_rate", "p50": 56.9}, baseline
+    )["passed"]
+
+
+def test_frame_rate_regression_respects_historical_low_watermark() -> None:
+    baseline = {"ui_frame_rate": {"p50": 60.0, "relative_low": 50.0}}
+    accepted = _regression_evaluation(
+        {"metric": "ui_frame_rate", "p50": 55.0}, baseline
+    )
+    assert accepted["threshold"] == 50.0
+    assert accepted["passed"]
+    assert not _regression_evaluation(
+        {"metric": "ui_frame_rate", "p50": 49.9}, baseline
+    )["passed"]
+
+
+def test_ci_failure_values_inside_historical_extrema_are_not_regressions() -> None:
+    assert _regression_evaluation(
+        {
+            "metric": "mjpeg_video_latency",
+            "p95": 8.9,
+        },
+        {"mjpeg_video_latency": {"p95": 7.0, "relative_high": 9.1}},
+    )["passed"]
+    assert _regression_evaluation(
+        {
+            "metric": "webrtc_video_latency",
+            "p95": 55.9,
+        },
+        {"webrtc_video_latency": {"p95": 41.4, "relative_high": 70.5}},
+    )["passed"]
+    assert not _regression_evaluation(
+        {
+            "metric": "mjpeg_video_latency",
+            "p95": 9.2,
+        },
+        {"mjpeg_video_latency": {"p95": 7.0, "relative_high": 9.1}},
     )["passed"]
 
 

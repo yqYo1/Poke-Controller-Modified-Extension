@@ -681,6 +681,8 @@ def _load_baseline(
 
     aggregated: dict[str, dict[str, Any]] = {}
     for metric in METRIC_ORDER:
+        relative_field = "p50" if metric == "ui_frame_rate" else "p95"
+        relative_values = [float(report[metric][relative_field]) for report in reports]
         aggregated[metric] = {
             "metric": metric,
             "unit": METRIC_UNITS[metric],
@@ -694,6 +696,8 @@ def _load_baseline(
             "maximum": nearest_rank(
                 [float(report[metric]["maximum"]) for report in reports], 0.5
             ),
+            "relative_high": max(relative_values),
+            "relative_low": min(relative_values),
         }
     return aggregated
 
@@ -731,7 +735,22 @@ def _regression_evaluation(
             "observed": observed,
             "passed": absolute["passed"],
         }
-    threshold = baseline_value * factor
+    if operator == ">=":
+        extreme_key = "relative_low"
+        threshold_rule = "min(median*factor, historical_low)"
+        baseline_extreme = _finite_number(
+            baseline_measurement.get(extreme_key, baseline_value),
+            f"baseline.{metric}.{extreme_key}",
+        )
+        threshold = min(baseline_value * factor, baseline_extreme)
+    else:
+        extreme_key = "relative_high"
+        threshold_rule = "max(median*factor, historical_high)"
+        baseline_extreme = _finite_number(
+            baseline_measurement.get(extreme_key, baseline_value),
+            f"baseline.{metric}.{extreme_key}",
+        )
+        threshold = max(baseline_value * factor, baseline_extreme)
     passed = observed >= threshold if operator == ">=" else observed <= threshold
     return {
         "kind": "relative",
@@ -739,6 +758,8 @@ def _regression_evaluation(
         "operator": operator,
         "factor": factor,
         "baseline": baseline_value,
+        "baseline_extreme": baseline_extreme,
+        "threshold_rule": threshold_rule,
         "threshold": threshold,
         "observed": observed,
         "passed": passed,
@@ -1066,7 +1087,7 @@ def run(args: argparse.Namespace) -> int:
             "path": args.baseline,
             "report_count": len(baseline_paths),
             "aggregation": (
-                "nearest-rank median"
+                "nearest-rank median with historical relative extremes"
                 if len(baseline_paths) > 1
                 else ("single report" if baseline_paths else None)
             ),
@@ -1141,7 +1162,11 @@ def run(args: argparse.Namespace) -> int:
             + (
                 "Baseline comparison was bootstrapped because no prior report was supplied."
                 if baseline is None
-                else f"Baseline regression thresholds used the nearest-rank median of {len(baseline_paths)} passing report(s)."
+                else (
+                    "Baseline regression thresholds used the nearest-rank median "
+                    f"and historical relative extremes of {len(baseline_paths)} "
+                    "passing report(s)."
+                )
             )
         ),
     }

@@ -334,9 +334,29 @@ def test_ci_control_paths_fail_closed_to_every_region(control_path: str) -> None
 
     assert classification.applicable == frozenset(REGIONS)
     assert classification.fail_closed is True
+    assert classification.performance_baseline is (
+        control_path in {"flake.lock", "flake.nix"}
+    )
     assert classification.reasons == {
         region.value: [control_path] for region in REGIONS
     }
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("web/src/app.ts", True),
+        ("scripts/performance/benchmark.py", True),
+        ("rust/pokecon/src/lib.rs", True),
+        (".github/workflows/normal-ci.yml", False),
+        ("tests/release/test_build_runtime.py", False),
+        ("rust/pokecon/registry/ci.json", False),
+    ],
+)
+def test_performance_baseline_only_tracks_product_inputs(
+    path: str, expected: bool
+) -> None:
+    assert classify_paths([path]).performance_baseline is expected
 
 
 def test_cli_emits_versioned_json_and_github_outputs(tmp_path: Path) -> None:
@@ -387,7 +407,7 @@ def test_cli_emits_versioned_json_and_github_outputs(tmp_path: Path) -> None:
         "fail_closed": False,
     }
     output_lines = github_output.read_text(encoding="utf-8").splitlines()
-    assert output_lines[:-1] == [
+    assert output_lines[:-2] == [
         "docs=true",
         "contracts=false",
         "rust=false",
@@ -397,10 +417,11 @@ def test_cli_emits_versioned_json_and_github_outputs(tmp_path: Path) -> None:
         "product=true",
         "remote_flake=false",
     ]
-    assert output_lines[-1].startswith("regions_json=")
+    assert output_lines[-2].startswith("regions_json=")
     assert (
-        json.loads(output_lines[-1].removeprefix("regions_json=")) == payload["regions"]
+        json.loads(output_lines[-2].removeprefix("regions_json=")) == payload["regions"]
     )
+    assert output_lines[-1] == "performance_baseline=true"
 
 
 @pytest.mark.parametrize(

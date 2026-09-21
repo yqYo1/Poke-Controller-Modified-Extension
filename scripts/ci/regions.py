@@ -208,6 +208,11 @@ class Classification:
         reasons = dict(self.reason_paths)
         return {region.value: list(reasons[region]) for region in REGIONS}
 
+    @property
+    def performance_baseline(self) -> bool:
+        """Return whether relative browser-performance comparison is applicable."""
+        return any(is_performance_baseline_path(path) for path in self.changed_paths)
+
     def as_json_object(self) -> dict[str, object]:
         """Return the versioned stdout representation."""
         return {
@@ -327,6 +332,15 @@ def regions_for_path(path: str) -> frozenset[Region]:
         regions.add(Region.REMOTE_FLAKE)
 
     return frozenset(regions)
+
+
+def is_performance_baseline_path(path: str) -> bool:
+    """Return whether a changed path can alter the measured product fixture."""
+    if path in PRODUCT_ROOT_PATHS:
+        return True
+    if is_ci_control_path(path):
+        return False
+    return Region.PRODUCT in regions_for_path(path)
 
 
 def classify_paths(changed_paths: Iterable[str]) -> Classification:
@@ -487,6 +501,7 @@ def write_github_output(path: Path, classification: Classification) -> None:
             for region in REGIONS
         ),
         f"regions_json={regions_json}",
+        f"performance_baseline={str(classification.performance_baseline).lower()}",
     ]
     try:
         with path.open("a", encoding="utf-8", newline="\n") as output:

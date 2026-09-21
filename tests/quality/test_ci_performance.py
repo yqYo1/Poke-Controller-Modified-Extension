@@ -31,6 +31,11 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}" in job
     assert "CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}" in job
     assert "CURRENT_FIXTURE_ID: browser-loopback-v2" in job
+    assert "PERFORMANCE_BASELINE: ${{ needs.plan.outputs.performance_baseline }}" in job
+    assert (
+        "No product/performance input changed; skipping relative performance baseline comparison"
+        in job
+    )
     assert 'runs_json="$baseline_root/runs.json"' in job
     assert '--slurpfile runs "$runs_json"' in job
     assert "($runs[0].workflow_runs" in job

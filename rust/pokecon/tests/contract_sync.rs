@@ -823,9 +823,11 @@ fn assert_ci_classification_contract(ci: &Value) {
         classification["github_outputs"]["structured"],
         "regions_json"
     );
+    let mut expected_scalars = string_set(&classification["region_names"]);
+    expected_scalars.insert("performance_baseline");
     assert_eq!(
         string_set(&classification["github_outputs"]["scalars"]),
-        string_set(&classification["region_names"])
+        expected_scalars
     );
     assert_eq!(
         classification["github_outputs"]["scalar_values"],
@@ -836,6 +838,7 @@ fn assert_ci_classification_contract(ci: &Value) {
             .contains("f\"{region.value}={str(region in classification.applicable).lower()}\"")
     );
     assert!(CI_REGIONS.contains("f\"regions_json={regions_json}\""));
+    assert!(CI_REGIONS.contains("f\"performance_baseline="));
 
     assert_ci_fail_closed_classification(classification);
     assert_ci_compatibility_classification(classification);

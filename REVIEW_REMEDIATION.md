@@ -186,6 +186,8 @@
 - 追加のread-only調査で、既に修正済みのproduct-smoke直列実行とevent／branch／PR未限定の指摘は現行ソースに残っていないことを確認した。一方、remote flake smokeの外側`--refresh`は同一SHA固定検証に不要な強制再取得だったため削除し、p95履歴は現行revisionを除外したうえで同一head SHAごとに最新runを1件だけ採用するよう変更した。閾値720秒、nearest-rank、10サンプル、fail-closed条件は維持し、remote smokeの`--option download-attempts 10`も維持した。
 - `d60cb30`のpush由来Normal CIでは、上記p95変更の初版にjqの配列化漏れがあり、`Cannot index number with string "head_sha"`で履歴収集が停止した。`.workflow_runs | map(...) | sort/group`へ修正し、同じobject/array境界を検出するquality契約を追加した。Rust／product／remote等の実jobはsuccessで、failureはこのp95収集stepだけだった。
 - `35537270200`のPackage CIでは、staged payload inventoryは2586ファイルで一致したが、`pokecon-worker.exe`だけが158 bytes異なり、`Verify Windows NSIS reproducibility`がfailした。両runnerのRust／LLVM／MSVC identityは一致し、両方が`Swatinem/rust-cache`でcompiled `target/`をfull restoreしていたため、独立再現性buildの外部target再利用を止める`cache-targets: false`をPackage／ReleaseのWindows jobへ追加した。閾値・artifact比較・failure判定は変更していない。
+- PR run `35541153768`では、同一SHAのpush runがsuccessしている一方、`Browser primitive performance smoke`だけがMJPEG `8.5 ms`（baseline `7.0 ms`、許容`7.7 ms`）とWebRTC `58.6 ms`（baseline `41.4 ms`、許容`45.54 ms`）でrelative regressionとなった。絶対閾値は通過し、過去baselineの同一build identityでもWebRTC p95は`34.4–70.5 ms`、MJPEG p95は`4.9–9.1 ms`とrunner測定分散が確認された。部分job rerunは性能job自体successだったが、timing artifact不足でrequired aggregateが失敗し、全job rerunでも同じ相対gateが再発したため、無根拠なthreshold変更・failure無視は採用していない。
+- CI制御・release test・CI registryだけの変更では、既存のfail-closedな全region実行と絶対性能閾値を維持しつつ、製品／performance入力の変更有無を別scalar `performance_baseline`で伝えるようにした。製品入力を変更しないrunではrelative baselineを比較せず、測定分散を製品回帰として誤判定しない。`regions_json`の8-region schema、relative threshold、absolute threshold、artifact保存は変更していない。focused quality 71 passed、`nix run .#contract-check`、actionlint、format、diff-checkが成功。
 
 ## 5. 完了判定
 

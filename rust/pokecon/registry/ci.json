@@ -128,7 +128,8 @@
         "routing",
         "web",
         "product",
-        "remote_flake"
+        "remote_flake",
+        "performance_baseline"
       ],
       "scalar_values": [
         "false",

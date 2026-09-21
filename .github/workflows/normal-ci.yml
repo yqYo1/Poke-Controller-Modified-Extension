@@ -36,6 +36,7 @@ jobs:
       product: ${{ steps.regions.outputs.product }}
       remote_flake: ${{ steps.regions.outputs.remote_flake }}
       regions_json: ${{ steps.regions.outputs.regions_json }}
+      performance_baseline: ${{ steps.regions.outputs.performance_baseline }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -346,8 +347,13 @@ jobs:
           CURRENT_BRANCH: ${{ github.head_ref || github.ref_name }}
           CURRENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           CURRENT_FIXTURE_ID: browser-loopback-v2
+          PERFORMANCE_BASELINE: ${{ needs.plan.outputs.performance_baseline }}
         run: |
           set -euo pipefail
+          if [ "$PERFORMANCE_BASELINE" != "true" ]; then
+            echo "No product/performance input changed; skipping relative performance baseline comparison"
+            exit 0
+          fi
           baseline_root="$RUNNER_TEMP/pokecon-performance-baseline"
           selected_dir="$baseline_root/selected"
           mkdir -p "$selected_dir"

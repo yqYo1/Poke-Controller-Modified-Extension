@@ -543,9 +543,8 @@ impl RestBackend for ApplicationBackend {
         let _gate = self.mutation_gate.lock().await;
         let before = self.serial.is_connected().await;
         match request {
-            SerialControlRequest::Connect {} if before => {}
             SerialControlRequest::Connect {} => {
-                self.serial.reconnect().await.map_err(serial_failure)?;
+                self.serial.connect().await.map_err(serial_failure)?;
             }
             SerialControlRequest::Disconnect {} => {
                 self.serial.disconnect().await.map_err(serial_failure)?;

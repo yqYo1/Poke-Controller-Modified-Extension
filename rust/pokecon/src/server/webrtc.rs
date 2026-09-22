@@ -1,5 +1,6 @@
 //! Native WebRTC peer, H.264 media pipeline, and isolated `DataChannels`.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
@@ -699,13 +700,13 @@ pub(crate) async fn create_peer_connection(
     let api_builder = APIBuilder::new()
         .with_media_engine(media_engine)
         .with_interceptor_registry(registry);
+    let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
+    setting_engine.set_ip_filter(Box::new(ice_ip_is_supported));
     #[cfg(test)]
-    let api_builder = {
-        let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();
-        setting_engine.set_include_loopback_candidate(true);
-        setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback()));
-        api_builder.with_setting_engine(setting_engine)
-    };
+    setting_engine.set_include_loopback_candidate(true);
+    #[cfg(test)]
+    setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback() && ice_ip_is_supported(ip)));
+    let api_builder = api_builder.with_setting_engine(setting_engine);
     let api = api_builder.build();
     let ice_servers = if config.stun_server.is_empty() {
         Vec::new()
@@ -721,6 +722,10 @@ pub(crate) async fn create_peer_connection(
     })
     .await
     .map_err(|_| WebRtcError::PeerCreationFailed)
+}
+
+fn ice_ip_is_supported(ip: IpAddr) -> bool {
+    !matches!(ip, IpAddr::V6(ip) if ip.is_unicast_link_local())
 }
 
 fn register_preferred_video_codecs(media_engine: &mut MediaEngine) -> Result<(), WebRtcError> {
@@ -1240,6 +1245,17 @@ mod tests {
             WebRtcPeerConfig::new("", 1, 0, 1),
             Err(WebRtcError::InvalidConfig)
         );
+    }
+
+    #[test]
+    fn ice_ip_filter_rejects_unscoped_ipv6_link_local_addresses() {
+        assert!(!ice_ip_is_supported(
+            "fe80::2e8d:bf9e:168a:4949".parse().unwrap()
+        ));
+        assert!(ice_ip_is_supported(
+            "fd42:7502:27a:7793::1".parse().unwrap()
+        ));
+        assert!(ice_ip_is_supported("192.0.2.1".parse().unwrap()));
     }
 
     #[tokio::test]

@@ -147,6 +147,28 @@ impl SerialManager {
         }
     }
 
+    /// Opens the currently configured selector, or leaves an existing
+    /// connection unchanged. This is the idempotent operation used by the
+    /// explicit UI `connect` action; it must not create a second receive
+    /// monitor for an already-connected port.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SerialError::Disconnected`] when no selector is configured,
+    /// or the normal transactional replacement error when opening fails.
+    pub async fn connect(&self) -> Result<(), SerialError> {
+        let _control = self.inner.control_gate.lock().await;
+        let config = self
+            .inner
+            .state
+            .lock()
+            .await
+            .config
+            .clone()
+            .ok_or(SerialError::Disconnected)?;
+        self.apply_optional_config_locked(Some(config)).await
+    }
+
     /// Applies port, baud, and format atomically. The old port is neutralized
     /// and closed first; failed replacement reopens the exact previous config.
     ///
@@ -685,6 +707,52 @@ mod tests {
         manager.disconnect().await.unwrap();
         events.changed().await.unwrap();
         assert!(!*events.borrow());
+    }
+
+    #[tokio::test]
+    async fn connect_is_idempotent_for_an_existing_connection() {
+        let backend = VirtualSerialBackend::default();
+        backend
+            .push_plan(VirtualOpenPlan::Success(VirtualSerialEndpoint::new()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+
+        manager.apply_config(config("virtual")).await.unwrap();
+        manager.connect().await.unwrap();
+
+        assert!(manager.is_connected().await);
+        assert_eq!(
+            backend.opened_selectors().await,
+            vec![("virtual".to_owned(), 9600)]
+        );
+    }
+
+    #[tokio::test]
+    async fn update_config_closes_old_endpoint_before_installing_new_one() {
+        let backend = VirtualSerialBackend::default();
+        let old = VirtualSerialEndpoint::new();
+        let new = VirtualSerialEndpoint::new();
+        backend
+            .push_plan(VirtualOpenPlan::Success(old.clone()))
+            .await;
+        backend
+            .push_plan(VirtualOpenPlan::Success(new.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend.clone()));
+
+        manager.apply_config(config("old")).await.unwrap();
+        manager.update_config(config("new")).await.unwrap();
+
+        assert!(old.is_closed());
+        assert!(manager.is_connected().await);
+        assert_eq!(
+            manager.current_config().await.unwrap().selector.as_str(),
+            "new"
+        );
+        assert_eq!(
+            backend.opened_selectors().await,
+            vec![("old".to_owned(), 9600), ("new".to_owned(), 9600)]
+        );
     }
 
     #[tokio::test]

@@ -151,6 +151,8 @@ POKECON_PYTHON_SCRIPT_PACKAGES_LIST='[{"name":"numpy","version":">=2.2,<3"}]' po
 
 `runtime_immediate`のhardware変更は、旧resourceを閉じて新resourceを開くtransactionを含む場合があります。
 
+serialの接続中に別の`serial.port`を保存すると、旧serialを中立化してcloseした後に新selectorを開きます。UIの`Connect`は接続中も実行でき、現在の設定で安全に再接続または接続先の切り替えを行います。`Disconnect`は明示的に接続だけを切断したい場合に使用します。
+
 新resourceを開けない場合は同じ旧selectorと旧設定への復帰を試み、別deviceを暗黙選択しません。
 
 `runtime_deferred`の現在値と保存値は、対応するtriggerが発生するまで異なる場合があります。

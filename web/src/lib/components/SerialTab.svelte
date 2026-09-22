@@ -175,7 +175,7 @@
     </label>
 
     <div class="flex gap-2 sm:col-span-2">
-      <button type="button" class="rounded-lg bg-blue/15 px-4 py-2 text-sm font-medium text-blue disabled:opacity-40" disabled={connected || effectivePort.length === 0} onclick={() => void control('connect')}>Connect</button>
+      <button type="button" class="rounded-lg bg-blue/15 px-4 py-2 text-sm font-medium text-blue disabled:opacity-40" disabled={effectivePort.length === 0} onclick={() => void control('connect')}>Connect</button>
       <button type="button" class="rounded-lg bg-red/10 px-4 py-2 text-sm font-medium text-red disabled:opacity-40" disabled={!connected} onclick={() => void control('disconnect')}>Disconnect</button>
     </div>
   </fieldset>

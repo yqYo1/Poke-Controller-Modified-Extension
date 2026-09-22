@@ -56,6 +56,25 @@ describe('SerialTab', () => {
     });
   });
 
+  it('keeps Connect available for switching while already connected', async () => {
+    const { runtime, view: initialView } = runtimeView();
+    const view = {
+      ...initialView,
+      state: stateSnapshot('1', { serial_connected: true, serial_port: 'COM3' })
+    };
+    const actions = serialActions();
+    render(SerialTab, { actions, autoLoad: false, runtime, view });
+
+    const connect = screen.getByRole('button', { name: 'Connect' });
+    expect(connect).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toHaveProperty('disabled', false);
+
+    await fireEvent.click(connect);
+    await waitFor(() => {
+      expect(actions.controlSerial).toHaveBeenCalledWith({ action: 'connect' });
+    });
+  });
+
   it('atomically selects 3DS format and its recommended baud rate', async () => {
     const { runtime, view } = runtimeView();
     const actions = serialActions();

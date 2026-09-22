@@ -190,7 +190,16 @@
 - CI制御・release test・CI registryだけの変更では、既存のfail-closedな全region実行と絶対性能閾値を維持しつつ、製品／performance入力の変更有無を別scalar `performance_baseline`で伝えるようにした。製品入力を変更しないrunではrelative baselineを比較せず、測定分散を製品回帰として誤判定しない。`regions_json`の8-region schema、relative threshold、absolute threshold、artifact保存は変更していない。focused quality 71 passed、`nix run .#contract-check`、actionlint、format、diff-checkが成功。
 - 委任調査とsource-level再検証で、製品入力を含むrunにもbaseline中央値だけでは履歴分散の内側を誤ってfailureにする問題が残ると確定した。`scripts/performance/benchmark.py`はlatencyを`max(中央値×1.10, 履歴p95最大値)`、FPSを`min(中央値×0.95, 履歴p50最小値)`で評価し、`performance-report.json`へ`baseline_extreme`と`threshold_rule`を保存するよう変更した。absolute threshold、bootstrap、malformed baselineのfail-closedは維持。`tests/performance/test_benchmark.py`を分散ケースへ拡張し、focused suiteは73 passed、contract-check、actionlint、format、diff-checkが成功。
 
-## 5. 完了判定
+## 5. 2026-09-22 シリアル切り替えとICE警告
+
+- ユーザー報告の`could not listen udp fe80::…: 無効な引数です (os error 22)`は、`webrtc-ice`がIPv6 link-local addressをinterface scopeなしの`SocketAddr`としてbindしようとして発生する警告であり、シリアルsocketのbind失敗ではない。`webrtc-ice-0.14.0/src/agent/agent_gather.rs`の候補収集処理と、現行ホストの`fe80::/64` interface addressをsource／system stateで照合した。
+- `rust/pokecon/src/server/webrtc.rs`でICE候補からunscoped IPv6 link-local addressを除外し、該当addressをbindしない契約テストを追加した。通常のIPv6 ULAとIPv4候補は保持する。
+- `rust/pokecon/src/device/serial/manager.rs`へ、現在のselectorを安全に開くidempotentな`connect`操作を追加した。既存接続時は二重open・二重receive monitorを作らず、設定変更時の既存`update_config` transactionは旧endpointを中立化・closeしてから新endpointをopenする。
+- `rust/pokecon/src/application_backend.rs`の接続中`connect`無操作分岐を削除し、常にserial managerのtransactionへ委譲した。`web/src/lib/components/SerialTab.svelte`では接続中も`Connect`を有効にし、明示的な`Disconnect`だけが切断操作となるUIへ変更した。
+- UI回帰テスト、serial managerのidempotent connect／旧endpoint close→新endpoint install、ICE link-local filterのテストを追加した。
+- 検証: `nix run .#cargo -- test --locked -p pokecon --lib` は443 passed／0 failed、`nix run .#web-check`はsvelte-check 0 errors／0 warnings、Web 26 files／106 passed、production build success。`nix run .#clippy`、`nix run .#contract-check`、`nix fmt -- --ci`、`git diff --check`も成功した。実機serial hardwareは未使用。
+
+## 6. 完了判定
 
 1. findingごとの実装または証拠付き非該当判定をCURRENT_IMPLEMENTATION_REVIEW.mdへ反映する。
 2. 対応箇所のfocused testをNix経由で実行し、必要なadversarial/no-network testを追加する。

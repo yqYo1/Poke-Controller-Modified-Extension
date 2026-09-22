@@ -365,14 +365,27 @@ def test_native_rtc_tests_use_test_only_loopback_candidates() -> None:
         "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
     )[1].split("          contractSyncCheck =", maxsplit=1)[0]
 
-    for loopback_setting in (
-        "#[cfg(test)]\n    let api_builder = {",
+    assert re.search(
+        r"#\[cfg\(test\)\]\s+setting_engine\.set_include_loopback_candidate\(true\);",
+        webrtc,
+    )
+    assert re.search(
+        r"#\[cfg\(test\)\]\s+setting_engine\.set_ip_filter\(Box::new\(\|ip\| ip\.is_loopback\(\) && ice_ip_is_supported\(ip\)\)\);",
+        webrtc,
+    )
+    for production_setting in (
         "let mut setting_engine = webrtc::api::setting_engine::SettingEngine::default();",
-        "setting_engine.set_include_loopback_candidate(true);",
-        "setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback()));",
+        "setting_engine.set_ip_filter(Box::new(ice_ip_is_supported));",
         "api_builder.with_setting_engine(setting_engine)",
     ):
-        assert webrtc.count(loopback_setting) == 1
+        assert webrtc.count(production_setting) == 1
+    assert webrtc.count("setting_engine.set_include_loopback_candidate(true);") == 1
+    assert (
+        webrtc.count(
+            "setting_engine.set_ip_filter(Box::new(|ip| ip.is_loopback() && ice_ip_is_supported(ip)));"
+        )
+        == 1
+    )
     assert webrtc.count("create_peer_connection(") == 3
     assert websocket.count("create_peer_connection(") == 1
     assert "acquire_loopback_test_lock" not in webrtc

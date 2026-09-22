@@ -29,6 +29,7 @@
 
 - [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を、clean worktreeと4 systemの証跡で再受入する。
 - [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。browser primitive smokeとそのblocking jobは実装済みだが、production主経路のCI証跡は未完了。実機latency／throughput計測環境は作成しない。
+- [ ] GPUIフロントエンド段階導入を、[GPUI_FRONTEND_PLAN.md](docs/GPUI_FRONTEND_PLAN.md)のPoC gateに従って進める。現行Svelte/Tauri/Web経路は採否判断まで維持する。
 - [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
 
 ### 2026-09-14 要件別監査の結果

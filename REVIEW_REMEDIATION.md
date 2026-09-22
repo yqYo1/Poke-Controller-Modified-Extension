@@ -200,6 +200,7 @@
 - 追加のPR Normal run `35707737079`／`35709829066`では、Python contract failureをsource contract同期で修正した。一方Browser performance smokeはabsolute thresholdを通過したままrelative baselineだけがfailureとなった。`scripts/performance/benchmark.py`はproduction Rust/Web UI/serialを呼び出さない独立loopback fixtureであることをsource call graphとartifactで確認し、`scripts/ci/regions.py`の`performance_baseline`をfixture本体（`scripts/performance/`）とruntime入力（`flake.nix`／`flake.lock`）だけへ限定した。Rust/Web変更ではabsolute smokeを維持し、relative比較を行わない。threshold引き上げやfailure無視ではない。
 - 上記分類修正のfocused qualityは62 passed、Python全体は520 passed／2 deselected。`nix fmt -- --ci`と`git diff --check`も成功した。
 - 検証: `nix run .#cargo -- test --locked -p pokecon --lib` は443 passed／0 failed、`nix run .#web-check`はsvelte-check 0 errors／0 warnings、Web 26 files／106 passed、production build success。`nix run .#clippy`、`nix run .#contract-check`、`nix fmt -- --ci`、`git diff --check`も成功した。実機serial hardwareは未使用。
+- 認証付きGitHub APIでPR Normal run `35711808165`のperformance artifactを再取得した。絶対thresholdは全5 metricでpassしたが、直近5件baselineのrelative gateだけがWebRTC p95 `57.6ms`（履歴上限`44.2ms`）とMJPEG p95 `8.8ms`（履歴上限`7.1ms`）でfailureとなった。同じNix fixtureを現行commitで実行するとWebRTC `57.0ms`／MJPEG `11.8ms`、変更直前`73844b1`のremote flakeでもWebRTC `55.9ms`／MJPEG `13.5ms`となり、serial／ICE変更による回帰とは確定できず、runner変動を再現した。relative比較を10件未満で有効化していたことが原因のため、workflowのbaseline minimumを10件へ変更し、10件未満はabsolute thresholdだけを評価するbootstrapへ改める。threshold値自体は変更しない。
 
 ## 6. 完了判定
 

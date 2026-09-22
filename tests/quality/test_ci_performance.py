@@ -46,7 +46,7 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "$current_pr_number | tonumber" in job
     assert "and .fixture_id == $current_fixture_id" in job
     assert "group_by(.workflow_run.head_sha)" in job
-    assert "baseline_limit=5" in job
+    assert "baseline_limit=10" in job
     assert "selected_dir/$(printf '%02d' \"$selected_count\").json" in job
     assert 'if [ "$selected_count" -ge "$baseline_limit" ]' in job
     assert "until $baseline_limit are available" in job

@@ -366,7 +366,9 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
             > "$runs_json"
           selected_count=0
-          baseline_limit=5
+          # Ten completed reports are required before relative comparison is
+          # enabled; fewer reports are bootstrap evidence, not a regression gate.
+          baseline_limit=10
           while IFS= read -r artifact_id; do
             [ -n "$artifact_id" ] || continue
             zip_path="$baseline_root/$artifact_id.zip"

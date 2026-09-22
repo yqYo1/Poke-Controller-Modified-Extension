@@ -33,7 +33,7 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "CURRENT_FIXTURE_ID: browser-loopback-v2" in job
     assert "PERFORMANCE_BASELINE: ${{ needs.plan.outputs.performance_baseline }}" in job
     assert (
-        "No product/performance input changed; skipping relative performance baseline comparison"
+        "No browser performance fixture or runner input changed; skipping relative performance baseline comparison"
         in job
     )
     assert 'runs_json="$baseline_root/runs.json"' in job

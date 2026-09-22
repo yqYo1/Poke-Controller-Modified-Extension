@@ -345,15 +345,17 @@ def test_ci_control_paths_fail_closed_to_every_region(control_path: str) -> None
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("web/src/app.ts", True),
+        ("web/src/app.ts", False),
         ("scripts/performance/benchmark.py", True),
-        ("rust/pokecon/src/lib.rs", True),
+        ("rust/pokecon/src/lib.rs", False),
+        ("rust/pokecon/src/server/serial.rs", False),
         (".github/workflows/normal-ci.yml", False),
+        ("flake.nix", True),
         ("tests/release/test_build_runtime.py", False),
         ("rust/pokecon/registry/ci.json", False),
     ],
 )
-def test_performance_baseline_only_tracks_product_inputs(
+def test_performance_baseline_only_tracks_fixture_and_runner_inputs(
     path: str, expected: bool
 ) -> None:
     assert classify_paths([path]).performance_baseline is expected
@@ -421,7 +423,7 @@ def test_cli_emits_versioned_json_and_github_outputs(tmp_path: Path) -> None:
     assert (
         json.loads(output_lines[-2].removeprefix("regions_json=")) == payload["regions"]
     )
-    assert output_lines[-1] == "performance_baseline=true"
+    assert output_lines[-1] == "performance_baseline=false"
 
 
 @pytest.mark.parametrize(

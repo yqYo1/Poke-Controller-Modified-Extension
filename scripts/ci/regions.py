@@ -173,6 +173,8 @@ PRODUCT_PREFIXES: Final = (
     "tests/fixtures/cli-help/",
     "web/",
 )
+PERFORMANCE_BASELINE_PATHS: Final = frozenset({"flake.lock", "flake.nix"})
+PERFORMANCE_BASELINE_PREFIXES: Final = ("scripts/performance/",)
 REMOTE_FLAKE_PATHS: Final = frozenset(
     {
         "Cargo.lock",
@@ -335,12 +337,12 @@ def regions_for_path(path: str) -> frozenset[Region]:
 
 
 def is_performance_baseline_path(path: str) -> bool:
-    """Return whether a changed path can alter the measured product fixture."""
-    if path in PRODUCT_ROOT_PATHS:
+    """Return whether a changed path can alter the measured browser fixture."""
+    if path in PERFORMANCE_BASELINE_PATHS:
         return True
     if is_ci_control_path(path):
         return False
-    return Region.PRODUCT in regions_for_path(path)
+    return _under(path, PERFORMANCE_BASELINE_PREFIXES)
 
 
 def classify_paths(changed_paths: Iterable[str]) -> Classification:

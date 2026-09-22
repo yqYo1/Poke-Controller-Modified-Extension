@@ -197,6 +197,8 @@
 - `rust/pokecon/src/device/serial/manager.rs`へ、現在のselectorを安全に開くidempotentな`connect`操作を追加した。既存接続時は二重open・二重receive monitorを作らず、設定変更時の既存`update_config` transactionは旧endpointを中立化・closeしてから新endpointをopenする。
 - `rust/pokecon/src/application_backend.rs`の接続中`connect`無操作分岐を削除し、常にserial managerのtransactionへ委譲した。`web/src/lib/components/SerialTab.svelte`では接続中も`Connect`を有効にし、明示的な`Disconnect`だけが切断操作となるUIへ変更した。
 - UI回帰テスト、serial managerのidempotent connect／旧endpoint close→新endpoint install、ICE link-local filterのテストを追加した。
+- 追加のPR Normal run `35707737079`／`35709829066`では、Python contract failureをsource contract同期で修正した。一方Browser performance smokeはabsolute thresholdを通過したままrelative baselineだけがfailureとなった。`scripts/performance/benchmark.py`はproduction Rust/Web UI/serialを呼び出さない独立loopback fixtureであることをsource call graphとartifactで確認し、`scripts/ci/regions.py`の`performance_baseline`をfixture本体（`scripts/performance/`）とruntime入力（`flake.nix`／`flake.lock`）だけへ限定した。Rust/Web変更ではabsolute smokeを維持し、relative比較を行わない。threshold引き上げやfailure無視ではない。
+- 上記分類修正のfocused qualityは62 passed、Python全体は518 passed／2 deselected。`nix fmt -- --ci`と`git diff --check`も成功した。
 - 検証: `nix run .#cargo -- test --locked -p pokecon --lib` は443 passed／0 failed、`nix run .#web-check`はsvelte-check 0 errors／0 warnings、Web 26 files／106 passed、production build success。`nix run .#clippy`、`nix run .#contract-check`、`nix fmt -- --ci`、`git diff --check`も成功した。実機serial hardwareは未使用。
 
 ## 6. 完了判定

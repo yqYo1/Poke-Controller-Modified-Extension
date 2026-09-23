@@ -14,7 +14,19 @@ use regex::Regex;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-static SPECIFICATION: LazyLock<String> = LazyLock::new(|| repository_text("SPECIFICATION.md"));
+// The root SPECIFICATION.md is only an index; contract checks search all three normative owners.
+static SPECIFICATION: LazyLock<String> = LazyLock::new(|| {
+    let mut documents = String::new();
+    for path in [
+        "docs/SPECIFICATION_BACKEND.md",
+        "docs/SPECIFICATION_FRONTEND.md",
+        "docs/SPECIFICATION_INTEGRATION.md",
+    ] {
+        documents.push_str(&repository_text(path));
+        documents.push('\n');
+    }
+    documents
+});
 static ACCEPTANCE_SCHEMA: LazyLock<String> =
     LazyLock::new(|| repository_text("rust/pokecon/registry/acceptance-record.schema.json"));
 static ACCEPTANCE_PROCEDURE: LazyLock<String> =
@@ -1468,7 +1480,7 @@ fn expand_projection_cell(cell: &str) -> Vec<String> {
 }
 
 fn specification_environment_names() -> BTreeSet<&'static str> {
-    between(&SPECIFICATION, "## 12. 環境変数", "## 13.")
+    between(&SPECIFICATION, "## 12. [必須要件] 環境変数", "## 13.")
         .lines()
         .filter(|line| line.starts_with("| `POKECON_") && !line.contains("POKECON_UV_*"))
         .map(|line| {
@@ -1482,7 +1494,7 @@ fn specification_environment_names() -> BTreeSet<&'static str> {
 }
 
 fn specification_rest_endpoints() -> BTreeSet<String> {
-    between(&SPECIFICATION, "### 7.4 HTTP REST API", "### 7.5")
+    between(&SPECIFICATION, "## 7.4 [必須要件] HTTP REST API", "## 7.5")
         .lines()
         .filter_map(|line| {
             let columns = split_markdown_row(line);
@@ -1493,7 +1505,7 @@ fn specification_rest_endpoints() -> BTreeSet<String> {
 }
 
 fn specification_websocket_variants() -> BTreeSet<String> {
-    let section = between(&SPECIFICATION, "#### 7.3.2", "### 7.8");
+    let section = between(&SPECIFICATION, "### 7.3.2", "## 8.");
     let union_table = between(
         section,
         "- **イベント／メッセージunion**:",
@@ -1530,7 +1542,7 @@ fn specification_builtin_events() -> BTreeSet<(String, String)> {
 }
 
 fn specification_compatibility_baselines() -> BTreeSet<(String, String)> {
-    between(&SPECIFICATION, "#### 4.6.1", "#### 4.6.2")
+    between(&SPECIFICATION, "### 4.6.1", "### 4.6.2")
         .lines()
         .filter_map(|line| {
             let columns = split_markdown_row(line);

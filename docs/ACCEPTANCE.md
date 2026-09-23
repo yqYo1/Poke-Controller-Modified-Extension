@@ -1,6 +1,6 @@
 # 外部環境で受入判定を記録する
 
-この文書は、release candidateを実機、実browser、clean installationで判定するrelease担当者と本体開発者向けです。性能はCI性能gateで判定し、この文書の外部platform受入には含めません。
+この文書は、release candidateを実機、実browser、clean installationで判定するrelease担当者と本体開発者向けです。CI性能gateはbrowser primitiveの回帰smokeだけを判定します。production latencyとGPUI native UIの性能gateは製品定義書およびGPUI導入計画に従う別検証であり、browser smokeの成功で代替しません。
 
 一般利用者の動作確認手順ではありません。
 
@@ -277,11 +277,21 @@ process ID、最初のshutdown reason、終了所要時間、残ったchild proc
 
 windowが消えただけでprocess終了と判定しません。
 
+### GPUI native frontend（未実装・未受入）
+
+GPUI native UIは製品目標であり、現時点では起動selectorも受入schema capabilityも未実装です。Tauri desktop lifecycleの成功recordをGPUI受入へ転用しません。
+
+GPUIの実装を開始する変更では、同じ変更で`gpui_native_frontend` capabilityと検証stepを受入schema、registry、contract testへ追加します。それ以前にこのcapabilityのrecordを作成したり、受入成功を主張したりしません。
+
+実装後は、Linux／Windowsの`nix run .#gpui`から同一backendを選択できること、現行UIと同じ製品操作を実行できること、IME・CJK入力・focus・keyboard・accessibility、camera描画と該当経路の応答性、screenshot保存とcancel/non-overwrite、serial設定反映、close/tray/single-instance/shutdownを個別に検証します。
+
+GPUI backend接続方式のPoCで選んだtransportを記録し、既存Origin・path制約、single backend owner、state revision、error、lifecycleを維持することを確認します。ブラウザー専用のWebRTC性能recordやTauriのwindow recordをGPUIの証拠に読み替えません。
+
 ## 統合負荷と長時間stress
 
 LinuxとWindowsのrelease buildでproduction topologyを最低60分継続します。
 
-1920×1080 camera、WebRTC browser、serial loopbackまたはMCU、Python command、動的Lua設定、操作中UIを同時に動かします。
+1920×1080 camera、WebRTC browser、serial loopbackまたはMCU、Python command、動的Lua設定、操作中のWeb/Tauri UI（GPUI nativeは実装後に別条件として追加）を同時に動かします。
 
 capabilityは`integrated_load_stress`です。
 

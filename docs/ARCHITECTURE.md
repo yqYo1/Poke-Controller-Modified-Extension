@@ -6,15 +6,17 @@ build手順とcheckの選び方は[本体開発ガイド](DEVELOPMENT.md)を参�
 
 利用者向けの操作説明、ユーザースクリプトAPI、周辺機器のwire protocolは、それぞれ専用文書を正本とします。
 
+本書は現在の実装構成を説明する文書であり、製品目標を定義するものではありません。製品の規範要件は[`SPECIFICATION.md`](../SPECIFICATION.md)を入口とする[backend](SPECIFICATION_BACKEND.md)、[frontend](SPECIFICATION_FRONTEND.md)、[integration](SPECIFICATION_INTEGRATION.md)の三定義書が正本です。現行UIはSvelte Web/Tauriです。native GPUI frontendは目標として定義されていますが未実装であり、以下の既存UI・transport記述をGPUI要件や技術選定の固定と解釈しないでください。GPUI backend接続方式もPoCで比較して決定します。
+
 ## 設計上の中心を理解する
 
-PokeConの中心原則は、hardware resourceと共有状態をRust processが所有し、Python、Lua、Web UIを制限された境界から接続することです。
+PokeConの中心原則は、hardware resourceと共有状態をRust processが所有し、Python、Lua、frontendを制限された境界から接続することです。
 
 Python workerはserial port、camera handle、server socketを直接所有しません。
 
 Luaを含む動的設定workerもdeviceを直接所有しません。
 
-Web clientはREST、WebSocket、WebRTCを介してRustの公開状態だけを操作します。
+現行Web clientはREST、WebSocket、WebRTCを介してRustの公開状態だけを操作します。native GPUI clientが利用する境界方式は別途PoCで選び、どのfrontendもRust backendのresourceやcanonical stateを直接所有しません。
 
 この所有関係により、script停止、profile切替、client切断、application終了時のcontroller neutral化をRust側で強制できます。
 
@@ -22,7 +24,9 @@ Web clientはREST、WebSocket、WebRTCを介してRustの公開状態だけを�
 
 通常実行では一つのRust application processがHTTP server、device、設定、lifecycleを所有します。
 
-desktop modeは同じbackendへTauri windowとtrayを加えます。
+現行desktop modeは同じbackendへTauri windowとtrayを加えます。
+
+native GPUI modeも同一backendを共有する目標ですが、selectorと実装は未完了です。
 
 web modeはdesktop windowを作らず、browserから同じbackendへ接続します。
 

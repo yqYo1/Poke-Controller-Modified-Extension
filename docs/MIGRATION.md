@@ -18,7 +18,7 @@ Rust版は旧repositoryや旧保存directoryを直接更新しません。
 
 この章でいう「旧設定file」は、リファクタリング前のPython/Tkinter prototypeが使用していた設定fileです。
 
-`SPECIFICATION.md`の設定file形式の非互換方針は、このprototypeから現在のRust版へ移行する境界に適用されます。
+[backend定義書 §4.4](SPECIFICATION_BACKEND.md)の「設定file形式の互換性は意図的に維持しない」という方針は、このprototypeから現在のRust版へ移行する境界に適用されます。
 
 prototypeの`auto_connect`、`script_dir`、旧`serial.*`、旧`camera.*`、旧`notify.*`などを、現行Rust版の設定keyとして自動移行することは保証しません。
 

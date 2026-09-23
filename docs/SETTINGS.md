@@ -36,7 +36,7 @@ TOML writerは未知のkeyとcommentを保持します。
 
 設定fileの互換性には、異なる二つの時間軸があります。
 
-`SPECIFICATION.md`の「設定file形式の互換性は意図的に維持しない」という方針は、リファクタリング前のPython/Tkinter prototypeから現在のRust版へ移行する境界に適用されます。
+`SPECIFICATION.md`の入口から参照する[backend定義書 §4.4](SPECIFICATION_BACKEND.md)の「設定file形式の互換性は意図的に維持しない」という方針は、リファクタリング前のPython/Tkinter prototypeから現在のRust版へ移行する境界に適用されます。
 
 prototypeの設定fileを現在のRust版へ自動移行することは保証しません。
 
@@ -284,8 +284,8 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `server.web_dir` | bundled `web/dist` | 空でないresource path | S | あり |
 | `server.port` | `8020` | 1から65535 | S | あり |
 | `server.bind_address` | `127.0.0.1` | wildcardではない数値IP | S | あり |
-| `ui.desktop.close_behavior` | `ask` | `ask`、`shutdown`、`keep_backend` | I | あり |
-| `ui.desktop.disable_compositing` | `false` | Desktopだけに効果がある | S | あり |
+| `ui.desktop.close_behavior` | `ask` | `ask`、`shutdown`、`keep_backend`。現行TauriとGPUI native desktopのlifecycle動作 | I | あり |
+| `ui.desktop.disable_compositing` | `false` | 現行Tauri WebViewだけに適用。GPUIには表示・適用しない | S | あり |
 
 `server.bind_address`はhostnameを受け付けず、`0.0.0.0`や`::`のwildcardも受け付けません。
 

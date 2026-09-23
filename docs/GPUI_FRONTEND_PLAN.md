@@ -23,7 +23,7 @@ Rustの構造移行は`PLAN.md`のPhase 2.1–2.7で完了と記録されてい�
 - 起動CLIは`rust/pokecon/src/entrypoint.rs`の`--ui web|desktop`で、現在の既定値は`web`。desktop固有のOrigin許可、スクリーンショット動作、window/tray lifecycle等はTauriに関係するcapabilityを持つため、GPUIへ機械的に引き継いではならない。
 - `docs/ARCHITECTURE.md`はWeb UIをREST、WebSocket、WebRTCを介した表示・操作clientとし、Rust側をhardware resourceと正準stateの所有者としている。HTTP/OpenAPI契約の正本は`rust/pokecon/src/server/api.rs`および`api/openapi.json`。TypeScript型は生成物である。
 - 現行Nix packageは`packages.default`/`packages.pokecon`で、`apps.default`はその`pokecon`実行ファイルをWeb modeの既定値で起動し、`apps.tauri`は同じ実行ファイルへ`--ui desktop`を渡す。既存のユーザー向け起動形は`nix run . -- --ui web`と`nix run .#tauri`。GPUIでもこの同一package/binaryの方針を守り、新しいbackend実行ファイル/packageへ分岐させない。
-- 現行`SPECIFICATION.md`にはSvelteKit/TailwindおよびTauri/Webの契約が記載されている。本計画はそのファイルを変更しない。PoC中に既存経路を残し、製品契約との最終整合はPoC結果をもとに別途決定する。GPUI経路を追加しただけで既存のUI要件が満たされたとは判定しない。
+- 規範要件は`SPECIFICATION.md`を入口とするbackend／frontend／integrationの三定義書に分割した。GPUI追加と既存UI維持は明示された製品目標であり、実装技術を固定していた旧UI条項は機能要件とbackend契約へ整理済み。未実装の要件を実装済みとして扱わず、PoC gateで証明する。
 
 ## 3. 目標の起動構成
 
@@ -39,7 +39,7 @@ nix run .#gpui              # 計画: GPUI native + 同じRust backend
 
 既存CLIは現在`--ui web|desktop`のみを受け付ける。追加する`--ui gpui`はCLIの既定値やWeb/Desktopの動作を変えず、新しい同一binary内の表示形態として追加する。`nix run .#gpui`は`apps.tauri`と同じ薄いwrapperとして、同じ`packages.pokecon/bin/pokecon`に`--ui gpui`を渡す。
 
-GPUI nativeも同一Rust process内で起動し、既存の`run_configured_controlled`が持つ単一backend lifecycleと`ProductionRuntime`を共有する。UI側は小さなtyped command/query/event境界を介してbackendの公開された操作面を使い、camera/serial/worker/controller内部serviceやnative handleを直接操作しない。不要なloopback HTTPや汎用trait階層を強制しない。実装上明確な利点がある場合は既存Axum API clientを比較候補にできるが、state/resourceの二重所有を作らない。Browser/WASM frontendは既存の公開REST/WS/WebRTC契約を使い、wire schemaはOpenAPI正本から生成する。
+GPUI nativeも同一Rust process内で起動し、既存の`run_configured_controlled`が持つ単一backend lifecycleと`ProductionRuntime`を共有する。backend接続方式は小さなtyped in-process boundaryと既存Axum API clientをPoCで比較し、latency、failure handling、Origin/path制約、型安全性から選択する。どちらもcamera/serial/worker/controller内部serviceやnative handleを直接操作せず、正準state/resourceを二重所有しない。不要なloopback HTTPや汎用trait階層も強制しない。Browser/WASM frontendは既存の公開REST/WS/WebRTC契約を使い、wire schemaはOpenAPI正本から生成する。
 
 ```text
 nix run .               nix run .#tauri             nix run .#gpui
@@ -61,7 +61,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 
 1. **Backend**はhardware、worker、settings、profile、controller state、media producer、server、graceful shutdownの正準所有者であり続ける。既存の主要な制御・通信契約を維持する。
 2. **Frontend**は表示、入力、画面内navigation、ユーザー操作を担当し、独自の正準device stateや二重のlifecycleを作らない。サーバーsnapshotとeventから表示状態を復元できる。
-3. **UI integration**は同じRust package内の小さなprivate module/adapterから開始する。native GPUI shellとWeb/Tauri shellはいずれも既存のbackend supervisorと`run_configured_controlled`へ接続し、唯一の`ProductionRuntime`、router、shutdown coordinatorを共有する。必要が明らかになる前に別crate、汎用trait hierarchy、public reusable APIを作らない。UIコードが`application_backend`やhardware resource serviceを直接操作する設計は避ける。
+3. **UI integration**は既存Axum API clientと同じRust package内の小さなtyped private adapterをPoCで比較する。native GPUI shellとWeb/Tauri shellはいずれも既存のbackend supervisorへ接続し、唯一の`ProductionRuntime`、router、shutdown coordinator、resource ownerを共有する。必要が明らかになる前に別crate、汎用trait hierarchy、public reusable APIを作らない。UIコードが`application_backend`やhardware resource serviceを直接操作する設計は避ける。
 4. **契約生成**はbrowser/WASM用の既存OpenAPIとgeneratorを維持する。wire型をUI用に手作業で複製しない。native GPUIのprivate command/query/event型は公開wire型と混同せず、両clientで共通化する対象と内部に留める対象をPoCで決める。
 5. **UI固有capability**は明示的なmatrixで扱う。Web、Tauri、GPUIごとにOrigin/Host、screenshot save/download、file chooser、clipboard、single-instance、tray、window close、shutdown policyを検査する。Tauri固有動作をGPUI modeへ誤って許可・適用しない。
 6. **互換性**は現行のSvelte Web/Desktopを回帰可能なまま維持する。backendや公開APIの変更を避けられない場合は、理由・contract diff・既存UIへの影響・rollbackをそのcheckpointで記録する。
@@ -73,7 +73,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 ### Phase 0 — 基準線と対象範囲を固定する
 
 - [ ] 現行のclean状態と基準commitを記録し、Svelte Web、Tauri Desktop、共通backend/APIのbuild・起動・停止gateを選ぶ。
-- [ ] `SPECIFICATION.md`の画面機能、低遅延要件、ブラウザ対応、Tauri lifecycle、キーボード/IME/アクセシビリティ要件を、移行対象・非対象・要確認へ対応づける。仕様本文自体は変更しない。
+- [ ] frontend／integration定義書の機能要件と必須要件を照合し、GPUIでも維持する操作、Web専用要件、Tauri専用capability、native受入が必要なkeyboard/IME/accessibility項目を対応づける。変更が必要な製品要件は本計画だけで変更せず、対応する定義書と受入条件を同一作業で更新する。
 - [ ] 現行UIの各主要操作からREST/WS/WebRTCまでの経路をinventory化し、最初のvertical sliceを選ぶ。基本候補は状態snapshot表示、設定の一項目更新、controller操作、camera表示の順とする。
 - [ ] 現行起動とUI capabilityのテストを、GPUI追加後にも回せるbaselineとして記録する。`PLAN.md`が報告するbrowser backend `410 Gone`、外部WebRTC/fallback受入未証明、production性能計測未完了を明記し、virtual I/OやREST read-backを実機性能・browser映像の代替証拠にしない。
 - [ ] 完了条件は既存CLI/起動gateの実行結果、`--help`、API/OpenAPI差分なし、既知の未受入項目一覧である。既知のbackend受入不足はGPUI差分のregressionと混同せず、GPUI実装中にbackend性能改善を同時着手しない。
@@ -92,7 +92,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - [ ] `apps.default`と`apps.tauri`を変更せず、同じ`packages.pokecon/bin/pokecon`へ`--ui gpui`を渡す薄い`apps.gpui`を追加する。別Cargo package、別backend binary、別workerは作らない。
 - [ ] Rust CLIに`UiArgument::Gpui`/`UiMode::Gpui`を追加し、`UiMode::capabilities()`でTauri Origin許可・Tauri screenshot pathをGPUIへ誤適用しない。既存`web`/`desktop`の意味とdefault、`README`の起動形は維持し、CLI help fixtureとflake canonical hashを更新する。GPUI Kit依存を加える場合はCargo manifest/lock identity assertionとNix native runtime dependenciesも同時に更新する。
 - [ ] GPUI shellは既存の`run_packaged_backend`/`run_configured_controlled`を一度だけ起動し、backend readiness、shutdown supervisor、同一`ProductionRuntime`を共有する。GPUIのevent loopとTokio runtimeのthread/lifecycle順序をfake backendおよびsoftware-only runtimeで検証する。
-- [ ] typed in-process UI adapterでstate snapshot、設定mutation一つ、revision付き通知、commit/read-backを先に試す。既存Axum API clientの方が具体的に簡単・安全な場合だけ比較し、追加transportはlatencyや分離を測って採否を決める。`ApplicationBackend`やcamera/serial/worker serviceをviewから直接参照させない。
+- [ ] typed in-process UI adapterと既存Axum API clientでstate snapshot、設定mutation一つ、revision付き通知、commit/read-backのvertical sliceを比較する。latency、failure handling、Origin/path制約、型安全性、運用の実測で採否を決める。`ApplicationBackend`やcamera/serial/worker serviceをviewから直接参照させない。
 - [ ] server start/stop、shutdown coordinator、設定、profile、worker起動に二重所有がないことを検証する。UI起動失敗時にもbackend/workerを残すか閉じるかを既存lifecycle契約に沿って決定し、全終了経路をtestする。
 - **Gate 2:** `nix run . -- --ui web`、`nix run .#tauri`、`nix run .#gpui`が同じ製品binaryを使い、一度だけbackend/workerを起動すること。GPUI固有capability、所有権、失敗/read-back契約が検証されること。browser向け既存API contractに変更が要る場合はOpenAPI同期、互換性検査、Svelte client testを追加する。
 
@@ -100,7 +100,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 
 - [ ] status/state snapshot、一設定更新、profile切替、controller入力の順にGPUIへ移す。各操作はUI入力→選定したquery/command境界→backend commit→event/snapshotのread-back→UI表示まで確認する。
 - [ ] stale revision、server拒否、切断、再接続、UI window close、操作中shutdownで誤った成功表示や二重実行がないことをno-network fake/integration testで確認する。
-- [ ] 代表的な画面でTkinter機能・視覚parityの要件を満たすか比較する。見た目の最終調整は操作の意味と状態遷移が一致した後に行う。
+- [ ] 代表的な画面で機能・操作・状態・安全停止・回復要件を満たすか比較する。GPUIはnative widget/layoutを使用でき、Tkinterのpixel単位の視覚parityは要求しない。見た目の調整は操作の意味と状態遷移が一致した後に行う。
 - **Gate 3:** 少なくとも一つの実ユーザーフローが選定した明示的なUI/backend境界で完結し、失敗・再接続・read-backの契約が検証されること。内部resource serviceへの直接callやbackend/UI間の重複した正準stateを必須にする構造なら境界案を見直す。
 
 ### Phase 4 — Camera/mediaと性能の最大リスクを先に検証
@@ -109,7 +109,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - [ ] 次に現行WebRTC primaryをnativeで受信し、H264 decode/renderとsignalingを検証する。GPUI canvasが`MediaStream`/`<video>`等のDOM mediaを自動的に扱えると仮定せず、native client/transport、frame format/conversion、texture upload、frame lifetimeの具体経路を選ぶ。
 - [ ] WebRTC primary中のfallback frameを誤ってprimary stateから降格させないこと、3秒 inactivity時のfallback、retry後のWebRTC再昇格を既存`MediaView` semanticsと合わせて試験する。Backend camera ownerは維持し、camera/serial handleをGPUIへ渡さない。
 - [ ] カラーピッカー、crop/screenshot、touchscreen area選択など映像上の入力を代表例として検証する。WebRTC不可時にも現在のfallback契約が失われないことを確認する。
-- [ ] mock/virtual cameraとloopbackでlatency・frame drops・throughput・CPU/memory・shutdown cleanupを測定する。`SPECIFICATION.md`の数値目標を採用判定に用い、実測値がないのに達成を主張しない。
+- [ ] mock/virtual cameraとloopbackでlatency・frame drops・throughput・CPU/memory・shutdown cleanupを測定する。frontend／integration定義書にある該当経路の数値目標を採用判定に用い、実測値がないのに達成を主張しない。
 - **Gate 4:** JPEG fallbackとWebRTC primaryの両方、切替/retry、主要camera操作、対象latency、継続描画、終了時解放をvirtual/loopback条件で証明する。WebRTC表示の方法がない、または性能/入力要件を満たさない場合は全画面移植を停止し、native video host等の代案を比較する。実機性能達成とは主張しない。
 
 ### Phase 5 — 残りの画面を縦切りで移行
@@ -139,7 +139,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - [ ] Gate 1–6の証跡からGPUI nativeの採否を決める。GPUI nativeのみ採用、native+WASM採用、PoC中断のいずれも結果として許容する。WASM/ browser対応は明確に要求された場合だけGate 7を必須化する。
 - [ ] GPUI nativeを既定にする前に、現行UIに対するnative主要要件parity、performance、crash/restart、package、CI、accessibilityを完了する。browser全体の受入は既存Svelte Web baselineとGPUI browserを区別して扱う。
 - [ ] 旧Svelte/Tauri起動selectorとrollback用Nix appは、利用者が移行完了を承認するまで削除しない。
-- [ ] 製品契約変更が必要な場合だけ、別途承認された作業として`SPECIFICATION.md`、開発文書、受入gateを同期する。本計画の更新を仕様変更の代替にしない。
+- [ ] 製品契約変更が必要な場合は、対象となるbackend／frontend／integration定義書、補助文書、受入gateを同じ承認済み作業で同期する。本計画だけの更新を仕様変更の代替にしない。
 
 ## 6. PoC合否条件と停止条件
 
@@ -164,7 +164,10 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 
 ### リポジトリ内
 
-- `SPECIFICATION.md` — UI機能、ブラウザ/OS、latency、camera、keyboard、screenshot、lifecycleの目標契約。変更禁止。
+- `SPECIFICATION.md` — 定義書群の入口と分類・担当表。
+- `docs/SPECIFICATION_BACKEND.md` — script/runtime/settings/deviceの必須契約。
+- `docs/SPECIFICATION_FRONTEND.md` — UI機能、keyboard/IME/accessibility、browser要件と応答性。
+- `docs/SPECIFICATION_INTEGRATION.md` — API/transport、camera/save、serial設定操作、frontend境界とlifecycle。
 - `PLAN.md` — Rust構造移行Phase 2.1–2.7の完了記録、未証明のproduction latency/throughputとexternal browser acceptance、同一binary Web/Desktopの既存受入。
 - `docs/ARCHITECTURE.md` — backend ownership、process topology、frontend責務、state/API境界。
 - `docs/HTTP_API.md`、`api/openapi.json`、`rust/pokecon/src/server/api.rs` — 公開HTTP/API contract。

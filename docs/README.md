@@ -4,6 +4,20 @@
 
 役割は排他的ではなく、同じ人が利用者、スクリプト開発者、本体開発者を兼ねる場合があります。
 
+## 製品の目標要件を確認する
+
+[`SPECIFICATION.md`](../SPECIFICATION.md)は製品定義書群の入口です。
+
+必須要件・機能要件の意味と担当sectionの対応表を示し、規範要件を以下の三文書に分けています。
+
+- [backend定義書](SPECIFICATION_BACKEND.md)：設定・動的設定、Python／Lua runtime互換性、user script API、device/resource、serial wireの要件。
+- [frontend定義書](SPECIFICATION_FRONTEND.md)：Web／Tauri／GPUI UIで提供する操作、表示、応答性、browser要件。
+- [backend/frontend連携定義書](SPECIFICATION_INTEGRATION.md)：HTTP／WebSocket／WebRTC、保存・設定操作、状態・lifecycleの契約。
+
+必須要件は既存互換性と固定architectureを守る安定契約です。機能要件も現在の製品目標として必須であり、UIやlatencyなどの達成結果を定めますが、具体的なfrontend technologyは固定しません。
+
+GPUI native frontendは目標として定義されていますが、現在の実装・selectorは未完了です。現行実装の説明は[アーキテクチャ文書](ARCHITECTURE.md)と[GPUI導入計画](GPUI_FRONTEND_PLAN.md)で区別します。
+
 ## 読者の役割から入口を選ぶ
 
 | 役割 | 想定する前提 | 読み始める文書 |
@@ -14,7 +28,7 @@
 | **動的設定の開発者** | PythonまたはLuaのコードを信頼境界内で管理できる | [動的設定ガイド](DYNAMIC_CONFIGURATION.md) |
 | **周辺機器開発者** | シリアル通信と対象MCUの電気的要件を理解している | [周辺機器開発ガイド](PERIPHERAL_DEVELOPMENT.md) |
 | **HTTPクライアント開発者** | REST、WebSocket、JSON、ブラウザーのOriginを理解している | [HTTP APIガイド](HTTP_API.md) |
-| **本体開発者** | Rust、TypeScript、Svelte、Nixの開発経験がある | [本体開発ガイド](DEVELOPMENT.md) |
+| **本体開発者** | Rust、現行Web UIのTypeScript/Svelte、Nixの開発経験がある | [本体開発ガイド](DEVELOPMENT.md)、該当する[製品定義書](../SPECIFICATION.md) |
 | **リリース検証担当者** | 実機試験、実browser、再現可能な証拠を管理できる | [外部受入ゲート](ACCEPTANCE.md) |
 
 上級利用者向け文書は一般操作を説明し直さず、[利用ガイド](USER_GUIDE.md)を読了していることを前提にします。
@@ -45,6 +59,10 @@
 
 | 文書 | 書く内容 | 書かない内容 |
 |---|---|---|
+| [製品定義書の入口](../SPECIFICATION.md) | 必須／機能要件の分類、担当section、仕様間の優先順位 | 実装の現状、逐次操作手順 |
+| [backend定義書](SPECIFICATION_BACKEND.md) | 固定runtime・script/settings compatibility、backend ownershipとcapability | UI配置・見た目 |
+| [frontend定義書](SPECIFICATION_FRONTEND.md) | UI操作・表示、browser要件、応答性とaccessibility | serial/HTTP wireの独立schema |
+| [backend/frontend連携定義書](SPECIFICATION_INTEGRATION.md) | API/transport、end-to-end操作、安全なlifecycle、frontend境界 | backend internalsの重複定義 |
 | [利用ガイド](USER_GUIDE.md) | UIで完結する通常操作と安全な停止 | TOMLの全キー、worker内部、wire byte列 |
 | [上級利用ガイド](ADVANCED_USAGE.md) | 理解せず変更すると危険な運用設定と復旧判断 | Rustのmodule構造、MCU firmware実装 |
 | [設定リファレンス](SETTINGS.md) | 設定の解決規則、型、scope、mutability、設定ID | UIの逐次操作、動的APIの詳細 |
@@ -63,7 +81,7 @@
 
 一方で、ほぼ同じAPI一覧や設定一覧を複数の文書へ複製しません。
 
-設定の厳密な型とsurfaceは`rust/pokecon/registry/settings.json`を正本とします。
+設定の厳密な型とsurfaceは`rust/pokecon/registry/settings.json`を正本とします。製品定義書はそのschemaに対する必須互換契約とfrontendでの期待動作を規定します。
 
 HTTPとWebSocketの厳密なschemaは`api/openapi.json`と`rust/pokecon/registry/protocol.json`を正本とします。
 

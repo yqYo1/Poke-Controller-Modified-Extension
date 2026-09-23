@@ -2,7 +2,8 @@
 
 ## 目的と規範
 
-- 規範: `SPECIFICATION.md`、`ARCHITECTURE_REVIEW.md`
+- 製品規範: `SPECIFICATION.md`（入口）とbackend／frontend／integrationの三定義書
+- Architecture review record: `ARCHITECTURE_REVIEW.md`（製品規範と矛盾する場合は製品定義書に合わせて更新）
 - 対象ブランチ: `refactor/rust-core`
 - 開始基準: `e20fad5a`（レビュー書更新完了時点）
 - 最終状態: PokeCon を単一 Cargo パッケージへ統合し、レビュー書で確定した責務、優先順位、開発入口、CI、配布契約を実装と検証へ反映する。
@@ -40,7 +41,7 @@
 - [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 103 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
 
 - [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
-- [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、`SPECIFICATION.md`の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
+- [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、root indexと三定義書の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
 
 ### 担当外の外部操作
 
@@ -437,7 +438,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 - [x] `pokecon-desktop`を`desktop`内部moduleへ移す（証跡: canonical実装／iconを`rust/pokecon/`へ移し、同起点のTauri設定を更新した`5fd5aa2`と下記checkpoint。旧crateは2.7までcompatibility facadeだけを維持）。
 - [x] **AR-10.9-08** PokeCon本体binaryにWeb UIとTauriの両方を含め、起動引数で表示形態を選択する（証跡: 同一store binary digestを保ったWeb／Tauri起動／停止smokeと下記checkpoint）。
-- [x] **AR-11-11** Web UIを主要UI、Tauriを下位の表示形態とする機能境界を維持する（証跡: Rust source testのmode capability／Web-first endpoint／Tauri adapter検査、exact packageの`ui-package-check`と下記checkpoint）。
+- [x] **AR-11-11（当時の完了判断）** 当時のWeb主要／Tauri下位という相対優先度を含むUI境界を実装・検証した。この優先順位は現在の三つの製品定義書により置き換えられており、Web-first source testは既存Web/Tauri modeの回帰証拠であってGPUIの優先度・受入証拠ではない。
 - [x] **AR-11-22** Web UIとTauriを同じPokeCon本体実行ファイルに含め、起動引数で切り替える（証跡: 同一store binaryとinstalled packageを使う`--ui web`／`--ui desktop` startup reportと下記checkpoint）。
 - [x] **AR-13.1-27** desktop移行後、Tauri設定、icon、bundle resource、署名対象、Linux package、Windows installerを`rust/pokecon/`起点で生成する（証跡: OS別Package CIのbundle／signing manifestと下記checkpoint）。
 
@@ -454,7 +455,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 | --- | --- |
 | desktop実装commit | native shell統合`0df5e8503cca2be83ade51bc315899a5d2b320f8`、icon配布`23d3dffd614a06446463586f4e335824f9ee9786`、canonical module移動`5fd5aa2253578d3216a45bc3dde1b601cc132d08`、exact package検査`204a007cba30722130245b6ab1a6e15022df8cc6`、UI境界`fdf209d995ad49857e22194a60619e6d47f2d3c3`、`tauri-shell`廃止`52540e17780ca76c0b62b0e40de7b540aa41141b`。全commitにSSH signatureを格納 |
 | CI改善commit | Debian desktop probe修正`fb2f62362673fe2fcc87059c2eac7d49c535cf06`、重複CI廃止`dad5f45d470f8dbbb765beca2f3f6825f6430cd2`、filtered source具現化`a9484a26ad8487870465cf92222aa6dd4e5ee01a`。全commitにSSH signatureを格納 |
-| Web主要／Tauri下位境界 | [Rust CI 31008261621](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)のsource jobがmode capability、Web-first endpoint、Tauri adapter依存境界を検査し、exact `ui-package-check`がOpenAPI 15 path／135 method matrixをWeb／Desktopの同じpackageに対して検査してsuccess |
+| 当時のWeb-first／Tauri adapter境界 | 当時のRust CI 31008261621はmode capability、Web-first endpoint、Tauri adapter依存境界を検査し、exact `ui-package-check`は15 path／135 method matrixを検査した。これは過去のWeb/Tauri実装証跡であり、現在のUI優先順位やGPUI受入証拠ではない |
 | 同一binaryの両UI mode | exact package `/nix/store/zz97vmdh48nfjch9hyaraaaxcz2lgwzq-pokecon-0.1.0`内の同じ`bin/pokecon`を`--ui web`／`--ui desktop`で起動し、両startup reportと停止を確認。Web専用feature／artifactは不在 |
 | `tauri-shell`廃止 | Cargo metadataとclosed-world source／release監査で製品feature参照が0、desktop依存がnon-optionalであることを確認。[Rust CI 31008261621](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261621)のLinux all-target／all-featureとWindows checkがsuccess |
 | Linux／Windows配布 | [Package CI 31008261238](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31008261238)が`rust/pokecon/`起点でDebian packageとNSIS installerを生成し、clean install後のWeb／Desktop両modeを検査。Windows installer SHA256は`c1d8d9464cf673b258e9cd8ef897b5ce74f105acd5906635e7c29e8edad5647c`、installed application SHA256は`23323dc4d6bb41fb351d9edcb64842a9f9f696b235f93602002405485cf31db0` |
@@ -565,7 +566,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 
 ### 4.1 主経路と優先順位
 
-- [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に`SPECIFICATION.md`の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
+- [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に製品定義書群の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
 - [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: CI上のmock／virtual I/Oによる非競合時の機能別latency／throughput／stability report）。browser primitive smokeは実装済みだが、production主経路の機能別latency／throughput／stability reportは未完了。
 - [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
@@ -625,7 +626,7 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
 - [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
-- [ ] `SPECIFICATION.md` の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
+- [ ] 製品定義書群の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
 - [x] 直近の実装commit後のGitHub CIを完了まで監視し、同一SHAのNormal `34784110190`／Package `34784110188` required aggregate successを確認した（正準`ci-watch`がNormal job `103796556818`、Package job `103796445654`をsettlement window後にsuccess判定。別eventの重複runは成功証跡へ二重計上しない）。

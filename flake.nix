@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "9785c580cb21de7d71f68cbbb9a2fc2bdaa0fd6847d9abb6a4e9a019250bfdbe";
+      canonicalFlakeHash = "9f697534c17340be41cfe78faac576048ff18751ffa31d83a34d79bb15765b08";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -499,7 +499,6 @@
             ];
             documentation = [
               "AGENTS.md"
-              "ARCHITECTURE_REVIEW.md"
               "PLAN.md"
               "README.md"
               "SPECIFICATION.md"
@@ -511,7 +510,6 @@
               ".markdownlint.json"
               ".textlintrc.json"
               "AGENTS.md"
-              "ARCHITECTURE_REVIEW.md"
               "Cargo.lock"
               "Cargo.toml"
               "PLAN.md"

@@ -174,7 +174,7 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - `rust/pokecon/src/entrypoint.rs` — 現行`--ui web|desktop` selector、Tauri shellから`run_packaged_backend`を監督する起動lifecycle。
 - `rust/pokecon/src/lib.rs` — `UiMode` capability分岐と単一の`run_configured_controlled` backend lifecycle。
 - `rust/pokecon/src/desktop/mod.rs`、`rust/pokecon/src/runtime/` — Tauri shellおよび共通shutdown境界。
-- `rust/pokecon/tests/ui_boundary_acceptance.rs`、`rust/pokecon/tests/startup.rs` — UI capability、同一SPA/API、startup modeの受入。
+- `rust/pokecon/src/tests/ui_boundary_acceptance.rs`、`rust/pokecon/tests/startup.rs` — UI capability、同一SPA/API、startup modeの受入。
 - `web/src/lib/`、`web/src/routes/` — 現行Svelte state/API/media/UI。
 - `flake.nix` — `apps.default`、既存`apps.tauri`、`packages.pokecon`、`packages.web`、canonical flake hashとNix task/runtime/package構成。
 - `tests/fixtures/cli-help/pokecon.txt` — CLIの`--ui`値追加時に同期するhelp snapshot。

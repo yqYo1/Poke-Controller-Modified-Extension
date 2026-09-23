@@ -54,7 +54,9 @@ PokeConのnative adapterは固定した`tokio-serial` versionのbuilder default�
 | right stick | `x`と`y`が0から255 | `(128, 128)` |
 | touch | `x`が0から319、`y`が0から239、または未押下 | 未押下 |
 
-UIと動的入力のstickは103から153のdead zoneを128へ正規化する経路があります。
+現行のRust入力経路では、stick値103から153を128へ正規化するdead zone処理は呼び出されません。
+
+`StickInput::resolve`はXY値をそのまま返し、PokeCon wire encoderも受け取ったcanonical byte値を送信します。`StickPosition::with_dead_zone`は実装されていますが、この経路から利用されていません。
 
 firmwareはwire上で受信した0から255の値を再度dead zone処理するかを独自に決めます。
 
@@ -505,7 +507,9 @@ nix run .#virtual-io-check
 
 同じtaskはV4L2 loopback cameraも検査します。
 
-実行中kernel用の`v4l2loopback` moduleと、moduleをloadできるpasswordless `sudo`が必要です。
+指定したdevice nodeが存在せず、`v4l2loopback`もまだloadされていない場合に限り、実行中kernel用moduleのloadが必要です。root以外の実行では、そのloadにpasswordless `sudo`を使用します。
+
+moduleが既にload済みで指定indexのdevice nodeがない場合は、既存のloopback indexを選び直します。device nodeが既にある場合も、現在のuserにread/write権限が必要です。
 
 既存のloopback device indexを使用する場合は次のように指定します。
 

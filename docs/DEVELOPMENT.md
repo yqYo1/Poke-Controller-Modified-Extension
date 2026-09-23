@@ -96,19 +96,20 @@ Node.jsを直接呼ぶscriptを追加しません。script内部ではNixが固�
 
 | path | 内容 |
 |---|---|
-| `rust/` | Rust workspace |
+| `rust/` | Rust package群。workspace rootはrepository直下 |
 | `web/` | SvelteKit SPA、TypeScript、frontend test |
 | `python/pokecon/` | 純Python互換メタデータと生成stub |
 | `scripts/` | quality、compatibility、release、integration tooling |
 | `tests/` | Python toolingとcross-language fixture |
 | `rust/pokecon/registry/` | 設定、event、受入記録などの正準registry |
 | `generated/` | registryから生成するschemaやmetadata |
-| `api/` | 生成済みOpenAPI契約 |
+| `api/` | OpenAPI契約と型生成用Bun package |
 | `docs/` | 読者別の恒久文書 |
 | `compatibility/` | 固定互換source、期待値、追補記録 |
 | `flake.nix` | source filter、package、完了gate、対話用flake app |
 | `Cargo.toml`と`Cargo.lock` | Rust workspaceと唯一のlock file |
-| `web/package.json`と`web/bun.lock` | frontend依存と唯一のBun lock |
+| `api/package.json`と`api/bun.lock` | API型生成用依存とBun lock |
+| `web/package.json`と`web/bun.lock` | frontend依存とBun lock |
 
 新しいtop-level directoryを追加する前に、既存の責務へ配置できない理由を確認します。
 
@@ -211,6 +212,22 @@ dev serverには、固定Bunとfrozen lock fileを使ってcallerの`web/`を監
 ```bash
 nix run .#web-dev
 ```
+
+API型生成用の依存は`api/package.json`と`api/bun.lock`で管理し、Nixの型生成gateはこのlock fileをfrozenで使用します。API dependencyを意図的に変更する場合は、Nix devShellが固定するBunでlock fileを更新し、生成gateを実行します。
+
+```bash
+nix develop -c bash -c 'cd api && bun install --ignore-scripts'
+nix run .#generate-api-types
+```
+
+Web frontend依存は`web/package.json`と`web/bun.lock`で管理します。Web dependencyを意図的に変更する場合も、同じ固定Bunを使ってlock fileを更新し、frontend gateを実行します。
+
+```bash
+nix develop -c bash -c 'cd web && bun install --ignore-scripts'
+nix run .#web-check
+```
+
+lock fileの更新でdependency treeのhashが変わる場合は、Nixのhash mismatch出力が示す新しいhashを対応する`apiBunDependencies.outputHash`または`webBunDependencies.outputHash`へ反映します。続けて`flake.nix`の`canonicalFlakeHash`を更新し、該当gateを再実行します。
 
 完了gateはnetwork installを行いません。`web-check`、`check`、`tauri-build`、API型生成はlock fileから作成したhash固定のNix dependency treeを使用します。
 

@@ -328,7 +328,9 @@ browser consoleでoffer、answer、ICE candidateとWebSocket close reasonを分�
 
 NATを越える公開serviceとして設計されていないため、まず同一hostまたは同一信頼LANで確認します。
 
-`webrtc.failure_timeout_seconds`後にfallbackへ移り、`webrtc.recovery_interval_seconds`ごとに主経路を再試行します。
+WebRTCが接続開始後5秒以内に確立しない場合、または接続確立後に3秒間フレーム／データを受信できない場合は、WebSocket／MJPEG fallbackへ移ります。この切替時間は設定項目ではありません。
+
+fallback中は`webrtc.auto_recover`が`true`の場合に自動復旧を試み、`webrtc.recovery_probe_interval_sec`（既定30秒）ごとに主経路を再試行します。
 
 fallbackの映像もない場合はcamera sourceまたはWebSocket自体を先に診断します。
 

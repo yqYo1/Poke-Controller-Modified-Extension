@@ -25,7 +25,11 @@
 !/AGENTS.md
 !/PLAN.md
 !/SPECIFICATION.md
-!/ARCHITECTURE_REVIEW.md
+
+# Local-only historical review archives
+/ARCHITECTURE_REVIEW.md
+/CURRENT_IMPLEMENTATION_REVIEW.md
+/REVIEW_REMEDIATION.md
 !/ExecutePokeConModified-Extension.bat
 !/ExecutePokeConModified-Extension.sh
 !/LICENSE

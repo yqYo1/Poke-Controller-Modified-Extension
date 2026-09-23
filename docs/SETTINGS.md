@@ -284,7 +284,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | `server.web_dir` | bundled `web/dist` | 空でないresource path | S | あり |
 | `server.port` | `8020` | 1から65535 | S | あり |
 | `server.bind_address` | `127.0.0.1` | wildcardではない数値IP | S | あり |
-| `ui.desktop.close_behavior` | `ask` | `ask`、`shutdown`、`keep_backend`。現行TauriとGPUI native desktopのlifecycle動作 | I | あり |
+| `ui.desktop.close_behavior` | `ask` | `ask`、`shutdown`、`keep_backend`。現行Tauri desktopで使用。GPUI nativeでは未実装 | I | あり |
 | `ui.desktop.disable_compositing` | `false` | 現行Tauri WebViewだけに適用。GPUIには表示・適用しない | S | あり |
 
 `server.bind_address`はhostnameを受け付けず、`0.0.0.0`や`::`のwildcardも受け付けません。
@@ -298,6 +298,7 @@ profile切替は旧script workerの停止、新profileの検証、設定適用�
 | 設定ID | default | 制約または用途 | 反映 | UI |
 |---|---|---|---|---|
 | `camera.screenshot_format` | `png` | `png`、`jpeg` | I | あり |
+| `input.allow_manual_intervention` | `true` | `false`は通常の手動入力を拒否。停止・解放・緊急neutralは引き続き受理 | I | あり |
 | `input.keyboard_enabled` | `true` | browser key eventの受付 | I | あり |
 | `input.left_stick_mouse_enabled` | `false` | camera canvasの左drag | I | あり |
 | `input.right_stick_mouse_enabled` | `false` | camera canvasの右drag | I | あり |
@@ -429,7 +430,7 @@ workerのvenv同期は解決済み閉包にないpackageを削除できるため
 
 | path | 役割 |
 |---|---|
-| `rust/pokecon/registry/settings.json` | 78設定の正準レジストリ |
+| `rust/pokecon/registry/settings.json` | 79設定の正準レジストリ |
 | `generated/settings.schema.json` | 全設定IDを必須keyとして持つ閉じたJSON Schema |
 | `generated/settings-ui.json` | UI control、access、secret、scope、mutabilityのmetadata |
 | `python/pokecon/typings/__init__.pyi` | Python動的設定の型情報 |

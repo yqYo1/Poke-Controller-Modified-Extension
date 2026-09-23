@@ -3,10 +3,10 @@
 ## 目的と規範
 
 - 製品規範: `SPECIFICATION.md`（入口）とbackend／frontend／integrationの三定義書
-- Architecture review record: `ARCHITECTURE_REVIEW.md`（製品規範と矛盾する場合は製品定義書に合わせて更新）
+- 過去のarchitecture reviewはローカル専用アーカイブであり、現行の製品規範・実装状態の根拠にはしない。
 - 対象ブランチ: `refactor/rust-core`
 - 開始基準: `e20fad5a`（レビュー書更新完了時点）
-- 最終状態: PokeCon を単一 Cargo パッケージへ統合し、レビュー書で確定した責務、優先順位、開発入口、CI、配布契約を実装と検証へ反映する。
+- 最終状態: PokeCon を単一 Cargo パッケージへ統合し、本計画と製品定義書で確定した責務、優先順位、開発入口、CI、配布契約を実装と検証へ反映する。
 - 進捗規則: 完了を証明するコマンドまたは成果物がある項目だけを `[x]` にする。部分完了は子項目だけを更新する。
 - 変更規則: 構造移行と実行時挙動変更を同じコミットへ混在させない。各チェックポイントで検証してから次へ進む。
 - 委譲規則: 実装委譲は不可分な1タスクずつ行い、primary agentが差分と対応gateを確認し、当該タスクだけを新規文脈のSolへレビュー依頼してから次のタスクへ進む。節全体を一度に委譲しない。
@@ -15,7 +15,7 @@
 
 ## 現在地
 
-- [x] `ARCHITECTURE_REVIEW.md` の確定方針、移行順序、受入条件を一対一の実装要件として抽出した（2026-07-30 Sol意味監査承認、129要件）。
+- [x] 過去のarchitecture reviewで確定した方針、移行順序、受入条件を一対一の実装要件として本計画へ展開した（2026-07-30 Sol意味監査承認、129要件）。
 - [x] 開始時の作業ツリーがcleanで、HEADが`e20fad5a`、`origin/refactor-rust-core`との差が0/0であることを変更前の`git status --short --branch`と`git rev-list --left-right --count`で記録した（2026-07-30 JST）。
 - [x] 旧実装の不在を前提にした旧 `PLAN.md` を廃止し、本チェックリストへ置き換えた。
 - [x] 2026-07-30時点の旧フェーズ1「flake appへの開発入口移行」を完了した（実装`23149e3`、受入`1e0836b`、再現性修正`7a01da0`。最終GitHub Actions 9/9 success）。
@@ -41,7 +41,7 @@
 - [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 103 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
 
 - [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
-- [ ] **最終対応表**: `ARCHITECTURE_REVIEW.md` §11／§13.1、root indexと三定義書の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
+- [ ] **最終対応表**: root indexと三定義書の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
 
 ### 担当外の外部操作
 
@@ -49,9 +49,9 @@
 
 ## レビュー要件トレーサビリティ
 
-- [x] `ARCHITECTURE_REVIEW.md` §10.4、§10.8、§10.9、§10.10、§10.11、§11、§13.1の各要件を、それぞれ一度だけ現れる個別ID付きcheckboxと同じ行の予定証跡へ展開した（証跡: 2026-07-30の許可済みVCS入口`git grep`機械監査で129件、群別`2 / 5 / 9 / 24 / 10 / 50 / 29`、重複0、予定証跡欠落0。コンテキストを切ったSol意味監査で順序、checkpoint、配置、意味対応を承認）。
+- [x] 過去のarchitecture reviewで合意した要件を、それぞれ一度だけ現れる個別ID付きcheckboxと同じ行の予定証跡へ展開した（証跡: 2026-07-30の許可済みVCS入口`git grep`機械監査で129件、群別`2 / 5 / 9 / 24 / 10 / 50 / 29`、重複0、予定証跡欠落0。コンテキストを切ったSol意味監査で順序、checkpoint、配置、意味対応を承認）。
 
-IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了判定は行わない。各checkboxの完了時は「予定証跡」を実行結果、生成物、CI run、またはGitHub設定の読み戻し結果で置き換える。
+IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完了判定は行わない。各checkboxの完了時は「予定証跡」を実行結果、生成物、CI run、またはGitHub設定の読み戻し結果で置き換える。
 
 予定証跡のproject操作はtool-only devShell内から実行し、各行に別のNix outputを明記しない限り`nix run .#check`を入口とする。専用操作は`nix run .#<task>`、`nix build .#pokecon`、`nix fmt`、`nix flake check`のいずれかを完了証跡の入口とし、flake output inventoryの読取りには`nix flake show`を使う。「test」、「report」、「log」、「matrix」はそのNix taskまたはCI workflowが生成する成果物を指し、hostの言語runtime、compiler、package manager、品質toolを直接起動しない。Git／GitHubの読取り、worktree操作、CI runの読み戻しはVCS／外部状態証跡として例外とし、native Windows CI／package／releaseだけはworkflowが固定するtoolchainを入口とする。
 
@@ -144,16 +144,11 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [ ] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（予定証跡: direnv読込み後のGit inventory、Nix source、package manifestのnegative report）。
 - [ ] **AR-13.1-24** 既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性、packageがambient shell状態へ依存せず移行前と一致する（予定証跡: current checkpointの全task log、生成物Git object ID、package NAR hash）。
 
-### 2026-09-20 全finding対応
+### 2026-09-24 旧レビュー資料の扱い
 
-- [ ] `CURRENT_IMPLEMENTATION_REVIEW.md`の確定finding 455件・139ファイルを、tracked `REVIEW_REMEDIATION.md`のWave 1–3台帳で実装修正・検証・commit・pushまで追跡する（現時点の検証済み修正: 162/455 finding、53/139 finding-file）。
-- [ ] Wave 1: Rust runtime、settings、worker、server、contracts、Rust tests（222件・65ファイル、現時点で114 findings/35 filesを修正または部分修正）。
-- [ ] Wave 2: API、Python typings、Web、frontend tests（110件・37ファイル）。
-- [ ] Wave 3: flake、CI、scripts、release、Python/tests（123件・37ファイル、現時点で41 findings/13 filesを修正）。
-- [ ] 各findingは実装、証拠付き非該当、または外部blockedの明示状態へ遷移させ、レビューmatrixとtracked台帳の両方を更新する。
-- [ ] 各waveはNix経由のfocused test、必要なadversarial/no-network test、format、diff-check、署名commit、push、最新SHAのCI監視を完了してから次へ進む。
+`ARCHITECTURE_REVIEW.md`、`CURRENT_IMPLEMENTATION_REVIEW.md`、`REVIEW_REMEDIATION.md`は、過去の特定時点を対象にしたローカル専用アーカイブです。現行の製品要件、実装状態、進捗、受入証跡として参照しません。
 
-`REVIEW_REMEDIATION.md`はレビュー対応のtracked進捗台帳、`CURRENT_IMPLEMENTATION_REVIEW.md`は326ファイル単位の詳細finding記録である。後者はignoredだが、両者を同じ作業境界で更新する。
+旧finding台帳の基準SHAと集計値には既知の不整合があります。旧件数を現行の進捗へ転記せず、残作業と完了状態は本計画の項目および最新の実行証跡から判断します。
 
 ### 現行refactor/rust-coreの追加実装と検証状態
 
@@ -624,8 +619,8 @@ IDはレビュー書の出現順に付与し、範囲IDや集約IDでの完了�
 - [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
 - [x] 2026-09-14のcommit `50bd589ba67ec801f9be4579c7062984d9577b2f`で隔離Web runtimeの外部hardware I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
-- [ ] `ARCHITECTURE_REVIEW.md` §11 の各引渡し情報に対応する実装または受入証跡を列挙する。
-- [ ] `ARCHITECTURE_REVIEW.md` §13.1 の全受入条件に直接の証拠があることを監査する。
+- [ ] architecture handoffに対応する実装または受入証跡を、本計画と製品定義書の要件ごとに列挙する。
+- [ ] 本計画に展開したarchitectureの各受入条件に直接の証拠があることを監査する。
 - [ ] 製品定義書群の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。

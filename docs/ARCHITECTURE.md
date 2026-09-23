@@ -257,14 +257,20 @@ window close、tray quit、OS signal、fatal task failureは`ShutdownCoordinator
 
 最初に受理した理由がprocess全体の停止系列を開始し、重複closeは別系列を作りません。
 
-production shutdownは次の順序です。
+production shutdownは[連携定義書の手順](SPECIFICATION_INTEGRATION.md#156-完全グレースフルシャットダウンの手順)と同じ0〜9の順序で実行します。
 
-1. 動的workerへ`AppShutdownPre`を通知し、新しい動的mutationを閉じます。
-2. background reconcilerを停止し、controller arbiterの全入力をreleaseして現在のneutral stateを送ります。
-3. camera producerを停止し、user-script commandとworkerを期限付きで停止します。
-4. 動的workerを停止してreapします。
-5. controllerを再度neutral化し、serialへneutral frameを送ってportを閉じます。
-6. HTTP serverをcancelし、期限内に終了しなければtaskをabortします。
+0. `AppShutdownPre`を発火し、最大2秒待った後に動的workerを`stopping`へ遷移させ、新しいmutationを拒否します。
+1. background taskを停止し、controllerの全入力を強制解放してneutral stateを送ります。
+2. camera captureを停止し、writerを期限付きでjoinします。期限内に止まらない場合は`camera_writer_unstopped`を記録し、`published_token`とslot stateを変更せずに続行します。
+3. user-script workerを設定済みの期限で停止します。
+4. 動的workerを協調停止し、期限超過時はprocess終了時に限って強制終了します。
+5. `camera_writer_unstopped`が偽で、writerと全worker processの終了を確認できた場合だけ共有memoryをunmapしてunlinkします。writerが止まらない場合はunmapせず、POSIXでは共有memory名だけをunlinkして既存mappingを保持し、Windowsではmapping handleをprocess終了まで保持します。
+6. controllerの全入力を再度強制解放します。
+7. serial接続を期限付きで切断します。
+8. HTTP serverをgraceful shutdownし、期限超過時は残存taskをcancelします。
+9. processを終了します。停止不能なthreadを無期限にjoinせず、共有mappingなどをOSのprocess終了で回収します。
+
+期限、失敗分岐、mappingの安全条件は連携定義書§15.6を正本とします。
 
 停止途中の一つのservice failureで後続のneutral化とserver停止を省略しません。
 

@@ -137,7 +137,7 @@ venvとpackage設定は[上級利用ガイド](ADVANCED_USAGE.md#user-script専�
 | server address | `server.bind_address`と`server.port` |
 | camera | Camera tabと`camera.*` |
 | serial | Serial tabと`serial.*` |
-| controller | Manual Control tabと`controller.*` |
+| controller | Manual Control tabと`input.*` |
 | command表示 | Commands tab、動的設定の`pokecon.commands` |
 | Windows通知 | Notifications tabと`notifications.windows.*` |
 | Discord | Notifications tabと`notifications.discord.*` |

@@ -121,6 +121,7 @@ pub enum ConfigurationWarning {
     },
     /// A pre-existing settings file has permissions broader than `0600`.
     /// `mode` holds only the permission bits; file contents are never stored.
+    #[cfg(unix)]
     InsecureFilePermissions { file: PathBuf, mode: u32 },
 }
 
@@ -173,6 +174,7 @@ impl ConfigurationWarning {
                 "設定ファイル {} のキー {key} の値 {value} は使用できないため、既定値へ戻しました。期待形式: {expected}。理由: {reason}。",
                 file.display()
             ),
+            #[cfg(unix)]
             Self::InsecureFilePermissions { file, mode } => format!(
                 "設定ファイル {} のパーミッション {:o} は必要以上に広いため、所有者のみが読み書きできる設定への変更を検討してください。自動で変更は行いません。",
                 file.display(),
@@ -187,6 +189,7 @@ impl ConfigurationWarning {
             Self::UnknownTomlKey { .. } => "unknown_toml_key",
             Self::DeprecatedTomlKey { .. } => "deprecated_toml_key",
             Self::InvalidTomlValueFallback { .. } => "invalid_toml_value_fallback",
+            #[cfg(unix)]
             Self::InsecureFilePermissions { .. } => "insecure_file_permissions",
         }
     }

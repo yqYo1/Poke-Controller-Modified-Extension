@@ -1031,6 +1031,11 @@ def test_nix_evidence_is_job_local_and_fail_closed() -> None:
     )
     assert "--log-format internal-json" in workflow
     assert "--option fallback false" in workflow
+    assert "echo 'log-format = internal-json'" not in workflow
+    assert (
+        'find "$evidence_root" -type f -name pokecon-nix-evidence.json -print'
+        in workflow
+    )
     assert "ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-" in workflow
     assert "pokecon-nix-evidence.json" in workflow
     assert "capture_complete == true" in workflow

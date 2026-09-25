@@ -147,7 +147,6 @@ jobs:
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
             printf '%s\n' "${NIX_CONFIG:-}"
             echo 'fallback = false'
-            echo 'log-format = internal-json'
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
       - name: Run combined Rust and contract checks
@@ -336,7 +335,6 @@ jobs:
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
             printf '%s\n' "${NIX_CONFIG:-}"
             echo 'fallback = false'
-            echo 'log-format = internal-json'
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
       - name: Run product smoke checks
@@ -437,7 +435,6 @@ jobs:
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
             printf '%s\n' "${NIX_CONFIG:-}"
             echo 'fallback = false'
-            echo 'log-format = internal-json'
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
       - name: Run default app help from remote, then build and web smoke without checkout

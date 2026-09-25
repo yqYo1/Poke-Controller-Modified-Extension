@@ -64,8 +64,11 @@ def test_collects_relevant_paths_without_msg_matching() -> None:
 
 
 def test_ignores_child_task_noise_but_requires_structured_events() -> None:
+    malformed_child_json = '{"reason":"compiler-message"'
+    foreign_child_json = '{"reason":"child-output"}'
     noisy_log = (
-        f"running 475 tests\n{valid_log()}\ntest result: ok. 475 passed; 0 failed"
+        f"running 475 tests\n{malformed_child_json}\n{foreign_child_json}\n"
+        f"{valid_log()}\ntest result: ok. 475 passed; 0 failed"
     )
 
     assert collect_evidence(noisy_log) == collect_evidence(valid_log())
@@ -90,7 +93,7 @@ def test_collection_is_deterministic_and_deduplicates_paths() -> None:
     "log, message",
     [
         ("not-json", "no structured Nix events"),
-        ('{"action":"start"', "not valid JSON"),
+        ('{"action":"start"', "no structured Nix events"),
         (start(1, ACT_BUILD, [{"s": DRV}]), "unterminated"),
         (
             "\n".join(

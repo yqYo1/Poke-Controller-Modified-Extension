@@ -26,10 +26,6 @@ def _fail(message: str) -> Never:
     raise EvidenceError(message)
 
 
-def _fail_from(message: str, cause: BaseException) -> Never:
-    raise EvidenceError(message) from cause
-
-
 JsonObject = dict[str, object]
 
 
@@ -97,7 +93,7 @@ def _first_string(fields: Sequence[object], context: str) -> str:
     return _store_path(fields[0], context)
 
 
-def _parse_line(raw_line: str, line_number: int) -> JsonObject:
+def _parse_line(raw_line: str) -> JsonObject | None:
     payload = raw_line.strip()
     if payload.startswith("@nix "):
         payload = payload[5:]
@@ -106,13 +102,17 @@ def _parse_line(raw_line: str, line_number: int) -> JsonObject:
             payload,
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
         )
-    except (json.JSONDecodeError, ValueError) as error:
-        _fail_from(f"line {line_number} is not valid JSON", error)
-    return _object(value, f"line {line_number}")
+    except json.JSONDecodeError:
+        return None
+    except ValueError:
+        return None
+    if not isinstance(value, dict):
+        return None
+    return cast("JsonObject", value)
 
 
 def parse_internal_json(text: str) -> tuple[dict[str, object], ...]:
-    """Parse structured events while ignoring human output from Nix tasks."""
+    """Keep valid Nix events and ignore mixed human/child output."""
     events: list[dict[str, object]] = []
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         if not raw_line.strip():
@@ -122,8 +122,14 @@ def parse_internal_json(text: str) -> tuple[dict[str, object], ...]:
             # Nix task stderr (cargo, remote smoke, and similar child output)
             # shares the wrapper stream but is not internal-json evidence.
             continue
-        event = _parse_line(raw_line, line_number)
+        event = _parse_line(raw_line)
+        if event is None:
+            # A child can also emit a brace-prefixed malformed/foreign line.
+            # It is noise unless the entire stream lacks valid Nix events.
+            continue
         action = event.get("action")
+        if action is None:
+            continue
         if not isinstance(action, str) or action not in RELEVANT_ACTIONS:
             _fail(f"line {line_number} has unsupported action")
         events.append(event)

@@ -108,7 +108,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 | `stopping` | profile switch／reload／shutdownでmutationを拒否 | `AppShutdownPre`後に新規mutationを拒否 | `GenerationPhase::Stopping`、cancellation token |
 | `stopped` | processをreapしてから次generationを作成 | 通常動作中の再生成を許可しない | `GenerationPhase::Stopped`、`DynamicRestartForbidden` |
 
-根拠は `rust/pokecon/src/worker/generation.rs:21-84` と [`ARCHITECTURE.md:206-236`](ARCHITECTURE.md#user-script-workerを世代として扱う) です。state transitionのfault test（停止中のmutation拒否、reap前のscript replacement禁止、dynamic worker再生成禁止）は別途必要です。
+根拠は `rust/pokecon/src/worker/generation.rs:21-84` と [`ARCHITECTURE.md:206-236`](ARCHITECTURE.md#user-script-workerを世代として扱う) です。`rust/pokecon/tests/lifecycle.rs:636-716`の実process testは、`ManagedWorker::request`について停止中のmutation拒否、許可classがIPCへ到達すること、reap後の全class拒否を検証します。これはstate table全体、reap前のscript replacement、dynamic worker再生成、production shutdown fault matrixの受入証拠ではありません。
 
 ### 4.3 camera writerとserver
 
@@ -138,7 +138,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 | WebRTC／fallback | `POKECON-CONTROL`、`POKECON-LOG`、`RealtimeRoute::{Connecting,WebRtc,WebSocketFallback}` | `rust/pokecon/src/server/webrtc.rs:47-49`、`rust/pokecon/src/server/realtime.rs:477-697` | media transportはcamera native handleを所有しない |
 | OpenAPI／TypeScript | `api/openapi.json`、`web/src/lib/api/openapi.json`、generated TypeScript | `rust/pokecon/src/server/openapi.rs:32-33,168,225`、`rust/pokecon/src/bin/generate_openapi.rs` | Rust wire型、OpenAPI、frontend生成物のdriftを`contract_sync`で検査 |
 | settings／dynamic schema | `generated/settings.schema.json`、`settings-ui.json`、protocol registry、Python／Lua typing | `rust/pokecon/registry/settings.json`、`rust/pokecon/registry/protocol.json`、`rust/pokecon/src/contracts/dynamic_typings.rs:9-38` | 正準registryを直接編集し、生成物を直接編集しない |
-| CLI／mode | `pokecon --ui web|desktop`、`pokecon-worker --kind script|dynamic`、compatibility／generator bin | `rust/pokecon/Cargo.toml:13-52`、`rust/pokecon/src/entrypoint.rs:37-65`、`rust/pokecon/src/lib.rs:78-121` | worker／generator binは公開library APIにしない |
+| CLI／mode | `pokecon --ui web&#124;desktop`、`pokecon-worker --kind script&#124;dynamic`、compatibility／generator bin | `rust/pokecon/Cargo.toml:13-52`、`rust/pokecon/src/entrypoint.rs:37-65`、`rust/pokecon/src/lib.rs:78-121` | worker／generator binは公開library APIにしない |
 | worker IPC | typed MessagePack `IpcValue`、script／dynamic protocol | `rust/pokecon/src/worker/ipc/mod.rs:1-13`、`rust/pokecon/src/worker/ipc/schema.rs:16-64`、`rust/pokecon/src/worker/script/protocol.rs`、`rust/pokecon/src/dynamic/protocol.rs` | native object、non-string key、任意Rust objectをpayloadへ入れない |
 
 このinventoryはsupported user-visible surfaceと、内部で接続するtyped boundaryを同じ表へ置きます。`server`内の`pub mod`はcrate外公開APIを意味せず、`rust/pokecon/src/lib.rs:38`の`mod server;`がcrate-private boundaryです。
@@ -173,7 +173,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 | controller source切断 | input arbiter／ApplicationBackend | source保持入力をreleaseし、neutralへ収束 | [`ARCHITECTURE.md:154-170`](ARCHITECTURE.md#controller入力の所有権を仲裁する) | source-verified、fault matrix pending |
 | serial write／disconnect failure | SerialManager | delta stateを成功write前にcommitせず、neutralを優先 | [`ARCHITECTURE.md:172-188`](ARCHITECTURE.md#serial-managerの安全性を保つ) | source-verified |
 | camera writer timeout | CameraManager／production shutdown | `camera_writer_unstopped`を記録し、mappingを保持。POSIX name-only unlink、Windows unlinkなし | `rust/pokecon/src/production.rs:394-465`、[`ARCHITECTURE.md:190-204`](ARCHITECTURE.md#camera-frameのlifetimeを守る) | source-verified、外部／fault evidence pending |
-| script callback／worker timeout | worker supervisor／command service | bounded timeout後にgenerationをstoppingへ進め、Rust shutdownを無期限停止させない | `rust/pokecon/src/worker/supervisor.rs:15-22`、[`ARCHITECTURE.md:206-220`](ARCHITECTURE.md#user-script-workerを世代として扱う) | source-verified、fault test pending |
+| script callback／worker timeout | worker supervisor／command service | bounded timeout後にgenerationをstoppingへ進め、Rust shutdownを無期限停止させない | `rust/pokecon/src/worker/supervisor.rs:15-22`、[`ARCHITECTURE.md:206-220`](ARCHITECTURE.md#user-script-workerを世代として扱う) | source-verified、停止中request gateの狭いfault testあり、worker timeout／shutdownのfull fault matrix pending |
 | dynamic source／callback failure | dynamic transaction／dynamic worker | 現行generationを維持し、新generationへ切り替えない | [`ARCHITECTURE.md:222-236`](ARCHITECTURE.md#動的設定をtransaction-generationとして扱う) | source-verified、fault test pending |
 | settings apply failure | SettingsService／applier | persistence、service適用、visible commitの成否を分離して報告し、失敗fieldを保持 | [`ARCHITECTURE.md:114-132`](ARCHITECTURE.md#設定pipelineを追う) | source-verified、contract report pending |
 | first shutdown request | ShutdownCoordinator | first-writer-wins reason、全依存taskへcancellationを配布 | `rust/pokecon/src/runtime/shutdown.rs:43-105` | source-verified |
@@ -238,7 +238,7 @@ workspaceは`pokecon`一packageで、Rust moduleは`rust/pokecon/src/lib.rs:3-43
 | phase／目的 | command | 期待結果 | 現行の扱い |
 | --- | --- | --- | --- |
 | structure／contract | `nix run .#contract-check` | generated contract、public schema、source boundaryの差分なし | local successは取得済み、checkpoint別logは要整理 |
-| Rust test／lifecycle | `nix run .#cargo-test` | Rust unit／integration／fault test success | local successは取得済み、全handoff fault testは未追加 |
+| Rust test／lifecycle | `nix run .#cargo -- test --locked -p pokecon --features 'integration-test-support worker-binary worker-test-fixture' --test lifecycle` | Rust lifecycle／fault test success | 7 passed。停止中request gateの狭い証拠は取得済み、全handoff fault testは未追加 |
 | compatibility | `nix run .#compatibility` | fixed baseline不変、report SHA、promotion条件のfail-closed判定 | local reportは`PLAN.md:204`に記録、Release promotionは未成立 |
 | aggregate check | `nix run .#check` | production、Web、Python、Rust、mutation、quality gate success | current local successは取得済み |
 | release/package | `nix run .#release-check`、Package CI | artifact manifest、clean install、再現性 | local release checkとPackage CI success、Release tagは未成立 |
@@ -252,7 +252,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | PLAN item | このartifactで記録したもの | 未成立の受入証拠 | 最小の次作業 |
 | --- | --- | --- | --- |
 | `AR-11-25` | ownership table、非owner、重複検査の規則 | 重複所有source／negative testのreport | `contract_sync`にresource owner一意性とnative handle漏洩の検査を追加しNix実行 |
-| `AR-11-26` | Rust／script／dynamic／camera／serverのstate table | stop／reap／fault transition test | `lifecycle`／`cross_process`既存fixtureへ停止中操作と再生成禁止のcaseを追加 |
+| `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:636-716`の停止中request gateとreap後拒否 | state table全体、script replacement、dynamic再生成、fault transition test | `ShutdownCoordinator`／`shutdown_all`／production sequenceを含む残りのstate／fault caseを追加 |
 | `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary | native object境界越え禁止test、schema report | public schemaを列挙するcontract testとnegative fixtureを追加 |
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle | `contract-check`／`compatibility`の同一artifact report | lifecycle状態表を生成reportへ接続し、failure時baseline保持を実行検証 |
 | `AR-11-29` | fault／timeout／rollback／shutdown責任表 | full shutdown fault matrix、resource release test | `lifecycle`へ各timeout後の最終状態と後続停止を追加 |

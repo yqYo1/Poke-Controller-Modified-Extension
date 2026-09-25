@@ -128,7 +128,7 @@ pub mod worker {
 
     /// Worker-generation errors used by lifecycle tests.
     pub mod generation {
-        pub use crate::worker::generation::{GenerationError, GenerationPhase};
+        pub use crate::worker::generation::{GenerationError, GenerationPhase, OperationClass};
     }
 
     /// Typed IPC values and resource-safety hook used by worker tests.
@@ -162,7 +162,8 @@ pub mod worker {
     /// Process launch, supervision, and stop values used by worker tests.
     pub mod supervisor {
         pub use crate::worker::supervisor::{
-            ManagedWorker, StopPurpose, SupervisorError, WorkerLaunch, WorkerSupervisor,
+            ManagedWorker, StopPurpose, SupervisorError, WorkerLaunch, WorkerRequestError,
+            WorkerSupervisor,
         };
     }
 

@@ -42,7 +42,7 @@
 - [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 103 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
 
 - [ ] **外部browser受入**: browser backendへのread-only probeは`example.com`で成功し、以前の`410 Gone`は現行の障害ではない。製品の最新commitはまだ隔離された一時server経由で受入していないため、WebRTC channel、fallback／再昇格、keyboard／accessibilityのcommit別証拠は未成立。writer完了後に専用HOME／XDGのephemeral serviceで試験し、必ず停止・cleanupする。既存camera／serial virtual-I/OとREST read-backは代替証拠にしない。
-- [ ] **最終対応表**: [Backend traceability](docs/TRACEABILITY_BACKEND.md)、[Frontend traceability](docs/TRACEABILITY_FRONTEND.md)、[Integration traceability](docs/TRACEABILITY_INTEGRATION.md)に三定義書のsection／要件ごとの直接根拠表を作成し、独立レビュー中。これらの表をroot index、6文書相互整合、各checkpoint共通gateまで統合した総合対応表は未完了。release tagは利用者担当のため残タスクに含めない。
+- [x] **最終対応表**: [Backend traceability](docs/TRACEABILITY_BACKEND.md)、[Frontend traceability](docs/TRACEABILITY_FRONTEND.md)、[Integration traceability](docs/TRACEABILITY_INTEGRATION.md)の要件別直接根拠を、[総合トレーサビリティ表](docs/TRACEABILITY_INDEX.md)へ統合した。root仕様、三定義書、ARCHITECTURE、PLANの6文書、各spec section、checkpoint共通gateを対応付け、auto_reload／GPUI／production性能／実browser／実機／clean worktree／Release tagは未完了として明示した（独立read-only reviewで確認、release tagは利用者担当）。
 
 ### 2026-09-24 追加再確認（この記録時点で未commit・未push）
 
@@ -719,9 +719,9 @@ selection tableは既存binary、feature、target条件の記録であり、追�
   - 2026-09-24 source-only follow-up（current runtime acceptanceではない）: `rust/pokecon/src/production.rs:309-332`は空の`Commands` rootを作成し、`CommandService`／`ProfileService`をrouter公開前にinstallするため、旧clean-root command reload失敗は現行source上では起動欠落が見つからない。`web/src/lib/components/CommandsTab.svelte:393`のReload buttonは空listでもenabledであり、実HTTP成功は未検証。live browser trialはskill必須のclean-repo cleanup conditionを満たせない（既存staged／dirty差分を保全し、別worktreeも作らない制約）ため未実施。
   - 同follow-up: `dynamic_host.rs:915-917`の`profile_list()`は実ディレクトリを再列挙する一方、UIの`WorkspaceMenu.svelte:76-80`は`StateSnapshot.available_profiles`を表示し、`refresh_available_profiles()`はlauncherによる新規作成時（`application_backend.rs:811-815`）にしか呼ばれない。実効Configルート配下のprofile directoryを実行中に外部作成／削除した後、UI listを更新する操作とその契約がないため、profile discoveryのlive refreshは未受入・未解決。`nix develop --command cargo test --locked -p pokecon dynamic_host::tests::profile_state_and_controller_are_rust_owned`は1 passedだが、internal host refresh pathのみでREST／SPAは検証しない。`nix run .#web-check`は26 test files／106 tests、Svelte diagnostics 0 errors／0 warnings、production build成功だがlive browser acceptanceの代替ではない。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
-- [ ] architecture handoffに対応する実装または受入証跡を、本計画と製品定義書の要件ごとに列挙する。
-- [ ] 本計画に展開したarchitectureの各受入条件に直接の証拠があることを監査する。
-- [ ] 製品定義書群の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない。
+- [x] architecture handoffに対応する実装または受入証跡を、本計画と製品定義書の要件ごとに列挙した（証跡: `docs/TRACEABILITY_INDEX.md` §2-§4がroot仕様、三定義書、ARCHITECTURE、PLANの6文書とbackend／frontend／integrationの全sectionを、各詳細traceability表の要件行へ対応付ける）。
+- [x] 本計画に展開したarchitectureの各受入条件へ直接の証拠があることを監査した（証跡: `docs/TRACEABILITY_INDEX.md` §3のsection／要件対応表、§4のarchitecture／package／外部受入接続、§5のcheckpoint共通gate対応）。未成立のclean worktree、performance、browser、hardware、Release、owner decisionは§6へ明示した。
+- [x] 製品定義書群の対象機能を要件別に照合し、未検証項目を「暗黙に成功」と扱わない監査を完了した（証跡: `docs/TRACEABILITY_INDEX.md` §3の三定義書詳細表と§6の未実装／外部証跡待ち一覧）。
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
 - [x] b719ad5d126bb88f7260fb829a88bcae2246914e push後のfresh GitHub CIを完了まで監視し、同一SHAのNormal CI run `36096392708`／Package CI run `36096392743`がcompleted／successとなったことを確認した。Normal CIのrequired aggregate job `107951886810`を含む全11 job、Package CIの全6 jobがsuccess。Normal artifact `ci-timing-36096392708-1`はproduct 10-sample p95 `674.0s`／threshold `720.0s`／violations 0を含み、job-local Nix evidenceはRust 4 built derivations・295 substituted paths、Product 392・1033、Remote 2・97を`capture_complete=true`で記録した。別eventの重複runは成功証跡へ二重計上しない。

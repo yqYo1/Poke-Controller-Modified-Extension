@@ -61,7 +61,7 @@ HTTP／WebSocket schemaの正本は`api/openapi.json`と`rust/pokecon/registry/p
 
 script APIの公開互換仕様はバックエンド定義書とし、生成typingsはその契約を開発時に補助します。
 
-[アーキテクチャ文書](docs/ARCHITECTURE.md)、[GPUI段階導入計画](docs/GPUI_FRONTEND_PLAN.md)、`PLAN.md`は実装説明または進行計画です。要件と矛盾する場合は本仕様群を正とし、補助文書を同期します。
+[アーキテクチャ文書](docs/ARCHITECTURE.md)、[総合トレーサビリティ表](docs/TRACEABILITY_INDEX.md)、[GPUI段階導入計画](docs/GPUI_FRONTEND_PLAN.md)、`PLAN.md`は実装説明または進行計画です。要件と矛盾する場合は本仕様群を正とし、補助文書を同期します。
 
 ## 2. 用語集
 

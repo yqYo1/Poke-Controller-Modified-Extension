@@ -14,6 +14,8 @@
 - [frontend定義書](SPECIFICATION_FRONTEND.md)：Web／Tauri／GPUI UIで提供する操作、表示、応答性、browser要件。
 - [backend/frontend連携定義書](SPECIFICATION_INTEGRATION.md)：HTTP／WebSocket／WebRTC、保存・設定操作、状態・lifecycleの契約。
 
+- [総合トレーサビリティ表](TRACEABILITY_INDEX.md)：製品仕様の入口、三定義書、アーキテクチャ、PLANのsection対応と未確認項目。
+
 必須要件は既存互換性と固定architectureを守る安定契約です。機能要件も現在の製品目標として必須であり、UIやlatencyなどの達成結果を定めますが、具体的なfrontend technologyは固定しません。
 
 GPUI native frontendは目標として定義されていますが、現在の実装・selectorは未完了です。現行実装の説明は[アーキテクチャ文書](ARCHITECTURE.md)と[GPUI導入計画](GPUI_FRONTEND_PLAN.md)で区別します。

@@ -665,6 +665,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（部分証跡: `rust/pokecon/tests/concurrent_camera_serial_load.rs`はproduction `CameraManager`のlatest-frame consumerと`SerialManager`のvirtual writerを同時実行し、64回のserial write、serial期間中8 distinct frame以上、時間区間の重なり、camera継続稼働を検査する。focused testは1 passed。さらに`nix run .#ci-rust-contracts` exit 0でRust unit 475件と同test 1件が成功した。これはprogress／overlapのsoftware-only証拠であり、画像認識処理、latency／jitter分布、throughput／stability reportを測定せず、要求全体は未完了）。
 - [ ] **AR-11-05** 明示的優先機構の導入前後で遅延、jitter、飢餓、queue停滞を比較し、改善しない機構は採用しない（予定証跡: before／after benchmarkと採用判定record）。
 - [ ] **AR-11-06** command実行、画像認識、serial出力を結ぶ主経路を実装する（予定証跡: end-to-end command→frame→controller／serial traceとlatency report）。
+- [x] camera writerのshutdown timeout時にdurable `camera_writer_unstopped`を記録し、`UnstoppedCameraWriter`／production fallbackで既存mappingを保持する（証跡: `rust/pokecon/src/camera/manager.rs`のtimeout回帰test、POSIX `shm_unlink`後も既存mappingを読めるassert、production fallback test。`nix run .#cargo-test`、`nix run .#check`、`nix run .#clippy`、`nix run .#build-rust`が現行差分でexit 0。reader-pin全体の監査とproduction性能測定は別項目として未完了）。
 - [x] **AR-11-12** UI制御要求を表示配信より優先し、映像、状態、logの滞留を主経路へ伝播させない（証跡: WebSocket の slow-client、latest-frame、control-latency、bounded-log tests）。
 - [x] frame は最新の完全 frame へ追従し、状態更新は同一項目の旧値を集約する。
 - [x] log 配信を有界 queue とし、低速／切断 UI から主経路への逆圧を防ぐ。

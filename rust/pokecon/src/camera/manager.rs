@@ -83,6 +83,11 @@ struct ManagerInner {
     flip: Arc<AtomicU8>,
     frames: LatestFrameSource,
     writer: Mutex<WriterOwnership>,
+    /// Durable §15.6 `camera_writer_unstopped` state. Set once when
+    /// [`CameraManager::shutdown`] cannot confirm writer termination before
+    /// its deadline; never cleared, so steps 5/9 observe the timeout for the
+    /// rest of the shutdown transaction.
+    writer_unstopped: AtomicBool,
 }
 
 impl std::fmt::Debug for ManagerInner {
@@ -106,6 +111,25 @@ impl ManagerInner {
         self.writer
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Records the durable §15.6 `camera_writer_unstopped` state with a
+    /// critical diagnostic. This path leaves `published_token`, slot state,
+    /// and the shared mapping untouched; step 3 proceeds with the mapping
+    /// retained.
+    fn record_writer_unstopped(&self) {
+        if !self.writer_unstopped.swap(true, Ordering::SeqCst) {
+            tracing::error!(
+                diagnostic_id = "CAMERA_WRITER_UNSTOPPED",
+                "camera writer did not stop before its deadline; published token, slot state, and shared mapping left unchanged"
+            );
+        }
+        if self.ring.unlink_name_for_shutdown().is_err() {
+            tracing::error!(
+                diagnostic_id = "CAMERA_MAPPING_UNLINK_FAILED",
+                "camera writer fallback could not unlink the shared-memory name; retaining the existing mapping until process exit"
+            );
+        }
     }
 }
 
@@ -179,6 +203,7 @@ impl CameraManager {
                     join: Some(join),
                     stopped: Some(stopped),
                 }),
+                writer_unstopped: AtomicBool::new(false),
             }),
         };
         // The inner result is intentionally status-only: camera-open failure
@@ -283,7 +308,10 @@ impl CameraManager {
 
     /// Requests writer termination and waits only to the supplied deadline.
     /// A timed-out guard retains the mapping and join handle so an unresponsive
-    /// native writer cannot cause an unsafe unmap.
+    /// native writer cannot cause an unsafe unmap. On timeout the durable
+    /// §15.6 `camera_writer_unstopped` state (see [`CameraManager::writer_unstopped`])
+    /// is recorded with a critical diagnostic, and `published_token`, slot
+    /// state, and the shared mapping are left untouched.
     ///
     /// # Errors
     ///
@@ -294,11 +322,15 @@ impl CameraManager {
             return Ok(());
         }
         if let Err(TrySendError::Full(_)) = self.inner.commands.try_send(WriterCommand::Shutdown) {
+            drop(ownership);
+            self.inner.record_writer_unstopped();
             return Err(UnstoppedCameraWriter {
                 manager: Arc::clone(&self.inner),
             });
         }
         let Some(stopped) = ownership.stopped.as_ref() else {
+            drop(ownership);
+            self.inner.record_writer_unstopped();
             return Err(UnstoppedCameraWriter {
                 manager: Arc::clone(&self.inner),
             });
@@ -316,10 +348,22 @@ impl CameraManager {
                 }
                 Ok(())
             }
-            Err(RecvTimeoutError::Timeout) => Err(UnstoppedCameraWriter {
-                manager: Arc::clone(&self.inner),
-            }),
+            Err(RecvTimeoutError::Timeout) => {
+                drop(ownership);
+                self.inner.record_writer_unstopped();
+                Err(UnstoppedCameraWriter {
+                    manager: Arc::clone(&self.inner),
+                })
+            }
         }
+    }
+
+    /// Durable §15.6 `camera_writer_unstopped` state for the shutdown
+    /// transaction. `true` once [`CameraManager::shutdown`] has timed out;
+    /// never reset, so steps 5/9 keep refusing shared-memory release.
+    #[must_use]
+    pub fn writer_unstopped(&self) -> bool {
+        self.inner.writer_unstopped.load(Ordering::SeqCst)
     }
 
     fn request(
@@ -346,7 +390,15 @@ impl CameraManager {
     }
 }
 
-/// Ownership returned when a driver read prevents bounded shutdown.
+/// Ownership returned when a driver read prevents bounded shutdown (§15.6
+/// steps 2/5/9 fallback).
+///
+/// Holding this guard (or any [`CameraManager`] clone over the same inner
+/// state) retains the shared mapping and the writer join handle so an
+/// unresponsive native writer cannot cause a write-after-unmap: POSIX unlinks
+/// only the name while the existing mapping stays until process exit, and
+/// Windows retains the mapping handle until process exit. This path never
+/// claims normal unmap completion; OS process exit reclaims the mapping.
 pub struct UnstoppedCameraWriter {
     manager: Arc<ManagerInner>,
 }
@@ -365,6 +417,14 @@ impl UnstoppedCameraWriter {
     #[must_use]
     pub fn mapping_descriptor(&self) -> MappingDescriptor {
         self.manager.ring.descriptor()
+    }
+
+    /// Durable §15.6 `camera_writer_unstopped` state behind this guard.
+    /// Always `true`: the guard exists only after [`CameraManager::shutdown`]
+    /// recorded the timeout.
+    #[must_use]
+    pub fn writer_unstopped(&self) -> bool {
+        self.manager.writer_unstopped.load(Ordering::SeqCst)
     }
 
     #[must_use]
@@ -759,6 +819,7 @@ mod tests {
     use crate::camera::backend::{CameraConfig, CameraError};
     use crate::camera::frame::{CaptureResolution, FlipMode};
     use crate::camera::selector::CameraSelector;
+    use crate::camera::shared_ring::{INVALID_PUBLISHED_TOKEN, SharedFrameRing};
     use crate::camera::virtual_camera::{
         RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
         VirtualReconfigurePlan, VirtualSessionPlan,
@@ -901,6 +962,73 @@ mod tests {
         assert_eq!(guard.mapping_descriptor(), manager.mapping_descriptor());
         assert!(!guard.is_finished());
         drop(guard);
+    }
+
+    #[test]
+    fn shutdown_timeout_records_durable_flag_and_preserves_publication() {
+        let backend = VirtualCameraBackend::default();
+        // The startup read publishes one solid frame; the next native read
+        // hangs, so the writer is still alive when the deadline expires.
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([9, 8, 7]), RecordedFrame::Hang],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            config(0, 30, CaptureResolution::R640x360),
+            FlipMode::None,
+        )
+        .unwrap();
+        for _ in 0..1_000 {
+            if manager.ring().read_published().unwrap().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let token_before = manager.ring().published_token();
+        assert_ne!(token_before, INVALID_PUBLISHED_TOKEN);
+        assert!(!manager.writer_unstopped());
+        // Let the writer block inside the hanging native read so the
+        // shutdown deadline deterministically expires first.
+        std::thread::sleep(Duration::from_millis(50));
+        let guard = manager
+            .shutdown(Duration::from_millis(20))
+            .expect_err("hung native read must retain mapping");
+        assert!(manager.writer_unstopped());
+        assert!(guard.writer_unstopped());
+        // §15.6 step 2: the timeout path changes neither the publication nor
+        // the shared mapping.
+        assert_eq!(manager.ring().published_token(), token_before);
+        assert!(manager.ring().read_published().unwrap().is_some());
+        assert_eq!(guard.mapping_descriptor(), manager.mapping_descriptor());
+        // POSIX fallback removes only the name; the existing mapping remains
+        // readable while the retained writer guard is alive.
+        #[cfg(unix)]
+        assert!(SharedFrameRing::open(manager.mapping_descriptor()).is_err());
+        // The flag is durable: a second attempt still fails and still reports it.
+        let retry = manager
+            .shutdown(Duration::from_millis(5))
+            .expect_err("writer is still hung");
+        assert!(manager.writer_unstopped());
+        assert!(retry.writer_unstopped());
+        drop(guard);
+        drop(retry);
+    }
+
+    #[test]
+    fn successful_shutdown_leaves_unstopped_flag_clear() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(open_plan([1, 2, 3], 30));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            config(0, 60, CaptureResolution::R640x360),
+            FlipMode::None,
+        )
+        .unwrap();
+        assert!(!manager.writer_unstopped());
+        manager.shutdown(Duration::from_secs(1)).unwrap();
+        assert!(!manager.writer_unstopped());
+        assert_eq!(manager.ring().published_token(), INVALID_PUBLISHED_TOKEN);
     }
 
     #[test]

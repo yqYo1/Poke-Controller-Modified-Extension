@@ -5,8 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::camera::{
-    CameraConfig, CameraManager, CaptureResolution, FlipMode, NativeCameraBackend,
-    ScreenshotFormat, ScreenshotRuntimeSettings, ScreenshotService,
+    CameraConfig, CameraManager, CaptureResolution, FlipMode, MappingDescriptor,
+    NativeCameraBackend, ScreenshotFormat, ScreenshotRuntimeSettings, ScreenshotService,
+    UnstoppedCameraWriter,
 };
 use crate::desktop::DesktopRuntimeSettings;
 use crate::device::ControllerState;
@@ -80,8 +81,21 @@ impl BuildCleanup {
         if let Some(camera) = self.camera.take() {
             let result =
                 tokio::task::spawn_blocking(move || camera.shutdown(SERVICE_STOP_TIMEOUT)).await;
-            if let Err(error) = result {
-                tracing::error!(%error, "production build camera cleanup task failed");
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(unstopped)) => {
+                    tracing::error!(
+                        diagnostic_id = "CAMERA_WRITER_UNSTOPPED",
+                        mapping = ?unstopped.mapping_descriptor(),
+                        "production build camera cleanup found an unstopped writer; retaining mapping until process exit without unmap"
+                    );
+                    // Build failure is immediately followed by process exit; retain the
+                    // guard until then instead of dropping the mapping under a live writer.
+                    std::mem::forget(unstopped);
+                }
+                Err(error) => {
+                    tracing::error!(%error, "production build camera cleanup task failed");
+                }
             }
         }
     }
@@ -106,6 +120,10 @@ pub(crate) struct ProductionRuntime {
     serial: SerialManager,
     tasks: Vec<JoinHandle<()>>,
     script_shutdown_timeout: Duration,
+    /// Retained §15.6 steps 2/5/9 fallback ownership. `Some` while the camera
+    /// writer never stopped: the shared mapping and writer join handle stay
+    /// alive until OS process exit, and shared-memory release stays refused.
+    camera_writer_fallback: Option<UnstoppedCameraWriter>,
 }
 
 impl std::fmt::Debug for ProductionRuntime {
@@ -365,6 +383,7 @@ impl ProductionRuntime {
             serial,
             tasks: cleanup.take_tasks(),
             script_shutdown_timeout,
+            camera_writer_fallback: None,
         })
     }
 
@@ -395,11 +414,9 @@ impl ProductionRuntime {
         .await;
         let camera = self.camera.clone();
         match tokio::task::spawn_blocking(move || camera.shutdown(SERVICE_STOP_TIMEOUT)).await {
-            Ok(Ok(())) => {}
-            Ok(Err(unstopped)) => tracing::error!(
-                mapping = ?unstopped.mapping_descriptor(),
-                "camera writer did not stop before its deadline"
-            ),
+            Ok(result) => {
+                self.camera_writer_fallback = retain_camera_fallback_on_timeout(result);
+            }
             Err(error) => tracing::error!(%error, "camera shutdown task failed"),
         }
         let script_shutdown = self.commands.shutdown(self.script_shutdown_timeout).await;
@@ -424,6 +441,65 @@ impl ProductionRuntime {
             Ok(Ok(())) => {}
             Ok(Err(error)) => tracing::error!(%error, "serial shutdown failed"),
             Err(_) => tracing::error!("serial shutdown timed out"),
+        }
+    }
+
+    /// Durable §15.6 `camera_writer_unstopped` state for this shutdown
+    /// transaction. `true` once the camera writer has missed its deadline,
+    /// whether observed here or inside [`CameraManager`].
+    #[allow(
+        dead_code,
+        reason = "step-5/9 shared-memory release wiring reads this gate; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn camera_writer_unstopped(&self) -> bool {
+        self.camera.writer_unstopped() || self.camera_writer_fallback.is_some()
+    }
+
+    /// §15.6 step 5 gate: shared-memory release is allowed only when the
+    /// writer-stopped state is false, i.e. step 2 confirmed writer
+    /// termination. A `false` return forbids unmap; the fallback in
+    /// [`ProductionRuntime::camera_mapping_fallback`] applies instead.
+    #[allow(
+        dead_code,
+        reason = "step-5 shared-memory release wiring reads this gate; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn shared_memory_release_allowed(&self) -> bool {
+        !self.camera_writer_unstopped()
+    }
+
+    /// §15.6 steps 5/9 explicit fallback teardown: while the writer is
+    /// unstopped, the Rust main mapping is retained until OS process exit
+    /// reclaims it instead of being unmapped. POSIX unlinks only the name
+    /// while the existing mapping stays; Windows retains the mapping handle.
+    /// `Some` carries the retained mapping descriptor without claiming
+    /// normal unmap completion; `None` means the fallback is not active.
+    #[allow(
+        dead_code,
+        reason = "step-9 process-exit wiring reads this fallback; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn camera_mapping_fallback(&self) -> Option<MappingDescriptor> {
+        self.camera_writer_fallback
+            .as_ref()
+            .map(UnstoppedCameraWriter::mapping_descriptor)
+    }
+}
+
+/// §15.6 step 2 to steps 5/9 propagation: converts a camera shutdown outcome
+/// into retained fallback ownership. A timed-out writer is logged with a
+/// critical diagnostic and kept alive (mapping plus join handle) so later
+/// steps refuse shared-memory release; a stopped writer retains nothing.
+fn retain_camera_fallback_on_timeout(
+    result: Result<(), UnstoppedCameraWriter>,
+) -> Option<UnstoppedCameraWriter> {
+    match result {
+        Ok(()) => None,
+        Err(unstopped) => {
+            tracing::error!(
+                diagnostic_id = "CAMERA_WRITER_UNSTOPPED",
+                mapping = ?unstopped.mapping_descriptor(),
+                "camera writer did not stop before its deadline; retaining mapping until process exit without unmap"
+            );
+            Some(unstopped)
         }
     }
 }
@@ -726,8 +802,9 @@ fn raw_values(loaded: &LoadedSettings) -> std::collections::BTreeMap<String, ser
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
-    use super::recover_reader_pins_after_script_shutdown;
+    use super::{recover_reader_pins_after_script_shutdown, retain_camera_fallback_on_timeout};
     use crate::camera::CaptureResolution;
     use crate::camera::backend::CameraConfig;
     use crate::camera::selector::CameraSelector;
@@ -784,5 +861,58 @@ mod tests {
                 RingError::ReaderAlreadyPinned
             );
         }
+    }
+
+    #[test]
+    fn camera_shutdown_timeout_is_retained_as_fallback() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6]), RecordedFrame::Hang],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        for _ in 0..1_000 {
+            if manager.ring().read_published().unwrap().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+        // This is the exact outcome type `stop_inputs_camera_and_scripts`
+        // feeds into the fallback helper via `spawn_blocking`.
+        let outcome = manager.shutdown(Duration::from_millis(20));
+        assert!(outcome.is_err());
+        let fallback = retain_camera_fallback_on_timeout(outcome);
+        let guard = fallback.expect("timeout must be retained");
+        assert!(guard.writer_unstopped());
+        assert_eq!(guard.mapping_descriptor(), manager.mapping_descriptor());
+        // The retained guard keeps the mapping observable instead of
+        // claiming any unmap completion.
+        assert!(manager.ring().read_published().unwrap().is_some());
+        drop(guard);
+    }
+
+    #[test]
+    fn camera_shutdown_success_retains_no_fallback() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6])],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        let outcome = manager.shutdown(Duration::from_secs(1));
+        assert!(outcome.is_ok());
+        assert!(retain_camera_fallback_on_timeout(outcome).is_none());
+        assert!(!manager.writer_unstopped());
     }
 }

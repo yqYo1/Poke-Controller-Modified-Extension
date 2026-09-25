@@ -335,6 +335,19 @@ impl SharedFrameRing {
             .store_published_token(INVALID_PUBLISHED_TOKEN, Ordering::Release);
         Ok(recovered)
     }
+
+    /// Removes the POSIX shared-memory name while retaining this process's
+    /// existing mapping. Windows has no separate name-unlink operation; the
+    /// existing mapping handle is retained until process exit.
+    #[cfg(unix)]
+    pub(crate) fn unlink_name_for_shutdown(&self) -> Result<(), RingError> {
+        self.mapping.unlink_name()
+    }
+
+    #[cfg(not(unix))]
+    pub(crate) fn unlink_name_for_shutdown(&self) -> Result<(), RingError> {
+        Ok(())
+    }
 }
 
 /// Per-worker reader that owns the last complete private frame fallback.
@@ -644,6 +657,17 @@ mod mapping {
 
         pub(super) fn os_id(&self) -> &str {
             self.mapping.get_os_id()
+        }
+
+        #[cfg(unix)]
+        pub(super) fn unlink_name(&self) -> Result<(), RingError> {
+            use nix::errno::Errno;
+            use nix::sys::mman::shm_unlink;
+
+            match shm_unlink(self.mapping.get_os_id()) {
+                Ok(()) | Err(Errno::ENOENT) => Ok(()),
+                Err(_) => Err(RingError::MappingFailed),
+            }
         }
 
         fn initialize(&self) {

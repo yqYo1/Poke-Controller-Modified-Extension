@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "bcf0a974cf9062019b408844b6980d06a08c3ad5e8e78c5b9ae4ae084f35f4b0",
+    "rust/pokecon": "a9ca8fc6fbdb6998c38ec5c171a547aff63f9f30f97fbfcabd9b571ca68d472a",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -430,7 +430,7 @@ tokio-tungstenite.workspace = true
 tower.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix = { workspace = true, features = ["fs"] }
+nix = { workspace = true, features = ["fs", "mman"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 nix.workspace = true
@@ -2335,7 +2335,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "25788e885f196ba9ff5a3c5959d2f2f924c6927e6e8917390adf479e9665be0a"
+        == "bfb347dbb5d33838d172356b898a0f594fe8276fe483c620e44aaf9411df655f"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2760,7 +2760,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "21f1d7da2f8153f93feed20fca08810d60823ce17d83015eb293db26ecb32486"
+        == "a963d41d07c9520d7b2a9810bf0a0921963b612e20e11c52cfbaa779c1c75abe"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",

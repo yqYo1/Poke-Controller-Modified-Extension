@@ -1,8 +1,8 @@
 # バックエンド仕様トレーサビリティ（直接証拠）
 
-- 対象: `ghq/github.com/yqYo1/Poke-Controller-Modified-Extension/.worktree/refactor-rust-core`、ブランチ `refactor/rust-core`、基準 `82b973e187e0fac0a26abf65541834e4c6ac72d4`（未コミット差分あり）
+- 対象: `ghq/github.com/yqYo1/Poke-Controller-Modified-Extension/.worktree/refactor-rust-core`、ブランチ `refactor/rust-core`、対象worktreeの現行HEADと監査時点の未コミット差分
 - 正本: `docs/SPECIFICATION_BACKEND.md`
-- 作成日: 2026-09-24。読み取り専用監査。実装・PLAN.md・他ドキュメントへの変更なし。
+- 作成日: 2026-09-24。読み取り専用監査を基礎とし、現行ソース／テストの証拠に合わせて判定記録を更新。
 - 判定基準: 実装済み=直接シンボルあり / 部分的=一部のみ証拠あり / 未実装=実装なし / 仕様のみ=コード不要の宣言
 - パス表記は worktree ルート相対。`src/`=`rust/pokecon/src/`、`registry/`=`rust/pokecon/registry/`、`tests/`=`rust/pokecon/tests/`。`compatibility/` は worktree ルート相対（`rust/pokecon/registry/` 接頭辞とは別体系）。
 - 前身 `/home/yayoi/backend-traceability.md`（127行）の全行を現行ソースで再検証し、古い引用を修正した後継。行数・集計は証拠が支持したため維持。
@@ -46,14 +46,14 @@
 | 7.8.3 エンベロープ種別/欄+閉値共用体（Anyなし） | 実装済み | `src/worker/ipc/schema.rs:341-342` Envelope（deny_unknown_fields）; `:45` IpcValue閉共用体 |
 | 7.8.4 request/response/event意味論 | 実装済み | `src/worker/ipc/schema.rs:342-381` variants; `src/worker/ipc/connection.rs:512` request_with_cancellation; `:556,575,594` respond/respond_error/send_event; `:230` complete_pending |
 | 7.8.4 エラー: 閉IpcErrorPayload{code,message}、ASCII符号、符号対応プロキシ | 実装済み | `src/worker/ipc/schema.rs:254-255` IpcErrorPayload deny_unknown_fields; ASCII検証; `src/worker/ipc/connection.rs:541-544` Remote{code,message} |
-| 7.8.4 SerialDisconnected: 未開始シリアル送信の拒否; 実行中は直列化 | 未実装 | `src/worker/ipc/schema.rs:443` テスト内リテラルのみ。拒否パスはworker/script/protocol・application_backend・serialのいずれにもなし（再grep確認） |
+| 7.8.4 SerialDisconnected: 未開始シリアル送信の拒否; 実行中は直列化 | 実装済み | `src/application_backend.rs:2438-2497` queued `SendCancelled`→`SerialDisconnected` regression; `:2499-2507` disconnected send mapping; `src/script_host.rs:2135-2141` public code mapping; `src/worker/ipc/schema.rs:442-447` closed ASCII code validation |
 | 7.8.4 log種別+重大ポリシー; 7.8.5 stdout横取り（生パイプバイトなし） | 部分的 | `src/worker/ipc/schema.rs:294-337` LogLevel/LogTarget/LogPayload; `src/worker/script/protocol.rs:27` HOST_OUTPUT=script.host.output要求（Envelope::Log未使用）; critical-no-kill方針シンボルなし |
 | 7.8.6 制御面のみ+kill意味論（キュー取消、実行中シリアル全体、強制解放） | 実装済み | 1MiB上限が制御面を拘束（codec.rs:10）; `src/worker/supervisor.rs:686-687` begin_stopping+force_release; `:748-753` start_kill; `src/worker/ipc/connection.rs:21-28` ResourceSafety::force_release |
 | 7.9.1 目標: フレームのみ、≤2コピー、安定フレーム、明示freeなし | 実装済み | `src/camera/shared_ring.rs` write_slot（1コピー）+ copy_payload（読者1コピー）; RingReader::readは独立可変コピー、履歴は部分更新なし |
-| 7.9.2 構成: 名前付き永続SHM、両OS同一意味 | 部分的 | `src/camera/shared_ring.rs:630` MappedRing::create/open（shared_memoryクレート経由、shutdown外unlinkなし）; shm_open/CreateFileMapping直接シンボルなし |
-| 7.9.2 流れ: release-store出版、acquire-load、UINT64_MAX→ゼロフレーム、私用コピー+unpin | 実装済み | `src/camera/shared_ring.rs:151` release store_published_token; `:101` acquire load; `:215` None→zero; `:240-255` pin生成、`:443-460` PinGuard::dropでunpin |
-| 7.9.3 SharedHeaderトークン（slot&#124;seq、巻戻し、予約UINT64_MAX、順序自由） | 実装済み | `src/camera/shared_ring.rs:11` INVALID_PUBLISHED_TOKEN; `:12` MAX_FRAME_SEQUENCE; `:491-504` encode/decode_token; `:553` SharedHeader |
-| 7.9.3 SlotHeader欄+単一読者pin 0/1 | 実装済み | `src/camera/shared_ring.rs:558` SlotHeader（seq/state/pin/byte_length/dtype/shape/strides）; `:240-255` pin CAS 0→1; `:524` ReaderAlreadyPinned; `:443-460` PinGuard Drop |
+| 7.9.2 構成: 名前付き永続SHM、両OS同一意味 | 部分的 | `src/camera/shared_ring.rs:339-350` timeout fallbackのPOSIX name unlink／Windows no separate unlink; `src/camera/shared_ring.rs:662-671` `shm_unlink`（既存mappingは保持）; `src/camera/manager.rs:309-357` writer timeoutからfallbackへ接続。shm_open/CreateFileMapping直接シンボルなし |
+| 7.9.2 流れ: release-store出版、acquire-load、UINT64_MAX→ゼロフレーム、私用コピー+unpin | 実装済み | `src/camera/shared_ring.rs:151` release store_published_token; `:101` acquire load; `:215` None→zero; `:240-255` pin生成、`:456-471` PinGuard::dropでunpin |
+| 7.9.3 SharedHeaderトークン（slot&#124;seq、巻戻し、予約UINT64_MAX、順序自由） | 実装済み | `src/camera/shared_ring.rs:11` INVALID_PUBLISHED_TOKEN; `:12` MAX_FRAME_SEQUENCE; `:504-522` encode/decode_token; `:566` SharedHeader |
+| 7.9.3 SlotHeader欄+単一読者pin 0/1 | 実装済み | `src/camera/shared_ring.rs:571` SlotHeader（seq/state/pin/byte_length/dtype/shape/strides）; `:240-255` pin CAS 0→1; `:524` ReaderAlreadyPinned; `:456-471` PinGuard Drop |
 | 7.9.3 MappingDescriptorはIPC経由で一度 | 実装済み | `src/camera/shared_ring.rs:23` MappingDescriptor deny_unknown_fields; `:88` open検証; `src/camera/manager.rs:193,366` mapping_descriptor; `src/script_host.rs:624-630` camera_initializeで記述子配送; `src/worker_binary/script/python.rs:510-513` 相当のopen+Reader生成 |
 | 7.9.4 writer: 現行除外、state 0/2+pin0 CAS、ブロックせず破棄、release出版; state=0なし再利用 | 実装済み | `src/camera/shared_ring.rs:160-195` reserve_noncurrent_slot（現行スキップ、CAS、NoWritableSlot）; `src/camera/manager.rs:437-439` NoWritableSlot時破棄（publish経路）、`:541-545` 同（reconfigure経路）（※`:415` は起動失敗時のinvalidate_publicationであり混同しない） |
 | 7.9.4 reader: pin+再トークン検査+seq検査、8回yield再試行、履歴/ゼロ退避、PinGuard | 実装済み | `src/camera/shared_ring.rs:13` READ_RETRY_LIMIT=8; `:209-232` read_published_with_hook; `:372` history同形 else zero |
@@ -170,9 +170,9 @@
 
 ## 集計
 
-- 実装済み 111 / 部分的 13 / 未実装 2 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。総数は維持）
+- 実装済み 112 / 部分的 13 / 未実装 1 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。総数は維持）
 - 部分的13: §1.2 UI温存、§4.6.1参照専用、§4.6.2監視、§6.1.6自動選択、7.8.1 OOB、7.8.4 log、7.9.2 SHM、10.4.3 tk橋渡し、付録B、11.1 none、11.4.3、§14.6 LSP、11.5.1時期
-- 未実装2: 7.8.4 SerialDisconnected、7.9.6ベンチマーク
+- 未実装1: 7.9.6ベンチマーク
 - 仕様のみ1: §1.2 frontend技術選択
 
 ## 旧引用の修正（前身からの差分）
@@ -183,15 +183,14 @@
 
 ## 対応が必要な未達（アクション）
 
-1. 7.8.4 SerialDisconnected拒否経路の実装（未実装）。キュー未開始シリアル送信の拒否を worker/script/protocol・application_backend・serial のいずれかに追加。
-2. 7.9.6 参照ベンチマーク harness の追加（未実装）。benches/criterion なし。CIはモックI/O性能ゲートとして配線。
-3. 11.5.1 自動reload監視の実装（部分的の核）。`notify`/FileWatcher は `src/` ゼロヒット。明示 Reload のみ。
-4. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
-5. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
-6. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
-7. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
-8. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
-9. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
+1. 7.9.6 参照ベンチマーク harness の追加（未実装）。benches/criterion なし。CIはモックI/O性能ゲートとして配線。
+2. 11.5.1 自動reload監視の実装（部分的の核）。`notify`/FileWatcher は `src/` ゼロヒット。明示 Reload のみ。
+3. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
+4. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
+5. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
+6. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
+7. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
+8. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
 
 ## 行なし仕様規範（将来の行候補）
 

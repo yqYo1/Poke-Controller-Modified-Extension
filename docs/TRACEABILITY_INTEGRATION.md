@@ -1,8 +1,8 @@
 # Integration 定義書トレーサビリティ（直接証拠）
 
 - 対象: `docs/SPECIFICATION_INTEGRATION.md`（829行）の全要件
-- ブランチ: `refactor/rust-core` / HEAD: `82b973e187e0fac0a26abf65541834e4c6ac72d4`（+ dirty/staged 変更あり）
-- 検証日: 2026-09-24 / 方法: 現worktreeへの直接grep・readによる再検証（実装修正なし）
+- ブランチ: `refactor/rust-core` / 対象worktreeの現行HEADと監査時点の未コミット差分を検証基準とする
+- 検証日: 2026-09-25 / 方法: 現worktreeの実装・テスト・仕様を直接照合（今回のcamera shutdown証跡を反映）
 - 凡例: ✅ IMPLEMENTED / ⚠️ PARTIAL（部分的・未検証の配線あり） / ❌ MISSING（未実装） / 🔶 DIVERGENCE（実装が仕様と乖離）
 - パスはすべてリポジトリルート相対。行番号は検証時点のもの。
 
@@ -225,12 +225,12 @@
 | 15.5 | bypass（tray終了/SIGTERM・Ctrl+C/OS logout・fatal・dialog不能→fail-safe shutdown） | ⚠️ | SIGINT/SIGTERM/Ctrl+C/Break配線（`runtime/shutdown.rs:15-17,107,152-162`）。OS session-end（logout/shutdown）専用handlerなし | **要対応**：OSセッション終了通知が盖然性あるplatformでは明示handler追加 or 対象外宣言 |
 | 15.6-0 | AppShutdownPre 2s・非cancel・例外継続・未開始不開始・実行中不待・stopping遷移・IPC切断（診断log許可） | ⚠️ | `dynamic_runtime.rs:167-191`、`dynamic_host.rs:731-743` 発火・期限。未開始不開始/await semanticsの明示性不足 | **要検証**：期限時ふるまいの行レベル証拠 |
 | 15.6-1 | controller強制解放 | ✅ | `production.rs:382-422` 順序、`lib.rs:76,325,482-497` | — |
-| 15.6-2 | camera停止＋出版停止（UINT64_MAX release順序・writer未了時は不変更＋ `camera_writer_unstopped`＋進行） | ✅ | `production.rs:396-404` が `CameraManager.shutdown` を呼び、成功時は `manager.rs:616-628,702-704` のwriter内 `close→invalidate_publication→stop_publication(true)`。timeout/チャネル失敗は `UnstoppedCameraWriter` として進行を止めない | writer未了時の永続診断フラグ・step5/9伝達は未完了 |
-| 15.6-3 | script worker協調停止（shutdown_timeout_ms）＋ reader_pin 0 reset | ✅ | `production.rs:443-464` が `Ok(Some(_))` 後に `recover_reader_pins(true,true)`。`supervisor.rs:706-769` はStopReport返却前にchild wait/reap、`command_service.rs:1284-1307` はプロファイルgate保持下で停止 | — |
+| 15.6-2 | camera停止＋出版停止（UINT64_MAX release順序・writer未了時は不変更＋ `camera_writer_unstopped`＋進行） | ✅ | `production.rs:415-420` が `CameraManager.shutdown` とtimeout fallbackを呼び、`manager.rs` はwriter timeoutをdurable flag／`UnstoppedCameraWriter`として返す。成功時はwriter内 `close→invalidate_publication→stop_publication(true)`。 | reader_pin 0 resetは15.6-3で検証 |
+| 15.6-3 | script worker協調停止（shutdown_timeout_ms）＋ reader_pin 0 reset | ✅ | `production.rs:422-426` がscript shutdown後に `recover_reader_pins_after_script_shutdown`（`:507-540`）を呼ぶ。`supervisor.rs:706-769` はStopReport返却前にchild wait/reap、`command_service.rs:1284-1307` はプロファイルgate保持下で停止 | — |
 | 15.6-4 | dynamic worker停止＋ deadline・force-killは終了時例外・finally不保証 | ⚠️ | `dynamic_runtime.rs:34,193-208` 2s停止。force-kill配線の全経路は未完了 | **要検証**：終了時例外／finally経路 |
-| 15.6-5 | shm unlink（条件付・POSIX unlink/Win保持・退避主張なし） | ⚠️ | 正常経路は`shared_memory` 0.12.4の`Shmem` Dropによるmap解放・owner unlink（依存一次ソース: `https://docs.rs/crate/shared_memory/0.12.4/source/src/unix.rs`／`windows.rs`）に依存。PokeCon側の明示unlinkなし | writer未了時にArc保持されたmappingを安全にunlinkする分岐・診断が未実装 |
+| 15.6-5 | shm unlink（条件付・POSIX unlink/Win保持・退避主張なし） | ✅ | 正常経路は`shared_memory` 0.12.4の`Shmem` Dropによるmap解放・owner unlink。writer未了時は`shared_ring.rs`の`shm_unlink`でPOSIX名だけをunlinkし、`ProductionRuntime`が`UnstoppedCameraWriter`／mappingを保持する。Windowsは別unlinkなしで既存handleを保持する。timeout回帰testが既存mappingの読出しを確認 | process-levelのflush-only終了証跡は15.6-9に残る |
 | 15.6-6/7/8 | 入力再解放・serial切断・axum 2s graceful（超過cancel・非受付） | ✅ | `production.rs:382-422`、`lib.rs` 期限 | — |
-| 15.6-9 | process終了（un unstopped時はunmapせずflushのみ・無期限待機禁止） | ⚠️ | 正常経路はRAII cleanupに依存。writer未了時のunmap禁止・flush-only分岐と永続診断は15.6-5の未完了に依存 | **要実装**：writer未了teardown分岐 |
+| 15.6-9 | process終了（unstopped時はunmapせずflushのみ・無期限待機禁止） | ⚠️ | camera mapping保持と有限ログは15.6-5で実装済み。process終了時のflush-only分岐と終了時証跡は未確認 | **要検証**：process-level teardown／flush経路 |
 | 15.7 | Web modeでclose_behavior無効・SIGTERM等は§15.5/15.6 | ✅ | mode分岐、shutdown共有 | — |
 | 15.8 | disable_compositing：startup-only・4経路・global専用・優先順・動的pathなし・Web無効・checkbox＋restart表示（GPUI非表示） | ⚠️ | `settings.json:2628` 正準ID、TOML/env/CLI/OpenAPI経路・scope・優先順はregistry＋backend適合。frontend checkbox/dir-picker/IP-input/restart-notice表面は `close_behavior` select以外未検証 | **要検証**：desktop settings画面のcheckbox・再起動表示 |
 | 15.9 | web_dir：startup-only・4経路・global専用・優先順・動的pathなし・path検証（directory/存在/非自動/型/symlink解決/権限/無fallback）・HTTP閉じ込め（decode→正規化→拒否→結合→正準子孫のみ・外部symlink/二重encode拒否403・内容/ host path非公開・安全不存在のみ404）・相対解決（CLI cwd/TOML-env Config基準）・picker＋restart表示・参照読取専用 | ⚠️ | registry `server.web_dir`（`:1936`）＋backend検証・static配信は適合。UI picker・再起動表示は未検証 | 同上（§15.8と同一 frontend表面検証） |

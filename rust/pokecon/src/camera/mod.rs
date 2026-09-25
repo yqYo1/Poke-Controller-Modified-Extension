@@ -16,7 +16,7 @@ pub mod virtual_camera;
 
 pub use backend::{CameraBackend, CameraConfig, CameraError};
 pub use frame::{BgrFrame, CaptureResolution, FlipMode, NormalizedRegion};
-pub use manager::CameraManager;
+pub use manager::{CameraManager, UnstoppedCameraWriter};
 pub use media::{LatestFrameSource, MediaFrame, MotionJpegSource, WebRtcFrameSource};
 pub use native::NativeCameraBackend;
 pub use screenshot::{

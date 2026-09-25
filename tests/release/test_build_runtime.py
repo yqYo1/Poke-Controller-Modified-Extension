@@ -1771,7 +1771,7 @@ def test_nix_release_task_isolates_reproducible_target_native_abi() -> None:
     root = Path(__file__).resolve().parents[2]
     flake = (root / "flake.nix").read_text(encoding="utf-8")
     runtime_output_hash = (
-        'outputHash = "sha256-h+mgNMekNvnlMfIuCc+YbqtQSCag7LiOIGmu+lxm2pY=";'
+        'outputHash = "sha256-7xp2J/bK3gMnIZxXEN3OBb2HPU1IJidD/mjJnb1uzYE=";'
     )
 
     assert flake.count(runtime_output_hash) == 1

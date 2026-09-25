@@ -133,6 +133,8 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-11-37** 別processと同一processの境界を確定する（予定証跡: process／module deployment diagramとIPC境界test）。
 - [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
 
+- 2026-09-26 architecture handoff packet: [`docs/ARCHITECTURE_HANDOFF.md`](docs/ARCHITECTURE_HANDOFF.md)に現行sourceのownership、process／resource lifecycle、公開boundary、distribution、dependency ruleを集約した。runtime／fault test、clean detached worktree、実機／実browser、Release tagの証拠は未成立のため、上記AR checkboxは未完了のまま保持する。
+
 ## フェーズ 1 — tool-only devShellと用途別Nix appへ開発入口を固定
 
 2026-07-30の旧方針で得た用途別app／隔離gateの証跡は維持する。2026-08-09の利用者指示がdevShell廃止だけを上書きしたため、該当IDは現在の意味へ更新し、再受入が終わるまで未完了へ戻す。

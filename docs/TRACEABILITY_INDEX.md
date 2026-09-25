@@ -19,7 +19,7 @@
 - `外部証跡待ち`は、実機、実browser、clean machine、Release tag、またはGitHub上の追加操作が必要な状態です。
 - local test、CI success、source-only auditは、別の種類の未確認項目を暗黙に完了扱いしません。
 
-## 2. 六つの文書の責務
+## 2. 文書とartifactの責務
 
 | 文書 | 種別 | この表での役割 | 正本または証拠 |
 |---|---|---|---|
@@ -28,6 +28,7 @@
 | [`docs/SPECIFICATION_FRONTEND.md`](SPECIFICATION_FRONTEND.md) | 規範定義書 | Web／Tauri／GPUIの操作、表示、accessibility、browser品質を定める | [`TRACEABILITY_FRONTEND.md`](TRACEABILITY_FRONTEND.md) |
 | [`docs/SPECIFICATION_INTEGRATION.md`](SPECIFICATION_INTEGRATION.md) | 規範定義書 | HTTP、WebSocket、WebRTC、保存、入力、lifecycle、frontend境界を定める | [`TRACEABILITY_INTEGRATION.md`](TRACEABILITY_INTEGRATION.md) |
 | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | 実装説明 | 現在のprocess、ownership、state、停止順を説明する。要件の正本ではない | source call graph、module／queue／lockの説明 |
+| [`docs/ARCHITECTURE_HANDOFF.md`](ARCHITECTURE_HANDOFF.md) | 受入準備artifact | architecture handoffのownership、lifecycle、公開境界、依存方向、配布matrixと未成立証拠を集約する。要件の正本ではない | source参照、PLAN対応表、次のtest packet |
 | [`PLAN.md`](../PLAN.md) | 進行計画 | 受入条件、実行証跡、未完了項目、owner／外部作業を記録する。要件の正本ではない | checkbox、CI run、artifact、残タスク |
 | [`FUNCTION_TRACEABILITY_MATRIX.md`](FUNCTION_TRACEABILITY_MATRIX.md) | 機能監査artifact | 定義書の機能sectionを役割、owner、実装、test、status、gapへ対応付ける。要件の正本ではない | 機能matrix、直接source、受入test、未完了分類 |
 
@@ -78,7 +79,7 @@
 
 | 対象 | 正本／artifact | 確認内容 | 完了扱いにしない条件 |
 |---|---|---|---|
-| ownership、process、queue、lock、shutdown | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)と三つのtraceability表 | architectureの主張を実在source symbolとproduction call graphへ接続 | architecture説明だけでruntime受入、実機、browser受入を主張しない |
+| ownership、process、queue、lock、shutdown | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)と[`docs/ARCHITECTURE_HANDOFF.md`](ARCHITECTURE_HANDOFF.md)、三つのtraceability表 | architectureの主張を実在source symbolとproduction call graphへ接続し、handoffの未成立testを分離 | architecture説明だけでruntime受入、実機、browser受入を主張しない |
 | 開発入口、生成物、正準registry | [`docs/README.md`](README.md)、[`docs/DEVELOPMENT.md`](DEVELOPMENT.md)、`registry/` | Nix task、source boundary、generated artifactの責務を接続 | clean detached worktreeが必要なgateを既存worktreeの成功で代用しない |
 | checkpoint共通gate | [`PLAN.md`](../PLAN.md)の各checkpointと`flake.nix` task | format、contract、source filter、test、build、文書lint、CI runを実行結果へ接続 | 以前のSHA、単一unit test、delegated reviewだけではcurrent SHAの受入にしない |
 | package／release | [`docs/INSTALL.md`](INSTALL.md)、[`docs/PACKAGE_REPRODUCIBILITY_EXCEPTIONS.md`](PACKAGE_REPRODUCIBILITY_EXCEPTIONS.md)、Package CI artifact | bundle、clean-install、upgrade、uninstall、二重build、manifestを接続 | `v*` tag、署名runner、実機／clean machineの外部証跡をCI successだけで代用しない |

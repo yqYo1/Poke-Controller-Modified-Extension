@@ -87,6 +87,43 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - [ ] WASMギャラリーの成功をアプリ全体の成功証明にしない。single canvas/window制約、threading/COOP-COEP要件、WebGPU/WebGL2、browser fonts、入力、screen readerの限界を記録する。
 - **Gate 1:** native window起動、event loop/backend監督の共存、IME/CJK/clipboard/accessibilityの基本確認が成立し、未解決点と回避案が文書化されること。WASMの成否は別記し、native PoCの合否へ混ぜない。
 
+#### PoC依存候補の一次資料調査（未採用）
+
+一次資料で確認した候補releaseは[`gpui-kit v0.6.6`](https://github.com/longbridge/gpui-kit/releases/tag/v0.6.6)（tag commit `9765ae2c9a5eccfa13891248a445991e6f6a09d8`）です。
+同tagの[workspace manifest](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/Cargo.toml)はGPUI関連crateを`=0.3.6`、`gpui-pre-reqwest`を`=0.12.15`へ完全固定します。
+[kit manifest](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/crates/kit/Cargo.toml)は`gpui-kit`をApache-2.0と宣言しています。
+[同tagのNix定義](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/flake.nix)にはWayland、Vulkan、XCB、GTK3等のLinux依存があります。
+
+この候補調査はPhase 1の依存採用・Gate 1通過を意味しません。
+Poke-ConにはGPUI依存がなく、候補tagのworkspace lockfile（1,248 package）とcrates.ioの1,186件のlicense metadata、icon license、上流課題を監査しました。既定featureの実際の依存閉包、MPL該当package、任意のGTK3／WebKitGTK配布条件、ライセンス原文の法的確認、Poke-Con上のnative buildとIME/CJK/clipboard/accessibility／Tokio共存は未確定です。
+これらの確認とfake-data native viewの実証が済むまで、Cargo依存、lockfile、Nix native libraryを追加せず、selector実装をPhase 1の代用にしません。
+
+### 候補依存のライセンスと上流課題
+
+`gpui-kit v0.6.6`のtag commitは`9765ae2c9a5eccfa13891248a445991e6f6a09d8`です。[kit manifest](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/crates/kit/Cargo.toml)はdefault featureを`component`＋`assets`とし、同tagの`gpui-base`、`gpui-component`、`gpui-kit-assets` manifestはApache-2.0を宣言します。[workspace manifest](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/Cargo.toml)はGPUI crateを`=0.3.6`、`gpui-pre-reqwest`を`=0.12.15`へ固定します。`shell`、`webview`、`tree-sitter-*`はopt-inです。
+
+このtagの[リポジトリトップレベル](https://github.com/longbridge/gpui-kit/tree/v0.6.6)に`NOTICE`はなく、[`LICENSE-APACHE`](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/LICENSE-APACHE)が存在します。crates.io version metadataは、[`gpui-pre 0.3.6`](https://crates.io/crates/gpui-pre/0.3.6)、[`gpui-pre-platform 0.3.6`](https://crates.io/crates/gpui-pre-platform/0.3.6)、[`gpui-pre-linux 0.3.6`](https://crates.io/crates/gpui-pre-linux/0.3.6)、[`gpui-pre-wgpu 0.3.6`](https://crates.io/crates/gpui-pre-wgpu/0.3.6)、[`gpui-pre-macros 0.3.6`](https://crates.io/crates/gpui-pre-macros/0.3.6)、[`gpui-pre-web 0.3.6`](https://crates.io/crates/gpui-pre-web/0.3.6)、[`gpui-pre-reqwest-client 0.3.6`](https://crates.io/crates/gpui-pre-reqwest-client/0.3.6)、[`gpui-pre-sum-tree 0.3.6`](https://crates.io/crates/gpui-pre-sum-tree/0.3.6)をApache-2.0、[`gpui-pre-reqwest 0.12.15`](https://crates.io/crates/gpui-pre-reqwest/0.12.15)をMIT OR Apache-2.0と宣言しています。
+
+上流[`Cargo.lock`](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/Cargo.lock)は1,248 package（crates.io 1,186、Git 24、workspace path 38）を解決し、crates.io metadataのlicense fieldは全1,186件で解決、未分類は0件でした。ただしlockfileはworkspace／target／optional featureの和集合であり、既定Linux feature closureを確定しません。
+
+- **MPL-2.0**: metadata上7 package。`option-ext 0.2.0`([crates.io metadata](https://crates.io/crates/option-ext/0.2.0))は`dirs-sys`→`dirs`→`zed-font-kit`→`gpui-pre`経由で既定Linuxの依存閉包に入る可能性があり、feature解決後の閉包を再検証します。`cbindgen 0.28.0`はmacOS向けbuild依存、`cssparser 0.29.6`／`cssparser-macros 0.6.1`／`dtoa-short 0.3.5`／`selectors 0.24.0`は`lb-wry`のAndroid target経由、`dwrote 0.11.5`はWindows targetです。MPLのソース提供条件を含め、target別の頒布可否は未承認です。
+- **複数license／metadata要確認**: [`self_cell 1.3.0`](https://crates.io/crates/self_cell/1.3.0)はApache-2.0 OR GPL-2.0-only（Apache選択可能）、`r-efi 5.3.0`／`6.0.0`はMIT OR Apache-2.0 OR LGPL-2.1-or-later（permissive選択可能）です。[`tree-sitter-graphql 0.1.0`](https://crates.io/crates/tree-sitter-graphql/0.1.0)はcrates.io metadataが`non-standard`ですが、上流LICENSEはMITと報告されています。任意feature依存ですが、公開crate metadataとの不一致は法務確認対象です。
+- **Git／workspace path依存とnative配布**: lockfile上の`llrt`はApache-2.0、`quickjs-jit`はMIT、公開対象path crateはApache-2.0宣言ですが、同梱C engineのlicense原文は全文照合していません。`gpui-pre-linux 0.3.6`の既定runtime依存にGTKはなく、[`lb-wry 0.53.3` manifest／feature metadata](https://docs.rs/crate/lb-wry/0.53.3/source/Cargo.toml)の`os-webview` featureを選ぶ場合にGTK／WebKitGTK／JavaScriptCore／Soupを含むnative依存が入ります。上流Nix開発環境のnative library一覧と実際の頒布runtime閉包は分けて確認します。
+
+[`crates/assets/LICENSE-LUCIDE`](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/crates/assets/LICENSE-LUCIDE)にはLucide由来iconのISC許諾文と、列挙されたFeather由来iconに適用されるMIT許諾文が併記されています。該当assetを再配布する場合は両方の著作権表示と許諾文を保持します。以上はregistry metadataと主要なlicense原文に基づく技術監査であり、法的助言・頒布承認ではありません。`cargo metadata`で選定feature／target closureを固定し、Git/C engine原文も含む`cargo-about`等のsource-based license reportと配布noticeを生成・reviewするまで、license／notice gateは未完了です。
+
+上流の版固定には実例があります。[#3156](https://github.com/longbridge/gpui-kit/issues/3156)では、`gpui-pre`の`register_inspector_element`変更によりcaret要件が破損し、[#3163](https://github.com/longbridge/gpui-kit/pull/3163)で完全固定へ切り替えました。v0.6.6のCIにもexact pin検査があります。PoCの依存更新ではGPUI関連snapshotとlockfileをまとめて更新し、同じNix gateを実行します。
+
+native viewの受入では、次の既知課題を個別に再現確認します。
+
+- 日本語IME: [Zed PR #60589](https://github.com/zed-industries/zed/pull/60589)はLinux X11／Fcitxで長時間稼働後に入力不能となる問題を報告し、[issue #64389](https://github.com/zed-industries/zed/issues/64389)はIME composition selectionのoffset計算問題を報告しています。上流修正の存在だけでは日本語IMEの受入根拠にならないため、長時間入力とcompositionを試験します。
+- accessibilityとfocus: [gpui-kit #3182](https://github.com/longbridge/gpui-kit/issues/3182)はv0.6.6のfocusable listにAccessKit roleがなくtree nodeが出ない事例を記録し、[#2968](https://github.com/longbridge/gpui-kit/issues/2968)はsidebar項目のrole欠落を報告しています。[#3183](https://github.com/longbridge/gpui-kit/issues/3183)はv0.6.0時点の入力focus報告で、投稿者自身がv0.6.6では変更済みの可能性を注記しています。いずれもPoke-Conでの不具合を証明するものではなく、fake-data viewでTab遷移とaccessibility treeを検査する再現候補です。
+- clipboard: [Zed PR #61338](https://github.com/zed-industries/zed/pull/61338)はWayland selectionの寿命と`text/plain` MIMEの相互運用を扱います。[PR #54857](https://github.com/zed-industries/zed/pull/54857)はGPUI Webのclipboard event bridgeを実装する提案です。native Wayland clipboardとWASM/browser clipboardは別gateとして扱います。
+- 起動と配布: 同tagの[Nix定義](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/flake.nix)は開発環境にWayland、Vulkan、XCB、XKB、GTK3等を列挙しますが、これは既定Linux runtimeのリンク閉包を意味しません。既定Linux backendと任意`lb-wry`のnative依存を区別し、PoCではX11／Waylandの起動・focus、Nix開発環境、実際の配布依存を別々に検査します。
+- event loop: upstreamの[`Application::run`](https://github.com/zed-industries/zed/blob/bcf6582/crates/gpui/src/app.rs)は通常platform上でevent loopを占有し、[`run_embedded`](https://github.com/zed-industries/zed/blob/bcf6582/crates/gpui/src/app.rs)は外部event loopから制御するための別経路を提供します。いずれも既存Tokio backend supervisorとの共存を証明しません。Gate 1で起動、制御、停止の共存をPoke-Con上で実証します。
+
+以上の課題は候補を排除する結論ではなく、Phase 1／Gate 1とGate 6へ引き継ぐ試験対象です。native build、Tokio共存、日本語IME、clipboard、accessibility、推移依存監査の結果が揃うまではPoCを完了扱いしません。
+
 ### Phase 2 — 並行起動選択とfrontend/backend接続
 
 - [ ] `apps.default`と`apps.tauri`を変更せず、同じ`packages.pokecon/bin/pokecon`へ`--ui gpui`を渡す薄い`apps.gpui`を追加する。別Cargo package、別backend binary、別workerは作らない。

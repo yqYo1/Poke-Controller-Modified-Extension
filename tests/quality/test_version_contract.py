@@ -436,7 +436,7 @@ def test_rust_ci_split_executes_every_declared_non_contract_target_once() -> Non
     assert "--doc" not in rust_check
     assert 'select(.name != "contract_sync")' in execution
     assert '"$test_executable"' in execution
-    assert 'if [ "$executed_test_count" -ne 9 ]; then' in execution
+    assert 'if [ "$executed_test_count" -ne 10 ]; then' in execution
     assert rust_check.count('install -m 0555 "$contract_test_executable"') == 1
     assert "src = rustCoreTestSource;" in rust_check
 

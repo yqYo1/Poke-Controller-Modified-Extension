@@ -61,7 +61,7 @@ Web UIの開発と構築にはBunを使用し、配布済みアプリケーシ�
 
 ## Nix devShellで開発する
 
-開発作業は、toolchainを固定したNix devShell内で行います。`.envrc`は`use flake`を指定しているため、新しいworktreeでは一度`direnv allow`を実行します。自動読込みを使わない場合は`nix develop`で同じ環境へ入れます。
+開発作業は、toolchainを固定したNix devShell内で行います。direnvを使う場合、新しいworktreeでは一度`direnv allow`を実行します。自動読込みを使わない場合は`nix develop`で同じ環境へ入れます。
 
 hostに直接導入したtoolchainは使用しません。完了gate、formatter、用途別の隔離実行は引き続き固定したflake appから実行します。
 

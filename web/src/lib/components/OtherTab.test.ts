@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApplicationRuntime, type RuntimeView } from '../runtime';
@@ -94,6 +94,67 @@ describe('OtherTab', () => {
       expect(writeSettings).toHaveBeenCalledWith({
         stun_server: 'stun:stun.example.com:3478'
       });
+    });
+  });
+
+  it('defaults the controller position to bottom while settings are not loaded', () => {
+    const { runtime, view } = runtimeView();
+    render(OtherTab, { runtime, view: { ...view, settings: null } });
+
+    const controller = within(screen.getByRole('group', { name: 'コントローラーの位置' }));
+    expect(controller.getByRole<HTMLInputElement>('radio', { name: 'BOTTOM' }).checked).toBe(true);
+    expect(controller.getByRole<HTMLInputElement>('radio', { name: 'TOP' }).checked).toBe(false);
+    const dialog = within(screen.getByRole('group', { name: 'ダイアログボタンの位置' }));
+    expect(dialog.getByRole<HTMLInputElement>('radio', { name: 'BOTTOM' }).checked).toBe(true);
+  });
+
+  it('renders radio controls for both position settings', () => {
+    const { runtime, view } = runtimeView();
+    render(OtherTab, { runtime, view });
+
+    const controller = within(screen.getByRole('group', { name: 'コントローラーの位置' }));
+    expect(
+      controller
+        .getAllByRole<HTMLInputElement>('radio')
+        .map((radio) => radio.value)
+    ).toEqual(['top', 'bottom']);
+    expect(controller.getByRole<HTMLInputElement>('radio', { name: 'BOTTOM' }).checked).toBe(true);
+
+    const dialog = within(screen.getByRole('group', { name: 'ダイアログボタンの位置' }));
+    expect(
+      dialog
+        .getAllByRole<HTMLInputElement>('radio')
+        .map((radio) => radio.value)
+    ).toEqual(['top', 'bottom', 'both']);
+    expect(dialog.getByRole<HTMLInputElement>('radio', { name: 'BOTTOM' }).checked).toBe(true);
+
+    expect(
+      screen.queryByRole('combobox', { name: /コントローラーの位置|ダイアログボタンの位置/ })
+    ).toBeNull();
+  });
+
+  it('writes position settings from the radio controls', async () => {
+    const { runtime, view } = runtimeView();
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('5')
+    });
+    render(OtherTab, { runtime, view });
+
+    await fireEvent.click(
+      within(screen.getByRole('group', { name: 'コントローラーの位置' })).getByRole('radio', {
+        name: 'TOP'
+      })
+    );
+    await fireEvent.click(
+      within(screen.getByRole('group', { name: 'ダイアログボタンの位置' })).getByRole('radio', {
+        name: 'BOTH'
+      })
+    );
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({ 'ui.controller_position': 'top' });
+      expect(writeSettings).toHaveBeenCalledWith({ 'ui.dialog_button_position': 'both' });
     });
   });
 });

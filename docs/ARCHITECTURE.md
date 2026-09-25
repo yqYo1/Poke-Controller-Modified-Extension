@@ -288,6 +288,24 @@ native pathとserial identityは必要な範囲で表示し、公開issue用の�
 
 fail-softな外部通知やlegacy helperも、失敗を完全に消さず診断へ残します。
 
+## 設計原則と実行時機構の対応
+
+製品全体で優先する設計原則を、所有するmoduleと実行時機構へ対応付ける。
+
+| 設計原則 | 所有module (実装事実) | queue / lock / task / thread の所有 |
+|---|---|---|
+| Rust processがhardware resourceと共有状態を所有し、worker・frontendは境界経由で接続する | `worker::supervisor` (`ManagedWorker`, `WorkerGeneration`)、子側 `worker_binary` | 世代gateと世代別`CancellationToken`、hangしたworkerがshutdownを止めないbounded IPC timeout |
+| 設定transactionは一つのvisible revisionとして観測される | `server::state` (`StateHub`, `commit`)、`application_backend` がprojectionを更新 | `Mutex<VisibleState>` のgate、順序付きcommitを配る`broadcast` channel (`history_capacity`) |
+| stateとephemeral eventを同じ信頼性で扱わない | `server::websocket` | control / state / low のbounded `mpsc` queue (`state_queue_capacity` / `ephemeral_queue_capacity`)、ephemeralはdrop-on-full、pongは`watch` |
+| controller入力sourceの所有権を世代で仲裁する | `device::input` (`InputArbiter`, `InputGeneration`, `InputSequence`)、`dynamic_host` が共有 | `Arc<Mutex<InputArbiter>>` の共有arbiter、旧generationと順序の壊れたsequenceを混ぜない |
+| serialはneutral優先・全byte成功後のみdelta commit・同selector再接続 | `device::serial::manager` (`SerialManager`, `codec.commit`) | 受信`broadcast` (64)、接続状態`watch`、再試行はbounded (20 attempts) |
+| camera frameのlifetimeをpinで守る | `camera::manager` (`CameraManager`)、`camera::media` (`LatestFrameSource`, `SharedFrameRing`) | 最新frame配布は`watch` channel、`shutdown(timeout)` で停止不能writerはmappingを保持 (`UnstoppedCameraWriter`) |
+| workerと動的設定をgeneration／transactionとして扱う | `worker::generation` (`WorkerGeneration`, `GenerationManager`)、`dynamic::transaction` (`EvaluationTransaction`)、`dynamic::callback` | 世代別cancellation、stage→commit切替、失敗時は現行generation維持、callback soft／hard timeout |
+| shutdownは一つの順序へ収束する | `runtime::shutdown` (`ShutdownCoordinator`, `ShutdownReason`) | 先勝ちreasonと`CancellationToken`、停止不能threadを無期限joinしない |
+| server境界とsecret境界を守る | `server::security` (`RequestSecurity`)、`server::api` (`ErrorEnvelope`, `ApiErrorCode`) | bind由来のOrigin許可と `x-pokecon-request` marker、閉じたmachine-readable code |
+
+この表のmodule pathはcrate-privateな実装事実であり、公開APIの約束ではない。`rust/pokecon/src/lib.rs` の `mod` 宣言が `pub mod` でないことで強制され、対応の欠落・変更は `contract_sync` のdrift testが検出する。
+
 ## 変更時に守る不変条件
 
 本体変更のreviewでは、少なくとも次の不変条件を確認します。

@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "2792deb76814f512fe15f39ca21a157b1a5a332013aec31f03909c128dca209e",
+    "rust/pokecon": "bcf0a974cf9062019b408844b6980d06a08c3ad5e8e78c5b9ae4ae084f35f4b0",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -303,6 +303,11 @@ path = "src/bin/generate_openapi.rs"
 test = false
 bench = false
 required-features = ["contract-generator"]
+
+[[test]]
+name = "concurrent_camera_serial_load"
+path = "tests/concurrent_camera_serial_load.rs"
+required-features = ["integration-test-support"]
 
 [[test]]
 name = "contract_sync"
@@ -2330,7 +2335,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     )
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "7714f0634817236b5cefe4c859a4c50a0b89b65766cbff83afd331c45205194f"
+        == "25788e885f196ba9ff5a3c5959d2f2f924c6927e6e8917390adf479e9665be0a"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2543,7 +2548,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "1b12052fd92a496b4321eb66a40f2e416eb1eebb7516bb3f3a2f760ece1fdf53"
+        == "2d2cfca67d0f135752a0b2a6da9d7e296fb0f670235d90f76382818e2fb10b66"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")
@@ -2684,6 +2689,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         '"rust/pokecon/registry/foundation.json"',
         '"rust/pokecon/registry/generation.json"',
         '"rust/pokecon/tests"',
+        '"docs/ARCHITECTURE.md"',
+        '"docs/SPECIFICATION_BACKEND.md"',
+        '"docs/SPECIFICATION_FRONTEND.md"',
+        '"docs/SPECIFICATION_INTEGRATION.md"',
         '"scripts/__init__.py"',
         '"scripts/ci/aggregate.py"',
         '"scripts/ci/regions.py"',
@@ -2751,7 +2760,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "00cd23575985d82fcd045eb7118c2cfed34f0bb821f7441c513fb9cb8660a360"
+        == "21f1d7da2f8153f93feed20fca08810d60823ce17d83015eb293db26ecb32486"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -3727,7 +3736,7 @@ offline = true
     rust_ci_check_section = flake[compatibility_sources_end:rust_ci_check_end]
     assert (
         hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
-        == "b042aca9a9b804454d7dcdc2f544d650641c487e426435d1670200505ba350bb"
+        == "da14e207143d660c104e4b09322e82380777ecd16f99afff16673e86e6bcc6cb"
     )
     for rust_ci_check_proof in (
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -3744,6 +3753,8 @@ offline = true
         "Compile the complete test graph once.",
         "workflow/spec changes do not invalidate this",
         "Execute the lib harness and every non-contract integration harness",
+        'name: "concurrent_camera_serial_load",',
+        'if [ "$executed_test_count" -ne 10 ]; then',
         "cargo test --locked --workspace --all-features",
         "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         "python -m scripts.compatibility.promote --check",
@@ -3916,7 +3927,7 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "10cb869f0e10490dfb47026852b037eba17db658c7c2556db4263afd736dd937"
+        == "cff150193eb552eb51ab42e5f930fed48903a2073fab4167a739440a5dbe504b"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -18585,7 +18596,11 @@ def test_ci_workflows_use_one_fail_closed_region_plan_and_required_aggregates() 
     ):
         assert not (workflow_root / retired_workflow).exists()
     for workflow in (normal, package):
-        assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
+        # Pushes to the integration branch are deliberately excluded while
+        # pull requests may target it; see PLAN.md AR-10.10-05 for the open
+        # direct-push coverage trade-off.
+        assert workflow.count("branches: [main, master]") == 1
+        assert workflow.count("branches: [main, master, refactor/rust-core]") == 1
         assert not re.search(r"(?m)^\s*paths\s*:", workflow)
         assert workflow.count("  plan:\n") == 1
         assert workflow.count("name: Plan changed regions") == 1

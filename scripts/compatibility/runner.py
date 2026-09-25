@@ -425,6 +425,31 @@ def serialized_results(results: Mapping[str, object]) -> str:
     return json.dumps(results, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
+REPORT_SCHEMA = "compatibility-report/1"
+
+
+def success_report(results: Mapping[str, object]) -> dict[str, object]:
+    """Build the compact corpus-SHA report emitted after a passing check."""
+    summary = require_mapping(results.get("summary"), "results summary")
+    return {
+        "schema": REPORT_SCHEMA,
+        "result": "passed",
+        "manifest_sha256": require_string(
+            results.get("manifest_sha256"), "manifest_sha256"
+        ),
+        "results_sha256": require_string(
+            results.get("results_sha256"), "results_sha256"
+        ),
+        "baseline_count": cast("int", summary["baseline_count"]),
+        "script_count": cast("int", summary["script_count"]),
+        "discovered_command_count": cast("int", summary["discovered_command_count"]),
+    }
+
+
+def serialized_report(report: Mapping[str, object]) -> str:
+    return json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def verify_promoted_corpora(
     registry_path: Path,
     candidates_path: Path,
@@ -566,6 +591,8 @@ def main() -> int:
         arguments.site_packages,
         parse_repository_overrides(arguments.repository),
     )
+    if arguments.check:
+        print(serialized_report(success_report(results)))
     return 0
 
 

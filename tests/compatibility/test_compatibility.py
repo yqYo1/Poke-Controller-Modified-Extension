@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,8 +22,12 @@ from scripts.compatibility.promote import (
 from scripts.compatibility.roll import changed_script_paths, discover_candidates
 from scripts.compatibility.runner import (
     command_root_for,
+    main,
     run_managed_discovery,
     script_domains,
+    serialized_report,
+    serialized_results,
+    success_report,
     verify_baseline,
 )
 
@@ -286,3 +291,143 @@ def test_changed_script_detection_preserves_existing_guarantees() -> None:
         "Commands/changed.py",
         "Commands/new.py",
     }
+
+
+def passing_compatibility_results() -> dict[str, object]:
+    return {
+        "manifest_sha256": "c" * 64,
+        "results_sha256": "d" * 64,
+        "summary": {
+            "baseline_count": 3,
+            "script_count": 103,
+            "discovered_command_count": 98,
+        },
+    }
+
+
+def test_compatibility_success_report_is_deterministic_and_compact() -> None:
+    report = success_report(passing_compatibility_results())
+    assert report["schema"] == "compatibility-report/1"
+    assert report["result"] == "passed"
+    assert report["manifest_sha256"] == "c" * 64
+    assert report["results_sha256"] == "d" * 64
+    assert report["baseline_count"] == 3
+    assert report["script_count"] == 103
+    assert report["discovered_command_count"] == 98
+
+    line = serialized_report(report)
+    assert "\n" not in line
+    assert json.loads(line) == report
+    assert serialized_report(success_report(passing_compatibility_results())) == line
+    for absent in ("baselines", "commands", "fixture_catalog", "Commands/"):
+        assert absent not in line
+
+
+def check_argv(output: Path, site_packages: Path) -> list[str]:
+    return [
+        "runner",
+        "--check",
+        "--output",
+        str(output),
+        "--compatibility-binary",
+        "compatibility",
+        "--worker",
+        "worker",
+        "--site-packages",
+        str(site_packages),
+    ]
+
+
+def test_compatibility_check_success_emits_corpus_sha_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text(serialized_results(results), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", check_argv(output, tmp_path))
+
+    assert main() == 0
+
+    line = capsys.readouterr().out.strip()
+    assert line.count("\n") == 0
+    payload = json.loads(line)
+    assert payload["schema"] == "compatibility-report/1"
+    assert payload["result"] == "passed"
+    assert payload["manifest_sha256"] == "c" * 64
+    assert payload["results_sha256"] == "d" * 64
+    assert payload["baseline_count"] == 3
+
+
+def test_compatibility_check_failure_emits_no_success_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", check_argv(output, tmp_path))
+
+    with pytest.raises(RuntimeError, match="drift"):
+        main()
+    assert capsys.readouterr().out == ""
+
+
+def test_compatibility_promotion_failure_emits_no_success_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        message = "promoted compatibility execution drift detected"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text(serialized_results(results), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", check_argv(output, tmp_path))
+
+    with pytest.raises(RuntimeError, match="drift"):
+        main()
+    assert capsys.readouterr().out == ""

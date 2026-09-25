@@ -6,9 +6,12 @@
 
 /// Camera fixtures and domain values used across process-level tests.
 pub mod camera {
+    pub use crate::camera::virtual_camera::{
+        RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
+    };
     pub use crate::camera::{
-        BgrFrame, CameraBackend, CameraConfig, CameraSelector, CaptureResolution, FlipMode,
-        NativeCameraBackend, ScreenshotFormat, SharedFrameRing,
+        BgrFrame, CameraBackend, CameraConfig, CameraManager, CameraSelector, CaptureResolution,
+        FlipMode, NativeCameraBackend, ScreenshotFormat, SharedFrameRing,
     };
 }
 

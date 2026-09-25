@@ -2,7 +2,7 @@ name: Normal CI
 
 on:
   push:
-    branches: [main, master, refactor/rust-core]
+    branches: [main, master]
   pull_request:
     branches: [main, master, refactor/rust-core]
 
@@ -127,15 +127,41 @@ jobs:
             echo "require-sigs = true"
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
+      - name: Enable Nix internal-json evidence capture
+        run: |
+          set -euo pipefail
+          real_nix="$(readlink -f "$(command -v nix)")"
+          wrapper_dir="$RUNNER_TEMP/pokecon-nix-evidence-bin"
+          log_path="$RUNNER_TEMP/pokecon-nix-evidence.jsonl"
+          mkdir -p "$wrapper_dir"
+          cat > "$wrapper_dir/nix" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec "$real_nix" --option fallback false --log-format internal-json "\$@" 2> >(tee -a "$log_path" >&2)
+          EOF
+          chmod 0755 "$wrapper_dir/nix"
+          {
+            echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
+            echo "PATH=$wrapper_dir:$PATH"
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            printf '%s\n' "${NIX_CONFIG:-}"
+            echo 'fallback = false'
+            echo 'log-format = internal-json'
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Run combined Rust and contract checks
+        id: rust_combined
         if: >-
           needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts == 'true'
         run: nix run .#ci-rust-contracts
       - name: Run Rust checks
+        id: rust_only
         if: >-
           needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts != 'true'
         run: nix run .#rust-ci-core
       - name: Run contract checks
+        id: contract_only
         if: >-
           needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
         run: nix run .#contract-check
@@ -169,6 +195,32 @@ jobs:
         with:
           path: ${{ runner.temp }}/pokecon-nix-cache
           key: ${{ steps.rust_cache_key.outputs.key }}
+      - name: Collect Rust Nix evidence
+        if: always()
+        env:
+          RUST_COMBINED_OUTCOME: ${{ steps.rust_combined.outcome }}
+          RUST_ONLY_OUTCOME: ${{ steps.rust_only.outcome }}
+          CONTRACT_ONLY_OUTCOME: ${{ steps.contract_only.outcome }}
+        run: |
+          set -euo pipefail
+          command_success=false
+          for outcome in "$RUST_COMBINED_OUTCOME" "$RUST_ONLY_OUTCOME" "$CONTRACT_ONLY_OUTCOME"; do
+            if [ "$outcome" = success ]; then command_success=true; fi
+          done
+          output="$RUNNER_TEMP/pokecon-nix-evidence.json"
+          "$POKECON_NIX_REAL" run .#nix-evidence -- \
+            --log "$POKECON_NIX_EVIDENCE_LOG" \
+            --output "$output" \
+            --job-name 'Rust and contracts (Linux)' \
+            --observed-command-success "$command_success" \
+            --fallback-disabled true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-rust
+          path: ${{ runner.temp }}/pokecon-nix-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
 
   python_tests:
     name: Python tests
@@ -264,10 +316,35 @@ jobs:
             echo "require-sigs = true"
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
+      - name: Enable Nix internal-json evidence capture
+        run: |
+          set -euo pipefail
+          real_nix="$(readlink -f "$(command -v nix)")"
+          wrapper_dir="$RUNNER_TEMP/pokecon-nix-evidence-bin"
+          log_path="$RUNNER_TEMP/pokecon-nix-evidence.jsonl"
+          mkdir -p "$wrapper_dir"
+          cat > "$wrapper_dir/nix" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec "$real_nix" --option fallback false --log-format internal-json "\$@" 2> >(tee -a "$log_path" >&2)
+          EOF
+          chmod 0755 "$wrapper_dir/nix"
+          {
+            echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
+            echo "PATH=$wrapper_dir:$PATH"
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            printf '%s\n' "${NIX_CONFIG:-}"
+            echo 'fallback = false'
+            echo 'log-format = internal-json'
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Run product smoke checks
+        id: product_smoke
         if: needs.plan.outputs.product == 'true'
         run: nix run .#product-smoke
       - name: Evaluate all local flake outputs
+        id: product_flake_check
         if: needs.plan.outputs.product == 'true'
         run: nix flake check --no-build
       - name: Export the PokeCon product roots to the binary cache (signed)
@@ -302,6 +379,31 @@ jobs:
         with:
           path: ${{ runner.temp }}/pokecon-nix-cache
           key: ${{ steps.product_cache_key.outputs.key }}
+      - name: Collect product Nix evidence
+        if: always()
+        env:
+          PRODUCT_SMOKE_OUTCOME: ${{ steps.product_smoke.outcome }}
+          PRODUCT_FLAKE_OUTCOME: ${{ steps.product_flake_check.outcome }}
+        run: |
+          set -euo pipefail
+          command_success=false
+          if [ "$PRODUCT_SMOKE_OUTCOME" = success ] && [ "$PRODUCT_FLAKE_OUTCOME" = success ]; then
+            command_success=true
+          fi
+          output="$RUNNER_TEMP/pokecon-nix-evidence.json"
+          "$POKECON_NIX_REAL" run .#nix-evidence -- \
+            --log "$POKECON_NIX_EVIDENCE_LOG" \
+            --output "$output" \
+            --job-name 'Product smoke (Linux)' \
+            --observed-command-success "$command_success" \
+            --fallback-disabled true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-product
+          path: ${{ runner.temp }}/pokecon-nix-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
 
   remote_flake:
     name: Remote GitHub flake smoke (Linux)
@@ -315,7 +417,31 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enable Nix internal-json evidence capture
+        run: |
+          set -euo pipefail
+          real_nix="$(readlink -f "$(command -v nix)")"
+          wrapper_dir="$RUNNER_TEMP/pokecon-nix-evidence-bin"
+          log_path="$RUNNER_TEMP/pokecon-nix-evidence.jsonl"
+          mkdir -p "$wrapper_dir"
+          cat > "$wrapper_dir/nix" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec "$real_nix" --option fallback false --log-format internal-json "\$@" 2> >(tee -a "$log_path" >&2)
+          EOF
+          chmod 0755 "$wrapper_dir/nix"
+          {
+            echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
+            echo "PATH=$wrapper_dir:$PATH"
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            printf '%s\n' "${NIX_CONFIG:-}"
+            echo 'fallback = false'
+            echo 'log-format = internal-json'
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Run default app help from remote, then build and web smoke without checkout
+        id: remote_smoke
         run: |
           set -euo pipefail
           test_root="$(mktemp -d "$HOME/pokecon-remote-flake-ci.XXXXXX")"
@@ -327,6 +453,31 @@ jobs:
             -- \
             --repository "${{ github.repository }}" \
             --revision "$remote_revision"
+      - name: Collect remote Nix evidence
+        if: always()
+        env:
+          REMOTE_SMOKE_OUTCOME: ${{ steps.remote_smoke.outcome }}
+        run: |
+          set -euo pipefail
+          command_success=false
+          if [ "$REMOTE_SMOKE_OUTCOME" = success ]; then command_success=true; fi
+          remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          output="$RUNNER_TEMP/pokecon-nix-evidence.json"
+          "$POKECON_NIX_REAL" run \
+            --option download-attempts 10 \
+            "github:${{ github.repository }}/$remote_revision#nix-evidence" -- \
+            --log "$POKECON_NIX_EVIDENCE_LOG" \
+            --output "$output" \
+            --job-name 'Remote GitHub flake smoke (Linux)' \
+            --observed-command-success "$command_success" \
+            --fallback-disabled true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-remote
+          path: ${{ runner.temp }}/pokecon-nix-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
 
   performance:
     name: Browser primitive performance smoke (Linux)
@@ -582,6 +733,14 @@ jobs:
             remote_flake=${{ needs.remote_flake.result }} \
             performance=${{ needs.performance.result }} \
             windows=${{ needs.windows.result }}
+      - name: Download Nix evidence artifacts
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/pokecon-ci-timing/nix-evidence
+          merge-multiple: false
+          if-no-artifact-found: warn
       - name: Collect CI timing evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -639,45 +798,51 @@ jobs:
           if [ "$CACHE_EVENT" = "push" ] && [ "$CACHE_ACTOR" = "yqYo1" ]; then
             cache_write=true
           fi
-          # Collect Nix evidence for jobs_evidence (actual derivations, fail-closed if missing)
-          rust_drv=""
-          product_drv=""
-          remote_drv=""
-          if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
-            rust_drv="$(nix path-info --derivation .#checks.x86_64-linux.rust-core-artifacts 2>/dev/null || echo "")"
-            if [ -z "$rust_drv" ]; then
-              echo "timing: rust derivation not found for evidence" >&2
+          # Consume job-local Nix evidence artifacts.  Never synthesize derivation
+          # or substitute paths from flake evaluation or cache-hit labels.
+          evidence_root="$RUNNER_TEMP/pokecon-ci-timing/nix-evidence"
+          jobs_evidence_json='{}'
+          if [ -d "$evidence_root" ]; then
+            mapfile -t evidence_paths < <(find "$evidence_root" -type f -name pokecon-nix-evidence.json -print)
+          else
+            evidence_paths=()
+          fi
+          for evidence_path in "${evidence_paths[@]}"; do
+            if ! jq -e '
+              .schema == "nix-evidence/1"
+              and .capture_complete == true
+              and (.built_derivations | type) == "array"
+              and (.substituted_store_paths | type) == "array"
+            ' "$evidence_path" >/dev/null; then
+              echo "timing: incomplete or malformed Nix evidence: $evidence_path" >&2
               exit 2
             fi
-            case "$rust_drv" in /nix/store/*.drv) ;; *) echo "invalid rust derivation: $rust_drv" >&2; exit 2;; esac
+            evidence_job="$(jq -er '.job_name' "$evidence_path")"
+            evidence_entry="$(jq -c '{built_derivations, substituted_store_paths}' "$evidence_path")"
+            if jq -e --arg job "$evidence_job" 'has($job)' <<< "$jobs_evidence_json" >/dev/null; then
+              echo "timing: duplicate Nix evidence job: $evidence_job" >&2
+              exit 2
+            fi
+            jobs_evidence_json="$(jq -c --arg job "$evidence_job" --argjson entry "$evidence_entry" '. + {($job): $entry}' <<< "$jobs_evidence_json")"
+          done
+          if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
+            jq -e 'has("Rust and contracts (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+              echo "timing: missing Rust and contracts Nix evidence" >&2
+              exit 2
+            }
           fi
           if [ "${{ needs.plan.outputs.product }}" = "true" ]; then
-            product_drv="$(nix path-info --derivation .#packages.x86_64-linux.pokecon 2>/dev/null || echo "")"
-            if [ -z "$product_drv" ]; then
-              echo "timing: product derivation not found for evidence" >&2
+            jq -e 'has("Product smoke (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+              echo "timing: missing Product smoke Nix evidence" >&2
               exit 2
-            fi
-            case "$product_drv" in /nix/store/*.drv) ;; *) echo "invalid product derivation: $product_drv" >&2; exit 2;; esac
+            }
           fi
           if [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
-            remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-            remote_drv="$(nix path-info --derivation --refresh "github:${GITHUB_REPOSITORY}/${remote_revision}#pokecon" 2>/dev/null || echo "")"
-            if [ -z "$remote_drv" ]; then
-              echo "timing: remote flake derivation not found for evidence" >&2
+            jq -e 'has("Remote GitHub flake smoke (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+              echo "timing: missing remote flake Nix evidence" >&2
               exit 2
-            fi
-            case "$remote_drv" in /nix/store/*.drv) ;; *) echo "invalid remote flake derivation: $remote_drv" >&2; exit 2;; esac
+            }
           fi
-          jobs_evidence_json="$(jq -n \
-            --arg rust_drv "$rust_drv" \
-            --arg product_drv "$product_drv" \
-            --arg remote_drv "$remote_drv" \
-            '{
-              }
-              | if $rust_drv != "" then .["Rust and contracts (Linux)"] = {built_derivations: [$rust_drv], substituted_store_paths: []} else . end
-              | if $product_drv != "" then .["Product smoke (Linux)"] = {built_derivations: [$product_drv], substituted_store_paths: []} else . end
-              | if $remote_drv != "" then .["Remote GitHub flake smoke (Linux)"] = {built_derivations: [$remote_drv], substituted_store_paths: []} else . end
-            ')"
           jq -n \
             --arg sha "$sha" \
             --arg workflow_name "$workflow_name" \

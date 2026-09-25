@@ -173,17 +173,17 @@ cameraとserialの`selector`はOS native identityです。
 
 ### screenshotの出力先を区別する
 
-`destination: "captures"`はPokeCon管理下のCaptures directoryへ保存します。
+`destination: "captures"`はPokeCon管理下のCaptures directoryへ保存します。`format`を省略した場合は実効`camera.screenshot_format`を使用します。
 
-`destination: "path"`はdesktop modeで明示したnative pathへ保存します。
+`destination: "path"`は現行Tauri desktopのnative保存dialogで利用者が明示選択したserver host上の絶対pathへ保存します。`path`と`format`は必須です。Web modeからは受け付けず`409`になります。
 
-`destination: "download"`はPNGまたはJPEG bytesをresponse bodyとして返します。
+`destination: "download"`はPNGまたはJPEG bytesをresponse bodyとして返します。`format`は必須です。`overwrite` fieldはなく、付けて送ると拒否されます。
 
 `region`はframe全体に対する0以上1以下の正規化座標です。
 
 範囲外、zero面積、frame外へはみ出すregionは受け入れられません。
 
-既存fileを置換する意図がない場合は`overwrite: false`を使用します。
+`captures`と`path`では、既存fileを置換する意図がない場合は`overwrite: false`を使用します。
 
 ### 動的codeのendpointを隔離する
 
@@ -199,13 +199,13 @@ path jailとtransactionの詳細は[動的設定ガイド](DYNAMIC_CONFIGURATION
 
 ## WebSocketで状態を追従する
 
-RESTの`GET /api/state`は完全snapshotを返し、WebSocketの`ui.state.changed`は一つのvisible transactionに対応する差分を返します。
+RESTの`GET /api/state`と`GET /api/settings`は完全snapshotを返し、WebSocketの`ui.state.changed`は一つのvisible transactionに対応する差分を返します。設定と状態は単一のglobal revisionを共有しますが、snapshotの取得と差分の適用は領域ごとに独立して行います。
 
-clientは最初にWebSocketを接続して`ui.state.changed`をbufferし、その後にREST snapshotを取得します。
+clientは最初にWebSocketを接続して`ui.state.changed`をbufferし、その後に`GET /api/settings`と`GET /api/state`を並行取得します。
 
-snapshot取得後は、snapshotより新しいbuffer済み差分をrevision順に適用します。
+snapshot取得後は、設定差分は設定snapshotのrevisionより新しい場合だけ、状態差分は状態snapshotのrevisionより新しい場合だけ、revision順に適用します。片方だけ新しい場合はその領域だけ適用します。設定snapshotの`instance_id`が現在の基準と異なる場合はrevision比較をresetして新しいsnapshotを基準にし、退役済みinstanceから遅れて届いたsnapshotは適用しません。
 
-WebSocket接続前の変更やbuffer overflowで差分を取り逃した可能性がある場合は、再度snapshotを取得します。
+WebSocket接続前の変更やbuffer overflowで差分を取り逃した可能性がある場合、保持イベントのrevisionに欠落や重複がある場合、差分を型検証できない場合は、両方のGETを再実行して新しい基準を作ります。
 
 `ui.state.changed`のrevisionが期待する次の状態と整合しない場合も、差分を推測せずsnapshotへ戻ります。
 

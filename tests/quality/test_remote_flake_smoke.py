@@ -56,7 +56,7 @@ def test_required_aggregate_tracks_remote_flake_job_separately() -> None:
         in required
     )
     assert "remote_flake=${{ needs.remote_flake.result }}" in required
-    assert "github:${GITHUB_REPOSITORY}/${remote_revision}#pokecon" in required
+    assert 'has("Remote GitHub flake smoke (Linux)")' in required
 
 
 def test_remote_smoke_script_isolation_and_runtime_checks_are_explicit() -> None:

@@ -153,7 +153,7 @@ browserのfocusが外れた場合やtabが非表示になった場合は、保�
 
 Commands tabを開き、「Python Command」を選びます。
 
-tagで絞り込むか検索欄へcommand名、module path、class名を入力します。
+tagで絞り込むか検索欄へcommand名、module path、class名、tagを入力します。
 
 一覧からcommandを選び、「Start」を押します。
 
@@ -185,7 +185,7 @@ firmwareとscriptが期待するport、baud rate、wire形式を事前に一致�
 
 Commands tabの「Shortcut」を開きます。
 
-番号付きslotをclickし、表示されたcommand一覧から割当先を選びます。
+10個の番号付きslotをclickし、表示されたcommand一覧から割当先を選びます。
 
 割当済みslotの「Run」でcommandを開始できます。
 

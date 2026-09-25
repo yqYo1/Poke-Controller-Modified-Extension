@@ -74,25 +74,46 @@ readonly true_bin
 temp_dir=$(mktemp -d -t pokecon-virtual-io.XXXXXXXX)
 readonly temp_dir
 readonly writer_log="$temp_dir/ffmpeg.log"
-module_loaded_by_script=false
+# rust/pokecon/build.rs requires POKECON_RESOURCE_PROVENANCE. The Nix gate
+# sanitizes the ambient environment before invoking this script, so establish
+# the development value here instead of relying on the caller.
+export POKECON_RESOURCE_PROVENANCE=development
+v4l2loopback_loaded_by_script=false
+videodev_loaded_by_script=false
 writer_pid=
 
 cleanup() {
-  local status=$?
+  local status=$? cleanup_failed=false
   trap - EXIT
   if [[ -n $writer_pid ]]; then
     kill "$writer_pid" >/dev/null 2>&1 || true
     wait "$writer_pid" >/dev/null 2>&1 || true
   fi
-  if [[ $module_loaded_by_script == true ]]; then
-    run_privileged "$modprobe_bin" -r v4l2loopback >/dev/null 2>&1 || \
-      echo "warning: could not unload v4l2loopback" >&2
+  # Unload only modules this script loaded, in reverse order of loading.
+  # Preexisting modules or devices are never touched.
+  if [[ $v4l2loopback_loaded_by_script == true ]]; then
+    if ! run_privileged "$modprobe_bin" -r v4l2loopback >/dev/null 2>&1; then
+      echo "error: could not unload v4l2loopback loaded by this script" >&2
+      cleanup_failed=true
+    fi
+  fi
+  if [[ $videodev_loaded_by_script == true ]]; then
+    if ! run_privileged "$modprobe_bin" -r videodev >/dev/null 2>&1; then
+      echo "error: could not unload videodev loaded by this script" >&2
+      cleanup_failed=true
+    fi
   fi
   if ((status != 0)) && [[ -s $writer_log ]]; then
     echo "virtual camera writer log:" >&2
     sed 's/^/  /' "$writer_log" >&2
   fi
-  rm -rf -- "$temp_dir"
+  if ! rm -rf -- "$temp_dir"; then
+    echo "error: could not remove temporary directory $temp_dir" >&2
+    cleanup_failed=true
+  fi
+  if [[ $cleanup_failed == true ]]; then
+    exit 1
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -113,14 +134,31 @@ if [[ ! -e $device ]]; then
       exit 1
     fi
   fi
-  run_privileged "$modprobe_bin" videodev
+  # Only claim modules this script actually loaded so cleanup never unloads
+  # a preexisting videodev or v4l2loopback.
+  if [[ ! -d /sys/module/videodev ]]; then
+    run_privileged "$modprobe_bin" videodev
+    videodev_loaded_by_script=true
+  fi
   run_privileged "$modprobe_bin" v4l2loopback \
     video_nr="$v4l2_index" \
     card_label=PokeCon-Virtual-Camera \
     exclusive_caps=1 \
     max_width=1920 \
     max_height=1080
-  module_loaded_by_script=true
+  v4l2loopback_loaded_by_script=true
+  # udev creates the device node asynchronously, so wait for it before
+  # adjusting permissions instead of assuming modprobe was synchronous.
+  for _ in {1..100}; do
+    if [[ -e $device ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+  if [[ ! -e $device ]]; then
+    echo "$device did not appear after loading v4l2loopback" >&2
+    exit 1
+  fi
   run_privileged "$chmod_bin" 0666 "$device"
 fi
 
@@ -142,18 +180,37 @@ ffmpeg \
 writer_pid=$!
 
 camera_ready=false
+writer_failed=false
 for _ in {1..100}; do
   if ! kill -0 "$writer_pid" >/dev/null 2>&1; then
+    writer_failed=true
     break
   fi
   if v4l2-ctl --device="$device" --all 2>/dev/null | grep -q 'Video Capture'; then
-    camera_ready=true
+    # v4l2-ctl reports capture caps even when the writer already exited, so
+    # re-check writer liveness before claiming readiness.
+    if kill -0 "$writer_pid" >/dev/null 2>&1; then
+      camera_ready=true
+    else
+      writer_failed=true
+    fi
     break
   fi
   sleep 0.1
 done
+if [[ $writer_failed == true ]]; then
+  echo "the virtual camera writer exited before $device became capture-ready (see virtual camera writer log)" >&2
+  exit 1
+fi
 if [[ $camera_ready != true ]]; then
   echo "the virtual camera did not become capture-ready" >&2
+  exit 1
+fi
+
+# The writer must still be alive when the integration tests start; otherwise
+# the V4L2 test would fail against a device with no frame source.
+if ! kill -0 "$writer_pid" >/dev/null 2>&1; then
+  echo "the virtual camera writer exited before the integration tests started (see virtual camera writer log)" >&2
   exit 1
 fi
 

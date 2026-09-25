@@ -38,7 +38,10 @@ use crate::application_backend::{
     ApplicationBackend, ApplicationBackendParts, initial_settings_snapshot, initial_state_snapshot,
 };
 use crate::camera::ScreenshotMode;
-use crate::command_service::{CommandService, DynamicCommandBridge, StaticCommandBridge};
+use crate::command_service::{
+    CommandService, CommandServiceError, DynamicCommandBridge, ScriptSessionStop,
+    StaticCommandBridge,
+};
 use crate::dynamic_host::StartupDynamicHost;
 use crate::profile_service::ProfileService;
 use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
@@ -399,9 +402,11 @@ impl ProductionRuntime {
             ),
             Err(error) => tracing::error!(%error, "camera shutdown task failed"),
         }
-        if let Err(error) = self.commands.shutdown(self.script_shutdown_timeout).await {
+        let script_shutdown = self.commands.shutdown(self.script_shutdown_timeout).await;
+        if let Err(error) = &script_shutdown {
             tracing::error!(%error, "user-script worker shutdown failed");
         }
+        recover_reader_pins_after_script_shutdown(&self.camera, &script_shutdown);
     }
 
     /// Executes shutdown steps 6 and 7 after the dynamic worker is reaped.
@@ -420,6 +425,41 @@ impl ProductionRuntime {
             Ok(Err(error)) => tracing::error!(%error, "serial shutdown failed"),
             Err(_) => tracing::error!("serial shutdown timed out"),
         }
+    }
+}
+
+/// Recovers abandoned camera reader pins after the user-script worker stops
+/// (§15.6 step 3, §7.9.4 worker-crash recovery).
+///
+/// Only `Ok(Some(_))` authorizes the reset. `UserScriptSession::shutdown`
+/// returns `Ok` solely after `ManagedWorker::stop` yields `Ok(StopReport)`,
+/// and every `Ok(StopReport)` path follows a completed OS `child.wait()`
+/// (the unreaped forced-termination timeout returns `Err`, which propagates
+/// here as `Err`). Shutdown additionally holds the profile gate with the
+/// session taken, and nothing respawns during application shutdown, so no
+/// replacement reader exists yet. `Ok(None)` (no worker was reaped by this
+/// shutdown) and `Err(_)` (reap unproven, possibly still live) leave all
+/// pins untouched and report `None`.
+fn recover_reader_pins_after_script_shutdown(
+    camera: &CameraManager,
+    outcome: &Result<Option<ScriptSessionStop>, CommandServiceError>,
+) -> Option<usize> {
+    if outcome.as_ref().ok()?.is_some() {
+        match camera.ring().recover_reader_pins(true, true) {
+            Ok(recovered) => {
+                tracing::info!(
+                    recovered,
+                    "camera reader pins recovered after script worker exit"
+                );
+                Some(recovered)
+            }
+            Err(error) => {
+                tracing::error!(%error, "camera reader pin recovery failed after script worker exit");
+                None
+            }
+        }
+    } else {
+        None
     }
 }
 
@@ -681,4 +721,68 @@ fn raw_values(loaded: &LoadedSettings) -> std::collections::BTreeMap<String, ser
         .iter()
         .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::recover_reader_pins_after_script_shutdown;
+    use crate::camera::CaptureResolution;
+    use crate::camera::backend::CameraConfig;
+    use crate::camera::selector::CameraSelector;
+    use crate::camera::shared_ring::RingError;
+    use crate::camera::virtual_camera::{
+        RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
+    };
+    use crate::camera::{CameraManager, FlipMode};
+    use crate::command_service::{CommandServiceError, ScriptSessionStop};
+
+    fn manager_with_abandoned_pin() -> CameraManager {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6])],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        manager
+            .ring()
+            .pin_current_for_diagnostics()
+            .unwrap()
+            .unwrap()
+            .abandon_for_crash_simulation();
+        manager
+    }
+
+    #[test]
+    fn confirmed_worker_exit_resets_stale_reader_pin() {
+        let manager = manager_with_abandoned_pin();
+        let outcome: Result<Option<ScriptSessionStop>, CommandServiceError> =
+            Ok(Some(ScriptSessionStop { forced: false }));
+        assert_eq!(
+            recover_reader_pins_after_script_shutdown(&manager, &outcome),
+            Some(1)
+        );
+        assert_eq!(manager.ring().recover_reader_pins(true, true).unwrap(), 0);
+    }
+
+    #[test]
+    fn unconfirmed_or_absent_worker_exit_preserves_reader_pin() {
+        for outcome in [Err(CommandServiceError::ProfileSwitchGateNotHeld), Ok(None)] {
+            let manager = manager_with_abandoned_pin();
+            assert_eq!(
+                recover_reader_pins_after_script_shutdown(&manager, &outcome),
+                None
+            );
+            assert_eq!(
+                manager.ring().pin_current_for_diagnostics().unwrap_err(),
+                RingError::ReaderAlreadyPinned
+            );
+        }
+    }
 }

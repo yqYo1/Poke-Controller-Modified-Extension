@@ -2,7 +2,7 @@ name: Package CI
 
 on:
   push:
-    branches: [main, master, refactor/rust-core]
+    branches: [main, master]
   pull_request:
     branches: [main, master, refactor/rust-core]
 

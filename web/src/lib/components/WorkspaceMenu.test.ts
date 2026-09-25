@@ -169,4 +169,49 @@ describe('WorkspaceMenu', () => {
     });
     expect(actions.downloadLauncher).not.toHaveBeenCalled();
   });
+
+  it('shows a removal notice for legacy LINE menu items by default', async () => {
+    const { runtime, view } = runtimeView();
+    render(WorkspaceMenu, { actions: menuActions(), runtime, view });
+
+    await fireEvent.click(screen.getByText('メニュー'));
+    await fireEvent.click(screen.getByRole('button', { name: 'LINE Token Assignment' }));
+    expect(screen.getByRole('status').textContent).toContain(
+      'LINE通知は削除されました。Discord Webhookをご利用ください。'
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'LINE Token Check' }));
+    expect(screen.getByRole('status').textContent).toContain(
+      'LINE通知は削除されました。Discord Webhookをご利用ください。'
+    );
+  });
+
+  it('shows a removal notice for legacy LINE menu items when the setting is missing', async () => {
+    const { runtime, view: baseView } = runtimeView();
+    const settings = settingsSnapshot('1');
+    Reflect.deleteProperty(settings.values, 'notifications.line_menu_behavior');
+    const view = { ...baseView, settings };
+    render(WorkspaceMenu, { actions: menuActions(), runtime, view });
+
+    await fireEvent.click(screen.getByText('メニュー'));
+    await fireEvent.click(screen.getByRole('button', { name: 'LINE Token Check' }));
+    expect(screen.getByRole('status').textContent).toContain(
+      'LINE通知は削除されました。Discord Webhookをご利用ください。'
+    );
+  });
+
+  it('does nothing for legacy LINE menu items when behavior is noop', async () => {
+    const { runtime, view: baseView } = runtimeView();
+    const view = {
+      ...baseView,
+      settings: settingsSnapshot('1', { 'notifications.line_menu_behavior': 'noop' })
+    };
+    render(WorkspaceMenu, { actions: menuActions(), runtime, view });
+
+    await fireEvent.click(screen.getByText('メニュー'));
+    await fireEvent.click(screen.getByRole('button', { name: 'LINE Token Assignment' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'LINE Token Check' }));
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

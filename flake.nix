@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "6783c6035ca9efa9c28b0a47572fe91e8b2557036d20859c8c3c70eee9b87877";
+      canonicalFlakeHash = "5645964aa7c84782efb6bf137be14808f69219726fe7a8bbc9bd81769cdf1c68";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -471,6 +471,10 @@
               "api/openapi.json"
               "compatibility"
               "docs/ACCEPTANCE.md"
+              "docs/ARCHITECTURE.md"
+              "docs/SPECIFICATION_BACKEND.md"
+              "docs/SPECIFICATION_FRONTEND.md"
+              "docs/SPECIFICATION_INTEGRATION.md"
               "flake.lock"
               "flake.nix"
               "generated"
@@ -484,6 +488,7 @@
               "rust-toolchain.toml"
               "scripts/__init__.py"
               "scripts/ci/aggregate.py"
+              "scripts/ci/nix_evidence.py"
               "scripts/ci/regions.py"
               "scripts/ci/timing.py"
               "scripts/compatibility"
@@ -748,7 +753,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "d568f484455a792c6d215c5ce990f22bfdca14e03e229a56aafe7c967447c28c";
+          expectedAuditTestHash = "ff7a04757a32059384a52bec01184d971f1e1c60fed032e64185d6bbd09d6785";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -769,7 +774,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "2792deb76814f512fe15f39ca21a157b1a5a332013aec31f03909c128dca209e";
+            "rust/pokecon" = "bcf0a974cf9062019b408844b6980d06a08c3ad5e8e78c5b9ae4ae084f35f4b0";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -2749,6 +2754,11 @@
                     crate_types: ["lib"]
                   },
                   {
+                    name: "concurrent_camera_serial_load",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
                     name: "contract_sync",
                     kind: ["test"],
                     crate_types: ["bin"]
@@ -2886,8 +2896,8 @@
                   | .name
                 ' "$TMPDIR/pokecon-test-inventory.json"
               )
-              if [ "$executed_test_count" -ne 9 ]; then
-                echo "Expected to execute 9 non-contract test targets, executed $executed_test_count" >&2
+              if [ "$executed_test_count" -ne 10 ]; then
+                echo "Expected to execute 10 non-contract test targets, executed $executed_test_count" >&2
                 exit 2
               fi
               cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
@@ -4122,6 +4132,16 @@
                 ${setupSourceGateEnvironment}
                 export PYTHONDONTWRITEBYTECODE=1
                 "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/ci/timing.py" "$@"
+              '';
+            };
+
+            nix-evidence = mkTask {
+              name = "nix-evidence";
+              runtimeInputs = [ pythonEnv ];
+              text = ''
+                ${setupSourceGateEnvironment}
+                export PYTHONDONTWRITEBYTECODE=1
+                exec "${pythonEnv}/bin/python" -I "${repositorySource}/scripts/ci/nix_evidence.py" "$@"
               '';
             };
 
@@ -5548,12 +5568,13 @@
                   echo "Run aggregate source verification gates; packaged CLI and UI use dedicated apps"
                   exit 0
                 fi
+                caller_root="$(pwd -P)"
                 ${setupQualityWorkdir}
                 export NODE_PATH="${pkgs.textlint-rule-no-start-duplicated-conjunction}/lib/node_modules"
                 export PYTHONDONTWRITEBYTECODE=1
                 export PYTHONPATH="$PWD/python:$PWD"
                 export POKECON_TEST_UV="${pythonPackageBuildUv}/bin/uv"
-                python -m scripts.quality.source_filter
+                python -m scripts.quality.source_filter --root "$caller_root"
                 actionlint .github/workflows/*.yml
                 python -m scripts.release.gate
                 ${config.treefmt.build.wrapper}/bin/treefmt --ci --working-dir "$PWD"

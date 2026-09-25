@@ -378,7 +378,10 @@ fn write_document(path: &Path, document: &DocumentMut) -> Result<(), Persistence
 
         let mut options = OpenOptions::new();
         options.mode(0o600);
-        options.preserve_mode(false);
+        // SPECIFICATION_BACKEND §11.4.3.3: new files are created `0600`,
+        // while pre-existing files keep their current permission bits
+        // through atomic replacement. Never auto-chmod existing files.
+        options.preserve_mode(true);
         options
     };
     #[cfg(not(unix))]
@@ -513,7 +516,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn updating_an_existing_settings_file_resets_insecure_permissions() {
+    fn updating_an_existing_settings_file_preserves_insecure_permissions() {
         use std::os::unix::fs::PermissionsExt;
 
         let temp = TempDir::new().expect("temporary directory must exist");
@@ -530,12 +533,14 @@ mod tests {
         TomlStore::new(LockManager::new(&roots))
             .update(&path, &[("global.language".to_owned(), json!("en"))])
             .expect("update must succeed");
+        let content = fs::read_to_string(&path).expect("content must be readable");
+        assert!(content.contains("language = \"en\""));
         let mode = fs::metadata(path)
             .expect("metadata must be readable")
             .permissions()
             .mode()
             & 0o777;
-        assert_eq!(mode, 0o600);
+        assert_eq!(mode, 0o644);
     }
 
     #[test]

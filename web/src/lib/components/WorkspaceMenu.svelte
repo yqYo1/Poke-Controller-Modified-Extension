@@ -288,6 +288,19 @@
     notice = t('View state reset.', '画面表示をリセットしました。');
   }
 
+  const lineMenuBehavior = $derived(
+    (values?.['notifications.line_menu_behavior'] ?? 'message').toLowerCase()
+  );
+
+  function handleLegacyLineMenu(): void {
+    if (lineMenuBehavior === 'noop') return;
+    error = null;
+    notice = t(
+      'LINE notifications have been removed. Use Discord Webhook instead.',
+      'LINE通知は削除されました。Discord Webhookをご利用ください。'
+    );
+  }
+
   function openRelease(): void {
     if (updateResult === null) return;
     try {
@@ -419,6 +432,24 @@
             {t('Launcher generation is available only on Windows.', 'ランチャー生成は Windows でのみ利用できます。')}
           </p>
         {/if}
+      </section>
+
+      <section class="border-t border-text/10 pt-4" aria-labelledby="legacy-command-menu-heading">
+        <h2 id="legacy-command-menu-heading" class="text-xs font-semibold tracking-[0.14em] text-blue uppercase">
+          {t('Command', 'コマンド')}
+        </h2>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs text-text hover:bg-text/10"
+            onclick={handleLegacyLineMenu}
+          >LINE Token Assignment</button>
+          <button
+            type="button"
+            class="rounded-lg border border-text/10 bg-text/5 px-3 py-2 text-xs text-text hover:bg-text/10"
+            onclick={handleLegacyLineMenu}
+          >LINE Token Check</button>
+        </div>
       </section>
 
       <button

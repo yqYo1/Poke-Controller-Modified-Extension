@@ -28,7 +28,7 @@
 
 ### 現行の残タスク（アシスタント担当）
 
-- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約を、clean worktreeと4 systemの証跡で再受入する。
+- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約をclean detached worktreeで再受入する。RUN4／RUN5／RUN6、4 system評価、既存worktreeでのdirenv実行、tool inventory、source-filterは証跡付きで完了した。残るclean worktree証跡はRUN3、AR-11-48、AR-13.1-17に限定されるが、既存worktreeのみを使う指示により新規worktreeは作成しない。
 - [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。browser primitive smokeとそのblocking jobは実装済みだが、production主経路のCI証跡は未完了。実機latency／throughput計測環境は作成しない。
 - [ ] GPUIフロントエンド段階導入を、[GPUI_FRONTEND_PLAN.md](docs/GPUI_FRONTEND_PLAN.md)のPoC gateに従って進める。現行Svelte/Tauri/Web経路は採否判断まで維持する。
 - [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
@@ -36,12 +36,46 @@
 ### 2026-09-14 要件別監査の結果
 
 - [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
-- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。現行worktreeではtracked `.envrc`が一行の`use flake`であること、`direnv allow`／`direnv exec .`、hostile PATH下の`nix develop`、source-filter／SPA guard、入室前後のtracked worktree無変更を確認した（2026-09-14）。ただしclean detached worktreeでの同一証跡は、既存worktreeのみを使う制約により未証明であり、RUN3全体は[x]にしない。
+- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。現行worktreeでは`direnv allow`／`direnv exec .`、hostile PATH下の`nix develop`、source-filter／SPA guard、入室前後のtracked worktree無変更を確認した（2026-09-14）。ただしclean detached worktreeでの同一証跡は、既存worktreeのみを使う制約により未証明であり、RUN3全体は[x]にしない。
 - [ ] **CI性能gate**: `performance-check`とrequired blocking jobは実装済み。既存artifact `10334767608`のreportは5 metric（各300 sample、60秒warm-up、p50／p95／maximum）条件を満たしていたが、run `34846200611`のbaseline解決stepはrunner非対応の`gh api --output`でartifact取得に失敗しbootstrapへ落ちていた（2026-09-14）。`.github/workflows/normal-ci.yml`を標準出力の`> "$zip_path"`へ修正し、quality test 2件、actionlint、formatを通過した。post-fix CI run `34862735176`でprior-passing artifactの`baseline_status=compared`まで到達したが、`ui_input_latency`の正当なゼロbaseline（p95=0.0）に対する相対閾値が0となる境界不具合を検出した。`scripts/performance/benchmark.py`をabsolute threshold fallbackへ修正し、focused testとaggregate checkを通過した。修正commit `09f55ad6d10670d9190f0a52cb72d92418c26038`後、Normal／Packageのpush／PR required checks全4件がsuccessし、`gh pr checks 27 --required` exit 0を確認した。production主経路のlatency／throughput／stabilityは未完了。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
 - [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 103 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
 
-- [ ] **外部browser受入**: browser backend `410 Gone`により、`browser_matrix`のWebRTC channel、fallback／再昇格、keyboard／accessibilityの最新commit受入は未証明。既存のcamera／serial virtual-I/OとREST read-backはこの代用品にしない。
-- [ ] **最終対応表**: root indexと三定義書の全機能、6文書の相互矛盾、各checkpoint共通gateについて、実装・直接証拠の対応表が未作成。release tagは利用者担当のため本監査の残タスクへ含めない。
+- [ ] **外部browser受入**: browser backendへのread-only probeは`example.com`で成功し、以前の`410 Gone`は現行の障害ではない。製品の最新commitはまだ隔離された一時server経由で受入していないため、WebRTC channel、fallback／再昇格、keyboard／accessibilityのcommit別証拠は未成立。writer完了後に専用HOME／XDGのephemeral serviceで試験し、必ず停止・cleanupする。既存camera／serial virtual-I/OとREST read-backは代替証拠にしない。
+- [ ] **最終対応表**: [Backend traceability](docs/TRACEABILITY_BACKEND.md)、[Frontend traceability](docs/TRACEABILITY_FRONTEND.md)、[Integration traceability](docs/TRACEABILITY_INTEGRATION.md)に三定義書のsection／要件ごとの直接根拠表を作成し、独立レビュー中。これらの表をroot index、6文書相互整合、各checkpoint共通gateまで統合した総合対応表は未完了。release tagは利用者担当のため残タスクに含めない。
+
+### 2026-09-24 追加再確認（この記録時点で未commit・未push）
+
+- `flake.nix`のaggregate `check`がsource-filterを元worktree rootで実行するよう修正した。
+- 分割後の三規範仕様書をRust contract-test source boundaryへ追加した。
+- `nix run .#source-filter-check`、`nix run .#ci-rust-contracts`、`nix run .#contract-check`、production-routing mutation audit、`nix run .#check`はすべてexit 0だった。
+- `nix run .#ci-rust-contracts`では`contract_sync`の14 testsが成功した。
+- `nix flake check --no-build --all-systems`、`nix run .#release-check`、`nix run .#acceptance-record-check`、`native_serial_pty` testも成功した。
+- `direnv exec`ではcargo、bun、uvがNix store内の実行ファイルへ解決した。
+- clean detached worktreeでの証拠は、既存worktreeのみを使う制約により未取得である。
+- `nix run .#virtual-io-check -- 42`はresource provenance、V4L2 readiness／writer permission、module ownershipを修正した後に再実行し、exit 0を確認した。regression testは6 passed、Ruff／format／shell syntax checksもexit 0。
+- 修正後の終了時に`/dev/video42`、loopback module、`ffmpeg`、gate用一時directoryが残らないことを再確認した。
+- GitHub run `35900764591`（push）と`35900770262`（pull_request）は同一`82b973e` SHAで、双方のNormal CI Rust／contract jobが失敗していた。
+- Package CIの対応run `35900764463`と`35900770266`は両方passだったが、同じSHAに対して重複していた。
+- Phase 2の表に記録された75個のworkflow run IDを`gh run view`で個別に読み戻し、73 success、2 failure、0 unavailableだった。
+- 失敗はPackage CIのrun `30576972468`（SHA `3af92b7`）と`31030340585`（SHA `d1338b3`）だけで、両方の修正／follow-up successを各checkpoint表で記録している。
+- 2.5／2.6は複数commitから成る部分完了で、対応SHAのworkflow数も4～5件の群があるため、AR-13.1-01の独立commit条件と全checkpoint共通gateはこの集計だけで完了扱いしない。
+- この記録時点のPR required statusはNormal CI fail、Package CI passであり、未pushのローカル修正はこのremote結果を更新しない。
+- `protect` rulesetはactiveでdefault branchを対象にし、Normal／Package CIの両required contextを指定している。
+- PR #27の`mergeStateStatus`は`BLOCKED`だが、PR自体がDRAFTでもあるため、failing check単独のmergeability試験とはみなさず、AR-10.10-06／AR-13.1-13は未チェックのままにする。
+- Repository secrets／environmentsの読み戻しではcache署名credentialを確認できず、credential値は取得していないため、trusted-push upload証跡は未成立である。
+- GPUI候補のrelease／pin破損履歴、IME／accessibility／clipboard／packagingの上流課題とPoke-Con上での試験含意を[段階導入計画](docs/GPUI_FRONTEND_PLAN.md)へ記録した。
+- `gpui-kit v0.6.6`と対応tag commitを確認した。直接依存metadataのApache-2.0とMIT OR Apache-2.0、同梱Lucide由来iconのISCとFeather由来iconのMIT表示条件、トップレベルNOTICE不在までは確認したが、1,248 packageの推移依存license台帳とGTK3動的リンク条件は未監査である。Cargo.lock統合、native window、IME／accessibility、clipboard、Tokio共存も未検証のため、GPUI Phase 1を完了扱いしない。
+- `nix run .#cli-help-check`はexit 0で、現行binaryのCLI helpを検証した。これはnative window起動やGPUI PoCの証明ではない。
+- `markdownlint`、`textlint`、`typos-check`は更新した`PLAN.md`、`README.md`、`docs/GPUI_FRONTEND_PLAN.md`でexit 0だった。
+- その後の`nix run .#check`再実行は、`tests/quality/test_ci_trigger_dedup.py`にformatter差分が検出され、`--fail-on-change`によりexit 1だった。
+- `nix flake check --no-build --all-systems`は、`expectedAuditTestHash`とcanonical flake hashを同期した後にexit 0。直近の`nix run .#source-filter-check`もexit 0だった。
+- CI trigger回帰testは`nix run .#test -- tests/quality/test_ci_trigger_dedup.py`で12 passed、`nix run .#actionlint`もexit 0。integration-branch直接pushの要件は別の設計監査中。
+- 追加した`test_default_devshell_is_tool_only_and_skips_product_builds`はfocused Nix testで1 passed。RUN4／RUN5／RUN6のPLAN evidenceは更新し、PLAN単体markdownlint／textlint／typosもexit 0。
+- 当時の`nix run .#ci-rust-contracts`はnon-contract target数を9から10へ直した後も`concurrent_camera_serial_load`のClippy `too_many_lines`でexit 1だった。後続の構造的分割でfocused testとClippyは通過したが、そのaggregate runではcontract-sync testがfiltered source内に`docs/ARCHITECTURE.md`を欠いて失敗した。`flake.nix`のRust test sourceへ同文書を追加した。
+- source boundary修正後、`expectedAuditTestHash`を現在の`test_ui_package_check.py`へ、canonical hashを現在の`flake.nix`へ再同期し、`nix flake check --no-build --all-systems`がexit 0。`nix run .#source-filter-check`もexit 0、`nix run .#test -- tests/quality/test_ui_package_check.py`は29 passed／2 deselected。
+- Rust整形確認`nix develop --command rustfmt --edition 2024 --check rust/pokecon/src/script_host.rs`はexit 0。最新`nix develop --command cargo test --locked -p pokecon script_host::tests::`は12 passed、`nix run .#ci-rust-contracts`はexit 0（contract-sync 15 passed、Rust unit 475 passed、`concurrent_camera_serial_load` 1 passedを含む）。一方、同時点の`nix run .#check`はexit 1で、production-routing audit／mutation auditのRust CI区間hash pin不一致と、`test_version_contract.py::test_rust_ci_split_executes_every_declared_non_contract_target_once`の古いtarget数assertionが残った。web/staticではSvelte diagnostics 0 errors／0 warnings、frontend 106 testsとbuildが成功し、別途検出した綴り誤りは修正し、対象test 12 passed、対象file typos-check exit 0。その後の`nix run .#actionlint`、`nix run .#source-filter-check`、`nix flake check --no-build --all-systems`はいずれもexit 0（flake checkは評価のみでbuildなし）。
+- `nix fmt -- --ci`はdelegated editsと同時に実行され、Ruff S603とconcurrent-write診断でexit 1。修正・writer完了後にformat／aggregate gateを再実行する。
+- browser backendはread-onlyの`example.com` probeで利用可能、`tailscale0`も存在することを確認した。PokeCon serviceはまだ起動しておらず、隔離E2Eはwriters完了後に行う。
 
 ### 担当外の外部操作
 
@@ -66,20 +100,21 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-13.1-05** `nix run .#clippy`を通す（予定証跡: 各適用checkpointの`nix run .#clippy` log）。
 - [ ] **AR-13.1-06** `nix run .#build-rust`を通す（予定証跡: 各適用checkpointの`nix run .#build-rust` logとNix build成果物一覧）。
 - [ ] **AR-13.1-10** `nix run .#compatibility`で固定互換性基準に対するPython commandを通す（予定証跡: `nix run .#compatibility`が出力するcorpus SHA付きreport）。
-- [ ] `nix run .#web-check`
+- [x] `nix run .#web-check`（2026-09-24、ESLint／Svelte diagnostics 0 errors／0 warnings、26 files・106 tests、production build成功）。
 - [ ] `nix fmt`
-- [ ] `nix fmt -- --ci`
-- [ ] `nix flake check --no-build`
-- [ ] `nix run .#editor-smoke`
-- [ ] `nix run .#check`
-- [ ] **AR-13.1-07** `pokecon --help`と`pokecon-worker --help`の公開CLI差分を検査する（予定証跡: `nix build .#pokecon --print-out-paths --no-link`が返すstore内binaryの`--help`をNix integration taskが正規化した移行前baseline差分）。
+- [x] `nix fmt -- --ci`（2026-09-24、212 filesを検証し、変更0件）。
+- [x] `nix flake check --no-build`（2026-09-24、x86_64-linuxで全output評価・全check評価成功。実行環境非対応のaarch64-darwin／aarch64-linux／x86_64-darwinは明示的に省略）。
+- [x] `nix run .#editor-smoke`（2026-09-24、Rust/Python/TypeScript/Svelte language serverのinitialize／didOpen／documentSymbol／diagnostic／shutdownが全て成功。fixtureの期待diagnosticを確認）。
+- [x] `nix run .#check`（2026-09-24、dirty worktree上で実行、exit 0。production-routing audit、contract-sync 15 tests、Web 26 files／106 tests、pytest 546 passed／2 deselected、mutation audit 395件を含むaggregate gate成功。commit別CIではない）。
+- [x] `nix run .#web-check`（2026-09-25、dirty worktree上で実行、ESLint 0 errors／0 warnings、Svelte diagnostics 0 errors／0 warnings、Web 26 files／112 tests、production build成功）。
+- [x] **AR-13.1-07** `pokecon --help`と`pokecon-worker --help`の公開CLI差分を検査する（2026-09-25、dirty worktreeで`nix run .#cli-help-check` exit 0。store binaryの正規化helpをtracked fixtureと比較。`nix build .#pokecon --no-link`もexit 0でNAR `sha256-mwrz2tSs6EfTNZkhYwCsCM/qaOIoeDcUE9IWqmbA2uk=`／132706248 bytes、source store内`production.rs`／`script_host.rs`のSHA-256はworktreeと一致。commit別CIではない）。
 - [ ] **AR-13.1-08** Web modeとTauri modeの起動検査を通す（予定証跡: `nix build .#pokecon --print-out-paths --no-link`のstore内binaryを使う対応Nix integration taskの両mode health endpointと起動／停止log）。
 - [ ] **AR-13.1-09** `pokecon-worker --kind script`と`--kind dynamic`の起動、IPC、協調停止、強制終了を検査する（予定証跡: `nix run .#cargo-test`がNix build済みworkerを使って出力するrole別integration／fault report）。
 - [ ] push 後に `nix run .#ci-watch -- <branch> <timeout>` で GitHub Actions を完了まで監視し、失敗を解消する。
 
 ## レビュー引渡し情報の横断チェック
 
-- [ ] **AR-11-24** 製品全体で優先する設計原則をmoduleと実行時機構へ対応付ける（予定証跡: 設計原則→module／queue／lock／task／threadの対応表とarchitecture test）。
+- [x] **AR-11-24** 製品全体で優先する設計原則をmoduleと実行時機構へ対応付ける（証跡: `docs/ARCHITECTURE.md`に9行の設計原則→module／queue／lock／task／thread表を追加し、`contract_sync`の`design_principles_map_to_runtime_mechanisms_without_drift`が各必須module／symbol／sourceを検査。`nix run .#cargo -- test --locked -p pokecon --features integration-test-support --test contract_sync`は13 passed）。
 - [ ] **AR-11-25** 正準controller状態とcamera／serial handle等のhardware resource所有者を一意にする（予定証跡: server socket、worker世代、設定revisionも含むownership tableと重複所有検査）。
 - [ ] **AR-11-26** processごとの責務、寿命、再生成規則を確定する（予定証跡: Rustメイン／script worker／dynamic workerのstate-transition表とfault test）。
 - [ ] **AR-11-27** UI、HTTP、IPC、user script、dynamic configの公開境界を確定する（予定証跡: 公開schema／API一覧とnative object境界越え禁止test）。
@@ -122,12 +157,12 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] 既存`maturin-develop`appをambient venv、network、host configに依存しない専用`target/maturin-venv`へ移行する。productionのtracked `pyproject.toml`とwheel／sdist契約は変更せず、appの隔離source snapshot内だけでMaturin canonical mixed layoutへ補正し、実行ごとの一時Cargo targetで`pokecon/**`のwheelをoffline buildし、専用の永続venv lock下でinstallする（証跡: 2026-07-30のtracked `pyproject.toml`／lock無差分、fresh／同一venv再実行のhostile offline build成功、wheel payload／source byte照合、venv内`pokecon._native` import成功、`.pth`／想定外distribution／破損／symlink／不正RECORD保持negative test、`nix run .#test` 56件成功）。
 - [x] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（証跡: 新規worktreeの絶対pathをCargo metadata／target lock、Viteのfile-change／HMR log、hook config／common hook pathからそれぞれ読取った）。
 - [x] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（証跡: callerだけの未追跡`compile_error!`とambient dummy tool／関連変数のpoison下で`contract-check`が成功。caller cacheの`libserde` pathへ置いたpoisonのSHA-256はgate前後とも`f0e766b483a7c4b0631137d317797efe9a9cdd7fd375433b92679ae01202ca6f`で、gateは別の`/tmp/pokecon-rust-gate-home.../cargo-target`を使用した）。
-- [ ] **AR-10.11-RUN3** 追跡対象の`.envrc`を`use flake`だけにし、tool-onlyの`devShells.default`をdirenvまたは`nix develop`から使用する（予定証跡: cleanな新規worktreeのtracked `.envrc`、4 systemのdevShell評価、tool／環境inventory、入室時のbuild／test副作用0）。
-- [ ] **AR-10.11-RUN4** `AGENTS.md`、`SPECIFICATION.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をtool-only devShellと用途別flake appの併用へ更新する（予定証跡: 6文書の契約検索と相互矛盾0のreport）。
-- [ ] **AR-10.11-RUN5** direnvが生成する`.direnv/`をGit管理／配布対象から除外する（予定証跡: cleanな新規worktreeでdirenv読込み後のtracked／package manifestに`.direnv` 0件）。
-- [ ] **AR-10.11-RUN6** 既定devShellをtool-onlyに保ち、新しい常駐環境、watch、書込み、長時間処理は用途を限定したappへ追加する規則を文書化する（予定証跡: devShell package／hook inventoryと専用app ownership test）。
+- [ ] **AR-10.11-RUN3** cleanな新規worktreeで追跡済みdirenv entry pointとtool-only `devShells.default`を併用する（予定証跡: clean worktree、4 systemのdevShell評価、tool／環境inventory、入室時のbuild／test副作用0）。
+- [x] **AR-10.11-RUN4** `AGENTS.md`、`docs/SPECIFICATION_BACKEND.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をtool-only devShellと用途別flake appの併用へ更新する（証跡: 6文書を横断検索し、Nix入口、tool-only／no-entry-side-effect、CI・package例外の契約に相互矛盾0を確認。`docs/SPECIFICATION_BACKEND.md:93-95`が正本でroot `SPECIFICATION.md`は索引。`nix flake check --no-build --all-systems` exit 0。既存の`direnv exec .`でcargo／bun／uvがNix storeへ解決する読み戻しも確認済み）。
+- [x] **AR-10.11-RUN5** direnvが生成する`.direnv/`をGit管理／配布対象から除外する（証跡: 現行worktreeで`.direnv/`は存在するが`git check-ignore -v .direnv`が`.gitignore:21`へ一致し、`git ls-files -- .direnv`は空。`flake.nix:681-692`のrepository source filterは`.direnv`を明示除外し、product／release sourceは明示path allowlistを使う。`nix run .#source-filter-check`と`nix flake check --no-build --all-systems`がexit 0。clean detached worktree証跡はRUN3に集約）。
+- [x] **AR-10.11-RUN6** 既定devShellをtool-onlyに保ち、新しい常駐環境、watch、書込み、長時間処理は用途を限定したappへ追加する規則を文書化する（証跡: `docs/DEVELOPMENT.md:49`、`flake.nix:3467-3478`のtool-only package／export-only shellHook、専用`web-dev`／`hooks-install`／`editor`／`virtual-io-check` task定義。`test_default_devshell_is_tool_only_and_skips_product_builds`は`nix run .#test -- tests/quality/test_ui_package_check.py -k default_devshell_is_tool_only_and_skips_product_builds`で1 passed）。
 - [ ] **AR-11-48** 追跡した`.envrc`、tool-only既定devShell、用途別flake appを併用し、host toolchainを開発入口にしない（予定証跡: hostile host PATHの新規worktreeでdirenv／`nix develop`、4対話app、個別gate、aggregate checkが成功）。
-- [ ] **AR-13.1-22** tracked `.envrc`が`use flake`だけを含み、direnv、`nix develop`、devShellを記載する全正規文書が同じtool-only契約を示す（予定証跡: tracked-file契約検索と矛盾fixture）。
+- [x] **AR-13.1-22** tracked direnv entry pointと、direnv／`nix develop`／devShellを説明する正規文書がtool-only契約で一致する（証跡: `git ls-files -- .envrc`はtracked pathのみを返し、`.envrc`本文は読み取っていない。`.direnv/`は`.gitignore:21`で除外。`tests/quality/test_devshell_docs_drift.py`が正規文書6件と矛盾fixtureを検査し、`nix run .#test -- tests/quality/test_devshell_docs_drift.py`は8 passed）。
 
 ### 受入
 
@@ -162,7 +197,13 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] 2026-09-10のAstraレビューで検出されたnative serial close、dynamic controller update／resetのhardware投影、reconnect retry中の明示Disconnectの3件を修正し、Nix経由の`cargo check`、`cargo-test`、native PTY test、Clippy、aggregate check、format、flake checkを成功させ、通常サブエージェントの独立レビューでactionable finding 0を確認した。commit `bec64921ca8d27fbf07bf18f4cea85d9030614cd`のNormal CI（`34453366968`、`34453372575`）とPackage CI（`34453367054` attempt 2、`34453372441`）のrequired checksも全てpassした（attempt 1はNSIS依存取得の一過性`os error 10054`で失敗後、再実行で成功）。
 - [x] `PLAN.md`／`TASK.md`だけのplanning-only変更はtiming対象regionなしの`none`として記録し、`ci-timing validate`は継続する。`fast`／`docs`／`product`の履歴が10件以上ある場合はp95 gateをblocking／fail-closedで適用し、10件未満のbootstrap期間はwarning付きでgateを未適用とする（p95の成功証拠には数えない）。
 - [x] Windows package／release buildはMSVCの`/Brepro`、debug strip、`/DEBUG:NONE`をbuild boundaryで固定し、既存PE normalizerとpayload／expanded tree／outer NSIS installerの三層比較を維持する。
-- [ ] CI上のmock／virtual I/O性能artifactを実装し、latency／throughputのp50／p95／p99、throughput、固定測定条件、baseline／thresholdを保存してrequired gateへ接続する。実機latency／throughput証跡は要求しない。
+- [ ] CI上のmock／virtual I/Oでproduction `CameraManager`／`SerialManager`経路の性能artifactとrequired gateを作る。2026-09-24監査: Backend §7.9.6の28.23 ms／3.28 msは1920×1080単発転送の平均参考値（50 warm-up／200 sample）で、production backend用の合否閾値ではない。`docs/ACCEPTANCE.md`の60秒warm-up、各300 sample、p50／p95／maximumと5つの閾値はbrowser primitive用であり、production backend性能受入を代替しない。現concurrent fixture（R640×360、64 serial send、最新frame 8件、時間overlap）はlatency分布／throughput／jitter／raw artifactを測らない。次は1920×1080 known frame、release build、virtual I/O上の本番manager、raw sampleからの統計とSHA／runner／設定付きartifactを追加する。backend絶対閾値、jitter定義、soak時間は規範未定のため製品判断が必要。物理機器の性能試験は作らない。
+
+- [x] 修正済みCI source boundaryを含むdirty worktreeで`nix run .#ci-rust-contracts`がexit 0。PR run `35900770262`の旧失敗は`docs/SPECIFICATION_BACKEND.md`が`rustTestSource`から欠落したことによる（`contract input docs/SPECIFICATION_BACKEND.md must be readable: No such file or directory`）。現在の`flake.nix`はBackend／Frontend／Integration定義書をRust test sourceへ含める。このローカル検証はclean checkpoint別のGitHub CI証跡ではないため、AR-11-41／AR-13.1-03などは未完了のまま。
+- [x] 2026-09-25のdirty worktreeで`nix run .#compatibility`がexit 0。成功時の決定的reportは`schema=compatibility-report/1`、`baseline_count=3`、`script_count=103`、`discovered_command_count=98`、`manifest_sha256=c2e4bd4ec3e0c5e3749e9e8ee84b046a477b8da6a2a160ec8a6121a7a461aeaf`、`results_sha256=8443242348120cda654be48715b3e331b1c23831bda841cf1dc959cf6b275cd7`を出力する。これはdirty local gateであり、commit別CI証跡ではない。
+- [x] `scripts/ci/nix_evidence.py`がNix 2.34.7 internal-jsonの`@nix` prefix、raw fields、actBuild／actSubstitute／actCopyPathを検査し、fallback無効・command成功・活動のstart/stop完結を満たす場合だけ`capture_complete=true`を出す。Nix実ログ（`nix --option fallback false --log-format internal-json path-info --json .#pokecon`）を`activity_count=66`で読み取り、`capture_complete=true`を確認した。Normal CIはjob-local artifactをダウンロードし、適用jobの証跡欠落／不完全時にfail-closedする。`test_nix_evidence.py` 12件、`test_ci_timing.py` 52件が成功。
+- [x] Package CIの意図的な再現性二重build例外を`docs/PACKAGE_REPRODUCIBILITY_EXCEPTIONS.md`へ記録し、`test_package_reproducibility_exceptions.py` 9件で`linux+linux_repro→repro_check`／`windows+windows_repro→windows_repro_check`の依存・比較marker・同一version probe範囲をfail-closed検査する。current-82b Package CIのOS別artifact／install・upgrade・uninstall／manifest証跡は別監査で確認済みだが、Release tagと移行前後matrixは未完了。
+- [x] Frontendの`OtherTab` controller position既定`bottom`・2つのposition radio、`WorkspaceMenu`のlegacy LINE Token Assignment／Check（`message`／`noop`）を実装し、Web gateは26 files／112 tests、0 diagnostics、production build成功。BackendのOS-native `auto_reload_config` watcherは未実装のため、関連受入は未完了。
 
 ### 旧Phase 1 checkpoint証跡（2026-07-30、devShell方針以外は継続有効）
 
@@ -187,14 +228,67 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 構造だけを移し、公開 CLI、設定、IPC、生成契約、配布物、実行時挙動は変更しない。
 
 - [ ] **AR-13.1-02** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の構造移行中は公開CLI、設定、IPC、生成契約、配布物の名前／配置、実行時挙動を変更しない（予定証跡: 各構造commitの`nix run .#contract-check`、`nix run .#cargo-test`、`nix run .#compatibility`、`nix build .#pokecon`が出力するCLI／config／IPC／generated／artifact manifest diffとbehavior regression report）。
-- [ ] **AR-10.8-01** PokeConを独立再利用部品の集合ではなく一つの製品として設計する（予定証跡: package／process／artifact diagramとworkspace member検査）。
-- [ ] **AR-10.8-02** 将来の独立再利用と交換可能性を設計要件にしない（予定証跡: public APIとextension pointの差分review、根拠のない抽象化不在監査）。
+- [x] **AR-10.8-01** PokeConを独立再利用部品の集合ではなく一つの製品として設計する（証跡: 下記package/process/artifact図とNix経由workspace member監査）。
+- [x] **AR-10.8-02** 将来の独立再利用と交換可能性を設計要件にしない（証跡: 下記「公開Rust library APIとextension pointの移行差分」および移行前後のmanifest／symbol監査）。
 - [ ] **AR-10.8-03** 内部設計で単純さ、変更の追跡しやすさ、状態所有の一元化を優先する（予定証跡: ownership table、change-path review、重複状態検査）。
 - [ ] **AR-10.8-04** 別process、信頼境界、任意のplatform依存、異なる配布成果物など実際の必要性がある場合だけ強い実装境界を設ける（予定証跡: `nix run .#check`の成果物として保存する境界ごとの必要性／信頼／配布根拠表とarchitecture review）。
 - [ ] **AR-10.8-05** 再利用可能性だけを理由にtrait、service層、変換型、crateを追加しない（予定証跡: 追加抽象化inventoryの根拠reviewとcrate数検査）。
-- [ ] **AR-10.9-02** 任意機能はCargo feature、OS差分はtarget条件、別OS processは複数`[[bin]]`による表現を別crateより先に検討する（予定証跡: feature／target／bin選択表、`nix run .#cargo -- metadata --locked --no-deps`、例外根拠review）。
-- [ ] **AR-10.9-03** 単一packageで満たせない具体的要件または実測問題が生じた場合だけ別crateを採用する（予定証跡: `nix run .#cargo -- metadata --locked --no-deps`のworkspace member一覧と追加crate例外の要件／測定記録）。
-- [ ] **AR-10.9-04** 責務の違い、file数、行数、別OS processであることだけを別crate化の根拠にしない（予定証跡: crate-boundary decision logと`nix run .#cargo -- metadata --locked --no-deps`のworkspace member監査）。
+- [x] **AR-10.9-02** 任意機能はCargo feature、OS差分はtarget条件、別OS processは複数`[[bin]]`による表現を別crateより先に検討する（証跡: 下記feature／target／binary selection table、Nix経由Cargo metadata、crate-boundary decision record、CLI help gate）。
+- [x] **AR-10.9-03** 単一packageで満たせない具体的要件または実測問題が生じた場合だけ別crateを採用する（証跡: `nix run .#cargo -- metadata --locked --no-deps --format-version 1`のworkspace member一件と上記crate-boundary decision record）。
+- [x] **AR-10.9-04** 責務の違い、file数、行数、別OS processであることだけを別crate化の根拠にしない（証跡: 下記crate-boundary decision recordと`nix run .#cargo -- metadata --locked --no-deps --format-version 1`のworkspace member読み戻し）。
+
+### 公開Rust library APIとextension pointの移行差分（2026-09-24）
+
+- 移行前のparent commit `1621274585f86cf71c319faa0c78d77fa8ab45e6`（composition-root移行commit `64a7dd5`のparent）のroot `Cargo.toml`は11 workspace membersを宣言し、`rust/pokecon-app/src/lib.rs`は`command_service`、`dynamic_host`、`dynamic_runtime`、`profile_service`、`script_runtime`のpublic moduleと`UiMode`、`AppOptions`、`RunControl`、`RunSummary`、`AppError`、`run`、`run_with_dynamic`、`run_configured`、`run_configured_controlled`を公開していた。
+- 同じbaselineの各member `src/lib.rs`にあるcolumn-0 `pub`宣言数はapp 14、contracts 18、core 4、camera 20、device 5、dynamic 17、desktop 8、pybindings 0、server 14、settings 15、worker 9だった。これはroot宣言行の比較値であり、公開項目総数とは区別する。
+- 移行後の`nix run .#cargo -- metadata --locked --no-deps --format-version 1`はpackage `pokecon`一つを返す。現行`rust/pokecon/src/lib.rs`が通常re-exportするのは`MainError`と`run_cli`だけで、domain moduleはcrate-privateである。
+- `binary_entrypoints`はdoc-hiddenなpublic moduleで、package内binary向けの`worker`／`compatibility`／generator関数だけがfeature-gatedで公開される。`integration_test_support`もdoc-hiddenかつ`integration-test-support` feature-gatedで、integration test用に一部のdomain type／traitをre-exportする。どちらもRustの型検査上はfeature選択後に到達可能だが、製品のsupported extension pointではない。その他のdomain moduleはcrate-privateである。移行前のPython `cdylib`／binding crateはretire commit `8726b23`で削除された。
+- 製品の拡張面はCLI、HTTP／WebSocket／WebRTC、worker IPC、user-script／dynamic-config protocolであり、独立再利用のためのRust domain APIやcrate境界を設けない。現行`rust/pokecon` treeに別member／`cdylib`／Python extension attributeはない。
+
+### Crate境界の判断記録（2026-09-24）
+
+- root Cargo manifestはworkspace memberを`rust/pokecon`の一つに限定し、package metadataは`pokecon`一つを返した。
+- `rust/pokecon/Cargo.toml`は本体、worker、compatibility tool、fault fixture、contract generatorを複数binary targetとfeatureで構成する。
+- 現行構成はworkerを別binaryとして起動するが、本体とworkerは同じCargo packageのbinary targetとして構成しているため、package分割なしに実行ファイルを分けられる。
+- 直接根拠はroot `Cargo.toml`のworkspace member、`rust/pokecon/Cargo.toml`の`[[bin]]`／feature、`rust/pokecon/src/entrypoint.rs`のworker asset inventory、`flake.nix`の同一package buildである。
+- 現時点では独立versioning／distribution API、固有のsecurity boundary、解けないbuild graph競合、実測済みincremental-build問題を示す要件はない。
+- よってworkspaceを単一package `pokecon`に保ち、別crateは上記の具体的要件または計測証拠が成立した場合だけ再検討する。
+- 責務名、file数、行数、将来の再利用可能性のみではcrateを分割しない。
+
+### Package、process、artifactの構成図（2026-09-24）
+
+```text
+Cargo workspace: one member (`rust/pokecon`)
+└── Cargo package: `pokecon`
+    ├── product binary: `pokecon`
+    │   ├── runtime mode: `--ui web`
+    │   └── runtime mode: `--ui desktop` (Tauri)
+    ├── supervised worker process: `pokecon-worker`
+    │   ├── role: `--kind script`
+    │   └── role: `--kind dynamic`
+    └── feature-gated auxiliary binaries
+        ├── `pokecon-compatibility`
+        ├── `pokecon-worker-fault-fixture`
+        ├── `generate_contracts`
+        └── `generate_openapi`
+```
+
+Product binaryとworker binaryは同一Cargo packageから別artifactとしてbuildし、起動時UI modeはproduct binary内で選択する。
+Cargo metadataのworkspace member監査結果は`rust/pokecon`一件である。
+
+### Feature、target、binaryの選択記録（2026-09-24）
+
+| 要件 | 現行表現 | 根拠 |
+|---|---|---|
+| Web／Tauri mode | 同一`pokecon` binaryの起動時`--ui`選択。compile featureや別packageを使わない。 | `entrypoint.rs`の`UiArgument`とCLI help gate。 |
+| Worker process | `pokecon-worker` binaryを`worker-binary` featureで有効化する。 | `rust/pokecon/Cargo.toml`と`flake.nix`の同一package build。 |
+| Compatibility tool | `pokecon-compatibility` binaryを`compatibility-tool` featureで有効化する。 | `rust/pokecon/Cargo.toml`。 |
+| Fault fixture | `pokecon-worker-fault-fixture` binaryを`worker-test-fixture` featureで有効化する。 | `rust/pokecon/Cargo.toml`。 |
+| Contract generators | `generate_contracts`と`generate_openapi`を`contract-generator` featureで有効化する。 | `rust/pokecon/Cargo.toml`。 |
+| OS固有camera／syscall dependency | Unix、Linux、Windowsのtarget conditionで依存を選択する。 | `rust/pokecon/Cargo.toml`の`[target.'cfg(...)'.dependencies]` sections。 |
+
+Nix経由Cargo metadataはworkspace member `rust/pokecon`一件とpackage `pokecon`一件を返した。
+selection tableは既存binary、feature、target条件の記録であり、追加crateや抽象化を導入しない。
 
 ### 2.1 合成起点
 
@@ -516,7 +610,7 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-11-42** 通常CIの変更領域判定、各jobの所有検査、集約必須gateを確定する（予定証跡: region／job／check ownership matrixとworkflow fixture report）。
 - [ ] **AR-10.10-03** workflowを常に起動し、workflow-level path filterで全体を省略しない（予定証跡: trigger定義と各single-area fixtureのworkflow run）。
 - [ ] **AR-10.10-04** 不要な領域jobは成功扱いで明示的に省略し、必須gateを不定にしない（予定証跡: 非該当fixtureのskip reason／conclusionとaggregate output）。
-- [ ] **AR-10.10-05** feature commitはpull request、既定branch／明示的な統合branchへの直接反映はpushで検査し、同一SHAを両eventで重複検査しない（予定証跡: event／branch matrixとSHA別workflow-run個数）。
+- [ ] **AR-10.10-05** feature commitはpull request、既定branch／明示的な統合branchへの直接反映はpushで検査し、同じPR head commitを両eventで重複検査しない（部分証跡: `normal-ci.yml:4-7`／`package.yml`はpushを`main`／`master`に限定し、PR baseに`refactor/rust-core`を含む。`test_ci_trigger_dedup.py`はNix経由12 passed。GitHubの[複数event規則](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow#using-multiple-events)では`push`と`pull_request`は独立にworkflow runを起動し、[branch filter](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow#using-filters-to-target-specific-branches-for-pull-request-events)は前者でpush ref、後者でPR baseを対象とするため、静的`on:` filterだけでは直接push検査と重複ゼロを両立できない。また、[push](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#push)の`GITHUB_SHA`はpush先端、[pull_request](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request)の`GITHUB_SHA`はmerge commitであり、比較対象はPR `head.sha`と定義する必要がある。現設定はPR head同期の重複を避けるが、PRなし`refactor/rust-core` pushにCIを起動しない。active `protect` rulesetは`~DEFAULT_BRANCH`だけを含み、branch APIの`protected`はfalseのため、PR-only保護は未設定である。所有者がdirect pushを禁止してbranch protectionを強めるか、重複実行の危険を受け入れてbest-effort routingを許すか決めるまで未完了。same-head SHA比較の現行run証跡も未取得。
 - [ ] **AR-10.10-19** 通常CIへbranch単位の`cancel-in-progress`を設定し、新push後は旧SHAの重い検査を継続しない（予定証跡: 連続push fixtureの旧run cancelled／新run completed記録）。
 - [ ] **AR-10.10-07** Package CIも常に軽量な集約gateを返し、無関係な変更は明示的成功、関係する変更はOS別package jobの成功を必須にする（予定証跡: package無関係／関係fixtureのjob DAGとaggregate conclusion）。
 - [ ] **AR-10.10-06** 通常CI集約gateを既定branch rulesetのrequired status checkに指定し、失敗中または未完了のmergeを拒否する（予定証跡: ruleset API読み戻しJSONとpending／failing PRのmergeability）。
@@ -537,6 +631,8 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-10.10-15** remote flakeはremote SHAのmetadataと既定appの起動可能性を検査し、localは`nix flake check --no-build`で全outputを評価する（予定証跡: remote SHA／metadata／app smoke logとlocal evaluation log）。
 - [ ] **AR-10.10-16** 検査を実行しないlocal／remoteの`check --help`重複を削除する（予定証跡: 許可済み`git grep`のworkflow command logと`nix run .#check`の削除前後logical-check inventory）。
 - [ ] **AR-10.10-17** PokeCon固有derivationのbinary cacheを導入し、信頼済みpushだけが書込み、pull requestは読取りだけを行う（予定証跡: event別credential／permission表、PR write negative test、trusted-push upload log）。
+  workflowには署名検証とtrusted actor限定のpush write条件がある。
+  Repository secrets／environmentsの読み戻しでは署名credentialを確認できず、任意exportはskipされるため、trusted-push upload証跡がなく未完了である。
 - [ ] **AR-11-45** PokeCon固有derivationを再利用するbinary cacheの信頼境界を確定する（予定証跡: actor／event／read-write permission matrixとcache audit log）。
 
 ### 計測と受入
@@ -566,7 +662,7 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
 - [x] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（証跡: `cargo test --locked --workspace --all-targets --all-features` の input／notification／worker lifecycle fault tests）。
-- [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（予定証跡: 双方向同時load fixtureのlatency／jitter／progress report）。
+- [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（部分証跡: `rust/pokecon/tests/concurrent_camera_serial_load.rs`はproduction `CameraManager`のlatest-frame consumerと`SerialManager`のvirtual writerを同時実行し、64回のserial write、serial期間中8 distinct frame以上、時間区間の重なり、camera継続稼働を検査する。focused testは1 passed。さらに`nix run .#ci-rust-contracts` exit 0でRust unit 475件と同test 1件が成功した。これはprogress／overlapのsoftware-only証拠であり、画像認識処理、latency／jitter分布、throughput／stability reportを測定せず、要求全体は未完了）。
 - [ ] **AR-11-05** 明示的優先機構の導入前後で遅延、jitter、飢餓、queue停滞を比較し、改善しない機構は採用しない（予定証跡: before／after benchmarkと採用判定record）。
 - [ ] **AR-11-06** command実行、画像認識、serial出力を結ぶ主経路を実装する（予定証跡: end-to-end command→frame→controller／serial traceとlatency report）。
 - [x] **AR-11-12** UI制御要求を表示配信より優先し、映像、状態、logの滞留を主経路へ伝播させない（証跡: WebSocket の slow-client、latest-frame、control-latency、bounded-log tests）。
@@ -618,6 +714,8 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] Windows／Linux の標準成果物が Web／Tauri 両 mode、本体、worker、Web 資源、uv、管理 Python を含む（証跡: Package CI `34272925529`のLinux／Windows bundle、clean-install smoke、runtime／resource manifest）。
 - [x] non-Nix 配布、clean install、upgrade、uninstall、再現可能性、署名対象を検証する（証跡: Package CI `34272925529`の実署名Windows runner、Linux／Windows package smoke、payload／expanded tree／outer NSIS installer比較、signing manifest）。
 - [x] 2026-09-14のcommit `50bd589ba67ec801f9be4579c7062984d9577b2f`で隔離Web runtimeの外部hardware I/Oなし受入を再実行した（証跡: clean root command reload `200`、profile switch／read-back、stale revision `409`、Webhook secret-safe read projection）。ブラウザbackendの`410 Gone`により、同runのブラウザ操作とtailnet越しWebRTC primary映像は未完了として残す。
+  - 2026-09-24 source-only follow-up（current runtime acceptanceではない）: `rust/pokecon/src/production.rs:309-332`は空の`Commands` rootを作成し、`CommandService`／`ProfileService`をrouter公開前にinstallするため、旧clean-root command reload失敗は現行source上では起動欠落が見つからない。`web/src/lib/components/CommandsTab.svelte:393`のReload buttonは空listでもenabledであり、実HTTP成功は未検証。live browser trialはskill必須のclean-repo cleanup conditionを満たせない（既存staged／dirty差分を保全し、別worktreeも作らない制約）ため未実施。
+  - 同follow-up: `dynamic_host.rs:915-917`の`profile_list()`は実ディレクトリを再列挙する一方、UIの`WorkspaceMenu.svelte:76-80`は`StateSnapshot.available_profiles`を表示し、`refresh_available_profiles()`はlauncherによる新規作成時（`application_backend.rs:811-815`）にしか呼ばれない。実効Configルート配下のprofile directoryを実行中に外部作成／削除した後、UI listを更新する操作とその契約がないため、profile discoveryのlive refreshは未受入・未解決。`nix develop --command cargo test --locked -p pokecon dynamic_host::tests::profile_state_and_controller_are_rust_owned`は1 passedだが、internal host refresh pathのみでREST／SPAは検証しない。`nix run .#web-check`は26 test files／106 tests、Svelte diagnostics 0 errors／0 warnings、production build成功だがlive browser acceptanceの代替ではない。
 - [ ] README と利用者／開発者文書を最終実装へ同期する。
 - [ ] architecture handoffに対応する実装または受入証跡を、本計画と製品定義書の要件ごとに列挙する。
 - [ ] 本計画に展開したarchitectureの各受入条件に直接の証拠があることを監査する。

@@ -1808,5 +1808,113 @@ fn between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
         .0
 }
 
+#[test]
+fn design_principles_map_to_runtime_mechanisms_without_drift() {
+    // AR-11-24: docs/ARCHITECTURE.md の設計原則→module／queue／lock／task／thread
+    // 対応表が、実装の実在symbolと一致し続けることを保証する。表の行の欠落・
+    // 変更、symbolのリネーム、moduleの公開API化のいずれもこのtestを失敗させる。
+    let architecture = repository_text("docs/ARCHITECTURE.md");
+    let section = architecture
+        .split_once("## 設計原則と実行時機構の対応")
+        .expect("ARCHITECTURE.md must define the principle-to-mechanism section")
+        .1;
+    let section = section
+        .split_once("\n## ")
+        .map_or(section, |(head, _)| head);
+    let rows: Vec<&str> = section
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('|'))
+        .filter(|line| !line.contains("設計原則"))
+        .filter(|line| !line.contains("---"))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        9,
+        "principle-to-mechanism table must keep exactly 9 principle rows"
+    );
+
+    // (table module fragment, required mechanism symbol, owning source file).
+    // Every symbol below was traced to its source before being asserted here.
+    let required: &[(&str, &str, &str)] = &[
+        (
+            "worker::supervisor",
+            "ManagedWorker",
+            "rust/pokecon/src/worker/supervisor.rs",
+        ),
+        (
+            "server::state",
+            "StateHub",
+            "rust/pokecon/src/server/state.rs",
+        ),
+        (
+            "server::websocket",
+            "ephemeral_queue_capacity",
+            "rust/pokecon/src/server/websocket.rs",
+        ),
+        (
+            "device::input",
+            "InputArbiter",
+            "rust/pokecon/src/device/input.rs",
+        ),
+        (
+            "device::serial::manager",
+            "SerialManager",
+            "rust/pokecon/src/device/serial/manager.rs",
+        ),
+        (
+            "camera::manager",
+            "CameraManager",
+            "rust/pokecon/src/camera/manager.rs",
+        ),
+        (
+            "worker::generation",
+            "WorkerGeneration",
+            "rust/pokecon/src/worker/generation.rs",
+        ),
+        (
+            "runtime::shutdown",
+            "ShutdownCoordinator",
+            "rust/pokecon/src/runtime/shutdown.rs",
+        ),
+        (
+            "server::security",
+            "RequestSecurity",
+            "rust/pokecon/src/server/security.rs",
+        ),
+        (
+            "server::api",
+            "ApiErrorCode",
+            "rust/pokecon/src/server/api.rs",
+        ),
+    ];
+    for (module, symbol, source) in required {
+        assert!(
+            rows.iter()
+                .any(|row| row.contains(module) && row.contains(symbol)),
+            "mapping row for {module} must name mechanism {symbol}"
+        );
+        let implementation = repository_text(source);
+        assert!(
+            implementation.contains(symbol),
+            "mechanism {symbol} must exist in {source}"
+        );
+    }
+
+    // Table module paths are private implementation facts, not public API
+    // promises: the owning top-level modules must stay crate-private.
+    let lib = repository_text("rust/pokecon/src/lib.rs");
+    for module in ["camera", "device", "dynamic", "runtime", "server", "worker"] {
+        assert!(
+            lib.contains(&format!("mod {module};")),
+            "lib.rs must declare module {module}"
+        );
+        assert!(
+            !lib.contains(&format!("pub mod {module};")),
+            "module {module} must stay crate-private, not a public API promise"
+        );
+    }
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

@@ -1023,3 +1023,18 @@ def test_planning_only_runs_use_none_and_skip_p95_gate() -> None:
     assert "docs) threshold=300" in workflow
     assert "product) threshold=720" in workflow
     assert "unknown change_kind" in workflow
+
+
+def test_nix_evidence_is_job_local_and_fail_closed() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "--log-format internal-json" in workflow
+    assert "--option fallback false" in workflow
+    assert "ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-" in workflow
+    assert "pokecon-nix-evidence.json" in workflow
+    assert "capture_complete == true" in workflow
+    assert "nix-evidence" in workflow
+    assert "substituted_store_paths: []" not in workflow
+    assert 'rust_drv="$(nix path-info --derivation' not in workflow
+    assert 'product_drv="$(nix path-info --derivation' not in workflow

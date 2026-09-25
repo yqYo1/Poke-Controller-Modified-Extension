@@ -84,7 +84,7 @@
   }
 
   async function changeSelect(event: Event, setting: SelectSetting): Promise<void> {
-    const value = (event.currentTarget as HTMLSelectElement).value;
+    const value = (event.currentTarget as HTMLInputElement | HTMLSelectElement).value;
     if (setting === 'ui.stdout_destination') {
       await write({ 'ui.stdout_destination': value as 'output_1' | 'output_2' });
     } else if (setting === 'ui.widget_mode') {
@@ -273,29 +273,42 @@
       {t('Layout', 'レイアウト')}
     </legend>
     <div class="grid gap-4 sm:grid-cols-2">
-      <label>
-        <span class="text-xs font-medium text-subtext1">{t('Controller position', 'コントローラーの位置')}</span>
-        <select
-          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
-          value={values?.['ui.controller_position'] ?? 'top'}
-          onchange={(event) => void changeSelect(event, 'ui.controller_position')}
-        >
-          <option value="top">TOP</option>
-          <option value="bottom">BOTTOM</option>
-        </select>
-      </label>
-      <label>
-        <span class="text-xs font-medium text-subtext1">{t('Dialog button position', 'ダイアログボタンの位置')}</span>
-        <select
-          class="mt-1 w-full rounded-lg border border-text/10 bg-crust px-3 py-2 text-sm text-text"
-          value={values?.['ui.dialog_button_position'] ?? 'bottom'}
-          onchange={(event) => void changeSelect(event, 'ui.dialog_button_position')}
-        >
-          <option value="top">TOP</option>
-          <option value="bottom">BOTTOM</option>
-          <option value="both">BOTH</option>
-        </select>
-      </label>
+      <fieldset>
+        <legend class="text-xs font-medium text-subtext1">{t('Controller position', 'コントローラーの位置')}</legend>
+        <div class="mt-2 flex gap-2">
+          {#each [['top', 'TOP'], ['bottom', 'BOTTOM']] as position (position[0])}
+            <label class="flex flex-1 items-center gap-2 rounded-lg bg-crust/15 px-3 py-2 text-sm text-text">
+              <input
+                type="radio"
+                name="controller-position"
+                value={position[0]}
+                checked={(values?.['ui.controller_position'] ?? 'bottom') === position[0]}
+                class="accent-blue"
+                onchange={(event) => void changeSelect(event, 'ui.controller_position')}
+              />
+              {position[1]}
+            </label>
+          {/each}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend class="text-xs font-medium text-subtext1">{t('Dialog button position', 'ダイアログボタンの位置')}</legend>
+        <div class="mt-2 flex gap-2">
+          {#each [['top', 'TOP'], ['bottom', 'BOTTOM'], ['both', 'BOTH']] as position (position[0])}
+            <label class="flex flex-1 items-center gap-2 rounded-lg bg-crust/15 px-3 py-2 text-sm text-text">
+              <input
+                type="radio"
+                name="dialog-button-position"
+                value={position[0]}
+                checked={(values?.['ui.dialog_button_position'] ?? 'bottom') === position[0]}
+                class="accent-blue"
+                onchange={(event) => void changeSelect(event, 'ui.dialog_button_position')}
+              />
+              {position[1]}
+            </label>
+          {/each}
+        </div>
+      </fieldset>
     </div>
   </fieldset>
 

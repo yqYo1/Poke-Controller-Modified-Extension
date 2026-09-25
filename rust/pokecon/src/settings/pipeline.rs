@@ -119,6 +119,9 @@ pub enum ConfigurationWarning {
         expected: String,
         reason: String,
     },
+    /// A pre-existing settings file has permissions broader than `0600`.
+    /// `mode` holds only the permission bits; file contents are never stored.
+    InsecureFilePermissions { file: PathBuf, mode: u32 },
 }
 
 impl ConfigurationWarning {
@@ -170,6 +173,11 @@ impl ConfigurationWarning {
                 "設定ファイル {} のキー {key} の値 {value} は使用できないため、既定値へ戻しました。期待形式: {expected}。理由: {reason}。",
                 file.display()
             ),
+            Self::InsecureFilePermissions { file, mode } => format!(
+                "設定ファイル {} のパーミッション {:o} は必要以上に広いため、所有者のみが読み書きできる設定への変更を検討してください。自動で変更は行いません。",
+                file.display(),
+                mode
+            ),
         }
     }
 
@@ -179,6 +187,7 @@ impl ConfigurationWarning {
             Self::UnknownTomlKey { .. } => "unknown_toml_key",
             Self::DeprecatedTomlKey { .. } => "deprecated_toml_key",
             Self::InvalidTomlValueFallback { .. } => "invalid_toml_value_fallback",
+            Self::InsecureFilePermissions { .. } => "insecure_file_permissions",
         }
     }
 }
@@ -608,11 +617,10 @@ impl SettingsPipeline {
         let parsed_cli = ParsedCli::parse(&registry, &self.request.arguments)?;
         let bootstrap = resolve_bootstrap(&registry, &parsed_cli, &self.request)?;
         let store = TomlStore::new(LockManager::new(&bootstrap.roots));
-        let profile = store.read(
-            &bootstrap
-                .roots
-                .profile_settings(bootstrap.active_profile.as_str())?,
-        )?;
+        let initial_profile_settings_path = bootstrap
+            .roots
+            .profile_settings(bootstrap.active_profile.as_str())?;
+        let profile = store.read(&initial_profile_settings_path)?;
         let mut resolution = resolve_layers(
             stage,
             &registry,
@@ -653,6 +661,11 @@ impl SettingsPipeline {
             resolution = final_resolution;
         }
         let profile_settings_path = bootstrap.roots.profile_settings(active_profile.as_str())?;
+        // §11.4.3.3: warn once per path read during this load for pre-existing
+        // files with permissions broader than `0600`. Never auto-chmod.
+        push_insecure_permission_warning(&mut resolution.warnings, &bootstrap.global_settings_path);
+        push_insecure_permission_warning(&mut resolution.warnings, &initial_profile_settings_path);
+        push_insecure_permission_warning(&mut resolution.warnings, &profile_settings_path);
         let roots = bootstrap.roots;
         let recipe = ResolutionRecipe {
             registry: registry.clone(),
@@ -873,6 +886,40 @@ fn default_value(
         .map_err(|reason| invalid(&setting.id, source, reason))?;
     Ok(value)
 }
+
+/// Records a content-free warning for a pre-existing settings file whose
+/// permissions are broader than `0600` (`SPECIFICATION_BACKEND` §11.4.3.3).
+///
+/// Missing files produce no warning because updates create them `0600`.
+/// At most one warning per path is recorded per load; file contents are
+/// never read here, only metadata.
+#[cfg(unix)]
+fn push_insecure_permission_warning(warnings: &mut Vec<ConfigurationWarning>, path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    if warnings.iter().any(|warning| {
+        matches!(
+            warning,
+            ConfigurationWarning::InsecureFilePermissions { file, .. } if file == path
+        )
+    }) {
+        return;
+    }
+    let mode = match std::fs::metadata(path) {
+        Ok(metadata) => metadata.permissions().mode() & 0o777,
+        Err(_) => return,
+    };
+    if mode & !0o600 != 0 {
+        warnings.push(ConfigurationWarning::InsecureFilePermissions {
+            file: path.to_path_buf(),
+            mode,
+        });
+    }
+}
+
+/// Non-Unix platforms keep the standard ACL behavior without permission warnings.
+#[cfg(not(unix))]
+fn push_insecure_permission_warning(_warnings: &mut Vec<ConfigurationWarning>, _path: &Path) {}
 
 fn resolve_bootstrap(
     registry: &SettingsRegistry,
@@ -2395,6 +2442,141 @@ mod tests {
             loaded
                 .profile_settings_path
                 .ends_with("profiles/from-dynamic/settings.toml")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn insecure_settings_files_warn_once_per_path_without_file_contents() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let config = temp.path().join("config/pokecon");
+        fs::create_dir_all(config.join("profiles/default")).expect("fixture dirs must exist");
+        let global = config.join("settings.toml");
+        let profile = config.join("profiles/default/settings.toml");
+        fs::write(&global, "[global]\nlanguage = \"ja\"\n")
+            .expect("global fixture must be writable");
+        fs::write(&profile, "[global]\nlanguage = \"ja\"\n")
+            .expect("profile fixture must be writable");
+        for file in [&global, &profile] {
+            let mut permissions = fs::metadata(file)
+                .expect("metadata must be readable")
+                .permissions();
+            permissions.set_mode(0o644);
+            fs::set_permissions(file, permissions).expect("fixture mode must be writable");
+        }
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon"], &[]))
+            .load()
+            .expect("pipeline must resolve");
+        let insecure = loaded
+            .configuration_warnings
+            .iter()
+            .filter(|warning| {
+                matches!(
+                    warning,
+                    super::ConfigurationWarning::InsecureFilePermissions { .. }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(insecure.len(), 2);
+        let mut files = Vec::new();
+        for warning in &insecure {
+            match warning {
+                super::ConfigurationWarning::InsecureFilePermissions { file, mode } => {
+                    assert_eq!(*mode, 0o644);
+                    let message = warning.message();
+                    assert!(message.contains(&*file.to_string_lossy()));
+                    assert!(message.contains("644"));
+                    assert!(
+                        !message.contains("language"),
+                        "permission diagnostics must never include file contents"
+                    );
+                    files.push(file.clone());
+                }
+                _ => unreachable!("filtered to permission warnings"),
+            }
+        }
+        assert!(files.contains(&global));
+        assert!(files.contains(&profile));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn insecure_global_file_warns_only_once_across_profile_reload() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let global = temp.path().join("config/pokecon/settings.toml");
+        let target = temp.path().join("config/pokecon/profiles/from-dynamic");
+        fs::create_dir_all(&target).expect("target profile must exist");
+        fs::write(&global, "[global]\nlanguage = \"ja\"\n")
+            .expect("global fixture must be writable");
+        fs::write(
+            target.join("settings.toml"),
+            "[ui]\nui_fps = 60\nui_fps_options = [15, 30, 60]\n",
+        )
+        .expect("target profile must be writable");
+        let mut permissions = fs::metadata(&global)
+            .expect("metadata must be readable")
+            .permissions();
+        permissions.set_mode(0o640);
+        fs::set_permissions(&global, permissions).expect("fixture mode must be writable");
+        let mut pipeline_request = request(&temp, &["pokecon"], &[]);
+        pipeline_request
+            .dynamic_values
+            .insert("active_profile".to_owned(), json!("from-dynamic"));
+        let loaded = SettingsPipeline::new(pipeline_request)
+            .load()
+            .expect("dynamic profile selection must resolve");
+        let global_warnings = loaded
+            .configuration_warnings
+            .iter()
+            .filter(|warning| {
+                matches!(
+                    warning,
+                    super::ConfigurationWarning::InsecureFilePermissions { file, .. }
+                    if file == &global
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(global_warnings.len(), 1);
+        let message = global_warnings[0].message();
+        assert!(message.contains(&*global.to_string_lossy()));
+        assert!(message.contains("640"));
+        assert!(
+            !message.contains("language"),
+            "permission diagnostics must never include file contents"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_or_missing_settings_files_produce_no_permission_warnings() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().expect("temporary directory must exist");
+        let global = temp.path().join("config/pokecon/settings.toml");
+        fs::create_dir_all(temp.path().join("config/pokecon/profiles/default"))
+            .expect("fixture dirs must exist");
+        fs::write(&global, "[global]\nlanguage = \"ja\"\n")
+            .expect("global fixture must be writable");
+        let mut permissions = fs::metadata(&global)
+            .expect("metadata must be readable")
+            .permissions();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&global, permissions).expect("fixture mode must be writable");
+        let loaded = SettingsPipeline::new(request(&temp, &["pokecon"], &[]))
+            .load()
+            .expect("pipeline must resolve");
+        assert!(
+            loaded
+                .configuration_warnings
+                .iter()
+                .all(|warning| !matches!(
+                    warning,
+                    super::ConfigurationWarning::InsecureFilePermissions { .. }
+                ))
         );
     }
 

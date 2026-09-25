@@ -2132,8 +2132,13 @@ fn host_error(code: &str, message: &str) -> ScriptHostError {
     ScriptHostError::new(code, message)
 }
 
-fn serial_host_error(_error: SerialError) -> ScriptHostError {
-    host_error("SerialUnavailable", "serial operation failed")
+fn serial_host_error(error: SerialError) -> ScriptHostError {
+    match error {
+        SerialError::Disconnected | SerialError::SendCancelled => {
+            host_error("SerialDisconnected", "serial port is disconnected")
+        }
+        _ => host_error("SerialUnavailable", "serial operation failed"),
+    }
 }
 
 fn camera_host_error() -> ScriptHostError {
@@ -2428,5 +2433,83 @@ mod tests {
         assert_eq!(overlay.snapshot().shapes.len(), 1);
         assert!(overlay.expire(expiry.id));
         assert!(overlay.snapshot().shapes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn queued_serial_send_cancellation_maps_to_serial_disconnected() {
+        use std::time::Duration;
+
+        use crate::device::serial::{
+            ControllerFormat, SerialConfig, VirtualOpenPlan, VirtualSerialBackend,
+            VirtualSerialEndpoint,
+        };
+
+        let backend = VirtualSerialBackend::default();
+        let endpoint = VirtualSerialEndpoint::new();
+        endpoint.set_write_delay(Duration::from_millis(250)).await;
+        backend
+            .push_plan(VirtualOpenPlan::Success(endpoint.clone()))
+            .await;
+        let manager = SerialManager::new(Arc::new(backend));
+        manager
+            .apply_config(
+                SerialConfig::new("port", 9600, ControllerFormat::Default).expect("valid config"),
+            )
+            .await
+            .expect("virtual port connects");
+        let writes_before = endpoint.write_call_count();
+        let active = {
+            let manager = manager.clone();
+            tokio::spawn(async move { manager.send_raw(b"active").await })
+        };
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while endpoint.write_call_count() == writes_before {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("active send reaches the virtual endpoint");
+
+        let queued = manager.send_raw(b"queued");
+        tokio::pin!(queued);
+        // Poll while the active write holds the lock so disconnect sees queued work.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), &mut queued)
+                .await
+                .is_err()
+        );
+        let disconnect = {
+            let manager = manager.clone();
+            tokio::spawn(async move { manager.disconnect().await })
+        };
+        active
+            .await
+            .expect("active send joins")
+            .expect("active send");
+        let queued_result = queued.await;
+        assert_eq!(queued_result, Err(SerialError::SendCancelled));
+        let mapped = queued_result.map_err(serial_host_error).unwrap_err();
+        assert_eq!(mapped.code, "SerialDisconnected");
+        disconnect
+            .await
+            .expect("disconnect joins")
+            .expect("disconnect");
+    }
+
+    #[tokio::test]
+    async fn disconnected_serial_send_maps_to_serial_disconnected() {
+        let backend = crate::device::serial::VirtualSerialBackend::default();
+        let manager = SerialManager::new(Arc::new(backend));
+        let result = manager.send_raw(b"frame").await;
+        assert_eq!(result, Err(SerialError::Disconnected));
+        let mapped = result.map_err(serial_host_error).unwrap_err();
+        assert_eq!(mapped.code, "SerialDisconnected");
+    }
+
+    #[test]
+    fn ordinary_serial_error_maps_to_serial_unavailable() {
+        let mapped = serial_host_error(SerialError::WriteFailed);
+        assert_eq!(mapped.code, "SerialUnavailable");
+        assert_eq!(mapped.message, "serial operation failed");
     }
 }

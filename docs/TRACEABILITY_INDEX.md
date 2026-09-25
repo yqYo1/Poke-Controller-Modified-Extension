@@ -29,6 +29,7 @@
 | [`docs/SPECIFICATION_INTEGRATION.md`](SPECIFICATION_INTEGRATION.md) | 規範定義書 | HTTP、WebSocket、WebRTC、保存、入力、lifecycle、frontend境界を定める | [`TRACEABILITY_INTEGRATION.md`](TRACEABILITY_INTEGRATION.md) |
 | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | 実装説明 | 現在のprocess、ownership、state、停止順を説明する。要件の正本ではない | source call graph、module／queue／lockの説明 |
 | [`PLAN.md`](../PLAN.md) | 進行計画 | 受入条件、実行証跡、未完了項目、owner／外部作業を記録する。要件の正本ではない | checkbox、CI run、artifact、残タスク |
+| [`FUNCTION_TRACEABILITY_MATRIX.md`](FUNCTION_TRACEABILITY_MATRIX.md) | 機能監査artifact | 定義書の機能sectionを役割、owner、実装、test、status、gapへ対応付ける。要件の正本ではない | 機能matrix、直接source、受入test、未完了分類 |
 
 利用者と開発者が入口を見つけるための[`docs/README.md`](README.md)は補助ナビゲーションです。
 同じAPI一覧や設定一覧をこの表へ複製せず、正準文書へリンクします。

@@ -15,6 +15,7 @@
 - [backend/frontend連携定義書](SPECIFICATION_INTEGRATION.md)：HTTP／WebSocket／WebRTC、保存・設定操作、状態・lifecycleの契約。
 
 - [総合トレーサビリティ表](TRACEABILITY_INDEX.md)：製品仕様の入口、三定義書、アーキテクチャ、PLANのsection対応と未確認項目。
+- [機能トレーサビリティmatrix](FUNCTION_TRACEABILITY_MATRIX.md)：機能、役割、owner、実装、受入test、status、gapの対応表。
 - [文書同期監査](DOCS_SYNC_AUDIT.md)：CLI、利用ガイド、開発ガイド、配布ガイドと現行実装の照合結果。
 
 必須要件は既存互換性と固定architectureを守る安定契約です。機能要件も現在の製品目標として必須であり、UIやlatencyなどの達成結果を定めますが、具体的なfrontend technologyは固定しません。

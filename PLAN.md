@@ -660,7 +660,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 - [ ] **AR-10.4-FUNCTIONS** 機能の優先順位を理由に製品定義書群の機能を不要または省略可能と判断しない（予定証跡: specification機能→実装／受入testの全件matrixと未実装数0）。
 - [ ] **AR-10.4-QUALITY** 後回しの機能も競合がない状態で定義済みの低遅延性、性能、安定性を満たし、優先度を品質要件緩和の理由にしない（予定証跡: CI上のmock／virtual I/Oによる非競合時の機能別latency／throughput／stability report）。browser primitive smokeは実装済みだが、production主経路の機能別latency／throughput／stability reportは未完了。
-- [ ] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付ける（予定証跡: 機能／役割／owner／testの全件matrix）。
+- [x] **AR-11-01** 定義書に記載する全機能の役割を実装と受入testへ対応付けた（証跡: `docs/FUNCTION_TRACEABILITY_MATRIX.md` §2-§3の全backend／frontend／integration section coverage、機能／役割／owner／実装source／受入test／status／gap matrix）。部分／未実装／外部受入待ちを含む機能は完了扱いせず、次のowner／外部証跡を§5へ分離した。
 - [ ] **AR-11-02** 機能同士が資源を競合した場合の処理優先順位をqueue、lock、task、threadに反映する（予定証跡: contention matrixと順序／飢餓／逆圧stress report）。
 - [x] **AR-11-03** 停止、全入力解放、neutral状態送信を最上位優先経路で処理する（証跡: `cargo test --locked --workspace --all-targets --all-features` の input／notification／worker lifecycle fault tests）。
 - [ ] **AR-11-04** 通常運転時のserial出力と画像認識を同じ高優先度で独立して進める（部分証跡: `rust/pokecon/tests/concurrent_camera_serial_load.rs`はproduction `CameraManager`のlatest-frame consumerと`SerialManager`のvirtual writerを同時実行し、64回のserial write、serial期間中8 distinct frame以上、時間区間の重なり、camera継続稼働を検査する。focused testは1 passed。さらに`nix run .#ci-rust-contracts` exit 0でRust unit 475件と同test 1件が成功した。これはprogress／overlapのsoftware-only証拠であり、画像認識処理、latency／jitter分布、throughput／stability reportを測定せず、要求全体は未完了）。

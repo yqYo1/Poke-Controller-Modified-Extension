@@ -819,7 +819,9 @@ mod tests {
     use crate::camera::backend::{CameraConfig, CameraError};
     use crate::camera::frame::{CaptureResolution, FlipMode};
     use crate::camera::selector::CameraSelector;
-    use crate::camera::shared_ring::{INVALID_PUBLISHED_TOKEN, SharedFrameRing};
+    use crate::camera::shared_ring::INVALID_PUBLISHED_TOKEN;
+    #[cfg(unix)]
+    use crate::camera::shared_ring::SharedFrameRing;
     use crate::camera::virtual_camera::{
         RecordedFrame, RecordedFrameSource, VirtualCameraBackend, VirtualOpenPlan,
         VirtualReconfigurePlan, VirtualSessionPlan,

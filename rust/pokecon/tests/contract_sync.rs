@@ -1916,5 +1916,98 @@ fn design_principles_map_to_runtime_mechanisms_without_drift() {
     }
 }
 
+#[test]
+fn module_ownership_table_has_unique_owners_without_drift() {
+    // docs/ARCHITECTURE_HANDOFF.md 3.1 module ownership manifest の drift guard。
+    // 表の行の欠落・重複所有行・module名の変更のいずれもこのtestを失敗させる。
+    // worker境界の一点のforbidden edgeのみを検査し、全forbidden edgeの被覆は主張しない。
+    let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
+    let section = handoff
+        .split_once("### 3.1 Module ownership manifest")
+        .expect("ARCHITECTURE_HANDOFF.md must define the 3.1 ownership manifest section")
+        .1;
+    let section = section
+        .split_once("\n### ")
+        .map_or(section, |(head, _)| head);
+    let rows: Vec<&str> = section
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('|'))
+        .filter(|line| !line.contains("所有する責務"))
+        .filter(|line| !line.contains("---"))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        12,
+        "ownership manifest table must keep exactly 12 module/process rows, found: {rows:?}"
+    );
+
+    let cells: Vec<&str> = rows
+        .iter()
+        .map(|row| {
+            row.split('|')
+                .nth(1)
+                .unwrap_or_else(|| panic!("ownership manifest row must have a module cell: {row}"))
+                .trim()
+        })
+        .collect();
+    let expected = [
+        "`entrypoint`／`production`",
+        "`application_backend`",
+        "`server`",
+        "`device::input`",
+        "`device::serial`",
+        "`camera`",
+        "`worker::supervisor`／`worker::generation`",
+        "`worker_binary`",
+        "`dynamic::transaction`／dynamic host",
+        "`settings`／`contracts`／`registry`",
+        "`runtime::shutdown`",
+        "frontend／generated client",
+    ];
+    for module in expected {
+        let occurrences = cells.iter().filter(|cell| ***cell == *module).count();
+        assert_eq!(
+            occurrences, 1,
+            "ownership manifest must list {module} exactly once, found {occurrences} in {cells:?}"
+        );
+    }
+
+    // Every symbol below was traced to its source before being asserted here.
+    let required: &[(&str, &str)] = &[
+        ("CameraManager", "rust/pokecon/src/camera/manager.rs"),
+        ("SerialManager", "rust/pokecon/src/device/serial/manager.rs"),
+        ("StateHub", "rust/pokecon/src/server/state.rs"),
+        ("InputArbiter", "rust/pokecon/src/device/input.rs"),
+        (
+            "ShutdownCoordinator",
+            "rust/pokecon/src/runtime/shutdown.rs",
+        ),
+        ("WorkerGeneration", "rust/pokecon/src/worker/generation.rs"),
+    ];
+    for (symbol, source) in required {
+        let implementation = repository_text(source);
+        assert!(
+            implementation.contains(*symbol),
+            "owner symbol {symbol} must exist in {source}"
+        );
+    }
+
+    // Narrow forbidden edge for the manifest's worker boundary only:
+    // the worker supervisor/generation must not own native/resource-owner symbols.
+    for source in [
+        "rust/pokecon/src/worker/supervisor.rs",
+        "rust/pokecon/src/worker/generation.rs",
+    ] {
+        let implementation = repository_text(source);
+        for forbidden in ["CameraManager", "SerialManager", "StateHub"] {
+            assert!(
+                !implementation.contains(forbidden),
+                "worker boundary {source} must not own {forbidden}"
+            );
+        }
+    }
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

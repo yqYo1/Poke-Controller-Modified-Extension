@@ -725,4 +725,4 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] 全共通完了ゲートを clean worktree で再実行する。
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
 - [x] b719ad5d126bb88f7260fb829a88bcae2246914e push後のfresh GitHub CIを完了まで監視し、同一SHAのNormal CI run `36096392708`／Package CI run `36096392743`がcompleted／successとなったことを確認した。Normal CIのrequired aggregate job `107951886810`を含む全11 job、Package CIの全6 jobがsuccess。Normal artifact `ci-timing-36096392708-1`はproduct 10-sample p95 `674.0s`／threshold `720.0s`／violations 0を含み、job-local Nix evidenceはRust 4 built derivations・295 substituted paths、Product 392・1033、Remote 2・97を`capture_complete=true`で記録した。別eventの重複runは成功証跡へ二重計上しない。
-- [ ] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない。
+- [x] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない（証跡: 現行89件を実装／文書、実装時選択、owner判断、外部／運用証跡へ分類し、各行の予定証跡または具体的な次作業を確認。`docs/TRACEABILITY_INDEX.md` §6、`docs/GPUI_PHASE0_INVENTORY.md` §5-§6、`docs/FUNCTION_TRACEABILITY_MATRIX.md` §5-§6、`docs/DOCS_SYNC_AUDIT.md` §4と照合。未完了要件、clean worktree、Solレビュー、性能、browser／実機、Release tagは未完了のまま保持。）

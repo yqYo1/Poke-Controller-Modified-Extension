@@ -112,19 +112,23 @@ def _parse_line(raw_line: str, line_number: int) -> JsonObject:
 
 
 def parse_internal_json(text: str) -> tuple[dict[str, object], ...]:
-    """Parse JSONL, reporting noise/malformed lines as a caller-visible error."""
+    """Parse structured events while ignoring human output from Nix tasks."""
     events: list[dict[str, object]] = []
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         if not raw_line.strip():
             continue
         stripped = raw_line.strip()
         if not stripped.startswith(("{", "@nix {")):
-            _fail(f"line {line_number} is non-JSON noise")
+            # Nix task stderr (cargo, remote smoke, and similar child output)
+            # shares the wrapper stream but is not internal-json evidence.
+            continue
         event = _parse_line(raw_line, line_number)
         action = event.get("action")
         if not isinstance(action, str) or action not in RELEVANT_ACTIONS:
             _fail(f"line {line_number} has unsupported action")
         events.append(event)
+    if not events:
+        _fail("log contains no structured Nix events")
     return tuple(events)
 
 

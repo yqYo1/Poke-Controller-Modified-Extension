@@ -1560,6 +1560,11 @@ def main() -> int:
     parser.add_argument(
         "--normalize-pe-if-present", type=str, dest="normalize_pe_if_present"
     )
+    parser.add_argument(
+        "--canonicalize-dos-stub",
+        action="store_true",
+        help="canonicalize linker DOS stub metadata during PE normalization",
+    )
     parser.add_argument("--project", type=Path, required=False)
     parser.add_argument("--uv", type=Path, required=False)
     parser.add_argument("--runtime-output", type=Path, required=False)
@@ -1576,6 +1581,12 @@ def main() -> int:
         help="require a physical audio input device during the release smoke test",
     )
     arguments = parser.parse_args()
+    if (
+        arguments.canonicalize_dos_stub
+        and arguments.normalize_pe is None
+        and arguments.normalize_pe_if_present is None
+    ):
+        parser.error("--canonicalize-dos-stub requires a PE normalization path")
     if (
         arguments.normalize_pe is not None
         or arguments.normalize_pe_if_present is not None
@@ -1611,7 +1622,7 @@ def main() -> int:
         if optional_normalize_pe and not os.path.lexists(str(target)):
             return 0
         _validate_pe_cli_target(target)
-        normalize_pe(target)
+        normalize_pe(target, canonicalize_dos_stub=arguments.canonicalize_dos_stub)
         return 0
     if (
         arguments.project is None

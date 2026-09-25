@@ -25,6 +25,7 @@
 - [x] `PLAN.md`／将来の`TASK.md`を作業追跡用メタデータとしてCIのdocs領域分類から除外し、常時実行のfast checksでlintする契約を追加した（`scripts/ci/regions.py`、`tests/quality/test_ci_regions.py`）。
 - [x] commit `50bd589ba67ec801f9be4579c7062984d9577b2f`のNix起動済みWeb runtimeを隔離rootで再受入した。clean rootの`POST /api/commands/reload`は`200`／`changed=true`、手動作成profileの`active_profile`切替は`Other`→`default`で`200`、stale revisionは`409 revision_conflict`となり、失敗write後のstate不変も確認した。ブラウザbackendは途中で`410 Gone`となったため、追加証跡はREST／state read-backに限定し、tailnet越しWebRTC primary映像成功とは扱わない。
 - [x] commit `5c740398da8c345e3abe612cc72cc94adc226e36`でx86_64-darwin専用のlocked `nixpkgs-darwin`（26.05-darwin）を追加し、main Linux nixpkgs／uv 0.11.28を維持したまま4 systemのpackages、devShells、checks、appsを`nix flake check --no-build --all-systems`で評価した。`nix run .#check`、`nix build .#pokecon --no-link`、`nix build .#web --no-link`、`nix run .#web-check`、`nix run .#actionlint`も成功した。同commitのpush Normal CI `34788294682`、PR Normal CI attempt 3 `34788296839`、Package CI `34788294683`がsuccess、PR required contextsもSUCCESSとなった（PR Normal attempt 1／2のproduct p95は729秒／721秒でthreshold 720秒を超えたため採用せず、attempt 3で再検証）。
+- [x] 署名commit `6ba7f4b64977f16bcea36a2c84e9476151b32285`でWindows PE normalization invocationの引数順序とtraceability参照を修正した。Normal CI `36127841885`とPackage CI `36127841813`がcompleted／success。同Package CIのDebian／Windows bundle、clean-install、独立二重build、byte-for-byte reproducibility、aggregate required job（Debian `108052948235`、Windows `108056470884`、aggregate `108056741526`）がすべてsuccessし、primary／repro artifact 4件（Linux／Windows）が未期限で存在することを読み戻した。
 
 ### 現行の残タスク（アシスタント担当）
 

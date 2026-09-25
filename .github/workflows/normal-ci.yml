@@ -142,6 +142,7 @@ jobs:
           chmod 0755 "$wrapper_dir/nix"
           {
             echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_WRAPPER=$wrapper_dir/nix"
             echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
             echo "PATH=$wrapper_dir:$PATH"
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
@@ -153,17 +154,20 @@ jobs:
         id: rust_combined
         if: >-
           needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts == 'true'
-        run: nix run .#ci-rust-contracts
+        run: |
+          "$POKECON_NIX_WRAPPER" run .#ci-rust-contracts
       - name: Run Rust checks
         id: rust_only
         if: >-
           needs.plan.outputs.rust == 'true' && needs.plan.outputs.contracts != 'true'
-        run: nix run .#rust-ci-core
+        run: |
+          "$POKECON_NIX_WRAPPER" run .#rust-ci-core
       - name: Run contract checks
         id: contract_only
         if: >-
           needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
-        run: nix run .#contract-check
+        run: |
+          "$POKECON_NIX_WRAPPER" run .#contract-check
       - name: Export the PokeCon Rust check to the binary cache (signed)
         if: >-
           success() &&
@@ -181,8 +185,8 @@ jobs:
           fi
           printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
           chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
-          nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#checks.x86_64-linux.rust-core-artifacts)"
-          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
+          "$POKECON_NIX_WRAPPER" store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$($POKECON_NIX_WRAPPER path-info .#checks.x86_64-linux.rust-core-artifacts)"
+          "$POKECON_NIX_WRAPPER" copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
           rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
       - name: Save the PokeCon Rust binary cache
         if: >-
@@ -330,6 +334,7 @@ jobs:
           chmod 0755 "$wrapper_dir/nix"
           {
             echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_WRAPPER=$wrapper_dir/nix"
             echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
             echo "PATH=$wrapper_dir:$PATH"
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
@@ -340,11 +345,13 @@ jobs:
       - name: Run product smoke checks
         id: product_smoke
         if: needs.plan.outputs.product == 'true'
-        run: nix run .#product-smoke
+        run: |
+          "$POKECON_NIX_WRAPPER" run .#product-smoke
       - name: Evaluate all local flake outputs
         id: product_flake_check
         if: needs.plan.outputs.product == 'true'
-        run: nix flake check --no-build
+        run: |
+          "$POKECON_NIX_WRAPPER" flake check --no-build
       - name: Export the PokeCon product roots to the binary cache (signed)
         if: >-
           success() &&
@@ -363,8 +370,8 @@ jobs:
           fi
           printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
           chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
-          for attr in "pokecon" "pokecon-core" "web"; do nix store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$(nix path-info .#packages.x86_64-linux.$attr)"; done
-          nix copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
+          for attr in "pokecon" "pokecon-core" "web"; do "$POKECON_NIX_WRAPPER" store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$($POKECON_NIX_WRAPPER path-info .#packages.x86_64-linux.$attr)"; done
+          "$POKECON_NIX_WRAPPER" copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
           rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
       - name: Save the PokeCon product binary cache
         if: >-
@@ -430,6 +437,7 @@ jobs:
           chmod 0755 "$wrapper_dir/nix"
           {
             echo "POKECON_NIX_REAL=$real_nix"
+            echo "POKECON_NIX_WRAPPER=$wrapper_dir/nix"
             echo "POKECON_NIX_EVIDENCE_LOG=$log_path"
             echo "PATH=$wrapper_dir:$PATH"
             echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
@@ -444,7 +452,7 @@ jobs:
           test_root="$(mktemp -d "$HOME/pokecon-remote-flake-ci.XXXXXX")"
           cd "$test_root"
           remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-          nix run \
+          "$POKECON_NIX_WRAPPER" run \
             --option download-attempts 10 \
             "github:${{ github.repository }}/$remote_revision#remote-flake-smoke" \
             -- \

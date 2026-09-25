@@ -1032,6 +1032,13 @@ def test_nix_evidence_is_job_local_and_fail_closed() -> None:
     assert "--log-format internal-json" in workflow
     assert "--option fallback false" in workflow
     assert "echo 'log-format = internal-json'" not in workflow
+    assert workflow.count('echo "POKECON_NIX_WRAPPER=$wrapper_dir/nix"') == 3
+    assert '"$POKECON_NIX_WRAPPER" run .#ci-rust-contracts' in workflow
+    assert '"$POKECON_NIX_WRAPPER" run .#rust-ci-core' in workflow
+    assert '"$POKECON_NIX_WRAPPER" run .#contract-check' in workflow
+    assert '"$POKECON_NIX_WRAPPER" run .#product-smoke' in workflow
+    assert '"$POKECON_NIX_WRAPPER" flake check --no-build' in workflow
+    assert '"$POKECON_NIX_REAL" run .#nix-evidence --' in workflow
     assert (
         'find "$evidence_root" -type f -name pokecon-nix-evidence.json -print'
         in workflow

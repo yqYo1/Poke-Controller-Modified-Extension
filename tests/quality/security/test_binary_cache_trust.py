@@ -70,8 +70,8 @@ def test_writer_is_push_only_and_trusted_actor() -> None:
     assert "steps.rust_cache_restore.outputs.cache-hit != 'true'" in text
     # Secret-backed signing
     assert "POKECON_NIX_CACHE_SECRET_KEY" in text
-    assert "nix store sign --key-file" in text
-    assert "nix copy" in text and "--to" in text
+    assert "store sign --key-file" in text
+    assert "copy --no-recursive" in text and "--to" in text
 
 
 def test_reader_is_unrestricted_but_fail_closed() -> None:

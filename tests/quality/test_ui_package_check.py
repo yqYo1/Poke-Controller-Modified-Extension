@@ -18722,11 +18722,11 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     assert "treefmt" not in ci_fast
     for command in (
         "nix run .#ci-fast",
-        "nix run .#ci-rust-contracts",
-        "nix run .#rust-ci-core",
-        "nix run .#contract-check",
-        "nix run .#product-smoke",
-        "nix flake check --no-build",
+        '"$POKECON_NIX_WRAPPER" run .#ci-rust-contracts',
+        '"$POKECON_NIX_WRAPPER" run .#rust-ci-core',
+        '"$POKECON_NIX_WRAPPER" run .#contract-check',
+        '"$POKECON_NIX_WRAPPER" run .#product-smoke',
+        '"$POKECON_NIX_WRAPPER" flake check --no-build',
         "Run default app help from remote",
     ):
         assert normal.count(command) == 1
@@ -18796,21 +18796,21 @@ def test_normal_ci_rust_contract_entrypoints_are_mutually_exclusive() -> None:
     )
     expected_steps = (
         (
-            "nix run .#ci-rust-contracts",
+            '"$POKECON_NIX_WRAPPER" run .#ci-rust-contracts',
             (
                 "      needs.plan.outputs.rust == 'true' && "
                 "needs.plan.outputs.contracts == 'true'\n"
             ),
         ),
         (
-            "nix run .#rust-ci-core",
+            '"$POKECON_NIX_WRAPPER" run .#rust-ci-core',
             (
                 "      needs.plan.outputs.rust == 'true' && "
                 "needs.plan.outputs.contracts != 'true'\n"
             ),
         ),
         (
-            "nix run .#contract-check",
+            '"$POKECON_NIX_WRAPPER" run .#contract-check',
             (
                 "      needs.plan.outputs.rust != 'true' && "
                 "needs.plan.outputs.contracts == 'true'\n"

@@ -35,6 +35,11 @@ PORTABLE_SYSTEM_INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
 PORTABLE_PYTHON_RPATH = "$ORIGIN/../lib"
 REPRODUCIBLE_ZIP_EPOCH = 315_532_800
 PE_REPRODUCIBLE_TIMESTAMP = REPRODUCIBLE_ZIP_EPOCH
+PE_CANONICAL_HEADER_OFFSET = 0x108
+PE_DOS_STUB = bytes.fromhex(
+    "0e1fba0e00b409cd21b8014ccd21546869732070726f6772616d "
+    "63616e6e6f742062652072756e20696e20444f53206d6f64652e0d0d0a24"
+)
 WORKER_RUNTIME_SMOKE = """\
 import cv2, numpy, pandas, PIL, pyaudio, scipy
 
@@ -655,6 +660,64 @@ def is_elf(path: Path) -> bool:
         return source.read(4) == b"\x7fELF"
 
 
+def _canonicalize_pe_dos_stub(
+    mutable: bytearray,
+    e_lfanew: int,
+    number_of_sections: int,
+    size_of_optional_header: int,
+) -> int:
+    """Canonicalize the linker-generated DOS stub and PE header offset."""
+    old_section_headers_offset = e_lfanew + 4 + 20 + size_of_optional_header
+    old_header_end = old_section_headers_offset + number_of_sections * 40
+    if old_header_end > len(mutable):
+        message = "PE file is truncated: section headers exceed file size"
+        raise ValueError(message)
+    first_section_raw: int | None = None
+    for index in range(number_of_sections):
+        offset = old_section_headers_offset + index * 40
+        size_of_raw_data = int.from_bytes(mutable[offset + 16 : offset + 20], "little")
+        pointer_to_raw_data = int.from_bytes(
+            mutable[offset + 20 : offset + 24], "little"
+        )
+        if pointer_to_raw_data == 0 or size_of_raw_data == 0:
+            continue
+        if pointer_to_raw_data < old_header_end:
+            message = "PE section data overlaps its headers"
+            raise ValueError(message)
+        if first_section_raw is None or pointer_to_raw_data < first_section_raw:
+            first_section_raw = pointer_to_raw_data
+
+    header_size = old_header_end - e_lfanew
+    canonical_end = PE_CANONICAL_HEADER_OFFSET + header_size
+    target_offset = (
+        PE_CANONICAL_HEADER_OFFSET
+        if first_section_raw is None or canonical_end <= first_section_raw
+        else e_lfanew
+    )
+    target_end = target_offset + header_size
+    clear_end = (
+        first_section_raw
+        if first_section_raw is not None
+        else max(old_header_end, target_end)
+    )
+    if clear_end > len(mutable):
+        if first_section_raw is not None:
+            message = "PE first section starts beyond the file"
+            raise ValueError(message)
+        mutable.extend(b"\x00" * (clear_end - len(mutable)))
+    header = bytes(mutable[e_lfanew:old_header_end])
+    if 0x40 + len(PE_DOS_STUB) > target_offset:
+        message = "canonical PE DOS stub does not fit before the PE header"
+        raise ValueError(message)
+    mutable[0x40:clear_end] = b"\x00" * (clear_end - 0x40)
+    mutable[0x40 : 0x40 + len(PE_DOS_STUB)] = PE_DOS_STUB
+    if target_end > len(mutable):
+        mutable.extend(b"\x00" * (target_end - len(mutable)))
+    mutable[target_offset:target_end] = header
+    mutable[0x3C:0x40] = target_offset.to_bytes(4, "little")
+    return target_offset
+
+
 def _pe_rva_to_file_offset(
     rva: int,
     sections: list[tuple[int, int, int, int]],
@@ -701,19 +764,25 @@ def normalize_pe(path: Path) -> bool:
     if e_lfanew + 4 + 20 > len(data):
         message = f"PE file is truncated: missing COFF header: {path}"
         raise ValueError(message)
-    coff_timestamp_offset = e_lfanew + 4 + 4
     number_of_sections = int.from_bytes(
         data[e_lfanew + 4 + 2 : e_lfanew + 4 + 4], "little"
     )
     size_of_optional_header = int.from_bytes(
         data[e_lfanew + 4 + 16 : e_lfanew + 4 + 18], "little"
     )
+    mutable = bytearray(data)
+    e_lfanew = _canonicalize_pe_dos_stub(
+        mutable,
+        e_lfanew,
+        number_of_sections,
+        size_of_optional_header,
+    )
     optional_header_offset = e_lfanew + 4 + 20
-    if optional_header_offset + size_of_optional_header > len(data):
+    if optional_header_offset + size_of_optional_header > len(mutable):
         message = f"PE file is truncated: missing optional header: {path}"
         raise ValueError(message)
-    mutable = bytearray(data)
-    changed = False
+    coff_timestamp_offset = e_lfanew + 4 + 4
+    changed = mutable != data
     fixed = PE_REPRODUCIBLE_TIMESTAMP.to_bytes(4, "little")
     if mutable[coff_timestamp_offset : coff_timestamp_offset + 4] != fixed:
         mutable[coff_timestamp_offset : coff_timestamp_offset + 4] = fixed
@@ -737,6 +806,20 @@ def normalize_pe(path: Path) -> bool:
     ):
         message = f"PE file is truncated: missing section headers: {path}"
         raise ValueError(message)
+    sections: list[tuple[int, int, int, int]] = []
+    for index in range(number_of_sections):
+        offset = section_headers_offset + index * 40
+        virtual_size = int.from_bytes(mutable[offset + 8 : offset + 12], "little")
+        virtual_address = int.from_bytes(mutable[offset + 12 : offset + 16], "little")
+        size_of_raw_data = int.from_bytes(mutable[offset + 16 : offset + 20], "little")
+        pointer_to_raw_data = int.from_bytes(
+            mutable[offset + 20 : offset + 24], "little"
+        )
+        sections.append(
+            (virtual_address, virtual_size, pointer_to_raw_data, size_of_raw_data)
+        )
+    data_directory_offset = 0
+    number_of_rva = 0
     debug_rva_offset: int | None = None
     if magic == 0x10B:
         data_directory_offset = optional_header_offset + 96
@@ -772,6 +855,29 @@ def normalize_pe(path: Path) -> bool:
                 message = f"PE file is truncated: missing debug data directory: {path}"
                 raise ValueError(message)
             debug_rva_offset = data_directory_offset + 6 * 8
+    if number_of_rva > 0:
+        export_rva_offset = data_directory_offset
+        if export_rva_offset + 8 > optional_header_offset + size_of_optional_header:
+            message = f"PE file is truncated: missing export data directory: {path}"
+            raise ValueError(message)
+        export_rva = int.from_bytes(
+            mutable[export_rva_offset : export_rva_offset + 4], "little"
+        )
+        export_size = int.from_bytes(
+            mutable[export_rva_offset + 4 : export_rva_offset + 8], "little"
+        )
+        if (export_rva == 0) != (export_size == 0):
+            message = f"PE file has inconsistent export directory: {path}"
+            raise ValueError(message)
+        if export_rva != 0:
+            export_file_offset = _pe_rva_to_file_offset(export_rva, sections)
+            if export_file_offset is None or export_file_offset + 8 > len(mutable):
+                message = f"PE export directory RVA does not map to file offset: {path}"
+                raise ValueError(message)
+            export_timestamp_offset = export_file_offset + 4
+            if mutable[export_timestamp_offset : export_timestamp_offset + 4] != fixed:
+                mutable[export_timestamp_offset : export_timestamp_offset + 4] = fixed
+                changed = True
     if debug_rva_offset is not None:
         if debug_rva_offset + 8 > optional_header_offset + size_of_optional_header:
             message = f"PE file is truncated: missing debug data directory: {path}"
@@ -791,29 +897,6 @@ def normalize_pe(path: Path) -> bool:
                     f"PE file has invalid debug directory size {debug_size}: {path}"
                 )
                 raise ValueError(message)
-            sections: list[tuple[int, int, int, int]] = []
-            for index in range(number_of_sections):
-                offset = section_headers_offset + index * 40
-                virtual_size = int.from_bytes(
-                    mutable[offset + 8 : offset + 12], "little"
-                )
-                virtual_address = int.from_bytes(
-                    mutable[offset + 12 : offset + 16], "little"
-                )
-                size_of_raw_data = int.from_bytes(
-                    mutable[offset + 16 : offset + 20], "little"
-                )
-                pointer_to_raw_data = int.from_bytes(
-                    mutable[offset + 20 : offset + 24], "little"
-                )
-                sections.append(
-                    (
-                        virtual_address,
-                        virtual_size,
-                        pointer_to_raw_data,
-                        size_of_raw_data,
-                    )
-                )
             file_offset = _pe_rva_to_file_offset(debug_rva, sections)
             if file_offset is None:
                 message = f"PE debug directory RVA does not map to file offset: {path}"

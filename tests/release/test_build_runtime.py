@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import stat
+import struct
 import subprocess
 import sys
 import zipfile
@@ -30,6 +31,7 @@ from scripts.release.build_runtime import (
     build_release_runtime,
     install_python,
     managed_python_install_prefix,
+    normalize_pe,
     normalize_python_bytecode,
     normalize_python_sysconfig,
     normalize_wheel,
@@ -1306,6 +1308,64 @@ def test_build_wheels_validates_native_tools_before_uv(
             tmp_path / "missing-strip",
             None,
         )
+
+
+def _synthetic_pe_variant(e_lfanew: int, salt: int) -> bytes:
+    data = bytearray(0x600)
+    data[:2] = b"MZ"
+    struct.pack_into("<I", data, 0x3C, e_lfanew)
+    data[0x40:e_lfanew] = bytes([salt & 0xFF]) * (e_lfanew - 0x40)
+    data[e_lfanew : e_lfanew + 4] = b"PE\x00\x00"
+    struct.pack_into(
+        "<HHIIIHH",
+        data,
+        e_lfanew + 4,
+        0x8664,
+        1,
+        salt,
+        0,
+        0,
+        240,
+        0x2022,
+    )
+    optional_header = e_lfanew + 24
+    struct.pack_into("<H", data, optional_header, 0x20B)
+    struct.pack_into("<I", data, optional_header + 108, 16)
+    struct.pack_into("<II", data, optional_header + 112, 0x1010, 40)
+    section_header = optional_header + 240
+    data[section_header : section_header + 8] = b".rdata\x00\x00"
+    struct.pack_into(
+        "<IIII",
+        data,
+        section_header + 8,
+        0x1000,
+        0x1000,
+        0x200,
+        0x400,
+    )
+    struct.pack_into("<I", data, section_header + 36, 0x40000040)
+    struct.pack_into("<II", data, 0x410, 0, salt + 100)
+    return bytes(data)
+
+
+def test_normalize_pe_canonicalizes_linker_metadata(tmp_path: Path) -> None:
+    first = tmp_path / "first.exe"
+    second = tmp_path / "second.exe"
+    first.write_bytes(_synthetic_pe_variant(0x108, 0x31))
+    second.write_bytes(_synthetic_pe_variant(0x110, 0xA7))
+
+    assert normalize_pe(first)
+    assert normalize_pe(second)
+
+    first_bytes = first.read_bytes()
+    second_bytes = second.read_bytes()
+    assert len(first_bytes) == len(second_bytes) == 0x600
+    assert first_bytes == second_bytes
+    assert (
+        int.from_bytes(first_bytes[0x3C:0x40], "little")
+        == release_runtime.PE_CANONICAL_HEADER_OFFSET
+    )
+    assert first_bytes[0x414:0x418] == PE_REPRODUCIBLE_TIMESTAMP.to_bytes(4, "little")
 
 
 def test_normalize_wheel_repacks_unchanged_members_deterministically(

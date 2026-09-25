@@ -1651,7 +1651,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "b2edfbd3c3fa2a9a28251605ff859952afa22fd5477faa165793fed62184aad6"
+            "2ad8b4e06b0c01e19e7b2a2bdf21472923e89c0cb42046c7a3747e93cce9787e"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"

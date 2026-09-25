@@ -745,7 +745,6 @@ jobs:
           pattern: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-*
           path: ${{ runner.temp }}/pokecon-ci-timing/nix-evidence
           merge-multiple: false
-          if-no-artifact-found: warn
       - name: Collect CI timing evidence
         env:
           GH_TOKEN: ${{ github.token }}

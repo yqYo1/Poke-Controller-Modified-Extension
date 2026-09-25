@@ -740,7 +740,7 @@ def _pe_rva_to_file_offset(
     return None
 
 
-def normalize_pe(path: Path) -> bool:
+def normalize_pe(path: Path, *, canonicalize_dos_stub: bool = False) -> bool:
     """Production-safe PE normalization for Windows release binaries.
 
     For a valid PE input, fixes COFF TimeDateStamp and removes/zeros the
@@ -771,12 +771,13 @@ def normalize_pe(path: Path) -> bool:
         data[e_lfanew + 4 + 16 : e_lfanew + 4 + 18], "little"
     )
     mutable = bytearray(data)
-    e_lfanew = _canonicalize_pe_dos_stub(
-        mutable,
-        e_lfanew,
-        number_of_sections,
-        size_of_optional_header,
-    )
+    if canonicalize_dos_stub:
+        e_lfanew = _canonicalize_pe_dos_stub(
+            mutable,
+            e_lfanew,
+            number_of_sections,
+            size_of_optional_header,
+        )
     optional_header_offset = e_lfanew + 4 + 20
     if optional_header_offset + size_of_optional_header > len(mutable):
         message = f"PE file is truncated: missing optional header: {path}"
@@ -1104,7 +1105,7 @@ def normalize_wheel(
                     raise ValueError(message)
                 changed = True
                 continue
-            if normalize_pe(binary):
+            if normalize_pe(binary, canonicalize_dos_stub=True):
                 changed = True
         if changed:
             wheel_record(root)

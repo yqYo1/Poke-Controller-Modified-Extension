@@ -118,7 +118,7 @@ def copy_tree(source: Path, destination: Path) -> None:
 def _normalize_staged_pe(path: Path) -> None:
     """Normalize a staged Windows PE in place; non-PE is a no-op."""
     # Fail-closed on malformed PE; non-PE/ELF must be no-op for Linux.
-    _build_normalize_pe(path)
+    _build_normalize_pe(path, canonicalize_dos_stub=True)
     # Preserve deterministic executable metadata after normalization.
     path.chmod(0o755)
     os.utime(path, (0, 0))

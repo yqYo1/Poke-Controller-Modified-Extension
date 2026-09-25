@@ -1354,8 +1354,8 @@ def test_normalize_pe_canonicalizes_linker_metadata(tmp_path: Path) -> None:
     first.write_bytes(_synthetic_pe_variant(0x108, 0x31))
     second.write_bytes(_synthetic_pe_variant(0x110, 0xA7))
 
-    assert normalize_pe(first)
-    assert normalize_pe(second)
+    assert normalize_pe(first, canonicalize_dos_stub=True)
+    assert normalize_pe(second, canonicalize_dos_stub=True)
 
     first_bytes = first.read_bytes()
     second_bytes = second.read_bytes()

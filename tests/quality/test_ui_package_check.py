@@ -1651,7 +1651,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
         ),
         "@release/build_runtime.py": (
-            "2ad8b4e06b0c01e19e7b2a2bdf21472923e89c0cb42046c7a3747e93cce9787e"
+            "2dbc3b01f119b3d401b6752554bca740b710d73e8db5b11fd627b6c87916bd04"
         ),
         "@release/installer.nsi": (
             "35db0ca5a7d0c600ad4c256b769eebab50cf0b3e8dc2642c4a946e4308fabef5"
@@ -1666,7 +1666,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "04274ee342642e554d13d08b80977725ba5c33345e86a5a1f6c533a7329a2aa0"
         ),
         "@release/stage.py": (
-            "a4f2b91c9f51c224339f22b11d493aa22cad7967923aae5086849fed744fcf47"
+            "01ba399142f1a3152e7cf581a4441593bda0edc84af8570075d810e0a345dc7c"
         ),
         "@tauri/linux/70-pokecon-controller.rules": (
             "d51f5162c4670cfa6ab5aafe02000a8b4e37973d9998a09e80ae532ed649fbe2"

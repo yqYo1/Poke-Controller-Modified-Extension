@@ -18,7 +18,7 @@
 
 必須要件は既存互換性と固定architectureを守る安定契約です。機能要件も現在の製品目標として必須であり、UIやlatencyなどの達成結果を定めますが、具体的なfrontend technologyは固定しません。
 
-GPUI native frontendは目標として定義されていますが、現在の実装・selectorは未完了です。現行実装の説明は[アーキテクチャ文書](ARCHITECTURE.md)と[GPUI導入計画](GPUI_FRONTEND_PLAN.md)で区別します。
+GPUI native frontendは目標として定義されていますが、現在の実装・selectorは未完了です。現行実装の説明は[アーキテクチャ文書](ARCHITECTURE.md)と[GPUI導入計画](GPUI_FRONTEND_PLAN.md)で区別し、Phase 0の現行baselineは[GPUI Phase 0 inventory](GPUI_PHASE0_INVENTORY.md)へ分離します。
 
 ## 読者の役割から入口を選ぶ
 

@@ -105,7 +105,7 @@
 | 項目 | 現在の判定 | 直接の残課題／次の証拠 |
 |---|---|---|
 | `auto_reload_config` OS-native watcher | 未実装 | `TRACEABILITY_BACKEND.md` §11.5と`TRACEABILITY_FRONTEND.md` §11.5.7。watch対象、debounce、single-flight、停止順、worker不在／parse errorの製品判断後に実装する |
-| GPUI native frontend | 将来／未実装 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0。GPUI Phase 0 inventory、Gate 1-6、採否判断が必要 |
+| GPUI native frontend | 将来／未実装 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0、[`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)。GPUI Phase 0 inventoryはbaseline／未決事項の記録であり、Gate 1-6や採否の証拠ではない |
 | production主経路のlatency／throughput／jitter／soak | 未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`docs/ACCEPTANCE.md`性能schema。CI workflow timing p95は製品性能の代用ではない |
 | 外部browser／tailnet WebRTC | 外部証跡待ち | `PLAN.md`外部browser受入、`docs/ACCEPTANCE.md` browser matrix。isolated serviceのstop／cleanupを含む |
 | 実機／driver／firmware／console | 外部証跡待ち | `docs/ACCEPTANCE.md`のhardware record。virtual I/O successは代用しない |

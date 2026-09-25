@@ -4,6 +4,7 @@
 >
 > 状態: 実装前の段階導入計画。GPUIベースのフロントエンドを実装する方向性を定めるが、PoCの検証結果を待たずに現行UIを廃止する計画ではない。
 >
+> Phase 0 inventory: [`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)。これは現行baselineと未決事項を記録するartifactであり、GPUI採用・依存追加・selector実装の証拠ではない。
 > 作業ブランチ: `refactor/rust-core`。計画作成時の基準commit: `66197f52397bbec606624c9f3e3c93064cfc957d`。
 
 ## 1. 目的と判断

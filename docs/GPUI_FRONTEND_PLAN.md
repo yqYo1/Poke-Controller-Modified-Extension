@@ -73,11 +73,11 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 
 ### Phase 0 — 基準線と対象範囲を固定する
 
-- [ ] 現行のclean状態と基準commitを記録し、Svelte Web、Tauri Desktop、共通backend/APIのbuild・起動・停止gateを選ぶ。
-- [ ] frontend／integration定義書の機能要件と必須要件を照合し、GPUIでも維持する操作、Web専用要件、Tauri専用capability、native受入が必要なkeyboard/IME/accessibility項目を対応づける。変更が必要な製品要件は本計画だけで変更せず、対応する定義書と受入条件を同一作業で更新する。
-- [ ] 現行UIの各主要操作からREST/WS/WebRTCまでの経路をinventory化し、最初のvertical sliceを選ぶ。基本候補は状態snapshot表示、設定の一項目更新、controller操作、camera表示の順とする。
-- [ ] 現行起動とUI capabilityのテストを、GPUI追加後にも回せるbaselineとして記録する。`PLAN.md`が報告するbrowser backend `410 Gone`、外部WebRTC/fallback受入未証明、production性能計測未完了を明記し、virtual I/OやREST read-backを実機性能・browser映像の代替証拠にしない。
-- [ ] 完了条件は既存CLI/起動gateの実行結果、`--help`、API/OpenAPI差分なし、既知の未受入項目一覧である。既知のbackend受入不足はGPUI差分のregressionと混同せず、GPUI実装中にbackend性能改善を同時着手しない。
+- [x] 現行のclean状態と基準commitを記録し、Svelte Web、Tauri Desktop、共通backend/APIのbuild・起動・停止gateを選ぶ（証跡: `b146e30ebb09f68367868d02f5a647534bd20ff7`でlocal／remote refを同期し、`GPUI_PHASE0_INVENTORY.md` §2・§5で入口とbaseline gateを固定。Normal CI `36141338540`／Package CI `36141338643`は同SHAでsuccess）。
+- [x] frontend／integration定義書の機能要件と必須要件を照合し、GPUIでも維持する操作、Web専用要件、Tauri専用capability、native受入が必要なkeyboard/IME/accessibility項目を対応づける（証跡: `GPUI_PHASE0_INVENTORY.md` §3-§4、`TRACEABILITY_FRONTEND.md` §0-§0.2、`TRACEABILITY_INTEGRATION.md` §0-§1.3）。変更が必要な製品要件は本計画だけで変更せず、対応する定義書と受入条件を同一作業で更新する。
+- [x] 現行UIの各主要操作からREST/WS/WebRTCまでの経路をinventory化し、最初のvertical sliceを選ぶ（証跡: `GPUI_PHASE0_INVENTORY.md` §3のsnapshot、設定mutation、profile、controller、camera、logs／notifications表と、snapshot→設定1項目read-backの候補）。基本候補は状態snapshot表示、設定の一項目更新、controller操作、camera表示の順とする。
+- [x] 現行起動とUI capabilityのテストを、GPUI追加後にも回せるbaselineとして記録する（証跡: `GPUI_PHASE0_INVENTORY.md` §5.1のbaseline gate一覧、§5.2のbrowser backend `410 Gone`・外部WebRTC/fallback・production性能・実機を代替扱いしない判定）。`PLAN.md`が報告するbrowser backend `410 Gone`、外部WebRTC/fallback受入未証明、production性能計測未完了を明記し、virtual I/OやREST read-backを実機性能・browser映像の代替証拠にしない。
+- [x] 完了条件は既存CLI/起動gateの実行結果、`--help`、API/OpenAPI差分なし、既知の未受入項目一覧である（証跡: `GPUI_PHASE0_INVENTORY.md` §5-§6、`nix run .#cli-help-check`／`nix run .#check`のexit 0、同じsource baselineのNormal／Package CI success）。既知のbackend受入不足はGPUI差分のregressionと混同せず、GPUI実装中にbackend性能改善を同時着手しない。
 
 ### Phase 1 — GPUI Kitの最小platform PoC
 

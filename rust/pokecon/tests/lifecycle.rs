@@ -714,3 +714,59 @@ async fn stopping_generation_gates_managed_worker_requests_through_real_process(
     }
     safety.assert_neutral_once();
 }
+
+#[tokio::test]
+async fn shutdown_all_force_stops_and_reaps_script_and_dynamic_workers() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ignore-shutdown"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("script fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("dynamic fixture starts");
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(100)).await;
+    assert_eq!(reports.len(), 2);
+
+    let mut seen_script = false;
+    let mut seen_dynamic = false;
+    for (kind, result) in &reports {
+        let report = result.as_ref().expect("forced shutdown reaps the worker");
+        assert!(report.forced);
+        assert!(!report.cooperative_acknowledged);
+        assert!(
+            !report.exit.success,
+            "forced kill must not look like a clean exit: {report:?}"
+        );
+        match kind {
+            WorkerKind::Script => assert!(!seen_script, "duplicate script report"),
+            WorkerKind::Dynamic => assert!(!seen_dynamic, "duplicate dynamic report"),
+        }
+        seen_script |= *kind == WorkerKind::Script;
+        seen_dynamic |= *kind == WorkerKind::Dynamic;
+    }
+    assert!(seen_script && seen_dynamic);
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}

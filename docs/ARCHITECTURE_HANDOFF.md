@@ -212,13 +212,13 @@ Package CIのsuccessはPackage受入の証拠ですが、Release tag、署名run
 | forbidden edge | 禁止理由 | 検査入口 | 状態 |
 | --- | --- | --- | --- |
 | frontend → `rust/pokecon/src/*` private module／native handle | 公開wire契約を迂回する | generated type／source filter／contract test | pending-test |
-| worker → camera／serial/server native handle | process境界と停止安全性を壊す | IPC schema／source check | pending-test |
-| lower module → composition root | ownerと依存方向が逆流する | `lib.rs` module visibility／Cargo/source check | documented |
+| worker → camera／serial/server native handle | process境界と停止安全性を壊す | AR-11-34のsymbol-level forbidden ownership test＋AR-11-36のmodule-level forbidden edge（worker→server／device。worker→cameraはwire値型のみのため除外） | source-checked（AR-11-34／AR-11-36） |
+| lower module → composition root | ownerと依存方向が逆流する | `lib.rs` module visibility／AR-11-36のforbidden edge 22対＋lib→production例外liveness | tested（AR-11-36） |
 | generated artifact → canonical input | 再生成で失われ、runtimeと型がずれる | generator／drift test | source-verified |
 | candidate promotion → fixed baseline overwrite | append-only compatibility保証を壊す | `compatibility` report／negative test | pending-test |
 | UI／transport → hardware serviceの重複状態 | StateHubとresource ownerが分裂する | architecture test／review | pending-test |
 
-workspaceは`pokecon`一packageで、Rust moduleは`rust/pokecon/src/lib.rs:3-43`のprivate declarationが基本です。これは依存方向の設計根拠ですが、上表の全forbidden edgeを自動検査するmanifestとfixtureはまだありません。
+workspaceは`pokecon`一packageで、Rust moduleは`rust/pokecon/src/lib.rs:3-43`のprivate declarationが基本です。これは依存方向の設計根拠であり、上表のRust `use` 走査範囲のforbidden edgeは`rust/pokecon/registry/dependency_edges.json`の`forbidden`27対と`contract_sync`の`forbidden_dependency_edges_are_rejected`が検査します（AR-11-36）。generated→canonical、candidate→baseline、UI duplicate stateの各方向は本manifestの走査範囲外です。
 
 ## 10. Migration inventoryと検証command
 
@@ -257,10 +257,10 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle | `contract-check`／`compatibility`の同一artifact report | lifecycle状態表を生成reportへ接続し、failure時baseline保持を実行検証 |
 | `AR-11-29` | `rust/pokecon/tests/lifecycle.rs:802-855`の`shutdown_all` narrow test（Script／Dynamicのforced stop／reap／neutral化） | full shutdown fault matrix、camera fallback、signal path、production resource release test | `lifecycle`へ各timeout後の最終状態と後続停止を追加 |
 | `AR-11-30` | OS／build／package／runtime matrix | Release tag／publication、外部browser／clean machine | Releaseはowner指示後、外部受入は別packetで取得 |
-| `AR-11-33` | module ownership manifest相当の表 | machine-readable manifestとarchitecture test | 本表をmanifestへ固定し、source symbol存在を検査 |
-| `AR-11-34` | negative responsibilityとforbidden edge表 | forbidden ownership test | native handle、socket、visible revisionの禁止参照をfixture付きで検査 |
-| `AR-11-35` | allowed dependency direction表 | Cargo／source dependency check | module import inventoryを生成し許可edgeとの差分をfail-closed化 |
-| `AR-11-36` | forbidden dependency direction表 | forbidden-edge fixture付きcheck | 意図的逆流fixtureを一件追加し、checkがrejectすることを確認 |
+| `AR-11-33` | `rust/pokecon/registry/ownership.json`（§3.1全12行→18エントリ、owner_symbols実在検査、symbol非所有枠はnote）＋`contract_sync`の`module_ownership_manifest_pins_owner_symbols`（id双射・symbol実在・lib.rs crate-private pin・fail-closed制御） | なし（完了）。commit `2ac00b6`、review LGTM（`deleg_54f1dd2c`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-34`（非責務manifest）へ |
+| `AR-11-34` | ownership.jsonへ`non_responsibilities`（全18）＋`forbidden_symbols`／`forbidden_scan_files`（13エントリ、必須3含む）＋`contract_sync`の`forbidden_ownership_manifest_is_enforced`（不在・liveness・sentinel・限定comment） | なし（完了）。commit `36e3159`、review LGTM（`deleg_dcd709fb`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-35`（allowed edge manifest）へ |
+| `AR-11-35` | `rust/pokecon/registry/dependency_edges.json`（allowed 104 edge）＋`source_dependency_edges_match_allowed_manifest`（共有extractor・双方向diff・§9.1連動・scanned>100・sentinel） | なし（完了）。commit `932ff90`、review LGTM（`deleg_18931d04`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-36`（forbidden edge）へ |
+| `AR-11-36` | dependency_edges.jsonの`forbidden`27対（worker→cameraはwire値型のみのため除外をnote化）＋`forbidden_dependency_edges_are_rejected`（実測∩禁止=∅・fixture control・sentinel・liveness・27対exact-pin）＋`tests/fixtures/forbidden_dependency_fixture.rs` | なし（完了）。commit `4bc7a1f`、review NEEDS_CHANGES→LGTM（`deleg_8fe61737`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-37`（IPC境界fixture）へ |
 | `AR-11-37` | process／module deployment boundary | IPC boundary test | `cross_process`へpublic payload以外を拒否するfixtureを追加 |
 | `AR-11-38` | artifact／OS distribution matrix | OS別clean-install report | existing Package artifactをmanifestへread-backし、Release待ちを分離 |
 | `AR-11-39` | current package／binary／generator／compatibility inventory | phase別inventory、許可済みgit grep log | phase ID別にinventory snapshotを保存 |

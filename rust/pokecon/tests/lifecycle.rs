@@ -466,6 +466,107 @@ async fn managed_worker_uses_protocol_stdout_and_cooperative_stop() {
     safety.assert_neutral_once();
 }
 
+#[tokio::test]
+async fn managed_worker_roundtrips_all_ipc_value_variants() {
+    let supervisor = WorkerSupervisor::new();
+    let safety = Arc::new(ControllerSafetyProbe::active());
+    let worker = supervisor
+        .spawn(
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Script),
+            safety.clone(),
+        )
+        .await
+        .expect("worker starts");
+    let mut diagnostics = worker
+        .take_diagnostics()
+        .expect("stderr diagnostic receiver is available once");
+
+    let corpus: Vec<(&str, IpcValue)> = vec![
+        ("nil", IpcValue::Nil),
+        ("bool", IpcValue::Bool(true)),
+        ("integer", IpcValue::Integer(-42)),
+        ("unsigned", IpcValue::Unsigned(u64::MAX)),
+        ("float", IpcValue::Float(1.5)),
+        ("string", IpcValue::String("ipc-ペイロード-✓".to_owned())),
+        ("binary", IpcValue::Binary(vec![0x00, 0x01, 0xFE, 0xFF])),
+        (
+            "array",
+            IpcValue::Array(vec![
+                IpcValue::Nil,
+                IpcValue::Bool(false),
+                IpcValue::Integer(1),
+            ]),
+        ),
+        (
+            "map",
+            IpcValue::Map(BTreeMap::from([
+                (
+                    "nested".to_owned(),
+                    IpcValue::Array(vec![IpcValue::Integer(2), IpcValue::String("x".to_owned())]),
+                ),
+                ("flag".to_owned(), IpcValue::Bool(true)),
+            ])),
+        ),
+    ];
+    assert_eq!(corpus.len(), 9);
+
+    for (label, payload) in corpus {
+        let response = worker
+            .connection()
+            .request("worker.ping", payload)
+            .await
+            .unwrap_or_else(|error| {
+                panic!("{label} payload crosses the process boundary: {error:?}")
+            });
+        let IpcValue::Map(response) = response else {
+            panic!("{label} ping response must be a map");
+        };
+        assert_eq!(
+            response.get("kind"),
+            Some(&IpcValue::String("script".to_owned())),
+            "{label} payload must not corrupt the script ping response",
+        );
+    }
+
+    assert!(
+        worker.connection().disconnect_reason().is_none(),
+        "full payload corpus must not disconnect the worker"
+    );
+
+    let response = worker
+        .connection()
+        .request("worker.ping", IpcValue::Nil)
+        .await
+        .expect("worker stays alive after the corpus");
+    let IpcValue::Map(response) = response else {
+        panic!("final ping response must be a map");
+    };
+    assert_eq!(
+        response.get("kind"),
+        Some(&IpcValue::String("script".to_owned()))
+    );
+
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(2))
+        .await
+        .expect("cooperative stop succeeds");
+    assert!(report.cooperative_acknowledged);
+    assert!(!report.forced);
+    if !report.exit.success {
+        let mut failure_diagnostics = Vec::new();
+        while let Ok(Some(diagnostic)) =
+            tokio::time::timeout(Duration::from_millis(100), diagnostics.recv()).await
+        {
+            failure_diagnostics.extend_from_slice(&diagnostic.bytes);
+        }
+        panic!(
+            "unexpected stop report: {report:?}; stderr: {}",
+            String::from_utf8_lossy(&failure_diagnostics)
+        );
+    }
+    safety.assert_neutral_once();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
     let temporary = TempDir::new().expect("temporary config root is created");

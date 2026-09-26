@@ -1240,3 +1240,298 @@ async fn repeated_shutdown_all_is_idempotent_and_retains_final_state() {
     script_safety.assert_neutral_once();
     dynamic_safety.assert_neutral_once();
 }
+
+#[tokio::test]
+async fn shutdown_all_stops_remaining_worker_when_peer_already_crashed() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script).argument("crash"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("crashing script fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("unresponsive dynamic fixture starts");
+
+    // Pin the peer-crashed precondition: the crash fixture exits on its own,
+    // so the script generation is already reaped before shutdown runs.
+    let crash_exit = script_worker
+        .wait()
+        .await
+        .expect("crashed script worker is reaped");
+    assert!(
+        !crash_exit.success,
+        "crash fixture must not look like a clean exit: {crash_exit:?}"
+    );
+    assert_eq!(crash_exit.code, Some(71));
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(500)).await;
+    assert_eq!(
+        reports.len(),
+        2,
+        "a crashed peer must not skip the remaining worker: {reports:?}"
+    );
+
+    let mut seen_script = false;
+    let mut seen_dynamic = false;
+    for (kind, result) in &reports {
+        match kind {
+            WorkerKind::Script => {
+                assert!(!seen_script, "duplicate script report");
+                seen_script = true;
+                let report = result
+                    .as_ref()
+                    .expect("crashed script worker still reports");
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "crashed worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.forced,
+                    "already-reaped worker needs no force: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "crash exit must not look like a clean exit: {report:?}"
+                );
+                assert_eq!(report.exit.code, Some(71));
+            }
+            WorkerKind::Dynamic => {
+                assert!(!seen_dynamic, "duplicate dynamic report");
+                seen_dynamic = true;
+                let report = result
+                    .as_ref()
+                    .expect("shutdown reaps the unresponsive worker");
+                assert!(
+                    report.forced,
+                    "unresponsive worker must be forced despite the crashed peer: {report:?}"
+                );
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "unresponsive worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "forced kill must not look like a clean exit: {report:?}"
+                );
+            }
+        }
+    }
+    assert!(seen_script && seen_dynamic);
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}
+
+#[tokio::test]
+async fn shutdown_all_stops_remaining_worker_when_dynamic_peer_already_crashed() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ignore-shutdown"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("unresponsive script fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic).argument("crash"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("crashing dynamic fixture starts");
+
+    // Pin the peer-crashed precondition before shutdown runs.
+    let crash_exit = dynamic_worker
+        .wait()
+        .await
+        .expect("crashed dynamic worker is reaped");
+    assert!(
+        !crash_exit.success,
+        "crash fixture must not look like a clean exit: {crash_exit:?}"
+    );
+    assert_eq!(crash_exit.code, Some(71));
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(500)).await;
+    assert_eq!(
+        reports.len(),
+        2,
+        "a crashed peer must not skip the remaining worker: {reports:?}"
+    );
+
+    let mut seen_script = false;
+    let mut seen_dynamic = false;
+    for (kind, result) in &reports {
+        match kind {
+            WorkerKind::Script => {
+                assert!(!seen_script, "duplicate script report");
+                seen_script = true;
+                let report = result
+                    .as_ref()
+                    .expect("shutdown reaps the unresponsive worker");
+                assert!(
+                    report.forced,
+                    "unresponsive worker must be forced despite the crashed peer: {report:?}"
+                );
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "unresponsive worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "forced kill must not look like a clean exit: {report:?}"
+                );
+            }
+            WorkerKind::Dynamic => {
+                assert!(!seen_dynamic, "duplicate dynamic report");
+                seen_dynamic = true;
+                let report = result
+                    .as_ref()
+                    .expect("crashed dynamic worker still reports");
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "crashed worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.forced,
+                    "already-reaped worker needs no force: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "crash exit must not look like a clean exit: {report:?}"
+                );
+                assert_eq!(report.exit.code, Some(71));
+            }
+        }
+    }
+    assert!(seen_script && seen_dynamic);
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}
+
+#[tokio::test]
+async fn shutdown_all_reaps_all_workers_when_one_acknowledges_and_peer_crashed() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ack-then-hang"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("ack-then-hang fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic).argument("crash"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("crashing dynamic fixture starts");
+
+    // Pin the peer-crashed precondition before shutdown runs.
+    let crash_exit = dynamic_worker
+        .wait()
+        .await
+        .expect("crashed dynamic worker is reaped");
+    assert!(
+        !crash_exit.success,
+        "crash fixture must not look like a clean exit: {crash_exit:?}"
+    );
+    assert_eq!(crash_exit.code, Some(71));
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(500)).await;
+    assert_eq!(
+        reports.len(),
+        2,
+        "a crashed peer must not skip the acknowledging worker: {reports:?}"
+    );
+
+    let mut seen_script = false;
+    let mut seen_dynamic = false;
+    for (kind, result) in &reports {
+        match kind {
+            WorkerKind::Script => {
+                assert!(!seen_script, "duplicate script report");
+                seen_script = true;
+                let report = result
+                    .as_ref()
+                    .expect("acknowledging but hung worker is reaped");
+                assert!(
+                    report.cooperative_acknowledged,
+                    "the shutdown ack must be observed: {report:?}"
+                );
+                assert!(
+                    report.forced,
+                    "a worker that acks but never exits must be force-killed: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "forced kill must not look like a clean exit: {report:?}"
+                );
+            }
+            WorkerKind::Dynamic => {
+                assert!(!seen_dynamic, "duplicate dynamic report");
+                seen_dynamic = true;
+                let report = result
+                    .as_ref()
+                    .expect("crashed dynamic worker still reports");
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "crashed worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.forced,
+                    "already-reaped worker needs no force: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "crash exit must not look like a clean exit: {report:?}"
+                );
+                assert_eq!(report.exit.code, Some(71));
+            }
+        }
+    }
+    assert!(seen_script && seen_dynamic);
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}

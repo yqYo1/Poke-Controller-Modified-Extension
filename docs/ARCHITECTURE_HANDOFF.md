@@ -85,7 +85,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 4. frontend／workerがRust private module、native handle、Python objectを境界越しに受け取らないことをcontract／IPC testで確認する。
 5. それぞれを`nix run .#contract-check`または専用architecture testの出力へ保存する。
 
-**判定:** 表は`documented`／source-verifiedです。重複所有検査は、検査2（camera）を`camera_shared_mapping_release_has_single_owner`、検査3（serial）を`serial_port_ownership_has_single_owner`として`contract_sync`へsource-levelで追加しました（各focused 1 passed、`contract_sync`全体19 passed、break-red確認済み）。検査1（visible revision）／検査4（frontend／worker境界）のreportと検査5の保存は未成立のため、検査report全体は`pending-test`のままです。`AR-11-25`と`AR-10.8-03`は未完了のままです。
+**判定:** 表は`documented`／source-verifiedです。重複所有検査は、検査1（visible revision）を`visible_revision_commit_has_single_owner`、検査2（camera）を`camera_shared_mapping_release_has_single_owner`、検査3（serial）を`serial_port_ownership_has_single_owner`として`contract_sync`へ、検査4のworker IPC側runtime-negativeを`messagepack_extension_values_are_rejected_at_decode`（`worker/ipc/codec.rs`）として追加しました（各focused 1 passed、`contract_sync`全体20 passed、break-red確認済み）。検査5（`contract-check`またはarchitecture test出力への保存）の明示手順は未成立のため、検査report全体は`pending-test`のままです。`AR-11-25`と`AR-10.8-03`は未完了のままです。
 
 ## 4. Processとstate transition
 
@@ -251,7 +251,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 
 | PLAN item | このartifactで記録したもの | 未成立の受入証拠 | 最小の次作業 |
 | --- | --- | --- | --- |
-| `AR-11-25` | ownership table、非owner、重複検査の規則、検査2／3の`contract_sync` source check（`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`） | 検査1（visible revision）／検査4（frontend／worker境界）のreport、検査5の保存、`AR-10.8-03`接続 | `contract_sync`へ検査1と検査4を追加しNix実行 |
+| `AR-11-25` | ownership table、非owner、重複検査の規則、検査1〜3の`contract_sync` source check（`visible_revision_commit_has_single_owner`、`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`）、検査4のworker IPC側runtime-negative（`messagepack_extension_values_are_rejected_at_decode`）とAR-11-27のpublic boundary scan | 検査5（`contract-check`またはarchitecture test出力への保存）の明示手順、`AR-10.8-03`接続 | 検査5の保存手順を確定し、AR-11-25の完了判定を行う |
 | `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript replacement、`:636-716`／`:720-800`のscript／dynamic停止中request gate | Rust mainを含むstate table全体、production sequence、fault transition matrix、production shutdown fault matrix | `ShutdownCoordinator`／`shutdown_all`／production sequenceを含む残りのstate／fault caseを追加 |
 | `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary、`rust/pokecon/tests/contract_sync.rs`の`public_wire_contracts_exclude_native_handles_and_private_paths`によるcanonical public source／generated surfaceのnative／private marker negative check | runtime dynamic callback ownership、full IPC payload corpus、schema reportの全項目、実browser／実device受入 | runtime fault／payload corpus／schema artifactの残りを追加し、source-level testと分離して証跡化 |
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle | `contract-check`／`compatibility`の同一artifact report | lifecycle状態表を生成reportへ接続し、failure時baseline保持を実行検証 |

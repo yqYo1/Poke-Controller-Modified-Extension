@@ -2356,5 +2356,135 @@ fn serial_port_ownership_has_single_owner() {
     );
 }
 
+#[test]
+fn visible_revision_commit_has_single_owner() {
+    // AR-11-25 check #1 (docs/ARCHITECTURE_HANDOFF.md:82, 3.2 item 1):
+    // only `ApplicationBackend` may commit the visible revision. The two
+    // product commit paths both live in
+    // rust/pokecon/src/application_backend.rs: `commit_projection`
+    // (defined :254, called throughout the file) funnels through
+    // `self.hub.commit(transaction)` (:272) and the split-receiver
+    // `self.hub\n.commit(transaction)` (:341-342).
+    //
+    // `#[cfg(test)]` truncation is applied for the three TEST_TAIL_FILES
+    // below because their inline test modules call `hub.commit` /
+    // `.commit(transaction)` as fixtures (state.rs:509+, websocket.rs:2316+,
+    // rest/mod.rs:292+); scanning only the production prefix keeps those
+    // test-only commits from tripping the negative assert.
+    const COMMIT_MARKERS: &[&str] = &["commit_projection", "hub.commit", ".commit(transaction)"];
+    // Allowlist = the single visible-revision commit owner. The
+    // split-receiver path (:341-342) contains no contiguous `hub.commit`
+    // substring, so `.commit(transaction)` is matched separately.
+    const COMMIT_OWNERS: &[&str] = &["rust/pokecon/src/application_backend.rs"];
+    // Files whose `#[cfg(test)] mod tests` module runs to EOF and exercises
+    // commit markers as fixtures: scan only the production prefix.
+    const TEST_TAIL_FILES: &[&str] = &[
+        "rust/pokecon/src/server/state.rs",
+        "rust/pokecon/src/server/websocket.rs",
+        "rust/pokecon/src/server/rest/mod.rs",
+    ];
+
+    let find_commit_marker = |text: &str| {
+        COMMIT_MARKERS
+            .iter()
+            .find_map(|marker| text.contains(marker).then_some(*marker))
+    };
+
+    // Fail-closed control: exercise the exact predicate used below with a
+    // synthetic injection, so a broken or empty scanner cannot pass this
+    // test vacuously.
+    assert!(
+        !COMMIT_MARKERS.is_empty(),
+        "visible revision commit marker set must not be empty"
+    );
+    let sentinel = COMMIT_MARKERS[0];
+    let injected = format!("AR-11-25 sentinel {sentinel}");
+    assert_eq!(
+        find_commit_marker(&injected),
+        Some(sentinel),
+        "AR-11-25 scanner control must detect injected commit marker {sentinel:?}"
+    );
+
+    // The documented owner pins the allowlist to docs/ARCHITECTURE.md, not
+    // to invented symbols.
+    let architecture = repository_text("docs/ARCHITECTURE.md");
+    assert!(
+        architecture.contains("`ApplicationBackend`が`StateHub`と各resource serviceを所有してprojectionを更新し、`server`と`desktop`はhardware handleまたはinterpreter stateを直接所有しません。"),
+        "docs/ARCHITECTURE.md must document ApplicationBackend as the visible revision owner (AR-11-25)"
+    );
+
+    // Every other Rust source file must contain no visible revision commit
+    // marker; only the allowlisted owner may.
+    let mut scanned = 0;
+    let mut stack = vec![repository_root().join("rust/pokecon/src")];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
+            panic!("contract input {} must be readable: {error}", dir.display())
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                scanned += 1;
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("contract input {relative} must be readable: {error}")
+                });
+                let effective: &str = if TEST_TAIL_FILES.contains(&relative.as_str()) {
+                    let occurrences = text.match_indices("#[cfg(test)]").count();
+                    assert_eq!(
+                        occurrences, 1,
+                        "truncation assumption broke for {relative}: expected exactly one #[cfg(test)] before the trailing test module (AR-11-25)"
+                    );
+                    let marker = text.find("#[cfg(test)]").unwrap_or_else(|| {
+                        panic!(
+                            "truncation assumption broke for {relative}: #[cfg(test)] marker vanished (AR-11-25)"
+                        )
+                    });
+                    let after_marker = &text[marker + "#[cfg(test)]".len()..];
+                    let first_nonblank = after_marker
+                        .lines()
+                        .find(|line| !line.trim().is_empty())
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "truncation assumption broke for {relative}: no code follows #[cfg(test)] (AR-11-25)"
+                            )
+                        });
+                    assert_eq!(
+                        first_nonblank.trim(),
+                        "mod tests {",
+                        "truncation assumption broke for {relative}: #[cfg(test)] must be followed by `mod tests {{` (AR-11-25)"
+                    );
+                    &text[..marker]
+                } else {
+                    &text
+                };
+                if COMMIT_OWNERS.contains(&relative.as_str()) {
+                    assert!(
+                        find_commit_marker(effective).is_some(),
+                        "allowlisted owner {relative} must still contain a visible revision commit marker; update the allowlist instead of keeping a stale entry (AR-11-25)"
+                    );
+                } else {
+                    assert_eq!(
+                        find_commit_marker(effective),
+                        None,
+                        "non-owner source {relative} must not commit the visible revision (AR-11-25, docs/ARCHITECTURE_HANDOFF.md 3.2 item 1)"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        scanned > 100,
+        "visible revision ownership scan must cover rust/pokecon/src (scanned {scanned} files)"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

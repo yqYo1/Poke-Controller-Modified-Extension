@@ -329,4 +329,36 @@ mod tests {
             Err(CodecError::Decode(_))
         ));
     }
+
+    #[test]
+    fn messagepack_extension_values_are_rejected_at_decode() {
+        // `IpcValue` has no extension/native variant, so foreign MessagePack
+        // ext values (e.g. the timestamp fixext4) must fail at decode time.
+        fn envelope_with_raw_payload_value(value_bytes: &[u8]) -> Vec<u8> {
+            let mut payload = vec![
+                0x83, 0xa4, b'k', b'i', b'n', b'd', 0xa5, b'e', b'v', b'e', b'n', b't', 0xa2, b'o',
+                b'p', 0xac, b'w', b'o', b'r', b'k', b'e', b'r', b'.', b'r', b'e', b'a', b'd', b'y',
+                0xa7, b'p', b'a', b'y', b'l', b'o', b'a', b'd',
+            ];
+            payload.extend_from_slice(value_bytes);
+            payload
+        }
+
+        // fixext4 timestamp (type -1): native extension data.
+        let timestamp_ext = [0xd6, 0xff, 0x00, 0x00, 0x00, 0x00];
+        let top_level = envelope_with_raw_payload_value(&timestamp_ext);
+        assert!(matches!(
+            decode_payload(&top_level),
+            Err(CodecError::Decode(_))
+        ));
+
+        // Extension nested as a map value must also be rejected.
+        let mut nested = vec![0x81, 0xa1, b'k'];
+        nested.extend_from_slice(&timestamp_ext);
+        let nested_payload = envelope_with_raw_payload_value(&nested);
+        assert!(matches!(
+            decode_payload(&nested_payload),
+            Err(CodecError::Decode(_))
+        ));
+    }
 }

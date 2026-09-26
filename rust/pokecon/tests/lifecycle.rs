@@ -717,6 +717,88 @@ async fn stopping_generation_gates_managed_worker_requests_through_real_process(
 }
 
 #[tokio::test]
+async fn dynamic_stopping_generation_gates_managed_worker_requests_through_real_process() {
+    let supervisor = WorkerSupervisor::new();
+    let safety = Arc::new(ControllerSafetyProbe::active());
+    let worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            safety.clone(),
+        )
+        .await
+        .expect("unresponsive fixture starts");
+    assert!(worker.generation().begin_stopping());
+
+    assert!(matches!(
+        worker
+            .request(
+                OperationClass::MutatingResource,
+                "worker.ping",
+                IpcValue::Nil
+            )
+            .await,
+        Err(WorkerRequestError::Generation(
+            GenerationError::Stopping { .. }
+        ))
+    ));
+
+    for class in [
+        OperationClass::ReadOnly,
+        OperationClass::Diagnostic,
+        OperationClass::CooperativeStop,
+    ] {
+        let worker = worker.clone();
+        let mut pending =
+            tokio::spawn(async move { worker.request(class, "worker.ping", IpcValue::Nil).await });
+        let completed = tokio::select! {
+            result = &mut pending => Some(result),
+            () = tokio::time::sleep(Duration::from_millis(100)) => None,
+        };
+        match completed {
+            None => {
+                pending.abort();
+                let _ = (&mut pending).await;
+            }
+            Some(Ok(Err(WorkerRequestError::Generation(_)))) => {
+                panic!("{class:?} must pass the stopping gate and pend on the silent fixture");
+            }
+            Some(outcome) => {
+                panic!("{class:?} must pend on the silent fixture, got {outcome:?}");
+            }
+        }
+    }
+
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_millis(100))
+        .await
+        .expect("shutdown force-stops the unresponsive fixture");
+    assert!(report.forced);
+    assert_eq!(
+        worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+
+    for class in [
+        OperationClass::MutatingResource,
+        OperationClass::ReadOnly,
+        OperationClass::Diagnostic,
+        OperationClass::CooperativeStop,
+    ] {
+        assert!(
+            matches!(
+                worker.request(class, "worker.ping", IpcValue::Nil).await,
+                Err(WorkerRequestError::Generation(
+                    GenerationError::Stopped { .. }
+                ))
+            ),
+            "{class:?} must be rejected once the generation is stopped"
+        );
+    }
+    safety.assert_neutral_once();
+}
+
+#[tokio::test]
 async fn shutdown_all_force_stops_and_reaps_script_and_dynamic_workers() {
     let supervisor = WorkerSupervisor::new();
     let script_safety = Arc::new(ControllerSafetyProbe::active());

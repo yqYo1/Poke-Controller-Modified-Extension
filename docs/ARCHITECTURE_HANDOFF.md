@@ -108,7 +108,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 | `stopping` | profile switch／reload／shutdownでmutationを拒否 | `AppShutdownPre`後に新規mutationを拒否 | `GenerationPhase::Stopping`、cancellation token |
 | `stopped` | processをreapしてから次generationを作成 | 通常動作中の再生成を許可しない | `GenerationPhase::Stopped`、`DynamicRestartForbidden` |
 
-根拠は `rust/pokecon/src/worker/generation.rs:21-84` と [`ARCHITECTURE.md:206-236`](ARCHITECTURE.md#user-script-workerを世代として扱う) です。`rust/pokecon/tests/lifecycle.rs:636-716`の実process testは、`ManagedWorker::request`について停止中のmutation拒否、許可classがIPCへ到達すること、reap後の全class拒否を検証します。これはstate table全体、reap前のscript replacement、dynamic worker再生成、production shutdown fault matrixの受入証拠ではありません。
+根拠は `rust/pokecon/src/worker/generation.rs:21-84` と [`ARCHITECTURE.md:206-236`](ARCHITECTURE.md#user-script-workerを世代として扱う) です。`rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript worker replacement、`:636-716`のscript worker停止中request gate、`:720-800`のdynamic worker停止中request gateは、`ManagedWorker::request`の停止中mutation拒否、許可classがIPCへ到達すること、reap後の全class拒否を実processで検証します。これはRust mainを含む全state table、production sequence、fault transition matrix、production shutdown fault matrixの受入証拠ではありません。
 
 ### 4.3 camera writerとserver
 
@@ -252,10 +252,10 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | PLAN item | このartifactで記録したもの | 未成立の受入証拠 | 最小の次作業 |
 | --- | --- | --- | --- |
 | `AR-11-25` | ownership table、非owner、重複検査の規則 | 重複所有source／negative testのreport | `contract_sync`にresource owner一意性とnative handle漏洩の検査を追加しNix実行 |
-| `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:636-716`の停止中request gateとreap後拒否 | state table全体、script replacement、dynamic再生成、fault transition test | `ShutdownCoordinator`／`shutdown_all`／production sequenceを含む残りのstate／fault caseを追加 |
+| `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript replacement、`:636-716`／`:720-800`のscript／dynamic停止中request gate | Rust mainを含むstate table全体、production sequence、fault transition matrix、production shutdown fault matrix | `ShutdownCoordinator`／`shutdown_all`／production sequenceを含む残りのstate／fault caseを追加 |
 | `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary | native object境界越え禁止test、schema report | public schemaを列挙するcontract testとnegative fixtureを追加 |
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle | `contract-check`／`compatibility`の同一artifact report | lifecycle状態表を生成reportへ接続し、failure時baseline保持を実行検証 |
-| `AR-11-29` | `rust/pokecon/tests/lifecycle.rs:718-772`の`shutdown_all` narrow test（Script／Dynamicのforced stop／reap／neutral化） | full shutdown fault matrix、camera fallback、signal path、production resource release test | `lifecycle`へ各timeout後の最終状態と後続停止を追加 |
+| `AR-11-29` | `rust/pokecon/tests/lifecycle.rs:802-855`の`shutdown_all` narrow test（Script／Dynamicのforced stop／reap／neutral化） | full shutdown fault matrix、camera fallback、signal path、production resource release test | `lifecycle`へ各timeout後の最終状態と後続停止を追加 |
 | `AR-11-30` | OS／build／package／runtime matrix | Release tag／publication、外部browser／clean machine | Releaseはowner指示後、外部受入は別packetで取得 |
 | `AR-11-33` | module ownership manifest相当の表 | machine-readable manifestとarchitecture test | 本表をmanifestへ固定し、source symbol存在を検査 |
 | `AR-11-34` | negative responsibilityとforbidden edge表 | forbidden ownership test | native handle、socket、visible revisionの禁止参照をfixture付きで検査 |

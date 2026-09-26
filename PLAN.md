@@ -134,8 +134,8 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [ ] **AR-11-38** 個別成果物と配布方法を確定する（予定証跡: artifact manifestとOS別clean-install report）。
 
 - 2026-09-26 architecture handoff packet: [`docs/ARCHITECTURE_HANDOFF.md`](docs/ARCHITECTURE_HANDOFF.md)に現行sourceのownership、process／resource lifecycle、公開boundary、distribution、dependency ruleを集約した。runtime／fault test、clean detached worktree、実機／実browser、Release tagの証拠は未成立のため、上記AR checkboxは未完了のまま保持する。
-- 2026-09-26 worker lifecycle narrow evidence: `rust/pokecon/tests/lifecycle.rs:636-716`へ実processの停止中request gateとreap後拒否を追加し、`nix run .#cargo -- test --locked -p pokecon --features 'integration-test-support worker-binary worker-test-fixture' --test lifecycle`で7 passedを確認した。これはAR-11-26／AR-11-29の狭いgate証拠であり、checkbox、全state transition、production shutdown fault matrixの完了根拠ではない。
-- 2026-09-26 shutdown_all narrow evidence: `rust/pokecon/tests/lifecycle.rs:718-772`で実processのScript／Dynamic workerを`shutdown_all`からforced stopし、reap、Stopped、各resource neutral化を確認した。lifecycle suiteは8 passed、列挙を1 workerへ制限したbreak-redは失敗した。これはAR-11-29の狭いmulti-worker証拠であり、full fault matrix、camera fallback、signal path、production shutdown全体の完了根拠ではない。
+- 2026-09-26 worker lifecycle narrow evidence: `rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript worker replacement、`:636-716`のscript worker停止中request gate、`:720-800`のdynamic worker停止中request gateを実processで検証した。dynamic gateのfocused testは1 passed、lifecycle suiteは9 passed／0 failed。これはAR-11-26／AR-11-29の狭いgate証拠であり、checkbox、Rust mainを含む全state transition、production shutdown fault matrixの完了根拠ではない。
+- 2026-09-26 shutdown_all narrow evidence: `rust/pokecon/tests/lifecycle.rs:802-855`で実processのScript／Dynamic workerを`shutdown_all`からforced stopし、reap、Stopped、各resource neutral化を確認した。lifecycle suiteは9 passed、列挙を1 workerへ制限したbreak-redは失敗した。これはAR-11-29の狭いmulti-worker証拠であり、full fault matrix、camera fallback、signal path、production shutdown全体の完了根拠ではない。
 
 ## フェーズ 1 — tool-only devShellと用途別Nix appへ開発入口を固定
 

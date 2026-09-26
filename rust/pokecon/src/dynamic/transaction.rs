@@ -547,4 +547,94 @@ mod tests {
             json!(5000)
         );
     }
+
+    #[tokio::test]
+    async fn staged_callback_is_dropped_when_transaction_is_rolled_back() {
+        let host = InMemoryDynamicHost::new(initial_settings(), BTreeMap::new()).unwrap();
+        let registry = Arc::new(DynamicSettingsRegistry::load().unwrap());
+        let bus = EventBus::new(CallbackSettings::default(), 3, Arc::new(NoopDiagnosticSink));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let callback: Arc<dyn Callback> = Arc::new(CountingCallback(calls.clone()));
+        assert_eq!(Arc::strong_count(&callback), 1);
+        {
+            let mut transaction = EvaluationTransaction::begin(&host, registry, &bus).unwrap();
+            transaction
+                .register(
+                    &bus,
+                    "PluginReadyPost",
+                    callback.clone(),
+                    RegistrationOptions::default(),
+                    false,
+                )
+                .unwrap();
+            assert_eq!(Arc::strong_count(&callback), 2);
+        }
+        assert_eq!(Arc::strong_count(&callback), 1);
+        bus.define("PluginReadyPost").unwrap();
+        let result = bus.emit("PluginReadyPost").await.unwrap();
+        assert!(result.outcomes.is_empty());
+        assert_eq!(calls.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn committed_handler_id_is_owned_by_event_bus_and_released_by_off() {
+        let host = InMemoryDynamicHost::new(initial_settings(), BTreeMap::new()).unwrap();
+        let registry = Arc::new(DynamicSettingsRegistry::load().unwrap());
+        let bus = EventBus::new(CallbackSettings::default(), 3, Arc::new(NoopDiagnosticSink));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut transaction = EvaluationTransaction::begin(&host, registry, &bus).unwrap();
+        let handler_id = transaction
+            .register(
+                &bus,
+                "PluginReadyPost",
+                Arc::new(CountingCallback(calls.clone())),
+                RegistrationOptions::default(),
+                false,
+            )
+            .unwrap();
+        transaction.define("PluginReadyPost").unwrap();
+        transaction.commit(&host, &bus).await.unwrap();
+        let delivered = bus.emit("PluginReadyPost").await.unwrap();
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+        assert!(delivered.outcomes.iter().any(|(id, _)| *id == handler_id));
+        bus.off(handler_id);
+        let after_off = bus.emit("PluginReadyPost").await.unwrap();
+        assert!(after_off.outcomes.is_empty());
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn reserved_handler_id_is_never_reused_after_rollback() {
+        let host = InMemoryDynamicHost::new(initial_settings(), BTreeMap::new()).unwrap();
+        let registry = Arc::new(DynamicSettingsRegistry::load().unwrap());
+        let bus = EventBus::new(CallbackSettings::default(), 3, Arc::new(NoopDiagnosticSink));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let rolled_back = {
+            let mut transaction =
+                EvaluationTransaction::begin(&host, registry.clone(), &bus).unwrap();
+            transaction
+                .register(
+                    &bus,
+                    "PluginReadyPost",
+                    Arc::new(CountingCallback(calls.clone())),
+                    RegistrationOptions::default(),
+                    false,
+                )
+                .unwrap()
+        };
+        let mut transaction = EvaluationTransaction::begin(&host, registry, &bus).unwrap();
+        let next_id = transaction
+            .register(
+                &bus,
+                "PluginReadyPost",
+                Arc::new(CountingCallback(calls.clone())),
+                RegistrationOptions::default(),
+                false,
+            )
+            .unwrap();
+        assert!(
+            next_id.get() > rolled_back.get(),
+            "rolled-back handler ID must never be reused"
+        );
+    }
 }

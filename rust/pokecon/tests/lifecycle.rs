@@ -4,6 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
+use pokecon::integration_test_support::camera::{
+    CameraConfig, CameraManager, CameraSelector, CaptureResolution, FlipMode, RecordedFrame,
+    VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
+};
 use pokecon::integration_test_support::dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
 use pokecon::integration_test_support::dynamic::protocol::{
     DynamicInitializeRequest, DynamicProfileSwitchResult,
@@ -878,4 +882,34 @@ async fn shutdown_all_force_stops_and_reaps_script_and_dynamic_workers() {
     );
     script_safety.assert_neutral_once();
     dynamic_safety.assert_neutral_once();
+}
+
+#[test]
+fn camera_shutdown_timeout_retains_fallback_at_manager_level() {
+    let backend = VirtualCameraBackend::default();
+    backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+        30,
+        [RecordedFrame::Solid([4, 5, 6]), RecordedFrame::Hang],
+    )));
+    let manager = CameraManager::start(
+        Arc::new(backend),
+        CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+        FlipMode::None,
+    )
+    .unwrap();
+    for _ in 0..1_000 {
+        if manager.ring().read_published().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    std::thread::sleep(Duration::from_millis(50));
+    let descriptor_before = manager.mapping_descriptor();
+    let outcome = manager.shutdown(Duration::from_millis(20));
+    assert!(outcome.is_err());
+    assert!(manager.writer_unstopped());
+    assert_eq!(manager.mapping_descriptor(), descriptor_before);
+    let second = manager.shutdown(Duration::from_millis(20));
+    assert!(second.is_err());
+    assert!(manager.ring().read_published().unwrap().is_some());
 }

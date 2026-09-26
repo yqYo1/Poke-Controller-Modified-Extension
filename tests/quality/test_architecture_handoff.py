@@ -12,6 +12,10 @@ import re
 import tomllib
 from pathlib import Path
 
+import pytest
+
+from scripts.acceptance import lifecycle_report
+
 REPOSITORY = Path(__file__).resolve().parents[2]
 HANDOFF = REPOSITORY / "docs/ARCHITECTURE_HANDOFF.md"
 LIBRARY = REPOSITORY / "rust/pokecon/src/lib.rs"
@@ -175,3 +179,81 @@ def test_handoff_navigation_is_reachable_from_document_entries() -> None:
     assert "(ARCHITECTURE_HANDOFF.md)" in readme
     assert "(ARCHITECTURE_HANDOFF.md)" in index
     assert "architecture説明だけでruntime受入、実機、browser受入を主張しない" in index
+
+
+LIFECYCLE_LABELS = (
+    "settings",
+    "profile",
+    "command",
+    "dynamic config",
+    "compatibility corpus",
+)
+
+LIFECYCLE_SUBJECTS = ("settings", "profile", "command", "dynamic", "compatibility")
+
+LIFECYCLE_COLUMNS = ("generate", "switch", "fail", "discard")
+
+
+def handoff_lifecycle_rows_link_to_executable_evidence() -> None:
+    text = HANDOFF.read_text(encoding="utf-8")
+    section = _section(text, "## 6.", "## 7.")
+    rows = _table_rows(section)
+    data_rows = [row for row in rows[1:] if not re.fullmatch(r"\|\s*---.*", row)]
+    assert len(data_rows) == len(LIFECYCLE_LABELS)
+    for label in LIFECYCLE_LABELS:
+        assert (
+            sum(row.startswith((f"| {label} ", f"| {label} |")) for row in data_rows)
+            == 1
+        ), label
+
+    report = lifecycle_report.build_report(REPOSITORY, text)
+    assert report["schema"] == "lifecycle-report/1"
+    subjects = report["subjects"]
+    for key in LIFECYCLE_SUBJECTS:
+        assert key in subjects, key
+        subject = subjects[key]
+        assert subject["generate"] and subject["switch"], key
+        assert subject["fail"] and subject["discard"], key
+        evidence = subject["evidence"]
+        assert evidence, key
+        for path in evidence:
+            assert path, (key, path)
+            assert (REPOSITORY / path).exists(), (key, path)
+
+
+def test_handoff_lifecycle_rows_link_to_executable_evidence() -> None:
+    handoff_lifecycle_rows_link_to_executable_evidence()
+
+
+def test_lifecycle_report_covers_generate_switch_fail_discard() -> None:
+    text = HANDOFF.read_text(encoding="utf-8")
+    report = lifecycle_report.build_report(REPOSITORY, text)
+    subjects = report["subjects"]
+    assert set(subjects) == set(LIFECYCLE_SUBJECTS)
+    for key, subject in subjects.items():
+        assert set(subject) == set(LIFECYCLE_COLUMNS) | {"evidence"}, key
+    state = report["compatibility_state"]
+    assert state["schema"] == "compatibility-report/1"
+    assert isinstance(state["baseline_count"], int)
+    assert state["manifest_sha256"] and state["results_sha256"]
+    assert isinstance(state["promotion_records"], int)
+    assert isinstance(state["promotion_kinds"], dict)
+
+
+def test_lifecycle_report_fails_closed_on_mutated_table(tmp_path: Path) -> None:
+    text = HANDOFF.read_text(encoding="utf-8")
+
+    mutated = "\n".join(
+        line for line in text.splitlines() if not line.startswith("| command |")
+    )
+    with pytest.raises(ValueError, match="missing subjects"):
+        lifecycle_report.parse_lifecycle_table(mutated)
+
+    emptied = text.replace("旧generationの状態を破壊せず、切替失敗を診断へ残す", "", 1)
+    assert emptied != text
+    with pytest.raises(ValueError, match="empty column"):
+        lifecycle_report.parse_lifecycle_table(emptied)
+
+    with pytest.raises(SystemExit) as exited:
+        lifecycle_report.main(["--handoff", str(tmp_path / "missing.md")])
+    assert exited.value.code != 0

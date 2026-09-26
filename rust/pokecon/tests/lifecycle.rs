@@ -365,6 +365,12 @@ async fn verify_python_runtime(
         .await
         .expect("status after both runtimes succeeds")
         .generation;
+    // Baseline before the rejected load: failed loads must not mutate host state.
+    let tags_before_reject = host.state_snapshot().unwrap()["command_candidates"][0]["tags"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let recompute_before_reject = host.command_recompute_requests();
     let rejected = client
         .control(&DynamicConfigControl::LoadContent {
             language: DynamicConfigLanguage::Python,
@@ -378,6 +384,26 @@ async fn verify_python_runtime(
     assert_eq!(
         status.initialized_languages,
         vec![DynamicConfigLanguage::Python, DynamicConfigLanguage::Lua]
+    );
+    // Rejected load preserves the baseline: settings, state tags, recompute count.
+    assert_eq!(
+        host.settings_snapshot()
+            .expect("host settings are readable")["language"],
+        json!("ja"),
+        "{:?}",
+        host.diagnostics()
+    );
+    assert_eq!(
+        host.state_snapshot().unwrap()["command_candidates"][0]["tags"],
+        json!(tags_before_reject),
+        "{:?}",
+        host.diagnostics()
+    );
+    assert_eq!(
+        host.command_recompute_requests(),
+        recompute_before_reject,
+        "{:?}",
+        host.diagnostics()
     );
     tokio::time::timeout(Duration::from_secs(2), async {
         while host.diagnostics().is_empty() || host.command_recompute_requests() == 0 {

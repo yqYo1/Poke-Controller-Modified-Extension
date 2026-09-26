@@ -527,6 +527,7 @@ async fn crash_and_malformed_frames_release_rust_owned_resources() {
         ("eof", false),
         ("partial-frame", true),
         ("oversize", true),
+        ("non-string-map", true),
     ] {
         let supervisor = WorkerSupervisor::new();
         let safety = Arc::new(ControllerSafetyProbe::active());

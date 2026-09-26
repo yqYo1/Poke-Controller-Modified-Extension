@@ -2106,7 +2106,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "3ab5e0f7439deb5d363a563632d2db9cb57b685a47acc36632bebd833defc507"
+            "92d606b6cdff7297ca97d3dd62ab106d665033a3f4a9d9c69d78611126bb1c65"
         ),
         "@rust/pokecon/src/main.rs": (
             "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"

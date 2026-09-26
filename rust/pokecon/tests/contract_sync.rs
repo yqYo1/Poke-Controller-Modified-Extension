@@ -2486,5 +2486,234 @@ fn visible_revision_commit_has_single_owner() {
     );
 }
 
+#[allow(clippy::too_many_lines)]
+#[test]
+fn module_ownership_manifest_pins_owner_symbols() {
+    // AR-11-33: docs/ARCHITECTURE_HANDOFF.md 3.1 module ownership manifest の
+    // machine-readable pin (rust/pokecon/registry/ownership.json)。
+    // manifest の module id と 3.1 テーブルの行が 1:1 に対応し、各 owner symbol が
+    // 列挙 source 内に実在し、対応する top module が crate-private のままであることを検査する。
+    static OWNERSHIP_JSON: LazyLock<String> =
+        LazyLock::new(|| repository_text("rust/pokecon/registry/ownership.json"));
+    let manifest = parse_json(&OWNERSHIP_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "ownership manifest schema_version must be 1 (AR-11-33)"
+    );
+    let modules = manifest["modules"]
+        .as_array()
+        .expect("ownership manifest must define a modules array");
+    assert!(
+        !modules.is_empty(),
+        "ownership manifest must pin at least one module"
+    );
+
+    // Fail-closed predicate helpers: the exact predicates asserted below.
+    let is_valid_symbol = |symbol: &str| !symbol.trim().is_empty();
+    let symbol_found = |symbol: &str, texts: &[&str]| {
+        !symbol.is_empty() && texts.iter().any(|text| text.contains(symbol))
+    };
+
+    // Fail-closed control 1: an empty manifest entry or an empty symbol must be
+    // rejected, so a vacuous manifest cannot pass this test.
+    assert!(
+        !is_valid_symbol(""),
+        "empty owner symbol must be rejected (AR-11-33 control)"
+    );
+    assert!(
+        !symbol_found("", &["anything"]),
+        "empty symbol must never match any text (AR-11-33 control)"
+    );
+    assert!(
+        !symbol_found(
+            "AR-11-33-sentinel-symbol-that-exists-nowhere",
+            &["some unrelated source text"]
+        ),
+        "unknown symbol must not match unrelated text (AR-11-33 control)"
+    );
+
+    // Fail-closed control 2 (sentinel injection): the symbol-scan predicate used
+    // below must detect a synthetic symbol, proving the scan is not broken.
+    let sentinel = "AR-11-33-sentinel-symbol";
+    let injected = format!("synthetic owner {sentinel} marker");
+    assert!(
+        symbol_found(sentinel, &[&injected]),
+        "symbol scan predicate must detect an injected sentinel symbol (AR-11-33 control)"
+    );
+
+    // (a) Manifest ids are unique and bijective with the 3.1 table rows: each
+    // manifest id appears in the table section, and each table row id appears
+    // in the manifest. Parsing is deliberately pragmatic: split the module
+    // cell on slashes and normalize `::`/space/`-` to `_`.
+    let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
+    let section = handoff
+        .split_once("### 3.1 Module ownership manifest")
+        .expect("ARCHITECTURE_HANDOFF.md must define the 3.1 ownership manifest section")
+        .1;
+    let section = section
+        .split_once("\n### ")
+        .map_or(section, |(head, _)| head);
+    let normalize = |token: &str| {
+        token
+            .trim()
+            .trim_matches('`')
+            .replace("::", "_")
+            .replace([' ', '-'], "_")
+            .to_lowercase()
+    };
+    let mut expected = BTreeSet::new();
+    for line in section
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('|'))
+    {
+        if line.contains("---") {
+            continue;
+        }
+        let module_cell = line
+            .split('|')
+            .nth(1)
+            .expect("3.1 table row must have a module cell");
+        let cell_ids: Vec<String> = module_cell
+            .split(['\u{FF0F}', '/'])
+            .map(&normalize)
+            .filter(|id| !id.is_empty())
+            .collect();
+        // Skip the header row (`module／process`); match on the module cell
+        // only, since body cells may legitimately mention "module".
+        if cell_ids.iter().all(|id| id == "module" || id == "process") {
+            continue;
+        }
+        for id in cell_ids {
+            expected.insert(id);
+        }
+    }
+    assert!(
+        expected.len() >= 12,
+        "3.1 table parse must cover the ownership rows (parsed {})",
+        expected.len()
+    );
+    let mut ids = BTreeSet::new();
+    for module in modules {
+        let id = module["id"]
+            .as_str()
+            .expect("ownership manifest module must have a string id");
+        assert!(
+            ids.insert(id.to_owned()),
+            "ownership manifest module id {id} must be unique"
+        );
+        assert!(
+            expected.contains(id),
+            "ownership manifest id {id} must appear in the 3.1 table section"
+        );
+    }
+    assert_eq!(
+        ids, expected,
+        "ownership manifest ids must be bijective with the 3.1 table rows"
+    );
+
+    // (b) Every owner symbol occurs in at least one listed source file.
+    // Entries without Rust owner symbols (registry inputs, frontend, generated
+    // client) must explain the gap in `note` instead of inventing symbols.
+    for module in modules {
+        let id = module["id"]
+            .as_str()
+            .expect("ownership manifest module must have a string id");
+        let owns = module["owns"]
+            .as_array()
+            .expect("ownership manifest module must declare owns");
+        assert!(
+            !owns.is_empty(),
+            "module {id} must declare at least one owned responsibility"
+        );
+        let symbols = module["owner_symbols"]
+            .as_array()
+            .expect("ownership manifest module must declare owner_symbols");
+        let files = module["source_files"]
+            .as_array()
+            .expect("ownership manifest module must declare source_files");
+        assert!(
+            !files.is_empty(),
+            "module {id} must list at least one source file"
+        );
+        let texts: Vec<String> = files
+            .iter()
+            .map(|file| {
+                let path = file
+                    .as_str()
+                    .expect("ownership manifest source file must be a string");
+                repository_text(path)
+            })
+            .collect();
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        if symbols.is_empty() {
+            let note = module
+                .get("note")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(
+                !note.trim().is_empty(),
+                "module {id} without owner symbols must explain why in `note` \
+                 instead of inventing symbols (AR-11-33)"
+            );
+            continue;
+        }
+        for symbol in symbols {
+            let symbol = symbol
+                .as_str()
+                .expect("ownership manifest owner symbol must be a string");
+            assert!(
+                is_valid_symbol(symbol),
+                "module {id} owner symbol must not be empty"
+            );
+            assert!(
+                symbol_found(symbol, &refs),
+                "owner symbol {symbol} of module {id} must occur in one of its source_files"
+            );
+        }
+    }
+
+    // (c) The owning top-level modules stay crate-private: derive the top
+    // module segments from the manifest source files and pin lib.rs.
+    let lib = repository_text("rust/pokecon/src/lib.rs");
+    let mut top_modules = BTreeSet::new();
+    for module in modules {
+        for file in module["source_files"]
+            .as_array()
+            .expect("ownership manifest module must declare source_files")
+        {
+            let path = file
+                .as_str()
+                .expect("ownership manifest source file must be a string");
+            if let Some(rest) = path.strip_prefix("rust/pokecon/src/") {
+                // Skip lib.rs itself: it is the composition root that declares
+                // the modules, not a module.
+                if rest == "lib.rs" {
+                    continue;
+                }
+                let top = rest
+                    .split('/')
+                    .next()
+                    .expect("source path below src/ must be non-empty");
+                top_modules.insert(top.strip_suffix(".rs").unwrap_or(top).to_owned());
+            }
+        }
+    }
+    assert!(
+        !top_modules.is_empty(),
+        "ownership manifest must pin at least one Rust top module"
+    );
+    for top in &top_modules {
+        assert!(
+            lib.contains(&format!("mod {top};")),
+            "lib.rs must declare module {top}"
+        );
+        assert!(
+            !lib.contains(&format!("pub mod {top};")),
+            "module {top} must stay crate-private, not a public API promise"
+        );
+    }
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

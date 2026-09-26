@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "modules": [
+    {
+      "id": "entrypoint",
+      "owns": [
+        "composition、startup／shutdown順、service接続、router合成"
+      ],
+      "owner_symbols": [
+        "run_cli",
+        "MainError"
+      ],
+      "source_files": [
+        "rust/pokecon/src/entrypoint.rs",
+        "rust/pokecon/src/lib.rs"
+      ]
+    },
+    {
+      "id": "production",
+      "owns": [
+        "composition、startup／shutdown順、service接続、router合成"
+      ],
+      "owner_symbols": [
+        "ProductionRuntime"
+      ],
+      "source_files": [
+        "rust/pokecon/src/production.rs",
+        "rust/pokecon/src/lib.rs"
+      ]
+    },
+    {
+      "id": "application_backend",
+      "owns": [
+        "StateHubとresource serviceのprojection、mutation gate、command／profile service接続"
+      ],
+      "owner_symbols": [
+        "ApplicationBackend",
+        "commit_projection"
+      ],
+      "source_files": [
+        "rust/pokecon/src/application_backend.rs"
+      ]
+    },
+    {
+      "id": "server",
+      "owns": [
+        "REST／WebSocket／WebRTCのwire、security、公開schema"
+      ],
+      "owner_symbols": [
+        "BoundServer",
+        "public_router",
+        "RequestSecurity"
+      ],
+      "source_files": [
+        "rust/pokecon/src/server/mod.rs",
+        "rust/pokecon/src/server/router.rs",
+        "rust/pokecon/src/server/security.rs"
+      ]
+    },
+    {
+      "id": "device_input",
+      "owns": [
+        "InputArbiter、source generation、release／neutral投影"
+      ],
+      "owner_symbols": [
+        "InputArbiter"
+      ],
+      "source_files": [
+        "rust/pokecon/src/device/input.rs",
+        "rust/pokecon/src/device/mod.rs"
+      ]
+    },
+    {
+      "id": "device_serial",
+      "owns": [
+        "native port、selector、codec、接続／切断／retry"
+      ],
+      "owner_symbols": [
+        "SerialManager"
+      ],
+      "source_files": [
+        "rust/pokecon/src/device/serial/manager.rs",
+        "rust/pokecon/src/device/serial/mod.rs"
+      ]
+    },
+    {
+      "id": "camera",
+      "owns": [
+        "capture session、latest frame、shared ring、writer shutdown"
+      ],
+      "owner_symbols": [
+        "CameraManager"
+      ],
+      "source_files": [
+        "rust/pokecon/src/camera/manager.rs",
+        "rust/pokecon/src/camera/mod.rs"
+      ]
+    },
+    {
+      "id": "worker_supervisor",
+      "owns": [
+        "child process、IPC、generation phase、stop／reap"
+      ],
+      "owner_symbols": [
+        "WorkerSupervisor"
+      ],
+      "source_files": [
+        "rust/pokecon/src/worker/supervisor.rs"
+      ]
+    },
+    {
+      "id": "worker_generation",
+      "owns": [
+        "child process、IPC、generation phase、stop／reap"
+      ],
+      "owner_symbols": [
+        "GenerationManager",
+        "GenerationPhase"
+      ],
+      "source_files": [
+        "rust/pokecon/src/worker/generation.rs"
+      ]
+    },
+    {
+      "id": "worker_binary",
+      "owns": [
+        "child側Python／Lua runtime、IPC protocol、child task cleanup"
+      ],
+      "owner_symbols": [
+        "DynamicWorkerRuntime",
+        "ScriptWorkerRuntime"
+      ],
+      "source_files": [
+        "rust/pokecon/src/worker_binary/mod.rs",
+        "rust/pokecon/src/worker_binary/dynamic/dispatch.rs",
+        "rust/pokecon/src/worker_binary/script/runtime.rs"
+      ]
+    },
+    {
+      "id": "dynamic_transaction",
+      "owns": [
+        "stage→commit、callback／option／command generation"
+      ],
+      "owner_symbols": [
+        "EvaluationTransaction",
+        "TransactionError"
+      ],
+      "source_files": [
+        "rust/pokecon/src/dynamic/transaction.rs"
+      ]
+    },
+    {
+      "id": "dynamic_host",
+      "owns": [
+        "stage→commit、callback／option／command generation"
+      ],
+      "owner_symbols": [
+        "InMemoryDynamicHost",
+        "StartupDynamicHost"
+      ],
+      "source_files": [
+        "rust/pokecon/src/dynamic/host.rs",
+        "rust/pokecon/src/dynamic_host.rs"
+      ]
+    },
+    {
+      "id": "settings",
+      "owns": [
+        "canonical settings／protocol／compatibility inputと生成"
+      ],
+      "owner_symbols": [
+        "SignedManifest",
+        "ManifestOutput"
+      ],
+      "source_files": [
+        "rust/pokecon/src/settings/manifest.rs"
+      ]
+    },
+    {
+      "id": "contracts",
+      "owns": [
+        "canonical settings／protocol／compatibility inputと生成"
+      ],
+      "owner_symbols": [
+        "SettingsRegistry",
+        "settings_json_schema"
+      ],
+      "source_files": [
+        "rust/pokecon/src/contracts/model.rs",
+        "rust/pokecon/src/contracts/settings_artifacts.rs"
+      ]
+    },
+    {
+      "id": "registry",
+      "owns": [
+        "canonical settings／protocol／compatibility inputと生成"
+      ],
+      "owner_symbols": [],
+      "source_files": [
+        "rust/pokecon/registry/foundation.json",
+        "rust/pokecon/registry/generation.json",
+        "rust/pokecon/registry/compatibility.json"
+      ],
+      "note": "registry/ JSON inputsはRust symbolを持たない正準入力であるためowner symbolを主張しない。schema_versionキーで版を固定する。"
+    },
+    {
+      "id": "runtime_shutdown",
+      "owns": [
+        "first-writer-wins reason、process cancellation"
+      ],
+      "owner_symbols": [
+        "ShutdownCoordinator"
+      ],
+      "source_files": [
+        "rust/pokecon/src/runtime/shutdown.rs",
+        "rust/pokecon/src/runtime/mod.rs"
+      ]
+    },
+    {
+      "id": "frontend",
+      "owns": [
+        "server projectionの表示と公開contract利用"
+      ],
+      "owner_symbols": [],
+      "source_files": [
+        "web/src/lib/api.ts",
+        "web/src/lib/camera-selector.ts"
+      ],
+      "note": "frontendはRust crate外の表示層でありRust owner symbolを持たない。列挙sourceは公開contractを利用する側の実在fileである。"
+    },
+    {
+      "id": "generated_client",
+      "owns": [
+        "server projectionの表示と公開contract利用"
+      ],
+      "owner_symbols": [],
+      "source_files": [
+        "web/src/lib/api/openapi.ts"
+      ],
+      "note": "生成clientはopenapi-typescript生成物でありRust owner symbolを持たない。直接編集せず再生成する。"
+    }
+  ]
+}

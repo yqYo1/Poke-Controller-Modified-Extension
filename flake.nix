@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "0f15adc94affdff5fa404ad02b2e7cf69494f244ee2b396e3e2bed804433c242";
+      canonicalFlakeHash = "a13b6d0a56da7db27f44582db8c6c5cf4c167bfa4982d92ef0b6068b1110c812";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -483,8 +483,10 @@
               "rust/pokecon/registry/acceptance-record.schema.json"
               "rust/pokecon/registry/ci.json"
               "rust/pokecon/registry/compatibility.json"
+              "rust/pokecon/registry/dependency_edges.json"
               "rust/pokecon/registry/foundation.json"
               "rust/pokecon/registry/generation.json"
+              "rust/pokecon/registry/ownership.json"
               "rust/pokecon/tests"
               "rust-toolchain.toml"
               "scripts/__init__.py"

@@ -2934,5 +2934,228 @@ fn forbidden_ownership_manifest_is_enforced() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
+#[test]
+fn source_dependency_edges_match_allowed_manifest() {
+    // AR-11-35: 内部依存方向の許可 edge manifest
+    // (rust/pokecon/registry/dependency_edges.json) と
+    // rust/pokecon/src/**/*.rs の `use crate::<top>::...` 行から抽出した実測 edge 集合が
+    // 双方向に一致することを検査する。未知 edge (manifest 漏れ) と stale entry
+    // (実装に存在しない許可) のいずれもこの test を失敗させる。
+    //
+    // 誠実な範囲限定 (scope):
+    // (1) `use` 行の文字列走査のみ — インライン完全修飾パス
+    //     (例: lib.rs の `crate::platform::PlatformKind`) や
+    //     include!/macro 生成参照は捕捉しない。
+    // (2) `#[cfg(test)]` 末尾を含む全文走査 (test-only の use も edge になる)。
+    // (3) Cargo package 境界の検査は対象外 (AR-10.8-05)。
+    //     single-package 境界は Cargo.toml:1-8 (members = ["rust/pokecon"])。
+    static DEPENDENCY_EDGES_JSON: LazyLock<String> =
+        LazyLock::new(|| repository_text("rust/pokecon/registry/dependency_edges.json"));
+    let manifest = parse_json(&DEPENDENCY_EDGES_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "dependency edge manifest schema_version must be 1 (AR-11-35)"
+    );
+    let allowed = manifest["allowed"]
+        .as_array()
+        .expect("dependency edge manifest must define an allowed array");
+    assert!(
+        !allowed.is_empty(),
+        "dependency edge manifest must allow at least one edge"
+    );
+    let mut allowed_set = BTreeSet::new();
+    let mut previous: Option<(String, String)> = None;
+    for edge in allowed {
+        let pair = edge
+            .as_array()
+            .unwrap_or_else(|| panic!("manifest edge must be a [from, to] pair, found {edge}"));
+        assert_eq!(
+            pair.len(),
+            2,
+            "manifest edge must be a [from, to] pair, found {edge}"
+        );
+        let from = pair[0]
+            .as_str()
+            .expect("manifest edge from must be a string")
+            .to_owned();
+        let to = pair[1]
+            .as_str()
+            .expect("manifest edge to must be a string")
+            .to_owned();
+        assert!(
+            !from.is_empty() && !to.is_empty(),
+            "manifest edge modules must not be empty, found [{from}, {to}]"
+        );
+        assert_ne!(
+            from, to,
+            "manifest must not list self-edges, found {from} -> {to} (AR-11-35)"
+        );
+        assert!(
+            allowed_set.insert((from.clone(), to.clone())),
+            "manifest edges must be unique, duplicate {from} -> {to} (AR-11-35)"
+        );
+        if let Some(previous_edge) = &previous {
+            assert!(
+                *previous_edge < (from.clone(), to.clone()),
+                "manifest edges must be sorted, {from} -> {to} follows {previous_edge:?} (AR-11-35)"
+            );
+        }
+        previous = Some((from, to));
+    }
+
+    // (a) Fail-closed sentinel control: the exact extraction predicate used
+    // below must detect a synthetic `use crate::sentinel_module::X` line and
+    // must not match a plain non-crate import, so a broken or empty scanner
+    // cannot pass this test vacuously.
+    let use_pattern =
+        Regex::new(r"use crate::([a-z0-9_]+)").expect("dependency edge regex must compile");
+    let extract_top = |line: &str| -> Option<String> {
+        use_pattern
+            .captures(line)
+            .map(|captures| captures[1].to_owned())
+    };
+    assert_eq!(
+        extract_top("use crate::sentinel_module::X;"),
+        Some("sentinel_module".to_owned()),
+        "AR-11-35 scanner control must detect injected `use crate::sentinel_module::X`"
+    );
+    assert_eq!(
+        extract_top("use std::collections::BTreeSet;"),
+        None,
+        "AR-11-35 scanner control must not match a non-crate import"
+    );
+
+    // Observed edge set: fs-walk rust/pokecon/src/**/*.rs, one capture per
+    // `use crate::<top>` line. The importer top module is the first path
+    // segment below src/; root files (e.g. production.rs) map via file stem
+    // (production). Self-edges (e.g. `use crate::worker::...` inside worker/)
+    // are excluded.
+    let src_root = repository_root().join("rust/pokecon/src");
+    let mut observed = BTreeSet::new();
+    let mut scanned = 0;
+    let mut stack = vec![src_root.clone()];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
+            panic!("contract input {} must be readable: {error}", dir.display())
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                scanned += 1;
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let under_src = path
+                    .strip_prefix(&src_root)
+                    .expect("contract input must be below rust/pokecon/src");
+                let mut components = under_src.components();
+                let first = components
+                    .next()
+                    .expect("source path below src/ must be non-empty");
+                let importer = if components.next().is_none() {
+                    path.file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .expect("root source file must have a UTF-8 stem")
+                        .to_owned()
+                } else {
+                    first
+                        .as_os_str()
+                        .to_str()
+                        .expect("source directory name must be UTF-8")
+                        .to_owned()
+                };
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("contract input {relative} must be readable: {error}")
+                });
+                for line in text.lines() {
+                    if let Some(top) = extract_top(line)
+                        && top != importer
+                    {
+                        observed.insert((importer.clone(), top));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        scanned > 100,
+        "dependency edge scan must cover rust/pokecon/src (scanned {scanned} files)"
+    );
+
+    // §9.1 drift guard: the allowed-direction table keeps exactly 6 data rows,
+    // and every manifest `from` is discoverable in the section text.
+    // 連動検査の意味: §9.1 テーブルは composition root／backend／transport／
+    // supervisor／frontend／tool の6概念しか列挙しない coarse な語彙であり、
+    // 実装の全 top module (desktop・test 支援・service 群など) を網羅しない。
+    // よって各 manifest `from` は (a) 正規化 (小文字化・`_`除去) 後に §9.1 節
+    // テキストの部分文字列として発見できるか、(b) rust/pokecon/src/ 直下に同名の
+    // 実在 top module (dir または .rs、cfg-gated を含む) に対応すること。
+    // どちらにも該当しない from は文書にも実装にも存在しない未知 module として
+    // 失敗させ、manifest の typo を検出する。
+    let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
+    let section = handoff
+        .split_once("### 9.1 許可する方向")
+        .expect("ARCHITECTURE_HANDOFF.md must define the 9.1 allowed-direction section")
+        .1;
+    let section = section
+        .split_once("\n### ")
+        .map_or(section, |(head, _)| head);
+    let rows: Vec<&str> = section
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('|'))
+        .filter(|line| !line.contains("allowed dependency"))
+        .filter(|line| !line.contains("---"))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        6,
+        "9.1 allowed-direction table must keep exactly 6 data rows, found: {rows:?}"
+    );
+    let normalized_section = section.to_lowercase().replace('_', "");
+    let mut from_modules = BTreeSet::new();
+    for (from, _) in &allowed_set {
+        from_modules.insert(from.clone());
+    }
+    for from in &from_modules {
+        let normalized = from.to_lowercase().replace('_', "");
+        if normalized_section.contains(&normalized) {
+            continue;
+        }
+        assert!(
+            src_root.join(from).is_dir() || src_root.join(format!("{from}.rs")).is_file(),
+            "manifest from {from} must be discoverable in the 9.1 section text \
+             or name a real top module under rust/pokecon/src (AR-11-35)"
+        );
+    }
+
+    // Both-direction diff: unknown observed edges and stale manifest entries
+    // each fail, the stale-entry liveness following the same pattern as the
+    // camera ownership test.
+    let unknown: Vec<(&String, &String)> = observed
+        .difference(&allowed_set)
+        .map(|(from, to)| (from, to))
+        .collect();
+    assert!(
+        unknown.is_empty(),
+        "unknown dependency edges missing from the manifest (AR-11-35): {unknown:?}"
+    );
+    let stale: Vec<(&String, &String)> = allowed_set
+        .difference(&observed)
+        .map(|(from, to)| (from, to))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "stale manifest entries with no observed edge; update the manifest instead of \
+         keeping a dead allowance (AR-11-35): {stale:?}"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

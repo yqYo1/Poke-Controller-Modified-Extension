@@ -985,6 +985,98 @@ async fn shutdown_all_force_stops_and_reaps_script_and_dynamic_workers() {
     dynamic_safety.assert_neutral_once();
 }
 
+#[tokio::test]
+async fn shutdown_all_mixes_cooperative_and_forced_workers() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Script),
+            script_safety.clone(),
+        )
+        .await
+        .expect("cooperative script worker starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("unresponsive dynamic fixture starts");
+    let mut script_diagnostics = script_worker
+        .take_diagnostics()
+        .expect("stderr diagnostic receiver is available once");
+    let _dynamic_diagnostics = dynamic_worker
+        .take_diagnostics()
+        .expect("stderr diagnostic receiver is available once");
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(100)).await;
+    assert_eq!(reports.len(), 2);
+
+    let mut seen_script = false;
+    let mut seen_dynamic = false;
+    for (kind, result) in &reports {
+        let report = result.as_ref().expect("shutdown reaps the worker");
+        match kind {
+            WorkerKind::Script => {
+                assert!(!seen_script, "duplicate script report");
+                seen_script = true;
+                assert!(
+                    report.cooperative_acknowledged,
+                    "cooperative worker must acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.forced,
+                    "cooperative worker must not be forced: {report:?}"
+                );
+                if !report.exit.success {
+                    let mut failure_diagnostics = Vec::new();
+                    while let Ok(Some(diagnostic)) =
+                        tokio::time::timeout(Duration::from_millis(100), script_diagnostics.recv())
+                            .await
+                    {
+                        failure_diagnostics.extend_from_slice(&diagnostic.bytes);
+                    }
+                    panic!(
+                        "unexpected stop report: {report:?}; stderr: {}",
+                        String::from_utf8_lossy(&failure_diagnostics)
+                    );
+                }
+            }
+            WorkerKind::Dynamic => {
+                assert!(!seen_dynamic, "duplicate dynamic report");
+                seen_dynamic = true;
+                assert!(
+                    report.forced,
+                    "unresponsive worker must be forced: {report:?}"
+                );
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "unresponsive worker must not acknowledge shutdown: {report:?}"
+                );
+                assert!(
+                    !report.exit.success,
+                    "forced kill must not look like a clean exit: {report:?}"
+                );
+            }
+        }
+    }
+    assert!(seen_script && seen_dynamic);
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}
+
 #[test]
 fn camera_shutdown_timeout_retains_fallback_at_manager_level() {
     let backend = VirtualCameraBackend::default();

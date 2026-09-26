@@ -2253,5 +2253,108 @@ fn camera_shared_mapping_release_has_single_owner() {
     );
 }
 
+#[test]
+fn serial_port_ownership_has_single_owner() {
+    // AR-11-25 check #3 (docs/ARCHITECTURE_HANDOFF.md 3.2 item 3):
+    // only `SerialManager` may hold the native serial port. The native
+    // handle (`SerialStream`) is acquired in
+    // rust/pokecon/src/device/serial/native.rs (`tokio_serial::new` ->
+    // `open_native_async`, native.rs:19-20) and held split inside
+    // `NativeSerialIo`; it is reached only via
+    // `SerialManager::open_initialized` through the `SerialBackend` trait
+    // (rust/pokecon/src/device/serial/manager.rs), so the manager itself
+    // never names the native handle type. The documented owner is
+    // `device::serial::manager` (`SerialManager`) per docs/ARCHITECTURE.md
+    // (serial ownership row).
+    //
+    // Hold markers are deliberately narrow: `tokio_serial::available_ports`
+    // in rust/pokecon/src/device/serial/selector.rs only enumerates port
+    // names without opening them, and the `NativeSerialBackend` re-exports
+    // (`device::serial::mod`, `device::mod`) plus the
+    // `SerialManager::new(Arc::new(NativeSerialBackend))` wiring in
+    // rust/pokecon/src/production.rs and
+    // rust/pokecon/src/integration_test_support.rs never name the native
+    // handle, so bare `tokio_serial`, `available_ports`,
+    // `NativeSerialBackend`, and `SerialManager` are excluded.
+    const HOLD_MARKERS: &[&str] = &["open_native_async", "tokio_serial::new", "SerialStream"];
+    // Allowlist = the single backend impl file owned by SerialManager.
+    // `manager.rs` holds only `Arc<dyn SerialIo>` through the
+    // `SerialBackend` trait and contains no hold marker, so it belongs to
+    // the negative assertion set rather than the allowlist.
+    const HOLD_OWNERS: &[&str] = &["rust/pokecon/src/device/serial/native.rs"];
+
+    let find_hold_marker = |text: &str| {
+        HOLD_MARKERS
+            .iter()
+            .find_map(|marker| text.contains(marker).then_some(*marker))
+    };
+
+    // Fail-closed control: exercise the exact predicate used below with a
+    // synthetic injection, so a broken or empty scanner cannot pass this
+    // test vacuously.
+    assert!(
+        !HOLD_MARKERS.is_empty(),
+        "serial hold marker set must not be empty"
+    );
+    let sentinel = HOLD_MARKERS[0];
+    let injected = format!("AR-11-25 sentinel {sentinel}");
+    assert_eq!(
+        find_hold_marker(&injected),
+        Some(sentinel),
+        "AR-11-25 scanner control must detect injected hold marker {sentinel:?}"
+    );
+
+    // The documented owner pins the allowlist to docs/ARCHITECTURE.md, not
+    // to invented symbols.
+    let architecture = repository_text("docs/ARCHITECTURE.md");
+    assert!(
+        architecture.contains("`device::serial::manager` (`SerialManager`"),
+        "docs/ARCHITECTURE.md must document SerialManager as the serial owner (AR-11-25)"
+    );
+
+    // Every other Rust source file must contain no serial hold marker;
+    // only the allowlisted owner impl may.
+    let mut scanned = 0;
+    let mut stack = vec![repository_root().join("rust/pokecon/src")];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
+            panic!("contract input {} must be readable: {error}", dir.display())
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                scanned += 1;
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("contract input {relative} must be readable: {error}")
+                });
+                if HOLD_OWNERS.contains(&relative.as_str()) {
+                    assert!(
+                        find_hold_marker(&text).is_some(),
+                        "allowlisted owner {relative} must still contain a serial hold marker; update the allowlist instead of keeping a stale entry (AR-11-25)"
+                    );
+                } else {
+                    assert_eq!(
+                        find_hold_marker(&text),
+                        None,
+                        "non-owner source {relative} must not hold the native serial port (AR-11-25, docs/ARCHITECTURE_HANDOFF.md 3.2 item 3)"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        scanned > 100,
+        "serial ownership scan must cover rust/pokecon/src (scanned {scanned} files)"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

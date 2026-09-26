@@ -1107,6 +1107,63 @@ fn camera_shutdown_timeout_retains_fallback_at_manager_level() {
     assert!(manager.ring().read_published().unwrap().is_some());
 }
 
+#[test]
+fn camera_shutdown_releases_mapping_on_success_control() {
+    // Control for `camera_shutdown_timeout_retains_fallback_at_manager_level`:
+    // the same harness with a Solid-only plan must reach a clean stop. This
+    // proves the Hang-case retention comes from the timed-out writer, not
+    // from the harness itself.
+    //
+    // What this proves: `shutdown` returns `Ok`, `writer_unstopped()` stays
+    // `false`, and shutdown is idempotent (a second `shutdown` is also `Ok`).
+    // The shared mapping is lifetime-fixed so `mapping_descriptor()` is
+    // unchanged; success only invalidates the publication
+    // (`WriterState::shutdown` -> `close` -> `invalidate_publication` ->
+    // `stop_publication(true)` runs before the stopped signal, so by the time
+    // `Ok` is observed) `read_published()` goes from `Some` to `None` -- the
+    // mirror image of the Hang case, which retains `Some`.
+    //
+    // What this cannot prove: POSIX name-only unlink semantics (no separate
+    // name/mapping handles are observable through `CameraManager`) and the
+    // production step-5/9 wiring (`shared_memory_release_allowed` /
+    // `camera_mapping_fallback` in `production.rs` have zero production
+    // readers; only the write side via `retain_camera_fallback_on_timeout`
+    // is production-wired).
+    let backend = VirtualCameraBackend::default();
+    backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+        30,
+        [
+            RecordedFrame::Solid([7, 8, 9]),
+            RecordedFrame::Solid([7, 8, 9]),
+            RecordedFrame::Solid([7, 8, 9]),
+        ],
+    )));
+    let manager = CameraManager::start(
+        Arc::new(backend),
+        CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+        FlipMode::None,
+    )
+    .unwrap();
+    for _ in 0..1_000 {
+        if manager.ring().read_published().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(
+        manager.ring().read_published().unwrap().is_some(),
+        "solid-only plan must publish before shutdown"
+    );
+    let descriptor_before = manager.mapping_descriptor();
+    let outcome = manager.shutdown(Duration::from_secs(5));
+    assert!(outcome.is_ok(), "solid-only writer must stop cleanly");
+    assert!(!manager.writer_unstopped());
+    assert_eq!(manager.mapping_descriptor(), descriptor_before);
+    assert!(manager.ring().read_published().unwrap().is_none());
+    let second = manager.shutdown(Duration::from_secs(5));
+    assert!(second.is_ok(), "shutdown must be idempotent after success");
+}
+
 #[tokio::test]
 async fn shutdown_all_force_kills_worker_that_acknowledges_but_does_not_exit() {
     let supervisor = WorkerSupervisor::new();

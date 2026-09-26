@@ -2945,7 +2945,8 @@ fn source_dependency_edges_match_allowed_manifest() {
     //
     // 誠実な範囲限定 (scope):
     // (1) `use` 行の文字列走査のみ — インライン完全修飾パス
-    //     (例: lib.rs の `crate::platform::PlatformKind`) や
+    //     (例: lib.rs の `crate::platform::PlatformKind`)、
+    //     `use crate::{...}` の brace-group import、
     //     include!/macro 生成参照は捕捉しない。
     // (2) `#[cfg(test)]` 末尾を含む全文走査 (test-only の use も edge になる)。
     // (3) Cargo package 境界の検査は対象外 (AR-10.8-05)。

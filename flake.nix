@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "a13b6d0a56da7db27f44582db8c6c5cf4c167bfa4982d92ef0b6068b1110c812";
+      canonicalFlakeHash = "2716ad3bf2dcb7710ce787df3bdfc1e1c2378549207ac1ad9e8ccb1983479082";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -496,6 +496,8 @@
               "scripts/ci/timing.py"
               "scripts/compatibility"
               "web/src/lib/api"
+              "web/src/lib/api.ts"
+              "web/src/lib/camera-selector.ts"
             ];
             web = [ "web" ];
             api = [ "api" ];

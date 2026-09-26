@@ -2334,9 +2334,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         + "<production-routing-audit-sha256>"
         + normalized_flake[audit_test_hash_match.end("hash") :]
     )
+    # This constant is the fully-normalized flake hash (canonicalFlakeHash and
+    # expectedAuditTestHash values replaced by placeholders). It must be
+    # updated together with flake.nix structural edits; editing this file
+    # also requires refreshing flake.nix expectedAuditTestHash (raw hash of
+    # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "c73784a25a10db688007097f720234b91a4316709ce025b934f380e3074fca37"
+        == "2561f41c21aa30b959452c0b2393f9f749946c8765b7d0816d90ff47aabc1fbe"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2549,7 +2554,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "da5914f51be182023974b02c6fe84815401f100c4dd0917adfbcc197de7a794e"
+        == "652e9420b97699f74d4efb73502bcd1e21983e1236b64688adb98bc8bfd282a7"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")

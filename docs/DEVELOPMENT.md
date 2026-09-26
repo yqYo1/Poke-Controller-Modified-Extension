@@ -229,6 +229,8 @@ nix run .#web-check
 
 lock fileの更新でdependency treeのhashが変わる場合は、Nixのhash mismatch出力が示す新しいhashを対応する`apiBunDependencies.outputHash`または`webBunDependencies.outputHash`へ反映します。続けて`flake.nix`の`canonicalFlakeHash`を更新し、該当gateを再実行します。
 
+`flake.nix`の構造を変更した場合は、`canonicalFlakeHash`に加えて監査テストの正規化ハッシュ定数（`tests/quality/test_ui_package_check.py`）も更新します。監査テスト自体を変更した場合は`flake.nix`の`expectedAuditTestHash`（テストファイルの生ハッシュ）を更新し、続けて`canonicalFlakeHash`を再計算します。整合は`production-routing-audit`gateで検証できます。
+
 完了gateはnetwork installを行いません。`web-check`、`check`、`tauri-build`、API型生成はlock fileから作成したhash固定のNix dependency treeを使用します。
 
 editor用language serverの統合は、host `PATH`へ依存せず次で検証します。

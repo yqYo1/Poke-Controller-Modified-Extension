@@ -194,6 +194,13 @@ mod tests {
     use super::{CodecError, MAX_PAYLOAD_BYTES, decode_payload, encode_frame, read_frame};
     use crate::worker::ipc::{Envelope, IpcValue};
 
+    // AR-11-37 非公開 wire payload fixture (source として include; Cargo target
+    // ではない。fixture 側の `pub` item のため fn 内ではなく module 直下に置く)。
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/ipc_nonpublic_payloads.rs"
+    ));
+
     #[test]
     fn frame_round_trip_uses_big_endian_length() {
         let envelope = Envelope::Event {
@@ -360,5 +367,38 @@ mod tests {
             decode_payload(&nested_payload),
             Err(CodecError::Decode(_))
         ));
+    }
+
+    #[test]
+    fn fixture_nonpublic_wire_payloads_are_rejected_at_decode() {
+        // AR-11-37: ワイヤ上の非公開値 (MessagePack ext・非文字列マップキー・
+        // 未知フィールド・trailing object・空 op) は peer の decode 層で拒否
+        // される。同一プロセス内の encode 側呼び出し元は任意の IpcValue を
+        // 構築できるため、プロセス内拒否は主張しない。
+        for &(name, bytes, expectation) in CASES {
+            let result = decode_payload(bytes);
+            match expectation {
+                FixtureExpectation::DecodeErr => assert!(
+                    matches!(result, Err(CodecError::Decode(_))),
+                    "non-public case {name} must fail at decode"
+                ),
+                FixtureExpectation::SchemaErr => assert!(
+                    matches!(result, Err(CodecError::Schema(_))),
+                    "non-public case {name} must fail at schema validation"
+                ),
+            }
+        }
+        // Positive control: 公開 IpcValue は encode→decode で round-trip する。
+        let public = Envelope::Event {
+            op: "worker.ready".to_owned(),
+            payload: IpcValue::String("ok".to_owned()),
+        };
+        let frame = encode_frame(&public).expect("public envelope encodes");
+        assert_eq!(
+            decode_payload(&frame[4..]).expect("public envelope decodes"),
+            public
+        );
+        // Sentinel control: 空 bytes は拒否される (空入力で pass しないこと)。
+        assert!(decode_payload(&[]).is_err(), "empty bytes must be rejected");
     }
 }

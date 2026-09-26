@@ -3357,5 +3357,191 @@ fn forbidden_dependency_edges_are_rejected() {
     );
 }
 
+#[allow(clippy::too_many_lines)]
+#[test]
+fn worker_ipc_deployment_boundary_is_pinned() {
+    // AR-11-37: worker IPC の deployment-boundary pin
+    // (rust/pokecon/registry/ipc_boundary.json)。envelope kind・closed 値集合・
+    // 最大 payload・非公開 wire marker・非公開 payload fixture case 名を固定し、
+    // 実装 source との drift を検査する。
+    //
+    // 誠実な範囲限定 (scope): op 名の allowlist、IPC payload 全体の corpus、
+    // プロセス内 (encode 側) 拒否は主張しない。拒否は peer の decode 層で行われ、
+    // 同一プロセス内の呼び出し元は任意の IpcValue を構築できる。
+    static IPC_BOUNDARY_JSON: LazyLock<String> =
+        LazyLock::new(|| repository_text("rust/pokecon/registry/ipc_boundary.json"));
+    let manifest = parse_json(&IPC_BOUNDARY_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "IPC boundary manifest schema_version must be 1 (AR-11-37)"
+    );
+
+    // (a) Manifest exact-pin: envelope kind・closed 値・最大 payload・非公開
+    // marker・非公開 case 名のいずれの無言の変更もここで失敗させる。意図的な
+    // 変更は manifest とこの期待集合を同時に更新する (AR-11-36 policy pin 流儀)。
+    let envelope_kinds = manifest["envelope_kinds"]
+        .as_array()
+        .expect("IPC boundary manifest must define an envelope_kinds array")
+        .iter()
+        .map(|kind| {
+            kind.as_str()
+                .expect("IPC boundary envelope kind must be a string")
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        envelope_kinds,
+        BTreeSet::from(["request", "response", "error", "event", "log"]),
+        "envelope kinds must match the reviewed 5-kind set exactly (AR-11-37)"
+    );
+    let closed_values = manifest["closed_values"]
+        .as_array()
+        .expect("IPC boundary manifest must define a closed_values array")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("IPC boundary closed value must be a string")
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        closed_values,
+        BTreeSet::from([
+            "nil", "bool", "int", "uint", "float", "str", "bin", "array", "map_str"
+        ]),
+        "closed values must match the reviewed 9-variant set exactly (AR-11-37)"
+    );
+    assert_eq!(
+        manifest["maximum_payload_bytes"], 1_048_576,
+        "maximum payload must be 1048576 bytes (AR-11-37)"
+    );
+    let forbidden_markers = manifest["forbidden_wire_markers"]
+        .as_array()
+        .expect("IPC boundary manifest must define a forbidden_wire_markers array")
+        .iter()
+        .map(|marker| {
+            marker
+                .as_str()
+                .expect("IPC boundary forbidden wire marker must be a string")
+        })
+        .collect::<BTreeSet<_>>();
+    assert!(
+        !forbidden_markers.is_empty(),
+        "forbidden wire markers must be non-empty so the pin cannot pass vacuously (AR-11-37)"
+    );
+    assert_eq!(
+        forbidden_markers,
+        BTreeSet::from([
+            "lua_value",
+            "native_handle",
+            "python_object",
+            "rust_arc",
+            "socket",
+            "token"
+        ]),
+        "forbidden wire markers must match the reviewed set exactly (AR-11-37)"
+    );
+    let nonpublic_cases = manifest["nonpublic_cases"]
+        .as_array()
+        .expect("IPC boundary manifest must define a nonpublic_cases array")
+        .iter()
+        .map(|case| {
+            case.as_str()
+                .expect("IPC boundary non-public case must be a string")
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        nonpublic_cases,
+        BTreeSet::from([
+            "empty_op_string",
+            "nested_ext_in_map_value",
+            "non_string_map_key",
+            "top_level_fixext4_timestamp",
+            "trailing_second_object",
+            "unknown_envelope_field",
+            "unknown_error_payload_field"
+        ]),
+        "non-public cases must match the reviewed 7-case set exactly (AR-11-37)"
+    );
+
+    // (b) Source drift: manifest の各値が実 source に対応すること。
+    let schema = repository_text("rust/pokecon/src/worker/ipc/schema.rs");
+    for (short, declaration) in [
+        ("nil", "    Nil,"),
+        ("bool", "    Bool(bool),"),
+        ("int", "    Integer(i64),"),
+        ("uint", "    Unsigned(u64),"),
+        ("float", "    Float(f64),"),
+        ("str", "    String(String),"),
+        ("bin", "    Binary(Vec<u8>),"),
+        ("array", "    Array(Vec<Self>),"),
+        ("map_str", "    Map(BTreeMap<String, Self>),"),
+    ] {
+        assert!(
+            closed_values.contains(short),
+            "closed value {short} must be pinned in the manifest (AR-11-37)"
+        );
+        assert!(
+            schema.contains(declaration),
+            "schema.rs must declare the IpcValue variant {declaration} for closed value {short} (AR-11-37)"
+        );
+    }
+    let codec = repository_text("rust/pokecon/src/worker/ipc/codec.rs");
+    assert!(
+        codec.contains("pub const MAX_PAYLOAD_BYTES: usize = 1_048_576;"),
+        "codec.rs must pin MAX_PAYLOAD_BYTES to the manifest value (AR-11-37)"
+    );
+    let protocol = parse_json(&repository_text("rust/pokecon/registry/protocol.json"));
+    let protocol_kinds = protocol["ipc"]["kinds"]
+        .as_array()
+        .expect("protocol registry must define ipc.kinds")
+        .iter()
+        .map(|kind| {
+            kind.as_str()
+                .expect("protocol registry ipc kind must be a string")
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        protocol_kinds, envelope_kinds,
+        "protocol.json ipc.kinds must match the manifest envelope kinds (AR-11-37)"
+    );
+
+    // (c) Fixture liveness: manifest の各非公開 case 名が fixture 内に実在し、
+    // 1:1 に対応すること (typo で検査が空回りしないこと)。
+    let fixture = repository_text("rust/pokecon/tests/fixtures/ipc_nonpublic_payloads.rs");
+    assert!(
+        fixture.contains("AR-11-37 intentional non-public wire fixture"),
+        "non-public fixture must carry its AR-11-37 header marker"
+    );
+    assert!(
+        fixture.contains("pub const CASES"),
+        "non-public fixture must define the pub const CASES array (AR-11-37)"
+    );
+    for name in &nonpublic_cases {
+        assert!(
+            fixture.contains(*name),
+            "non-public case {name} must appear in the fixture 1:1 without typos (AR-11-37)"
+        );
+    }
+
+    // (d) Fail-closed sentinel controls: 空名の拒否と未知 case の検出。
+    let is_valid_case_name = |name: &str| !name.trim().is_empty();
+    assert!(
+        !is_valid_case_name(""),
+        "empty case name must be rejected (AR-11-37 control)"
+    );
+    assert!(
+        is_valid_case_name("empty_op_string"),
+        "pinned case name must count as valid (AR-11-37 control)"
+    );
+    assert!(
+        !nonpublic_cases.contains("AR-11-37-sentinel-unknown-case"),
+        "unknown case must not match the pinned set (AR-11-37 control)"
+    );
+    assert!(
+        nonpublic_cases.contains("empty_op_string"),
+        "pinned case must be found in the set (AR-11-37 control)"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "2e648659dcb189312369b542ef78b3aa511cc99afdfe92b282820867f86b9c9b";
+      canonicalFlakeHash = "00d13ef281df515b008be99c39a562877767639efe5b5a0cb751d963616a5dc8";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -486,6 +486,7 @@
               "rust/pokecon/registry/dependency_edges.json"
               "rust/pokecon/registry/foundation.json"
               "rust/pokecon/registry/generation.json"
+              "rust/pokecon/registry/ipc_boundary.json"
               "rust/pokecon/registry/ownership.json"
               "rust/pokecon/tests"
               "rust-toolchain.toml"
@@ -758,7 +759,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "f32d3cd289b5fd6089dce976a9dd4eff588805b2a0b77310c6e97d96345c5d1f";
+          expectedAuditTestHash = "92dcd0120e1af6028976e0eddbf7b42db89bcc259bf1ed173b7dd8ccc6c457db";
 
           workspaceMemberPaths = [
             "rust/pokecon"

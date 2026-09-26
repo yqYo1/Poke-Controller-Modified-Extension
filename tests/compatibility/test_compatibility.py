@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from scripts.compatibility.promote import (
     load_candidates,
     load_history,
     persist_result,
+    promotion_failures,
     record_sha256,
     validate_decision_results,
     validate_history,
@@ -431,3 +433,115 @@ def test_compatibility_promotion_failure_emits_no_success_report(
     with pytest.raises(RuntimeError, match="drift"):
         main()
     assert capsys.readouterr().out == ""
+
+
+def test_failed_evaluation_leaves_fixed_baseline_untouched(
+    tmp_path: Path,
+) -> None:
+    candidates_path, history_path = write_ledger(tmp_path)
+    fixed_manifest = tmp_path / "fixed-manifest.json"
+    fixed_manifest.write_text(
+        json.dumps({"baselines": [], "schema_version": 1}, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    fixed_results = tmp_path / "fixed-results.json"
+    fixed_results.write_text(
+        serialized_results(passing_compatibility_results()),
+        encoding="utf-8",
+    )
+    result_directory = tmp_path / "results"
+    durable_result = result_directory / "candidate-one.json"
+    persist_result(result_directory, "candidate-one", passing_result())
+
+    fixed_digests = {
+        path: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (
+            candidates_path,
+            fixed_manifest,
+            fixed_results,
+            durable_result,
+        )
+    }
+    history_before = history_path.read_bytes()
+
+    failing = copy.deepcopy(passing_result())
+    failing["result"] = "failed"
+    candidate = load_candidates(candidates_path)["candidate-one"]
+    assert "candidate_verification_failed" in promotion_failures(candidate, failing)
+    with pytest.raises(ValueError, match="immutable once written"):
+        persist_result(result_directory, "candidate-one", failing)
+
+    assert history_path.read_bytes() == history_before
+    assert len(load_history(history_path)) == 1
+    for path, digest in fixed_digests.items():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+
+
+def test_tampered_fixed_results_fails_check_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    serialized = serialized_results(results)
+    output.write_text(serialized, encoding="utf-8")
+    output.write_text(serialized.replace("d" * 64, "0" * 64), encoding="utf-8")
+    assert output.read_text(encoding="utf-8") != serialized
+    monkeypatch.setattr(sys, "argv", check_argv(output, tmp_path))
+
+    with pytest.raises(RuntimeError, match="drift"):
+        main()
+    assert capsys.readouterr().out == ""
+
+
+def test_quarantined_decision_appends_record_without_promotion(
+    tmp_path: Path,
+) -> None:
+    candidates_path, history_path = write_ledger(tmp_path)
+    candidates = load_candidates(candidates_path)
+    records = load_history(history_path)
+    candidates_before = candidates_path.read_bytes()
+    history_before = history_path.read_bytes()
+
+    result = copy.deepcopy(passing_result())
+    api_surface = result["api_surface"]
+    assert isinstance(api_surface, dict)
+    api_surface["breaking_changes"] = ["public_api_removed"]
+    api_surface["result"] = "breaking"
+
+    result_directory = tmp_path / "results"
+    persist_result(result_directory, "candidate-one", result)
+    decision = append_decision(
+        history_path,
+        records,
+        candidates["candidate-one"],
+        result,
+        "2026-07-22T00:00:00Z",
+    )
+    assert decision["kind"] == "quarantined"
+
+    updated = load_history(history_path)
+    assert len(updated) == len(records) + 1
+    assert updated[-1]["kind"] == "quarantined"
+    assert updated[-1]["previous_sha256"] == records[-1]["record_sha256"]
+    assert updated[-1]["record_sha256"] == record_sha256(updated[-1])
+    validate_history(updated, candidates)
+    validate_decision_results(updated, result_directory)
+    assert all(record.get("kind") != "promoted" for record in updated)
+    assert candidates_path.read_bytes() == candidates_before
+    assert history_path.read_bytes() != history_before

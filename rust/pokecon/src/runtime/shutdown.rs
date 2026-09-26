@@ -177,7 +177,7 @@ async fn wait_for_os_signal(ready: oneshot::Sender<()>) -> io::Result<OsSignal> 
 
 #[cfg(test)]
 mod tests {
-    use super::{ShutdownCoordinator, ShutdownReason};
+    use super::{OsSignal, ShutdownCoordinator, ShutdownReason, install_os_signal_forwarder};
 
     #[tokio::test]
     async fn first_shutdown_reason_wins() {
@@ -241,5 +241,57 @@ mod tests {
             ShutdownReason::FatalError(format!("race-{winner}"))
         );
         assert!(!coordinator.request(ShutdownReason::StartupProbe));
+    }
+
+    // NOTE: `install_os_signal_forwarder` registers process-wide OS signal
+    // streams for this test binary (harmless here: these tests never send real
+    // OS signals; signal-delivery coverage lives in process-level startup.rs
+    // tests and is intentionally not duplicated here).
+    #[tokio::test]
+    async fn signal_forwarder_completes_immediately_when_coordinator_already_cancelled() {
+        let coordinator = ShutdownCoordinator::new();
+        assert!(coordinator.request(ShutdownReason::DesktopExit));
+        let handle = install_os_signal_forwarder(coordinator.clone()).await;
+        let completed = tokio::time::timeout(std::time::Duration::from_secs(1), handle).await;
+        assert!(
+            completed.is_ok(),
+            "forwarder task leaked despite shutdown already requested"
+        );
+    }
+
+    #[tokio::test]
+    async fn signal_forwarder_stays_pending_until_shutdown_requested() {
+        let coordinator = ShutdownCoordinator::new();
+        let mut handle = install_os_signal_forwarder(coordinator.clone()).await;
+        // Registration is done once `install_os_signal_forwarder` returns; no
+        // signal arrives, so the task must stay pending on this short bound.
+        let pending =
+            tokio::time::timeout(std::time::Duration::from_millis(100), &mut handle).await;
+        assert!(
+            pending.is_err(),
+            "forwarder task completed before any shutdown was requested"
+        );
+        assert!(coordinator.request(ShutdownReason::DesktopExit));
+        let completed = tokio::time::timeout(std::time::Duration::from_secs(1), handle).await;
+        assert!(
+            completed.is_ok(),
+            "forwarder task did not complete after shutdown was requested"
+        );
+        assert_eq!(coordinator.reason(), Some(ShutdownReason::DesktopExit));
+    }
+
+    #[tokio::test]
+    async fn signal_reason_first_writer_survives_later_requests() {
+        let coordinator = ShutdownCoordinator::new();
+        assert!(coordinator.request(ShutdownReason::Signal(OsSignal::Interrupt)));
+        assert!(!coordinator.request(ShutdownReason::FatalError("late".into())));
+        assert_eq!(
+            coordinator.reason(),
+            Some(ShutdownReason::Signal(OsSignal::Interrupt))
+        );
+        assert_eq!(
+            coordinator.cancelled().await,
+            ShutdownReason::Signal(OsSignal::Interrupt)
+        );
     }
 }

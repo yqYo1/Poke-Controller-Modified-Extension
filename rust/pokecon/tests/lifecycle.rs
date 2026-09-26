@@ -1106,3 +1106,137 @@ fn camera_shutdown_timeout_retains_fallback_at_manager_level() {
     assert!(second.is_err());
     assert!(manager.ring().read_published().unwrap().is_some());
 }
+
+#[tokio::test]
+async fn shutdown_all_force_kills_worker_that_acknowledges_but_does_not_exit() {
+    let supervisor = WorkerSupervisor::new();
+    let safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ack-then-hang"),
+            safety.clone(),
+        )
+        .await
+        .expect("ack-then-hang fixture starts");
+
+    let reports = supervisor.shutdown_all(Duration::from_millis(500)).await;
+    assert_eq!(
+        reports.len(),
+        1,
+        "only the script worker is supervised: {reports:?}"
+    );
+    let (kind, result) = reports.into_iter().next().expect("one script report");
+    assert_eq!(kind, WorkerKind::Script);
+    let report = result
+        .as_ref()
+        .expect("acknowledging but hung worker is reaped");
+    assert!(
+        report.cooperative_acknowledged,
+        "the shutdown ack must be observed: {report:?}"
+    );
+    assert!(
+        report.forced,
+        "a worker that acks but never exits must be force-killed: {report:?}"
+    );
+    assert!(
+        !report.exit.success,
+        "a forced kill must not look like a clean exit: {report:?}"
+    );
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    safety.assert_neutral_once();
+}
+
+#[tokio::test]
+async fn repeated_shutdown_all_is_idempotent_and_retains_final_state() {
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ack-then-hang"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("script fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("dynamic fixture starts");
+
+    let first = supervisor.shutdown_all(Duration::from_millis(500)).await;
+    assert_eq!(first.len(), 2, "both workers are supervised: {first:?}");
+    for (kind, result) in &first {
+        let report = result.as_ref().expect("first shutdown reaps the worker");
+        match kind {
+            WorkerKind::Script => {
+                assert!(
+                    report.cooperative_acknowledged,
+                    "ack-then-hang script worker must acknowledge: {report:?}"
+                );
+                assert!(
+                    report.forced,
+                    "ack-then-hang script worker must still be forced: {report:?}"
+                );
+            }
+            WorkerKind::Dynamic => {
+                assert!(
+                    !report.cooperative_acknowledged,
+                    "silent dynamic worker must not acknowledge: {report:?}"
+                );
+                assert!(
+                    report.forced,
+                    "silent dynamic worker must be forced: {report:?}"
+                );
+            }
+        }
+        assert!(
+            !report.exit.success,
+            "{kind:?} forced kill must not look like a clean exit: {report:?}"
+        );
+    }
+
+    let second = tokio::time::timeout(
+        Duration::from_secs(1),
+        supervisor.shutdown_all(Duration::from_millis(500)),
+    )
+    .await
+    .expect("repeated shutdown completes without re-timing out");
+    assert_eq!(second.len(), 2, "both workers report again: {second:?}");
+    for (kind, result) in &second {
+        let report = result
+            .as_ref()
+            .expect("repeated shutdown retains the final state");
+        assert!(
+            !report.cooperative_acknowledged,
+            "{kind:?} repeated stop must not re-acknowledge: {report:?}"
+        );
+        assert!(
+            !report.forced,
+            "{kind:?} repeated stop must not re-force: {report:?}"
+        );
+        assert!(
+            !report.exit.success,
+            "{kind:?} repeated stop must retain the forced exit: {report:?}"
+        );
+    }
+
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+}

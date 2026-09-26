@@ -993,4 +993,83 @@ mod tests {
         abort_and_join(server_task).await;
         abort_and_join(signal_task).await;
     }
+
+    #[tokio::test]
+    async fn completed_server_task_result_clean_completion_requests_fatal_error() {
+        let shutdown = ShutdownCoordinator::new();
+
+        let result = completed_server_task_result(&shutdown, Ok(Ok(())));
+
+        assert!(matches!(
+            result.early_task_error,
+            Some(EarlyRuntimeTaskError::Server(AppError::ServerStopped))
+        ));
+        assert!(result.server_task_consumed);
+        assert!(!result.signal_task_consumed);
+        assert_eq!(
+            shutdown.reason(),
+            Some(ShutdownReason::FatalError(
+                "axum server stopped before shutdown was requested".to_owned()
+            ))
+        );
+
+        let shutdown = ShutdownCoordinator::new();
+        assert!(shutdown.request(ShutdownReason::Signal(OsSignal::Interrupt)));
+
+        let result = completed_server_task_result(&shutdown, Ok(Ok(())));
+
+        assert!(matches!(
+            result.early_task_error,
+            Some(EarlyRuntimeTaskError::Server(AppError::ServerStopped))
+        ));
+        assert!(result.server_task_consumed);
+        assert!(!result.signal_task_consumed);
+        assert_eq!(
+            shutdown.reason(),
+            Some(ShutdownReason::Signal(OsSignal::Interrupt))
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_shutdown_or_runtime_task_returns_immediately_for_cancelled_shutdown() {
+        let shutdown = ShutdownCoordinator::new();
+        assert!(shutdown.request(ShutdownReason::StartupProbe));
+        let mut server_task = tokio::spawn(async { Ok::<(), io::Error>(()) });
+        let mut signal_task = tokio::spawn(pending::<()>());
+
+        let result = timeout(
+            TEST_TIMEOUT,
+            wait_for_shutdown_or_runtime_task(&shutdown, &mut server_task, &mut signal_task),
+        )
+        .await
+        .expect("pre-cancelled shutdown must win before the deadline");
+
+        assert!(result.early_task_error.is_none());
+        assert!(!result.server_task_consumed);
+        assert!(!result.signal_task_consumed);
+        assert_eq!(shutdown.reason(), Some(ShutdownReason::StartupProbe));
+        timeout(TEST_TIMEOUT, server_task)
+            .await
+            .expect("completed listener must remain joinable after the biased shutdown win")
+            .expect("listener task must not panic")
+            .expect("injected listener completion must remain successful");
+        abort_and_join(signal_task).await;
+    }
+
+    #[tokio::test]
+    async fn finish_server_task_aborts_hanging_serve_future_after_deadline() {
+        // A hanging serve future exercises the SERVER_STOP_TIMEOUT (~2s) abort
+        // path, so this test intentionally takes ~2s.
+        let task = tokio::spawn(pending::<io::Result<()>>());
+
+        let started = std::time::Instant::now();
+        let outcome = finish_server_task(task).await;
+        let elapsed = started.elapsed();
+
+        outcome.expect("aborted hanging serve task must resolve to Ok(())");
+        assert!(
+            elapsed >= SERVER_STOP_TIMEOUT,
+            "hanging serve task must wait out the stop deadline (elapsed: {elapsed:?})"
+        );
+    }
 }

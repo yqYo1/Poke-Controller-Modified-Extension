@@ -6,6 +6,10 @@
       "owns": [
         "composition、startup／shutdown順、service接続、router合成"
       ],
+      "non_responsibilities": [
+        "device wireの重複実装",
+        "frontendのcanonical state"
+      ],
       "owner_symbols": [
         "run_cli",
         "MainError"
@@ -13,12 +17,17 @@
       "source_files": [
         "rust/pokecon/src/entrypoint.rs",
         "rust/pokecon/src/lib.rs"
-      ]
+      ],
+      "note": "composition rootはserviceを接続するためowner symbolを参照する。正の接続以外の責務を持たないことはsymbol scanではなくreviewで担保するためforbidden symbolを主張しない。"
     },
     {
       "id": "production",
       "owns": [
         "composition、startup／shutdown順、service接続、router合成"
+      ],
+      "non_responsibilities": [
+        "device wireの重複実装",
+        "frontendのcanonical state"
       ],
       "owner_symbols": [
         "ProductionRuntime"
@@ -26,12 +35,18 @@
       "source_files": [
         "rust/pokecon/src/production.rs",
         "rust/pokecon/src/lib.rs"
-      ]
+      ],
+      "note": "composition rootはCameraManager／SerialManager／StateHubを正当に接続するため、これらをforbidden symbolにできない。device wireの重複実装を持たないことはreviewで担保する。"
     },
     {
       "id": "application_backend",
       "owns": [
         "StateHubとresource serviceのprojection、mutation gate、command／profile service接続"
+      ],
+      "non_responsibilities": [
+        "TCP listener",
+        "worker native object",
+        "frontend store"
       ],
       "owner_symbols": [
         "ApplicationBackend",
@@ -39,12 +54,22 @@
       ],
       "source_files": [
         "rust/pokecon/src/application_backend.rs"
+      ],
+      "forbidden_symbols": [
+        "TcpListener"
+      ],
+      "forbidden_scan_files": [
+        "rust/pokecon/src/application_backend.rs"
       ]
     },
     {
       "id": "server",
       "owns": [
         "REST／WebSocket／WebRTCのwire、security、公開schema"
+      ],
+      "non_responsibilities": [
+        "camera／serial native handle",
+        "Rust private object"
       ],
       "owner_symbols": [
         "BoundServer",
@@ -55,6 +80,15 @@
         "rust/pokecon/src/server/mod.rs",
         "rust/pokecon/src/server/router.rs",
         "rust/pokecon/src/server/security.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager"
+      ],
+      "forbidden_scan_files": [
+        "rust/pokecon/src/server/mod.rs",
+        "rust/pokecon/src/server/router.rs",
+        "rust/pokecon/src/server/security.rs"
       ]
     },
     {
@@ -62,23 +96,49 @@
       "owns": [
         "InputArbiter、source generation、release／neutral投影"
       ],
+      "non_responsibilities": [
+        "UI接続",
+        "worker process",
+        "serial port"
+      ],
       "owner_symbols": [
         "InputArbiter"
       ],
       "source_files": [
         "rust/pokecon/src/device/input.rs",
         "rust/pokecon/src/device/mod.rs"
-      ]
+      ],
+      "forbidden_symbols": [
+        "SerialManager",
+        "WorkerSupervisor"
+      ],
+      "forbidden_scan_files": [
+        "rust/pokecon/src/device/input.rs"
+      ],
+      "note": "device/mod.rsはSerialManagerの正当なre-exportを含むため、forbidden scanはarbiter本体のdevice/input.rsに限定する。"
     },
     {
       "id": "device_serial",
       "owns": [
         "native port、selector、codec、接続／切断／retry"
       ],
+      "non_responsibilities": [
+        "WebSocket state",
+        "camera frame",
+        "script object"
+      ],
       "owner_symbols": [
         "SerialManager"
       ],
       "source_files": [
+        "rust/pokecon/src/device/serial/manager.rs",
+        "rust/pokecon/src/device/serial/mod.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "StateHub"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/device/serial/manager.rs",
         "rust/pokecon/src/device/serial/mod.rs"
       ]
@@ -88,10 +148,23 @@
       "owns": [
         "capture session、latest frame、shared ring、writer shutdown"
       ],
+      "non_responsibilities": [
+        "media transport",
+        "frontend",
+        "worker handle"
+      ],
       "owner_symbols": [
         "CameraManager"
       ],
       "source_files": [
+        "rust/pokecon/src/camera/manager.rs",
+        "rust/pokecon/src/camera/mod.rs"
+      ],
+      "forbidden_symbols": [
+        "TcpListener",
+        "WorkerSupervisor"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/camera/manager.rs",
         "rust/pokecon/src/camera/mod.rs"
       ]
@@ -101,10 +174,22 @@
       "owns": [
         "child process、IPC、generation phase、stop／reap"
       ],
+      "non_responsibilities": [
+        "camera／serial／socket native handle"
+      ],
       "owner_symbols": [
         "WorkerSupervisor"
       ],
       "source_files": [
+        "rust/pokecon/src/worker/supervisor.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager",
+        "StateHub",
+        "TcpListener"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/worker/supervisor.rs"
       ]
     },
@@ -113,11 +198,23 @@
       "owns": [
         "child process、IPC、generation phase、stop／reap"
       ],
+      "non_responsibilities": [
+        "camera／serial／socket native handle"
+      ],
       "owner_symbols": [
         "GenerationManager",
         "GenerationPhase"
       ],
       "source_files": [
+        "rust/pokecon/src/worker/generation.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager",
+        "StateHub",
+        "TcpListener"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/worker/generation.rs"
       ]
     },
@@ -126,11 +223,25 @@
       "owns": [
         "child側Python／Lua runtime、IPC protocol、child task cleanup"
       ],
+      "non_responsibilities": [
+        "parent側のhardware resource",
+        "server listener"
+      ],
       "owner_symbols": [
         "DynamicWorkerRuntime",
         "ScriptWorkerRuntime"
       ],
       "source_files": [
+        "rust/pokecon/src/worker_binary/mod.rs",
+        "rust/pokecon/src/worker_binary/dynamic/dispatch.rs",
+        "rust/pokecon/src/worker_binary/script/runtime.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager",
+        "TcpListener"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/worker_binary/mod.rs",
         "rust/pokecon/src/worker_binary/dynamic/dispatch.rs",
         "rust/pokecon/src/worker_binary/script/runtime.rs"
@@ -141,11 +252,23 @@
       "owns": [
         "stage→commit、callback／option／command generation"
       ],
+      "non_responsibilities": [
+        "device handle",
+        "process-wide shutdown ownership"
+      ],
       "owner_symbols": [
         "EvaluationTransaction",
         "TransactionError"
       ],
       "source_files": [
+        "rust/pokecon/src/dynamic/transaction.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager",
+        "ShutdownCoordinator"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/dynamic/transaction.rs"
       ]
     },
@@ -154,6 +277,10 @@
       "owns": [
         "stage→commit、callback／option／command generation"
       ],
+      "non_responsibilities": [
+        "device handle",
+        "process-wide shutdown ownership"
+      ],
       "owner_symbols": [
         "InMemoryDynamicHost",
         "StartupDynamicHost"
@@ -161,18 +288,38 @@
       "source_files": [
         "rust/pokecon/src/dynamic/host.rs",
         "rust/pokecon/src/dynamic_host.rs"
-      ]
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "ShutdownCoordinator"
+      ],
+      "forbidden_scan_files": [
+        "rust/pokecon/src/dynamic/host.rs",
+        "rust/pokecon/src/dynamic_host.rs"
+      ],
+      "note": "dynamic_host.rsはSerialManagerを正当に参照するためforbidden symbolに含めない。"
     },
     {
       "id": "settings",
       "owns": [
         "canonical settings／protocol／compatibility inputと生成"
       ],
+      "non_responsibilities": [
+        "generated frontend outputの直接編集",
+        "runtime device state"
+      ],
       "owner_symbols": [
         "SignedManifest",
         "ManifestOutput"
       ],
       "source_files": [
+        "rust/pokecon/src/settings/manifest.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/settings/manifest.rs"
       ]
     },
@@ -181,11 +328,23 @@
       "owns": [
         "canonical settings／protocol／compatibility inputと生成"
       ],
+      "non_responsibilities": [
+        "generated frontend outputの直接編集",
+        "runtime device state"
+      ],
       "owner_symbols": [
         "SettingsRegistry",
         "settings_json_schema"
       ],
       "source_files": [
+        "rust/pokecon/src/contracts/model.rs",
+        "rust/pokecon/src/contracts/settings_artifacts.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/contracts/model.rs",
         "rust/pokecon/src/contracts/settings_artifacts.rs"
       ]
@@ -195,23 +354,39 @@
       "owns": [
         "canonical settings／protocol／compatibility inputと生成"
       ],
+      "non_responsibilities": [
+        "generated frontend outputの直接編集",
+        "runtime device state"
+      ],
       "owner_symbols": [],
       "source_files": [
         "rust/pokecon/registry/foundation.json",
         "rust/pokecon/registry/generation.json",
         "rust/pokecon/registry/compatibility.json"
       ],
-      "note": "registry/ JSON inputsはRust symbolを持たない正準入力であるためowner symbolを主張しない。schema_versionキーで版を固定する。"
+      "note": "registry/ JSON inputsはRust symbolを持たない正準入力であるためowner symbolを主張しない。schema_versionキーで版を固定する。JSON入力にRust symbol scanは適用できないためforbidden symbolも主張しない。"
     },
     {
       "id": "runtime_shutdown",
       "owns": [
         "first-writer-wins reason、process cancellation"
       ],
+      "non_responsibilities": [
+        "各resourceの個別解放順を独自に作ること"
+      ],
       "owner_symbols": [
         "ShutdownCoordinator"
       ],
       "source_files": [
+        "rust/pokecon/src/runtime/shutdown.rs",
+        "rust/pokecon/src/runtime/mod.rs"
+      ],
+      "forbidden_symbols": [
+        "CameraManager",
+        "SerialManager",
+        "StateHub"
+      ],
+      "forbidden_scan_files": [
         "rust/pokecon/src/runtime/shutdown.rs",
         "rust/pokecon/src/runtime/mod.rs"
       ]
@@ -221,23 +396,33 @@
       "owns": [
         "server projectionの表示と公開contract利用"
       ],
+      "non_responsibilities": [
+        "canonical state",
+        "hardware handle",
+        "Rust private module"
+      ],
       "owner_symbols": [],
       "source_files": [
         "web/src/lib/api.ts",
         "web/src/lib/camera-selector.ts"
       ],
-      "note": "frontendはRust crate外の表示層でありRust owner symbolを持たない。列挙sourceは公開contractを利用する側の実在fileである。"
+      "note": "frontendはRust crate外の表示層でありRust owner symbolを持たない。列挙sourceは公開contractを利用する側の実在fileである。native handle境界はpublic-wire contract testで検査するためforbidden symbol scanは主張しない。"
     },
     {
       "id": "generated_client",
       "owns": [
         "server projectionの表示と公開contract利用"
       ],
+      "non_responsibilities": [
+        "canonical state",
+        "hardware handle",
+        "Rust private module"
+      ],
       "owner_symbols": [],
       "source_files": [
         "web/src/lib/api/openapi.ts"
       ],
-      "note": "生成clientはopenapi-typescript生成物でありRust owner symbolを持たない。直接編集せず再生成する。"
+      "note": "生成clientはopenapi-typescript生成物でありRust owner symbolを持たない。直接編集せず再生成する。native handle境界はpublic-wire contract testで検査するためforbidden symbol scanは主張しない。"
     }
   ]
 }

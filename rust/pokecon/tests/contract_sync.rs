@@ -2715,5 +2715,224 @@ fn module_ownership_manifest_pins_owner_symbols() {
     }
 }
 
+#[allow(clippy::too_many_lines)]
+#[test]
+fn forbidden_ownership_manifest_is_enforced() {
+    // AR-11-34: docs/ARCHITECTURE_HANDOFF.md 3.1「所有しない責務」columnの
+    // machine-readable pin (rust/pokecon/registry/ownership.json の
+    // non_responsibilities／forbidden_symbols／forbidden_scan_files)。
+    // 各 module が所有しない責務の代表 symbol を列挙 source 内で参照しないこと、
+    // かつ代表 symbol が他所に実在すること（typo で検査が空回りしないこと）を検査する。
+    // §9.2 の全 forbidden-edge 被覆は主張しない: manifest に列挙された edge のみを
+    // 検査し、§3.2 の重複所有検査 1〜5 の残りは既存 test の範囲に留める
+    // （module_ownership_table_has_unique_owners_without_drift の限定と同じ流儀）。
+    static OWNERSHIP_JSON: LazyLock<String> =
+        LazyLock::new(|| repository_text("rust/pokecon/registry/ownership.json"));
+    let manifest = parse_json(&OWNERSHIP_JSON);
+    let modules = manifest["modules"]
+        .as_array()
+        .expect("ownership manifest must define a modules array");
+    assert!(
+        !modules.is_empty(),
+        "ownership manifest must pin at least one module"
+    );
+
+    // Fail-closed predicate helpers: the exact predicates asserted below.
+    let is_valid_symbol = |symbol: &str| !symbol.trim().is_empty();
+    let forbidden_absent = |symbol: &str, texts: &[&str]| {
+        !symbol.is_empty() && texts.iter().all(|text| !text.contains(symbol))
+    };
+
+    // Fail-closed control 1 (empty-input rejection): an empty symbol must be
+    // rejected, so a vacuous manifest entry cannot pass this test.
+    assert!(
+        !is_valid_symbol(""),
+        "empty forbidden symbol must be rejected (AR-11-34 control)"
+    );
+    assert!(
+        !forbidden_absent("", &["some source text"]),
+        "empty symbol must never count as absent (AR-11-34 control)"
+    );
+
+    // Fail-closed control 2 (sentinel injection): the absence predicate used
+    // below must detect a synthetic forbidden occurrence, proving the scan is
+    // not broken.
+    let sentinel = "AR-11-34-sentinel-forbidden";
+    let injected = format!("synthetic forbidden {sentinel} reference");
+    assert!(
+        !forbidden_absent(sentinel, &[&injected]),
+        "absence predicate must detect an injected sentinel occurrence (AR-11-34 control)"
+    );
+
+    // (a) Every entry declares its non-responsibilities from the 3.1 table and
+    // pairs them with forbidden symbols, or explains the gap in `note` instead
+    // of inventing symbols (AR-11-33 honesty pattern).
+    // (b) Each forbidden symbol is absent from every forbidden_scan_file.
+    let mut required_pins = BTreeMap::from([
+        ("server", vec!["CameraManager", "SerialManager"]),
+        ("application_backend", vec!["TcpListener"]),
+        ("worker_supervisor", vec!["StateHub"]),
+    ]);
+    for module in modules {
+        let id = module["id"]
+            .as_str()
+            .expect("ownership manifest module must have a string id");
+        let non_responsibilities = module["non_responsibilities"]
+            .as_array()
+            .unwrap_or_else(|| panic!("module {id} must declare non_responsibilities (AR-11-34)"));
+        assert!(
+            !non_responsibilities.is_empty(),
+            "module {id} must declare at least one non-responsibility"
+        );
+        let symbols = module["forbidden_symbols"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if symbols.is_empty() {
+            let note = module
+                .get("note")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            assert!(
+                !note.trim().is_empty(),
+                "module {id} without forbidden symbols must explain why in `note` \
+                 instead of inventing symbols (AR-11-34)"
+            );
+            continue;
+        }
+        let files = module["forbidden_scan_files"]
+            .as_array()
+            .unwrap_or_else(|| panic!("module {id} must declare forbidden_scan_files (AR-11-34)"));
+        assert!(
+            !files.is_empty(),
+            "module {id} must list at least one forbidden_scan_file"
+        );
+        let declared_sources: BTreeSet<&str> = module["source_files"]
+            .as_array()
+            .expect("ownership manifest module must declare source_files")
+            .iter()
+            .map(|file| {
+                file.as_str()
+                    .expect("ownership manifest source file must be a string")
+            })
+            .collect();
+        let mut texts = Vec::new();
+        for file in files {
+            let path = file
+                .as_str()
+                .expect("ownership manifest forbidden scan file must be a string");
+            assert!(
+                declared_sources.contains(path),
+                "module {id} forbidden_scan_file {path} must be one of its source_files"
+            );
+            texts.push(repository_text(path));
+        }
+        let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
+        for symbol in &symbols {
+            let symbol = symbol
+                .as_str()
+                .expect("ownership manifest forbidden symbol must be a string");
+            assert!(
+                is_valid_symbol(symbol),
+                "module {id} forbidden symbol must not be empty"
+            );
+            assert!(
+                forbidden_absent(symbol, &refs),
+                "module {id} must not reference forbidden symbol {symbol} in its forbidden_scan_files"
+            );
+        }
+        if let Some(required) = required_pins.remove(id) {
+            let listed: BTreeSet<&str> = symbols
+                .iter()
+                .map(|symbol| {
+                    symbol
+                        .as_str()
+                        .expect("ownership manifest forbidden symbol must be a string")
+                })
+                .collect();
+            for symbol in required {
+                assert!(
+                    listed.contains(symbol),
+                    "module {id} must pin required forbidden symbol {symbol} (AR-11-34)"
+                );
+            }
+        }
+    }
+    assert!(
+        required_pins.is_empty(),
+        "required forbidden pins must all be present in the manifest, missing: {required_pins:?}"
+    );
+
+    // (c) Liveness: every forbidden symbol occurs somewhere in
+    // rust/pokecon/src outside its own forbidden_scan_files, so a symbol typo
+    // cannot make the absence check vacuous.
+    let root = repository_root();
+    let mut rust_sources: Vec<(String, String)> = Vec::new();
+    let mut directories = vec![root.join("rust/pokecon/src")];
+    while let Some(directory) = directories.pop() {
+        let entries = fs::read_dir(&directory).unwrap_or_else(|error| {
+            panic!(
+                "rust source directory {} must be readable: {error}",
+                directory.display()
+            )
+        });
+        for entry in entries {
+            let entry = entry.expect("rust source directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                directories.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let relative = path
+                    .strip_prefix(root)
+                    .expect("rust source path must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("rust source {} must be readable: {error}", path.display())
+                });
+                rust_sources.push((relative, text));
+            }
+        }
+    }
+    assert!(
+        !rust_sources.is_empty(),
+        "rust/pokecon/src must contain at least one Rust source file"
+    );
+    for module in modules {
+        let id = module["id"]
+            .as_str()
+            .expect("ownership manifest module must have a string id");
+        let symbols = module["forbidden_symbols"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        if symbols.is_empty() {
+            continue;
+        }
+        let scanned: BTreeSet<&str> = module["forbidden_scan_files"]
+            .as_array()
+            .expect("module with forbidden symbols must declare forbidden_scan_files")
+            .iter()
+            .map(|file| {
+                file.as_str()
+                    .expect("ownership manifest forbidden scan file must be a string")
+            })
+            .collect();
+        for symbol in &symbols {
+            let symbol = symbol
+                .as_str()
+                .expect("ownership manifest forbidden symbol must be a string");
+            let live = rust_sources.iter().any(|(relative, text)| {
+                !scanned.contains(relative.as_str()) && text.contains(symbol)
+            });
+            assert!(
+                live,
+                "forbidden symbol {symbol} of module {id} must occur somewhere in \
+                 rust/pokecon/src outside its forbidden_scan_files (liveness, AR-11-34)"
+            );
+        }
+    }
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

@@ -192,7 +192,9 @@ mod tests {
     use tokio::io::{AsyncWriteExt, duplex};
 
     use super::{CodecError, MAX_PAYLOAD_BYTES, decode_payload, encode_frame, read_frame};
-    use crate::worker::ipc::{Envelope, IpcValue};
+    use crate::worker::ipc::{
+        Envelope, IpcErrorPayload, IpcValue, LogLevel, LogPayload, LogTarget,
+    };
 
     // AR-11-37 非公開 wire payload fixture (source として include; Cargo target
     // ではない。fixture 側の `pub` item のため fn 内ではなく module 直下に置く)。
@@ -400,5 +402,156 @@ mod tests {
         );
         // Sentinel control: 空 bytes は拒否される (空入力で pass しないこと)。
         assert!(decode_payload(&[]).is_err(), "empty bytes must be rejected");
+    }
+
+    #[test]
+    fn envelope_kinds_and_boundary_values_roundtrip() {
+        // AR-11-27 P2: full IPC payload corpus — all 5 envelope kinds ×
+        // boundary values, via encode_frame/decode_payload roundtrip.
+        // Float NaN is deliberately excluded: rmp_serde float
+        // canonicalization (±0, NaN bit patterns) is not pinned by the IPC
+        // contract, so exact equality after a wire roundtrip is only asserted
+        // for exactly-representable values.
+        fn nested_array(depth: usize) -> IpcValue {
+            // Leaf must be negative: a non-negative Integer serializes as a
+            // MessagePack positive fixint, which decodes back as Unsigned.
+            let mut value = IpcValue::Integer(-1);
+            for _ in 0..depth {
+                value = IpcValue::Array(vec![value]);
+            }
+            value
+        }
+
+        fn nested_map(depth: usize) -> IpcValue {
+            // Same positive-fixint canonicalization note as nested_array.
+            let mut value = IpcValue::Integer(-2);
+            for _ in 0..depth {
+                value = IpcValue::Map(BTreeMap::from([("n".to_owned(), value)]));
+            }
+            value
+        }
+
+        let kinds = vec![
+            Envelope::Request {
+                id: 1,
+                op: "worker.ping".to_owned(),
+                payload: IpcValue::Nil,
+            },
+            Envelope::Response {
+                id: 1,
+                op: Some("worker.ping".to_owned()),
+                payload: IpcValue::Bool(true),
+            },
+            Envelope::Response {
+                id: 2,
+                op: None,
+                payload: IpcValue::String("ok".to_owned()),
+            },
+            Envelope::Error {
+                id: 3,
+                op: "serial.send".to_owned(),
+                payload: IpcErrorPayload::new("SerialError", "failed")
+                    .expect("valid error payload"),
+            },
+            Envelope::Event {
+                op: "worker.ready".to_owned(),
+                payload: IpcValue::Binary(vec![0, 1, 2]),
+            },
+            Envelope::Log {
+                payload: LogPayload {
+                    level: LogLevel::Warning,
+                    message: "log-メッセージ-✓".to_owned(),
+                    target: LogTarget::Panel1,
+                },
+            },
+        ];
+        assert_eq!(kinds.len(), 6);
+        for envelope in &kinds {
+            let frame = encode_frame(envelope).expect("envelope kind encodes");
+            assert_eq!(
+                decode_payload(&frame[4..]).expect("envelope kind decodes"),
+                *envelope
+            );
+        }
+
+        // Near-limit probe: the limit applies to the MessagePack body
+        // (encode_frame checks the serialized body length, decode_payload
+        // checks the input slice, read_frame checks the length prefix before
+        // allocating). Measure the envelope overhead with an empty binary,
+        // then size the payload to stay under MAX_PAYLOAD_BYTES with slack
+        // for the wider bin32 header the large payload selects.
+        let overhead = {
+            let probe = Envelope::Event {
+                op: "boundary.near-limit".to_owned(),
+                payload: IpcValue::Binary(Vec::new()),
+            };
+            let frame = encode_frame(&probe).expect("probe encodes");
+            frame.len() - 4
+        };
+        let near_limit = IpcValue::Binary(vec![0x5A; MAX_PAYLOAD_BYTES - overhead - 16]);
+
+        let boundaries: Vec<(&str, IpcValue)> = vec![
+            ("empty-string", IpcValue::String(String::new())),
+            ("empty-binary", IpcValue::Binary(Vec::new())),
+            ("empty-array", IpcValue::Array(Vec::new())),
+            ("empty-map", IpcValue::Map(BTreeMap::new())),
+            ("u64-max", IpcValue::Unsigned(u64::MAX)),
+            ("i64-min", IpcValue::Integer(i64::MIN)),
+            ("nested-array-64", nested_array(64)),
+            ("nested-map-64", nested_map(64)),
+            ("near-limit-binary", near_limit),
+        ];
+        assert_eq!(boundaries.len(), 9);
+        for (label, payload) in &boundaries {
+            let envelope = Envelope::Event {
+                op: "boundary.value".to_owned(),
+                payload: payload.clone(),
+            };
+            let frame = encode_frame(&envelope)
+                .unwrap_or_else(|error| panic!("{label} boundary payload encodes: {error:?}"));
+            assert!(
+                frame.len() - 4 <= MAX_PAYLOAD_BYTES,
+                "{label} encoded body must stay under the limit"
+            );
+            assert_eq!(
+                decode_payload(&frame[4..])
+                    .unwrap_or_else(|error| panic!("{label} boundary payload decodes: {error:?}")),
+                envelope,
+                "{label} boundary payload must roundtrip exactly"
+            );
+        }
+    }
+
+    #[test]
+    fn oversize_payload_is_rejected_at_decode_or_encode() {
+        // AR-11-27 P2: both sides enforce MAX_PAYLOAD_BYTES on the MessagePack
+        // body — encode_frame rejects an envelope whose serialized body exceeds
+        // the limit, and decode_payload rejects an over-limit input slice
+        // before parsing (read_frame additionally rejects an over-limit length
+        // prefix before allocating; covered by
+        // oversize_prefix_is_rejected_before_payload_read).
+        let oversize = Envelope::Event {
+            op: "boundary.oversize".to_owned(),
+            payload: IpcValue::Binary(vec![0xA5; MAX_PAYLOAD_BYTES + 1]),
+        };
+        match encode_frame(&oversize) {
+            Err(CodecError::PayloadTooLarge { actual, maximum }) => {
+                assert_eq!(maximum, MAX_PAYLOAD_BYTES);
+                assert!(
+                    actual > MAX_PAYLOAD_BYTES,
+                    "actual {actual} must exceed the limit"
+                );
+            }
+            other => panic!("oversize envelope must be rejected at encode, got {other:?}"),
+        }
+
+        let raw = vec![0_u8; MAX_PAYLOAD_BYTES + 1];
+        match decode_payload(&raw) {
+            Err(CodecError::PayloadTooLarge { actual, maximum }) => {
+                assert_eq!(actual, MAX_PAYLOAD_BYTES + 1);
+                assert_eq!(maximum, MAX_PAYLOAD_BYTES);
+            }
+            other => panic!("oversize body must be rejected at decode, got {other:?}"),
+        }
     }
 }

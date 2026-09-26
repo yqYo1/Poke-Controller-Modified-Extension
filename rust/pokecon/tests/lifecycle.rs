@@ -567,6 +567,117 @@ async fn managed_worker_roundtrips_all_ipc_value_variants() {
     safety.assert_neutral_once();
 }
 
+#[tokio::test]
+async fn managed_worker_roundtrips_boundary_payloads() {
+    // AR-11-27 P2: boundary payload corpus through the real worker process.
+    // `worker.ping` discards its request payload and answers a fixed
+    // `{kind: "script"}` map, so "roundtrip" here means each boundary payload
+    // crosses the process boundary intact: the request encodes, frames, and
+    // decodes in the child without corrupting the connection, and the typed
+    // response matches exactly. (Float NaN is excluded: rmp_serde float
+    // canonicalization is not pinned by the IPC contract. The ~1MiB
+    // near-limit case stays in the codec unit tests to protect CI time.)
+    fn nested_array(depth: usize) -> IpcValue {
+        // Leaf must be negative: a non-negative Integer serializes as a
+        // MessagePack positive fixint, which decodes back as Unsigned.
+        let mut value = IpcValue::Integer(-1);
+        for _ in 0..depth {
+            value = IpcValue::Array(vec![value]);
+        }
+        value
+    }
+
+    fn nested_map(depth: usize) -> IpcValue {
+        // Same positive-fixint canonicalization note as nested_array.
+        let mut value = IpcValue::Integer(-2);
+        for _ in 0..depth {
+            value = IpcValue::Map(BTreeMap::from([("n".to_owned(), value)]));
+        }
+        value
+    }
+
+    let supervisor = WorkerSupervisor::new();
+    let safety = Arc::new(ControllerSafetyProbe::active());
+    let worker = supervisor
+        .spawn(
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Script),
+            safety.clone(),
+        )
+        .await
+        .expect("worker starts");
+    let mut diagnostics = worker
+        .take_diagnostics()
+        .expect("stderr diagnostic receiver is available once");
+
+    let expected = IpcValue::Map(BTreeMap::from([(
+        "kind".to_owned(),
+        IpcValue::String("script".to_owned()),
+    )]));
+    let corpus: Vec<(&str, IpcValue)> = vec![
+        ("unsigned-max", IpcValue::Unsigned(u64::MAX)),
+        ("integer-min", IpcValue::Integer(i64::MIN)),
+        ("empty-string", IpcValue::String(String::new())),
+        ("empty-binary", IpcValue::Binary(Vec::new())),
+        ("empty-array", IpcValue::Array(Vec::new())),
+        ("empty-map", IpcValue::Map(BTreeMap::new())),
+        ("nested-array-32", nested_array(32)),
+        ("nested-map-32", nested_map(32)),
+        ("moderate-binary", IpcValue::Binary(vec![0xA5; 64 * 1024])),
+        (
+            "moderate-string",
+            IpcValue::String("境界-✓".to_owned().repeat(1024)),
+        ),
+    ];
+    assert_eq!(corpus.len(), 10);
+
+    for (label, payload) in corpus {
+        let response = worker
+            .connection()
+            .request("worker.ping", payload)
+            .await
+            .unwrap_or_else(|error| {
+                panic!("{label} boundary payload crosses the process boundary: {error:?}")
+            });
+        assert_eq!(
+            response,
+            expected.clone(),
+            "{label} boundary payload must not corrupt the script ping response"
+        );
+    }
+
+    assert!(
+        worker.connection().disconnect_reason().is_none(),
+        "boundary payload corpus must not disconnect the worker"
+    );
+
+    let response = worker
+        .connection()
+        .request("worker.ping", IpcValue::Nil)
+        .await
+        .expect("worker stays alive after the boundary corpus");
+    assert_eq!(response, expected);
+
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(2))
+        .await
+        .expect("cooperative stop succeeds");
+    assert!(report.cooperative_acknowledged);
+    assert!(!report.forced);
+    if !report.exit.success {
+        let mut failure_diagnostics = Vec::new();
+        while let Ok(Some(diagnostic)) =
+            tokio::time::timeout(Duration::from_millis(100), diagnostics.recv()).await
+        {
+            failure_diagnostics.extend_from_slice(&diagnostic.bytes);
+        }
+        panic!(
+            "unexpected stop report: {report:?}; stderr: {}",
+            String::from_utf8_lossy(&failure_diagnostics)
+        );
+    }
+    safety.assert_neutral_once();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn dynamic_worker_runs_both_languages_over_bidirectional_ipc() {
     let temporary = TempDir::new().expect("temporary config root is created");

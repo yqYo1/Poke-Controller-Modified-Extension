@@ -2934,6 +2934,92 @@ fn forbidden_ownership_manifest_is_enforced() {
     }
 }
 
+static DEPENDENCY_USE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"use crate::([a-z0-9_]+)").expect("dependency edge regex must compile")
+});
+
+/// AR-11-35/AR-11-36 shared extractor: first-segment capture of a
+/// `use crate::<top>::...` line. Both the allowed-manifest test and the
+/// forbidden-edge test call this same function so the two scans cannot drift
+/// apart.
+fn extract_dependency_top_module(line: &str) -> Option<String> {
+    DEPENDENCY_USE_PATTERN
+        .captures(line)
+        .map(|captures| captures[1].to_owned())
+}
+
+/// AR-11-35/AR-11-36 shared source scan: fs-walk of
+/// rust/pokecon/src/**/*.rs, one captured edge per `use crate::<top>` line.
+/// The importer top module is the first path segment below src/; root files
+/// (e.g. production.rs) map via file stem (production). Self-edges (e.g.
+/// `use crate::worker::...` inside worker/) are excluded.
+fn scan_source_dependency_edges() -> (BTreeSet<(String, String)>, usize) {
+    let src_root = repository_root().join("rust/pokecon/src");
+    let mut observed = BTreeSet::new();
+    let mut scanned = 0;
+    let mut stack = vec![src_root.clone()];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
+            panic!("contract input {} must be readable: {error}", dir.display())
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                scanned += 1;
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let under_src = path
+                    .strip_prefix(&src_root)
+                    .expect("contract input must be below rust/pokecon/src");
+                let mut components = under_src.components();
+                let first = components
+                    .next()
+                    .expect("source path below src/ must be non-empty");
+                let importer = if components.next().is_none() {
+                    path.file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .expect("root source file must have a UTF-8 stem")
+                        .to_owned()
+                } else {
+                    first
+                        .as_os_str()
+                        .to_str()
+                        .expect("source directory name must be UTF-8")
+                        .to_owned()
+                };
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("contract input {relative} must be readable: {error}")
+                });
+                for line in text.lines() {
+                    if let Some(top) = extract_dependency_top_module(line)
+                        && top != importer
+                    {
+                        observed.insert((importer.clone(), top));
+                    }
+                }
+            }
+        }
+    }
+    (observed, scanned)
+}
+
+/// AR-11-36 shared forbidden-membership predicate: an edge is rejected if and
+/// only if it is a member of the manifest `forbidden` set. The real-tree scan
+/// check, the fixture positive control, and the sentinel controls below all
+/// call this same predicate.
+fn is_forbidden_dependency_edge(
+    edge: &(String, String),
+    forbidden: &BTreeSet<(String, String)>,
+) -> bool {
+    forbidden.contains(edge)
+}
+
 #[allow(clippy::too_many_lines)]
 #[test]
 fn source_dependency_edges_match_allowed_manifest() {
@@ -3009,81 +3095,22 @@ fn source_dependency_edges_match_allowed_manifest() {
     // below must detect a synthetic `use crate::sentinel_module::X` line and
     // must not match a plain non-crate import, so a broken or empty scanner
     // cannot pass this test vacuously.
-    let use_pattern =
-        Regex::new(r"use crate::([a-z0-9_]+)").expect("dependency edge regex must compile");
-    let extract_top = |line: &str| -> Option<String> {
-        use_pattern
-            .captures(line)
-            .map(|captures| captures[1].to_owned())
-    };
     assert_eq!(
-        extract_top("use crate::sentinel_module::X;"),
+        extract_dependency_top_module("use crate::sentinel_module::X;"),
         Some("sentinel_module".to_owned()),
         "AR-11-35 scanner control must detect injected `use crate::sentinel_module::X`"
     );
     assert_eq!(
-        extract_top("use std::collections::BTreeSet;"),
+        extract_dependency_top_module("use std::collections::BTreeSet;"),
         None,
         "AR-11-35 scanner control must not match a non-crate import"
     );
 
-    // Observed edge set: fs-walk rust/pokecon/src/**/*.rs, one capture per
-    // `use crate::<top>` line. The importer top module is the first path
-    // segment below src/; root files (e.g. production.rs) map via file stem
-    // (production). Self-edges (e.g. `use crate::worker::...` inside worker/)
-    // are excluded.
+    // Observed edge set via the AR-11-35/AR-11-36 shared scan (fs-walk of
+    // rust/pokecon/src/**/*.rs, importer mapping and self-edge exclusion as
+    // documented on `scan_source_dependency_edges`).
+    let (observed, scanned) = scan_source_dependency_edges();
     let src_root = repository_root().join("rust/pokecon/src");
-    let mut observed = BTreeSet::new();
-    let mut scanned = 0;
-    let mut stack = vec![src_root.clone()];
-    while let Some(dir) = stack.pop() {
-        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
-            panic!("contract input {} must be readable: {error}", dir.display())
-        });
-        for entry in entries {
-            let entry = entry.expect("contract input directory entry must be readable");
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
-                scanned += 1;
-                let relative = path
-                    .strip_prefix(repository_root())
-                    .expect("contract input must be below the repository root")
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                let under_src = path
-                    .strip_prefix(&src_root)
-                    .expect("contract input must be below rust/pokecon/src");
-                let mut components = under_src.components();
-                let first = components
-                    .next()
-                    .expect("source path below src/ must be non-empty");
-                let importer = if components.next().is_none() {
-                    path.file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .expect("root source file must have a UTF-8 stem")
-                        .to_owned()
-                } else {
-                    first
-                        .as_os_str()
-                        .to_str()
-                        .expect("source directory name must be UTF-8")
-                        .to_owned()
-                };
-                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
-                    panic!("contract input {relative} must be readable: {error}")
-                });
-                for line in text.lines() {
-                    if let Some(top) = extract_top(line)
-                        && top != importer
-                    {
-                        observed.insert((importer.clone(), top));
-                    }
-                }
-            }
-        }
-    }
     assert!(
         scanned > 100,
         "dependency edge scan must cover rust/pokecon/src (scanned {scanned} files)"
@@ -3155,6 +3182,178 @@ fn source_dependency_edges_match_allowed_manifest() {
         stale.is_empty(),
         "stale manifest entries with no observed edge; update the manifest instead of \
          keeping a dead allowance (AR-11-35): {stale:?}"
+    );
+}
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn forbidden_dependency_edges_are_rejected() {
+    // AR-11-36: FORBIDDEN 方向禁止 edge manifest
+    // (rust/pokecon/registry/dependency_edges.json の `forbidden` 配列) に
+    // 対する検査。実測 edge 集合に禁止 edge が1つも含まれないこと、
+    // 意図的な逆流 fixture が同じ抽出器・同じ述語で拒否されること、
+    // fail-closed の番兵制御、lib→production 例外の liveness を検査する。
+    //
+    // 誠実な範囲限定 (scope): `use` 行の文字列走査のみであり、
+    // brace-group import (`use crate::{...}`) やインライン完全修飾パスは
+    // 捕捉しない。fixture は file-as-text の positive control であり、
+    // Cargo target としてはコンパイルされない。§9.2 全行の被覆は主張しない。
+    static FORBIDDEN_EDGES_JSON: LazyLock<String> =
+        LazyLock::new(|| repository_text("rust/pokecon/registry/dependency_edges.json"));
+    let manifest = parse_json(&FORBIDDEN_EDGES_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "dependency edge manifest schema_version must be 1 (AR-11-36)"
+    );
+    let forbidden = manifest["forbidden"]
+        .as_array()
+        .expect("dependency edge manifest must define a forbidden array (AR-11-36)");
+    assert!(
+        !forbidden.is_empty(),
+        "forbidden edge list must be non-empty so the check cannot pass vacuously (AR-11-36)"
+    );
+    let mut forbidden_set = BTreeSet::new();
+    let mut previous: Option<(String, String)> = None;
+    for edge in forbidden {
+        let pair = edge
+            .as_array()
+            .unwrap_or_else(|| panic!("forbidden edge must be a [from, to] pair, found {edge}"));
+        assert_eq!(
+            pair.len(),
+            2,
+            "forbidden edge must be a [from, to] pair, found {edge}"
+        );
+        let from = pair[0]
+            .as_str()
+            .expect("forbidden edge from must be a string")
+            .to_owned();
+        let to = pair[1]
+            .as_str()
+            .expect("forbidden edge to must be a string")
+            .to_owned();
+        assert!(
+            !from.is_empty() && !to.is_empty(),
+            "forbidden edge modules must not be empty, found [{from}, {to}]"
+        );
+        assert_ne!(
+            from, to,
+            "forbidden manifest must not list self-edges, found {from} -> {to} (AR-11-36)"
+        );
+        assert!(
+            forbidden_set.insert((from.clone(), to.clone())),
+            "forbidden edges must be unique, duplicate {from} -> {to} (AR-11-36)"
+        );
+        if let Some(previous_edge) = &previous {
+            assert!(
+                *previous_edge < (from.clone(), to.clone()),
+                "forbidden edges must be sorted, {from} -> {to} follows {previous_edge:?} (AR-11-36)"
+            );
+        }
+        previous = Some((from, to));
+    }
+
+    // Policy pin: the reviewed forbidden policy is the exact 27-pair set
+    // below. A silent deletion, addition, or swap in the manifest fails here;
+    // intentional policy changes update the manifest and this expected set
+    // together.
+    let lower_layers = [
+        "device",
+        "camera",
+        "worker",
+        "runtime",
+        "server",
+        "settings",
+        "dynamic",
+        "dynamic_host",
+        "dynamic_runtime",
+        "script_host",
+        "script_runtime",
+    ];
+    let mut expected_forbidden = BTreeSet::new();
+    for from in lower_layers {
+        for to in ["production", "entrypoint"] {
+            expected_forbidden.insert((from.to_owned(), to.to_owned()));
+        }
+    }
+    for from in ["device", "camera", "runtime"] {
+        expected_forbidden.insert((from.to_owned(), "server".to_owned()));
+    }
+    expected_forbidden.insert(("worker".to_owned(), "device".to_owned()));
+    expected_forbidden.insert(("worker".to_owned(), "server".to_owned()));
+    assert_eq!(
+        forbidden_set, expected_forbidden,
+        "forbidden policy must match the reviewed 27-pair set exactly (AR-11-36)"
+    );
+
+    // (d) Exception liveness: lib.rs keeps the composition-root reference to
+    // production, which is the documented manifest exception. If this line is
+    // removed, the manifest note must be updated, so fail here first.
+    let lib = repository_text("rust/pokecon/src/lib.rs");
+    assert!(
+        lib.contains("use crate::production::ProductionRuntime"),
+        "lib.rs must keep the documented `use crate::production::ProductionRuntime` \
+         exception (AR-11-36); if it was removed, update the manifest note"
+    );
+
+    // (a) Real-tree scan with the SAME extractor as AR-11-35: no observed
+    // edge may be a member of the forbidden set.
+    let (observed, scanned) = scan_source_dependency_edges();
+    assert!(
+        scanned > 100,
+        "forbidden edge scan must cover rust/pokecon/src (scanned {scanned} files)"
+    );
+    let violations: Vec<&(String, String)> = observed
+        .iter()
+        .filter(|edge| is_forbidden_dependency_edge(edge, &forbidden_set))
+        .collect();
+    assert!(
+        violations.is_empty(),
+        "forbidden dependency edges observed in rust/pokecon/src (AR-11-36): {violations:?}"
+    );
+
+    // (b) Fixture positive control: the intentional reverse-flow fixture is
+    // read as text and run through the SAME extractor and the SAME
+    // forbidden-membership predicate. The fixture models a worker-context
+    // file, so its extracted top module pairs with the `worker` importer.
+    let fixture = repository_text("rust/pokecon/tests/fixtures/forbidden_dependency_fixture.rs");
+    assert!(
+        fixture.contains("AR-11-36 intentional reverse-flow fixture"),
+        "forbidden fixture must carry its AR-11-36 header marker"
+    );
+    let mut fixture_edges = BTreeSet::new();
+    for line in fixture.lines() {
+        if let Some(top) = extract_dependency_top_module(line) {
+            fixture_edges.insert(("worker".to_owned(), top));
+        }
+    }
+    let fixture_edge = ("worker".to_owned(), "server".to_owned());
+    assert!(
+        fixture_edges.contains(&fixture_edge),
+        "fixture must model the worker -> server reverse flow, found {fixture_edges:?} (AR-11-36)"
+    );
+    assert!(
+        is_forbidden_dependency_edge(&fixture_edge, &forbidden_set),
+        "fixture edge worker -> server must be REJECTED by the forbidden manifest (AR-11-36)"
+    );
+
+    // (c) Fail-closed sentinel controls with the SAME predicate: a synthetic
+    // worker-context `use crate::production::X` line must be detected as
+    // forbidden, while a synthetic allowed edge must NOT be rejected.
+    assert_eq!(
+        extract_dependency_top_module("use crate::production::X;"),
+        Some("production".to_owned()),
+        "AR-11-36 scanner control must detect injected `use crate::production::X`"
+    );
+    assert!(
+        is_forbidden_dependency_edge(
+            &("worker".to_owned(), "production".to_owned()),
+            &forbidden_set
+        ),
+        "synthetic worker -> production reverse flow must be rejected (AR-11-36 control)"
+    );
+    assert!(
+        !is_forbidden_dependency_edge(&("server".to_owned(), "camera".to_owned()), &forbidden_set),
+        "synthetic allowed edge server -> camera must NOT be rejected (AR-11-36 control)"
     );
 }
 

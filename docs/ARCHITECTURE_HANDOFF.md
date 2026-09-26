@@ -36,6 +36,14 @@ Python command execution      Python or Lua dynamic execution
 
 Rust processがhardware resourceと共有状態を所有し、frontend、Python、Luaは閉じた境界から接続するという構成は、[`ARCHITECTURE.md:11-39`](ARCHITECTURE.md#設計上の中心を理解する) と [`ARCHITECTURE.md:43-59`](ARCHITECTURE.md#process-topologyを把握する) に記載されています。
 
+process境界の固定（AR-11-37）は `rust/pokecon/registry/ipc_boundary.json` と、`contract_sync`の`worker_ipc_deployment_boundary_is_pinned`、`worker/ipc/codec.rs`の`fixture_nonpublic_wire_payloads_are_rejected_at_decode`（fixture: `rust/pokecon/tests/fixtures/ipc_nonpublic_payloads.rs`）が担います。同一process内はcodecを経由せずRust値の直接参照であり、processを越える値はencode／decodeとtyped検証を必ず通過する、という区別です。
+
+| 境界要素 | 固定内容 | 検査 |
+| --- | --- | --- |
+| process／module | Rust application process（HTTP server、device、camera、serial、settings、state、shutdownのowner）と2 worker OS process（script＝遅延起動、dynamic＝永続。`pokecon-worker --kind`起動）。worker側module（`worker::supervisor`／`ipc`／`generation`、`script_host`／`dynamic_host`／`dynamic_runtime`、`worker_binary`）はcrate-private | 本節の定義＋[`ARCHITECTURE.md:25-39`](ARCHITECTURE.md#設計上の中心を理解する)、`rust/pokecon/src/lib.rs:41-43`（source-verified） |
+| wire／value | Envelope 5 kind（request／response／error／event／log）、`IpcValue` 9値（nil〜map_str）、上限1,048,576B、禁止wire marker 6（`lua_value`／`native_handle`／`python_object`／`rust_arc`／`socket`／`token`） | `ipc_boundary.json`＋`worker_ipc_deployment_boundary_is_pinned`（exact-set pin。markerはwire上禁止の目印でありsource内出現は主張しない） |
+| 非公開payload拒否 | 7ケース（`top_level_fixext4_timestamp`、`nested_ext_in_map_value`、`non_string_map_key`、`unknown_envelope_field`、`trailing_second_object`、`unknown_error_payload_field`、`empty_op_string`）をdecode／validateで拒否 | `fixture_nonpublic_wire_payloads_are_rejected_at_decode`（6 DecodeErr＋1 SchemaErr、positive round-trip control付き） |
+
 ## 3. Ownership table
 
 「owner」は正準状態、native handle、停止責任を保持するmoduleまたはprocessです。「非owner」は、そのresourceを直接保持せず、公開契約を通じて要求する側です。
@@ -139,7 +147,7 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 | OpenAPI／TypeScript | `api/openapi.json`、`web/src/lib/api/openapi.json`、generated TypeScript | `rust/pokecon/src/server/openapi.rs:32-33,168,225`、`rust/pokecon/src/bin/generate_openapi.rs` | Rust wire型、OpenAPI、frontend生成物のdriftを`contract_sync`で検査 |
 | settings／dynamic schema | `generated/settings.schema.json`、`settings-ui.json`、protocol registry、Python／Lua typing | `rust/pokecon/registry/settings.json`、`rust/pokecon/registry/protocol.json`、`rust/pokecon/src/contracts/dynamic_typings.rs:9-38` | 正準registryを直接編集し、生成物を直接編集しない |
 | CLI／mode | `pokecon --ui web&#124;desktop`、`pokecon-worker --kind script&#124;dynamic`、compatibility／generator bin | `rust/pokecon/Cargo.toml:13-52`、`rust/pokecon/src/entrypoint.rs:37-65`、`rust/pokecon/src/lib.rs:78-121` | worker／generator binは公開library APIにしない |
-| worker IPC | typed MessagePack `IpcValue`、script／dynamic protocol | `rust/pokecon/src/worker/ipc/mod.rs:1-13`、`rust/pokecon/src/worker/ipc/schema.rs:16-64`、`rust/pokecon/src/worker/script/protocol.rs`、`rust/pokecon/src/dynamic/protocol.rs` | native object、non-string key、任意Rust objectをpayloadへ入れない |
+| worker IPC | typed MessagePack `IpcValue`、script／dynamic protocol | `rust/pokecon/src/worker/ipc/mod.rs:1-13`、`rust/pokecon/src/worker/ipc/schema.rs:16-64`、`rust/pokecon/src/worker/script/protocol.rs`、`rust/pokecon/src/dynamic/protocol.rs`、`rust/pokecon/registry/ipc_boundary.json` | native object、non-string key、任意Rust objectをpayloadへ入れない。process境界と非公開payload拒否は`worker_ipc_deployment_boundary_is_pinned`＋`fixture_nonpublic_wire_payloads_are_rejected_at_decode`がpin（AR-11-37） |
 
 このinventoryはsupported user-visible surfaceと、内部で接続するtyped boundaryを同じ表へ置きます。`server`内の`pub mod`はcrate外公開APIを意味せず、`rust/pokecon/src/lib.rs:38`の`mod server;`がcrate-private boundaryです。
 
@@ -212,8 +220,8 @@ Package CIのsuccessはPackage受入の証拠ですが、Release tag、署名run
 | forbidden edge | 禁止理由 | 検査入口 | 状態 |
 | --- | --- | --- | --- |
 | frontend → `rust/pokecon/src/*` private module／native handle | 公開wire契約を迂回する | generated type／source filter／contract test | pending-test |
-| worker → camera／serial/server native handle | process境界と停止安全性を壊す | AR-11-34のsymbol-level forbidden ownership test＋AR-11-36のmodule-level forbidden edge（worker→server／device。worker→cameraはwire値型のみのため除外） | source-checked（AR-11-34／AR-11-36） |
-| lower module → composition root | ownerと依存方向が逆流する | `lib.rs` module visibility／AR-11-36のforbidden edge 22対＋lib→production例外liveness | tested（AR-11-36） |
+| worker → camera／serial/server native handle | process境界と停止安全性を壊す | AR-11-34のsymbol-level forbidden ownership test＋AR-11-36のmodule-level forbidden edge（worker→server／device。worker→cameraはwire値型のみのため除外）＋AR-11-37の非公開payload拒否fixture（7ケース） | source-verified（AR-11-34／AR-11-36／AR-11-37） |
+| lower module → composition root | ownerと依存方向が逆流する | `lib.rs` module visibility／AR-11-36のforbidden edge 22対＋lib→production例外liveness | source-verified（AR-11-36） |
 | generated artifact → canonical input | 再生成で失われ、runtimeと型がずれる | generator／drift test | source-verified |
 | candidate promotion → fixed baseline overwrite | append-only compatibility保証を壊す | `compatibility` report／negative test | pending-test |
 | UI／transport → hardware serviceの重複状態 | StateHubとresource ownerが分裂する | architecture test／review | pending-test |
@@ -261,7 +269,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | `AR-11-34` | ownership.jsonへ`non_responsibilities`（全18）＋`forbidden_symbols`／`forbidden_scan_files`（13エントリ、必須3含む）＋`contract_sync`の`forbidden_ownership_manifest_is_enforced`（不在・liveness・sentinel・限定comment） | なし（完了）。commit `36e3159`、review LGTM（`deleg_dcd709fb`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-35`（allowed edge manifest）へ |
 | `AR-11-35` | `rust/pokecon/registry/dependency_edges.json`（allowed 104 edge）＋`source_dependency_edges_match_allowed_manifest`（共有extractor・双方向diff・§9.1連動・scanned>100・sentinel） | なし（完了）。commit `932ff90`、review LGTM（`deleg_18931d04`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-36`（forbidden edge）へ |
 | `AR-11-36` | dependency_edges.jsonの`forbidden`27対（worker→cameraはwire値型のみのため除外をnote化）＋`forbidden_dependency_edges_are_rejected`（実測∩禁止=∅・fixture control・sentinel・liveness・27対exact-pin）＋`tests/fixtures/forbidden_dependency_fixture.rs` | なし（完了）。commit `4bc7a1f`、review NEEDS_CHANGES→LGTM（`deleg_8fe61737`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-37`（IPC境界fixture）へ |
-| `AR-11-37` | process／module deployment boundary | IPC boundary test | `cross_process`へpublic payload以外を拒否するfixtureを追加 |
+| `AR-11-37` | `rust/pokecon/registry/ipc_boundary.json`（Envelope 5 kind・`IpcValue` 9値・上限1,048,576B・marker 6・非公開payload 7ケース）＋`worker_ipc_deployment_boundary_is_pinned`（exact-set・source drift・liveness・sentinel・範囲限定comment）＋`fixture_nonpublic_wire_payloads_are_rejected_at_decode`（include! fixture、6 DecodeErr＋1 SchemaErr、positive control） | CI success確認のみ（初回`9a55506`のPython tests語彙失敗は修正済み・`nix run .#test`577 passed）。commit `fae2479`、review LGTM（`deleg_417d9009`）、Nix checks exit 0 | `AR-11-38`（配布matrix）へ |
 | `AR-11-38` | artifact／OS distribution matrix | OS別clean-install report | existing Package artifactをmanifestへread-backし、Release待ちを分離 |
 | `AR-11-39` | current package／binary／generator／compatibility inventory | phase別inventory、許可済みgit grep log | phase ID別にinventory snapshotを保存 |
 | `AR-11-40` | command／expected result matrix | 各phaseの実行log | owner許可済みclean worktreeでphase commandを実行 |

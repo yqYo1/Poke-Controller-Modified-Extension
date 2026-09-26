@@ -186,4 +186,60 @@ mod tests {
         assert!(!coordinator.request(ShutdownReason::DesktopExit));
         assert_eq!(coordinator.cancelled().await, ShutdownReason::StartupProbe);
     }
+
+    #[tokio::test]
+    async fn cancellation_propagates_to_subscriber_tokens_taken_before_and_after_the_request() {
+        let coordinator = ShutdownCoordinator::new();
+        let token_before = coordinator.cancellation_token();
+        assert!(!token_before.is_cancelled());
+        assert_eq!(coordinator.reason(), None);
+        assert!(coordinator.request(ShutdownReason::DesktopExit));
+        assert!(token_before.is_cancelled());
+        let token_after = coordinator.cancellation_token();
+        assert!(token_after.is_cancelled());
+        assert_eq!(coordinator.reason(), Some(ShutdownReason::DesktopExit));
+    }
+
+    #[tokio::test]
+    async fn accepted_reason_is_shared_across_clones() {
+        let coordinator = ShutdownCoordinator::new();
+        let clone = coordinator.clone();
+        assert!(clone.request(ShutdownReason::WorkerStop));
+        assert_eq!(coordinator.reason(), Some(ShutdownReason::WorkerStop));
+        assert_eq!(coordinator.cancelled().await, ShutdownReason::WorkerStop);
+        assert!(!clone.request(ShutdownReason::DesktopExit));
+    }
+
+    #[tokio::test]
+    async fn concurrent_requests_accept_exactly_one_reason() {
+        let coordinator = ShutdownCoordinator::new();
+        let mut handles = Vec::new();
+        for index in 0..8 {
+            let task_coordinator = coordinator.clone();
+            handles.push(tokio::spawn(async move {
+                let accepted =
+                    task_coordinator.request(ShutdownReason::FatalError(format!("race-{index}")));
+                (index, accepted)
+            }));
+        }
+        let mut winners = Vec::new();
+        for handle in handles {
+            let (index, accepted) = handle.await.expect("shutdown race task panicked");
+            if accepted {
+                winners.push(index);
+            }
+        }
+        assert_eq!(
+            winners.len(),
+            1,
+            "expected exactly one accepted shutdown reason"
+        );
+        let winner = winners[0];
+        let winner_reason = coordinator.reason().expect("shutdown reason must be set");
+        assert_eq!(
+            winner_reason,
+            ShutdownReason::FatalError(format!("race-{winner}"))
+        );
+        assert!(!coordinator.request(ShutdownReason::StartupProbe));
+    }
 }

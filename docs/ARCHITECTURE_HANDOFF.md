@@ -147,12 +147,12 @@ Rust processがhardware resourceと共有状態を所有し、frontend、Python�
 
 現行の公開契約は、設定registry、protocol registry、server API、worker IPCの4系統です。生成物は正準入力から再生成し、生成物を直接編集しません（[`ARCHITECTURE.md:95-112`](ARCHITECTURE.md#正準契約と生成物を区別する)）。
 
-`contract_sync`に次のnegative assertionを追加するまで、`AR-11-27`は完了扱いにしません。
+`contract_sync`に`public_wire_contracts_exclude_native_handles_and_private_paths`を追加し、canonical public source／generated surfacesについて次のsource-level negative assertionを実行できるようにしました。ただし、runtime dynamic callback ownership、full IPC payload corpus、実browser／実device受入は未成立のため、`AR-11-27`は完了扱いにしません。
 
-- public APIの型にcamera／serial native handleが出ない。
-- IPC payloadにPython／Lua objectまたはRust private objectが出ない。
-- frontend generated typeのsourceがRust private module pathへ依存しない。
-- dynamic callbackの失敗がdevice threadの所有権またはprocess shutdownを直接奪わない。
+- `rust/pokecon/src/server/api.rs`、`rust/pokecon/registry/protocol.json`、`api/openapi.json`、`web/src/lib/api/openapi.ts`にcamera／serial native handle markerが出ない。
+- 同じ公開面にPython／Lua／Rust private object marker、Rust private module path、dynamic callback ownership overclaim markerが出ない。
+- `server/rest/mod.rs`は内部`StateHub`を正当に使用するためscan対象外とし、public wire sourceと内部実装を混同しない。
+- dynamic callbackの失敗がdevice threadの所有権またはprocess shutdownを直接奪わないことは、runtime fault testが未成立であり、source-level marker検査だけでは証明しない。
 
 ## 6. Settings、profile、command、compatibility corpusのlifecycle
 
@@ -253,7 +253,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | --- | --- | --- | --- |
 | `AR-11-25` | ownership table、非owner、重複検査の規則 | 重複所有source／negative testのreport | `contract_sync`にresource owner一意性とnative handle漏洩の検査を追加しNix実行 |
 | `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript replacement、`:636-716`／`:720-800`のscript／dynamic停止中request gate | Rust mainを含むstate table全体、production sequence、fault transition matrix、production shutdown fault matrix | `ShutdownCoordinator`／`shutdown_all`／production sequenceを含む残りのstate／fault caseを追加 |
-| `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary | native object境界越え禁止test、schema report | public schemaを列挙するcontract testとnegative fixtureを追加 |
+| `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary、`rust/pokecon/tests/contract_sync.rs`の`public_wire_contracts_exclude_native_handles_and_private_paths`によるcanonical public source／generated surfaceのnative／private marker negative check | runtime dynamic callback ownership、full IPC payload corpus、schema reportの全項目、実browser／実device受入 | runtime fault／payload corpus／schema artifactの残りを追加し、source-level testと分離して証跡化 |
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle | `contract-check`／`compatibility`の同一artifact report | lifecycle状態表を生成reportへ接続し、failure時baseline保持を実行検証 |
 | `AR-11-29` | `rust/pokecon/tests/lifecycle.rs:802-855`の`shutdown_all` narrow test（Script／Dynamicのforced stop／reap／neutral化） | full shutdown fault matrix、camera fallback、signal path、production resource release test | `lifecycle`へ各timeout後の最終状態と後続停止を追加 |
 | `AR-11-30` | OS／build／package／runtime matrix | Release tag／publication、外部browser／clean machine | Releaseはowner指示後、外部受入は別packetで取得 |

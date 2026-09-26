@@ -2009,5 +2009,125 @@ fn module_ownership_table_has_unique_owners_without_drift() {
     }
 }
 
+#[test]
+fn public_wire_contracts_exclude_native_handles_and_private_paths() {
+    // AR-11-27 negative contract for docs/ARCHITECTURE_HANDOFF.md 5.2
+    // (public schema / native-object boundary): the genuinely public wire
+    // surfaces must not expose camera/serial native handles, Python/Lua/Rust
+    // private objects, or Rust private module paths, and must not overclaim
+    // dynamic callback ownership. Only canonical public inputs are scanned:
+    // rust/pokecon/src/server/api.rs (public HTTP/WS wire types),
+    // rust/pokecon/registry/protocol.json (canonical protocol registry),
+    // api/openapi.json (generated OpenAPI surface), and
+    // web/src/lib/api/openapi.ts (generated frontend client).
+    // server/rest/mod.rs legitimately uses the internal StateHub and is
+    // intentionally NOT scanned, so this test cannot misfire on it.
+    //
+    // Owner symbols are source-cited, not invented: CameraManager lives in
+    // rust/pokecon/src/camera/manager.rs, SerialManager lives in
+    // rust/pokecon/src/device/serial/manager.rs, and StateHub lives in
+    // rust/pokecon/src/server/state.rs. The public descriptors in
+    // rust/pokecon/src/server/api.rs (CameraDevice/CameraSelector as
+    // index-or-name, SerialPort as selector/label/available strings) carry
+    // no such owner, which is exactly what the assertions below pin.
+    const NATIVE_HANDLE_MARKERS: &[&str] = &[
+        "CameraManager",
+        "SerialManager",
+        "StateHub",
+        "JoinHandle",
+        "CameraHandle",
+        "SerialHandle",
+    ];
+    // Precise FFI/private-object markers. Deliberately NOT bare "Lua"/"lua":
+    // rust/pokecon/src/server/api.rs legitimately exposes
+    // DynamicLanguage::Lua and rust/pokecon/registry/protocol.json
+    // legitimately lists "lua" as a dynamic language, so a bare substring
+    // would misfire on public descriptors.
+    const PRIVATE_OBJECT_MARKERS: &[&str] = &["PyObject", "pyo3::", "mlua::", "LuaValue"];
+    // Rust private module paths. Deliberately NOT bare "crate::server":
+    // rust/pokecon/src/server/api.rs doc comments legitimately reference
+    // `crate::server::openapi` (the schema replacer), so only genuinely
+    // internal owner paths are forbidden here.
+    const PRIVATE_PATH_MARKERS: &[&str] = &[
+        "crate::camera",
+        "crate::device",
+        "crate::worker",
+        "crate::runtime",
+        "crate::dynamic",
+        "crate::server::state",
+        "crate::server::security",
+        "rust/pokecon/src/",
+    ];
+    // Overclaimed dynamic-callback ownership shapes. None appear in any
+    // public surface today; asserting their absence keeps the boundary
+    // honest without inferring ownership from mere source text (callback
+    // scheduling lives in rust/pokecon/src/dynamic/callback.rs, which is
+    // NOT scanned here).
+    const OWNERSHIP_OVERCLAIM_MARKERS: &[&str] = &[
+        "callback owns",
+        "owns the device",
+        "owns shutdown",
+        "callback_owner",
+        "owns_device_thread",
+        "shutdown_owner",
+    ];
+
+    let public_surfaces = [
+        (
+            "rust/pokecon/src/server/api.rs",
+            repository_text("rust/pokecon/src/server/api.rs"),
+        ),
+        (
+            "rust/pokecon/registry/protocol.json",
+            repository_text("rust/pokecon/registry/protocol.json"),
+        ),
+        ("api/openapi.json", repository_text("api/openapi.json")),
+        (
+            "web/src/lib/api/openapi.ts",
+            repository_text("web/src/lib/api/openapi.ts"),
+        ),
+    ];
+    let marker_sets = [
+        ("native-handle", NATIVE_HANDLE_MARKERS),
+        ("private-object", PRIVATE_OBJECT_MARKERS),
+        ("private-path", PRIVATE_PATH_MARKERS),
+        ("ownership-overclaim", OWNERSHIP_OVERCLAIM_MARKERS),
+    ];
+
+    let find_forbidden_marker = |text: &str| {
+        marker_sets.iter().find_map(|(set_name, markers)| {
+            markers
+                .iter()
+                .find_map(|marker| text.contains(marker).then_some((*set_name, *marker)))
+        })
+    };
+
+    // Fail-closed control: exercise the exact predicate used below with a
+    // synthetic injection, so a broken or empty scanner cannot pass this test
+    // vacuously.
+    for (set_name, markers) in &marker_sets {
+        assert!(
+            !markers.is_empty(),
+            "{set_name} marker set must not be empty"
+        );
+        let marker = markers[0];
+        let injected = format!("AR-11-27 sentinel {marker}");
+        assert_eq!(
+            find_forbidden_marker(&injected),
+            Some((*set_name, marker)),
+            "AR-11-27 scanner control must detect injected {set_name} marker {marker:?}"
+        );
+    }
+
+    for (path, text) in &public_surfaces {
+        assert_eq!(
+            find_forbidden_marker(text),
+            None,
+            "public wire surface {path} must not expose a forbidden marker \
+             (AR-11-27, docs/ARCHITECTURE_HANDOFF.md 5.2)"
+        );
+    }
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

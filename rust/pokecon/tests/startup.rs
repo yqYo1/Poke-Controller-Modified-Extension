@@ -104,17 +104,29 @@ pokecon.autocmd.on("AppShutdownPre", {
 #[cfg(unix)]
 #[tokio::test]
 async fn sigint_uses_the_clean_shutdown_path() {
-    assert_signal_uses_clean_shutdown(Signal::SIGINT).await;
+    assert_signal_uses_clean_shutdown(Signal::SIGINT, 1).await;
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn sigterm_uses_the_clean_shutdown_path() {
-    assert_signal_uses_clean_shutdown(Signal::SIGTERM).await;
+    assert_signal_uses_clean_shutdown(Signal::SIGTERM, 1).await;
 }
 
 #[cfg(unix)]
-async fn assert_signal_uses_clean_shutdown(signal: Signal) {
+#[tokio::test]
+async fn sigint_double_delivery_still_exits_cleanly() {
+    assert_signal_uses_clean_shutdown(Signal::SIGINT, 2).await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn sigterm_double_delivery_still_exits_cleanly() {
+    assert_signal_uses_clean_shutdown(Signal::SIGTERM, 2).await;
+}
+
+#[cfg(unix)]
+async fn assert_signal_uses_clean_shutdown(signal: Signal, deliveries: u32) {
     let roots = TempDir::new().expect("isolated roots must exist");
     let mut command = TokioCommand::new(env!("CARGO_BIN_EXE_pokecon"));
     isolate_tokio_command(&mut command, &roots);
@@ -130,16 +142,18 @@ async fn assert_signal_uses_clean_shutdown(signal: Signal) {
     assert_ui_is_served(port).await;
     assert_api_is_served(port).await;
 
-    kill(
-        Pid::from_raw(
-            child
-                .id()
-                .expect("running process must have an identifier")
-                .cast_signed(),
-        ),
-        signal,
-    )
-    .expect("the operating-system signal must be delivered");
+    let pid = Pid::from_raw(
+        child
+            .id()
+            .expect("running process must have an identifier")
+            .cast_signed(),
+    );
+    kill(pid, signal).expect("the operating-system signal must be delivered");
+    for _ in 1..deliveries {
+        sleep(Duration::from_millis(150)).await;
+        // The process may already have exited, so delivery failure is acceptable.
+        let _ = kill(pid, signal);
+    }
     let status = match timeout(Duration::from_secs(10), child.wait()).await {
         Ok(result) => result.expect("process status must be readable"),
         Err(_elapsed) => {
@@ -160,6 +174,14 @@ async fn assert_signal_uses_clean_shutdown(signal: Signal) {
     assert!(
         status.success(),
         "shutdown after {signal:?} failed: {status}; stdout={stdout}"
+    );
+    assert!(
+        stdout.contains("POKECON-RUNTIME-0002"),
+        "clean-stop marker is missing after {signal:?}: {stdout}"
+    );
+    assert!(
+        stdout.contains("PokeCon stopped cleanly"),
+        "clean-stop message is missing after {signal:?}: {stdout}"
     );
 }
 

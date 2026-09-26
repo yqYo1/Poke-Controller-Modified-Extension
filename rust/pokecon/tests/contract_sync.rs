@@ -2129,5 +2129,129 @@ fn public_wire_contracts_exclude_native_handles_and_private_paths() {
     }
 }
 
+#[test]
+fn camera_shared_mapping_release_has_single_owner() {
+    // AR-11-25 check #2 (docs/ARCHITECTURE_HANDOFF.md 3.2 item 2):
+    // only `CameraManager` may release the camera native handle or the
+    // shared mapping. The production shutdown fallback
+    // (`retain_camera_fallback_on_timeout` / `camera_writer_fallback` in
+    // rust/pokecon/src/production.rs:394-426,466-505) retains the
+    // `UnstoppedCameraWriter` guard until OS process exit and never unmaps,
+    // so it holds ownership without a release marker. The documented owners
+    // are `camera::manager` (`CameraManager`) plus `camera::media`
+    // (`SharedFrameRing`) per docs/ARCHITECTURE.md (camera frame lifetime
+    // row); the release itself lives one layer down in
+    // `camera/shared_ring.rs` (`MappedRing::unlink_name` -> `shm_unlink`),
+    // reached only via `ManagerInner::record_writer_unstopped`
+    // (rust/pokecon/src/camera/manager.rs:127).
+    //
+    // Release markers are deliberately narrow: bare `CloseHandle` is
+    // excluded because rust/pokecon/src/settings/hmac_key.rs legitimately
+    // closes a non-camera OS key handle, and `SharedFrameRing::open` (used
+    // by rust/pokecon/src/worker_binary/script/python.rs) opens a mapping
+    // for reading without releasing it.
+    const RELEASE_MARKERS: &[&str] = &["shm_unlink", "unlink_name", "munmap", "UnmapViewOfFile"];
+    // Allowlist = camera manager + shared-ring owner impl. The production
+    // shutdown fallback file is asserted separately below: it must
+    // reference the retained guard yet contain no release marker.
+    const RELEASE_OWNERS: &[&str] = &[
+        "rust/pokecon/src/camera/manager.rs",
+        "rust/pokecon/src/camera/shared_ring.rs",
+    ];
+    const FALLBACK_FILE: &str = "rust/pokecon/src/production.rs";
+    const FALLBACK_OWNERSHIP_MARKERS: &[&str] = &[
+        "retain_camera_fallback_on_timeout",
+        "camera_writer_fallback",
+        "UnstoppedCameraWriter",
+    ];
+
+    let find_release_marker = |text: &str| {
+        RELEASE_MARKERS
+            .iter()
+            .find_map(|marker| text.contains(marker).then_some(*marker))
+    };
+
+    // Fail-closed control: exercise the exact predicate used below with a
+    // synthetic injection, so a broken or empty scanner cannot pass this
+    // test vacuously.
+    assert!(
+        !RELEASE_MARKERS.is_empty(),
+        "camera release marker set must not be empty"
+    );
+    let sentinel = RELEASE_MARKERS[0];
+    let injected = format!("AR-11-25 sentinel {sentinel}");
+    assert_eq!(
+        find_release_marker(&injected),
+        Some(sentinel),
+        "AR-11-25 scanner control must detect injected release marker {sentinel:?}"
+    );
+
+    // The documented owners pin the allowlist to docs/ARCHITECTURE.md, not
+    // to invented symbols.
+    let architecture = repository_text("docs/ARCHITECTURE.md");
+    assert!(
+        architecture.contains("`camera::manager` (`CameraManager`)"),
+        "docs/ARCHITECTURE.md must document CameraManager as the camera owner (AR-11-25)"
+    );
+
+    // The production shutdown fallback must hold (not release) the mapping:
+    // it references the retained guard and contains no release marker.
+    let fallback = repository_text(FALLBACK_FILE);
+    for marker in FALLBACK_OWNERSHIP_MARKERS {
+        assert!(
+            fallback.contains(marker),
+            "production shutdown fallback {FALLBACK_FILE} must reference {marker} (AR-11-25)"
+        );
+    }
+    assert_eq!(
+        find_release_marker(&fallback),
+        None,
+        "production shutdown fallback {FALLBACK_FILE} must not release the camera shared mapping (AR-11-25)"
+    );
+
+    // Every other Rust source file must contain no camera release marker;
+    // only the allowlisted owner impls may.
+    let mut scanned = 0;
+    let mut stack = vec![repository_root().join("rust/pokecon/src")];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).unwrap_or_else(|error| {
+            panic!("contract input {} must be readable: {error}", dir.display())
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                scanned += 1;
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!("contract input {relative} must be readable: {error}")
+                });
+                if RELEASE_OWNERS.contains(&relative.as_str()) {
+                    assert!(
+                        find_release_marker(&text).is_some(),
+                        "allowlisted owner {relative} must still contain a camera release marker; update the allowlist instead of keeping a stale entry (AR-11-25)"
+                    );
+                } else {
+                    assert_eq!(
+                        find_release_marker(&text),
+                        None,
+                        "non-owner source {relative} must not release the camera shared mapping (AR-11-25, docs/ARCHITECTURE_HANDOFF.md 3.2 item 2)"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        scanned > 100,
+        "camera ownership scan must cover rust/pokecon/src (scanned {scanned} files)"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

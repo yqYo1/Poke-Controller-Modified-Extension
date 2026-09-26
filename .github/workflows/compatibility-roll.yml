@@ -1,0 +1,49 @@
+name: Rolling compatibility
+
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: rolling-compatibility
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  evaluate:
+    name: Evaluate upstream default branches
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Discover, execute, and classify immutable candidates
+        run: nix run .#compatibility-roll
+      - name: Verify the complete guarantee chain
+        run: nix run .#compatibility
+      - name: Format generated ledgers and reports
+        run: nix fmt
+      - name: Create signed review pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: automation/compatibility-roll
+          delete-branch: true
+          commit-message: 'chore(compatibility): evaluate upstream candidates'
+          title: 'chore(compatibility): evaluate upstream candidates'
+          body: |
+            Automated immutable-SHA compatibility evaluation.
+
+            - Re-runs all three fixed baselines and every promoted corpus.
+            - Promotes only managed-runtime and non-breaking API passes.
+            - Quarantines failures and unresolved hardware gates with durable evidence.
+
+            Normal review and required status checks remain mandatory.

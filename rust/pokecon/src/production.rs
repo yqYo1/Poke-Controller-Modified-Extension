@@ -1,0 +1,918 @@
+//! Construction and bounded shutdown of the production application services.
+
+use std::str::FromStr as _;
+use std::sync::Arc;
+use std::time::Duration;
+
+use crate::camera::{
+    CameraConfig, CameraManager, CaptureResolution, FlipMode, MappingDescriptor,
+    NativeCameraBackend, ScreenshotFormat, ScreenshotRuntimeSettings, ScreenshotService,
+    UnstoppedCameraWriter,
+};
+use crate::desktop::DesktopRuntimeSettings;
+use crate::device::ControllerState;
+use crate::device::{ControllerFormat, NativeSerialBackend, SerialConfig, SerialManager};
+use crate::device::{
+    DiscordTransport, NotificationService, ReqwestDiscordTransport, UnavailableDiscordTransport,
+    WindowsNativeNotificationTransport,
+};
+use crate::server::api::{SerialData, SerialEncoding, StateChangeCause};
+use crate::server::backend::RestBackend;
+use crate::server::realtime::RealtimeTransportConfig;
+use crate::server::realtime_connection::RealtimeConnectionConfig;
+use crate::server::rest;
+use crate::server::state::StateHub;
+use crate::server::webrtc::{WebRtcMedia, WebRtcMediaConfig, WebRtcPeerConfig};
+use crate::server::websocket::{
+    MotionJpegFeed, WebSocketBackend, WebSocketConfig, WebSocketTransport,
+};
+use crate::settings::pipeline::{LoadedSettings, PipelineRequest};
+use crate::settings::service::SettingsService;
+use crate::worker::dynamic::DynamicWorkerClient;
+use axum::Router;
+use base64::Engine as _;
+use serde::de::DeserializeOwned;
+use tokio::task::JoinHandle;
+use tokio::time::timeout;
+
+use crate::application_backend::{
+    ApplicationBackend, ApplicationBackendParts, initial_settings_snapshot, initial_state_snapshot,
+};
+use crate::camera::ScreenshotMode;
+use crate::command_service::{
+    CommandService, CommandServiceError, DynamicCommandBridge, ScriptSessionStop,
+    StaticCommandBridge,
+};
+use crate::dynamic_host::StartupDynamicHost;
+use crate::profile_service::ProfileService;
+use crate::script_host::{ProductionScriptHostFactory, ScriptUiCoordinator};
+use crate::script_runtime::ManagedUserScriptFactory;
+use crate::settings_runtime::{
+    CameraSettingsApplier, CompositeSettingsApplier, DesktopSettingsApplier, HostSettingsApplier,
+    NotificationSettingsApplier, RealtimeSettingsApplier, SerialSettingsApplier,
+    WebSocketSettingsApplier, notification_config, reconcile_desktop_settings,
+};
+
+const STATE_HISTORY_CAPACITY: usize = 256;
+const SERVICE_STOP_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Default)]
+struct BuildCleanup {
+    camera: Option<CameraManager>,
+    serial: Option<SerialManager>,
+    tasks: Vec<JoinHandle<()>>,
+}
+
+impl BuildCleanup {
+    async fn cleanup(mut self) {
+        for mut task in self.tasks.drain(..) {
+            task.abort();
+            if timeout(SERVICE_STOP_TIMEOUT, &mut task).await.is_err() {
+                tracing::error!("production build cleanup task did not stop before its deadline");
+            }
+        }
+        if let Some(serial) = self.serial.take() {
+            match timeout(SERVICE_STOP_TIMEOUT, serial.disconnect()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => tracing::error!(%error, "production build serial cleanup failed"),
+                Err(_) => tracing::error!("production build serial cleanup timed out"),
+            }
+        }
+        if let Some(camera) = self.camera.take() {
+            let result =
+                tokio::task::spawn_blocking(move || camera.shutdown(SERVICE_STOP_TIMEOUT)).await;
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(unstopped)) => {
+                    tracing::error!(
+                        diagnostic_id = "CAMERA_WRITER_UNSTOPPED",
+                        mapping = ?unstopped.mapping_descriptor(),
+                        "production build camera cleanup found an unstopped writer; retaining mapping until process exit without unmap"
+                    );
+                    // Build failure is immediately followed by process exit; retain the
+                    // guard until then instead of dropping the mapping under a live writer.
+                    std::mem::forget(unstopped);
+                }
+                Err(error) => {
+                    tracing::error!(%error, "production build camera cleanup task failed");
+                }
+            }
+        }
+    }
+
+    fn take_tasks(&mut self) -> Vec<JoinHandle<()>> {
+        std::mem::take(&mut self.tasks)
+    }
+
+    fn disarm(&mut self) {
+        self.camera = None;
+        self.serial = None;
+    }
+}
+
+/// Fully connected API router and every resource whose lifetime is bounded by
+/// one application run.
+pub(crate) struct ProductionRuntime {
+    router: Router,
+    backend: Arc<ApplicationBackend>,
+    commands: Arc<CommandService>,
+    camera: CameraManager,
+    serial: SerialManager,
+    tasks: Vec<JoinHandle<()>>,
+    script_shutdown_timeout: Duration,
+    /// Retained §15.6 steps 2/5/9 fallback ownership. `Some` while the camera
+    /// writer never stopped: the shared mapping and writer join handle stay
+    /// alive until OS process exit, and shared-memory release stays refused.
+    camera_writer_fallback: Option<UnstoppedCameraWriter>,
+}
+
+impl std::fmt::Debug for ProductionRuntime {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProductionRuntime")
+            .field("backend", &self.backend)
+            .field("commands", &self.commands)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ProductionRuntime {
+    /// Builds native devices, settings adapters, REST/WebSocket routes, and
+    /// lazy user-script orchestration from the final startup snapshot.
+    // The composition root is deliberately linear so initialization and
+    // ownership order can be compared directly with the shutdown contract.
+    pub(crate) async fn build(
+        request: PipelineRequest,
+        loaded: LoadedSettings,
+        host: Arc<StartupDynamicHost>,
+        dynamic: Option<Arc<DynamicWorkerClient>>,
+        screenshot_mode: ScreenshotMode,
+        desktop_settings: Option<DesktopRuntimeSettings>,
+    ) -> Result<Self, String> {
+        let mut cleanup = BuildCleanup::default();
+        match Self::build_inner(
+            request,
+            loaded,
+            host,
+            dynamic,
+            screenshot_mode,
+            desktop_settings,
+            &mut cleanup,
+        )
+        .await
+        {
+            Ok(runtime) => {
+                cleanup.disarm();
+                Ok(runtime)
+            }
+            Err(error) => {
+                cleanup.cleanup().await;
+                Err(error)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn build_inner(
+        request: PipelineRequest,
+        loaded: LoadedSettings,
+        host: Arc<StartupDynamicHost>,
+        dynamic: Option<Arc<DynamicWorkerClient>>,
+        screenshot_mode: ScreenshotMode,
+        desktop_settings: Option<DesktopRuntimeSettings>,
+        cleanup: &mut BuildCleanup,
+    ) -> Result<Self, String> {
+        let runtime = tokio::runtime::Handle::current();
+        let script_shutdown_timeout =
+            Duration::from_millis(setting_u64(&loaded, "python.script.shutdown_timeout_ms")?);
+        let camera_config = camera_config(&loaded)?;
+        let flip = FlipMode::from_str(setting_text(&loaded, "camera.flip_mode")?)
+            .map_err(|_error| "camera flip setting is invalid".to_owned())?;
+        let screenshot_format =
+            ScreenshotFormat::from_str(setting_text(&loaded, "camera.screenshot_format")?)
+                .map_err(|_error| "screenshot format setting is invalid".to_owned())?;
+        let jpeg_quality = setting_u8(&loaded, "jpeg_quality")?;
+        let screenshot_settings = ScreenshotRuntimeSettings::new(screenshot_format, jpeg_quality)
+            .map_err(|_error| "screenshot settings are invalid".to_owned())?;
+        let serial_port = setting_text(&loaded, "serial.port")?.to_owned();
+        let serial_baud_rate = setting_u32(&loaded, "serial.baud_rate")?;
+        let serial_format = ControllerFormat::parse(setting_text(&loaded, "serial.data_format")?)
+            .ok_or_else(|| "serial format setting is invalid".to_owned())?;
+        let serial_config = if serial_port.is_empty() {
+            None
+        } else {
+            Some(
+                SerialConfig::new(serial_port.clone(), serial_baud_rate, serial_format)
+                    .map_err(|_error| "serial settings are invalid".to_owned())?,
+            )
+        };
+        let initial_notification_config = notification_config(&raw_values(&loaded))?;
+        let camera =
+            CameraManager::start(Arc::new(NativeCameraBackend), camera_config.clone(), flip)
+                .map_err(|error| format!("camera runtime initialization failed: {error}"))?;
+        cleanup.camera = Some(camera.clone());
+        let screenshots = ScreenshotService::new(
+            camera.frame_source(),
+            loaded.roots.data.clone(),
+            screenshot_mode,
+            screenshot_settings.clone(),
+        );
+
+        let serial = SerialManager::new(Arc::new(NativeSerialBackend));
+        cleanup.serial = Some(serial.clone());
+        if let Some(serial_config) = serial_config {
+            serial
+                .update_config(serial_config)
+                .await
+                .map_err(|error| format!("serial runtime initialization failed: {error}"))?;
+        }
+
+        let notification_transport: Arc<dyn DiscordTransport> = match ReqwestDiscordTransport::new()
+        {
+            Ok(transport) => Arc::new(transport),
+            Err(error) => {
+                tracing::warn!(
+                    diagnostic_id = "NOTIFICATION_TRANSPORT_UNAVAILABLE",
+                    %error,
+                    "Discord notifications are unavailable for this process"
+                );
+                Arc::new(UnavailableDiscordTransport)
+            }
+        };
+        let notifications = Arc::new(NotificationService::new(
+            initial_notification_config,
+            notification_transport,
+            Arc::new(WindowsNativeNotificationTransport),
+        ));
+
+        let (realtime_applier, realtime_settings) = RealtimeSettingsApplier::new(&loaded)?;
+        let (websocket_applier, websocket_settings) = WebSocketSettingsApplier::new(&loaded)?;
+        let (realtime, motion_jpeg, fallback_media_task) = start_media(
+            camera.frame_source(),
+            screenshot_settings.clone(),
+            realtime_settings.clone(),
+        )
+        .await;
+
+        let mut applier = CompositeSettingsApplier::new(&loaded);
+        applier.push(HostSettingsApplier::new(Arc::clone(&host)));
+        if let Some(settings) = desktop_settings.clone() {
+            applier.push(DesktopSettingsApplier::new(settings));
+        }
+        applier.push(
+            CameraSettingsApplier::new(
+                camera.clone(),
+                camera_config,
+                flip,
+                screenshot_format,
+                jpeg_quality,
+                screenshot_settings.clone(),
+            )
+            .map_err(|error| format!("camera settings adapter initialization failed: {error}"))?,
+        );
+        applier.push(
+            SerialSettingsApplier::new(
+                serial.clone(),
+                runtime.clone(),
+                serial_port,
+                serial_baud_rate,
+                serial_format,
+            )
+            .map_err(|error| format!("serial settings adapter initialization failed: {error}"))?,
+        );
+        applier.push(NotificationSettingsApplier::new(
+            Arc::clone(&notifications),
+            runtime,
+            &loaded,
+        )?);
+        applier.push(realtime_applier);
+        applier.push(websocket_applier);
+        let settings = SettingsService::new(loaded.clone(), Box::new(applier));
+        let settings_snapshot = initial_settings_snapshot(&settings)?;
+        let state_snapshot = initial_state_snapshot(&host, &camera, &serial).await?;
+        let hub = StateHub::new(settings_snapshot, state_snapshot, STATE_HISTORY_CAPACITY)
+            .map_err(|error| format!("application state initialization failed: {error}"))?;
+
+        let script_ui = ScriptUiCoordinator::new();
+        let backend = Arc::new(ApplicationBackend::new(ApplicationBackendParts {
+            hub,
+            settings,
+            host: Arc::clone(&host),
+            camera: camera.clone(),
+            serial: serial.clone(),
+            screenshots,
+            notifications: Arc::clone(&notifications),
+            dynamic: dynamic.clone(),
+            realtime,
+            motion_jpeg: Some(motion_jpeg),
+            screenshot_mode,
+            script_ui: script_ui.clone(),
+        }));
+        let websocket_backend: Arc<dyn WebSocketBackend> = backend.clone();
+        let websocket = WebSocketTransport::new(websocket_backend, WebSocketConfig::default())
+            .map_err(|error| format!("WebSocket transport initialization failed: {error}"))?
+            .with_heartbeat_settings(websocket_settings);
+        let broker = websocket.broker();
+        script_ui.install_broker(broker.clone())?;
+
+        let hosts = Arc::new(ProductionScriptHostFactory::new(
+            tokio::runtime::Handle::current(),
+            Arc::clone(&host),
+            serial.clone(),
+            camera.clone(),
+            screenshot_settings,
+            notifications,
+            script_ui,
+        ));
+        let command_root = loaded.roots.data.join("Commands");
+        std::fs::create_dir_all(&command_root)
+            .map_err(|error| format!("user command root initialization failed: {error}"))?;
+        let factory = Arc::new(ManagedUserScriptFactory::new(
+            request,
+            &loaded,
+            command_root,
+            hosts,
+        ));
+        let bridge: Arc<dyn DynamicCommandBridge> = dynamic.map_or_else(
+            || Arc::new(StaticCommandBridge::new(Arc::clone(&host))) as Arc<_>,
+            |client| client as Arc<_>,
+        );
+        let commands = Arc::new(CommandService::new(
+            Arc::clone(&host),
+            factory,
+            Arc::clone(&bridge),
+        ));
+        let profiles = Arc::new(ProfileService::new(
+            Arc::clone(&host),
+            Arc::clone(&commands),
+            bridge,
+        ));
+        backend.install_command_services(Arc::clone(&commands), profiles)?;
+
+        let rest_backend: Arc<dyn RestBackend> = backend.clone();
+        let router = rest::router(rest_backend).merge(websocket.router());
+        if let Some(task) = fallback_media_task {
+            cleanup.tasks.push(task);
+        }
+        cleanup.tasks.extend(spawn_device_state_events(
+            Arc::clone(&backend),
+            &camera,
+            &serial,
+        ));
+        cleanup.tasks.push(spawn_serial_events(&serial, broker));
+        cleanup.tasks.push(spawn_runtime_reconciler(
+            Arc::clone(&backend),
+            host.subscribe_runtime_changes(),
+            desktop_settings,
+        ));
+        cleanup.tasks.push(spawn_dynamic_controller_publisher(
+            Arc::clone(&backend),
+            host.subscribe_controller_outputs(),
+        ));
+        cleanup.tasks.push(spawn_command_recompute(
+            Arc::clone(&backend),
+            Arc::clone(&commands),
+            host.subscribe_command_recompute(),
+        ));
+
+        Ok(Self {
+            router,
+            backend,
+            commands,
+            camera,
+            serial,
+            tasks: cleanup.take_tasks(),
+            script_shutdown_timeout,
+            camera_writer_fallback: None,
+        })
+    }
+
+    pub(crate) fn router(&self) -> Router {
+        self.router.clone()
+    }
+
+    /// Executes shutdown steps 1 through 3 after `AppShutdownPre` has closed
+    /// dynamic mutations.
+    pub(crate) async fn stop_inputs_camera_and_scripts(&mut self) {
+        let tasks = std::mem::take(&mut self.tasks);
+        for mut task in tasks {
+            task.abort();
+            if timeout(SERVICE_STOP_TIMEOUT, &mut task).await.is_err() {
+                tracing::error!("production shutdown task did not join before its deadline");
+            }
+        }
+        let controller = {
+            let arbiter = self.backend.host().controller_safety().arbiter();
+            let mut arbiter = arbiter.lock();
+            arbiter.force_release_all();
+            arbiter.output()
+        };
+        let _ = timeout(
+            SERVICE_STOP_TIMEOUT,
+            self.serial.send_controller_state(controller),
+        )
+        .await;
+        let camera = self.camera.clone();
+        match tokio::task::spawn_blocking(move || camera.shutdown(SERVICE_STOP_TIMEOUT)).await {
+            Ok(result) => {
+                self.camera_writer_fallback = retain_camera_fallback_on_timeout(result);
+            }
+            Err(error) => tracing::error!(%error, "camera shutdown task failed"),
+        }
+        let script_shutdown = self.commands.shutdown(self.script_shutdown_timeout).await;
+        if let Err(error) = &script_shutdown {
+            tracing::error!(%error, "user-script worker shutdown failed");
+        }
+        recover_reader_pins_after_script_shutdown(&self.camera, &script_shutdown);
+    }
+
+    /// Executes shutdown steps 6 and 7 after the dynamic worker is reaped.
+    pub(crate) async fn stop_serial(&self) {
+        {
+            let arbiter = self.backend.host().controller_safety().arbiter();
+            arbiter.lock().force_release_all();
+        }
+        let _ = timeout(
+            SERVICE_STOP_TIMEOUT,
+            self.serial.send_controller_state(ControllerState::NEUTRAL),
+        )
+        .await;
+        match timeout(SERVICE_STOP_TIMEOUT, self.serial.disconnect()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::error!(%error, "serial shutdown failed"),
+            Err(_) => tracing::error!("serial shutdown timed out"),
+        }
+    }
+
+    /// Durable §15.6 `camera_writer_unstopped` state for this shutdown
+    /// transaction. `true` once the camera writer has missed its deadline,
+    /// whether observed here or inside [`CameraManager`].
+    #[allow(
+        dead_code,
+        reason = "step-5/9 shared-memory release wiring reads this gate; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn camera_writer_unstopped(&self) -> bool {
+        self.camera.writer_unstopped() || self.camera_writer_fallback.is_some()
+    }
+
+    /// §15.6 step 5 gate: shared-memory release is allowed only when the
+    /// writer-stopped state is false, i.e. step 2 confirmed writer
+    /// termination. A `false` return forbids unmap; the fallback in
+    /// [`ProductionRuntime::camera_mapping_fallback`] applies instead.
+    #[allow(
+        dead_code,
+        reason = "step-5 shared-memory release wiring reads this gate; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn shared_memory_release_allowed(&self) -> bool {
+        !self.camera_writer_unstopped()
+    }
+
+    /// §15.6 steps 5/9 explicit fallback teardown: while the writer is
+    /// unstopped, the Rust main mapping is retained until OS process exit
+    /// reclaims it instead of being unmapped. POSIX unlinks only the name
+    /// while the existing mapping stays; Windows retains the mapping handle.
+    /// `Some` carries the retained mapping descriptor without claiming
+    /// normal unmap completion; `None` means the fallback is not active.
+    #[allow(
+        dead_code,
+        reason = "step-9 process-exit wiring reads this fallback; write-side coverage lives in manager/helper tests"
+    )]
+    pub(crate) fn camera_mapping_fallback(&self) -> Option<MappingDescriptor> {
+        self.camera_writer_fallback
+            .as_ref()
+            .map(UnstoppedCameraWriter::mapping_descriptor)
+    }
+}
+
+/// §15.6 step 2 to steps 5/9 propagation: converts a camera shutdown outcome
+/// into retained fallback ownership. A timed-out writer is logged with a
+/// critical diagnostic and kept alive (mapping plus join handle) so later
+/// steps refuse shared-memory release; a stopped writer retains nothing.
+fn retain_camera_fallback_on_timeout(
+    result: Result<(), UnstoppedCameraWriter>,
+) -> Option<UnstoppedCameraWriter> {
+    match result {
+        Ok(()) => None,
+        Err(unstopped) => {
+            tracing::error!(
+                diagnostic_id = "CAMERA_WRITER_UNSTOPPED",
+                mapping = ?unstopped.mapping_descriptor(),
+                "camera writer did not stop before its deadline; retaining mapping until process exit without unmap"
+            );
+            Some(unstopped)
+        }
+    }
+}
+
+/// Recovers abandoned camera reader pins after the user-script worker stops
+/// (§15.6 step 3, §7.9.4 worker-crash recovery).
+///
+/// Only `Ok(Some(_))` authorizes the reset. `UserScriptSession::shutdown`
+/// returns `Ok` solely after `ManagedWorker::stop` yields `Ok(StopReport)`,
+/// and every `Ok(StopReport)` path follows a completed OS `child.wait()`
+/// (the unreaped forced-termination timeout returns `Err`, which propagates
+/// here as `Err`). Shutdown additionally holds the profile gate with the
+/// session taken, and nothing respawns during application shutdown, so no
+/// replacement reader exists yet. `Ok(None)` (no worker was reaped by this
+/// shutdown) and `Err(_)` (reap unproven, possibly still live) leave all
+/// pins untouched and report `None`.
+fn recover_reader_pins_after_script_shutdown(
+    camera: &CameraManager,
+    outcome: &Result<Option<ScriptSessionStop>, CommandServiceError>,
+) -> Option<usize> {
+    if outcome.as_ref().ok()?.is_some() {
+        match camera.ring().recover_reader_pins(true, true) {
+            Ok(recovered) => {
+                tracing::info!(
+                    recovered,
+                    "camera reader pins recovered after script worker exit"
+                );
+                Some(recovered)
+            }
+            Err(error) => {
+                tracing::error!(%error, "camera reader pin recovery failed after script worker exit");
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
+
+async fn start_media(
+    frames: crate::camera::LatestFrameSource,
+    screenshot_settings: ScreenshotRuntimeSettings,
+    runtime_settings: tokio::sync::watch::Receiver<
+        crate::server::realtime_connection::RealtimeRuntimeSettings,
+    >,
+) -> (
+    Option<RealtimeConnectionConfig>,
+    MotionJpegFeed,
+    Option<JoinHandle<()>>,
+) {
+    let media = WebRtcMedia::new(
+        frames.webrtc(),
+        frames.motion_jpeg(screenshot_settings.clone()),
+        WebRtcMediaConfig::default(),
+    )
+    .await;
+    match media {
+        Ok(media) => {
+            let motion_jpeg = media.motion_jpeg();
+            let initial = runtime_settings.borrow().clone();
+            let peer = WebRtcPeerConfig {
+                stun_server: initial.stun_server().to_owned(),
+                ..WebRtcPeerConfig::default()
+            };
+            let transport = RealtimeTransportConfig {
+                auto_recover: initial.auto_recover(),
+                recovery_probe_interval: initial.recovery_probe_interval(),
+                ..RealtimeTransportConfig::default()
+            };
+            match RealtimeConnectionConfig::new(media, peer, transport) {
+                Ok(config) => (
+                    Some(config.with_runtime_settings(runtime_settings)),
+                    motion_jpeg,
+                    None,
+                ),
+                Err(error) => {
+                    tracing::warn!(%error, "realtime transport is unavailable; using Motion JPEG");
+                    start_fallback_motion_jpeg(&frames, screenshot_settings)
+                }
+            }
+        }
+        Err(error) => {
+            tracing::warn!(%error, "WebRTC encoder is unavailable; using Motion JPEG");
+            start_fallback_motion_jpeg(&frames, screenshot_settings)
+        }
+    }
+}
+
+fn start_fallback_motion_jpeg(
+    frames: &crate::camera::LatestFrameSource,
+    screenshot_settings: ScreenshotRuntimeSettings,
+) -> (
+    Option<RealtimeConnectionConfig>,
+    MotionJpegFeed,
+    Option<JoinHandle<()>>,
+) {
+    let feed = MotionJpegFeed::new();
+    let published = feed.clone();
+    let mut source = frames.motion_jpeg(screenshot_settings);
+    let task = tokio::spawn(async move {
+        loop {
+            let snapshot = match source.changed().await {
+                Ok(Some(snapshot)) => snapshot,
+                Ok(None) => {
+                    published.suspend();
+                    continue;
+                }
+                Err(_) => break,
+            };
+            let jpeg_source = source.clone();
+            match tokio::task::spawn_blocking(move || jpeg_source.encode_jpeg(&snapshot)).await {
+                Ok(Ok(jpeg)) => published.publish(jpeg.bytes),
+                Ok(Err(error)) => tracing::warn!(%error, "Motion JPEG encoding failed"),
+                Err(error) => tracing::warn!(%error, "Motion JPEG encoder task failed"),
+            }
+        }
+    });
+    (None, feed, Some(task))
+}
+
+fn spawn_serial_events(
+    serial: &SerialManager,
+    broker: crate::server::websocket::WebSocketBroker,
+) -> JoinHandle<()> {
+    let mut received = serial.subscribe_received();
+    tokio::spawn(async move {
+        loop {
+            match received.recv().await {
+                Ok(bytes) => {
+                    broker.publish_serial(SerialData {
+                        encoding: SerialEncoding::Base64,
+                        data: base64::engine::general_purpose::STANDARD.encode(&bytes),
+                        byte_length: bytes.len(),
+                    });
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                    tracing::warn!(count, "serial monitor dropped lagged receive chunks");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}
+
+fn spawn_device_state_events(
+    backend: Arc<ApplicationBackend>,
+    camera: &CameraManager,
+    serial: &SerialManager,
+) -> Vec<JoinHandle<()>> {
+    let mut camera_status = camera.subscribe_status();
+    let camera_backend = Arc::clone(&backend);
+    let camera_task = tokio::spawn(async move {
+        while camera_status.changed().await.is_ok() {
+            if let Err(error) = camera_backend
+                .reconcile_device_state(StateChangeCause::Camera)
+                .await
+            {
+                tracing::error!(error = ?error.error(), "camera state reconciliation failed");
+            }
+        }
+    });
+
+    let mut serial_status = serial.subscribe_connection_status();
+    let serial_backend = backend;
+    let serial_task = tokio::spawn(async move {
+        while serial_status.changed().await.is_ok() {
+            if let Err(error) = serial_backend
+                .reconcile_device_state(StateChangeCause::Serial)
+                .await
+            {
+                tracing::error!(error = ?error.error(), "serial state reconciliation failed");
+            }
+        }
+    });
+
+    vec![camera_task, serial_task]
+}
+
+fn spawn_runtime_reconciler(
+    backend: Arc<ApplicationBackend>,
+    mut changes: tokio::sync::watch::Receiver<u64>,
+    desktop_settings: Option<DesktopRuntimeSettings>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        while changes.changed().await.is_ok() {
+            if let Some(settings) = desktop_settings.as_ref()
+                && let Err(error) =
+                    reconcile_desktop_settings(settings, &backend.host().loaded_settings())
+            {
+                tracing::error!(%error, "desktop settings reconciliation failed");
+            }
+            if let Err(error) = backend
+                .reconcile_host(StateChangeCause::DynamicConfig)
+                .await
+            {
+                tracing::error!(error = ?error.error(), "runtime state reconciliation failed");
+            }
+        }
+    })
+}
+
+/// Forwards pending dynamic controller outputs to hardware in arrival order.
+///
+/// Each wake publishes the authoritative merged arbiter output under the
+/// backend mutation gate, so dynamic frames serialize with browser/script
+/// mutations. The receiver is marked changed once up front to flush any
+/// dynamic output that landed before this subscription (dynamic startup runs
+/// before the production runtime subscribes). Later state commits only bump
+/// the runtime generation, so the publisher never self-triggers.
+fn spawn_dynamic_controller_publisher(
+    backend: Arc<ApplicationBackend>,
+    mut outputs: tokio::sync::watch::Receiver<u64>,
+) -> JoinHandle<()> {
+    outputs.mark_changed();
+    tokio::spawn(async move {
+        while outputs.changed().await.is_ok() {
+            if let Err(error) = backend.publish_dynamic_controller().await {
+                tracing::error!(error = ?error.error(), "dynamic controller output publication failed");
+            }
+        }
+    })
+}
+
+fn spawn_command_recompute(
+    backend: Arc<ApplicationBackend>,
+    commands: Arc<CommandService>,
+    mut changes: tokio::sync::watch::Receiver<u64>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        while changes.changed().await.is_ok() {
+            if let Err(error) = commands.recompute_display_cache().await {
+                tracing::warn!(%error, "command display cache recomputation failed");
+            }
+            if let Err(error) = backend.reconcile_host(StateChangeCause::Commands).await {
+                tracing::error!(error = ?error.error(), "command state reconciliation failed");
+            }
+        }
+    })
+}
+
+fn camera_config(loaded: &LoadedSettings) -> Result<CameraConfig, String> {
+    CameraConfig::new(
+        setting_json(loaded, "camera.device")?,
+        setting_u32(loaded, "camera.capture_fps")?,
+        CaptureResolution::from_str(setting_text(loaded, "camera.capture_resolution")?)
+            .map_err(|_error| "camera resolution setting is invalid".to_owned())?,
+    )
+    .map_err(|_error| "camera settings are invalid".to_owned())
+}
+
+fn setting_json<T>(loaded: &LoadedSettings, id: &str) -> Result<T, String>
+where
+    T: DeserializeOwned,
+{
+    let value = loaded
+        .settings
+        .get(id)
+        .ok_or_else(|| format!("required setting {id} is missing"))?
+        .value
+        .clone();
+    serde_json::from_value(value).map_err(|_error| format!("setting {id} has an invalid type"))
+}
+
+fn setting_text<'a>(loaded: &'a LoadedSettings, id: &str) -> Result<&'a str, String> {
+    loaded
+        .settings
+        .string(id)
+        .map_err(|_error| format!("setting {id} has an invalid type"))
+}
+
+fn setting_u64(loaded: &LoadedSettings, id: &str) -> Result<u64, String> {
+    u64::try_from(
+        loaded
+            .settings
+            .integer(id)
+            .map_err(|_error| format!("setting {id} has an invalid type"))?,
+    )
+    .map_err(|_error| format!("setting {id} is outside its runtime range"))
+}
+
+fn setting_u32(loaded: &LoadedSettings, id: &str) -> Result<u32, String> {
+    u32::try_from(setting_u64(loaded, id)?)
+        .map_err(|_error| format!("setting {id} is outside its runtime range"))
+}
+
+fn setting_u8(loaded: &LoadedSettings, id: &str) -> Result<u8, String> {
+    u8::try_from(setting_u64(loaded, id)?)
+        .map_err(|_error| format!("setting {id} is outside its runtime range"))
+}
+
+fn raw_values(loaded: &LoadedSettings) -> std::collections::BTreeMap<String, serde_json::Value> {
+    loaded
+        .settings
+        .values()
+        .iter()
+        .map(|(id, resolved)| (id.clone(), resolved.value.clone()))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::{recover_reader_pins_after_script_shutdown, retain_camera_fallback_on_timeout};
+    use crate::camera::CaptureResolution;
+    use crate::camera::backend::CameraConfig;
+    use crate::camera::selector::CameraSelector;
+    use crate::camera::shared_ring::RingError;
+    use crate::camera::virtual_camera::{
+        RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
+    };
+    use crate::camera::{CameraManager, FlipMode};
+    use crate::command_service::{CommandServiceError, ScriptSessionStop};
+
+    fn manager_with_abandoned_pin() -> CameraManager {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6])],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        manager
+            .ring()
+            .pin_current_for_diagnostics()
+            .unwrap()
+            .unwrap()
+            .abandon_for_crash_simulation();
+        manager
+    }
+
+    #[test]
+    fn confirmed_worker_exit_resets_stale_reader_pin() {
+        let manager = manager_with_abandoned_pin();
+        let outcome: Result<Option<ScriptSessionStop>, CommandServiceError> =
+            Ok(Some(ScriptSessionStop { forced: false }));
+        assert_eq!(
+            recover_reader_pins_after_script_shutdown(&manager, &outcome),
+            Some(1)
+        );
+        assert_eq!(manager.ring().recover_reader_pins(true, true).unwrap(), 0);
+    }
+
+    #[test]
+    fn unconfirmed_or_absent_worker_exit_preserves_reader_pin() {
+        for outcome in [Err(CommandServiceError::ProfileSwitchGateNotHeld), Ok(None)] {
+            let manager = manager_with_abandoned_pin();
+            assert_eq!(
+                recover_reader_pins_after_script_shutdown(&manager, &outcome),
+                None
+            );
+            assert_eq!(
+                manager.ring().pin_current_for_diagnostics().unwrap_err(),
+                RingError::ReaderAlreadyPinned
+            );
+        }
+    }
+
+    #[test]
+    fn camera_shutdown_timeout_is_retained_as_fallback() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6]), RecordedFrame::Hang],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        for _ in 0..1_000 {
+            if manager.ring().read_published().unwrap().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+        // This is the exact outcome type `stop_inputs_camera_and_scripts`
+        // feeds into the fallback helper via `spawn_blocking`.
+        let outcome = manager.shutdown(Duration::from_millis(20));
+        assert!(outcome.is_err());
+        let fallback = retain_camera_fallback_on_timeout(outcome);
+        let guard = fallback.expect("timeout must be retained");
+        assert!(guard.writer_unstopped());
+        assert_eq!(guard.mapping_descriptor(), manager.mapping_descriptor());
+        // The retained guard keeps the mapping observable instead of
+        // claiming any unmap completion.
+        assert!(manager.ring().read_published().unwrap().is_some());
+        drop(guard);
+    }
+
+    #[test]
+    fn camera_shutdown_success_retains_no_fallback() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+            30,
+            [RecordedFrame::Solid([4, 5, 6])],
+        )));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+            FlipMode::None,
+        )
+        .unwrap();
+        let outcome = manager.shutdown(Duration::from_secs(1));
+        assert!(outcome.is_ok());
+        assert!(retain_camera_fallback_on_timeout(outcome).is_none());
+        assert!(!manager.writer_unstopped());
+    }
+}

@@ -679,14 +679,12 @@ def derivation_hashes(
             config.timeout_seconds,
         )
         try:
-            payload = json.loads(output)
+            decoded = json.loads(output)
         except json.JSONDecodeError as error:
             invalid_value(f"nix eval returned invalid JSON: {error}")
-        if not isinstance(payload, dict) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in payload.items()
-        ):
-            invalid_value("nix eval returned a non-string-valued object")
+        if not isinstance(decoded, dict):
+            invalid_value("nix eval returned a non-object payload")
+        payload = cast("JsonObject", decoded)
         for attr in group:
             _, _, leaf = split_attr(attr)
             if leaf not in payload:
@@ -694,6 +692,8 @@ def derivation_hashes(
                     f"nix eval has no leaf {leaf!r} under {collection}.{system}"
                 )
             drv_path = payload[leaf]
+            if not isinstance(drv_path, str):
+                invalid_value("nix eval returned a non-string-valued object")
             if not drv_path.endswith(".drv"):
                 invalid_value(f"nix eval returned a non-derivation path: {drv_path!r}")
             resolved[attr] = drv_path
@@ -709,7 +709,7 @@ def run_matrix(
     manifest: Mapping[str, Sequence[str]],
     areas: Sequence[str] = AREAS,
     attrs: Sequence[str] = MATRIX_ATTRS,
-    config: NixConfig = NixConfig(),  # noqa: B008
+    config: NixConfig | None = None,
 ) -> MatrixReport:
     for area in areas:
         if area not in AREAS:
@@ -720,6 +720,7 @@ def run_matrix(
     for attr in attrs:
         if attr not in DERIVATION_SOURCE_AREAS:
             invalid_value(f"unknown matrix attr: {attr!r}")
+    resolved_config = NixConfig() if config is None else config
     head_sha = git_head_sha(repo_root)
     scratch_parent = Path(tempfile.mkdtemp(prefix="source-boundary-"))
     tree_dir = scratch_parent / "tree"
@@ -730,7 +731,7 @@ def run_matrix(
             120,
         )
         try:
-            baseline = derivation_hashes(tree_dir, attrs, config)
+            baseline = derivation_hashes(tree_dir, attrs, resolved_config)
             rows: list[MatrixRow] = []
             for area in areas:
                 probe = AREA_PROBES[area]
@@ -739,7 +740,7 @@ def run_matrix(
                 original = target.read_bytes()
                 target.write_bytes(original + PROBE_SUFFIX)
                 try:
-                    observed = derivation_hashes(tree_dir, attrs, config)
+                    observed = derivation_hashes(tree_dir, attrs, resolved_config)
                 finally:
                     target.write_bytes(original)
                 cells: list[MatrixCell] = []

@@ -637,8 +637,8 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [x] **AR-10.10-07** Package CIも常に軽量な集約gateを返し、無関係な変更は明示的成功、関係する変更はOS別package jobの成功を必須にする（証跡: gate定義 `package.yml:486-491`（全6 jobに`"applicable": needs.plan.outputs.product == 'true'`）。package-unrelated fixture＝push [36349830139](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/36349830139)（`cf97443`、PLAN.mdのみ）で6 job全てが`completed／skipped`＋`Package CI Required` success。package-related＝[36280421865](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/36280421865)／[36282007231](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/36282007231)は7/7 success。両方向とも設計どおり）。
 - [x] **AR-10.10-06** 通常CI集約gateを既定branch rulesetのrequired status checkに指定し、失敗中または未完了のmergeを拒否する（証跡: ruleset 6904111 readback（enforcement active、対象`~DEFAULT_BRANCH`、required=`Normal CI Required`＋`Package CI Required`）。非draft probe PR [#29](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/29)（base main／head refactor系統）で3状態を実測: pending（Plan/Fast IN_PROGRESS）・constituent失敗（Fast FAILURE）・集約失敗（`Normal CI Required` COMPLETED/FAILURE, 約812s）のすべてで`mergeStateStatus: BLOCKED`＋`mergeable: MERGEABLE`（blockerはcheck、競合ではない）。main-based probe [#28](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/28)はrequired context未報告でもBLOCKED（missing-context variant）。PR [#27](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/27)はpending中BLOCKED。probe teardown（close＋branch削除）検証済み）。
 - [x] **AR-13.1-13** 既定branch rulesetを読み戻し、通常CIとPackage CIの集約gateがrequired status checkで、未完了または失敗時にmerge可能と判定されないことを確認する（証跡: ruleset 6904111 readback JSON＋required context一覧（`Normal CI Required`、`Package CI Required`）。非draft probe [#29](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/29)のpending／Fast FAILURE／`Normal CI Required` FAILUREの3状態すべてで`mergeStateStatus: BLOCKED`・`mergeable: MERGEABLE`。PR [#27](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/27)のpending-BLOCKED記録も参照。管理者bypass不使用はAR-13.1-14参照）。
-- [ ] **AR-13.1-14** rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時無効化を使用しない（予定証跡: GitHub ruleset／merge audit logと、管理者bypass、直接merge、一時無効化の操作件数0の記録）。
-  PM声明: refactor検証期間（branch開始〜2026-09-28）にadmin bypass／直接API merge／一時的ruleset無効化は不使用。補強: ruleset 6904111はupdated_at 2026-09-07以降不変（created_at 2025-07-23）、origin/main履歴はmerge-only、org audit-log APIはuser accountのため404で利用不可。注: ruleset config内にbypass actor entry（admin role）は存在するが未使用。残作業: フェーズ3完了報告への記載。
+- [x] **AR-13.1-14** rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時無効化を使用しない（予定証跡: GitHub ruleset／merge audit logと、管理者bypass、直接merge、一時無効化の操作件数0の記録）。
+  PM声明: refactor検証期間（branch開始〜2026-09-28）にadmin bypass／直接API merge／一時的ruleset無効化は不使用。補強: ruleset 6904111はupdated_at 2026-09-07以降不変（created_at 2025-07-23）、origin/main履歴はmerge-only、org audit-log APIはuser accountのため404で利用不可。注: ruleset config内にbypass actor entry（admin role）は存在するが未使用。フェーズ3完了報告（本節末尾）に操作件数0を記載済み。
 
 ### 重複除去と Nix 成果物境界
 
@@ -675,6 +675,16 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [x] **AR-13.1-25** 通常CI再構成後もPackage CIとReleaseがOS別成果物、clean install、upgrade、uninstall、再現可能性を従来どおり検査する（証跡: 移行前後matrix（`280360f^` vs HEAD、release.yml込み）=Package移行前4 job全維持＋Windows再現性2 job追加（`c06d9af`／`86c62a0`、payload/tree/exe 3層cmp）＋`plan`/`required`集約の計8 job。移行前緑[31066656315](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/31066656315)（@df9884f、4/4）／移行後緑[36282007231](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/36282007231)（@d861800）・[36353061684](https://github.com/yqYo1/Poke-Controller-Modified-Extension/actions/runs/36353061684)（@fec66d9）とも8/8（ubuntu／windows別緑）。Release=`linux`／`windows`／`github-release`＋全assertion維持＋Windows byte-for-byte再現性追加（`280360f`はrelease.yml非接触）。era間12 commit分類=additive／determinism／triggerのみで**削除ゼロ**）。
   注: Release実run証跡はtag `v*`未有のため取得不能（利用者担当・本計画外、workflow定義面の維持のみ保証）。
 - [x] **AR-10.10-PACKAGE-REPRO** 同一入力からpackageを二回生成する再現性検査は意図した重複として通常CIの重複削減対象から除外する（証跡: run 36282007231の2 build traceでdigest MATCH（上記）、outer upload-zip digest差分はzip framingによる設計どおりの差異。例外を`docs/PACKAGE_REPRODUCIBILITY_EXCEPTIONS.md`へ記録し、`test_package_reproducibility_exceptions.py` 9件で`linux+linux_repro→repro_check`／`windows+windows_repro→windows_repro_check`の依存・比較marker・同一version probe範囲をfail-closed検査）。
+
+### フェーズ3完了報告（2026-09-28）
+
+通常CI再構成の完了報告。操作統制（AR-13.1-14）を含む。
+
+- **起動と判定**: 両workflowはpush＋PRのdual trigger（`main`／`master`／`refactor/rust-core`限定、workflow-level path filterなし）。8領域の独立判定（`scripts/ci/regions.py`、path→region matrix）と無関係jobの明示skip（`expected_result: "skipped"`）。安定名集約`Normal CI Required`／`Package CI Required`をruleset 6904111のrequired status checkに固定。分類4系統（none／docs単一／contracts+python／PR全true）＋mergeability 3状態（pending／Fast失敗／集約失敗）を実CIで実測。
+- **重複除去と境界**: 論理検査の1回実行（inventory exit 0、duplication空、意図的例外14件文書化）。source boundary 10領域×6 attr＝60/60。binary cache（trusted pushのみwrite／PRはread、署名検証）の導入とsubstitute実測（built_derivations 398→15、wall 943.0→694.0s）。
+- **計測と監視**: p95 gate（fast=180s／docs=300s／product=720s、nearest-rank n=10、bootstrap未満はwarning）。実測: product p95=696.0≤720（10-sample）、docs p95=104.0≤300（10-sample）。`ci-watch`既定=3400s（直近green push対10件のp95=2587s＋31.4%余裕）と終了理由の実測（124＝期限切れ／1＝required failure）。
+- **操作統制（AR-13.1-14）**: 本リファクタリング検証期間（branch開始〜2026-09-28）に管理者bypass・APIによる直接merge・rulesetの一時無効化の使用**0件**（ruleset 6904111はupdated_at 2026-09-07以降不変、merge操作は未実施、probe PR #28／#29はclose＋branch削除でteardown検証済み）。
+- **留保**: fast kindのp95強制は履歴蓄積待ち（4/10、AR-10.10-TIME-01／AR-11-46／AR-13.1-16で追跡）。
 
 ## フェーズ 4 — 確定した実行時挙動を反映
 

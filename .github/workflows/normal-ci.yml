@@ -2,7 +2,7 @@ name: Normal CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, refactor/rust-core]
   pull_request:
     branches: [main, master, refactor/rust-core]
 

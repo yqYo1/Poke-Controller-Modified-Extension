@@ -18602,11 +18602,12 @@ def test_ci_workflows_use_one_fail_closed_region_plan_and_required_aggregates() 
     ):
         assert not (workflow_root / retired_workflow).exists()
     for workflow in (normal, package):
-        # Pushes to the integration branch are deliberately excluded while
-        # pull requests may target it; see PLAN.md AR-10.10-05 for the open
-        # direct-push coverage trade-off.
-        assert workflow.count("branches: [main, master]") == 1
-        assert workflow.count("branches: [main, master, refactor/rust-core]") == 1
+        # Both push and pull_request cover the integration branch: direct
+        # pushes are inspected, and same-head duplicate runs while a PR is
+        # open are accepted best-effort (AR-10.10-05, owner decision
+        # 2026-09-28).
+        assert workflow.count("branches: [main, master]") == 0
+        assert workflow.count("branches: [main, master, refactor/rust-core]") == 2
         assert not re.search(r"(?m)^\s*paths\s*:", workflow)
         assert workflow.count("  plan:\n") == 1
         assert workflow.count("name: Plan changed regions") == 1

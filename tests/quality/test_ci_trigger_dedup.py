@@ -1,20 +1,30 @@
-"""Regression: one PR head commit must trigger exactly one CI run (AR-10.10-05).
+"""Regression: direct-push inspection and PR-head dedup trade-off (AR-10.10-05).
 
-Observed duplicate: pushing head commit ``82b973e`` to ``refactor/rust-core``
-while its pull request against ``main`` was open produced both a ``push`` and
-``pull_request`` workflow run. GitHub Actions uses the pushed tip for
-``push.GITHUB_SHA`` and a synthetic merge commit for ``pull_request.GITHUB_SHA``;
-this test therefore models one shared PR head and checks event selection, not
-equality of the two event SHAs.
+History: pushing head commit ``82b973e`` to ``refactor/rust-core`` while its
+pull request against ``main`` was open produced both a ``push`` and
+``pull_request`` workflow run. The first mitigation kept ``on.push`` limited
+to default branches, which left PR-less pushes to the integration branch
+uninspected.
+
+Owner decision (2026-09-28, see PLAN.md AR-10.10-05): direct pushes to the
+integration branch ``refactor/rust-core`` are allowed and must be inspected
+via the ``push`` event. The same-head duplicate run that occurs while a pull
+request is open is accepted best-effort: static ``on:`` filters cannot
+distinguish cross-event duplicates, and GitHub uses the pushed tip for
+``push.GITHUB_SHA`` but a synthetic merge commit for
+``pull_request.GITHUB_SHA``.
 
 Trigger contract under test (``.github/workflows/normal-ci.yml`` and
 ``.github/workflows/package.yml``):
 
-* feature-branch commits are checked once via ``pull_request``;
 * direct commits to a default branch (``main``/``master``) are checked once
   via ``push``;
-* ``push`` must therefore not list any feature/integration branch, otherwise a
-  push to that branch while its PR is open fires both events for one SHA.
+* direct commits to the integration branch (``refactor/rust-core``) are
+  checked via ``push`` even when no pull request exists;
+* feature commits are checked via ``pull_request`` whose base may be a
+  default or the integration branch;
+* a push to the integration branch while its PR is open fires both events for
+  one head commit; this duplicate is accepted best-effort.
 
 The test parses the workflow ``on:`` trigger block with the standard library
 only and simulates GitHub branch-filter matching for an event/branch matrix.
@@ -38,6 +48,7 @@ WORKFLOWS = {
 
 FEATURE_BRANCH = "refactor/rust-core"
 DEFAULT_BRANCHES = ("main", "master")
+PUSH_BRANCHES = frozenset((*DEFAULT_BRANCHES, FEATURE_BRANCH))
 
 _PUSH_RE = re.compile(
     r"(?m)^on:\s*\n(?:^[ ]+.*\n)*?^[ ]+push:\s*\n^[ ]+branches:\s*\[([^\]]*)\]",
@@ -65,7 +76,9 @@ class Trigger:
         """Event names GitHub would fire for one pushed SHA.
 
         ``pr_base`` is the base of the open PR whose head contains the SHA, or
-        ``None`` when the push has no associated pull request.
+        ``None`` when the push has no associated pull request. When both
+        events fire for one head commit the duplicate is accepted
+        best-effort (AR-10.10-05).
         """
         runs: list[str] = []
         if pushed_branch in self.push_branches:
@@ -94,12 +107,21 @@ def workflow(request: pytest.FixtureRequest) -> tuple[Path, Trigger]:
     return path, _load_trigger(path)
 
 
-def test_feature_branch_push_with_open_pr_runs_once_via_pull_request(
+def test_direct_integration_branch_push_without_pr_is_checked_via_push(
     workflow: tuple[Path, Trigger],
 ) -> None:
-    """Regression: head commit 82b973e is tested only through pull_request."""
+    """AR-10.10-05: PR-less integration-branch pushes must trigger CI."""
+    _, trigger = workflow
+    assert trigger.runs_for(pushed_branch=FEATURE_BRANCH, pr_base=None) == ("push",)
+
+
+def test_feature_branch_push_with_open_pr_is_accepted_duplicate(
+    workflow: tuple[Path, Trigger],
+) -> None:
+    """Best-effort trade-off: both events fire for one head commit."""
     _, trigger = workflow
     assert trigger.runs_for(pushed_branch=FEATURE_BRANCH, pr_base="main") == (
+        "push",
         "pull_request",
     )
 
@@ -121,14 +143,15 @@ def test_stacked_pr_targeting_integration_branch_is_checked(
     ) == ("pull_request",)
 
 
-def test_push_lists_no_feature_branch(workflow: tuple[Path, Trigger]) -> None:
-    """De-dup invariant: push must cover only default branches."""
+def test_push_covers_default_and_integration_branches(
+    workflow: tuple[Path, Trigger],
+) -> None:
+    """Push inspects default branches and the integration branch exactly."""
     path, trigger = workflow
-    assert trigger.push_branches <= frozenset(DEFAULT_BRANCHES), (
-        f"{path}: on.push.branches lists a non-default branch: "
-        f"{sorted(trigger.push_branches - frozenset(DEFAULT_BRANCHES))}"
+    assert trigger.push_branches == PUSH_BRANCHES, (
+        f"{path}: on.push.branches must be exactly {sorted(PUSH_BRANCHES)}, "
+        f"got {sorted(trigger.push_branches)}"
     )
-    assert FEATURE_BRANCH not in trigger.push_branches
 
 
 def test_pull_request_still_covers_default_and_integration_bases(

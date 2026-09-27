@@ -71,7 +71,10 @@ def test_writer_is_push_only_and_trusted_actor() -> None:
     # Secret-backed signing
     assert "POKECON_NIX_CACHE_SECRET_KEY" in text
     assert "store sign --key-file" in text
-    assert "copy --no-recursive" in text and "--to" in text
+    # Export must copy the full signed closure: a file:// binary cache rejects paths whose
+    # references are not valid in the destination, so --no-recursive can never succeed here.
+    assert "--no-recursive" not in text
+    assert "copy --to" in text
 
 
 def test_reader_is_unrestricted_but_fail_closed() -> None:

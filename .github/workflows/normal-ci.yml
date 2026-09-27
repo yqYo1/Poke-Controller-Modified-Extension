@@ -186,7 +186,7 @@ jobs:
           printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
           chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
           "$POKECON_NIX_WRAPPER" store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$($POKECON_NIX_WRAPPER path-info .#checks.x86_64-linux.rust-core-artifacts)"
-          "$POKECON_NIX_WRAPPER" copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
+          "$POKECON_NIX_WRAPPER" copy --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#checks.x86_64-linux.rust-core-artifacts
           rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
       - name: Save the PokeCon Rust binary cache
         if: >-
@@ -371,7 +371,7 @@ jobs:
           printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
           chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
           for attr in "pokecon" "pokecon-core" "web"; do "$POKECON_NIX_WRAPPER" store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$($POKECON_NIX_WRAPPER path-info .#packages.x86_64-linux.$attr)"; done
-          "$POKECON_NIX_WRAPPER" copy --no-recursive --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
+          "$POKECON_NIX_WRAPPER" copy --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
           rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
       - name: Save the PokeCon product binary cache
         if: >-

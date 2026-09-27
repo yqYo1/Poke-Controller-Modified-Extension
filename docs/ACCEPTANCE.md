@@ -261,6 +261,18 @@ debug build、異なるresolution、sample不足の結果を閾値判定へ使�
 
 このrecordはrequired CI gateの証跡であり、外部platform受入recordや実機性能の代用品ではありません。
 
+## 通常CIの時間目標と監視期限
+
+通常CIの完了目標は変更種別ごとのp95で管理します。fast jobは180秒、文書だけの変更は300秒、製品code変更の必須gateは720秒です。720秒は実測710秒を60秒単位へ切り上げた値です。
+
+p95はworkflow、event、branchごとの直近10件の成功runからnearest-rankで計算します。閾値を超えたrunは回帰としてblockingに扱います。履歴が10件未満の変更種別はbootstrap期間としてgate未適用のwarningを記録します。
+
+`ci-watch`の監視期限はrequired context両方の完了を被覆します。直近の成功push 10件のp95が2587秒のため、30%以上の余裕を加えた3400秒を既定値とします。期限切れはexit 124、required contextの失敗完了はexit 1で区別します。同一SHAでworkflow runを再実行している間のcheck再作成ギャップは完了判定を保証しないため、再実行後は監視を再起動します。
+
+既定branch rulesetは`Normal CI Required`と`Package CI Required`をrequired status checkとし、未完了または失敗中のmergeを拒否します。
+
+PokeCon固有derivationは署名付きbinary cacheで再利用します。書込みは信頼済みactorのpushだけが行い、pull requestは読取りだけを行います。
+
 ## desktop lifecycle
 
 LinuxとWindowsでdesktop bundleを使用します。

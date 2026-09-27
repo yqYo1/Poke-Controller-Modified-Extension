@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-readonly default_timeout_seconds=1200
+readonly default_timeout_seconds=3400
 readonly poll_seconds=10
 readonly settlement_seconds=120
 readonly minimum_timeout_seconds=$((settlement_seconds + poll_seconds))
@@ -18,6 +18,11 @@ usage() {
     "  timeout: ${default_timeout_seconds} seconds" \
     "  minimum timeout: ${minimum_timeout_seconds} seconds" \
     "" \
+    "default rationale: 3400s = 30%+ margin over the measured p95 of complete" \
+    "required-context times for the last 10 normal green pushes (2026-09-22..28 sample)" \
+    "(2587s; product-change pushes set the maximum, Windows package side included)," \
+    "so the deadline does not expire the normal critical path." \
+    "" \
     "The watcher resolves the remote branch HEAD SHA at start (refs/remotes/origin/<branch>)" \
     "and enforces the two required branch-protection contexts for that exact SHA:" \
     "  - Normal CI Required" \
@@ -28,6 +33,11 @@ usage() {
     "Unrelated optional checks are ignored once the two required contexts are" \
     "complete. The watcher polls every ${poll_seconds}s and succeeds only after the" \
     "required contexts have remained successful and unchanged for ${settlement_seconds}s." \
+    "" \
+    "known limitation: while a workflow run for the target SHA is being rerun, the" \
+    "re-creation gap can briefly leave an older completed check from another event" \
+    "as the latest by id, and the watcher may accept the contexts early; re-run the" \
+    "watcher after any rerun settles." \
     "" \
     "exit statuses:" \
     "  0  both required contexts completed successfully and settled" \

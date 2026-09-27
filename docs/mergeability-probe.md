@@ -1,3 +1,3 @@
 # Mergeability probe
 
-Temporary fixture for mergeability-check verification.   
+Temporary fixture for mergeability-check verification.

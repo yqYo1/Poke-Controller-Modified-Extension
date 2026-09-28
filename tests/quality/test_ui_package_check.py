@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "a9ca8fc6fbdb6998c38ec5c171a547aff63f9f30f97fbfcabd9b571ca68d472a",
+    "rust/pokecon": "89e675d93f65f1682bc2f8bf5a3d50ce12ed104a9f9f4a363f04f988c5070562",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -307,6 +307,11 @@ required-features = ["contract-generator"]
 [[test]]
 name = "concurrent_camera_serial_load"
 path = "tests/concurrent_camera_serial_load.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
+name = "production_perf_virtual"
+path = "tests/production_perf_virtual.rs"
 required-features = ["integration-test-support"]
 
 [[test]]
@@ -2341,7 +2346,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "4f791eb500b818ec1f6e885da99167b70d2e783d2b1b04aaa157eb1d8964e60b"
+        == "26ed374175fc1c3d840957c02c9eb35914f21b7be22cdfadc8b2e4bfb913afec"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2766,7 +2771,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "a963d41d07c9520d7b2a9810bf0a0921963b612e20e11c52cfbaa779c1c75abe"
+        == "e54132bba6c46c0c3c9143abe5eae023d99af0a31b2a7bd2aeb7a431b2180b9b"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -3742,7 +3747,7 @@ offline = true
     rust_ci_check_section = flake[compatibility_sources_end:rust_ci_check_end]
     assert (
         hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
-        == "da14e207143d660c104e4b09322e82380777ecd16f99afff16673e86e6bcc6cb"
+        == "c21b168f754b46157b1b1118f748be0ef88d5ee12b8d533d5c073c82e2916c4e"
     )
     for rust_ci_check_proof in (
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -3760,7 +3765,7 @@ offline = true
         "workflow/spec changes do not invalidate this",
         "Execute the lib harness and every non-contract integration harness",
         'name: "concurrent_camera_serial_load",',
-        'if [ "$executed_test_count" -ne 10 ]; then',
+        'if [ "$executed_test_count" -ne 11 ]; then',
         "cargo test --locked --workspace --all-features",
         "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         "python -m scripts.compatibility.promote --check",
@@ -3940,8 +3945,8 @@ offline = true
         development_command_sections_text.count(development_provenance_assignment) == 5
     )
     assert development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE") == 5
-    assert flake.count(development_provenance_assignment) == 13
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 16
+    assert flake.count(development_provenance_assignment) == 14
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 17
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -18428,7 +18433,13 @@ def test_flake_gate_inputs_exclude_desktop_application_libraries() -> None:
         "uiPackageSessionBusConfig = pkgs.writeTextFile {",
         "\n          uiPackageCheck = mkTask {",
     )
-    gate = section(flake, "uiPackageCheck = mkTask {", "\n        in\n")
+    # The gate section is the ui-package gate task itself; sibling let
+    # bindings after it (perf apps) are separate tasks and are not scanned.
+    gate = section(
+        flake,
+        "uiPackageCheck = mkTask {",
+        "\n          performanceCheckPackages =\n",
+    )
     runtime_inputs_start = "runtimeInputs = ["
     if runtime_inputs_start not in gate:
         runtime_inputs_start = "runtimeInputs = lib.optionals pkgs.stdenv.isLinux ["

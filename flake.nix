@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "c6c348771ac7cc876ad5600aa72875b53cb8b5200aa5c43d992ca108c6bfcf02";
+      canonicalFlakeHash = "3b279698584d4e80df4c44cac3909e2b93a86dac04dd9f1d707539e4b4c9829f";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "8c513f46d62fa985b1c350862407408e22ec11f943d9426f0b084713e67e3afe";
+          expectedAuditTestHash = "c8807d6beee18f60607e0d765fcec37e69a55b4dc0f880f2290acc3024f39d35";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "a9ca8fc6fbdb6998c38ec5c171a547aff63f9f30f97fbfcabd9b571ca68d472a";
+            "rust/pokecon" = "89e675d93f65f1682bc2f8bf5a3d50ce12ed104a9f9f4a363f04f988c5070562";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -2799,6 +2799,11 @@
                     crate_types: ["bin"]
                   },
                   {
+                    name: "production_perf_virtual",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
                     name: "script_runtime",
                     kind: ["test"],
                     crate_types: ["bin"]
@@ -2906,8 +2911,8 @@
                   | .name
                 ' "$TMPDIR/pokecon-test-inventory.json"
               )
-              if [ "$executed_test_count" -ne 10 ]; then
-                echo "Expected to execute 10 non-contract test targets, executed $executed_test_count" >&2
+              if [ "$executed_test_count" -ne 11 ]; then
+                echo "Expected to execute 11 non-contract test targets, executed $executed_test_count" >&2
                 exit 2
               fi
               cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
@@ -3471,6 +3476,85 @@
                 "$@"
             '';
           };
+
+          productionPerfCheck = mkTask {
+            name = "production-perf-check";
+            runtimeInputs = rustTaskInputs ++ [
+              pkgs.cargo-tauri
+              pkgs.git
+              pkgs.python314
+              pkgs.uv
+            ];
+            text = ''
+              if [ "$(uname -s)" != Linux ]; then
+                echo "production-perf-check requires the Linux virtual-I/O fixture runner" >&2
+                exit 2
+              fi
+              if ! repo_root="$(
+                "${pkgs.coreutils}/bin/env" -i \
+                  PATH="${
+                    lib.makeBinPath [
+                      pkgs.coreutils
+                      pkgs.git
+                    ]
+                  }" \
+                  "${pkgs.git}/bin/git" -C "$PWD" rev-parse --show-toplevel
+              )"; then
+                echo "production-perf-check must be run from a PokeCon worktree" >&2
+                exit 2
+              fi
+              if [ ! -f "$repo_root/Cargo.toml" ]; then
+                echo "Cargo.toml is missing from worktree root: $repo_root" >&2
+                exit 2
+              fi
+              cd "$repo_root"
+              ${setupInteractiveCargoEnvironment}
+              ${acquireCargoTaskLock}
+              ${setupUvLinks}
+              ${desktopEnvironment}
+              export CARGO_HOME="${gateCargoHome}"
+              export CARGO_NET_OFFLINE=true
+              if [ -L "$CARGO_HOME" ] \
+                || [ ! -d "$CARGO_HOME" ] \
+                || [ "$(readlink -f "$CARGO_HOME")" != "${gateCargoHome}" ] \
+                || [ ! -L "$CARGO_HOME/config.toml" ] \
+                || [ "$(readlink -f "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ]; then
+                echo "production-perf-check immutable Cargo home is not canonical" >&2
+                exit 2
+              fi
+              out_dir="''${POKECON_PRODUCTION_PERF_OUT:-$repo_root/rust/pokecon/target}"
+              export POKECON_PRODUCTION_PERF_OUT="$out_dir"
+              if [ -z "''${POKECON_PERF_BUILD_SHA:-}" ]; then
+                POKECON_PERF_BUILD_SHA="$("${pkgs.git}/bin/git" -C "$repo_root" rev-parse HEAD)"
+                export POKECON_PERF_BUILD_SHA
+              fi
+              export POKECON_PRODUCTION_PERF_PROFILE="release"
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --features integration-test-support --test production_perf_virtual \
+                -- --nocapture "$@"
+              for production_perf_artifact in performance-report.json performance-samples.json production-perf.log; do
+                if [ ! -s "$out_dir/$production_perf_artifact" ]; then
+                  echo "production-perf-check: missing artifact $out_dir/$production_perf_artifact" >&2
+                  exit 1
+                fi
+              done
+              "${pkgs.python314}/bin/python" -I - "$out_dir" <<'PY'
+              import json
+              import sys
+              out = sys.argv[1]
+              with open(f"{out}/performance-report.json", encoding="utf-8") as handle:
+                  report = json.load(handle)
+              with open(f"{out}/performance-samples.json", encoding="utf-8") as handle:
+                  samples = json.load(handle)
+              assert report["fixture_id"] == "production-virtual-v1", report.get("fixture_id")
+              assert samples["fixture_id"] == "production-virtual-v1"
+              assert report["baseline"]["status"] == "bootstrap"
+              assert report["result"] == "pass"
+              print(f"production-perf-check: artifacts validated in {out}")
+              PY
+              cat "$out_dir/production-perf.log"
+            '';
+          };
         in
         {
           _module.args.pkgs = import (
@@ -3564,6 +3648,7 @@
             ui-package-check = uiPackageCheck;
             worker-package-check = workerPackageCheck;
             performance-check = performanceCheck;
+            production-perf-check = productionPerfCheck;
 
             product-smoke = mkTask {
               name = "product-smoke";

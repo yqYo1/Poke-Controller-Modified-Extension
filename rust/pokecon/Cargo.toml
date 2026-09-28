@@ -57,6 +57,11 @@ path = "tests/concurrent_camera_serial_load.rs"
 required-features = ["integration-test-support"]
 
 [[test]]
+name = "production_perf_virtual"
+path = "tests/production_perf_virtual.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
 name = "contract_sync"
 path = "tests/contract_sync.rs"
 required-features = ["integration-test-support"]

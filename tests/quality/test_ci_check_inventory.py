@@ -57,6 +57,13 @@ EXPECTED_NORMAL_CI: tuple[SiteTuple, ...] = (
         "ubuntu-latest",
     ),
     (
+        "production_perf",
+        "Run the production main-path virtual performance gate",
+        "production-perf-check",
+        "performance",
+        "ubuntu-latest",
+    ),
+    (
         "plan",
         "Classify changed regions",
         "ci-regions",
@@ -546,6 +553,7 @@ EXPECTED_REPORT_APP_COUNTS: dict[str, dict[str, int]] = {
         "flake-check": 1,
         "remote-flake-smoke": 1,
         "performance-check": 1,
+        "production-perf-check": 1,
         "cargo-check": 1,
         "ci-aggregate": 1,
         "ci-timing": 3,
@@ -675,6 +683,7 @@ def test_normal_ci_headline_counts() -> None:
         "test-production-routing-mutations",
         "web-check",
         "performance-check",
+        "production-perf-check",
         "ci-aggregate",
     ):
         assert observed[single] == 1, f"normal-ci {single} count changed"

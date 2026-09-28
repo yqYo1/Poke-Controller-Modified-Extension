@@ -13,7 +13,7 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
         encoding="utf-8"
     )
     job_start = workflow.index("  performance:\n")
-    job_end = workflow.index("  windows:\n", job_start)
+    job_end = workflow.index("  production_perf:\n", job_start)
     job = workflow[job_start:job_end]
 
     assert "name: Browser primitive performance smoke (Linux)" in job
@@ -83,6 +83,49 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "if-no-files-found: error" in job
 
 
+def test_normal_ci_production_perf_gate_is_evidence_blocking_number_advisory() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    job_start = workflow.index("  production_perf:\n")
+    job_end = workflow.index("  windows:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    assert "name: Production main-path virtual performance (Linux)" in job
+    assert "if: needs.plan.outputs.product == 'true'" in job
+    assert "needs: plan" in job
+    assert "runs-on: ubuntu-latest" in job
+    assert "timeout-minutes: 20" in job
+    assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in job
+    assert "cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24" in job
+    assert "Run the production main-path virtual performance gate" in job
+    assert (
+        "POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence"
+        in job
+    )
+    assert "POKECON_PRODUCTION_PERF_SAMPLES: '300'" in job
+    assert "POKECON_PRODUCTION_PERF_WARMUP_SECS: '60'" in job
+    assert "POKECON_PRODUCTION_PERF_CYCLES: '300'" in job
+    assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
+    assert "nix run .#production-perf-check" in job
+    assert "Inspect production perf evidence directory" in job
+    assert "performance-report.json" in job
+    assert "performance-samples.json" in job
+    assert "production-perf.log" in job
+    assert "production perf evidence file is missing" in job
+    assert "if: always()" in job
+    assert "name: pokecon-production-perf-linux-${{ github.run_attempt }}" in job
+    assert "path: ${{ github.workspace }}/production-perf-evidence/" in job
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in job
+    assert "if-no-files-found: error" in job
+    assert "retention-days" not in job
+    # Evidence-blocking, number-advisory: no numeric threshold gates in CI.
+    assert "threshold" not in job
+    assert "p95" not in job
+    assert "continue-on-error:" not in job
+    assert "|| true" not in job
+
+
 def test_normal_ci_required_aggregates_performance_result() -> None:
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
         encoding="utf-8"
@@ -90,8 +133,14 @@ def test_normal_ci_required_aggregates_performance_result() -> None:
     required = workflow[workflow.index("  required:\n") :]
 
     assert "      - performance\n" in required
+    assert "      - production_perf\n" in required
     assert (
         '"performance":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
         in required
     )
+    assert (
+        '"production_perf":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
+        in required
+    )
     assert "performance=${{ needs.performance.result }}" in required
+    assert "production_perf=${{ needs.production_perf.result }}" in required

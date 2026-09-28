@@ -32,6 +32,7 @@ EXPECTED_JOB_IDS = (
     "product_flake",
     "remote_flake",
     "performance",
+    "production_perf",
     "windows",
     "required",
 )
@@ -46,6 +47,7 @@ EXPECTED_NEEDS = (
     "product_flake",
     "remote_flake",
     "performance",
+    "production_perf",
     "windows",
 )
 
@@ -58,6 +60,7 @@ EXPECTED_AGGREGATE_KEYS = (
     "product_flake",
     "remote_flake",
     "performance",
+    "production_perf",
     "windows",
 )
 
@@ -70,6 +73,7 @@ EXPECTED_AGGREGATE_REGIONS = {
     "product_flake": ["product"],
     "remote_flake": ["remote_flake"],
     "performance": ["product"],
+    "production_perf": ["product"],
     "windows": ["rust"],
 }
 
@@ -97,11 +101,17 @@ EXPECTED_FIXTURES = {
     # Every web/ path also selects the product region by construction.
     "web": {
         "regions": ["product", "web"],
-        "applicable_jobs": ["fast", "web", "product_flake", "performance"],
+        "applicable_jobs": [
+            "fast",
+            "web",
+            "product_flake",
+            "performance",
+            "production_perf",
+        ],
     },
     "product": {
         "regions": ["product"],
-        "applicable_jobs": ["fast", "product_flake", "performance"],
+        "applicable_jobs": ["fast", "product_flake", "performance", "production_perf"],
     },
     # Every remote-flake path overlaps the product, routing, and rust
     # regions; flake.lock/flake.nix additionally fail closed to all regions.
@@ -114,6 +124,7 @@ EXPECTED_FIXTURES = {
             "product_flake",
             "remote_flake",
             "performance",
+            "production_perf",
             "windows",
         ],
     },

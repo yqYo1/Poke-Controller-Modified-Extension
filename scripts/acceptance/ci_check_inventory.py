@@ -28,8 +28,8 @@ Logical mapping (derived from flake.nix app text, not guessed):
 * ``.#test`` is the pytest suite; ``.#test-production-routing-mutations`` is
   the production-routing mutation audit runner; both are test executions.
 * ``.#web-check`` (and the release Windows web bundle verification) is web;
-  ``.#performance-check`` is performance; ``.#compatibility`` and
-  ``.#compatibility-roll`` are compatibility.
+  ``.#performance-check`` and ``.#production-perf-check`` are performance;
+  ``.#compatibility`` and ``.#compatibility-roll`` are compatibility.
 * ``.#ci-aggregate`` is the required-status merge gate, the same gate family
   as the release gate (``.#check``); both are release readiness gates, as are
   ``.#release-check``, the signing-input manifests, and
@@ -118,6 +118,7 @@ APP_LOGIC: Final = {
     "web-check": "web",
     "web-bundle-verification": "web",
     "performance-check": "performance",
+    "production-perf-check": "performance",
     "compatibility": "compatibility",
     "compatibility-roll": "compatibility",
     "ci-aggregate": "release",

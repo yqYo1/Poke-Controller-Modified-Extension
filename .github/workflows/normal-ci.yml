@@ -657,6 +657,52 @@ jobs:
           path: ${{ github.workspace }}/performance-evidence/
           if-no-files-found: error
 
+  production_perf:
+    name: Production main-path virtual performance (Linux)
+    needs: plan
+    if: needs.plan.outputs.product == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run the production main-path virtual performance gate
+        env:
+          POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence
+          POKECON_PRODUCTION_PERF_SAMPLES: '300'
+          POKECON_PRODUCTION_PERF_WARMUP_SECS: '60'
+          POKECON_PRODUCTION_PERF_CYCLES: '300'
+          POKECON_PERF_BUILD_SHA: ${{ github.sha }}
+        run: |
+          nix run .#production-perf-check
+      - name: Inspect production perf evidence directory
+        if: always()
+        run: |
+          evidence_dir="${{ github.workspace }}/production-perf-evidence"
+          if [ ! -d "$evidence_dir" ]; then
+            echo "production perf evidence directory is missing: $evidence_dir"
+          else
+            for evidence_file in \
+              performance-report.json \
+              performance-samples.json \
+              production-perf.log; do
+              if [ -f "$evidence_dir/$evidence_file" ]; then
+                stat --format='%n %s bytes' "$evidence_dir/$evidence_file"
+              else
+                echo "production perf evidence file is missing: $evidence_file"
+              fi
+            done
+          fi
+      - name: Upload production perf evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pokecon-production-perf-linux-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/production-perf-evidence/
+          if-no-files-found: error
+
   windows:
     name: Check workspace (Windows)
     needs: plan
@@ -688,6 +734,7 @@ jobs:
       - product_flake
       - remote_flake
       - performance
+      - production_perf
       - windows
     if: >-
       always() &&
@@ -725,6 +772,7 @@ jobs:
             "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "remote_flake":{"applicable":${{ needs.plan.outputs.remote_flake == 'true' }},"reason":"remote flake paths changed"},
             "performance":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
+            "production_perf":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
             }}
         run: |
@@ -737,6 +785,7 @@ jobs:
             product_flake=${{ needs.product_flake.result }} \
             remote_flake=${{ needs.remote_flake.result }} \
             performance=${{ needs.performance.result }} \
+            production_perf=${{ needs.production_perf.result }} \
             windows=${{ needs.windows.result }}
       - name: Download Nix evidence artifacts
         if: always()

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "a20a7ac6badc691251a0eb80887247981228892d4a5c693f4cfa7bcb383a8ea8";
+      canonicalFlakeHash = "c6c348771ac7cc876ad5600aa72875b53cb8b5200aa5c43d992ca108c6bfcf02";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -473,6 +473,7 @@
               "docs/ACCEPTANCE.md"
               "docs/ARCHITECTURE.md"
               "docs/ARCHITECTURE_HANDOFF.md"
+              "docs/ARTIFACT_MANIFEST.md"
               "docs/SPECIFICATION_BACKEND.md"
               "docs/SPECIFICATION_FRONTEND.md"
               "docs/SPECIFICATION_INTEGRATION.md"
@@ -480,6 +481,7 @@
               "flake.nix"
               "generated"
               "python/pokecon/typings"
+              "rust/pokecon/registry/abstraction_baseline.json"
               "rust/pokecon/registry/acceptance-record.schema.json"
               "rust/pokecon/registry/ci.json"
               "rust/pokecon/registry/compatibility.json"
@@ -488,6 +490,7 @@
               "rust/pokecon/registry/generation.json"
               "rust/pokecon/registry/ipc_boundary.json"
               "rust/pokecon/registry/ownership.json"
+              "rust/pokecon/registry/strong_boundaries.json"
               "rust/pokecon/tests"
               "rust-toolchain.toml"
               "scripts/__init__.py"
@@ -496,6 +499,7 @@
               "scripts/ci/regions.py"
               "scripts/ci/timing.py"
               "scripts/compatibility"
+              "scripts/release/signing_manifest.py"
               "web/src/lib/api"
               "web/src/lib/api.ts"
               "web/src/lib/camera-selector.ts"
@@ -759,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "1fbaf7a7b30b425b442200c59b73593eab5fe396d3352b1bd25fd8594df535a1";
+          expectedAuditTestHash = "8c513f46d62fa985b1c350862407408e22ec11f943d9426f0b084713e67e3afe";
 
           workspaceMemberPaths = [
             "rust/pokecon"

@@ -45,6 +45,8 @@
 
 製品成果物の内容差を示す証拠はなく、継続観測の対象とする。
 
+その後、`2d4baa7` の full build（Package CI run `36364102715`）で Windows NSIS 再現性検証は success を再確認しており、一過性の flake として扱う。
+
 ## Release との分離
 
 `release.yml` は tag push を起点に `release-check --tag`、package smoke、install smoke、signing-input manifest を実行する。

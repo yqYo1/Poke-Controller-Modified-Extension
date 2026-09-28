@@ -3543,5 +3543,984 @@ fn worker_ipc_deployment_boundary_is_pinned() {
     );
 }
 
+static STRONG_BOUNDARIES_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/strong_boundaries.json"));
+static ABSTRACTION_BASELINE_JSON: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/registry/abstraction_baseline.json"));
+static POKECON_MANIFEST: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/Cargo.toml"));
+static CONTRACT_SYNC_SOURCE: LazyLock<String> =
+    LazyLock::new(|| repository_text("rust/pokecon/tests/contract_sync.rs"));
+
+/// AR-10.8-04 shared predicate: a necessity entry is one non-empty line.
+fn is_valid_necessity(text: &str) -> bool {
+    !text.trim().is_empty() && !text.contains('\n')
+}
+
+/// AR-10.8-04 shared helper: split a `path[:NN[-MM]]` evidence anchor into
+/// its file path and optional first line number.
+fn split_source_anchor(anchor: &str) -> (String, Option<usize>) {
+    if let Some((head, tail)) = anchor.rsplit_once(':') {
+        let first = tail.split('-').next().unwrap_or(tail);
+        if let Ok(line) = first.parse::<usize>() {
+            return (head.to_owned(), Some(line));
+        }
+    }
+    (anchor.to_owned(), None)
+}
+
+/// AR-10.8-04 shared predicate: a `check_ref` is live when it names either a
+/// `contract_sync` test function or a flake task/check name.
+fn check_ref_is_live(name: &str, contract_sync_text: &str, flake_text: &str) -> bool {
+    contract_sync_text.contains(&format!("fn {name}")) || flake_text.contains(name)
+}
+
+/// AR-10.8-04 shared predicate: a binary name is covered when the packaged
+/// bin set contains it.
+fn bin_is_covered(name: &str, packaged: &BTreeSet<String>) -> bool {
+    packaged.contains(name)
+}
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn strong_boundaries_have_necessity_and_evidence() {
+    // AR-10.8-04: 強い境界ごとの必要性／信頼／配布根拠表
+    // (rust/pokecon/registry/strong_boundaries.json) の pin。各境界が一行の
+    // 非空 necessity と実在する証拠 (source／registry／check 参照) を持ち、
+    // 実装走査の closed-world marker がいずれも根拠付き境界に被覆されること
+    // を検査する。未知の marker class や根拠のない境界はここで失敗させる。
+    //
+    // 誠実な範囲限定 (scope):
+    // (1) source_refs の行番号は存在範囲の検査に留める (1 <= NN <= 総行数)。
+    //     行内容の一致までは主張しない — 内容側の liveness は symbol_anchors
+    //     の正規表現が担う (brittle な行内容 pin を避けるため)。
+    // (2) test-only bin (fault fixture) は closed-world の対象外とし、path で
+    //     明示除外する。macro 生成コードは走査しない。
+    // (3) check_refs は contract_sync test 名または flake task/check 名の
+    //     いずれかへの解決を要求する。
+    let manifest = parse_json(&STRONG_BOUNDARIES_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "strong boundary manifest schema_version must be 1 (AR-10.8-04)"
+    );
+    let boundaries = manifest["boundaries"]
+        .as_array()
+        .expect("strong boundary manifest must define a boundaries array");
+    assert!(
+        !boundaries.is_empty(),
+        "strong boundary manifest must pin at least one boundary"
+    );
+
+    // Fail-closed sentinel controls on the exact predicates below.
+    assert!(
+        !is_valid_necessity(""),
+        "empty necessity must be rejected (AR-10.8-04 control)"
+    );
+    assert!(
+        !is_valid_necessity("first line\nsecond line"),
+        "multi-line necessity must be rejected (AR-10.8-04 control)"
+    );
+    assert!(
+        is_valid_necessity("one line of necessity"),
+        "single-line necessity must count as valid (AR-10.8-04 control)"
+    );
+    let (anchor_path, anchor_line) = split_source_anchor("rust/pokecon/src/lib.rs:41-43");
+    assert_eq!(anchor_path, "rust/pokecon/src/lib.rs");
+    assert_eq!(anchor_line, Some(41));
+    let (bare_path, bare_line) = split_source_anchor("docs/ARTIFACT_MANIFEST.md");
+    assert_eq!(bare_path, "docs/ARTIFACT_MANIFEST.md");
+    assert_eq!(bare_line, None);
+
+    // Policy pin: the reviewed boundary set is exactly these five ids.
+    // Intentional additions update the manifest and this set together.
+    let expected_ids = BTreeSet::from([
+        "worker-process",
+        "ipc-wire-value",
+        "lan-http-trust",
+        "os-platform-conditional",
+        "os-bundle-distribution",
+    ]);
+    let mut ids = BTreeSet::new();
+    for boundary in boundaries {
+        let id = boundary["id"]
+            .as_str()
+            .expect("strong boundary must have a string id");
+        assert!(
+            ids.insert(id.to_owned()),
+            "strong boundary id {id} must be unique"
+        );
+        for field in ["kind", "necessity", "trust", "distribution"] {
+            let text = boundary[field]
+                .as_str()
+                .unwrap_or_else(|| panic!("boundary {id} must declare {field} (AR-10.8-04)"));
+            assert!(
+                is_valid_necessity(text),
+                "boundary {id} field {field} must be one non-empty line"
+            );
+        }
+        let evidence = &boundary["evidence"];
+        let source_refs = evidence["source_refs"]
+            .as_array()
+            .unwrap_or_else(|| panic!("boundary {id} must declare evidence.source_refs"));
+        assert!(
+            !source_refs.is_empty(),
+            "boundary {id} must list at least one evidence source_ref"
+        );
+        let mut evidence_texts = Vec::new();
+        for source_ref in source_refs {
+            let anchor = source_ref
+                .as_str()
+                .expect("evidence source_ref must be a string");
+            let (path, line) = split_source_anchor(anchor);
+            let text = repository_text(&path);
+            evidence_texts.push(text);
+            if let Some(line) = line {
+                let total = evidence_texts
+                    .last()
+                    .expect("evidence text must exist")
+                    .lines()
+                    .count();
+                assert!(
+                    line >= 1 && line <= total,
+                    "evidence anchor {anchor} line {line} must resolve within {path} ({total} lines)"
+                );
+            }
+        }
+        let joined = evidence_texts.join("\n");
+        for symbol in evidence["symbol_anchors"]
+            .as_array()
+            .unwrap_or_else(|| panic!("boundary {id} must declare evidence.symbol_anchors"))
+        {
+            let symbol = symbol
+                .as_str()
+                .expect("evidence symbol_anchor must be a string");
+            assert!(
+                !symbol.trim().is_empty(),
+                "boundary {id} symbol_anchor must not be empty"
+            );
+            assert!(
+                joined.contains(symbol),
+                "symbol anchor {symbol} of boundary {id} must occur in its evidence sources"
+            );
+        }
+        for registry_ref in evidence["registry_refs"]
+            .as_array()
+            .unwrap_or_else(|| panic!("boundary {id} must declare evidence.registry_refs"))
+        {
+            let path = registry_ref
+                .as_str()
+                .expect("evidence registry_ref must be a string");
+            repository_text(path);
+        }
+        let contract_sync_text = CONTRACT_SYNC_SOURCE.clone();
+        for check_ref in evidence["check_refs"]
+            .as_array()
+            .unwrap_or_else(|| panic!("boundary {id} must declare evidence.check_refs"))
+        {
+            let name = check_ref
+                .as_str()
+                .expect("evidence check_ref must be a string");
+            assert!(
+                check_ref_is_live(name, &contract_sync_text, &FLAKE),
+                "check ref {name} of boundary {id} must name a contract_sync test or a flake task"
+            );
+        }
+    }
+    assert_eq!(
+        ids,
+        expected_ids
+            .iter()
+            .map(ToString::to_string)
+            .collect::<BTreeSet<_>>(),
+        "strong boundary ids must match the reviewed five-boundary set exactly (AR-10.8-04)"
+    );
+    assert!(
+        !check_ref_is_live(
+            "ar-10-8-04-sentinel-missing-check",
+            &CONTRACT_SYNC_SOURCE,
+            &FLAKE
+        ),
+        "unknown check ref must not resolve (AR-10.8-04 control)"
+    );
+
+    // Non-boundaries: the closed world is explicit — these must stay a plain
+    // crate-internal or retired surface, never a justified boundary.
+    let non_boundaries = manifest["non_boundaries"]
+        .as_array()
+        .expect("strong boundary manifest must define a non_boundaries array");
+    let non_ids: BTreeSet<&str> = non_boundaries
+        .iter()
+        .map(|item| item.as_str().expect("non_boundary must be a string"))
+        .collect();
+    assert_eq!(
+        non_ids,
+        BTreeSet::from([
+            "separate-crate",
+            "public-rust-api",
+            "server-pub-mod",
+            "python-cdylib"
+        ]),
+        "non-boundary set must match the reviewed four-item set exactly (AR-10.8-04)"
+    );
+
+    // Closed world: every strong-boundary marker class observed in the
+    // implementation is covered by a justified boundary entry.
+    let markers: [(&str, &str, &str); 10] = [
+        (
+            "worker binary packaged",
+            "rust/pokecon/Cargo.toml",
+            "name = \"pokecon-worker\"",
+        ),
+        (
+            "worker spawn constructor",
+            "rust/pokecon/src/dynamic_runtime.rs",
+            "WorkerLaunch::managed",
+        ),
+        (
+            "worker supervisor",
+            "rust/pokecon/src/worker/supervisor.rs",
+            "WorkerSupervisor",
+        ),
+        (
+            "os-conditional code",
+            "rust/pokecon/src/device/serial/selector.rs",
+            "cfg(target_os",
+        ),
+        (
+            "windows notification",
+            "rust/pokecon/src/device/notification.rs",
+            "show_windows_toast",
+        ),
+        (
+            "shutdown unlink gate",
+            "rust/pokecon/src/camera/shared_ring.rs",
+            "unlink_name_for_shutdown",
+        ),
+        (
+            "lan trust enforcement",
+            "rust/pokecon/src/server/security.rs",
+            "enforce_security",
+        ),
+        (
+            "ipc payload ceiling",
+            "rust/pokecon/src/worker/ipc/codec.rs",
+            "MAX_PAYLOAD_BYTES",
+        ),
+        (
+            "distribution manifest",
+            "docs/ARTIFACT_MANIFEST.md",
+            "dist/tauri",
+        ),
+        ("signing provenance", "flake.nix", "signing-input-manifest"),
+    ];
+    let cover: BTreeSet<(&str, &str)> = [
+        ("name = \"pokecon-worker\"", "worker-process"),
+        ("WorkerLaunch::managed", "worker-process"),
+        ("WorkerSupervisor", "worker-process"),
+        ("cfg(target_os", "os-platform-conditional"),
+        ("show_windows_toast", "os-platform-conditional"),
+        ("unlink_name_for_shutdown", "os-platform-conditional"),
+        ("enforce_security", "lan-http-trust"),
+        ("MAX_PAYLOAD_BYTES", "ipc-wire-value"),
+        ("dist/tauri", "os-bundle-distribution"),
+        ("signing-input-manifest", "os-bundle-distribution"),
+    ]
+    .into_iter()
+    .collect();
+    for (label, file, needle) in markers {
+        let text = repository_text(file);
+        assert!(
+            text.contains(needle),
+            "closed-world marker {label} ({needle} in {file}) must stay live (AR-10.8-04)"
+        );
+        let (covered, boundary) = cover
+            .iter()
+            .find(|(marker, _)| *marker == needle)
+            .expect("closed-world marker must declare its covering boundary");
+        assert!(
+            ids.contains(*boundary),
+            "closed-world marker {label} ({covered}) must be covered by justified boundary {boundary}"
+        );
+    }
+
+    // Fail-closed bin control: the packaged bin set covers pokecon-worker,
+    // while a synthetic unlisted bin is uncovered.
+    let packaged: BTreeSet<String> = parse_pokecon_bin_names(&POKECON_MANIFEST)
+        .into_iter()
+        .collect();
+    assert!(
+        bin_is_covered("pokecon-worker", &packaged),
+        "packaged bins must cover pokecon-worker (AR-10.8-04 control)"
+    );
+    assert!(
+        !bin_is_covered("pokecon-sentinel-extra-bin", &packaged),
+        "synthetic unlisted bin must NOT be covered (AR-10.8-04 control)"
+    );
+}
+
+/// AR-10.8-05 shared helper: names of every `[[bin]]` section.
+fn parse_pokecon_bin_names(manifest: &str) -> Vec<String> {
+    parse_pokecon_bins(manifest)
+        .into_iter()
+        .map(|(name, _, _)| name)
+        .collect()
+}
+
+/// AR-10.8-05 shared helper: `(name, path, required_features)` per `[[bin]]`.
+fn parse_pokecon_bins(manifest: &str) -> Vec<(String, String, Vec<String>)> {
+    static BIN_NAME: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"name\s*=\s*"([^"]+)""#).expect("bin name regex must compile")
+    });
+    static BIN_PATH: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"path\s*=\s*"([^"]+)""#).expect("bin path regex must compile")
+    });
+    let mut bins = Vec::new();
+    for section in manifest.split("[[bin]]").skip(1) {
+        let section = section.split("[[test]]").next().unwrap_or(section);
+        let section = section.split("[[bench]]").next().unwrap_or(section);
+        let section = section.split("\n[features]").next().unwrap_or(section);
+        let name = BIN_NAME
+            .captures(section)
+            .unwrap_or_else(|| panic!("[[bin]] section must declare a name: {section}"))
+            .get(1)
+            .expect("bin name capture must exist")
+            .as_str()
+            .to_owned();
+        let path = BIN_PATH
+            .captures(section)
+            .unwrap_or_else(|| panic!("[[bin]] {name} must declare a path"))
+            .get(1)
+            .expect("bin path capture must exist")
+            .as_str()
+            .to_owned();
+        let features = section
+            .find("required-features")
+            .map_or_else(Vec::new, |start| {
+                let tail = &section[start..];
+                let end = tail
+                    .find(']')
+                    .unwrap_or_else(|| panic!("[[bin]] {name} features must close"));
+                tail[..end]
+                    .split('"')
+                    .skip(1)
+                    .step_by(2)
+                    .map(ToString::to_string)
+                    .collect()
+            });
+        bins.push((name, path, features));
+    }
+    bins
+}
+
+/// AR-10.8-05 shared helper: every `members = [...]` array in a manifest.
+fn parse_workspace_member_arrays(manifest: &str) -> Vec<Vec<String>> {
+    static MEMBERS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^[a-z-]*members\s*=\s*\[([^\]]*)\]").expect("members regex must compile")
+    });
+    static QUOTED: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#""([^"]+)""#).expect("quoted regex must compile"));
+    MEMBERS
+        .captures_iter(manifest)
+        .map(|captures| {
+            QUOTED
+                .captures_iter(&captures[1])
+                .map(|quoted| {
+                    quoted
+                        .get(1)
+                        .expect("member capture must exist")
+                        .as_str()
+                        .to_owned()
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// AR-10.8-05 shared predicate: exactly the single `rust/pokecon` member.
+fn is_single_member_set(members: &[String]) -> bool {
+    members == ["rust/pokecon"]
+}
+
+/// AR-10.8-05 shared helper: dependency names of a `[workspace.dependencies]` section.
+fn parse_workspace_dependency_names(manifest: &str) -> Vec<String> {
+    static NAME_LINE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^([a-z0-9_-]+)\s*=").expect("dependency name regex must compile")
+    });
+    let section = manifest
+        .split_once("[workspace.dependencies]")
+        .expect("workspace manifest must define [workspace.dependencies]")
+        .1;
+    let section = section.split_once("\n[").map_or(section, |(head, _)| head);
+    NAME_LINE
+        .captures_iter(section)
+        .map(|captures| {
+            captures
+                .get(1)
+                .expect("dependency name capture must exist")
+                .as_str()
+                .to_owned()
+        })
+        .collect()
+}
+
+/// AR-10.8-05 shared helper: keys of the `[features]` section.
+fn parse_feature_keys(manifest: &str) -> Vec<String> {
+    static KEY_LINE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^([A-Za-z0-9_-]+)\s*=").expect("feature key regex must compile")
+    });
+    let section = manifest
+        .split_once("\n[features]")
+        .expect("package manifest must define [features]")
+        .1;
+    let section = section.split_once("\n[").map_or(section, |(head, _)| head);
+    KEY_LINE
+        .captures_iter(section)
+        .map(|captures| {
+            captures
+                .get(1)
+                .expect("feature key capture must exist")
+                .as_str()
+                .to_owned()
+        })
+        .collect()
+}
+
+static TRAIT_DECLARATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"pub\s+trait\s+([A-Za-z0-9_]+)").expect("trait declaration regex must compile")
+});
+
+/// AR-10.8-05 shared scan: `(relative path, trait name)` per `pub trait` line
+/// under `rust/pokecon/src`. `#[cfg(test)]` modules are included; fixture
+/// paths outside `src/` never enter this walk by construction.
+fn scan_source_traits() -> BTreeSet<(String, String)> {
+    let src_root = repository_root().join("rust/pokecon/src");
+    let mut observed = BTreeSet::new();
+    let mut stack = vec![src_root];
+    while let Some(directory) = stack.pop() {
+        let entries = fs::read_dir(&directory).unwrap_or_else(|error| {
+            panic!(
+                "contract input {} must be readable: {error}",
+                directory.display()
+            )
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("contract input must be below the repository root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!(
+                        "contract input {} must be readable: {error}",
+                        path.display()
+                    )
+                });
+                for line in text.lines() {
+                    if let Some(captures) = TRAIT_DECLARATION.captures(line) {
+                        observed.insert((
+                            relative.clone(),
+                            captures
+                                .get(1)
+                                .expect("trait name capture must exist")
+                                .as_str()
+                                .to_owned(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    observed
+}
+
+/// AR-10.8-05 shared scan: files under `rust/pokecon/src` whose file name
+/// marks the service/host/runtime layer.
+fn scan_service_layer_files() -> BTreeSet<String> {
+    let src_root = repository_root().join("rust/pokecon/src");
+    let mut observed = BTreeSet::new();
+    let mut stack = vec![src_root];
+    while let Some(directory) = stack.pop() {
+        let entries = fs::read_dir(&directory).unwrap_or_else(|error| {
+            panic!(
+                "contract input {} must be readable: {error}",
+                directory.display()
+            )
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                let stem = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or_default();
+                if stem.contains("service") || stem.contains("host") || stem.contains("runtime") {
+                    observed.insert(
+                        path.strip_prefix(repository_root())
+                            .expect("contract input must be below the repository root")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    );
+                }
+            }
+        }
+    }
+    observed
+}
+
+/// AR-10.8-05 shared scan: files under `rust/pokecon/src` containing an
+/// `impl From<` / `impl TryFrom<` conversion (file-level, not item-level).
+fn scan_conversion_files() -> BTreeSet<String> {
+    let src_root = repository_root().join("rust/pokecon/src");
+    let mut observed = BTreeSet::new();
+    let mut stack = vec![src_root];
+    while let Some(directory) = stack.pop() {
+        let entries = fs::read_dir(&directory).unwrap_or_else(|error| {
+            panic!(
+                "contract input {} must be readable: {error}",
+                directory.display()
+            )
+        });
+        for entry in entries {
+            let entry = entry.expect("contract input directory entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(path.extension().and_then(|ext| ext.to_str()), Some("rs")) {
+                let text = fs::read_to_string(&path).unwrap_or_else(|error| {
+                    panic!(
+                        "contract input {} must be readable: {error}",
+                        path.display()
+                    )
+                });
+                if text
+                    .lines()
+                    .any(|line| line.contains("impl From<") || line.contains("impl TryFrom<"))
+                {
+                    observed.insert(
+                        path.strip_prefix(repository_root())
+                            .expect("contract input must be below the repository root")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    );
+                }
+            }
+        }
+    }
+    observed
+}
+
+/// AR-10.8-05: fixture paths excluded from the abstraction scans by
+/// construction (outside `rust/pokecon/src/`).
+fn is_baseline_excluded_fixture(path: &str) -> bool {
+    path.starts_with("rust/pokecon/tests/fixtures/")
+}
+
+/// AR-10.8-05 shared predicate: a worker-gated binary must reference a
+/// justified strong boundary, unless it is a test-only fixture path.
+fn worker_bin_boundary_ok(
+    name: &str,
+    features: &[String],
+    boundary_ref: Option<&str>,
+    boundary_ids: &BTreeSet<String>,
+    bin_path: &str,
+) -> bool {
+    if is_baseline_excluded_fixture(bin_path) {
+        return true;
+    }
+    if !features.iter().any(|feature| feature == "worker-binary") {
+        return true;
+    }
+    boundary_ref.is_some_and(|id| boundary_ids.contains(id)) && !name.is_empty()
+}
+
+#[test]
+fn workspace_has_single_member() {
+    // AR-10.8-05: workspace member は `rust/pokecon` 一件であること。
+    // 第二 member の追加はこの test を失敗させる (fail-closed)。
+    let arrays = parse_workspace_member_arrays(&CARGO_MANIFEST);
+    assert!(
+        !arrays.is_empty(),
+        "workspace manifest must declare at least one members array"
+    );
+    for members in &arrays {
+        assert!(
+            is_single_member_set(members),
+            "workspace members must stay exactly [\"rust/pokecon\"], found {members:?} (AR-10.8-05)"
+        );
+    }
+    // Fail-closed sentinel controls on the exact predicate.
+    assert!(
+        is_single_member_set(&["rust/pokecon".to_owned()]),
+        "single member set must count as valid (AR-10.8-05 control)"
+    );
+    assert!(
+        !is_single_member_set(&["rust/pokecon".to_owned(), "rust/pokecon-extra".to_owned()]),
+        "second workspace member must be rejected (AR-10.8-05 control)"
+    );
+    assert!(
+        !is_single_member_set(&[]),
+        "empty member set must be rejected (AR-10.8-05 control)"
+    );
+}
+
+#[allow(clippy::too_many_lines)]
+#[test]
+fn abstraction_baseline_matches_manifest() {
+    // AR-10.8-05: current Cargo.toml manifest の baseline 化
+    // (rust/pokecon/registry/abstraction_baseline.json)。workspace member、
+    // 依存名、bin、feature、trait、service 層、変換型のいずれの無言の追加も
+    // 双方向 diff で失敗させる。未知の追加 (manifest 漏れ) と stale entry
+    // (実装に存在しない宣言) のいずれもこの test を失敗させる。
+    //
+    // 誠実な範囲限定 (scope):
+    // (1) 依存は sorted NAME のみを pin し version は見ない (upgrade-proof。
+    //     version は Cargo.lock + workspace-lock-check が担う)。
+    // (2) trait 走査は `pub trait NAME` 行の文字列走査のみ —
+    //     コメント化行、macro 生成 trait は捕捉しない。`#[cfg(test)]`
+    //     module は含め、tests/fixtures 配下は path 除外する。
+    // (3) service／conversion inventory は file-level であり item-level
+    //     diff は主張しない (AR-11-39)。
+    // (4) test 内部で cargo を起動しない (hermeticity)。`cargo metadata`
+    //     は handoff 10.2 の手動検証手順に留める。
+    let manifest = parse_json(&ABSTRACTION_BASELINE_JSON);
+    assert_eq!(
+        manifest["schema_version"], 1,
+        "abstraction baseline schema_version must be 1 (AR-10.8-05)"
+    );
+
+    // (a) Workspace members: baseline mirrors the single-member pin.
+    let baseline_members: BTreeSet<String> = manifest["workspace_members"]
+        .as_array()
+        .expect("abstraction baseline must define workspace_members")
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .expect("workspace member must be a string")
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(
+        baseline_members,
+        BTreeSet::from(["rust/pokecon".to_owned()]),
+        "baseline workspace members must stay exactly [\"rust/pokecon\"]"
+    );
+
+    // (b) Workspace dependencies: exact-set bidirectional diff on sorted names.
+    let baseline_deps: BTreeSet<String> = manifest["workspace_dependency_names"]
+        .as_array()
+        .expect("abstraction baseline must define workspace_dependency_names")
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .expect("workspace dependency name must be a string")
+                .to_owned()
+        })
+        .collect();
+    let baseline_dep_list: Vec<&str> = manifest["workspace_dependency_names"]
+        .as_array()
+        .expect("abstraction baseline must define workspace_dependency_names")
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .expect("workspace dependency name must be a string")
+        })
+        .collect();
+    let mut sorted_deps = baseline_dep_list.clone();
+    sorted_deps.sort_unstable();
+    assert_eq!(
+        baseline_dep_list, sorted_deps,
+        "baseline dependency names must be sorted (AR-10.8-05)"
+    );
+    let observed_deps: BTreeSet<String> = parse_workspace_dependency_names(&CARGO_MANIFEST)
+        .into_iter()
+        .collect();
+    let unknown_deps: Vec<&String> = observed_deps.difference(&baseline_deps).collect();
+    assert!(
+        unknown_deps.is_empty(),
+        "unknown workspace dependencies missing from the baseline (AR-10.8-05): {unknown_deps:?}"
+    );
+    let stale_deps: Vec<&String> = baseline_deps.difference(&observed_deps).collect();
+    assert!(
+        stale_deps.is_empty(),
+        "stale baseline dependencies with no manifest entry (AR-10.8-05): {stale_deps:?}"
+    );
+    // Fail-closed sentinel: a synthetic extra dep must break the predicate.
+    let mut with_extra = baseline_deps.clone();
+    with_extra.insert("ar-10-8-05-sentinel-crate".to_owned());
+    assert_ne!(
+        with_extra, observed_deps,
+        "synthetic extra dependency must break the baseline pin (AR-10.8-05 control)"
+    );
+
+    // (c) Bins: exact-set vs [[bin]] plus the 04<->05 cross-file link.
+    let strong = parse_json(&STRONG_BOUNDARIES_JSON);
+    let boundary_ids: BTreeSet<String> = strong["boundaries"]
+        .as_array()
+        .expect("strong boundary manifest must define boundaries")
+        .iter()
+        .map(|boundary| {
+            boundary["id"]
+                .as_str()
+                .expect("strong boundary must have a string id")
+                .to_owned()
+        })
+        .collect();
+    let baseline_bins = manifest["bins"]
+        .as_array()
+        .expect("abstraction baseline must define bins");
+    let mut baseline_bin_names = BTreeSet::new();
+    for bin in baseline_bins {
+        let name = bin["name"]
+            .as_str()
+            .expect("baseline bin must have a string name");
+        assert!(
+            baseline_bin_names.insert(name.to_owned()),
+            "baseline bin {name} must be unique"
+        );
+        let path = bin["path"]
+            .as_str()
+            .expect("baseline bin must have a string path");
+        repository_text(path);
+        let features: Vec<String> = bin["required_features"]
+            .as_array()
+            .unwrap_or_else(|| panic!("baseline bin {name} must declare required_features"))
+            .iter()
+            .map(|feature| {
+                feature
+                    .as_str()
+                    .expect("baseline bin feature must be a string")
+                    .to_owned()
+            })
+            .collect();
+        let boundary_ref = bin["boundary_ref"].as_str();
+        if let Some(id) = boundary_ref {
+            assert!(
+                boundary_ids.contains(id),
+                "baseline bin {name} boundary_ref {id} must name a strong boundary id"
+            );
+        }
+        assert!(
+            worker_bin_boundary_ok(name, &features, boundary_ref, &boundary_ids, path),
+            "worker-gated bin {name} must reference a justified strong boundary (AR-10.8-05)"
+        );
+    }
+    let observed_bins = parse_pokecon_bins(&POKECON_MANIFEST);
+    let observed_bin_names: BTreeSet<String> = observed_bins
+        .iter()
+        .map(|(name, _, _)| name.clone())
+        .collect();
+    assert_eq!(
+        baseline_bin_names, observed_bin_names,
+        "baseline bins must match Cargo.toml [[bin]] exactly (AR-10.8-05)"
+    );
+    for (name, path, features) in &observed_bins {
+        let entry = baseline_bins
+            .iter()
+            .find(|bin| bin["name"] == *name)
+            .unwrap_or_else(|| panic!("baseline must pin observed bin {name}"));
+        // Baseline bin paths are repository-relative; the package manifest
+        // records them relative to rust/pokecon/.
+        let expected_path = format!("rust/pokecon/{path}");
+        assert_eq!(
+            entry["path"],
+            expected_path.as_str(),
+            "baseline bin {name} path must match Cargo.toml"
+        );
+        let baseline_features: BTreeSet<&str> = entry["required_features"]
+            .as_array()
+            .expect("baseline bin must declare required_features")
+            .iter()
+            .map(|feature| feature.as_str().expect("bin feature must be a string"))
+            .collect();
+        let observed_features: BTreeSet<&str> = features.iter().map(String::as_str).collect();
+        assert_eq!(
+            baseline_features, observed_features,
+            "baseline bin {name} features must match Cargo.toml"
+        );
+    }
+    // Fail-closed sentinel: a synthetic worker-gated bin without a
+    // boundary_ref must fail the cross-file predicate.
+    assert!(
+        !worker_bin_boundary_ok(
+            "pokecon-sentinel-bin",
+            &["worker-binary".to_owned()],
+            None,
+            &boundary_ids,
+            "rust/pokecon/src/bin/sentinel.rs",
+        ),
+        "synthetic worker bin without boundary_ref must be rejected (AR-10.8-05 control)"
+    );
+    assert!(
+        worker_bin_boundary_ok(
+            "pokecon-worker",
+            &["worker-binary".to_owned()],
+            Some("worker-process"),
+            &boundary_ids,
+            "rust/pokecon/src/bin/worker.rs",
+        ),
+        "pinned worker bin must count as covered (AR-10.8-05 control)"
+    );
+
+    // (d) Features: exact-set vs [features] keys.
+    let baseline_features: BTreeSet<String> = manifest["features"]
+        .as_array()
+        .expect("abstraction baseline must define features")
+        .iter()
+        .map(|item| item.as_str().expect("feature must be a string").to_owned())
+        .collect();
+    let observed_features: BTreeSet<String> =
+        parse_feature_keys(&POKECON_MANIFEST).into_iter().collect();
+    assert_eq!(
+        baseline_features, observed_features,
+        "baseline features must match Cargo.toml [features] exactly (AR-10.8-05)"
+    );
+
+    // (e) Traits: exact-set vs `pub trait` scan, each with a justification.
+    let baseline_traits: BTreeSet<(String, String)> = manifest["traits"]
+        .as_array()
+        .expect("abstraction baseline must define traits")
+        .iter()
+        .map(|entry| {
+            let path = entry["path"]
+                .as_str()
+                .expect("baseline trait must have a string path");
+            let name = entry["name"]
+                .as_str()
+                .expect("baseline trait must have a string name");
+            let justification = entry["justification"]
+                .as_str()
+                .unwrap_or_else(|| panic!("baseline trait {name} must declare a justification"));
+            assert!(
+                is_valid_necessity(justification),
+                "baseline trait {name} justification must be one non-empty line"
+            );
+            assert!(
+                !is_baseline_excluded_fixture(path),
+                "baseline trait {name} must not point at an excluded fixture path"
+            );
+            repository_text(path);
+            (path.to_owned(), name.to_owned())
+        })
+        .collect();
+    let observed_traits = scan_source_traits();
+    assert!(
+        !observed_traits.is_empty(),
+        "trait scan must observe rust/pokecon/src (AR-10.8-05)"
+    );
+    let unknown_traits: Vec<&(String, String)> =
+        observed_traits.difference(&baseline_traits).collect();
+    assert!(
+        unknown_traits.is_empty(),
+        "new traits without a justification entry (AR-10.8-05): {unknown_traits:?}"
+    );
+    let stale_traits: Vec<&(String, String)> =
+        baseline_traits.difference(&observed_traits).collect();
+    assert!(
+        stale_traits.is_empty(),
+        "stale baseline trait entries with no observed declaration (AR-10.8-05): {stale_traits:?}"
+    );
+    // Fail-closed sentinel: a synthetic extra trait must break the pin, and
+    // the trait-declaration regex must detect an injected declaration while
+    // ignoring a non-trait line.
+    let mut with_trait = baseline_traits.clone();
+    with_trait.insert((
+        "rust/pokecon/src/sentinel.rs".to_owned(),
+        "SentinelTrait".to_owned(),
+    ));
+    assert_ne!(
+        with_trait, observed_traits,
+        "synthetic extra trait must break the baseline pin (AR-10.8-05 control)"
+    );
+    assert_eq!(
+        TRAIT_DECLARATION
+            .captures("pub trait SentinelTrait: Send + Sync {")
+            .expect("trait regex must match a trait line")
+            .get(1)
+            .expect("trait name capture must exist")
+            .as_str(),
+        "SentinelTrait"
+    );
+    assert!(
+        TRAIT_DECLARATION
+            .captures("pub struct NotATrait;")
+            .is_none(),
+        "trait regex must not match a non-trait line (AR-10.8-05 control)"
+    );
+
+    // (f) Service layer: exact-set vs service/host/runtime file glob.
+    let baseline_services: BTreeSet<String> = manifest["services"]
+        .as_array()
+        .expect("abstraction baseline must define services")
+        .iter()
+        .map(|entry| {
+            let path = entry["path"]
+                .as_str()
+                .expect("baseline service must have a string path");
+            let justification = entry["justification"]
+                .as_str()
+                .unwrap_or_else(|| panic!("baseline service {path} must declare a justification"));
+            assert!(
+                is_valid_necessity(justification),
+                "baseline service {path} justification must be one non-empty line"
+            );
+            repository_text(path);
+            path.to_owned()
+        })
+        .collect();
+    let observed_services = scan_service_layer_files();
+    assert_eq!(
+        baseline_services, observed_services,
+        "baseline services must match the service/host/runtime file inventory exactly (AR-10.8-05)"
+    );
+
+    // (g) Conversion files: exact-set vs impl From/TryFrom file scan.
+    let baseline_conversions: BTreeSet<String> = manifest["conversion_files"]
+        .as_array()
+        .expect("abstraction baseline must define conversion_files")
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .expect("conversion file must be a string")
+                .to_owned()
+        })
+        .collect();
+    let observed_conversions = scan_conversion_files();
+    assert_eq!(
+        baseline_conversions, observed_conversions,
+        "baseline conversion files must match the From/TryFrom scan exactly (AR-10.8-05)"
+    );
+
+    // (h) Fixture-exclusion liveness: the excluded fixture paths exist, so
+    // the exclusion list cannot pass vacuously, and the src/ scans never
+    // observe them.
+    for fixture in [
+        "rust/pokecon/tests/fixtures/fault_worker.rs",
+        "rust/pokecon/tests/fixtures/forbidden_dependency_fixture.rs",
+        "rust/pokecon/tests/fixtures/ipc_nonpublic_payloads.rs",
+    ] {
+        assert!(
+            is_baseline_excluded_fixture(fixture),
+            "fixture {fixture} must be excluded by path (AR-10.8-05 control)"
+        );
+        repository_text(fixture);
+        assert!(
+            !observed_traits.iter().any(|(path, _)| path == fixture),
+            "excluded fixture {fixture} must never enter the trait scan"
+        );
+    }
+    assert!(
+        !is_baseline_excluded_fixture("rust/pokecon/src/server/backend.rs"),
+        "src/ files must NOT count as excluded fixtures (AR-10.8-05 control)"
+    );
+}
+
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}

@@ -4,7 +4,7 @@
 
 ## 1. 適用範囲と状態
 
-- 対象HEAD: `900685a4d719bccc312ff1f037db1ce1bd1a5085`
+- 対象HEAD: `2d4baa747c44a549e7a7b89ca7ec0276c7c34159`
 - 対象PLAN: `AR-11-25`〜`AR-11-30`、`AR-11-33`〜`AR-11-40`、`AR-10.8-03`〜`AR-10.8-05`
 - このartifactの目的は、所有者、非所有者、境界、寿命、停止順、依存方向、配布形態、検証入口を一つのhandoffへ集約することです。
 - `source-verified` は現行sourceまたは既存の実行証拠で対応を確認した状態です。
@@ -106,7 +106,7 @@ process境界の固定（AR-11-37）は `rust/pokecon/registry/ipc_boundary.json
 - user-script workerのprocessとgenerationは `worker::supervisor::WorkerSupervisor` と `worker::generation::GenerationManager` が所有する。dynamic Python／Luaのgenerationは `dynamic::transaction` とdynamic worker・Rust側dynamic hostが所有する。process-wide shutdown reasonとcancellationは `runtime::shutdown::ShutdownCoordinator` に一元化される。
 - 正準設定registryと生成contractは `settings`／`contracts`／`registry/` が所有し、frontend生成物・手書きwire型・worker複製registryは正準を再定義しない。
 - 単一所有は `contract_sync` の検査（`visible_revision_commit_has_single_owner`、`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`、`public_wire_contracts_exclude_native_handles_and_private_paths`、`module_ownership_manifest_pins_owner_symbols`）と `worker/ipc/codec.rs` の `messagepack_extension_values_are_rejected_at_decode` で機械検査される。
-- 重複状態検査の結果: 検査1〜5は成立し、`checks.contract-sync` と `checks.rust-ci-core` のNix check出力へ接続され、Normal CIのRust region jobがrealizeする。frontend store・worker複製・生成物側の重複は `non_responsibilities`／`forbidden_symbols` として非owner宣言され、二重正準は存在しない。
+- 重複状態検査の結果: 検査1〜5は成立し、`checks.contract-sync` と `checks.rust-ci-core` のNix check出力へ接続され、Normal CIのRust region jobがrealizeする。frontend store・worker複製・生成物側の重複は `non_responsibilities`／`forbidden_symbols` として非owner宣言され（`forbidden_ownership_manifest_is_enforced`）、二重正準は存在しない。
 - 単純さ: workspace memberは `pokecon` 一件で、worker・compatibility tool・generatorは同一packageの `[[bin]]`＋feature構成である。compat shim用の中間crateは2.7で撤去済みである。
 - 追跡しやすさ: 許可方向104 edge・禁止27対は `dependency_edges.json` に固定され、driftをfail-closedで検査する。変更は所有moduleの `source_files` に局在し、変更経路はmanifest→source→checkの三点で追跡できる。
 
@@ -182,6 +182,18 @@ process境界の固定（AR-11-37）は `rust/pokecon/registry/ipc_boundary.json
 - `server/rest/mod.rs`は内部`StateHub`を正当に使用するためscan対象外とし、public wire sourceと内部実装を混同しない。
 - dynamic callbackの失敗がdevice threadの所有権またはprocess shutdownを直接奪わないことは、runtime fault testが未成立であり、source-level marker検査だけでは証明しない。
 
+### 5.3 強い境界の必要性根拠（`AR-10.8-04`）
+
+各強い境界に一行の必要性根拠と実装証拠を対応付ける。machine-readable正本は`rust/pokecon/registry/strong_boundaries.json`（schema 1、境界5件＋非境界4件）であり、本表は双方向pinの対象である（`contract_sync`の`strong_boundaries_have_necessity_and_evidence`、`scripts/acceptance/boundary_report.py`＋`tests/quality/test_boundary_report.py`）。非境界（別crate・公開Rust API・`server`内`pub mod`・Python cdylib）は境界を主張しないことがclosed worldの条件である。
+
+| 境界 | 必要性（一行） | 根拠 |
+| --- | --- | --- |
+| `worker-process` | Python／Lua user codeはhardware ownerとaddress spaceを共有せず、generation単位でcrash／timeout隔離する。 | `rust/pokecon/src/worker/supervisor.rs:63`、`rust/pokecon/src/worker/supervisor.rs:355`、`rust/pokecon/Cargo.toml:19-38`、`rust/pokecon/registry/ipc_boundary.json` |
+| `ipc-wire-value` | process境界を越える値は閉じたtyped値に限定し、native handleとprivate objectはdecodeで拒否してserializeしない。 | `rust/pokecon/src/worker/ipc/schema.rs:45`、`rust/pokecon/src/worker/ipc/codec.rs:10`、`rust/pokecon/registry/ipc_boundary.json` |
+| `lan-http-trust` | LAN公開HTTP面とuntrustedなdynamic `load_content` intakeはhandler到達前にallowlistで検証する。 | `rust/pokecon/src/server/security.rs:1`、`rust/pokecon/src/server/rest/mod.rs:662`、`rust/pokecon/src/dynamic/control.rs:88` |
+| `os-platform-conditional` | serial列挙・通知・共有memory teardownのOS差は単一crate内のcfg分岐で吸収し、誤platform codeを混入させない。 | `rust/pokecon/src/device/serial/selector.rs:1`、`rust/pokecon/src/device/notification.rs:365`、`rust/pokecon/src/camera/shared_ring.rs:343` |
+| `os-bundle-distribution` | OS別bundleはnative形式＋署名provenanceで配布し、runtimeが配布manifestを再定義しない。 | `docs/ARTIFACT_MANIFEST.md:12`、`flake.nix:4444`、`scripts/release/signing_manifest.py:1` |
+
 ## 6. Settings、profile、command、compatibility corpusのlifecycle
 
 | 対象 | 生成／読込 | 切替／適用 | 失敗時 | 破棄／保持 | 根拠 |
@@ -248,6 +260,8 @@ Package CIのsuccessはPackage受入の証拠ですが、Release tag、署名run
 
 workspaceは`pokecon`一packageで、Rust moduleは`rust/pokecon/src/lib.rs:3-43`のprivate declarationが基本です。これは依存方向の設計根拠であり、上表のRust `use` 走査範囲のforbidden edgeは`rust/pokecon/registry/dependency_edges.json`の`forbidden`27対と`contract_sync`の`forbidden_dependency_edges_are_rejected`が検査します（AR-11-36）。generated→canonical、candidate→baseline、UI duplicate stateの各方向は本manifestの走査範囲外です。
 
+抽象化baseline（`AR-10.8-05`）: 追加抽象化を無条件に認めないため、current `Cargo.toml` manifestを`rust/pokecon/registry/abstraction_baseline.json`（schema 1: member 1件・依存52名・bin 6件・feature 6件・trait 21件・service 10件・変換14件）にbaseline化し、`contract_sync`の`workspace_has_single_member`＋`abstraction_baseline_matches_manifest`と`boundary_report.py --abstraction`（`abstraction-report/1`）で追加時の根拠検査を行う。依存はsorted NAMEのみをpinしversionは見ない（versionは`Cargo.lock`＋workspace-lock-checkが担う）。trait走査は`#[cfg(test)]`を含め、`tests/fixtures`配下はpath除外する。worker-gated binの追加は`strong_boundaries.json`のid参照を要求する（04↔05連動）。
+
 ## 10. Migration inventoryと検証command
 
 ### 10.1 現行inventory
@@ -294,8 +308,8 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | `AR-11-39` | current package／binary／generator／compatibility inventory、phase別inventory snapshot（2.1〜2.7のfile／module-level＋型／trait item-level。純移動は+0/-0でパス再配置、compat shim退役は`pub use`再輸出のためitem差分に出ない旨を注記）、残存参照log（旧crate名`git grep`、2.7でclean） | なし（完了）。`nix run .#check`組込みの段階別inventory機能は不存在（代替＝git-based読み戻し） | runtime受入（`AR-11-26`以降、owner判断系）へ |
 | `AR-11-40` | command／expected result matrix、stage別検証command表（PLAN.md「共通完了ゲート適用記録（読み戻し 2026-09-28）」: 5 gate＋ci-watch×2.1〜2.7、期待結果exit 0＋CI success）、実行ファイル別command（`pokecon`→cli-help-check／ui-package-check／build-rust、`pokecon-worker`→worker-package-check／lifecycle focused。§10.2）、現checkpoint完全log（`d644eeb` 13 gate） | なし（完了）。歴史的per-stage実行logの新規生成は未実施（CI run URL＋checkpoint表で代替。必要なら別作業） | runtime受入（`AR-11-26`以降、owner判断系）へ |
 | `AR-10.8-03` | ownership／single-state／change-pathの整理、duplicate state inspectionの`AR-11-25` architecture test（検査1〜4）への接続、change-path review（§3.3: 状態変更の所有module単一化・重複正準否定・manifest→source→check追跡） | なし（完了） | `AR-10.8-04`／`AR-10.8-05`（境界根拠・抽象化baseline）へ |
-| `AR-10.8-04` | process／trust／platform／distribution boundaryの根拠 | 必要性／信頼／配布根拠表のreview | 各強い境界に一行の必要性根拠と実装証拠を追加 |
-| `AR-10.8-05` | 追加抽象化を無条件に認めないdependency rule | abstraction inventoryとcrate数検査 | current `Cargo.toml` manifestをbaseline化し、追加時の根拠検査を追加 |
+| `AR-10.8-04` | 強い境界5件の一行必要性／信頼／配布根拠表（`strong_boundaries.json` schema 1）＋§5.3 machine-readable双方向pin（`strong_boundaries_have_necessity_and_evidence`、closed-world marker 10件、非境界4件）＋`boundary_report.py`（`boundary-report/1`）とquality test | `nix run .#check`のcontracts／pytest laneへの保存（focused testとreportの実行証拠で確認） | `AR-10.8-04`完了。境界追加時はregistry＋§5.3＋checkの三点更新へ |
+| `AR-10.8-05` | current `Cargo.toml` manifestのbaseline化（`abstraction_baseline.json` schema 1: member 1件・依存52名・bin 6件・feature 6件・trait 21件・service 10件・変換14件）＋追加時根拠検査（`workspace_has_single_member`、`abstraction_baseline_matches_manifest`、worker-gated binの04↔05連動）＋`boundary_report.py --abstraction`（`abstraction-report/1`）と§9注記 | `nix run .#check`のcontracts／pytest laneへの保存（focused testとreportの実行証拠で確認） | `AR-10.8-05`完了。依存・bin・trait・service追加時はbaseline＋根拠の同時更新へ |
 
 ## 12. 完了判定
 

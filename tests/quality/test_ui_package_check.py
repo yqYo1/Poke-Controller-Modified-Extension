@@ -2341,7 +2341,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "1a409d38735522ce287ab2f6af37b8469fbb532a23ae3ed1f9777ce5a193a7fe"
+        == "4f791eb500b818ec1f6e885da99167b70d2e783d2b1b04aaa157eb1d8964e60b"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2554,7 +2554,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     source_filter_section = flake[source_filter_start:source_filter_end]
     assert (
         hashlib.sha256(source_filter_section.strip().encode()).hexdigest()
-        == "f2acf8716f074cfc79108bc673db0cd65f406e62b8269a716db52e5a11badbb5"
+        == "fd2aa05711054098ba0b48eb43eb171347715c6975f7723bdf1397c81e3c85d8"
     )
     scoped_source_start = source_filter_section.index("mkScopedSource =")
     repository_source_start = source_filter_section.index("repositorySource =")

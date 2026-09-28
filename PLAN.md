@@ -29,7 +29,7 @@
 
 ### 現行の残タスク（アシスタント担当）
 
-- [ ] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約をclean detached worktreeで再受入する。RUN4／RUN5／RUN6、4 system評価、既存worktreeでのdirenv実行、tool inventory、source-filterは証跡付きで完了した。残るclean worktree証跡はRUN3、AR-11-48、AR-13.1-17に限定されるが、既存worktreeのみを使う指示により新規worktreeは作成しない。
+- [x] 2026-08-09の利用者指示で上書きされたtool-only devShell／direnv併用契約をclean detached worktreeで再受入した。RUN4／RUN5／RUN6、4 system評価、既存worktreeでのdirenv実行、tool inventory、source-filterは証跡付きで完了し、残っていたclean worktree証跡は2026-09-28に`d644eeb`のclean detached worktreeで取得した（凍結制約の解除決定後、git-workflowスキル準拠で作成・受入・削除。direnv／`nix develop`両入口がstore toolchainへ解決、4 system `nix flake check --no-build --all-systems` 309 checks、tool inventory、入室前後のtracked無変更、aggregate `nix run .#check` exit 0。log `phase1-acceptance/`）。
 - [ ] CI上のmock／virtual I/O性能計測を実装し、固定条件、統計値、artifact、regression threshold、required blocking gateを追加する。browser primitive smokeとそのblocking jobは実装済みだが、production主経路のCI証跡は未完了。実機latency／throughput計測環境は作成しない。
 - [ ] GPUIフロントエンド段階導入を、[GPUI_FRONTEND_PLAN.md](docs/GPUI_FRONTEND_PLAN.md)のPoC gateに従って進める。現行Svelte/Tauri/Web経路は採否判断まで維持する。
 - [ ] 全フェーズ完了後の要件別監査を行い、実装済み項目は証跡で`[x]`へ更新し、未完了項目は具体的な実作業へ整理する。
@@ -37,7 +37,7 @@
 ### 2026-09-14 要件別監査の結果
 
 - [x] 構造移行、CI／runtime、配布／文書の4系統をread-onlyで監査し、source上の実装と証跡不足を分離した（監査対象の未完了18件、フェーズ3／4の未完了項目、フェーズ5の未完了項目をID・行番号・次作業へ分類）。監査だけで[x]へできる項目は追加しなかった。
-- [ ] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。現行worktreeでは`direnv allow`／`direnv exec .`、hostile PATH下の`nix develop`、source-filter／SPA guard、入室前後のtracked worktree無変更を確認した（2026-09-14）。ただしclean detached worktreeでの同一証跡は、既存worktreeのみを使う制約により未証明であり、RUN3全体は[x]にしない。
+- [x] **devShell／direnv再受入**: `nix flake check --no-build --all-systems`と4 system（`x86_64-linux`、`aarch64-linux`、`aarch64-darwin`、`x86_64-darwin`）のdevShell attribute評価は成功した。x86_64-darwinはlocked `nixpkgs-darwin`（26.05-darwin）を専用pkgsとして使い、main Linux nixpkgs／uv固定を維持する実装へ更新した。現行worktreeでは`direnv allow`／`direnv exec .`、hostile PATH下の`nix develop`、source-filter／SPA guard、入室前後のtracked worktree無変更を確認した（2026-09-14）。clean detached worktreeでの同一証跡も2026-09-28に`d644eeb`で取得し、RUN3全体を[x]とした（両入口、4 system評価、hostile PATH、source-filter、入室前後のtracked無変更、4 app smoke、aggregate check。log `phase1-acceptance/`）。
 - [ ] **CI性能gate**: `performance-check`とrequired blocking jobは実装済み。既存artifact `10334767608`のreportは5 metric（各300 sample、60秒warm-up、p50／p95／maximum）条件を満たしていたが、run `34846200611`のbaseline解決stepはrunner非対応の`gh api --output`でartifact取得に失敗しbootstrapへ落ちていた（2026-09-14）。`.github/workflows/normal-ci.yml`を標準出力の`> "$zip_path"`へ修正し、quality test 2件、actionlint、formatを通過した。post-fix CI run `34862735176`でprior-passing artifactの`baseline_status=compared`まで到達したが、`ui_input_latency`の正当なゼロbaseline（p95=0.0）に対する相対閾値が0となる境界不具合を検出した。`scripts/performance/benchmark.py`をabsolute threshold fallbackへ修正し、focused testとaggregate checkを通過した。修正commit `09f55ad6d10670d9190f0a52cb72d92418c26038`後、Normal／Packageのpush／PR required checks全4件がsuccessし、`gh pr checks 27 --required` exit 0を確認した。production主経路のlatency／throughput／stabilityは未完了。既存のCI workflow timing／10-run p95は製品latency／throughputの代用品にしない。
 - [x] WebRTC primaryがactiveな間に到着するMJPEG fallback frameで`MediaView`をfallbackへ降格しないよう`web/src/lib/media.ts:197-200`を修正し、`web/src/lib/media.test.ts`の回帰テストを追加した。`nix run .#web-check`はfrontend 103 tests、svelte-check 0 errors／0 warnings、buildを成功した。外部browser／tailnet WebRTCの実映像受入は別項目として未証明。
 
@@ -52,7 +52,7 @@
 - `nix run .#ci-rust-contracts`では`contract_sync`の14 testsが成功した。
 - `nix flake check --no-build --all-systems`、`nix run .#release-check`、`nix run .#acceptance-record-check`、`native_serial_pty` testも成功した。
 - `direnv exec`ではcargo、bun、uvがNix store内の実行ファイルへ解決した。
-- clean detached worktreeでの証拠は、既存worktreeのみを使う制約により未取得である。
+- clean detached worktreeでの証拠は`d644eeb`で取得済みである（`phase1-acceptance/`、RUN3／AR-11-48／AR-13.1-17／AR-13.1-23参照）。
 - `nix run .#virtual-io-check -- 42`はresource provenance、V4L2 readiness／writer permission、module ownershipを修正した後に再実行し、exit 0を確認した。regression testは6 passed、Ruff／format／shell syntax checksもexit 0。
 - 修正後の終了時に`/dev/video42`、loopback module、`ffmpeg`、gate用一時directoryが残らないことを再確認した。
 - GitHub run `35900764591`（push）と`35900770262`（pull_request）は同一`82b973e` SHAで、双方のNormal CI Rust／contract jobが失敗していた。
@@ -94,15 +94,15 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 
 適用対象はフェーズ1、2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7、フェーズ3、4.1、4.2、4.3、4.4、4.5の各checkpointとする。各checkpointで次をすべて実行し、該当しないgateは対象外となる具体的理由と代替証跡をcheckpoint記録に残す。失敗または理由のない未実行がある状態で後続checkpointへ進まない。
 
-- [ ] **AR-13.1-01** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の各構造移行を独立commitにし、当該段階のgate失敗時は後続のcrate／module移行を開始しない（予定証跡: VCSが読み戻す各commit SHAと順序、対応するNix gate log）。
-- [ ] **AR-11-41** workspace全体の共通完了gateを全適用checkpointで実行する（予定証跡: checkpoint／commit SHAごとの下記Nix command終了コード、対象外理由／代替証跡、CI run URL）。
-- [ ] **AR-13.1-03** `nix run .#contract-check`を通す（予定証跡: 各適用checkpointの`nix run .#contract-check` log）。
-- [ ] **AR-13.1-04** `nix run .#cargo-test`を通す（予定証跡: 各適用checkpointの`nix run .#cargo-test` log）。
-- [ ] **AR-13.1-05** `nix run .#clippy`を通す（予定証跡: 各適用checkpointの`nix run .#clippy` log）。
-- [ ] **AR-13.1-06** `nix run .#build-rust`を通す（予定証跡: 各適用checkpointの`nix run .#build-rust` logとNix build成果物一覧）。
-- [ ] **AR-13.1-10** `nix run .#compatibility`で固定互換性基準に対するPython commandを通す（予定証跡: `nix run .#compatibility`が出力するcorpus SHA付きreport）。
+- [x] **AR-13.1-01** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の各構造移行を独立commitにし、当該段階のgate失敗時は後続のcrate／module移行を開始しない（証跡: 「共通完了ゲート適用記録（読み戻し 2026-09-28）」(1)の18 commit順序リスト（`git log`読み戻し、全SHA存在確認、raw `gpgsig`格納確認）と(2)のcheckpoint別gate結果。2.2初回failure→`5ee440b`、2.7 failure→`f292a35`の「失敗時に後続を開始しない」処理記録を含む。`0df5e85`・`52540e1`はbatch push中間でper-SHA CIなし（supersession、群CI＋表行で代替））。
+- [x] **AR-11-41** workspace全体の共通完了gateを全適用checkpointで実行する（証跡: (2)のcheckpoint／SHAごとの5 gate結果＋(4)の対象外理由／代替証跡（batch中間commit、2.3d virtual-io-check、gate単独log不存在）＋gh確認済みCI run URL群）。
+- [x] **AR-13.1-03** `nix run .#contract-check`を通す（証跡: 全旧checkpoint表にcontract-check exit 0行（例 `681c8ae`）＋(3)現checkpointの完全log（292s、`gate-bundle-d644eeb/contract-check.log`）。旧per-checkpoint単独logは不存在（(4)））。
+- [x] **AR-13.1-04** `nix run .#cargo-test`を通す（証跡: 全旧checkpoint表にexit 0行（例2.4: 331 passed／0 failed）＋(3)現checkpoint完全log（196s）。現CIではci-rust-contracts／rust-ci-coreとして実現）。
+- [x] **AR-13.1-05** `nix run .#clippy`を通す（証跡: 全旧checkpoint表にexit 0行（-D warnings）＋(3)現checkpoint完全log（128s）。現CIではrust-ci-core内で実行）。
+- [x] **AR-13.1-06** `nix run .#build-rust`を通す（証跡: 全旧checkpoint表にexit 0行＋store path（例2.4 `qizi4ca8…`）＋(3)現checkpoint完全log（161s）＋`nix build .#pokecon --no-link --print-out-paths`＝`/nix/store/6wyq25fcml0yddhjrlvbl1djpjfaifqf-pokecon-0.1.0`）。
+- [x] **AR-13.1-10** `nix run .#compatibility`で固定互換性基準に対するPython commandを通す（証跡: 全旧checkpoint表にexit 0行＋(3)現checkpointのcorpus SHA付きreport（`result: passed`、manifest `c2e4bd4e…`・results `84432423…`、PLAN:148の既知値と一致）。旧per-checkpoint corpus reportは不存在（(4)））。
 - [x] `nix run .#web-check`（2026-09-24、ESLint／Svelte diagnostics 0 errors／0 warnings、26 files・106 tests、production build成功）。
-- [ ] `nix fmt`
+- [x] `nix fmt`（2026-09-28、現checkpoint `d644eeb`でbare exit 0（traversed 64588・formatted 229 files（0 changed）、`gate-bundle-d644eeb/nix-fmt-bare.log`）。2026-09-24のexit 1（Ruff S603＋concurrent-write、PLAN:78）は修正・writer完了後の再実行で解消）。
 - [x] `nix fmt -- --ci`（2026-09-24、212 filesを検証し、変更0件）。
 - [x] `nix flake check --no-build`（2026-09-24、x86_64-linuxで全output評価・全check評価成功。実行環境非対応のaarch64-darwin／aarch64-linux／x86_64-darwinは明示的に省略）。
 - [x] `nix run .#editor-smoke`（2026-09-24、Rust/Python/TypeScript/Svelte language serverのinitialize／didOpen／documentSymbol／diagnostic／shutdownが全て成功。fixtureの期待diagnosticを確認）。
@@ -111,7 +111,33 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] **AR-13.1-07** `pokecon --help`と`pokecon-worker --help`の公開CLI差分を検査する（2026-09-25、dirty worktreeで`nix run .#cli-help-check` exit 0。store binaryの正規化helpをtracked fixtureと比較。`nix build .#pokecon --no-link`もexit 0でNAR `sha256-mwrz2tSs6EfTNZkhYwCsCM/qaOIoeDcUE9IWqmbA2uk=`／132706248 bytes、source store内`production.rs`／`script_host.rs`のSHA-256はworktreeと一致。commit別CIではない）。
 - [x] **AR-13.1-08** Web modeとTauri modeの起動検査を通す（2026-09-27、fe3eb0cのclean worktreeで`nix build .#pokecon --print-out-paths --no-link`が`/nix/store/j839vw5k63zahnjjn89b3d6wmix34ssv-pokecon-0.1.0`を出力し、store内binaryを使う`nix run .#ui-package-check`がexit 0。reportは`"gate":"ui-package-check"`／`"status":"PASS"`で、web／desktop両modeともshutdown_status 0、resource snapshot 0、state／settings endpoint `json_http_200`、起動診断`POKECON-RUNTIME-0001`／停止要求`0003 Signal(Terminate)`／clean stop`0002`。supply chain確認: binary SHA-256 `492a71d116a2db96a7a1fa7a56a683a9e2a85cc1e5871064d5f6a4b54ebf4f92`、canonical openapi SHA-256 `5c36b8a416ce1590d8ec7ac9c39c1566ed9f99aee38158c67e890ec4c8e2494a`、mode結果byte-identical `true`。log `/tmp/ui-package-check-fe3eb0c.log`。local runの証跡でありcommit別CI証跡ではない）。
 - [x] **AR-13.1-09** `pokecon-worker --kind script`と`--kind dynamic`の起動、IPC、協調停止、強制終了を検査する（2026-09-27、2319f15のclean worktreeで`nix run .#worker-package-check`がexit 0／PASS（roles=script,dynamic、role_probes=exact-packaged-worker、product_resolution=exact-sibling-execve+lua-marker、ipc=dynamic-init+log+cooperative-stop、packaged_stop=cooperative、packageは`/nix/store/hvxpcvw15rbqdkpp3wdk59wjlscmrsgz-pokecon-0.1.0`、log `/tmp/worker-package-check-2319f15.log`）。加えて同store workerを`POKECON_TEST_WORKER_BINARY`で渡したfocused test（`worker_startup`の両role起動、`managed_worker_uses_protocol_stdout_and_cooperative_stop`、`dynamic_worker_runs_both_languages_over_bidirectional_ipc`、`shutdown_all_force_stops_and_reaps_script_and_dynamic_workers`）が全pass、env注入はbogus path canaryのfailure（exit 101）で確認した（log `/tmp/part-b-store-worker-2319f15.log`）。強制終了は非協調fault fixture workerを対象とする設計で検証し、store worker自身は協調停止する。予定証跡の`nix run .#cargo-test`はstore worker指定APIを持たないため、role別integration／fault reportは`worker-package-check`とfocused test実行で取得した。local runの証跡でありcommit別CI証跡ではない）。
-- [ ] push 後に `nix run .#ci-watch -- <branch> <timeout>` で GitHub Actions を完了まで監視し、失敗を解消する。
+- [x] push 後に `nix run .#ci-watch -- <branch> <timeout>` で GitHub Actions を完了まで監視し、失敗を解消する（証跡: 全旧checkpoint表にexit 0行（120秒settlement）。fold eraでは c4221df exit 0／0b10e58 superseded-failure exit 1（設計どおり、AR-10.10-WATCH記録）。rerun耐性gapはscriptのknown-limitationとして残る）。
+
+### 共通完了ゲート適用記録（読み戻し 2026-09-28）
+
+「共通完了ゲート」適用checkpoint（フェーズ1、2.1〜2.7、フェーズ3）のcommit読み戻しとgate適用結果。全SHAは`git rev-parse --verify`で存在確認し、代表CI runは`gh run view`でconclusionを確認した。署名はcommit object内raw `gpgsig`（SSH SIGNATURE block）の格納を確認（暗号検証の再実行はしていない）。
+
+**(1) 構造移行commit順序**（全SHAは`git rev-parse --verify`、系譜は`merge-base --is-ancestor`で確認。2.5群の`0df5e85`・`23d3dff`は日付先行の統合commitで直線区間に現れないため群内に併記）:
+- 2.1 `64a7dd5` 合成起点 → `b48f1ce` MSRV lint互換修正
+- 2.2 `3af92b7` core/contracts移動 → `5ee440b` generator除外
+- 2.3a `450a854` settings、2.3b `336aec3` camera、2.3c `d9f44ee` device、2.3d `46e275b` server
+- 2.4 `e25c1ad` dynamic/worker
+- 2.5群: `5fd5aa2` desktop、`0df5e85` native shell統合（日付先行）、`23d3dff` icons（同）、`204a007` package検証hardening、`fdf209d` UI mode境界、`52540e1` tauri-shell撤去
+- 2.6 `8726b23` Python native extension退役
+- 2.7 `cabb890` 単一package完成 → `f292a35` 重複worker harness撤去
+
+**(2) checkpoint別gate結果**（contract-check／cargo-test／clippy／build-rust／compatibility）:
+- フェーズ1: 旧Phase 1 checkpoint証跡表の完了gate exit 0行＋9 run URL（@`7a01da0`、代表 Package `30528517763` success）
+- 2.1: exit 0行＋`b48f1ce`の9 run全てsuccess（`30555701841`・`30555701920`・`30555701950`・`30555701885`・`30555701895`・`30555701785`・`30555701927`・`30555701869`・`30555702008`）
+- 2.2: 初回Package failure `30576972468` → `5ee440b`で9/9（代表 `30587596674`）
+- 2.3a: 9/9（`30597614268`・`30597614281`）／2.3b: 9/9（`30604536176`・`30604536177`）／2.3c: 9/9（`30612881884`）／2.3d: 9/9（`30622494292`）／2.4: 9/9（`30642068473`）
+- 2.5／2.6群: 群CI `31008261238`・`31008261621`（headSha `a9484a2`）＋`8726b23` `31022369923`・`31022370244`等。`0df5e85`・`52540e1`はbatch push中間のためper-SHA CIなし（supersession。代替＝群CI＋checkpoint表exit 0行）
+- 2.7: `cabb890` Package failure `31062780731` → `f292a35`で5/5（`31068364683`・`31068364697`・`31068364663`）
+- 全checkpointに`ci-watch` exit 0行あり（120秒settlement）
+
+**(3) 現checkpoint `d644eeb` の完全gate bundle**: 13 gateすべてexit 0 — `nix fmt`（229 files 0 changed）／`nix fmt -- --ci`／contract-check／cargo-test／clippy／build-rust／compatibility（`result: passed`、corpus manifest `c2e4bd4e…`・results `84432423…`）／source-filter-check／cli-help-check／actionlint／markdownlint／textlint／typos-check。log・`logs.sha256`・post-run git status（PLAN.mdのみ変更＝本記録編集中）を保存（`gate-bundle-d644eeb/`）。
+
+**(4) 証跡保存範囲**: 歴史的checkpointの完全logは保持されていない（当時は/tmpで揮発）。代替証跡＝checkpoint表の終了コード＋durableなCI run URL（(2)）。完全log bundleは現checkpointのみ。5 gate単独のrun URLは歴史的に存在しない（当時はworkflow単位で実現）。
 
 ## レビュー引渡し情報の横断チェック
 
@@ -171,22 +197,22 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] **AR-10.11-APP3** `nix run .#hooks-install`を追加し、現在のworktreeへ`git-hooks.nix`生成hookを明示的に導入する（証跡: 新規worktreeからGit common hookへ導入し、固定`PATH`、一時`HOME`、`env -i`、hardening markerを読取り。Rust／Python／Markdownをstageしたtest commit `fb4dbeb`で全8 hookが`SKIP`、`BASH_ENV`、`ENV`のpoison下でも実行され成功した）。
 - [x] **AR-10.11-APP4** `nix run .#editor`を追加し、host toolchainなしでRust、Python、TypeScript／Svelteのlanguage serverを利用できるようにする（証跡: `--print`が5個のNix store executableを返し、`editor-smoke`が4言語すべてでinitialize、didOpen、documentSymbol、期待diagnostic、shutdownを成功させた）。
 - [x] `nix run .#ci-watch` を追加し、CI監視に必要なGitHub CLI等をhost環境から排除する（証跡: 2026-07-30のhostile環境／subdirectoryからの`nix run .#ci-watch -- --help`成功、固定`gh`／`git`／`jq` path）。
-- [x] `ci-watch` の暫定既定期限を現行critical pathの実測最大値 + 30% 以上へ延長し、正常CIを期限切れ扱いしない（証跡: 既定1200秒、settlement 120秒、最小指定130秒のhelp／境界test）。
+- [x] `ci-watch` の暫定既定期限を現行critical pathの実測最大値 + 30% 以上へ延長し、正常CIを期限切れ扱いしない（証跡: 当時既定1200秒（2026-09-28に3400秒へ延長、AR-10.10-WATCH）、settlement 120秒、最小指定130秒のhelp／境界test）。
 - [x] `nix run .#workspace-lock-check` を追加し、pre-commitのlock検査をambientなCargo／GitとcallerのCargo cacheから排除する（証跡: 固定Nix appの生成、実行ごとの一時Cargo target、`nix flake check --no-build`のapp評価成功）。
 - [x] pre-commitのworkspace lock hookを`workspace-lock-check` app経由へ変更する（証跡: 生成済みpre-commit設定のentry読み戻し）。
 - [x] 既存`maturin-develop`appをambient venv、network、host configに依存しない専用`target/maturin-venv`へ移行する。productionのtracked `pyproject.toml`とwheel／sdist契約は変更せず、appの隔離source snapshot内だけでMaturin canonical mixed layoutへ補正し、実行ごとの一時Cargo targetで`pokecon/**`のwheelをoffline buildし、専用の永続venv lock下でinstallする（証跡: 2026-07-30のtracked `pyproject.toml`／lock無差分、fresh／同一venv再実行のhostile offline build成功、wheel payload／source byte照合、venv内`pokecon._native` import成功、`.pth`／想定外distribution／破損／symlink／不正RECORD保持negative test、`nix run .#test` 56件成功）。
 - [x] **AR-10.11-RUN1** 書込み、watch、hot reload、対象限定testを行うappは一時copyでなくcaller worktreeを対象にする（証跡: 新規worktreeの絶対pathをCargo metadata／target lock、Viteのfile-change／HMR log、hook config／common hook pathからそれぞれ読取った）。
 - [x] **AR-10.11-RUN2** 読取り専用完了gateはNix storeの正準sourceまたは隔離した一時copyと、実行ごとの一時Cargo targetを維持する（証跡: callerだけの未追跡`compile_error!`とambient dummy tool／関連変数のpoison下で`contract-check`が成功。caller cacheの`libserde` pathへ置いたpoisonのSHA-256はgate前後とも`f0e766b483a7c4b0631137d317797efe9a9cdd7fd375433b92679ae01202ca6f`で、gateは別の`/tmp/pokecon-rust-gate-home.../cargo-target`を使用した）。
-- [ ] **AR-10.11-RUN3** cleanな新規worktreeで追跡済みdirenv entry pointとtool-only `devShells.default`を併用する（予定証跡: clean worktree、4 systemのdevShell評価、tool／環境inventory、入室時のbuild／test副作用0）。
+- [x] **AR-10.11-RUN3** cleanな新規worktreeで追跡済みdirenv entry pointとtool-only `devShells.default`を併用する（証跡: 2026-09-28、`d644eeb`のclean detached worktreeで`.envrc`=`use flake`と`direnv allow`／`direnv exec .`／`nix develop`の両入口がcargo／bun／uvをNix storeへ解決。4 system `nix flake check --no-build --all-systems`は309 checksでexit 0、tool inventory（cargo／rustc 1.95.0、bun 1.3.13、uv 0.11.28、python 3.14.6。ambientなnodeはcontract対象外と記録）、入室前後の`git status --porcelain`は空でbuild／test副作用0。log `phase1-acceptance/`）。
 - [x] **AR-10.11-RUN4** `AGENTS.md`、`docs/SPECIFICATION_BACKEND.md`、`PLAN.md`、`README.md`、`docs/DEVELOPMENT.md`、`docs/TROUBLESHOOTING.md`をtool-only devShellと用途別flake appの併用へ更新する（証跡: 6文書を横断検索し、Nix入口、tool-only／no-entry-side-effect、CI・package例外の契約に相互矛盾0を確認。`docs/SPECIFICATION_BACKEND.md:93-95`が正本でroot `SPECIFICATION.md`は索引。`nix flake check --no-build --all-systems` exit 0。既存の`direnv exec .`でcargo／bun／uvがNix storeへ解決する読み戻しも確認済み）。
 - [x] **AR-10.11-RUN5** direnvが生成する`.direnv/`をGit管理／配布対象から除外する（証跡: 現行worktreeで`.direnv/`は存在するが`git check-ignore -v .direnv`が`.gitignore:21`へ一致し、`git ls-files -- .direnv`は空。`flake.nix:681-692`のrepository source filterは`.direnv`を明示除外し、product／release sourceは明示path allowlistを使う。`nix run .#source-filter-check`と`nix flake check --no-build --all-systems`がexit 0。clean detached worktree証跡はRUN3に集約）。
 - [x] **AR-10.11-RUN6** 既定devShellをtool-onlyに保ち、新しい常駐環境、watch、書込み、長時間処理は用途を限定したappへ追加する規則を文書化する（証跡: `docs/DEVELOPMENT.md:49`、`flake.nix:3467-3478`のtool-only package／export-only shellHook、専用`web-dev`／`hooks-install`／`editor`／`virtual-io-check` task定義。`test_default_devshell_is_tool_only_and_skips_product_builds`は`nix run .#test -- tests/quality/test_ui_package_check.py -k default_devshell_is_tool_only_and_skips_product_builds`で1 passed）。
-- [ ] **AR-11-48** 追跡した`.envrc`、tool-only既定devShell、用途別flake appを併用し、host toolchainを開発入口にしない（予定証跡: hostile host PATHの新規worktreeでdirenv／`nix develop`、4対話app、個別gate、aggregate checkが成功）。
+- [x] **AR-11-48** 追跡した`.envrc`、tool-only既定devShell、用途別flake appを併用し、host toolchainを開発入口にしない（証跡: 2026-09-28、`d644eeb`のclean detached worktreeでhostile PATH（`PATH=/usr/bin:/bin`）下の`nix develop`がstore toolchainを解決。4 app smoke（`cargo --version`、`web-dev --help`、`hooks-install`、`editor-smoke` 4言語LSP）すべてexit 0、個別gate（`nix fmt -- --ci`、`source-filter-check`、`cargo metadata --locked`）成功、aggregate `nix run .#check` exit 0（pytest 656 passed／2 deselected、Web 112、mutation 4/4 shard）。hook再導入はhardened・commit時root解決で親worktreeへ影響なし。log `phase1-acceptance/`）。
 - [x] **AR-13.1-22** tracked direnv entry pointと、direnv／`nix develop`／devShellを説明する正規文書がtool-only契約で一致する（証跡: `git ls-files -- .envrc`はtracked pathのみを返し、`.envrc`本文は読み取っていない。`.direnv/`は`.gitignore:21`で除外。`tests/quality/test_devshell_docs_drift.py`が正規文書6件と矛盾fixtureを検査し、`nix run .#test -- tests/quality/test_devshell_docs_drift.py`は8 passed）。
 
 ### 受入
 
-- [ ] **AR-13.1-17** 新しいworktreeで`direnv allow`または`nix develop`から固定toolchainへ入り、flake appだけで完了gateまで実行できる（予定証跡: clean detached worktreeの両入口、Cargo metadata、`nix fmt -- --ci`、aggregate check log）。
+- [x] **AR-13.1-17** 新しいworktreeで`direnv allow`または`nix develop`から固定toolchainへ入り、flake appだけで完了gateまで実行できる（証跡: 2026-09-28、`d644eeb`のclean detached worktreeで両入口を確認し、`nix run .#cargo -- metadata --locked --no-deps`の`workspace_root`が新worktreeを指し、`nix fmt -- --ci`（0 changed）とaggregate `nix run .#check`（exit 0）をflake appだけで完走。log `phase1-acceptance/`）。
 - [x] **AR-11-49** callerのworktreeを対象とするCargo、frontend dev server、hook導入、editor連携appを揃える（証跡: 4 systemで同一のapp一覧を評価し、新規worktreeで`cargo`、`web-dev`、`hooks-install`、`editor`のcaller smokeに成功）。
 - [x] **AR-11-50** 完了gateの隔離実行と、書込みまたはwatch appのcaller-worktree実行を区別し、callerへ書き込むgeneratorもbuild artifactは実行ごとの一時targetへ隔離する（証跡: Cargo／Web／hookはcaller path、editorは`target/nix-editor`、読取りgateとgeneratorはNix sourceまたは隔離copyと実行ごとの`/tmp/.../cargo-target`を使用。未追跡sourceとcache poisonのnegative testに成功）。
 - [x] **AR-13.1-18** `cargo` appがcaller worktreeでpackage限定、個別test、lock file更新、metadata確認を実行でき、固定toolchain／build環境がRust完了gateと一致する（証跡: Cargo 1.97.1／Rust 1.97.1を固定し、metadata、`pokecon-contracts`の`validates_http_urls_structurally` 1件、`update --workspace --locked`、`tauri-check`が成功。Cargo.lock差分は0）。
@@ -196,7 +222,7 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] **AR-13.1-20** `hooks-install` appを新規worktreeで一度実行し、git hookがNixで固定したpre-commit検査を実行する（証跡: common hookの絶対pathとhardening内容を読取り、hostile環境の署名付きtest commit `fb4dbeb`でlock、clippy、Markdown、Ruff、textlint、treefmt、typosがすべて成功）。
 - [x] `nix run .#workspace-lock-check` と`nix run .#ci-watch -- --help`が固定flake appとして動作する。
 - [x] **AR-13.1-21** `editor` appまたはNixが出力するlanguage serverだけで、Rust、Python、TypeScript／Svelteの解析がhost toolchainへ依存せず動作する（証跡: 5 executableのstore pathを読取り、host tool／関連環境変数のpoison下を含む`editor-smoke`で4言語すべての実LSP sessionが成功）。
-- [ ] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（予定証跡: direnv読込み後のGit inventory、Nix source、package manifestのnegative report）。
+- [x] **AR-13.1-23** 移行を検証する各worktreeで`.direnv/`がGit管理または配布対象になっていない（証跡: 2026-09-28、`d644eeb`のclean detached worktreeでdirenv読込み後も`git check-ignore -v .direnv`が`.gitignore:21`へ一致、`git ls-files .direnv`は空、`git status --porcelain`に無出現。Nix sourceは`flake.nix:696-697`の`isDirenvPath`除外と`:3500`のglobal excludes、package manifestはRUN5／source-filter-checkのnegativeで確認。log `phase1-acceptance/`）。
 - [ ] **AR-13.1-24** 既存のflake taskをdevShell内と隔離CIから実行し、CI、format、lint、test、build、生成、互換性、packageがambient shell状態へ依存せず移行前と一致する（予定証跡: current checkpointの全task log、生成物Git object ID、package NAR hash）。
 
 ### 2026-09-24 旧レビュー資料の扱い
@@ -217,7 +243,7 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 - [x] 2026-09-10のAstraレビューで検出されたnative serial close、dynamic controller update／resetのhardware投影、reconnect retry中の明示Disconnectの3件を修正し、Nix経由の`cargo check`、`cargo-test`、native PTY test、Clippy、aggregate check、format、flake checkを成功させ、通常サブエージェントの独立レビューでactionable finding 0を確認した。commit `bec64921ca8d27fbf07bf18f4cea85d9030614cd`のNormal CI（`34453366968`、`34453372575`）とPackage CI（`34453367054` attempt 2、`34453372441`）のrequired checksも全てpassした（attempt 1はNSIS依存取得の一過性`os error 10054`で失敗後、再実行で成功）。
 - [x] `PLAN.md`／`TASK.md`だけのplanning-only変更はtiming対象regionなしの`none`として記録し、`ci-timing validate`は継続する。`fast`／`docs`／`product`の履歴が10件以上ある場合はp95 gateをblocking／fail-closedで適用し、10件未満のbootstrap期間はwarning付きでgateを未適用とする（p95の成功証拠には数えない）。
 - [x] Windows package／release buildはMSVCの`/Brepro`、debug strip、`/DEBUG:NONE`をbuild boundaryで固定し、既存PE normalizerとpayload／expanded tree／outer NSIS installerの三層比較を維持する。
-- [ ] CI上のmock／virtual I/Oでproduction `CameraManager`／`SerialManager`経路の性能artifactとrequired gateを作る。2026-09-24監査: Backend §7.9.6の28.23 ms／3.28 msは1920×1080単発転送の平均参考値（50 warm-up／200 sample）で、production backend用の合否閾値ではない。`docs/ACCEPTANCE.md`の60秒warm-up、各300 sample、p50／p95／maximumと5つの閾値はbrowser primitive用であり、production backend性能受入を代替しない。現concurrent fixture（R640×360、64 serial send、最新frame 8件、時間overlap）はlatency分布／throughput／jitter／raw artifactを測らない。次は1920×1080 known frame、release build、virtual I/O上の本番manager、raw sampleからの統計とSHA／runner／設定付きartifactを追加する。backend絶対閾値、jitter定義、soak時間は規範未定のため製品判断が必要。物理機器の性能試験は作らない。
+- [ ] CI上のmock／virtual I/Oでproduction `CameraManager`／`SerialManager`経路の性能artifactとrequired gateを作る。2026-09-24監査: Backend §7.9.6の28.23 ms／3.28 msは1920×1080単発転送の平均参考値（50 warm-up／200 sample）で、production backend用の合否閾値ではない。`docs/ACCEPTANCE.md`の60秒warm-up、各300 sample、p50／p95／maximumと5つの閾値はbrowser primitive用であり、production backend性能受入を代替しない。現concurrent fixture（R640×360、64 serial send、最新frame 8件、時間overlap）はlatency分布／throughput／jitter／raw artifactを測らない。次は1920×1080 known frame、release build、virtual I/O上の本番manager、raw sampleからの統計とSHA／runner／設定付きartifactを追加する。backend絶対閾値、jitter定義、soak時間の数値類は2026-09-28の利用者決定（性能受入は完了時点のmain比較、数値は努力目標）により非ブロッキングの努力目標として扱う。物理機器の性能試験は作らない。
 
 - [x] 修正済みCI source boundaryを含むdirty worktreeで`nix run .#ci-rust-contracts`がexit 0。PR run `35900770262`の旧失敗は`docs/SPECIFICATION_BACKEND.md`が`rustTestSource`から欠落したことによる（`contract input docs/SPECIFICATION_BACKEND.md must be readable: No such file or directory`）。現在の`flake.nix`はBackend／Frontend／Integration定義書をRust test sourceへ含める。このローカル検証はclean checkpoint別のGitHub CI証跡ではないため、AR-11-41／AR-13.1-03などは未完了のまま。
 - [x] 2026-09-25のdirty worktreeで`nix run .#compatibility`がexit 0。成功時の決定的reportは`schema=compatibility-report/1`、`baseline_count=3`、`script_count=103`、`discovered_command_count=98`、`manifest_sha256=c2e4bd4ec3e0c5e3749e9e8ee84b046a477b8da6a2a160ec8a6121a7a461aeaf`、`results_sha256=8443242348120cda654be48715b3e331b1c23831bda841cf1dc959cf6b275cd7`を出力する。これはdirty local gateであり、commit別CI証跡ではない。
@@ -638,7 +664,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [x] **AR-10.10-06** 通常CI集約gateを既定branch rulesetのrequired status checkに指定し、失敗中または未完了のmergeを拒否する（証跡: ruleset 6904111 readback（enforcement active、対象`~DEFAULT_BRANCH`、required=`Normal CI Required`＋`Package CI Required`）。非draft probe PR [#29](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/29)（base main／head refactor系統）で3状態を実測: pending（Plan/Fast IN_PROGRESS）・constituent失敗（Fast FAILURE）・集約失敗（`Normal CI Required` COMPLETED/FAILURE, 約812s）のすべてで`mergeStateStatus: BLOCKED`＋`mergeable: MERGEABLE`（blockerはcheck、競合ではない）。main-based probe [#28](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/28)はrequired context未報告でもBLOCKED（missing-context variant）。PR [#27](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/27)はpending中BLOCKED。probe teardown（close＋branch削除）検証済み）。
 - [x] **AR-13.1-13** 既定branch rulesetを読み戻し、通常CIとPackage CIの集約gateがrequired status checkで、未完了または失敗時にmerge可能と判定されないことを確認する（証跡: ruleset 6904111 readback JSON＋required context一覧（`Normal CI Required`、`Package CI Required`）。非draft probe [#29](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/29)のpending／Fast FAILURE／`Normal CI Required` FAILUREの3状態すべてで`mergeStateStatus: BLOCKED`・`mergeable: MERGEABLE`。PR [#27](https://github.com/yqYo1/Poke-Controller-Modified-Extension/pull/27)のpending-BLOCKED記録も参照。管理者bypass不使用はAR-13.1-14参照）。
 - [x] **AR-13.1-14** rulesetの検証で管理者権限、APIによる直接merge、rulesetの一時無効化を使用しない（予定証跡: GitHub ruleset／merge audit logと、管理者bypass、直接merge、一時無効化の操作件数0の記録）。
-  PM声明: refactor検証期間（branch開始〜2026-09-28）にadmin bypass／直接API merge／一時的ruleset無効化は不使用。補強: ruleset 6904111はupdated_at 2026-09-07以降不変（created_at 2025-07-23）、origin/main履歴はmerge-only、org audit-log APIはuser accountのため404で利用不可。注: ruleset config内にbypass actor entry（admin role）は存在するが未使用。フェーズ3完了報告（本節末尾）に操作件数0を記載済み。
+  PM声明: refactor検証期間（branch開始〜2026-09-28）にadmin bypass／直接API merge／一時的ruleset無効化は不使用。補強: ruleset 6904111はupdated_at 2026-09-07以降不変（created_at 2025-07-23）、検証期間中はmain無更新（origin/main head `dfc13b82`のまま）、org audit-log APIはuser accountのため404で利用不可。注: ruleset config内にbypass actor entry（admin role）は存在するが未使用。フェーズ3完了報告（本節末尾）に操作件数0を記載済み。
 
 ### 重複除去と Nix 成果物境界
 

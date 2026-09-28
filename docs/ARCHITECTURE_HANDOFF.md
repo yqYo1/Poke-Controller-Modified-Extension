@@ -271,9 +271,9 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | `AR-11-35` | `rust/pokecon/registry/dependency_edges.json`（allowed 104 edge）＋`source_dependency_edges_match_allowed_manifest`（共有extractor・双方向diff・§9.1連動・scanned>100・sentinel） | なし（完了）。commit `932ff90`、review LGTM（`deleg_18931d04`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-36`（forbidden edge）へ |
 | `AR-11-36` | dependency_edges.jsonの`forbidden`27対（worker→cameraはwire値型のみのため除外をnote化）＋`forbidden_dependency_edges_are_rejected`（実測∩禁止=∅・fixture control・sentinel・liveness・27対exact-pin）＋`tests/fixtures/forbidden_dependency_fixture.rs` | なし（完了）。commit `4bc7a1f`、review NEEDS_CHANGES→LGTM（`deleg_8fe61737`）、Nix `checks.contract-sync` exit 0、CI `4bc7a1f` success | `AR-11-37`（IPC境界fixture）へ |
 | `AR-11-37` | `rust/pokecon/registry/ipc_boundary.json`（Envelope 5 kind・`IpcValue` 9値・上限1,048,576B・marker 6・非公開payload 7ケース）＋`worker_ipc_deployment_boundary_is_pinned`（exact-set・source drift・liveness・sentinel・範囲限定comment）＋`fixture_nonpublic_wire_payloads_are_rejected_at_decode`（include! fixture、6 DecodeErr＋1 SchemaErr、positive control） | なし（完了）。commit `fae2479`、review LGTM（`deleg_417d9009`）、Nix checks exit 0、CI `1328469` success | `AR-11-38`（配布matrix）へ |
-| `AR-11-38` | artifact／OS distribution matrix | OS別clean-install report | existing Package artifactをmanifestへread-backし、Release待ちを分離 |
-| `AR-11-39` | current package／binary／generator／compatibility inventory | phase別inventory、許可済みgit grep log | phase ID別にinventory snapshotを保存 |
-| `AR-11-40` | command／expected result matrix | 各phaseの実行log | owner許可済みclean worktreeでphase commandを実行 |
+| `AR-11-38` | artifact／OS distribution matrix、artifact manifest（`docs/ARTIFACT_MANIFEST.md`）、OS別clean-install／再現性report（Package CI run `36353061684`、8/8 SUCCESS。job `108715822568`／`108715822604`／`108718837112`／`108720611250`／`108720714749`）、`d644eeb` run `36359352644`のNSIS再現性失敗は既知の稀有codegen flakeとして注記 | なし（完了）。Release publicationは利用者deferred | runtime受入（`AR-11-26`以降、owner判断系）へ |
+| `AR-11-39` | current package／binary／generator／compatibility inventory、phase別inventory snapshot（2.1〜2.7のfile／module-level＋型／trait item-level。純移動は+0/-0でパス再配置、compat shim退役は`pub use`再輸出のためitem差分に出ない旨を注記）、残存参照log（旧crate名`git grep`、2.7でclean） | なし（完了）。`nix run .#check`組込みの段階別inventory機能は不存在（代替＝git-based読み戻し） | runtime受入（`AR-11-26`以降、owner判断系）へ |
+| `AR-11-40` | command／expected result matrix、stage別検証command表（PLAN.md「共通完了ゲート適用記録（読み戻し 2026-09-28）」: 5 gate＋ci-watch×2.1〜2.7、期待結果exit 0＋CI success）、実行ファイル別command（`pokecon`→cli-help-check／ui-package-check／build-rust、`pokecon-worker`→worker-package-check／lifecycle focused。§10.2）、現checkpoint完全log（`d644eeb` 13 gate） | なし（完了）。歴史的per-stage実行logの新規生成は未実施（CI run URL＋checkpoint表で代替。必要なら別作業） | runtime受入（`AR-11-26`以降、owner判断系）へ |
 | `AR-10.8-03` | ownership／single-state／change-pathの整理、duplicate state inspectionの`AR-11-25` architecture test（検査1〜4）への接続 | change-path review | state変更経路の単一性reviewを`AR-11-25`reportへ追記 |
 | `AR-10.8-04` | process／trust／platform／distribution boundaryの根拠 | 必要性／信頼／配布根拠表のreview | 各強い境界に一行の必要性根拠と実装証拠を追加 |
 | `AR-10.8-05` | 追加抽象化を無条件に認めないdependency rule | abstraction inventoryとcrate数検査 | current `Cargo.toml` manifestをbaseline化し、追加時の根拠検査を追加 |
@@ -282,9 +282,11 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 
 このartifactの追加だけでは、上表のPLAN itemを完了扱いにしません。現在完了扱いにできるのは、source／既存実行証拠で明示した行だけです。特に次の項目は未完了として保持します。
 
-- clean detached worktree、phase checkpoint別の全gate、owner decision。
+- owner decision（production test seam、step 5/9 release gate配線、DynamicRuntime AppShutdownPre全経路）。
 - production camera／serial性能、fault matrixの未取得test。
 - 外部browser、実機camera／serial／MCU、Release tag／publication。
+
+clean detached worktreeとphase checkpoint別の全gateは、PLAN.mdの「共通完了ゲート適用記録（読み戻し 2026-09-28）」とフェーズ1再受入記録で取得済みです。
 - machine-readable ownership／negative responsibility／dependency manifestと対応test。
 - Sol review、PR merge、tag作成。これらは明示指示なしに実施しません。
 

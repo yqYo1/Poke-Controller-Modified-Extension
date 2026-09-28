@@ -59,6 +59,7 @@ GPUI native frontendは目標として定義されていますが、現在の実
 | process境界、所有権、状態transactionを理解する | [アーキテクチャ](ARCHITECTURE.md) |
 | 本体を変更し、生成、検査、CIを通す | [本体開発ガイド](DEVELOPMENT.md) |
 | 実機、実ブラウザー、securityを判定する | [外部受入ゲート](ACCEPTANCE.md) |
+| 成果物の構成、provenance、OS別clean-install／再現性の記録を確認する | [成果物manifest](ARTIFACT_MANIFEST.md) |
 
 ## 各文書の責務を区別する
 
@@ -77,6 +78,7 @@ GPUI native frontendは目標として定義されていますが、現在の実
 | [HTTP APIガイド](HTTP_API.md) | request境界、revision、REST、WebSocket | UI componentの実装、内部worker IPC |
 | [アーキテクチャ](ARCHITECTURE.md) | process、所有権、データ経路、停止順 | 開発コマンドの逐次手順 |
 | [本体開発ガイド](DEVELOPMENT.md) | Nix環境、変更手順、正準レジストリ、検証階層 | 一般利用者向けの操作説明 |
+| [成果物manifest](ARTIFACT_MANIFEST.md) | 配布成果物一覧、provenance manifest群、OS別clean-install／再現性report、Release分離 | workflow／script自体の定義（正はpackage.yml等） |
 
 ## 必要な重複と正準情報を区別する
 

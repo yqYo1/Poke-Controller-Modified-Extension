@@ -95,6 +95,25 @@ process境界の固定（AR-11-37）は `rust/pokecon/registry/ipc_boundary.json
 
 **判定:** 表は`documented`／source-verifiedで、重複所有検査1〜5が成立しています。検査1（visible revision）`visible_revision_commit_has_single_owner`、検査2（camera）`camera_shared_mapping_release_has_single_owner`、検査3（serial）`serial_port_ownership_has_single_owner`、検査4のfrontend側`public_wire_contracts_exclude_native_handles_and_private_paths`を`contract_sync`のsource checkとして、検査4のworker IPC側`messagepack_extension_values_are_rejected_at_decode`を`worker/ipc/codec.rs`のruntime-negative testとして実装しました（各focused 1 passed、`contract_sync`全体20 passed、codec suite 8 passed、break-red確認済み、log `/tmp/ownership-checks-2319f15.log`）。検査5の保存は専用architecture testのNix check出力へ接続します: 検査1〜3と4 frontend側は`checks.contract-sync`（`contractSyncCheck`の`passed` store path）、検査4 worker側は`checks.rust-ci-core`（`rustCoreCheck`のlib harness）で、Normal CIのRust region job（`nix run .#rust-ci-core`／`.#ci-rust-contracts`）がrealizeします（`flake.nix:3019-3048,3546-3547,4216-4246`、`.github/workflows/normal-ci.yml:153-164`）。これにより`AR-11-25`の5検査が成立し、`AR-10.8-03`のduplicate state inspectionは同一reportへ接続済みです（change-path reviewのみ別途）。
 
+### 3.3 変更経路review（`AR-10.8-03`）
+
+対象は `rust/pokecon` 単一packageと `rust/pokecon/registry/ownership.json`（18エントリ）である。内部設計の「単純さ、変更の追跡しやすさ、状態所有の一元化」を変更経路の単一性の観点から確認した。
+
+- 状態変更は所有module経由でのみ行われる。controller正準入力とreleaseは `device::input::InputArbiter` と `ApplicationBackend` のprojection／mutation gateを経由し、browser・Tauri・script／dynamic workerは公開契約越しに要求する側に限定される。
+- camera native handle・capture・最新frameの唯一のownerは `camera::manager::CameraManager` であり、media consumer・WebRTC・MJPEG・scriptはhandleを保持しない。shared mappingの停止後lifetimeは `CameraManager` とproduction shutdown fallbackに収束する。
+- serial port・selector・baud・codec状態のownerは `device::serial::manager::SerialManager` であり、arbiter・server・worker・frontendは直接保持しない。
+- visible settings／runtime stateのrevisionは `server::state::StateHub` と `ApplicationBackend` が保持し、server handler・frontend store・device thread・worker callbackは複製を正準としない。
+- user-script workerのprocessとgenerationは `worker::supervisor::WorkerSupervisor` と `worker::generation::GenerationManager` が所有する。dynamic Python／Luaのgenerationは `dynamic::transaction` とdynamic worker・Rust側dynamic hostが所有する。process-wide shutdown reasonとcancellationは `runtime::shutdown::ShutdownCoordinator` に一元化される。
+- 正準設定registryと生成contractは `settings`／`contracts`／`registry/` が所有し、frontend生成物・手書きwire型・worker複製registryは正準を再定義しない。
+- 単一所有は `contract_sync` の検査（`visible_revision_commit_has_single_owner`、`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`、`public_wire_contracts_exclude_native_handles_and_private_paths`、`module_ownership_manifest_pins_owner_symbols`）と `worker/ipc/codec.rs` の `messagepack_extension_values_are_rejected_at_decode` で機械検査される。
+- 重複状態検査の結果: 検査1〜5は成立し、`checks.contract-sync` と `checks.rust-ci-core` のNix check出力へ接続され、Normal CIのRust region jobがrealizeする。frontend store・worker複製・生成物側の重複は `non_responsibilities`／`forbidden_symbols` として非owner宣言され、二重正準は存在しない。
+- 単純さ: workspace memberは `pokecon` 一件で、worker・compatibility tool・generatorは同一packageの `[[bin]]`＋feature構成である。compat shim用の中間crateは2.7で撤去済みである。
+- 追跡しやすさ: 許可方向104 edge・禁止27対は `dependency_edges.json` に固定され、driftをfail-closedで検査する。変更は所有moduleの `source_files` に局在し、変更経路はmanifest→source→checkの三点で追跡できる。
+
+結論: 状態変更経路は所有moduleに単一化され、重複正準は検査で否定され、単一package＋manifest pin構成により単純さと追跡しやすさが保たれている。
+
+根拠: `ownership.json`（全18エントリ）、`rust/pokecon/tests/contract_sync.rs:2013,2133,2257,2360,2491,2720`、`dependency_edges.json`、root `Cargo.toml:1-8`、`rust/pokecon/Cargo.toml:13-52`。
+
 ## 4. Processとstate transition
 
 ### 4.1 Rust application process
@@ -260,7 +279,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 
 | PLAN item | このartifactで記録したもの | 未成立の受入証拠 | 最小の次作業 |
 | --- | --- | --- | --- |
-| `AR-11-25` | ownership table、非owner、重複検査の規則、検査1〜3の`contract_sync` source check（`visible_revision_commit_has_single_owner`、`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`）、検査4（`public_wire_contracts_exclude_native_handles_and_private_paths`＋`messagepack_extension_values_are_rejected_at_decode`）、検査5の保存接続（`checks.contract-sync`／`checks.rust-ci-core`＋Normal CI realize） | なし（完了）。`AR-10.8-03`側のchange-path reviewのみ別途 | `AR-11-25`完了。次のruntime受入（`AR-11-26`以降）へ |
+| `AR-11-25` | ownership table、非owner、重複検査の規則、検査1〜3の`contract_sync` source check（`visible_revision_commit_has_single_owner`、`camera_shared_mapping_release_has_single_owner`、`serial_port_ownership_has_single_owner`）、検査4（`public_wire_contracts_exclude_native_handles_and_private_paths`＋`messagepack_extension_values_are_rejected_at_decode`）、検査5の保存接続（`checks.contract-sync`／`checks.rust-ci-core`＋Normal CI realize） | なし（完了）。`AR-10.8-03`側のchange-path reviewは§3.3で取得済み | `AR-11-25`完了。次のruntime受入（`AR-11-26`以降）へ |
 | `AR-11-26` | Rust／script／dynamic／camera／serverのstate table、`rust/pokecon/tests/lifecycle.rs:567-602`のdynamic worker非再生成、`:605-635`のscript replacement、`:636-716`／`:720-800`のscript／dynamic停止中request gate、worker fault matrix（peer-crash隔離×3）とcamera成功対照、`runtime/shutdown.rs`のcoordinator／signal forwarder cases、`lib.rs`のserver停止fault分岐、`startup`のsignal二重配送 | Rust mainを含むstate table全体、production sequenceとfault transition／shutdown fault matrixのproduction level受入（test seam不在）、step 5/9 release gate配線、DynamicRuntime AppShutdownPre全経路 | owner判断（production test seam／step 5/9配線）を仰ぎ、production level受入を追加 |
 | `AR-11-27` | UI／HTTP／IPC／script／dynamicのpublic boundary、`rust/pokecon/tests/contract_sync.rs`の`public_wire_contracts_exclude_native_handles_and_private_paths`によるcanonical public source／generated surfaceのnative／private marker negative check、`dynamic/transaction.rs`のcallback ownership 3テスト、`codec`／`lifecycle`のIPC payload corpus（5 kind×境界値・上限両側拒否・実process境界通過）、`scripts/acceptance/schema_report.py`＋`tests/quality/test_schema_report.py`の§5.1 7公開面×30 path sha256 report | 実browser／実device受入、reportのflake組込み | 外部受入（browser／device）とreportの組込みへ |
 | `AR-11-28` | settings／profile／command／dynamic／compatibility lifecycle、`tests/compatibility/test_compatibility.py`のfailure時baseline保全3テスト、`scripts/acceptance/lifecycle_report.py`＋`tests/quality/test_architecture_handoff.py`の§6連結3テスト | `contract-check`／`compatibility`の同一artifact report | report生成器を`contract-check`／`compatibility`の同一artifactへ組み込み、owner checkpoint別受入へ |
@@ -274,7 +293,7 @@ commandの成功だけで異なるcommit、clean worktree、外部Release、実�
 | `AR-11-38` | artifact／OS distribution matrix、artifact manifest（`docs/ARTIFACT_MANIFEST.md`）、OS別clean-install／再現性report（Package CI run `36353061684`、8/8 SUCCESS。job `108715822568`／`108715822604`／`108718837112`／`108720611250`／`108720714749`）、`d644eeb` run `36359352644`のNSIS再現性失敗は既知の稀有codegen flakeとして注記 | なし（完了）。Release publicationは利用者deferred | runtime受入（`AR-11-26`以降、owner判断系）へ |
 | `AR-11-39` | current package／binary／generator／compatibility inventory、phase別inventory snapshot（2.1〜2.7のfile／module-level＋型／trait item-level。純移動は+0/-0でパス再配置、compat shim退役は`pub use`再輸出のためitem差分に出ない旨を注記）、残存参照log（旧crate名`git grep`、2.7でclean） | なし（完了）。`nix run .#check`組込みの段階別inventory機能は不存在（代替＝git-based読み戻し） | runtime受入（`AR-11-26`以降、owner判断系）へ |
 | `AR-11-40` | command／expected result matrix、stage別検証command表（PLAN.md「共通完了ゲート適用記録（読み戻し 2026-09-28）」: 5 gate＋ci-watch×2.1〜2.7、期待結果exit 0＋CI success）、実行ファイル別command（`pokecon`→cli-help-check／ui-package-check／build-rust、`pokecon-worker`→worker-package-check／lifecycle focused。§10.2）、現checkpoint完全log（`d644eeb` 13 gate） | なし（完了）。歴史的per-stage実行logの新規生成は未実施（CI run URL＋checkpoint表で代替。必要なら別作業） | runtime受入（`AR-11-26`以降、owner判断系）へ |
-| `AR-10.8-03` | ownership／single-state／change-pathの整理、duplicate state inspectionの`AR-11-25` architecture test（検査1〜4）への接続 | change-path review | state変更経路の単一性reviewを`AR-11-25`reportへ追記 |
+| `AR-10.8-03` | ownership／single-state／change-pathの整理、duplicate state inspectionの`AR-11-25` architecture test（検査1〜4）への接続、change-path review（§3.3: 状態変更の所有module単一化・重複正準否定・manifest→source→check追跡） | なし（完了） | `AR-10.8-04`／`AR-10.8-05`（境界根拠・抽象化baseline）へ |
 | `AR-10.8-04` | process／trust／platform／distribution boundaryの根拠 | 必要性／信頼／配布根拠表のreview | 各強い境界に一行の必要性根拠と実装証拠を追加 |
 | `AR-10.8-05` | 追加抽象化を無条件に認めないdependency rule | abstraction inventoryとcrate数検査 | current `Cargo.toml` manifestをbaseline化し、追加時の根拠検査を追加 |
 

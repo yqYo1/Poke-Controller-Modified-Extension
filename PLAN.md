@@ -273,10 +273,10 @@ IDは当時のレビュー項目順に付与し、範囲IDや集約IDでの完�
 
 構造だけを移し、公開 CLI、設定、IPC、生成契約、配布物、実行時挙動は変更しない。
 
-- [ ] **AR-13.1-02** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の構造移行中は公開CLI、設定、IPC、生成契約、配布物の名前／配置、実行時挙動を変更しない（予定証跡: 各構造commitの`nix run .#contract-check`、`nix run .#cargo-test`、`nix run .#compatibility`、`nix build .#pokecon`が出力するCLI／config／IPC／generated／artifact manifest diffとbehavior regression report）。
+- [x] **AR-13.1-02** 2.1、2.2、2.3a、2.3b、2.3c、2.3d、2.4、2.5、2.6、2.7の構造移行中は公開CLI、設定、IPC、生成契約、配布物の名前／配置、実行時挙動を変更しない（2026-09-28、移行は純粋移動でitem-level inventoryの全純粋移動区間が+0/-0（名前保持・パス再配置のみ）、2.7で旧crate名clean。CLIは`cli-help-check` fixture一致＋version 0.1.0不変、設定／IPCはregistry pin（settings.json／ipc_boundary.json）＋`contract_sync`検査群＋codec fixture、生成契約は`schema_report` 30 path sha256、配布物はPackage artifact名とNAR一致、挙動はcompatibility corpus（`result: passed`）＋cargo-test／lifecycle suitesで回帰なし（証跡: 「共通完了ゲート適用記録（読み戻し 2026-09-28）」＋CI run `31068364683`／`30528517763`、waveB/ar-11-39-item-inventory.md:42-59、`gate-bundle-d644eeb/`。commit別manifest diffの単一artifactは不存在＝代替証拠の束で充足））。
 - [x] **AR-10.8-01** PokeConを独立再利用部品の集合ではなく一つの製品として設計する（証跡: 下記package/process/artifact図とNix経由workspace member監査）。
 - [x] **AR-10.8-02** 将来の独立再利用と交換可能性を設計要件にしない（証跡: 下記「公開Rust library APIとextension pointの移行差分」および移行前後のmanifest／symbol監査）。
-- [ ] **AR-10.8-03** 内部設計で単純さ、変更の追跡しやすさ、状態所有の一元化を優先する（予定証跡: ownership table、change-path review、重複状態検査）。
+- [x] **AR-10.8-03** 内部設計で単純さ、変更の追跡しやすさ、状態所有の一元化を優先する（2026-09-28、ownership table（handoff §3、`ownership.json` 18エントリ）＋変更経路review（handoff §3.3、状態変更の所有module単一化・重複正準否定・manifest→source→checkの追跡経路を確認）＋重複状態検査1〜5の`contract_sync`／Nix check接続を確定（証跡: `docs/ARCHITECTURE_HANDOFF.md` §3／§3.3、`rust/pokecon/tests/contract_sync.rs:2013,2133,2257,2360,2491,2720`、単一package＋`[[bin]]`構成、依存manifest 104／27対））。
 - [ ] **AR-10.8-04** 別process、信頼境界、任意のplatform依存、異なる配布成果物など実際の必要性がある場合だけ強い実装境界を設ける（予定証跡: `nix run .#check`の成果物として保存する境界ごとの必要性／信頼／配布根拠表とarchitecture review）。
 - [ ] **AR-10.8-05** 再利用可能性だけを理由にtrait、service層、変換型、crateを追加しない（予定証跡: 追加抽象化inventoryの根拠reviewとcrate数検査）。
 - [x] **AR-10.9-02** 任意機能はCargo feature、OS差分はtarget条件、別OS processは複数`[[bin]]`による表現を別crateより先に検討する（証跡: 下記feature／target／binary selection table、Nix経由Cargo metadata、crate-boundary decision record、CLI help gate）。

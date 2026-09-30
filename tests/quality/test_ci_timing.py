@@ -905,9 +905,14 @@ def test_p95_history_gate_bootstraps_without_inventing_a_p95() -> None:
     )
     # Must not contain old caveat non-blocking wording
     assert "caveat: insufficient history for blocking p95" not in workflow
-    # Must preserve completion-safe upstream_completed_max and cache trust
     assert "upstream_completed_max" in workflow
     assert "cache_read=true" in workflow or "cache.read" in workflow
+    # Large Nix evidence must travel through files rather than argv; PR product
+    # evidence can exceed the platform's exec argument limit.
+    assert '--slurpfile jobs_evidence "$jobs_evidence_json_file"' in workflow
+    assert "jobs_evidence: $jobs_evidence[0]" in workflow
+    assert '--argjson jobs_evidence "$jobs_evidence_json"' not in workflow
+    assert '--argjson entry "$evidence_entry"' not in workflow
     # Bootstrap does not claim an invented p95; it warns and defers enforcement
     # until ten same-kind samples exist. Malformed/stale history remains fatal.
     assert "insufficient same-kind history" in workflow.lower()

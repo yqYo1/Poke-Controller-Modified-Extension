@@ -893,7 +893,10 @@ jobs:
           # Consume job-local Nix evidence artifacts.  Never synthesize derivation
           # or substitute paths from flake evaluation or cache-hit labels.
           evidence_root="$RUNNER_TEMP/pokecon-ci-timing/nix-evidence"
-          jobs_evidence_json='{}'
+          jobs_evidence_json_file="$RUNNER_TEMP/pokecon-ci-timing/jobs-evidence.json"
+          jobs_evidence_next_file="$RUNNER_TEMP/pokecon-ci-timing/jobs-evidence.next.json"
+          evidence_entry_file="$RUNNER_TEMP/pokecon-ci-timing/evidence-entry.json"
+          printf '{}\n' > "$jobs_evidence_json_file"
           if [ -d "$evidence_root" ]; then
             mapfile -t evidence_paths < <(find "$evidence_root" -type f -name pokecon-nix-evidence.json -print)
           else
@@ -910,27 +913,29 @@ jobs:
               exit 2
             fi
             evidence_job="$(jq -er '.job_name' "$evidence_path")"
-            evidence_entry="$(jq -c '{built_derivations, substituted_store_paths}' "$evidence_path")"
-            if jq -e --arg job "$evidence_job" 'has($job)' <<< "$jobs_evidence_json" >/dev/null; then
+            jq -c '{built_derivations, substituted_store_paths}' "$evidence_path" > "$evidence_entry_file"
+            if jq -e --arg job "$evidence_job" 'has($job)' "$jobs_evidence_json_file" >/dev/null; then
               echo "timing: duplicate Nix evidence job: $evidence_job" >&2
               exit 2
             fi
-            jobs_evidence_json="$(jq -c --arg job "$evidence_job" --argjson entry "$evidence_entry" '. + {($job): $entry}' <<< "$jobs_evidence_json")"
+            jq -c --arg job "$evidence_job" --slurpfile entry "$evidence_entry_file" \
+              '. + {($job): $entry[0]}' "$jobs_evidence_json_file" > "$jobs_evidence_next_file"
+            mv "$jobs_evidence_next_file" "$jobs_evidence_json_file"
           done
           if [ "${{ needs.plan.outputs.rust }}" = "true" ] || [ "${{ needs.plan.outputs.contracts }}" = "true" ]; then
-            jq -e 'has("Rust and contracts (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+            jq -e 'has("Rust and contracts (Linux)")' "$jobs_evidence_json_file" >/dev/null || {
               echo "timing: missing Rust and contracts Nix evidence" >&2
               exit 2
             }
           fi
           if [ "${{ needs.plan.outputs.product }}" = "true" ]; then
-            jq -e 'has("Product smoke (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+            jq -e 'has("Product smoke (Linux)")' "$jobs_evidence_json_file" >/dev/null || {
               echo "timing: missing Product smoke Nix evidence" >&2
               exit 2
             }
           fi
           if [ "${{ needs.plan.outputs.remote_flake }}" = "true" ]; then
-            jq -e 'has("Remote GitHub flake smoke (Linux)")' <<< "$jobs_evidence_json" >/dev/null || {
+            jq -e 'has("Remote GitHub flake smoke (Linux)")' "$jobs_evidence_json_file" >/dev/null || {
               echo "timing: missing remote flake Nix evidence" >&2
               exit 2
             }
@@ -950,7 +955,7 @@ jobs:
             --argjson workflow_wall_seconds "$workflow_wall_seconds" \
             --argjson cache_read "$cache_read" \
             --argjson cache_write "$cache_write" \
-            --argjson jobs_evidence "$jobs_evidence_json" \
+            --slurpfile jobs_evidence "$jobs_evidence_json_file" \
             '{
               sha: $sha,
               attempt: $attempt,
@@ -959,7 +964,7 @@ jobs:
               measured_wall_seconds: $measured_wall_seconds,
               workflow: {name: $workflow_name, wall_seconds: $workflow_wall_seconds},
               cache: {read: $cache_read, write: $cache_write, actor: $actor, event: $event},
-              jobs_evidence: $jobs_evidence,
+              jobs_evidence: $jobs_evidence[0],
               run: {started_at: $run_started_at, status: $run_status, conclusion: (if $run_conclusion == "" then null else $run_conclusion end)},
               collection: {kind: "upstream_completed_max"}
             }' > "$metadata_json"

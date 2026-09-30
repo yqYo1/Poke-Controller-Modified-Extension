@@ -26,7 +26,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 SCHEMA: Final = "gpui-selected-closure-license-report"
 SCHEMA_VERSION: Final = 1
@@ -228,11 +228,24 @@ def build_report(root: Path) -> dict[str, Any]:
         workspace_manifest = tomllib.load(handle)
     with (root / "rust" / "pokecon" / "Cargo.toml").open("rb") as handle:
         pokecon_manifest = tomllib.load(handle)
-    gpui_req = workspace_manifest["workspace"]["dependencies"]["gpui-kit"]
-    gpui_pin = gpui_req["version"] if isinstance(gpui_req, dict) else gpui_req
-    gpui_default_features = (
-        gpui_req.get("default-features", True) if isinstance(gpui_req, dict) else True
+    gpui_req = cast(
+        "str | dict[str, Any]",
+        workspace_manifest["workspace"]["dependencies"]["gpui-kit"],
     )
+    if isinstance(gpui_req, dict):
+        gpui_pin_value = gpui_req.get("version")
+        gpui_default_features_value = gpui_req.get("default-features", True)
+        if not isinstance(gpui_pin_value, str):
+            error = "gpui-kit workspace dependency has no string version"
+            raise RuntimeError(error)
+        if not isinstance(gpui_default_features_value, bool):
+            error = "gpui-kit workspace dependency has non-boolean default-features"
+            raise RuntimeError(error)
+        gpui_pin = gpui_pin_value
+        gpui_default_features = gpui_default_features_value
+    else:
+        gpui_pin = gpui_req
+        gpui_default_features = True
 
     gpui_meta = cargo_metadata(root, with_gpui=True)
     base_meta = cargo_metadata(root, with_gpui=False)

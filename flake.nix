@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "b13118201687a0caf34d69a06f61f4b58616c68dbf723c23b3b063998ab5d0e7";
+      canonicalFlakeHash = "abb36fa9280e6a6b0334228de59f41f3ed00b4d7c064a896587e949dd2d87468";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "d330cbe345c200ab288796d2b923bd48595fbc8ba402470e8e1da0a8ea3734a0";
+          expectedAuditTestHash = "cb64864226abf229e289982dee432a3f2f7f091c5cce0ff6b6740b58e0154eec";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3612,6 +3612,35 @@
               print(f"production-perf-check: artifacts validated in {out}")
               PY
               cat "$out_dir/production-perf.log"
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --lib production_composition_root \
+                -- --nocapture
+              for composition_root_artifact in composition-root-perf-report.json composition-root-perf-samples.json composition-root-perf.log; do
+                if [ ! -s "$out_dir/$composition_root_artifact" ]; then
+                  echo "production-perf-check: missing composition-root artifact $out_dir/$composition_root_artifact" >&2
+                  exit 1
+                fi
+              done
+              "${pkgs.python314}/bin/python" -I - "$out_dir" <<'PY'
+              import json
+              import sys
+              out = sys.argv[1]
+              with open(f"{out}/composition-root-perf-report.json", encoding="utf-8") as handle:
+                  report = json.load(handle)
+              with open(f"{out}/composition-root-perf-samples.json", encoding="utf-8") as handle:
+                  samples = json.load(handle)
+              assert report["fixture_id"] == "production-composition-root-v1", report.get("fixture_id")
+              assert samples["fixture_id"] == "production-composition-root-v1"
+              assert report["baseline"]["status"] == "fixed-threshold"
+              assert report["evaluation"]["mode"] == "blocking"
+              assert all(
+                  item["blocking"] and not item["exceeded"]
+                  for item in report["threshold_evaluation"]
+              )
+              assert report["result"] == "pass"
+              print(f"production-perf-check: composition-root artifacts validated in {out}")
+              PY
+              cat "$out_dir/composition-root-perf.log"
               POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
                 -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual \
                 -- --nocapture "$@"

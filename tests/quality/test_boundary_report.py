@@ -32,7 +32,7 @@ EXPECTED_IDS = frozenset(
 
 EXPECTED_ABSTRACTION_COUNTS = {
     "member_count": 1,
-    "dependency_count": 53,
+    "dependency_count": 54,
     "trait_count": 21,
     "service_count": 10,
     "bin_count": 6,

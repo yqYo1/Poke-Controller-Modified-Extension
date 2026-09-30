@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "600f3a19189b30b0cfc23b7f956d34d97cc03ac426ca2aca1a3ffed604536f9c",
+    "rust/pokecon": "be376b9e37cddc47ff78428d2e2a8c962451196ef763b293acc026218ce5667c",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -219,6 +219,7 @@ opener = "0.8.3"
 mlua = { version = "0.10", features = ["luajit", "vendored", "async", "send", "serialize"] }
 nix = { version = "0.30", features = ["process", "signal", "term"] }
 nokhwa = { version = "0.10.11", default-features = false }
+notify = "7"
 toml = "0.8"
 toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"
@@ -396,6 +397,7 @@ hmac.workspace = true
 image.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
+notify.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true
@@ -1365,7 +1367,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"
+        == "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -2120,7 +2122,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "0cbc5c7ea361743f51d2c36ae418563d0435331d3cc4c70a52763e892ec36aef"
+            "07e4d0b3dc7cabaf16c0f06fa00612fdbf7c9dffdbef1aadf9d14f110540f9db"
         ),
         "@rust/pokecon/src/main.rs": (
             "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
@@ -2355,7 +2357,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "4336d7cf7ef53cc288385982e49f026ea770669457e9511a8e86c2fac487307e"
+        == "bde01c39582c10a934ba74be16497ccc2407cd8b1831cc17ea73d2c224ccaa94"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2780,14 +2782,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "af37f68239a1453115a9ce31b8d54ac216a6db7458cc006ad457cfe04226e6b8"
+        == "df0b60d7d00c7d1b5398610b57cad8637894d20374e3e006b3d540fdaeef0914"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"',
+        '== "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -5248,6 +5250,7 @@ mod dynamic;
 pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
+mod dynamic_watcher;
 mod entrypoint;
 #[cfg(feature = "gpui")]
 mod gpui;
@@ -5294,6 +5297,7 @@ pub use entrypoint::{MainError, run_cli};
         "dynamic",
         "dynamic_host",
         "dynamic_runtime",
+        "dynamic_watcher",
         "entrypoint",
         "gpui",
         "integration_test_support",
@@ -5750,7 +5754,7 @@ pub use entrypoint::{MainError, run_cli};
             .await;
         }
 
-        run_packaged_backend(
+        Box::pin(run_packaged_backend(
             request,
             before_dynamic,
             cli.ui.into(),
@@ -5758,7 +5762,7 @@ pub use entrypoint::{MainError, run_cli};
             ephemeral_port,
             RunControl::new(ShutdownCoordinator::new()),
             None,
-        )
+        ))
         .await
         """
     )
@@ -5943,7 +5947,7 @@ pub use entrypoint::{MainError, run_cli};
                 &lifecycle,
                 move || {
                     let inner_task = runtime.spawn(async move {
-                        run_packaged_backend(
+                        Box::pin(run_packaged_backend(
                             request,
                             before_dynamic,
                             UiMode::Desktop,
@@ -5951,7 +5955,7 @@ pub use entrypoint::{MainError, run_cli};
                             ephemeral_port,
                             control,
                             Some(runtime_settings),
-                        )
+                        ))
                         .await
                     });
                     let supervisor_task = runtime.spawn(supervise_desktop_backend_startup(
@@ -15287,7 +15291,7 @@ impl BoundServer {{"""
     desktop_packaged_backend_bypassed = replace_once(
         "entrypoint.rs",
         """                let inner_task = runtime.spawn(async move {
-                    run_packaged_backend(
+                    Box::pin(run_packaged_backend(
                         request,
                         before_dynamic,""",
         """                let inner_task = runtime.spawn(async move {
@@ -15601,7 +15605,7 @@ pub(super) fn r#router() -> Router<RestState> {{
     )
     alternate_desktop_backend = replace_once(
         "entrypoint.rs",
-        """                    run_packaged_backend(
+        """                    Box::pin(run_packaged_backend(
                         request,
                         before_dynamic,
                         UiMode::Desktop,""",

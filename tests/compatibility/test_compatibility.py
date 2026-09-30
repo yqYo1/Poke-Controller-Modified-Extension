@@ -33,6 +33,8 @@ from scripts.compatibility.runner import (
     verify_baseline,
 )
 
+REPOSITORY = Path(__file__).resolve().parents[2]
+
 
 def test_command_root_and_domain_classification_are_closed() -> None:
     baseline = Baseline(
@@ -545,3 +547,124 @@ def test_quarantined_decision_appends_record_without_promotion(
     assert all(record.get("kind") != "promoted" for record in updated)
     assert candidates_path.read_bytes() == candidates_before
     assert history_path.read_bytes() != history_before
+
+
+def report_argv(output: Path, site_packages: Path, report: Path) -> list[str]:
+    return [*check_argv(output, site_packages), "--report-output", str(report)]
+
+
+def test_compatibility_check_report_output_writes_compact_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text(serialized_results(results), encoding="utf-8")
+    report = tmp_path / "compatibility-report.json"
+    monkeypatch.setattr(sys, "argv", report_argv(output, tmp_path, report))
+
+    assert main() == 0
+
+    line = capsys.readouterr().out.strip()
+    assert line.count("\n") == 0
+    payload = json.loads(line)
+    assert payload["schema"] == "compatibility-report/1"
+    assert payload["result"] == "passed"
+    assert report.is_file() and not report.is_symlink()
+    assert report.read_text(encoding="utf-8") == line + "\n"
+
+
+def test_compatibility_check_report_output_failure_writes_no_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text("{}\n", encoding="utf-8")
+    report = tmp_path / "compatibility-report.json"
+    monkeypatch.setattr(sys, "argv", report_argv(output, tmp_path, report))
+
+    with pytest.raises(RuntimeError, match="drift"):
+        main()
+    assert capsys.readouterr().out == ""
+    assert not report.exists()
+
+
+def test_compatibility_check_report_output_rejects_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    results = passing_compatibility_results()
+
+    def fake_build_results(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return results
+
+    def fake_verify_promoted(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.build_results", fake_build_results
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.runner.verify_promoted_corpora",
+        fake_verify_promoted,
+    )
+    output = tmp_path / "fixed-results.json"
+    output.write_text(serialized_results(results), encoding="utf-8")
+    report = tmp_path / "compatibility-report.json"
+    report.symlink_to(tmp_path / "nothing.json")
+    monkeypatch.setattr(sys, "argv", report_argv(output, tmp_path, report))
+
+    with pytest.raises(ValueError, match="already exists"):
+        main()
+    assert report.is_symlink()
+
+
+def test_compatibility_task_emits_only_its_own_report() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text(encoding="utf-8")
+    _prefix, separator, tail = flake.partition("            compatibility = mkTask {\n")
+    assert separator, "missing compatibility task in flake.nix"
+    body, separator, _suffix = tail.partition(
+        "            compatibility-roll = mkTask {\n"
+    )
+    assert separator, "missing compatibility-roll task in flake.nix"
+    assert "POKECON_ACCEPTANCE_REPORT_DIR" in body
+    assert "--report-output" in body
+    assert "compatibility-report.json" in body
+    for foreign in (
+        "schema-report.json",
+        "boundary-report.json",
+        "abstraction-report.json",
+        "lifecycle-report.json",
+    ):
+        assert foreign not in body

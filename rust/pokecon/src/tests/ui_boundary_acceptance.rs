@@ -83,6 +83,8 @@ mod tests {
 
     #[test]
     fn ar_11_11_mode_capability_matrix_is_exact() {
+        #[cfg(feature = "gpui")]
+        let gpui_capabilities = UiMode::Gpui.capabilities();
         assert_eq!(
             [
                 (UiMode::Web, UiMode::Web.capabilities()),
@@ -105,11 +107,35 @@ mod tests {
                 ),
             ]
         );
+        // The GPUI PoC shell shares the single backend but must never inherit
+        // Tauri-only capabilities: no Tauri origin, no native screenshot path.
+        #[cfg(feature = "gpui")]
+        assert_eq!(
+            gpui_capabilities,
+            UiCapabilities {
+                allow_tauri_origin: false,
+                screenshot_mode: ScreenshotMode::Web,
+            }
+        );
+    }
+
+    #[cfg(feature = "gpui")]
+    #[test]
+    fn gpui_poc_keeps_web_equivalent_capabilities() {
+        assert!(!UiMode::Gpui.capabilities().allow_tauri_origin);
+        assert_eq!(
+            UiMode::Gpui.capabilities().screenshot_mode,
+            ScreenshotMode::Web
+        );
     }
 
     #[tokio::test]
     async fn ar_11_11_both_modes_use_the_same_primary_spa_and_api() {
-        for mode in [UiMode::Web, UiMode::Desktop] {
+        #[cfg(feature = "gpui")]
+        let modes = [UiMode::Web, UiMode::Desktop, UiMode::Gpui];
+        #[cfg(not(feature = "gpui"))]
+        let modes = [UiMode::Web, UiMode::Desktop];
+        for mode in modes {
             let (_root, address, server) = acceptance_server(mode).await;
             for (path, expected_body) in [("/", "primary-spa"), ("/api/capability", "primary-api")]
             {

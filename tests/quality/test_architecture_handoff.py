@@ -8,6 +8,7 @@ in the Rust integration tests and external gates named by the handoff.
 
 from __future__ import annotations
 
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -257,3 +258,30 @@ def test_lifecycle_report_fails_closed_on_mutated_table(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exited:
         lifecycle_report.main(["--handoff", str(tmp_path / "missing.md")])
     assert exited.value.code != 0
+
+
+def test_lifecycle_report_output_writes_file_matching_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert lifecycle_report.main([]) == 0
+    baseline_stdout = capsys.readouterr().out
+    payload: object = json.loads(baseline_stdout)
+    assert isinstance(payload, dict)
+    assert payload["schema"] == "lifecycle-report/1"
+
+    output = tmp_path / "lifecycle-report.json"
+    assert lifecycle_report.main(["--output", str(output)]) == 0
+    assert capsys.readouterr().out == baseline_stdout
+    assert output.is_file() and not output.is_symlink()
+    assert output.read_text(encoding="utf-8") == baseline_stdout
+
+    with pytest.raises(SystemExit) as existing:
+        lifecycle_report.main(["--output", str(output)])
+    assert existing.value.code != 0
+
+    dangling = tmp_path / "dangling.json"
+    dangling.symlink_to(tmp_path / "nothing.json")
+    with pytest.raises(SystemExit) as redirected:
+        lifecycle_report.main(["--output", str(dangling)])
+    assert redirected.value.code != 0
+    assert dangling.is_symlink()

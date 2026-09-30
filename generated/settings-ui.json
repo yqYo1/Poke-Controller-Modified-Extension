@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "specification_version": "2.2.0",
   "settings": [
     {
       "access": "read_write",
@@ -18,11 +19,11 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "ja",
           "en"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -62,12 +63,12 @@
       ],
       "unsupported_reason": "bootstrap-only",
       "value_schema": {
+        "type": "string",
         "enum": [
           "python",
           "lua",
           "none"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -87,9 +88,9 @@
       ],
       "unsupported_reason": "advanced callback policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 0,
-        "type": "integer"
+        "minimum": 0
       }
     },
     {
@@ -109,9 +110,9 @@
       ],
       "unsupported_reason": "advanced callback policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 0,
-        "type": "integer"
+        "minimum": 0
       }
     },
     {
@@ -131,9 +132,9 @@
       ],
       "unsupported_reason": "advanced callback policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 0,
-        "type": "integer"
+        "minimum": 0
       }
     },
     {
@@ -153,9 +154,9 @@
       ],
       "unsupported_reason": "advanced callback policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -175,9 +176,9 @@
       ],
       "unsupported_reason": "advanced callback policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -218,9 +219,9 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "profile_name",
+        "type": "string",
         "minLength": 1,
-        "type": "string"
+        "format": "profile_name"
       }
     },
     {
@@ -241,9 +242,9 @@
       ],
       "unsupported_reason": "bootstrap-only",
       "value_schema": {
-        "format": "app_name",
+        "type": "string",
         "minLength": 1,
-        "type": "string"
+        "format": "app_name"
       }
     },
     {
@@ -263,9 +264,9 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -285,12 +286,12 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "640x360",
           "1280x720",
           "1920x1080"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -312,14 +313,14 @@
       "value_schema": {
         "oneOf": [
           {
+            "type": "integer",
             "format": "int64",
-            "minimum": 0,
-            "type": "integer"
+            "minimum": 0
           },
           {
-            "format": "non_empty_no_nul",
+            "type": "string",
             "minLength": 1,
-            "type": "string"
+            "format": "non_empty_no_nul"
           }
         ]
       }
@@ -341,13 +342,13 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "none",
           "vertical",
           "horizontal",
           "both"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -367,11 +368,11 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "png",
           "jpeg"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -391,8 +392,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -412,9 +413,9 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -434,12 +435,12 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "default",
           "qingpi",
           "3ds"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -508,10 +509,10 @@
       "default": {
         "kind": "literal",
         "value": {
-          "bottom": 1.0,
           "left": 0.0,
+          "top": 0.0,
           "right": 1.0,
-          "top": 0.0
+          "bottom": 1.0
         }
       },
       "id": "input.touchscreen_area",
@@ -524,31 +525,31 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "additionalProperties": false,
+        "type": "object",
         "properties": {
           "bottom": {
+            "type": "number",
             "format": "double",
-            "maximum": 1.0,
             "minimum": 0.0,
-            "type": "number"
+            "maximum": 1.0
           },
           "left": {
+            "type": "number",
             "format": "double",
-            "maximum": 1.0,
             "minimum": 0.0,
-            "type": "number"
+            "maximum": 1.0
           },
           "right": {
+            "type": "number",
             "format": "double",
-            "maximum": 1.0,
             "minimum": 0.0,
-            "type": "number"
+            "maximum": 1.0
           },
           "top": {
+            "type": "number",
             "format": "double",
-            "maximum": 1.0,
             "minimum": 0.0,
-            "type": "number"
+            "maximum": 1.0
           }
         },
         "required": [
@@ -557,7 +558,7 @@
           "right",
           "top"
         ],
-        "type": "object"
+        "additionalProperties": false
       }
     },
     {
@@ -599,11 +600,11 @@
       ],
       "unsupported_reason": "LINE UI was removed",
       "value_schema": {
+        "type": "string",
         "enum": [
           "message",
           "noop"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -624,8 +625,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "discord_webhook_or_empty",
-        "type": "string"
+        "type": "string",
+        "format": "discord_webhook_or_empty"
       }
     },
     {
@@ -645,8 +646,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -666,8 +667,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "http_url_or_empty",
-        "type": "string"
+        "type": "string",
+        "format": "http_url_or_empty"
       }
     },
     {
@@ -767,9 +768,9 @@
       ],
       "unsupported_reason": "transport policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -789,9 +790,9 @@
       ],
       "unsupported_reason": "transport policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 0,
-        "type": "integer"
+        "minimum": 0
       }
     },
     {
@@ -811,9 +812,9 @@
       ],
       "unsupported_reason": "transport policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -833,9 +834,9 @@
       ],
       "unsupported_reason": "transport policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -875,9 +876,9 @@
       ],
       "unsupported_reason": "transport policy",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -897,8 +898,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "stun_uri_or_empty",
-        "type": "string"
+        "type": "string",
+        "format": "stun_uri_or_empty"
       }
     },
     {
@@ -918,10 +919,10 @@
       ],
       "unsupported_reason": "advanced codec setting",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "maximum": 100,
         "minimum": 1,
-        "type": "integer"
+        "maximum": 100
       }
     },
     {
@@ -941,8 +942,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "minLength": 1,
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     {
@@ -962,10 +963,10 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "maximum": 65535,
         "minimum": 1,
-        "type": "integer"
+        "maximum": 65535
       }
     },
     {
@@ -985,9 +986,9 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "ip_literal_non_wildcard",
+        "type": "string",
         "minLength": 1,
-        "type": "string"
+        "format": "ip_literal_non_wildcard"
       }
     },
     {
@@ -1012,14 +1013,14 @@
       ],
       "unsupported_reason": "provides values for the FPS selector",
       "value_schema": {
-        "items": {
-          "format": "int64",
-          "minimum": 1,
-          "type": "integer"
-        },
-        "minItems": 1,
         "type": "array",
-        "uniqueItems": true
+        "items": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        },
+        "uniqueItems": true,
+        "minItems": 1
       }
     },
     {
@@ -1039,9 +1040,9 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 1,
-        "type": "integer"
+        "minimum": 1
       }
     },
     {
@@ -1061,6 +1062,7 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "all",
           "outputs",
@@ -1069,8 +1071,7 @@
           "output_1",
           "output_2",
           "controller"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1090,10 +1091,10 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "maximum": 100,
         "minimum": 0,
-        "type": "integer"
+        "maximum": 100
       }
     },
     {
@@ -1113,11 +1114,11 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "output_1",
           "output_2"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1137,11 +1138,11 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "top",
           "bottom"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1161,12 +1162,12 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "bottom",
           "top",
           "both"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1246,12 +1247,12 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "ask",
           "shutdown",
           "keep_backend"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1291,8 +1292,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1312,8 +1313,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1333,8 +1334,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1354,8 +1355,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1375,8 +1376,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1396,8 +1397,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1417,8 +1418,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1438,8 +1439,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1459,8 +1460,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1480,8 +1481,8 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
-        "format": "free",
-        "type": "string"
+        "type": "string",
+        "format": "free"
       }
     },
     {
@@ -1501,13 +1502,13 @@
       ],
       "unsupported_reason": null,
       "value_schema": {
+        "type": "string",
         "enum": [
           "exact",
           "partial",
           "prefix",
           "suffix"
-        ],
-        "type": "string"
+        ]
       }
     },
     {
@@ -1527,8 +1528,8 @@
       ],
       "unsupported_reason": "advanced worker environment",
       "value_schema": {
-        "minLength": 1,
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     {
@@ -1548,9 +1549,9 @@
       ],
       "unsupported_reason": "advanced worker lifecycle",
       "value_schema": {
+        "type": "integer",
         "format": "int64",
-        "minimum": 0,
-        "type": "integer"
+        "minimum": 0
       }
     },
     {
@@ -1570,32 +1571,32 @@
       ],
       "unsupported_reason": "advanced worker environment",
       "value_schema": {
+        "type": "array",
         "items": {
-          "additionalProperties": false,
+          "type": "object",
           "properties": {
             "extras": {
-              "items": {
-                "minLength": 1,
-                "type": "string"
-              },
               "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "name": {
-              "minLength": 1,
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "version": {
-              "minLength": 1,
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
             "name"
           ],
-          "type": "object"
+          "additionalProperties": false
         },
-        "type": "array",
         "uniqueItems": false
       }
     },
@@ -1661,8 +1662,8 @@
             "type": "null"
           },
           {
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         ]
       }
@@ -1704,8 +1705,8 @@
       ],
       "unsupported_reason": "bootstrap-only",
       "value_schema": {
-        "minLength": 1,
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     {
@@ -1725,32 +1726,32 @@
       ],
       "unsupported_reason": "bootstrap-only",
       "value_schema": {
+        "type": "array",
         "items": {
-          "additionalProperties": false,
+          "type": "object",
           "properties": {
             "extras": {
-              "items": {
-                "minLength": 1,
-                "type": "string"
-              },
               "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "uniqueItems": true
             },
             "name": {
-              "minLength": 1,
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "version": {
-              "minLength": 1,
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
             "name"
           ],
-          "type": "object"
+          "additionalProperties": false
         },
-        "type": "array",
         "uniqueItems": false
       }
     },
@@ -1816,8 +1817,8 @@
             "type": "null"
           },
           {
-            "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         ]
       }
@@ -1842,6 +1843,5 @@
         "type": "boolean"
       }
     }
-  ],
-  "specification_version": "2.2.0"
+  ]
 }

@@ -6,6 +6,9 @@ embeds the compatibility row's actual runtime state from
 ``compatibility/fixed-results.json`` and ``compatibility/promotions.jsonl``,
 and emits one JSON document (schema ``lifecycle-report/1``) to stdout.
 
+The report always goes to stdout. Pass --output to additionally write the
+same JSON document to a regular file (fail-closed).
+
 Fail-closed: any parse or validation failure exits non-zero with a message.
 No network access; standard library only.
 """
@@ -15,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import stat
 from pathlib import Path
 from typing import TYPE_CHECKING, Never, TypedDict, cast
 
@@ -257,6 +261,38 @@ def load_compatibility_state(root: Path) -> CompatibilityState:
     )
 
 
+def write_report_output(output: Path, serialized: str) -> None:
+    """Write *serialized* to *output* without changing the stdout contract.
+
+    Fail-closed (mirrors scripts/release/signing_manifest.py): the
+    destination must not exist yet (not even as a symlink), and its parent
+    must already be exactly one real directory.
+    """
+    if output.exists() or output.is_symlink() or output.is_junction():
+        invalid_value(f"lifecycle report output already exists: {output}")
+    parent = output.parent
+    try:
+        parent_metadata = parent.stat(follow_symlinks=False)
+    except OSError as error:
+        message = f"lifecycle report output parent cannot be inspected: {parent}"
+        raise ValueError(message) from error
+    if (
+        parent.is_symlink()
+        or parent.is_junction()
+        or not stat.S_ISDIR(parent_metadata.st_mode)
+    ):
+        invalid_value(
+            f"lifecycle report output parent must be one real directory: {parent}"
+        )
+    try:
+        with output.open("xb") as stream:
+            stream.write((serialized + "\n").encode("utf-8"))
+        output.chmod(0o644)
+    except OSError:
+        output.unlink(missing_ok=True)
+        raise
+
+
 def build_report(root: Path, handoff_text: str) -> LifecycleReport:
     subjects = parse_lifecycle_table(handoff_text)
     compatibility_state = load_compatibility_state(root)
@@ -283,6 +319,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=root / "compatibility/promotions.jsonl",
     )
+    parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args(argv)
     try:
         handoff_path = arguments.handoff
@@ -301,7 +338,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
     except (OSError, ValueError) as error:
         parser.exit(1, f"lifecycle report failed: {error}\n")
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    serialized = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    output_arg = arguments.output
+    if output_arg is not None:
+        try:
+            write_report_output(output_arg, serialized)
+        except (OSError, ValueError) as error:
+            parser.exit(1, f"lifecycle report failed: {error}\n")
+    print(serialized)
     return 0
 
 

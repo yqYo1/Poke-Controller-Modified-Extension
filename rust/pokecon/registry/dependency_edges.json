@@ -143,6 +143,10 @@
     ],
     [
       "entrypoint",
+      "gpui"
+    ],
+    [
+      "entrypoint",
       "runtime"
     ],
     [
@@ -210,6 +214,10 @@
       "settings"
     ],
     [
+      "lib",
+      "worker"
+    ],
+    [
       "production",
       "application_backend"
     ],
@@ -232,6 +240,10 @@
     [
       "production",
       "dynamic_host"
+    ],
+    [
+      "production",
+      "dynamic_runtime"
     ],
     [
       "production",

@@ -32,7 +32,7 @@ EXPECTED_IDS = frozenset(
 
 EXPECTED_ABSTRACTION_COUNTS = {
     "member_count": 1,
-    "dependency_count": 52,
+    "dependency_count": 53,
     "trait_count": 21,
     "service_count": 10,
     "bin_count": 6,
@@ -269,3 +269,60 @@ def test_boundary_report_breaks_red_on_synthetic_extra_boundary(
     registry_path.write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(ValueError, match=r"missing from handoff 5\.3"):
         boundary_report.build_report(tmp_path, handoff)
+
+
+def test_boundary_report_output_writes_file_matching_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    handoff = _write_fixture(tmp_path)
+    args = ["--root", str(tmp_path), "--handoff", str(handoff), "--check"]
+    assert boundary_report.main(args) == 0
+    baseline_stdout = capsys.readouterr().out
+    payload: object = json.loads(baseline_stdout)
+    assert isinstance(payload, dict)
+    assert payload["schema"] == "boundary-report/1"
+
+    output = tmp_path / "boundary-report.json"
+    assert boundary_report.main([*args, "--output", str(output)]) == 0
+    assert capsys.readouterr().out == baseline_stdout
+    assert output.is_file() and not output.is_symlink()
+    assert output.read_text(encoding="utf-8") == baseline_stdout
+
+
+def test_abstraction_report_output_writes_file_matching_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_fixture(tmp_path)
+    args = ["--root", str(tmp_path), "--abstraction"]
+    assert boundary_report.main(args) == 0
+    baseline_stdout = capsys.readouterr().out
+    payload: object = json.loads(baseline_stdout)
+    assert isinstance(payload, dict)
+    assert payload["schema"] == "abstraction-report/1"
+
+    output = tmp_path / "abstraction-report.json"
+    assert boundary_report.main([*args, "--output", str(output)]) == 0
+    assert capsys.readouterr().out == baseline_stdout
+    assert output.read_text(encoding="utf-8") == baseline_stdout
+
+
+def test_boundary_report_output_is_fail_closed(tmp_path: Path) -> None:
+    handoff = _write_fixture(tmp_path)
+    args = ["--root", str(tmp_path), "--handoff", str(handoff)]
+
+    output = tmp_path / "boundary-report.json"
+    output.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as existing:
+        boundary_report.main([*args, "--output", str(output)])
+    assert existing.value.code != 0
+
+    dangling = tmp_path / "dangling.json"
+    dangling.symlink_to(tmp_path / "nothing.json")
+    with pytest.raises(SystemExit) as redirected:
+        boundary_report.main([*args, "--output", str(dangling)])
+    assert redirected.value.code != 0
+    assert dangling.is_symlink()
+
+    with pytest.raises(SystemExit) as missing_parent:
+        boundary_report.main([*args, "--output", str(tmp_path / "absent" / "out.json")])
+    assert missing_parent.value.code != 0

@@ -366,6 +366,19 @@ impl CameraManager {
         self.inner.writer_unstopped.load(Ordering::SeqCst)
     }
 
+    /// Fail-closed fallback when the shutdown join itself is lost (e.g. the
+    /// `spawn_blocking` camera shutdown task fails): the writer state is
+    /// unknown, so the durable §15.6 `camera_writer_unstopped` state is
+    /// recorded and a guard retaining the mapping and join handle until
+    /// process exit is returned. This path never claims normal unmap
+    /// completion.
+    pub fn mark_writer_unstopped(&self) -> UnstoppedCameraWriter {
+        self.inner.record_writer_unstopped();
+        UnstoppedCameraWriter {
+            manager: Arc::clone(&self.inner),
+        }
+    }
+
     fn request(
         &self,
         command: impl FnOnce(SyncSender<Result<(), CameraError>>, Arc<AtomicBool>) -> WriterCommand,
@@ -1031,6 +1044,29 @@ mod tests {
         manager.shutdown(Duration::from_secs(1)).unwrap();
         assert!(!manager.writer_unstopped());
         assert_eq!(manager.ring().published_token(), INVALID_PUBLISHED_TOKEN);
+    }
+
+    #[test]
+    fn lost_shutdown_join_retains_mapping_through_fail_closed_fallback() {
+        let backend = VirtualCameraBackend::default();
+        backend.push_open(open_plan([4, 5, 6], 30));
+        let manager = CameraManager::start(
+            Arc::new(backend),
+            config(0, 30, CaptureResolution::R640x360),
+            FlipMode::None,
+        )
+        .unwrap();
+        assert!(!manager.writer_unstopped());
+        // This is the exact fallback `stop_inputs_camera_and_scripts`
+        // retains when the `spawn_blocking` camera shutdown join itself is
+        // lost: the writer state is unknown, so the durable flag is recorded
+        // and the mapping stays retained instead of being released.
+        let guard = manager.mark_writer_unstopped();
+        assert!(manager.writer_unstopped());
+        assert!(guard.writer_unstopped());
+        assert_eq!(guard.mapping_descriptor(), manager.mapping_descriptor());
+        assert!(manager.ring().read_published().unwrap().is_some());
+        drop(guard);
     }
 
     #[test]

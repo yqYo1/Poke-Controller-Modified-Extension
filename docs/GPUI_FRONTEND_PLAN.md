@@ -88,6 +88,8 @@ WebAssembly版は別のbackendでも独立した製品成果物でもない。�
 - [ ] WASMギャラリーの成功をアプリ全体の成功証明にしない。single canvas/window制約、threading/COOP-COEP要件、WebGPU/WebGL2、browser fonts、入力、screen readerの限界を記録する。
 - **Gate 1:** native window起動、event loop/backend監督の共存、IME/CJK/clipboard/accessibilityの基本確認が成立し、未解決点と回避案が文書化されること。WASMの成否は別記し、native PoCの合否へ混ぜない。
 
+現行dirty worktreeのheadless補助証跡として、`rust/pokecon/src/gpui/fake_view.rs`の`fake_view_ime_marked_range_and_geometry_headless`は、実`GpuiFakeView`とGPUI test window上でmarked UTF-16 range、candidate/caret bounds、element origin追従、UTF-16 character hit-test境界を検証する。同じharnessの`fake_view_focus_cycle_and_accessibility_labels_headless`は、実`GpuiFakeView`とGPUI test window上でTabのinput→copy→quit遷移とquit→inputのwrap、Shift-Tabの逆遷移、root／input／copy／quitの`Group`／`TextInput`／`Button` roleとlabel、visibleかつnon-zero boundsを検証する（証跡: `/home/yayoi/.hermes/cache/scratch/gpui-headless-focus-a11y/gpui-headless-focus-a11y.json`、schema `gpui-headless-focus-a11y-v1`）。status行はproductionに`.test_support()`登録がないためheadlessで観測できず、当該packetは`try_find`不在の確認に狭めている。`nix run .#cargo -- test --locked -p pokecon --features gpui-test-support --lib gpui::fake_view`は3 passedである。ただしheadless観測の証跡であり、platform IME composition、rendered pixels、live candidate window、OS clipboard、AccessKit／AT-SPI enumerationの証明ではないため、Gate 1およびPhase 1は未完了のままとする。
+
 #### PoC依存候補の一次資料調査（未採用）
 
 一次資料で確認した候補releaseは[`gpui-kit v0.6.6`](https://github.com/longbridge/gpui-kit/releases/tag/v0.6.6)（tag commit `9765ae2c9a5eccfa13891248a445991e6f6a09d8`）です。
@@ -228,7 +230,7 @@ native viewの受入では、次の既知課題を個別に再現確認します
 ## 8. 進捗
 
 - [x] 作業対象を既存`refactor/rust-core` branch/worktreeに固定し、現行CLI、backend ownership、OpenAPI境界、Nix default launcher、仕様との既知のずれを計画の前提として記録する。
-- [ ] Phase 0 — 現行要件と実装baselineを再照合する。
+- [x] Phase 0 — 現行要件と実装baselineを再照合する（`GPUI_PHASE0_INVENTORY.md`、frontend／integration traceability、既存UI／backend gate）。
 - [ ] Phase 1 — GPUI Kit native view、Tokio/event-loop共存PoC (WASM probeは別記)。
 - [ ] Phase 2 — 同一binaryの`apps.gpui` selectorとbackend接続。
 - [ ] Phase 3 — control/settings vertical slice。
@@ -237,3 +239,9 @@ native viewの受入では、次の既知課題を個別に再現確認します
 - [ ] Phase 6 — native lifecycle/package。
 - [ ] Phase 7 — GPUI browser/WASM受入 (共有UI要件が確定した場合)。
 - [ ] Phase 8 — 採否・段階的切替。
+
+### 8.1 現行実装の境界
+
+`gpui-kit 0.6.6`（Cargo manifest／lockで固定）、optional `gpui`／`gpui-test-support` feature、同一`pokecon` binaryの`--ui gpui`、`apps.gpui`、dedicated GPUI UI thread、Tokio backend adapter、fake-data view、CJK／text input／focus／clipboard／accessibility wiring、Linuxのfontconfig／freetype／libxkbcommon／XCB／Mesa／Vulkan loader inputsを実装した。`cargo check --locked --features gpui`、required clippy、GPUI test-support library test（Xvfb下、478 tests）、CLI help、`nix build .#pokecon`、`nix run .#ui-package-check`、flake check、UI package provenance testは成功している。
+
+Weston headless Wayland＋Mesa llvmpipe GL software rendererでは実window runtimeも成功し、`gpui-native-wayland-runtime-report.json`にproduction readiness、`Gpui` mode、`DesktopExit` request、clean stop、selected adapter、panic absenceを記録した。Vulkan adapter初期化失敗は想定したGL fallbackとして`expected_fallback_errors`へ明示し、unexpected errorとは区別している。XvfbはGLX visual／GPU adapter不足で失敗する。追加のXwayland on Sway headless probeでは、dirty-local package（`/nix/store/5h3asil0vkqvq03zwkzyzz0lpb5p2xd8-pokecon-0.1.0`）の実window起動、X11経由の`日本語🦀` paste、application-owned `text/plain` clipboard read-back、window close（exit 0）まで確認した（証跡: `/home/yayoi/.hermes/cache/scratch/gpui-g1-ops-x11/run-report.json`）。ただし同probeのAccessKit/AT-SPI列挙はrootを含む3 nodeに留まり、button/inputの非空label treeを得られず、IME composition／caret・hit-test、clean-source／remote／hardware evidenceも未確認である（caret rect／UTF-16 hit-test実装自体は`GpuiFakeView`に追加済みだが、live IMEでの位置受入は未証明）。追加のSway headless再試行では、共有固定D-Bus socketを廃止してrunごとのsession busへ分離し、`nixpkgs#sway`を明示した結果、D-Bus／AT-SPI registryの起動とWayland real windowの生成までは再現したが、既存dirty-local packageの操作artifactは`status="fail"`（clipboardは事前投入文字列のみ、application-owned read-backなし、`accessibility-elements=[]`、window close exit `124`）だった（証跡: `/home/yayoi/.hermes/cache/scratch/gpui-g1-ops-retry-existing-sway-current/gpui-g1-ops-report.json`）。これは元の`--config-file`競合を解消した診断結果であり、Gate 1の受入証拠ではない。したがってIME／clipboard／AccessKit treeの完全な実window操作証跡、全target license／notice、media／vertical sliceは未完了であり、Gate 1とPhase 2以降は未完了のまま扱う。

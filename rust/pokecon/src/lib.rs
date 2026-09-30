@@ -22,6 +22,8 @@ pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
+#[cfg(feature = "gpui")]
+mod gpui;
 #[cfg(feature = "integration-test-support")]
 #[doc(hidden)]
 pub mod integration_test_support;
@@ -72,6 +74,7 @@ use tokio_util::sync::CancellationToken;
 use crate::dynamic_host::StartupDynamicHost;
 use crate::dynamic_runtime::DynamicRuntime;
 use crate::production::ProductionRuntime;
+use crate::worker::supervisor::{StopReport, SupervisorError};
 
 const SERVER_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -82,6 +85,9 @@ enum UiMode {
     Web,
     /// Prepare the Tauri lifecycle boundary alongside axum.
     Desktop,
+    /// Prepare the `GPUI` native `PoC` shell alongside the same axum backend.
+    #[cfg(feature = "gpui")]
+    Gpui,
 }
 
 /// Capabilities that differ between the primary Web UI and its desktop adapter.
@@ -103,6 +109,11 @@ impl UiMode {
             Self::Desktop => UiCapabilities {
                 allow_tauri_origin: true,
                 screenshot_mode: ScreenshotMode::Desktop,
+            },
+            #[cfg(feature = "gpui")]
+            Self::Gpui => UiCapabilities {
+                allow_tauri_origin: false,
+                screenshot_mode: ScreenshotMode::Web,
             },
         };
         debug_assert_eq!(capabilities.allow_tauri_origin, self == Self::Desktop);
@@ -468,15 +479,56 @@ async fn emit_startup_post(runtime: Option<&DynamicRuntime>) {
     }
 }
 
-async fn shutdown_production(production: &mut ProductionRuntime, dynamic: Option<DynamicRuntime>) {
+/// Observable receipt for one [`shutdown_production`] pass: the dynamic reap
+/// verdict, the real worker-stop outcome when a dynamic worker existed, and
+/// the §15.6 step-5 release observation. Production callers ignore this and
+/// continue unconditionally; tests consume it to distinguish a confirmed
+/// reap (`dynamic_reaped == true`) from fail-closed retention.
+#[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "fields are consumed by crate unit tests via the shutdown report"
+)]
+pub(crate) struct ProductionShutdownReport {
+    pub(crate) dynamic_reaped: bool,
+    pub(crate) dynamic_stop: Option<Result<StopReport, SupervisorError>>,
+    pub(crate) step5_release_allowed: bool,
+}
+
+pub(crate) async fn shutdown_production(
+    production: &mut ProductionRuntime,
+    dynamic: Option<DynamicRuntime>,
+) -> ProductionShutdownReport {
     if let Some(runtime) = dynamic.as_ref() {
         runtime.prepare_shutdown().await;
     }
     production.stop_inputs_camera_and_scripts().await;
-    if let Some(runtime) = dynamic {
-        runtime.shutdown_worker().await;
-    }
+    let dynamic_stop: Option<Result<StopReport, SupervisorError>> = match dynamic {
+        // The worker reap receipt is the dynamic half of the step-5 gate:
+        // only an `Ok` stop proves the worker was reaped.
+        Some(runtime) => Some(runtime.shutdown_worker().await),
+        // No dynamic worker was ever started, so there is nothing to reap;
+        // the dynamic half of the step-5 gate is vacuously met (mirroring
+        // the `Ok(None)` script path, which needs no reader fallback).
+        None => None,
+    };
+    let dynamic_reaped = dynamic_stop.as_ref().is_none_or(Result::is_ok);
+    // §15.6 step 5: fail-closed persistence before the read-only
+    // observation. An unconfirmed dynamic reap is retained as
+    // `camera_reader_fallback` ownership so `shared_memory_release_allowed`
+    // and `Drop` refuse release; the gate below only observes and the
+    // verdict stays diagnostic-only while shutdown continues
+    // unconditionally and fallback retention stays owned by
+    // `ProductionRuntime`.
+    production.retain_dynamic_mapping_after_worker_shutdown(dynamic_reaped);
+    let step5_release_allowed =
+        production.shared_memory_release_gate_after_dynamic_reap(dynamic_reaped);
     production.stop_serial().await;
+    ProductionShutdownReport {
+        dynamic_reaped,
+        dynamic_stop,
+        step5_release_allowed,
+    }
 }
 
 async fn finish_server_task(mut task: JoinHandle<io::Result<()>>) -> Result<(), AppError> {

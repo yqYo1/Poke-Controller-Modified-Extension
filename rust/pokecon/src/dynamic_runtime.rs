@@ -191,13 +191,20 @@ impl DynamicRuntime {
     }
 
     /// Reaps the already-stopping dynamic worker by the fixed deadline.
-    pub async fn shutdown_worker(mut self) {
+    ///
+    /// Returns the real `ManagedWorker::stop` outcome: `Ok` (the worker was
+    /// reaped) or `Err` (reap unproven, the worker is possibly still live).
+    /// The caller maps this to the §15.6 step-5 release-gate receipt with
+    /// `is_ok()`.
+    pub async fn shutdown_worker(
+        mut self,
+    ) -> Result<crate::worker::supervisor::StopReport, SupervisorError> {
         self.host.begin_stopping();
-        log_stop_result(
-            self.worker
-                .stop(StopPurpose::ApplicationShutdown, DYNAMIC_STOP_TIMEOUT)
-                .await,
-        );
+        let stop = self
+            .worker
+            .stop(StopPurpose::ApplicationShutdown, DYNAMIC_STOP_TIMEOUT)
+            .await;
+        log_stop_result(&stop);
         finish_worker_receivers(
             &self.worker,
             self.client.take(),
@@ -205,12 +212,43 @@ impl DynamicRuntime {
             self.diagnostic_task.take(),
         )
         .await;
+        stop
     }
 
     /// Performs both shutdown phases for startup-failure and legacy callers.
     pub async fn shutdown(self) {
         self.prepare_shutdown().await;
-        self.shutdown_worker().await;
+        let _reaped = self.shutdown_worker().await;
+    }
+
+    /// Test-only seam wrapping an already-spawned real worker generation.
+    ///
+    /// Crate unit tests spawn the existing fault-worker fixture through
+    /// [`WorkerSupervisor::spawn`] and wrap the resulting [`ManagedWorker`]
+    /// here so [`crate::shutdown_production`] exercises its real
+    /// `prepare_shutdown` / `shutdown_worker` path. No client, log, or
+    /// diagnostic task is attached: the fixture speaks no dynamic protocol,
+    /// and the shutdown path only needs the worker and the host. Fails
+    /// closed on a non-dynamic worker handle.
+    #[cfg(test)]
+    pub(crate) fn from_test_worker(
+        supervisor: Arc<WorkerSupervisor>,
+        worker: Arc<ManagedWorker>,
+        host: Arc<StartupDynamicHost>,
+    ) -> Self {
+        assert_eq!(
+            worker.kind(),
+            WorkerKind::Dynamic,
+            "test dynamic runtime wraps a dynamic worker generation"
+        );
+        Self {
+            _supervisor: supervisor,
+            worker,
+            host,
+            client: None,
+            log_task: None,
+            diagnostic_task: None,
+        }
     }
 }
 
@@ -599,14 +637,14 @@ async fn stop_failed_startup(
 ) {
     host.begin_stopping();
     log_stop_result(
-        worker
+        &worker
             .stop(StopPurpose::ApplicationShutdown, DYNAMIC_STOP_TIMEOUT)
             .await,
     );
     finish_worker_receivers(worker, client, log_task, diagnostic_task).await;
 }
 
-fn log_stop_result(result: Result<crate::worker::supervisor::StopReport, SupervisorError>) {
+fn log_stop_result(result: &Result<crate::worker::supervisor::StopReport, SupervisorError>) {
     match result {
         Ok(report) if report.forced => tracing::warn!(
             worker_kind = "dynamic",

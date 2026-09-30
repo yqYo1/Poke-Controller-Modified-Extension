@@ -106,6 +106,7 @@ struct VirtualBackendState {
     opens: VecDeque<VirtualOpenPlan>,
     opened_configs: Vec<CameraConfig>,
     reconfigured_values: Vec<(u32, CaptureResolution)>,
+    closed_sessions: usize,
 }
 
 /// Queue-driven camera backend for transactions, recorded frames, Windows
@@ -132,6 +133,16 @@ impl VirtualCameraBackend {
     #[must_use]
     pub fn reconfigured_values(&self) -> Vec<(u32, CaptureResolution)> {
         self.lock_state().reconfigured_values.clone()
+    }
+
+    /// Returns the number of virtual sessions whose `close` hook ran.
+    ///
+    /// This is intentionally observable so production composition failure
+    /// tests can prove that `BuildCleanup` stopped an already-open camera
+    /// session instead of merely dropping the manager handle.
+    #[must_use]
+    pub fn closed_sessions(&self) -> usize {
+        self.lock_state().closed_sessions
     }
 
     fn lock_state(&self) -> MutexGuard<'_, VirtualBackendState> {
@@ -224,7 +235,13 @@ impl CameraSession for VirtualCameraSession {
     }
 
     fn close(&mut self) {
-        self.closed = true;
+        if !self.closed {
+            self.closed = true;
+            self.backend_state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .closed_sessions += 1;
+        }
     }
 }
 

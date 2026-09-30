@@ -6,12 +6,14 @@
 > **未実装**（コードに存在しない）/ **将来**（仕様が未実装と明示）/ **対象外**（仕様が backend 所有・他書所有・実装しないと明示）。
 > 実装の修正は行わない。本書は証拠とギャップの記録のみである。
 
+> GPUI native PoCは後続差分で実装された。以下のhistorical frontend requirement tableはWeb／Tauri baselineを保持し、GPUIの現行PoC証拠（Cargo／CLI／fake view／test-support／Weston headless Wayland実window runtime）とGate 1未受入の境界は`docs/GPUI_FRONTEND_PLAN.md`および`docs/GPUI_PHASE0_INVENTORY.md`を正とする。
+
 ## 0. 分類と frontend 選択
 
 | 要求 | 判定 | 直接証拠 | ギャップ・備考 |
 |------|------|----------|----------------|
 | Svelte Web UI / Tauri desktop UI を維持する | 実装済 | `web/src/`（SvelteKit 一式）; `rust/pokecon/tauri.conf.json`; `flake.nix` の `tauri-build` ジョブ | — |
-| GPUI native UI を同一 Rust backend へ追加し `nix run` から選択起動 | 将来 | 仕様が「未実装」と明示。`flake.nix` に `.#gpui` エントリなし、`--ui web`（`flake.nix` 約3255行）のみ | GPUI 入口は実装後に受入 |
+| GPUI native UI を同一 Rust backend へ追加し `nix run` から選択起動 | 部分的 | 同じ`pokecon` binaryの`--ui gpui`、optional `gpui` feature、`apps.gpui`、`gpui-kit 0.6.6`、fake-data view、UTF-16 selected／marked text state、CJK／surrogate-safe replacement／backspace、caret rect／character hit-test、headless `fake_view_ime_marked_range_and_geometry_headless`（marked UTF-16／candidate-caret bounds／origin追従／hit-test）、headless `fake_view_focus_cycle_and_accessibility_labels_headless`（Tabのinput→copy→quit遷移とwrap／Shift-Tab逆遷移／`Group`・`TextInput`・`Button` roleとlabel／visibleかつnon-zero bounds、status行は`try_find`不在確認に限定）、Weston headless Wayland＋Mesa llvmpipe GL runtime、Xwayland on Sway headlessでのreal window／CJK paste／clipboard read-back／close | compile／CLI／test-supportと実windowのreadiness／DesktopExit／clean stopはlocalで検証済み。X11 clipboard経路はdirty-local packageで確認したが、IME composition／caret・hit-test／AccessKit tree、Tokio共存の全経路、clean-source／remote、Gate 1は未受入。Sway headless再試行はrun-local D-Busへ分離後にreal windowまで到達したが、application-owned clipboard read-backなし、`accessibility-elements=[]`、close exit `124`であり、診断artifact（`/home/yayoi/.hermes/cache/scratch/gpui-g1-ops-retry-existing-sway-current/gpui-g1-ops-report.json`）もGate 1の代替ではない |
 | WASM 版 GPUI は要件に含めない | 対象外 | 仕様の明示的除外。コード側の対応物なし（正しい） | — |
 | `--ui` 選択は process 起動時に固定、既存 process の移行なし | 対象外 | backend/CLI の責務。frontend 側に対応物なし（正しい） | — |
 | 現行 Web/Tauri 実装技術を GPUI へ強制しない | 対象外 | 方針宣言。コード側の対応物なし（正しい） | — |
@@ -22,7 +24,7 @@
 |------|------|----------|----------------|
 | GPUI 受入・旧 UI 残存判断まで現行 Svelte Web/Tauri UI を削除しない | 実装済 | `web/src/` が現存し削除されていない | — |
 | Web/Tauri/GPUI は同一 Rust backend を使い hardware・canonical state を重複所有しない | 対象外 | backend 所有。frontend は `ApplicationRuntime`（`web/src/lib/runtime.ts`）経由で backend 状態を参照するのみ | — |
-| `nix run . -- --ui web` / `nix run .#tauri` / `nix run .#gpui` の選択目標を維持 | 部分的 | `--ui web`（`flake.nix` 約3255行）、`--ui desktop`（`flake.nix` 約5382行）、`tauri-build` ジョブは存在。`.#gpui` エントリなし | `.#gpui` は将来実装（仕様どおり） |
+| `nix run . -- --ui web` / `nix run .#tauri` / `nix run .#gpui` の選択目標を維持 | 部分的 | `--ui web`、`--ui desktop`、`--ui gpui`、`apps.gpui`、`tauri-build` は存在 | 同一binary／selectorのcompileとhelp、Wayland／llvmpipe GPUI readiness／DesktopExit／clean stop、Xwayland dirty-local packageのCJK clipboard paste/read-back／closeはlocal検証済み。IME／AccessKit tree、remote／clean-source runtimeは未受入 |
 
 ### 0.2 機能要件（所有分担）
 
@@ -33,7 +35,7 @@
 | GPUI では native 表示へ適合、Tkinter pixel 配置・widget 種別の複製を要求しない | 対象外 | 方針宣言 | — |
 | `ui.*` 等の設定 ID・型・既定値・scope・保存・validation は backend・正準 registry が所有。frontend は独自 schema を定義しない | 実装済 | `OtherTab.svelte:6-14`（`SelectSetting`/`BooleanSetting` は backend ID の参照のみ）; 生成型 `web/src/lib/api/openapi.ts` を使用 | — |
 | 設定値の表示・操作 UI は本書が所有 | 実装済 | `OtherTab.svelte`、`CameraTab.svelte`、`CommandsTab.svelte`、`NotificationsTab.svelte`、`ManualTab.svelte`、`SerialTab.svelte` | — |
-| `ui.desktop.disable_compositing` は Tauri/WebView 専用、GPUI に表示・適用しない | 実装済 | `OtherTab.svelte` の compositing チェックボックスは Web モードで「値だけ保持し効果なし」と表示し、GPUI 分岐なし（GPUI 自体が未実装のため表示対象外） | — |
+| `ui.desktop.disable_compositing` は Tauri/WebView 専用、GPUI に表示・適用しない | 実装済み | `OtherTab.svelte` の compositing チェックボックスは Web モードで「値だけ保持し効果なし」と表示し、GPUI native viewにもWebView compositing設定を適用しない | GPUI native shellのsoftware／GPU renderer選択は別のruntime gateとして扱う |
 | Web browser 専用 version 要件・video transport 要件を native GPUI へ誤適用しない | 対象外 | 方針宣言 | — |
 
 ## 1.1 目的 / 1.4 対象外機能

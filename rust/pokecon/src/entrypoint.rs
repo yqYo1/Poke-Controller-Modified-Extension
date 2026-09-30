@@ -38,6 +38,9 @@ const COMPOSITING_REEXEC_MARKER: &str = "PCME_DESKTOP_COMPOSITING_CONFIGURED";
 enum UiArgument {
     Web,
     Desktop,
+    /// Native `GPUI` `PoC` shell sharing the single backend lifecycle.
+    #[cfg(feature = "gpui")]
+    Gpui,
 }
 
 impl From<UiArgument> for UiMode {
@@ -45,6 +48,8 @@ impl From<UiArgument> for UiMode {
         match value {
             UiArgument::Web => Self::Web,
             UiArgument::Desktop => Self::Desktop,
+            #[cfg(feature = "gpui")]
+            UiArgument::Gpui => Self::Gpui,
         }
     }
 }
@@ -52,7 +57,7 @@ impl From<UiArgument> for UiMode {
 #[derive(Debug, Parser)]
 #[command(version, about = "PokeCon Rust runtime")]
 struct Cli {
-    /// Selects the web-only or desktop lifecycle mode.
+    /// Selects the UI lifecycle mode.
     #[arg(long, value_enum, default_value_t = UiArgument::Web)]
     ui: UiArgument,
     /// Exit successfully after the runtime boundaries have started.
@@ -72,6 +77,9 @@ pub enum MainError {
     App(Box<dyn std::error::Error + Send + Sync>),
     #[error(transparent)]
     Desktop(#[from] DesktopError),
+    #[cfg(feature = "gpui")]
+    #[error(transparent)]
+    Gpui(#[from] crate::gpui::GpuiError),
     #[error(transparent)]
     Settings(#[from] PipelineError),
     #[error(transparent)]
@@ -136,6 +144,17 @@ pub async fn run_cli() -> Result<(), MainError> {
 
     if cli.ui == UiArgument::Desktop && !cli.exit_after_startup {
         return run_desktop(request, before_dynamic, ephemeral_port).await;
+    }
+
+    #[cfg(feature = "gpui")]
+    if cli.ui == UiArgument::Gpui {
+        return run_gpui(
+            request,
+            before_dynamic,
+            ephemeral_port,
+            cli.exit_after_startup,
+        )
+        .await;
     }
 
     run_packaged_backend(
@@ -1915,6 +1934,124 @@ async fn finish_desktop_run(
     backend_result
 }
 
+/// Starts the single backend lifecycle and supervises it next to the GPUI
+/// native `PoC` shell.
+///
+/// The backend runs on the Tokio runtime exactly like the Web mode path;
+/// only the GPUI platform event loop lives on its dedicated UI thread (see
+/// [`crate::gpui`]). Window close and event-loop exit signals request
+/// shutdown on the shared coordinator, and every exit path joins the backend
+/// supervisor before returning.
+///
+/// # Errors
+///
+/// Returns an error if backend startup, the UI thread, the readiness join,
+/// or the backend supervisor fails.
+#[cfg(feature = "gpui")]
+async fn run_gpui(
+    request: PipelineRequest,
+    before_dynamic: LoadedSettings,
+    ephemeral_port: bool,
+    exit_after_startup: bool,
+) -> Result<(), MainError> {
+    use crate::gpui::{GpuiError, GpuiUiSignal, gpui_signal_channel, spawn_gpui_ui_thread};
+
+    let shutdown = ShutdownCoordinator::new();
+    let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+    let readiness_guard = ready_sender.clone();
+    let backend_stopped_before_readiness = Arc::new(AtomicBool::new(false));
+    let startup_failure_marker = Arc::clone(&backend_stopped_before_readiness);
+    let runtime = tokio::runtime::Handle::current();
+    let task_shutdown = shutdown.clone();
+    let control = RunControl::new(shutdown.clone()).with_ready_sender(ready_sender);
+    let (ui_signal_sender, mut ui_signal_receiver) = gpui_signal_channel();
+
+    // The single backend lifecycle stays on the Tokio runtime; the GPUI event
+    // loop moves to its dedicated UI thread instead of blocking this task.
+    let inner_task = runtime.spawn(run_packaged_backend(
+        request,
+        before_dynamic,
+        UiMode::Gpui,
+        false,
+        ephemeral_port,
+        control,
+        None,
+    ));
+    let mut supervisor_task = runtime.spawn(supervise_desktop_backend_startup(
+        inner_task,
+        task_shutdown,
+        readiness_guard,
+    ));
+    let _ui_thread = spawn_gpui_ui_thread(ui_signal_sender, exit_after_startup)?;
+
+    // Wait for backend readiness without blocking the Tokio worker: the
+    // readiness sender owned by the backend task is the only publisher of
+    // the listener address.
+    let backend_ready = tokio::task::spawn_blocking(move || ready_receiver.recv())
+        .await
+        .map_err(GpuiError::BackendTask)?;
+    if backend_ready.is_err() {
+        startup_failure_marker.store(true, Ordering::Release);
+        return match supervisor_task.await {
+            Ok(result) => result,
+            Err(error) => Err(GpuiError::BackendTask(error).into()),
+        };
+    }
+
+    loop {
+        tokio::select! {
+            biased;
+            supervisor_result = &mut supervisor_task => {
+                return finish_gpui_backend_result(supervisor_result, &shutdown);
+            }
+            signal = ui_signal_receiver.recv() => {
+                match signal {
+                    Some(GpuiUiSignal::WindowOpened) => {}
+                    Some(GpuiUiSignal::WindowClosed | GpuiUiSignal::EventLoopExited) | None => {
+                        shutdown.request(ShutdownReason::DesktopExit);
+                        break;
+                    }
+                    Some(GpuiUiSignal::WindowOpenFailed(detail)) => {
+                        shutdown.request(ShutdownReason::FatalError(detail.clone()));
+                        return Err(GpuiError::WindowOpen(detail).into());
+                    }
+                }
+            }
+        }
+    }
+
+    match supervisor_task.await {
+        Ok(result) => result,
+        Err(error) => Err(GpuiError::BackendTask(error).into()),
+    }
+}
+
+/// Classifies a backend supervisor that finished before the GPUI shell
+/// closed: a stop caused by an accepted shutdown request is clean, any other
+/// early stop is a lost backend and fails closed.
+#[cfg(feature = "gpui")]
+fn finish_gpui_backend_result(
+    supervisor_result: Result<Result<(), MainError>, tokio::task::JoinError>,
+    shutdown: &ShutdownCoordinator,
+) -> Result<(), MainError> {
+    use crate::gpui::GpuiError;
+
+    match supervisor_result {
+        Ok(Ok(())) => {
+            if shutdown.reason().is_some() {
+                Ok(())
+            } else {
+                shutdown.request(ShutdownReason::FatalError(
+                    "GPUI backend stopped before the UI shell closed".to_owned(),
+                ));
+                Err(GpuiError::BackendNotStarted.into())
+            }
+        }
+        Ok(Err(error)) => Err(error),
+        Err(error) => Err(GpuiError::BackendTask(error).into()),
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn should_reexec_for_linux_compositing(
     ui: UiArgument,
@@ -1984,6 +2121,13 @@ mod tests {
         assert_eq!(desktop.ui, super::UiArgument::Desktop);
         assert_eq!(crate::UiMode::from(desktop.ui), crate::UiMode::Desktop);
 
+        #[cfg(feature = "gpui")]
+        {
+            let gpui = super::Cli::try_parse_from(["pokecon", "--ui", "gpui"]).expect("gpui CLI");
+            assert_eq!(gpui.ui, super::UiArgument::Gpui);
+            assert_eq!(crate::UiMode::from(gpui.ui), crate::UiMode::Gpui);
+        }
+
         #[cfg(feature = "integration-test-support")]
         {
             let ephemeral = super::Cli::try_parse_from(["pokecon", "--ephemeral-port"])
@@ -2010,7 +2154,15 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_compositing_reexec_predicate_is_exact() {
-        for ui in [super::UiArgument::Web, super::UiArgument::Desktop] {
+        #[cfg(feature = "gpui")]
+        let modes = [
+            super::UiArgument::Web,
+            super::UiArgument::Desktop,
+            super::UiArgument::Gpui,
+        ];
+        #[cfg(not(feature = "gpui"))]
+        let modes = [super::UiArgument::Web, super::UiArgument::Desktop];
+        for ui in modes {
             for exit_after_startup in [false, true] {
                 for disable_compositing in [false, true] {
                     for already_reexecuted in [false, true] {

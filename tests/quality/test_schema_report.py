@@ -130,3 +130,95 @@ def test_schema_report_rejects_unknown_surface_shape(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="duplicate"):
         schema_report.parse_section(duplicated.read_text(encoding="utf-8"))
+
+
+def test_schema_report_output_writes_file_matching_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    handoff = _write_fixture(tmp_path)
+    args = ["--root", str(tmp_path), "--handoff", str(handoff)]
+    assert schema_report.main(args) == 0
+    baseline_stdout = capsys.readouterr().out
+
+    output = tmp_path / "schema-report.json"
+    assert schema_report.main([*args, "--output", str(output)]) == 0
+    assert capsys.readouterr().out == baseline_stdout
+    assert output.is_file() and not output.is_symlink()
+    assert output.read_text(encoding="utf-8") == baseline_stdout
+    payload: object = json.loads(baseline_stdout)
+    assert isinstance(payload, dict)
+    assert payload["schema"] == "schema-report/1"
+
+
+def test_schema_report_output_is_fail_closed(tmp_path: Path) -> None:
+    handoff = _write_fixture(tmp_path)
+    args = ["--root", str(tmp_path), "--handoff", str(handoff)]
+
+    output = tmp_path / "schema-report.json"
+    output.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as existing:
+        schema_report.main([*args, "--output", str(output)])
+    assert existing.value.code != 0
+
+    dangling = tmp_path / "dangling.json"
+    dangling.symlink_to(tmp_path / "nothing.json")
+    with pytest.raises(SystemExit) as redirected:
+        schema_report.main([*args, "--output", str(dangling)])
+    assert redirected.value.code != 0
+    assert dangling.is_symlink()
+
+    with pytest.raises(SystemExit) as missing_parent:
+        schema_report.main([*args, "--output", str(tmp_path / "absent" / "out.json")])
+    assert missing_parent.value.code != 0
+
+    parent_file = tmp_path / "parent-file"
+    parent_file.write_text("not a directory\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as file_parent:
+        schema_report.main([*args, "--output", str(parent_file / "out.json")])
+    assert file_parent.value.code != 0
+
+
+def _flake_section(document: str, start: str, end: str) -> str:
+    _prefix, separator, tail = document.partition(start)
+    assert separator, f"missing flake section start: {start}"
+    body, separator, _suffix = tail.partition(end)
+    assert separator, f"missing flake section end after: {start}"
+    return body
+
+
+def test_contract_tasks_emit_acceptance_reports_to_one_directory() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text(encoding="utf-8")
+    combined = _flake_section(
+        flake,
+        "            ci-rust-contracts = mkTask {\n",
+        "            clippy = mkTask {\n",
+    )
+    contract = _flake_section(
+        flake,
+        "            contract-check = mkTask {\n",
+        "            generate-contracts = mkTask {\n",
+    )
+    for section in (combined, contract):
+        assert "${emitAcceptanceReports}" in section
+        assert "compatibility-report.json" not in section
+    helper = _flake_section(
+        flake,
+        "          emitAcceptanceReports = ''\n",
+        "          cliHelpCheck = mkTask {\n",
+    )
+    assert "POKECON_ACCEPTANCE_REPORT_DIR" in helper
+    for command in (
+        "python -m scripts.acceptance.schema_report",
+        "python -m scripts.acceptance.boundary_report",
+        "python -m scripts.acceptance.lifecycle_report",
+    ):
+        assert command in helper
+    assert "--abstraction" in helper
+    for filename in (
+        "schema-report.json",
+        "boundary-report.json",
+        "abstraction-report.json",
+        "lifecycle-report.json",
+    ):
+        assert filename in helper
+    assert "compatibility-report.json" not in helper

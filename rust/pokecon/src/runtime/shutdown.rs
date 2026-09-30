@@ -24,7 +24,8 @@ pub enum OsSignal {
 pub enum ShutdownReason {
     /// An operating-system signal requested termination.
     Signal(OsSignal),
-    /// The Tauri lifecycle requested complete application shutdown.
+    /// A colocated native shell (Tauri desktop or the `GPUI` `PoC`) requested
+    /// complete application shutdown.
     DesktopExit,
     /// A startup probe requested an immediate clean exit.
     StartupProbe,

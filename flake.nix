@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "3b279698584d4e80df4c44cac3909e2b93a86dac04dd9f1d707539e4b4c9829f";
+      canonicalFlakeHash = "5983dbaa9a9a393c5ec76a9ead0e7beab47253e81504dea566f535f912781eff";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "c8807d6beee18f60607e0d765fcec37e69a55b4dc0f880f2290acc3024f39d35";
+          expectedAuditTestHash = "b815dff8f155f2b28f5d467cf3d468c26dc72559a31531cbc7969569f3dc71d3";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "89e675d93f65f1682bc2f8bf5a3d50ce12ed104a9f9f4a363f04f988c5070562";
+            "rust/pokecon" = "600f3a19189b30b0cfc23b7f956d34d97cc03ac426ca2aca1a3ffed604536f9c";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -992,7 +992,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "3aa13f59ba5e6c65f45ea43e3e1624352ca21b10b5ee16ba525f56844f865273"
+                == "fc7698884ec85289da62bbcea4e9364e8e1228e51119d76ea82dc4d029a0d17c"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -1000,7 +1000,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"
+                == "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts
@@ -1617,6 +1617,8 @@
               ambient_name="''${ambient_entry%%=*}"
               case "$ambient_name" in
                 PATH | PWD)
+                  ;;
+                POKECON_ACCEPTANCE_REPORT_DIR)
                   ;;
                 *)
                   unset "$ambient_name"
@@ -2305,15 +2307,21 @@
           linuxDesktopPackages = lib.optionals pkgs.stdenv.isLinux [
             pkgs.atk
             pkgs.cairo
+            pkgs.fontconfig
+            pkgs.freetype
             pkgs.gdk-pixbuf
             pkgs.glib
             pkgs.gtk3
             pkgs.harfbuzz
             pkgs.linuxHeaders
+            pkgs.libxkbcommon
+            pkgs.libxcb
+            pkgs.mesa
             pkgs.libsoup_3
             pkgs.pango
             pkgs.portaudio
             pkgs.udev
+            pkgs.vulkan-loader
             pkgs.webkitgtk_4_1
             pkgs.zlib
           ];
@@ -2337,7 +2345,10 @@
           linuxBindgenArgs = lib.optionalString pkgs.stdenv.isLinux "-I${pkgs.stdenv.cc.libc.dev}/include -I${pkgs.linuxHeaders}/include";
           desktopEnvironment = lib.optionalString pkgs.stdenv.isLinux ''
             export BINDGEN_EXTRA_CLANG_ARGS="${linuxBindgenArgs}"
-            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
+            export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
+            export NIX_LDFLAGS="-L${pkgs.libxkbcommon}/lib -L${pkgs.libxcb}/lib -L${pkgs.mesa}/lib -L${pkgs.vulkan-loader}/lib ''${NIX_LDFLAGS:-}"
+            export LD_LIBRARY_PATH="${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:''${LD_LIBRARY_PATH:-}"
+            export RUSTFLAGS="''${RUSTFLAGS:-} -L native=${pkgs.libxkbcommon}/lib -L native=${pkgs.libxcb}/lib"
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
 
@@ -2526,7 +2537,7 @@
               "--package"
               "pokecon"
               "--features"
-              "worker-binary"
+              "worker-binary,gpui"
               "--bin"
               "pokecon"
               "--bin"
@@ -2644,7 +2655,7 @@
             inherit (gateCargoLock) metadata;
           };
           gateCargoVendorIdentity = builtins.hashString "sha256" (builtins.toJSON gateCargoVendorLock);
-          expectedGateCargoVendorIdentity = "206ade87ceac36a1c8a0b29358ad3320eced78535da9aa96d3a97c18b22b7202";
+          expectedGateCargoVendorIdentity = "f18bc325d91a187bf5b677f9016f4d984ab6afbebeb74ecb9a853fffb82b309e";
           # buildRustPackage vendors from the full workspace lock, whose store
           # path changes for local-only graph edits. This source-only lock keeps
           # the immutable gate vendor path stable until external inputs change.
@@ -2789,6 +2800,11 @@
                     crate_types: ["bin"]
                   },
                   {
+                    name: "main_path_trace_virtual",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
                     name: "native_serial_pty",
                     kind: ["test"],
                     crate_types: ["bin"]
@@ -2911,8 +2927,8 @@
                   | .name
                 ' "$TMPDIR/pokecon-test-inventory.json"
               )
-              if [ "$executed_test_count" -ne 11 ]; then
-                echo "Expected to execute 11 non-contract test targets, executed $executed_test_count" >&2
+              if [ "$executed_test_count" -ne 12 ]; then
+                echo "Expected to execute 12 non-contract test targets, executed $executed_test_count" >&2
                 exit 2
               fi
               cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
@@ -3056,6 +3072,35 @@
               fi
             done <<< "$rust_ci_core_outputs"
             unset rust_ci_core_output rust_ci_core_output_count rust_ci_core_outputs
+          '';
+          emitAcceptanceReports = ''
+            # Emit the deterministic AR-11-27/AR-11-28 acceptance reports
+            # (schema-report/1, boundary-report/1, abstraction-report/1,
+            # lifecycle-report/1) into one directory when the caller opts in
+            # via POKECON_ACCEPTANCE_REPORT_DIR. Unset means the gate keeps
+            # its default behavior with no report files. Each report command
+            # runs only after the gate commands above succeeded, and any
+            # report failure fails the gate. This helper never emits the
+            # compatibility report; the compatibility task owns that file.
+            if [ -n "''${POKECON_ACCEPTANCE_REPORT_DIR:-}" ]; then
+              set -o errexit
+              acceptance_report_dir="''${POKECON_ACCEPTANCE_REPORT_DIR}"
+              mkdir -p "$acceptance_report_dir"
+              rm -f \
+                "$acceptance_report_dir/schema-report.json" \
+                "$acceptance_report_dir/boundary-report.json" \
+                "$acceptance_report_dir/abstraction-report.json" \
+                "$acceptance_report_dir/lifecycle-report.json"
+              python -m scripts.acceptance.schema_report \
+                --output "$acceptance_report_dir/schema-report.json"
+              python -m scripts.acceptance.boundary_report \
+                --output "$acceptance_report_dir/boundary-report.json"
+              python -m scripts.acceptance.boundary_report --abstraction \
+                --output "$acceptance_report_dir/abstraction-report.json"
+              python -m scripts.acceptance.lifecycle_report \
+                --output "$acceptance_report_dir/lifecycle-report.json"
+              unset acceptance_report_dir
+            fi
           '';
           cliHelpCheck = mkTask {
             name = "cli-help-check";
@@ -3524,11 +3569,17 @@
               fi
               out_dir="''${POKECON_PRODUCTION_PERF_OUT:-$repo_root/rust/pokecon/target}"
               export POKECON_PRODUCTION_PERF_OUT="$out_dir"
+              main_path_trace_out="''${POKECON_MAIN_PATH_TRACE_OUT:-$out_dir/main-path-trace}"
+              export POKECON_MAIN_PATH_TRACE_OUT="$main_path_trace_out"
+              export POKECON_MAIN_PATH_TRACE_CYCLES="''${POKECON_MAIN_PATH_TRACE_CYCLES:-300}"
+              export POKECON_MAIN_PATH_TRACE_WARMUP_SECS="''${POKECON_MAIN_PATH_TRACE_WARMUP_SECS:-60}"
+              mkdir -p "$main_path_trace_out"
               if [ -z "''${POKECON_PERF_BUILD_SHA:-}" ]; then
                 POKECON_PERF_BUILD_SHA="$("${pkgs.git}/bin/git" -C "$repo_root" rev-parse HEAD)"
                 export POKECON_PERF_BUILD_SHA
               fi
               export POKECON_PRODUCTION_PERF_PROFILE="release"
+              export POKECON_MAIN_PATH_TRACE_PROFILE="release"
               POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
                 -p pokecon --features integration-test-support --test production_perf_virtual \
                 -- --nocapture "$@"
@@ -3548,11 +3599,129 @@
                   samples = json.load(handle)
               assert report["fixture_id"] == "production-virtual-v1", report.get("fixture_id")
               assert samples["fixture_id"] == "production-virtual-v1"
-              assert report["baseline"]["status"] == "bootstrap"
+              assert report["baseline"]["status"] == "fixed-threshold"
+              assert report["evaluation"]["mode"] == "blocking"
+              assert all(
+                  item["blocking"] and not item["exceeded"]
+                  for item in report["threshold_evaluation"]
+              )
               assert report["result"] == "pass"
               print(f"production-perf-check: artifacts validated in {out}")
               PY
               cat "$out_dir/production-perf.log"
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual \
+                -- --nocapture "$@"
+              for main_path_trace_artifact in main-path-trace-report.json main-path-trace-samples.json main-path-trace.log; do
+                if [ ! -s "$main_path_trace_out/$main_path_trace_artifact" ]; then
+                  echo "production-perf-check: missing main-path trace artifact $main_path_trace_out/$main_path_trace_artifact" >&2
+                  exit 1
+                fi
+              done
+              "${pkgs.python314}/bin/python" -I - "$main_path_trace_out" <<'PY'
+              import json
+              import sys
+              out = sys.argv[1]
+              with open(f"{out}/main-path-trace-report.json", encoding="utf-8") as handle:
+                  report = json.load(handle)
+              with open(f"{out}/main-path-trace-samples.json", encoding="utf-8") as handle:
+                  samples = json.load(handle)
+              assert report["fixture_id"] == "main-path-trace-v1", report.get("fixture_id")
+              assert samples["fixture_id"] == "main-path-trace-v1"
+              assert report["baseline"]["status"] == "fixed-threshold"
+              assert report["evaluation"]["mode"] == "blocking"
+              assert all(
+                  item["blocking"] and not item["exceeded"]
+                  for item in report["threshold_evaluation"]
+              )
+              assert report["result"] == "pass"
+              print(f"production-perf-check: main-path trace artifacts validated in {out}")
+              PY
+              cat "$main_path_trace_out/main-path-trace.log"
+            '';
+          };
+
+          mainPathTraceCheck = mkTask {
+            name = "main-path-trace-check";
+            runtimeInputs = rustTaskInputs ++ [
+              pkgs.cargo-tauri
+              pkgs.git
+              pkgs.python314
+              pkgs.uv
+            ];
+            text = ''
+              if [ "$(uname -s)" != Linux ]; then
+                echo "main-path-trace-check requires the Linux virtual-I/O fixture runner" >&2
+                exit 2
+              fi
+              if ! repo_root="$(
+                "${pkgs.coreutils}/bin/env" -i \
+                  PATH="${
+                    lib.makeBinPath [
+                      pkgs.coreutils
+                      pkgs.git
+                    ]
+                  }" \
+                  "${pkgs.git}/bin/git" -C "$PWD" rev-parse --show-toplevel
+              )"; then
+                echo "main-path-trace-check must be run from a PokeCon worktree" >&2
+                exit 2
+              fi
+              if [ ! -f "$repo_root/Cargo.toml" ]; then
+                echo "Cargo.toml is missing from worktree root: $repo_root" >&2
+                exit 2
+              fi
+              cd "$repo_root"
+              ${setupInteractiveCargoEnvironment}
+              ${acquireCargoTaskLock}
+              ${setupUvLinks}
+              ${desktopEnvironment}
+              export CARGO_HOME="${gateCargoHome}"
+              export CARGO_NET_OFFLINE=true
+              if [ -L "$CARGO_HOME" ] \
+                || [ ! -d "$CARGO_HOME" ] \
+                || [ "$(readlink -f "$CARGO_HOME")" != "${gateCargoHome}" ] \
+                || [ ! -L "$CARGO_HOME/config.toml" ] \
+                || [ "$(readlink -f "$CARGO_HOME/config.toml")" != "${gateCargoConfig}" ]; then
+                echo "main-path-trace-check immutable Cargo home is not canonical" >&2
+                exit 2
+              fi
+              out_dir="''${POKECON_MAIN_PATH_TRACE_OUT:-$repo_root/rust/pokecon/target}"
+              export POKECON_MAIN_PATH_TRACE_OUT="$out_dir"
+              if [ -z "''${POKECON_PERF_BUILD_SHA:-}" ]; then
+                POKECON_PERF_BUILD_SHA="$("${pkgs.git}/bin/git" -C "$repo_root" rev-parse HEAD)"
+                export POKECON_PERF_BUILD_SHA
+              fi
+              export POKECON_MAIN_PATH_TRACE_PROFILE="release"
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual \
+                -- --nocapture "$@"
+              for main_path_trace_artifact in main-path-trace-report.json main-path-trace-samples.json main-path-trace.log; do
+                if [ ! -s "$out_dir/$main_path_trace_artifact" ]; then
+                  echo "main-path-trace-check: missing artifact $out_dir/$main_path_trace_artifact" >&2
+                  exit 1
+                fi
+              done
+              "${pkgs.python314}/bin/python" -I - "$out_dir" <<'PY'
+              import json
+              import sys
+              out = sys.argv[1]
+              with open(f"{out}/main-path-trace-report.json", encoding="utf-8") as handle:
+                  report = json.load(handle)
+              with open(f"{out}/main-path-trace-samples.json", encoding="utf-8") as handle:
+                  samples = json.load(handle)
+              assert report["fixture_id"] == "main-path-trace-v1", report.get("fixture_id")
+              assert samples["fixture_id"] == "main-path-trace-v1"
+              assert report["baseline"]["status"] == "fixed-threshold"
+              assert report["evaluation"]["mode"] == "blocking"
+              assert all(
+                  item["blocking"] and not item["exceeded"]
+                  for item in report["threshold_evaluation"]
+              )
+              assert report["result"] == "pass"
+              print(f"main-path-trace-check: artifacts validated in {out}")
+              PY
+              cat "$out_dir/main-path-trace.log"
             '';
           };
         in
@@ -3649,6 +3818,30 @@
             worker-package-check = workerPackageCheck;
             performance-check = performanceCheck;
             production-perf-check = productionPerfCheck;
+            main-path-trace-check = mainPathTraceCheck;
+            test-production-routing = mkTask {
+              name = "test-production-routing";
+              runtimeInputs = [ pkgs.nix ];
+              text = ''
+                if [ "$#" -ne 0 ]; then
+                  echo "usage: nix run .#test-production-routing" >&2
+                  exit 2
+                fi
+                production_routing_output="$(
+                  "${pkgs.nix}/bin/nix-store" --realise "${productionRoutingAuditDrvPath}"
+                )"
+                if [ -z "$production_routing_output" ] \
+                  || [ "$(printf "%s\n" "$production_routing_output" | wc -l)" -ne 1 ] \
+                  || [ -L "$production_routing_output" ] \
+                  || [ ! -d "$production_routing_output" ] \
+                  || [ -L "$production_routing_output/passed" ] \
+                  || [ ! -f "$production_routing_output/passed" ]; then
+                  echo "production routing audit returned an invalid result: $production_routing_output" >&2
+                  exit 1
+                fi
+                printf 'production routing audit passed: %s\n' "$production_routing_output"
+              '';
+            };
 
             product-smoke = mkTask {
               name = "product-smoke";
@@ -4337,6 +4530,7 @@
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
                 scripts/quality/generate-api-types.sh --check-types-only
+                ${emitAcceptanceReports}
               '';
             };
 
@@ -4417,6 +4611,7 @@
                 python -m scripts.acceptance.records
                 export POKECON_API_NODE_MODULES="${apiBunDependencies}/node_modules"
                 scripts/quality/generate-api-types.sh --check-types-only
+                ${emitAcceptanceReports}
               '';
             };
 
@@ -4433,7 +4628,7 @@
                 ${setupCallerRustTaskEnvironment}
                 ${desktopEnvironment}
                 export PYO3_PYTHON="${pythonEnv}/bin/python"
-                POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --features contract-generator -- "$@"
+                POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package pokecon --bin generate_contracts --all-features -- "$@"
               '';
             };
 
@@ -4461,11 +4656,25 @@
                 POKECON_RESOURCE_PROVENANCE=development \
                   cargo build --locked --jobs 1 --package pokecon --bin pokecon-worker --bin pokecon-compatibility --features compatibility-tool,worker-binary
                 python -m scripts.compatibility.promote --check
+                # The compatibility gate owns only compatibility-report/1; it
+                # never emits the schema/boundary/abstraction/lifecycle files
+                # that the contract tasks own.
+                compatibility_report_args=()
+                if [ -n "''${POKECON_ACCEPTANCE_REPORT_DIR:-}" ]; then
+                  set -o errexit
+                  mkdir -p "''${POKECON_ACCEPTANCE_REPORT_DIR}"
+                  rm -f "''${POKECON_ACCEPTANCE_REPORT_DIR}/compatibility-report.json"
+                  compatibility_report_args=(
+                    --report-output
+                    "''${POKECON_ACCEPTANCE_REPORT_DIR}/compatibility-report.json"
+                  )
+                fi
                 python -m scripts.compatibility.runner \
                   --check \
                   --compatibility-binary "$CARGO_TARGET_DIR/debug/pokecon-compatibility" \
                   --worker "$CARGO_TARGET_DIR/debug/pokecon-worker" \
                   --site-packages "${pythonEnv}/${pkgs.python314.sitePackages}" \
+                  "''${compatibility_report_args[@]}" \
                   "$@"
               '';
             };
@@ -4956,6 +5165,10 @@
                     release_wheelhouse="${linuxReleaseRuntime}/wheelhouse"
                     ${resetTauriCargoTarget}
                     ${desktopEnvironment}
+                    # Tauri release builds must enter Cargo with no ambient Rust flags.
+                    # The desktop linker inputs above are provided by pkg-config/NIX_LDFLAGS;
+                    # any inherited RUSTFLAGS would violate the reproducible invocation gate.
+                    unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
                     export PYO3_PYTHON="$release_python/bin/python3.14"
                     export CFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CFLAGS:+ $CFLAGS}"
                     export CXXFLAGS="-ffile-prefix-map=$workdir=/build/pokecon -ffile-prefix-map=$release_python=/build/python -ffile-prefix-map=$CARGO_TARGET_DIR=/build/target''${CXXFLAGS:+ $CXXFLAGS}"
@@ -5487,6 +5700,174 @@
               name = "tauri";
               text = ''
                 exec "${self'.packages.pokecon}/bin/pokecon" --ui desktop "$@"
+              '';
+            };
+
+            gpui = mkTask {
+              name = "gpui";
+              text = ''
+                exec "${self'.packages.pokecon}/bin/pokecon" --ui gpui "$@"
+              '';
+            };
+
+            gpui-runtime-check = mkTask {
+              name = "gpui-runtime-check";
+              # SC2050 is a constant platform guard after Nix evaluation;
+              # SC2329 cannot see cleanup invoked through an EXIT trap.
+              excludeShellChecks = [
+                "SC2050"
+                "SC2329"
+              ];
+              runtimeInputs = lib.optionals pkgs.stdenv.isLinux [
+                pkgs.weston
+                pkgs.mesa
+                pkgs.vulkan-loader
+                pythonEnv
+              ];
+              text = ''
+                output_root="''${POKECON_GPUI_RUNTIME_OUT:-$PWD/target/gpui-runtime}"
+                work_root="$(mktemp -d -t pokecon-gpui-runtime.XXXXXXXX)"
+                runtime_dir="$work_root/runtime"
+                mkdir -p "$runtime_dir" "$work_root/web"
+                chmod 700 "$runtime_dir"
+                printf '<!doctype html><title>GPUI runtime check</title>\n' > "$work_root/web/index.html"
+                # shellcheck disable=SC2329
+                cleanup() {
+                  status=$?
+                  trap - EXIT
+                  if [ -n "''${weston_pid:-}" ]; then
+                    kill "$weston_pid" 2>/dev/null || true
+                    wait "$weston_pid" 2>/dev/null || true
+                  fi
+                  rm -rf "$work_root"
+                  exit "$status"
+                }
+                trap cleanup EXIT
+                export XDG_RUNTIME_DIR="$runtime_dir"
+                export WAYLAND_DISPLAY="wayland-pokecon"
+                export WGPU_BACKEND="gl"
+                export LIBGL_ALWAYS_SOFTWARE="1"
+                export GALLIUM_DRIVER="llvmpipe"
+                export LD_LIBRARY_PATH="${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:''${LD_LIBRARY_PATH:-}"
+                icd_path=""
+                for candidate in ${pkgs.mesa}/share/vulkan/icd.d/*.json; do
+                  if [ -f "$candidate" ]; then
+                    icd_path="$candidate"
+                    break
+                  fi
+                done
+                if [ -z "$icd_path" ]; then
+                  echo "Mesa Vulkan ICD was not found" >&2
+                  exit 2
+                fi
+                export VK_ICD_FILENAMES="$icd_path"
+                weston --backend=headless-backend.so --socket="$WAYLAND_DISPLAY" \
+                  --idle-time=0 --width=1280 --height=1024 --fake-seat \
+                  > "$work_root/weston.log" 2>&1 &
+                weston_pid=$!
+                ready=0
+                for _ in {1..100}; do
+                  if [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]; then
+                    ready=1
+                    break
+                  fi
+                  if ! kill -0 "$weston_pid" 2>/dev/null; then
+                    break
+                  fi
+                  sleep 0.1
+                done
+                if [ "$ready" -ne 1 ]; then
+                  echo "Weston headless Wayland socket did not become ready" >&2
+                  cat "$work_root/weston.log" >&2 || true
+                  exit 1
+                fi
+                mkdir -p "$output_root"
+                log_path="$output_root/gpui-native-wayland-runtime.log"
+                set +e
+                HOME="$work_root/home" XDG_CONFIG_HOME="$work_root/config" \
+                XDG_DATA_HOME="$work_root/data" XDG_STATE_HOME="$work_root/state" \
+                XDG_CACHE_HOME="$work_root/cache" POKECON_WEB_DIR="$work_root/web" \
+                timeout --kill-after=5s 120s \
+                  "${self'.packages.pokecon}/bin/pokecon" --ui gpui \
+                  --exit-after-startup \
+                  > "$log_path" 2>&1
+                app_status=$?
+                set -e
+                report_path="$output_root/gpui-native-wayland-runtime-report.json"
+                python - "$log_path" "$report_path" "$app_status" "$icd_path" <<'PY'
+                import json
+                import pathlib
+                import sys
+
+                log_path, report_path, status, icd_path = sys.argv[1:]
+                lines = pathlib.Path(log_path).read_text(encoding="utf-8").splitlines()
+                panic_lines = [
+                    line for line in lines if "panicked at" in line or "thread '" in line and "panicked" in line
+                ]
+                error_lines = [line for line in lines if '"level":"ERROR"' in line]
+                adapter_lines = [line for line in lines if "Selected GPU adapter:" in line]
+                expected_fallback_errors = [
+                    line
+                    for line in error_lines
+                    if "wgpu_hal::vulkan::instance" in line and "enumerate_adapters" in line
+                ]
+                unexpected_error_lines = [line for line in error_lines if line not in expected_fallback_errors]
+                markers = {}
+                for key, marker in (
+                    ("ready", "POKECON-RUNTIME-0001"),
+                    ("shutdown_requested", "POKECON-RUNTIME-0003"),
+                    ("stopped", "POKECON-RUNTIME-0002"),
+                ):
+                    line = next((line for line in lines if marker in line), None)
+                    item = {"present": line is not None}
+                    if line is not None:
+                        event = json.loads(line)
+                        fields = event.get("fields", {})
+                        item.update({
+                            "timestamp": event.get("timestamp"),
+                            "diagnostic_id": fields.get("diagnostic_id"),
+                            "reason": fields.get("shutdown_reason"),
+                            "ui_mode": fields.get("ui_mode"),
+                            "listen_address": fields.get("listen_address"),
+                        })
+                    markers[key] = item
+                passed = (
+                    status == "0"
+                    and all(item["present"] for item in markers.values())
+                    and markers["shutdown_requested"].get("reason") == "DesktopExit"
+                    and not panic_lines
+                    and not unexpected_error_lines
+                    and adapter_lines
+                )
+                pathlib.Path(report_path).write_text(
+                    json.dumps({
+                        "fixture_id": "gpui-native-wayland-headless-v1",
+                        "status": "pass" if passed else "fail",
+                        "exit_code": int(status),
+                        "compositor": {
+                            "kind": "Wayland",
+                            "server": "weston",
+                            "backend": "headless-backend.so",
+                            "socket": "wayland-pokecon",
+                        },
+                        "renderer_inputs": {
+                            "backend": "gl",
+                            "software_renderer": "llvmpipe",
+                            "available_vulkan_icd": pathlib.Path(icd_path).name,
+                        },
+                        "panic_lines": panic_lines,
+                        "error_lines": error_lines,
+                        "expected_fallback_errors": expected_fallback_errors,
+                        "unexpected_error_lines": unexpected_error_lines,
+                        "selected_adapter": adapter_lines,
+                        "markers": markers,
+                    }, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                if not passed:
+                    raise SystemExit(1)
+                PY
+                exit "$app_status"
               '';
             };
 

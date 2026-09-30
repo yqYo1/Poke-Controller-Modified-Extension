@@ -1,4 +1,9 @@
-"""Execute the immutable compatibility corpus through the managed worker."""
+"""Execute the immutable compatibility corpus through the managed worker.
+
+In --check mode the compact compatibility-report/1 success report always
+goes to stdout; pass --report-output to additionally write it to a regular
+file (fail-closed, only after the check succeeds).
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -532,6 +538,39 @@ def write_results_atomic(path: Path, serialized: str) -> None:
             temporary_path.unlink(missing_ok=True)
 
 
+def write_report_output(output: Path, serialized: str) -> None:
+    """Write the compact success *serialized* report to *output*.
+
+    Fail-closed (mirrors scripts/release/signing_manifest.py): the
+    destination must not exist yet (not even as a symlink), and its parent
+    must already be exactly one real directory. Callers invoke this only
+    after the compatibility check itself has succeeded.
+    """
+    if output.exists() or output.is_symlink() or output.is_junction():
+        invalid_value(f"compatibility report output already exists: {output}")
+    parent = output.parent
+    try:
+        parent_metadata = parent.stat(follow_symlinks=False)
+    except OSError as error:
+        message = f"compatibility report output parent cannot be inspected: {parent}"
+        raise ValueError(message) from error
+    if (
+        parent.is_symlink()
+        or parent.is_junction()
+        or not stat.S_ISDIR(parent_metadata.st_mode)
+    ):
+        invalid_value(
+            f"compatibility report output parent must be one real directory: {parent}"
+        )
+    try:
+        with output.open("xb") as stream:
+            stream.write((serialized + "\n").encode("utf-8"))
+        output.chmod(0o644)
+    except OSError:
+        output.unlink(missing_ok=True)
+        raise
+
+
 def main() -> int:
     root = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__)
@@ -563,6 +602,7 @@ def main() -> int:
         metavar="BASELINE_ID=/ABSOLUTE/PATH",
     )
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--report-output", type=Path, default=None)
     arguments = parser.parse_args()
     results = build_results(
         arguments.registry,
@@ -593,6 +633,9 @@ def main() -> int:
     )
     if arguments.check:
         print(serialized_report(success_report(results)))
+    report_output = arguments.report_output
+    if report_output is not None:
+        write_report_output(report_output, serialized_report(success_report(results)))
     return 0
 
 

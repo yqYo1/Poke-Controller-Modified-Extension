@@ -13,6 +13,7 @@
     "futures-util",
     "getrandom",
     "gilrs",
+    "gpui-kit",
     "hex",
     "hmac",
     "image",
@@ -98,6 +99,8 @@
     "compatibility-tool",
     "contract-generator",
     "default",
+    "gpui",
+    "gpui-test-support",
     "integration-test-support",
     "worker-binary",
     "worker-test-fixture"

@@ -37,6 +37,14 @@ CIや仮想I/Oの成功を、外部受入の成功へ読み替えません。
 
 このCI性能recordをPokeCon production backend、physical camera／serial／console、Windows release build、実browser外部受入、tailnet越しWebRTCの成功証跡へ読み替えません。Linux／Windows release buildの最終性能受入条件は、このsmoke gateとは別の未完了gateです。
 
+### production主経路のvirtual-I/O性能gate
+
+`nix run .#production-perf-check`は、`production-virtual-v1`（既存の停止／復旧計測）と`main-path-trace-v1`（command→camera frame→recognition→serial→wire observe）の両方をrelease profileで実行します。各fixtureは60秒warm-up、300 sample／cycleで、`performance-report.json`と`main-path-trace-report.json`およびraw sampleをartifactとして保存します。これはbrowser primitive smokeとは別のproduction主経路mock／virtual-I/O証跡です。
+
+両fixtureのp95閾値は固定値で、relative baselineやbootstrap状態へ縮退しません。各reportの`evaluation.mode`は`blocking`、各`threshold_evaluation[].blocking`は`true`であり、1 metricでも`exceeded=true`ならartifactを書き出したうえでtestとrequired jobが失敗します。現在の固定budgetは、camera frame 10 ms、recognition 500 ms、serial send 50 ms、wire observe 50 ms、command dispatch 5000 ms、total end-to-end／recovery 30000 ms、shutdown 5000 msです。
+
+このgateのlocal実行は証明済みですが、dirty worktreeではclean-source snapshotやremote required CIの代替になりません。clean detached source、remote Normal／Package CI、実機I/O、外部browser受入は独立gateとして完了まで未証明のまま扱います。
+
 ## 対象commitとartifactを固定する
 
 受入開始前に次を満たします。

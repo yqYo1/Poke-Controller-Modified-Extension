@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "89e675d93f65f1682bc2f8bf5a3d50ce12ed104a9f9f4a363f04f988c5070562",
+    "rust/pokecon": "600f3a19189b30b0cfc23b7f956d34d97cc03ac426ca2aca1a3ffed604536f9c",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -229,6 +229,7 @@ rumqttc = { version = "0.25.1", default-features = false }
 rustls = { version = "0.23.42", default-features = false, features = ["ring", "std"] }
 tokio-serial = { version = "5.5.0", features = ["libudev"] }
 gilrs = { version = "0.11.2", default-features = false, features = ["xinput"] }
+gpui-kit = { version = "=0.6.6", default-features = false }
 sha2 = "0.10"
 shared_memory = "0.12.4"
 tempfile = "3"
@@ -315,6 +316,11 @@ path = "tests/production_perf_virtual.rs"
 required-features = ["integration-test-support"]
 
 [[test]]
+name = "main_path_trace_virtual"
+path = "tests/main_path_trace_virtual.rs"
+required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
 name = "contract_sync"
 path = "tests/contract_sync.rs"
 required-features = ["integration-test-support"]
@@ -367,6 +373,8 @@ required-features = ["worker-binary"]
 default = []
 compatibility-tool = []
 contract-generator = []
+gpui = ["dep:gpui-kit"]
+gpui-test-support = ["gpui", "gpui-kit/test-support"]
 integration-test-support = []
 worker-binary = []
 worker-test-fixture = []
@@ -382,6 +390,7 @@ fs4.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 gilrs.workspace = true
+gpui-kit = { workspace = true, optional = true }
 hex.workspace = true
 hmac.workspace = true
 image.workspace = true
@@ -1356,7 +1365,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     } == EXPECTED_WORKSPACE_MANIFEST_HASHES
     assert (
         hashlib.sha256(sources[WORKSPACE_LOCK_SOURCE].encode()).hexdigest()
-        == "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"
+        == "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"
     )
     assert manifests["rust/pokecon"] == EXPECTED_POKECON_MANIFEST
     assert all(
@@ -2111,10 +2120,10 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
             "a6e82da417412f5507ab97a13deca227491e3a2475304d4fe290ff658bdc7544"
         ),
         "@rust/pokecon/src/lib.rs": (
-            "92d606b6cdff7297ca97d3dd62ab106d665033a3f4a9d9c69d78611126bb1c65"
+            "0cbc5c7ea361743f51d2c36ae418563d0435331d3cc4c70a52763e892ec36aef"
         ),
         "@rust/pokecon/src/main.rs": (
-            "3d6086ac1a4eb099da412154307d639e18d0c51a39396cf0efe0d5a937a3c137"
+            "97133ad5fcf7ea3575f09eab2b6e9c43034d378a68ea92ba883d503f9ecb2574"
         ),
     }
     assert {
@@ -2346,7 +2355,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "26ed374175fc1c3d840957c02c9eb35914f21b7be22cdfadc8b2e4bfb913afec"
+        == "b6a8ecf93f226b2e45839e6ebe73b08089d7a578a9bde34ce7cc86019ff863ad"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -2771,14 +2780,14 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "e54132bba6c46c0c3c9143abe5eae023d99af0a31b2a7bd2aeb7a431b2180b9b"
+        == "af37f68239a1453115a9ce31b8d54ac216a6db7458cc006ad457cfe04226e6b8"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
         "workspaceTargetBuildDependenciesAreEmpty =",
         "workspaceMemberManifestsAreCanonical =",
         "repositoryCargoConfigInventory =",
-        '== "6fbee67598192b241f1cbbe790dae6d45d5b9e1bdb895b4d66100d6a825dbfc3"',
+        '== "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"',
         'memberEntries."Cargo.toml" == "regular"',
         'memberEntries."build.rs" == "regular"',
         "dependency.dependencyName == expectedWorkspacePackageNames.${resolvedPath}",
@@ -3015,7 +3024,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     gate_environment_sanitizer = flake[gate_environment_sanitizer_start:sanitizer_start]
     assert (
         hashlib.sha256(gate_environment_sanitizer.strip().encode()).hexdigest()
-        == "c3275e40e89e8e13c0f05c98cbd040c0979cfa6ea611230889c573ad06ab9ea6"
+        == "ae0b44c48e31a2bf47f838eef01c34d5925d0de0b2d27872d4c93ab2de9d3ba4"
     )
     for gate_environment_proof in (
         'done < <("${pkgs.coreutils}/bin/env" -0)',
@@ -3473,12 +3482,13 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     package_section = flake[package_start:package_end]
     assert (
         hashlib.sha256(core_package_section.strip().encode()).hexdigest()
-        == "fef58d07c94acf7a1f10fab37e1b8fb6cd2c221505cc48cf78987feea0a9e847"
+        == "8b954dfc62c4d78f2d92186e874d454ae428b50543e6cdea5f352fa0dfdf70f2"
     )
     assert core_package_section.count("${installControlledCargoManifests}") == 2
     assert core_package_section.count('"--locked"') == 1
     assert core_package_section.count('"--features"') == 1
-    assert core_package_section.count('"worker-binary"') == 1
+    assert '"worker-binary,gpui"' in core_package_section
+    assert '"worker-binary"' not in core_package_section
     assert "integration-test-support" not in core_package_section
     assert "productionRoutingAudit" not in core_package_section
     assert "webPackage" not in core_package_section
@@ -3599,7 +3609,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     gate_cargo_vendor_section = flake[gate_cargo_vendor_start:gate_cargo_vendor_end]
     assert (
         hashlib.sha256(gate_cargo_vendor_section.strip().encode()).hexdigest()
-        == "f6c72fc870b648a1603cd8e7898fb4bfd212175628adbe3e1496f5e3a6dab141"
+        == "e11ba3fdd396c3e415122a76324eb93133b2fbbb97c5289a6b8202a35532c75e"
     )
     canonical_cargo_lock = tomllib.loads(sources[WORKSPACE_LOCK_SOURCE])
     external_cargo_packages = [
@@ -3612,7 +3622,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     if "metadata" in canonical_cargo_lock:
         gate_cargo_vendor_lock["metadata"] = canonical_cargo_lock["metadata"]
     expected_gate_cargo_vendor_identity = (
-        "206ade87ceac36a1c8a0b29358ad3320eced78535da9aa96d3a97c18b22b7202"
+        "f18bc325d91a187bf5b677f9016f4d984ab6afbebeb74ecb9a853fffb82b309e"
     )
     assert (
         hashlib.sha256(
@@ -3747,7 +3757,7 @@ offline = true
     rust_ci_check_section = flake[compatibility_sources_end:rust_ci_check_end]
     assert (
         hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
-        == "c21b168f754b46157b1b1118f748be0ef88d5ee12b8d533d5c073c82e2916c4e"
+        == "6e0018bd0650491114c64de114cdeb83c1388534ade908ab22e4a177d09dc51d"
     )
     for rust_ci_check_proof in (
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -3765,7 +3775,7 @@ offline = true
         "workflow/spec changes do not invalidate this",
         "Execute the lib harness and every non-contract integration harness",
         'name: "concurrent_camera_serial_load",',
-        'if [ "$executed_test_count" -ne 11 ]; then',
+        'if [ "$executed_test_count" -ne 12 ]; then',
         "cargo test --locked --workspace --all-features",
         "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         "python -m scripts.compatibility.promote --check",
@@ -3938,15 +3948,15 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "cff150193eb552eb51ab42e5f930fed48903a2073fab4167a739440a5dbe504b"
+        == "a2284c2bb3d57b31f18a6da61b898243bc776df6b799e1b77b1dd1c6b9db5b22"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
         development_command_sections_text.count(development_provenance_assignment) == 5
     )
     assert development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE") == 5
-    assert flake.count(development_provenance_assignment) == 14
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 17
+    assert flake.count(development_provenance_assignment) == 16
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 19
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "
@@ -4206,7 +4216,7 @@ offline = true
     assert (
         generate_contracts_section.count(
             "POKECON_RESOURCE_PROVENANCE=development cargo run --locked --package "
-            'pokecon --bin generate_contracts --features contract-generator -- "$@"'
+            'pokecon --bin generate_contracts --all-features -- "$@"'
         )
         == 1
     )
@@ -4243,7 +4253,7 @@ offline = true
     tauri_section = flake[tauri_start:tauri_end]
     assert (
         hashlib.sha256(tauri_section.strip().encode()).hexdigest()
-        == "4a41ed7b3d82ac729d2ad53053682aafd5b369fdd9e6ca1324aefb93db511e98"
+        == "9a2e0df823b39f92e7a82759789282c24a779a2b5d93beb7cb2cf50476ae8692"
     )
     assert tauri_section.count("${installControlledCargoManifests}") == 0
     assert tauri_section.count("${prepareTauriCargoInvocation}") == 3
@@ -4898,6 +4908,8 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         "default": [],
         "compatibility-tool": [],
         "contract-generator": [],
+        "gpui": ["dep:gpui-kit"],
+        "gpui-test-support": ["gpui", "gpui-kit/test-support"],
         "integration-test-support": [],
         "worker-binary": [],
         "worker-test-fixture": [],
@@ -4940,7 +4952,7 @@ def assert_canonical_routing_wiring(sources: dict[str, str]) -> None:
         """
         #[tokio::main]
         async fn main() -> Result<(), pokecon::MainError> {
-            pokecon::run_cli().await
+            Box::pin(pokecon::run_cli()).await
         }
         """
     )
@@ -5152,7 +5164,10 @@ pub mod websocket;
             sources["production.rs"],
             "ProductionRuntime",
             r"\basync\s+fn\s+build_inner\s*\(",
-            attributes=("#[allow(clippy::too_many_lines)]",),
+            attributes=(
+                "#[allow(clippy::too_many_arguments)]",
+                "#[allow(clippy::too_many_lines)]",
+            ),
         )
     )
     assert {
@@ -5234,6 +5249,8 @@ pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
 mod entrypoint;
+#[cfg(feature = "gpui")]
+mod gpui;
 #[cfg(feature = "integration-test-support")]
 #[doc(hidden)]
 pub mod integration_test_support;
@@ -5278,6 +5295,7 @@ pub use entrypoint::{MainError, run_cli};
         "dynamic_host",
         "dynamic_runtime",
         "entrypoint",
+        "gpui",
         "integration_test_support",
         "openapi_generator",
         "platform",
@@ -5721,6 +5739,17 @@ pub use entrypoint::{MainError, run_cli};
             return run_desktop(request, before_dynamic, ephemeral_port).await;
         }
 
+        #[cfg(feature = "gpui")]
+        if cli.ui == UiArgument::Gpui {
+            return run_gpui(
+                request,
+                before_dynamic,
+                ephemeral_port,
+                cli.exit_after_startup,
+            )
+            .await;
+        }
+
         run_packaged_backend(
             request,
             before_dynamic,
@@ -6061,7 +6090,7 @@ pub use entrypoint::{MainError, run_cli};
     assert "packaged_resource_root" not in run_cli_body
     assert run_cli_body.count("load_before_dynamic()?") == 1
     assert run_cli_body.count("run_packaged_backend(") == 1
-    assert entrypoint_source.count("run_packaged_backend(") == 3
+    assert entrypoint_source.count("run_packaged_backend(") == 4
     assert run_desktop_body.count("run_packaged_backend(") == 1
     assert run_desktop_body.index("move || {") < run_desktop_body.index(
         "run_packaged_backend("
@@ -6500,6 +6529,7 @@ def assert_closed_production_routing(sources: dict[str, str]) -> None:
         r"(?:::\s*(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*)\s*!"
     )
     expected_top_level_bang_macros = {
+        "gpui/fake_view.rs": ("actions",),
         "worker_binary/dynamic/engine.rs": ("thread_local",),
     }
     actual_top_level_bang_macros: dict[str, tuple[str, ...]] = {}
@@ -14336,8 +14366,8 @@ def test_production_routing_audit_fails_closed_under_registration_mutations() ->
     )
     production_package_enables_integration_test_support = replace_once(
         FLAKE_SOURCE,
-        '              "worker-binary"\n              "--bin"\n',
-        '              "worker-binary,integration-test-support"\n'
+        '              "worker-binary,gpui"\n              "--bin"\n',
+        '              "worker-binary,gpui,integration-test-support"\n'
         '              "--bin"\n',
     )
     contract_check_omits_integration_test_support = replace_once(
@@ -15201,8 +15231,8 @@ impl BoundServer {{"""
     )
     alternate_main = replace_once(
         "main.rs",
-        "pokecon::run_cli().await",
-        "alternate::run_cli().await",
+        "Box::pin(pokecon::run_cli()).await",
+        "Box::pin(alternate::run_cli()).await",
     )
     alternate_controlled_runner = replace_once(
         "entrypoint.rs",
@@ -18888,8 +18918,8 @@ def test_api_type_drift_reuses_the_contract_test_openapi_proof() -> None:
         generator.count("cargo run --locked --package pokecon --bin generate_openapi")
         == 1
     )
-    assert generator.count("--features contract-generator") == 1
-    assert "--all-features" not in generator
+    assert generator.count("--all-features") == 1
+    assert "--features contract-generator" not in generator
     assert (
         script.count(
             'if [[ "$mode" == "--check" || "$mode" == "--check-types-only" ]]; then'

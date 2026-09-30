@@ -83,7 +83,7 @@ def test_normal_ci_performance_gate_is_blocking_and_artifact_backed() -> None:
     assert "if-no-files-found: error" in job
 
 
-def test_normal_ci_production_perf_gate_is_evidence_blocking_number_advisory() -> None:
+def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> None:
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
         encoding="utf-8"
     )
@@ -103,27 +103,75 @@ def test_normal_ci_production_perf_gate_is_evidence_blocking_number_advisory() -
         "POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence"
         in job
     )
+    assert (
+        "POKECON_MAIN_PATH_TRACE_OUT: ${{ github.workspace }}/production-perf-evidence/main-path-trace"
+        in job
+    )
     assert "POKECON_PRODUCTION_PERF_SAMPLES: '300'" in job
     assert "POKECON_PRODUCTION_PERF_WARMUP_SECS: '60'" in job
     assert "POKECON_PRODUCTION_PERF_CYCLES: '300'" in job
+    assert "POKECON_MAIN_PATH_TRACE_CYCLES: '300'" in job
+    assert "POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'" in job
     assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
     assert "nix run .#production-perf-check" in job
     assert "Inspect production perf evidence directory" in job
     assert "performance-report.json" in job
     assert "performance-samples.json" in job
     assert "production-perf.log" in job
+    assert "main-path-trace/main-path-trace-report.json" in job
+    assert "main-path-trace/main-path-trace-samples.json" in job
+    assert "main-path-trace/main-path-trace.log" in job
     assert "production perf evidence file is missing" in job
+    assert "production main-path trace evidence file is missing" in job
     assert "if: always()" in job
     assert "name: pokecon-production-perf-linux-${{ github.run_attempt }}" in job
     assert "path: ${{ github.workspace }}/production-perf-evidence/" in job
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in job
     assert "if-no-files-found: error" in job
     assert "retention-days" not in job
-    # Evidence-blocking, number-advisory: no numeric threshold gates in CI.
-    assert "threshold" not in job
-    assert "p95" not in job
+    trace = (REPOSITORY / "rust/pokecon/tests/main_path_trace_virtual.rs").read_text(
+        encoding="utf-8"
+    )
+    production_trace = (
+        REPOSITORY / "rust/pokecon/tests/production_perf_virtual.rs"
+    ).read_text(encoding="utf-8")
+    assert "BLOCKING_P95_" in trace
+    assert "BLOCKING_P95_" in production_trace
+    assert '"mode": "blocking"' in trace
+    assert '"mode": "blocking"' in production_trace
+    assert '"status": "fixed-threshold"' in trace
+    assert '"status": "fixed-threshold"' in production_trace
+    assert '"blocking": true' in trace
+    assert '"blocking": true' in production_trace
     assert "continue-on-error:" not in job
     assert "|| true" not in job
+
+
+def test_normal_ci_contract_gates_publish_acceptance_reports() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    job_start = workflow.index("  rust_contracts:\n")
+    job_end = workflow.index("  python_tests:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    assert (
+        "POKECON_ACCEPTANCE_REPORT_DIR: ${{ github.workspace }}/acceptance-contract-evidence"
+        in job
+    )
+    for report_name in (
+        "schema-report.json",
+        "boundary-report.json",
+        "abstraction-report.json",
+        "lifecycle-report.json",
+    ):
+        assert report_name in job
+    assert (
+        "ci-acceptance-reports-${{ github.run_id }}-${{ github.run_attempt }}-rust"
+        in job
+    )
+    assert "path: ${{ github.workspace }}/acceptance-contract-evidence" in job
+    assert "if-no-files-found: warn" in job
 
 
 def test_normal_ci_required_aggregates_performance_result() -> None:

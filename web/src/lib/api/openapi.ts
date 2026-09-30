@@ -250,10 +250,10 @@ export interface components {
     schemas: {
         ApiError: {
             code: components["schemas"]["ApiErrorCode"];
+            message: string;
             fields: {
                 [key: string]: string[];
             } | null;
-            message: string;
         };
         /**
          * @description Closed, stable machine-readable failure codes shared by every public HTTP
@@ -265,23 +265,23 @@ export interface components {
         ButtonState: {
             a: boolean;
             b: boolean;
-            capture: boolean;
-            home: boolean;
-            l: boolean;
-            lclick: boolean;
-            minus: boolean;
-            plus: boolean;
-            r: boolean;
-            rclick: boolean;
             x: boolean;
             y: boolean;
+            l: boolean;
+            r: boolean;
             zl: boolean;
             zr: boolean;
+            lclick: boolean;
+            rclick: boolean;
+            plus: boolean;
+            minus: boolean;
+            home: boolean;
+            capture: boolean;
         };
         CameraDevice: {
-            available: boolean;
-            label: string;
             selector: components["schemas"]["CameraSelector"];
+            label: string;
+            available: boolean;
         };
         CameraSelector: number | string;
         /** @description Client-to-server WebSocket/DataChannel union. */
@@ -340,13 +340,13 @@ export interface components {
             label: string | null;
         };
         CommandIdentity: {
-            class_name: string;
             module_path: string;
+            class_name: string;
         };
         CommandInfo: {
-            class_name: string;
-            module_path: string;
             name: string;
+            module_path: string;
+            class_name: string;
             tags: string[];
         };
         CommandStartFields: {
@@ -378,8 +378,8 @@ export interface components {
         /** @enum {string} */
         DynamicLanguage: "python" | "lua";
         DynamicLoadContent: {
-            content: string;
             language: components["schemas"]["DynamicLanguage"];
+            content: string;
         };
         DynamicLoadPath: {
             path: string;
@@ -392,17 +392,17 @@ export interface components {
         /** @enum {string} */
         GamepadButton: "A" | "B" | "X" | "Y" | "L" | "R" | "ZL" | "ZR" | "LCLICK" | "RCLICK" | "MINUS" | "PLUS" | "HOME" | "CAPTURE";
         GamepadButtonInput: {
-            button: components["schemas"]["GamepadButton"];
             generation: string;
             sequence: components["schemas"]["DecimalString"];
+            button: components["schemas"]["GamepadButton"];
             state: components["schemas"]["PressState"];
         };
         /** @enum {string} */
         GamepadHat: "UP" | "DOWN" | "LEFT" | "RIGHT" | "TOP_RIGHT" | "BTM_RIGHT" | "BTM_LEFT" | "TOP_LEFT" | "CENTER";
         GamepadHatInput: {
             generation: string;
-            hat: components["schemas"]["GamepadHat"];
             sequence: components["schemas"]["DecimalString"];
+            hat: components["schemas"]["GamepadHat"];
         };
         GamepadInput: (components["schemas"]["GamepadButtonInput"] & {
             /** @enum {string} */
@@ -432,13 +432,13 @@ export interface components {
             touch: null | components["schemas"]["TouchPoint"];
         };
         GenerateLauncherRequest: {
+            profile: string;
             copy_current: boolean;
             destination: components["schemas"]["LauncherDestination"];
-            profile: string;
         };
         GenerateLauncherResult: {
-            launcher_created: boolean;
             profile_created: boolean;
+            launcher_created: boolean;
             revision: components["schemas"]["DecimalString"];
         };
         /** @enum {string} */
@@ -461,21 +461,21 @@ export interface components {
             generation: string;
         };
         InputSnapshot: {
-            buttons: components["schemas"]["ButtonState"];
             generation: string;
-            hat: components["schemas"]["Hat"];
-            keyboard_keys: string[];
-            left_stick: components["schemas"]["StickPosition"];
-            mouse_buttons: components["schemas"]["MouseButtons"];
-            right_stick: components["schemas"]["StickPosition"];
             /** @enum {string} */
             sequence: "0";
+            keyboard_keys: string[];
+            mouse_buttons: components["schemas"]["MouseButtons"];
+            buttons: components["schemas"]["ButtonState"];
+            hat: components["schemas"]["Hat"];
+            left_stick: components["schemas"]["StickPosition"];
+            right_stick: components["schemas"]["StickPosition"];
             touch: null | components["schemas"]["TouchPoint"];
         };
         KeyboardInput: {
             generation: string;
-            key: string;
             sequence: components["schemas"]["DecimalString"];
+            key: string;
             state: components["schemas"]["PressState"];
         };
         LauncherDestination: (components["schemas"]["LauncherPath"] & {
@@ -494,8 +494,8 @@ export interface components {
         LogData: {
             level: components["schemas"]["LogLevel"];
             message: string;
-            operation: components["schemas"]["LogOperation"];
             target: components["schemas"]["LogTarget"];
+            operation: components["schemas"]["LogOperation"];
         };
         /** @enum {string} */
         LogLevel: "debug" | "info" | "warning" | "error" | "critical";
@@ -545,23 +545,23 @@ export interface components {
         };
         MessageData_InputSnapshot: {
             data: {
-                buttons: components["schemas"]["ButtonState"];
                 generation: string;
-                hat: components["schemas"]["Hat"];
-                keyboard_keys: string[];
-                left_stick: components["schemas"]["StickPosition"];
-                mouse_buttons: components["schemas"]["MouseButtons"];
-                right_stick: components["schemas"]["StickPosition"];
                 /** @enum {string} */
                 sequence: "0";
+                keyboard_keys: string[];
+                mouse_buttons: components["schemas"]["MouseButtons"];
+                buttons: components["schemas"]["ButtonState"];
+                hat: components["schemas"]["Hat"];
+                left_stick: components["schemas"]["StickPosition"];
+                right_stick: components["schemas"]["StickPosition"];
                 touch: null | components["schemas"]["TouchPoint"];
             };
         };
         MessageData_KeyboardInput: {
             data: {
                 generation: string;
-                key: string;
                 sequence: components["schemas"]["DecimalString"];
+                key: string;
                 state: components["schemas"]["PressState"];
             };
         };
@@ -569,15 +569,15 @@ export interface components {
             data: {
                 level: components["schemas"]["LogLevel"];
                 message: string;
-                operation: components["schemas"]["LogOperation"];
                 target: components["schemas"]["LogTarget"];
+                operation: components["schemas"]["LogOperation"];
             };
         };
         MessageData_MouseInput: {
             data: {
-                button: components["schemas"]["MouseButton"];
                 generation: string;
                 sequence: components["schemas"]["DecimalString"];
+                button: components["schemas"]["MouseButton"];
                 state: components["schemas"]["PressState"];
                 /** Format: int32 */
                 x: number;
@@ -608,37 +608,37 @@ export interface components {
              *     to infer missed dialog or Tk mutations.
              */
             data: {
-                dialogs: components["schemas"]["ScriptDialog"][];
                 generation: string | null;
+                dialogs: components["schemas"]["ScriptDialog"][];
+                tk_windows: components["schemas"]["ScriptTkWindow"][];
                 overlay: components["schemas"]["ScriptOverlaySnapshot"];
                 popup_images: components["schemas"]["ScriptPopupImage"][];
-                tk_windows: components["schemas"]["ScriptTkWindow"][];
             };
         };
         MessageData_SerialData: {
             data: {
-                byte_length: number;
-                data: string;
                 encoding: components["schemas"]["SerialEncoding"];
+                data: string;
+                byte_length: number;
             };
         };
         MessageData_SessionDescription: {
             data: {
-                negotiation_id?: string | null;
                 sdp: string;
+                negotiation_id?: string | null;
             };
         };
         /** @enum {string} */
         MouseButton: "left" | "right" | "middle";
         MouseButtons: {
             left: boolean;
-            middle: boolean;
             right: boolean;
+            middle: boolean;
         };
         MouseInput: {
-            button: components["schemas"]["MouseButton"];
             generation: string;
             sequence: components["schemas"]["DecimalString"];
+            button: components["schemas"]["MouseButton"];
             state: components["schemas"]["PressState"];
             /** Format: int32 */
             x: number;
@@ -659,13 +659,13 @@ export interface components {
         };
         NormalizedRegion: {
             /** Format: double */
-            height: number;
-            /** Format: double */
-            width: number;
-            /** Format: double */
             x: number;
             /** Format: double */
             y: number;
+            /** Format: double */
+            width: number;
+            /** Format: double */
+            height: number;
         };
         NotificationTestRequest: {
             /** @enum {string} */
@@ -684,29 +684,29 @@ export interface components {
         /** @enum {string} */
         PressState: "pressed" | "released";
         RevisionedStateChange: {
-            data: components["schemas"]["UiStateChange"];
             revision: components["schemas"]["DecimalString"];
+            data: components["schemas"]["UiStateChange"];
         };
         SavedScreenshot: {
             display_path: string;
             format: components["schemas"]["ImageFormat"];
         };
         ScreenshotCaptures: {
+            region?: null | components["schemas"]["NormalizedRegion"];
             filename?: string | null;
             format?: null | components["schemas"]["ImageFormat"];
             overwrite?: boolean;
-            region?: null | components["schemas"]["NormalizedRegion"];
         };
         ScreenshotDownload: {
+            region?: null | components["schemas"]["NormalizedRegion"];
             filename?: string | null;
             format: components["schemas"]["ImageFormat"];
-            region?: null | components["schemas"]["NormalizedRegion"];
         };
         ScreenshotPath: {
+            region?: null | components["schemas"]["NormalizedRegion"];
+            path: string;
             format: components["schemas"]["ImageFormat"];
             overwrite?: boolean;
-            path: string;
-            region?: null | components["schemas"]["NormalizedRegion"];
         };
         ScreenshotRequest: (components["schemas"]["ScreenshotCaptures"] & {
             /** @enum {string} */
@@ -719,9 +719,9 @@ export interface components {
             destination: "download";
         });
         ScriptDialog: {
-            description: string | null;
             id: components["schemas"]["DecimalString"];
             title: string;
+            description: string | null;
             widgets: components["schemas"]["ScriptDialogWidget"][];
         };
         /** @enum {string} */
@@ -731,49 +731,49 @@ export interface components {
             /** @enum {string} */
             type: "none";
         } | {
+            value: string;
             /** @enum {string} */
             type: "string";
-            value: string;
         } | {
+            value: boolean;
             /** @enum {string} */
             type: "bool";
-            value: boolean;
         } | {
-            /** @enum {string} */
-            type: "integer";
             /** Format: int64 */
             value: number;
-        } | {
             /** @enum {string} */
-            type: "float";
+            type: "integer";
+        } | {
             /** Format: double */
             value: number;
+            /** @enum {string} */
+            type: "float";
         };
         ScriptDialogWidget: {
             kind: components["schemas"]["ScriptDialogWidgetKind"];
             label: string | null;
-            /** Format: double */
-            maximum: number | null;
+            value: components["schemas"]["ScriptDialogValue"];
+            options: components["schemas"]["ScriptDialogValue"][];
             /** Format: double */
             minimum: number | null;
-            options: components["schemas"]["ScriptDialogValue"][];
+            /** Format: double */
+            maximum: number | null;
             /** Format: int32 */
             precision: number | null;
-            value: components["schemas"]["ScriptDialogValue"];
         };
         /** @enum {string} */
         ScriptDialogWidgetKind: "entry" | "check" | "combo" | "radio" | "spin" | "scale" | "next";
         ScriptOverlayRectangle: {
-            outline: string;
             tag: string;
             /** Format: int64 */
             x1: number;
             /** Format: int64 */
-            x2: number;
-            /** Format: int64 */
             y1: number;
             /** Format: int64 */
+            x2: number;
+            /** Format: int64 */
             y2: number;
+            outline: string;
         };
         ScriptOverlayShape: (components["schemas"]["ScriptOverlayRectangle"] & {
             /** @enum {string} */
@@ -783,28 +783,28 @@ export interface components {
             kind: "text";
         });
         ScriptOverlaySnapshot: {
-            bindings: components["schemas"]["ScriptPointerBindings"];
             /** Format: int32 */
             fps: number;
-            right_mouse_mode: string;
-            shapes: components["schemas"]["ScriptOverlayShape"][];
-            /** Format: int32 */
-            show_height: number;
             /** Format: int32 */
             show_width: number;
+            /** Format: int32 */
+            show_height: number;
+            right_mouse_mode: string;
             touchscreen_area: components["schemas"]["NormalizedRegion"];
+            bindings: components["schemas"]["ScriptPointerBindings"];
+            shapes: components["schemas"]["ScriptOverlayShape"][];
         };
         ScriptOverlayText: {
-            color: string;
-            font: string;
-            /** Format: int32 */
-            font_size: number;
             tag: string;
-            text: string;
             /** Format: int64 */
             x: number;
             /** Format: int64 */
             y: number;
+            text: string;
+            font: string;
+            /** Format: int32 */
+            font_size: number;
+            color: string;
         };
         ScriptPointerBindings: {
             left: boolean;
@@ -815,41 +815,41 @@ export interface components {
         /** @enum {string} */
         ScriptPointerPhase: "pressed" | "moved" | "released";
         ScriptPopupImage: {
-            content_type: string;
-            encoded_base64: string;
             id: components["schemas"]["DecimalString"];
             title: string;
+            content_type: string;
+            encoded_base64: string;
         };
         ScriptTkButton: {
             id: components["schemas"]["DecimalString"];
+            text: string;
             /** Format: int64 */
             pady: number | null;
-            text: string;
         };
         ScriptTkLabel: {
-            background: string | null;
-            /** Format: int64 */
-            height: number | null;
             id: components["schemas"]["DecimalString"];
-            /** Format: int64 */
-            pady: number | null;
-            relief: string | null;
             text: string;
             /** Format: int64 */
             width: number | null;
-        };
-        ScriptTkScale: {
-            /** Format: double */
-            from_value: number;
-            id: components["schemas"]["DecimalString"];
-            label: string | null;
-            orient: string;
+            /** Format: int64 */
+            height: number | null;
+            relief: string | null;
+            background: string | null;
             /** Format: int64 */
             pady: number | null;
+        };
+        ScriptTkScale: {
+            id: components["schemas"]["DecimalString"];
+            /** Format: double */
+            from_value: number;
             /** Format: double */
             to_value: number;
+            orient: string;
+            label: string | null;
             /** Format: double */
             value: number;
+            /** Format: int64 */
+            pady: number | null;
         };
         ScriptTkWidget: (components["schemas"]["ScriptTkScale"] & {
             /** @enum {string} */
@@ -862,56 +862,56 @@ export interface components {
             kind: "label";
         });
         ScriptTkWindow: {
-            geometry: string | null;
             id: components["schemas"]["DecimalString"];
             title: string;
+            geometry: string | null;
             widgets: components["schemas"]["ScriptTkWidget"][];
         };
         /** @description Browser-originated, generation-checked interaction with script-owned UI. */
         ScriptUiAction: {
+            generation: string;
+            dialog_id: components["schemas"]["DecimalString"];
+            values: components["schemas"]["ScriptDialogValue"][];
             /** @enum {string} */
             action: "dialog_confirm";
-            dialog_id: components["schemas"]["DecimalString"];
-            generation: string;
-            values: components["schemas"]["ScriptDialogValue"][];
         } | {
+            generation: string;
+            dialog_id: components["schemas"]["DecimalString"];
+            reason: components["schemas"]["ScriptDialogAbortReason"];
             /** @enum {string} */
             action: "dialog_abort";
-            dialog_id: components["schemas"]["DecimalString"];
-            generation: string;
-            reason: components["schemas"]["ScriptDialogAbortReason"];
         } | {
-            /** @enum {string} */
-            action: "tk_scale_changed";
             generation: string;
+            widget_id: components["schemas"]["DecimalString"];
             /** Format: double */
             value: number;
-            widget_id: components["schemas"]["DecimalString"];
+            /** @enum {string} */
+            action: "tk_scale_changed";
         } | {
+            generation: string;
+            widget_id: components["schemas"]["DecimalString"];
             /** @enum {string} */
             action: "tk_button_invoked";
-            generation: string;
-            widget_id: components["schemas"]["DecimalString"];
         } | {
-            /** @enum {string} */
-            action: "tk_window_closed";
             generation: string;
             window_id: components["schemas"]["DecimalString"];
-        } | {
             /** @enum {string} */
-            action: "popup_closed";
+            action: "tk_window_closed";
+        } | {
             generation: string;
             popup_id: components["schemas"]["DecimalString"];
-        } | {
             /** @enum {string} */
-            action: "pointer";
-            button: components["schemas"]["ScriptPointerButton"];
+            action: "popup_closed";
+        } | {
             generation: string;
+            button: components["schemas"]["ScriptPointerButton"];
             phase: components["schemas"]["ScriptPointerPhase"];
             /** Format: int32 */
             x: number;
             /** Format: int32 */
             y: number;
+            /** @enum {string} */
+            action: "pointer";
         };
         ScriptUiActionResult: {
             accepted: boolean;
@@ -922,11 +922,11 @@ export interface components {
          *     to infer missed dialog or Tk mutations.
          */
         ScriptUiSnapshot: {
-            dialogs: components["schemas"]["ScriptDialog"][];
             generation: string | null;
+            dialogs: components["schemas"]["ScriptDialog"][];
+            tk_windows: components["schemas"]["ScriptTkWindow"][];
             overlay: components["schemas"]["ScriptOverlaySnapshot"];
             popup_images: components["schemas"]["ScriptPopupImage"][];
-            tk_windows: components["schemas"]["ScriptTkWindow"][];
         };
         SerialControlRequest: {
             /** @enum {string} */
@@ -936,16 +936,16 @@ export interface components {
             action: "disconnect";
         };
         SerialData: {
-            byte_length: number;
-            data: string;
             encoding: components["schemas"]["SerialEncoding"];
+            data: string;
+            byte_length: number;
         };
         /** @enum {string} */
         SerialEncoding: "base64";
         SerialPort: {
-            available: boolean;
-            label: string;
             selector: string;
+            label: string;
+            available: boolean;
         };
         /**
          * @description Server-to-client WebSocket union. Every JSON variant is closed and only
@@ -983,25 +983,38 @@ export interface components {
             type: "ping";
         });
         SessionDescription: {
-            negotiation_id?: string | null;
             sdp: string;
+            negotiation_id?: string | null;
         };
         SettingsChange: {
+            values: components["schemas"]["SettingsReadPatchValues"];
+            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
+            restart_required: string[];
             apply_failures: {
                 [key: string]: string;
             };
-            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
-            restart_required: string[];
-            values: components["schemas"]["SettingsReadPatchValues"];
         };
         SettingsPatchRequest: {
             expected_revision?: null | components["schemas"]["DecimalString"];
             values: components["schemas"]["SettingsWriteValues"];
         };
         SettingsReadPatchValues: {
+            /** @enum {string} */
+            language?: "ja" | "en";
+            auto_reload_config?: boolean;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_grace_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_hard_timeout_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_max_concurrency"?: number;
+            /** Format: int64 */
+            "dynamic.callback_queue_capacity"?: number;
+            report_ignored_profile_global_settings?: boolean;
             /** Format: profile_name */
             active_profile?: string;
-            auto_reload_config?: boolean;
             /** Format: int64 */
             "camera.capture_fps"?: number;
             /** @enum {string} */
@@ -1011,19 +1024,12 @@ export interface components {
             "camera.flip_mode"?: "none" | "vertical" | "horizontal" | "both";
             /** @enum {string} */
             "camera.screenshot_format"?: "png" | "jpeg";
+            /** Format: free */
+            "serial.port"?: string;
+            /** Format: int64 */
+            "serial.baud_rate"?: number;
             /** @enum {string} */
-            "commands.tag_match_mode"?: "exact" | "partial" | "prefix" | "suffix";
-            /** Format: int64 */
-            "dynamic.callback_hard_timeout_ms"?: number;
-            /** Format: int64 */
-            "dynamic.callback_max_concurrency"?: number;
-            /** Format: int64 */
-            "dynamic.callback_queue_capacity"?: number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_grace_ms"?: number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_ms"?: number;
-            "input.allow_manual_intervention"?: boolean;
+            "serial.data_format"?: "default" | "qingpi" | "3ds";
             "input.keyboard_enabled"?: boolean;
             "input.left_stick_mouse_enabled"?: boolean;
             "input.right_stick_mouse_enabled"?: boolean;
@@ -1037,52 +1043,62 @@ export interface components {
                 /** Format: double */
                 top: number;
             };
-            /** Format: int64 */
-            jpeg_quality?: number;
+            "input.allow_manual_intervention"?: boolean;
             /** @enum {string} */
-            language?: "ja" | "en";
-            /** Format: http_url_or_empty */
-            "notifications.discord.avatar_url"?: string;
-            "notifications.discord.on_script_end"?: boolean;
-            "notifications.discord.on_script_start"?: boolean;
-            /** Format: free */
-            "notifications.discord.username"?: string;
+            "notifications.line_menu_behavior"?: "message" | "noop";
             /** @description Secret-safe status; the secret value is never returned */
             "notifications.discord.webhook_url"?: {
                 configured: boolean;
             };
-            /** @enum {string} */
-            "notifications.line_menu_behavior"?: "message" | "noop";
-            "notifications.windows.on_script_end"?: boolean;
-            "notifications.windows.on_script_start"?: boolean;
-            "python.script.packages.list"?: {
-                extras?: string[];
-                name: string;
-                version?: string;
-            }[];
-            "python.script.packages.override_application_constraints"?: boolean;
-            "python.script.packages.override_package_metadata_constraints"?: boolean;
-            "python.script.packages.revalidate_mutable_sources"?: boolean;
-            "python.script.packages.uv_config"?: null | string;
-            /** Format: int64 */
-            "python.script.shutdown_timeout_ms"?: number;
-            "python.script.venv"?: string;
-            report_ignored_profile_global_settings?: boolean;
-            /** Format: int64 */
-            "serial.baud_rate"?: number;
-            /** @enum {string} */
-            "serial.data_format"?: "default" | "qingpi" | "3ds";
             /** Format: free */
-            "serial.port"?: string;
-            /** Format: ip_literal_non_wildcard */
-            "server.bind_address"?: string;
+            "notifications.discord.username"?: string;
+            /** Format: http_url_or_empty */
+            "notifications.discord.avatar_url"?: string;
+            "notifications.discord.on_script_start"?: boolean;
+            "notifications.discord.on_script_end"?: boolean;
+            "notifications.windows.on_script_start"?: boolean;
+            "notifications.windows.on_script_end"?: boolean;
+            /** Format: int64 */
+            "websocket.reconnect_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.reconnect_max_retries"?: number;
+            /** Format: int64 */
+            "websocket.ping_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.pong_timeout_sec"?: number;
+            "webrtc.auto_recover"?: boolean;
+            /** Format: int64 */
+            "webrtc.recovery_probe_interval_sec"?: number;
+            /** Format: stun_uri_or_empty */
+            stun_server?: string;
+            /** Format: int64 */
+            jpeg_quality?: number;
+            "server.web_dir"?: string;
             /** Format: int64 */
             "server.port"?: number;
-            "server.web_dir"?: string;
+            /** Format: ip_literal_non_wildcard */
+            "server.bind_address"?: string;
+            "ui.fps_options"?: number[];
+            /** Format: int64 */
+            "ui.fps"?: number;
+            /** @enum {string} */
+            "ui.widget_mode"?: "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
+            /** Format: int64 */
+            "ui.output_split_ratio"?: number;
+            /** @enum {string} */
+            "ui.stdout_destination"?: "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.controller_position"?: "top" | "bottom";
+            /** @enum {string} */
+            "ui.dialog_button_position"?: "bottom" | "top" | "both";
+            "ui.camera.live_view_enabled"?: boolean;
+            "ui.camera.pixel_values_visible"?: boolean;
+            "ui.camera.guide_visible"?: boolean;
+            /** @enum {string} */
+            "ui.desktop.close_behavior"?: "ask" | "shutdown" | "keep_backend";
+            "ui.desktop.disable_compositing"?: boolean;
             /** Format: free */
             "shortcuts.button_1"?: string;
-            /** Format: free */
-            "shortcuts.button_10"?: string;
             /** Format: free */
             "shortcuts.button_2"?: string;
             /** Format: free */
@@ -1099,43 +1115,40 @@ export interface components {
             "shortcuts.button_8"?: string;
             /** Format: free */
             "shortcuts.button_9"?: string;
-            /** Format: stun_uri_or_empty */
-            stun_server?: string;
-            "ui.camera.guide_visible"?: boolean;
-            "ui.camera.live_view_enabled"?: boolean;
-            "ui.camera.pixel_values_visible"?: boolean;
+            /** Format: free */
+            "shortcuts.button_10"?: string;
             /** @enum {string} */
-            "ui.controller_position"?: "top" | "bottom";
-            /** @enum {string} */
-            "ui.desktop.close_behavior"?: "ask" | "shutdown" | "keep_backend";
-            "ui.desktop.disable_compositing"?: boolean;
-            /** @enum {string} */
-            "ui.dialog_button_position"?: "bottom" | "top" | "both";
+            "commands.tag_match_mode"?: "exact" | "partial" | "prefix" | "suffix";
+            "python.script.venv"?: string;
             /** Format: int64 */
-            "ui.fps"?: number;
-            "ui.fps_options"?: number[];
-            /** Format: int64 */
-            "ui.output_split_ratio"?: number;
-            /** @enum {string} */
-            "ui.stdout_destination"?: "output_1" | "output_2";
-            /** @enum {string} */
-            "ui.widget_mode"?: "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
-            "webrtc.auto_recover"?: boolean;
-            /** Format: int64 */
-            "webrtc.recovery_probe_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.ping_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.pong_timeout_sec"?: number;
-            /** Format: int64 */
-            "websocket.reconnect_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.reconnect_max_retries"?: number;
+            "python.script.shutdown_timeout_ms"?: number;
+            "python.script.packages.list"?: {
+                extras?: string[];
+                name: string;
+                version?: string;
+            }[];
+            "python.script.packages.override_application_constraints"?: boolean;
+            "python.script.packages.override_package_metadata_constraints"?: boolean;
+            "python.script.packages.uv_config"?: null | string;
+            "python.script.packages.revalidate_mutable_sources"?: boolean;
         };
         SettingsReadValues: {
+            /** @enum {string} */
+            language: "ja" | "en";
+            auto_reload_config: boolean;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_ms": number;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_grace_ms": number;
+            /** Format: int64 */
+            "dynamic.callback_hard_timeout_ms": number;
+            /** Format: int64 */
+            "dynamic.callback_max_concurrency": number;
+            /** Format: int64 */
+            "dynamic.callback_queue_capacity": number;
+            report_ignored_profile_global_settings: boolean;
             /** Format: profile_name */
             active_profile: string;
-            auto_reload_config: boolean;
             /** Format: int64 */
             "camera.capture_fps": number;
             /** @enum {string} */
@@ -1145,19 +1158,12 @@ export interface components {
             "camera.flip_mode": "none" | "vertical" | "horizontal" | "both";
             /** @enum {string} */
             "camera.screenshot_format": "png" | "jpeg";
+            /** Format: free */
+            "serial.port": string;
+            /** Format: int64 */
+            "serial.baud_rate": number;
             /** @enum {string} */
-            "commands.tag_match_mode": "exact" | "partial" | "prefix" | "suffix";
-            /** Format: int64 */
-            "dynamic.callback_hard_timeout_ms": number;
-            /** Format: int64 */
-            "dynamic.callback_max_concurrency": number;
-            /** Format: int64 */
-            "dynamic.callback_queue_capacity": number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_grace_ms": number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_ms": number;
-            "input.allow_manual_intervention": boolean;
+            "serial.data_format": "default" | "qingpi" | "3ds";
             "input.keyboard_enabled": boolean;
             "input.left_stick_mouse_enabled": boolean;
             "input.right_stick_mouse_enabled": boolean;
@@ -1171,52 +1177,62 @@ export interface components {
                 /** Format: double */
                 top: number;
             };
-            /** Format: int64 */
-            jpeg_quality: number;
+            "input.allow_manual_intervention": boolean;
             /** @enum {string} */
-            language: "ja" | "en";
-            /** Format: http_url_or_empty */
-            "notifications.discord.avatar_url": string;
-            "notifications.discord.on_script_end": boolean;
-            "notifications.discord.on_script_start": boolean;
-            /** Format: free */
-            "notifications.discord.username": string;
+            "notifications.line_menu_behavior": "message" | "noop";
             /** @description Secret-safe status; the secret value is never returned */
             "notifications.discord.webhook_url": {
                 configured: boolean;
             };
-            /** @enum {string} */
-            "notifications.line_menu_behavior": "message" | "noop";
-            "notifications.windows.on_script_end": boolean;
-            "notifications.windows.on_script_start": boolean;
-            "python.script.packages.list": {
-                extras?: string[];
-                name: string;
-                version?: string;
-            }[];
-            "python.script.packages.override_application_constraints": boolean;
-            "python.script.packages.override_package_metadata_constraints": boolean;
-            "python.script.packages.revalidate_mutable_sources": boolean;
-            "python.script.packages.uv_config": null | string;
-            /** Format: int64 */
-            "python.script.shutdown_timeout_ms": number;
-            "python.script.venv": string;
-            report_ignored_profile_global_settings: boolean;
-            /** Format: int64 */
-            "serial.baud_rate": number;
-            /** @enum {string} */
-            "serial.data_format": "default" | "qingpi" | "3ds";
             /** Format: free */
-            "serial.port": string;
-            /** Format: ip_literal_non_wildcard */
-            "server.bind_address": string;
+            "notifications.discord.username": string;
+            /** Format: http_url_or_empty */
+            "notifications.discord.avatar_url": string;
+            "notifications.discord.on_script_start": boolean;
+            "notifications.discord.on_script_end": boolean;
+            "notifications.windows.on_script_start": boolean;
+            "notifications.windows.on_script_end": boolean;
+            /** Format: int64 */
+            "websocket.reconnect_interval_sec": number;
+            /** Format: int64 */
+            "websocket.reconnect_max_retries": number;
+            /** Format: int64 */
+            "websocket.ping_interval_sec": number;
+            /** Format: int64 */
+            "websocket.pong_timeout_sec": number;
+            "webrtc.auto_recover": boolean;
+            /** Format: int64 */
+            "webrtc.recovery_probe_interval_sec": number;
+            /** Format: stun_uri_or_empty */
+            stun_server: string;
+            /** Format: int64 */
+            jpeg_quality: number;
+            "server.web_dir": string;
             /** Format: int64 */
             "server.port": number;
-            "server.web_dir": string;
+            /** Format: ip_literal_non_wildcard */
+            "server.bind_address": string;
+            "ui.fps_options": number[];
+            /** Format: int64 */
+            "ui.fps": number;
+            /** @enum {string} */
+            "ui.widget_mode": "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
+            /** Format: int64 */
+            "ui.output_split_ratio": number;
+            /** @enum {string} */
+            "ui.stdout_destination": "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.controller_position": "top" | "bottom";
+            /** @enum {string} */
+            "ui.dialog_button_position": "bottom" | "top" | "both";
+            "ui.camera.live_view_enabled": boolean;
+            "ui.camera.pixel_values_visible": boolean;
+            "ui.camera.guide_visible": boolean;
+            /** @enum {string} */
+            "ui.desktop.close_behavior": "ask" | "shutdown" | "keep_backend";
+            "ui.desktop.disable_compositing": boolean;
             /** Format: free */
             "shortcuts.button_1": string;
-            /** Format: free */
-            "shortcuts.button_10": string;
             /** Format: free */
             "shortcuts.button_2": string;
             /** Format: free */
@@ -1233,54 +1249,51 @@ export interface components {
             "shortcuts.button_8": string;
             /** Format: free */
             "shortcuts.button_9": string;
-            /** Format: stun_uri_or_empty */
-            stun_server: string;
-            "ui.camera.guide_visible": boolean;
-            "ui.camera.live_view_enabled": boolean;
-            "ui.camera.pixel_values_visible": boolean;
+            /** Format: free */
+            "shortcuts.button_10": string;
             /** @enum {string} */
-            "ui.controller_position": "top" | "bottom";
-            /** @enum {string} */
-            "ui.desktop.close_behavior": "ask" | "shutdown" | "keep_backend";
-            "ui.desktop.disable_compositing": boolean;
-            /** @enum {string} */
-            "ui.dialog_button_position": "bottom" | "top" | "both";
+            "commands.tag_match_mode": "exact" | "partial" | "prefix" | "suffix";
+            "python.script.venv": string;
             /** Format: int64 */
-            "ui.fps": number;
-            "ui.fps_options": number[];
-            /** Format: int64 */
-            "ui.output_split_ratio": number;
-            /** @enum {string} */
-            "ui.stdout_destination": "output_1" | "output_2";
-            /** @enum {string} */
-            "ui.widget_mode": "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
-            "webrtc.auto_recover": boolean;
-            /** Format: int64 */
-            "webrtc.recovery_probe_interval_sec": number;
-            /** Format: int64 */
-            "websocket.ping_interval_sec": number;
-            /** Format: int64 */
-            "websocket.pong_timeout_sec": number;
-            /** Format: int64 */
-            "websocket.reconnect_interval_sec": number;
-            /** Format: int64 */
-            "websocket.reconnect_max_retries": number;
+            "python.script.shutdown_timeout_ms": number;
+            "python.script.packages.list": {
+                extras?: string[];
+                name: string;
+                version?: string;
+            }[];
+            "python.script.packages.override_application_constraints": boolean;
+            "python.script.packages.override_package_metadata_constraints": boolean;
+            "python.script.packages.uv_config": null | string;
+            "python.script.packages.revalidate_mutable_sources": boolean;
         };
         SettingsSnapshot: {
+            /** @description Random identity shared by all snapshots from one backend process. */
+            instance_id: string;
+            revision: components["schemas"]["DecimalString"];
+            values: components["schemas"]["SettingsReadValues"];
+            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
+            restart_required: string[];
             apply_failures: {
                 [key: string]: string;
             };
-            /** @description Random identity shared by all snapshots from one backend process. */
-            instance_id: string;
-            pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
-            restart_required: string[];
-            revision: components["schemas"]["DecimalString"];
-            values: components["schemas"]["SettingsReadValues"];
         };
         SettingsWriteValues: {
+            /** @enum {string} */
+            language?: "ja" | "en";
+            auto_reload_config?: boolean;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_soft_timeout_grace_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_hard_timeout_ms"?: number;
+            /** Format: int64 */
+            "dynamic.callback_max_concurrency"?: number;
+            /** Format: int64 */
+            "dynamic.callback_queue_capacity"?: number;
+            report_ignored_profile_global_settings?: boolean;
             /** Format: profile_name */
             active_profile?: string;
-            auto_reload_config?: boolean;
             /** Format: int64 */
             "camera.capture_fps"?: number;
             /** @enum {string} */
@@ -1290,19 +1303,12 @@ export interface components {
             "camera.flip_mode"?: "none" | "vertical" | "horizontal" | "both";
             /** @enum {string} */
             "camera.screenshot_format"?: "png" | "jpeg";
+            /** Format: free */
+            "serial.port"?: string;
+            /** Format: int64 */
+            "serial.baud_rate"?: number;
             /** @enum {string} */
-            "commands.tag_match_mode"?: "exact" | "partial" | "prefix" | "suffix";
-            /** Format: int64 */
-            "dynamic.callback_hard_timeout_ms"?: number;
-            /** Format: int64 */
-            "dynamic.callback_max_concurrency"?: number;
-            /** Format: int64 */
-            "dynamic.callback_queue_capacity"?: number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_grace_ms"?: number;
-            /** Format: int64 */
-            "dynamic.callback_soft_timeout_ms"?: number;
-            "input.allow_manual_intervention"?: boolean;
+            "serial.data_format"?: "default" | "qingpi" | "3ds";
             "input.keyboard_enabled"?: boolean;
             "input.left_stick_mouse_enabled"?: boolean;
             "input.right_stick_mouse_enabled"?: boolean;
@@ -1316,50 +1322,60 @@ export interface components {
                 /** Format: double */
                 top: number;
             };
-            /** Format: int64 */
-            jpeg_quality?: number;
-            /** @enum {string} */
-            language?: "ja" | "en";
-            /** Format: http_url_or_empty */
-            "notifications.discord.avatar_url"?: string;
-            "notifications.discord.on_script_end"?: boolean;
-            "notifications.discord.on_script_start"?: boolean;
-            /** Format: free */
-            "notifications.discord.username"?: string;
-            /** Format: discord_webhook_or_empty */
-            "notifications.discord.webhook_url"?: string;
+            "input.allow_manual_intervention"?: boolean;
             /** @enum {string} */
             "notifications.line_menu_behavior"?: "message" | "noop";
-            "notifications.windows.on_script_end"?: boolean;
-            "notifications.windows.on_script_start"?: boolean;
-            "python.script.packages.list"?: {
-                extras?: string[];
-                name: string;
-                version?: string;
-            }[];
-            "python.script.packages.override_application_constraints"?: boolean;
-            "python.script.packages.override_package_metadata_constraints"?: boolean;
-            "python.script.packages.revalidate_mutable_sources"?: boolean;
-            "python.script.packages.uv_config"?: null | string;
-            /** Format: int64 */
-            "python.script.shutdown_timeout_ms"?: number;
-            "python.script.venv"?: string;
-            report_ignored_profile_global_settings?: boolean;
-            /** Format: int64 */
-            "serial.baud_rate"?: number;
-            /** @enum {string} */
-            "serial.data_format"?: "default" | "qingpi" | "3ds";
+            /** Format: discord_webhook_or_empty */
+            "notifications.discord.webhook_url"?: string;
             /** Format: free */
-            "serial.port"?: string;
-            /** Format: ip_literal_non_wildcard */
-            "server.bind_address"?: string;
+            "notifications.discord.username"?: string;
+            /** Format: http_url_or_empty */
+            "notifications.discord.avatar_url"?: string;
+            "notifications.discord.on_script_start"?: boolean;
+            "notifications.discord.on_script_end"?: boolean;
+            "notifications.windows.on_script_start"?: boolean;
+            "notifications.windows.on_script_end"?: boolean;
+            /** Format: int64 */
+            "websocket.reconnect_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.reconnect_max_retries"?: number;
+            /** Format: int64 */
+            "websocket.ping_interval_sec"?: number;
+            /** Format: int64 */
+            "websocket.pong_timeout_sec"?: number;
+            "webrtc.auto_recover"?: boolean;
+            /** Format: int64 */
+            "webrtc.recovery_probe_interval_sec"?: number;
+            /** Format: stun_uri_or_empty */
+            stun_server?: string;
+            /** Format: int64 */
+            jpeg_quality?: number;
+            "server.web_dir"?: string;
             /** Format: int64 */
             "server.port"?: number;
-            "server.web_dir"?: string;
+            /** Format: ip_literal_non_wildcard */
+            "server.bind_address"?: string;
+            "ui.fps_options"?: number[];
+            /** Format: int64 */
+            "ui.fps"?: number;
+            /** @enum {string} */
+            "ui.widget_mode"?: "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
+            /** Format: int64 */
+            "ui.output_split_ratio"?: number;
+            /** @enum {string} */
+            "ui.stdout_destination"?: "output_1" | "output_2";
+            /** @enum {string} */
+            "ui.controller_position"?: "top" | "bottom";
+            /** @enum {string} */
+            "ui.dialog_button_position"?: "bottom" | "top" | "both";
+            "ui.camera.live_view_enabled"?: boolean;
+            "ui.camera.pixel_values_visible"?: boolean;
+            "ui.camera.guide_visible"?: boolean;
+            /** @enum {string} */
+            "ui.desktop.close_behavior"?: "ask" | "shutdown" | "keep_backend";
+            "ui.desktop.disable_compositing"?: boolean;
             /** Format: free */
             "shortcuts.button_1"?: string;
-            /** Format: free */
-            "shortcuts.button_10"?: string;
             /** Format: free */
             "shortcuts.button_2"?: string;
             /** Format: free */
@@ -1376,96 +1392,80 @@ export interface components {
             "shortcuts.button_8"?: string;
             /** Format: free */
             "shortcuts.button_9"?: string;
-            /** Format: stun_uri_or_empty */
-            stun_server?: string;
-            "ui.camera.guide_visible"?: boolean;
-            "ui.camera.live_view_enabled"?: boolean;
-            "ui.camera.pixel_values_visible"?: boolean;
+            /** Format: free */
+            "shortcuts.button_10"?: string;
             /** @enum {string} */
-            "ui.controller_position"?: "top" | "bottom";
-            /** @enum {string} */
-            "ui.desktop.close_behavior"?: "ask" | "shutdown" | "keep_backend";
-            "ui.desktop.disable_compositing"?: boolean;
-            /** @enum {string} */
-            "ui.dialog_button_position"?: "bottom" | "top" | "both";
+            "commands.tag_match_mode"?: "exact" | "partial" | "prefix" | "suffix";
+            "python.script.venv"?: string;
             /** Format: int64 */
-            "ui.fps"?: number;
-            "ui.fps_options"?: number[];
-            /** Format: int64 */
-            "ui.output_split_ratio"?: number;
-            /** @enum {string} */
-            "ui.stdout_destination"?: "output_1" | "output_2";
-            /** @enum {string} */
-            "ui.widget_mode"?: "all" | "outputs" | "output_1_controller" | "output_2_controller" | "output_1" | "output_2" | "controller";
-            "webrtc.auto_recover"?: boolean;
-            /** Format: int64 */
-            "webrtc.recovery_probe_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.ping_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.pong_timeout_sec"?: number;
-            /** Format: int64 */
-            "websocket.reconnect_interval_sec"?: number;
-            /** Format: int64 */
-            "websocket.reconnect_max_retries"?: number;
+            "python.script.shutdown_timeout_ms"?: number;
+            "python.script.packages.list"?: {
+                extras?: string[];
+                name: string;
+                version?: string;
+            }[];
+            "python.script.packages.override_application_constraints"?: boolean;
+            "python.script.packages.override_package_metadata_constraints"?: boolean;
+            "python.script.packages.uv_config"?: null | string;
+            "python.script.packages.revalidate_mutable_sources"?: boolean;
         };
         /** @enum {string} */
         StateChangeCause: "settings" | "camera" | "serial" | "command" | "profile" | "dynamic_config" | "commands" | "shutdown" | "other";
         /** @description Sparse state payload emitted by exactly one visible transaction. */
         StatePatch: {
-            active_profile?: string | null;
-            available_profiles?: string[] | null;
-            camera_device?: null | components["schemas"]["CameraSelector"];
-            /** Format: double */
-            camera_fps?: number | null;
-            camera_opened?: boolean | null;
-            camera_resolution?: string | null;
-            command_candidates?: components["schemas"]["CommandInfo"][] | null;
-            command_display_cache_loading?: boolean | null;
-            command_display_lists?: {
-                [key: string]: components["schemas"]["CommandDisplayItem"][];
-            } | null;
-            command_state?: null | components["schemas"]["CommandState"];
-            current_command?: string | null;
-            holding_buttons?: string[] | null;
-            is_running?: boolean | null;
-            last_input?: string | null;
-            pending_profile?: string | null;
-            /** Format: int32 */
-            pid?: number | null;
+            serial_port?: string | null;
             /** Format: int32 */
             serial_baud_rate?: number | null;
             serial_connected?: boolean | null;
-            serial_port?: string | null;
+            camera_opened?: boolean | null;
+            /** Format: double */
+            camera_fps?: number | null;
+            camera_resolution?: string | null;
+            camera_device?: null | components["schemas"]["CameraSelector"];
+            is_running?: boolean | null;
+            command_state?: null | components["schemas"]["CommandState"];
+            current_command?: string | null;
+            command_candidates?: components["schemas"]["CommandInfo"][] | null;
             tags?: string[] | null;
+            active_profile?: string | null;
+            pending_profile?: string | null;
+            available_profiles?: string[] | null;
+            last_input?: string | null;
+            holding_buttons?: string[] | null;
+            /** Format: int32 */
+            pid?: number | null;
+            command_display_lists?: {
+                [key: string]: components["schemas"]["CommandDisplayItem"][];
+            } | null;
+            command_display_cache_loading?: boolean | null;
         };
         StateSnapshot: {
-            active_profile: string;
-            available_profiles: string[];
-            camera_device: components["schemas"]["CameraSelector"];
-            /** Format: double */
-            camera_fps: number;
-            camera_opened: boolean;
-            camera_resolution: string;
-            command_candidates: components["schemas"]["CommandInfo"][];
-            command_display_cache_loading: boolean;
-            command_display_lists: {
-                [key: string]: components["schemas"]["CommandDisplayItem"][];
-            };
-            command_state: components["schemas"]["CommandState"];
-            current_command: string | null;
-            holding_buttons: string[];
-            is_running: boolean;
-            last_input: string | null;
-            pending_profile: string | null;
-            /** Format: int32 */
-            pid: number;
             revision: components["schemas"]["DecimalString"];
+            serial_port: string | null;
             /** Format: int32 */
             serial_baud_rate: number;
             serial_connected: boolean;
-            serial_port: string | null;
+            camera_opened: boolean;
+            /** Format: double */
+            camera_fps: number;
+            camera_resolution: string;
+            camera_device: components["schemas"]["CameraSelector"];
+            is_running: boolean;
+            command_state: components["schemas"]["CommandState"];
+            current_command: string | null;
+            command_candidates: components["schemas"]["CommandInfo"][];
             tags: string[];
+            active_profile: string;
+            pending_profile: string | null;
+            available_profiles: string[];
+            last_input: string | null;
+            holding_buttons: string[];
+            /** Format: int32 */
+            pid: number;
+            command_display_lists: {
+                [key: string]: components["schemas"]["CommandDisplayItem"][];
+            };
+            command_display_cache_loading: boolean;
         };
         /** @enum {string} */
         StickName: "LSTICK" | "RSTICK";
@@ -1486,8 +1486,8 @@ export interface components {
         /** @description Common successful JSON envelope. */
         Success_GenerateLauncherResult: {
             data: {
-                launcher_created: boolean;
                 profile_created: boolean;
+                launcher_created: boolean;
                 revision: components["schemas"]["DecimalString"];
             };
         };
@@ -1520,46 +1520,46 @@ export interface components {
         /** @description Common successful JSON envelope. */
         Success_SettingsSnapshot: {
             data: {
+                /** @description Random identity shared by all snapshots from one backend process. */
+                instance_id: string;
+                revision: components["schemas"]["DecimalString"];
+                values: components["schemas"]["SettingsReadValues"];
+                pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
+                restart_required: string[];
                 apply_failures: {
                     [key: string]: string;
                 };
-                /** @description Random identity shared by all snapshots from one backend process. */
-                instance_id: string;
-                pending_restart_values: components["schemas"]["SettingsReadPatchValues"];
-                restart_required: string[];
-                revision: components["schemas"]["DecimalString"];
-                values: components["schemas"]["SettingsReadValues"];
             };
         };
         /** @description Common successful JSON envelope. */
         Success_StateSnapshot: {
             data: {
-                active_profile: string;
-                available_profiles: string[];
-                camera_device: components["schemas"]["CameraSelector"];
-                /** Format: double */
-                camera_fps: number;
-                camera_opened: boolean;
-                camera_resolution: string;
-                command_candidates: components["schemas"]["CommandInfo"][];
-                command_display_cache_loading: boolean;
-                command_display_lists: {
-                    [key: string]: components["schemas"]["CommandDisplayItem"][];
-                };
-                command_state: components["schemas"]["CommandState"];
-                current_command: string | null;
-                holding_buttons: string[];
-                is_running: boolean;
-                last_input: string | null;
-                pending_profile: string | null;
-                /** Format: int32 */
-                pid: number;
                 revision: components["schemas"]["DecimalString"];
+                serial_port: string | null;
                 /** Format: int32 */
                 serial_baud_rate: number;
                 serial_connected: boolean;
-                serial_port: string | null;
+                camera_opened: boolean;
+                /** Format: double */
+                camera_fps: number;
+                camera_resolution: string;
+                camera_device: components["schemas"]["CameraSelector"];
+                is_running: boolean;
+                command_state: components["schemas"]["CommandState"];
+                current_command: string | null;
+                command_candidates: components["schemas"]["CommandInfo"][];
                 tags: string[];
+                active_profile: string;
+                pending_profile: string | null;
+                available_profiles: string[];
+                last_input: string | null;
+                holding_buttons: string[];
+                /** Format: int32 */
+                pid: number;
+                command_display_lists: {
+                    [key: string]: components["schemas"]["CommandDisplayItem"][];
+                };
+                command_display_cache_loading: boolean;
             };
         };
         /** @description Common successful JSON envelope. */
@@ -1567,44 +1567,44 @@ export interface components {
             data: {
                 current_version: string;
                 latest_version: string;
-                release_url: string;
                 update_available: boolean;
+                release_url: string;
             };
         };
         /** @description Common successful JSON envelope. */
         Success_Vec_CameraDevice: {
             data: {
-                available: boolean;
-                label: string;
                 selector: components["schemas"]["CameraSelector"];
+                label: string;
+                available: boolean;
             }[];
         };
         /** @description Common successful JSON envelope. */
         Success_Vec_SerialPort: {
             data: {
-                available: boolean;
-                label: string;
                 selector: string;
+                label: string;
+                available: boolean;
             }[];
         };
         TouchPoint: {
-            /** @enum {boolean} */
-            pressed: true;
             /** Format: int32 */
             x: number;
             /** Format: int32 */
             y: number;
+            /** @enum {boolean} */
+            pressed: true;
         };
         UiStateChange: {
             cause: components["schemas"]["StateChangeCause"];
-            settings: null | components["schemas"]["SettingsChange"];
             state: components["schemas"]["StatePatch"];
+            settings: null | components["schemas"]["SettingsChange"];
         };
         UpdateCheckResult: {
             current_version: string;
             latest_version: string;
-            release_url: string;
             update_available: boolean;
+            release_url: string;
         };
     };
     responses: never;
@@ -1679,8 +1679,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Success_SavedScreenshot"];
-                    "image/jpeg": number[];
                     "image/png": number[];
+                    "image/jpeg": number[];
                 };
             };
             /** @description No frame or incompatible UI mode */

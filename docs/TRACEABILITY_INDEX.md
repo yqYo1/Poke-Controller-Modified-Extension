@@ -107,8 +107,8 @@
 | 項目 | 現在の判定 | 直接の残課題／次の証拠 |
 |---|---|---|
 | `auto_reload_config` OS-native watcher | 未実装 | `TRACEABILITY_BACKEND.md` §11.5と`TRACEABILITY_FRONTEND.md` §11.5.7。watch対象、debounce、single-flight、停止順、worker不在／parse errorの製品判断後に実装する |
-| GPUI native frontend | 将来／未実装 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0、[`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)。GPUI Phase 0 inventoryはbaseline／未決事項の記録であり、Gate 1-6や採否の証拠ではない |
-| production主経路のlatency／throughput／jitter／soak | 未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`docs/ACCEPTANCE.md`性能schema。CI workflow timing p95は製品性能の代用ではない |
+| GPUI native frontend | PoC実装済み、Gate 1未受入 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0、[`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)、[`GPUI_FRONTEND_PLAN.md`](GPUI_FRONTEND_PLAN.md)。Cargo／CLI／fake-view testとWeston headless Waylandのnative readiness／clean shutdown reportはあるが、IME／clipboard／AccessKit treeの実window操作、Gate 1-6や採否は未完了 |
+| `production`主経路のlatency／throughput／jitter／soak | localのvirtual-I/O blocking fixtureは実装・検証済み、clean／remote未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`docs/ACCEPTANCE.md`性能schema、`docs/ARTIFACT_MANIFEST.md` production fixture。CI workflow上のclean-source／remote required CI、実機I/Oは未証明 |
 | 外部browser／tailnet WebRTC | 外部証跡待ち | `PLAN.md`外部browser受入、`docs/ACCEPTANCE.md` browser matrix。isolated serviceのstop／cleanupを含む |
 | 実機／driver／firmware／console | 外部証跡待ち | `docs/ACCEPTANCE.md`のhardware record。virtual I/O successは代用しない |
 | clean detached worktree再受入 | 制約により未成立 | `PLAN.md`現行残タスク。既存worktreeのみを使う制約の変更が必要 |

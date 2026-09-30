@@ -7,6 +7,9 @@ rust/pokecon/registry/abstraction_baseline.json, and emits one JSON document
 (schema "boundary-report/1", or "abstraction-report/1" with --abstraction)
 to stdout.
 
+The report always goes to stdout. Pass --output to additionally write the
+same JSON document to a regular file (fail-closed).
+
 Fail-closed: any parse or validation failure exits non-zero with a message.
 No network access; standard library only.
 """
@@ -17,6 +20,7 @@ import argparse
 import hashlib
 import json
 import re
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Never, cast
@@ -134,6 +138,38 @@ def parse_section(text: str) -> dict[str, BoundaryRow]:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_report_output(output: Path, serialized: str) -> None:
+    """Write *serialized* to *output* without changing the stdout contract.
+
+    Fail-closed (mirrors scripts/release/signing_manifest.py): the
+    destination must not exist yet (not even as a symlink), and its parent
+    must already be exactly one real directory.
+    """
+    if output.exists() or output.is_symlink() or output.is_junction():
+        invalid_value(f"boundary report output already exists: {output}")
+    parent = output.parent
+    try:
+        parent_metadata = parent.stat(follow_symlinks=False)
+    except OSError as error:
+        message = f"boundary report output parent cannot be inspected: {parent}"
+        raise ValueError(message) from error
+    if (
+        parent.is_symlink()
+        or parent.is_junction()
+        or not stat.S_ISDIR(parent_metadata.st_mode)
+    ):
+        invalid_value(
+            f"boundary report output parent must be one real directory: {parent}"
+        )
+    try:
+        with output.open("xb") as stream:
+            stream.write((serialized + "\n").encode("utf-8"))
+        output.chmod(0o644)
+    except OSError:
+        output.unlink(missing_ok=True)
+        raise
 
 
 def split_anchor(anchor: str) -> tuple[str, int | None]:
@@ -408,6 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--baseline", type=Path, default=None)
     parser.add_argument("--abstraction", action="store_true")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args(argv)
     try:
         project_root = cast("Path", arguments.root)
@@ -446,7 +483,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             invalid_value("boundary report carries an unexpected schema")
     except (OSError, ValueError) as error:
         parser.exit(1, f"boundary report failed: {error}\n")
-    print(json.dumps(report, indent=2, sort_keys=True))
+    serialized = json.dumps(report, indent=2, sort_keys=True)
+    output_arg = cast("Path | None", arguments.output)
+    if output_arg is not None:
+        try:
+            write_report_output(output_arg, serialized)
+        except (OSError, ValueError) as error:
+            parser.exit(1, f"boundary report failed: {error}\n")
+    print(serialized)
     return 0
 
 

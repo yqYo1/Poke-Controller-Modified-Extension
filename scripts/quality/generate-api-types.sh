@@ -28,7 +28,7 @@ run_openapi_generator() {
   local generator=${POKECON_OPENAPI_GENERATOR:-}
   if [[ -z $generator ]]; then
     cargo run --locked --package pokecon --bin generate_openapi \
-      --features contract-generator -- "$@"
+      --all-features -- "$@"
     return
   fi
   if [[ $generator != /* || ! -f $generator || ! -x $generator || -L $generator ]]; then

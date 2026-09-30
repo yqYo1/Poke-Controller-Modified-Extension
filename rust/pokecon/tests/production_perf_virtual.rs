@@ -30,13 +30,11 @@
 //! p50/p95/maximum, p99 detail, throughput = N/(duration/1000),
 //! jitter = p99-p50.
 //!
-//! Threshold policy: effort-target numbers live in one advisory constants
-//! block and are recorded in the artifacts but NEVER asserted (shared runners
-//! are too noisy to gate on). Only sample counts, error counts, schema shape,
-//! and fresh-frame progress can fail the test. Baseline is Opt-3
-//! branch-bootstrap: the first green report becomes baseline v1, so the
-//! report carries `baseline.status = "bootstrap"` with the substitution
-//! disclosed.
+//! Threshold policy: fixed p95 budgets are part of the required gate. The
+//! budgets are intentionally generous absolute limits for this virtual-I/O
+//! fixture; every sample count, error count, schema invariant, and threshold
+//! comparison is blocking. No mutable baseline or runner-local substitution
+//! can turn a threshold failure into a pass.
 //!
 //! Knobs (all optional): `POKECON_PRODUCTION_PERF_OUT` (artifact dir,
 //! default `target/` under the crate directory, i.e. `rust/pokecon/target/`),
@@ -87,14 +85,12 @@ const CHECKER_ALT_BGR: [u8; 3] = [200, 150, 100];
 /// Checker tile edge in pixels; 1920x1080 factors into 16x9 tiles of 120px.
 const CHECKER_TILE: u32 = 120;
 
-/// Advisory effort-target thresholds (milliseconds). Bootstrap placeholders
-/// pending 2x the first-baseline (v1) p95; shutdown/recovery follow the
-/// PM-decided 5s/30s wall advisories. Recorded, never asserted.
-const ADVISORY_P95_CAMERA_FRAME_MS: f64 = 10.0;
-const ADVISORY_P95_SERIAL_SEND_MS: f64 = 50.0;
-const ADVISORY_P95_RECOGNITION_MS: f64 = 500.0;
-const ADVISORY_P95_SHUTDOWN_MS: f64 = 5_000.0;
-const ADVISORY_P95_RECOVERY_MS: f64 = 30_000.0;
+/// Required p95 budgets (milliseconds) for the release virtual-I/O gate.
+const BLOCKING_P95_CAMERA_FRAME_MS: f64 = 10.0;
+const BLOCKING_P95_SERIAL_SEND_MS: f64 = 50.0;
+const BLOCKING_P95_RECOGNITION_MS: f64 = 500.0;
+const BLOCKING_P95_SHUTDOWN_MS: f64 = 5_000.0;
+const BLOCKING_P95_RECOVERY_MS: f64 = 30_000.0;
 
 fn controller_with(button: Button) -> ControllerState {
     let mut state = ControllerState::NEUTRAL;
@@ -549,7 +545,7 @@ fn metric_entry(
     name: &str,
     unit: &str,
     summary: &MetricSummary,
-    advisory_p95: f64,
+    threshold_p95: f64,
     method: &str,
 ) -> serde_json::Value {
     serde_json::json!({
@@ -567,9 +563,9 @@ fn metric_entry(
             "method": method,
         },
         "threshold": {
-            "advisory_p95": advisory_p95,
-            "advisory": true,
-            "exceeded": summary.p95_ms > advisory_p95,
+            "threshold_p95": threshold_p95,
+            "blocking": true,
+            "exceeded": summary.p95_ms > threshold_p95,
         },
     })
 }
@@ -577,10 +573,10 @@ fn metric_entry(
 fn one_measurement(
     name: &str,
     summary: &MetricSummary,
-    advisory_p95: f64,
+    threshold_p95: f64,
     method: &str,
 ) -> serde_json::Value {
-    metric_entry(name, "ms", summary, advisory_p95, method)
+    metric_entry(name, "ms", summary, threshold_p95, method)
 }
 
 fn measurement_entries(summaries: &Summaries) -> serde_json::Value {
@@ -588,31 +584,31 @@ fn measurement_entries(summaries: &Summaries) -> serde_json::Value {
         one_measurement(
             "camera_frame_latency",
             &summaries.camera,
-            ADVISORY_P95_CAMERA_FRAME_MS,
+            BLOCKING_P95_CAMERA_FRAME_MS,
             "in-process LatestFrameSource::latest() acquisition (Arc clone, no pixel copy)"
         ),
         one_measurement(
             "serial_send_latency",
             &summaries.serial,
-            ADVISORY_P95_SERIAL_SEND_MS,
+            BLOCKING_P95_SERIAL_SEND_MS,
             "send_controller_state until the write completes on the virtual endpoint"
         ),
         one_measurement(
             "recognition_latency",
             &summaries.recognition,
-            ADVISORY_P95_RECOGNITION_MS,
+            BLOCKING_P95_RECOGNITION_MS,
             "pixel-SAD stand-in for template matching over latest-frame bytes (NOT the real recognition path)"
         ),
         one_measurement(
             "shutdown_latency",
             &summaries.shutdown,
-            ADVISORY_P95_SHUTDOWN_MS,
+            BLOCKING_P95_SHUTDOWN_MS,
             "serial disconnect (neutral frame + close) plus CameraManager::shutdown"
         ),
         one_measurement(
             "recovery_latency",
             &summaries.recovery,
-            ADVISORY_P95_RECOVERY_MS,
+            BLOCKING_P95_RECOVERY_MS,
             "fresh CameraManager::start plus serial reconnect to first fresh frame and one proving send"
         ),
     ])
@@ -627,8 +623,8 @@ fn threshold_entries(measurements: &serde_json::Value) -> Vec<serde_json::Value>
             serde_json::json!({
                 "metric": entry["metric"],
                 "observed_p95": entry["p95"],
-                "advisory_p95": entry["threshold"]["advisory_p95"],
-                "advisory": true,
+                "threshold_p95": entry["threshold"]["threshold_p95"],
+                "blocking": true,
                 "exceeded": entry["threshold"]["exceeded"],
             })
         })
@@ -662,6 +658,14 @@ fn build_report(
 ) -> serde_json::Value {
     let measurements = measurement_entries(summaries);
     let threshold_evaluation = threshold_entries(&measurements);
+    let result = if threshold_evaluation
+        .iter()
+        .any(|entry| entry["exceeded"].as_bool().unwrap_or(true))
+    {
+        "fail"
+    } else {
+        "pass"
+    };
     serde_json::json!({
         "fixture_id": FIXTURE_ID,
         "resolution": PERF_RESOLUTION.as_str(),
@@ -685,16 +689,16 @@ fn build_report(
         },
         "threshold_evaluation": threshold_evaluation,
         "baseline": {
-            "status": "bootstrap",
+            "status": "fixed-threshold",
             "report_count": 0,
             "aggregation": serde_json::Value::Null,
-            "note": "Opt-3 branch-bootstrap: the first green production-virtual-v1 report becomes baseline v1 (main is unmeasurable with this fixture); advisory p95 numbers are bootstrap placeholders pending 2x baseline-v1 p95",
+            "note": "Fixed absolute p95 budgets are required for production-virtual-v1; no mutable baseline is used",
         },
-        "result": "pass",
+        "result": result,
         "evaluation": {
-            "mode": "advisory",
-            "result": "pass",
-            "notes": "numeric thresholds are advisory until AR-11-10 closes; only sample/error counts and schema shape gate",
+            "mode": "blocking",
+            "result": result,
+            "notes": "fixed p95 budgets, sample counts, error counts, and schema invariants are required gates",
         },
         "streaming_sample_counts": {
             "serial_send_latency_ms": streams.serial.len(),
@@ -750,23 +754,23 @@ fn summary_lines(report: &serde_json::Value) -> Vec<String> {
     if let Some(measurements) = report["measurements"].as_array() {
         for entry in measurements {
             lines.push(format!(
-                "{}: p50={:.3}ms p95={:.3}ms max={:.3}ms n={} advisory_p95={} {}",
+                "{}: p50={:.3}ms p95={:.3}ms max={:.3}ms n={} threshold_p95={} {}",
                 entry["metric"],
                 entry["p50"].as_f64().unwrap_or(f64::NAN),
                 entry["p95"].as_f64().unwrap_or(f64::NAN),
                 entry["maximum"].as_f64().unwrap_or(f64::NAN),
                 entry["sample_count"],
-                entry["threshold"]["advisory_p95"],
+                entry["threshold"]["threshold_p95"],
                 if entry["threshold"]["exceeded"].as_bool().unwrap_or(false) {
-                    "ADVISORY-EXCEEDED"
+                    "BLOCKING-EXCEEDED"
                 } else {
-                    "within-advisory"
+                    "within-blocking-budget"
                 },
             ));
         }
     }
     lines.push(format!(
-        "baseline: {} | result: {} (numeric thresholds advisory)",
+        "baseline: {} | result: {} (numeric thresholds blocking)",
         report["baseline"]["status"], report["result"],
     ));
     lines
@@ -818,8 +822,8 @@ fn assert_report_shape(path: &str, config: &RunConfig) {
     assert_eq!(parsed["fixture_id"], FIXTURE_ID, "report fixture id");
     assert_eq!(parsed["resolution"], "1920x1080", "report resolution");
     assert_eq!(
-        parsed["baseline"]["status"], "bootstrap",
-        "baseline bootstrap"
+        parsed["baseline"]["status"], "fixed-threshold",
+        "fixed threshold policy"
     );
     assert_eq!(parsed["result"], "pass", "report result");
     let measurements = parsed["measurements"]
@@ -835,8 +839,8 @@ fn assert_report_shape(path: &str, config: &RunConfig) {
         };
         assert_eq!(entry["sample_count"], expected, "{name} sample count");
         assert!(
-            entry["threshold"]["advisory"].as_bool().unwrap_or(false),
-            "{name} threshold must be advisory"
+            entry["threshold"]["blocking"].as_bool().unwrap_or(false),
+            "{name} threshold must be blocking"
         );
     }
 }

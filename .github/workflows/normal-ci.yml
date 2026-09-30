@@ -84,6 +84,8 @@ jobs:
       needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      POKECON_ACCEPTANCE_REPORT_DIR: ${{ github.workspace }}/acceptance-contract-evidence
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
@@ -217,11 +219,33 @@ jobs:
             --job-name 'Rust and contracts (Linux)' \
             --observed-command-success "$command_success" \
             --fallback-disabled true
+      - name: Validate contract acceptance reports
+        if: always() && needs.plan.outputs.contracts == 'true'
+        run: |
+          set -euo pipefail
+          for report in \
+            schema-report.json \
+            boundary-report.json \
+            abstraction-report.json \
+            lifecycle-report.json; do
+            report_path="${POKECON_ACCEPTANCE_REPORT_DIR}/$report"
+            if [ ! -s "$report_path" ]; then
+              echo "contract acceptance report is missing or empty: $report_path" >&2
+              exit 1
+            fi
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: ci-nix-evidence-${{ github.run_id }}-${{ github.run_attempt }}-rust
           path: ${{ runner.temp }}/pokecon-nix-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: ci-acceptance-reports-${{ github.run_id }}-${{ github.run_attempt }}-rust
+          path: ${{ github.workspace }}/acceptance-contract-evidence
           if-no-files-found: warn
           retention-days: 7
 
@@ -671,9 +695,12 @@ jobs:
       - name: Run the production main-path virtual performance gate
         env:
           POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence
+          POKECON_MAIN_PATH_TRACE_OUT: ${{ github.workspace }}/production-perf-evidence/main-path-trace
           POKECON_PRODUCTION_PERF_SAMPLES: '300'
           POKECON_PRODUCTION_PERF_WARMUP_SECS: '60'
           POKECON_PRODUCTION_PERF_CYCLES: '300'
+          POKECON_MAIN_PATH_TRACE_CYCLES: '300'
+          POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
           POKECON_PERF_BUILD_SHA: ${{ github.sha }}
         run: |
           nix run .#production-perf-check
@@ -692,6 +719,16 @@ jobs:
                 stat --format='%n %s bytes' "$evidence_dir/$evidence_file"
               else
                 echo "production perf evidence file is missing: $evidence_file"
+              fi
+            done
+            for evidence_file in \
+              main-path-trace/main-path-trace-report.json \
+              main-path-trace/main-path-trace-samples.json \
+              main-path-trace/main-path-trace.log; do
+              if [ -f "$evidence_dir/$evidence_file" ]; then
+                stat --format='%n %s bytes' "$evidence_dir/$evidence_file"
+              else
+                echo "production main-path trace evidence file is missing: $evidence_file"
               fi
             done
           fi

@@ -8,6 +8,11 @@ use pokecon::integration_test_support::camera::{
     CameraConfig, CameraManager, CameraSelector, CaptureResolution, FlipMode, RecordedFrame,
     VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
 };
+use pokecon::integration_test_support::device::controller::ControllerState;
+use pokecon::integration_test_support::device::serial::{
+    ControllerFormat, SerialConfig, SerialManager, VirtualOpenPlan as SerialOpenPlan,
+    VirtualSerialBackend, VirtualSerialEndpoint,
+};
 use pokecon::integration_test_support::dynamic::protocol::PYTHON_SITE_PACKAGES_ENV;
 use pokecon::integration_test_support::dynamic::protocol::{
     DynamicInitializeRequest, DynamicProfileSwitchResult,
@@ -1702,4 +1707,617 @@ async fn shutdown_all_reaps_all_workers_when_one_acknowledges_and_peer_crashed()
     );
     script_safety.assert_neutral_once();
     dynamic_safety.assert_neutral_once();
+}
+
+#[tokio::test]
+async fn production_serial_terminal_sequence_is_idempotent_over_virtual_port() {
+    // AR-11-26 narrow evidence: the same `SerialManager` type the production
+    // shutdown owns, driven through the shutdown tail order over an
+    // adversarial virtual port (release -> send deflected -> NEUTRAL ->
+    // disconnect, then the repeated-shutdown pass). This pins the serial safe
+    // terminal state only. It is not a full `ProductionRuntime` sequence
+    // proof: `ProductionRuntime::build` needs native backends and the settings
+    // pipeline, which this harness cannot construct.
+    let backend = VirtualSerialBackend::default();
+    let endpoint = VirtualSerialEndpoint::new();
+    backend
+        .push_plan(SerialOpenPlan::Success(endpoint.clone()))
+        .await;
+    let manager = SerialManager::new(Arc::new(backend));
+    manager
+        .apply_config(
+            SerialConfig::new("virtual", 9600, ControllerFormat::Default)
+                .expect("virtual serial config is valid"),
+        )
+        .await
+        .expect("virtual serial port opens");
+    let mut deflected = ControllerState::NEUTRAL;
+    deflected.buttons.a = true;
+    manager
+        .send_controller_state(deflected)
+        .await
+        .expect("deflected frame is accepted while connected");
+    let sent = endpoint.written().await.len();
+    assert!(sent > 0, "deflected output must reach the virtual wire");
+
+    // First shutdown pass: force-released NEUTRAL, then disconnect.
+    manager
+        .send_controller_state(ControllerState::NEUTRAL)
+        .await
+        .expect("neutral frame is accepted while connected");
+    manager
+        .disconnect()
+        .await
+        .expect("first disconnect succeeds");
+    assert!(
+        endpoint.is_closed(),
+        "disconnect must close the virtual endpoint"
+    );
+    assert!(
+        endpoint.written().await.len() > sent,
+        "disconnect must append the neutral frame after prior output"
+    );
+
+    // Repeated shutdown is idempotent and fails closed: no error, no extra
+    // bytes, still closed, and post-disconnect sends are refused.
+    assert!(
+        manager
+            .send_controller_state(ControllerState::NEUTRAL)
+            .await
+            .is_err(),
+        "sends after disconnect must fail closed"
+    );
+    manager
+        .disconnect()
+        .await
+        .expect("repeated disconnect succeeds");
+    assert!(endpoint.is_closed());
+}
+
+// ---------------------------------------------------------------------------
+// AR-11-29 production-order shutdown fault sequence.
+//
+// This drives the §15.6 shutdown order used by `shutdown_production`
+// (`prepare_shutdown` event half is covered over real IPC by
+// `dynamic_rejected_load_rolls_back_production_state`; step 5 is observed
+// through the `writer_unstopped` release-refusal gate; steps 8-9 are process
+// exit and out of scope): step 1 (abort tasks, force-release, neutral send)
+// → step 2 (camera shutdown with a hung writer) → step 3 (script worker
+// ack-then-hang forced stop + reader-pin recovery after the confirmed reap)
+// → step 4 (dynamic worker forced stop, no regeneration) → steps 6-7
+// (second force-release, neutral send, disconnect under an injected write
+// fault). Every resource is the production-owned type (`CameraManager`,
+// `SerialManager`, real worker processes); the only virtual pieces are the
+// camera/serial backends, which are the same software-virtual backends the
+// production managers accept as `Arc<dyn CameraBackend>` /
+// `Arc<dyn SerialBackend>`. No mocks.
+//
+// The step order is asserted on an execution log, and the final states are
+// written to a JSON artifact (`fixture_id`
+// `production-shutdown-fault-v1`).
+// ---------------------------------------------------------------------------
+
+/// Artifact identity for the AR-11-29 shutdown fault sequence.
+const SHUTDOWN_FAULT_FIXTURE_ID: &str = "production-shutdown-fault-v1";
+/// Per-worker stop deadline for the forced-stop steps (fault fixtures never
+/// exit on their own, so each stop waits out this bound before killing).
+const SHUTDOWN_FAULT_STOP_TIMEOUT: Duration = Duration::from_millis(500);
+/// Camera writer join deadline for the timeout step (mirrors the production
+/// 2s deadline discipline at a fraction of its cost; the Hang plan never
+/// joins, so any finite bound observes the timeout path).
+const SHUTDOWN_FAULT_CAMERA_TIMEOUT: Duration = Duration::from_millis(20);
+
+type ShutdownOrderLog = Arc<std::sync::Mutex<Vec<&'static str>>>;
+
+fn shutdown_fault_artifact_dir() -> PathBuf {
+    PathBuf::from(
+        std::env::var("POKECON_SHUTDOWN_FAULT_OUT").unwrap_or_else(|_| "target".to_owned()),
+    )
+    .join("shutdown-fault")
+}
+
+fn write_shutdown_fault_artifact(file_name: &str, report: &serde_json::Value) -> PathBuf {
+    let dir = shutdown_fault_artifact_dir();
+    std::fs::create_dir_all(&dir).expect("shutdown fault output dir must be creatable");
+    let path = dir.join(file_name);
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&report).expect("shutdown fault report must serialize"),
+    )
+    .expect("shutdown fault report must be writable");
+    eprintln!("shutdown-fault artifact: {}", path.display());
+    path
+}
+
+fn record_shutdown_order(log: &ShutdownOrderLog, step: &'static str) {
+    log.lock()
+        .expect("shutdown order log stays lockable")
+        .push(step);
+}
+
+/// Starts a camera whose writer hangs after its first frame, waits for that
+/// frame, and abandons one reader pin so step 3 can recover it after the
+/// confirmed worker reap.
+fn start_hanging_camera_with_abandoned_pin() -> CameraManager {
+    let backend = VirtualCameraBackend::default();
+    backend.push_open(VirtualOpenPlan::Success(VirtualSessionPlan::recorded(
+        30,
+        [RecordedFrame::Solid([4, 5, 6]), RecordedFrame::Hang],
+    )));
+    let manager = CameraManager::start(
+        Arc::new(backend),
+        CameraConfig::new(CameraSelector::Index(0), 30, CaptureResolution::R640x360).unwrap(),
+        FlipMode::None,
+    )
+    .unwrap();
+    for _ in 0..1_000 {
+        if manager.ring().read_published().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    std::thread::sleep(Duration::from_millis(50));
+    // The writer thread is concurrently active (it hangs inside the second
+    // plan entry), so a single pin attempt can transiently lose the
+    // single-reader race to it. Retry boundedly; a genuinely broken ring
+    // still fails at the expect below instead of hanging this fixture.
+    let mut abandoned = None;
+    for _ in 0..1_000 {
+        match manager.ring().pin_current_for_diagnostics() {
+            Ok(Some(guard)) => {
+                abandoned = Some(guard);
+                break;
+            }
+            Ok(None) | Err(_) => std::thread::sleep(Duration::from_millis(1)),
+        }
+    }
+    abandoned
+        .expect("a published frame must become pinnable for crash simulation")
+        .abandon_for_crash_simulation();
+    manager
+}
+
+async fn connect_virtual_serial_with_deflected_output()
+-> (SerialManager, VirtualSerialEndpoint, usize) {
+    let backend = VirtualSerialBackend::default();
+    let endpoint = VirtualSerialEndpoint::new();
+    backend
+        .push_plan(SerialOpenPlan::Success(endpoint.clone()))
+        .await;
+    let manager = SerialManager::new(Arc::new(backend));
+    manager
+        .apply_config(
+            SerialConfig::new("virtual", 9600, ControllerFormat::Default)
+                .expect("virtual serial config is valid"),
+        )
+        .await
+        .expect("virtual serial port opens");
+    let mut deflected = ControllerState::NEUTRAL;
+    deflected.buttons.a = true;
+    manager
+        .send_controller_state(deflected)
+        .await
+        .expect("deflected frame is accepted while connected");
+    let sent = endpoint.written().await.len();
+    assert!(sent > 0, "deflected output must reach the virtual wire");
+    (manager, endpoint, sent)
+}
+
+#[allow(clippy::too_many_lines)]
+#[tokio::test]
+async fn production_shutdown_fault_sequence_releases_resources_in_order() {
+    let order: ShutdownOrderLog = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let camera = start_hanging_camera_with_abandoned_pin();
+    let descriptor_before = camera.mapping_descriptor();
+    let (serial, endpoint, deflected_bytes) = connect_virtual_serial_with_deflected_output().await;
+
+    // Step 1: a hung background task must be aborted rather than joined, and
+    // the force-released NEUTRAL output must reach the wire while connected.
+    let hung_completed = Arc::new(AtomicBool::new(false));
+    let hung_flag = Arc::clone(&hung_completed);
+    let hung = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_mins(1)).await;
+        hung_flag.store(true, Ordering::Release);
+    });
+    hung.abort();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), hung)
+            .await
+            .expect("aborted task must join before the production stop deadline")
+            .is_err(),
+        "a hung background task must be aborted rather than joined to completion"
+    );
+    assert!(
+        !hung_completed.load(Ordering::Acquire),
+        "aborted task must not run to completion"
+    );
+    record_shutdown_order(&order, "tasks-aborted");
+    serial
+        .send_controller_state(ControllerState::NEUTRAL)
+        .await
+        .expect("released neutral output is accepted while connected");
+    assert!(
+        endpoint.written().await.len() > deflected_bytes,
+        "released neutral output must follow the deflected frame on the wire"
+    );
+    record_shutdown_order(&order, "neutral-sent");
+
+    // Step 2 (fault: hung writer): the deadline expires, the writer is
+    // recorded unstopped, and the mapping is retained instead
+    // of released (the step-5 gate stays closed).
+    let outcome = camera.shutdown(SHUTDOWN_FAULT_CAMERA_TIMEOUT);
+    assert!(
+        outcome.is_err(),
+        "a hung camera writer must miss its shutdown deadline"
+    );
+    assert!(
+        camera.writer_unstopped(),
+        "the timed-out writer must be recorded unstopped"
+    );
+    assert_eq!(
+        camera.mapping_descriptor(),
+        descriptor_before,
+        "the timed-out mapping must be retained, not released"
+    );
+    // No `read_published` check here by design: the abandoned reader pin is
+    // still held at this point (it is recovered only after the step-3
+    // worker reap), and any pin attempt on its slot — including the transient
+    // one inside `read_published` — correctly reports `ReaderAlreadyPinned`
+    // while the pin is outstanding. Mapping retention plus the unstopped
+    // writer state is the release-refusal evidence.
+    record_shutdown_order(&order, "camera-timeout-retained");
+
+    // Steps 3-4 (fault: unresponsive workers): both workers are reaped by
+    // force; the script worker acknowledged before hanging, the dynamic
+    // worker never did; each Rust-owned safety hook fires exactly once.
+    let supervisor = WorkerSupervisor::new();
+    let script_safety = Arc::new(ControllerSafetyProbe::active());
+    let dynamic_safety = Arc::new(ControllerSafetyProbe::active());
+    let script_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Script)
+                .argument("ack-then-hang"),
+            script_safety.clone(),
+        )
+        .await
+        .expect("ack-then-hang script fixture starts");
+    let dynamic_worker = supervisor
+        .spawn(
+            WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                .argument("ignore-shutdown"),
+            dynamic_safety.clone(),
+        )
+        .await
+        .expect("unresponsive dynamic fixture starts");
+    let script_report = script_worker
+        .stop(
+            StopPurpose::ApplicationShutdown,
+            SHUTDOWN_FAULT_STOP_TIMEOUT,
+        )
+        .await
+        .expect("shutdown reaps the acknowledging but hung script worker");
+    assert!(
+        script_report.cooperative_acknowledged && script_report.forced,
+        "ack-then-hang must be observed then force-killed: {script_report:?}"
+    );
+    assert!(!script_report.exit.success);
+    assert_eq!(
+        script_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    // The abandoned reader pin is recovered only now that the worker exit
+    // is confirmed by the reaped stop report (production step 3
+    // post-condition; the authorization predicate itself is pinned by the
+    // `production.rs` unit tests).
+    assert_eq!(
+        camera.ring().recover_reader_pins(true, true).unwrap(),
+        1,
+        "the confirmed worker exit must authorize exactly one recovered reader pin"
+    );
+    record_shutdown_order(&order, "script-forced");
+    let dynamic_report = dynamic_worker
+        .stop(
+            StopPurpose::ApplicationShutdown,
+            SHUTDOWN_FAULT_STOP_TIMEOUT,
+        )
+        .await
+        .expect("shutdown force-stops the unresponsive dynamic worker");
+    assert!(
+        dynamic_report.forced && !dynamic_report.cooperative_acknowledged,
+        "a silent dynamic worker must be forced without acknowledgement: {dynamic_report:?}"
+    );
+    assert!(!dynamic_report.exit.success);
+    assert_eq!(
+        dynamic_worker.generation().phase(),
+        pokecon_worker::generation::GenerationPhase::Stopped
+    );
+    assert!(matches!(
+        supervisor
+            .spawn(
+                WorkerLaunch::custom(fault_worker_binary(), WorkerKind::Dynamic)
+                    .argument("ignore-shutdown"),
+                Arc::new(ControllerSafetyProbe::active()),
+            )
+            .await,
+        Err(SupervisorError::Generation(
+            GenerationError::DynamicRestartForbidden
+        ))
+    ));
+    record_shutdown_order(&order, "dynamic-forced");
+
+    // Steps 6-7 (fault: serial write failure at disconnect): the endpoint
+    // still reaches its closed terminal state, later sends fail closed, and
+    // a repeated disconnect emits no extra bytes.
+    endpoint
+        .fail_next_write(std::io::ErrorKind::BrokenPipe)
+        .await;
+    // Production step 7 (`disconnect_serial_service`) tolerates the
+    // disconnect outcome and shuts down anyway; the terminal state is the
+    // guarantee. Assert both halves: the injected fault surfaces in the
+    // result (proving the fault path ran, not the happy path), and the
+    // endpoint still reaches its closed terminal state.
+    assert!(
+        serial.disconnect().await.is_err(),
+        "the injected BrokenPipe must surface in the disconnect result"
+    );
+    assert!(
+        endpoint.is_closed(),
+        "a faulted disconnect must still close the endpoint"
+    );
+    assert!(
+        serial
+            .send_controller_state(ControllerState::NEUTRAL)
+            .await
+            .is_err(),
+        "sends after disconnect must fail closed"
+    );
+    record_shutdown_order(&order, "serial-disconnected-fault-closed");
+    let closed_bytes = endpoint.written().await.len();
+    serial
+        .disconnect()
+        .await
+        .expect("repeated disconnect succeeds");
+    assert_eq!(
+        endpoint.written().await.len(),
+        closed_bytes,
+        "repeated shutdown must not emit extra bytes"
+    );
+    assert!(endpoint.is_closed());
+    record_shutdown_order(&order, "repeat-idempotent");
+
+    // Shutdown ordering: the executed steps must follow the production
+    // `shutdown_production` order (steps 1 → 2 → 3 → 4 → 6/7), pinned
+    // independently by
+    // `production_shutdown_call_graph_pins_fault_responsibility_table`.
+    let observed = order.lock().expect("order log stays lockable").clone();
+    assert_eq!(
+        observed,
+        vec![
+            "tasks-aborted",
+            "neutral-sent",
+            "camera-timeout-retained",
+            "script-forced",
+            "dynamic-forced",
+            "serial-disconnected-fault-closed",
+            "repeat-idempotent",
+        ],
+        "shutdown steps ran out of production order"
+    );
+    script_safety.assert_neutral_once();
+    dynamic_safety.assert_neutral_once();
+
+    write_shutdown_fault_artifact(
+        "production-shutdown-fault-sequence.json",
+        &json!({
+            "fixture_id": SHUTDOWN_FAULT_FIXTURE_ID,
+            "production_order": "shutdown_production: prepare_shutdown -> stop_inputs_camera_and_scripts -> shutdown_worker -> stop_serial",
+            "call_graph_pin": "production_shutdown_call_graph_pins_fault_responsibility_table",
+            "steps": [
+                {
+                    "step": 1,
+                    "owner": "production shutdown (abort_background_tasks) + input arbiter",
+                    "fault_injected": "background task hung for 60s",
+                    "final_state": "task aborted before the stop deadline; NEUTRAL follows deflected output on the wire",
+                    "observed": {"task_completed": false, "neutral_after_deflected": true},
+                },
+                {
+                    "step": 2,
+                    "owner": "CameraManager + production shutdown fallback",
+                    "fault_injected": "camera writer hangs (Hang plan) past a 20ms join deadline",
+                    "final_state": "writer_unstopped recorded; mapping retained; shared-memory release refused",
+                    "observed": {"writer_unstopped": true, "mapping_retained": true},
+                },
+                {
+                    "step": 3,
+                    "owner": "worker supervisor + command service",
+                    "fault_injected": "script worker acknowledges shutdown but never exits",
+                    "final_state": "worker reaped by force; generation Stopped; one abandoned reader pin recovered after the confirmed exit; safety released once",
+                    "observed": {"cooperative_acknowledged": true, "forced": true, "exit_success": false, "reader_pins_recovered": 1},
+                },
+                {
+                    "step": 4,
+                    "owner": "worker supervisor + DynamicRuntime",
+                    "fault_injected": "dynamic worker ignores shutdown",
+                    "final_state": "worker reaped by force; generation Stopped; regeneration refused (DynamicRestartForbidden); safety released once",
+                    "observed": {"cooperative_acknowledged": false, "forced": true, "exit_success": false, "restart": "forbidden"},
+                },
+                {
+                    "steps": "6-7",
+                    "owner": "SerialManager",
+                    "fault_injected": "BrokenPipe on the disconnect write",
+                    "final_state": "endpoint closed; post-disconnect sends fail closed; repeated disconnect emits no extra bytes",
+                    "observed": {"endpoint_closed": true, "post_disconnect_send": "refused", "repeat_emits_bytes": false},
+                },
+            ],
+            "execution_order": observed,
+            "limitations": [
+                "ProductionRuntime::build needs native camera/serial backends plus the settings pipeline, so this sequence drives the same production-owned managers, worker processes, and step order with software-virtual backends rather than the full constructor.",
+                "Step 0 (AppShutdownPre emit) runs over real worker IPC in dynamic_rejected_load_rolls_back_production_state; steps 8-9 are process exit and out of scope.",
+                "Step 5/9 shared-memory release gates have no production readers yet; release refusal is observed through writer_unstopped plus the retained mapping.",
+            ],
+        }),
+    );
+}
+
+#[allow(clippy::too_many_lines)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn dynamic_rejected_load_rolls_back_production_state() {
+    // AR-11-29 rollback + step 0: the shutdown-pre event crosses real worker
+    // IPC while services are alive (the `DynamicRuntime::prepare_shutdown`
+    // event half), then a rejected dynamic load must leave the committed
+    // generation, settings, and controller state untouched (the transaction
+    // rollback half: dropping the uncommitted evaluation keeps the current
+    // generation). No mocks: a real dynamic worker process, real IPC, and
+    // the real transaction path.
+    let temporary = TempDir::new().expect("temporary config root is created");
+    let host = Arc::new(
+        InMemoryDynamicHost::new(
+            dynamic_settings(),
+            BTreeMap::from([
+                ("active_profile".to_owned(), json!("default")),
+                ("available_profiles".to_owned(), json!(["default", "Other"])),
+                ("command_candidates".to_owned(), json!([])),
+                ("tags".to_owned(), json!([])),
+            ]),
+        )
+        .expect("dynamic host registry is valid"),
+    );
+    let neutral_controller = host.controller_state();
+    let safety = Arc::new(DynamicHostSafety::new(host.clone()));
+    let supervisor = WorkerSupervisor::new();
+    let worker = supervisor
+        .spawn(
+            WorkerLaunch::managed(worker_binary(), WorkerKind::Dynamic)
+                .clear_environment()
+                .environment("POKECON_WORKER_TEST_SENTINEL", "retained"),
+            safety.clone(),
+        )
+        .await
+        .expect("dynamic worker starts");
+    let client = DynamicWorkerClient::attach(worker.clone(), host.clone())
+        .expect("dynamic client attaches before initialization");
+    client
+        .initialize(&DynamicInitializeRequest {
+            config_root: temporary.path().to_path_buf(),
+            home: Some(temporary.path().to_path_buf()),
+            primary: DynamicConfigLanguage::Lua,
+        })
+        .await
+        .expect("dynamic engine initializes in the child process");
+
+    // Step 0: the shutdown-pre event completes over IPC while every service
+    // is still alive and is not cancellable.
+    let shutdown_pre = tokio::time::timeout(Duration::from_secs(5), client.emit("AppShutdownPre"))
+        .await
+        .expect("shutdown-pre event must complete before the deadline")
+        .expect("shutdown-pre emit crosses worker IPC");
+    assert!(
+        !shutdown_pre.cancelled,
+        "AppShutdownPre must not report cancellation"
+    );
+
+    // A valid Lua load commits: settings, controller output, and a new
+    // generation are all observable on the host.
+    let loaded = client
+        .control(&DynamicConfigControl::LoadContent {
+            language: DynamicConfigLanguage::Lua,
+            content: LUA_DYNAMIC_SOURCE.to_owned(),
+        })
+        .await
+        .expect("Lua control request completes");
+    assert!(loaded.loaded, "{:?}", loaded.diagnostic);
+    let baseline_generation = client
+        .status()
+        .await
+        .expect("status after the committed load succeeds")
+        .generation;
+    assert_eq!(
+        host.settings_snapshot()
+            .expect("host settings are readable")["language"],
+        json!("en")
+    );
+    assert!(host.controller_state().buttons.a);
+
+    // Fault: a rejected load must roll back the committed state. Generation,
+    // settings, and controller state all keep the baseline, and the worker
+    // stays responsive for the shutdown that follows. Note what is NOT
+    // asserted: `initialized_languages` may gain the attempted language
+    // runtime (the failed evaluation still initializes the interpreter as
+    // staging infrastructure) — the rollback promise covers the committed
+    // generation and host state, which is what the assertions below pin.
+    let rejected = client
+        .control(&DynamicConfigControl::LoadContent {
+            language: DynamicConfigLanguage::Python,
+            content: "import Commands\n".to_owned(),
+        })
+        .await
+        .expect("evaluation failures use a typed load result");
+    assert!(!rejected.loaded);
+    let status = client
+        .status()
+        .await
+        .expect("worker remains responsive after the rejected load");
+    assert_eq!(
+        status.generation, baseline_generation,
+        "a rejected load must not advance the generation"
+    );
+    assert_eq!(
+        host.settings_snapshot()
+            .expect("host settings are readable")["language"],
+        json!("en"),
+        "a rejected load must not touch committed settings: {:?}",
+        host.diagnostics()
+    );
+    assert!(
+        host.controller_state().buttons.a,
+        "a rejected load must not touch committed controller output"
+    );
+
+    // Application shutdown after the rollback stays cooperative: the worker
+    // is reaped cleanly and Rust-owned controller state returns to neutral
+    // exactly once.
+    let report = worker
+        .stop(StopPurpose::ApplicationShutdown, Duration::from_secs(2))
+        .await
+        .expect("dynamic worker stops cooperatively at application shutdown");
+    assert!(report.cooperative_acknowledged);
+    assert!(!report.forced);
+    assert!(report.exit.success);
+    assert_eq!(host.controller_state(), neutral_controller);
+    assert_eq!(safety.releases.load(Ordering::Acquire), 1);
+
+    write_shutdown_fault_artifact(
+        "production-shutdown-fault-rollback.json",
+        &json!({
+            "fixture_id": SHUTDOWN_FAULT_FIXTURE_ID,
+            "case": "rollback",
+            "production_order": "shutdown_production: prepare_shutdown -> stop_inputs_camera_and_scripts -> shutdown_worker -> stop_serial",
+            "steps": [
+                {
+                    "step": 0,
+                    "owner": "DynamicRuntime",
+                    "fault_injected": "none (precondition: services alive)",
+                    "final_state": "AppShutdownPre completes over worker IPC without cancellation",
+                    "observed": {"completed": true, "cancelled": false},
+                },
+                {
+                    "step": "rollback",
+                    "owner": "dynamic transaction + dynamic worker",
+                    "fault_injected": "rejected Python load (Commands namespace leak) after a committed Lua load",
+                    "final_state": "generation, settings, and controller output keep the committed baseline; worker stays responsive",
+                    "observed": {"generation_advanced": false, "settings_changed": false, "controller_changed": false},
+                },
+                {
+                    "step": 4,
+                    "owner": "worker supervisor + DynamicRuntime",
+                    "fault_injected": "none (shutdown after rollback)",
+                    "final_state": "worker reaped cooperatively; controller returns to neutral; safety released once",
+                    "observed": {"cooperative_acknowledged": true, "forced": false, "exit_success": true, "safety_releases": 1},
+                },
+            ],
+            "limitations": [
+                "Rollback of a partially applied settings applier is out of scope; this pins the dynamic transaction rollback (failed evaluation keeps the current generation).",
+            ],
+        }),
+    );
 }

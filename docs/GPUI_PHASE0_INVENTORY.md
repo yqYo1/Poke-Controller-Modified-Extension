@@ -5,8 +5,7 @@
 この文書は、`docs/GPUI_FRONTEND_PLAN.md` Phase 0のinventory artifactです。
 現行Web/Tauri baseline、backend ownership、公開契約、UI capability差、最初のvertical slice候補、既知の未受入を一つの表へ固定します。
 
-この文書はGPUIの採用、Cargo依存の追加、`--ui gpui`の追加、`apps.gpui`の追加、既存UIの廃止を決定しません。
-採否と実装開始は、Phase 0の証跡およびPhase 1 Gate 1のnative PoC結果を確認してから別途判断します。
+この文書のPhase 0表は、実装開始前のbaseline inventoryとして凍結した記録です。後続packetでCargo依存、`--ui gpui`、`apps.gpui`、native fake viewを追加しましたが、Phase 1 Gate 1のnative PoC合否や既存UIの廃止はまだ決定していません。
 
 監査基準は対象worktreeの現行HEADと監査時点の未コミット差分です。
 clean worktreeを要求する受入は、当該inventoryの存在だけでは完了扱いにしません。
@@ -17,7 +16,7 @@ clean worktreeを要求する受入は、当該inventoryの存在だけでは完
 |---|---|---|---|---|
 | Web | `nix run . -- --ui web` | `web/`のSvelteKit／Svelte／TypeScript SPA | `pokecon` Rust processがAxum、state、device、camera、serial、worker lifecycleを所有 | baseline |
 | Tauri desktop | `nix run .#tauri` | 同じWeb UIをTauri WebViewで表示 | 同じ`pokecon` binaryへ`--ui desktop`を渡し、Tauri shellを追加 | baseline |
-| GPUI native | 入口なし | 未実装 | `--ui gpui`、`apps.gpui`、GPUI依存は存在しない | 将来目標／未受入 |
+| GPUI native | `nix run .#gpui`、`--ui gpui` | `gpui-kit 0.6.6`のfake-data native view | 同じ`pokecon` binary、optional `gpui` feature、専用GPUI UI thread | PoC実装済み／Gate 1未受入 |
 | GPUI browser／WASM | 製品入口なし | 対象範囲未確定 | 既存Svelte Webのbrowser受入とは分離して扱う | owner decision待ち |
 
 直接根拠:
@@ -92,7 +91,7 @@ clean worktreeを要求する受入は、当該inventoryの存在だけでは完
 | real hardware／driver／firmware／console | 外部証跡待ち | virtual I/Oをnative実機の代用にしない |
 | clean detached worktree | 未成立 | 既存worktree制約下で完了扱いしない |
 | Release tag／tag起点Release | 利用者担当 | 明示指示なしに実施しない |
-| GPUI dependency／license closure | 未採用 | candidate release、lock、target closure、license、native libsをPhase 1で再調査する |
+| GPUI dependency／license closure | `gpui-kit 0.6.6` exact dependencyとLinux native inputsを実装済み | Cargo.lock／license closure／配布noticeの最終監査は未完了。採否へ転用しない |
 
 ## 6. Phase 0の完了条件と未決事項
 
@@ -108,18 +107,26 @@ clean worktreeを要求する受入は、当該inventoryの存在だけでは完
 ### 6.2 まだ完了扱いにしない条件
 
 - clean worktreeと基準commitを含む外部受入recordがないこと。
-- native window、Tokio backend共存、CJK／IME、clipboard、focus、accessibility treeを実測していないこと。
-- `gpui-kit`の採用release、exact lock、target依存、license／notice、Nix native closureをPoke-Con上で確定していないこと。
-- backend接続方式、`--ui gpui`、`apps.gpui`、native media実装を決定していないこと。
+- Xvfbのnative GPU surface起動はGLX visual／adapter不足で失敗する一方、Weston headless Wayland＋Mesa llvmpipe GL software rendererではproduction readiness（`POKECON-RUNTIME-0001`）、`Gpui` UI mode、`DesktopExit` shutdown request／clean stop（`POKECON-RUNTIME-0003`／`0002`）を`gpui-native-wayland-runtime-report.json`へ保存した。Vulkan adapter初期化失敗はexpected GL fallbackとして記録し、panic／unexpected errorはない。なおIME／clipboard／focus／accessibility treeの実window操作証跡は別に不足しており、GPUI test-supportのfake-view testだけではGate 1を通過させない。
+- `gpui-kit 0.6.6`のexact lockとApache-2.0宣言、fontconfig／freetype／libxkbcommon／XCBのNix inputsは確認済みだが、全target license／noticeと配布runtime closureは未完了であること。
+- backend接続方式、`--ui gpui`、`apps.gpui`、native media実装はPoC入口まで決定済みだが、vertical slice／media受入は未完了であること。
 - Gate 1を通過しておらず、既存Svelte／Tauriを置換する根拠がないこと。
 
-## 7. 次のowner decision
+- `gpui-kit 0.6.6` exact dependency、`gpui`／`gpui-test-support` feature、Linux native inputs（fontconfig、freetype、libxkbcommon、XCB、Mesa、Vulkan loader）と同一binary selectorを実装した。Cargo／clippy／test-support／CLI help／flake provenanceはlocalでpassしている。
+- Xvfb下のreal native windowはGLX visual／GPU adapter不足でfailした。`No suitable GPU adapters`／`Unable to find a compatible adapter`は正直なruntime blockerとして保存し、fake-view testやheadless platformをnative Gate 1の代替にしない。
+- `nix build .#pokecon`と`nix run .#ui-package-check`は、GPUI filesをintent-to-addした現行dirty worktreeでpassした（package store pathとapplication SHA-256はrun artifactに記録）。初回はGit source filterがuntracked GPUI filesを除外して`file not found for module gpui`となったため、clean tracked source／commit別証跡とは別扱いである。
 
-Phase 0 inventoryの次に必要なのは、次の決定です。決定がないままCargo依存やselectorを追加しません。
+## 7. Phase 1実装checkpoint
+
+現行差分で実装した入口と、Gate 1未受入の証跡境界は次のとおりです。
+
+## 8. 次のowner decision
+
+Phase 1 Gate 1のruntime証拠取得後に必要な決定です。決定がないまま既存UIを置換しません。
 
 1. GPUI native PoCをPhase 1へ進めるか。
 2. GPUI browser／WASMを今回の製品対象に含めるか、それともSvelte Webを維持するか。
 3. native PoCで比較するbackend接続方式（typed in-process adapter／既存API client）の評価条件。
 4. candidate release、license／notice、Nix native dependencyの受入責任者と判定基準。
 
-この決定後にだけ、`docs/GPUI_FRONTEND_PLAN.md` Phase 1の最小fake-data view packetを作成します。
+この決定は既存UIの採否・置換判断を拘束します。fake-data view packetは実装済みですが、Gate 1受入と採用決定がない限り本番UI移行へ進めません。

@@ -2133,17 +2133,23 @@ fn public_wire_contracts_exclude_native_handles_and_private_paths() {
 fn camera_shared_mapping_release_has_single_owner() {
     // AR-11-25 check #2 (docs/ARCHITECTURE_HANDOFF.md 3.2 item 2):
     // only `CameraManager` may release the camera native handle or the
-    // shared mapping. The production shutdown fallback
-    // (`retain_camera_fallback_on_timeout` / `camera_writer_fallback` in
-    // rust/pokecon/src/production.rs:394-426,466-505) retains the
-    // `UnstoppedCameraWriter` guard until OS process exit and never unmaps,
-    // so it holds ownership without a release marker. The documented owners
+    // shared mapping. The production shutdown fallbacks in
+    // `stop_inputs_camera_and_scripts` (§15.6 steps 2-3:
+    // `retain_camera_fallback_on_timeout` / `camera_writer_fallback` for a
+    // timed-out writer, `recover_reader_pins_after_script_shutdown` /
+    // `retain_reader_mapping_after_script_shutdown` /
+    // `camera_reader_fallback` for an unreaped script reader) and the
+    // step-5 fail-closed persistence
+    // (`retain_dynamic_mapping_after_worker_shutdown`, observed read-only
+    // by `shared_memory_release_gate_after_dynamic_reap`) retain their
+    // guards until OS process exit and never unmap, so they hold ownership
+    // without a release marker. The documented owners
     // are `camera::manager` (`CameraManager`) plus `camera::media`
     // (`SharedFrameRing`) per docs/ARCHITECTURE.md (camera frame lifetime
     // row); the release itself lives one layer down in
     // `camera/shared_ring.rs` (`MappedRing::unlink_name` -> `shm_unlink`),
     // reached only via `ManagerInner::record_writer_unstopped`
-    // (rust/pokecon/src/camera/manager.rs:127).
+    // in `camera::manager`.
     //
     // Release markers are deliberately narrow: bare `CloseHandle` is
     // excluded because rust/pokecon/src/settings/hmac_key.rs legitimately
@@ -2163,6 +2169,11 @@ fn camera_shared_mapping_release_has_single_owner() {
         "retain_camera_fallback_on_timeout",
         "camera_writer_fallback",
         "UnstoppedCameraWriter",
+        "camera_reader_fallback",
+        "retain_reader_mapping_after_script_shutdown",
+        "recover_reader_pins_after_script_shutdown",
+        "shared_memory_release_gate_after_dynamic_reap",
+        "retain_dynamic_mapping_after_worker_shutdown",
     ];
 
     let find_release_marker = |text: &str| {
@@ -2257,9 +2268,8 @@ fn camera_shared_mapping_release_has_single_owner() {
 fn serial_port_ownership_has_single_owner() {
     // AR-11-25 check #3 (docs/ARCHITECTURE_HANDOFF.md 3.2 item 3):
     // only `SerialManager` may hold the native serial port. The native
-    // handle (`SerialStream`) is acquired in
-    // rust/pokecon/src/device/serial/native.rs (`tokio_serial::new` ->
-    // `open_native_async`, native.rs:19-20) and held split inside
+    // handle (`SerialStream`) is acquired in the native serial backend
+    // (`tokio_serial::new` -> `open_native_async`) and held split inside
     // `NativeSerialIo`; it is reached only via
     // `SerialManager::open_initialized` through the `SerialBackend` trait
     // (rust/pokecon/src/device/serial/manager.rs), so the manager itself
@@ -4524,3 +4534,295 @@ fn abstraction_baseline_matches_manifest() {
 
 #[allow(dead_code)]
 fn _assert_setting_is_public(_: &Setting) {}
+
+/// Positions of `markers` inside `body`, in order. Each marker must occur
+/// exactly once so a duplicated or split shutdown step fails closed instead
+/// of passing on its first occurrence.
+fn ordered_marker_positions(body: &str, markers: &[&str]) -> Vec<usize> {
+    markers
+        .iter()
+        .map(|marker| {
+            let positions: Vec<usize> =
+                body.match_indices(marker).map(|(index, _)| index).collect();
+            assert_eq!(
+                positions.len(),
+                1,
+                "shutdown call-graph marker {marker:?} must occur exactly once in its pinned body"
+            );
+            positions[0]
+        })
+        .collect()
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn production_shutdown_call_graph_pins_fault_responsibility_table() {
+    // AR-11-29: docs/ARCHITECTURE_HANDOFF.md section 7 (fault, timeout,
+    // rollback, shutdown responsibility) is backed by this call-graph pin,
+    // not by prose alone. Any reorder, removal, or duplication of a
+    // production shutdown step breaks this test before the table can drift.
+    //
+    // Fail-closed controls: the ordering predicate is first exercised on a
+    // synthetic body (positive control) and on a body with a duplicated
+    // marker, which must panic (negative control via `catch_unwind`).
+
+    // (a) `shutdown_production` (rust/pokecon/src/lib.rs) is the single
+    // production shutdown order: dynamic shutdown-pre, production steps
+    // 1-3, dynamic worker reap, the step-5 release-gate observation,
+    // production steps 6-7.
+    let lib = repository_text("rust/pokecon/src/lib.rs");
+    let shutdown_production = between(&lib, "async fn shutdown_production(", "\n}\n");
+    assert!(
+        !shutdown_production.is_empty(),
+        "lib.rs must define shutdown_production (AR-11-29)"
+    );
+    let lib_order = ordered_marker_positions(
+        shutdown_production,
+        &[
+            "prepare_shutdown",
+            "stop_inputs_camera_and_scripts",
+            "shutdown_worker",
+            "retain_dynamic_mapping_after_worker_shutdown",
+            "shared_memory_release_gate_after_dynamic_reap",
+            "stop_serial",
+        ],
+    );
+    assert!(
+        lib_order.windows(2).all(|pair| pair[0] < pair[1]),
+        "shutdown_production must run prepare_shutdown, stop_inputs_camera_and_scripts, shutdown_worker, retain_dynamic_mapping_after_worker_shutdown, shared_memory_release_gate_after_dynamic_reap, stop_serial in that order (AR-11-29)"
+    );
+
+    // (a3) Fail-closed step 5 is a persistence-then-observation pair: an
+    // unconfirmed dynamic reap is first retained as `camera_reader_fallback`
+    // ownership (ordered above), and only then is the step-5 verdict
+    // observed. The verdict itself stays diagnostic-only: it is bound only
+    // to build `ProductionShutdownReport` and shutdown continues to
+    // stop_serial unconditionally, so the gate observation never controls
+    // shutdown flow and its semantics are not overstated.
+    assert!(
+        shutdown_production.contains("let step5_release_allowed =")
+            && shutdown_production.contains("step5_release_allowed,"),
+        "shutdown_production must retain the step-5 verdict only as report data so it stays diagnostic-only (AR-11-29)"
+    );
+    assert!(
+        !shutdown_production.contains("if step5_release_allowed"),
+        "shutdown_production must continue to stop_serial unconditionally; the step-5 verdict must not gate control flow (AR-11-29)"
+    );
+
+    // (a2) The step-5 gate itself (rust/pokecon/src/production.rs) is a
+    // read-only observation: it consumes the existing release state plus
+    // an explicit dynamic-reap confirmation, and it must never release,
+    // unmap, or retain anything itself.
+    let production_rs = repository_text("rust/pokecon/src/production.rs");
+    let release_gate = between(
+        &production_rs,
+        "pub(crate) fn shared_memory_release_gate_after_dynamic_reap(",
+        "\n    }\n",
+    );
+    assert!(
+        !release_gate.is_empty(),
+        "production.rs must define shared_memory_release_gate_after_dynamic_reap (AR-11-29)"
+    );
+    assert!(
+        release_gate.contains("&self,"),
+        "the step-5 gate must take a shared receiver so shutdown state cannot be mutated (AR-11-29)"
+    );
+    assert!(
+        !release_gate.contains("&mut self"),
+        "the step-5 gate must not take a mutable receiver (AR-11-29)"
+    );
+    assert!(
+        release_gate.contains("dynamic_reaped")
+            && release_gate.contains("shared_memory_release_allowed"),
+        "the step-5 gate must consume both the dynamic-reap confirmation and the existing release state (AR-11-29)"
+    );
+    assert!(
+        !release_gate.contains("mem::forget"),
+        "the step-5 gate must never retain a mapping itself; retention stays owned by Drop (AR-11-29)"
+    );
+    // The gate body must contain none of the known mutation/retention
+    // operations: pin recovery, writer shutdown, reader or dynamic
+    // retention, fallback state, forget, mapping release, or drop. Each is
+    // asserted separately so a future edit cannot smuggle exactly one of
+    // them past a grouped check.
+    for marker in [
+        "recover_reader_pins",
+        "shutdown",
+        "retain_reader",
+        "retain_dynamic",
+        "camera_reader_fallback",
+        "DYNAMIC_WORKER_UNREAPED",
+        "forget",
+        "release_mapping",
+        "drop",
+    ] {
+        assert!(
+            !release_gate.contains(marker),
+            "the step-5 gate must never call {marker:?}; it is read-only and retention stays owned by Drop (AR-11-29)"
+        );
+    }
+    // The single known diagnostic phrase "without unmap" states the
+    // fail-closed outcome in prose; any other unmap operation is refused.
+    assert!(
+        !release_gate.replace("without unmap", "").contains("unmap"),
+        "the step-5 gate must never unmap itself outside the documented diagnostic phrase; retention stays owned by Drop (AR-11-29)"
+    );
+
+    // (b) `stop_inputs_camera_and_scripts` (rust/pokecon/src/production.rs)
+    // is production steps 1-3: abort tasks, force-release + neutral send,
+    // camera shutdown with fallback retention, script shutdown, reader-pin
+    // recovery. Method bodies close indented (`    }`), so the end marker
+    // must not be the column-0 `}` used for top-level functions.
+    let production = repository_text("rust/pokecon/src/production.rs");
+    let stop_inputs = between(
+        &production,
+        "pub(crate) async fn stop_inputs_camera_and_scripts(&mut self)",
+        "\n    }\n",
+    );
+    assert!(
+        !stop_inputs.is_empty(),
+        "production.rs must define stop_inputs_camera_and_scripts (AR-11-29)"
+    );
+    let inputs_order = ordered_marker_positions(
+        stop_inputs,
+        &[
+            "abort_background_tasks",
+            "force_release_all",
+            "send_released_controller_output",
+            "camera.shutdown(SERVICE_STOP_TIMEOUT)",
+            "retain_camera_fallback_on_timeout",
+            "self.commands.shutdown",
+            "recover_reader_pins_after_script_shutdown",
+        ],
+    );
+    assert!(
+        inputs_order.windows(2).all(|pair| pair[0] < pair[1]),
+        "stop_inputs_camera_and_scripts must keep the step 1-3 order (AR-11-29)"
+    );
+
+    // (c) `stop_serial` (rust/pokecon/src/production.rs) is production
+    // steps 6-7: second force-release, NEUTRAL send, bounded disconnect.
+    let stop_serial = between(
+        &production,
+        "pub(crate) async fn stop_serial(&self)",
+        "\n    }\n",
+    );
+    assert!(
+        !stop_serial.is_empty(),
+        "production.rs must define stop_serial (AR-11-29)"
+    );
+    let serial_order = ordered_marker_positions(
+        stop_serial,
+        &[
+            "force_release_all",
+            "ControllerState::NEUTRAL",
+            "disconnect_serial_service",
+        ],
+    );
+    assert!(
+        serial_order.windows(2).all(|pair| pair[0] < pair[1]),
+        "stop_serial must keep the step 6-7 order (AR-11-29)"
+    );
+
+    // (d) `DynamicRuntime` shutdown halves (rust/pokecon/src/dynamic_runtime.rs):
+    // prepare emits AppShutdownPre under a timeout then closes mutations;
+    // the worker half reaps by the fixed deadline with ApplicationShutdown.
+    let dynamic = repository_text("rust/pokecon/src/dynamic_runtime.rs");
+    let prepare = between(
+        &dynamic,
+        "pub async fn prepare_shutdown(&self)",
+        "\n    }\n",
+    );
+    assert!(
+        prepare.contains("AppShutdownPre") && prepare.contains("begin_stopping"),
+        "DynamicRuntime::prepare_shutdown must emit AppShutdownPre then close mutations (AR-11-29)"
+    );
+    let reap = between(&dynamic, "pub async fn shutdown_worker(", "\n    }\n");
+    assert!(
+        reap.contains("StopPurpose::ApplicationShutdown"),
+        "DynamicRuntime::shutdown_worker must reap with ApplicationShutdown (AR-11-29)"
+    );
+    // The worker half returns the real `StopReport` result. The caller maps
+    // that result to the step-5 gate, so a forced-stop or an unproven reap is
+    // not collapsed into an invented bool inside DynamicRuntime.
+    assert!(
+        reap.contains("-> Result<crate::worker::supervisor::StopReport, SupervisorError>")
+            && reap.contains("log_stop_result(&stop)")
+            && reap.lines().any(|line| line.trim() == "stop"),
+        "DynamicRuntime::shutdown_worker must return the real StopReport result (AR-11-29)"
+    );
+
+    // (e) The handoff section 7 table names the pinned entry points, so the
+    // table cannot silently detach from this call graph.
+    let handoff = repository_text("docs/ARCHITECTURE_HANDOFF.md");
+    let section7 = handoff
+        .split_once("## 7. Fault、timeout、rollback、shutdownの責任")
+        .expect("ARCHITECTURE_HANDOFF.md must define section 7 (AR-11-29)")
+        .1;
+    let section7 = section7
+        .split_once("\n## ")
+        .map_or(section7, |(head, _)| head);
+    for anchor in [
+        "stop_inputs_camera_and_scripts",
+        "stop_serial",
+        "retain_camera_fallback_on_timeout",
+        "AppShutdownPre",
+    ] {
+        assert!(
+            section7.contains(anchor),
+            "handoff section 7 must name the pinned shutdown entry point {anchor:?} (AR-11-29)"
+        );
+    }
+
+    // (f) Fail-closed controls for the ordering predicate itself.
+    let synthetic = "alpha prepare_shutdown beta stop_inputs_camera_and_scripts gamma";
+    let positions = ordered_marker_positions(
+        synthetic,
+        &["prepare_shutdown", "stop_inputs_camera_and_scripts"],
+    );
+    assert!(
+        positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "AR-11-29 ordering control must accept ordered markers"
+    );
+    let duplicated = "prepare_shutdown prepare_shutdown stop_inputs_camera_and_scripts";
+    assert!(
+        std::panic::catch_unwind(|| ordered_marker_positions(
+            duplicated,
+            &["prepare_shutdown", "stop_inputs_camera_and_scripts"],
+        ))
+        .is_err(),
+        "AR-11-29 ordering control must reject a duplicated marker"
+    );
+
+    // (g) `ProductionRuntime::Drop` keeps a flag-only fallback path for a
+    // lost shutdown join (e.g. the `spawn_blocking` camera shutdown task
+    // fails): a durable `camera_writer_unstopped` flag with no guard mints
+    // a fresh guard instead of releasing. No OS-level post-Drop mapping
+    // proof is claimed here; this pins the source shape only, while the
+    // virtual-backend shutdown test below drives the flag-only state at
+    // production level.
+    let drop_impl = between(&production_rs, "impl Drop for ProductionRuntime", "\n}\n");
+    assert!(
+        !drop_impl.is_empty(),
+        "production.rs must define Drop for ProductionRuntime (AR-11-29)"
+    );
+    assert!(
+        drop_impl.contains("None if self.camera.writer_unstopped()"),
+        "Drop must keep a flag-only arm so a durable writer-unstopped flag without a guard still retains the mapping (AR-11-29)"
+    );
+    assert!(
+        drop_impl.contains("mark_writer_unstopped"),
+        "Drop flag-only arm must mint a fresh guard via mark_writer_unstopped instead of releasing (AR-11-29)"
+    );
+    assert!(
+        drop_impl
+            .matches("CAMERA_MAPPING_FALLBACK_RETAINED")
+            .count()
+            >= 2,
+        "Drop must log retention for both the guard path and the flag-only path (AR-11-29)"
+    );
+    assert!(
+        drop_impl.matches("mem::forget").count() >= 2,
+        "Drop must forget (never unmap) on both the reader and writer fallback paths (AR-11-29)"
+    );
+}

@@ -851,10 +851,45 @@ jobs:
           gh api \
             "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             > "$run_json"
-          gh api \
-            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-            > "$jobs_json"
-          jq '{jobs: [.jobs[] | select(.status == "completed")]}' \
+          jobs_ready=false
+          for jobs_attempt in $(seq 1 12); do
+            gh api \
+              "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+              > "$jobs_json"
+            if jq -e '
+              [.jobs[] | select(.status == "completed" and .name != "Normal CI Required")] as $completed
+              | ($completed | length) > 0
+              and all(
+                $completed[];
+                (.conclusion != null)
+                and (
+                  .conclusion == "skipped"
+                  or (
+                    (.started_at | type) == "string"
+                    and (.completed_at | type) == "string"
+                    and (.steps | type) == "array"
+                    and ((.steps | length) > 0)
+                    and all(
+                      .steps[]?;
+                      (.started_at | type) == "string"
+                      and (.completed_at | type) == "string"
+                    )
+                  )
+                )
+              )
+            ' "$jobs_json" >/dev/null; then
+              jobs_ready=true
+              break
+            fi
+            if [ "$jobs_attempt" -lt 12 ]; then
+              sleep 5
+            fi
+          done
+          if [ "$jobs_ready" != true ]; then
+            echo "timing: GitHub jobs API did not expose complete completed-job timestamps" >&2
+            exit 2
+          fi
+          jq '{jobs: [.jobs[] | select(.status == "completed" and .name != "Normal CI Required")]}' \
             "$jobs_json" > "$completed_jobs_json"
           sha="$(jq -er '.head_sha' "$run_json")"
           attempt="$(jq -er '.run_attempt' "$run_json")"

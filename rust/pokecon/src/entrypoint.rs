@@ -157,7 +157,7 @@ pub async fn run_cli() -> Result<(), MainError> {
         .await;
     }
 
-    run_packaged_backend(
+    Box::pin(run_packaged_backend(
         request,
         before_dynamic,
         cli.ui.into(),
@@ -165,7 +165,7 @@ pub async fn run_cli() -> Result<(), MainError> {
         ephemeral_port,
         RunControl::new(ShutdownCoordinator::new()),
         None,
-    )
+    ))
     .await
 }
 
@@ -1864,7 +1864,7 @@ async fn run_desktop(
             &lifecycle,
             move || {
                 let inner_task = runtime.spawn(async move {
-                    run_packaged_backend(
+                    Box::pin(run_packaged_backend(
                         request,
                         before_dynamic,
                         UiMode::Desktop,
@@ -1872,7 +1872,7 @@ async fn run_desktop(
                         ephemeral_port,
                         control,
                         Some(runtime_settings),
-                    )
+                    ))
                     .await
                 });
                 let supervisor_task = runtime.spawn(supervise_desktop_backend_startup(

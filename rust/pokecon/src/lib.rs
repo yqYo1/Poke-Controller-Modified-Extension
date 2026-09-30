@@ -21,6 +21,7 @@ mod dynamic;
 pub(crate) use dynamic as dynamic_domain;
 mod dynamic_host;
 mod dynamic_runtime;
+mod dynamic_watcher;
 mod entrypoint;
 #[cfg(feature = "gpui")]
 mod gpui;
@@ -499,6 +500,9 @@ pub(crate) async fn shutdown_production(
     production: &mut ProductionRuntime,
     dynamic: Option<DynamicRuntime>,
 ) -> ProductionShutdownReport {
+    // Stop file-triggered reloads before anything else: no auto-reload may
+    // race `AppShutdownPre`, the host close, the worker reap, or serial stop.
+    production.stop_dynamic_watcher().await;
     if let Some(runtime) = dynamic.as_ref() {
         runtime.prepare_shutdown().await;
     }

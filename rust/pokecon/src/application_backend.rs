@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::camera::{
     CameraManager, CameraSelector as RuntimeCameraSelector, ScreenshotDestination,
@@ -39,6 +39,7 @@ use crate::server::state::{CommitOutcome, StateHub, StateTransaction};
 use crate::server::websocket::{
     ConnectionId, MotionJpegFeed, MotionJpegStream, WebSocketBackend, WebSocketReply,
 };
+use crate::settings::pipeline::ResolvedSettings;
 use crate::settings::roots::SafeComponent;
 use crate::settings::service::{
     PatchClass, PatchError, PatchRequest, PatchResponse, SettingsService,
@@ -58,6 +59,7 @@ use crate::command_service::{
     CommandActionResult, CommandIdentity, CommandReloadResult, CommandService, CommandServiceError,
 };
 use crate::dynamic_host::StartupDynamicHost;
+use crate::dynamic_watcher::{AutoReloadOutcome, AutoReloadTarget, DynamicConfigWatcher};
 use crate::profile_service::{ProfileService, ProfileSwitchResult};
 use crate::script_host::ScriptUiCoordinator;
 
@@ -65,6 +67,25 @@ const RELEASES_URL: &str = "https://github.com/yqYo1/Poke-Controller-Modified-Ex
 const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/yqYo1/Poke-Controller-Modified-Extension/releases/latest";
 const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn selected_init_file(language: &str) -> Option<&'static str> {
+    match language.to_ascii_lowercase().as_str() {
+        "python" => Some("init.py"),
+        "lua" => Some("init.lua"),
+        _ => None,
+    }
+}
+
+/// Resolves the watcher init file from bootstrap-inclusive effective
+/// settings. `dynamic_config_language` is startup-only with
+/// `openapi.access: none`, so it never appears in the public snapshot;
+/// callers must pass the loaded (not public) settings. Mirrors
+/// `dynamic_runtime::selected_language`: `python` arms `init.py`, `lua`
+/// arms `init.lua`, `none` and invalid values resolve to no file. Missing
+/// values fall back to `lua`, matching the registry default.
+fn watcher_init_file(settings: &ResolvedSettings) -> Option<&'static str> {
+    selected_init_file(settings.string("dynamic_config_language").unwrap_or("lua"))
+}
 
 /// All already-created services needed by the transport adapter.
 pub(crate) struct ApplicationBackendParts {
@@ -102,6 +123,8 @@ pub(crate) struct ApplicationBackend {
     mutation_gate: Mutex<()>,
     commands: OnceLock<Arc<CommandService>>,
     profiles: OnceLock<Arc<ProfileService>>,
+    dynamic_watcher: DynamicConfigWatcher,
+    watcher_owner: OnceLock<Weak<ApplicationBackend>>,
 }
 
 impl std::fmt::Debug for ApplicationBackend {
@@ -137,6 +160,8 @@ impl ApplicationBackend {
             mutation_gate: Mutex::new(()),
             commands: OnceLock::new(),
             profiles: OnceLock::new(),
+            dynamic_watcher: DynamicConfigWatcher::new(),
+            watcher_owner: OnceLock::new(),
         }
     }
 
@@ -155,6 +180,77 @@ impl ApplicationBackend {
 
     pub(crate) fn host(&self) -> Arc<StartupDynamicHost> {
         Arc::clone(&self.host)
+    }
+
+    /// Registers the weak self-handle the file watcher uses as its reload
+    /// target. Called once by the composition root after the backend `Arc`
+    /// exists; later calls are ignored so the single-global-watcher owner
+    /// can never be replaced mid-flight.
+    pub(crate) fn install_watcher_owner(&self, owner: Weak<ApplicationBackend>) {
+        let _ignored = self.watcher_owner.set(owner);
+    }
+
+    /// Reconciles the single global `auto_reload_config` watcher with the
+    /// committed effective setting: enabled starts (or keeps) exactly one
+    /// task over the config root, disabled stops it. The watcher stays armed
+    /// when no dynamic worker exists; change events then degrade to
+    /// diagnostics until a worker is available.
+    pub(crate) async fn reconcile_dynamic_watcher(&self) {
+        let enabled = {
+            let settings = self.settings.lock().await;
+            settings
+                .public_snapshot()
+                .get("auto_reload_config")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        };
+        if !enabled {
+            Box::pin(self.dynamic_watcher.stop()).await;
+            return;
+        }
+        // `dynamic_config_language` is bootstrap-only (`openapi.access:
+        // none`), so the public snapshot never carries it. Resolve from the
+        // effective loaded settings instead, mirroring
+        // `dynamic_runtime::selected_language`; otherwise every bootstrap
+        // selection but the default degrades to Lua here while the worker
+        // loads the selected language.
+        let loaded = self.host.loaded_settings();
+        let language = loaded
+            .settings
+            .string("dynamic_config_language")
+            .unwrap_or("lua");
+        let Some(init_file) = watcher_init_file(&loaded.settings) else {
+            if !language.eq_ignore_ascii_case("none") {
+                tracing::error!(
+                    diagnostic_id = "DYNAMIC_WATCHER_INVALID_LANGUAGE",
+                    language = %language,
+                    "automatic config reload could not select an init file"
+                );
+            }
+            Box::pin(self.dynamic_watcher.stop()).await;
+            return;
+        };
+        let Some(owner) = self.watcher_owner.get().and_then(Weak::upgrade) else {
+            tracing::error!(
+                diagnostic_id = "DYNAMIC_WATCHER_OWNER_MISSING",
+                "automatic config reload is enabled but the watcher owner is missing"
+            );
+            return;
+        };
+        let config_root = loaded.roots.config.clone();
+        let target: Arc<dyn AutoReloadTarget> = owner;
+        Box::pin(
+            self.dynamic_watcher
+                .start(config_root, init_file, Arc::downgrade(&target)),
+        )
+        .await;
+    }
+
+    /// Stops change delivery before worker shutdown. Called first in the
+    /// production shutdown sequence so no auto-reload can race the dynamic
+    /// worker reap or the serial fail-closed stop.
+    pub(crate) async fn stop_dynamic_watcher(&self) {
+        Box::pin(self.dynamic_watcher.shutdown()).await;
     }
 
     /// Smallest typed API for the composition root to enforce manual intervention.
@@ -437,6 +533,12 @@ impl RestBackend for ApplicationBackend {
         } else {
             ManualInterventionPolicy::Denied
         });
+        // `auto_reload_config` is runtime_immediate: reconcile the single
+        // global file watcher with the committed value while still holding
+        // the mutation gate.
+        if internal.values.contains_key("auto_reload_config") {
+            self.reconcile_dynamic_watcher().await;
+        }
         Ok(outcome.snapshots.settings)
     }
 
@@ -871,6 +973,70 @@ impl RestBackend for ApplicationBackend {
                 release.html_url
             },
         })
+    }
+}
+
+#[async_trait]
+impl AutoReloadTarget for ApplicationBackend {
+    /// Performs one debounced watcher-triggered reload: worker `Reload`,
+    /// then settings adopt and projection commit, mirroring the manual
+    /// control path. A rejected generation keeps the prior generation and
+    /// counts as acted-on; transport and projection-commit failures keep the
+    /// prior generation but stay retryable. Worker absence only drops this
+    /// change event.
+    async fn reload_dynamic_config(&self) -> AutoReloadOutcome {
+        let _gate = self.mutation_gate.lock().await;
+        let Some(client) = self.dynamic.as_ref() else {
+            return AutoReloadOutcome::NoWorker;
+        };
+        let result = match client.control(&DynamicConfigControl::Reload {}).await {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::warn!(
+                    diagnostic_id = "DYNAMIC_CONFIG_AUTO_RELOAD_FAILED",
+                    error = %error,
+                    "automatic dynamic configuration reload failed; keeping the prior generation"
+                );
+                return AutoReloadOutcome::RetryableFailure;
+            }
+        };
+        if !result.loaded {
+            tracing::warn!(
+                diagnostic_id = "DYNAMIC_CONFIG_AUTO_RELOAD_REJECTED",
+                path = %result.display_path,
+                "automatic reload was rejected; keeping the prior generation"
+            );
+            return AutoReloadOutcome::KeptPriorGeneration;
+        }
+        self.settings
+            .lock()
+            .await
+            .adopt_runtime_loaded(self.host.loaded_settings());
+        if let Err(error) = self
+            .commit_projection(StateChangeCause::DynamicConfig, true, None)
+            .await
+        {
+            tracing::error!(
+                diagnostic_id = "DYNAMIC_CONFIG_AUTO_RELOAD_COMMIT_FAILED",
+                error = ?error,
+                "automatic reload committed in the worker but projection failed"
+            );
+            return AutoReloadOutcome::RetryableFailure;
+        }
+        let auto_reload_enabled = self
+            .settings
+            .lock()
+            .await
+            .public_snapshot()
+            .get("auto_reload_config")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !auto_reload_enabled {
+            // This callback runs inside the watcher loop. Request an orderly
+            // loop exit rather than awaiting shutdown on the current task.
+            self.dynamic_watcher.request_stop();
+        }
+        AutoReloadOutcome::Reloaded
     }
 }
 
@@ -1596,5 +1762,86 @@ mod tests {
             std::fs::read_to_string(destination.join("nested/data.txt")).unwrap(),
             "payload"
         );
+    }
+
+    fn loaded_settings_with(
+        temporary: &TempDir,
+        arguments: &[&str],
+        environment: &[(&str, &str)],
+    ) -> crate::settings::pipeline::LoadedSettings {
+        use std::collections::BTreeMap;
+        use std::ffi::OsString;
+
+        use crate::settings::pipeline::{PipelineRequest, SettingsPipeline};
+        use crate::settings::roots::{BaseDirectories, RootEnvironment};
+
+        let base = temporary.path();
+        let bases = BaseDirectories::linux(&RootEnvironment::from_values([
+            ("HOME", base.as_os_str().to_os_string()),
+            ("XDG_CONFIG_HOME", base.join("config").into_os_string()),
+            ("XDG_DATA_HOME", base.join("data").into_os_string()),
+            ("XDG_CACHE_HOME", base.join("cache").into_os_string()),
+            ("XDG_STATE_HOME", base.join("state").into_os_string()),
+        ]))
+        .expect("bases must resolve");
+        let root_environment = RootEnvironment::from_values(
+            [("HOME", base.to_string_lossy().as_ref())]
+                .into_iter()
+                .chain(environment.iter().copied()),
+        );
+        SettingsPipeline::new(PipelineRequest {
+            arguments: arguments.iter().map(OsString::from).collect(),
+            environment: root_environment,
+            startup_cwd: base.to_path_buf(),
+            resource_root: base.join("resources"),
+            base_directories: Some(bases),
+            dynamic_values: BTreeMap::new(),
+        })
+        .load()
+        .expect("settings must load")
+    }
+
+    #[test]
+    fn watcher_init_file_resolves_bootstrap_effective_language() {
+        use crate::settings::service::{NoopSettingsApplier, SettingsService};
+
+        // Default registry value arms Lua.
+        let temporary = TempDir::new().expect("temporary directory must exist");
+        let loaded = loaded_settings_with(&temporary, &["pokecon"], &[]);
+        assert_eq!(watcher_init_file(&loaded.settings), Some("init.lua"));
+
+        // A python bootstrap selection must arm init.py even though the
+        // bootstrap-only setting never appears in the public snapshot (the
+        // defect this guards: reading the public snapshot always fell back
+        // to Lua).
+        let loaded = loaded_settings_with(
+            &temporary,
+            &["pokecon"],
+            &[("POKECON_DYNAMIC_CONFIG_LANGUAGE", "python")],
+        );
+        let service = SettingsService::new(loaded.clone(), Box::new(NoopSettingsApplier));
+        assert!(
+            !service
+                .public_snapshot()
+                .contains_key("dynamic_config_language"),
+            "bootstrap-only language must stay out of the public snapshot"
+        );
+        assert_eq!(watcher_init_file(&loaded.settings), Some("init.py"));
+
+        // Explicit Lua still arms init.lua.
+        let loaded = loaded_settings_with(
+            &temporary,
+            &["pokecon"],
+            &[("POKECON_DYNAMIC_CONFIG_LANGUAGE", "lua")],
+        );
+        assert_eq!(watcher_init_file(&loaded.settings), Some("init.lua"));
+
+        // `none` disables the watcher (no init file).
+        let loaded = loaded_settings_with(
+            &temporary,
+            &["pokecon"],
+            &[("POKECON_DYNAMIC_CONFIG_LANGUAGE", "none")],
+        );
+        assert_eq!(watcher_init_file(&loaded.settings), None);
     }
 }

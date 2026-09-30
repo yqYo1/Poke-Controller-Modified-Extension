@@ -3,7 +3,7 @@ Poke-Con GPUI Selected-Closure Redistribution NOTICE
 
 Scope: the exact `x86_64-unknown-linux-gnu` Cargo dependency closure
 selected by the `pokecon` `gpui` feature (`gpui-kit =0.6.6`,
-`default-features = false`). 866 packages. Source record:
+`default-features = false`). 870 packages. Source record:
 `docs/licenses/gpui-selected-closure-license-report.json`
 (schema `gpui-selected-closure-license-report`, version 1).
 
@@ -83,6 +83,7 @@ licenses (see the report for the per-package declaration):
 - nokhwa-bindings-linux@0.1.4
 - nokhwa-bindings-windows@0.4.6
 - nokhwa-core@0.1.9
+- notify@7.0.0
 - openh264-sys2@0.9.7
 - openh264@0.9.7
 - pathfinder_geometry@0.5.1

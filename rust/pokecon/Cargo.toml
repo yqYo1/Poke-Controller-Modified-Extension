@@ -142,6 +142,7 @@ hmac.workspace = true
 image.workspace = true
 mime_guess.workspace = true
 mlua.workspace = true
+notify.workspace = true
 opener.workspace = true
 openh264.workspace = true
 parking_lot.workspace = true

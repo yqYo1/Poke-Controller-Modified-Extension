@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -1028,6 +1030,139 @@ def test_planning_only_runs_use_none_and_skip_p95_gate() -> None:
     assert "docs) threshold=300" in workflow
     assert "product) threshold=720" in workflow
     assert "unknown change_kind" in workflow
+
+
+def test_timing_collection_retries_eventually_consistent_job_steps() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    # GitHub can expose a completed upstream job while one step still has
+    # pending/null timestamps. Retry the read before failing closed; never
+    # accept an incomplete timing snapshot or include this aggregate job.
+    assert "for jobs_attempt in $(seq 1 12)" in workflow
+    assert "sleep 5" in workflow
+    assert "complete completed-job timestamps" in workflow
+    assert (
+        '[.jobs[] | select(.status == "completed" and .name != "Normal CI Required")]'
+        in workflow
+    )
+    # The collected timing snapshot must use the same aggregate-excluded set
+    # as the readiness gate, and a non-skipped completed job must carry at
+    # least one timestamped step (empty steps are not vacuously ready).
+    assert (
+        '\'{jobs: [.jobs[] | select(.status == "completed" '
+        'and .name != "Normal CI Required")]}' in workflow
+    )
+    assert "((.steps | length) > 0)" in workflow
+
+    jq = shutil.which("jq")
+    assert jq is not None, "jq is required to evaluate the readiness predicate"
+    match = re.search(r"if jq -e '(.*?)' \"\$jobs_json\"", workflow, re.DOTALL)
+    assert match is not None, "readiness jq predicate not found in workflow"
+    predicate = match.group(1)
+    assert "Normal CI Required" in predicate
+
+    def _check(jobs: list[dict[str, object]], *, readiness_pass: bool) -> None:
+        payload = json.dumps({"jobs": jobs})
+        completed = subprocess.run(  # noqa: S603 - jq and extracted predicate
+            [jq, "-e", predicate],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            input=payload,
+        )
+        if readiness_pass:
+            assert completed.returncode == 0, completed.stderr
+        else:
+            assert completed.returncode != 0
+
+    def _job(
+        name: str,
+        *,
+        conclusion: str | None,
+        started_at: str | None,
+        completed_at: str | None,
+        steps: list[dict[str, object]],
+    ) -> dict[str, object]:
+        return {
+            "name": name,
+            "status": "completed",
+            "conclusion": conclusion,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "steps": steps,
+        }
+
+    def _step(started_at: str | None, completed_at: str | None) -> dict[str, object]:
+        return {
+            "name": "check",
+            "started_at": started_at,
+            "completed_at": completed_at,
+        }
+
+    complete_step = _step("2026-01-01T00:00:01Z", "2026-01-01T00:00:04Z")
+    # Aggregate job is excluded: an incomplete aggregate must not block a
+    # complete producer.
+    _check(
+        [
+            _job(
+                "Fast checks",
+                conclusion="success",
+                started_at="2026-01-01T00:00:00Z",
+                completed_at="2026-01-01T00:00:05Z",
+                steps=[dict(complete_step)],
+            ),
+            _job(
+                "Normal CI Required",
+                conclusion="success",
+                started_at=None,
+                completed_at=None,
+                steps=[],
+            ),
+        ],
+        readiness_pass=True,
+    )
+    # A producer step with a null timestamp is not ready.
+    _check(
+        [
+            _job(
+                "Fast checks",
+                conclusion="success",
+                started_at="2026-01-01T00:00:00Z",
+                completed_at="2026-01-01T00:00:05Z",
+                steps=[_step(None, "2026-01-01T00:00:04Z")],
+            )
+        ],
+        readiness_pass=False,
+    )
+    # A non-skipped completed producer with empty steps is not ready.
+    _check(
+        [
+            _job(
+                "Fast checks",
+                conclusion="success",
+                started_at="2026-01-01T00:00:00Z",
+                completed_at="2026-01-01T00:00:05Z",
+                steps=[],
+            )
+        ],
+        readiness_pass=False,
+    )
+    # Only the aggregate job completed: the excluded producer set is empty,
+    # so the gate stays fail-closed.
+    _check(
+        [
+            _job(
+                "Normal CI Required",
+                conclusion="success",
+                started_at="2026-01-01T00:00:00Z",
+                completed_at="2026-01-01T00:00:05Z",
+                steps=[dict(complete_step)],
+            )
+        ],
+        readiness_pass=False,
+    )
 
 
 def test_nix_evidence_is_job_local_and_fail_closed() -> None:

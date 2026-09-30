@@ -53,6 +53,7 @@ opener = "0.8.3"
 mlua = { version = "0.10", features = ["luajit", "vendored", "async", "send", "serialize"] }
 nix = { version = "0.30", features = ["process", "signal", "term"] }
 nokhwa = { version = "0.10.11", default-features = false }
+notify = "7"
 toml = "0.8"
 toml_edit = { version = "0.22", features = ["serde"] }
 regex = "1"

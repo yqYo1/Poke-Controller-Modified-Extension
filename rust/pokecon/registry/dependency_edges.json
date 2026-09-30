@@ -23,6 +23,10 @@
     ],
     [
       "application_backend",
+      "dynamic_watcher"
+    ],
+    [
+      "application_backend",
       "profile_service"
     ],
     [

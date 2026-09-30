@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "e0527f20e7bab7cdabdbbafe3e02ba54caf2f100ad5c3c037947741608ec51eb";
+      canonicalFlakeHash = "75ea44991d420f5b06448d7acdef29bb2d9821189b2b3836e97b420522430d8a";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "600f3a19189b30b0cfc23b7f956d34d97cc03ac426ca2aca1a3ffed604536f9c";
+            "rust/pokecon" = "be376b9e37cddc47ff78428d2e2a8c962451196ef763b293acc026218ce5667c";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -992,7 +992,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.toml" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.toml")
-                == "fc7698884ec85289da62bbcea4e9364e8e1228e51119d76ea82dc4d029a0d17c"
+                == "563d213de4fdbe57f2f09fc6061567ac6987a1959e193b02c3d29f0905cab22a"
             ) "Cargo workspace manifest content changed";
             assert lib.assertMsg workspaceMemberManifestsAreCanonical
               "Cargo workspace member manifest content changed";
@@ -1000,7 +1000,7 @@
               (builtins.readDir inputs.self.outPath)."Cargo.lock" == "regular"
               &&
                 builtins.hashFile "sha256" (inputs.self.outPath + "/Cargo.lock")
-                == "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d"
+                == "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9"
             ) "Cargo lockfile content changed";
             assert lib.assertMsg (
               actualWorkspaceBuildScriptPaths == builtins.attrNames expectedWorkspaceBuildScripts

@@ -395,6 +395,12 @@ impl ProductionRuntime {
             bridge,
         ));
         backend.install_command_services(Arc::clone(&commands), profiles)?;
+        // The single global `auto_reload_config` watcher is backend-owned:
+        // register its reload target, then reconcile with the startup
+        // effective setting (default off). Later PATCH transactions reconcile
+        // again; shutdown stops delivery before the worker reap.
+        backend.install_watcher_owner(Arc::downgrade(&backend));
+        backend.reconcile_dynamic_watcher().await;
 
         let rest_backend: Arc<dyn RestBackend> = backend.clone();
         let router = rest::router(rest_backend).merge(websocket.router());
@@ -434,6 +440,12 @@ impl ProductionRuntime {
 
     pub(crate) fn router(&self) -> Router {
         self.router.clone()
+    }
+
+    /// Stops automatic config-reload delivery. Called first in the production
+    /// shutdown sequence, before `AppShutdownPre` and the dynamic worker reap.
+    pub(crate) async fn stop_dynamic_watcher(&self) {
+        self.backend.stop_dynamic_watcher().await;
     }
 
     /// Executes shutdown steps 1 through 3 after `AppShutdownPre` has closed

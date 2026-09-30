@@ -1,6 +1,6 @@
 {
   "closure": {
-    "package_count": 866,
+    "package_count": 870,
     "packages": [
       {
         "checksum": "d3b7f7f85a7e5f68090000ed7622545829afd484d210358702ae4cb97dd0c320",
@@ -3842,6 +3842,23 @@
         "version": "0.8.3"
       },
       {
+        "checksum": "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759",
+        "in_gpui_delta": false,
+        "license": "MIT/Apache-2.0",
+        "license_file": null,
+        "license_text_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ],
+        "name": "filetime",
+        "repository": "https://github.com/alexcrichton/filetime",
+        "resolved_features": [],
+        "review_reasons": [],
+        "source": "registry",
+        "source_relpath": "index.crates.io-1949cf8c6b5b557f/filetime-0.2.29",
+        "version": "0.2.29"
+      },
+      {
         "checksum": "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582",
         "in_gpui_delta": false,
         "license": "MIT OR Apache-2.0",
@@ -6284,6 +6301,22 @@
         "version": "0.19.0"
       },
       {
+        "checksum": "fdd168d97690d0b8c412d6b6c10360277f4d7ee495c5d0d5d5fe0854923255cc",
+        "in_gpui_delta": false,
+        "license": "ISC",
+        "license_file": null,
+        "license_text_files": [
+          "LICENSE"
+        ],
+        "name": "inotify",
+        "repository": "https://github.com/hannobraun/inotify",
+        "resolved_features": [],
+        "review_reasons": [],
+        "source": "registry",
+        "source_relpath": "index.crates.io-1949cf8c6b5b557f/inotify-0.10.2",
+        "version": "0.10.2"
+      },
+      {
         "checksum": "153be1941a183ec9ccd095ddbe17a8b8d435ef6c76e9e02451b933c3999af2c8",
         "in_gpui_delta": false,
         "license": "ISC",
@@ -6336,7 +6369,7 @@
       },
       {
         "checksum": "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222",
-        "in_gpui_delta": true,
+        "in_gpui_delta": false,
         "license": "BSD-3-Clause",
         "license_file": null,
         "license_text_files": [
@@ -8062,6 +8095,26 @@
         "version": "0.3.0"
       },
       {
+        "checksum": "c533b4c39709f9ba5005d8002048266593c1cfaf3c5f0739d5b8ab0c6c504009",
+        "in_gpui_delta": false,
+        "license": "CC0-1.0",
+        "license_file": null,
+        "license_text_files": [],
+        "name": "notify",
+        "repository": "https://github.com/notify-rs/notify.git",
+        "resolved_features": [
+          "default",
+          "fsevent-sys",
+          "macos_fsevent"
+        ],
+        "review_reasons": [
+          "license-text-absent-from-crate"
+        ],
+        "source": "registry",
+        "source_relpath": "index.crates.io-1949cf8c6b5b557f/notify-7.0.0",
+        "version": "7.0.0"
+      },
+      {
         "checksum": "fe430c879247371c47fdedd328ad4e301e6b30b533c5fd5db1c06d75253d0e46",
         "in_gpui_delta": true,
         "license": "MIT OR Apache-2.0",
@@ -8083,6 +8136,23 @@
         "source": "registry",
         "source_relpath": "index.crates.io-1949cf8c6b5b557f/notify-rust-4.18.1",
         "version": "4.18.1"
+      },
+      {
+        "checksum": "585d3cb5e12e01aed9e8a1f70d5c6b5e86fe2a6e48fc8cd0b3e0b8df6f6eb174",
+        "in_gpui_delta": false,
+        "license": "MIT OR Apache-2.0",
+        "license_file": null,
+        "license_text_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ],
+        "name": "notify-types",
+        "repository": "https://github.com/notify-rs/notify.git",
+        "resolved_features": [],
+        "review_reasons": [],
+        "source": "registry",
+        "source_relpath": "index.crates.io-1949cf8c6b5b557f/notify-types-1.0.1",
+        "version": "1.0.1"
       },
       {
         "checksum": "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5",
@@ -16941,7 +17011,6 @@
       "image-webp@0.2.4",
       "imagesize@0.14.0",
       "imgref@1.12.3",
-      "instant@0.1.13",
       "inventory@0.3.24",
       "is-docker@0.2.0",
       "is-wsl@0.4.0",
@@ -17130,7 +17199,7 @@
       "zerocopy-derive@0.8.54",
       "zune-inflate@0.2.54"
     ],
-    "added_count": 308,
+    "added_count": 307,
     "removed": [],
     "removed_count": 0
   },
@@ -17148,9 +17217,9 @@
     "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
     "command": "cargo metadata --locked --format-version 1 --filter-platform x86_64-unknown-linux-gnu --features gpui --manifest-path Cargo.toml",
     "files": {
-      "Cargo.lock": "a64b9da5cb837bf8dee28eb83b292390d92bb61bcc5af5bcf84ea4a98e14637d",
-      "Cargo.toml": "fc7698884ec85289da62bbcea4e9364e8e1228e51119d76ea82dc4d029a0d17c",
-      "rust/pokecon/Cargo.toml": "600f3a19189b30b0cfc23b7f956d34d97cc03ac426ca2aca1a3ffed604536f9c"
+      "Cargo.lock": "1eb118a63d4460a9bf85ef7bc554b4cd8471206ac683340526f1351ef7a29eb9",
+      "Cargo.toml": "563d213de4fdbe57f2f09fc6061567ac6987a1959e193b02c3d29f0905cab22a",
+      "rust/pokecon/Cargo.toml": "be376b9e37cddc47ff78428d2e2a8c962451196ef763b293acc026218ce5667c"
     },
     "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
@@ -17186,6 +17255,7 @@
     "nokhwa-bindings-linux@0.1.4",
     "nokhwa-bindings-windows@0.4.6",
     "nokhwa-core@0.1.9",
+    "notify@7.0.0",
     "openh264-sys2@0.9.7",
     "openh264@0.9.7",
     "pathfinder_geometry@0.5.1",

@@ -349,7 +349,7 @@ impl SharedFrameRing {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn reclaim_probe_cleanup(&self) -> Result<(), RingError> {
         self.unlink_name_for_shutdown()
     }

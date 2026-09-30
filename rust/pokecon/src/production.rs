@@ -1003,13 +1003,15 @@ mod tests {
     };
     use crate::camera::CaptureResolution;
     use crate::camera::MappingDescriptor;
+    #[cfg(unix)]
+    use crate::camera::SharedFrameRing;
     use crate::camera::backend::CameraConfig;
     use crate::camera::selector::CameraSelector;
     use crate::camera::shared_ring::RingError;
     use crate::camera::virtual_camera::{
         RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
     };
-    use crate::camera::{CameraManager, FlipMode, SharedFrameRing};
+    use crate::camera::{CameraManager, FlipMode};
     use crate::command_service::{CommandServiceError, ScriptSessionStop};
     use crate::device::serial::{
         ControllerFormat, SerialConfig, SerialManager, VirtualOpenPlan as SerialOpenPlan,

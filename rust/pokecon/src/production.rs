@@ -1002,6 +1002,7 @@ mod tests {
         retain_reader_mapping_after_script_shutdown, send_released_controller_output,
     };
     use crate::camera::CaptureResolution;
+    use crate::camera::MappingDescriptor;
     use crate::camera::backend::CameraConfig;
     use crate::camera::selector::CameraSelector;
     use crate::camera::shared_ring::RingError;
@@ -1015,6 +1016,7 @@ mod tests {
         VirtualSerialBackend, VirtualSerialEndpoint,
     };
     use crate::device::{ControllerState, StickPosition};
+    use serde::{Deserialize, Serialize};
 
     const CONTENTION_ROUNDS: usize = 5;
 
@@ -3667,6 +3669,506 @@ mod tests {
         eprintln!(
             "production reader Drop retention artifact: {}",
             artifact_path.display()
+        );
+    }
+
+    /// Child-process observation record for the AR-11-29 process-exit
+    /// reclaim proof. Written by the observer child, validated by the
+    /// orchestrator; never hand-edited.
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+    #[serde(deny_unknown_fields)]
+    struct ReclaimObservation {
+        stdin_eof_observed: bool,
+        child_open_succeeded: bool,
+        frame_present: bool,
+        first_byte: Option<u8>,
+        open_error: Option<String>,
+        child_pid: u32,
+        descriptor: MappingDescriptor,
+    }
+
+    fn process_exit_reclaim_proven(observation: &ReclaimObservation) -> bool {
+        observation.stdin_eof_observed
+            && !observation.child_open_succeeded
+            && !observation.frame_present
+            && observation.first_byte.is_none()
+            && observation.open_error.is_some()
+    }
+
+    /// Environment role for the reclaim helpers. `None` is the
+    /// orchestrator; `Some("parent")` creates, publishes, forgets, and
+    /// exits; `Some("child")` observes after the parent's exit.
+    fn reclaim_role() -> Option<String> {
+        std::env::var("POKECON_RECLAIM_ROLE").ok()
+    }
+
+    fn reclaim_dir() -> std::path::PathBuf {
+        std::path::PathBuf::from(
+            std::env::var_os("POKECON_RECLAIM_DIR").expect("reclaim helper directory must be set"),
+        )
+    }
+
+    /// Full libtest path of a helper so `--exact` re-execution selects one
+    /// test even though every helper lives in this module.
+    fn reclaim_test_path(function: &str) -> String {
+        let module = module_path!();
+        let relative = module.split_once("::").map_or(module, |(_, rest)| rest);
+        format!("{relative}::{function}")
+    }
+
+    fn spawn_reclaim_helper(
+        role: &str,
+        dir: &std::path::Path,
+        function: &str,
+        stdin: std::process::Stdio,
+    ) -> std::process::Child {
+        let executable = std::env::current_exe().expect("test executable must be available");
+        std::process::Command::new(executable)
+            .args(["--exact", &reclaim_test_path(function), "--nocapture"])
+            .env("POKECON_RECLAIM_ROLE", role)
+            .env("POKECON_RECLAIM_DIR", dir)
+            .stdin(stdin)
+            .spawn()
+            .expect("reclaim helper must start")
+    }
+
+    #[cfg(unix)]
+    fn unlink_reclaim_mapping(handle: &str) -> bool {
+        nix::sys::mman::shm_unlink(handle).is_ok()
+    }
+
+    #[cfg(not(unix))]
+    fn unlink_reclaim_mapping(_handle: &str) -> bool {
+        false
+    }
+
+    struct ChildReaper {
+        child: std::process::Child,
+    }
+
+    impl ChildReaper {
+        fn new(child: std::process::Child) -> Self {
+            Self { child }
+        }
+
+        fn id(&self) -> u32 {
+            self.child.id()
+        }
+
+        fn take_stdin(&mut self) -> Option<std::process::ChildStdin> {
+            self.child.stdin.take()
+        }
+
+        fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            self.child.try_wait()
+        }
+    }
+
+    impl Drop for ChildReaper {
+        fn drop(&mut self) {
+            if !matches!(self.child.try_wait(), Ok(Some(_))) {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+            }
+        }
+    }
+
+    struct ReclaimMappingCleanup {
+        directory: std::path::PathBuf,
+        active: bool,
+    }
+
+    impl ReclaimMappingCleanup {
+        fn new(directory: &std::path::Path) -> Self {
+            Self {
+                directory: directory.to_owned(),
+                active: true,
+            }
+        }
+
+        fn disarm(&mut self) {
+            self.active = false;
+        }
+    }
+
+    impl Drop for ReclaimMappingCleanup {
+        fn drop(&mut self) {
+            if !self.active {
+                return;
+            }
+            let Ok(bytes) = std::fs::read(self.directory.join("descriptor.json")) else {
+                return;
+            };
+            let Ok(descriptor) = serde_json::from_slice::<MappingDescriptor>(&bytes) else {
+                return;
+            };
+            let _ = unlink_reclaim_mapping(&descriptor.shm_handle);
+        }
+    }
+
+    const RECLAIM_PUBLISHED_FIRST_BYTE: u8 = 13;
+
+    /// Reclaim parent helper: creates one mapping, publishes one known
+    /// frame, then retains the mapping exactly like `ProductionRuntime` Drop
+    /// (`mem::forget`, no unlink) and waits for the orchestrator to release
+    /// it. The orchestrator closes this pipe after spawning the observer, so
+    /// the parent exits without running destructors after the observer launch;
+    /// the observer's own EOF gate is released only after the parent is reaped.
+    #[test]
+    fn production_process_exit_reclaim_parent_helper() {
+        use std::io::Read as _;
+
+        use crate::camera::{BgrFrame, CaptureResolution, SharedFrameRing};
+
+        if reclaim_role().as_deref() != Some("parent") {
+            return;
+        }
+        let dir = reclaim_dir();
+        let ring = SharedFrameRing::create(CaptureResolution::R640x360)
+            .expect("reclaim parent must create its mapping");
+        ring.publish(&BgrFrame::solid(
+            CaptureResolution::R640x360,
+            [RECLAIM_PUBLISHED_FIRST_BYTE, 14, 15],
+        ))
+        .expect("reclaim parent must publish its known frame");
+        let descriptor = ring.descriptor();
+        std::fs::write(
+            dir.join("descriptor.json"),
+            serde_json::to_string_pretty(&descriptor).expect("descriptor must serialize"),
+        )
+        .expect("descriptor file must be writable");
+        // Retain the OS mapping until process exit instead of unmapping,
+        // mirroring the `ProductionRuntime` reader-fallback `Drop` path.
+        std::mem::forget(ring);
+        // The orchestrator closes this pipe after spawning the observer, so
+        // the parent cannot exit before the observer launch.
+        let mut stdin_sink = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut stdin_sink)
+            .expect("reclaim parent must wait for orchestrator release");
+        std::process::exit(0);
+    }
+
+    /// Reclaim observer helper: blocks on stdin until the orchestrator closes
+    /// its pipe after reaping the parent (EOF), then opens the published
+    /// descriptor in this process and records whether the stale mapping/frame
+    /// survived. Every outcome is recorded; nothing is asserted here so a
+    /// surprising platform contract becomes data, not a masked failure.
+    #[test]
+    fn production_process_exit_reclaim_child_observer() {
+        use std::io::Read as _;
+
+        use crate::camera::SharedFrameRing;
+
+        if reclaim_role().as_deref() != Some("child") {
+            return;
+        }
+        let dir = reclaim_dir();
+        let descriptor: MappingDescriptor = serde_json::from_slice(
+            &std::fs::read(dir.join("descriptor.json")).expect("observer must read its descriptor"),
+        )
+        .expect("observer descriptor must parse");
+        let mut stdin_sink = Vec::new();
+        let stdin_eof_observed = std::io::stdin().read_to_end(&mut stdin_sink).is_ok();
+        let (child_open_succeeded, frame_present, first_byte, open_error) =
+            match SharedFrameRing::open(descriptor.clone()) {
+                Ok(ring) => match ring.read_published() {
+                    Ok(Some(frame)) => (true, true, frame.pixels().first().copied(), None),
+                    Ok(None) => (true, false, None, None),
+                    Err(error) => (true, false, None, Some(format!("{error:?}"))),
+                },
+                Err(error) => (false, false, None, Some(format!("{error:?}"))),
+            };
+        let observation = ReclaimObservation {
+            stdin_eof_observed,
+            child_open_succeeded,
+            frame_present,
+            first_byte,
+            open_error,
+            child_pid: std::process::id(),
+            descriptor,
+        };
+        std::fs::write(
+            dir.join("result.json"),
+            serde_json::to_string_pretty(&observation).expect("observation must serialize"),
+        )
+        .expect("observation file must be writable");
+    }
+
+    /// AR-11-29 child-process slice: a parent process publishes one known
+    /// frame, deliberately retains/forgets its mapping, and exits; a
+    /// spawned child observes the descriptor only after the parent is gone
+    /// and records whether the stale mapping/frame remains. This is the
+    /// adversarial counterpart to
+    /// `production_reader_drop_retains_unconfirmed_mapping`, which only
+    /// reopens the mapping in the same process: here the creator's death is
+    /// proven twice (the orchestrator reaps the parent, and the observer
+    /// blocks on stdin EOF before opening), the observer proves it runs in
+    /// a different process via its pid, and the verdict is derived from
+    /// this execution instead of asserting a platform contract. Fail-closed:
+    /// a missing, unreadable, mismatched, or pre-exit observation fails the
+    /// test rather than claiming proof.
+    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn production_process_exit_reclaim_across_processes() {
+        use std::io::Write as _;
+        use tempfile::TempDir;
+
+        if reclaim_role().is_some() {
+            return;
+        }
+        let temporary = TempDir::new().expect("isolated reclaim directory must exist");
+        let dir = temporary.path().to_path_buf();
+        let mut mapping_cleanup = ReclaimMappingCleanup::new(&dir);
+        let mut parent = ChildReaper::new(spawn_reclaim_helper(
+            "parent",
+            &dir,
+            "production_process_exit_reclaim_parent_helper",
+            std::process::Stdio::piped(),
+        ));
+        let parent_pid = parent.id();
+        let parent_stdin = parent
+            .take_stdin()
+            .expect("reclaim parent stdin must be piped");
+        let descriptor_deadline = Instant::now() + Duration::from_secs(30);
+        let published: MappingDescriptor = loop {
+            if let Ok(bytes) = std::fs::read(dir.join("descriptor.json"))
+                && let Ok(descriptor) = serde_json::from_slice::<MappingDescriptor>(&bytes)
+            {
+                break descriptor;
+            }
+            assert!(
+                Instant::now() < descriptor_deadline,
+                "reclaim parent must publish its descriptor before its deadline"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+
+        let mut observer = ChildReaper::new(spawn_reclaim_helper(
+            "child",
+            &dir,
+            "production_process_exit_reclaim_child_observer",
+            std::process::Stdio::piped(),
+        ));
+        let observer_stdin = observer
+            .take_stdin()
+            .expect("reclaim observer stdin must be piped");
+        // Release the parent after the observer is spawned. The observer's
+        // independent EOF gate remains open, so it cannot open the mapping
+        // until the orchestrator closes that gate after reaping the parent.
+        drop(parent_stdin);
+        let parent_deadline = Instant::now() + Duration::from_secs(30);
+        let parent_status = loop {
+            if let Some(status) = parent.try_wait().expect("parent status must be readable") {
+                break status;
+            }
+            assert!(
+                Instant::now() < parent_deadline,
+                "reclaim parent must exit before its deadline"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(
+            parent_status.success(),
+            "reclaim parent must exit successfully after forgetting its mapping"
+        );
+
+        // Closing the observer's stdin now proves that it opens the mapping
+        // only after the orchestrator has reaped the parent.
+        drop(observer_stdin);
+        let result_path = dir.join("result.json");
+        let result_deadline = Instant::now() + Duration::from_secs(30);
+        let observation: ReclaimObservation = loop {
+            if let Ok(bytes) = std::fs::read(&result_path)
+                && let Ok(observation) = serde_json::from_slice::<ReclaimObservation>(&bytes)
+            {
+                break observation;
+            }
+            assert!(
+                Instant::now() < result_deadline,
+                "reclaim observer must record its post-exit observation before its deadline"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let observer_deadline = Instant::now() + Duration::from_secs(30);
+        let observer_status = loop {
+            if let Some(status) = observer
+                .try_wait()
+                .expect("observer status must be readable")
+            {
+                break status;
+            }
+            assert!(
+                Instant::now() < observer_deadline,
+                "reclaim observer must exit before its deadline"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(
+            observer_status.success(),
+            "reclaim observer must exit successfully after recording its observation"
+        );
+
+        // Fail-closed: the observation only counts when the observer proved
+        // it ran in another process after the parent's exit, opened this
+        // run's descriptor, and reported a self-consistent verdict.
+        assert!(
+            observation.stdin_eof_observed,
+            "observer must prove parent exit via stdin EOF before opening the mapping"
+        );
+        assert_ne!(
+            observation.child_pid,
+            std::process::id(),
+            "observer must run in a different process than the orchestrator"
+        );
+        assert_ne!(
+            observation.child_pid, parent_pid,
+            "observer must run in a different process than the exited parent"
+        );
+        assert_eq!(
+            observation.descriptor, published,
+            "observer must have opened the descriptor this run published"
+        );
+        assert!(
+            !published.shm_handle.is_empty(),
+            "published descriptor must name a real mapping"
+        );
+        let process_exit_reclaim_proven = process_exit_reclaim_proven(&observation);
+
+        // Best-effort cleanup of the deliberately leaked POSIX name so
+        // repeated runs do not accumulate mappings; the observation above
+        // is already recorded and unaffected. The guard retries cleanup if a
+        // later assertion or artifact write panics.
+        let cleanup_unlinked = unlink_reclaim_mapping(&published.shm_handle);
+        if cleanup_unlinked {
+            mapping_cleanup.disarm();
+        }
+
+        // Measured artifact: every value below is read from this execution.
+        let artifact_path = production_artifact_path("production-process-exit-reclaim.json");
+        let document = serde_json::json!({
+            "schema": "production-process-exit-reclaim/1",
+            "fixture_id": "production-process-exit-reclaim-across-processes",
+            "platform": std::env::consts::OS,
+            "mapping": {
+                "shm_handle": published.shm_handle,
+                "total_size": published.total_size,
+                "frame_width": published.frame_width,
+                "frame_height": published.frame_height,
+                "slot_byte_size": published.slot_byte_size,
+            },
+            "published_first_byte": RECLAIM_PUBLISHED_FIRST_BYTE,
+            "parent_pid": parent_pid,
+            "parent_exit_observed": parent_status.success(),
+            "child_pid": observation.child_pid,
+            "child_stdin_eof_observed": observation.stdin_eof_observed,
+            "child_open_succeeded": observation.child_open_succeeded,
+            "child_open_error": observation.open_error,
+            "child_frame_observed": {
+                "present": observation.frame_present,
+                "first_byte": observation.first_byte,
+            },
+            "process_exit_reclaim_proven": process_exit_reclaim_proven,
+            "cleanup_unlinked": cleanup_unlinked,
+            "result": "passed",
+            "limitations": [
+                "no camera backend or hardware: the parent exercises the raw SharedFrameRing create/publish/forget primitive that ProductionRuntime Drop uses, while the same-process production test covers the real Drop composition",
+                "the forgotten mapping is never unlinked, mirroring the reader-fallback Drop path (unlike the writer path, which unlinks via record_writer_unstopped); on POSIX the name can therefore outlive process exit and the stale frame stays observable",
+                "parent death is proven twice: the orchestrator reaps the parent process, and the observer blocks on stdin EOF before opening the mapping",
+                "no Windows/POSIX reclaim semantics are asserted beyond the recorded observation; process_exit_reclaim_proven is derived from this execution only",
+                "no step-9 teardown, no crash-abandoned-pin recovery, no live hardware, dirty-local evidence only",
+            ],
+        });
+        let bytes =
+            serde_json::to_string_pretty(&document).expect("artifact document must serialize");
+        {
+            let mut file = atomic_write_file::AtomicWriteFile::open(&artifact_path)
+                .expect("artifact must open for atomic write");
+            file.write_all(bytes.as_bytes())
+                .expect("artifact must write completely");
+            file.commit().expect("artifact must commit atomically");
+        }
+        eprintln!(
+            "production process-exit reclaim artifact: {}",
+            artifact_path.display()
+        );
+    }
+
+    #[test]
+    fn reclaim_observation_serialization_round_trip() {
+        let observation = ReclaimObservation {
+            stdin_eof_observed: true,
+            child_open_succeeded: true,
+            frame_present: true,
+            first_byte: Some(13),
+            open_error: None,
+            child_pid: 1,
+            descriptor: MappingDescriptor {
+                shm_handle: "test-mapping".to_owned(),
+                total_size: 9,
+                frame_width: 640,
+                frame_height: 360,
+                slot_byte_size: 3,
+            },
+        };
+        let bytes = serde_json::to_vec(&observation).expect("observation must serialize");
+        assert_eq!(
+            serde_json::from_slice::<ReclaimObservation>(&bytes).expect("observation must parse"),
+            observation
+        );
+    }
+
+    #[test]
+    fn reclaim_verdict_requires_consistent_open_failure() {
+        let descriptor = MappingDescriptor {
+            shm_handle: "test-mapping".to_owned(),
+            total_size: 9,
+            frame_width: 640,
+            frame_height: 360,
+            slot_byte_size: 3,
+        };
+        let mut observation = ReclaimObservation {
+            stdin_eof_observed: true,
+            child_open_succeeded: false,
+            frame_present: false,
+            first_byte: None,
+            open_error: Some("mapping not found".to_owned()),
+            child_pid: 1,
+            descriptor,
+        };
+        assert!(
+            process_exit_reclaim_proven(&observation),
+            "consistent post-exit open failure must prove reclaim: {observation:?}"
+        );
+
+        observation.open_error = None;
+        assert!(
+            !process_exit_reclaim_proven(&observation),
+            "open failure without an error must not prove reclaim: {observation:?}"
+        );
+        observation.open_error = Some("mapping not found".to_owned());
+        observation.child_open_succeeded = true;
+        assert!(
+            !process_exit_reclaim_proven(&observation),
+            "a successful mapping open must not prove reclaim: {observation:?}"
+        );
+        observation.child_open_succeeded = false;
+        observation.first_byte = Some(13);
+        assert!(
+            !process_exit_reclaim_proven(&observation),
+            "an observed frame byte must not prove reclaim: {observation:?}"
+        );
+        observation.first_byte = None;
+        observation.frame_present = true;
+        assert!(
+            !process_exit_reclaim_proven(&observation),
+            "an observed frame must not prove reclaim: {observation:?}"
+        );
+        observation.frame_present = false;
+        observation.stdin_eof_observed = false;
+        assert!(
+            !process_exit_reclaim_proven(&observation),
+            "an observation before parent EOF must not prove reclaim: {observation:?}"
         );
     }
 

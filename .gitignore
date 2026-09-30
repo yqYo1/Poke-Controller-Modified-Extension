@@ -97,6 +97,9 @@
 !/docs/*/
 !/docs/**/*.md
 !/docs/**/*.txt
+# GPUI selected-closure license packet (source-generated report + NOTICE).
+!/docs/licenses/*.json
+!/docs/licenses/NOTICE-GPUI
 
 !/web/
 /web/*

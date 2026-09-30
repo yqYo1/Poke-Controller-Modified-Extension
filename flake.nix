@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "5983dbaa9a9a393c5ec76a9ead0e7beab47253e81504dea566f535f912781eff";
+      canonicalFlakeHash = "e0527f20e7bab7cdabdbbafe3e02ba54caf2f100ad5c3c037947741608ec51eb";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "b815dff8f155f2b28f5d467cf3d468c26dc72559a31531cbc7969569f3dc71d3";
+          expectedAuditTestHash = "ffddb6d9181ee406e40c237146497053678ee39a276d4f9cf644abb436e0be65";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -2347,7 +2347,10 @@
             export BINDGEN_EXTRA_CLANG_ARGS="${linuxBindgenArgs}"
             export PKG_CONFIG_PATH="${pkgs.glib.dev}/lib/pkgconfig:${pkgs.gtk3.dev}/lib/pkgconfig:${pkgs.pango.dev}/lib/pkgconfig:${pkgs.harfbuzz.dev}/lib/pkgconfig:${pkgs.cairo.dev}/lib/pkgconfig:${pkgs.fontconfig.dev}/lib/pkgconfig:${pkgs.freetype.dev}/lib/pkgconfig:${pkgs.libxkbcommon.dev}/lib/pkgconfig:${pkgs.libxcb.dev}/lib/pkgconfig:${pkgs.atk.dev}/lib/pkgconfig:${pkgs.gdk-pixbuf.dev}/lib/pkgconfig:${pkgs.libsoup_3.dev}/lib/pkgconfig:${pkgs.webkitgtk_4_1.dev}/lib/pkgconfig:${pkgs.udev.dev}/lib/pkgconfig:${pkgs.zlib.dev}/share/pkgconfig"
             export NIX_LDFLAGS="-L${pkgs.libxkbcommon}/lib -L${pkgs.libxcb}/lib -L${pkgs.mesa}/lib -L${pkgs.vulkan-loader}/lib ''${NIX_LDFLAGS:-}"
-            export LD_LIBRARY_PATH="${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:''${LD_LIBRARY_PATH:-}"
+            ld_library_path_name=LD_LIBRARY_PATH
+            existing_ld_library_path="''${LD_LIBRARY_PATH:-}"
+            export "$ld_library_path_name=${pkgs.libxkbcommon}/lib:${pkgs.libxcb}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:$existing_ld_library_path"
+            unset existing_ld_library_path ld_library_path_name
             export RUSTFLAGS="''${RUSTFLAGS:-} -L native=${pkgs.libxkbcommon}/lib -L native=${pkgs.libxcb}/lib"
             export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
           '';
@@ -5748,7 +5751,10 @@
                 export WGPU_BACKEND="gl"
                 export LIBGL_ALWAYS_SOFTWARE="1"
                 export GALLIUM_DRIVER="llvmpipe"
-                export LD_LIBRARY_PATH="${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:''${LD_LIBRARY_PATH:-}"
+                ld_library_path_name=LD_LIBRARY_PATH
+                existing_ld_library_path="''${LD_LIBRARY_PATH:-}"
+                export "$ld_library_path_name=${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib:$existing_ld_library_path"
+                unset existing_ld_library_path ld_library_path_name
                 icd_path=""
                 for candidate in ${pkgs.mesa}/share/vulkan/icd.d/*.json; do
                   if [ -f "$candidate" ]; then

@@ -115,6 +115,8 @@ Poke-ConにはGPUI依存がなく、候補tagのworkspace lockfile（1,248 packa
 
 [`crates/assets/LICENSE-LUCIDE`](https://raw.githubusercontent.com/longbridge/gpui-kit/refs/tags/v0.6.6/crates/assets/LICENSE-LUCIDE)にはLucide由来iconのISC許諾文と、列挙されたFeather由来iconに適用されるMIT許諾文が併記されています。該当assetを再配布する場合は両方の著作権表示と許諾文を保持します。以上はregistry metadataと主要なlicense原文に基づく技術監査であり、法的助言・頒布承認ではありません。`cargo metadata`で選定feature／target closureを固定し、Git/C engine原文も含む`cargo-about`等のsource-based license reportと配布noticeを生成・reviewするまで、license／notice gateは未完了です。
 
+選定closureのsource-based reportと再配布NOTICEは`docs/licenses/`に生成済みである（`gpui-selected-closure-license-report.json`、schema `gpui-selected-closure-license-report` version 1、対象`x86_64-unknown-linux-gnu`＋`gpui` featureで866 package、GPUI差分308件、`NOTICE-GPUI`、生成器・検証器は`scripts/licenses/`、説明は`docs/licenses/README.md`）。再生成は`nix develop -c python3 -I scripts/licenses/generate_gpui_closure_report.py`、検証は`nix develop -c python3 -I scripts/licenses/check_gpui_closure_report.py`で行う。現時点でMPL-2.0の7件（`cssparser 0.36.0`、`cssparser-macros 0.6.1`、`dtoa-short 0.3.5`、`option-ext 0.2.0`、`selectors 0.36.1`、`serialport 4.9.0`、`version-ranges 0.1.3`）はsource-offer対応が未完了のため未解決として残し、`gpui-kit-assets`（Lucide ISC／Feather MIT）はclosure外のため条件付き記載に留める。Nix system libraryのruntime閉包と法的確認も未完了であり、Phase 1およびGate 1のcheckboxは変更しない。
+
 上流の版固定には実例があります。[#3156](https://github.com/longbridge/gpui-kit/issues/3156)では、`gpui-pre`の`register_inspector_element`変更によりcaret要件が破損し、[#3163](https://github.com/longbridge/gpui-kit/pull/3163)で完全固定へ切り替えました。v0.6.6のCIにもexact pin検査があります。PoCの依存更新ではGPUI関連snapshotとlockfileをまとめて更新し、同じNix gateを実行します。
 
 native viewの受入では、次の既知課題を個別に再現確認します。

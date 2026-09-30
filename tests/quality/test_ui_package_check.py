@@ -1659,7 +1659,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
         )
     ]
     expected_production_build_input_hashes = {
-        "@.gitignore": "357816046c5ddd348cd4c1d4af4d78fe5f8d535a48a6f3eacf7ae386e1764e81",
+        "@.gitignore": "21697367d7af25feda8242b1aa9ddde844c79bef88cb97b34a8492e9faf1479f",
         "@LICENSE": "263a077fd442c4196f1f54ef8840025030b6016d39192840651d3c7eb9330e4c",
         "@pyproject.toml": (
             "bfc394b9331cbe38d108f2e19122d7345e07c89b55ef3daa45e71c396cbf1e61"
@@ -2355,7 +2355,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "b6a8ecf93f226b2e45839e6ebe73b08089d7a578a9bde34ce7cc86019ff863ad"
+        == "4336d7cf7ef53cc288385982e49f026ea770669457e9511a8e86c2fac487307e"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (

@@ -1009,7 +1009,7 @@ mod tests {
     use crate::camera::virtual_camera::{
         RecordedFrame, VirtualCameraBackend, VirtualOpenPlan, VirtualSessionPlan,
     };
-    use crate::camera::{CameraManager, FlipMode};
+    use crate::camera::{CameraManager, FlipMode, SharedFrameRing};
     use crate::command_service::{CommandServiceError, ScriptSessionStop};
     use crate::device::serial::{
         ControllerFormat, SerialConfig, SerialManager, VirtualOpenPlan as SerialOpenPlan,
@@ -3733,12 +3733,14 @@ mod tests {
     }
 
     #[cfg(unix)]
-    fn unlink_reclaim_mapping(handle: &str) -> bool {
-        nix::sys::mman::shm_unlink(handle).is_ok()
+    fn unlink_reclaim_mapping(descriptor: &MappingDescriptor) -> bool {
+        SharedFrameRing::open(descriptor.clone())
+            .and_then(|ring| ring.reclaim_probe_cleanup())
+            .is_ok()
     }
 
     #[cfg(not(unix))]
-    fn unlink_reclaim_mapping(_handle: &str) -> bool {
+    fn unlink_reclaim_mapping(_descriptor: &MappingDescriptor) -> bool {
         false
     }
 
@@ -3802,7 +3804,7 @@ mod tests {
             let Ok(descriptor) = serde_json::from_slice::<MappingDescriptor>(&bytes) else {
                 return;
             };
-            let _ = unlink_reclaim_mapping(&descriptor.shm_handle);
+            let _ = unlink_reclaim_mapping(&descriptor);
         }
     }
 
@@ -4039,7 +4041,7 @@ mod tests {
         // repeated runs do not accumulate mappings; the observation above
         // is already recorded and unaffected. The guard retries cleanup if a
         // later assertion or artifact write panics.
-        let cleanup_unlinked = unlink_reclaim_mapping(&published.shm_handle);
+        let cleanup_unlinked = unlink_reclaim_mapping(&published);
         if cleanup_unlinked {
             mapping_cleanup.disarm();
         }

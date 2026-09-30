@@ -348,6 +348,11 @@ impl SharedFrameRing {
     pub(crate) fn unlink_name_for_shutdown(&self) -> Result<(), RingError> {
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) fn reclaim_probe_cleanup(&self) -> Result<(), RingError> {
+        self.unlink_name_for_shutdown()
+    }
 }
 
 /// Per-worker reader that owns the last complete private frame fallback.

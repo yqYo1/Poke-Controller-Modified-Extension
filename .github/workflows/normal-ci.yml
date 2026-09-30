@@ -970,7 +970,7 @@ jobs:
           # change_kind and computes blocking p95 (nearest-rank, 10 samples). Fail-closed on
           # malformed, stale (>30d), incomplete, or threshold breach.
           # change_kind none (zero applicable timing regions) skips only the p95 gate.
-          nix run .#ci-timing -- validate "$(cat "$report_json")"
+          nix run .#ci-timing -- validate "$report_json"
       - name: Enforce timing p95 history gate (blocking, fail-closed)
         env:
           GH_TOKEN: ${{ github.token }}

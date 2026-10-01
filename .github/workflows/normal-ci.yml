@@ -967,6 +967,12 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore production perf Cargo target (read-only)
+        id: production_perf_target_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target/nix-tasks/release
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
       - name: Run the production main-path virtual performance gate
         env:
           POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence
@@ -979,6 +985,17 @@ jobs:
           POKECON_PERF_BUILD_SHA: ${{ github.sha }}
         run: |
           nix run .#production-perf-check
+      - name: Save production perf Cargo target
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target/nix-tasks/release
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
       - name: Inspect production perf evidence directory
         if: always()
         run: |

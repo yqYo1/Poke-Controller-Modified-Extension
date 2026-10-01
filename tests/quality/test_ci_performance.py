@@ -98,6 +98,15 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "timeout-minutes: 20" in job
     assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in job
     assert "cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24" in job
+    assert "Restore production perf Cargo target (read-only)" in job
+    assert "id: production_perf_target_restore" in job
+    assert "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in job
+    assert "path: target/nix-tasks/release" in job
+    assert (
+        "key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}"
+        in job
+    )
+    assert "restore-keys:" not in job
     assert "Run the production main-path virtual performance gate" in job
     assert (
         "POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence"
@@ -114,6 +123,20 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'" in job
     assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
     assert "nix run .#production-perf-check" in job
+    assert "Save production perf Cargo target" in job
+    save_start = job.index("      - name: Save production perf Cargo target")
+    save_end = job.index(
+        "      - name: Inspect production perf evidence directory", save_start
+    )
+    save_step = job[save_start:save_end]
+    assert "github.event_name == 'push'" in save_step
+    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in save_step
+    assert (
+        "steps.production_perf_target_restore.outputs.cache-hit != 'true'" in save_step
+    )
+    assert (
+        "uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in save_step
+    )
     assert "Inspect production perf evidence directory" in job
     assert "performance-report.json" in job
     assert "performance-samples.json" in job

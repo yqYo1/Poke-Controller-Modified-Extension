@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "74f52abc50357ecacf908855e039f9a0e90099c737aae9d1836b772f4be42301";
+      canonicalFlakeHash = "3e2308f57f709380aed3ec80331dbf626d40d67308cf9ec3d408d20fe01ce0dd";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -3582,17 +3582,65 @@
               fi
               export POKECON_PRODUCTION_PERF_PROFILE="release"
               export POKECON_MAIN_PATH_TRACE_PROFILE="release"
-              # Serially precompile all three exact test targets in one Cargo
-              # invocation. The union feature set is compile-only: runtime
-              # selection, filters, environment, artifacts, and validators below
-              # remain unchanged for each captured executable. Keeping one Cargo
-              # process also avoids the artifact-directory lock that makes
-              # concurrent cargo invocations serialize. Capture Cargo's JSON once
-              # and select each executable fail-closed from that single stream.
-              extract_cargo_test_executable() {
-                local expected_test_name="$1"
-                local expected_test_kind="$2"
-                "${pkgs.python314}/bin/python" -I -c '
+              production_perf_target_reuse="''${POKECON_PERF_TARGET_REUSE:-false}"
+              production_perf_manifest="$CARGO_TARGET_DIR/release/.pokecon-production-perf-executables.json"
+              production_perf_reuse_ready=false
+              if [ "$production_perf_target_reuse" = true ] || [ "$production_perf_target_reuse" = 1 ]; then
+                prepared_executables=""
+                if [ ! -L "$production_perf_manifest" ] && [ -s "$production_perf_manifest" ] && prepared_executables="$(
+                  "${pkgs.python314}/bin/python" -I - "$production_perf_manifest" "$CARGO_TARGET_DIR" <<'PY'
+              import json
+              import os
+              import sys
+
+              manifest_path, target_dir = sys.argv[1:]
+              expected_keys = ("production_perf", "composition_root", "main_path_trace")
+              with open(manifest_path, encoding="utf-8") as handle:
+                  manifest = json.load(handle)
+              if set(manifest) != set(expected_keys):
+                  raise SystemExit("prepared Cargo executable manifest keys are not exact")
+              target_root = os.path.realpath(target_dir)
+              prepared_paths = []
+              for key in expected_keys:
+                  relative_path = manifest[key]
+                  if not isinstance(relative_path, str) or not relative_path or os.path.isabs(relative_path):
+                      raise SystemExit(f"prepared Cargo executable path is not relative: {key}")
+                  prepared_path = os.path.realpath(os.path.join(target_root, relative_path))
+                  if os.path.commonpath((target_root, prepared_path)) != target_root:
+                      raise SystemExit(f"prepared Cargo executable escapes target directory: {key}")
+                  if os.path.islink(prepared_path) or not os.path.isfile(prepared_path) or not os.access(prepared_path, os.X_OK):
+                      raise SystemExit(f"prepared Cargo executable is unavailable: {key}")
+                  prepared_paths.append(prepared_path)
+              print("\n".join(prepared_paths), end="")
+              PY
+                )"; then
+                  mapfile -t prepared_executable_paths <<< "$prepared_executables"
+                  if [ "''${#prepared_executable_paths[@]}" -eq 3 ]; then
+                    production_perf_reuse_ready=true
+                  else
+                    echo "production-perf-check: prepared Cargo executable manifest count is not three; using cold Cargo build" >&2
+                  fi
+                else
+                  echo "production-perf-check: prepared Cargo target is unavailable; using cold Cargo build" >&2
+                fi
+              fi
+              if [ "$production_perf_reuse_ready" = true ]; then
+                production_perf_executable="''${prepared_executable_paths[0]}"
+                composition_root_executable="''${prepared_executable_paths[1]}"
+                main_path_trace_executable="''${prepared_executable_paths[2]}"
+                unset prepared_executable_paths prepared_executables
+              else
+                # Serially precompile all three exact test targets in one Cargo
+                # invocation. The union feature set is compile-only: runtime
+                # selection, filters, environment, artifacts, and validators below
+                # remain unchanged for each captured executable. Keeping one Cargo
+                # process also avoids the artifact-directory lock that makes
+                # concurrent cargo invocations serialize. Capture Cargo's JSON once
+                # and select each executable fail-closed from that single stream.
+                extract_cargo_test_executable() {
+                  local expected_test_name="$1"
+                  local expected_test_kind="$2"
+                  "${pkgs.python314}/bin/python" -I -c '
               import json
               import sys
               expected_name = sys.argv[1]
@@ -3621,27 +3669,54 @@
                   print(f"expected exactly one test executable for {expected_name}/{expected_kind}; found {len(matches)}", file=sys.stderr)
                   sys.exit(2)
               print(matches[0])' "$expected_test_name" "$expected_test_kind"
-              }
-              cargo_test_messages="$("${pkgs.coreutils}/bin/mktemp" \
-                --tmpdir="$CARGO_TARGET_DIR" production-perf-check-cargo-messages.XXXXXX)"
-              cleanup_cargo_test_messages() {
-                "${pkgs.coreutils}/bin/rm" -f -- "$cargo_test_messages"
-              }
-              trap cleanup_cargo_test_messages EXIT
-              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                -p pokecon --features integration-test-support,worker-binary \
-                --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
-                --message-format=json > "$cargo_test_messages"
-              production_perf_executable="$(
-                extract_cargo_test_executable production_perf_virtual test < "$cargo_test_messages"
-              )"
-              composition_root_executable="$(
-                extract_cargo_test_executable pokecon lib < "$cargo_test_messages"
-              )"
-              main_path_trace_executable="$(
-                extract_cargo_test_executable main_path_trace_virtual test < "$cargo_test_messages"
-              )"
-              unset -f extract_cargo_test_executable
+                }
+                cargo_test_messages="$("${pkgs.coreutils}/bin/mktemp" \
+                  --tmpdir="$CARGO_TARGET_DIR" production-perf-check-cargo-messages.XXXXXX)"
+                cleanup_cargo_test_messages() {
+                  "${pkgs.coreutils}/bin/rm" -f -- "$cargo_test_messages"
+                }
+                trap cleanup_cargo_test_messages EXIT
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                  -p pokecon --features integration-test-support,worker-binary \
+                  --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
+                  --message-format=json > "$cargo_test_messages"
+                production_perf_executable="$(
+                  extract_cargo_test_executable production_perf_virtual test < "$cargo_test_messages"
+                )"
+                composition_root_executable="$(
+                  extract_cargo_test_executable pokecon lib < "$cargo_test_messages"
+                )"
+                main_path_trace_executable="$(
+                  extract_cargo_test_executable main_path_trace_virtual test < "$cargo_test_messages"
+                )"
+                unset -f extract_cargo_test_executable
+                "${pkgs.python314}/bin/python" -I - "$production_perf_manifest" "$CARGO_TARGET_DIR" \
+                  "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable" <<'PY'
+              import json
+              import os
+              import sys
+
+              manifest_path, target_dir, production_perf, composition_root, main_path_trace = sys.argv[1:]
+              target_root = os.path.realpath(target_dir)
+              manifest = {}
+              for key, executable in (
+                  ("production_perf", production_perf),
+                  ("composition_root", composition_root),
+                  ("main_path_trace", main_path_trace),
+              ):
+                  executable_path = os.path.realpath(executable)
+                  if os.path.commonpath((target_root, executable_path)) != target_root:
+                      raise SystemExit(f"Cargo executable escapes target directory: {key}")
+                  manifest[key] = os.path.relpath(executable_path, target_root)
+              temporary_manifest = f"{manifest_path}.tmp"
+              with open(temporary_manifest, "w", encoding="utf-8") as handle:
+                  json.dump(manifest, handle, sort_keys=True)
+                  handle.write("\n")
+              os.chmod(temporary_manifest, 0o644)
+              os.replace(temporary_manifest, manifest_path)
+              PY
+              fi
+              unset production_perf_target_reuse production_perf_manifest production_perf_reuse_ready
               for test_executable in "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable"; do
                 if [ -z "$test_executable" ] || [ -L "$test_executable" ] \
                   || [ ! -f "$test_executable" ] || [ ! -x "$test_executable" ]; then

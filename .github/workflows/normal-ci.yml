@@ -1084,6 +1084,8 @@ jobs:
           POKECON_MAIN_PATH_TRACE_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
           POKECON_PERF_BUILD_SHA: ${{ github.sha }}
+          POKECON_PERF_TARGET_REUSE: >-
+            ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_target_download.outcome == 'success' }}
         run: |
           nix run .#production-perf-check
       - name: Save production perf Cargo target

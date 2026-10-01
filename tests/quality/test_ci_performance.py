@@ -156,7 +156,39 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "POKECON_MAIN_PATH_TRACE_CYCLES: '300'" in job
     assert "POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'" in job
     assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
+    assert "POKECON_PERF_TARGET_REUSE: >-" in job
+    assert (
+        "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_target_download.outcome == 'success'"
+        in job
+    )
     assert "nix run .#production-perf-check" in job
+    flake = (REPOSITORY / "flake.nix").read_text(encoding="utf-8")
+    production_task_start = flake.index("productionPerfCheck = mkTask")
+    production_task = flake[production_task_start:]
+    assert (
+        'production_perf_manifest="$CARGO_TARGET_DIR/release/.pokecon-production-perf-executables.json"'
+        in production_task
+    )
+    assert "production_perf_reuse_ready=false" in production_task
+    assert (
+        "prepared Cargo target is unavailable; using cold Cargo build"
+        in production_task
+    )
+    assert "prepared Cargo executable is unavailable" in production_task
+    assert (
+        "os.path.commonpath((target_root, prepared_path)) != target_root"
+        in production_task
+    )
+    assert (
+        "os.path.islink(prepared_path) or not os.path.isfile(prepared_path) or not os.access(prepared_path, os.X_OK)"
+        in production_task
+    )
+    assert "POKECON_PERF_TARGET_REUSE" in production_task
+    assert 'cargo" test --locked --release' in production_task
+    assert (
+        "--test production_perf_virtual --test main_path_trace_virtual --no-run"
+        in production_task
+    )
     assert "Save production perf Cargo target" in job
     save_start = job.index("      - name: Save production perf Cargo target")
     save_end = job.index(

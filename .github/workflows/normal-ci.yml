@@ -529,8 +529,14 @@ jobs:
 
   remote_flake:
     name: Remote GitHub flake smoke (Linux)
-    needs: plan
-    if: needs.plan.outputs.remote_flake == 'true'
+    needs:
+      - plan
+      - product_flake
+    if: >-
+      always() &&
+      needs.plan.outputs.remote_flake == 'true' &&
+      (needs.product_flake.result == 'success' ||
+      needs.product_flake.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -539,6 +545,161 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Discover the trusted Product cache artifact for remote flake (read-only)
+        id: remote_product_cache_artifact
+        if: needs.plan.outputs.remote_flake == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POKECON_REMOTE_EVENT: ${{ github.event_name }}
+          POKECON_REMOTE_ACTOR: ${{ github.actor }}
+          POKECON_REMOTE_PRODUCT_RESULT: ${{ needs.product_flake.result }}
+          POKECON_REMOTE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_REMOTE_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          POKECON_REMOTE_HEAD_REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          set -euo pipefail
+          found_run_id=""
+          found_artifact_name=""
+          write_miss() {
+            {
+              echo "found=false"
+              echo "run_id="
+              echo "artifact_name="
+            } >> "$GITHUB_OUTPUT"
+          }
+          match_possible=false
+          if [ "$POKECON_REMOTE_PRODUCT_RESULT" != "skipped" ]; then
+            case "$POKECON_REMOTE_EVENT" in
+              push)
+                if [ "$POKECON_REMOTE_ACTOR" = "yqYo1" ]; then
+                  match_possible=true
+                fi
+                ;;
+              pull_request)
+                if [ "$POKECON_REMOTE_HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ]; then
+                  match_possible=true
+                fi
+                ;;
+            esac
+          fi
+          if [ "$match_possible" = true ]; then
+            case "$POKECON_REMOTE_PUBLIC_KEY" in
+              pokecon-nix-cache-1:*) ;;
+              *) match_possible=false ;;
+            esac
+          fi
+          if [ "$match_possible" != true ]; then
+            write_miss
+            exit 0
+          fi
+          for attempt in $(seq 1 30); do
+            candidate_run_ids=""
+            case "$POKECON_REMOTE_EVENT" in
+              push)
+                if [ "$POKECON_REMOTE_ACTOR" = "yqYo1" ]; then
+                  candidate_run_ids="$GITHUB_RUN_ID"
+                fi
+                ;;
+              pull_request)
+                if [ "$POKECON_REMOTE_HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ]; then
+                  runs_json="$(mktemp)"
+                  if gh api \
+                    "/repos/${GITHUB_REPOSITORY}/actions/workflows/normal-ci.yml/runs?event=push&per_page=50" \
+                    > "$runs_json"; then
+                    if ! candidate_run_ids="$(jq -r \
+                      --arg sha "$POKECON_REMOTE_HEAD_SHA" \
+                      --arg repo "$GITHUB_REPOSITORY" \
+                      '[.workflow_runs[]
+                       | select(.event == "push")
+                       | select(.head_sha == $sha)
+                       | select(.head_repository.full_name == $repo)
+                       | select(.actor.login == "yqYo1")
+                       | {id, created_at}]
+                       | sort_by(.created_at) | reverse | .[].id' \
+                      "$runs_json")"; then
+                      candidate_run_ids=""
+                    fi
+                  fi
+                  rm -f "$runs_json"
+                fi
+                ;;
+            esac
+            while IFS= read -r candidate_run_id; do
+              [ -n "$candidate_run_id" ] || continue
+              artifacts_json="$(mktemp)"
+              artifact_name=""
+              if gh api \
+                "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run_id}/artifacts?per_page=100" \
+                > "$artifacts_json"; then
+                if ! artifact_name="$(jq -r \
+                  --arg sha "$POKECON_REMOTE_HEAD_SHA" \
+                  '[.artifacts[]
+                   | select(.expired == false)
+                   | select(.name | startswith("pokecon-product-cache-pokecon-nix-v1-linux-product-"))
+                   | select(.name | test("\\.drv-" + $sha + "$") )]
+                   | if length == 1 then .[0].name else empty end' \
+                  "$artifacts_json" 2>/dev/null)"; then
+                  artifact_name=""
+                fi
+              fi
+              rm -f "$artifacts_json"
+              if [ -n "$artifact_name" ]; then
+                found_run_id="$candidate_run_id"
+                found_artifact_name="$artifact_name"
+                break
+              fi
+            done <<< "$candidate_run_ids"
+            if [ -n "$found_run_id" ]; then
+              break
+            fi
+            if [ "$attempt" -lt 30 ]; then
+              sleep 10
+            fi
+          done
+          if [ -n "$found_run_id" ] && [ -n "$found_artifact_name" ]; then
+            {
+              echo "found=true"
+              echo "run_id=$found_run_id"
+              echo "artifact_name=$found_artifact_name"
+            } >> "$GITHUB_OUTPUT"
+          else
+            write_miss
+          fi
+      - name: Download the trusted Product cache artifact for remote flake (read-only)
+        if: needs.plan.outputs.remote_flake == 'true' && steps.remote_product_cache_artifact.outputs.found == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ steps.remote_product_cache_artifact.outputs.artifact_name }}
+          run-id: ${{ steps.remote_product_cache_artifact.outputs.run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/pokecon-nix-cache
+      - name: Enable the PokeCon product binary cache for remote flake (signed, fail-closed)
+        if: needs.plan.outputs.remote_flake == 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-nix-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
       - name: Enable Nix internal-json evidence capture
         run: |
           set -euo pipefail

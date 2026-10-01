@@ -46,6 +46,20 @@ def test_remote_flake_job_is_checkout_free_and_sha_pinned() -> None:
     assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in product_job
 
 
+def test_remote_flake_restores_product_cache_before_artifact_poll() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    remote_job = _job_section(workflow, "remote_flake")
+
+    assert (
+        "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        in remote_job
+    )
+    assert "key: ${{ steps.remote_product_cache_key.outputs.key }}" in remote_job
+    assert (
+        "steps.remote_product_cache_restore.outputs.cache-hit != 'true'" in remote_job
+    )
+
+
 def test_required_aggregate_tracks_remote_flake_job_separately() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     required = workflow[workflow.index("  required:\n") :]

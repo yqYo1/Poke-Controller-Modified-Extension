@@ -545,9 +545,30 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve the remote Product cache identity
+        id: remote_product_cache_key
+        if: needs.plan.outputs.remote_flake == 'true'
+        run: |
+          set -euo pipefail
+          remote_revision="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          target_drv="$(nix path-info --derivation "github:${{ github.repository }}/$remote_revision#packages.x86_64-linux.pokecon")"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid remote product derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-product-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore the PokeCon product binary cache for remote flake (read-only)
+        id: remote_product_cache_restore
+        if: needs.plan.outputs.remote_flake == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-nix-cache
+          key: ${{ steps.remote_product_cache_key.outputs.key }}
       - name: Discover the trusted Product cache artifact for remote flake (read-only)
         id: remote_product_cache_artifact
-        if: needs.plan.outputs.remote_flake == 'true'
+        if: >-
+          needs.plan.outputs.remote_flake == 'true' &&
+          steps.remote_product_cache_restore.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           POKECON_REMOTE_EVENT: ${{ github.event_name }}

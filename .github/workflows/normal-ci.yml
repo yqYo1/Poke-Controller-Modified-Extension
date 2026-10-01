@@ -973,6 +973,72 @@ jobs:
         with:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Discover the same-SHA push production target artifact (read-only)
+        id: production_perf_push_artifact
+        if: >-
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POKECON_PRODUCTION_PERF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          expected_name="pokecon-production-perf-target-$POKECON_PRODUCTION_PERF_HEAD_SHA"
+          found_run_id=""
+          found_artifact=false
+          for attempt in $(seq 1 30); do
+            runs_json="$(mktemp)"
+            found_run_id=""
+            if gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/normal-ci.yml/runs?event=push&per_page=50" > "$runs_json"; then
+              if ! found_run_id="$(jq -r --arg sha "$POKECON_PRODUCTION_PERF_HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '[.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo and .actor.login == "yqYo1") | {id, created_at}] | sort_by(.created_at) | reverse | first.id // empty' "$runs_json")"; then
+                found_run_id=""
+              fi
+            fi
+            rm -f "$runs_json"
+            if [ -n "$found_run_id" ]; then
+              artifacts_json="$(mktemp)"
+              if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${found_run_id}/artifacts?per_page=100" > "$artifacts_json" && \
+                jq -e --arg name "$expected_name" '.artifacts[] | select(.name == $name and .expired == false and .size_in_bytes > 0)' "$artifacts_json" > /dev/null; then
+                found_artifact=true
+                rm -f "$artifacts_json"
+                break
+              fi
+              rm -f "$artifacts_json"
+            fi
+            if [ "$attempt" -lt 30 ]; then
+              sleep 10
+            fi
+          done
+          if [ "$found_artifact" = true ]; then
+            {
+              echo "found=true"
+              echo "run_id=$found_run_id"
+              echo "artifact_name=$expected_name"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "found=false"
+              echo "run_id="
+              echo "artifact_name="
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download the same-SHA push production target artifact (read-only)
+        if: >-
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true' &&
+          steps.production_perf_push_artifact.outputs.found == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ steps.production_perf_push_artifact.outputs.artifact_name }}
+          run-id: ${{ steps.production_perf_push_artifact.outputs.run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: target/nix-tasks/release
       - name: Run the production main-path virtual performance gate
         env:
           POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence
@@ -996,6 +1062,20 @@ jobs:
         with:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Upload production perf Cargo target for same-SHA pull requests
+        if: >-
+          success() &&
+          needs.plan.outputs.product == 'true' &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pokecon-production-perf-target-${{ github.sha }}
+          path: target/nix-tasks/release
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
       - name: Inspect production perf evidence directory
         if: always()
         run: |

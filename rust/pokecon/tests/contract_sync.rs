@@ -513,9 +513,9 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         normal_ci
             .matches("contains(fromJSON('[\"yqYo1\"]'), github.actor)")
             .count(),
-        5
+        6
     );
-    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 8);
+    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 9);
     let normal_source = WORKFLOWS
         .iter()
         .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))

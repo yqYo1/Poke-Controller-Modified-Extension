@@ -107,6 +107,34 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         in job
     )
     assert "restore-keys:" not in job
+    assert "Discover the same-SHA push production target artifact (read-only)" in job
+    discover_start = job.index(
+        "      - name: Discover the same-SHA push production target artifact (read-only)"
+    )
+    discover_end = job.index(
+        "      - name: Download the same-SHA push production target artifact (read-only)",
+        discover_start,
+    )
+    discover_step = job[discover_start:discover_end]
+    assert "github.event_name == 'pull_request'" in discover_step
+    assert (
+        "github.event.pull_request.head.repo.full_name == github.repository"
+        in discover_step
+    )
+    assert (
+        "steps.production_perf_target_restore.outputs.cache-hit != 'true'"
+        in discover_step
+    )
+    assert ".head_sha == $sha" in discover_step
+    assert ".head_repository.full_name == $repo" in discover_step
+    assert '.actor.login == "yqYo1"' in discover_step
+    assert ".expired == false" in discover_step
+    assert (
+        "POKECON_PRODUCTION_PERF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}"
+        in job
+    )
+    assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in job
+    assert "path: target/nix-tasks/release" in job
     assert "Run the production main-path virtual performance gate" in job
     assert (
         "POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence"
@@ -137,6 +165,21 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert (
         "uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in save_step
     )
+    assert "Upload production perf Cargo target for same-SHA pull requests" in job
+    target_upload_start = job.index(
+        "      - name: Upload production perf Cargo target for same-SHA pull requests"
+    )
+    target_upload_end = job.index(
+        "      - name: Inspect production perf evidence directory", target_upload_start
+    )
+    target_upload = job[target_upload_start:target_upload_end]
+    assert "github.event_name == 'push'" in target_upload
+    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in target_upload
+    assert "name: pokecon-production-perf-target-${{ github.sha }}" in target_upload
+    assert "path: target/nix-tasks/release" in target_upload
+    assert "if-no-files-found: error" in target_upload
+    assert "retention-days: 3" in target_upload
+    assert "compression-level: 0" in target_upload
     assert "Inspect production perf evidence directory" in job
     assert "performance-report.json" in job
     assert "performance-samples.json" in job
@@ -151,7 +194,9 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "path: ${{ github.workspace }}/production-perf-evidence/" in job
     assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in job
     assert "if-no-files-found: error" in job
-    assert "retention-days" not in job
+    evidence_upload_start = job.index("      - name: Upload production perf evidence")
+    evidence_upload = job[evidence_upload_start:]
+    assert "retention-days" not in evidence_upload
     trace = (REPOSITORY / "rust/pokecon/tests/main_path_trace_virtual.rs").read_text(
         encoding="utf-8"
     )
@@ -166,7 +211,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert '"status": "fixed-threshold"' in production_trace
     assert '"blocking": true' in trace
     assert '"blocking": true' in production_trace
-    assert "continue-on-error:" not in job
+    gate_start = job.index(
+        "      - name: Run the production main-path virtual performance gate"
+    )
+    assert "continue-on-error:" not in job[gate_start:]
     assert "|| true" not in job
 
 

@@ -174,8 +174,13 @@ def _rederive_job_conditions(text: str) -> dict[str, str | None]:
         if first not in (">", ">-", "|", "|-"):
             conditions[header.group(1)] = first
             continue
-        rest = block[match.end() :].splitlines()[1:]
-        continued = [line.strip() for line in rest if line.strip()][:1]
+        continued: list[str] = []
+        for line in block[match.end() :].splitlines()[1:]:
+            if not line.strip():
+                continue
+            if len(line) - len(line.lstrip(" ")) < 6:
+                break
+            continued.append(line.strip())
         conditions[header.group(1)] = " ".join(continued)
     return conditions
 

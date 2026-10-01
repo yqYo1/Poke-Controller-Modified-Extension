@@ -379,10 +379,13 @@ jobs:
         run: |
           "$POKECON_NIX_WRAPPER" flake check --no-build
       - name: Export the PokeCon product roots to the binary cache (signed)
+        id: product_cache_export
         if: >-
           success() &&
           needs.plan.outputs.product == 'true' &&
-          github.event_name == 'push' &&
+          (github.event_name == 'push' ||
+           (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.repository)) &&
           contains(fromJSON('["yqYo1"]'), github.actor) &&
           steps.product_cache_restore.outputs.cache-hit != 'true'
         env:
@@ -390,22 +393,32 @@ jobs:
           POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
           POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
         run: |
+          set -euo pipefail
           if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
             echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            echo "exported=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$RUNNER_TEMP/pokecon-nix-cache.key"
-          chmod 600 "$RUNNER_TEMP/pokecon-nix-cache.key"
-          for attr in "pokecon" "pokecon-core" "web"; do "$POKECON_NIX_WRAPPER" store sign --key-file "$RUNNER_TEMP/pokecon-nix-cache.key" --recursive "$($POKECON_NIX_WRAPPER path-info .#packages.x86_64-linux.$attr)"; done
+          key_file="$RUNNER_TEMP/pokecon-nix-cache.key"
+          cleanup() {
+            rm -f "$key_file"
+          }
+          trap cleanup EXIT
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          for attr in "pokecon" "pokecon-core" "web"; do "$POKECON_NIX_WRAPPER" store sign --key-file "$key_file" --recursive "$($POKECON_NIX_WRAPPER path-info .#packages.x86_64-linux.$attr)"; done
           "$POKECON_NIX_WRAPPER" copy --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" .#packages.x86_64-linux.pokecon .#packages.x86_64-linux.pokecon-core .#packages.x86_64-linux.web
-          rm -f "$RUNNER_TEMP/pokecon-nix-cache.key"
+          echo "exported=true" >> "$GITHUB_OUTPUT"
       - name: Save the PokeCon product binary cache
         if: >-
           success() &&
           needs.plan.outputs.product == 'true' &&
-          github.event_name == 'push' &&
+          (github.event_name == 'push' ||
+           (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.repository)) &&
           contains(fromJSON('["yqYo1"]'), github.actor) &&
-          steps.product_cache_restore.outputs.cache-hit != 'true'
+          steps.product_cache_restore.outputs.cache-hit != 'true' &&
+          steps.product_cache_export.outputs.exported == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ runner.temp }}/pokecon-nix-cache

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "abb36fa9280e6a6b0334228de59f41f3ed00b4d7c064a896587e949dd2d87468";
+      canonicalFlakeHash = "3c3112bab00296c91024467c0a23962fdcbb293cde1007923729bf34057ed87a";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -3583,9 +3583,131 @@
               fi
               export POKECON_PRODUCTION_PERF_PROFILE="release"
               export POKECON_MAIN_PATH_TRACE_PROFILE="release"
-              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                -p pokecon --features integration-test-support --test production_perf_virtual \
-                -- --nocapture "$@"
+              # Serial precompile for the exact test targets/features below, capturing
+              # each built test executable via Cargo JSON messages. The concurrent
+              # phase below runs those executables directly: concurrent cargo
+              # invocations serialize on Cargo's artifact directory lock, so they
+              # cannot overlap even when everything is already compiled.
+              extract_cargo_test_executable() {
+                local expected_test_name="$1"
+                local expected_test_kind="$2"
+                "${pkgs.python314}/bin/python" -I -c '
+              import json
+              import sys
+              expected_name = sys.argv[1]
+              expected_kind = sys.argv[2]
+              matches = []
+              for message_line in sys.stdin:
+                  message_line = message_line.strip()
+                  if not message_line:
+                      continue
+                  try:
+                      record = json.loads(message_line)
+                  except json.JSONDecodeError as exc:
+                      print(f"cargo message is not valid JSON: {exc}", file=sys.stderr)
+                      sys.exit(2)
+                  if record.get("reason") != "compiler-artifact":
+                      continue
+                  target = record.get("target", {})
+                  if target.get("name") != expected_name:
+                      continue
+                  if expected_kind not in (target.get("kind") or []):
+                      continue
+                  executable = record.get("executable")
+                  if executable:
+                      matches.append(executable)
+              if len(matches) != 1:
+                  print(f"expected exactly one test executable for {expected_name}/{expected_kind}; found {len(matches)}", file=sys.stderr)
+                  sys.exit(2)
+              print(matches[0])' "$expected_test_name" "$expected_test_kind"
+              }
+              production_perf_executable="$(
+                set -o pipefail
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                  -p pokecon --features integration-test-support --test production_perf_virtual --no-run \
+                  --message-format=json \
+                  | extract_cargo_test_executable production_perf_virtual test
+              )"
+              composition_root_executable="$(
+                set -o pipefail
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                  -p pokecon --lib production_composition_root --no-run \
+                  --message-format=json \
+                  | extract_cargo_test_executable pokecon lib
+              )"
+              main_path_trace_executable="$(
+                set -o pipefail
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                  -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual --no-run \
+                  --message-format=json \
+                  | extract_cargo_test_executable main_path_trace_virtual test
+              )"
+              unset -f extract_cargo_test_executable
+              for test_executable in "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable"; do
+                if [ -z "$test_executable" ] || [ -L "$test_executable" ] \
+                  || [ ! -f "$test_executable" ] || [ ! -x "$test_executable" ]; then
+                  echo "production-perf-check: missing test executable: ''${test_executable:-<unset>}" >&2
+                  exit 1
+                fi
+                test_executable_canonical="$(readlink -f -- "$test_executable")"
+                case "$test_executable_canonical" in
+                  "$CARGO_TARGET_DIR"/*) ;;
+                  *)
+                    echo "production-perf-check: test executable escapes CARGO_TARGET_DIR: $test_executable" >&2
+                    exit 1
+                    ;;
+                esac
+              done
+              unset test_executable test_executable_canonical
+              mkdir -p "$out_dir"
+              production_runner_log="$out_dir/production-perf-check-production.runner.log"
+              composition_runner_log="$out_dir/production-perf-check-composition.runner.log"
+              main_path_trace_runner_log="$main_path_trace_out/production-perf-check-main-path.runner.log"
+              : > "$production_runner_log"
+              : > "$composition_runner_log"
+              : > "$main_path_trace_runner_log"
+              POKECON_RESOURCE_PROVENANCE=development "$production_perf_executable" \
+                --nocapture "$@" >"$production_runner_log" 2>&1 &
+              production_perf_pid=$!
+              POKECON_RESOURCE_PROVENANCE=development "$composition_root_executable" \
+                production_composition_root --nocapture >"$composition_runner_log" 2>&1 &
+              composition_root_pid=$!
+              POKECON_RESOURCE_PROVENANCE=development "$main_path_trace_executable" \
+                --nocapture "$@" >"$main_path_trace_runner_log" 2>&1 &
+              main_path_trace_pid=$!
+              production_perf_status=0
+              composition_root_status=0
+              main_path_trace_status=0
+              if wait "$production_perf_pid"; then
+                :
+              else
+                production_perf_status=$?
+              fi
+              if wait "$composition_root_pid"; then
+                :
+              else
+                composition_root_status=$?
+              fi
+              if wait "$main_path_trace_pid"; then
+                :
+              else
+                main_path_trace_status=$?
+              fi
+              cat "$production_runner_log"
+              cat "$composition_runner_log"
+              cat "$main_path_trace_runner_log"
+              if [ "$production_perf_status" -ne 0 ]; then
+                echo "production-perf-check: production_perf_virtual failed with status $production_perf_status" >&2
+              fi
+              if [ "$composition_root_status" -ne 0 ]; then
+                echo "production-perf-check: production_composition_root failed with status $composition_root_status" >&2
+              fi
+              if [ "$main_path_trace_status" -ne 0 ]; then
+                echo "production-perf-check: main_path_trace_virtual failed with status $main_path_trace_status" >&2
+              fi
+              if [ "$production_perf_status" -ne 0 ] || [ "$composition_root_status" -ne 0 ] || [ "$main_path_trace_status" -ne 0 ]; then
+                exit 1
+              fi
               for production_perf_artifact in performance-report.json performance-samples.json production-perf.log; do
                 if [ ! -s "$out_dir/$production_perf_artifact" ]; then
                   echo "production-perf-check: missing artifact $out_dir/$production_perf_artifact" >&2
@@ -3612,9 +3734,6 @@
               print(f"production-perf-check: artifacts validated in {out}")
               PY
               cat "$out_dir/production-perf.log"
-              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                -p pokecon --lib production_composition_root \
-                -- --nocapture
               for composition_root_artifact in composition-root-perf-report.json composition-root-perf-samples.json composition-root-perf.log; do
                 if [ ! -s "$out_dir/$composition_root_artifact" ]; then
                   echo "production-perf-check: missing composition-root artifact $out_dir/$composition_root_artifact" >&2
@@ -3641,9 +3760,6 @@
               print(f"production-perf-check: composition-root artifacts validated in {out}")
               PY
               cat "$out_dir/composition-root-perf.log"
-              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual \
-                -- --nocapture "$@"
               for main_path_trace_artifact in main-path-trace-report.json main-path-trace-samples.json main-path-trace.log; do
                 if [ ! -s "$main_path_trace_out/$main_path_trace_artifact" ]; then
                   echo "production-perf-check: missing main-path trace artifact $main_path_trace_out/$main_path_trace_artifact" >&2

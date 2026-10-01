@@ -856,10 +856,9 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use super::{
-        INVALID_PUBLISHED_TOKEN, MappingDescriptor, RingError, RingReader, SLOT_PUBLISHED,
-        SharedFrameRing,
-    };
+    #[cfg(unix)]
+    use super::MappingDescriptor;
+    use super::{INVALID_PUBLISHED_TOKEN, RingError, RingReader, SLOT_PUBLISHED, SharedFrameRing};
     use crate::camera::frame::{BgrFrame, CaptureResolution};
 
     fn frame(resolution: CaptureResolution, value: u8) -> BgrFrame {

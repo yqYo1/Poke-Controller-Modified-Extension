@@ -396,13 +396,29 @@ def discover_tasks(
         msg = "nix flake show returned a non-object"
         raise ReportError(msg)
     payload = cast("JsonObject", value)
+    current_system_proc = _run(
+        ["nix", "eval", "--raw", "--impure", "--expr", "builtins.currentSystem"],
+        repository,
+    )
+    current_system = (
+        current_system_proc.stdout.strip()
+        if current_system_proc.returncode == 0
+        else ""
+    )
     found: dict[str, str] = {}
     for kind in kinds:
         section = payload.get(kind, {})
         if not isinstance(section, dict):
             continue
         systems = cast("JsonObject", section)
-        for system, entries in systems.items():
+        ordered_systems = [
+            system
+            for system in [current_system, *sorted(systems)]
+            if system and system in systems
+        ]
+        ordered_systems = list(dict.fromkeys(ordered_systems))
+        for system in ordered_systems:
+            entries = systems[system]
             if not isinstance(entries, dict):
                 continue
             names = cast("JsonObject", entries)

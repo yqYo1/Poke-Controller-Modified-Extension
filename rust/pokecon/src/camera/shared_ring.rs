@@ -856,7 +856,10 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use super::{INVALID_PUBLISHED_TOKEN, RingError, RingReader, SLOT_PUBLISHED, SharedFrameRing};
+    use super::{
+        INVALID_PUBLISHED_TOKEN, MappingDescriptor, RingError, RingReader, SLOT_PUBLISHED,
+        SharedFrameRing,
+    };
     use crate::camera::frame::{BgrFrame, CaptureResolution};
 
     fn frame(resolution: CaptureResolution, value: u8) -> BgrFrame {
@@ -1001,5 +1004,363 @@ mod tests {
             }
         }
         writer.join().unwrap();
+    }
+
+    #[cfg(unix)]
+    const SHM_STEP9_TEARDOWN_CHILD_ROLE: &str = "step9-teardown";
+
+    #[cfg(unix)]
+    fn shm_step9_teardown_role() -> Option<String> {
+        std::env::var("POKECON_SHM_STEP9_ROLE").ok()
+    }
+
+    #[cfg(unix)]
+    fn shm_step9_teardown_dir() -> std::path::PathBuf {
+        std::path::PathBuf::from(
+            std::env::var_os("POKECON_SHM_STEP9_DIR").expect("step-9 helper directory must be set"),
+        )
+    }
+
+    /// Full libtest path of the child helper so `--exact` re-execution
+    /// selects one test even though every helper lives in this module.
+    #[cfg(unix)]
+    fn shm_step9_test_path(function: &str) -> String {
+        let module = module_path!();
+        let relative = module.split_once("::").map_or(module, |(_, rest)| rest);
+        format!("{relative}::{function}")
+    }
+
+    /// Reap the helper on every unwind path, including assertion failures while
+    /// it is blocked on the stdin release gate. `std::process::Child` does not
+    /// kill its process when dropped, so the test owns that cleanup explicitly.
+    /// The guard is best-effort because `Drop` cannot return an error: explicit
+    /// timeout/status branches still fail the test, while a kernel-level kill
+    /// or wait failure is not itself evidence of successful OS cleanup.
+    #[cfg(unix)]
+    struct ShmStep9ChildReaper {
+        child: std::process::Child,
+    }
+
+    #[cfg(unix)]
+    impl ShmStep9ChildReaper {
+        fn new(child: std::process::Child) -> Self {
+            Self { child }
+        }
+
+        fn id(&self) -> u32 {
+            self.child.id()
+        }
+
+        fn take_stdin(&mut self) -> Option<std::process::ChildStdin> {
+            self.child.stdin.take()
+        }
+
+        fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            self.child.try_wait()
+        }
+
+        fn kill_and_wait(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ShmStep9ChildReaper {
+        fn drop(&mut self) {
+            if !matches!(self.child.try_wait(), Ok(Some(_))) {
+                self.kill_and_wait();
+            }
+        }
+    }
+
+    /// Best-effort cleanup of the POSIX name if the child dies before its
+    /// own step-9 unlink, so repeated runs do not accumulate mappings. The
+    /// recorded observation is unaffected: cleanup only runs on paths where
+    /// no reclaim verdict was reached.
+    #[cfg(unix)]
+    struct ShmStep9Cleanup {
+        directory: std::path::PathBuf,
+        active: bool,
+    }
+
+    #[cfg(unix)]
+    impl ShmStep9Cleanup {
+        fn new(directory: &std::path::Path) -> Self {
+            Self {
+                directory: directory.to_owned(),
+                active: true,
+            }
+        }
+
+        fn disarm(&mut self) {
+            self.active = false;
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ShmStep9Cleanup {
+        fn drop(&mut self) {
+            if !self.active {
+                return;
+            }
+            let Ok(bytes) = std::fs::read(self.directory.join("descriptor.json")) else {
+                return;
+            };
+            let Ok(descriptor) = serde_json::from_slice::<MappingDescriptor>(&bytes) else {
+                return;
+            };
+            let _ = SharedFrameRing::open(descriptor).and_then(|ring| ring.reclaim_probe_cleanup());
+        }
+    }
+
+    /// AR-11-29 step-9 slice, child side: creates one ring, proves the name
+    /// is live by reopening it in this process, runs the production step-9
+    /// primitive (`unlink_name_for_shutdown`), proves the retained mapping
+    /// stays readable after the unlink, then exits without further cleanup.
+    /// The orchestrator below reaps this process before opening the
+    /// descriptor, so the post-exit observation is ordered by real OS exit.
+    #[cfg(unix)]
+    #[test]
+    fn camera_shared_ring_step9_teardown_child_helper() {
+        use std::io::Read as _;
+
+        if shm_step9_teardown_role().as_deref() != Some(SHM_STEP9_TEARDOWN_CHILD_ROLE) {
+            return;
+        }
+        let dir = shm_step9_teardown_dir();
+        let ring = SharedFrameRing::create(CaptureResolution::R640x360)
+            .expect("step-9 child must create its mapping");
+        let descriptor = ring.descriptor();
+        std::fs::write(
+            dir.join("descriptor.json"),
+            serde_json::to_string_pretty(&descriptor).expect("descriptor must serialize"),
+        )
+        .expect("descriptor file must be writable");
+        ring.publish(&frame(CaptureResolution::R640x360, 7))
+            .expect("step-9 child must publish its known frame");
+        let reopened = SharedFrameRing::open(descriptor.clone())
+            .expect("step-9 name must be openable before teardown");
+        let pre_teardown = reopened
+            .read_published()
+            .expect("pre-teardown read must not fail")
+            .expect("pre-teardown publication must be present");
+        assert_eq!(
+            pre_teardown.pixels()[0],
+            7,
+            "pre-teardown reopen must observe the published frame"
+        );
+        ring.unlink_name_for_shutdown()
+            .expect("step-9 unlink must succeed");
+        let retained = ring
+            .read_published()
+            .expect("post-unlink read must not fail")
+            .expect("retained mapping must stay readable after unlink");
+        assert_eq!(
+            retained.pixels()[0],
+            7,
+            "retained mapping must keep serving the published frame after unlink"
+        );
+        std::fs::write(
+            dir.join("child_ready.json"),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "child_pid": std::process::id(),
+                "shm_handle": descriptor.shm_handle,
+                "pre_teardown_open_ok": true,
+                "post_unlink_read_ok": true,
+            }))
+            .expect("child report must serialize"),
+        )
+        .expect("child report must be writable");
+        // Keep both mappings live until the orchestrator has checked that the
+        // unlinked name is already unavailable in a different process. Closing
+        // this pipe releases the child to exit through the real OS boundary.
+        let mut release = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut release)
+            .expect("step-9 child must wait for the orchestrator release");
+        std::process::exit(0);
+    }
+
+    #[cfg(unix)]
+    fn shm_step9_wait_for_ready(
+        child: &mut ShmStep9ChildReaper,
+        directory: &std::path::Path,
+    ) -> (MappingDescriptor, serde_json::Value) {
+        use std::time::{Duration, Instant};
+
+        let ready_deadline = Instant::now() + Duration::from_mins(1);
+        loop {
+            if let (Ok(descriptor_bytes), Ok(report_bytes)) = (
+                std::fs::read(directory.join("descriptor.json")),
+                std::fs::read(directory.join("child_ready.json")),
+            ) && let (Ok(descriptor), Ok(report)) = (
+                serde_json::from_slice::<MappingDescriptor>(&descriptor_bytes),
+                serde_json::from_slice::<serde_json::Value>(&report_bytes),
+            ) {
+                return (descriptor, report);
+            }
+            match child.try_wait() {
+                Ok(None) if Instant::now() < ready_deadline => {}
+                Ok(Some(status)) => {
+                    child.kill_and_wait();
+                    panic!("step-9 child exited before publishing its ready report: {status}");
+                }
+                Ok(None) => {
+                    child.kill_and_wait();
+                    panic!("step-9 child must publish its ready report before its deadline");
+                }
+                Err(error) => {
+                    child.kill_and_wait();
+                    panic!("step-9 child status must be readable: {error}");
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[cfg(unix)]
+    fn shm_step9_assert_live_and_unlinked(
+        child: &mut ShmStep9ChildReaper,
+        child_pid: u32,
+        descriptor: &MappingDescriptor,
+    ) {
+        if child_pid == std::process::id() {
+            child.kill_and_wait();
+            panic!("step-9 child must run in a different process than the orchestrator");
+        }
+        match child.try_wait() {
+            Ok(None) => {}
+            Ok(Some(status)) => {
+                child.kill_and_wait();
+                panic!("step-9 child must remain alive until the pre-exit open check: {status}");
+            }
+            Err(error) => {
+                child.kill_and_wait();
+                panic!("step-9 child status must be readable: {error}");
+            }
+        }
+        match SharedFrameRing::open(descriptor.clone()) {
+            Ok(_) => {
+                child.kill_and_wait();
+                panic!("step-9 mapping must not be openable after unlink while child is alive");
+            }
+            Err(RingError::MappingFailed) => {}
+            Err(error) => {
+                child.kill_and_wait();
+                panic!(
+                    "pre-exit open must fail with MappingFailed after the POSIX name is unlinked: {error:?}"
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn shm_step9_wait_for_exit(child: &mut ShmStep9ChildReaper) -> std::process::ExitStatus {
+        use std::time::{Duration, Instant};
+
+        let exit_deadline = Instant::now() + Duration::from_mins(1);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => return status,
+                Ok(None) if Instant::now() < exit_deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Ok(None) => {
+                    child.kill_and_wait();
+                    panic!("step-9 child must exit before its deadline");
+                }
+                Err(error) => {
+                    child.kill_and_wait();
+                    panic!("step-9 child status must be readable: {error}");
+                }
+            }
+        }
+    }
+
+    /// AR-11-29 step-9 slice: the child above runs the real step-9 unlink,
+    /// keeps its mappings live while a separate process observes the unlinked
+    /// name, then exits; this orchestrator reaps it and verifies the name is
+    /// still unavailable after the OS process boundary. Fail-closed: a live
+    /// pre-exit or post-exit open, a missing child report, or a mismatched
+    /// descriptor fails instead of claiming proof. This is mapping-name and
+    /// process-exit evidence, not a claim about physical memory accounting.
+    /// Unix-only: POSIX `shm_unlink` name removal has no Windows counterpart
+    /// in this path (`unlink_name_for_shutdown` is a no-op there).
+    #[cfg(unix)]
+    #[test]
+    fn camera_shared_ring_step9_unlink_name_stays_unopenable_after_process_exit() {
+        use tempfile::TempDir;
+
+        if shm_step9_teardown_role().is_some() {
+            return;
+        }
+        let temporary = TempDir::new().expect("isolated step-9 directory must exist");
+        let dir = temporary.path().to_path_buf();
+        let mut mapping_cleanup = ShmStep9Cleanup::new(&dir);
+        let executable = std::env::current_exe().expect("test executable must be available");
+        let mut child = ShmStep9ChildReaper::new(
+            std::process::Command::new(executable)
+                .args([
+                    "--exact",
+                    &shm_step9_test_path("camera_shared_ring_step9_teardown_child_helper"),
+                    "--nocapture",
+                ])
+                .env("POKECON_SHM_STEP9_ROLE", SHM_STEP9_TEARDOWN_CHILD_ROLE)
+                .env("POKECON_SHM_STEP9_DIR", &dir)
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .expect("step-9 child must start"),
+        );
+        let child_pid = child.id();
+        let child_stdin = child
+            .take_stdin()
+            .expect("step-9 child stdin must be piped");
+        let (descriptor, report) = shm_step9_wait_for_ready(&mut child, &dir);
+        shm_step9_assert_live_and_unlinked(&mut child, child_pid, &descriptor);
+        drop(child_stdin);
+        let status = shm_step9_wait_for_exit(&mut child);
+        assert!(
+            status.success(),
+            "step-9 child must exit successfully after unlinking its mapping"
+        );
+        assert_eq!(
+            report.get("shm_handle").and_then(serde_json::Value::as_str),
+            Some(descriptor.shm_handle.as_str()),
+            "step-9 child must report the descriptor this run published"
+        );
+        assert_eq!(
+            report.get("child_pid").and_then(serde_json::Value::as_u64),
+            Some(u64::from(child_pid)),
+            "step-9 child report must come from the reaped child process"
+        );
+        assert!(
+            report
+                .get("pre_teardown_open_ok")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            "step-9 child must prove the name was live before teardown"
+        );
+        assert!(
+            report
+                .get("post_unlink_read_ok")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            "step-9 child must prove the retained mapping survived the unlink"
+        );
+        assert!(
+            !descriptor.shm_handle.is_empty(),
+            "step-9 descriptor must name a real mapping"
+        );
+        match SharedFrameRing::open(descriptor) {
+            Ok(_) => {
+                panic!("step-9 mapping must not remain openable after the creating process exited")
+            }
+            Err(RingError::MappingFailed) => {}
+            Err(error) => panic!(
+                "post-exit open must fail with MappingFailed after the mapping name was unlinked: {error:?}"
+            ),
+        }
+        mapping_cleanup.disarm();
     }
 }

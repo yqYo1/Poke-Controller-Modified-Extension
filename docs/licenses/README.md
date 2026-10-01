@@ -5,7 +5,7 @@
 ## 収録物
 
 - `gpui-selected-closure-license-report.json` — 生成物。`x86_64-unknown-linux-gnu`
-  かつ `pokecon` の `gpui` feature で選択される依存閉包（866 package）の
+  かつ `pokecon` の `gpui` feature で選択される依存閉包（870 package）の
   source-based inventory。schema `gpui-selected-closure-license-report` version 1。
   上流の union lockfile ではなく、現行 source に対する `cargo metadata --locked`
   から生成する。

@@ -970,10 +970,10 @@ jobs:
           path: ${{ github.workspace }}/performance-evidence/
           if-no-files-found: error
 
-  production_perf:
-    name: Production main-path virtual performance (Linux)
+  production_perf_build:
+    name: Production performance target build (Linux)
     needs: plan
-    if: needs.plan.outputs.product == 'true'
+    if: needs.plan.outputs.product == 'true' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -987,6 +987,67 @@ jobs:
         with:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Prepare production perf Cargo target
+        env:
+          POKECON_PERF_BUILD_SHA: ${{ github.sha }}
+          POKECON_PERF_TARGET_REUSE: ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' }}
+        run: |
+          nix run .#production-perf-prepare
+      - name: Save production perf Cargo target
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target/nix-tasks/release
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Upload production perf Cargo target for same-SHA consumers
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pokecon-production-perf-target-${{ github.sha }}
+          path: target/nix-tasks/release
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          include-hidden-files: true
+
+  production_perf:
+    name: Production main-path virtual performance (Linux)
+    needs: [plan, production_perf_build]
+    if: >-
+      always() &&
+      needs.plan.outputs.product == 'true' &&
+      (github.event_name != 'push' || needs.production_perf_build.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore production perf Cargo target (read-only)
+        id: production_perf_target_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target/nix-tasks/release
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Download production perf Cargo target from push build (read-only)
+        id: production_perf_build_target_download
+        if: >-
+          github.event_name == 'push' &&
+          needs.production_perf_build.result == 'success' &&
+          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pokecon-production-perf-target-${{ github.sha }}
+          path: target/nix-tasks/release
       - name: Discover the same-SHA push production target artifact (read-only)
         id: production_perf_push_artifact
         if: >-
@@ -1056,8 +1117,8 @@ jobs:
           path: target/nix-tasks/release
       - name: Restore Cargo executable bits lost by artifact transport
         if: >-
-          steps.production_perf_push_artifact.outputs.found == 'true' &&
-          steps.production_perf_target_download.outcome == 'success'
+          (steps.production_perf_build_target_download.outcome == 'success' ||
+          steps.production_perf_target_download.outcome == 'success')
         run: |
           set -euo pipefail
           if [ -d target/nix-tasks/release/build ]; then
@@ -1089,34 +1150,9 @@ jobs:
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
           POKECON_PERF_BUILD_SHA: ${{ github.sha }}
           POKECON_PERF_TARGET_REUSE: >-
-            ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_target_download.outcome == 'success' }}
+            ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
         run: |
           nix run .#production-perf-check
-      - name: Save production perf Cargo target
-        if: >-
-          success() &&
-          needs.plan.outputs.product == 'true' &&
-          github.event_name == 'push' &&
-          contains(fromJSON('["yqYo1"]'), github.actor) &&
-          steps.production_perf_target_restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: target/nix-tasks/release
-          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
-      - name: Upload production perf Cargo target for same-SHA pull requests
-        if: >-
-          success() &&
-          needs.plan.outputs.product == 'true' &&
-          github.event_name == 'push' &&
-          contains(fromJSON('["yqYo1"]'), github.actor)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: pokecon-production-perf-target-${{ github.sha }}
-          path: target/nix-tasks/release
-          if-no-files-found: error
-          retention-days: 3
-          compression-level: 0
-          include-hidden-files: true
       - name: Inspect production perf evidence directory
         if: always()
         run: |
@@ -1185,6 +1221,7 @@ jobs:
       - product_flake
       - remote_flake
       - performance
+      - production_perf_build
       - production_perf
       - windows
     if: >-
@@ -1224,6 +1261,7 @@ jobs:
             "product_flake":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "remote_flake":{"applicable":${{ needs.plan.outputs.remote_flake == 'true' }},"reason":"remote flake paths changed"},
             "performance":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
+            "production_perf_build":{"applicable":${{ github.event_name == 'push' && needs.plan.outputs.product == 'true' }},"reason":"trusted push target preparation"},
             "production_perf":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
             }}
@@ -1238,6 +1276,7 @@ jobs:
             product_flake=${{ needs.product_flake.result }} \
             remote_flake=${{ needs.remote_flake.result }} \
             performance=${{ needs.performance.result }} \
+            production_perf_build=${{ needs.production_perf_build.result }} \
             production_perf=${{ needs.production_perf.result }} \
             windows=${{ needs.windows.result }}
       - name: Download Nix evidence artifacts

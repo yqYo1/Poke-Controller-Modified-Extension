@@ -498,6 +498,23 @@
       "phase": 3
     },
     {
+      "name": "normal-ci/production_perf_build",
+      "workflow": "normal-ci",
+      "job": "production_perf_build",
+      "command": "nix run .#production-perf-prepare",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "trusted push release Cargo target preparation",
+        "same-SHA production performance cache and artifact handoff"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected on a push event",
+      "not_applicable": "pull requests use read-only exact-SHA cache or artifact discovery and GitHub concludes this push-only job skipped",
+      "phase": 3
+    },
+    {
       "name": "normal-ci/production_perf",
       "workflow": "normal-ci",
       "job": "production_perf",
@@ -797,6 +814,7 @@
           "normal-ci/product_flake",
           "normal-ci/remote_flake",
           "normal-ci/performance",
+          "normal-ci/production_perf_build",
           "normal-ci/production_perf",
           "normal-ci/windows"
         ],

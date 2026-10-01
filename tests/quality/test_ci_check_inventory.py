@@ -57,6 +57,13 @@ EXPECTED_NORMAL_CI: tuple[SiteTuple, ...] = (
         "ubuntu-latest",
     ),
     (
+        "production_perf_build",
+        "Prepare production perf Cargo target",
+        "production-perf-prepare",
+        "performance",
+        "ubuntu-latest",
+    ),
+    (
         "production_perf",
         "Run the production main-path virtual performance gate",
         "production-perf-check",
@@ -561,6 +568,7 @@ EXPECTED_REPORT_APP_COUNTS: dict[str, dict[str, int]] = {
         "flake-check": 1,
         "remote-flake-smoke": 1,
         "performance-check": 1,
+        "production-perf-prepare": 1,
         "production-perf-check": 1,
         "cargo-check": 1,
         "ci-aggregate": 1,

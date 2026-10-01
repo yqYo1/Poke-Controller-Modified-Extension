@@ -501,7 +501,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         normal_ci
             .matches("uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
             .count(),
-        4
+        5
     );
     assert_eq!(
         normal_ci
@@ -515,7 +515,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
             .count(),
         6
     );
-    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 9);
+    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 12);
     let normal_source = WORKFLOWS
         .iter()
         .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))

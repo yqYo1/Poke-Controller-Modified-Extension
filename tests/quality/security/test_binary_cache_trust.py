@@ -81,13 +81,16 @@ def test_reader_is_unrestricted_but_fail_closed() -> None:
     text = _read(NORMAL_CI)
     # Restore steps should exist and be unrestricted (no actor/event guard on restore)
     assert "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in text
-    # Restore must not be gated on push
-    # Check that restore steps don't have an if that restricts to push
-    # We verify by ensuring the restore step block does not contain "github.event_name == 'push'" in the 5 lines before cache/restore
+    # Restore must not be gated on push. Inspect only the restore step's own
+    # mapping so a push-only producer job does not make a read-only restore
+    # look restricted to pushes.
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if "actions/cache/restore" in line:
-            window = "\n".join(lines[max(0, i - 10) : i])
+            step_start = i
+            while step_start > 0 and not lines[step_start].startswith("      - "):
+                step_start -= 1
+            window = "\n".join(lines[step_start:i])
             assert "github.event_name == 'push'" not in window, (
                 "restore must be readable by PRs (no push-only gate), trust is via signatures"
             )

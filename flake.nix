@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "d28f224987e116845a6907040453d7ee1c0862e632efd314e0b129804722d15f";
+      canonicalFlakeHash = "33ebdc2e8066ff565fa9ac8118329c37a29e7668ad5a24e56493c456f042a724";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -3733,6 +3733,10 @@
                 esac
               done
               unset test_executable test_executable_canonical
+              if [ "''${POKECON_PERF_PREPARE_ONLY:-false}" = true ] || [ "''${POKECON_PERF_PREPARE_ONLY:-false}" = 1 ]; then
+                echo "production-perf-check: release test executables prepared; measurement phase skipped"
+                exit 0
+              fi
               mkdir -p "$out_dir"
               production_runner_log="$out_dir/production-perf-check-production.runner.log"
               composition_runner_log="$out_dir/production-perf-check-composition.runner.log"
@@ -3860,6 +3864,18 @@
               print(f"production-perf-check: main-path trace artifacts validated in {out}")
               PY
               cat "$main_path_trace_out/main-path-trace.log"
+            '';
+          };
+
+          productionPerfPrepare = mkTask {
+            name = "production-perf-prepare";
+            text = ''
+              if [ "$#" -ne 0 ]; then
+                echo "usage: nix run .#production-perf-prepare" >&2
+                exit 2
+              fi
+              export POKECON_PERF_PREPARE_ONLY=true
+              exec "${productionPerfCheck.program}" "$@"
             '';
           };
 
@@ -4040,6 +4056,7 @@
             worker-package-check = workerPackageCheck;
             performance-check = performanceCheck;
             production-perf-check = productionPerfCheck;
+            production-perf-prepare = productionPerfPrepare;
             main-path-trace-check = mainPathTraceCheck;
             test-production-routing = mkTask {
               name = "test-production-routing";

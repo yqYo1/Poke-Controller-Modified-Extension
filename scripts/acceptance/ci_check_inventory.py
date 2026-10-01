@@ -120,6 +120,7 @@ APP_LOGIC: Final = {
     "web-bundle-verification": "web",
     "performance-check": "performance",
     "production-perf-check": "performance",
+    "production-perf-prepare": "performance",
     "compatibility": "compatibility",
     "compatibility-roll": "compatibility",
     "ci-aggregate": "release",

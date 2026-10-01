@@ -87,13 +87,75 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
         encoding="utf-8"
     )
+    build_start = workflow.index("  production_perf_build:\n")
+    build_end = workflow.index("  production_perf:\n", build_start)
+    build_job = workflow[build_start:build_end]
     job_start = workflow.index("  production_perf:\n")
     job_end = workflow.index("  windows:\n", job_start)
     job = workflow[job_start:job_end]
 
+    assert "name: Production performance target build (Linux)" in build_job
+    assert "needs: plan" in build_job
+    assert (
+        "if: needs.plan.outputs.product == 'true' && github.event_name == 'push'"
+        in build_job
+    )
+    assert "timeout-minutes: 20" in build_job
+    assert "Prepare production perf Cargo target" in build_job
+    assert "nix run .#production-perf-prepare" in build_job
+    assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in build_job
+    assert (
+        "POKECON_PERF_TARGET_REUSE: ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' }}"
+        in build_job
+    )
+    assert "Save production perf Cargo target" in build_job
+    assert "Upload production perf Cargo target for same-SHA consumers" in build_job
+    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in build_job
+    assert (
+        "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        in build_job
+    )
+    assert (
+        "uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in build_job
+    )
+    assert (
+        "key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}"
+        in build_job
+    )
+    assert "restore-keys:" not in build_job
+    build_save_start = build_job.index(
+        "      - name: Save production perf Cargo target"
+    )
+    build_save_end = build_job.index(
+        "      - name: Upload production perf Cargo target for same-SHA consumers",
+        build_save_start,
+    )
+    build_save_step = build_job[build_save_start:build_save_end]
+    assert "success()" in build_save_step
+    assert "github.event_name == 'push'" in build_save_step
+    assert "github.actor" in build_save_step
+    assert (
+        "steps.production_perf_target_restore.outputs.cache-hit != 'true'"
+        in build_save_step
+    )
+    build_upload_start = build_job.index(
+        "      - name: Upload production perf Cargo target for same-SHA consumers"
+    )
+    build_upload = build_job[build_upload_start:]
+    assert "success()" in build_upload
+    assert "github.event_name == 'push'" in build_upload
+    assert "github.actor" in build_upload
+    assert "name: pokecon-production-perf-target-${{ github.sha }}" in build_upload
+    assert "path: target/nix-tasks/release" in build_upload
+    assert "if-no-files-found: error" in build_upload
+    assert "retention-days: 3" in build_upload
+    assert "compression-level: 0" in build_upload
+    assert "include-hidden-files: true" in build_upload
+
     assert "name: Production main-path virtual performance (Linux)" in job
-    assert "if: needs.plan.outputs.product == 'true'" in job
-    assert "needs: plan" in job
+    assert "needs: [plan, production_perf_build]" in job
+    assert "always()" in job
+    assert "needs.plan.outputs.product == 'true'" in job
     assert "runs-on: ubuntu-latest" in job
     assert "timeout-minutes: 20" in job
     assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in job
@@ -107,6 +169,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         in job
     )
     assert "restore-keys:" not in job
+    assert "Download production perf Cargo target from push build (read-only)" in job
+    assert "id: production_perf_build_target_download" in job
+    assert "needs.production_perf_build.result == 'success'" in job
+    assert "continue-on-error: true" in job
     assert "Discover the same-SHA push production target artifact (read-only)" in job
     discover_start = job.index(
         "      - name: Discover the same-SHA push production target artifact (read-only)"
@@ -139,6 +205,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "Restore Cargo executable bits lost by artifact transport" in job
     assert "if [ -d target/nix-tasks/release/build ]; then" in job
     assert "if [ -d target/nix-tasks/release/deps ]; then" in job
+    assert "steps.production_perf_build_target_download.outcome == 'success'" in job
     assert "steps.production_perf_target_download.outcome == 'success'" in job
     assert "find target/nix-tasks/release/build -type f -name build-script-build" in job
     assert "production_perf_virtual-*" in job
@@ -160,7 +227,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
     assert "POKECON_PERF_TARGET_REUSE: >-" in job
     assert (
-        "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_target_download.outcome == 'success'"
+        "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success'"
         in job
     )
     assert "nix run .#production-perf-check" in job
@@ -191,36 +258,18 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         "--test production_perf_virtual --test main_path_trace_virtual --no-run"
         in production_task
     )
-    assert "Save production perf Cargo target" in job
-    save_start = job.index("      - name: Save production perf Cargo target")
-    save_end = job.index(
-        "      - name: Inspect production perf evidence directory", save_start
-    )
-    save_step = job[save_start:save_end]
-    assert "github.event_name == 'push'" in save_step
-    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in save_step
+    assert "POKECON_PERF_PREPARE_ONLY" in production_task
     assert (
-        "steps.production_perf_target_restore.outputs.cache-hit != 'true'" in save_step
+        "release test executables prepared; measurement phase skipped"
+        in production_task
     )
-    assert (
-        "uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in save_step
-    )
-    assert "Upload production perf Cargo target for same-SHA pull requests" in job
-    target_upload_start = job.index(
-        "      - name: Upload production perf Cargo target for same-SHA pull requests"
-    )
-    target_upload_end = job.index(
-        "      - name: Inspect production perf evidence directory", target_upload_start
-    )
-    target_upload = job[target_upload_start:target_upload_end]
-    assert "github.event_name == 'push'" in target_upload
-    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in target_upload
-    assert "name: pokecon-production-perf-target-${{ github.sha }}" in target_upload
-    assert "path: target/nix-tasks/release" in target_upload
-    assert "if-no-files-found: error" in target_upload
-    assert "retention-days: 3" in target_upload
-    assert "compression-level: 0" in target_upload
-    assert "include-hidden-files: true" in target_upload
+    prepare_task_start = flake.index("productionPerfPrepare = mkTask")
+    prepare_task = flake[prepare_task_start:]
+    assert 'name = "production-perf-prepare"' in prepare_task
+    assert "export POKECON_PERF_PREPARE_ONLY=true" in prepare_task
+    assert 'exec "${productionPerfCheck.program}" "$@"' in prepare_task
+    assert "Save production perf Cargo target" not in job
+    assert "Upload production perf Cargo target for same-SHA pull requests" not in job
     assert "Inspect production perf evidence directory" in job
     assert "performance-report.json" in job
     assert "performance-samples.json" in job
@@ -293,14 +342,20 @@ def test_normal_ci_required_aggregates_performance_result() -> None:
     required = workflow[workflow.index("  required:\n") :]
 
     assert "      - performance\n" in required
+    assert "      - production_perf_build\n" in required
     assert "      - production_perf\n" in required
     assert (
         '"performance":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
         in required
     )
     assert (
+        "\"production_perf_build\":{\"applicable\":${{ github.event_name == 'push' && needs.plan.outputs.product == 'true' }}"
+        in required
+    )
+    assert (
         '"production_perf":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
         in required
     )
+    assert "production_perf_build=${{ needs.production_perf_build.result }}" in required
     assert "performance=${{ needs.performance.result }}" in required
     assert "production_perf=${{ needs.production_perf.result }}" in required

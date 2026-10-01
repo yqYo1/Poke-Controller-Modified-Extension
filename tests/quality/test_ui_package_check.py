@@ -2357,7 +2357,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "05c3b9d55b3a6077c515838b678f6afec6282ae288f7c0646ab68cf618f3f447"
+        == "d3fc57977fc6c4b76a0a958275454b69b3b3841d18d9c9699ef3d8fc8213d8bf"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3957,8 +3957,8 @@ offline = true
         development_command_sections_text.count(development_provenance_assignment) == 5
     )
     assert development_command_sections_text.count("POKECON_RESOURCE_PROVENANCE") == 5
-    assert flake.count(development_provenance_assignment) == 20
-    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 23
+    assert flake.count(development_provenance_assignment) == 18
+    assert flake.count("POKECON_RESOURCE_PROVENANCE") == 21
     compatibility_cargo_build = (
         "cargo build --locked --jobs 1 --package pokecon "
         "--bin pokecon-worker --bin pokecon-compatibility "

@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "b3d53894d1f2f6bbc55e9eeb14e1ebd4048a91a49945b28ee9e0dc7ace40ea2d";
+      canonicalFlakeHash = "b9ea0db15fa9a0a1d90b32c7a0107e8b6f110a9a9042ac448bd388ef30896a3f";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "a27cbf9f1fe70e4f43125d4ce61d391724c35ce6171d6641bcedf0fee913866a";
+          expectedAuditTestHash = "e9cbb3c9ad0628ac24b06a091fcd4754eb53ae80e2a38c83f71defc42e24de59";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3583,11 +3583,13 @@
               fi
               export POKECON_PRODUCTION_PERF_PROFILE="release"
               export POKECON_MAIN_PATH_TRACE_PROFILE="release"
-              # Serial precompile for the exact test targets/features below, capturing
-              # each built test executable via Cargo JSON messages. The concurrent
-              # phase below runs those executables directly: concurrent cargo
-              # invocations serialize on Cargo's artifact directory lock, so they
-              # cannot overlap even when everything is already compiled.
+              # Serially precompile all three exact test targets in one Cargo
+              # invocation. The union feature set is compile-only: runtime
+              # selection, filters, environment, artifacts, and validators below
+              # remain unchanged for each captured executable. Keeping one Cargo
+              # process also avoids the artifact-directory lock that makes
+              # concurrent cargo invocations serialize. Capture Cargo's JSON once
+              # and select each executable fail-closed from that single stream.
               extract_cargo_test_executable() {
                 local expected_test_name="$1"
                 local expected_test_kind="$2"
@@ -3621,26 +3623,24 @@
                   sys.exit(2)
               print(matches[0])' "$expected_test_name" "$expected_test_kind"
               }
+              cargo_test_messages="$("${pkgs.coreutils}/bin/mktemp" \
+                --tmpdir="$CARGO_TARGET_DIR" production-perf-check-cargo-messages.XXXXXX)"
+              cleanup_cargo_test_messages() {
+                "${pkgs.coreutils}/bin/rm" -f -- "$cargo_test_messages"
+              }
+              trap cleanup_cargo_test_messages EXIT
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --features integration-test-support,worker-binary \
+                --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
+                --message-format=json > "$cargo_test_messages"
               production_perf_executable="$(
-                set -o pipefail
-                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                  -p pokecon --features integration-test-support --test production_perf_virtual --no-run \
-                  --message-format=json \
-                  | extract_cargo_test_executable production_perf_virtual test
+                extract_cargo_test_executable production_perf_virtual test < "$cargo_test_messages"
               )"
               composition_root_executable="$(
-                set -o pipefail
-                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                  -p pokecon --lib production_composition_root --no-run \
-                  --message-format=json \
-                  | extract_cargo_test_executable pokecon lib
+                extract_cargo_test_executable pokecon lib < "$cargo_test_messages"
               )"
               main_path_trace_executable="$(
-                set -o pipefail
-                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
-                  -p pokecon --features integration-test-support,worker-binary --test main_path_trace_virtual --no-run \
-                  --message-format=json \
-                  | extract_cargo_test_executable main_path_trace_virtual test
+                extract_cargo_test_executable main_path_trace_virtual test < "$cargo_test_messages"
               )"
               unset -f extract_cargo_test_executable
               for test_executable in "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable"; do

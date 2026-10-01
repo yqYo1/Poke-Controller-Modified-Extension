@@ -271,6 +271,9 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     rust_check = flake.split(
         "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
     )[1].split("          contractSyncCheck =", maxsplit=1)[0]
+    clippy_task = flake.split("            clippy = mkTask {", maxsplit=1)[1].split(
+        "\n            };", maxsplit=1
+    )[0]
     compatibility_check = flake.split(
         "          compatibilityCorpusCheck =", maxsplit=1
     )[1].split("          rustCoreDrvPath =", maxsplit=1)[0]
@@ -296,7 +299,8 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
     assert workspace_clippy not in aggregate_check
     assert workspace_test not in aggregate_check
     assert "cargo build " not in rust_check
-    assert rust_check.count(workspace_clippy) == 1
+    assert rust_check.count(workspace_clippy) == 0
+    assert clippy_task.count(workspace_clippy) == 1
     assert rust_check.count(workspace_test) == 1
     assert rust_check.count("${setupUvLinks}") == 1
     assert aggregate_check.count("${realizeRustCiCore}") == 1
@@ -324,8 +328,8 @@ def test_aggregate_check_reuses_rust_artifacts_without_mid_run_clean() -> None:
         < rust_check.index(test_debug_export)
         < rust_check.index(linux_only_lld_export)
         < rust_check.index(workspace_test)
-        < rust_check.index(workspace_clippy)
     )
+    assert clippy_task.index("${setupWorkdir}") < clippy_task.index(workspace_clippy)
 
     for compatibility_binary in (
         '--compatibility-binary "${rustCoreCheck}/libexec/pokecon-compatibility"',
@@ -409,6 +413,9 @@ def test_rust_ci_split_executes_every_declared_non_contract_target_once() -> Non
     rust_check = flake.split(
         "          rustCoreCheck = pkgs.stdenv.mkDerivation {", maxsplit=1
     )[1].split("          contractSyncCheck =", maxsplit=1)[0]
+    clippy_task = flake.split("            clippy = mkTask {", maxsplit=1)[1].split(
+        "\n            };", maxsplit=1
+    )[0]
     inventory_contract = rust_check.split(
         "                def expected_targets: [", maxsplit=1
     )[1].split("                ];", maxsplit=1)[0]
@@ -419,7 +426,7 @@ def test_rust_ci_split_executes_every_declared_non_contract_target_once() -> Non
     execution = rust_check.split(
         "# Execute the lib harness and every non-contract integration harness",
         maxsplit=1,
-    )[1].split("cargo clippy --locked", maxsplit=1)[0]
+    )[1]
 
     assert inventory_targets == {"pokecon", *declared_tests}
     assert len(inventory_target_list) == len(inventory_targets)
@@ -431,7 +438,9 @@ def test_rust_ci_split_executes_every_declared_non_contract_target_once() -> Non
     assert "bench" not in manifest
     assert rust_check.count("--no-run") == 1
     assert rust_check.count("--message-format=json-render-diagnostics") == 1
-    assert rust_check.count("--all-targets") == 1
+    assert rust_check.count("--all-targets") == 0
+    assert clippy_task.count("cargo clippy --locked") == 1
+    assert clippy_task.count("--all-targets") == 1
     assert rust_check.count("cargo test --locked") == 1
     assert "--doc" not in rust_check
     assert 'select(.name != "contract_sync")' in execution

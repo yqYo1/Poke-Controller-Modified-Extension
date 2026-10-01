@@ -251,6 +251,20 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  rust_clippy:
+    name: Rust clippy (Linux)
+    needs: plan
+    if: needs.plan.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Rust clippy
+        run: nix run .#clippy
+
   python_tests:
     name: Python tests
     needs: plan
@@ -1067,8 +1081,7 @@ jobs:
           success() &&
           needs.plan.outputs.product == 'true' &&
           github.event_name == 'push' &&
-          contains(fromJSON('["yqYo1"]'), github.actor) &&
-          steps.production_perf_target_restore.outputs.cache-hit != 'true'
+          contains(fromJSON('["yqYo1"]'), github.actor)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pokecon-production-perf-target-${{ github.sha }}
@@ -1137,6 +1150,7 @@ jobs:
       - plan
       - fast
       - rust_contracts
+      - rust_clippy
       - python_tests
       - routing_mutations
       - web
@@ -1175,6 +1189,7 @@ jobs:
             },"jobs":{
             "fast":{"applicable":true,"reason":"always required"},
             "rust_contracts":{"applicable":${{ needs.plan.outputs.rust == 'true' || needs.plan.outputs.contracts == 'true' }},"reason":"Rust or contract paths changed"},
+            "rust_clippy":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"},
             "python_tests":{"applicable":${{ needs.plan.outputs.python == 'true' }},"reason":"Python paths changed"},
             "routing_mutations":{"applicable":${{ needs.plan.outputs.routing == 'true' }},"reason":"production-routing audit inputs changed"},
             "web":{"applicable":${{ needs.plan.outputs.web == 'true' }},"reason":"Web paths changed"},
@@ -1188,6 +1203,7 @@ jobs:
           nix run .#ci-aggregate -- "$PLAN_JSON" \
             fast=${{ needs.fast.result }} \
             rust_contracts=${{ needs.rust_contracts.result }} \
+            rust_clippy=${{ needs.rust_clippy.result }} \
             python_tests=${{ needs.python_tests.result }} \
             routing_mutations=${{ needs.routing_mutations.result }} \
             web=${{ needs.web.result }} \

@@ -57,6 +57,7 @@
       "name": "rust",
       "normal_ci_owner_jobs": [
         "normal-ci/rust_contracts",
+        "normal-ci/rust_clippy",
         "normal-ci/windows"
       ],
       "package_ci_owner_jobs": []
@@ -370,13 +371,29 @@
         "rust"
       ],
       "owns": [
-        "Rust Clippy, build, tests, and compatibility checks",
+        "Rust build, tests, and compatibility checks",
         "contract generation and generated-output drift",
         "contract schemas and acceptance records"
       ],
       "aggregate_role": "input",
       "applicable_when": "the rust or contracts region is selected",
       "not_applicable": "the planning job records both rust and contracts as false and GitHub concludes skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/rust_clippy",
+      "workflow": "normal-ci",
+      "job": "rust_clippy",
+      "command": "nix run .#clippy",
+      "selected_by_regions": [
+        "rust"
+      ],
+      "owns": [
+        "Rust Clippy with warnings denied"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the rust region is selected",
+      "not_applicable": "the planning job records rust as false and GitHub concludes skipped",
       "phase": 3
     },
     {
@@ -773,6 +790,7 @@
         "input_jobs": [
           "normal-ci/fast",
           "normal-ci/rust_contracts",
+          "normal-ci/rust_clippy",
           "normal-ci/python_tests",
           "normal-ci/routing_mutations",
           "normal-ci/web",

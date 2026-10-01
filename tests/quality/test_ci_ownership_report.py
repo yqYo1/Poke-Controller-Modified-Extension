@@ -26,6 +26,7 @@ EXPECTED_JOB_IDS = (
     "plan",
     "fast",
     "rust_contracts",
+    "rust_clippy",
     "python_tests",
     "routing_mutations",
     "web",
@@ -41,6 +42,7 @@ EXPECTED_NEEDS = (
     "plan",
     "fast",
     "rust_contracts",
+    "rust_clippy",
     "python_tests",
     "routing_mutations",
     "web",
@@ -54,6 +56,7 @@ EXPECTED_NEEDS = (
 EXPECTED_AGGREGATE_KEYS = (
     "fast",
     "rust_contracts",
+    "rust_clippy",
     "python_tests",
     "routing_mutations",
     "web",
@@ -67,6 +70,7 @@ EXPECTED_AGGREGATE_KEYS = (
 EXPECTED_AGGREGATE_REGIONS = {
     "fast": [],
     "rust_contracts": ["contracts", "rust"],
+    "rust_clippy": ["rust"],
     "python_tests": ["python"],
     "routing_mutations": ["routing"],
     "web": ["web"],
@@ -88,7 +92,7 @@ EXPECTED_FIXTURES = {
     },
     "rust": {
         "regions": ["rust"],
-        "applicable_jobs": ["fast", "rust_contracts", "windows"],
+        "applicable_jobs": ["fast", "rust_contracts", "rust_clippy", "windows"],
     },
     "python": {
         "regions": ["python"],
@@ -120,6 +124,7 @@ EXPECTED_FIXTURES = {
         "applicable_jobs": [
             "fast",
             "rust_contracts",
+            "rust_clippy",
             "routing_mutations",
             "product_flake",
             "remote_flake",
@@ -130,7 +135,7 @@ EXPECTED_FIXTURES = {
     },
     "mixed": {
         "regions": ["docs", "rust"],
-        "applicable_jobs": ["fast", "rust_contracts", "windows"],
+        "applicable_jobs": ["fast", "rust_contracts", "rust_clippy", "windows"],
     },
 }
 

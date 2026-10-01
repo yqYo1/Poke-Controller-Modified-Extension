@@ -2357,7 +2357,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     # this file) and then canonicalFlakeHash again.
     assert (
         hashlib.sha256(fully_normalized_flake.encode()).hexdigest()
-        == "d3fc57977fc6c4b76a0a958275454b69b3b3841d18d9c9699ef3d8fc8213d8bf"
+        == "a8ca0beff68bf5c55904b19b9ce5f1056206181016ec5aca319a5e03140f94c3"
     )
     resolved_input_boundary = flake[: flake.index("flake-parts.lib.mkFlake")]
     assert (
@@ -3757,9 +3757,16 @@ offline = true
 
     rust_ci_check_end = flake.index("cliHelpCheck =", compatibility_sources_end)
     rust_ci_check_section = flake[compatibility_sources_end:rust_ci_check_end]
+    clippy_task_start = flake.index("clippy = mkTask {")
+    clippy_task_end = flake.index("build-rust = mkTask {", clippy_task_start)
+    clippy_task_section = flake[clippy_task_start:clippy_task_end]
+    assert (
+        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings"
+        in clippy_task_section
+    )
     assert (
         hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
-        == "6e0018bd0650491114c64de114cdeb83c1388534ade908ab22e4a177d09dc51d"
+        == "4be442c727697d079860c1f0b8c74d5d7db2989d60fb6f5a45737be24bbfdd1b"
     )
     for rust_ci_check_proof in (
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -3779,7 +3786,6 @@ offline = true
         'name: "concurrent_camera_serial_load",',
         'if [ "$executed_test_count" -ne 12 ]; then',
         "cargo test --locked --workspace --all-features",
-        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         "python -m scripts.compatibility.promote --check",
         "python -m scripts.compatibility.runner",
         "export GIT_CONFIG_COUNT=3",
@@ -3950,7 +3956,7 @@ offline = true
         assert cargo_command_section.count(cached_cargo_proof) == 1
     assert (
         hashlib.sha256(development_command_sections_text.encode()).hexdigest()
-        == "a2284c2bb3d57b31f18a6da61b898243bc776df6b799e1b77b1dd1c6b9db5b22"
+        == "e1a0be3a02a2b263ebf21aed8ff3198c6f769b2aafb5c7258173948eb1c544d8"
     )
     development_provenance_assignment = "POKECON_RESOURCE_PROVENANCE=development"
     assert (
@@ -3983,7 +3989,7 @@ offline = true
         "ci-rust-contracts": (),
         "clippy": (
             "POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked "
-            "--workspace --all-targets --all-features --no-deps -- -D warnings",
+            "--profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
         ),
         "build-rust": ("cargo build --locked --workspace --all-features",),
         "cargo-test": (
@@ -18758,6 +18764,11 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         "            ci-rust-contracts = mkTask {\n",
         "            clippy = mkTask {\n",
     )
+    clippy_task = section(
+        flake,
+        "            clippy = mkTask {\n",
+        "            build-rust = mkTask {\n",
+    )
     rust_check = section(
         flake,
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -18777,6 +18788,7 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         '"$POKECON_NIX_WRAPPER" run .#ci-rust-contracts',
         '"$POKECON_NIX_WRAPPER" run .#rust-ci-core',
         '"$POKECON_NIX_WRAPPER" run .#contract-check',
+        "nix run .#clippy",
         '"$POKECON_NIX_WRAPPER" run .#product-smoke',
         '"$POKECON_NIX_WRAPPER" flake check --no-build',
         "Run default app help from remote",
@@ -18793,7 +18805,6 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
         assert product_check in product_smoke
 
     for superseded_command in (
-        "nix run .#clippy",
         "nix run .#build-rust",
         "nix run .#cargo-test",
         "nix run .#compatibility",
@@ -18811,12 +18822,24 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
     ):
         assert ci_fast.count(static_check) == 1
         assert static_check not in contract_check
-    for shared_rust_command in (
-        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings",
-        "cargo test --locked --workspace --all-features",
-    ):
-        assert rust_check.count(shared_rust_command) == 1
-        assert shared_rust_command not in combined_check
+    assert rust_check.count("cargo test --locked --workspace --all-features") == 1
+    assert "cargo test --locked --workspace --all-features" not in combined_check
+    assert (
+        rust_check.count(
+            "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings"
+        )
+        == 0
+    )
+    assert (
+        clippy_task.count(
+            "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings"
+        )
+        == 1
+    )
+    assert (
+        "cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings"
+        not in combined_check
+    )
     assert "cargo build " not in rust_check
     assert combined_check.count("${realizeRustCiCore}") == 1
     assert '"$CARGO_TARGET_DIR/debug/generate_contracts"' not in combined_check
@@ -18836,7 +18859,7 @@ def test_ci_executes_each_existing_logical_check_once() -> None:
 
 def test_normal_ci_rust_contract_entrypoints_are_mutually_exclusive() -> None:
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text()
-    rust_job = section(workflow, "  rust_contracts:\n", "  python_tests:\n")
+    rust_job = section(workflow, "  rust_contracts:\n", "  rust_clippy:\n")
 
     assert rust_job.count("    needs: plan\n") == 1
     assert (

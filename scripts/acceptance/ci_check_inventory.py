@@ -19,9 +19,10 @@ Logical mapping (derived from flake.nix app text, not guessed):
 * ``ci-regions`` is static changeset classification (``scripts/ci/regions.py``
   never builds, tests, or packages); it is a singleton planner per workflow.
 * ``ci-rust-contracts`` / ``rust-ci-core`` realize the Rust core derivation
-  (cargo test graph plus clippy), the contract-sync derivation, and the
-  compatibility corpus derivation (flake ``realizeRustCiCore``); they descend
-  to build plus generated-drift plus compatibility lanes.
+  (cargo test graph), the contract-sync derivation, and the compatibility corpus
+  derivation (flake ``realizeRustCiCore``); the dedicated ``clippy`` app owns
+  the workspace clippy gate; they descend to build plus generated-drift plus
+  compatibility lanes.
 * ``contract-check`` realizes only the contract-sync derivation plus the
   settings-schema, records, and API-types drift lanes (flake
   ``realizeContractSync``); it is pure generated-drift.
@@ -133,6 +134,7 @@ APP_LOGIC: Final = {
     "remote-flake-smoke": "smoke",
     "tauri-build": "packaging",
     "cargo-tauri-build": "packaging",
+    "clippy": "static-analysis",
     "package-smoke": "packaging",
     "package-install-smoke": "packaging",
     "windows-install-smoke": "packaging",

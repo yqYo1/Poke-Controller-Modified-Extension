@@ -191,6 +191,13 @@ EXPECTED_NORMAL_CI: tuple[SiteTuple, ...] = (
         "generated-drift",
         "ubuntu-latest",
     ),
+    (
+        "rust_clippy",
+        "Run Rust clippy",
+        "clippy",
+        "static-analysis",
+        "ubuntu-latest",
+    ),
     ("web", "Run Web checks", "web-check", "web", "ubuntu-latest"),
     (
         "windows",
@@ -542,6 +549,7 @@ EXPECTED_EXCEPTION_SITE_COUNTS: dict[str, int] = {
 EXPECTED_REPORT_APP_COUNTS: dict[str, dict[str, int]] = {
     "normal-ci.yml": {
         "ci-regions": 1,
+        "clippy": 1,
         "ci-rust-contracts": 3,
         "rust-ci-core": 3,
         "contract-check": 1,

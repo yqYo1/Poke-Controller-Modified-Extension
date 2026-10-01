@@ -781,7 +781,11 @@ fn assert_ci_region_ownership_matrix(ci: &Value) {
             },
             {
                 "name": "rust",
-                "normal_ci_owner_jobs": ["normal-ci/rust_contracts", "normal-ci/windows"],
+                "normal_ci_owner_jobs": [
+                    "normal-ci/rust_contracts",
+                    "normal-ci/rust_clippy",
+                    "normal-ci/windows"
+                ],
                 "package_ci_owner_jobs": [],
             },
             {

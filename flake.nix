@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "b9ea0db15fa9a0a1d90b32c7a0107e8b6f110a9a9042ac448bd388ef30896a3f";
+      canonicalFlakeHash = "74f52abc50357ecacf908855e039f9a0e90099c737aae9d1836b772f4be42301";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "e9cbb3c9ad0628ac24b06a091fcd4754eb53ae80e2a38c83f71defc42e24de59";
+          expectedAuditTestHash = "16b5035d778501ece8118316b53af6664beefa845421bc5d66ed45b2a616bd19";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -2934,7 +2934,6 @@
                 echo "Expected to execute 12 non-contract test targets, executed $executed_test_count" >&2
                 exit 2
               fi
-              cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
               runHook postBuild
             '';
             installPhase = ''
@@ -4688,7 +4687,7 @@
               text = ''
                 ${setupWorkdir}
                 ${desktopEnvironment}
-                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --workspace --all-targets --all-features --no-deps -- -D warnings
+                POKECON_RESOURCE_PROVENANCE=development cargo clippy --locked --profile test --workspace --all-targets --all-features --no-deps -- -D warnings
               '';
             };
 

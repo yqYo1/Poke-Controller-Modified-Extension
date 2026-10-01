@@ -134,7 +134,13 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         in job
     )
     assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in job
+    assert "id: production_perf_target_download" in job
     assert "path: target/nix-tasks/release" in job
+    assert "Restore Cargo executable bits lost by artifact transport" in job
+    assert "steps.production_perf_target_download.outcome == 'success'" in job
+    assert "find target/nix-tasks/release/build -type f -name build-script-build" in job
+    assert "production_perf_virtual-*" in job
+    assert "main_path_trace_virtual-*" in job
     assert "Run the production main-path virtual performance gate" in job
     assert (
         "POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence"

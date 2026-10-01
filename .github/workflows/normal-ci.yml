@@ -1039,6 +1039,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
       - name: Download the same-SHA push production target artifact (read-only)
+        id: production_perf_target_download
         if: >-
           needs.plan.outputs.product == 'true' &&
           github.event_name == 'pull_request' &&
@@ -1053,6 +1054,26 @@ jobs:
           repository: ${{ github.repository }}
           github-token: ${{ github.token }}
           path: target/nix-tasks/release
+      - name: Restore Cargo executable bits lost by artifact transport
+        if: >-
+          steps.production_perf_push_artifact.outputs.found == 'true' &&
+          steps.production_perf_target_download.outcome == 'success'
+        run: |
+          set -euo pipefail
+          find target/nix-tasks/release/build -type f -name build-script-build -exec chmod 0555 {} +
+          for executable_pattern in \
+            'production_perf_virtual-*' \
+            'main_path_trace_virtual-*' \
+            'pokecon-*'; do
+            find target/nix-tasks/release/deps -maxdepth 1 -type f \
+              -name "$executable_pattern" \
+              ! -name '*.d' \
+              ! -name '*.json' \
+              ! -name '*.rlib' \
+              ! -name '*.rmeta' \
+              ! -name '*.so' \
+              -exec chmod 0555 {} +
+          done
       - name: Run the production main-path virtual performance gate
         env:
           POKECON_PRODUCTION_PERF_OUT: ${{ github.workspace }}/production-perf-evidence

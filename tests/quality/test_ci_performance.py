@@ -180,6 +180,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "if-no-files-found: error" in target_upload
     assert "retention-days: 3" in target_upload
     assert "compression-level: 0" in target_upload
+    assert "include-hidden-files: true" in target_upload
     assert "Inspect production perf evidence directory" in job
     assert "performance-report.json" in job
     assert "performance-samples.json" in job

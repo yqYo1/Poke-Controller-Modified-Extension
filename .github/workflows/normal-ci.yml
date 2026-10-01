@@ -1089,6 +1089,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
+          include-hidden-files: true
       - name: Inspect production perf evidence directory
         if: always()
         run: |

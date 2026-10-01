@@ -204,9 +204,13 @@ def _app_program_store_path(
             "could not determine Nix system: "
             f"{detail[-1][:200] if detail else f'exit {system_proc.returncode}'}"
         )
+    # Nix system and app names may contain punctuation with meaning in an
+    # attribute path (for example, ``x86_64-linux`` or ``app.with.dot``).
+    # Quote both keys so Nix selects the literal attrset entries instead of
+    # parsing them as operators or nested attributes.
     program_expr = (
         f"let flake = builtins.getFlake {json.dumps(str(repository.resolve()))}; "
-        f"in flake.apps.{system}.{app_name}.program"
+        f"in flake.apps.{json.dumps(system)}.{json.dumps(app_name)}.program"
     )
     program_proc = _run(
         ["nix", "eval", "--raw", "--impure", "--expr", program_expr],

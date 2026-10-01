@@ -175,17 +175,18 @@ def test_probe_failure_records_unavailable_without_fabrication(tmp_path: Path) -
     assert task["nar"] == {"reason": "simulated outage", "status": "unavailable"}
 
 
+@pytest.mark.parametrize("app_name", ["clippy", "cli-help-check", "app.with.dot"])
 def test_nix_run_app_probes_realized_launcher(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, app_name: str
 ) -> None:
     repo = make_repo(tmp_path / "app-launcher")
-    store_path = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-clippy-launcher"
+    store_path = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-app-launcher"
 
     def fake_run(
         argv: list[str], cwd: Path, timeout: int = parity.SUBPROCESS_TIMEOUT
     ) -> subprocess.CompletedProcess[str]:
         del cwd, timeout
-        if argv[:2] == ["nix", "path-info"] and "#clippy" in argv[-1]:
+        if argv[:2] == ["nix", "path-info"] and f"#{app_name}" in argv[-1]:
             return subprocess.CompletedProcess(
                 argv, 1, "", "direct app is not a derivation"
             )
@@ -195,8 +196,9 @@ def test_nix_run_app_probes_realized_launcher(
         ):
             return subprocess.CompletedProcess(argv, 0, "x86_64-linux\n", "")
         if argv[:4] == ["nix", "eval", "--raw", "--impure"]:
+            assert f'apps."x86_64-linux"."{app_name}".program' in argv[-1]
             return subprocess.CompletedProcess(
-                argv, 0, f"{store_path}/bin/clippy\n", ""
+                argv, 0, f"{store_path}/bin/{app_name}\n", ""
             )
         if argv[:2] == ["nix", "path-info"]:
             payload = {
@@ -211,7 +213,7 @@ def test_nix_run_app_probes_realized_launcher(
         raise AssertionError(detail)
 
     monkeypatch.setattr(parity, "_run", fake_run)
-    task = parity.collect_task("app", "nix run .#clippy", ".", repo, {})
+    task = parity.collect_task("app", f"nix run .#{app_name}", ".", repo, {})
     nar = _fields(task["nar"])
     assert nar["status"] == "available"
     assert nar["hash"] == NAR_HASH

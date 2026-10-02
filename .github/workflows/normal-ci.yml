@@ -981,6 +981,144 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve production perf derivation identity
+        id: production_perf_derivation_key
+        run: |
+          set -euo pipefail
+          target_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid production perf derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-production-perf-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore production perf derivation cache (read-only)
+        id: production_perf_derivation_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          key: ${{ steps.production_perf_derivation_key.outputs.key }}
+      - name: Enable production perf derivation cache (signed, fail-closed)
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
+      - name: Realize production perf derivation (substitute or cold-build once)
+        id: production_perf_derivation
+        run: |
+          set -euo pipefail
+          realized=false
+          store_path=""
+          materialize_production_perf_derivation() {
+            derivation_store_path="$1"
+            case "$derivation_store_path" in
+              /nix/store/*) ;;
+              *)
+                echo "production perf derivation store path is not canonical: $derivation_store_path" >&2
+                return 1
+                ;;
+            esac
+            if [ -L "$derivation_store_path" ] || [ ! -d "$derivation_store_path" ]; then
+              echo "production perf derivation store path is redirected or missing: $derivation_store_path" >&2
+              return 1
+            fi
+            derivation_manifest="$derivation_store_path/release/.pokecon-production-perf-executables.json"
+            if [ -L "$derivation_manifest" ] || [ ! -s "$derivation_manifest" ]; then
+              echo "production perf derivation manifest is redirected or missing: $derivation_manifest" >&2
+              return 1
+            fi
+            mkdir -p target/nix-tasks/release
+            if ! cp -a -- "$derivation_store_path/release/." target/nix-tasks/release/; then
+              echo "failed to materialize the production perf derivation executables" >&2
+              return 1
+            fi
+            chmod -R u+w -- target/nix-tasks/release
+            manifest_keys="$(jq -r 'keys_unsorted | sort | join(",")' "$derivation_manifest")"
+            if [ "$manifest_keys" != "composition_root,main_path_trace,production_perf" ]; then
+              echo "materialized production perf manifest keys are not exact: $manifest_keys" >&2
+              return 1
+            fi
+            for manifest_pin_key in production_perf composition_root main_path_trace; do
+              case "$manifest_pin_key" in
+                production_perf) manifest_pin_expected="release/deps/production_perf_virtual-nix" ;;
+                composition_root) manifest_pin_expected="release/deps/pokecon-nix" ;;
+                main_path_trace) manifest_pin_expected="release/deps/main_path_trace_virtual-nix" ;;
+              esac
+              manifest_pinned="$(jq -er --arg key "$manifest_pin_key" '.[$key]' "$derivation_manifest")"
+              if [ "$manifest_pinned" != "$manifest_pin_expected" ]; then
+                echo "materialized production perf manifest pin differs for $manifest_pin_key: $manifest_pinned" >&2
+                return 1
+              fi
+            done
+            unset manifest_pin_key manifest_pin_expected manifest_pinned
+            materialized_target_root="$(readlink -f -- target/nix-tasks)"
+            for manifest_key in production_perf composition_root main_path_trace; do
+              manifest_relative="$(jq -er --arg key "$manifest_key" '.[$key] | select(type == "string" and length > 0)' "$derivation_manifest")" || {
+                echo "materialized production perf path is not a non-empty string: $manifest_key" >&2
+                return 1
+              }
+              case "$manifest_relative" in
+                /*)
+                  echo "materialized production perf path is not relative: $manifest_key" >&2
+                  return 1
+                  ;;
+              esac
+              manifest_canonical="$(readlink -f -- "target/nix-tasks/$manifest_relative")" || {
+                echo "materialized production perf path does not resolve: $manifest_key" >&2
+                return 1
+              }
+              case "$manifest_canonical" in
+                "$materialized_target_root"/*) ;;
+                *)
+                  echo "materialized production perf path escapes target directory: $manifest_key" >&2
+                  return 1
+                  ;;
+              esac
+              unset manifest_relative manifest_canonical
+            done
+            unset manifest_keys manifest_key
+            for materialized_name in pokecon-nix production_perf_virtual-nix main_path_trace_virtual-nix; do
+              materialized_path="target/nix-tasks/release/deps/$materialized_name"
+              if [ -L "$materialized_path" ] || [ ! -f "$materialized_path" ]; then
+                echo "materialized production perf executable is redirected or missing: $materialized_path" >&2
+                return 1
+              fi
+              chmod 0555 -- "$materialized_path"
+            done
+            unset materialized_target_root derivation_store_path derivation_manifest materialized_name materialized_path
+          }
+          if derivation_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)" && \
+            store_path="$(nix-store --realise "$derivation_drv")"; then
+            if materialize_production_perf_derivation "$store_path"; then
+              realized=true
+            else
+              echo "production perf derivation materialization failed; raw Cargo fallback runs with fail-closed validation" >&2
+              store_path=""
+            fi
+          else
+            echo "production perf derivation is unavailable; raw Cargo fallback runs with fail-closed validation" >&2
+            store_path=""
+          fi
+          echo "realized=$realized" >> "$GITHUB_OUTPUT"
+          echo "store_path=$store_path" >> "$GITHUB_OUTPUT"
+          unset realized store_path
       - name: Restore production perf Cargo target (read-only)
         id: production_perf_target_restore
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -988,11 +1126,100 @@ jobs:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
       - name: Prepare production perf Cargo target
+        if: steps.production_perf_derivation.outputs.realized != 'true'
         env:
           POKECON_PERF_BUILD_SHA: ${{ github.sha }}
           POKECON_PERF_TARGET_REUSE: ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' }}
         run: |
+          set -euo pipefail
           nix run .#production-perf-prepare
+          prepared_manifest="target/nix-tasks/release/.pokecon-production-perf-executables.json"
+          if [ -L "$prepared_manifest" ] || [ ! -s "$prepared_manifest" ]; then
+            echo "prepared Cargo executable manifest is redirected or missing: $prepared_manifest" >&2
+            exit 2
+          fi
+          prepared_keys="$(jq -r 'keys_unsorted | sort | join(",")' "$prepared_manifest")"
+          if [ "$prepared_keys" != "composition_root,main_path_trace,production_perf" ]; then
+            echo "prepared Cargo executable manifest keys are not exact: $prepared_keys" >&2
+            exit 2
+          fi
+          prepared_target_root="$(readlink -f -- target/nix-tasks)"
+          for prepared_key in production_perf composition_root main_path_trace; do
+            prepared_relative="$(jq -er --arg key "$prepared_key" '.[$key] | select(type == "string" and length > 0)' "$prepared_manifest")" || {
+              echo "prepared Cargo executable path is not a non-empty string: $prepared_key" >&2
+              exit 2
+            }
+            case "$prepared_relative" in
+              /*)
+                echo "prepared Cargo executable path is not relative: $prepared_key" >&2
+                exit 2
+                ;;
+            esac
+            prepared_canonical="$(readlink -f -- "target/nix-tasks/$prepared_relative")" || {
+              echo "prepared Cargo executable path does not resolve: $prepared_key" >&2
+              exit 2
+            }
+            case "$prepared_canonical" in
+              "$prepared_target_root"/*) ;;
+              *)
+                echo "prepared Cargo executable escapes target directory: $prepared_key" >&2
+                exit 2
+                ;;
+            esac
+            if [ -L "$prepared_canonical" ] || [ ! -f "$prepared_canonical" ] || [ ! -x "$prepared_canonical" ]; then
+              echo "prepared Cargo executable is unavailable: $prepared_key" >&2
+              exit 2
+            fi
+          done
+      - name: Export production perf derivation to binary cache (signed)
+        id: production_perf_derivation_export
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.production_perf_derivation_restore.outputs.cache-hit != 'true' &&
+          steps.production_perf_derivation.outputs.realized == 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+          POKECON_NIX_CACHE_SECRET_KEY: ${{ secrets.POKECON_NIX_CACHE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ] || [ -z "$POKECON_NIX_CACHE_SECRET_KEY" ]; then
+            echo "PokeCon cache signing keys are not configured; skipping optional cache export"
+            echo "exported=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          store_path="${{ steps.production_perf_derivation.outputs.store_path }}"
+          case "$store_path" in
+            /nix/store/*) ;;
+            *) echo "invalid production perf store path for export: $store_path" >&2; exit 2 ;;
+          esac
+          if [ -L "$store_path" ] || [ ! -d "$store_path" ]; then
+            echo "production perf store path is redirected or missing: $store_path" >&2
+            exit 2
+          fi
+          key_file="$RUNNER_TEMP/pokecon-production-perf-derivation-cache.key"
+          cleanup() {
+            rm -f "$RUNNER_TEMP/pokecon-production-perf-derivation-cache.key"
+          }
+          trap cleanup EXIT
+          printf '%s' "$POKECON_NIX_CACHE_SECRET_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          nix store sign --key-file "$key_file" --recursive "$store_path"
+          nix copy --to "file://$POKECON_NIX_CACHE_DIRECTORY?compression=zstd&compression-level=3" "$store_path"
+          echo "exported=true" >> "$GITHUB_OUTPUT"
+      - name: Save production perf derivation cache
+        if: >-
+          success() &&
+          github.event_name == 'push' &&
+          contains(fromJSON('["yqYo1"]'), github.actor) &&
+          steps.production_perf_derivation_restore.outputs.cache-hit != 'true' &&
+          steps.production_perf_derivation_export.outputs.exported == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          key: ${{ steps.production_perf_derivation_key.outputs.key }}
       - name: Save production perf Cargo target
         if: >-
           success() &&
@@ -1055,6 +1282,94 @@ jobs:
         with:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+      - name: Resolve production perf derivation identity
+        id: production_perf_derivation_key
+        run: |
+          set -euo pipefail
+          target_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)"
+          case "$target_drv" in
+            /nix/store/*.drv) ;;
+            *) echo "invalid production perf derivation path: $target_drv" >&2; exit 2 ;;
+          esac
+          echo "key=pokecon-nix-v1-linux-production-perf-${target_drv##*/}" >> "$GITHUB_OUTPUT"
+      - name: Restore production perf derivation cache (read-only)
+        id: production_perf_derivation_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          key: ${{ steps.production_perf_derivation_key.outputs.key }}
+      - name: Enable production perf derivation cache (signed, fail-closed)
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
+          POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
+        run: |
+          if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
+            echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            exit 0
+          fi
+          case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
+            pokecon-nix-cache-1:*) ;;
+            *) echo "invalid PokeCon cache public-key format" >&2; exit 2 ;;
+          esac
+          mkdir -p "$POKECON_NIX_CACHE_DIRECTORY"
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          nix store info --store "$cache_uri"
+          {
+            echo 'NIX_CONFIG<<POKECON_NIX_CONFIG'
+            echo "extra-substituters = $cache_uri"
+            echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= $POKECON_NIX_CACHE_PUBLIC_KEY"
+            echo "require-sigs = true"
+            echo 'POKECON_NIX_CONFIG'
+          } >> "$GITHUB_ENV"
+      - name: Materialize production perf derivation executables (substitute-only)
+        id: production_perf_derivation_materialize
+        if: steps.production_perf_derivation_restore.outputs.cache-hit == 'true'
+        run: |
+          set -euo pipefail
+          realized=false
+          if derivation_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)" && \
+            derivation_store_path="$(nix-store --option fallback false --realise "$derivation_drv")"; then
+            case "$derivation_store_path" in
+              /nix/store/*) ;;
+              *)
+                echo "production perf derivation store path is not canonical: $derivation_store_path" >&2
+                derivation_store_path=""
+                ;;
+            esac
+            if [ -n "$derivation_store_path" ] && \
+              [ ! -L "$derivation_store_path" ] && [ -d "$derivation_store_path" ] && \
+              [ ! -L "$derivation_store_path/release/.pokecon-production-perf-executables.json" ] && \
+              [ -s "$derivation_store_path/release/.pokecon-production-perf-executables.json" ]; then
+              mkdir -p target/nix-tasks/release
+              if cp -a -- "$derivation_store_path/release/." target/nix-tasks/release/; then
+                chmod -R u+w -- target/nix-tasks/release
+                materialized_ok=true
+                for materialized_name in pokecon-nix production_perf_virtual-nix main_path_trace_virtual-nix; do
+                  materialized_path="target/nix-tasks/release/deps/$materialized_name"
+                  if [ -L "$materialized_path" ] || [ ! -f "$materialized_path" ]; then
+                    echo "materialized production perf executable is redirected or missing: $materialized_path" >&2
+                    materialized_ok=false
+                  else
+                    chmod 0555 -- "$materialized_path"
+                  fi
+                done
+                if [ "$materialized_ok" = true ]; then
+                  realized=true
+                else
+                  echo "production perf derivation materialization is incomplete; same-SHA handoff paths still apply" >&2
+                fi
+                unset materialized_ok materialized_name materialized_path
+              else
+                echo "failed to materialize the production perf derivation executables; same-SHA handoff paths still apply" >&2
+              fi
+            else
+              echo "production perf derivation content failed validation; same-SHA handoff paths still apply" >&2
+            fi
+          else
+            echo "production perf derivation substitution failed; same-SHA handoff paths still apply" >&2
+          fi
+          echo "realized=$realized" >> "$GITHUB_OUTPUT"
+          unset realized
       - name: Download production perf Cargo target from push build (read-only)
         id: production_perf_build_target_download
         if: >-
@@ -1173,7 +1488,7 @@ jobs:
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
           POKECON_PERF_BUILD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           POKECON_PERF_TARGET_REUSE: >-
-            ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
+            ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_derivation_materialize.outputs.realized == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
         run: |
           nix run .#production-perf-check
       - name: Inspect production perf evidence directory

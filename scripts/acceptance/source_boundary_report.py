@@ -30,6 +30,12 @@ Derivation -> scoped-source mapping (read from flake.nix, not guessed):
   FAILED; flake inspection confirmed the ``${rustCoreCheck}``
   interpolation, and the mapping was corrected here instead of the
   observations being adjusted.
+* ``checks.production-perf-target`` uses ``rustCoreTestSource``
+  (``sourceBoundaryPaths.rustCoreTest`` = product + generated/lua,
+  python typings, rust tests, toolchain; no exclusions) and compiles
+  exactly the three release harnesses the production performance gate
+  executes, so it tracks the rustCoreTest area (and every area
+  rustCoreTest extends, notably product).
 
 Probe choice rationale (each probe belongs to its row area; the
 ``expected_changed`` set is *derived* from manifest membership, see
@@ -37,17 +43,18 @@ Probe choice rationale (each probe belongs to its row area; the
 
 * product -> ``rust/pokecon/src/main.rs``: inside product, hence also in
   rustCoreTest and rustTest (both extend product). Expect pokecon,
-  pokecon-core, rust-core-artifacts, contract-sync, and
-  compatibility-corpus changed (the last via the rustCoreTestSource ->
-  rustCoreCheck -> compatibilityCorpusCheck input edge); web unchanged.
+  pokecon-core, rust-core-artifacts, production-perf-target,
+  contract-sync, and compatibility-corpus changed (the last via the
+  rustCoreTestSource -> rustCoreCheck -> compatibilityCorpusCheck input
+  edge); web unchanged.
   (Counter-example documented:
   ``compatibility/fixed-manifest.json`` is shared between product and
-  compatibilityCheck and moves the same five through its own src too.)
+  compatibilityCheck and moves the same six through its own src too.)
 * release -> ``README.md``: in release/documentation/quality only; no
   matrix attr consumes the release source, so expect no change.
 * rustCoreTest -> ``generated/lua/pokecon.d.lua``: in rustCoreTest,
-  rustTest, quality. Expect rust-core-artifacts + contract-sync +
-  compatibility-corpus (input edge) changed.
+  rustTest, quality. Expect rust-core-artifacts + production-perf-target
+  + contract-sync + compatibility-corpus (input edge) changed.
 * compatibilityCheck -> ``compatibility/candidates.json``: in
   compatibilityCheck, rustTest, quality. Expect contract-sync +
   compatibility-corpus changed.
@@ -127,6 +134,7 @@ MATRIX_ATTRS: Final = (
     "packages.x86_64-linux.pokecon-core",
     "packages.x86_64-linux.web",
     "checks.x86_64-linux.rust-core-artifacts",
+    "checks.x86_64-linux.production-perf-target",
     "checks.x86_64-linux.contract-sync",
     "checks.x86_64-linux.compatibility-corpus",
 )
@@ -147,6 +155,7 @@ DERIVATION_SOURCE_AREAS: Final = {
     "packages.x86_64-linux.pokecon-core": ("product",),
     "packages.x86_64-linux.web": ("web",),
     "checks.x86_64-linux.rust-core-artifacts": ("rustCoreTest",),
+    "checks.x86_64-linux.production-perf-target": ("rustCoreTest",),
     "checks.x86_64-linux.contract-sync": ("rustTest", "rustCoreTest"),
     "checks.x86_64-linux.compatibility-corpus": (
         "compatibilityCheck",

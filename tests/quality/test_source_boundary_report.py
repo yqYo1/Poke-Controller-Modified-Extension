@@ -161,6 +161,7 @@ def test_derive_expected_changed_for_product_probe() -> None:
         "packages.x86_64-linux.pokecon",
         "packages.x86_64-linux.pokecon-core",
         "checks.x86_64-linux.rust-core-artifacts",
+        "checks.x86_64-linux.production-perf-target",
         "checks.x86_64-linux.contract-sync",
         "checks.x86_64-linux.compatibility-corpus",
     }
@@ -203,6 +204,7 @@ def test_derive_expected_changed_respects_product_exclusion() -> None:
     # ${rustCoreCheck} input edge additionally moves compatibility-corpus.
     assert expected == {
         "checks.x86_64-linux.rust-core-artifacts",
+        "checks.x86_64-linux.production-perf-target",
         "checks.x86_64-linux.contract-sync",
         "checks.x86_64-linux.compatibility-corpus",
     }
@@ -221,6 +223,7 @@ def test_derive_expected_changed_covers_derivation_input_edges() -> None:
         "packages.x86_64-linux.pokecon",
         "packages.x86_64-linux.pokecon-core",
         "checks.x86_64-linux.rust-core-artifacts",
+        "checks.x86_64-linux.production-perf-target",
         "checks.x86_64-linux.contract-sync",
         "checks.x86_64-linux.compatibility-corpus",
     }

@@ -278,7 +278,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     )
     assert "POKECON_PERF_TARGET_REUSE: >-" in job
     assert (
-        "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success'"
+        "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_derivation_materialize.outputs.realized == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success'"
         in job
     )
     assert "nix run .#production-perf-check" in job
@@ -357,6 +357,62 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     )
     assert "continue-on-error:" not in job[gate_start:]
     assert "|| true" not in job
+
+    assert "id: production_perf_derivation_key" in build_job
+    assert "id: production_perf_derivation_restore" in build_job
+    assert "id: production_perf_derivation" in build_job
+    assert "id: production_perf_derivation_export" in build_job
+    assert (
+        "nix path-info --derivation .#checks.x86_64-linux.production-perf-target"
+        in build_job
+    )
+    assert "invalid production perf derivation path" in build_job
+    assert "key=pokecon-nix-v1-linux-production-perf-${target_drv##*/}" in build_job
+    assert "pokecon-production-perf-derivation-cache" in build_job
+    assert "restore-keys:" not in build_job
+    assert "Realize production perf derivation (substitute or cold-build once)" in (
+        build_job
+    )
+    assert "nix-store --realise" in build_job
+    assert "nix build" not in build_job
+    assert "materialized production perf manifest keys are not exact" in build_job
+    assert "raw Cargo fallback runs with fail-closed validation" in build_job
+    assert "steps.production_perf_derivation.outputs.realized != 'true'" in (build_job)
+    assert "prepared Cargo executable manifest keys are not exact" in build_job
+    assert "prepared Cargo executable escapes target directory" in build_job
+    assert "nix store sign --key-file" in build_job
+    assert "--recursive" in build_job
+    assert "nix copy --to" in build_job
+    assert "chmod 600" in build_job
+    assert "POKECON_NIX_CACHE_SECRET_KEY" in build_job
+    assert 'echo "$POKECON_NIX_CACHE_SECRET_KEY"' not in build_job
+    assert "steps.production_perf_derivation_restore.outputs.cache-hit" in (build_job)
+    assert "steps.production_perf_derivation.outputs.realized == 'true'" in (build_job)
+    assert (
+        "steps.production_perf_derivation_export.outputs.exported == 'true'"
+        in build_job
+    )
+    assert "require-sigs = true" in build_job
+    assert "pokecon-nix-cache-1:" in build_job
+    assert "actions/cache/save@" not in upload_job
+    assert "id: production_perf_derivation_key" in job
+    assert "id: production_perf_derivation_restore" in job
+    assert "id: production_perf_derivation_materialize" in job
+    assert "Materialize production perf derivation executables (substitute-only)" in job
+    assert "--option fallback false --realise" in job
+    assert "actions/cache/save@" not in job
+    assert "nix store sign" not in job
+    assert "nix copy --to" not in job
+    assert "production-perf-derivation-cache" in job
+
+    assert "productionPerfTarget = pkgs.stdenv.mkDerivation" in flake
+    assert "checks.production-perf-target = productionPerfTarget;" in flake
+    assert "src = rustCoreTestSource;" in flake
+    assert "integration-test-support,worker-binary" in flake
+    assert 'cargo" test --locked --release' in production_task
+    assert "release/deps/production_perf_virtual-nix" in flake
+    assert "release/deps/pokecon-nix" in flake
+    assert "release/deps/main_path_trace_virtual-nix" in flake
 
 
 def test_normal_ci_contract_gates_publish_acceptance_reports() -> None:

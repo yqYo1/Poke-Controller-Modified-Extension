@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "08d43dbf2ac513b28752561e7520125a2ee64492167b603005658bb56582ef51";
+      canonicalFlakeHash = "066bb6b23d12ffe5ab35ce5143af9ff79c64e4fe901ed7ec6302a59b7f72ea13";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "d6a65075074cfab794689d23a5a72fa8a29fd003e987c2c92f792f7e6cc6452c";
+          expectedAuditTestHash = "5ef524e45fade8ddcb16f47d1be771ec1876db8c2009c30ed98c66284bd3e44e";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3879,6 +3879,179 @@
             '';
           };
 
+          # Release executables for the production performance gate, built
+          # once as a source-identity derivation so a later push with
+          # identical Rust source, lockfile, toolchain, and features
+          # substitutes them instead of cold-compiling. The build command,
+          # profile, package, and feature set exactly match the
+          # production-perf-check cold path; only the isolated per-run
+          # Cargo home/target differs.
+          productionPerfTarget = pkgs.stdenv.mkDerivation {
+            pname = "pokecon-production-perf-target";
+            version = workspaceVersion;
+            src = rustCoreTestSource;
+            sourceRoot = "pokecon-rust-core-test-source";
+            nativeBuildInputs = rustTaskInputs ++ [ pkgs.jq ];
+            dontConfigure = true;
+            __darwinAllowLocalNetworking = pkgs.stdenv.isDarwin;
+            buildPhase = ''
+              runHook preBuild
+              export HOME="$TMPDIR/home"
+              export CARGO_HOME="$HOME/cargo-home"
+              export CARGO_TARGET_DIR="$HOME/target"
+              export CARGO_INCREMENTAL=0
+              export CARGO_NET_OFFLINE=true
+              export XDG_CACHE_HOME="$HOME/.cache"
+              export XDG_CONFIG_HOME="$HOME/.config"
+              export XDG_RUNTIME_DIR="$HOME/runtime"
+              export XDG_STATE_HOME="$HOME/.local/state"
+              export UV_CACHE_DIR="$XDG_CACHE_HOME/uv"
+              export NPM_CONFIG_USERCONFIG=/dev/null
+              mkdir -p \
+                "$CARGO_HOME" \
+                "$CARGO_TARGET_DIR" \
+                "$XDG_CACHE_HOME" \
+                "$XDG_CONFIG_HOME" \
+                "$XDG_RUNTIME_DIR" \
+                "$XDG_STATE_HOME"
+              chmod 0700 "$XDG_RUNTIME_DIR"
+              ${setupUvLinks}
+              ln -s -- "${gateCargoConfig}" "$CARGO_HOME/config.toml"
+              ${rustEnvironmentExports}
+              ${desktopEnvironment}
+              export PYTHONDONTWRITEBYTECODE=1
+              export PYTHONNOUSERSITE=1
+              # Compile exactly the three release harnesses the
+              # production-perf-check gate executes: the production
+              # performance fixture, the composition-root probe (lib
+              # harness), and the main-path trace fixture. One Cargo
+              # invocation, compiled only, never executed here.
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
+                -p pokecon --features integration-test-support,worker-binary \
+                --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
+                --message-format=json-render-diagnostics \
+                > "$TMPDIR/cargo-test-artifacts.jsonl"
+              ${pkgs.jq}/bin/jq -se --arg package_root "$PWD/rust/pokecon/" '
+                def expected_targets: [
+                  {
+                    name: "pokecon",
+                    kind: ["lib"]
+                  },
+                  {
+                    name: "production_perf_virtual",
+                    kind: ["test"]
+                  },
+                  {
+                    name: "main_path_trace_virtual",
+                    kind: ["test"]
+                  }
+                ];
+                [
+                  .[]
+                  | select(.reason == "compiler-artifact")
+                  | select((.target.src_path | type) == "string")
+                  | select(.target.src_path | startswith($package_root))
+                  | {
+                      name: .target.name,
+                      kind: .target.kind,
+                      executable: .executable
+                    }
+                ] as $actual
+                | expected_targets as $expected
+                | if ($actual | map(.name) | unique | length) != ($actual | length) then
+                    error("Cargo returned duplicate production perf target names")
+                  elif ($actual | map({ name, kind }) | sort_by(.name))
+                    != ($expected | sort_by(.name)) then
+                    error(
+                      "Cargo production perf target inventory differed: "
+                      + ($actual | map(.name) | sort | join(", "))
+                    )
+                  elif any(
+                    $actual[];
+                    ((.executable | type) != "string") or (.executable == "")
+                  ) then
+                    error("Cargo returned an empty or non-string production perf executable")
+                  elif ($actual | map(.executable) | unique | length) != ($actual | length) then
+                    error("Cargo returned duplicate production perf executable paths")
+                  elif any($actual[]; (.executable | startswith("/") | not)) then
+                    error("Cargo returned a non-absolute production perf executable path")
+                  else
+                    $actual
+                  end
+              ' "$TMPDIR/cargo-test-artifacts.jsonl" \
+                > "$TMPDIR/pokecon-production-perf-inventory.json"
+              extract_production_perf_executable() {
+                expected_target_name="$1"
+                extracted_executable="$(${pkgs.jq}/bin/jq -er \
+                  --arg target_name "$expected_target_name" '
+                    [
+                      .[]
+                      | select(.name == $target_name)
+                      | .executable
+                    ]
+                    | if length == 1 then
+                        .[0]
+                      else
+                        error("expected exactly one executable for " + $target_name)
+                      end
+                  ' "$TMPDIR/pokecon-production-perf-inventory.json")"
+                if [ ! -f "$extracted_executable" ] \
+                  || [ -L "$extracted_executable" ] \
+                  || [ ! -x "$extracted_executable" ]; then
+                  echo "Cargo returned an invalid production perf executable for $expected_target_name: $extracted_executable" >&2
+                  exit 2
+                fi
+                printf '%s' "$extracted_executable"
+              }
+              production_perf_executable="$(extract_production_perf_executable production_perf_virtual)"
+              production_perf_composition_executable="$(extract_production_perf_executable pokecon)"
+              production_perf_trace_executable="$(extract_production_perf_executable main_path_trace_virtual)"
+              unset -f extract_production_perf_executable
+              unset expected_target_name extracted_executable
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out/release/deps"
+              "${pkgs.coreutils}/bin/install" -m 0555 -- \
+                "$production_perf_executable" "$out/release/deps/production_perf_virtual-nix"
+              "${pkgs.coreutils}/bin/install" -m 0555 -- \
+                "$production_perf_composition_executable" "$out/release/deps/pokecon-nix"
+              "${pkgs.coreutils}/bin/install" -m 0555 -- \
+                "$production_perf_trace_executable" "$out/release/deps/main_path_trace_virtual-nix"
+              "${pkgs.python314}/bin/python" -I - "$out/release/.pokecon-production-perf-executables.json" <<'PY'
+              import json
+              import os
+              import sys
+
+              manifest_path = sys.argv[1]
+              manifest = {
+                  "composition_root": "release/deps/pokecon-nix",
+                  "main_path_trace": "release/deps/main_path_trace_virtual-nix",
+                  "production_perf": "release/deps/production_perf_virtual-nix",
+              }
+              release_root = os.path.dirname(manifest_path)
+              target_root = os.path.dirname(release_root)
+              for key, relative_path in manifest.items():
+                  candidate = os.path.realpath(os.path.join(target_root, relative_path))
+                  if os.path.commonpath((target_root, candidate)) != target_root:
+                      raise SystemExit(f"production perf executable escapes target directory: {key}")
+                  if os.path.islink(candidate) or not os.path.isfile(candidate):
+                      raise SystemExit(f"production perf executable is unavailable: {key}")
+                  if not os.access(candidate, os.X_OK):
+                      raise SystemExit(f"production perf executable is not executable: {key}")
+              temporary_manifest = f"{manifest_path}.tmp"
+              with open(temporary_manifest, "w", encoding="utf-8") as handle:
+                  json.dump(manifest, handle, sort_keys=True)
+                  handle.write("\n")
+              os.chmod(temporary_manifest, 0o644)
+              os.replace(temporary_manifest, manifest_path)
+              PY
+              touch "$out/passed"
+              runHook postInstall
+            '';
+          };
+
           mainPathTraceCheck = mkTask {
             name = "main-path-trace-check";
             runtimeInputs = rustTaskInputs ++ [
@@ -4046,6 +4219,7 @@
           checks.rust-ci-core = rustCoreCheck;
           checks.contract-sync = contractSyncCheck;
           checks.compatibility-corpus = compatibilityCorpusCheck;
+          checks.production-perf-target = productionPerfTarget;
           checks.web = webPackage;
 
           apps = {

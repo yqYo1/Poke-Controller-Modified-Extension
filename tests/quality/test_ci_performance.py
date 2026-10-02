@@ -251,6 +251,8 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "Restore Cargo executable bits lost by artifact transport" in job
     assert "if [ -d target/nix-tasks/release/build ]; then" in job
     assert "if [ -d target/nix-tasks/release/deps ]; then" in job
+    assert "for executable_name in pokecon pokecon-worker; do" in job
+    assert "target/nix-tasks/release/$executable_name" in job
     assert "steps.production_perf_build_target_download.outcome == 'success'" in job
     assert "steps.production_perf_target_download.outcome == 'success'" in job
     assert "find target/nix-tasks/release/build -type f -name build-script-build" in job

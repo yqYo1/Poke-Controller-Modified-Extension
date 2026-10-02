@@ -1142,6 +1142,11 @@ jobs:
           if [ -d target/nix-tasks/release/build ]; then
             find target/nix-tasks/release/build -type f -name build-script-build -exec chmod 0555 {} +
           fi
+          for executable_name in pokecon pokecon-worker; do
+            if [ -f "target/nix-tasks/release/$executable_name" ]; then
+              chmod 0555 "target/nix-tasks/release/$executable_name"
+            fi
+          done
           if [ -d target/nix-tasks/release/deps ]; then
             for executable_pattern in \
               'production_perf_virtual-*' \

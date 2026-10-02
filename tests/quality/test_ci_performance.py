@@ -415,6 +415,60 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "release/deps/main_path_trace_virtual-nix" in flake
 
 
+def test_production_perf_target_inventory_filters_non_executable_artifacts() -> None:
+    flake = (REPOSITORY / "flake.nix").read_text(encoding="utf-8")
+    target_start = flake.index("productionPerfTarget = pkgs.stdenv.mkDerivation")
+    extractor_start = flake.index("extract_production_perf_executable", target_start)
+    target_section = flake[target_start:extractor_start]
+    inventory_start = target_section.index('select(.reason == "compiler-artifact")')
+    inventory = target_section[inventory_start:]
+    executable_filter = 'select((.executable | type) == "string")'
+    non_empty_filter = 'select(.executable != "")'
+    actual_anchor = inventory.index("] as $actual")
+    assert executable_filter in inventory
+    assert non_empty_filter in inventory
+    assert inventory.index(executable_filter) < actual_anchor
+    assert inventory.index(non_empty_filter) < actual_anchor
+    assert "Cargo returned duplicate production perf target names" in target_section
+    assert (
+        "Cargo returned an empty or non-string production perf executable"
+        in target_section
+    )
+    assert "Cargo returned duplicate production perf executable paths" in target_section
+
+
+def test_production_perf_materialization_failure_is_fail_closed() -> None:
+    workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
+        encoding="utf-8"
+    )
+    build_start = workflow.index("  production_perf_build:\n")
+    build_end = workflow.index("  production_perf_target_upload:\n", build_start)
+    build_job = workflow[build_start:build_end]
+    realize_start = build_job.index(
+        "Realize production perf derivation (substitute or cold-build once)"
+    )
+    realize_end = build_job.index(
+        "      - name: Restore production perf Cargo target (read-only)",
+        realize_start,
+    )
+    realize_step = build_job[realize_start:realize_end]
+    assert (
+        "production perf derivation realized but materialization failed; "
+        "failing closed without raw Cargo fallback" in realize_step
+    )
+    failure_index = realize_step.index("failing closed without raw Cargo fallback")
+    assert "exit 2" in realize_step[failure_index : failure_index + 200]
+    assert (
+        "production perf derivation materialization failed; "
+        "raw Cargo fallback runs with fail-closed validation"
+    ) not in build_job
+    assert (
+        "production perf derivation is unavailable; "
+        "raw Cargo fallback runs with fail-closed validation" in realize_step
+    )
+    assert "steps.production_perf_derivation.outputs.realized != 'true'" in (build_job)
+
+
 def test_normal_ci_contract_gates_publish_acceptance_reports() -> None:
     workflow = (REPOSITORY / ".github/workflows/normal-ci.yml").read_text(
         encoding="utf-8"

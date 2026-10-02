@@ -1106,12 +1106,11 @@ jobs:
           }
           if derivation_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)" && \
             store_path="$(nix-store --realise "$derivation_drv")"; then
-            if materialize_production_perf_derivation "$store_path"; then
-              realized=true
-            else
-              echo "production perf derivation materialization failed; raw Cargo fallback runs with fail-closed validation" >&2
-              store_path=""
+            if ! materialize_production_perf_derivation "$store_path"; then
+              echo "production perf derivation realized but materialization failed; failing closed without raw Cargo fallback" >&2
+              exit 2
             fi
+            realized=true
           else
             echo "production perf derivation is unavailable; raw Cargo fallback runs with fail-closed validation" >&2
             store_path=""

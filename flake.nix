@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "066bb6b23d12ffe5ab35ce5143af9ff79c64e4fe901ed7ec6302a59b7f72ea13";
+      canonicalFlakeHash = "e378fae43386914ef21b2ce53cefe4e41fc772021c329e16b4535ec18d749703";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "5ef524e45fade8ddcb16f47d1be771ec1876db8c2009c30ed98c66284bd3e44e";
+          expectedAuditTestHash = "b5d300e89389681cda1df37f9bfe9ec53fcad250d59f068a5e05094cb6246066";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3951,6 +3951,8 @@
                   | select(.reason == "compiler-artifact")
                   | select((.target.src_path | type) == "string")
                   | select(.target.src_path | startswith($package_root))
+                  | select((.executable | type) == "string")
+                  | select(.executable != "")
                   | {
                       name: .target.name,
                       kind: .target.kind,

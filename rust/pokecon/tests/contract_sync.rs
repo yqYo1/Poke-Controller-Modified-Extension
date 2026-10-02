@@ -501,7 +501,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         normal_ci
             .matches("uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
             .count(),
-        5
+        6
     );
     assert_eq!(
         normal_ci
@@ -515,7 +515,7 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
             .count(),
         6
     );
-    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 12);
+    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 14);
     let normal_source = WORKFLOWS
         .iter()
         .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))
@@ -679,8 +679,14 @@ fn assert_ci_job_registry(ci: &Value) {
         assert_eq!(string_at(job, "name"), format!("{workflow}/{job_id}"));
         let command = string_at(job, "command");
         let windows_native = job["execution_environment"] == "windows-native";
+        // The same-SHA target upload job is a GitHub-managed cache/artifacts
+        // transfer with no build to run: it must not invoke Nix, so it is the
+        // single documented exception to the Nix-command rule.
+        let transfer_only = string_at(job, "name") == "normal-ci/production_perf_target_upload";
         assert!(
-            command.starts_with("nix ") || (windows_native && command.starts_with("cargo ")),
+            command.starts_with("nix ")
+                || (windows_native && command.starts_with("cargo "))
+                || (transfer_only && command.starts_with("actions/cache/restore")),
             "CI commands must use Nix except for explicit Windows-native jobs: {command}"
         );
         assert!(

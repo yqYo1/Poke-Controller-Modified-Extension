@@ -507,10 +507,26 @@
       ],
       "owns": [
         "trusted push release Cargo target preparation",
-        "same-SHA production performance cache and artifact handoff"
+        "same-SHA production performance cache handoff"
       ],
       "aggregate_role": "input",
       "applicable_when": "the product region is selected on a push event",
+      "not_applicable": "pull requests use read-only exact-SHA cache or artifact discovery and GitHub concludes this push-only job skipped",
+      "phase": 3
+    },
+    {
+      "name": "normal-ci/production_perf_target_upload",
+      "workflow": "normal-ci",
+      "job": "production_perf_target_upload",
+      "command": "actions/cache/restore exact-SHA Cargo target then actions/upload-artifact same-SHA handoff (GitHub-managed transfer, no Nix invocation)",
+      "selected_by_regions": [
+        "product"
+      ],
+      "owns": [
+        "same-SHA production performance artifact handoff"
+      ],
+      "aggregate_role": "input",
+      "applicable_when": "the product region is selected on a push event after the target build succeeds",
       "not_applicable": "pull requests use read-only exact-SHA cache or artifact discovery and GitHub concludes this push-only job skipped",
       "phase": 3
     },
@@ -815,6 +831,7 @@
           "normal-ci/remote_flake",
           "normal-ci/performance",
           "normal-ci/production_perf_build",
+          "normal-ci/production_perf_target_upload",
           "normal-ci/production_perf",
           "normal-ci/windows"
         ],

@@ -1003,6 +1003,24 @@ jobs:
         with:
           path: target/nix-tasks/release
           key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+
+  production_perf_target_upload:
+    name: Production performance target upload (Linux)
+    needs: [plan, production_perf_build]
+    if: >-
+      needs.plan.outputs.product == 'true' &&
+      github.event_name == 'push' &&
+      needs.production_perf_build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Restore production perf Cargo target (read-only)
+        id: production_perf_target_restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: target/nix-tasks/release
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
       - name: Upload production perf Cargo target for same-SHA consumers
         if: >-
           success() &&
@@ -1019,11 +1037,11 @@ jobs:
 
   production_perf:
     name: Production main-path virtual performance (Linux)
-    needs: [plan, production_perf_build]
+    needs: [plan, production_perf_build, production_perf_target_upload]
     if: >-
       always() &&
       needs.plan.outputs.product == 'true' &&
-      (github.event_name != 'push' || needs.production_perf_build.result == 'success')
+      (github.event_name != 'push' || (needs.production_perf_build.result == 'success' && needs.production_perf_target_upload.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -1041,7 +1059,7 @@ jobs:
         id: production_perf_build_target_download
         if: >-
           github.event_name == 'push' &&
-          needs.production_perf_build.result == 'success' &&
+          needs.production_perf_target_upload.result == 'success' &&
           steps.production_perf_target_restore.outputs.cache-hit != 'true'
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1222,6 +1240,7 @@ jobs:
       - remote_flake
       - performance
       - production_perf_build
+      - production_perf_target_upload
       - production_perf
       - windows
     if: >-
@@ -1262,6 +1281,7 @@ jobs:
             "remote_flake":{"applicable":${{ needs.plan.outputs.remote_flake == 'true' }},"reason":"remote flake paths changed"},
             "performance":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "production_perf_build":{"applicable":${{ github.event_name == 'push' && needs.plan.outputs.product == 'true' }},"reason":"trusted push target preparation"},
+            "production_perf_target_upload":{"applicable":${{ github.event_name == 'push' && needs.plan.outputs.product == 'true' }},"reason":"trusted push target upload"},
             "production_perf":{"applicable":${{ needs.plan.outputs.product == 'true' }},"reason":"product paths changed"},
             "windows":{"applicable":${{ needs.plan.outputs.rust == 'true' }},"reason":"Rust paths changed"}
             }}
@@ -1277,6 +1297,7 @@ jobs:
             remote_flake=${{ needs.remote_flake.result }} \
             performance=${{ needs.performance.result }} \
             production_perf_build=${{ needs.production_perf_build.result }} \
+            production_perf_target_upload=${{ needs.production_perf_target_upload.result }} \
             production_perf=${{ needs.production_perf.result }} \
             windows=${{ needs.windows.result }}
       - name: Download Nix evidence artifacts

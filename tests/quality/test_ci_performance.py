@@ -88,8 +88,11 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         encoding="utf-8"
     )
     build_start = workflow.index("  production_perf_build:\n")
-    build_end = workflow.index("  production_perf:\n", build_start)
+    build_end = workflow.index("  production_perf_target_upload:\n", build_start)
     build_job = workflow[build_start:build_end]
+    upload_start = workflow.index("  production_perf_target_upload:\n")
+    upload_end = workflow.index("  production_perf:\n", upload_start)
+    upload_job = workflow[upload_start:upload_end]
     job_start = workflow.index("  production_perf:\n")
     job_end = workflow.index("  windows:\n", job_start)
     job = workflow[job_start:job_end]
@@ -109,7 +112,9 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         in build_job
     )
     assert "Save production perf Cargo target" in build_job
-    assert "Upload production perf Cargo target for same-SHA consumers" in build_job
+    assert "Upload production perf Cargo target for same-SHA consumers" not in (
+        build_job
+    )
     assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in build_job
     assert (
         "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
@@ -126,11 +131,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     build_save_start = build_job.index(
         "      - name: Save production perf Cargo target"
     )
-    build_save_end = build_job.index(
-        "      - name: Upload production perf Cargo target for same-SHA consumers",
-        build_save_start,
-    )
-    build_save_step = build_job[build_save_start:build_save_end]
+    build_save_step = build_job[build_save_start:]
     assert "success()" in build_save_step
     assert "github.event_name == 'push'" in build_save_step
     assert "github.actor" in build_save_step
@@ -138,22 +139,49 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
         "steps.production_perf_target_restore.outputs.cache-hit != 'true'"
         in build_save_step
     )
-    build_upload_start = build_job.index(
+
+    assert "name: Production performance target upload (Linux)" in upload_job
+    assert "needs: [plan, production_perf_build]" in upload_job
+    assert "needs.plan.outputs.product == 'true'" in upload_job
+    assert "github.event_name == 'push'" in upload_job
+    assert "needs.production_perf_build.result == 'success'" in upload_job
+    assert "runs-on: ubuntu-latest" in upload_job
+    assert "timeout-minutes: 20" in upload_job
+    assert "Restore production perf Cargo target (read-only)" in upload_job
+    assert (
+        "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        in upload_job
+    )
+    assert (
+        "key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}"
+        in upload_job
+    )
+    assert "restore-keys:" not in upload_job
+    assert "nix run" not in upload_job
+    assert "actions/cache/save@" not in upload_job
+    upload_step_start = upload_job.index(
         "      - name: Upload production perf Cargo target for same-SHA consumers"
     )
-    build_upload = build_job[build_upload_start:]
-    assert "success()" in build_upload
-    assert "github.event_name == 'push'" in build_upload
-    assert "github.actor" in build_upload
-    assert "name: pokecon-production-perf-target-${{ github.sha }}" in build_upload
-    assert "path: target/nix-tasks/release" in build_upload
-    assert "if-no-files-found: error" in build_upload
-    assert "retention-days: 3" in build_upload
-    assert "compression-level: 0" in build_upload
-    assert "include-hidden-files: true" in build_upload
+    upload_step = upload_job[upload_step_start:]
+    assert "success()" in upload_step
+    assert "github.event_name == 'push'" in upload_step
+    assert "github.actor" in upload_step
+    assert "contains(fromJSON('[\"yqYo1\"]'), github.actor)" in upload_step
+    assert (
+        "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        in upload_step
+    )
+    assert "name: pokecon-production-perf-target-${{ github.sha }}" in upload_step
+    assert "path: target/nix-tasks/release" in upload_step
+    assert "if-no-files-found: error" in upload_step
+    assert "retention-days: 3" in upload_step
+    assert "compression-level: 0" in upload_step
+    assert "include-hidden-files: true" in upload_step
 
     assert "name: Production main-path virtual performance (Linux)" in job
-    assert "needs: [plan, production_perf_build]" in job
+    assert "needs: [plan, production_perf_build, production_perf_target_upload]" in (
+        job
+    )
     assert "always()" in job
     assert "needs.plan.outputs.product == 'true'" in job
     assert "runs-on: ubuntu-latest" in job
@@ -172,6 +200,24 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "Download production perf Cargo target from push build (read-only)" in job
     assert "id: production_perf_build_target_download" in job
     assert "needs.production_perf_build.result == 'success'" in job
+    assert "needs.production_perf_target_upload.result == 'success'" in job
+    push_download_start = job.index(
+        "      - name: Download production perf Cargo target from push build (read-only)"
+    )
+    push_download_end = job.index(
+        "      - name: Discover the same-SHA push production target artifact (read-only)",
+        push_download_start,
+    )
+    push_download_step = job[push_download_start:push_download_end]
+    assert "github.event_name == 'push'" in push_download_step
+    assert (
+        "needs.production_perf_target_upload.result == 'success'" in push_download_step
+    )
+    assert "needs.production_perf_build.result" not in push_download_step
+    assert (
+        "steps.production_perf_target_restore.outputs.cache-hit != 'true'"
+        in push_download_step
+    )
     assert "continue-on-error: true" in job
     assert "Discover the same-SHA push production target artifact (read-only)" in job
     discover_start = job.index(
@@ -346,6 +392,7 @@ def test_normal_ci_required_aggregates_performance_result() -> None:
 
     assert "      - performance\n" in required
     assert "      - production_perf_build\n" in required
+    assert "      - production_perf_target_upload\n" in required
     assert "      - production_perf\n" in required
     assert (
         '"performance":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
@@ -356,9 +403,17 @@ def test_normal_ci_required_aggregates_performance_result() -> None:
         in required
     )
     assert (
+        "\"production_perf_target_upload\":{\"applicable\":${{ github.event_name == 'push' && needs.plan.outputs.product == 'true' }}"
+        in required
+    )
+    assert (
         '"production_perf":{"applicable":${{ needs.plan.outputs.product == \'true\' }}'
         in required
     )
     assert "production_perf_build=${{ needs.production_perf_build.result }}" in required
+    assert (
+        "production_perf_target_upload=${{ needs.production_perf_target_upload.result }}"
+        in required
+    )
     assert "performance=${{ needs.performance.result }}" in required
     assert "production_perf=${{ needs.production_perf.result }}" in required

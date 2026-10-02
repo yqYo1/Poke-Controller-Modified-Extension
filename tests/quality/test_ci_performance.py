@@ -224,7 +224,10 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "POKECON_PRODUCTION_PERF_CYCLES: '300'" in job
     assert "POKECON_MAIN_PATH_TRACE_CYCLES: '300'" in job
     assert "POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'" in job
-    assert "POKECON_PERF_BUILD_SHA: ${{ github.sha }}" in job
+    assert (
+        "POKECON_PERF_BUILD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in job
+    )
     assert "POKECON_PERF_TARGET_REUSE: >-" in job
     assert (
         "steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success'"

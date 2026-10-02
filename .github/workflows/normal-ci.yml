@@ -1148,7 +1148,7 @@ jobs:
           POKECON_PRODUCTION_PERF_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
-          POKECON_PERF_BUILD_SHA: ${{ github.sha }}
+          POKECON_PERF_BUILD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           POKECON_PERF_TARGET_REUSE: >-
             ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
         run: |

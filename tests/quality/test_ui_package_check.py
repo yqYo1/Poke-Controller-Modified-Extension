@@ -168,7 +168,7 @@ WORKSPACE_BUILD_SCRIPT_SOURCES: dict[str, str] = {
     "rust/pokecon/build.rs": "@pokecon/build.rs",
 }
 EXPECTED_WORKSPACE_MANIFEST_HASHES: dict[str, str] = {
-    "rust/pokecon": "be376b9e37cddc47ff78428d2e2a8c962451196ef763b293acc026218ce5667c",
+    "rust/pokecon": "83acb589dca1e7f4dd947d8ac77abee557277b75e2451159a00268af291728a7",
 }
 
 EXPECTED_WORKSPACE_PROVENANCE = tomllib.loads(
@@ -364,6 +364,11 @@ required-features = ["integration-test-support", "worker-binary"]
 name = "startup"
 path = "tests/startup.rs"
 required-features = ["integration-test-support", "worker-binary"]
+
+[[test]]
+name = "transfer_reference_virtual"
+path = "tests/transfer_reference_virtual.rs"
+required-features = ["integration-test-support"]
 
 [[test]]
 name = "worker_startup"
@@ -2782,7 +2787,7 @@ def assert_canonical_cargo_provenance(sources: dict[str, str]) -> None:
     ]
     assert (
         hashlib.sha256(workspace_provenance_section.strip().encode()).hexdigest()
-        == "df0b60d7d00c7d1b5398610b57cad8637894d20374e3e006b3d540fdaeef0914"
+        == "3cb71edf06089f10ad44aa2316dd658510170ddd2c58a1dca4148c5b7c17ec0b"
     )
     for cargo_graph_proof in (
         "expectedWorkspaceManifestHashes =",
@@ -3766,7 +3771,7 @@ offline = true
     )
     assert (
         hashlib.sha256(rust_ci_check_section.strip().encode()).hexdigest()
-        == "4be442c727697d079860c1f0b8c74d5d7db2989d60fb6f5a45737be24bbfdd1b"
+        == "c8d6c3853488aaeca42b1bdc78a73898c6851df501ca2ecde1ce520410b67aaa"
     )
     for rust_ci_check_proof in (
         "rustCoreCheck = pkgs.stdenv.mkDerivation {",
@@ -3784,7 +3789,7 @@ offline = true
         "workflow/spec changes do not invalidate this",
         "Execute the lib harness and every non-contract integration harness",
         'name: "concurrent_camera_serial_load",',
-        'if [ "$executed_test_count" -ne 12 ]; then',
+        'if [ "$executed_test_count" -ne 13 ]; then',
         "cargo test --locked --workspace --all-features",
         "python -m scripts.compatibility.promote --check",
         "python -m scripts.compatibility.runner",

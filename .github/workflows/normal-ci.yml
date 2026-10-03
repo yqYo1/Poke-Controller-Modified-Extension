@@ -1558,6 +1558,9 @@ jobs:
           steps.production_perf_target_download.outcome == 'success')
         run: |
           set -euo pipefail
+          if [ -d target/nix-tasks/release ]; then
+            chmod -R u+rwX -- target/nix-tasks/release
+          fi
           if [ -d target/nix-tasks/release/build ]; then
             find target/nix-tasks/release/build -type f -name build-script-build -exec chmod 0555 {} +
           fi

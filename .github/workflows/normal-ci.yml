@@ -1081,15 +1081,16 @@ jobs:
             fi
             chmod -R u+w -- target/nix-tasks/release
             manifest_keys="$(jq -r 'keys_unsorted | sort | join(",")' "$derivation_manifest")"
-            if [ "$manifest_keys" != "composition_root,main_path_trace,production_perf" ]; then
+            if [ "$manifest_keys" != "composition_root,main_path_trace,production_perf,worker_binary" ]; then
               echo "materialized production perf manifest keys are not exact: $manifest_keys" >&2
               return 1
             fi
-            for manifest_pin_key in production_perf composition_root main_path_trace; do
+            for manifest_pin_key in production_perf composition_root main_path_trace worker_binary; do
               case "$manifest_pin_key" in
                 production_perf) manifest_pin_expected="release/deps/production_perf_virtual-nix" ;;
                 composition_root) manifest_pin_expected="release/deps/pokecon-nix" ;;
                 main_path_trace) manifest_pin_expected="release/deps/main_path_trace_virtual-nix" ;;
+                worker_binary) manifest_pin_expected="release/pokecon-worker" ;;
               esac
               manifest_pinned="$(jq -er --arg key "$manifest_pin_key" '.[$key]' "$derivation_manifest")"
               if [ "$manifest_pinned" != "$manifest_pin_expected" ]; then

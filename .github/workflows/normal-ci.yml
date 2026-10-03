@@ -1553,9 +1553,6 @@ jobs:
           github-token: ${{ github.token }}
           path: target/nix-tasks/release
       - name: Restore Cargo executable bits lost by artifact transport
-        if: >-
-          (steps.production_perf_build_target_download.outcome == 'success' ||
-          steps.production_perf_target_download.outcome == 'success')
         run: |
           set -euo pipefail
           if [ -d target/nix-tasks/release ]; then

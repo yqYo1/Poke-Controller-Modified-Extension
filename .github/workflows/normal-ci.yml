@@ -998,12 +998,14 @@ jobs:
           path: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
           key: ${{ steps.production_perf_derivation_key.outputs.key }}
       - name: Enable production perf derivation cache (signed, fail-closed)
+        id: production_perf_derivation_cache
         env:
           POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
           POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
         run: |
           if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
             echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
@@ -1020,6 +1022,7 @@ jobs:
             echo "require-sigs = true"
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
       - name: Realize production perf derivation (substitute or cold-build once)
         id: production_perf_derivation
         run: |
@@ -1272,6 +1275,29 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # Reuse the trusted push target only when the checked-out source is
+          # the same repository PR head. Fork PRs stay on the merge SHA and
+          # use the cold/virtual path without trusted artifacts.
+          ref: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.repository &&
+            github.event.pull_request.head.sha || github.sha }}
+      - name: Verify production perf source revision
+        id: production_perf_source
+        env:
+          EXPECTED_SOURCE_SHA: >-
+            ${{ github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.repository &&
+            github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_source_sha="$(git rev-parse HEAD)"
+          if [ "$actual_source_sha" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "production perf checkout revision differs from expected source: $actual_source_sha != $EXPECTED_SOURCE_SHA" >&2
+            exit 2
+          fi
+          echo "source_sha=$actual_source_sha" >> "$GITHUB_OUTPUT"
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
@@ -1280,7 +1306,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target/nix-tasks/release
-          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}
+          key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ steps.production_perf_source.outputs.source_sha }}
       - name: Resolve production perf derivation identity
         id: production_perf_derivation_key
         run: |
@@ -1298,12 +1324,14 @@ jobs:
           path: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
           key: ${{ steps.production_perf_derivation_key.outputs.key }}
       - name: Enable production perf derivation cache (signed, fail-closed)
+        id: production_perf_derivation_cache
         env:
           POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
           POKECON_NIX_CACHE_PUBLIC_KEY: ${{ secrets.POKECON_NIX_CACHE_PUBLIC_KEY }}
         run: |
           if [ -z "$POKECON_NIX_CACHE_PUBLIC_KEY" ]; then
             echo "PokeCon cache public key is not configured; skipping the optional substituter"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           case "$POKECON_NIX_CACHE_PUBLIC_KEY" in
@@ -1320,14 +1348,60 @@ jobs:
             echo "require-sigs = true"
             echo 'POKECON_NIX_CONFIG'
           } >> "$GITHUB_ENV"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
       - name: Materialize production perf derivation executables (substitute-only)
         id: production_perf_derivation_materialize
-        if: steps.production_perf_derivation_restore.outputs.cache-hit == 'true'
+        if: >-
+          steps.production_perf_derivation_restore.outputs.cache-hit == 'true' &&
+          steps.production_perf_derivation_cache.outputs.enabled == 'true'
+        env:
+          POKECON_NIX_CACHE_DIRECTORY: ${{ runner.temp }}/pokecon-production-perf-derivation-cache
         run: |
           set -euo pipefail
           realized=false
+          derivation_drv=""
+          derivation_store_path=""
+          cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"
+          expected_outputs=""
+          cache_available=false
           if derivation_drv="$(nix path-info --derivation .#checks.x86_64-linux.production-perf-target)" && \
-            derivation_store_path="$(nix-store --option fallback false --realise "$derivation_drv")"; then
+            expected_outputs="$(nix-store --query --outputs "$derivation_drv")" && \
+            [ -n "$expected_outputs" ]; then
+            cache_available=true
+            while IFS= read -r output_path; do
+              if [ -z "$output_path" ]; then
+                continue
+              fi
+              case "$output_path" in
+                /nix/store/*) ;;
+                *)
+                  cache_available=false
+                  break
+                  ;;
+              esac
+              if ! nix path-info --store "$cache_uri" --recursive "$output_path" > /dev/null 2>&1; then
+                cache_available=false
+                break
+              fi
+              if ! nix store verify --store "$cache_uri" --recursive --sigs-needed 1 --no-contents "$output_path" > /dev/null 2>&1; then
+                cache_available=false
+                break
+              fi
+            done <<< "$expected_outputs"
+          fi
+          if [ "$cache_available" = true ]; then
+            while IFS= read -r output_path; do
+              if [ -z "$output_path" ]; then
+                continue
+              fi
+              if ! nix copy --from "$cache_uri" "$output_path" > /dev/null; then
+                cache_available=false
+                break
+              fi
+              derivation_store_path="$output_path"
+            done <<< "$expected_outputs"
+          fi
+          if [ "$cache_available" = true ] && [ -n "$derivation_store_path" ]; then
             case "$derivation_store_path" in
               /nix/store/*) ;;
               *)
@@ -1365,7 +1439,11 @@ jobs:
               echo "production perf derivation content failed validation; same-SHA handoff paths still apply" >&2
             fi
           else
-            echo "production perf derivation substitution failed; same-SHA handoff paths still apply" >&2
+            if [ "$cache_available" = true ]; then
+              echo "production perf derivation substitution failed; same-SHA handoff paths still apply" >&2
+            else
+              echo "production perf derivation outputs are not all present in the signed substituter; same-SHA handoff paths still apply" >&2
+            fi
           fi
           echo "realized=$realized" >> "$GITHUB_OUTPUT"
           unset realized
@@ -1389,17 +1467,17 @@ jobs:
           steps.production_perf_target_restore.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          POKECON_PRODUCTION_PERF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POKECON_PRODUCTION_PERF_SOURCE_SHA: ${{ steps.production_perf_source.outputs.source_sha }}
         run: |
           set -euo pipefail
-          expected_name="pokecon-production-perf-target-$POKECON_PRODUCTION_PERF_HEAD_SHA"
+          expected_name="pokecon-production-perf-target-$POKECON_PRODUCTION_PERF_SOURCE_SHA"
           found_run_id=""
           found_artifact=false
           for attempt in $(seq 1 30); do
             runs_json="$(mktemp)"
             found_run_id=""
             if gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/normal-ci.yml/runs?event=push&per_page=50" > "$runs_json"; then
-              if ! found_run_id="$(jq -r --arg sha "$POKECON_PRODUCTION_PERF_HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '[.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo and .actor.login == "yqYo1") | {id, created_at}] | sort_by(.created_at) | reverse | first.id // empty' "$runs_json")"; then
+              if ! found_run_id="$(jq -r --arg sha "$POKECON_PRODUCTION_PERF_SOURCE_SHA" --arg repo "$GITHUB_REPOSITORY" '[.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo and .actor.login == "yqYo1") | {id, created_at}] | sort_by(.created_at) | reverse | first.id // empty' "$runs_json")"; then
                 found_run_id=""
               fi
             fi
@@ -1485,7 +1563,7 @@ jobs:
           POKECON_PRODUCTION_PERF_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
-          POKECON_PERF_BUILD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          POKECON_PERF_BUILD_SHA: ${{ steps.production_perf_source.outputs.source_sha }}
           POKECON_PERF_TARGET_REUSE: >-
             ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_derivation_materialize.outputs.realized == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
         run: |

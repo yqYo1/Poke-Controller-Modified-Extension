@@ -187,13 +187,17 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "runs-on: ubuntu-latest" in job
     assert "timeout-minutes: 20" in job
     assert "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803" in job
+    assert "id: production_perf_source" in job
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in job
+    assert 'actual_source_sha="$(git rev-parse HEAD)"' in job
+    assert "production perf checkout revision differs from expected source" in job
     assert "cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24" in job
     assert "Restore production perf Cargo target (read-only)" in job
     assert "id: production_perf_target_restore" in job
     assert "uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9" in job
     assert "path: target/nix-tasks/release" in job
     assert (
-        "key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ github.sha }}"
+        "key: pokecon-production-perf-target-v1-${{ runner.os }}-${{ steps.production_perf_source.outputs.source_sha }}"
         in job
     )
     assert "restore-keys:" not in job
@@ -242,7 +246,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert '.actor.login == "yqYo1"' in discover_step
     assert ".expired == false" in discover_step
     assert (
-        "POKECON_PRODUCTION_PERF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}"
+        "POKECON_PRODUCTION_PERF_SOURCE_SHA: ${{ steps.production_perf_source.outputs.source_sha }}"
         in job
     )
     assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in job
@@ -273,7 +277,7 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "POKECON_MAIN_PATH_TRACE_CYCLES: '300'" in job
     assert "POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'" in job
     assert (
-        "POKECON_PERF_BUILD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        "POKECON_PERF_BUILD_SHA: ${{ steps.production_perf_source.outputs.source_sha }}"
         in job
     )
     assert "POKECON_PERF_TARGET_REUSE: >-" in job
@@ -397,9 +401,20 @@ def test_normal_ci_production_perf_gate_is_blocking_and_artifact_backed() -> Non
     assert "actions/cache/save@" not in upload_job
     assert "id: production_perf_derivation_key" in job
     assert "id: production_perf_derivation_restore" in job
+    assert "id: production_perf_derivation_cache" in job
     assert "id: production_perf_derivation_materialize" in job
     assert "Materialize production perf derivation executables (substitute-only)" in job
-    assert "--option fallback false --realise" in job
+    assert "steps.production_perf_derivation_cache.outputs.enabled == 'true'" in job
+    assert 'nix-store --query --outputs "$derivation_drv"' in job
+    assert 'cache_uri="file://$POKECON_NIX_CACHE_DIRECTORY?priority=20"' in job
+    assert 'nix path-info --store "$cache_uri" --recursive "$output_path"' in job
+    assert (
+        'nix store verify --store "$cache_uri" --recursive --sigs-needed 1 --no-contents "$output_path"'
+        in job
+    )
+    assert "cache_available=false" in job
+    assert 'nix copy --from "$cache_uri" "$output_path"' in job
+    assert 'nix-store --option fallback false --realise "$derivation_drv"' not in job
     assert "actions/cache/save@" not in job
     assert "nix store sign" not in job
     assert "nix copy --to" not in job
@@ -424,11 +439,14 @@ def test_production_perf_target_inventory_filters_non_executable_artifacts() -> 
     inventory = target_section[inventory_start:]
     executable_filter = 'select((.executable | type) == "string")'
     non_empty_filter = 'select(.executable != "")'
+    test_profile_filter = "select(.profile.test == true)"
     actual_anchor = inventory.index("] as $actual")
     assert executable_filter in inventory
     assert non_empty_filter in inventory
+    assert test_profile_filter in inventory
     assert inventory.index(executable_filter) < actual_anchor
     assert inventory.index(non_empty_filter) < actual_anchor
+    assert inventory.index(test_profile_filter) < actual_anchor
     assert "Cargo returned duplicate production perf target names" in target_section
     assert (
         "Cargo returned an empty or non-string production perf executable"

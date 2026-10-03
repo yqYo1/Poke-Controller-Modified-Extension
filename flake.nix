@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "e378fae43386914ef21b2ce53cefe4e41fc772021c329e16b4535ec18d749703";
+      canonicalFlakeHash = "fa650e50a68f3037b8e184ba893a60b6ce1f9846d2208bc071667addf6f1795b";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -3949,6 +3949,7 @@
                 [
                   .[]
                   | select(.reason == "compiler-artifact")
+                  | select(.profile.test == true)
                   | select((.target.src_path | type) == "string")
                   | select(.target.src_path | startswith($package_root))
                   | select((.executable | type) == "string")

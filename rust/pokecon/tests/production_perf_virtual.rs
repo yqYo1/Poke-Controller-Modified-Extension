@@ -41,7 +41,9 @@
 //! `POKECON_PRODUCTION_PERF_FAST=1|0` (force fast sanity or full mode),
 //! `POKECON_PRODUCTION_PERF_SAMPLES` /
 //! `POKECON_PRODUCTION_PERF_WARMUP_SECS` / `POKECON_PRODUCTION_PERF_CYCLES`
-//! (explicit per-value overrides), `POKECON_PERF_BUILD_SHA` (report header).
+//! (explicit per-value overrides), `POKECON_PERF_BUILD_SHA` (report header),
+//! `POKECON_PERF_TARGET_REUSE` (whether the release executable set was
+//! reused from a verified same-SHA target handoff).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -641,12 +643,22 @@ fn mode_entry(config: &RunConfig) -> serde_json::Value {
     })
 }
 
+fn target_reuse() -> bool {
+    match std::env::var("POKECON_PERF_TARGET_REUSE") {
+        Ok(value) if value == "1" || value.eq_ignore_ascii_case("true") => true,
+        Ok(value) if value == "0" || value.eq_ignore_ascii_case("false") => false,
+        Ok(value) => panic!("POKECON_PERF_TARGET_REUSE must be true or false, saw {value:?}"),
+        Err(_) => false,
+    }
+}
+
 fn header_entry() -> serde_json::Value {
     serde_json::json!({
         "build_sha": std::env::var("POKECON_PERF_BUILD_SHA").unwrap_or_else(|_| "unknown".to_owned()),
         "runner": std::env::var("RUNNER_NAME").or_else(|_| std::env::var("HOSTNAME")).unwrap_or_else(|_| "unknown".to_owned()),
         "package_version": env!("CARGO_PKG_VERSION"),
         "profile": std::env::var("POKECON_PRODUCTION_PERF_PROFILE").unwrap_or_else(|_| "test".to_owned()),
+        "target_reuse": target_reuse(),
     })
 }
 
@@ -826,6 +838,10 @@ fn assert_report_shape(path: &str, config: &RunConfig) {
         "fixed threshold policy"
     );
     assert_eq!(parsed["result"], "pass", "report result");
+    assert!(
+        parsed["header"]["target_reuse"].is_boolean(),
+        "report target_reuse provenance must be boolean"
+    );
     let measurements = parsed["measurements"]
         .as_array()
         .expect("measurements must be an array");

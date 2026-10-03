@@ -1560,6 +1560,10 @@ jobs:
           set -euo pipefail
           if [ -d target/nix-tasks/release ]; then
             chmod -R u+rwX -- target/nix-tasks/release
+            if [ ! -w target/nix-tasks/release ]; then
+              echo "downloaded production perf target directory is not writable" >&2
+              exit 2
+            fi
           fi
           if [ -d target/nix-tasks/release/build ]; then
             find target/nix-tasks/release/build -type f -name build-script-build -exec chmod 0555 {} +

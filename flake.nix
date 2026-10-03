@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "701e0c2e3b8aaf1d2d4fb10360e087e1f62051aebbe3265be569bb8db1d13f4b";
+      canonicalFlakeHash = "2ba2377c0405f68b451d7657b46c370c3b2a6da884d210a216162d8e6ea8264f";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "53ae650f5ecc19cb51d2311cb0cd5ca6c50d5c6504e95ed8c460ffcbd28931de";
+          expectedAuditTestHash = "500b8bb49e5cda961a510b3b75b1cfffdc19c16f2defd5a0d010a7f63eacf24b";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -784,7 +784,7 @@
             "rust/pokecon" = "build.rs";
           };
           expectedWorkspaceManifestHashes = {
-            "rust/pokecon" = "be376b9e37cddc47ff78428d2e2a8c962451196ef763b293acc026218ce5667c";
+            "rust/pokecon" = "83acb589dca1e7f4dd947d8ac77abee557277b75e2451159a00268af291728a7";
           };
           expectedWorkspaceBuildDependencies = {
             "rust/pokecon" = {
@@ -2764,6 +2764,10 @@
               export CARGO_PROFILE_TEST_DEBUG=0
               ${lib.optionalString pkgs.stdenv.isLinux "export RUSTFLAGS='-C link-arg=-Wl,--threads=1'"}
               export POKECON_RESOURCE_PROVENANCE=development
+              export POKECON_PERF_BUILD_SHA="nix-source:${rustCoreTestSource}"
+              export RUNNER_NAME="nix-${system}"
+              export POKECON_TRANSFER_REFERENCE_OUT="$TMPDIR/transfer-reference-evidence"
+              mkdir -p "$POKECON_TRANSFER_REFERENCE_OUT"
               # Compile the complete test graph once. Contract data is loaded at
               # execution time, so workflow/spec changes do not invalidate this
               # expensive artifact producer.
@@ -2829,6 +2833,11 @@
                   },
                   {
                     name: "startup",
+                    kind: ["test"],
+                    crate_types: ["bin"]
+                  },
+                  {
+                    name: "transfer_reference_virtual",
                     kind: ["test"],
                     crate_types: ["bin"]
                   },
@@ -2930,15 +2939,23 @@
                   | .name
                 ' "$TMPDIR/pokecon-test-inventory.json"
               )
-              if [ "$executed_test_count" -ne 12 ]; then
-                echo "Expected to execute 12 non-contract test targets, executed $executed_test_count" >&2
+              if [ "$executed_test_count" -ne 13 ]; then
+                echo "Expected to execute 13 non-contract test targets, executed $executed_test_count" >&2
                 exit 2
               fi
               runHook postBuild
             '';
             installPhase = ''
               runHook preInstall
-              mkdir -p "$out/libexec"
+              mkdir -p "$out/libexec" "$out/evidence"
+              for evidence in transfer-reference-report.json transfer-reference-samples.json; do
+                evidence_path="$POKECON_TRANSFER_REFERENCE_OUT/$evidence"
+                if [ ! -s "$evidence_path" ]; then
+                  echo "Rust reference benchmark evidence is missing: $evidence_path" >&2
+                  exit 2
+                fi
+                install -m 0444 "$evidence_path" "$out/evidence/$evidence"
+              done
               install -m 0555 "$contract_test_executable" "$out/libexec/contract-sync"
               for binary in pokecon-compatibility pokecon-worker; do
                 binary_path="$CARGO_TARGET_DIR/debug/$binary"

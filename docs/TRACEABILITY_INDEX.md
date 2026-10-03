@@ -108,7 +108,7 @@
 |---|---|---|
 | `auto_reload_config` OS-native watcher | 実装済み・current remote acceptance未完了 | `TRACEABILITY_BACKEND.md` §11.5、`rust/pokecon/src/dynamic_watcher.rs`、focused 17 tests。watch対象、debounce、single-flight、停止順、worker不在／rejection／retryをsourceとlocal testで確認済み。current SHAのremote required CI／full product acceptanceは別gateで確認する |
 | GPUI native frontend | PoC実装済み、Gate 1未受入 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0、[`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)、[`GPUI_FRONTEND_PLAN.md`](GPUI_FRONTEND_PLAN.md)。Cargo／CLI／fake-view testとWeston headless Waylandのnative readiness／clean shutdown reportはあるが、IME／clipboard／AccessKit treeの実window操作、Gate 1-6や採否は未完了 |
-| `production`主経路のlatency／throughput／jitter／soak | localのvirtual-I/O blocking fixtureは実装・検証済み、clean／remote未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`docs/ACCEPTANCE.md`性能schema、`docs/ARTIFACT_MANIFEST.md` production fixture。CI workflow上のclean-source／remote required CI、実機I/Oは未証明 |
+| `production`主経路のlatency／throughput／jitter／soak | reference harnessとlocal virtual-I/O fixtureは実装・検証済み、production acceptanceのclean／remote証跡は未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`rust/pokecon/tests/transfer_reference_virtual.rs`、Nix `rust-core-artifacts`のreport／samples、`docs/ACCEPTANCE.md`性能schema、`docs/ARTIFACT_MANIFEST.md` production fixture。reference harnessのpipe armは§7.8 control codecを使わない合成比較であり、仕様本文の28.23/3.28msをassertせず、production threshold／jitter／soak／実機I/Oを証明しない |
 | 外部browser／tailnet WebRTC | 外部証跡待ち | `PLAN.md`外部browser受入、`docs/ACCEPTANCE.md` browser matrix。isolated serviceのstop／cleanupを含む |
 | 実機／driver／firmware／console | 外部証跡待ち | `docs/ACCEPTANCE.md`のhardware record。virtual I/O successは代用しない |
 | clean detached worktree再受入 | 制約により未成立 | `PLAN.md`現行残タスク。既存worktreeのみを使う制約の変更が必要 |

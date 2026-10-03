@@ -501,21 +501,21 @@ fn ci_cache_and_timing_registry_tracks_implemented_boundaries() {
         normal_ci
             .matches("uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
             .count(),
-        6
+        8
     );
     assert_eq!(
         normal_ci
             .matches("uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9")
             .count(),
-        3
+        4
     );
     assert_eq!(
         normal_ci
             .matches("contains(fromJSON('[\"yqYo1\"]'), github.actor)")
             .count(),
-        6
+        8
     );
-    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 14);
+    assert_eq!(normal_ci.matches("github.event_name == 'push'").count(), 16);
     let normal_source = WORKFLOWS
         .iter()
         .find_map(|(name, source)| (*name == "normal-ci").then_some(source.as_str()))

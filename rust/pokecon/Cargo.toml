@@ -111,6 +111,11 @@ path = "tests/startup.rs"
 required-features = ["integration-test-support", "worker-binary"]
 
 [[test]]
+name = "transfer_reference_virtual"
+path = "tests/transfer_reference_virtual.rs"
+required-features = ["integration-test-support"]
+
+[[test]]
 name = "worker_startup"
 path = "tests/worker_startup.rs"
 required-features = ["worker-binary"]

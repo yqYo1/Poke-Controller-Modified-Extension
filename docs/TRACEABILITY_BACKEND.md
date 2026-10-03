@@ -59,7 +59,7 @@
 | 7.9.4 reader: pin+再トークン検査+seq検査、8回yield再試行、履歴/ゼロ退避、PinGuard | 実装済み | `src/camera/shared_ring.rs:13` READ_RETRY_LIMIT=8; `:209-232` read_published_with_hook; `:372` history同形 else zero |
 | 7.9.4 最新フレーム+衝突回復（回収→pin初期化、対応維持、記述子再送） | 実装済み | `src/camera/shared_ring.rs:289` recover_reader_pins; `:335` トークン無効化し対応維持; `src/camera/manager.rs:415,489,514,610` invalidate_publication |
 | 7.9.5 Camera API統合（image_bgr/readFrame/getCameraImage→私用コピー） | 実装済み | `src/worker_binary/script/python.rs:895` camera_frame; `:2327-2334` image_bgr/readFrame; getCameraImage定義 `:3517-3518`（`:3247` は利用側） |
-| 7.9.6 ベンチマーク注記（28.23ms対3.28ms; CIモックのみゲート） | 未実装 | 値は仕様文のみ。benches/なし、criterionなし、カメラ/CIにモックI/O性能ゲートなし（再確認） |
+| 7.9.6 ベンチマーク注記（28.23ms対3.28ms; CIモックのみゲート） | 実装済み（reference-only） | `tests/transfer_reference_virtual.rs` が固定1920×1080 frame、50 warm-up、200 measured、MessagePack bin32 body＋匿名pipeの合成転送と`SharedFrameRing` worker-side copyを比較し、u64 little-endian pipe framing、§7.8 control codec非使用、units/sample counts/source-build identity付きJSONを検証。`rust/pokecon/Cargo.toml`と`flake.nix`の`rustCoreCheck`へ統合し、report／samplesをNix成果物とNormal CI artifactへ保存。仕様本文の28.23/3.28msは`prose_reference=true`・`asserted=false`であり、production §7.8 codecやlatency／throughput acceptanceの証拠ではない。focused test 7 passed、dirty localの`nix run .#rust-ci-core`も成功。current commitのremote required CIは別途確認する |
 
 ## 10 + 付録B
 
@@ -170,9 +170,9 @@
 
 ## 集計
 
-- 実装済み 113 / 部分的 12 / 未実装 1 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。11.5.1のOS-native watcher実装と17件のfocused testを反映。総数は維持）
+- 実装済み 114 / 部分的 12 / 未実装 0 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。11.5.1のOS-native watcher実装と17件のfocused testを反映。7.9.6 reference harnessのsource／Nix integrationと7 focused testを反映）
 - 部分的12: §1.2 UI温存、§4.6.1参照専用、§4.6.2監視、§6.1.6自動選択、7.8.1 OOB、7.8.4 log、7.9.2 SHM、10.4.3 tk橋渡し、付録B、11.1 none、11.4.3、§14.6 LSP
-- 未実装1: 7.9.6ベンチマーク
+- 未実装0
 - 仕様のみ1: §1.2 frontend技術選択
 
 ## 旧引用の修正（前身からの差分）
@@ -183,13 +183,12 @@
 
 ## 対応が必要な未達（アクション）
 
-1. 7.9.6 参照ベンチマーク harness の追加（未実装）。benches/criterion なし。CIはモックI/O性能ゲートとして配線。
-2. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
-3. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
-4. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
-5. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
-6. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
-7. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
+1. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
+2. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
+3. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
+4. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
+5. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
+6. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
 
 ## 行なし仕様規範（将来の行候補）
 

@@ -170,6 +170,33 @@ jobs:
           needs.plan.outputs.rust != 'true' && needs.plan.outputs.contracts == 'true'
         run: |
           "$POKECON_NIX_WRAPPER" run .#contract-check
+      - name: Collect Rust reference benchmark evidence
+        if: >-
+          success() &&
+          needs.plan.outputs.rust == 'true'
+        run: |
+          set -euo pipefail
+          rust_output="$($POKECON_NIX_WRAPPER path-info .#checks.x86_64-linux.rust-core-artifacts)"
+          evidence_dir="$RUNNER_TEMP/pokecon-transfer-reference-evidence"
+          mkdir -p "$evidence_dir"
+          for evidence in transfer-reference-report.json transfer-reference-samples.json; do
+            source_path="$rust_output/evidence/$evidence"
+            if [ ! -s "$source_path" ]; then
+              echo "Rust reference benchmark evidence is missing: $source_path" >&2
+              exit 1
+            fi
+            cp -- "$source_path" "$evidence_dir/$evidence"
+          done
+      - name: Upload Rust reference benchmark evidence
+        if: >-
+          always() &&
+          needs.plan.outputs.rust == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: transfer-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pokecon-transfer-reference-evidence/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Export the PokeCon Rust check to the binary cache (signed)
         if: >-
           success() &&

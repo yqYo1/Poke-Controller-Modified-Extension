@@ -195,7 +195,7 @@ jobs:
         with:
           name: transfer-reference-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/pokecon-transfer-reference-evidence/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
       - name: Export the PokeCon Rust check to the binary cache (signed)
         if: >-

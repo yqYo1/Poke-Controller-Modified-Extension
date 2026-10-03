@@ -27,7 +27,7 @@
 |---|---|---|---|---|---|
 | 起動、readiness、shutdown、resource ownership | backend §1.2、integration §7.1-§7.7、§15 | Rust composition／`ProductionRuntime` owner | `rust/pokecon/src/production.rs:176-445`、`src/entrypoint.rs`、`src/runtime/` | `rust/pokecon/tests/lifecycle.rs`、`nix run .#cargo-test`、Normal CI Rust job | 実装済み。process-level camera timeoutと外部browserは別gap |
 | 設定pipeline、四つのroot、`app_name`、path／secret policy | backend §4.4、§11.1-§11.4、§12、§14 | Settings pipeline／registry owner | `rust/pokecon/src/settings/pipeline.rs`、`src/settings/roots.rs`、`registry/settings.json` | `rust/pokecon/tests/contract_sync.rs`、settings unit tests、`nix run .#contract-check` | 実装済み。仕様と異なるsecret modeは詳細表でowner decision待ち |
-| 動的設定のPython／Lua runtimeとtransaction | backend §11.5、integration §7.5 | Dynamic worker／dynamic host owner | `rust/pokecon/src/dynamic_runtime.rs`、`src/dynamic/`、`src/worker_binary/dynamic/` | `rust/pokecon/tests/lifecycle.rs`、dynamic unit tests、contract registry | 部分。手動reload／transactionは実装済み、OS-native `auto_reload_config` watcherは未実装 |
+| 動的設定のPython／Lua runtimeとtransaction | backend §11.5、integration §7.5 | Dynamic worker／dynamic host／watcher owner | `rust/pokecon/src/dynamic_runtime.rs`、`src/dynamic/`、`src/worker_binary/dynamic/`、`src/dynamic_watcher.rs`、`src/application_backend.rs` | `rust/pokecon/tests/lifecycle.rs`、`dynamic_watcher::tests`（17 passed）、dynamic unit tests、contract registry | 部分。startup／manual／OS-native auto-reload、debounce、single-flight、停止／reapは実装・focused test済み。current remote required CIとfull product acceptanceは別gap |
 | Profile switchとscript worker lifecycle | backend §1.2、§10、integration §7.2 | `ProfileService`／script worker owner | `rust/pokecon/src/profile_service.rs`、`src/script_runtime.rs`、`src/worker/supervisor.rs` | `rust/pokecon/tests/lifecycle.rs`、`tests/script_runtime.rs` | 実装済み。live browser profile discoveryは外部受入待ち |
 | 固定compatibility corpusとpromotion | backend §4.6 | Compatibility registry／CI owner | `registry/compatibility.json`、`compatibility/fixed-manifest.json`、`scripts/compatibility/` | `tests/compatibility/`、`nix run .#compatibility`（baseline 3、script 103、discovered 98） | 実装済み。rolling／same-SHA live fixtureは外部証跡待ち |
 | Camera enumeration、selector、capture、reconfigure | backend §6.1.6、§7.9、integration §6.1.5 | Camera manager／shared ring owner | `rust/pokecon/src/camera/manager.rs`、`selector.rs`、`shared_ring.rs`、`native.rs` | camera manager／shared ring tests、`tests/concurrent_camera_serial_load.rs`、`nix run .#cargo-test` | 部分。production latency／throughput／real cameraは未受入 |
@@ -43,7 +43,7 @@
 | Notifications、secret projection、failure isolation | backend §10.3、frontend §4.3、integration §7.7 | Notification service／Web notification UI owner | `rust/pokecon/src/device/notification/`、`web/src/lib/components/NotificationsTab.svelte` | notification tests、`NotificationsTab.test.ts`、secret-safe contract | 実装済み。外部Discord／Windows notification deliveryは実環境受入待ち |
 | Packaging、managed runtime、wheelhouse、NSIS／Debian | backend §14、frontend §0、integration §8 | release scripts／Nix／Package workflow owner | `scripts/release/`、`flake.nix`、`.github/workflows/package.yml` | Package CI `36150170942`全8 job、primary／repro artifact、release tests | 実装済み。Release tag／publicationはowner decision待ち |
 | CI regions、aggregate、Nix evidence、timing | plan §3、integration §8 | `.github/workflows`／`scripts/ci` owner | `normal-ci.yml`、`package.yml`、`scripts/ci/aggregate.py`、`nix_evidence.py`、`ci_timing.py` | Normal CI `36150170777`、p95 timing artifact、`tests/quality/`、mutation 395/395 | 部分。fixture run matrix、cancel-in-progress、10-run history、non-draft mergeabilityは外部証跡待ち |
-| GPUI native frontend | frontend §0、integration §0、GPUI plan | Future UI owner。現行Web/Tauriを維持 | `docs/GPUI_PHASE0_INVENTORY.md`のみ。Cargo／selector／`apps.gpui`なし | Phase 0 inventoryと5条件のみ。Phase 1 Gate 1-6未実施 | 将来。採否、依存、native／WASM scopeはowner decision待ち |
+| GPUI native frontend | frontend §0、integration §0、GPUI plan | Future UI owner。現行Web/Tauriを維持 | `rust/pokecon/src/gpui/`、`src/entrypoint.rs`、`flake.nix`の`apps.gpui`、`Cargo.toml`／`Cargo.lock`のexact pin、`docs/GPUI_PHASE0_INVENTORY.md` | fake-view／headless tests、GPUI feature build／Clippy／all-features testは実装済み。Phase 1 Gate 1のnative window、IME／clipboard／AccessKit、license／clean-source／remote証跡は未実施 | PoC実装済み・Gate 1未受入。採否、依存closure、native／WASM scopeはowner decision待ち |
 
 ## 4. 役割とownerの境界
 
@@ -67,7 +67,7 @@
 
 - production latency／throughput／jitterの閾値とsoak duration。
 - resource contentionの優先順位、starvation、backpressureの規範。
-- `auto_reload_config`の監視対象、debounce、retry、worker ownership、停止順、対応OS。
+- `auto_reload_config`の対応OS／notify backend差分と、remote／full product acceptanceの証跡。
 - GPUI native／WASMのscope、依存release、license、Gate 1採否。
 - Release tag作成とtag-triggered publication。
 

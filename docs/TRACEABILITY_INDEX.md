@@ -46,7 +46,7 @@
 | §10 command class、付録B CommandMeta | [`TRACEABILITY_BACKEND.md:64-95`](TRACEABILITY_BACKEND.md#10--付録b) | public script surface、typing、protocol、部分的なCommandMetaを個別行で判定 |
 | §11 settings filesystem | [`TRACEABILITY_BACKEND.md:97-127`](TRACEABILITY_BACKEND.md#111-114) | registry、scope、pipeline、dynamic config、apply pathを個別行で判定 |
 | §12 environment、§14 development environment | [`TRACEABILITY_BACKEND.md:128-154`](TRACEABILITY_BACKEND.md#12--14) | env surface、XDG、Nix／devShellを個別行で判定 |
-| §11.5 runtime dynamic configuration | [`TRACEABILITY_BACKEND.md:155-170`](TRACEABILITY_BACKEND.md#115) | manual reload、dynamic worker、`auto_reload_config`の未実装部分を分離して判定 |
+| §11.5 runtime dynamic configuration | [`TRACEABILITY_BACKEND.md:155-170`](TRACEABILITY_BACKEND.md#115) | manual reload、dynamic worker、`auto_reload_config`のOS-native watcherと未受入範囲を分離して判定 |
 | 集計、action、将来候補 | [`TRACEABILITY_BACKEND.md:171-197`](TRACEABILITY_BACKEND.md#集計) | 集計は個別行の要約であり、未実装を成功へ変換しない |
 
 ### 3.2 Frontend
@@ -106,7 +106,7 @@
 
 | 項目 | 現在の判定 | 直接の残課題／次の証拠 |
 |---|---|---|
-| `auto_reload_config` OS-native watcher | 未実装 | `TRACEABILITY_BACKEND.md` §11.5と`TRACEABILITY_FRONTEND.md` §11.5.7。watch対象、debounce、single-flight、停止順、worker不在／parse errorの製品判断後に実装する |
+| `auto_reload_config` OS-native watcher | 実装済み・current remote acceptance未完了 | `TRACEABILITY_BACKEND.md` §11.5、`rust/pokecon/src/dynamic_watcher.rs`、focused 17 tests。watch対象、debounce、single-flight、停止順、worker不在／rejection／retryをsourceとlocal testで確認済み。current SHAのremote required CI／full product acceptanceは別gateで確認する |
 | GPUI native frontend | PoC実装済み、Gate 1未受入 | `TRACEABILITY_FRONTEND.md` §0、`TRACEABILITY_INTEGRATION.md` §0、[`GPUI_PHASE0_INVENTORY.md`](GPUI_PHASE0_INVENTORY.md)、[`GPUI_FRONTEND_PLAN.md`](GPUI_FRONTEND_PLAN.md)。Cargo／CLI／fake-view testとWeston headless Waylandのnative readiness／clean shutdown reportはあるが、IME／clipboard／AccessKit treeの実window操作、Gate 1-6や採否は未完了 |
 | `production`主経路のlatency／throughput／jitter／soak | localのvirtual-I/O blocking fixtureは実装・検証済み、clean／remote未完了 | `TRACEABILITY_BACKEND.md` §7.9.6、`docs/ACCEPTANCE.md`性能schema、`docs/ARTIFACT_MANIFEST.md` production fixture。CI workflow上のclean-source／remote required CI、実機I/Oは未証明 |
 | 外部browser／tailnet WebRTC | 外部証跡待ち | `PLAN.md`外部browser受入、`docs/ACCEPTANCE.md` browser matrix。isolated serviceのstop／cleanupを含む |

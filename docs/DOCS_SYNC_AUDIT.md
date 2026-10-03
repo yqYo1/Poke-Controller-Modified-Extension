@@ -32,7 +32,7 @@
 | 開発gate | `docs/DEVELOPMENT.md` | `markdownlint-check`、`textlint-check`、`typos-check`、`web-check`、`contract-check`、`release-check` | task名をflakeで照合済み |
 | 配布gate | `docs/INSTALL.md`、`docs/DEVELOPMENT.md` | `tauri-build`、`package-smoke`、`package-install-smoke`、Package CI | 引数付きtaskとして同期済み |
 | GPUI | `docs/GPUI_FRONTEND_PLAN.md`、`docs/GPUI_PHASE0_INVENTORY.md` | Phase 0完了、Phase 1／Gate 1／native selector未実装 | 将来扱いで同期済み |
-| 動的設定 | `docs/ADVANCED_USAGE.md`、`docs/DYNAMIC_CONFIGURATION.md` | `auto_reload_config`の設定surfaceと現在のreload経路 | OS-native watcherは未実装として扱う |
+| 動的設定 | `docs/ADVANCED_USAGE.md`、`docs/DYNAMIC_CONFIGURATION.md` | `auto_reload_config`の設定surfaceと現在のreload経路 | `rust/pokecon/src/dynamic_watcher.rs`のOS-native watcher（notify 7、debounce、single-flight、停止／reap）を実装済みとして同期。current remote acceptanceは別管理 |
 
 ## 3. 実行した検証
 
@@ -59,7 +59,7 @@
 次の項目は文書へ実装済みと記載していません。
 
 - GPUI native view、GPUI Cargo依存、`--ui gpui`、`apps.gpui`、Gate 1-6。
-- `auto_reload_config`のOS-native file watcher。
+- `auto_reload_config`のOS-native file watcherの実装（source／focused test済み。current remote／full product acceptanceは別途未受入）。
 - browserでのWebRTC primary、Motion JPEG fallback、再昇格、keyboard／accessibility受入。
 - production主経路のlatency、throughput、jitter、soakの製品閾値受入。
 - 実camera、実serial、実MCUを使うhardware acceptance。

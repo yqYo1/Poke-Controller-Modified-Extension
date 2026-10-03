@@ -85,7 +85,7 @@ clean worktreeを要求する受入は、当該inventoryの存在だけでは完
 
 | 項目 | 現在の判定 | GPUI Phase 0での扱い |
 |---|---|---|
-| `auto_reload_config` OS-native watcher | 未実装 | GPUI作業と分離し、owner decision後にbackend packetとして扱う |
+| `auto_reload_config` OS-native watcher | 実装済み・current remote acceptance未完了 | `rust/pokecon/src/dynamic_watcher.rs`（notify 7、single-global、debounce、single-flight、停止／reap）と17件のfocused test。GPUI作業とは分離し、current remote／full product acceptanceはbackend gateで扱う |
 | production latency／throughput／jitter／soak | 未完了 | CI critical-path timingと製品性能を分離し、GPUI採否の根拠にしない |
 | external browser／tailnet WebRTC | 外部証跡待ち | GPUI native PoCの成功／失敗に転用しない |
 | real hardware／driver／firmware／console | 外部証跡待ち | virtual I/Oをnative実機の代用にしない |

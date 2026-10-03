@@ -156,7 +156,7 @@
 
 | 要件 | 判定 | 直接証拠 |
 |---|---|---|
-| 11.5.1 時期（起動/手動/auto-reload） | 部分的 | worker_binary/dynamic/dispatch.rs:246 起動init.{primary.extension()}; dynamic/control.rs:35 DynamicConfigControl::{LoadPath,Reload} + worker_binary/dynamic/engine.rs:379 制御処理。自動reload監視なし（`notify`/FileWatcherは`src/`全体ゼロヒット、再grep確認） |
+| 11.5.1 時期（起動/手動/auto-reload） | 実装済み | 起動／手動はworker_binary/dynamic/dispatch.rs:246、dynamic/control.rs:35、worker_binary/dynamic/engine.rs:379。自動reloadはdynamic_watcher.rs:1-1246（notify 7のOS-native監視、単一global watcher、debounce、single-flight、content hash、atomic-save、worker不在／rejection／retry、停止時のabort＋reap）とapplication_backend.rs:193-254、production.rs:398-403、lib.rs:503-506で接続。`nix run .#cargo -- test --locked -p pokecon --lib dynamic_watcher::tests` は17 passed。 |
 | 11.5.2 共存（Neovim式単一選択） | 実装済み | dynamic_runtime.rs:~280 selected_language（python/lua/none）; registry/settings.json dynamic_config_language既定"lua"; worker_binary/dynamic/engine.rs:296 primary eager + :472 ensure_runtime遅延 |
 | 11.5.3 共通（即時/記憶/優先） | 実装済み | dynamic/transaction.rs:205 EvaluationTransaction::set_setting; dynamic/host.rs:435 InMemoryDynamicHost（※旧:446はずれ）; dynamic_runtime.rs:225 bootstrap_dynamic（動的>静的、CLI最上） |
 | 11.5.4 Python API表面 | 実装済み | worker_binary/dynamic/runtime/python.rs:501 source、:507 get_state/set_state、~543 profile_switch、~549 controller_update; dynamic/protocol.rs PYTHON_SITE_PACKAGES_ENV組込CPython; dynamic_runtime.rs:245-267 起動失敗は前世代維持 |
@@ -170,8 +170,8 @@
 
 ## 集計
 
-- 実装済み 112 / 部分的 13 / 未実装 1 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。総数は維持）
-- 部分的13: §1.2 UI温存、§4.6.1参照専用、§4.6.2監視、§6.1.6自動選択、7.8.1 OOB、7.8.4 log、7.9.2 SHM、10.4.3 tk橋渡し、付録B、11.1 none、11.4.3、§14.6 LSP、11.5.1時期
+- 実装済み 113 / 部分的 12 / 未実装 1 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。11.5.1のOS-native watcher実装と17件のfocused testを反映。総数は維持）
+- 部分的12: §1.2 UI温存、§4.6.1参照専用、§4.6.2監視、§6.1.6自動選択、7.8.1 OOB、7.8.4 log、7.9.2 SHM、10.4.3 tk橋渡し、付録B、11.1 none、11.4.3、§14.6 LSP
 - 未実装1: 7.9.6ベンチマーク
 - 仕様のみ1: §1.2 frontend技術選択
 
@@ -184,13 +184,12 @@
 ## 対応が必要な未達（アクション）
 
 1. 7.9.6 参照ベンチマーク harness の追加（未実装）。benches/criterion なし。CIはモックI/O性能ゲートとして配線。
-2. 11.5.1 自動reload監視の実装（部分的の核）。`notify`/FileWatcher は `src/` ゼロヒット。明示 Reload のみ。
-3. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
-4. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
-5. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
-6. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
-7. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
-8. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
+2. §14.6 LSP 7種の補完（部分的）。pylsp/pyrefly/ty の雛形・配線なし。
+3. 10.4.3 tk橋渡しの Scale/get/config/再接続部分集合の証拠化または仕様整合（部分的）。
+4. 付録B CommandMeta の do検査・切替シンボル欠落（部分的）。存在検証のみ。
+5. §6.1.6 仕様OpenCV必須と実装nokhwa+v4lの乖離解消（部分的）。仕様改訂か実装変更のいずれか。
+6. §10.7 Windows通知「実装済み」（仕様L992相当）。script表面に windows 通知シンボルなし。要確認（将来行は未実装/未検証見込）。
+7. 7.8.1 TCP禁止の積極的証拠なし（部分的）。許可経路の列挙または試験追加。
 
 ## 行なし仕様規範（将来の行候補）
 

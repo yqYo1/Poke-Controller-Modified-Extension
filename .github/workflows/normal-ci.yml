@@ -1595,6 +1595,7 @@ jobs:
           POKECON_MAIN_PATH_TRACE_CYCLES: '300'
           POKECON_MAIN_PATH_TRACE_WARMUP_SECS: '60'
           POKECON_PERF_BUILD_SHA: ${{ steps.production_perf_source.outputs.source_sha }}
+          POKECON_TEST_WORKER_BINARY: ${{ github.workspace }}/target/nix-tasks/release/pokecon-worker
           POKECON_PERF_TARGET_REUSE: >-
             ${{ steps.production_perf_target_restore.outputs.cache-hit == 'true' || steps.production_perf_derivation_materialize.outputs.realized == 'true' || steps.production_perf_build_target_download.outcome == 'success' || steps.production_perf_target_download.outcome == 'success' }}
         run: |

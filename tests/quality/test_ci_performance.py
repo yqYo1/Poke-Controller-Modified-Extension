@@ -439,14 +439,17 @@ def test_production_perf_target_inventory_filters_non_executable_artifacts() -> 
     inventory = target_section[inventory_start:]
     executable_filter = 'select((.executable | type) == "string")'
     non_empty_filter = 'select(.executable != "")'
-    test_profile_filter = "select(.profile.test == true)"
-    actual_anchor = inventory.index("] as $actual")
+    test_profile_filter = ".profile.test == true"
+    worker_target_filter = '.target.name == "pokecon-worker"'
+    actual_anchor = inventory.index("unique_by([.name, .kind, .executable]) as $actual")
     assert executable_filter in inventory
     assert non_empty_filter in inventory
     assert test_profile_filter in inventory
+    assert worker_target_filter in inventory
     assert inventory.index(executable_filter) < actual_anchor
     assert inventory.index(non_empty_filter) < actual_anchor
     assert inventory.index(test_profile_filter) < actual_anchor
+    assert inventory.index(worker_target_filter) < actual_anchor
     assert "Cargo returned duplicate production perf target names" in target_section
     assert (
         "Cargo returned an empty or non-string production perf executable"

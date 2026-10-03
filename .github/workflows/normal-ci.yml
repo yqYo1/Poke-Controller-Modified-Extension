@@ -1453,6 +1453,14 @@ jobs:
                     chmod 0555 -- "$materialized_path"
                   fi
                 done
+                materialized_worker_path="target/nix-tasks/release/pokecon-worker"
+                if [ -L "$materialized_worker_path" ] || [ ! -f "$materialized_worker_path" ]; then
+                  echo "materialized production perf worker executable is redirected or missing: $materialized_worker_path" >&2
+                  materialized_ok=false
+                else
+                  chmod 0555 -- "$materialized_worker_path"
+                fi
+                unset materialized_worker_path
                 if [ "$materialized_ok" = true ]; then
                   realized=true
                 else
@@ -1564,6 +1572,14 @@ jobs:
           fi
           if [ -d target/nix-tasks/release/build ]; then
             find target/nix-tasks/release/build -type f -name build-script-build -exec chmod 0555 {} +
+          fi
+          if [ ! -f target/nix-tasks/release/pokecon-worker ] && [ -d target/nix-tasks/release/deps ]; then
+            worker_candidates=(target/nix-tasks/release/deps/pokecon_worker-*)
+            if [ "${#worker_candidates[@]}" -eq 1 ] && [ -f "${worker_candidates[0]}" ]; then
+              cp -- "${worker_candidates[0]}" target/nix-tasks/release/pokecon-worker
+              chmod 0555 target/nix-tasks/release/pokecon-worker
+            fi
+            unset worker_candidates
           fi
           for executable_name in pokecon pokecon-worker; do
             if [ -f "target/nix-tasks/release/$executable_name" ]; then

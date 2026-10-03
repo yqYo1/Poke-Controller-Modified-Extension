@@ -28,7 +28,7 @@
       ...
     }:
     let
-      canonicalFlakeHash = "f98daac791a710077d2321bc67e8e399f3b12464193d323d6225999fc6a5c15f";
+      canonicalFlakeHash = "1d792c1a259798113116947e2bc0ff812147399d5ba05ab3a92e9b45dce43df4";
       canonicalFlakePath = ./flake.nix;
       canonicalFlakeText = builtins.readFile canonicalFlakePath;
       normalizedCanonicalFlakeText =
@@ -763,7 +763,7 @@
               builtins.hashFile "sha256" inputAuditTest == expectedAuditTestHash
               || builtins.throw "production routing audit test input changed";
             filteredAuditTest;
-          expectedAuditTestHash = "e7cfaa2cf093c613322e4c3b9f4a1bf23added86e2e1f69eb08fb4eb431d54c4";
+          expectedAuditTestHash = "7a6a6eac2d2432dcbeaa3fd8d549e42fac1fe8d7811df0413ec5dca65886acdb";
 
           workspaceMemberPaths = [
             "rust/pokecon"
@@ -3611,7 +3611,7 @@
               import sys
 
               manifest_path, target_dir = sys.argv[1:]
-              expected_keys = ("production_perf", "composition_root", "main_path_trace")
+              expected_keys = ("production_perf", "composition_root", "main_path_trace", "worker_binary")
               with open(manifest_path, encoding="utf-8") as handle:
                   manifest = json.load(handle)
               if set(manifest) != set(expected_keys):
@@ -3632,10 +3632,10 @@
               PY
                 )"; then
                   mapfile -t prepared_executable_paths <<< "$prepared_executables"
-                  if [ "''${#prepared_executable_paths[@]}" -eq 3 ]; then
+                  if [ "''${#prepared_executable_paths[@]}" -eq 4 ]; then
                     production_perf_reuse_ready=true
                   else
-                    echo "production-perf-check: prepared Cargo executable manifest count is not three; using cold Cargo build" >&2
+                    echo "production-perf-check: prepared Cargo executable manifest count is not four; using cold Cargo build" >&2
                   fi
                 else
                   echo "production-perf-check: prepared Cargo target is unavailable; using cold Cargo build" >&2
@@ -3645,23 +3645,26 @@
                 production_perf_executable="''${prepared_executable_paths[0]}"
                 composition_root_executable="''${prepared_executable_paths[1]}"
                 main_path_trace_executable="''${prepared_executable_paths[2]}"
+                worker_executable="''${prepared_executable_paths[3]}"
+                export POKECON_TEST_WORKER_BINARY="$worker_executable"
                 unset prepared_executable_paths prepared_executables
               else
-                # Serially precompile all three exact test targets in one Cargo
-                # invocation. The union feature set is compile-only: runtime
-                # selection, filters, environment, artifacts, and validators below
-                # remain unchanged for each captured executable. Keeping one Cargo
-                # process also avoids the artifact-directory lock that makes
-                # concurrent cargo invocations serialize. Capture Cargo's JSON once
-                # and select each executable fail-closed from that single stream.
+                # Compile the real release worker once, then compile the three
+                # exact test harnesses in the same target directory. The two
+                # Cargo invocations share dependency artifacts; using
+                # `cargo test --bin` would create a test harness instead of a
+                # worker process. Capture Cargo's JSON once and select each
+                # executable fail-closed from that combined stream.
                 extract_cargo_test_executable() {
                   local expected_test_name="$1"
                   local expected_test_kind="$2"
+                  local expected_profile_test="''${3:-}"
                   "${pkgs.python314}/bin/python" -I -c '
               import json
               import sys
               expected_name = sys.argv[1]
               expected_kind = sys.argv[2]
+              expected_profile_test = sys.argv[3] or None
               matches = []
               for message_line in sys.stdin:
                   message_line = message_line.strip()
@@ -3679,13 +3682,16 @@
                       continue
                   if expected_kind not in (target.get("kind") or []):
                       continue
+                  if expected_profile_test is not None and str(record.get("profile", {}).get("test")).lower() != expected_profile_test:
+                      continue
                   executable = record.get("executable")
                   if executable:
                       matches.append(executable)
-              if len(matches) != 1:
-                  print(f"expected exactly one test executable for {expected_name}/{expected_kind}; found {len(matches)}", file=sys.stderr)
+              unique_matches = sorted(set(matches))
+              if len(unique_matches) != 1:
+                  print(f"expected exactly one test executable for {expected_name}/{expected_kind}; found {len(unique_matches)}", file=sys.stderr)
                   sys.exit(2)
-              print(matches[0])' "$expected_test_name" "$expected_test_kind"
+              print(unique_matches[0])' "$expected_test_name" "$expected_test_kind" "$expected_profile_test"
                 }
                 cargo_test_messages="$("${pkgs.coreutils}/bin/mktemp" \
                   --tmpdir="$CARGO_TARGET_DIR" production-perf-check-cargo-messages.XXXXXX)"
@@ -3693,10 +3699,13 @@
                   "${pkgs.coreutils}/bin/rm" -f -- "$cargo_test_messages"
                 }
                 trap cleanup_cargo_test_messages EXIT
+                POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" build --locked --release \
+                  -p pokecon --features integration-test-support,worker-binary \
+                  --bin pokecon-worker --message-format=json > "$cargo_test_messages"
                 POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
                   -p pokecon --features integration-test-support,worker-binary \
                   --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
-                  --message-format=json > "$cargo_test_messages"
+                  --message-format=json >> "$cargo_test_messages"
                 production_perf_executable="$(
                   extract_cargo_test_executable production_perf_virtual test < "$cargo_test_messages"
                 )"
@@ -3706,20 +3715,25 @@
                 main_path_trace_executable="$(
                   extract_cargo_test_executable main_path_trace_virtual test < "$cargo_test_messages"
                 )"
+                worker_executable="$(
+                  extract_cargo_test_executable pokecon-worker bin false < "$cargo_test_messages"
+                )"
+                export POKECON_TEST_WORKER_BINARY="$worker_executable"
                 unset -f extract_cargo_test_executable
                 "${pkgs.python314}/bin/python" -I - "$production_perf_manifest" "$CARGO_TARGET_DIR" \
-                  "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable" <<'PY'
+                  "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable" "$worker_executable" <<'PY'
               import json
               import os
               import sys
 
-              manifest_path, target_dir, production_perf, composition_root, main_path_trace = sys.argv[1:]
+              manifest_path, target_dir, production_perf, composition_root, main_path_trace, worker_binary = sys.argv[1:]
               target_root = os.path.realpath(target_dir)
               manifest = {}
               for key, executable in (
                   ("production_perf", production_perf),
                   ("composition_root", composition_root),
                   ("main_path_trace", main_path_trace),
+                  ("worker_binary", worker_binary),
               ):
                   executable_path = os.path.realpath(executable)
                   if os.path.commonpath((target_root, executable_path)) != target_root:
@@ -3734,7 +3748,7 @@
               PY
               fi
               unset production_perf_target_reuse production_perf_manifest production_perf_reuse_ready
-              for test_executable in "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable"; do
+              for test_executable in "$production_perf_executable" "$composition_root_executable" "$main_path_trace_executable" "$worker_executable"; do
                 if [ -z "$test_executable" ] || [ -L "$test_executable" ] \
                   || [ ! -f "$test_executable" ] || [ ! -x "$test_executable" ]; then
                   echo "production-perf-check: missing test executable: ''${test_executable:-<unset>}" >&2
@@ -3938,21 +3952,29 @@
               ${desktopEnvironment}
               export PYTHONDONTWRITEBYTECODE=1
               export PYTHONNOUSERSITE=1
-              # Compile exactly the three release harnesses the
-              # production-perf-check gate executes: the production
-              # performance fixture, the composition-root probe (lib
-              # harness), and the main-path trace fixture. One Cargo
-              # invocation, compiled only, never executed here.
+              # Compile the real release worker once, then compile the three
+              # release test harnesses in the same target directory. The two
+              # Cargo invocations share dependency artifacts; using
+              # `cargo test --bin` would create a test harness instead of a
+              # worker process. Neither invocation executes tests here.
+              POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" build --locked --release \
+                -p pokecon --features integration-test-support,worker-binary \
+                --bin pokecon-worker --message-format=json-render-diagnostics \
+                > "$TMPDIR/cargo-test-artifacts.jsonl"
               POKECON_RESOURCE_PROVENANCE=development "${rustToolchain}/bin/cargo" test --locked --release \
                 -p pokecon --features integration-test-support,worker-binary \
                 --lib --test production_perf_virtual --test main_path_trace_virtual --no-run \
                 --message-format=json-render-diagnostics \
-                > "$TMPDIR/cargo-test-artifacts.jsonl"
+                >> "$TMPDIR/cargo-test-artifacts.jsonl"
               ${pkgs.jq}/bin/jq -se --arg package_root "$PWD/rust/pokecon/" '
                 def expected_targets: [
                   {
                     name: "pokecon",
                     kind: ["lib"]
+                  },
+                  {
+                    name: "pokecon-worker",
+                    kind: ["bin"]
                   },
                   {
                     name: "production_perf_virtual",
@@ -3966,7 +3988,7 @@
                 [
                   .[]
                   | select(.reason == "compiler-artifact")
-                  | select(.profile.test == true)
+                  | select((.profile.test == true) or (.target.name == "pokecon-worker"))
                   | select((.target.src_path | type) == "string")
                   | select(.target.src_path | startswith($package_root))
                   | select((.executable | type) == "string")
@@ -3976,7 +3998,8 @@
                       kind: .target.kind,
                       executable: .executable
                     }
-                ] as $actual
+                ]
+                | unique_by([.name, .kind, .executable]) as $actual
                 | expected_targets as $expected
                 | if ($actual | map(.name) | unique | length) != ($actual | length) then
                     error("Cargo returned duplicate production perf target names")
@@ -4026,6 +4049,7 @@
               production_perf_executable="$(extract_production_perf_executable production_perf_virtual)"
               production_perf_composition_executable="$(extract_production_perf_executable pokecon)"
               production_perf_trace_executable="$(extract_production_perf_executable main_path_trace_virtual)"
+              production_perf_worker_executable="$(extract_production_perf_executable pokecon-worker)"
               unset -f extract_production_perf_executable
               unset expected_target_name extracted_executable
               runHook postBuild
@@ -4039,6 +4063,8 @@
                 "$production_perf_composition_executable" "$out/release/deps/pokecon-nix"
               "${pkgs.coreutils}/bin/install" -m 0555 -- \
                 "$production_perf_trace_executable" "$out/release/deps/main_path_trace_virtual-nix"
+              "${pkgs.coreutils}/bin/install" -m 0555 -- \
+                "$production_perf_worker_executable" "$out/release/pokecon-worker"
               "${pkgs.python314}/bin/python" -I - "$out/release/.pokecon-production-perf-executables.json" <<'PY'
               import json
               import os
@@ -4049,6 +4075,7 @@
                   "composition_root": "release/deps/pokecon-nix",
                   "main_path_trace": "release/deps/main_path_trace_virtual-nix",
                   "production_perf": "release/deps/production_perf_virtual-nix",
+                  "worker_binary": "release/pokecon-worker",
               }
               release_root = os.path.dirname(manifest_path)
               target_root = os.path.dirname(release_root)

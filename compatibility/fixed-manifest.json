@@ -1,0 +1,4797 @@
+{
+  "baselines": [
+    {
+      "commit": "dfc13b82cb926b571351265a9333a7e4bc1f8aeb",
+      "id": "yqyo1-extension",
+      "repository": "https://github.com/yqYo1/Poke-Controller-Modified-Extension.git",
+      "script_count": 36,
+      "scripts": [
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 13,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Final"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "TYPE_CHECKING"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/AutoLeague.py",
+          "referenced_api": [],
+          "sha256": "6e5d3651f7a71b998a9f1963ecf5e7db9167d55dc0d9da3aacb731454b1b1da4"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 13,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Final"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "TYPE_CHECKING"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/InfinityWatt.py",
+          "referenced_api": [],
+          "sha256": "36414d36b48bc8bf325a5b1d26ce0dd5ceffb8dbb9c88aa1db28decb89812001"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 13,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Final"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "TYPE_CHECKING"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/MashA.py",
+          "referenced_api": [],
+          "sha256": "a9ae9121de9c3537b7cbafcc1bc89283ae5835c66fbd8693da38b0045e68218e"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 13,
+              "name": "PickUpBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PickUpBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Final"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "TYPE_CHECKING"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/PickUpBerry.py",
+          "referenced_api": [],
+          "sha256": "9cec1688a67a56ff8ab38d8acafbb3ea7612932444f244c14b845d0d26604758"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 11,
+              "name": "AllHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AllHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AllHatching.py",
+          "referenced_api": [
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "4fbcc32fef0401e31fe8bab0431c950f842c1cd18d9075505e22542700094e0d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AutoHatching.py",
+          "referenced_api": [
+            "self.Release",
+            "self.ReleaseBox",
+            "self.finish",
+            "self.getNewEgg",
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.pressRep",
+            "self.putPokemonsToBox",
+            "self.wait"
+          ],
+          "sha256": "62328e75e6e72644a5487199ba3b1d754bca7c1e717c0a7c5fd6c0ba53307bd4"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "Fossil_shiny"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 85,
+              "name": "Fossil_shiny_00"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 95,
+              "name": "Fossil_shiny_01"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 105,
+              "name": "Fossil_shiny_10"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 115,
+              "name": "Fossil_shiny_11"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Fossil_shiny",
+              "Fossil_shiny_00",
+              "Fossil_shiny_01",
+              "Fossil_shiny_10",
+              "Fossil_shiny_11"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/FossilShiny.py",
+          "referenced_api": [
+            "self.CheckBox",
+            "self.fossil_loop",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "8d027cc72e99e915f4906b24ab6c11d4cd8c82656f2f5a715df30a415941e558"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 12,
+              "name": "CalcTime"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "CalcTime"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/TemplateMatchingTimeMeasure.py",
+          "referenced_api": [
+            "self.isContainTemplate",
+            "self.isContainTemplateGPU"
+          ],
+          "sha256": "9d844f33daf19a1048b64a34e1abcf7d32aad9056350e948a19b41bcec44ac7d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "changetemplatedir"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "changetemplatedir"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/changeTemplateDir.py",
+          "referenced_api": [
+            "self.setTemplateDir"
+          ],
+          "sha256": "ad2ae3d3899e6824ba1d88bf59a30b9f7163d30cb08c9b1051dc7752a7d6fbde"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "ImageRecRect"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ImageRecRect"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/imagerecrect.py",
+          "referenced_api": [
+            "self.isContainTemplate"
+          ],
+          "sha256": "66e4acb9f945e481fb96875020ac04a856c0e1d30dfb1f09a54b2eacdf0982c9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 4,
+              "name": "ScreenShot"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ScreenShot"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/screenshot.py",
+          "referenced_api": [
+            "self.camera.saveCapture"
+          ],
+          "sha256": "2d44e65a471e97d77993cd8a92743f589a49f35a8e8853230e37fb93acecedac"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/AutoLeague.py",
+          "referenced_api": [
+            "self.hold",
+            "self.press"
+          ],
+          "sha256": "561e0d7c95b0b76984b038b09a0c65d600fc791463344c01b713156f915204f5"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "AutoRelease"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoRelease"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/AutoRelease.py",
+          "referenced_api": [
+            "self.Release",
+            "self.cam.isOpened",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "4f051551e1d36dbd68cde277aefdde75a1d626e5defff0338b500b3729868492"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "DiscordTest"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "DiscordTest"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Discord_Test.py",
+          "referenced_api": [
+            "self.discord_image",
+            "self.discord_text"
+          ],
+          "sha256": "a6e74af93935a4a2d7e09f3eb92e06cfe4d25ab024eb6b58325325fd49694749"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "InputKeyboard"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InputKeyboard"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/InputSerial.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "671755c286e642d0cd384d56acd4a49c410547aeac89174f4afed2f575eb899d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "LineSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LineSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/LineNotifySample.py",
+          "referenced_api": [
+            "self.LINE_image",
+            "self.LINE_text"
+          ],
+          "sha256": "a414a511861be007e4f4f175a3e3ab04a0ec99282b4306bd33fe214b787b5a7a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 11,
+              "name": "LoggingSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LoggingSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "logging",
+              "names": [
+                "DEBUG",
+                "NullHandler",
+                "getLogger"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/LoggingSample.py",
+          "referenced_api": [
+            "self._logger.addHandler",
+            "self._logger.critical",
+            "self._logger.debug",
+            "self._logger.error",
+            "self._logger.info",
+            "self._logger.setLevel",
+            "self._logger.warning"
+          ],
+          "sha256": "7af30f21174fc6ee2dce7d9fe670eaa2cd8902abdcae1169210e30c4eea9d37d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/MashA.py",
+          "referenced_api": [
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "f283387edfe1cfdda491a0201c3ebb91f82e743b66016d52feb3492ddc56e809"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 7,
+              "name": "Print_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Print_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Print-sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.print_s",
+            "self.print_t",
+            "self.print_t1",
+            "self.print_t1b",
+            "self.print_t2",
+            "self.print_t2b",
+            "self.print_tb"
+          ],
+          "sha256": "9a59c67aaee08761f7b67cbda33217b0acce9eae593468edf1109de771bd31d4"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "Qingpi_Touchscreen_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Qingpi_Touchscreen_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Touchscreen"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Qingpi_Touchscreen_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.hold",
+            "self.holdEnd"
+          ],
+          "sha256": "69af504ba078c6b811609079fb14e132a1dc6d08a8c4d1e3827ee2afe00ba025"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 17,
+              "name": "Move2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Move2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RaidPassword.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "50cc0758a4ec74e8c13d8bbd0d1b9439de9bdb31ea7eaf6b31ae6f0a986ff6d9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 13,
+              "name": "InfinityBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityBerry.py",
+          "referenced_api": [
+            "self.cam.isOpened",
+            "self.camera.readFrame",
+            "self.getInterframeDiff",
+            "self.isContainTemplate",
+            "self.isContinue",
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "5be1d6e792f237e666c3c7bf81fda89ea21a49d995ec72c71c1e4b4521d0e7f2"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityCafe"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityCafe"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityCafe.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "e386f2a0327b0a5604ac7cffe873dd4700c3690c62f29c0d8a90ecf26591d06c"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 8,
+              "name": "InfinityFeather"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityFeather"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityFeather.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "eda4bb94fba4bfb36a5541b769ff112441aa7631e7d5e7c9d3f6a7e551c8117d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityLottery"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityLottery"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityLottery.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap"
+          ],
+          "sha256": "c065a5795b6e03b1046521482c3a2dc4435eaab95daf6f0e13beca84bb3bb560"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityWatt.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "9e603766ac3a569fceb8eecf11a882b414aab3dd443494ccb6be2fd1f115041e"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 14,
+              "name": "PlayRec"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PlayRec"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            },
+            {
+              "module": "tkinter",
+              "names": [
+                "filedialog"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RecPlay.py",
+          "referenced_api": [
+            "self.LStick",
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.keys.ser.writeRow",
+            "self.stickEnd"
+          ],
+          "sha256": "90736fc90dde363848610b5d2b36331a46300efb7bf76c2163051f9399d7a230"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "StickSample2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Stick-Sample2.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.press",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "53a9aeb302e52643dc676c34c413f918e5df3b4444b66d0dc0b22d36dd830b1d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "StickSample1"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample1"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Stick_Sample1.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "a7bc4c5bbf6306104584ef24630d64bf8cfa3b9b24d04617349a3a65e005d681"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 90,
+              "name": "TestPath"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "TestPath"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "path"
+              ]
+            },
+            {
+              "module": "shutil",
+              "names": [
+                "shutil"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/TestPath.py",
+          "referenced_api": [],
+          "sha256": "02f957e138f6a4a813325eea203312e1e21b32b95804c13f1194095ef0eab450"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 6,
+              "name": "Widget_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Widget_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Widget-sample.py",
+          "referenced_api": [
+            "self.dialogue",
+            "self.dialogue6widget",
+            "self.finish"
+          ],
+          "sha256": "8eae0f9684abe656e3477eb62b4982c79cd5c2774e859c82479e3c17dd47933b"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "isContainTemplate_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "isContainTemplate_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "tkinter.messagebox",
+              "names": [
+                "tkmsg"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/isContainTemplate_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.isContainTemplate"
+          ],
+          "sha256": "c1b8b2f0282fdc723f98f679da36a1eae42d41dab7253d8797833585ea246af2"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "isContainTemplate_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "isContainTemplate_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "tkinter.messagebox",
+              "names": [
+                "tkmsg"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/isContainedImage_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.isContainedImage",
+            "self.saveCapture"
+          ],
+          "sha256": "99f4a1283d8a63ecc87aaa9a2613de71e8702528711033c6da2dc415b25b8751"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "ListenShiny"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ListenShiny"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "datetime",
+              "names": [
+                "datetime"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "pyaudio",
+              "names": [
+                "pyaudio"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/listen_shiny.py",
+          "referenced_api": [
+            "self._logger.debug",
+            "self.checkIfAlive"
+          ],
+          "sha256": "46df29f66cbbe9fcef4e54810cb08526d968a440ffd6adfb7ad49fa826b7dcda"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "BridgeFunctionsSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "BridgeFunctionsSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommands.bridge_functions.bridge_functions",
+              "names": [
+                "BridgeFunctions"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/bridge_functions/Sample/bf_sample.py",
+          "referenced_api": [
+            "self.bf.bf_dialogue6widget_save_settings",
+            "self.bf.bf_dialogue6widget_select_settings",
+            "self.bf.bf_print",
+            "self.bf.bf_print_w",
+            "self.bf.bf_show_informations",
+            "self.bf.set_template_directory"
+          ],
+          "sha256": "adcc5dbc9a8d53072bbc1a14e48386a7a41c0a404b4289ed8dec2f66939ee59e"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "object"
+              ],
+              "line": 28,
+              "name": "BridgeFunctions"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "BridgeFunctions"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "List",
+                "Optional"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/bridge_functions/bridge_functions.py",
+          "referenced_api": [
+            "self.bf_print",
+            "self.commands.dialogue",
+            "self.commands.dialogue6widget",
+            "self.commands.dialogue6widget_save_settings",
+            "self.commands.dialogue6widget_select_settings",
+            "self.commands.isContainTemplate",
+            "self.commands.isContainTemplate_max",
+            "self.commands.print_tb",
+            "self.commands.print_tbs",
+            "self.commands.setTemplateDir"
+          ],
+          "sha256": "5fb5dea08cf5bb8fac4d3c21ae25b5ba14219355f3731d073097d6c66e5edc54"
+        }
+      ]
+    },
+    {
+      "commit": "b4d0eff04b1c525d78034ab47b87a7c7ef17089a",
+      "id": "futo030-extension",
+      "repository": "https://github.com/futo030/Poke-Controller-Modified-Extension.git",
+      "script_count": 36,
+      "scripts": [
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/AutoLeague.py",
+          "referenced_api": [],
+          "sha256": "ad18121efa3f83c5c652064aa15b45fc31896259870baa9f4b7eb8c1e3d58bb5"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/InfinityWatt.py",
+          "referenced_api": [],
+          "sha256": "35115b52841549cc117e1a68c99c2d2f43fa558d7e967b441291d62d316c6e67"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/MashA.py",
+          "referenced_api": [],
+          "sha256": "70355f0ccfce1fcc8d77cec1ef57a82ac3aef6947ccb40f343c9277d90dc2966"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "PickUpBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PickUpBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/PickUpBerry.py",
+          "referenced_api": [],
+          "sha256": "fa024316d9faab3512b70ad2312c2011f66d7bfad66a8629270ffbd8969df034"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 11,
+              "name": "AllHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AllHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AllHatching.py",
+          "referenced_api": [
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "4fbcc32fef0401e31fe8bab0431c950f842c1cd18d9075505e22542700094e0d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/AutoHatching.py",
+          "referenced_api": [
+            "self.Release",
+            "self.ReleaseBox",
+            "self.finish",
+            "self.getNewEgg",
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.pressRep",
+            "self.putPokemonsToBox",
+            "self.wait"
+          ],
+          "sha256": "62328e75e6e72644a5487199ba3b1d754bca7c1e717c0a7c5fd6c0ba53307bd4"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "Fossil_shiny"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 85,
+              "name": "Fossil_shiny_00"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 95,
+              "name": "Fossil_shiny_01"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 105,
+              "name": "Fossil_shiny_10"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 115,
+              "name": "Fossil_shiny_11"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Fossil_shiny",
+              "Fossil_shiny_00",
+              "Fossil_shiny_01",
+              "Fossil_shiny_10",
+              "Fossil_shiny_11"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/FossilShiny.py",
+          "referenced_api": [
+            "self.CheckBox",
+            "self.fossil_loop",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "8d027cc72e99e915f4906b24ab6c11d4cd8c82656f2f5a715df30a415941e558"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 12,
+              "name": "CalcTime"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "CalcTime"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/TemplateMatchingTimeMeasure.py",
+          "referenced_api": [
+            "self.isContainTemplate",
+            "self.isContainTemplateGPU"
+          ],
+          "sha256": "9d844f33daf19a1048b64a34e1abcf7d32aad9056350e948a19b41bcec44ac7d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "changetemplatedir"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "changetemplatedir"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/changeTemplateDir.py",
+          "referenced_api": [
+            "self.setTemplateDir"
+          ],
+          "sha256": "6fd1b139756b3beb758cd56f05955214f412110b686e2af4986c9dfbda34db74"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "ImageRecRect"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ImageRecRect"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/imagerecrect.py",
+          "referenced_api": [
+            "self.isContainTemplate"
+          ],
+          "sha256": "66e4acb9f945e481fb96875020ac04a856c0e1d30dfb1f09a54b2eacdf0982c9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "ScreenShot"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ScreenShot"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/Samples/screenshot.py",
+          "referenced_api": [
+            "self.camera.saveCapture"
+          ],
+          "sha256": "2eb11c46ac9b1985b064dab05c8114b412b7cc42b70c4d56311d7ad898ee2532"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/AutoLeague.py",
+          "referenced_api": [
+            "self.hold",
+            "self.press"
+          ],
+          "sha256": "561e0d7c95b0b76984b038b09a0c65d600fc791463344c01b713156f915204f5"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "AutoRelease"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoRelease"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/AutoRelease.py",
+          "referenced_api": [
+            "self.Release",
+            "self.cam.isOpened",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "4f051551e1d36dbd68cde277aefdde75a1d626e5defff0338b500b3729868492"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "DiscordTest"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "DiscordTest"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Discord_Test.py",
+          "referenced_api": [
+            "self.discord_image",
+            "self.discord_text"
+          ],
+          "sha256": "a6e74af93935a4a2d7e09f3eb92e06cfe4d25ab024eb6b58325325fd49694749"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "InputKeyboard"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InputKeyboard"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/InputSerial.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "671755c286e642d0cd384d56acd4a49c410547aeac89174f4afed2f575eb899d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "LineSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LineSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/LineNotifySample.py",
+          "referenced_api": [
+            "self.LINE_image",
+            "self.LINE_text"
+          ],
+          "sha256": "a414a511861be007e4f4f175a3e3ab04a0ec99282b4306bd33fe214b787b5a7a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 11,
+              "name": "LoggingSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LoggingSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "logging",
+              "names": [
+                "DEBUG",
+                "NullHandler",
+                "getLogger"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/LoggingSample.py",
+          "referenced_api": [
+            "self._logger.addHandler",
+            "self._logger.critical",
+            "self._logger.debug",
+            "self._logger.error",
+            "self._logger.info",
+            "self._logger.setLevel",
+            "self._logger.warning"
+          ],
+          "sha256": "7af30f21174fc6ee2dce7d9fe670eaa2cd8902abdcae1169210e30c4eea9d37d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/MashA.py",
+          "referenced_api": [
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "f283387edfe1cfdda491a0201c3ebb91f82e743b66016d52feb3492ddc56e809"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 7,
+              "name": "Print_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Print_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Print-sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.print_s",
+            "self.print_t",
+            "self.print_t1",
+            "self.print_t1b",
+            "self.print_t2",
+            "self.print_t2b",
+            "self.print_tb"
+          ],
+          "sha256": "9a59c67aaee08761f7b67cbda33217b0acce9eae593468edf1109de771bd31d4"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "Qingpi_Touchscreen_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Qingpi_Touchscreen_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Touchscreen"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Qingpi_Touchscreen_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.hold",
+            "self.holdEnd"
+          ],
+          "sha256": "69af504ba078c6b811609079fb14e132a1dc6d08a8c4d1e3827ee2afe00ba025"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 17,
+              "name": "Move2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Move2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RaidPassword.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "50cc0758a4ec74e8c13d8bbd0d1b9439de9bdb31ea7eaf6b31ae6f0a986ff6d9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 13,
+              "name": "InfinityBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityBerry.py",
+          "referenced_api": [
+            "self.cam.isOpened",
+            "self.camera.readFrame",
+            "self.getInterframeDiff",
+            "self.isContainTemplate",
+            "self.isContinue",
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "5be1d6e792f237e666c3c7bf81fda89ea21a49d995ec72c71c1e4b4521d0e7f2"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityCafe"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityCafe"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityCafe.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "e386f2a0327b0a5604ac7cffe873dd4700c3690c62f29c0d8a90ecf26591d06c"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 8,
+              "name": "InfinityFeather"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityFeather"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityFeather.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "eda4bb94fba4bfb36a5541b769ff112441aa7631e7d5e7c9d3f6a7e551c8117d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityLottery"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityLottery"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityLottery.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap"
+          ],
+          "sha256": "c065a5795b6e03b1046521482c3a2dc4435eaab95daf6f0e13beca84bb3bb560"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RankGlitch/InfinityWatt.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "9e603766ac3a569fceb8eecf11a882b414aab3dd443494ccb6be2fd1f115041e"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 14,
+              "name": "PlayRec"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PlayRec"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            },
+            {
+              "module": "tkinter",
+              "names": [
+                "filedialog"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/RecPlay.py",
+          "referenced_api": [
+            "self.LStick",
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.keys.ser.writeRow",
+            "self.stickEnd"
+          ],
+          "sha256": "90736fc90dde363848610b5d2b36331a46300efb7bf76c2163051f9399d7a230"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "StickSample2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Stick-Sample2.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.press",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "53a9aeb302e52643dc676c34c413f918e5df3b4444b66d0dc0b22d36dd830b1d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "StickSample1"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample1"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Stick_Sample1.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "a7bc4c5bbf6306104584ef24630d64bf8cfa3b9b24d04617349a3a65e005d681"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 90,
+              "name": "TestPath"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "TestPath"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "path"
+              ]
+            },
+            {
+              "module": "shutil",
+              "names": [
+                "shutil"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/TestPath.py",
+          "referenced_api": [],
+          "sha256": "02f957e138f6a4a813325eea203312e1e21b32b95804c13f1194095ef0eab450"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 7,
+              "name": "Widget_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Widget_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/Widget-sample.py",
+          "referenced_api": [
+            "self.dialogue",
+            "self.dialogue6widget",
+            "self.finish"
+          ],
+          "sha256": "3385280a84900f1223c4258b87422eb5517e57427bcedc47c58cbd1aa9e84ed6"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "isContainTemplate_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "isContainTemplate_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "tkinter.messagebox",
+              "names": [
+                "tkmsg"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/isContainTemplate_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.isContainTemplate"
+          ],
+          "sha256": "c1b8b2f0282fdc723f98f679da36a1eae42d41dab7253d8797833585ea246af2"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "isContainTemplate_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "isContainTemplate_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "tkinter.messagebox",
+              "names": [
+                "tkmsg"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/isContainedImage_sample.py",
+          "referenced_api": [
+            "self.finish",
+            "self.isContainedImage",
+            "self.saveCapture"
+          ],
+          "sha256": "99f4a1283d8a63ecc87aaa9a2613de71e8702528711033c6da2dc415b25b8751"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "ListenShiny"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ListenShiny"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "datetime",
+              "names": [
+                "datetime"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "pyaudio",
+              "names": [
+                "pyaudio"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Samples/listen_shiny.py",
+          "referenced_api": [
+            "self._logger.debug",
+            "self.checkIfAlive"
+          ],
+          "sha256": "46df29f66cbbe9fcef4e54810cb08526d968a440ffd6adfb7ad49fa826b7dcda"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "BridgeFunctionsSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "BridgeFunctionsSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommands.bridge_functions.bridge_functions",
+              "names": [
+                "BridgeFunctions"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/bridge_functions/Sample/bf_sample.py",
+          "referenced_api": [
+            "self.bf.bf_dialogue6widget_save_settings",
+            "self.bf.bf_dialogue6widget_select_settings",
+            "self.bf.bf_print",
+            "self.bf.bf_print_w",
+            "self.bf.bf_show_informations",
+            "self.bf.set_template_directory"
+          ],
+          "sha256": "5c92a27703b4b5992aa3f53227cca96ce14ce5df8b2b21e73c99a8834f8b060a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "object"
+              ],
+              "line": 28,
+              "name": "BridgeFunctions"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "BridgeFunctions"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "__future__",
+              "names": [
+                "annotations"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "List",
+                "Optional"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/bridge_functions/bridge_functions.py",
+          "referenced_api": [
+            "self.bf_print",
+            "self.commands.dialogue",
+            "self.commands.dialogue6widget",
+            "self.commands.dialogue6widget_save_settings",
+            "self.commands.dialogue6widget_select_settings",
+            "self.commands.isContainTemplate",
+            "self.commands.isContainTemplate_max",
+            "self.commands.print_tb",
+            "self.commands.print_tbs",
+            "self.commands.setTemplateDir"
+          ],
+          "sha256": "4d38c9e68004212903113930a126f15a71d378af5a231a5f3f936885807102d6"
+        }
+      ]
+    },
+    {
+      "commit": "431d0e22dbc6b900efcfb9a72e722a8484c8e4bb",
+      "id": "moi-poke-modified",
+      "repository": "https://github.com/Moi-poke/Poke-Controller-Modified.git",
+      "script_count": 31,
+      "scripts": [
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/AutoLeague.py",
+          "referenced_api": [],
+          "sha256": "ad18121efa3f83c5c652064aa15b45fc31896259870baa9f4b7eb8c1e3d58bb5"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/InfinityWatt.py",
+          "referenced_api": [],
+          "sha256": "35115b52841549cc117e1a68c99c2d2f43fa558d7e967b441291d62d316c6e67"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/MashA.py",
+          "referenced_api": [],
+          "sha256": "70355f0ccfce1fcc8d77cec1ef57a82ac3aef6947ccb40f343c9277d90dc2966"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "McuCommand"
+              ],
+              "line": 8,
+              "name": "PickUpBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PickUpBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.McuCommandBase",
+              "names": [
+                "McuCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/McuCommands/PickUpBerry.py",
+          "referenced_api": [],
+          "sha256": "fa024316d9faab3512b70ad2312c2011f66d7bfad66a8629270ffbd8969df034"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoLeague"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoLeague"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/AutoLeague.py",
+          "referenced_api": [
+            "self.hold",
+            "self.press"
+          ],
+          "sha256": "11bf0efa970251693e7c04b1366226755f6a44ebf7c37d9efa3294066897f68e"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "AutoRelease"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoRelease"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/AutoRelease.py",
+          "referenced_api": [
+            "self.Release",
+            "self.cam.isOpened",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "4e668d4df1bf7cbdafd6257cc39057d15d1a20dfe942f2786b08000786979cb5"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 12,
+              "name": "battleSchoolWars"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "battleSchoolWars"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat",
+                "KeyPress",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand",
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/BattleSchoolWars.py",
+          "referenced_api": [
+            "self.press"
+          ],
+          "sha256": "2d38f6754909bf64786903e8d779d3402ba33a0e7bfe6814193187402a01997a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "DiscordNotifySample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "DiscordNotifySample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Any"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/DiscordNotifySample.py",
+          "referenced_api": [
+            "self.discord_image",
+            "self.discord_text"
+          ],
+          "sha256": "f3b87868ef4e67ef721246ef6fd38d2a8f4135631668f946150a526b9887b684"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 11,
+              "name": "AllHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AllHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/AllHatching.py",
+          "referenced_api": [
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "65dcbfcb710cbd2c86789a68352599b0a04f27c03aeb1bd1ebbdfac90373368a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 10,
+              "name": "AutoHatching"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "AutoHatching"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/AutoHatching.py",
+          "referenced_api": [
+            "self.Release",
+            "self.ReleaseBox",
+            "self.finish",
+            "self.getNewEgg",
+            "self.hold",
+            "self.holdEnd",
+            "self.isContainTemplate",
+            "self.press",
+            "self.pressRep",
+            "self.putPokemonsToBox",
+            "self.wait"
+          ],
+          "sha256": "50ac4a3913991810b83b3de6ed8b927b6aa67211fadc8964f7f2cdcd8504ca14"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "Fossil_shiny"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 85,
+              "name": "Fossil_shiny_00"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 95,
+              "name": "Fossil_shiny_01"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 105,
+              "name": "Fossil_shiny_10"
+            },
+            {
+              "bases": [
+                "Fossil_shiny"
+              ],
+              "line": 115,
+              "name": "Fossil_shiny_11"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Fossil_shiny",
+              "Fossil_shiny_00",
+              "Fossil_shiny_01",
+              "Fossil_shiny_10",
+              "Fossil_shiny_11"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/FossilShiny.py",
+          "referenced_api": [
+            "self.CheckBox",
+            "self.fossil_loop",
+            "self.isContainTemplate",
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "0738552c2b1df6b7a5e36d6d97ebe9792292c311cc1284438782d68efe72d3d6"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 12,
+              "name": "CalcTime"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "CalcTime"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/TemplateMatchingTimeMeasure.py",
+          "referenced_api": [
+            "self.isContainTemplate",
+            "self.isContainTemplateGPU"
+          ],
+          "sha256": "e69bbb36710e54b8a14adea4c5b8fab684dacbf276ea25bc6f3e75d209f651cb"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 7,
+              "name": "ImageRecRect"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ImageRecRect"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/imagerecrect.py",
+          "referenced_api": [
+            "self.isContainTemplate"
+          ],
+          "sha256": "721ee513b64d92c5714be16bfb3d08cd11201e9071a68463e94bf9d7b75ce453"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 8,
+              "name": "ScreenShot"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ScreenShot"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/ImageProcessingOnly/screenshot.py",
+          "referenced_api": [
+            "self.camera.saveCapture"
+          ],
+          "sha256": "2eb11c46ac9b1985b064dab05c8114b412b7cc42b70c4d56311d7ad898ee2532"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "InputKeyboard"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InputKeyboard"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/InputSerial.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "671755c286e642d0cd384d56acd4a49c410547aeac89174f4afed2f575eb899d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 9,
+              "name": "LineSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LineSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/LineNotifySample.py",
+          "referenced_api": [
+            "self.LINE_image",
+            "self.LINE_text"
+          ],
+          "sha256": "a414a511861be007e4f4f175a3e3ab04a0ec99282b4306bd33fe214b787b5a7a"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 12,
+              "name": "LoggingSample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "LoggingSample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "loguru",
+              "names": [
+                "logger"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Any"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/LoggingSample.py",
+          "referenced_api": [],
+          "sha256": "8a915764637e942611e8b624df4b5a99f54c09c21f2300d9f2a536c889a554b9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 10,
+              "name": "Mash_A"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Mash_A"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/MashA.py",
+          "referenced_api": [
+            "self.press",
+            "self.wait"
+          ],
+          "sha256": "33b56c1acf9b40a62fbbdc710bea1b8e4d8c101326cc502aa10db9a2c82c8e18"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 17,
+              "name": "Move2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Move2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Hat"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "re",
+              "names": [
+                "re"
+              ]
+            },
+            {
+              "module": "scipy.sparse",
+              "names": [
+                "csr_matrix"
+              ]
+            },
+            {
+              "module": "scipy.sparse.csgraph",
+              "names": [
+                "shortest_path"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RaidPassword.py",
+          "referenced_api": [
+            "self.MakeGraph",
+            "self.Move",
+            "self.press"
+          ],
+          "sha256": "50cc0758a4ec74e8c13d8bbd0d1b9439de9bdb31ea7eaf6b31ae6f0a986ff6d9"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 13,
+              "name": "InfinityBerry"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityBerry"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RankGlitch/InfinityBerry.py",
+          "referenced_api": [
+            "self.cam.isOpened",
+            "self.camera.readFrame",
+            "self.getInterframeDiff",
+            "self.isContainTemplate",
+            "self.isContinue",
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "0e83a930c77704798938d939611867f1181ba9b5c32b6615a521088a279ef971"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityCafe"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityCafe"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RankGlitch/InfinityCafe.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "991d29527616d666639aa92afd75c4025573de14b0647d5b5cb025fe05d2de42"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 8,
+              "name": "InfinityFeather"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityFeather"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RankGlitch/InfinityFeather.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "9329b1729668acd4ae664f65d3829641d335e4c80342a3088c2be2ad955d6682"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "InfinityLottery"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityLottery"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RankGlitch/InfinityLottery.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap"
+          ],
+          "sha256": "b382a561879b8a6749665a5916a9eab835a66d8f949083e088b5d51488cb226c"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "InfinityWatt"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "InfinityWatt"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RankGlitch/InfinityWatt.py",
+          "referenced_api": [
+            "self.press",
+            "self.timeLeap",
+            "self.wait"
+          ],
+          "sha256": "c370d13485fb6d9b0f25c256b7b8099116993bcf122b005715a16907a365b62b"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 14,
+              "name": "PlayRec"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "PlayRec"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            },
+            {
+              "module": "tkinter",
+              "names": [
+                "filedialog"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/RecPlay.py",
+          "referenced_api": [
+            "self.LStick",
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.keys.ser.writeRow",
+            "self.stickEnd"
+          ],
+          "sha256": "90736fc90dde363848610b5d2b36331a46300efb7bf76c2163051f9399d7a230"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 11,
+              "name": "StickSample2"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample2"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button",
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Stick-Sample2.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.press",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "53a9aeb302e52643dc676c34c413f918e5df3b4444b66d0dc0b22d36dd830b1d"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 9,
+              "name": "StickSample1"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "StickSample1"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Direction",
+                "Stick"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Stick_Sample1.py",
+          "referenced_api": [
+            "self.checkIfAlive",
+            "self.keys.input",
+            "self.keys.inputEnd",
+            "self.stick",
+            "self.stickEnd",
+            "self.wait"
+          ],
+          "sha256": "60ef3c270935e41110e96162d207f8f1dc54ba794125ddedcdb62e1c15326578"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 90,
+              "name": "TestPath"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "TestPath"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "os"
+              ]
+            },
+            {
+              "module": "os",
+              "names": [
+                "path"
+              ]
+            },
+            {
+              "module": "shutil",
+              "names": [
+                "shutil"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/TestPath.py",
+          "referenced_api": [],
+          "sha256": "02f957e138f6a4a813325eea203312e1e21b32b95804c13f1194095ef0eab450"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 6,
+              "name": "Widget_sample"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "Widget_sample"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/Widget-sample.py",
+          "referenced_api": [
+            "self.dialogue",
+            "self.dialogue6widget",
+            "self.finish"
+          ],
+          "sha256": "d3f18254ad95a8a5a6f06a435a640f92a575c168f5b0c8563473bb0cfab5d585"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "ImageProcPythonCommand"
+              ],
+              "line": 78,
+              "name": "ColorDetectSampleCommand"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ColorDetectSampleCommand"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "ImageProcPythonCommand"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "cv2",
+              "names": [
+                "cv2"
+              ]
+            },
+            {
+              "module": "icecream",
+              "names": [
+                "ic"
+              ]
+            },
+            {
+              "module": "logging",
+              "names": [
+                "DEBUG",
+                "NullHandler",
+                "getLogger"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "time",
+              "names": [
+                "time"
+              ]
+            },
+            {
+              "module": "tkinter",
+              "names": [
+                "tk"
+              ]
+            },
+            {
+              "module": "typing",
+              "names": [
+                "Any"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/color_detect_sample.py",
+          "referenced_api": [
+            "self.camera.readFrame",
+            "self.color_label.config",
+            "self.color_label.pack",
+            "self.create_slider_window",
+            "self.detect_button.pack",
+            "self.detect_color_in_frame",
+            "self.error_hue_slider.get",
+            "self.error_hue_slider.pack",
+            "self.error_hue_slider.set",
+            "self.error_sat_slider.get",
+            "self.error_sat_slider.pack",
+            "self.error_sat_slider.set",
+            "self.error_val_slider.get",
+            "self.error_val_slider.pack",
+            "self.error_val_slider.set",
+            "self.gui.ImgRect",
+            "self.hsv_to_rgb",
+            "self.slider_window.geometry",
+            "self.slider_window.title",
+            "self.target_hue_slider.get",
+            "self.target_hue_slider.pack",
+            "self.target_hue_slider.set",
+            "self.target_sat_slider.get",
+            "self.target_sat_slider.pack",
+            "self.target_sat_slider.set",
+            "self.target_val_slider.get",
+            "self.target_val_slider.pack",
+            "self.target_val_slider.set",
+            "self.update_color_label"
+          ],
+          "sha256": "bb27e7eef3231ecdb2e6a5afabbc6b777d103dd5297390a08df6ee1bbeed3673"
+        },
+        {
+          "classes": [
+            {
+              "bases": [
+                "PythonCommand"
+              ],
+              "line": 47,
+              "name": "ListenShiny"
+            }
+          ],
+          "expected": {
+            "discovered_classes": [
+              "ListenShiny"
+            ],
+            "imports": "resolve_without_source_changes",
+            "python_3_14_parse": "success",
+            "runtime": "deterministic_fixture_or_explicit_hardware_gate"
+          },
+          "imports": [
+            {
+              "module": "Commands.Keys",
+              "names": [
+                "Button"
+              ]
+            },
+            {
+              "module": "Commands.PythonCommandBase",
+              "names": [
+                "PythonCommand"
+              ]
+            },
+            {
+              "module": "datetime",
+              "names": [
+                "datetime"
+              ]
+            },
+            {
+              "module": "numpy",
+              "names": [
+                "np"
+              ]
+            },
+            {
+              "module": "pyaudio",
+              "names": [
+                "pyaudio"
+              ]
+            }
+          ],
+          "path": "SerialController/Commands/PythonCommands/listen_shiny.py",
+          "referenced_api": [
+            "self._logger.debug",
+            "self.checkIfAlive"
+          ],
+          "sha256": "46df29f66cbbe9fcef4e54810cb08526d968a440ffd6adfb7ad49fa826b7dcda"
+        }
+      ]
+    }
+  ],
+  "hash_algorithm": "sha256",
+  "inventory_sha256": "c2e4bd4ec3e0c5e3749e9e8ee84b046a477b8da6a2a160ec8a6121a7a461aeaf",
+  "schema_version": 1
+}

@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "specification_version": "2.2.0",
+  "test_categories": [
+    {
+      "id": "unit",
+      "purpose": "one module or pure component without process or network boundaries",
+      "entrypoint_patterns": [
+        "rust/*/src/**/*.rs #[cfg(test)]",
+        "python/**/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/unit/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "contract",
+      "purpose": "machine-readable public surface and specification drift",
+      "entrypoint_patterns": [
+        "rust/*/tests/contract_*.rs",
+        "tests/contract/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/contract/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "integration",
+      "purpose": "multiple in-process or child-process components with virtual adapters",
+      "entrypoint_patterns": [
+        "rust/*/tests/integration_*.rs",
+        "tests/integration/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/integration/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "fault_injection",
+      "purpose": "timeouts, malformed data, crashes, disconnects, and resource exhaustion",
+      "entrypoint_patterns": [
+        "rust/*/tests/fault_*.rs",
+        "tests/fault_injection/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/fault_injection/<capability>/<case>.<ext>",
+      "hardware_allowed": false
+    },
+    {
+      "id": "hardware",
+      "purpose": "explicitly gated physical camera, serial, controller, and notification verification",
+      "entrypoint_patterns": ["tests/hardware/test_*.py"],
+      "fixture_pattern": "tests/fixtures/hardware/<capability>/<case>.<ext>",
+      "hardware_allowed": true,
+      "required_record_pattern": "artifacts/hardware/<platform>/<capability>/<utc-timestamp>.json",
+      "record_schema": "rust/pokecon/registry/acceptance-record.schema.json",
+      "procedure": "docs/ACCEPTANCE.md"
+    },
+    {
+      "id": "compatibility",
+      "purpose": "unchanged fixed and promoted user scripts plus API-surface comparison",
+      "entrypoint_patterns": [
+        "rust/*/tests/compatibility_*.rs",
+        "tests/compatibility/test_*.py"
+      ],
+      "fixture_pattern": "tests/fixtures/compatibility/<baseline>/<case>.<ext>",
+      "hardware_allowed": false,
+      "hardware_exception": "a case may be an explicit hardware gate only when no deterministic adapter exists"
+    }
+  ],
+  "fixture_naming": {
+    "root": "tests/fixtures",
+    "segment_regex": "^[a-z][a-z0-9_]*$",
+    "case_path_template": "<category>/<capability>/<case>.<ext>",
+    "expected_path_template": "<category>/<capability>/<case>.expected.<ext>",
+    "binary_hash_sidecar_template": "<category>/<capability>/<case>.<ext>.sha256",
+    "mutable_shared_fixtures": "forbidden",
+    "wall_clock_or_random_defaults": "forbidden",
+    "platform_specific_suffixes": ["linux", "windows"]
+  },
+  "path_audit": [
+    {
+      "id": "rust_workspace",
+      "paths": ["Cargo.toml", "rust/*/Cargo.toml", "rust/*/src"],
+      "observed_in": ["Cargo.toml", "flake.nix", ".github/workflows/rust-ci.yml"],
+      "status": "implemented",
+      "phase": 2,
+      "resolution": "the root workspace contains only the application package; contracts, settings, runtime, diagnostics, platform, dynamic, camera, device, and worker process targets are internal application modules or binaries"
+    },
+    {
+      "id": "python_package",
+      "paths": ["python/pokecon"],
+      "observed_in": ["pyproject.toml", "flake.nix", ".github/workflows/lint.yml"],
+      "status": "implemented",
+      "phase": 2,
+      "resolution": "the typed pure-Python package is buildable through the exactly pinned uv_build backend"
+    },
+    {
+      "id": "legacy_python_native_extension",
+      "paths": ["rust/pokecon-pybindings", "pokecon._native", "maturin"],
+      "observed_in": ["phase 2.6 native-extension removal audit"],
+      "status": "resolved",
+      "phase": 13,
+      "resolution": "the unused first-party PyO3 extension crate, import surface, Maturin backend, and release wheel were removed; embedded worker PyO3 and third-party dependency wheels remain"
+    },
+    {
+      "id": "web_package",
+      "paths": ["web/package.json", "web/bun.lock", "web/src"],
+      "observed_in": ["flake.nix", ".github/workflows/lint.yml"],
+      "status": "implemented",
+      "phase": 11,
+      "resolution": "the Svelte application, generated API client, tests, static build, and guarded CI job are active"
+    },
+    {
+      "id": "python_tests",
+      "paths": ["tests/**/test_*.py", "tests/**/*_test.py"],
+      "observed_in": ["flake.nix", ".github/workflows/pytest.yml"],
+      "status": "implemented",
+      "phase": 2,
+      "resolution": "pytest fixtures exercise present and absent source-guard branches; subsystem suites expand in later phases"
+    },
+    {
+      "id": "legacy_src_server",
+      "paths": [
+        "src-server/Cargo.toml",
+        "src-server/Cargo.lock",
+        "src-server/src/main.rs",
+        "src-server/icons"
+      ],
+      "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
+      "status": "resolved",
+      "phase": 2,
+      "resolution": "all active manifests, hooks, workflows, and icons were migrated to the root workspace; the remaining stale icon directory was removed"
+    },
+    {
+      "id": "legacy_typescript_output",
+      "paths": ["src/lib/api/types.ts"],
+      "observed_in": ["phase 1 audit at commit d5e9998faf6341dc4f140900320e2c92d0b33864"],
+      "status": "resolved",
+      "phase": 2,
+      "resolution": "the stale output was removed; phase 10 generates web/src/lib/api/openapi.ts from the tracked api/openapi.json contract"
+    },
+    {
+      "id": "legacy_release_crates",
+      "paths": [
+        "pokecon-events",
+        "pokecon-serial",
+        "pokecon-cv",
+        "pokecon-notify",
+        "pokecon-net",
+        "pokecon-lua"
+      ],
+      "observed_in": ["phase 1 release workflow audit"],
+      "status": "resolved",
+      "phase": 13,
+      "resolution": "the release workflow derives artifacts from the implemented workspace and contains no obsolete crate publication list"
+    },
+    {
+      "id": "generated_contracts",
+      "paths": [
+        "generated/settings.schema.json",
+        "generated/settings-ui.json",
+        "generated/lua/pokecon.d.lua",
+        "python/pokecon/typings",
+        "api/openapi.json",
+        "web/src/lib/api/openapi.json",
+        "web/src/lib/api/openapi.ts"
+      ],
+      "observed_in": ["rust/pokecon/registry/generation.json"],
+      "status": "implemented",
+      "phase": 3,
+      "resolution": "all declared contract artifacts are generated at their canonical paths and CI rejects drift"
+    },
+    {
+      "id": "external_acceptance",
+      "paths": [
+        "docs/ACCEPTANCE.md",
+        "scripts/acceptance/records.py",
+        "rust/pokecon/registry/acceptance-record.schema.json",
+        "rust/pokecon/registry/acceptance-record.example.json",
+        "tests/acceptance/test_records.py"
+      ],
+      "observed_in": [
+        "flake.nix",
+        "rust/pokecon/registry/foundation.json"
+      ],
+      "status": "implemented",
+      "phase": 15,
+      "resolution": "hardware, browser, performance, integrated stress, security, and desktop gates have canonical required steps, a closed record schema, semantic release-matrix validator, Nix checker, and explicit procedures"
+    }
+  ],
+  "audit_policy": {
+    "obsolete_reference_is_success": false,
+    "obsolete_reference_requires_phase_and_resolution": true,
+    "resolved_reference_must_be_absent": true,
+    "planned_path_missing_is_not_applicable_until_phase": true,
+    "implemented_path_missing_is_error": true
+  }
+}

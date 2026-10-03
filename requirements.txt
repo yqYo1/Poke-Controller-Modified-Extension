@@ -19,7 +19,7 @@ scipy
 #
 # from README:
 # 
-pygame
+# pygame removed — controller input handled by Rust core
 paho-mqtt
 windows-capture-device-list
 gitpython

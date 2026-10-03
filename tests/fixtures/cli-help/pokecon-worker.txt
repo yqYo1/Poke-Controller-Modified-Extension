@@ -1,0 +1,9 @@
+PokeCon managed worker process
+
+Usage: pokecon-worker [OPTIONS] --kind <KIND>
+
+Options:
+      --kind <KIND>         Selects the isolated worker role [possible values: script, dynamic]
+      --exit-after-startup  Exit successfully after the worker runtime starts
+  -h, --help                Print help
+  -V, --version             Print version

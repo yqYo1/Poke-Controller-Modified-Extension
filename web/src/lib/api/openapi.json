@@ -1,0 +1,6736 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PokeCon API",
+    "description": "Closed REST and WebSocket contracts for PokeCon",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/camera/retry": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "operationId": "retry_camera",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Camera retry applied or a no-op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_OperationResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Camera retry failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Camera backend failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/camera/screenshot": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "operationId": "screenshot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Saved screenshot metadata or downloaded image bytes",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Present for attachment responses"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_SavedScreenshot"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No frame or incompatible UI mode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid crop, name, path, or format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Screenshot failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/control": {
+      "post": {
+        "tags": [
+          "commands"
+        ],
+        "operationId": "control_command",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Command transition applied or a no-op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_OperationResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Command identity was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Command state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid command request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Command backend failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/reload": {
+      "post": {
+        "tags": [
+          "commands"
+        ],
+        "operationId": "reload_commands",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Command generation reloaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_OperationResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Profile switch conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Worker or cache failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/cameras": {
+      "get": {
+        "tags": [
+          "devices"
+        ],
+        "operationId": "get_cameras",
+        "responses": {
+          "200": {
+            "description": "Fresh camera enumeration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_Vec_CameraDevice"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Camera enumeration failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/serial-ports": {
+      "get": {
+        "tags": [
+          "devices"
+        ],
+        "operationId": "get_serial_ports",
+        "responses": {
+          "200": {
+            "description": "Fresh serial-port enumeration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_Vec_SerialPort"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial enumeration failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dynamic-config/control": {
+      "post": {
+        "tags": [
+          "dynamic_config"
+        ],
+        "operationId": "control_dynamic_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicConfigControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dynamic configuration load result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_DynamicConfigResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No current dynamic file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid language, path, or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Dynamic configuration transport failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/test": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "operationId": "test_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Test notification delivered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_NotificationTestResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Unsupported notification channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Notification configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Notification delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/generate-launcher": {
+      "post": {
+        "tags": [
+          "profiles"
+        ],
+        "operationId": "generate_launcher",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateLauncherRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Profile and launcher result or downloaded Windows batch bytes",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Present for attachment responses"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_GenerateLauncherResult"
+                }
+              },
+              "application/x-bat": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Unsupported platform or UI mode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid profile or destination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Profile or launcher write failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/script-ui/action": {
+      "post": {
+        "tags": [
+          "script_ui"
+        ],
+        "operationId": "script_ui_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptUiAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Script UI interaction accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_ScriptUiActionResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale generation or completed UI object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid dialog value or Tk interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Script worker interaction failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/serial/control": {
+      "post": {
+        "tags": [
+          "devices"
+        ],
+        "operationId": "control_serial",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SerialControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Serial transition applied or a no-op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_OperationResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Serial connection failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid serial request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial backend failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "operationId": "get_settings",
+        "responses": {
+          "200": {
+            "description": "Current canonical settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_SettingsSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Settings snapshot failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "operationId": "patch_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Committed settings snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_SettingsSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or runtime conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid setting transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Persistence failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state": {
+      "get": {
+        "tags": [
+          "state"
+        ],
+        "operationId": "get_state",
+        "responses": {
+          "200": {
+            "description": "Current runtime state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_StateSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "State snapshot failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/update/check": {
+      "post": {
+        "tags": [
+          "update"
+        ],
+        "operationId": "check_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Version comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success_UpdateCheckResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "tags": [
+          "websocket"
+        ],
+        "operationId": "websocket",
+        "responses": {
+          "101": {
+            "description": "WebSocket upgrade"
+          },
+          "400": {
+            "description": "Invalid WebSocket upgrade",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Host or Origin rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Connection identifier exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "fields"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ApiErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "fields": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiErrorCode": {
+        "type": "string",
+        "description": "Closed, stable machine-readable failure codes shared by every public HTTP\nresponse. Endpoint response declarations constrain which subset is\napplicable, while the runtime wire type cannot emit an unregistered code.",
+        "enum": [
+          "request_forbidden",
+          "unsupported_media_type",
+          "payload_too_large",
+          "malformed_json",
+          "invalid_request",
+          "resource_not_found",
+          "method_not_allowed",
+          "revision_conflict",
+          "command_not_found",
+          "command_state_conflict",
+          "profile_switch_conflict",
+          "serial_connection_failed",
+          "camera_unavailable",
+          "screenshot_unavailable",
+          "destination_conflict",
+          "notification_unsupported",
+          "dynamic_config_unavailable",
+          "unsupported_platform",
+          "persistence_failed",
+          "backend_unavailable",
+          "internal_error"
+        ]
+      },
+      "ButtonState": {
+        "type": "object",
+        "required": [
+          "a",
+          "b",
+          "x",
+          "y",
+          "l",
+          "r",
+          "zl",
+          "zr",
+          "lclick",
+          "rclick",
+          "plus",
+          "minus",
+          "home",
+          "capture"
+        ],
+        "properties": {
+          "a": {
+            "type": "boolean"
+          },
+          "b": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "boolean"
+          },
+          "y": {
+            "type": "boolean"
+          },
+          "l": {
+            "type": "boolean"
+          },
+          "r": {
+            "type": "boolean"
+          },
+          "zl": {
+            "type": "boolean"
+          },
+          "zr": {
+            "type": "boolean"
+          },
+          "lclick": {
+            "type": "boolean"
+          },
+          "rclick": {
+            "type": "boolean"
+          },
+          "plus": {
+            "type": "boolean"
+          },
+          "minus": {
+            "type": "boolean"
+          },
+          "home": {
+            "type": "boolean"
+          },
+          "capture": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CameraDevice": {
+        "type": "object",
+        "required": [
+          "selector",
+          "label",
+          "available"
+        ],
+        "properties": {
+          "selector": {
+            "$ref": "#/components/schemas/CameraSelector"
+          },
+          "label": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CameraSelector": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "ClientMessage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SessionDescription"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.offer"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SessionDescription"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.answer"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_IceCandidate"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.ice_candidate"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_InputSnapshot"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "input.snapshot"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_KeyboardInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "keyboard_input"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_MouseStickInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mouse_stick_input"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_MouseInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mouse_input"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_GamepadInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "gamepad_input"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_Nonce"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pong"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "description": "Client-to-server WebSocket/DataChannel union.",
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "CommandControlRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommandStartFields"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "start"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "stop"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "pause"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "resume"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "action"
+        }
+      },
+      "CommandDisplayCommand": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/CommandInfo"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandDisplayItem": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommandDisplayCommand"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "command"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommandDisplaySeparator"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "separator"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "CommandDisplaySeparator": {
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandIdentity": {
+        "type": "object",
+        "required": [
+          "module_path",
+          "class_name"
+        ],
+        "properties": {
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandInfo": {
+        "type": "object",
+        "required": [
+          "name",
+          "module_path",
+          "class_name",
+          "tags"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "module_path": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandStartFields": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/CommandIdentity"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommandState": {
+        "type": "string",
+        "enum": [
+          "running",
+          "paused",
+          "stopped",
+          "error"
+        ]
+      },
+      "DecimalString": {
+        "type": "string",
+        "description": "An exact non-negative integer wire value that never depends on JavaScript\n`Number` precision.",
+        "example": "42",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "DynamicConfigControlRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DynamicLoadPath"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "load_path"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DynamicLoadContent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "load_content"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "reload"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "action"
+        }
+      },
+      "DynamicConfigResult": {
+        "type": "object",
+        "required": [
+          "display_path",
+          "language",
+          "loaded"
+        ],
+        "properties": {
+          "display_path": {
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/DynamicLanguage"
+          },
+          "loaded": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DynamicLanguage": {
+        "type": "string",
+        "enum": [
+          "python",
+          "lua"
+        ]
+      },
+      "DynamicLoadContent": {
+        "type": "object",
+        "required": [
+          "language",
+          "content"
+        ],
+        "properties": {
+          "language": {
+            "$ref": "#/components/schemas/DynamicLanguage"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DynamicLoadPath": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EmptyRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "description": "Common secret-safe error envelope.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GamepadButton": {
+        "type": "string",
+        "enum": [
+          "A",
+          "B",
+          "X",
+          "Y",
+          "L",
+          "R",
+          "ZL",
+          "ZR",
+          "LCLICK",
+          "RCLICK",
+          "MINUS",
+          "PLUS",
+          "HOME",
+          "CAPTURE"
+        ]
+      },
+      "GamepadButtonInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "button",
+          "state"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "button": {
+            "$ref": "#/components/schemas/GamepadButton"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PressState"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GamepadHat": {
+        "type": "string",
+        "enum": [
+          "UP",
+          "DOWN",
+          "LEFT",
+          "RIGHT",
+          "TOP_RIGHT",
+          "BTM_RIGHT",
+          "BTM_LEFT",
+          "TOP_LEFT",
+          "CENTER"
+        ]
+      },
+      "GamepadHatInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "hat"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "hat": {
+            "$ref": "#/components/schemas/GamepadHat"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GamepadInput": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GamepadButtonInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "button"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GamepadStickInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "stick"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GamepadHatInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "hat"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GamepadTouchInput"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "touch"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "GamepadStickInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "stick",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "stick": {
+            "$ref": "#/components/schemas/StickName"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "GamepadTouchInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "touch"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "touch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TouchPoint"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerateLauncherRequest": {
+        "type": "object",
+        "required": [
+          "profile",
+          "copy_current",
+          "destination"
+        ],
+        "properties": {
+          "profile": {
+            "type": "string"
+          },
+          "copy_current": {
+            "type": "boolean"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/LauncherDestination"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerateLauncherResult": {
+        "type": "object",
+        "required": [
+          "profile_created",
+          "launcher_created",
+          "revision"
+        ],
+        "properties": {
+          "profile_created": {
+            "type": "boolean"
+          },
+          "launcher_created": {
+            "type": "boolean"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/DecimalString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Hat": {
+        "type": "string",
+        "enum": [
+          "up",
+          "down",
+          "left",
+          "right",
+          "up_right",
+          "up_left",
+          "down_right",
+          "down_left",
+          "neutral"
+        ]
+      },
+      "IceCandidate": {
+        "type": "object",
+        "required": [
+          "candidate",
+          "sdp_mid",
+          "sdp_mline_index",
+          "username_fragment"
+        ],
+        "properties": {
+          "candidate": {
+            "type": "string"
+          },
+          "negotiation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sdp_mid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sdp_mline_index": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "username_fragment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ImageFormat": {
+        "type": "string",
+        "enum": [
+          "png",
+          "jpeg"
+        ]
+      },
+      "InputApplied": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputGeneration": {
+        "type": "object",
+        "required": [
+          "generation"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "InputSnapshot": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "keyboard_keys",
+          "mouse_buttons",
+          "buttons",
+          "hat",
+          "left_stick",
+          "right_stick",
+          "touch"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "type": "string",
+            "enum": [
+              "0"
+            ]
+          },
+          "keyboard_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mouse_buttons": {
+            "$ref": "#/components/schemas/MouseButtons"
+          },
+          "buttons": {
+            "$ref": "#/components/schemas/ButtonState"
+          },
+          "hat": {
+            "$ref": "#/components/schemas/Hat"
+          },
+          "left_stick": {
+            "$ref": "#/components/schemas/StickPosition"
+          },
+          "right_stick": {
+            "$ref": "#/components/schemas/StickPosition"
+          },
+          "touch": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TouchPoint"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "KeyboardInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "key",
+          "state"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "key": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PressState"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LauncherDestination": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LauncherPath"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "path"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LauncherDownload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "download"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "LauncherDownload": {
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "properties": {
+          "filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "LauncherPath": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LogData": {
+        "type": "object",
+        "required": [
+          "level",
+          "message",
+          "target",
+          "operation"
+        ],
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/LogLevel"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/LogTarget"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/LogOperation"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LogLevel": {
+        "type": "string",
+        "enum": [
+          "debug",
+          "info",
+          "warning",
+          "error",
+          "critical"
+        ]
+      },
+      "LogOperation": {
+        "type": "string",
+        "description": "Mutation semantics for one output-panel message. Ordinary diagnostics\nappend, while the compatibility print APIs may replace or clear a panel.",
+        "enum": [
+          "append",
+          "replace",
+          "clear"
+        ]
+      },
+      "LogTarget": {
+        "type": "string",
+        "enum": [
+          "stdout",
+          "panel1",
+          "panel2",
+          "log"
+        ]
+      },
+      "MessageData_GamepadInput": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "oneOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/GamepadButtonInput"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "button"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/GamepadStickInput"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "stick"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/GamepadHatInput"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "hat"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/GamepadTouchInput"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "kind"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "touch"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_IceCandidate": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "candidate",
+              "sdp_mid",
+              "sdp_mline_index",
+              "username_fragment"
+            ],
+            "properties": {
+              "candidate": {
+                "type": "string"
+              },
+              "negotiation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sdp_mid": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sdp_mline_index": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              },
+              "username_fragment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_InputApplied": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation",
+              "sequence"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              },
+              "sequence": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_InputGeneration": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_InputSnapshot": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation",
+              "sequence",
+              "keyboard_keys",
+              "mouse_buttons",
+              "buttons",
+              "hat",
+              "left_stick",
+              "right_stick",
+              "touch"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              },
+              "sequence": {
+                "type": "string",
+                "enum": [
+                  "0"
+                ]
+              },
+              "keyboard_keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mouse_buttons": {
+                "$ref": "#/components/schemas/MouseButtons"
+              },
+              "buttons": {
+                "$ref": "#/components/schemas/ButtonState"
+              },
+              "hat": {
+                "$ref": "#/components/schemas/Hat"
+              },
+              "left_stick": {
+                "$ref": "#/components/schemas/StickPosition"
+              },
+              "right_stick": {
+                "$ref": "#/components/schemas/StickPosition"
+              },
+              "touch": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TouchPoint"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_KeyboardInput": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation",
+              "sequence",
+              "key",
+              "state"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              },
+              "sequence": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "key": {
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/components/schemas/PressState"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_LogData": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "level",
+              "message",
+              "target",
+              "operation"
+            ],
+            "properties": {
+              "level": {
+                "$ref": "#/components/schemas/LogLevel"
+              },
+              "message": {
+                "type": "string"
+              },
+              "target": {
+                "$ref": "#/components/schemas/LogTarget"
+              },
+              "operation": {
+                "$ref": "#/components/schemas/LogOperation"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_MouseInput": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation",
+              "sequence",
+              "button",
+              "state",
+              "x",
+              "y"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              },
+              "sequence": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "button": {
+                "$ref": "#/components/schemas/MouseButton"
+              },
+              "state": {
+                "$ref": "#/components/schemas/PressState"
+              },
+              "x": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "y": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_MouseStickInput": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "generation",
+              "sequence",
+              "stick",
+              "x",
+              "y"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[\\x00-\\x7F]+$"
+              },
+              "sequence": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "stick": {
+                "$ref": "#/components/schemas/StickName"
+              },
+              "x": {
+                "type": "integer",
+                "format": "int32",
+                "maximum": 255,
+                "minimum": 0
+              },
+              "y": {
+                "type": "integer",
+                "format": "int32",
+                "maximum": 255,
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_Nonce": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "nonce"
+            ],
+            "properties": {
+              "nonce": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_ScriptUiSnapshot": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Latest complete profile-scoped script UI state. The broker replays this\nsnapshot to every newly connected client, so browser reconnects never need\nto infer missed dialog or Tk mutations.",
+            "required": [
+              "generation",
+              "dialogs",
+              "tk_windows",
+              "overlay",
+              "popup_images"
+            ],
+            "properties": {
+              "generation": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "dialogs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ScriptDialog"
+                }
+              },
+              "tk_windows": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ScriptTkWindow"
+                }
+              },
+              "overlay": {
+                "$ref": "#/components/schemas/ScriptOverlaySnapshot"
+              },
+              "popup_images": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ScriptPopupImage"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_SerialData": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "encoding",
+              "data",
+              "byte_length"
+            ],
+            "properties": {
+              "encoding": {
+                "$ref": "#/components/schemas/SerialEncoding"
+              },
+              "data": {
+                "type": "string"
+              },
+              "byte_length": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MessageData_SessionDescription": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "sdp"
+            ],
+            "properties": {
+              "sdp": {
+                "type": "string"
+              },
+              "negotiation_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "MouseButton": {
+        "type": "string",
+        "enum": [
+          "left",
+          "right",
+          "middle"
+        ]
+      },
+      "MouseButtons": {
+        "type": "object",
+        "required": [
+          "left",
+          "right",
+          "middle"
+        ],
+        "properties": {
+          "left": {
+            "type": "boolean"
+          },
+          "right": {
+            "type": "boolean"
+          },
+          "middle": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MouseInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "button",
+          "state",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "button": {
+            "$ref": "#/components/schemas/MouseButton"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PressState"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "MouseStickInput": {
+        "type": "object",
+        "required": [
+          "generation",
+          "sequence",
+          "stick",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "generation": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\x00-\\x7F]+$"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "stick": {
+            "$ref": "#/components/schemas/StickName"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Nonce": {
+        "type": "object",
+        "required": [
+          "nonce"
+        ],
+        "properties": {
+          "nonce": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NormalizedRegion": {
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "y": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "height": {
+            "type": "number",
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationTestRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "channel"
+            ],
+            "properties": {
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "windows"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "channel"
+            ],
+            "properties": {
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "discord"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "channel"
+        }
+      },
+      "NotificationTestResult": {
+        "type": "object",
+        "required": [
+          "delivered"
+        ],
+        "properties": {
+          "delivered": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationResult": {
+        "type": "object",
+        "required": [
+          "changed",
+          "revision"
+        ],
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/DecimalString"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PressState": {
+        "type": "string",
+        "enum": [
+          "pressed",
+          "released"
+        ]
+      },
+      "RevisionedStateChange": {
+        "type": "object",
+        "required": [
+          "revision",
+          "data"
+        ],
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "data": {
+            "$ref": "#/components/schemas/UiStateChange"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SavedScreenshot": {
+        "type": "object",
+        "required": [
+          "display_path",
+          "format"
+        ],
+        "properties": {
+          "display_path": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ImageFormat"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScreenshotCaptures": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedRegion"
+              }
+            ]
+          },
+          "filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageFormat"
+              }
+            ]
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScreenshotDownload": {
+        "type": "object",
+        "required": [
+          "format"
+        ],
+        "properties": {
+          "region": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedRegion"
+              }
+            ]
+          },
+          "filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "$ref": "#/components/schemas/ImageFormat"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScreenshotPath": {
+        "type": "object",
+        "required": [
+          "path",
+          "format"
+        ],
+        "properties": {
+          "region": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedRegion"
+              }
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ImageFormat"
+          },
+          "overwrite": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScreenshotRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScreenshotCaptures"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "destination"
+                ],
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "captures"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScreenshotPath"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "destination"
+                ],
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "path"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScreenshotDownload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "destination"
+                ],
+                "properties": {
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "download"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "destination"
+        }
+      },
+      "ScriptDialog": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "widgets"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "widgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialogWidget"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptDialogAbortReason": {
+        "type": "string",
+        "enum": [
+          "close",
+          "escape",
+          "destroy"
+        ]
+      },
+      "ScriptDialogValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "value": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "bool"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "integer"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "format": "double"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "float"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Script-dialog value kept type-safe across Python, Rust, and the browser."
+      },
+      "ScriptDialogWidget": {
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "value",
+          "options",
+          "minimum",
+          "maximum",
+          "precision"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ScriptDialogWidgetKind"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/ScriptDialogValue"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialogValue"
+            }
+          },
+          "minimum": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "maximum": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "precision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptDialogWidgetKind": {
+        "type": "string",
+        "enum": [
+          "entry",
+          "check",
+          "combo",
+          "radio",
+          "spin",
+          "scale",
+          "next"
+        ]
+      },
+      "ScriptOverlayRectangle": {
+        "type": "object",
+        "required": [
+          "tag",
+          "x1",
+          "y1",
+          "x2",
+          "y2",
+          "outline"
+        ],
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "x1": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "y1": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "x2": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "y2": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "outline": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptOverlayShape": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptOverlayRectangle"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "rectangle"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptOverlayText"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "text"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "ScriptOverlaySnapshot": {
+        "type": "object",
+        "required": [
+          "fps",
+          "show_width",
+          "show_height",
+          "right_mouse_mode",
+          "touchscreen_area",
+          "bindings",
+          "shapes"
+        ],
+        "properties": {
+          "fps": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "show_width": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "show_height": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "right_mouse_mode": {
+            "type": "string"
+          },
+          "touchscreen_area": {
+            "$ref": "#/components/schemas/NormalizedRegion"
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/ScriptPointerBindings"
+          },
+          "shapes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptOverlayShape"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptOverlayText": {
+        "type": "object",
+        "required": [
+          "tag",
+          "x",
+          "y",
+          "text",
+          "font",
+          "font_size",
+          "color"
+        ],
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          },
+          "font": {
+            "type": "string"
+          },
+          "font_size": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "color": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptPointerBindings": {
+        "type": "object",
+        "required": [
+          "left",
+          "right"
+        ],
+        "properties": {
+          "left": {
+            "type": "boolean"
+          },
+          "right": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptPointerButton": {
+        "type": "string",
+        "enum": [
+          "left",
+          "right"
+        ]
+      },
+      "ScriptPointerPhase": {
+        "type": "string",
+        "enum": [
+          "pressed",
+          "moved",
+          "released"
+        ]
+      },
+      "ScriptPopupImage": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "content_type",
+          "encoded_base64"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "encoded_base64": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptTkButton": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "pady"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "text": {
+            "type": "string"
+          },
+          "pady": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptTkLabel": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "width",
+          "height",
+          "relief",
+          "background",
+          "pady"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "text": {
+            "type": "string"
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "relief": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "background": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pady": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptTkScale": {
+        "type": "object",
+        "required": [
+          "id",
+          "from_value",
+          "to_value",
+          "orient",
+          "label",
+          "value",
+          "pady"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "from_value": {
+            "type": "number",
+            "format": "double"
+          },
+          "to_value": {
+            "type": "number",
+            "format": "double"
+          },
+          "orient": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          },
+          "pady": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptTkWidget": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkScale"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "scale"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkButton"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "button"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScriptTkLabel"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "label"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "ScriptTkWindow": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "geometry",
+          "widgets"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "title": {
+            "type": "string"
+          },
+          "geometry": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "widgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptTkWidget"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptUiAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "dialog_id",
+              "values",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "dialog_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ScriptDialogValue"
+                }
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "dialog_confirm"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "dialog_id",
+              "reason",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "dialog_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ScriptDialogAbortReason"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "dialog_abort"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "widget_id",
+              "value",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "widget_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "value": {
+                "type": "number",
+                "format": "double"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "tk_scale_changed"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "widget_id",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "widget_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "tk_button_invoked"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "window_id",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "window_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "tk_window_closed"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "popup_id",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "popup_id": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "popup_closed"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "generation",
+              "button",
+              "phase",
+              "x",
+              "y",
+              "action"
+            ],
+            "properties": {
+              "generation": {
+                "type": "string"
+              },
+              "button": {
+                "$ref": "#/components/schemas/ScriptPointerButton"
+              },
+              "phase": {
+                "$ref": "#/components/schemas/ScriptPointerPhase"
+              },
+              "x": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "y": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "pointer"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "Browser-originated, generation-checked interaction with script-owned UI.",
+        "discriminator": {
+          "propertyName": "action"
+        }
+      },
+      "ScriptUiActionResult": {
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScriptUiSnapshot": {
+        "type": "object",
+        "description": "Latest complete profile-scoped script UI state. The broker replays this\nsnapshot to every newly connected client, so browser reconnects never need\nto infer missed dialog or Tk mutations.",
+        "required": [
+          "generation",
+          "dialogs",
+          "tk_windows",
+          "overlay",
+          "popup_images"
+        ],
+        "properties": {
+          "generation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dialogs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptDialog"
+            }
+          },
+          "tk_windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptTkWindow"
+            }
+          },
+          "overlay": {
+            "$ref": "#/components/schemas/ScriptOverlaySnapshot"
+          },
+          "popup_images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptPopupImage"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SerialControlRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "connect"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "disconnect"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "action"
+        }
+      },
+      "SerialData": {
+        "type": "object",
+        "required": [
+          "encoding",
+          "data",
+          "byte_length"
+        ],
+        "properties": {
+          "encoding": {
+            "$ref": "#/components/schemas/SerialEncoding"
+          },
+          "data": {
+            "type": "string"
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SerialEncoding": {
+        "type": "string",
+        "enum": [
+          "base64"
+        ]
+      },
+      "SerialPort": {
+        "type": "object",
+        "required": [
+          "selector",
+          "label",
+          "available"
+        ],
+        "properties": {
+          "selector": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ServerMessage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RevisionedStateChange"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ui.state.changed"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SerialData"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "serial.data"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_LogData"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "log"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_ScriptUiSnapshot"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "script.ui"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SessionDescription"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.offer"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_SessionDescription"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.answer"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_IceCandidate"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "webrtc.ice_candidate"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_InputGeneration"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "input.generation"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_InputApplied"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "input.snapshot.applied"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageData_Nonce"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ping"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        ],
+        "description": "Server-to-client WebSocket union. Every JSON variant is closed and only\nstate changes carry a revision.",
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "SessionDescription": {
+        "type": "object",
+        "required": [
+          "sdp"
+        ],
+        "properties": {
+          "sdp": {
+            "type": "string"
+          },
+          "negotiation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SettingsChange": {
+        "type": "object",
+        "required": [
+          "values",
+          "pending_restart_values",
+          "restart_required",
+          "apply_failures"
+        ],
+        "properties": {
+          "values": {
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
+          },
+          "pending_restart_values": {
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
+          },
+          "restart_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "apply_failures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SettingsPatchRequest": {
+        "type": "object",
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "expected_revision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/SettingsWriteValues"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SettingsReadPatchValues": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en"
+            ]
+          },
+          "auto_reload_config": {
+            "type": "boolean"
+          },
+          "dynamic.callback_soft_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_soft_timeout_grace_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_hard_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_max_concurrency": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "dynamic.callback_queue_capacity": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "report_ignored_profile_global_settings": {
+            "type": "boolean"
+          },
+          "active_profile": {
+            "type": "string",
+            "minLength": 1,
+            "format": "profile_name"
+          },
+          "camera.capture_fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "camera.capture_resolution": {
+            "type": "string",
+            "enum": [
+              "640x360",
+              "1280x720",
+              "1920x1080"
+            ]
+          },
+          "camera.device": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "format": "non_empty_no_nul"
+              }
+            ]
+          },
+          "camera.flip_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "vertical",
+              "horizontal",
+              "both"
+            ]
+          },
+          "camera.screenshot_format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          },
+          "serial.port": {
+            "type": "string",
+            "format": "free"
+          },
+          "serial.baud_rate": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "serial.data_format": {
+            "type": "string",
+            "enum": [
+              "default",
+              "qingpi",
+              "3ds"
+            ]
+          },
+          "input.keyboard_enabled": {
+            "type": "boolean"
+          },
+          "input.left_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.right_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.touchscreen_area": {
+            "type": "object",
+            "properties": {
+              "bottom": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "left": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "right": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "top": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              }
+            },
+            "required": [
+              "bottom",
+              "left",
+              "right",
+              "top"
+            ],
+            "additionalProperties": false
+          },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
+          },
+          "notifications.line_menu_behavior": {
+            "type": "string",
+            "enum": [
+              "message",
+              "noop"
+            ]
+          },
+          "notifications.discord.webhook_url": {
+            "type": "object",
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configured"
+            ],
+            "additionalProperties": false,
+            "description": "Secret-safe status; the secret value is never returned"
+          },
+          "notifications.discord.username": {
+            "type": "string",
+            "format": "free"
+          },
+          "notifications.discord.avatar_url": {
+            "type": "string",
+            "format": "http_url_or_empty"
+          },
+          "notifications.discord.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.discord.on_script_end": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_end": {
+            "type": "boolean"
+          },
+          "websocket.reconnect_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.reconnect_max_retries": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "websocket.ping_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.pong_timeout_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "webrtc.auto_recover": {
+            "type": "boolean"
+          },
+          "webrtc.recovery_probe_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "stun_server": {
+            "type": "string",
+            "format": "stun_uri_or_empty"
+          },
+          "jpeg_quality": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "server.web_dir": {
+            "type": "string",
+            "minLength": 1
+          },
+          "server.port": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "server.bind_address": {
+            "type": "string",
+            "minLength": 1,
+            "format": "ip_literal_non_wildcard"
+          },
+          "ui.fps_options": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "ui.fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "ui.widget_mode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "outputs",
+              "output_1_controller",
+              "output_2_controller",
+              "output_1",
+              "output_2",
+              "controller"
+            ]
+          },
+          "ui.output_split_ratio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "ui.stdout_destination": {
+            "type": "string",
+            "enum": [
+              "output_1",
+              "output_2"
+            ]
+          },
+          "ui.controller_position": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom"
+            ]
+          },
+          "ui.dialog_button_position": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "top",
+              "both"
+            ]
+          },
+          "ui.camera.live_view_enabled": {
+            "type": "boolean"
+          },
+          "ui.camera.pixel_values_visible": {
+            "type": "boolean"
+          },
+          "ui.camera.guide_visible": {
+            "type": "boolean"
+          },
+          "ui.desktop.close_behavior": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "shutdown",
+              "keep_backend"
+            ]
+          },
+          "ui.desktop.disable_compositing": {
+            "type": "boolean"
+          },
+          "shortcuts.button_1": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_2": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_3": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_4": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_5": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_6": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_7": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_8": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_9": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_10": {
+            "type": "string",
+            "format": "free"
+          },
+          "commands.tag_match_mode": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "partial",
+              "prefix",
+              "suffix"
+            ]
+          },
+          "python.script.venv": {
+            "type": "string",
+            "minLength": 1
+          },
+          "python.script.shutdown_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "python.script.packages.list": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "extras": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "uniqueItems": false
+          },
+          "python.script.packages.override_application_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.override_package_metadata_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.uv_config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          },
+          "python.script.packages.revalidate_mutable_sources": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "SettingsReadValues": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en"
+            ]
+          },
+          "auto_reload_config": {
+            "type": "boolean"
+          },
+          "dynamic.callback_soft_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_soft_timeout_grace_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_hard_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_max_concurrency": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "dynamic.callback_queue_capacity": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "report_ignored_profile_global_settings": {
+            "type": "boolean"
+          },
+          "active_profile": {
+            "type": "string",
+            "minLength": 1,
+            "format": "profile_name"
+          },
+          "camera.capture_fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "camera.capture_resolution": {
+            "type": "string",
+            "enum": [
+              "640x360",
+              "1280x720",
+              "1920x1080"
+            ]
+          },
+          "camera.device": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "format": "non_empty_no_nul"
+              }
+            ]
+          },
+          "camera.flip_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "vertical",
+              "horizontal",
+              "both"
+            ]
+          },
+          "camera.screenshot_format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          },
+          "serial.port": {
+            "type": "string",
+            "format": "free"
+          },
+          "serial.baud_rate": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "serial.data_format": {
+            "type": "string",
+            "enum": [
+              "default",
+              "qingpi",
+              "3ds"
+            ]
+          },
+          "input.keyboard_enabled": {
+            "type": "boolean"
+          },
+          "input.left_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.right_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.touchscreen_area": {
+            "type": "object",
+            "properties": {
+              "bottom": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "left": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "right": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "top": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              }
+            },
+            "required": [
+              "bottom",
+              "left",
+              "right",
+              "top"
+            ],
+            "additionalProperties": false
+          },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
+          },
+          "notifications.line_menu_behavior": {
+            "type": "string",
+            "enum": [
+              "message",
+              "noop"
+            ]
+          },
+          "notifications.discord.webhook_url": {
+            "type": "object",
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "configured"
+            ],
+            "additionalProperties": false,
+            "description": "Secret-safe status; the secret value is never returned"
+          },
+          "notifications.discord.username": {
+            "type": "string",
+            "format": "free"
+          },
+          "notifications.discord.avatar_url": {
+            "type": "string",
+            "format": "http_url_or_empty"
+          },
+          "notifications.discord.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.discord.on_script_end": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_end": {
+            "type": "boolean"
+          },
+          "websocket.reconnect_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.reconnect_max_retries": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "websocket.ping_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.pong_timeout_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "webrtc.auto_recover": {
+            "type": "boolean"
+          },
+          "webrtc.recovery_probe_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "stun_server": {
+            "type": "string",
+            "format": "stun_uri_or_empty"
+          },
+          "jpeg_quality": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "server.web_dir": {
+            "type": "string",
+            "minLength": 1
+          },
+          "server.port": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "server.bind_address": {
+            "type": "string",
+            "minLength": 1,
+            "format": "ip_literal_non_wildcard"
+          },
+          "ui.fps_options": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "ui.fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "ui.widget_mode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "outputs",
+              "output_1_controller",
+              "output_2_controller",
+              "output_1",
+              "output_2",
+              "controller"
+            ]
+          },
+          "ui.output_split_ratio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "ui.stdout_destination": {
+            "type": "string",
+            "enum": [
+              "output_1",
+              "output_2"
+            ]
+          },
+          "ui.controller_position": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom"
+            ]
+          },
+          "ui.dialog_button_position": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "top",
+              "both"
+            ]
+          },
+          "ui.camera.live_view_enabled": {
+            "type": "boolean"
+          },
+          "ui.camera.pixel_values_visible": {
+            "type": "boolean"
+          },
+          "ui.camera.guide_visible": {
+            "type": "boolean"
+          },
+          "ui.desktop.close_behavior": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "shutdown",
+              "keep_backend"
+            ]
+          },
+          "ui.desktop.disable_compositing": {
+            "type": "boolean"
+          },
+          "shortcuts.button_1": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_2": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_3": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_4": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_5": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_6": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_7": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_8": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_9": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_10": {
+            "type": "string",
+            "format": "free"
+          },
+          "commands.tag_match_mode": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "partial",
+              "prefix",
+              "suffix"
+            ]
+          },
+          "python.script.venv": {
+            "type": "string",
+            "minLength": 1
+          },
+          "python.script.shutdown_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "python.script.packages.list": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "extras": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "uniqueItems": false
+          },
+          "python.script.packages.override_application_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.override_package_metadata_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.uv_config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          },
+          "python.script.packages.revalidate_mutable_sources": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "language",
+          "auto_reload_config",
+          "dynamic.callback_soft_timeout_ms",
+          "dynamic.callback_soft_timeout_grace_ms",
+          "dynamic.callback_hard_timeout_ms",
+          "dynamic.callback_max_concurrency",
+          "dynamic.callback_queue_capacity",
+          "report_ignored_profile_global_settings",
+          "active_profile",
+          "camera.capture_fps",
+          "camera.capture_resolution",
+          "camera.device",
+          "camera.flip_mode",
+          "camera.screenshot_format",
+          "serial.port",
+          "serial.baud_rate",
+          "serial.data_format",
+          "input.keyboard_enabled",
+          "input.left_stick_mouse_enabled",
+          "input.right_stick_mouse_enabled",
+          "input.touchscreen_area",
+          "input.allow_manual_intervention",
+          "notifications.line_menu_behavior",
+          "notifications.discord.webhook_url",
+          "notifications.discord.username",
+          "notifications.discord.avatar_url",
+          "notifications.discord.on_script_start",
+          "notifications.discord.on_script_end",
+          "notifications.windows.on_script_start",
+          "notifications.windows.on_script_end",
+          "websocket.reconnect_interval_sec",
+          "websocket.reconnect_max_retries",
+          "websocket.ping_interval_sec",
+          "websocket.pong_timeout_sec",
+          "webrtc.auto_recover",
+          "webrtc.recovery_probe_interval_sec",
+          "stun_server",
+          "jpeg_quality",
+          "server.web_dir",
+          "server.port",
+          "server.bind_address",
+          "ui.fps_options",
+          "ui.fps",
+          "ui.widget_mode",
+          "ui.output_split_ratio",
+          "ui.stdout_destination",
+          "ui.controller_position",
+          "ui.dialog_button_position",
+          "ui.camera.live_view_enabled",
+          "ui.camera.pixel_values_visible",
+          "ui.camera.guide_visible",
+          "ui.desktop.close_behavior",
+          "ui.desktop.disable_compositing",
+          "shortcuts.button_1",
+          "shortcuts.button_2",
+          "shortcuts.button_3",
+          "shortcuts.button_4",
+          "shortcuts.button_5",
+          "shortcuts.button_6",
+          "shortcuts.button_7",
+          "shortcuts.button_8",
+          "shortcuts.button_9",
+          "shortcuts.button_10",
+          "commands.tag_match_mode",
+          "python.script.venv",
+          "python.script.shutdown_timeout_ms",
+          "python.script.packages.list",
+          "python.script.packages.override_application_constraints",
+          "python.script.packages.override_package_metadata_constraints",
+          "python.script.packages.uv_config",
+          "python.script.packages.revalidate_mutable_sources"
+        ],
+        "additionalProperties": false
+      },
+      "SettingsSnapshot": {
+        "type": "object",
+        "required": [
+          "instance_id",
+          "revision",
+          "values",
+          "pending_restart_values",
+          "restart_required",
+          "apply_failures"
+        ],
+        "properties": {
+          "instance_id": {
+            "type": "string",
+            "description": "Random identity shared by all snapshots from one backend process."
+          },
+          "revision": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "values": {
+            "$ref": "#/components/schemas/SettingsReadValues"
+          },
+          "pending_restart_values": {
+            "$ref": "#/components/schemas/SettingsReadPatchValues"
+          },
+          "restart_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "apply_failures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SettingsWriteValues": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "ja",
+              "en"
+            ]
+          },
+          "auto_reload_config": {
+            "type": "boolean"
+          },
+          "dynamic.callback_soft_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_soft_timeout_grace_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_hard_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "dynamic.callback_max_concurrency": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "dynamic.callback_queue_capacity": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "report_ignored_profile_global_settings": {
+            "type": "boolean"
+          },
+          "active_profile": {
+            "type": "string",
+            "minLength": 1,
+            "format": "profile_name"
+          },
+          "camera.capture_fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "camera.capture_resolution": {
+            "type": "string",
+            "enum": [
+              "640x360",
+              "1280x720",
+              "1920x1080"
+            ]
+          },
+          "camera.device": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "format": "non_empty_no_nul"
+              }
+            ]
+          },
+          "camera.flip_mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "vertical",
+              "horizontal",
+              "both"
+            ]
+          },
+          "camera.screenshot_format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          },
+          "serial.port": {
+            "type": "string",
+            "format": "free"
+          },
+          "serial.baud_rate": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "serial.data_format": {
+            "type": "string",
+            "enum": [
+              "default",
+              "qingpi",
+              "3ds"
+            ]
+          },
+          "input.keyboard_enabled": {
+            "type": "boolean"
+          },
+          "input.left_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.right_stick_mouse_enabled": {
+            "type": "boolean"
+          },
+          "input.touchscreen_area": {
+            "type": "object",
+            "properties": {
+              "bottom": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "left": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "right": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "top": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0.0,
+                "maximum": 1.0
+              }
+            },
+            "required": [
+              "bottom",
+              "left",
+              "right",
+              "top"
+            ],
+            "additionalProperties": false
+          },
+          "input.allow_manual_intervention": {
+            "type": "boolean"
+          },
+          "notifications.line_menu_behavior": {
+            "type": "string",
+            "enum": [
+              "message",
+              "noop"
+            ]
+          },
+          "notifications.discord.webhook_url": {
+            "type": "string",
+            "format": "discord_webhook_or_empty"
+          },
+          "notifications.discord.username": {
+            "type": "string",
+            "format": "free"
+          },
+          "notifications.discord.avatar_url": {
+            "type": "string",
+            "format": "http_url_or_empty"
+          },
+          "notifications.discord.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.discord.on_script_end": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_start": {
+            "type": "boolean"
+          },
+          "notifications.windows.on_script_end": {
+            "type": "boolean"
+          },
+          "websocket.reconnect_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.reconnect_max_retries": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "websocket.ping_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "websocket.pong_timeout_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "webrtc.auto_recover": {
+            "type": "boolean"
+          },
+          "webrtc.recovery_probe_interval_sec": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "stun_server": {
+            "type": "string",
+            "format": "stun_uri_or_empty"
+          },
+          "jpeg_quality": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "server.web_dir": {
+            "type": "string",
+            "minLength": 1
+          },
+          "server.port": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "server.bind_address": {
+            "type": "string",
+            "minLength": 1,
+            "format": "ip_literal_non_wildcard"
+          },
+          "ui.fps_options": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            },
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "ui.fps": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "ui.widget_mode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "outputs",
+              "output_1_controller",
+              "output_2_controller",
+              "output_1",
+              "output_2",
+              "controller"
+            ]
+          },
+          "ui.output_split_ratio": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "ui.stdout_destination": {
+            "type": "string",
+            "enum": [
+              "output_1",
+              "output_2"
+            ]
+          },
+          "ui.controller_position": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom"
+            ]
+          },
+          "ui.dialog_button_position": {
+            "type": "string",
+            "enum": [
+              "bottom",
+              "top",
+              "both"
+            ]
+          },
+          "ui.camera.live_view_enabled": {
+            "type": "boolean"
+          },
+          "ui.camera.pixel_values_visible": {
+            "type": "boolean"
+          },
+          "ui.camera.guide_visible": {
+            "type": "boolean"
+          },
+          "ui.desktop.close_behavior": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "shutdown",
+              "keep_backend"
+            ]
+          },
+          "ui.desktop.disable_compositing": {
+            "type": "boolean"
+          },
+          "shortcuts.button_1": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_2": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_3": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_4": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_5": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_6": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_7": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_8": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_9": {
+            "type": "string",
+            "format": "free"
+          },
+          "shortcuts.button_10": {
+            "type": "string",
+            "format": "free"
+          },
+          "commands.tag_match_mode": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "partial",
+              "prefix",
+              "suffix"
+            ]
+          },
+          "python.script.venv": {
+            "type": "string",
+            "minLength": 1
+          },
+          "python.script.shutdown_timeout_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "python.script.packages.list": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "extras": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            "uniqueItems": false
+          },
+          "python.script.packages.override_application_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.override_package_metadata_constraints": {
+            "type": "boolean"
+          },
+          "python.script.packages.uv_config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          },
+          "python.script.packages.revalidate_mutable_sources": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "StateChangeCause": {
+        "type": "string",
+        "enum": [
+          "settings",
+          "camera",
+          "serial",
+          "command",
+          "profile",
+          "dynamic_config",
+          "commands",
+          "shutdown",
+          "other"
+        ]
+      },
+      "StatePatch": {
+        "type": "object",
+        "description": "Sparse state payload emitted by exactly one visible transaction.",
+        "properties": {
+          "serial_port": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serial_baud_rate": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "serial_connected": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "camera_opened": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "camera_fps": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "camera_resolution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "camera_device": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CameraSelector"
+              }
+            ]
+          },
+          "is_running": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "command_state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CommandState"
+              }
+            ]
+          },
+          "current_command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "command_candidates": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CommandInfo"
+            }
+          },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "active_profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pending_profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "available_profiles": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "holding_buttons": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "command_display_lists": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/CommandDisplayItem"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "command_display_cache_loading": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "StateSnapshot": {
+        "type": "object",
+        "required": [
+          "revision",
+          "serial_port",
+          "serial_baud_rate",
+          "serial_connected",
+          "camera_opened",
+          "camera_fps",
+          "camera_resolution",
+          "camera_device",
+          "is_running",
+          "command_state",
+          "current_command",
+          "command_candidates",
+          "tags",
+          "active_profile",
+          "pending_profile",
+          "available_profiles",
+          "last_input",
+          "holding_buttons",
+          "pid",
+          "command_display_lists",
+          "command_display_cache_loading"
+        ],
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "serial_port": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serial_baud_rate": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "serial_connected": {
+            "type": "boolean"
+          },
+          "camera_opened": {
+            "type": "boolean"
+          },
+          "camera_fps": {
+            "type": "number",
+            "format": "double"
+          },
+          "camera_resolution": {
+            "type": "string"
+          },
+          "camera_device": {
+            "$ref": "#/components/schemas/CameraSelector"
+          },
+          "is_running": {
+            "type": "boolean"
+          },
+          "command_state": {
+            "$ref": "#/components/schemas/CommandState"
+          },
+          "current_command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "command_candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandInfo"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active_profile": {
+            "type": "string"
+          },
+          "pending_profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "available_profiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_input": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "holding_buttons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pid": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "command_display_lists": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/CommandDisplayItem"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "command_display_cache_loading": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "StickName": {
+        "type": "string",
+        "enum": [
+          "LSTICK",
+          "RSTICK"
+        ]
+      },
+      "StickPosition": {
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_DynamicConfigResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "display_path",
+              "language",
+              "loaded"
+            ],
+            "properties": {
+              "display_path": {
+                "type": "string"
+              },
+              "language": {
+                "$ref": "#/components/schemas/DynamicLanguage"
+              },
+              "loaded": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_GenerateLauncherResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "profile_created",
+              "launcher_created",
+              "revision"
+            ],
+            "properties": {
+              "profile_created": {
+                "type": "boolean"
+              },
+              "launcher_created": {
+                "type": "boolean"
+              },
+              "revision": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_NotificationTestResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "delivered"
+            ],
+            "properties": {
+              "delivered": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_OperationResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "changed",
+              "revision"
+            ],
+            "properties": {
+              "changed": {
+                "type": "boolean"
+              },
+              "revision": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_SavedScreenshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "display_path",
+              "format"
+            ],
+            "properties": {
+              "display_path": {
+                "type": "string"
+              },
+              "format": {
+                "$ref": "#/components/schemas/ImageFormat"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_ScriptUiActionResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "accepted"
+            ],
+            "properties": {
+              "accepted": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_SettingsSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "instance_id",
+              "revision",
+              "values",
+              "pending_restart_values",
+              "restart_required",
+              "apply_failures"
+            ],
+            "properties": {
+              "instance_id": {
+                "type": "string",
+                "description": "Random identity shared by all snapshots from one backend process."
+              },
+              "revision": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "values": {
+                "$ref": "#/components/schemas/SettingsReadValues"
+              },
+              "pending_restart_values": {
+                "$ref": "#/components/schemas/SettingsReadPatchValues"
+              },
+              "restart_required": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "apply_failures": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_StateSnapshot": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "revision",
+              "serial_port",
+              "serial_baud_rate",
+              "serial_connected",
+              "camera_opened",
+              "camera_fps",
+              "camera_resolution",
+              "camera_device",
+              "is_running",
+              "command_state",
+              "current_command",
+              "command_candidates",
+              "tags",
+              "active_profile",
+              "pending_profile",
+              "available_profiles",
+              "last_input",
+              "holding_buttons",
+              "pid",
+              "command_display_lists",
+              "command_display_cache_loading"
+            ],
+            "properties": {
+              "revision": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "serial_port": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "serial_baud_rate": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "serial_connected": {
+                "type": "boolean"
+              },
+              "camera_opened": {
+                "type": "boolean"
+              },
+              "camera_fps": {
+                "type": "number",
+                "format": "double"
+              },
+              "camera_resolution": {
+                "type": "string"
+              },
+              "camera_device": {
+                "$ref": "#/components/schemas/CameraSelector"
+              },
+              "is_running": {
+                "type": "boolean"
+              },
+              "command_state": {
+                "$ref": "#/components/schemas/CommandState"
+              },
+              "current_command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "command_candidates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommandInfo"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "active_profile": {
+                "type": "string"
+              },
+              "pending_profile": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "available_profiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "last_input": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "holding_buttons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pid": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "command_display_lists": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommandDisplayItem"
+                  }
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "command_display_cache_loading": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_UpdateCheckResult": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "current_version",
+              "latest_version",
+              "update_available",
+              "release_url"
+            ],
+            "properties": {
+              "current_version": {
+                "type": "string"
+              },
+              "latest_version": {
+                "type": "string"
+              },
+              "update_available": {
+                "type": "boolean"
+              },
+              "release_url": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_Vec_CameraDevice": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "selector",
+                "label",
+                "available"
+              ],
+              "properties": {
+                "selector": {
+                  "$ref": "#/components/schemas/CameraSelector"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Success_Vec_SerialPort": {
+        "type": "object",
+        "description": "Common successful JSON envelope.",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "selector",
+                "label",
+                "available"
+              ],
+              "properties": {
+                "selector": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "TouchPoint": {
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "pressed"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 319,
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 239,
+            "minimum": 0
+          },
+          "pressed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "UiStateChange": {
+        "type": "object",
+        "required": [
+          "cause",
+          "state",
+          "settings"
+        ],
+        "properties": {
+          "cause": {
+            "$ref": "#/components/schemas/StateChangeCause"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StatePatch"
+          },
+          "settings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SettingsChange"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateCheckResult": {
+        "type": "object",
+        "required": [
+          "current_version",
+          "latest_version",
+          "update_available",
+          "release_url"
+        ],
+        "properties": {
+          "current_version": {
+            "type": "string"
+          },
+          "latest_version": {
+            "type": "string"
+          },
+          "update_available": {
+            "type": "boolean"
+          },
+          "release_url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "settings",
+      "description": "Canonical settings"
+    },
+    {
+      "name": "state",
+      "description": "Runtime state"
+    },
+    {
+      "name": "commands",
+      "description": "User command lifecycle"
+    },
+    {
+      "name": "devices",
+      "description": "Camera and serial devices"
+    },
+    {
+      "name": "script_ui",
+      "description": "Profile-scoped script dialogs and compatibility UI"
+    }
+  ]
+}

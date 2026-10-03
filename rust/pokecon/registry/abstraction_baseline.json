@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "workspace_members": ["rust/pokecon"],
+  "workspace_dependency_names": [
+    "anyhow",
+    "async-trait",
+    "atomic-write-file",
+    "axum",
+    "base64",
+    "chrono",
+    "clap",
+    "fs4",
+    "futures-util",
+    "getrandom",
+    "gilrs",
+    "gpui-kit",
+    "hex",
+    "hmac",
+    "image",
+    "mime_guess",
+    "mlua",
+    "nix",
+    "nokhwa",
+    "notify",
+    "opener",
+    "openh264",
+    "parking_lot",
+    "pep440_rs",
+    "pyo3",
+    "regex",
+    "reqwest",
+    "rfd",
+    "rmp-serde",
+    "rumqttc",
+    "rustls",
+    "semver",
+    "serde",
+    "serde_json",
+    "sha2",
+    "shared_memory",
+    "tauri",
+    "tauri-plugin-single-instance",
+    "tempfile",
+    "thiserror",
+    "tokio",
+    "tokio-serial",
+    "tokio-tungstenite",
+    "tokio-util",
+    "toml",
+    "toml_edit",
+    "tower",
+    "tracing",
+    "tracing-subscriber",
+    "url",
+    "utoipa",
+    "v4l",
+    "version-ranges",
+    "webrtc"
+  ],
+  "bins": [
+    {
+      "name": "pokecon",
+      "path": "rust/pokecon/src/main.rs",
+      "required_features": [],
+      "boundary_ref": null
+    },
+    {
+      "name": "pokecon-worker",
+      "path": "rust/pokecon/src/bin/worker.rs",
+      "required_features": ["worker-binary"],
+      "boundary_ref": "worker-process"
+    },
+    {
+      "name": "pokecon-compatibility",
+      "path": "rust/pokecon/src/bin/compatibility.rs",
+      "required_features": ["compatibility-tool"],
+      "boundary_ref": null
+    },
+    {
+      "name": "pokecon-worker-fault-fixture",
+      "path": "rust/pokecon/tests/fixtures/fault_worker.rs",
+      "required_features": ["worker-test-fixture"],
+      "boundary_ref": null,
+      "note": "test-only fault fixture; excluded from the boundary_ref requirement by path, not a product boundary"
+    },
+    {
+      "name": "generate_contracts",
+      "path": "rust/pokecon/src/bin/generate_contracts.rs",
+      "required_features": ["contract-generator"],
+      "boundary_ref": null
+    },
+    {
+      "name": "generate_openapi",
+      "path": "rust/pokecon/src/bin/generate_openapi.rs",
+      "required_features": ["contract-generator"],
+      "boundary_ref": null
+    }
+  ],
+  "features": [
+    "compatibility-tool",
+    "contract-generator",
+    "default",
+    "gpui",
+    "gpui-test-support",
+    "integration-test-support",
+    "worker-binary",
+    "worker-test-fixture"
+  ],
+  "traits": [
+    {
+      "path": "rust/pokecon/src/script_runtime.rs",
+      "name": "ScriptGenerationHostFactory",
+      "justification": "test seam: builds script generation hosts for production vs test doubles"
+    },
+    {
+      "path": "rust/pokecon/src/device/serial/mod.rs",
+      "name": "SerialIo",
+      "justification": "hardware seam: serial I/O behind native and test implementations"
+    },
+    {
+      "path": "rust/pokecon/src/device/serial/mod.rs",
+      "name": "SerialBackend",
+      "justification": "hardware seam: serial backend selection for native vs test ports"
+    },
+    {
+      "path": "rust/pokecon/src/device/notification.rs",
+      "name": "DiscordTransport",
+      "justification": "test seam: Discord notification transport behind a mockable interface"
+    },
+    {
+      "path": "rust/pokecon/src/device/notification.rs",
+      "name": "NativeNotificationTransport",
+      "justification": "platform seam: OS-native toast hidden behind a cfg-gated implementation"
+    },
+    {
+      "path": "rust/pokecon/src/worker/script/mod.rs",
+      "name": "ScriptHost",
+      "justification": "wire boundary: script host protocol between supervisor and worker binary"
+    },
+    {
+      "path": "rust/pokecon/src/worker/ipc/connection.rs",
+      "name": "ResourceSafety",
+      "justification": "wire boundary: resource-safety gate for IPC connections"
+    },
+    {
+      "path": "rust/pokecon/src/platform/mod.rs",
+      "name": "PlatformAdapter",
+      "justification": "platform seam: OS platform adaptation behind one interface"
+    },
+    {
+      "path": "rust/pokecon/src/dynamic/callback.rs",
+      "name": "Callback",
+      "justification": "wire boundary: dynamic callback contract for staged evaluation results"
+    },
+    {
+      "path": "rust/pokecon/src/dynamic/callback.rs",
+      "name": "DiagnosticSink",
+      "justification": "test seam: diagnostic collection for dynamic evaluation"
+    },
+    {
+      "path": "rust/pokecon/src/dynamic/host.rs",
+      "name": "DynamicHost",
+      "justification": "wire boundary: dynamic host protocol between runtime and worker"
+    },
+    {
+      "path": "rust/pokecon/src/settings/service.rs",
+      "name": "RuntimeSettingsApplier",
+      "justification": "test seam: runtime settings application without a live service"
+    },
+    {
+      "path": "rust/pokecon/src/settings/venv.rs",
+      "name": "UvExecutor",
+      "justification": "test seam: uv executor for venv management behind a mockable interface"
+    },
+    {
+      "path": "rust/pokecon/src/command_service.rs",
+      "name": "UserScriptSession",
+      "justification": "test seam: user script session behind a mockable session interface"
+    },
+    {
+      "path": "rust/pokecon/src/command_service.rs",
+      "name": "UserScriptFactory",
+      "justification": "test seam: factory for script sessions in tests"
+    },
+    {
+      "path": "rust/pokecon/src/command_service.rs",
+      "name": "DynamicCommandBridge",
+      "justification": "wire boundary: bridge between dynamic commands and the command service"
+    },
+    {
+      "path": "rust/pokecon/src/camera/backend.rs",
+      "name": "CameraSession",
+      "justification": "hardware seam: camera capture session behind native and test backends"
+    },
+    {
+      "path": "rust/pokecon/src/camera/backend.rs",
+      "name": "CameraBackend",
+      "justification": "hardware seam: camera backend selection for native vs test capture"
+    },
+    {
+      "path": "rust/pokecon/src/camera/screenshot.rs",
+      "name": "ScreenshotClock",
+      "justification": "test seam: clock injection for deterministic screenshot tests"
+    },
+    {
+      "path": "rust/pokecon/src/server/websocket.rs",
+      "name": "WebSocketBackend",
+      "justification": "transport seam: websocket transport behind a testable backend interface"
+    },
+    {
+      "path": "rust/pokecon/src/server/backend.rs",
+      "name": "RestBackend",
+      "justification": "transport seam: REST transport bounded to the public backend interface"
+    }
+  ],
+  "services": [
+    {
+      "path": "rust/pokecon/src/dynamic_host.rs",
+      "justification": "startup dynamic host wiring between composition root and dynamic runtime"
+    },
+    {
+      "path": "rust/pokecon/src/script_runtime.rs",
+      "justification": "script generation host factory and runtime glue for user commands"
+    },
+    {
+      "path": "rust/pokecon/src/worker_binary/script/runtime.rs",
+      "justification": "worker-side script runtime owned by the child process, not the parent"
+    },
+    {
+      "path": "rust/pokecon/src/dynamic_runtime.rs",
+      "justification": "parent-side dynamic runtime owning staged generation lifecycle"
+    },
+    {
+      "path": "rust/pokecon/src/script_host.rs",
+      "justification": "parent-side script host owning command session lifecycle"
+    },
+    {
+      "path": "rust/pokecon/src/dynamic/host.rs",
+      "justification": "dynamic host protocol implementation for staged evaluation"
+    },
+    {
+      "path": "rust/pokecon/src/settings/service.rs",
+      "justification": "settings service owning runtime application of validated settings"
+    },
+    {
+      "path": "rust/pokecon/src/command_service.rs",
+      "justification": "command service owning user-script session lifecycle and bridging"
+    },
+    {
+      "path": "rust/pokecon/src/profile_service.rs",
+      "justification": "profile service owning profile switch and command root resolution"
+    },
+    {
+      "path": "rust/pokecon/src/settings_runtime.rs",
+      "justification": "settings runtime glue between pipeline output and live services"
+    }
+  ],
+  "conversion_files": [
+    "rust/pokecon/src/camera/frame.rs",
+    "rust/pokecon/src/camera/screenshot.rs",
+    "rust/pokecon/src/command_service.rs",
+    "rust/pokecon/src/contracts/validate.rs",
+    "rust/pokecon/src/dynamic/command.rs",
+    "rust/pokecon/src/entrypoint.rs",
+    "rust/pokecon/src/profile_service.rs",
+    "rust/pokecon/src/server/backend.rs",
+    "rust/pokecon/src/server/rest/mod.rs",
+    "rust/pokecon/src/server/websocket.rs",
+    "rust/pokecon/src/worker/ipc/codec.rs",
+    "rust/pokecon/src/worker/ipc/schema.rs",
+    "rust/pokecon/src/worker/supervisor.rs",
+    "rust/pokecon/src/worker_binary/mod.rs"
+  ],
+  "note": "Scope limits: names only, not versions (versions stay locked via Cargo.lock + workspace-lock-check); trait scan covers rust/pokecon/src/**/*.rs including #[cfg(test)] modules via a `pub trait NAME` line regex, so commented-out lines and macro-generated traits are out of scope; tests/fixtures paths are excluded by construction (outside src/) with explicit exclusion constants in the check; conversion inventory is file-level (files containing impl From/TryFrom), not item-level, per AR-11-39."
+}

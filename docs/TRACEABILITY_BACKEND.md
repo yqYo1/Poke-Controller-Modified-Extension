@@ -69,7 +69,7 @@
 |---|---|---|
 | 10.1 公開隔離（ユーザースクリプトワーカーのみ、init.py/init.luaにCommandsなし） | 実装済み | protocol.json:299-356 動的設定名前空間+forbidden_namespaces=["Commands"]; contract_sync.rs:208 禁止断定; python.rs:556 add_python_paths |
 | 10.2 方針（Rustが資源所有、CommandMeta切替フック、互換、命名） | 実装済み | python.rs:814-1078 PyApi IPC転送; protocol.json:58-68 ipc種別; _meta.pyi:3 CommandMeta |
-| 10.3 公開モジュール dialogue/image_proc/net 射影 | 実装済み | protocol.json:251-294 module_functions（dialogue 8、net 16、image_proc 12）; dialogue.pyi:32-61、net.pyi:3-18、image_proc.pyi:9-20 |
+| 10.3 公開モジュール dialogue/image_proc/net 射影 | 実装済み | protocol.json:251-294 module_functions（dialogue 8、net 16、image_proc 13）; dialogue.pyi:32-61、net.pyi:3-18、image_proc.pyi:9-21 |
 | 10.3 所有権（実体束縛、commandなしRuntimeError、全局なし; ImageProc専用守衛） | 実装済み | python.rs:844-868 is_executing/is_alive/checkpoint/finish/abort; python.rs:731 validate_runtime_surface |
 | 10.4.1 階層 Command(Meta)->PythonCommand->ImageProc; McuCommand | 実装済み | PythonCommandBase.pyi:73 PythonCommand(Command,metaclass=CommandMeta); :153 ImageProcPythonCommand; McuCommandBase.pyi:9; protocol.json:107-119 required_imports |
 | 10.4.2 ライフサイクル do/finish/checkIfAlive + _logger/alive/keys/postProcess | 実装済み | PythonCommandBase.pyi:74-83; protocol.json:132-139 |
@@ -86,7 +86,7 @@
 | 10.4.3 Camera（image_bgr/readFrame/isOpened/fps/capture_size/flip/flip_mode/set_flip/saveCapture+内部5） | 実装済み | PythonCommandBase.pyi:21-43; python.rs:880 camera_state、:888 camera_control、:895 camera_frame、:911 save_image; protocol.json:204-219 |
 | 10.4.3 CaptureArea（ImgRect/ImgText/delete*/setFps/setShowsize/rightMouse/touchscreen/saveCapture/show_size/is_show_var+mouse/range関数） | 実装済み | PythonCommandBase.pyi:45-71; python.rs:929 overlay; protocol.json:220-245 |
 | 10.4.3 tkinter→Web橋渡し（Toplevel/Scale/Button/Label部分集合、コールバックスレッド、再接続） | 部分的 | python.rs:951 tk、:367 tk_event、:490 `_shutdown_tk`、:596 `_reset_tk`、:615 Cleanup（※旧:611は+4ずれ）; Scale/get/config/再接続部分集合の専用シンボルなし |
-| 10.4.3 画像処理12関数（match/max/GPU/contained/save/popup/get/open/setDir/filespec/rect/text） | 実装済み | PythonCommandBase.pyi:159-170; image_proc.pyi:9-20; python.rs:895、:929、:935; protocol.json:191-203+280-293 |
+| 10.4.3 画像処理13関数（match/max/GPU/contained/save/popup/diff/get/open/setDir/filespec/rect/text） | 実装済み | PythonCommandBase.pyi:160-172; image_proc.pyi:9-21; python.rs:895、:929、:935; protocol.json:191-204+280-294 |
 | 10.4.4 McuCommand（sync_name）+start/end | 実装済み | McuCommandBase.pyi:9-12; python.rs:994 serial_write_row; protocol.json:114、246; contract_sync.rs:1664（※旧:1668は行ずれ） |
 | 10.5.1 KeyPress input/inputEnd/hold/holdEnd/neutral/end/ser | 実装済み | Keys.pyi:82-91; python.rs:958、983、987、994; protocol.json:247 |
 | 10.5.2 Sender writeRow/write + to_bytes変換（str/float TypeError、int実行時のみ） | 実装済み | Sender.pyi:3-5 writeRow/write; python.rs:987、994; protocol.json:248 |

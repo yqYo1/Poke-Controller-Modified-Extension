@@ -3157,6 +3157,17 @@ def _preprocess(image, use_gray, crop_fmt, crop, bgr_range, threshold_binary):
     return np.ascontiguousarray(processed)
 
 
+def _get_interframe_diff(frame1, frame2, frame3, threshold):
+    import cv2
+
+    diff1 = cv2.absdiff(frame1, frame2)
+    diff2 = cv2.absdiff(frame2, frame3)
+    diff = cv2.bitwise_and(diff1, diff2)
+    img_th = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
+    mask = cv2.medianBlur(img_th, 3)
+    return mask
+
+
 def _match_template(
     source,
     template,
@@ -3514,6 +3525,9 @@ class ImageProcPythonCommand(PythonCommand):
     def popupImage(self, crop_fmt="", crop=None, title="image"):
         _popup_array(self.getCameraImage(crop_fmt, crop), title)
 
+    def getInterframeDiff(self, frame1, frame2, frame3, threshold):
+        return _get_interframe_diff(frame1, frame2, frame3, threshold)
+
     def getCameraImage(self, crop_fmt="", crop=None):
         return _crop_image(self.camera.image_bgr, crop_fmt, crop)
 
@@ -3707,6 +3721,7 @@ for name in (
     "isContainedImage",
     "saveCapture",
     "popupImage",
+    "getInterframeDiff",
     "getCameraImage",
     "openImage",
     "setTemplateDir",

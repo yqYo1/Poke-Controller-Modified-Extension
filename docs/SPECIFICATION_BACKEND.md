@@ -416,7 +416,7 @@ Camera.image_bgrプロパティ、readFrame()、getCameraImage()は、§7.9.2お
 - 各モジュール関数のシグネチャ、既定値、戻り値、例外、secret秘匿化は、下記の対応するクラスメソッドから`self`だけを除いたものと完全に同一とする。生成型定義には各関数を個別の実名・完全シグネチャで記載し、`Callable[..., object]`、`Any`、動的`__getattr__`で代替しない
 - `dialogue`は`Widget`、`show_dialog`、`is_dialog_closed`、`wait_dialog`、`dialogue6widget`、`dialogue6widget_save_settings`、`dialogue6widget_select_settings`、`dialogue`を公開する。各関数は§10.4.2および§10.6の同名APIへ委譲する
 - `net`は`socket_connect`、`socket_disconnect`、`socket_transmit_message`、`socket_receive_message`、`socket_receive_message2`、`socket_change_ipaddr`、`socket_change_port`、`socket_change_alive`、`mqtt_transmit_message`、`mqtt_receive_message`、`mqtt_receive_message2`、`mqtt_change_broker_address`、`mqtt_change_id`、`mqtt_change_clientId`、`mqtt_change_pub_token`、`mqtt_change_sub_token`を公開する。未定義のHTTP関数は公開しない
-- `image_proc`は`isContainTemplate`、`isContainTemplate_max`、`isContainTemplateGPU`、`isContainedImage`、`saveCapture`、`popupImage`、`getCameraImage`、`openImage`、`setTemplateDir`、`get_filespec`、`displayRectangle`、`displayText`を公開する。現在のコマンドが`ImageProcPythonCommand`でない場合はカメラやUIプロキシを推測せず`RuntimeError`を送出する
+- `image_proc`は`isContainTemplate`、`isContainTemplate_max`、`isContainTemplateGPU`、`isContainedImage`、`saveCapture`、`popupImage`、`getInterframeDiff`、`getCameraImage`、`openImage`、`setTemplateDir`、`get_filespec`、`displayRectangle`、`displayText`を公開する。現在のコマンドが`ImageProcPythonCommand`でない場合はカメラやUIプロキシを推測せず`RuntimeError`を送出する
 
 **注**: イベントシステム（`pokecon.autocmd`, `pokecon.event`）は§11で定義される。
 
@@ -661,6 +661,7 @@ OpenCV画像配列型。`numpy.ndarray` のサブクラス互換。画像処理�
 | `isContainedImage()` | `isContainedImage(image_path: str, threshold: float = 0.7, use_gray: bool = True, show_value: bool = False, show_position: bool = True, show_only_true_rect: bool = True, ms: float = 2000, crop_fmt: CropFmt = "", crop: list[int] \| None = None, mask_path: str \| None = None, use_gpu: bool = False, BGR_range: dict[Literal["lower", "upper"], int \| tuple[int, int, int]] \| None = None, threshold_binary: int \| None = None, crop_template: list[int] \| None = None, show_image: bool = False, color: list[str] \| None = None) -> bool` | 逆テンプレートマッチング |
 | `saveCapture()` | `saveCapture(filename: str \| None = None, crop_fmt: CropFmt = "", crop: list[int] \| None = None, mode: bool = True, format: ScreenshotFormat \| None = None) -> None` | カメラフレームを実効Dataルート/Captures/へ保存。`crop_fmt` と `crop` でトリミング指定。`format` が `None` の場合は実効 `camera.screenshot_format` を使用。明示指定時はこの呼び出しに限り指定形式で保存 |
 | `popupImage()` | `popupImage(crop_fmt: CropFmt = "", crop: list[int] \| None = None, title: str = "image") -> None` | カメラフレームをポップアップ表示。エンコード・処理はワーカー内で行い、UI表示用の圧縮ペイロードのみをRustメイン経由で送信する |
+| `getInterframeDiff()` | `getInterframeDiff(frame1: MatLike, frame2: MatLike, frame3: MatLike, threshold: float) -> MatLike` | 連続する3枚のフレームからフレーム間差分の2値化画像（動いた部分が白）を生成。内部処理は absdiff×2 → bitwise_and → threshold → medianBlur(3) |
 | `getCameraImage()` | `getCameraImage(crop_fmt: CropFmt = "", crop: list[int] \| None = None) -> MatLike` | カメラフレームをOpenCV画像配列で取得。永続共有メモリ出版領域からワーカー内のプライベートMatLikeにコピーして返す。初回出版前または出版停止中は§7.9.4の全ゼロBGRフレームへ同じcrop処理を適用して返す。返された配列はワーカー内で自由に変更可能 |
 | `openImage()` | `openImage(filename: str, mode: str = "t") -> MatLike \| None` | 画像ファイルを読み込み |
 | `setTemplateDir()` | `setTemplateDir(path: str) -> None` | テンプレート画像ディレクトリを変更 |

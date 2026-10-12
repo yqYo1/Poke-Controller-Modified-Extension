@@ -433,6 +433,7 @@ cropは必ず4個のintegerを指定します。
 | 複数templateから最大scoreを選ぶ | `isContainTemplate_max` |
 | GPU互換入口を使う | `isContainTemplateGPU` |
 | file image内にcamera frameがあるか調べる | `isContainedImage` |
+| 3枚のフレームから動いた部分を検出する | `getInterframeDiff` |
 | overlayへ矩形を出す | `displayRectangle` |
 | overlayへ文字を出す | `displayText` |
 | Discordへframeを送る | `discord_image` |

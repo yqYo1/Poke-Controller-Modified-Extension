@@ -2009,3 +2009,63 @@ class SlowShutdown(PythonCommand):
     assert!(report.cooperative_acknowledged, "{report:?}");
     assert!(report.forced, "{report:?}");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn get_interframe_diff_reports_motion_across_three_frames() {
+    const SOURCE: &str = r"
+import numpy as np
+
+from Commands import image_proc
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class InterframeDiff(ImageProcPythonCommand):
+    def do(self):
+        f1 = np.zeros((16, 16), dtype=np.uint8)
+        f2 = np.zeros((16, 16), dtype=np.uint8)
+        f3 = np.zeros((16, 16), dtype=np.uint8)
+        f1[0:4, 0:4] = 255
+        f2[0:4, 4:8] = 255
+        f3[0:4, 8:12] = 255
+        result = self.getInterframeDiff(f1, f2, f3, 10)
+        assert isinstance(result, np.ndarray)
+        assert result.shape == (16, 16)
+        assert result.dtype == np.uint8
+        assert int(result[2, 5]) == 255
+        assert int(result[12, 12]) == 0
+        assert int(np.count_nonzero(result)) > 0
+        forwarded = image_proc.getInterframeDiff(f1, f2, f3, 10)
+        assert np.array_equal(forwarded, result)
+
+        # threshold=255: no pixel can exceed it -> all zero (threshold is honored)
+        strict = self.getInterframeDiff(f1, f2, f3, 255)
+        assert int(np.count_nonzero(strict)) == 0
+
+        # medianBlur(3) removes an isolated single-pixel change (0 -> 255 -> 0)
+        g1 = np.zeros((16, 16), dtype=np.uint8)
+        g2 = np.zeros((16, 16), dtype=np.uint8)
+        g3 = np.zeros((16, 16), dtype=np.uint8)
+        g2[8, 8] = 255
+        isolated = self.getInterframeDiff(g1, g2, g3, 10)
+        assert int(np.count_nonzero(isolated)) == 0
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("interframe_diff.py"), SOURCE)
+        .expect("interframe diff script is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "interframe_diff.py".into(),
+            class_name: "InterframeDiff".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("interframe diff script execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    stop_worker(&worker).await;
+}

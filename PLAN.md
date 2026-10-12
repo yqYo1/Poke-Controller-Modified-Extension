@@ -881,12 +881,52 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **6.4d Record→スクリプト生成**: `InputRecorder`相当（CSV→press／hold／wait生成）の実装可否と配置（`device/record.rs`新設等）を確定し、実装する。
 - [ ] **6.4e 入力優先度合成の仕様確定**: 当方の`KEYBOARD_MOUSE(100)`一括を上流のKEYBOARD／MOUSE分離へ寄せるか現行維持かを決め、§11.4等へ明記する。
 
-#### 6.4.2 利用者判断（優先度・需要・安全方針）
+#### 6.4.2 個別判断（2026-10-12〜）
 
-- 実行リスト、開始/停止予約、スリープ復帰時停止、実行履歴、右クリックメニュー、依存module再読み込み、スクリプトひな形、タグ編集画面、使用頻度、検索挙動差 — コマンド操作系の拡張は、無人実行の権限・責任分界とセットで判断する。
-- Software-Controllerレイアウト（5+7）、Simulator実寸タッチ、本体色、ControllerProfiles複数対応、機種別KeyConfig、モニター補助ツール、Keyboardウィンドウ — コントローラー系は需要と実機検証コストを勘案する。
-- 起動時profile選択、`--auto`/priority.txt、2窓read-only、名前charset、ライブラリ増減UI、Install bat、`.python-version` — プロファイル／環境系は現行設計（単一バイナリ・TOML・exact sync）との整合で判断する。
-- テーマ（FRONTEND §4.7/§9で「将来」）、Audioタブ、Mask編集UI、ウィンドウ取り込み、MJPG露出、ミニ画面、仕切り線ドラッグ、Show Size連動、プレビューGain/Gamma、環境の診断、Discordウィンドウ全体送信 — UI大物は仕様新設を伴うため優先度を判断する。
+順に1件ずつ判断する（決定済みは承認・見送りを注記）。判断観点: コマンド操作系=無人実行の安全方針、コントローラー系=需要と実機検証コスト、プロファイル／環境系=現行設計（単一バイナリ・TOML・exact sync）との整合、UI大物=仕様新設の優先度。
+
+コマンド操作系:
+- [ ] **実行リスト**（2026-10-12利用者承認: フェーズ6に含めて実装）: `run_lists.json`相当の保存スキーマ（行=回数1〜9999・制限時間、Mcu行は制限時間必須、入れ子禁止）＋検証＋逐次実行器＋作成・編集UI。既存の開始/停止・全入力解放経路に載せ、詳細仕様は上流`services/run_list.py`へ準拠する。
+- [ ] 開始/停止予約
+- [ ] スリープ復帰時停止
+- [ ] 実行履歴
+- [ ] 右クリックメニュー
+- [ ] 依存module再読み込み
+- [ ] スクリプトひな形
+- [ ] タグ編集画面
+- [ ] 使用頻度
+- [ ] 検索挙動差
+
+コントローラー系:
+- [ ] Software-Controllerレイアウト（5+7）
+- [ ] Simulator実寸タッチ
+- [ ] 本体色
+- [ ] ControllerProfiles複数対応
+- [ ] 機種別KeyConfig
+- [ ] モニター補助ツール
+- [ ] Keyboardウィンドウ
+
+プロファイル／環境系:
+- [ ] 起動時profile選択
+- [ ] `--auto`/priority.txt
+- [ ] 2窓read-only
+- [ ] 名前charset
+- [ ] ライブラリ増減UI
+- [ ] Install bat
+- [ ] `.python-version`
+
+UI大物:
+- [ ] テーマ（FRONTEND §4.7/§9で「将来」）
+- [ ] Audioタブ
+- [ ] Mask編集UI
+- [ ] ウィンドウ取り込み
+- [ ] MJPG露出
+- [ ] ミニ画面
+- [ ] 仕切り線ドラッグ
+- [ ] Show Size連動
+- [ ] プレビューGain/Gamma
+- [ ] 環境の診断
+- [ ] Discordウィンドウ全体送信
 
 #### 6.4.3 対応済み・対象外（記録）
 

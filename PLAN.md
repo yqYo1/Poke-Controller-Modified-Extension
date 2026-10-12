@@ -823,3 +823,87 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] Sol 役のコンテキストを切った辛口レビューを受け、重大・高・中の指摘をすべて解消する。
 - [x] b719ad5d126bb88f7260fb829a88bcae2246914e push後のfresh GitHub CIを完了まで監視し、同一SHAのNormal CI run `36096392708`／Package CI run `36096392743`がcompleted／successとなったことを確認した。Normal CIのrequired aggregate job `107951886810`を含む全11 job、Package CIの全6 jobがsuccess。Normal artifact `ci-timing-36096392708-1`はproduct 10-sample p95 `674.0s`／threshold `720.0s`／violations 0を含み、job-local Nix evidenceはRust 4 built derivations・295 substituted paths、Product 392・1033、Remote 2・97を`capture_complete=true`で記録した。別eventの重複runは成功証跡へ二重計上しない。
 - [x] `PLAN.md`の未完了checkboxを要件別に監査し、完了証跡または具体的な残タスクへ更新する。利用者担当の外部操作はこの監査対象のアシスタントタスクに含めない（証跡: 現行89件を実装／文書、実装時選択、owner判断、外部／運用証跡へ分類し、各行の予定証跡または具体的な次作業を確認。`docs/TRACEABILITY_INDEX.md` §6、`docs/GPUI_PHASE0_INVENTORY.md` §5-§6、`docs/FUNCTION_TRACEABILITY_MATRIX.md` §5-§6、`docs/DOCS_SYNC_AUDIT.md` §4と照合。未完了要件、clean worktree、Solレビュー、性能、browser／実機、Release tagは未完了のまま保持。）
+
+## フェーズ 6 — アップストリーム v0.1.9／v0.2.0 の取り込み（2026-10-12 利用者指示）
+
+2026-10-12の利用者指示（「アップストリームの変更をこのリファクタリングにも取り込みたい。変更すべき場所を詳細に調査し、PLAN.mdを更新」）により、fork元`futo030/Poke-Controller-Modified-Extension`の未取り込み更新を調査し、本リファクタリング（PokeCon EX）への取り込み作業を以下へ展開した。各項目は完了条件を満たす証跡を取得してから`[x]`にする。実装時の上流の正本は`cc49f82`の該当ファイルであり、本節のrefは2026-10-12の6系統調査（API差分／シリアルwire／UI機能①②／互換チェーン機構／バグ修正）で上流`git show`と当方`path:line`により裏取りした結果に基づく。
+
+### 6.0 背景と対象
+
+- 上流未取り込み更新: v0.1.9 `3274e77`（2026-09-03、3DS Controllerタッチスクリーン対応＋FW:x.4プロトコル）と、v0.2.0 `8cb238d`＝master merge `cc49f82`（2026-10-12、290ファイル・+64,772/−45,080行）。後者が「大規模なアップデート」の実体。
+- 現行の固定ベースライン（§4.6.1）は`futo030@b4d0eff`（=v0.1.8）であり、上流の新規コミットは第二層（§4.6.2）のローリング追補の対象。`compatibility/candidates.json`は現在空で、v0.1.9／v0.2.0は未評価。
+- 上流v0.2.0の内容: 10タブUI再編・テーマ・ミニ画面、カメラ拡張（Capture Size・MJPG・ウィンドウ取り込み）、Audio／Mask／Touch Screenタブ、シリアル新形式（NX・DS FT）と`transport/`集約、3DS 2形式化（11B＋タッチ）、実行リスト・予約・スリープ検知、モニター補助ツール、Keyboardウィンドウ、複数コントローラー・レイアウト・入力記録、uv起動環境と更新機構、約43件のバグ修正、`ui`／`services`／`transport`／`web`分割。
+- 調査の分類: 上流の各項目を「取り込み推奨」「利用者判断（優先度・需要・安全方針）」「対応済み／対象外」に分類した。serial wireの3DS変更は既存契約の破壊的変更であり、必須要件の変更として利用者の明示判断を先に得る。`bridge_functions`は現行方針どおり再同梱しない（`docs/DEVELOPMENT.md:362-366`）。
+
+### 6.1 互換チェーンの前提整備と昇格評価
+
+- [ ] **6.1a 機構gap（APIサーフェス比較）**: `scripts/compatibility/roll.py:244-249`は`api_surface.result`を`non_breaking`固定で返し、§4.6.2が要求する「ランタイムテストとAPIサーフェス比較の両方」の比較側が未実装。上流`SerialController/tests/public_api.py`方式（AST署名抽出、削除・必須化=broken、任意追加=unrecorded）を移植し、候補commitの公開API差分を判定可能にする。機構変更に伴い§4.6.2の記述を更新する。
+- [ ] **6.1b 機構gap（fixture selector）**: 現行の合否はmanifest SHAとRust fixture selectorで、script単位の実行ではないため、keyboard未実装でも`Keyboard_sample.py`等が`passed`になり得る（`referenced_api`は記録のみで未使用）。参照API（`self.KeyBoard_Init`等）を合否へ接続するかper-script実行を追加し、新API未実装時の偽陽性を塞ぐ。
+- [ ] **6.1c futo030 `3274e77`の候補登録・評価**: 自動発見は`git ls-remote HEAD`のみのため過去コミットは`candidates.json`へフルSHAで手動登録する。変更1件（Qingpi体裁のみ）は`numpy`→`camera_device` gateにより`unverified`（quarantined）見込み。評価結果とreasonsを証跡として記録する（結果ファイルはimmutableのため、記録したidの再評価不可に注意）。
+- [ ] **6.1d futo030 `cc49f82`の候補評価（6.2・6.3の実装完了後に実施）**: 実装前に本評価の結果ファイルを書かない。実装後にevaluateし、deterministic域の増加とquarantine理由の変化を確認してpromotion可否を判定する。hardware gateの扱いは6.1eの判断結果を反映する。
+- [ ] **6.1e hardware gate運用の決定（利用者判断）**: 変更scriptに`explicit_hardware_gate`（camera／audio／external services等）が1件でもあると候補全体が`unverified`となる現行仕様を、quarantine運用として維持するか、fixture拡充（例: camera sampleの静的検証追加）でdeterministic化を進めるかを決定する。
+
+### 6.2 ユーザースクリプトAPIの取り込み（§10・typings・worker）
+
+上流`public_api.json`（v0.2.0新規）基準の未実装・要更新項目。実装は`python/pokecon/typings/*.pyi`、`rust/pokecon/src/worker_binary/script/python.rs`、`docs/SPECIFICATION_BACKEND.md §10`を同時に更新する。
+
+- [ ] **6.2a** `holdChange`（`PythonCommand`／`KeyPress`）を実装する（離さず切替え）。
+- [ ] **6.2b** SwitchキーボードAPI 6件（`KeyBoard_Init`／`TypeString`／`TypeStringln`／`TypeKey`／`PressKey`／`ReleaseKey`）と`Commands.SwitchKeyboard`（`KEY`、`MAX_TEXT_LENGTH=13`、`text_row`／`key_row`／`split_text`等）を実装する。送信可能形式はDefault／NXのみ（他形式は理由を返す）。
+- [ ] **6.2c** `InputSource`と`KeyPress(source=)`、Sender合成API（`send_state`／`release`／`release_all`／`send_keyboard`／`transport`）の互換面を設計・実装する。Rust側`InputArbiter`との責務対応（script入力源の優先度表現）を含む設計判断を先に行う。
+- [ ] **6.2d** `getInterframeDiff`（3フレーム差分2値化）を実装する。
+- [ ] **6.2e** `discord_text`／`discord_image`の`name`引数（通知先名）と`-> bool`返却を実装する（§10.3）。
+- [ ] **6.2f** `precise_sleep`／`format_elapsed_time`、`register_output_thread`等4件、`do_safe_with_output_page`／`waitWhilePaused`／`_load_com_port_settings`の公開要否を決定し、公開分を実装する。内部利用のみとする場合は§10.1に非公開として明記する。
+- [ ] **6.2g** press系入力の型（`Button｜Hat｜Direction｜Touchscreen｜list`、`Stick`含みの是正）と`end`／`neutral`挙動を上流v0.2.0と突合し、typingsと§10.5の記述を確定する。
+- [ ] **6.2h** `bridge_functions.convert_crop`と当方`python.rs::_convert_crop`の等価性テストを追加し、差があれば一本化方針を決定する。
+- [ ] **6.2i** 公開API凍結基盤（上流`tests/public_api.py`方式）を当方contract testへ導入するか決定し、導入する場合は§10.7と生成typings・worker実装の同期検査へ接続する。
+
+### 6.3 シリアルwire形式の取り込み（codec・registry・周辺機器ガイド）
+
+上流は形式を`transport/`へ集約し、v0.2.0でNX／DS FTを追加、v0.1.9で3DSを破壊的更新した。当方は`Default／Qingpi／3ds(6B)`のみ（`codec.rs:8-14`、`settings.json:874-923`）。
+
+- [ ] **6.3a NX形式の追加**: 11Bフレーム`AB btnLo btnHi hat lx ly rx ry kbdMode key 00`（`transport/nx_macro.py:59-83`）。キーボード手順（`init:(5,0)`、`text:(1,ord(c))+(2,ord(c))`、`Key:(3,4)`／`Press`／`Release:(1,2)`、wait 0.03s）を同梱し、settings値`NX`とgolden vectors（例 `ab 04 00 08 80 80 80 80 00 00 00`）を追加する。
+- [ ] **6.3b 3DS形式の破壊的更新**: `3DS Controller(FW:x.4-)`（stick `255-v`）と`3DS Controller(FW:-x.3)`（`<128→127-x`）の2形式化、11Bフレーム（`0xA1…0xA2 LX LY 0xB2 touchon touchX(BE) touchY`）、baud 115200。旧`3ds`設定値の移行と旧単一名の互換解決（上流`get_transport`は`"3DS Controller"`名を`-x.3`へ解決）を決定する。必須要件変更のため利用者判断を先に得る。
+- [ ] **6.3c DS FT (Rev1/Rev2/Rev3)の追加**: FTDI MPSSE 6B（`[0x82,C,~C,0x80,D,~D]`、Rev差はB/X/Yピン）、`baud=None`・raw書込み禁止・`skip_unchanged=true`、`--ds_ft`相当ゲート（`ftd2xx`検出時のみ提示）。新backend実装（工数大）。対応機材の需要を利用者判断で確認する。
+- [ ] **6.3d Transport横断属性の実装**: 形式別baud既定、`end_row`、`skip_unchanged`、`allows_raw_write`（禁止時の警告・遮断）、`has_touchscreen`、`supports_text`を`manager.rs`とcodecへ実装し、baud素通し・raw一律許可を是正する。
+- [ ] **6.3e registry順序と解決**: 登録順（Default→NX→Qingpi→x.4-→-x.3→DS FT Rev3→Rev2→Rev1）、旧名互換、`port.format_name`優先をsettingsとUI表示へ反映する。
+- [ ] **6.3f golden vectorsの転写**: 上流`tests/data/transport_golden.json`の代表6件（Default／NX press A、Qingpi touch、3DS両mode press A、DS FT Rev1 press A）と両mode・touch・Rev差を含む全域を`codec.rs`単体テストとPTY経路テストへ転写する。
+- [ ] **6.3g 周辺機器ガイド更新**: `docs/PERIPHERAL_DEVELOPMENT.md`へNX章・DS FT章を追加し、3DS章を2 mode＋タッチへ全面改訂する。
+
+### 6.4 製品機能の取り込み（UI・コマンド・コントローラー・環境）
+
+上流v0.2.0の機能・UI項目の分類結果。§6.4.1から着手し、§6.4.2は利用者判断のうえで作業項目へ展開する。
+
+#### 6.4.1 取り込み推奨
+
+- [ ] **6.4a UI小規模群**: Statusタブ（`+page.svelte`タブ定義・新規`StatusTab.svelte`）、右パネル位置切替（右／下／非表示）、Capture Size追加（720x480・400x480・256x384、`camera/frame.rs`・`SETTINGS.md`・FRONTEND §6.1.2・`CameraTab`）、Touch Screen数値設定、通知画像選択（`notifications.discord.image_source`）、Start/End通知の画像添付（`notification.rs`配線）、Output画像リンク、キーボード素通しの部品粒度拡張（`input-safety.ts`）。
+- [ ] **6.4b コマンド小規模群**: 一覧の並び替え（名前／更新日時）、Tag一括rename／delete、Pause位置・変数表示、Mcu実行中のPause禁止、シリアル送信モニター、予約名ガード（`settings/roots.rs`）、更新確認タグ扱いの仕様1行。
+- [ ] **6.4c Data Format拡張のUI接続**: `SerialTab`のoption順とNX／3DS選択肢を6.3と一体で更新する。
+- [ ] **6.4d Record→スクリプト生成**: `InputRecorder`相当（CSV→press／hold／wait生成）の実装可否と配置（`device/record.rs`新設等）を確定し、実装する。
+- [ ] **6.4e 入力優先度合成の仕様確定**: 当方の`KEYBOARD_MOUSE(100)`一括を上流のKEYBOARD／MOUSE分離へ寄せるか現行維持かを決め、§11.4等へ明記する。
+
+#### 6.4.2 利用者判断（優先度・需要・安全方針）
+
+- 実行リスト、開始/停止予約、スリープ復帰時停止、実行履歴、右クリックメニュー、依存module再読み込み、スクリプトひな形、タグ編集画面、使用頻度、検索挙動差 — コマンド操作系の拡張は、無人実行の権限・責任分界とセットで判断する。
+- Software-Controllerレイアウト（5+7）、Simulator実寸タッチ、本体色、ControllerProfiles複数対応、機種別KeyConfig、モニター補助ツール、Keyboardウィンドウ、FTDI直結 — コントローラー系は需要と実機検証コストを勘案する。
+- 起動時profile選択、`--auto`/priority.txt、2窓read-only、名前charset、ライブラリ増減UI、Install bat、`.python-version` — プロファイル／環境系は現行設計（単一バイナリ・TOML・exact sync）との整合で判断する。
+- テーマ（FRONTEND §4.7/§9で「将来」）、Audioタブ、Mask編集UI、ウィンドウ取り込み、MJPG露出、ミニ画面、仕切り線ドラッグ、Show Size連動、プレビューGain/Gamma、環境の診断、Discordウィンドウ全体送信 — UI大物は仕様新設を伴うため優先度を判断する。
+
+#### 6.4.3 対応済み・対象外（記録）
+
+- 対応済み（変更不要）: カメラ専用スレッド（`camera/manager.rs`）、Pokemon Home削除（一致）、長時間待機のStop即応（当方は0.05秒刻みで同等以上）、print系ルーティング、基本のCtrl/Alt素通し除外。
+- 対象外: uv起動bat・リポジトリ内`.venv`・bootstrap分離・ZIP差分更新（単一バイナリ・署名配布・並行移行方針と衝突）、Macのキーボード受付方式（pynput前提）、paho-mqtt／DeviceMatch等の設計差異、tkinter固有バグ。
+
+### 6.5 バグ修正の反映
+
+上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした結果の要約。3DS関連は6.3bで扱う。
+
+- [ ] **6.5a 要修正（高）**: 保存失敗でも`capture succeeded`表示／無名`saveImage`（`python.rs:2376-2406`）、`holdEnd`未押下の警告なし（`python.rs:1441-1471`）、ダイアログCancel時の正常終了化（`_legacy_result`）、`isContainedImage`矩形起点の意味差（`python.rs:3460-3508`）、macOSカメラ列挙欠落（`camera/selector.rs`）、シリアルopen失敗の案内文なし（`manager.rs:326-332`＋UI）、open失敗原因詳細の破棄（`manager.rs`／`application_backend.rs:644-652`）。
+- [ ] **6.5b 要検証（回帰テストで確定）**: 初回スクリプト読込のLoading表示、Webhook URLのHTTP詳細ログ抑制、空設定ファイル読込、logフォルダ不在時、Captures以外のフォルダopen、カメラ名取得失敗時の番号fallback、設定系Cancel、Web終了ボタン配線、Windowsメニュー操作中のキー遮断粒度、wait停止の期限。
+- 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
+
+### 6.6 仕様・文書・検証
+
+- [ ] **6.6a SPEC更新**: BACKEND §10（6.2の各API）・§10.5・§6.1.6（capture sizeはFRONTEND）・§11（serial値、通知画像）・§4.6.2（機構変更時の記述更新）。FRONTEND §5・§6（タブ構成・通知・プレビュー）と§9（テーマ記述の整合）。INTEGRATION §6.2.2（wire）・§6.1.5。
+- [ ] **6.6b docs更新**: `PERIPHERAL_DEVELOPMENT.md`（6.3g）、`USER_GUIDE.md`／`SETTINGS.md`（新設定・形式）、`MIGRATION.md`（3DS形式の移行注記）、`TRACEABILITY_*`／`FUNCTION_TRACEABILITY_MATRIX.md`へ行追加（§6更新規則）。
+- [ ] **6.6c 検証**: 追加API・形式のfocused test、`codec.rs` golden、PTY経路、`nix run .#compatibility`、`web-check`、aggregate `nix run .#check`、6.1の昇格評価。clean sourceでcommit別remote CIまで取得する。
+- [ ] **6.6d 実施順序（提案）**: 6.1a/b（機構）と6.2a/d/e（小API）→ 6.3a/b（NX・3DS）→ 6.2b/c（Keyboard・合成）→ 6.3d/e/f/g → 6.4.1（小規模UI・コマンド）→ 6.5a（バグ修正）→ 6.1c/d（候補評価・昇格）→ 6.4.2の判断後項目。各段で共通完了ゲートと該当focused gateを通す。着手は利用者の指示（または選択された優先範囲）に従う。

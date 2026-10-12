@@ -863,7 +863,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 - [ ] **6.3a NX形式の追加**: 11Bフレーム`AB btnLo btnHi hat lx ly rx ry kbdMode key 00`（`transport/nx_macro.py:59-83`）。キーボード手順（`init:(5,0)`、`text:(1,ord(c))+(2,ord(c))`、`Key:(3,4)`／`Press`／`Release:(1,2)`、wait 0.03s）を同梱し、settings値`NX`とgolden vectors（例 `ab 04 00 08 80 80 80 80 00 00 00`）を追加する。
 - [ ] **6.3b 3DS形式の破壊的更新（2026-10-12利用者承認: 上流v0.2.0準拠へ完全置き換え）**: `3DS Controller(FW:x.4-)`（stick `255-v`）と`3DS Controller(FW:-x.3)`（`<128→127-x`）の2形式へ置き換え、11Bフレーム（`0xA1…0xA2 LX LY 0xB2 touchon touchX(BE) touchY`）、baud 115200。旧6B単一形式と旧`3ds`設定値は残さず、未リリースのため値の移行互換は行わない。旧名の互換解決は上流`get_transport`どおり（完全一致を優先し、「3DS Controller」を含む名は`x.3`の有無で2択、サフィックスなしの旧名は`x.4-`）。実装はcodec置換・settings値2件化・`SerialTab` option・`PERIPHERAL_DEVELOPMENT.md`／§6.2.2改訂・golden転写を含む。
-- [ ] **6.3c DS FT (Rev1/Rev2/Rev3)の追加**: FTDI MPSSE 6B（`[0x82,C,~C,0x80,D,~D]`、Rev差はB/X/Yピン）、`baud=None`・raw書込み禁止・`skip_unchanged=true`、`--ds_ft`相当ゲート（`ftd2xx`検出時のみ提示）。新backend実装（工数大）。対応機材の需要を利用者判断で確認する。
+- [ ] **6.3c DS FT (Rev1/Rev2/Rev3)の追加（2026-10-12利用者承認: フェーズ6に含めて実装）**: FTDI MPSSE 6B（`[0x82,C,~C,0x80,D,~D]`、Rev差はB/X/Yピン）、`baud=None`・raw書込み禁止・`skip_unchanged=true`、`--ds_ft`相当ゲート（検出時のみ提示）。Rust新backendを6.3内の最後の順序で実装する。実機受入は外部受入ゲート扱いとし、CIはFakeFtdiゴールデンとavailabilityゲートの単体検証まで（実機未検証を明示する）。
 - [ ] **6.3d Transport横断属性の実装**: 形式別baud既定、`end_row`、`skip_unchanged`、`allows_raw_write`（禁止時の警告・遮断）、`has_touchscreen`、`supports_text`を`manager.rs`とcodecへ実装し、baud素通し・raw一律許可を是正する。
 - [ ] **6.3e registry順序と解決**: 登録順（Default→NX→Qingpi→x.4-→-x.3→DS FT Rev3→Rev2→Rev1）、旧名互換、`port.format_name`優先をsettingsとUI表示へ反映する。
 - [ ] **6.3f golden vectorsの転写**: 上流`tests/data/transport_golden.json`の代表6件（Default／NX press A、Qingpi touch、3DS両mode press A、DS FT Rev1 press A）と両mode・touch・Rev差を含む全域を`codec.rs`単体テストとPTY経路テストへ転写する。
@@ -884,7 +884,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 #### 6.4.2 利用者判断（優先度・需要・安全方針）
 
 - 実行リスト、開始/停止予約、スリープ復帰時停止、実行履歴、右クリックメニュー、依存module再読み込み、スクリプトひな形、タグ編集画面、使用頻度、検索挙動差 — コマンド操作系の拡張は、無人実行の権限・責任分界とセットで判断する。
-- Software-Controllerレイアウト（5+7）、Simulator実寸タッチ、本体色、ControllerProfiles複数対応、機種別KeyConfig、モニター補助ツール、Keyboardウィンドウ、FTDI直結 — コントローラー系は需要と実機検証コストを勘案する。
+- Software-Controllerレイアウト（5+7）、Simulator実寸タッチ、本体色、ControllerProfiles複数対応、機種別KeyConfig、モニター補助ツール、Keyboardウィンドウ — コントローラー系は需要と実機検証コストを勘案する。
 - 起動時profile選択、`--auto`/priority.txt、2窓read-only、名前charset、ライブラリ増減UI、Install bat、`.python-version` — プロファイル／環境系は現行設計（単一バイナリ・TOML・exact sync）との整合で判断する。
 - テーマ（FRONTEND §4.7/§9で「将来」）、Audioタブ、Mask編集UI、ウィンドウ取り込み、MJPG露出、ミニ画面、仕切り線ドラッグ、Show Size連動、プレビューGain/Gamma、環境の診断、Discordウィンドウ全体送信 — UI大物は仕様新設を伴うため優先度を判断する。
 

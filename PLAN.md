@@ -862,7 +862,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 上流は形式を`transport/`へ集約し、v0.2.0でNX／DS FTを追加、v0.1.9で3DSを破壊的更新した。当方は`Default／Qingpi／3ds(6B)`のみ（`codec.rs:8-14`、`settings.json:874-923`）。
 
 - [ ] **6.3a NX形式の追加**: 11Bフレーム`AB btnLo btnHi hat lx ly rx ry kbdMode key 00`（`transport/nx_macro.py:59-83`）。キーボード手順（`init:(5,0)`、`text:(1,ord(c))+(2,ord(c))`、`Key:(3,4)`／`Press`／`Release:(1,2)`、wait 0.03s）を同梱し、settings値`NX`とgolden vectors（例 `ab 04 00 08 80 80 80 80 00 00 00`）を追加する。
-- [ ] **6.3b 3DS形式の破壊的更新**: `3DS Controller(FW:x.4-)`（stick `255-v`）と`3DS Controller(FW:-x.3)`（`<128→127-x`）の2形式化、11Bフレーム（`0xA1…0xA2 LX LY 0xB2 touchon touchX(BE) touchY`）、baud 115200。旧`3ds`設定値の移行と旧単一名の互換解決（上流`get_transport`は`"3DS Controller"`名を`-x.3`へ解決）を決定する。必須要件変更のため利用者判断を先に得る。
+- [ ] **6.3b 3DS形式の破壊的更新（2026-10-12利用者承認: 上流v0.2.0準拠へ完全置き換え）**: `3DS Controller(FW:x.4-)`（stick `255-v`）と`3DS Controller(FW:-x.3)`（`<128→127-x`）の2形式へ置き換え、11Bフレーム（`0xA1…0xA2 LX LY 0xB2 touchon touchX(BE) touchY`）、baud 115200。旧6B単一形式と旧`3ds`設定値は残さず、未リリースのため値の移行互換は行わない。旧名の互換解決は上流`get_transport`どおり（完全一致を優先し、「3DS Controller」を含む名は`x.3`の有無で2択、サフィックスなしの旧名は`x.4-`）。実装はcodec置換・settings値2件化・`SerialTab` option・`PERIPHERAL_DEVELOPMENT.md`／§6.2.2改訂・golden転写を含む。
 - [ ] **6.3c DS FT (Rev1/Rev2/Rev3)の追加**: FTDI MPSSE 6B（`[0x82,C,~C,0x80,D,~D]`、Rev差はB/X/Yピン）、`baud=None`・raw書込み禁止・`skip_unchanged=true`、`--ds_ft`相当ゲート（`ftd2xx`検出時のみ提示）。新backend実装（工数大）。対応機材の需要を利用者判断で確認する。
 - [ ] **6.3d Transport横断属性の実装**: 形式別baud既定、`end_row`、`skip_unchanged`、`allows_raw_write`（禁止時の警告・遮断）、`has_touchscreen`、`supports_text`を`manager.rs`とcodecへ実装し、baud素通し・raw一律許可を是正する。
 - [ ] **6.3e registry順序と解決**: 登録順（Default→NX→Qingpi→x.4-→-x.3→DS FT Rev3→Rev2→Rev1）、旧名互換、`port.format_name`優先をsettingsとUI表示へ反映する。
@@ -897,7 +897,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした結果の要約。3DS関連は6.3bで扱う。
 
-- [ ] **6.5a 要修正（高）**: 保存失敗でも`capture succeeded`表示／無名`saveImage`（`python.rs:2376-2406`）、`holdEnd`未押下の警告なし（`python.rs:1441-1471`）、ダイアログCancel時の正常終了化（`_legacy_result`）、`isContainedImage`矩形起点の意味差（`python.rs:3460-3508`）、macOSカメラ列挙欠落（`camera/selector.rs`）、シリアルopen失敗の案内文なし（`manager.rs:326-332`＋UI）、open失敗原因詳細の破棄（`manager.rs`／`application_backend.rs:644-652`）。
+- [ ] **6.5a 要修正（高）**: 保存失敗でも`capture succeeded`表示／無名`saveImage`（`python.rs:2376-2406`）、`holdEnd`未押下の警告なし（`python.rs:1441-1471`）、ダイアログCancel時の正常終了化（`_legacy_result`）、`isContainedImage`矩形起点の意味差（`python.rs:3460-3508`）、macOSカメラ列挙欠落（`camera/selector.rs`。配布対象はLinuxとWindowsのため現行スコープ外と整理し、macOS配布追加時の要対応として記録する）、シリアルopen失敗の案内文なし（`manager.rs:326-332`＋UI）、open失敗原因詳細の破棄（`manager.rs`／`application_backend.rs:644-652`）。
 - [ ] **6.5b 要検証（回帰テストで確定）**: 初回スクリプト読込のLoading表示、Webhook URLのHTTP詳細ログ抑制、空設定ファイル読込、logフォルダ不在時、Captures以外のフォルダopen、カメラ名取得失敗時の番号fallback、設定系Cancel、Web終了ボタン配線、Windowsメニュー操作中のキー遮断粒度、wait停止の期限。
 - 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
 

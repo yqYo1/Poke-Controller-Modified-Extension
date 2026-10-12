@@ -849,7 +849,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 - [ ] **6.2a** `holdChange`（`PythonCommand`／`KeyPress`）を実装する（離さず切替え）。
 - [ ] **6.2b** SwitchキーボードAPI 6件（`KeyBoard_Init`／`TypeString`／`TypeStringln`／`TypeKey`／`PressKey`／`ReleaseKey`）と`Commands.SwitchKeyboard`（`KEY`、`MAX_TEXT_LENGTH=13`、`text_row`／`key_row`／`split_text`等）を実装する。送信可能形式はDefault／NXのみ（他形式は理由を返す）。
-- [ ] **6.2c** `InputSource`と`KeyPress(source=)`、Sender合成API（`send_state`／`release`／`release_all`／`send_keyboard`／`transport`）の互換面を設計・実装する。Rust側`InputArbiter`との責務対応（script入力源の優先度表現）を含む設計判断を先に行う。
+- [ ] **6.2c** `InputSource`と`KeyPress(source=)`、Sender合成API（`send_state`／`release`／`release_all`／`send_keyboard`／`transport`。`KeyPress._send`／`release`／`end`、`SendFormat.convert2list2(mode=)`等の内部補助を含む）の互換面を設計・実装する。Rust側`InputArbiter`との責務対応は6.4.1の入力優先度・合成モデルの判断結果を反映する。
 - [ ] **6.2d** `getInterframeDiff`（3フレーム差分2値化）を実装する。
 - [ ] **6.2e** `discord_text`／`discord_image`の`name`引数（通知先名）と`-> bool`返却を実装する（§10.3）。
 - [ ] **6.2f** `precise_sleep`／`format_elapsed_time`、`register_output_thread`等4件、`do_safe_with_output_page`／`waitWhilePaused`／`_load_com_port_settings`の公開要否を決定し、公開分を実装する。内部利用のみとする場合は§10.1に非公開として明記する。
@@ -871,74 +871,99 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 ### 6.4 製品機能の取り込み（UI・コマンド・コントローラー・環境）
 
-上流v0.2.0の機能・UI項目。§6.4.1と§6.4.2の全項目を取り込み対象として実装する（取り込み内容は各項の注記と6.6dの順序に従う）。
+上流v0.2.0の機能差分を§6.4.1へ網羅列挙する（既定で全て取り込む。取り込み内容は各項の注記と6.6dの順序に従う）。
 
-#### 6.4.1 取り込み推奨
+#### 6.4.1 取り込み項目（網羅リスト）
 
-- [ ] **6.4a UI小規模群**: Statusタブ（`+page.svelte`タブ定義・新規`StatusTab.svelte`）、右パネル位置切替（右／下／非表示）、Capture Size追加（720x480・400x480・256x384、`camera/frame.rs`・`SETTINGS.md`・FRONTEND §6.1.2・`CameraTab`）、Touch Screen数値設定、通知画像選択（`notifications.discord.image_source`）、Start/End通知の画像添付（`notification.rs`配線）、Output画像リンク、キーボード素通しの部品粒度拡張（`input-safety.ts`）。
-- [ ] **6.4b コマンド小規模群**: 一覧の並び替え（名前／更新日時）、Tag一括rename／delete、Pause位置・変数表示、Mcu実行中のPause禁止、シリアル送信モニター、予約名ガード（`settings/roots.rs`）、更新確認タグ扱いの仕様1行。
-- [ ] **6.4c Data Format拡張のUI接続**: `SerialTab`のoption順とNX／3DS選択肢を6.3と一体で更新する。
-- [ ] **6.4d Record→スクリプト生成**: `InputRecorder`相当（CSV→press／hold／wait生成）の実装可否と配置（`device/record.rs`新設等）を確定し、実装する。
-- [ ] **6.4e 入力優先度合成の仕様確定**: 当方の`KEYBOARD_MOUSE(100)`一括を上流のKEYBOARD／MOUSE分離へ寄せるか現行維持かを決め、§11.4等へ明記する。
-
-#### 6.4.2 上流機能差分の取り込み（既定で全て取り込む）
-
-2026-10-12の利用者指示: 上流v0.2.0の機能差分は基本すべて取り込む（個別の要否判断は行わない）。各項目をフェーズ6の実装対象として扱い、アーキテクチャ都合の読み替えは注記に従う。既存の利用者決定・契約と真に衝突する項目が実装中に見つかった場合のみ、その時点で利用者判断を仰ぐ。
+上流v0.2.0の機能差分を、変更箇所が漏れないよう項目単位で列挙する（既定で全て取り込む）。アーキテクチャ都合の読み替えは各項の注記に従い、実装の詳細は各項の上流refと注記を正本として実装時に確定する。
 
 コマンド操作系:
-- [ ] **実行リスト**（2026-10-12利用者承認: フェーズ6に含めて実装）: `run_lists.json`相当の保存スキーマ（行=回数1〜9999・制限時間、Mcu行は制限時間必須、入れ子禁止）＋検証＋逐次実行器＋作成・編集UI。既存の開始/停止・全入力解放経路に載せ、詳細仕様は上流`services/run_list.py`へ準拠する。
-- [ ] **開始/停止予約**（2026-10-12利用者承認: フェーズ6に含めて実装）: 時刻指定の開始（実行リストも可）、時刻または「開始から◯分後」の停止。60秒超の遅延時は開始しない・他コマンド実行中は開始しない・対象終了で停止予約を取り消す。予約はメモリ保持（保存しない）でスリープ警告を表示。実行リストの直後に実装する。
-- [ ] **スリープ復帰時停止（＋連続送信失敗での停止）**（2026-10-12利用者承認: フェーズ6に含めて実装）: 1秒監視で20秒超の空白（スリープ・休止、時計ジャンプ含む）を検知したら実行中コマンドを理由付きで停止し、再接続案内を表示する。連続5回の送信失敗でも停止（成功でリセット）。閾値・案内文は上流準拠。予約の後に実装する。
-- [ ] **実行履歴**（2026-10-12利用者承認）: 直近10件（設定へ保存・再起動後も保持）、CommandsタブのHistoryサブタブ（Command／Last Run、並び切替、行クリック実行、選択削除・全削除）。上流`command_catalog.py`／`command_panel`準拠。
-- [ ] 右クリックメニュー: 行メニュー（パス表示・コピー）。実ファイルopenはTauri限定、Webはパス操作に限定（上流Open file／Open with／Open folderの読み替え）。
-- [ ] 依存module再読み込み: 上流`CommandLoader`の同フォルダ依存module再読込を、ワーカー内`sys.modules`スコープのreloadとして移植する。
-- [ ] スクリプトひな形: 新規スクリプト作成（名前・作者・格納場所・Bridge使用・画像保存先、README／License雛形、既存は上書きしない）。
-- [ ] タグ編集画面: タグの追加/削除と表示中コマンドの一括rename／delete（AST＋digestガード、書込競合は警告）。
-- [ ] 使用頻度: 実行回数の記録（プロファイル共通のstore）と使用頻度ソート（多い順／少ない順）。
-- [ ] 検索挙動差: 上流の名前部分一致に相当する機能は現行検索で充足（fuzzy検索を維持し、差分は仕様へ記録）。
+- [ ] **実行リスト**（2026-10-12利用者承認: フェーズ6に含めて実装）: `run_lists.json`相当の保存スキーマ（行=回数1〜9999・制限時間、Mcu行は制限時間必須、入れ子禁止）＋検証＋逐次実行器（間隔・on_error・loops）＋作成・編集UI＋「名前 (実行リスト)」としてコマンド一覧へ統合（`@実行リスト`タグ）。上流`services/run_list.py`／`ui/run_list_window.py`準拠。
+- [ ] **開始/停止予約**（2026-10-12利用者承認: フェーズ6に含めて実装）: 時刻指定の開始（実行リストも可）、時刻または「開始から◯分後」の停止。60秒超の遅延時は開始しない・他コマンド実行中は開始しない・対象終了で停止予約を取り消す。予約はメモリ保持（保存しない）でスリープ警告を表示。上流`services/run_schedule.py`準拠。
+- [ ] **スリープ復帰時停止（＋連続送信失敗での停止）**（2026-10-12利用者承認: フェーズ6に含めて実装）: 1秒監視で20秒超の空白（スリープ・休止、時計ジャンプ含む）を検知したら実行中コマンドを理由付きで停止し、再接続案内を表示する。連続5回の送信失敗でも停止（成功でリセット）。閾値・案内文は上流準拠。
+- [ ] **実行履歴**（2026-10-12利用者承認）: 直近10件（設定へ保存・再起動後も保持、同一コマンドは先頭へ移動）、CommandsのHistoryサブタブ（Command／Last Run、並び切替、行クリック実行、選択削除・全削除・Shortcut割当）。
+- [ ] **一覧の並び替え**: 名前／更新日時／使用頻度でのソートUI。
+- [ ] **タグ編集**: タグの追加/削除、一括rename／delete（AST＋digestガード、書込競合は警告）、タグ欄入力への自動チェック。
+- [ ] **右クリックメニュー**: パス表示・コピー（実ファイルopenはTauri限定、Webはパス操作に限定）。
+- [ ] **Pause情報**: 停止位置（呼び出し順・ファイルリンク）と変数の表示。
+- [ ] **Mcu実行中のPause禁止**: Pause受付のコマンド種別ゲート（サーバ側拒否を含む）。
+- [ ] **シリアル送信モニター**: `[時刻][形式名] 値`の送信ログ（Serialタブ、受信表示との分離）。
+- [ ] **依存module再読み込み**: 同フォルダ依存moduleのreload（ワーカー内`sys.modules`スコープ設計）。
+- [ ] **スクリプトひな形作成**: 名前・作者・格納場所・Bridge使用・画像保存先の入力でテンプレ生成（README／License雛形、既存は上書きしない）。
+- [ ] **使用頻度**: 実行回数の記録（プロファイル共通store）と使用頻度ソート。
+- [ ] **検索**: 上流の名前部分一致に相当する機能は現行fuzzy検索で充足（維持、差分は仕様へ記録）。
+- [ ] **Record→スクリプト生成**: 入力記録→press／hold／wait生成（CSV→`PythonCommands/Record/`）。`InputRecorder`相当。
+- [ ] **press判定タイミング**: press実行中はボタンを離してから再開、画像認識は判定前に一時停止する挙動へ。
+- [ ] **ログファイル名**: `log_プロファイル名_日時.log`へ変更。
 
-コントローラー系:
-- [ ] Software-Controllerレイアウト（5+7）: レイアウト定義をregistry化して切替可能にする。
-- [ ] Simulator実寸タッチ: 実寸（例: 320x240等倍）表示と、カメラ映像の重ね表示。
-- [ ] 本体色: コントローラー本体色の設定（プリセットの書出し含む）。
-- [ ] ControllerProfiles複数対応: `ControllerProfiles/*.json`方式の機種別マッチングとボタン割当セットアップ（上流`ControllerProfile`／`ControllerSetupSession`準拠）。
-- [ ] 機種別KeyConfig: ゲーム機（Switch／3DS／DS／GameCube）別のキー割当と保存。
-- [ ] モニター補助ツール: 複数インスタンス（プロファイル別プロセス）の監視ツールとして読み替えて実装する（最大枠数・All Start／Stop等の詳細は実装時設計）。
-- [ ] Keyboardウィンドウ: ソフトウェアキーボード（かな→ローマ字変換、入力モード自動切替）。6.2b／6.3a（NX）完了後に実装。
+UI・表示系:
+- [ ] **タブ構成**: Status／Camera／Audio／Serial／Touch Screen／Manual Control／Commands／Notification／Mask／Othersの10系統へ整理し配置見直し（FRONTEND §5.2/§6更新）。
+- [ ] **Statusタブ**: カメラ＋Capture Size、音声入出力、シリアル機器・COM・Baud、実行中コマンド＋開始時刻を表示（設定は変えない、約500ms更新）。
+- [ ] **右パネル位置切替**: Output／Software-Controllerを右／下／非表示で切替（通常画面とミニ画面で引継ぎ）。
+- [ ] **仕切り線**: 領域間のドラッグ比率調整＋比率保持＋ダブルクリック復帰（Output#1/#2間含む）。
+- [ ] **プレビュー**: 領域いっぱいの最大表示（縦横比維持）、Show Sizeによるウィンドウサイズ変更（WebRTC自動フィットとの整合を設計）、明るさGain/Gamma（表示のみ）。
+- [ ] **メニュー**: ファイル／コマンド／表示／接続／操作／ツール／設定／ヘルプの8系統再構築＋キーボードから開ける操作（タブ・ボタン操作のメニュー露出含む）。
+- [ ] **ミニ画面**: コマンド選択・実行中心の狭幅画面。
+- [ ] **起動時レイアウト確定後表示**: 配置確定まで非表示にして起動直後のガタつきを防ぐ。
+- [ ] **Screenshotボタン**: アプリウィンドウ全体をCapturesへ保存（WebのOS制約を注記、Tauri優先）。
+- [ ] **Outputのタブ拡張**: Logタブ（レベル色分け・フィルタ・プロファイル毎保存）／Noteタブ（フリーメモ・プロファイル毎保存）／Serialタブ（送信データ表示）、出力全域の文字検索（Ctrl+F、大小切替）。
+- [ ] **キーボード素通し規則**: Alt/Ctrl押下中、入力欄、キー消費部品フォーカス中、メニュー操作中（Windows）はゲーム機へ送らない（`input-safety.ts`の部品粒度拡張）。
+- [ ] **すべての入力を離す**: メニュー「操作」から既存の全解放経路を呼出し（実行中は確認）。
+- [ ] **テーマ**: 同梱テーマ（デフォルト・ダーク3種・明色5種）＋プロファイル毎保存＋テーマ作成/編集UI＋themesフォルダのユーザーテーマ。SPEC §4.7/§9の「将来」を実装へ更新。
+- [ ] **環境の診断**: バージョン・書込可否・シリアル／カメラ等の診断＋マスクコピー（旧Version確認の廃止方針を維持）。
+- [ ] **ヘルプ/マニュアル**: Instruction Manual・機能紹介のビューワ（スクロール・今後は表示しない・URLリンク化）、Discord通知設定／ハードウェア設定項の追記。
 
-プロファイル／環境系:
-- [ ] 起動時profile選択: profile未指定かつ複数存在する場合の選択UI（ネイティブダイアログ／Web初期画面の形態は実装時設計）。
-- [ ] `--auto`/priority.txt: 起動時自動選択の優先順（priority.txt）を起動ポリシーとして実装。
-- [ ] 2窓read-only: 同一profileの2つ目インスタンスをread-onlyで開けるようにする（現行lock直列化・保存拒否との整合を設計）。
-- [ ] 名前charset: プロファイル名の文字制限とWindows予約名拒否（6.4bの予約名ガードへ統合）。
-- [ ] ライブラリ増減UI: `[python.script.packages]`宣言の追加/削除UIと同期結果表示（BAT互換は不要）。
-- [ ] Install bat: 製品installer（deb／NSIS）で代替済み。単体batは採用しない（マーカー検証思想は取込記録）。
-- [ ] `.python-version`: 現行管理（`PORTABLE_PYTHON_VERSION`定数＋exact sync）を維持し、ファイルは追加しない。
+カメラ・映像・音声:
+- [ ] **Capture Size追加**: 720x480・400x480・256x384（`camera/frame.rs`・`SETTINGS.md`・FRONTEND §6.1.2・`CameraTab`）＋Show Size候補の連動。
+- [ ] **MJPG**: カメラ設定にMJPGトグルを追加（native backendの優先取得ロジックは既存）。
+- [ ] **ウィンドウ取り込み**: Windows限定の他アプリウィンドウ取り込み（`Window:`候補、非対応OSのフォールバック表示）。
+- [ ] **Audioタブ**: 音声デバイス選択・取込・再生（新規仕様節＋backend＋UI）。
+- [ ] **Mask編集UI**: 矩形／楕円マスクの編集・名前付き保存/読込・Capture反映・一覧管理。
+- [ ] **Touch Screen数値設定**: タッチ範囲の数値入力（既存の正規化rectangle設定との統合）。
 
-UI大物:
-- [ ] テーマ: 同梱テーマ（dark／light系）＋ユーザーテーマ（themesフォルダ）＋テーマエディタ。SPEC §4.7/§9の「将来」を実装へ更新。
-- [ ] Audioタブ: 音声デバイス選択・取込・再生（新規仕様節＋backend＋UI）。
-- [ ] Mask編集UI: 矩形／楕円マスクの編集・名前付き保存／読込・Capture反映。
-- [ ] ウィンドウ取り込み: Windows限定の他アプリウィンドウ取り込み（`Window:`候補）。
-- [ ] MJPG露出: カメラ設定にMJPGトグルを追加（native backendの優先取得ロジックは既存）。
-- [ ] ミニ画面: コマンド選択・実行中心の狭幅レイアウト（通常画面との設定引継ぎ含む）。
-- [ ] 仕切り線ドラッグ: レイアウト・Output間のドラッグ比率調整（比率保持・ダブルクリック復帰）。
-- [ ] Show Size連動: Capture Sizeに応じた表示サイズ切替（WebRTC自動フィットとの整合を設計）。
-- [ ] プレビューGain/Gamma: 表示のみの明るさ調整（キャプチャ・画像処理へ影響させない）。
-- [ ] 環境の診断: バージョン・書込可否・シリアル／カメラ等の診断＋マスクコピー（Help系UI）。
-- [ ] Discordウィンドウ全体送信: ウィンドウ全体のスクリーンショット送信（OS制約は実装時に注記）。
+コントローラー・入力:
+- [ ] **Software-Controllerレイアウト（5+7）**: レイアウト定義をregistry化して切替可能にする。
+- [ ] **Simulator実寸タッチ**: 実寸（320x240等倍）表示とカメラ映像の重ね表示。
+- [ ] **本体色**: コントローラー本体色の設定（プリセットの書出し含む）。
+- [ ] **ControllerProfiles複数対応**: `ControllerProfiles/*.json`方式の機種別マッチングとボタン割当セットアップ。
+- [ ] **機種別KeyConfig**: ゲーム機（Switch／3DS／DS／GameCube）別のキー割当と保存。
+- [ ] **モニター補助ツール**: 複数インスタンス（プロファイル別プロセス）の監視ツールとして読み替えて実装（枠数・All Start／Stop等の詳細は実装時設計）。
+- [ ] **Keyboardウィンドウ**: ソフトウェアキーボード（かな→ローマ字、モード自動切替）。6.2b／6.3aの後。
+- [ ] **入力優先度・合成モデル【利用者判断・確認中】**: 上流は`COMMAND(0)<KEYBOARD(1)<MOUSE(2)<PROCON(3)`（手動優先、連続系は優先度高の勝ち・ボタンは論理和）。当方は`USER_SCRIPT(500)`最高（script優先）＋`KEYBOARD_MOUSE`一括。整合方針（競合方向・分離・公開値）を利用者判断で確定し、§4.2/§4.3・arbiter・テストへ反映する。
+- [ ] **Data Format拡張のUI接続**: `SerialTab`のoption順とNX／3DS選択肢を6.3と一体で更新。
 
-#### 6.4.3 対応済み・対象外（記録）
+通知系:
+- [ ] **Discord通知先の複数登録**: 名前付き通知先（既定`DISCORD_WEBHOOK`は必ず作成）＋設定UI。`discord_text/image`の`name`引数（6.2e）と接続。
+- [ ] **通知画像選択**: 画面／ウィンドウ全体の選択（プロファイル毎保存、Test/Start/End/Main PanelのDiscordボタンへ反映）＋Start/End通知への画像添付（`notification.rs`配線）。
+- [ ] **Discordウィンドウ全体送信**: ツールメニューからのウィンドウ全体送信（OS制約注記）。
 
-- 対応済み（変更不要）: カメラ専用スレッド（`camera/manager.rs`）、Pokemon Home削除（一致）、長時間待機のStop即応（当方は0.05秒刻みで同等以上）、print系ルーティング、基本のCtrl/Alt素通し除外。
+プロファイル・環境:
+- [ ] **起動時profile選択**: profile未指定かつ複数存在時の選択UI（形態は実装時設計）。
+- [ ] **`--auto`/priority.txt**: 起動時自動選択の優先順。
+- [ ] **2窓read-only**: 同一profileの2つ目インスタンスをread-onlyで開けるようにする（現行lock直列化との整合を設計）。
+- [ ] **プロファイル名ガード**: 文字制限＋Windows予約名拒否（`settings/roots.rs`のSafeComponentへ統合）。
+- [ ] **ライブラリ増減UI**: `[python.script.packages]`宣言の追加/削除UIと同期結果表示。
+- [ ] **更新確認タグ扱い**: 異常タグの扱いを仕様1行へ明記。
+
+#### 6.4.2 対応済み・対象外（記録）
+
+- 対応済み（変更不要）: カメラ専用スレッド（`camera/manager.rs`）、Pokemon Home削除（一致）、長時間待機のStop即応（当方は0.05秒刻みで同等以上）、print系ルーティング、基本のCtrl/Alt素通し除外、すべての入力を離すの内部経路（`force_release_all`）。
+- 代替・維持（変更なしで記録）: Install bat→製品installer（deb／NSIS）で代替、`.python-version`→`PORTABLE_PYTHON_VERSION`定数＋exact syncを維持、旧環境からの移行確認（migrate相当）→新製品に旧環境なしのため対象外。
 - 対象外: uv起動bat・リポジトリ内`.venv`・bootstrap分離・ZIP差分更新（単一バイナリ・署名配布・並行移行方針と衝突）、Macのキーボード受付方式（pynput前提）、paho-mqtt／DeviceMatch等の設計差異、tkinter固有バグ。
 
 ### 6.5 バグ修正の反映
 
-上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした結果の要約。3DS関連は6.3bで扱う。
+上流v0.2.0のバグ修正43件・更新1件、v0.1.9の2件、キーボード素通し等を全48行でマッピングした。要修正・要検証の全項目を列挙し、等価・N/Aは変更なしとして記録する。3DS関連は6.3bで扱う。
 
-- [ ] **6.5a 要修正（高）**: 保存失敗でも`capture succeeded`表示／無名`saveImage`（`python.rs:2376-2406`）、`holdEnd`未押下の警告なし（`python.rs:1441-1471`）、ダイアログCancel時の正常終了化（`_legacy_result`）、`isContainedImage`矩形起点の意味差（`python.rs:3460-3508`）、macOSカメラ列挙欠落（`camera/selector.rs`。配布対象はLinuxとWindowsのため現行スコープ外と整理し、macOS配布追加時の要対応として記録する）、シリアルopen失敗の案内文なし（`manager.rs:326-332`＋UI）、open失敗原因詳細の破棄（`manager.rs`／`application_backend.rs:644-652`）。
-- [ ] **6.5b 要検証（回帰テストで確定）**: 初回スクリプト読込のLoading表示、Webhook URLのHTTP詳細ログ抑制、空設定ファイル読込、logフォルダ不在時、Captures以外のフォルダopen、カメラ名取得失敗時の番号fallback、設定系Cancel、Web終了ボタン配線、Windowsメニュー操作中のキー遮断粒度、wait停止の期限。
+- [ ] **6.5a 要修正（高）— 7件**:
+  - [ ] 保存失敗時表示・無名`saveImage`（`python.rs:2376-2406`）: 失敗時に`capture succeeded`と表示／無名が例外となる現状を、上流（Capture Failed表示・無名は失敗）へ合わせる。
+  - [ ] `holdEnd`未押下（`python.rs:1441-1471`）: 保持なしholdEndは警告＋skip、hold重複は警告し二重送信なし（型込み比較）。
+  - [ ] ダイアログCancel（`_legacy_result`）: Cancel時にfinish／StopThreadで正常終了扱いへ。
+  - [ ] `isContainedImage`矩形起点（`python.rs:3460-3508`）: crop_template起点の表示位置を上流と一致させる。
+  - [ ] macOSカメラ列挙（`camera/selector.rs`）: 配布対象はLinuxとWindowsのため現行スコープ外と整理（macOS配布追加時の要対応として記録）。
+  - [ ] シリアルopen失敗の案内（`manager.rs:326-332`＋UI）: 抜き差し・Scan Device・Reload Portの案内文を表示。
+  - [ ] open失敗原因詳細（`manager.rs`／`application_backend.rs:644-652`）: ioエラー詳細を保全してログ／APIへ残す。
+- [ ] **6.5b 要検証（回帰テストで確定）— 10件**: 初回スクリプト読込のLoading表示／Webhook URLのHTTP詳細ログ抑制／空設定ファイル読込のfallback／logフォルダ不在時の起動／Captures以外のフォルダopen／カメラ名取得失敗時の番号fallback／設定系Cancelの挙動／Web終了ボタン配線／Windowsメニュー・部品フォーカス中のキー遮断粒度／wait停止の期限。
 - 等価・N/A（記録の要約）: 入力種別分離hold、マスクリスト分岐、GPUスタブ、`saveCapture`のimg優先、baud指定・冪等切断、socket port反映、COM番号なし列挙、git非依存起動、失敗識別コード等は等価を確認した。サンプル整理・転写表示等の未移植概念はN/A。
 
 ### 6.6 仕様・文書・検証
@@ -946,4 +971,4 @@ UI大物:
 - [ ] **6.6a SPEC更新**: BACKEND §10（6.2の各API）・§10.5・§6.1.6（capture sizeはFRONTEND）・§11（serial値、通知画像）・§4.6.2（機構変更時の記述更新）。FRONTEND §5・§6（タブ構成・通知・プレビュー）と§9（テーマ記述の整合）。INTEGRATION §6.2.2（wire）・§6.1.5。
 - [ ] **6.6b docs更新**: `PERIPHERAL_DEVELOPMENT.md`（6.3g）、`USER_GUIDE.md`／`SETTINGS.md`（新設定・形式）、`MIGRATION.md`（3DS形式の移行注記）、`TRACEABILITY_*`／`FUNCTION_TRACEABILITY_MATRIX.md`へ行追加（§6更新規則）。
 - [ ] **6.6c 検証**: 追加API・形式のfocused test、`codec.rs` golden、PTY経路、`nix run .#compatibility`、`web-check`、aggregate `nix run .#check`、6.1の昇格評価。clean sourceでcommit別remote CIまで取得する。
-- [ ] **6.6d 実施順序（提案）**: 6.1a/b（機構）と6.2a/d/e（小API）→ 6.3a/b（NX・3DS）→ 6.2b/c（Keyboard・合成）→ 6.3d/e/f/g → 6.4.1（小規模UI・コマンド）→ 6.5a（バグ修正）→ 6.1c/d（候補評価・昇格）→ 6.4.2（上流機能差分）。各段で共通完了ゲートと該当focused gateを通す。着手は利用者の指示に従う。
+- [ ] **6.6d 実施順序（提案）**: 6.1a/b（機構）と6.2a/d/e（小API）→ 6.3a/b（NX・3DS）→ 6.2b/c（Keyboard・合成）→ 6.3d/e/f/g → 6.4.1の小規模群（UI・コマンド）→ 6.5a（バグ修正）→ 6.1c/d（候補評価・昇格）→ 6.4.1の残り（大物UI・音声等）。各段で共通完了ゲートと該当focused gateを通す。着手は利用者の指示に従う。

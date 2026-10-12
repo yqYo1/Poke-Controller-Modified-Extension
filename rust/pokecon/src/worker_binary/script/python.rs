@@ -1464,6 +1464,9 @@ class KeyPress:
     def holdEnd(self, btns):
         self.inputEnd(btns)
 
+    def holdChange(self, btns):
+        _api.controller_input("press", _controls(btns), False, False)
+
     def neutral(self):
         _api.controller_neutral()
 
@@ -1891,6 +1894,10 @@ class PythonCommand(Command):
 
     def holdEnd(self, buttons):
         self.keys.holdEnd(buttons)
+
+    def holdChange(self, buttons, wait=0.1):
+        self.keys.holdChange(buttons)
+        self.wait(wait)
 
     def wait(self, wait):
         wait = float(wait)

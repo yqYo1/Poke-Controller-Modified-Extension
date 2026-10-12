@@ -243,6 +243,8 @@ class MixedInput(PythonCommand):
 
 `holdEnd(buttons)`は対象入力をreleaseします。
 
+`holdChange(buttons, wait=0.1)`は保持中のスティックの向き・倒し量、Hatの向き、タッチ位置を離さずに切り替えます（`holdEnd`→`hold`では一度ニュートラルに戻るため）。同じスティック・Hat・タッチを保持していない場合は`hold`と同じ動作です。切り替え後に`wait`秒だけ待ちます（既定0.1）。
+
 `KeyPress.input()`と`inputEnd()`はより低水準の互換methodです。
 
 `KeyPress.neutral()`はcommand sourceのcontroller入力をneutralへ戻します。
@@ -637,7 +639,7 @@ import errorを回避するために本体repositoryへcopyを戻しません。
 | group | member |
 |---|---|
 | lifecycle | `alive`、`do`、`finish`、`checkIfAlive`、`postProcess` |
-| controller | `keys`、`press`、`pressRep`、`hold`、`holdEnd`、`wait`、`short_wait` |
+| controller | `keys`、`press`、`pressRep`、`hold`、`holdEnd`、`holdChange`、`wait`、`short_wait` |
 | serial | `direct_serial`、`reload_com_port` |
 | output | `print_t1`、`print_t2`、`print_t`、`print_s`、`print_ts`、`print_t1b`、`print_t2b`、`print_tb`、`print_tbs`、`show_var` |
 | dialog | `show_dialog`、`is_dialog_closed`、`wait_dialog`、`dialogue6widget`、`dialogue6widget_save_settings`、`dialogue6widget_select_settings`、`dialogue` |

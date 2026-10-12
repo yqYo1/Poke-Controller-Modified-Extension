@@ -150,9 +150,9 @@ pub mod worker {
                 HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest,
                 HostNetworkResult, HostNotificationRequest, HostOutputRequest, HostOverlayRequest,
                 HostPopupImageRequest, HostTkRequest, HostTkResult, MAX_NOTIFICATION_IMAGE_BYTES,
-                MAX_POPUP_IMAGE_BYTES, PYTHON_SITE_PACKAGES_ENV, ScriptCommandKind, ScriptControl,
-                ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
-                ScriptInitializeRequest, ScriptInputAction, ScriptPointerButton,
+                MAX_POPUP_IMAGE_BYTES, PYTHON_SITE_PACKAGES_ENV, ScriptButton, ScriptCommandKind,
+                ScriptControl, ScriptDialogState, ScriptExecuteRequest, ScriptExecutionOutcome,
+                ScriptHat, ScriptInitializeRequest, ScriptInputAction, ScriptPointerButton,
                 ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
                 ScriptWorkerStatus,
             };

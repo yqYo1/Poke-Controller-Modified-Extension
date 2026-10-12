@@ -141,6 +141,7 @@
           "pressRep",
           "hold",
           "holdEnd",
+          "holdChange",
           "wait",
           "short_wait",
           "direct_serial",
@@ -245,7 +246,7 @@
           "ReleaseRangeSS"
         ],
         "McuCommand": ["start", "end"],
-        "KeyPress": ["input", "inputEnd", "hold", "holdEnd", "neutral", "end", "ser"],
+        "KeyPress": ["input", "inputEnd", "hold", "holdEnd", "holdChange", "neutral", "end", "ser"],
         "Sender": ["writeRow", "write"],
         "Widget": ["value", "has_result"]
       },

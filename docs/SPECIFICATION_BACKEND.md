@@ -472,6 +472,7 @@ type GamepadInput = ButtonsList | Buttons
 | `pressRep()` | `pressRep(buttons: GamepadInput, repeat: int, duration: float = 0.1, interval: float = 0.1, wait: float = 0.1) -> None` | 繰り返し押下 |
 | `hold()` | `hold(buttons: GamepadInput, wait: float = 0.1) -> None` | ボタンを押下状態で保持 |
 | `holdEnd()` | `holdEnd(buttons: GamepadInput) -> None` | 保持中のボタンを解放 |
+| `holdChange()` | `holdChange(buttons: GamepadInput, wait: float = 0.1) -> None` | 保持中のスティックの向き・倒し量、Hatの向き、タッチ位置を離さずに切り替え。同じスティック・Hat・タッチを保持していない場合は`hold()`と同じ |
 | `wait()` | `wait(wait: float) -> None` | 指定時間待機。>0.1sは `time.sleep()`（CPU効率、低精度）、≤0.1sはビジーループ（`time.perf_counter()`、高精度、高CPU使用率）。いずれの場合も `checkIfAlive()` を呼び出す |
 | `short_wait()` | `short_wait(wait: float) -> None` | 常にビジーループ待機（`time.perf_counter()`、高精度、高CPU使用率）。`checkIfAlive()` を呼び出す |
 | `direct_serial()` | `direct_serial(commands: list[str], waittimes: list[float]) -> None` | 生シリアルコマンド送信。`commands` から `\r`/`\n` を除去し、`zip(waittimes, commands, strict=False)` で並列処理。各コマンド送信前に `waittimes[i]` 秒待機。長さ不一致時は短い側まで実行。`writeRow_wo_perf_counter()` で `\r\n` を付加して送信。`strict=False` は互換性のため（長さ不一致時もエラーにしない）。空リスト時は何も送信しない |
@@ -731,6 +732,7 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - `self.keys.input(btns: GamepadInput, ifPrint: bool = True) -> None`: 指定入力を押下状態として送信する。`ifPrint`は互換引数として受理する
 - `self.keys.inputEnd(btns: GamepadInput, ifPrint: bool = True, unset_hat: bool = True, unset_Touchscreen: bool = True) -> None`: 指定入力を解放する。既存のcamelCaseキーワード`ifPrint`／`unset_Touchscreen`を変更しない
 - `self.keys.hold(btns: GamepadInput) -> None`／`self.keys.holdEnd(btns: GamepadInput) -> None`: 保持集合を更新して押下／解放する
+- `self.keys.holdChange(btns: GamepadInput) -> None`: 保持中のスティックの向き・倒し量、Hatの向き、タッチ位置を離さずに切り替える（`holdEnd`→`hold`では一度ニュートラルが送信されるため）。同じスティック・Hat・タッチを保持していない場合は`hold`と同じ
 - `self.keys.neutral() -> None`: 全保持状態をクリアしてコントローラーをニュートラル状態にリセットする
 - `self.keys.end() -> None`: 互換シリアル終了行を送信する
 - `self.keys.ser.write()` で生シリアル書き込みが可能（IPCプロキシ経由）。公開型は `bytes | bytearray | memoryview | list[int]`
@@ -980,7 +982,7 @@ def dialogue(self, title: str, message: int | str | list[int | str], desc: str |
 | `from Commands.Keys import Button, Hat, ...` | ✅ モジュールパッチで保持 | |
 | `self.keys.neutral()` | ✅ 利用可能 | |
 | `self.keys.input()` / `self.keys.inputEnd()` | ✅ 利用可能（既存の`ifPrint`／`unset_hat`／`unset_Touchscreen`キーワードを保持） | |
-| `self.keys.hold()` / `self.keys.holdEnd()` / `self.keys.end()` | ✅ 利用可能 | |
+| `self.keys.hold()` / `self.keys.holdEnd()` / `self.keys.holdChange()` / `self.keys.end()` | ✅ 利用可能 | |
 | `self.keys.ser.writeRow()` | ✅ 利用可能（末尾に改行自動追加） | |
 | `self.keys.ser.write()` | ✅ 利用可能（公開型は `bytes \| bytearray \| memoryview \| list[int]`。スカラー`int`はランタイム互換のみで静的型から除外） | |
 | `dialogue6widget_save_settings()` | ✅ 旧JSON設定の読込・保存を含む互換シグネチャを保持 | |
@@ -3055,7 +3057,7 @@ pokecon.autocmd.on("ProfileSwitchPost", {
 ###### 11.5.6.5.1 設計方針
 
 - **動的設定専用**: `init.py`/`init.lua` からコントローラーを操作するAPI
-- **スクリプトAPIとは別**: `PythonCommand` クラスの `press()`, `hold()`, `holdEnd()` とは異なる設計。動的設定では状態ベースの一括更新が適切
+- **スクリプトAPIとは別**: `PythonCommand` クラスの `press()`, `hold()`, `holdEnd()`, `holdChange()` とは異なる設計。動的設定では状態ベースの一括更新が適切
 - **複数ボタン同時操作**: 同じタイミングで複数ボタンの押下・離脱を表現できる必要がある
 - **スティック入力**: x,y座標の絶対値指定、および角度+強度の指定の両方に対応
 - **3DSタッチスクリーン対応**: タッチスクリーンのx,y座標指定

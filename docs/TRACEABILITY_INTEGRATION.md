@@ -58,7 +58,7 @@
 | 6.1.5-4 | 拡張子は実効形式に従う（PNG→`.png`、JPEG→`.jpg`） | ✅ | `screenshot.rs` 拡張子付与 | — |
 | 6.1.5-5 | 既定名 `YYYY-MM-DD_HH-MM-SS`＋`_1…` 最小未使用接尾辞・排他的create、TZはホストローカル、時刻失敗は失敗 | ✅ | `screenshot.rs` 既定名生成・排他create | — |
 | 6.1.5-6 | 既定非上書き、明示名既存は409、確認後のみ `overwrite=true`。`overwrite=true` でもsymlink・非通常・閉じ込め外拒否 | ✅ | `application_backend.rs:247,631,674,718` Conflict系、`screenshot.rs:90-155` overwrite分岐 | — |
-| 6.1.5-7 | `saveCapture()` 互換：明示既存通常ファイルは置換可、`None`/空文字は非上書き接尾辞規則 | ✅ | `rust/pokecon/src/worker_binary/script/python.rs:2376,2562-2563,2681` `saveCapture` 定義・委譲、frontend `MainPanel.svelte:56,130,174`、`CameraTab.svelte:172` | — |
+| 6.1.5-7 | `saveCapture()` 互換：明示既存通常ファイルは置換可、`None`/空文字は非上書き接尾辞規則 | ✅ | `rust/pokecon/src/worker_binary/script/python.rs:2383,2569-2570,2688` `saveCapture` 定義・委譲、frontend `MainPanel.svelte:56,130,174`、`CameraTab.svelte:172` | — |
 | 6.1.5-8 | 一回限り上書き：dialogは実効format初期選択＋当該保存限り再選択可、設定・TOML不変、拡張子付替規則、既存上書きは通常確認 | ⚠️ | server側 ext置換・confirm/cancel保持あり。frontend dialogにformat再選択コントロールなし（formatは実効値固定） | **要対応**：保存dialogへPNG/JPEG再選択UI追加（設定不変の一時上書き） |
 | 6.1.5-9 | JPEG品質 `jpeg_quality` 1-100・既定85、PNG時無視、MJPEGと共有 | ✅ | `registry/settings.json:1889-1906`、`screenshot.rs:263-269` 既定85・`:769-775` 範囲・`:497-504` PNG無視、`camera/media.rs:131-132` MJPEG共有、`settings_runtime/camera.rs:52-55,87-97` | — |
 | 6.1.5-10 | GPUI用にTauri専用server-path variant拡張禁止、byte-return/local-saveまたはadapterをPoC選択 | ⚠️ | `ScreenshotMode::Web/Desktop` ゲート `screenshot.rs:392-394` → WebからPath要求は409（`application_backend.rs:1456-1462`）。`Download` byte-return `:403-412` あり | GPUI側選択はPoC未実施のため保留 |

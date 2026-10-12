@@ -58,7 +58,7 @@
 | 7.9.4 writer: 現行除外、state 0/2+pin0 CAS、ブロックせず破棄、release出版; state=0なし再利用 | 実装済み | `src/camera/shared_ring.rs:160-195` reserve_noncurrent_slot（現行スキップ、CAS、NoWritableSlot）; `src/camera/manager.rs:437-439` NoWritableSlot時破棄（publish経路）、`:541-545` 同（reconfigure経路）（※`:415` は起動失敗時のinvalidate_publicationであり混同しない） |
 | 7.9.4 reader: pin+再トークン検査+seq検査、8回yield再試行、履歴/ゼロ退避、PinGuard | 実装済み | `src/camera/shared_ring.rs:13` READ_RETRY_LIMIT=8; `:209-232` read_published_with_hook; `:372` history同形 else zero |
 | 7.9.4 最新フレーム+衝突回復（回収→pin初期化、対応維持、記述子再送） | 実装済み | `src/camera/shared_ring.rs:289` recover_reader_pins; `:335` トークン無効化し対応維持; `src/camera/manager.rs:415,489,514,610` invalidate_publication |
-| 7.9.5 Camera API統合（image_bgr/readFrame/getCameraImage→私用コピー） | 実装済み | `src/worker_binary/script/python.rs:895` camera_frame; `:2327-2334` image_bgr/readFrame; getCameraImage定義 `:3517-3518`（`:3247` は利用側） |
+| 7.9.5 Camera API統合（image_bgr/readFrame/getCameraImage→私用コピー） | 実装済み | `src/worker_binary/script/python.rs:895` camera_frame; `:2330-2341` image_bgr/readFrame; getCameraImage定義 `:3538-3539`（`:3265` は利用側） |
 | 7.9.6 ベンチマーク注記（28.23ms対3.28ms; CIモックのみゲート） | 実装済み（reference-only） | `tests/transfer_reference_virtual.rs` が固定1920×1080 frame、50 warm-up、200 measured、MessagePack bin32 body＋匿名pipeの合成転送と`SharedFrameRing` worker-side copyを比較し、u64 little-endian pipe framing、§7.8 control codec非使用、units/sample counts/source-build identity付きJSONを検証。`rust/pokecon/Cargo.toml`と`flake.nix`の`rustCoreCheck`へ統合し、report／samplesをNix成果物とNormal CI artifactへ保存。仕様本文の28.23/3.28msは`prose_reference=true`・`asserted=false`であり、production §7.8 codecやlatency／throughput acceptanceの証拠ではない。focused test 7 passed、dirty localの`nix run .#rust-ci-core`も成功。current commitのremote required CIは別途確認する |
 
 ## 10 + 付録B
@@ -67,31 +67,31 @@
 
 | 項目 | 判定 | 直接証拠 |
 |---|---|---|
-| 10.1 公開隔離（ユーザースクリプトワーカーのみ、init.py/init.luaにCommandsなし） | 実装済み | protocol.json:299-356 動的設定名前空間+forbidden_namespaces=["Commands"]; contract_sync.rs:208 禁止断定; python.rs:556 add_python_paths |
+| 10.1 公開隔離（ユーザースクリプトワーカーのみ、init.py/init.luaにCommandsなし） | 実装済み | protocol.json:300-359 動的設定名前空間+forbidden_namespaces=["Commands"]; contract_sync.rs:208 禁止断定; python.rs:556 add_python_paths |
 | 10.2 方針（Rustが資源所有、CommandMeta切替フック、互換、命名） | 実装済み | python.rs:814-1078 PyApi IPC転送; protocol.json:58-68 ipc種別; _meta.pyi:3 CommandMeta |
-| 10.3 公開モジュール dialogue/image_proc/net 射影 | 実装済み | protocol.json:251-294 module_functions（dialogue 8、net 16、image_proc 13）; dialogue.pyi:32-61、net.pyi:3-18、image_proc.pyi:9-21 |
+| 10.3 公開モジュール dialogue/image_proc/net 射影 | 実装済み | protocol.json:253-297 module_functions（dialogue 8、net 16、image_proc 13）; dialogue.pyi:32-61、net.pyi:3-18、image_proc.pyi:9-21 |
 | 10.3 所有権（実体束縛、commandなしRuntimeError、全局なし; ImageProc専用守衛） | 実装済み | python.rs:844-868 is_executing/is_alive/checkpoint/finish/abort; python.rs:731 validate_runtime_surface |
-| 10.4.1 階層 Command(Meta)->PythonCommand->ImageProc; McuCommand | 実装済み | PythonCommandBase.pyi:73 PythonCommand(Command,metaclass=CommandMeta); :153 ImageProcPythonCommand; McuCommandBase.pyi:9; protocol.json:107-119 required_imports |
+| 10.4.1 階層 Command(Meta)->PythonCommand->ImageProc; McuCommand | 実装済み | PythonCommandBase.pyi:73 PythonCommand(Command,metaclass=CommandMeta); :152 ImageProcPythonCommand; McuCommandBase.pyi:9; protocol.json:107-119 required_imports |
 | 10.4.2 ライフサイクル do/finish/checkIfAlive + _logger/alive/keys/postProcess | 実装済み | PythonCommandBase.pyi:74-83; protocol.json:132-139 |
 | 10.4.2 GamepadInput型 Button/Hat/Direction/Touchscreen（+Stick） | 実装済み | Keys.pyi:8 Button(IntFlag)、:28 Hat、:39 Stick、:43 Direction、:70 Touchscreen; protocol.json:115-118 |
-| 10.4.2 入力 press/pressRep/hold/holdEnd/wait/short_wait/direct_serial | 実装済み | PythonCommandBase.pyi:84-90; python.rs:958 controller_input、:983 controller_neutral; protocol.json:140-146 |
-| 10.4.2 設定 reload_com_port | 実装済み | PythonCommandBase.pyi:91; python.rs:1001 serial_reload; protocol.json:147 |
-| 10.4.2 出力 print_t1/t2/t/s/ts/t1b/t2b/tb/tbs + show_var | 実装済み | PythonCommandBase.pyi:92-101; python.rs:1005 output; protocol.json:148-157 |
-| 10.4.2 dialog群 show_dialog/is_dialog_closed/wait_dialog/dialogue6widget*2/dialogue | 実装済み | PythonCommandBase.pyi:103-131; python.rs:1030 dialog_open、:1054 dialog_status、:1062 dialog_close_all; protocol.json:158-164 |
-| 10.4.2 socket群（8関数） | 実装済み | PythonCommandBase.pyi:132-139; net.pyi:3-10; python.rs:1066 network; protocol.json:165-172+262-269 |
-| 10.4.2 MQTT群（8関数） | 実装済み | PythonCommandBase.pyi:140-148; net.pyi:11-18; python.rs:1066 network; protocol.json:173-180+270-277 |
-| 10.4.2 通知 LINE_text（no-op）/discord_text | 実装済み | PythonCommandBase.pyi:149-150; python.rs:1073 notification; protocol.json:181-182 |
-| 10.4.3 通知 discord_image/LINE_image + CropFmt/ScreenshotFormat | 実装済み | PythonCommandBase.pyi:15-16、:156-157; python.rs:1073、:911 save_image、:935 popup_image |
-| 10.4.3 ctor + camera/cam/gui/canvas注入 | 実装済み | PythonCommandBase.pyi:153-155、:158 __init__; protocol.json:184-188 |
-| 10.4.3 Camera（image_bgr/readFrame/isOpened/fps/capture_size/flip/flip_mode/set_flip/saveCapture+内部5） | 実装済み | PythonCommandBase.pyi:21-43; python.rs:880 camera_state、:888 camera_control、:895 camera_frame、:911 save_image; protocol.json:204-219 |
-| 10.4.3 CaptureArea（ImgRect/ImgText/delete*/setFps/setShowsize/rightMouse/touchscreen/saveCapture/show_size/is_show_var+mouse/range関数） | 実装済み | PythonCommandBase.pyi:45-71; python.rs:929 overlay; protocol.json:220-245 |
+| 10.4.2 入力 press/pressRep/hold/holdEnd/holdChange/wait/short_wait/direct_serial | 実装済み | PythonCommandBase.pyi:84-91; python.rs:958 controller_input、:983 controller_neutral; protocol.json:140-147 |
+| 10.4.2 設定 reload_com_port | 実装済み | PythonCommandBase.pyi:92; python.rs:1001 serial_reload; protocol.json:148 |
+| 10.4.2 出力 print_t1/t2/t/s/ts/t1b/t2b/tb/tbs + show_var | 実装済み | PythonCommandBase.pyi:93-102; python.rs:1005 output; protocol.json:149-158 |
+| 10.4.2 dialog群 show_dialog/is_dialog_closed/wait_dialog/dialogue6widget*2/dialogue | 実装済み | PythonCommandBase.pyi:104-132; python.rs:1030 dialog_open、:1054 dialog_status、:1062 dialog_close_all; protocol.json:159-165 |
+| 10.4.2 socket群（8関数） | 実装済み | PythonCommandBase.pyi:133-140; net.pyi:3-10; python.rs:1066 network; protocol.json:166-173+265-272 |
+| 10.4.2 MQTT群（8関数） | 実装済み | PythonCommandBase.pyi:141-148; net.pyi:11-18; python.rs:1066 network; protocol.json:174-181+273-280 |
+| 10.4.2 通知 LINE_text（no-op）/discord_text | 実装済み | PythonCommandBase.pyi:149-150; python.rs:1073 notification; protocol.json:182-183 |
+| 10.4.3 通知 discord_image/LINE_image + CropFmt/ScreenshotFormat | 実装済み | PythonCommandBase.pyi:15-16、:159-160; python.rs:1073、:911 save_image、:935 popup_image |
+| 10.4.3 ctor + camera/cam/gui/canvas注入 | 実装済み | PythonCommandBase.pyi:153-156、:158 __init__; protocol.json:186-189 |
+| 10.4.3 Camera（image_bgr/readFrame/isOpened/fps/capture_size/flip/flip_mode/set_flip/saveCapture+内部5） | 実装済み | PythonCommandBase.pyi:21-43; python.rs:880 camera_state、:888 camera_control、:895 camera_frame、:911 save_image; protocol.json:207-220 |
+| 10.4.3 CaptureArea（ImgRect/ImgText/delete*/setFps/setShowsize/rightMouse/touchscreen/saveCapture/show_size/is_show_var+mouse/range関数） | 実装済み | PythonCommandBase.pyi:45-71; python.rs:929 overlay; protocol.json:223-246 |
 | 10.4.3 tkinter→Web橋渡し（Toplevel/Scale/Button/Label部分集合、コールバックスレッド、再接続） | 部分的 | python.rs:951 tk、:367 tk_event、:490 `_shutdown_tk`、:596 `_reset_tk`、:615 Cleanup（※旧:611は+4ずれ）; Scale/get/config/再接続部分集合の専用シンボルなし |
-| 10.4.3 画像処理13関数（match/max/GPU/contained/save/popup/diff/get/open/setDir/filespec/rect/text） | 実装済み | PythonCommandBase.pyi:160-172; image_proc.pyi:9-21; python.rs:895、:929、:935; protocol.json:191-204+280-294 |
+| 10.4.3 画像処理13関数（match/max/GPU/contained/save/popup/diff/get/open/setDir/filespec/rect/text） | 実装済み | PythonCommandBase.pyi:161-173; image_proc.pyi:9-21; python.rs:895、:929、:935; protocol.json:192-204+283-295 |
 | 10.4.4 McuCommand（sync_name）+start/end | 実装済み | McuCommandBase.pyi:9-12; python.rs:994 serial_write_row; protocol.json:114、246; contract_sync.rs:1664（※旧:1668は行ずれ） |
-| 10.5.1 KeyPress input/inputEnd/hold/holdEnd/neutral/end/ser | 実装済み | Keys.pyi:82-91; python.rs:958、983、987、994; protocol.json:247 |
-| 10.5.2 Sender writeRow/write + to_bytes変換（str/float TypeError、int実行時のみ） | 実装済み | Sender.pyi:3-5 writeRow/write; python.rs:987、994; protocol.json:248 |
-| 10.6 dialog API Widget[T] overloads/value/has_result + 遮断/非遮断/status/wait + save/select-settings | 実装済み | dialogue.pyi:5-61; PythonCommandBase.pyi:103-131; python.rs:1030-1062; protocol.json:249、252-261 |
-| 10.7 互換ゲート（imports、keys/ser、save_settings、_logger、tk標本、discord/LINE、削除なし） | 実装済み | protocol.json:107-119 required_imports、:295 compatibility_projection; contract_sync.rs:150、262、1158、1664-1696（※旧1668-1758は範囲ずれ） |
+| 10.5.1 KeyPress input/inputEnd/hold/holdEnd/holdChange/neutral/end/ser | 実装済み | Keys.pyi:82-92; python.rs:958、983、987、994; protocol.json:249 |
+| 10.5.2 Sender writeRow/write + to_bytes変換（str/float TypeError、int実行時のみ） | 実装済み | Sender.pyi:3-5 writeRow/write; python.rs:987、994; protocol.json:250 |
+| 10.6 dialog API Widget[T] overloads/value/has_result + 遮断/非遮断/status/wait + save/select-settings | 実装済み | dialogue.pyi:5-61; PythonCommandBase.pyi:104-132; python.rs:1030-1062; protocol.json:251、254-262 |
+| 10.7 互換ゲート（imports、keys/ser、save_settings、_logger、tk標本、discord/LINE、削除なし） | 実装済み | protocol.json:107-119 required_imports、:298 compatibility_projection; contract_sync.rs:150、262、1158、1664-1696（※旧1668-1758は範囲ずれ） |
 | 付録B CommandMeta（抽象do()検査→TypeError、__target_implementation__切替; 現行は全IPCプロキシ） | 部分的 | _meta.pyi:3 素朴 `class CommandMeta(type)`（do検査/切替シンボルなし）; protocol.json:130 空メンバ; python.rs:731-773 存在検証のみ |
 
 ## 11.1-11.4

@@ -14,10 +14,10 @@ use pokecon_worker::script::protocol::{
     HostControllerInputRequest, HostDialogOpenRequest, HostDialogOpenResult,
     HostDialogStatusRequest, HostDialogStatusResult, HostNetworkRequest, HostNetworkResult,
     HostNotificationRequest, HostOutputRequest, HostOverlayRequest, HostPopupImageRequest,
-    HostTkRequest, HostTkResult, ScriptCommandKind, ScriptControl, ScriptDialogState,
-    ScriptExecuteRequest, ScriptExecutionOutcome, ScriptInitializeRequest, ScriptInputAction,
-    ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick, ScriptTkEvent,
-    ScriptWorkerStatus,
+    HostTkRequest, HostTkResult, ScriptButton, ScriptCommandKind, ScriptControl, ScriptDialogState,
+    ScriptExecuteRequest, ScriptExecutionOutcome, ScriptHat, ScriptInitializeRequest,
+    ScriptInputAction, ScriptPointerButton, ScriptPointerEvent, ScriptPointerPhase, ScriptStick,
+    ScriptTkEvent, ScriptWorkerStatus,
 };
 use pokecon_worker::script::{ScriptHost, ScriptHostError, ScriptWorkerClient};
 use pokecon_worker::supervisor::{ManagedWorker, StopPurpose, WorkerLaunch, WorkerSupervisor};
@@ -580,6 +580,175 @@ class Exercise(PythonCommand):
     }
     assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
     assert!(!client.status().await.unwrap().running);
+
+    stop_worker(&worker).await;
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hold_change_switches_held_inputs_without_intermediate_release() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.Keys import Direction, Hat, Touchscreen
+
+
+class ExerciseHoldChange(PythonCommand):
+    def do(self):
+        self.hold(Direction.UP, wait=0)
+        self.holdChange(Direction.RIGHT, wait=0)
+        self.hold(Hat.TOP, wait=0)
+        self.holdChange(Hat.RIGHT, wait=0)
+        self.hold(Touchscreen(10, 20), wait=0)
+        self.holdChange(Touchscreen(30, 40), wait=0)
+        self.holdEnd(Direction.RIGHT)
+        self.holdEnd(Hat.RIGHT)
+        self.holdEnd(Touchscreen(30, 40))
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("exercise_hold_change.py"), SOURCE)
+        .expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise_hold_change.py".into(),
+            class_name: "ExerciseHoldChange".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    let inputs = host.controller_inputs.lock().unwrap().clone();
+    assert_eq!(inputs.len(), 9);
+    // No release or neutral happens between the hold/holdChange pairs:
+    // every switch is a single press send.
+    for input in inputs.iter().take(6) {
+        assert_eq!(input.action, ScriptInputAction::Press);
+    }
+    assert_eq!(
+        inputs[0].controls,
+        vec![ScriptControl::Stick {
+            stick: ScriptStick::Left,
+            x: 128,
+            y: 255,
+        }]
+    );
+    assert_eq!(
+        inputs[1].controls,
+        vec![ScriptControl::Stick {
+            stick: ScriptStick::Left,
+            x: 255,
+            y: 127,
+        }]
+    );
+    assert!(!inputs[1].unset_hat && !inputs[1].unset_touchscreen);
+    assert_eq!(
+        inputs[2].controls,
+        vec![ScriptControl::Hat {
+            direction: ScriptHat::Top,
+        }]
+    );
+    assert_eq!(
+        inputs[3].controls,
+        vec![ScriptControl::Hat {
+            direction: ScriptHat::Right,
+        }]
+    );
+    assert!(!inputs[3].unset_hat && !inputs[3].unset_touchscreen);
+    assert_eq!(
+        inputs[4].controls,
+        vec![ScriptControl::Touchscreen { x: 10, y: 20 }]
+    );
+    assert_eq!(
+        inputs[5].controls,
+        vec![ScriptControl::Touchscreen { x: 30, y: 40 }]
+    );
+    assert!(!inputs[5].unset_hat && !inputs[5].unset_touchscreen);
+    // The replaced set is released coherently afterwards.
+    for input in inputs.iter().skip(6) {
+        assert_eq!(input.action, ScriptInputAction::Release);
+    }
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
+
+    stop_worker(&worker).await;
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hold_change_without_prior_hold_behaves_like_hold_and_keeps_buttons() {
+    const SOURCE: &str = r"
+from Commands.PythonCommandBase import PythonCommand
+from Commands.Keys import Button, Direction
+
+
+class ExerciseHoldChangeFallback(PythonCommand):
+    def do(self):
+        self.hold(Button.A, wait=0)
+        self.holdChange([Button.A, Direction.UP], wait=0)
+        self.holdChange(Button.B)
+";
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(
+        command_root.join("exercise_hold_change_fallback.py"),
+        SOURCE,
+    )
+    .expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise_hold_change_fallback.py".into(),
+            class_name: "ExerciseHoldChangeFallback".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+
+    let inputs = host.controller_inputs.lock().unwrap().clone();
+    assert_eq!(inputs.len(), 3);
+    assert!(
+        inputs
+            .iter()
+            .all(|input| input.action == ScriptInputAction::Press)
+    );
+    assert_eq!(
+        inputs[0].controls,
+        vec![ScriptControl::Button {
+            button: ScriptButton::A,
+        }]
+    );
+    // An already-held button is kept as-is (not duplicated, not released)
+    // while the new stick direction is added in the same send.
+    assert_eq!(
+        inputs[1].controls,
+        vec![
+            ScriptControl::Button {
+                button: ScriptButton::A,
+            },
+            ScriptControl::Stick {
+                stick: ScriptStick::Left,
+                x: 128,
+                y: 255,
+            },
+        ]
+    );
+    assert!(!inputs[1].unset_hat && !inputs[1].unset_touchscreen);
+    // Without a prior hold, holdChange behaves like hold (default wait applies).
+    assert_eq!(
+        inputs[2].controls,
+        vec![ScriptControl::Button {
+            button: ScriptButton::B,
+        }]
+    );
+    assert_eq!(host.neutralizations.load(Ordering::Acquire), 1);
 
     stop_worker(&worker).await;
     assert_eq!(host.neutralizations.load(Ordering::Acquire), 2);

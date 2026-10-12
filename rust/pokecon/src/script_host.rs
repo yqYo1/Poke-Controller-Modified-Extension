@@ -2323,6 +2323,63 @@ mod tests {
     }
 
     #[test]
+    fn script_controller_hold_change_presses_without_unsetting_others() {
+        let update = controller_update(HostControllerInputRequest {
+            action: ScriptInputAction::Press,
+            controls: vec![
+                ScriptControl::Stick {
+                    stick: ScriptStick::Left,
+                    x: 255,
+                    y: 127,
+                },
+                ScriptControl::Hat {
+                    direction: ScriptHat::Right,
+                },
+                ScriptControl::Touchscreen { x: 30, y: 40 },
+            ],
+            unset_hat: false,
+            unset_touchscreen: false,
+        });
+        assert_eq!(
+            update.left_stick,
+            Some(StickInput::Xy(StickPosition { x: 255, y: 127 }))
+        );
+        assert_eq!(update.right_stick, None);
+        assert_eq!(update.hat, Some(Hat::Right));
+        assert_eq!(
+            update.touch,
+            Some(TouchUpdate {
+                x: 30,
+                y: 40,
+                pressed: true,
+            })
+        );
+        assert_eq!(update.a, None);
+    }
+
+    #[test]
+    fn script_controller_press_with_unset_flags_maps_to_active_resets() {
+        let update = controller_update(HostControllerInputRequest {
+            action: ScriptInputAction::Press,
+            controls: vec![ScriptControl::Button {
+                button: ScriptButton::A,
+            }],
+            unset_hat: true,
+            unset_touchscreen: true,
+        });
+        assert_eq!(update.a, Some(true));
+        assert_eq!(update.hat, Some(Hat::Neutral));
+        assert_eq!(
+            update.touch,
+            Some(TouchUpdate {
+                x: 0,
+                y: 0,
+                pressed: false,
+            })
+        );
+    }
+
+    #[test]
     fn tk_store_reconstructs_windows_and_validates_scale_updates() {
         let mut store = TkStore::default();
         store

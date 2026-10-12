@@ -841,7 +841,7 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 - [ ] **6.1b 機構gap（fixture selector）**: 現行の合否はmanifest SHAとRust fixture selectorで、script単位の実行ではないため、keyboard未実装でも`Keyboard_sample.py`等が`passed`になり得る（`referenced_api`は記録のみで未使用）。参照API（`self.KeyBoard_Init`等）を合否へ接続するかper-script実行を追加し、新API未実装時の偽陽性を塞ぐ。
 - [ ] **6.1c futo030 `3274e77`の候補登録・評価**: 自動発見は`git ls-remote HEAD`のみのため過去コミットは`candidates.json`へフルSHAで手動登録する。変更1件（Qingpi体裁のみ）は`numpy`→`camera_device` gateにより`unverified`（quarantined）見込み。評価結果とreasonsを証跡として記録する（結果ファイルはimmutableのため、記録したidの再評価不可に注意）。
 - [ ] **6.1d futo030 `cc49f82`の候補評価（6.2・6.3の実装完了後に実施）**: 実装前に本評価の結果ファイルを書かない。実装後にevaluateし、deterministic域の増加とquarantine理由の変化を確認してpromotion可否を判定する。hardware gateの扱いは6.1eの判断結果を反映する。
-- [ ] **6.1e hardware gate運用の決定（利用者判断）**: 変更scriptに`explicit_hardware_gate`（camera／audio／external services等）が1件でもあると候補全体が`unverified`となる現行仕様を、quarantine運用として維持するか、fixture拡充（例: camera sampleの静的検証追加）でdeterministic化を進めるかを決定する。
+- [ ] **6.1e hardware gate運用（2026-10-12利用者承認: 隔離運用を維持）**: 変更scriptに`explicit_hardware_gate`（camera／audio／external services等）が1件でもある場合に候補全体を`unverified`（quarantine）とする現行仕様を維持し、promotionはdeterministic域に限る。fixture拡充による実機依存ドメインのdeterministic化は今回の対象外（将来、正式保証範囲を広げる場合に別判断として検討）。
 
 ### 6.2 ユーザースクリプトAPIの取り込み（§10・typings・worker）
 

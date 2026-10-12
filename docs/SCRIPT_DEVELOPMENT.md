@@ -451,7 +451,7 @@ maskの縦横はtemplateと一致させます。
 
 `LINE_image`はLINE Notify終了により送信せず、warningを記録します。
 
-`discord_image`の送信失敗は互換性のためwarningとして扱う場合があるため、成功が必須なら送信先側も確認します。
+`discord_text`と`discord_image`は送信成否を`bool`で返す（失敗時は例外ではなく`False`＋warning）。戻り値`True`はRust通知キューへの受付成功を意味し、配送自体は非同期のため、到達の厳密な確認は送信先側で行う。
 
 ## templateとcaptureのpath基準を理解する
 
@@ -529,9 +529,9 @@ command context外で呼ぶと`RuntimeError`になります。
 
 ## Discordと終了済みLINE APIを区別する
 
-`discord_text`と`discord_image`はRust notification serviceへrequestします。
+`discord_text`と`discord_image`はRust notification serviceへrequestし、成否を`bool`で返す。上流v0.2.0互換の送り先解決（`name`/`keys`が`index`より優先、不明名は`index`へフォールバック、`"ALL"`・リスト対応、範囲外`index`は`False`）を行う。
 
-既定の設定keyは`DISCORD_WEBHOOK`互換名です。
+既定の設定keyは`DISCORD_WEBHOOK`互換名です。ホスト設定は単一webhook（`notifications.discord.webhook_url`）のため、解決済み名はすべて既定webhookへ配送される。
 
 Webhook本体はglobal secret設定としてRust側に保持し、script出力へ戻しません。
 

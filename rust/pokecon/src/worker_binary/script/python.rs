@@ -1829,6 +1829,50 @@ def _notification(request):
     )
 
 
+_DISCORD_DEFAULT_KEY = "DISCORD_WEBHOOK"
+_DISCORD_ALL = "ALL"
+# Destination names known to the compatibility layer. The host settings model
+# exposes exactly one webhook (notifications.discord.webhook_url), so this
+# mirrors upstream DiscordNotify with a single configured destination: index 0
+# is DISCORD_WEBHOOK and any other index is out of range. The resolved names
+# are passed through as settings keys; the host delivers to its webhook
+# without ever exposing the secret to the worker.
+_DISCORD_DESTINATIONS = (_DISCORD_DEFAULT_KEY,)
+
+
+def _discord_resolve(logger, index, name):
+    if name is not None:
+        if name in _DISCORD_DESTINATIONS:
+            return name
+        print(f"Discordの通知先「{name}」がありません。index={index} の通知先に送ります。")
+        logger.warning(f"Discord webhook '{name}' is not found.")
+    if isinstance(index, int) and 0 <= index < len(_DISCORD_DESTINATIONS):
+        return _DISCORD_DESTINATIONS[index]
+    print(f"Discordの通知先がありません。(index={index})")
+    logger.warning(f"Discord webhook index {index} is out of range.")
+    return None
+
+
+def _discord_keys(logger, index, keys, name):
+    if name is None and keys != _DISCORD_DEFAULT_KEY:
+        if not isinstance(keys, str) or keys == _DISCORD_ALL:
+            return keys
+        name = keys
+    return _discord_resolve(logger, index, name)
+
+
+def _discord_targets(logger, resolved):
+    if isinstance(resolved, str):
+        if resolved == _DISCORD_ALL:
+            return list(_DISCORD_DESTINATIONS)
+        return [resolved]
+    if isinstance(resolved, list):
+        return list(resolved)
+    print("keysのフォーマットが間違っています")
+    logger.error('Using the wrong "keys" format')
+    return None
+
+
 class PythonCommand(Command):
     __requires_do__ = True
     _logger = None
@@ -2168,18 +2212,32 @@ class PythonCommand(Command):
     def LINE_text(self, txt, token=""):
         self._logger.warning("LINE_text is unavailable because LINE Notify has ended")
 
-    def discord_text(self, content="", index=0, keys="DISCORD_WEBHOOK"):
-        settings_key = f"DISCORD_WEBHOOK{index}" if index != 0 else str(keys)
-        try:
-            _notification(
-                {
-                    "kind": "discord_text",
-                    "content": str(content),
-                    "settings_key": settings_key,
-                }
-            )
-        except Exception:
-            self._logger.warning("discord_text delivery failed")
+    def discord_text(self, content="", index=0, keys="DISCORD_WEBHOOK", name=None):
+        resolved = _discord_keys(self._logger, index, keys, name)
+        if resolved is None:
+            return False
+        targets = _discord_targets(self._logger, resolved)
+        if targets is None:
+            return False
+        ok = True
+        for target in targets:
+            if target not in _DISCORD_DESTINATIONS:
+                print(f"[{target}]webhook urlを確認してください。")
+                self._logger.error("Using the wrong token")
+                ok = False
+                continue
+            try:
+                _notification(
+                    {
+                        "kind": "discord_text",
+                        "content": str(content),
+                        "settings_key": target,
+                    }
+                )
+            except Exception:
+                self._logger.warning("discord_text delivery failed")
+                ok = False
+        return ok
 
 
 _CROP_FORMATS = {"", "1", "2", "3", "4", "11", "12", "13", "14"}
@@ -3250,24 +3308,35 @@ class ImageProcPythonCommand(PythonCommand):
         self.isSimilarity = False
         self.isGuide = False
 
-    def discord_image(self, content="", index=0, crop_fmt="", crop=None, keys="DISCORD_WEBHOOK"):
+    def discord_image(self, content="", index=0, crop_fmt="", crop=None, keys="DISCORD_WEBHOOK", name=None):
+        # discord_image(content, index, name) の順で通知先の名前を渡された場合(crop_fmt には無い文字列)
+        if isinstance(crop_fmt, str) and crop_fmt not in _CROP_FORMATS:
+            name, crop_fmt = crop_fmt, ""
         _convert_crop(crop_fmt, crop)
-        if index != 0:
-            settings_keys = [f"DISCORD_WEBHOOK{index}"]
-        elif isinstance(keys, str):
-            settings_keys = [keys]
-        elif isinstance(keys, list) and all(isinstance(key, str) for key in keys):
-            settings_keys = list(keys)
-        else:
-            raise TypeError("discord_image keys must be str or list[str]")
+        resolved = _discord_keys(self._logger, index, keys, name)
+        if resolved is None:
+            return False
+        targets = _discord_targets(self._logger, resolved)
+        if targets is None:
+            return False
+        if not targets:
+            return True
+        unknown = [target for target in targets if target not in _DISCORD_DESTINATIONS]
+        for target in unknown:
+            print(f"[{target}]webhook urlを確認してください。")
+            self._logger.error("Using the wrong token")
+        known = [target for target in targets if target in _DISCORD_DESTINATIONS]
+        if not known:
+            return False
         normalized_crop = None if crop is None else [_require_int(value, "crop coordinate") for value in crop]
+        image = self.getCameraImage(crop_fmt, crop)
         try:
-            encoded = _encode_popup(self.getCameraImage(crop_fmt, crop))
+            encoded = _encode_popup(image)
             _notification(
                 {
                     "kind": "discord_image",
                     "content": str(content),
-                    "settings_keys": settings_keys,
+                    "settings_keys": known,
                     "crop_format": str(crop_fmt),
                     "crop": normalized_crop,
                     "content_type": "image/jpeg",
@@ -3276,6 +3345,8 @@ class ImageProcPythonCommand(PythonCommand):
             )
         except Exception:
             self._logger.warning("discord_image delivery failed")
+            return False
+        return not unknown
 
     def LINE_image(self, txt, crop_fmt="", crop=None, token=""):
         self._logger.warning("LINE_image is unavailable because LINE Notify has ended")

@@ -1291,13 +1291,12 @@ class NetworkAndNotifications(ImageProcPythonCommand):
         assert self.mqtt_receive_message("room", "one") == "mqtt-response"
         assert self.mqtt_receive_message2("room", ["two"], True) == "mqtt-response"
 
-        self.discord_text("private-content", index=2, keys="ignored")
-        self.discord_image(
+        assert self.discord_text("private-content") is False
+        assert self.discord_image(
             "private-image-content",
             crop_fmt="1",
             crop=[0, 0, 10, 10],
-            keys=["HOOK_A", "HOOK_B"],
-        )
+        ) is False
         self.LINE_text("ignored")
         self.LINE_image("ignored")
 "#;
@@ -1356,7 +1355,7 @@ class NetworkAndNotifications(ImageProcPythonCommand):
         assert!(matches!(
             &notifications[0],
             HostNotificationRequest::DiscordText { settings_key, .. }
-                if settings_key == "DISCORD_WEBHOOK2"
+                if settings_key == "DISCORD_WEBHOOK"
         ));
         assert!(matches!(
             &notifications[1],
@@ -1367,7 +1366,7 @@ class NetworkAndNotifications(ImageProcPythonCommand):
                 encoded,
                 ..
             }
-                if settings_keys == &["HOOK_A", "HOOK_B"]
+                if settings_keys == &["DISCORD_WEBHOOK"]
                     && crop.as_deref() == Some(&[0, 0, 10, 10][..])
                     && content_type == "image/jpeg"
                     && encoded.starts_with(&[0xff, 0xd8])
@@ -1378,6 +1377,138 @@ class NetworkAndNotifications(ImageProcPythonCommand):
             assert!(!debug.contains("private"));
         }
     }
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn discord_destinations_follow_upstream_name_index_keys_semantics() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class DiscordSemantics(ImageProcPythonCommand):
+    def do(self):
+        assert self.discord_text("hello") is True
+        assert self.discord_text("named", name="DISCORD_WEBHOOK") is True
+        assert self.discord_text("keys-name", keys="DISCORD_WEBHOOK") is True
+        assert self.discord_text("fallback", name="MISSING", index=0) is True
+        assert self.discord_text("bad-index", index=3) is False
+        assert self.discord_text("none-keys", keys=None) is False
+        assert self.discord_text("bad-format", keys=123) is False
+        assert self.discord_text("all", keys="ALL") is True
+        assert self.discord_text("multi", keys=["DISCORD_WEBHOOK"]) is True
+        assert self.discord_text("bad-multi", keys=["NOPE"]) is False
+        assert self.discord_text("empty", keys=[]) is True
+
+        assert self.discord_image("img", keys="ALL") is True
+        assert self.discord_image("img2", 0, "DISCORD_WEBHOOK") is True
+        assert self.discord_image("img3", 0, "MISSING-NAME") is True
+        assert self.discord_image("img4", index=2) is False
+
+        # v0.2.0境界: 送信前のエラー(crop不正)は送出し、送信失敗のみFalse
+        try:
+            self.discord_image("img5", crop_fmt="1", crop=[0, 0])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid crop must raise")
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("discord_semantics.py"), SOURCE)
+        .expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let ring =
+        SharedFrameRing::create(CaptureResolution::R640x360).expect("test frame ring is created");
+    ring.publish(&BgrFrame::new(640, 360, vec![0; 640 * 360 * 3]).expect("test frame is valid"))
+        .expect("test frame is published");
+    *host.camera_ring.lock().unwrap() = Some(ring);
+    *host.camera_state.lock().unwrap() = Some(HostCameraState {
+        opened: true,
+        fps: 30,
+        capture_resolution: CaptureResolution::R640x360,
+        flip_mode: FlipMode::None,
+        screenshot_format: ScreenshotFormat::Png,
+    });
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "discord_semantics.py".into(),
+            class_name: "DiscordSemantics".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("discord semantics script execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    {
+        let notifications = host.notification_requests.lock().unwrap();
+        assert_eq!(notifications.len(), 9);
+        for request in notifications.iter() {
+            match request {
+                HostNotificationRequest::DiscordText { settings_key, .. } => {
+                    assert_eq!(settings_key, "DISCORD_WEBHOOK");
+                }
+                HostNotificationRequest::DiscordImage { settings_keys, .. } => {
+                    assert_eq!(settings_keys, &["DISCORD_WEBHOOK"]);
+                }
+            }
+            let debug = format!("{request:?}");
+            assert!(!debug.contains("hello"));
+            assert!(!debug.contains("fallback"));
+        }
+    }
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[allow(clippy::too_many_lines)]
+async fn discord_failures_return_false_without_raising() {
+    const SOURCE: &str = r#"
+from Commands.PythonCommandBase import ImageProcPythonCommand
+
+
+class DiscordFailures(ImageProcPythonCommand):
+    def do(self):
+        assert self.discord_text("unavailable") is False
+        assert self.discord_image("unavailable-image") is False
+        assert self.discord_text("bad-index", index=9) is False
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("discord_failures.py"), SOURCE)
+        .expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    let ring =
+        SharedFrameRing::create(CaptureResolution::R640x360).expect("test frame ring is created");
+    ring.publish(&BgrFrame::new(640, 360, vec![0; 640 * 360 * 3]).expect("test frame is valid"))
+        .expect("test frame is published");
+    *host.camera_ring.lock().unwrap() = Some(ring);
+    *host.camera_state.lock().unwrap() = Some(HostCameraState {
+        opened: true,
+        fps: 30,
+        capture_resolution: CaptureResolution::R640x360,
+        flip_mode: FlipMode::None,
+        screenshot_format: ScreenshotFormat::Png,
+    });
+    host.fail_notifications.store(true, Ordering::Release);
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "discord_failures.py".into(),
+            class_name: "DiscordFailures".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("discord failure script execution succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    assert_eq!(host.notification_requests.lock().unwrap().len(), 2);
 
     stop_worker(&worker).await;
 }

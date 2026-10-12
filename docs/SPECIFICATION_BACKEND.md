@@ -550,7 +550,7 @@ type DialogueList = list[DialogueEntry]
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
 | `LINE_text()` | `LINE_text(txt: str, token: str = "") -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
-| `discord_text()` | `discord_text(content: str = "", index: int = 0, keys: str = "DISCORD_WEBHOOK") -> None` | Discord Webhookへテキストを送信する互換API。`index != 0`の場合は`keys`の指定値にかかわらず`DISCORD_WEBHOOK<index>`へ置換し、`index == 0`の場合は指定された`keys`をそのまま使用する旧解釈を維持。送信失敗例外は旧APIどおり呼出元へ送出せず抑制する。内部診断を記録する場合もsecretを必ず秘匿化する |
+| `discord_text()` | `discord_text(content: str = "", index: int = 0, keys: str \| list[str] = "DISCORD_WEBHOOK", name: str \| None = None) -> bool` | Discord Webhookへテキストを送信する互換API（v0.2.0意味論）。`name`/`keys`は通知先名で`index`より優先し、不明名はWARNING＋`index`側へフォールバック、範囲外`index`はWARNING＋`False`。`keys`は`"ALL"`・リスト可。戻り値は全送信先の受付成功で、例外は送出せず`False`。`True`はRust通知キューへの受付成功（配送は非同期・再試行付き）であり、上流の同期送信成功とは厳密に異なる。secretは必ず秘匿化する |
 
 #### 10.4.3 ImageProcPythonCommand
 
@@ -562,7 +562,7 @@ type DialogueList = list[DialogueEntry]
 
 | メソッド | シグネチャ | 説明 |
 |--------|-----------|-------------|
-| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] \| None = None, keys: str \| list[str] = "DISCORD_WEBHOOK") -> None` | Discord webhook経由でテキスト+スクリーンショット送信。`index`: 複数webhook設定時のインデックス（0始まり）。`keys`: 環境変数/設定キー名 |
+| `discord_image()` | `discord_image(content: str = "", index: int = 0, crop_fmt: CropFmt = "", crop: list[int] \| None = None, keys: str \| list[str] = "DISCORD_WEBHOOK", name: str \| None = None) -> bool` | Discord webhook経由でテキスト+スクリーンショット送信（v0.2.0意味論）。送り先解決は`discord_text()`と同一（`name`/`keys`優先、`index`フォールバック、`"ALL"`・リスト可）。`crop_fmt`に切り抜き形式名以外の文字列を渡した旧来呼び出しは`name`指定とみなす。戻り値は全送信先の受付成功で、例外は送出せず`False` |
 | `LINE_image()` | `LINE_image(txt: str, crop_fmt: str = '', crop: list[int] \| None = None, token: str = '') -> None` | No-opスタブ（LINEサービスEOL）。WARNINGログを出力 |
 
 **トリミングパラメータ**:

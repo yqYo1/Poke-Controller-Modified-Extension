@@ -80,8 +80,8 @@
 | 10.4.2 dialog群 show_dialog/is_dialog_closed/wait_dialog/dialogue6widget*2/dialogue | 実装済み | PythonCommandBase.pyi:104-132; python.rs:1030 dialog_open、:1054 dialog_status、:1062 dialog_close_all; protocol.json:159-165 |
 | 10.4.2 socket群（8関数） | 実装済み | PythonCommandBase.pyi:133-140; net.pyi:3-10; python.rs:1066 network; protocol.json:166-173+265-272 |
 | 10.4.2 MQTT群（8関数） | 実装済み | PythonCommandBase.pyi:141-148; net.pyi:11-18; python.rs:1066 network; protocol.json:174-181+273-280 |
-| 10.4.2 通知 LINE_text（no-op）/discord_text | 実装済み | PythonCommandBase.pyi:149-150; python.rs:1073 notification; protocol.json:182-183 |
-| 10.4.3 通知 discord_image/LINE_image + CropFmt/ScreenshotFormat | 実装済み | PythonCommandBase.pyi:15-16、:159-160; python.rs:1073、:911 save_image、:935 popup_image |
+| 10.4.2 通知 LINE_text（no-op）/discord_text | 実装済み | PythonCommandBase.pyi:150（v0.2.0意味論：`name`/`keys`優先、`-> bool`）; python.rs:1843 resolve、:1856 keys、:2215 discord_text、:1073 notification; protocol.json:182-183 |
+| 10.4.3 通知 discord_image/LINE_image + CropFmt/ScreenshotFormat | 実装済み | PythonCommandBase.pyi:15-16、:159（v0.2.0意味論：crop_fmt-as-name、`-> bool`）; python.rs:3311 discord_image、:1073、:911 save_image、:935 popup_image |
 | 10.4.3 ctor + camera/cam/gui/canvas注入 | 実装済み | PythonCommandBase.pyi:153-156、:158 __init__; protocol.json:186-189 |
 | 10.4.3 Camera（image_bgr/readFrame/isOpened/fps/capture_size/flip/flip_mode/set_flip/saveCapture+内部5） | 実装済み | PythonCommandBase.pyi:21-43; python.rs:880 camera_state、:888 camera_control、:895 camera_frame、:911 save_image; protocol.json:207-220 |
 | 10.4.3 CaptureArea（ImgRect/ImgText/delete*/setFps/setShowsize/rightMouse/touchscreen/saveCapture/show_size/is_show_var+mouse/range関数） | 実装済み | PythonCommandBase.pyi:45-71; python.rs:929 overlay; protocol.json:223-246 |

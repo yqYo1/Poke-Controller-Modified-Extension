@@ -15,6 +15,7 @@ from scripts.compatibility.inventory import (
     Baseline,
     require_mapping,
     require_sequence,
+    run_git,
 )
 from scripts.compatibility.promote import (
     append_decision,
@@ -27,7 +28,13 @@ from scripts.compatibility.promote import (
     validate_decision_results,
     validate_history,
 )
-from scripts.compatibility.public_api import collect_public_api, compare_public_api
+from scripts.compatibility.public_api import (
+    collect_public_api,
+    collect_script_api_surface,
+    collect_script_local_members,
+    compare_public_api,
+    unresolved_script_references,
+)
 from scripts.compatibility.roll import (
     changed_script_paths,
     discover_candidates,
@@ -36,6 +43,7 @@ from scripts.compatibility.roll import (
 from scripts.compatibility.runner import (
     command_root_for,
     main,
+    materialize_command_files,
     run_managed_discovery,
     script_domains,
     serialized_report,
@@ -901,6 +909,7 @@ def run_evaluate_candidate(
     baseline_source: str | None,
     candidate_source: str,
     baseline_api_cache: dict[str, dict[str, object]],
+    layer_api: dict[str, object] | None = None,
 ) -> dict[str, object]:
     baseline_root = tmp_path / "baseline"
     if baseline_source is not None:
@@ -922,8 +931,15 @@ def run_evaluate_candidate(
     def fake_verify(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {"scripts": []}
 
+    @contextmanager
+    def fake_command_files(repository: Path, _commit: str) -> Generator[Path]:
+        yield repository
+
     monkeypatch.setattr(
         "scripts.compatibility.roll.materialize_repository", fake_materialize
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.roll.materialize_command_files", fake_command_files
     )
     monkeypatch.setattr("scripts.compatibility.roll.inventory_baseline", fake_inventory)
     monkeypatch.setattr("scripts.compatibility.roll.verify_baseline", fake_verify)
@@ -959,6 +975,7 @@ def run_evaluate_candidate(
         protocol,
         {},
         baseline_api_cache,
+        layer_api if layer_api is not None else {"classes": {}},
     )
 
 
@@ -1034,3 +1051,214 @@ def test_evaluate_candidate_fails_closed_without_baseline_api_files(
     )
     assert result["result"] == "failed"
     assert result["diagnostic_code"] == "ValueError"
+
+
+def test_script_api_surface_resolves_typings_inheritance(tmp_path: Path) -> None:
+    typings = tmp_path / "Commands"
+    typings.mkdir()
+    (typings / "CommandBase.pyi").write_text(
+        "class Command:\n    def isRunning(self) -> bool: ...\n",
+        encoding="utf-8",
+    )
+    (typings / "PythonCommandBase.pyi").write_text(
+        "from Commands.Keys import KeyPress\n"
+        "\n"
+        "class PythonCommand(Command):\n"
+        "    keys: KeyPress\n"
+        "\n"
+        "    def press(self, button) -> None: ...\n",
+        encoding="utf-8",
+    )
+    (typings / "Keys.pyi").write_text(
+        "class KeyPress:\n    def input(self, key) -> None: ...\n",
+        encoding="utf-8",
+    )
+    surface = collect_script_api_surface(typings)
+    classes = require_mapping(surface["classes"], "classes")
+    python_command = require_sequence(classes["PythonCommand"], "members")
+    assert "press" in python_command
+    assert "keys" in python_command
+    assert "isRunning" in python_command
+
+
+def test_script_api_surface_requires_classes(tmp_path: Path) -> None:
+    typings = tmp_path / "Commands"
+    typings.mkdir()
+    with pytest.raises(ValueError, match="no script API classes"):
+        collect_script_api_surface(typings)
+
+
+def test_unresolved_script_references_separates_local_layer_and_missing(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "sample.py"
+    script.write_text(
+        "class Sample(ImageProcPythonCommand):\n"
+        "    def __init__(self, cam):\n"
+        "        super().__init__(cam)\n"
+        "        self.helper_value = 0\n"
+        "\n"
+        "    def helper(self):\n"
+        "        return self.helper_value\n",
+        encoding="utf-8",
+    )
+    local = collect_script_local_members(script)
+    assert {"helper", "helper_value"} <= local
+    surface: dict[str, object] = {
+        "classes": {"ImageProcPythonCommand": ["press", "cam", "keys"]}
+    }
+    unresolved = unresolved_script_references(
+        ["self.press", "self.helper", "self.KeyBoard_Init", "Commands.Keys"],
+        ["ImageProcPythonCommand"],
+        local,
+        surface,
+    )
+    assert unresolved == ["self.KeyBoard_Init"]
+
+
+def test_evaluate_candidate_flags_missing_layer_api_in_changed_scripts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    baseline_root = write_commands_fixture(
+        tmp_path / "baseline", {"PythonCommandBase.py": BASELINE_COMMANDS_SOURCE}
+    )
+    candidate_root = write_commands_fixture(
+        tmp_path / "candidate", {"PythonCommandBase.py": BASELINE_COMMANDS_SOURCE}
+    )
+    script_path = "SerialController/Commands/PythonCommands/Keyboard_sample.py"
+    new_script = candidate_root.joinpath(*script_path.split("/"))
+    new_script.parent.mkdir(parents=True)
+    new_script.write_text(
+        "class KeyboardSample(PythonCommand):\n"
+        "    def do(self):\n"
+        "        self.KeyBoard_Init()\n"
+        "        self.press(1)\n",
+        encoding="utf-8",
+    )
+    roots = {"yqyo1-extension": baseline_root, "candidate-one": candidate_root}
+
+    @contextmanager
+    def fake_materialize(entry: Baseline, _overrides: object) -> Generator[Path]:
+        yield roots[entry.identifier]
+
+    def fake_inventory(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "id": "candidate-one",
+            "scripts": [
+                {
+                    "path": script_path,
+                    "sha256": "0" * 64,
+                    "referenced_api": ["self.KeyBoard_Init", "self.press"],
+                    "classes": [
+                        {
+                            "name": "KeyboardSample",
+                            "bases": ["PythonCommand"],
+                            "line": 1,
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def fake_verify(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"scripts": [{"path": script_path, "runtime_evidence": []}]}
+
+    @contextmanager
+    def fake_command_files(repository: Path, _commit: str) -> Generator[Path]:
+        yield repository
+
+    monkeypatch.setattr(
+        "scripts.compatibility.roll.materialize_repository", fake_materialize
+    )
+    monkeypatch.setattr(
+        "scripts.compatibility.roll.materialize_command_files", fake_command_files
+    )
+    monkeypatch.setattr("scripts.compatibility.roll.inventory_baseline", fake_inventory)
+    monkeypatch.setattr("scripts.compatibility.roll.verify_baseline", fake_verify)
+    protocol = tmp_path / "protocol.json"
+    protocol.write_text("{}\n", encoding="utf-8")
+    baseline = Baseline(
+        identifier="yqyo1-extension",
+        repository="https://example.invalid/repository.git",
+        commit="a" * 40,
+        script_roots=("SerialController/Commands/PythonCommands",),
+    )
+    candidate: dict[str, object] = {
+        "id": "candidate-one",
+        "baseline_id": "yqyo1-extension",
+        "repository": "https://example.invalid/repository.git",
+        "commit": "b" * 40,
+    }
+    result = evaluate_candidate(
+        candidate,
+        baseline,
+        {"scripts": []},
+        {
+            "summary": {
+                "result": "passed",
+                "baseline_count": 3,
+                "script_count": 103,
+            },
+            "results_sha256": "d" * 64,
+        },
+        tmp_path / "compatibility",
+        tmp_path / "worker",
+        tmp_path / "site-packages",
+        protocol,
+        {},
+        {},
+        {"classes": {"PythonCommand": ["press", "wait", "finish"]}},
+    )
+    assert result["result"] == "unverified"
+    runtime = require_mapping(result["runtime"], "runtime")
+    assert runtime["result"] == "unverified"
+    assert runtime["unverified"] == 1
+    assert runtime["deterministic_scripts"] == []
+    missing = require_sequence(runtime["missing_api"], "missing_api")
+    assert missing == [{"path": script_path, "missing": ["self.KeyBoard_Init"]}]
+    failures = promotion_failures({"id": "candidate-one", "commit": "b" * 40}, result)
+    assert "runtime_unverified" in failures
+
+
+def test_materialize_command_files_extracts_from_fetch_only_repository(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    commands = repository / "SerialController" / "Commands"
+    commands.mkdir(parents=True)
+    (commands / "PythonCommandBase.py").write_text(
+        "class PythonCommand:\n    pass\n", encoding="utf-8"
+    )
+    (commands / "PythonCommands").mkdir()
+    (commands / "PythonCommands" / "sample.py").write_text(
+        "print('sample')\n", encoding="utf-8"
+    )
+    run_git(repository, ["init", "--quiet"])
+    run_git(repository, ["add", "-A"])
+    run_git(
+        repository,
+        [
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "user.name=fixture",
+            "commit",
+            "--quiet",
+            "-m",
+            "fixture",
+        ],
+    )
+    commit = run_git(repository, ["rev-parse", "HEAD"]).decode().strip()
+    # Remove the checkout so only the object database remains: extraction must
+    # work from a fetch-only repository, like the rolling evaluation does.
+    for path in list(commands.rglob("*")):
+        if path.is_file():
+            path.unlink()
+    with materialize_command_files(repository, commit) as extracted:
+        assert (
+            extracted / "SerialController" / "Commands" / "PythonCommandBase.py"
+        ).is_file()
+        assert (
+            extracted / "SerialController" / "Commands" / "PythonCommands" / "sample.py"
+        ).is_file()

@@ -16,6 +16,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Never, cast
 
@@ -38,7 +39,7 @@ from scripts.compatibility.promote import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Generator, Mapping
 
 
 def invalid_value(message: str) -> Never:
@@ -144,6 +145,28 @@ def materialize_scripts(
             f"{baseline.identifier}: archive has no materialized command root"
         )
     return command_root
+
+
+COMMAND_FILES_ROOT = "SerialController/Commands"
+
+
+@contextmanager
+def materialize_command_files(repository: Path, commit: str) -> Generator[Path]:
+    """Extract the ``SerialController/Commands`` tree at *commit* into a temp directory.
+
+    ``materialize_repository`` yields a fetch-only repository with no checkout, so
+    file contents (public API modules, scripts) are read through ``git archive``
+    exactly like the corpus materialization does.
+    """
+    archive = run_git(
+        repository,
+        ["archive", "--format=tar", commit, "--", COMMAND_FILES_ROOT],
+    )
+    with tempfile.TemporaryDirectory(prefix="pokecon-command-files-") as raw_directory:
+        destination = Path(raw_directory)
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as source:
+            source.extractall(destination, filter="data")
+        yield destination
 
 
 def run_managed_discovery(

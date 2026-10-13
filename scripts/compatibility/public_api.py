@@ -286,3 +286,111 @@ def compare_public_api(
             f"{path} > {name}" for name in current_names if name not in recorded_names
         ]
     return broken, unrecorded
+
+
+def _class_members(node: ast.ClassDef) -> set[str]:
+    members: set[str] = set()
+    for item in node.body:
+        if isinstance(item, _FUNCTION_NODES):
+            members.add(item.name)
+            members.update(
+                attribute for _, attribute in _assigned_attributes(item, "self")
+            )
+        else:
+            members.update(_assigned_names(item))
+    return members
+
+
+def collect_script_api_surface(typings_directory: Path) -> dict[str, object]:
+    """Collect the script-visible API surface from the generated typings (``.pyi``).
+
+    Returns ``{"classes": {name: [members]}}`` with each class's own members merged
+    with those inherited from typings-known bases.
+    """
+    own: dict[str, set[str]] = {}
+    bases: dict[str, list[str]] = {}
+    for file_path in sorted(typings_directory.glob("*.pyi")):
+        source = decode_python_source(file_path.read_bytes(), str(file_path))
+        try:
+            tree = ast.parse(source, filename=str(file_path))
+        except SyntaxError as error:
+            message = f"{file_path}: typings parse failed: {error}"
+            raise ValueError(message) from error
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                own[node.name] = _class_members(node)
+                bases[node.name] = [ast.unparse(base) for base in node.bases]
+    if not own:
+        invalid_value(f"no script API classes found in {typings_directory}")
+
+    resolved: dict[str, set[str]] = {}
+
+    def resolve(name: str, seen: set[str]) -> set[str]:
+        if name in resolved:
+            return resolved[name]
+        if name in seen or name not in own:
+            return set()
+        members = set(own[name])
+        for base in bases.get(name, []):
+            members |= resolve(base, {*seen, name})
+        resolved[name] = members
+        return members
+
+    return {"classes": {name: sorted(resolve(name, set())) for name in own}}
+
+
+def collect_script_local_members(source_path: Path) -> set[str]:
+    """Members a script defines for itself (class methods, attributes, self assignments)."""
+    source = decode_python_source(source_path.read_bytes(), str(source_path))
+    try:
+        tree = ast.parse(source, filename=str(source_path))
+    except SyntaxError as error:
+        message = f"{source_path}: script parse failed: {error}"
+        raise ValueError(message) from error
+    members: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            members.update(_class_members(node))
+    return members
+
+
+def unresolved_script_references(
+    references: list[str],
+    bases: list[str],
+    local_members: set[str],
+    surface: dict[str, object],
+) -> list[str]:
+    """References whose first ``self.`` segment resolves to neither the script nor the layer.
+
+    The comparison is static and first-segment only: ``self.keys.ser.writeRow`` is
+    checked as ``keys``. Non-``self.`` references are not judged here.
+    """
+    classes = require_mapping(surface.get("classes"), "script API surface classes")
+    layer_members: set[str] = set()
+    known_base = False
+    for base in bases:
+        if base not in classes:
+            continue
+        known_base = True
+        layer_members.update(
+            item
+            for item in require_sequence(classes.get(base), "class members")
+            if isinstance(item, str)
+        )
+    if not known_base:
+        # No typings-known base: fall back to the union of every known class.
+        for name in classes:
+            layer_members.update(
+                item
+                for item in require_sequence(classes.get(name), "class members")
+                if isinstance(item, str)
+            )
+    missing: list[str] = []
+    for reference in references:
+        parts = reference.split(".")
+        if not reference.startswith("self.") or len(parts) < 2 or not parts[1]:
+            continue
+        root = parts[1]
+        if root not in local_members and root not in layer_members:
+            missing.append(reference)
+    return sorted(set(missing))

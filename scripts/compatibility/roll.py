@@ -31,13 +31,17 @@ from scripts.compatibility.promote import (
 )
 from scripts.compatibility.public_api import (
     collect_public_api,
+    collect_script_api_surface,
+    collect_script_local_members,
     compare_public_api,
     public_api_file_count,
+    unresolved_script_references,
 )
 from scripts.compatibility.runner import (
     FIXTURE_CATALOG,
     build_results,
     load_manifest,
+    materialize_command_files,
     serialized_results,
     verify_baseline,
 )
@@ -158,6 +162,65 @@ def changed_script_paths(
     }
 
 
+def missing_api_scripts(
+    execution: Mapping[str, object],
+    manifest: Mapping[str, object],
+    root: Path,
+    changed: set[str],
+    layer_api: dict[str, object],
+) -> list[dict[str, object]]:
+    """Changed scripts whose referenced public API is absent from the current layer."""
+    scripts_by_path: dict[str, Mapping[str, object]] = {}
+    for raw_script in require_sequence(manifest.get("scripts"), "manifest scripts"):
+        manifest_script = require_mapping(raw_script, "manifest script")
+        scripts_by_path[
+            require_string(manifest_script.get("path"), "manifest script path")
+        ] = manifest_script
+    root_resolved = root.resolve()
+    missing: list[dict[str, object]] = []
+    for raw_script in require_sequence(execution.get("scripts"), "executed scripts"):
+        script = require_mapping(raw_script, "executed script")
+        path = require_string(script.get("path"), "executed script path")
+        if path not in changed:
+            continue
+        manifest_script = scripts_by_path.get(path)
+        if manifest_script is None:
+            continue
+        references = [
+            item
+            for item in require_sequence(
+                manifest_script.get("referenced_api"), "referenced_api"
+            )
+            if isinstance(item, str)
+        ]
+        if not references:
+            continue
+        bases = [
+            item
+            for raw_class in require_sequence(
+                manifest_script.get("classes"), "script classes"
+            )
+            for item in require_sequence(
+                require_mapping(raw_class, "script class").get("bases"), "class bases"
+            )
+            if isinstance(item, str)
+        ]
+        source = root / path
+        resolved_source = source.resolve(strict=False)
+        if (
+            resolved_source != root_resolved
+            and root_resolved not in resolved_source.parents
+        ):
+            invalid_value(f"manifest script path escapes its sandbox: {path}")
+        local_members = collect_script_local_members(resolved_source)
+        unresolved = unresolved_script_references(
+            references, bases, local_members, layer_api
+        )
+        if unresolved:
+            missing.append({"path": path, "missing": unresolved})
+    return missing
+
+
 def fixed_chain_summary(results: Mapping[str, object]) -> dict[str, object]:
     summary = require_mapping(results.get("summary"), "fixed result summary")
     if summary.get("result") != "passed" or summary.get("baseline_count") != 3:
@@ -181,6 +244,7 @@ def evaluate_candidate(
     protocol_path: Path,
     repository_overrides: Mapping[str, Path],
     baseline_api_cache: dict[str, dict[str, object]],
+    layer_api: dict[str, object],
 ) -> dict[str, object]:
     candidate_id = require_string(candidate.get("id"), "candidate id")
     commit = require_string(candidate.get("commit"), "candidate commit")
@@ -199,10 +263,15 @@ def evaluate_candidate(
         overrides = {candidate_id: override} if override is not None else {}
         baseline_api = baseline_api_cache.get(baseline.identifier)
         if baseline_api is None:
-            with materialize_repository(
-                baseline, repository_overrides
-            ) as baseline_materialized:
-                baseline_api = collect_public_api(baseline_materialized)
+            with (
+                materialize_repository(
+                    baseline, repository_overrides
+                ) as baseline_materialized,
+                materialize_command_files(
+                    baseline_materialized, baseline.commit
+                ) as baseline_files,
+            ):
+                baseline_api = collect_public_api(baseline_files)
             if public_api_file_count(baseline_api) == 0:
                 invalid_value(
                     f"baseline {baseline.identifier} exposed no comparable "
@@ -221,11 +290,19 @@ def evaluate_candidate(
                 worker,
                 site_packages,
             )
-            candidate_api = collect_public_api(materialized)
+            with materialize_command_files(materialized, commit) as candidate_files:
+                candidate_api = collect_public_api(candidate_files)
+                changed = changed_script_paths(fixed_manifest, candidate_manifest)
+                missing_api = missing_api_scripts(
+                    execution, candidate_manifest, candidate_files, changed, layer_api
+                )
         breaking_changes, unrecorded_additions = compare_public_api(
             baseline_api, candidate_api
         )
-        changed = changed_script_paths(fixed_manifest, candidate_manifest)
+        missing_paths = {
+            require_string(entry.get("path"), "missing api path")
+            for entry in missing_api
+        }
         unverified: list[dict[str, object]] = []
         deterministic: list[str] = []
         for raw_script in require_sequence(
@@ -245,13 +322,16 @@ def evaluate_candidate(
             ]
             if hardware_domains:
                 unverified.append({"path": path, "domains": hardware_domains})
+            elif path in missing_paths:
+                continue
             else:
                 deterministic.append(path)
-        runtime_result = "passed" if not unverified else "unverified"
+        unverified_total = len(unverified) + len(missing_api)
+        runtime_result = "passed" if not unverified_total else "unverified"
         if breaking_changes:
             candidate_result = "breaking"
         else:
-            candidate_result = "passed" if not unverified else "unverified"
+            candidate_result = "passed" if not unverified_total else "unverified"
         return {
             "schema_version": 1,
             "candidate_id": candidate_id,
@@ -264,8 +344,9 @@ def evaluate_candidate(
                 "result": runtime_result,
                 "changed_or_added": len(changed),
                 "deterministic_scripts": sorted(deterministic),
-                "unverified": len(unverified),
+                "unverified": unverified_total,
                 "hardware_gates": unverified,
+                "missing_api": missing_api,
             },
             "api_surface": {
                 "result": "breaking" if breaking_changes else "non_breaking",
@@ -355,6 +436,9 @@ def evaluate_pending(
     decision_timestamp = timestamp or datetime.now(UTC).isoformat().replace(
         "+00:00", "Z"
     )
+    layer_api = collect_script_api_surface(
+        Path(__file__).resolve().parents[2] / "python/pokecon/typings/Commands"
+    )
     decisions: list[dict[str, object]] = []
     baseline_api_cache: dict[str, dict[str, object]] = {}
     for candidate in pending:
@@ -377,6 +461,7 @@ def evaluate_pending(
             protocol_path,
             repository_overrides,
             baseline_api_cache,
+            layer_api,
         )
         persist_result(result_directory, candidate_id, report)
         decision = append_decision(

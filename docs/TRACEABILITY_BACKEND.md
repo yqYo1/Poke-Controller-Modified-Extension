@@ -27,7 +27,7 @@
 | §4.4 動的設定=init.py/init.lua | 実装済み | `src/settings/scaffold.rs:44-45` init.py/init.lua; `src/worker_binary/dynamic/engine.rs:1501` fixture |
 | §4.6.1 固定3-SHA不変ベースライン | 実装済み | `registry/compatibility.json:9,26,43` 3 SHA; `compatibility/fixed-manifest.json:4,1694,3319` 同 |
 | §4.6.1 ブランチ参照のみ+load-and-run検証 | 部分的 | `registry/compatibility.json:8-9` reference_branch+規範commit; expectations all_resolve（ブランチ非規範フラグなし） |
-| §4.6.2 ローリング監視+二重ゲート（実行時+表面、不存在証明なし） | 実装済み | `registry/ci.json:317` ローリング評価; `src/compatibility_tool.rs:24` 不変コーパス探索; `scripts/compatibility/public_api.py:186`/`:237` AST公開API抽出・比較; `scripts/compatibility/roll.py:200`/`:225` api_surface判定配線; `.github/workflows/compatibility-roll.yml:27-30` ワークフロー実在 |
+| §4.6.2 ローリング監視+二重ゲート（実行時+表面、不存在証明なし） | 実装済み | `registry/ci.json:317` ローリング評価; `src/compatibility_tool.rs:24` 不変コーパス探索; `scripts/compatibility/public_api.py:187`/`:238` AST公開API抽出・比較、`:304`/`:357` スクリプト参照解決; `scripts/compatibility/roll.py:264`/`:293` APIサーフェス判定配線、`:296` missing_api配線、`:351` 判定結果反映; `scripts/compatibility/runner.py:154` git archive抽出; `.github/workflows/compatibility-roll.yml:27-30` ワークフロー実在 |
 | §4.6.2 追加専用+失敗コミット隔離/診断 | 実装済み | `registry/compatibility.json:60` append_only + `:73` non_promotable_results; `compatibility/promotions.jsonl:1` genesis連鎖（履歴は1件） |
 | §6.1.6 バックエンド自動選択ネイティブ取込 | 部分的 | `src/camera/native.rs:4` + `:21-22` Linux本番モジュール; `:29` v4l::buffer::Type; opencv取込クレートなし（※仕様はOpenCV必須のため意図的乖離） |
 | §6.1.6 非UIブロッキング非同期取込 | 実装済み | `src/camera/manager.rs:112` 専用取込スレッド; `:153` thread-affine; `src/application_backend.rs:492` spawn_blocking(enumerate) |
@@ -170,7 +170,7 @@
 
 ## 集計
 
-- 実装済み 115 / 部分的 11 / 未実装 0 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。11.5.1のOS-native watcher実装と17件のfocused testを反映。7.9.6 reference harnessのsource／Nix integrationと7 focused testを反映。6.1aのAPIサーフェス比較実装により§4.6.2監視→実装済み）
+- 実装済み 115 / 部分的 11 / 未実装 0 / 仕様のみ 1（計127。独立監査で2件の判定修正: 11.4.1.5→実装済み、11.4.3→部分的。7.8.4のSerialDisconnected mappingを現行source／testへ反映。11.5.1のOS-native watcher実装と17件のfocused testを反映。7.9.6 reference harnessのsource／Nix integrationと7 focused testを反映。6.1aのAPIサーフェス比較実装により§4.6.2監視→実装済み。6.1bのスクリプト参照解決（未解決参照のunverified化）とgit archive経由の実環境読取を反映）
 - 部分的11: §1.2 UI温存、§4.6.1参照専用、§6.1.6自動選択、7.8.1 OOB、7.8.4 log、7.9.2 SHM、10.4.3 tk橋渡し、付録B、11.1 none、11.4.3、§14.6 LSP
 - 未実装0
 - 仕様のみ1: §1.2 frontend技術選択

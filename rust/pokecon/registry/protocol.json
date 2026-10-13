@@ -115,7 +115,7 @@
         { "module": "Commands.McuCommandBase", "symbols": ["McuCommand"] },
         {
           "module": "Commands.Keys",
-          "symbols": ["Button", "Hat", "Direction", "Touchscreen", "KeyPress", "Stick"]
+          "symbols": ["Button", "Hat", "Direction", "Touchscreen", "KeyPress", "Stick", "InputSource"]
         },
         { "module": "Commands.SwitchKeyboard", "symbols": ["KEY"] }
       ],
@@ -254,8 +254,9 @@
           "ReleaseRangeSS"
         ],
         "McuCommand": ["start", "end"],
-        "KeyPress": ["input", "inputEnd", "hold", "holdEnd", "holdChange", "neutral", "end", "ser"],
-        "Sender": ["writeRow", "write", "send_keyboard"],
+        "KeyPress": ["input", "inputEnd", "hold", "holdEnd", "holdChange", "neutral", "end", "ser", "source", "init_hat", "_send", "release", "serialcommand_direct_send"],
+        "SendFormat": ["format", "setButton", "unsetButton", "resetAllButtons", "setHat", "unsetHat", "setAnyDirection", "unsetDirection", "fixOtherAxis", "resetAllDirections", "setTouchscreen", "unsetTouchscreen", "convert2str", "convert2list", "convert2list2"],
+        "Sender": ["writeRow", "write", "send_keyboard", "writeRow_wo_perf_counter", "send_state", "release", "release_all", "transport"],
         "Widget": ["value", "has_result"]
       },
       "module_functions": {

@@ -754,6 +754,9 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 - `self.keys.ser.writeRow()` でシリアル行書き込み（末尾に改行自動追加）
 - **入力の合成優先度（2026-10-12決定: 手動優先）**: 同一要素（スティック・Hat・タッチ）を複数の入力元が同時に主張した場合、手動入力（キーボード／マウス、ブラウザゲームパッド、ハードウェアコントローラー）がスクリプト入力を上回る。上流`InputSource`（`COMMAND`＜`KEYBOARD`＜`MOUSE`＜`PROCON`）の順序に準拠し、動的設定入力は最上位を維持する。ボタンは入力元を問わず論理和で合成する
 - **注**: `self.keys` は互換性維持のための旧API。ユーザースクリプトからは引き続き `self.keys` を使用する
+- `InputSource(IntEnum)`: 送信の入力源（`COMMAND`=0（自動化スクリプト）＜`KEYBOARD`=1＜`MOUSE`=2＜`PROCON`=3。値が大きいほど優先度が高い）。`KeyPress(ser, source=InputSource.COMMAND)`は`source`を互換引数として受理し、本実装の合成優先度は下記の規則に従う
+- `KeyPress`の互換内部補助: `init_hat()`（no-op）、`_send()`（合成はRust所有のためno-op）、`release()`（この入力源の入力をすべて離す）、`serialcommand_direct_send(serialcommands, waittime)`（合成を経由せず行を順に送る）。クラス属性`serial_data_format_name`は互換のため保持する
+- `SendFormat`: コントローラーの1状態（`format`。ボタン・十字キー・スティック・タッチ）と送信データの相互変換（旧API互換）。`setButton`／`unsetButton`／`resetAllButtons`／`setHat`／`unsetHat`／`setAnyDirection`／`unsetDirection`／`fixOtherAxis`／`resetAllDirections`／`setTouchscreen`／`unsetTouchscreen`と、`convert2str`（Defaultの行）／`convert2list`（Qingpiの11バイト）／`convert2list2(mode=)`（3DS Controllerの11バイト。mode 0=FW:-x.3、1=FW:x.4-）を持つ。`Direction.getTilting()`は倒れている軸（`Tilt`）の一覧を返す
 
 #### 10.5.2 Sender
 
@@ -763,6 +766,11 @@ self.displayText([10, 10], "HP: 100/100", ms=3000, color="green")
 | `writeRow()` | `writeRow(row: str) -> None` | シリアル行を書き込み（末尾に改行を自動追加） |
 | `write()` | `write(data: bytes \| bytearray \| memoryview \| list[int]) -> None` | 直接シリアル書き込み（IPCプロキシ経由）。変換・互換動作は下記に従う |
 | `send_keyboard()` | `send_keyboard(item: str \| tuple[int, int]) -> None` | キーボード入力の1手順を送る（§10.4.2のキーボードメソッドから使用する）。文字列は行としてそのまま送信し、`(モード, キー)`の値の組は現在のコントローラー状態と合成した11バイトフレームとして送信する（NX形式、§11.4.1.3） |
+| `writeRow_wo_perf_counter()` | `writeRow_wo_perf_counter(row: str, is_show: bool = False) -> None` | 計測なしの行書き込み（本実装の`writeRow`は常に計測なし） |
+| `send_state()` | `send_state(source: object, priority: int, state: dict) -> None` | v0.2.0互換。入力源の状態（`SendFormat.format`形式）をスクリプト入力源へ差分適用する（ボタンは押下差分、十字キー・スティック・タッチは変化時に適用）。合成と優先度はRustのarbiterが所有し、`source`／`priority`は受理のみ |
+| `release()` | `release(source: object, end_row: str \| None = None) -> bool` | v0.2.0互換。この入力源の入力を離す（本実装ではスクリプト入力をニュートラルへ戻す）。`end_row`指定時はその行を送る。戻り値は常に`False`（他の入力源の所有はRust側） |
+| `release_all()` | `release_all(end_row: str \| None = None) -> None` | v0.2.0互換。全入力源の入力を離す（メニューの「すべての入力を離す」相当） |
+| `transport()` | `transport() -> object` | 今のData Formatの互換送信方式（`name`／`supports_text`／`end_row`／`has_touchscreen`／`button_conversion`／`keyboard_steps()`）を返す互換オブジェクト |
 
 `write()`は`to_bytes()`互換変換として次を適用する:
 

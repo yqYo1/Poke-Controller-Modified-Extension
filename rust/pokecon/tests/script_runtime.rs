@@ -742,6 +742,115 @@ class ExerciseKeyboardUnsupported(PythonCommand):
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn script_worker_composition_compat_surface_covers_sources_and_formats() {
+    const SOURCE: &str = r#"
+from Commands.Keys import Button, Direction, Hat, InputSource, SendFormat, Tilt
+from Commands.PythonCommandBase import PythonCommand
+
+
+class ExerciseComposition(PythonCommand):
+    def do(self):
+        assert self.keys.source == InputSource.COMMAND
+        fmt = SendFormat()
+        fmt.setButton([Button.A, Button.B])
+        assert fmt.format["btn"] == int(Button.A) | int(Button.B)
+        fmt.setHat([Hat.RIGHT])
+        fmt.unsetHat()
+        assert fmt.format["hat"] == int(Hat.CENTER)
+        fmt.setAnyDirection([Direction.UP])
+        assert (fmt.format["lx"], fmt.format["ly"]) == (Direction.UP.x, 255 - Direction.UP.y)
+        assert fmt.convert2str().startswith("0x")
+        listing = fmt.convert2list2(0)
+        assert len(listing) == 11 and listing[0] == 0xA1, listing
+        assert Tilt.UP in Direction.UP.getTilting()
+        self.keys.ser.send_state(
+            self.keys,
+            0,
+            {
+                "btn": int(Button.A),
+                "hat": int(Hat.CENTER),
+                "lx": 128,
+                "ly": 128,
+                "rx": 128,
+                "ry": 128,
+                "sx": 0,
+                "sy": 0,
+            },
+        )
+        self.keys.ser.send_state(
+            self.keys,
+            0,
+            {
+                "btn": 0,
+                "hat": int(Hat.CENTER),
+                "lx": 128,
+                "ly": 128,
+                "rx": 128,
+                "ry": 128,
+                "sx": 0,
+                "sy": 0,
+            },
+        )
+        self.keys.release()
+        self.keys.serialcommand_direct_send(["compat-row"], [0])
+        transport = self.keys.ser.transport()
+        assert transport.name == "Default" and transport.supports_text
+        assert transport.keyboard_steps("init") == [("end", 0.05)]
+        self.keys.ser.writeRow_wo_perf_counter("perf-row")
+        self.keys.ser.release_all(end_row="end")
+"#;
+
+    let (_temporary, command_root, data_root) = create_profile();
+    std::fs::write(command_root.join("exercise.py"), SOURCE).expect("script fixture is written");
+    let host = Arc::new(RecordingScriptHost::default());
+    *host.data_format.lock().unwrap() = "Default".to_owned();
+    let (worker, client) = spawn_client(host.clone()).await;
+    initialize(&client, &command_root, &data_root).await;
+
+    let result = client
+        .execute(&ScriptExecuteRequest {
+            path: "exercise.py".into(),
+            class_name: "ExerciseComposition".to_owned(),
+            tags: Vec::new(),
+        })
+        .await
+        .expect("script execution request succeeds");
+    assert_eq!(result.outcome, ScriptExecutionOutcome::Completed);
+    {
+        let rows = host.serial_rows.lock().unwrap();
+        assert!(rows.contains(&"compat-row".to_owned()), "{rows:?}");
+        assert!(rows.contains(&"perf-row".to_owned()), "{rows:?}");
+        assert!(rows.contains(&"end".to_owned()), "{rows:?}");
+    }
+    {
+        let inputs = host.controller_inputs.lock().unwrap();
+        assert!(
+            inputs.iter().any(|request| {
+                request.action == ScriptInputAction::Press
+                    && request.controls
+                        == vec![ScriptControl::Button {
+                            button: ScriptButton::A,
+                        }]
+            }),
+            "{inputs:?}"
+        );
+        assert!(
+            inputs.iter().any(|request| {
+                request.action == ScriptInputAction::Release
+                    && request.controls
+                        == vec![ScriptControl::Button {
+                            button: ScriptButton::A,
+                        }]
+            }),
+            "{inputs:?}"
+        );
+    }
+    assert!(host.neutralizations.load(Ordering::Acquire) >= 2);
+
+    stop_worker(&worker).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn hold_change_switches_held_inputs_without_intermediate_release() {
     const SOURCE: &str = r"
 from Commands.PythonCommandBase import PythonCommand
@@ -920,6 +1029,7 @@ async fn runtime_signatures_match_generated_typings_and_command_meta_is_enforced
     let source = format!(
         r#"
 import ast
+import enum as _enum
 import importlib
 import inspect
 import pathlib
@@ -958,6 +1068,8 @@ def _runtime_default(value):
         return ("type", value.__name__)
     if isinstance(value, tuple):
         return ("tuple", tuple(_runtime_default(item) for item in value))
+    if isinstance(value, _enum.Enum):
+        return ("source", f"{{type(value).__name__}}.{{value.name}}")
     if value is None or isinstance(value, (bool, float, int, str)):
         return ("literal", value)
     return ("runtime", repr(value))

@@ -769,6 +769,7 @@ fn validate_runtime_surface(py: Python<'_>) -> PyResult<()> {
         ("CaptureArea", "Commands.PythonCommandBase"),
         ("McuCommand", "Commands.McuCommandBase"),
         ("KeyPress", "Commands.Keys"),
+        ("SendFormat", "Commands.Keys"),
         ("Sender", "Commands.Sender"),
         ("Widget", "Commands.dialogue"),
     ];
@@ -1151,6 +1152,7 @@ fn connection_error(error: ConnectionError) -> String {
 }
 
 const PYTHON_BOOTSTRAP: &str = r#"
+import collections as _collections
 import enum as _enum
 import inspect as _inspect
 import json as _json
@@ -1332,6 +1334,31 @@ class Direction:
     def __hash__(self):
         return hash((self.x, self.y, self.stick))
 
+    def getTilting(self):
+        """倒れている向きの一覧(X と Y の軸ごと。中央の軸は入らない)"""
+        tilting = []
+        if self.stick == Stick.LEFT:
+            if self.x < _CENTER:
+                tilting.append(Tilt.LEFT)
+            elif self.x > _CENTER:
+                tilting.append(Tilt.RIGHT)
+
+            if self.y < _CENTER - 1:
+                tilting.append(Tilt.DOWN)
+            elif self.y > _CENTER - 1:
+                tilting.append(Tilt.UP)
+        elif self.stick == Stick.RIGHT:
+            if self.x < _CENTER:
+                tilting.append(Tilt.R_LEFT)
+            elif self.x > _CENTER:
+                tilting.append(Tilt.R_RIGHT)
+
+            if self.y < _CENTER - 1:
+                tilting.append(Tilt.R_DOWN)
+            elif self.y > _CENTER - 1:
+                tilting.append(Tilt.R_UP)
+        return tilting
+
 
 Direction.UP = Direction(Stick.LEFT, 90, showName="UP")
 Direction.RIGHT = Direction(Stick.LEFT, 0, showName="RIGHT")
@@ -1368,6 +1395,268 @@ class Touchscreen:
 
     def __hash__(self):
         return hash((self.x, self.y))
+
+
+class Tilt(_enum.Enum):
+    """Direction.getTilting が返す、倒れている軸(右スティックは R_ 付き)"""
+
+    UP = _enum.auto()
+    DOWN = _enum.auto()
+    LEFT = _enum.auto()
+    RIGHT = _enum.auto()
+    R_UP = _enum.auto()
+    R_DOWN = _enum.auto()
+    R_LEFT = _enum.auto()
+    R_RIGHT = _enum.auto()
+
+
+class InputSource(_enum.IntEnum):
+    """シリアル送信の入力源(値が大きいほど優先度が高い)。
+
+    Hat・スティック・タッチは、倒されている入力源のうち優先度の高いものを採用し、
+    ボタンは全入力源の論理和を採用する。本実装の合成はRustのarbiterが同じ規則で行う。
+    """
+
+    COMMAND = 0
+    KEYBOARD = 1
+    MOUSE = 2
+    PROCON = 3
+
+
+_CENTER = 128
+_convert_hat_default = list(range(0, 9))
+_convert_hat_3ds_controller = [8, 0, 4, 0, 2, 0, 1, 0, 0]
+_conversion_default_button = {
+    Button.Y: Button.Y,
+    Button.B: Button.B,
+    Button.A: Button.A,
+    Button.X: Button.X,
+    Button.L: Button.L,
+    Button.R: Button.R,
+    Button.ZL: Button.ZL,
+    Button.ZR: Button.ZR,
+    Button.MINUS: Button.MINUS,
+    Button.PLUS: Button.PLUS,
+    Button.LCLICK: Button.LCLICK,
+    Button.RCLICK: Button.RCLICK,
+    Button.HOME: Button.HOME,
+    Button.CAPTURE: Button.CAPTURE,
+    Button.SELECT: Button.SELECT,
+    Button.START: Button.START,
+    Button.POWER: Button.POWER,
+    Button.WIRELESS: Button.WIRELESS,
+}
+_conversion_3ds_controller_button = {
+    Button.A: 1,
+    Button.B: 2,
+    Button.X: 4,
+    Button.Y: 8,
+    Button.L: 16,
+    Button.R: 32,
+    Button.HOME: 64,
+    Button.START: 128,
+    Button.SELECT: 256,
+    Button.POWER: 512,
+    Button.MINUS: 256,
+    Button.PLUS: 128,
+    Button.LCLICK: 512,
+    Button.RCLICK: 0,
+    Button.ZL: 0,
+    Button.ZR: 0,
+    Button.CAPTURE: 0,
+    Button.WIRELESS: 0,
+}
+
+
+class SendFormat:
+    """コントローラーの 1 つの状態(ボタン・十字キー・スティック・タッチ)と、
+    送るデータ(Default の行、Qingpi・3DS Controller の 11 バイト)の相互変換。"""
+
+    format = None
+
+    def __init__(self):
+        self.format = _collections.OrderedDict(
+            [
+                ("btn", 0),
+                ("hat", Hat.CENTER),
+                ("lx", _CENTER),
+                ("ly", _CENTER),
+                ("rx", _CENTER),
+                ("ry", _CENTER),
+                ("sx", 0),
+                ("sy", 0),
+            ]
+        )
+        self.L_stick_changed = False
+        self.R_stick_changed = False
+        self.Hat_pos = Hat.CENTER
+
+    def setButton(self, btns, convert=None):
+        """btns のボタンを押した状態にする(convert: Button -> 送るビット の対応)"""
+        if convert is None:
+            convert = _conversion_default_button
+        for btn in btns:
+            self.format["btn"] |= convert[btn]
+
+    def unsetButton(self, btns, convert=None):
+        """btns のボタンを離した状態にする(convert: Button -> 送るビット の対応)"""
+        if convert is None:
+            convert = _conversion_default_button
+        for btn in btns:
+            self.format["btn"] &= ~convert[btn]
+
+    def resetAllButtons(self):
+        """すべてのボタンを離した状態にする"""
+        self.format["btn"] = 0
+
+    def setHat(self, btns, convert=None):
+        """十字キーを、btns の先頭の向きにする(空なら最後に設定した向きのまま)"""
+        if convert is None:
+            convert = _convert_hat_default
+        if not btns:
+            self.format["hat"] = self.Hat_pos
+        else:
+            self.Hat_pos = convert[btns[0]]
+            self.format["hat"] = convert[btns[0]]
+
+    def unsetHat(self, convert=None):
+        """十字キーを、押していない状態にする"""
+        if convert is None:
+            convert = _convert_hat_default
+        self.Hat_pos = convert[Hat.CENTER]
+        self.format["hat"] = self.Hat_pos
+
+    def setAnyDirection(self, dirs, x_reverse=False, y_reverse=False):
+        """スティックを、dirs の向きに倒した状態にする(dirs の stick で左右が決まる)"""
+        for direction in dirs:
+            x = direction.x if not x_reverse else 255 - direction.x
+            y = 255 - direction.y if not y_reverse else direction.y
+            if direction.stick == Stick.LEFT:
+                if self.format["lx"] != x or self.format["ly"] != y:
+                    self.L_stick_changed = True
+                self.format["lx"] = x
+                self.format["ly"] = y
+            elif direction.stick == Stick.RIGHT:
+                if self.format["rx"] != x or self.format["ry"] != y:
+                    self.R_stick_changed = True
+                self.format["rx"] = x
+                self.format["ry"] = y
+
+    def unsetDirection(self, dirs):
+        """dirs にある向きの軸を、中央に戻す(Direction.getTilting の戻り値を渡す)"""
+        if Tilt.UP in dirs or Tilt.DOWN in dirs:
+            self.format["ly"] = _CENTER
+            self.format["lx"] = self.fixOtherAxis(self.format["lx"])
+            self.L_stick_changed = True
+        if Tilt.RIGHT in dirs or Tilt.LEFT in dirs:
+            self.format["lx"] = _CENTER
+            self.format["ly"] = self.fixOtherAxis(self.format["ly"])
+            self.L_stick_changed = True
+        if Tilt.R_UP in dirs or Tilt.R_DOWN in dirs:
+            self.format["ry"] = _CENTER
+            self.format["rx"] = self.fixOtherAxis(self.format["rx"])
+            self.R_stick_changed = True
+        if Tilt.R_RIGHT in dirs or Tilt.R_LEFT in dirs:
+            self.format["rx"] = _CENTER
+            self.format["ry"] = self.fixOtherAxis(self.format["ry"])
+            self.R_stick_changed = True
+
+    def fixOtherAxis(self, fix_target):
+        """軸の値を、中央ならそのまま、中央より小さければ 0、大きければ 255 にして返す"""
+        if fix_target == _CENTER:
+            return _CENTER
+        return 0 if fix_target < _CENTER else 255
+
+    def resetAllDirections(self):
+        """左右のスティックを中央に戻す(覚えている十字キーの向きも、押していない状態に戻す)"""
+        self.format["lx"] = _CENTER
+        self.format["ly"] = _CENTER
+        self.format["rx"] = _CENTER
+        self.format["ry"] = _CENTER
+        self.L_stick_changed = True
+        self.R_stick_changed = True
+        self.Hat_pos = Hat.CENTER
+
+    def setTouchscreen(self, dirs):
+        """タッチの位置を、dirs の先頭の位置にする(空なら変えない)"""
+        if dirs:
+            self.format["sx"] = dirs[0].x
+            self.format["sy"] = dirs[0].y
+
+    def unsetTouchscreen(self):
+        """タッチを離した状態(0, 0)にする"""
+        self.format["sx"] = 0
+        self.format["sy"] = 0
+
+    def convert2str(self):
+        """今の状態を、Default の形式の行にする(行末の改行は付けない)"""
+        send_btn = int(self.format["btn"]) << 2
+        if self.L_stick_changed:
+            send_btn |= 0x2
+        if self.R_stick_changed:
+            send_btn |= 0x1
+        row = f"{send_btn:#06x} {int(self.format['hat'])}"
+        if self.L_stick_changed:
+            row += f" {self.format['lx']:x} {self.format['ly']:x}"
+        if self.R_stick_changed:
+            row += f" {self.format['rx']:x} {self.format['ry']:x}"
+        self.L_stick_changed = False
+        self.R_stick_changed = False
+        return row
+
+    def convert2list(self):
+        """今の状態を、Qingpi の形式(11 個の数値)にする"""
+        send_btn = int(self.format["btn"])
+        send_touch_x = int(self.format["sx"])
+        return [
+            0xAB,
+            send_btn & 0xFF,
+            (send_btn >> 8) & 0xFF,
+            int(self.format["hat"]),
+            self.format["lx"],
+            self.format["ly"],
+            _CENTER,
+            _CENTER,
+            send_touch_x & 0xFF,
+            (send_touch_x >> 8) & 0xFF,
+            int(self.format["sy"]),
+        ]
+
+    def convert2list2(self, mode=0):
+        """今の状態を、3DS Controller の形式(11 個の数値)にする。
+
+        mode: 0(FW:-x.3) / 1(FW:x.4-)
+        """
+        send_btn = int(self.format["btn"])
+        send_hat = _convert_hat_3ds_controller[int(self.format["hat"])]
+        if mode == 0:
+            send_lx = (
+                self.format["lx"] if self.format["lx"] >= _CENTER else 127 - self.format["lx"]
+            )
+            send_ly = (
+                self.format["ly"] if self.format["ly"] >= _CENTER else 127 - self.format["ly"]
+            )
+        else:
+            send_lx = 255 - self.format["lx"]
+            send_ly = 255 - self.format["ly"]
+        send_touch_x = int(self.format["sx"])
+        send_touch_y = int(self.format["sy"])
+        touchon = 0
+        if send_touch_x != 0 or send_touch_y != 0:
+            touchon = 1
+        return [
+            0xA1,
+            ((send_btn & 0xF) << 4) | send_hat,
+            (send_btn >> 4) & 0x3F,
+            0xA2,
+            send_lx,
+            send_ly,
+            0xB2,
+            touchon,
+            (send_touch_x >> 8) & 0xFF,
+            send_touch_x & 0xFF,
+            send_touch_y,
+        ]
 
 
 _button_names = [
@@ -1431,7 +1720,27 @@ def _controls(value):
     return _json.dumps(result, separators=(",", ":"))
 
 
+class _CompatTransport:
+    """互換用の送信方式オブジェクト(名前・テキスト行対応・キーボード手順)。"""
+
+    def __init__(self, name):
+        self.name = name
+        self.supports_text = name == "Default"
+        self.end_row = "end" if name == "Default" else None
+        self.has_touchscreen = name != "NX"
+        self.button_conversion = _conversion_default_button
+
+    def keyboard_steps(self, kind, value=None):
+        if self.name == "NX":
+            return _nx_keyboard_steps(kind, value)
+        if self.name == "Default":
+            return _default_keyboard_steps(kind, value)
+        return None
+
+
 class Sender:
+    _state = None
+
     def writeRow(self, row):
         if not isinstance(row, str):
             raise TypeError("serial row must be str")
@@ -1455,12 +1764,127 @@ class Sender:
         mode, key = item
         _api.serial_write_nx_keyboard(int(mode), int(key))
 
+    def writeRow_wo_perf_counter(self, row, is_show=False):
+        """互換API: 計測なしの行書き込み(本実装のwriteRowは常に計測なし)"""
+        self.writeRow(row)
+
+    def send_state(self, source, priority, state):
+        """v0.2.0互換: 入力源の状態を登録し、合成状態を送信する。
+
+        本実装の合成と優先度はRustのarbiterが所有するため、渡された状態を
+        スクリプト入力源へ差分適用する(ボタン・十字キー・スティック・タッチ)。
+        source と priority は互換引数として受理し、記録しない。
+        """
+        state = {name: int(value) for name, value in state.items()}
+        previous = self._state
+        if previous is None:
+            previous = {
+                "btn": 0,
+                "hat": int(Hat.CENTER),
+                "lx": _CENTER,
+                "ly": _CENTER,
+                "rx": _CENTER,
+                "ry": _CENTER,
+                "sx": 0,
+                "sy": 0,
+            }
+        self._state = state
+        presses = []
+        releases = []
+        pressed = previous["btn"] & ~state["btn"]
+        added = state["btn"] & ~previous["btn"]
+        for button, name in _button_names:
+            if added & int(button):
+                presses.append({"kind": "button", "button": name})
+            if pressed & int(button):
+                releases.append({"kind": "button", "button": name})
+        if (state["lx"], state["ly"]) != (previous["lx"], previous["ly"]):
+            presses.append(
+                {"kind": "stick", "stick": "left", "x": state["lx"], "y": state["ly"]}
+            )
+        if (state["rx"], state["ry"]) != (previous["rx"], previous["ry"]):
+            presses.append(
+                {"kind": "stick", "stick": "right", "x": state["rx"], "y": state["ry"]}
+            )
+        unset_hat = False
+        if state["hat"] != previous["hat"]:
+            if state["hat"] == int(Hat.CENTER):
+                unset_hat = True
+            else:
+                presses.append(
+                    {"kind": "hat", "direction": _hat_names[Hat(state["hat"])]}
+                )
+        unset_touchscreen = False
+        if (state["sx"], state["sy"]) != (previous["sx"], previous["sy"]):
+            if state["sx"] == 0 and state["sy"] == 0:
+                unset_touchscreen = True
+            else:
+                presses.append(
+                    {"kind": "touchscreen", "x": state["sx"], "y": state["sy"]}
+                )
+        if presses:
+            _api.controller_input(
+                "press", _json.dumps(presses, separators=(",", ":")), False, False
+            )
+        if releases or unset_hat or unset_touchscreen:
+            _api.controller_input(
+                "release",
+                _json.dumps(releases, separators=(",", ":")),
+                unset_hat,
+                unset_touchscreen,
+            )
+
+    def release(self, source, end_row=None):
+        """この入力源の入力を離し、残りの入力源の状態を送信する(互換API)。
+
+        本実装では入力源はスクリプト自身のみのため、スクリプト入力をニュートラルへ戻す。
+        戻り値は、ほかの入力源が残っているか(常に False)。
+        """
+        _api.controller_neutral()
+        self._state = None
+        if end_row is not None:
+            self.writeRow(end_row)
+        return False
+
+    def release_all(self, end_row=None):
+        """すべての入力源の入力を離す(互換API: メニューの「すべての入力を離す」相当)"""
+        _api.controller_neutral()
+        self._state = None
+        if end_row is not None:
+            self.writeRow(end_row)
+
+    def transport(self):
+        """今のData Formatの互換送信方式オブジェクトを返す"""
+        return _CompatTransport(_api.serial_data_format_name())
+
 
 class KeyPress:
     ser = None
+    source = InputSource.COMMAND
+    serial_data_format_name = "Default"
 
-    def __init__(self, ser):
+    def __init__(self, ser, source=InputSource.COMMAND):
         self.ser = ser
+        self.source = source
+
+    def init_hat(self):
+        """何もしない(以前の版との互換のために残してある)"""
+        pass
+
+    def _send(self):
+        """互換のためのno-op。本実装ではinput/inputEndが入力をホストへ直接届け、
+        合成はRustのarbiterが行う。"""
+        pass
+
+    def release(self):
+        """この入力源の入力をすべて離す"""
+        _api.controller_neutral()
+
+    def serialcommand_direct_send(self, serialcommands, waittime):
+        """行を、合成を経由せずに、順に送る(自分で組み立てた行を送る場合に使う)"""
+        for wtime, row in zip(waittime, serialcommands, strict=False):
+            _time.sleep(wtime)
+            self.ser.writeRow_wo_perf_counter(row, is_show=False)
 
     def input(self, btns, ifPrint=True):
         _api.controller_input("press", _controls(btns), True, True)
@@ -3976,7 +4400,17 @@ switch_keyboard_module = _module("Commands.SwitchKeyboard")
 
 meta_module.CommandMeta = CommandMeta
 command_module.Command = Command
-for value in (Button, Hat, Stick, Direction, Touchscreen, KeyPress):
+for value in (
+    Button,
+    Hat,
+    Stick,
+    Direction,
+    Touchscreen,
+    KeyPress,
+    InputSource,
+    SendFormat,
+    Tilt,
+):
     setattr(keys_module, value.__name__, value)
 sender_module.Sender = Sender
 for value in (

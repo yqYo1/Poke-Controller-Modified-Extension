@@ -847,11 +847,11 @@ selection tableは既存binary、feature、target条件の記録であり、追�
 
 上流`public_api.json`（v0.2.0新規）基準の未実装・要更新項目。実装は`python/pokecon/typings/*.pyi`、`rust/pokecon/src/worker_binary/script/python.rs`、`docs/SPECIFICATION_BACKEND.md §10`を同時に更新する。
 
-- [ ] **6.2a** `holdChange`（`PythonCommand`／`KeyPress`）を実装する（離さず切替え）。
+- [x] **6.2a** `holdChange`（`PythonCommand`／`KeyPress`）を実装する（離さず切替え）。実装 `e3faa4c`。検証: push Normal CI `38286027433`・PR Normal CI `38286032588`・Package CI success。
 - [ ] **6.2b** SwitchキーボードAPI 6件（`KeyBoard_Init`／`TypeString`／`TypeStringln`／`TypeKey`／`PressKey`／`ReleaseKey`）と`Commands.SwitchKeyboard`（`KEY`、`MAX_TEXT_LENGTH=13`、`text_row`／`key_row`／`split_text`等）を実装する。送信可能形式はDefault／NXのみ（他形式は理由を返す）。
 - [ ] **6.2c** `InputSource`と`KeyPress(source=)`、Sender合成API（`send_state`／`release`／`release_all`／`send_keyboard`／`transport`。`KeyPress._send`／`release`／`end`、`SendFormat.convert2list2(mode=)`等の内部補助を含む）の互換面を設計・実装する。Rust側`InputArbiter`との責務対応は6.4.1の入力優先度・合成モデル（2026-10-12決定: 手動優先）の結果を反映する。
-- [ ] **6.2d** `getInterframeDiff`（3フレーム差分2値化）を実装する。
-- [ ] **6.2e** `discord_text`／`discord_image`の`name`引数（通知先名）と`-> bool`返却を実装する（§10.3）。
+- [x] **6.2d** `getInterframeDiff`（3フレーム差分2値化）を実装する。実装 `8266e31`。検証: push Normal CI `38279368527`・Package CI `38279368560` success（PR run `38279376127` は後続pushでsuperseded、`e3faa4c` 以降のPR CI successが包含）。
+- [x] **6.2e** `discord_text`／`discord_image`の`name`引数（通知先名）と`-> bool`返却を実装する（§10.3）。実装 `2fed121`。検証: push Normal CI `38309881410`（attempt 2）・PR Normal CI `38309891118`（attempt 2）・Package CI success、`gh pr checks 27 --required` exit 0。
 - [ ] **6.2f** `precise_sleep`／`format_elapsed_time`、`register_output_thread`等4件、`do_safe_with_output_page`／`waitWhilePaused`／`_load_com_port_settings`の公開要否を決定し、公開分を実装する。内部利用のみとする場合は§10.1に非公開として明記する。
 - [ ] **6.2g** press系入力の型（`Button｜Hat｜Direction｜Touchscreen｜list`、`Stick`含みの是正）と`end`／`neutral`挙動を上流v0.2.0と突合し、typingsと§10.5の記述を確定する。
 - [ ] **6.2h** `bridge_functions.convert_crop`と当方`python.rs::_convert_crop`の等価性テストを追加し、差があれば一本化方針を決定する。

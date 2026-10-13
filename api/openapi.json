@@ -4547,7 +4547,8 @@
               "default",
               "nx",
               "qingpi",
-              "3ds"
+              "3ds_x4",
+              "3ds_x3"
             ]
           },
           "input.keyboard_enabled": {
@@ -4981,7 +4982,8 @@
               "default",
               "nx",
               "qingpi",
-              "3ds"
+              "3ds_x4",
+              "3ds_x3"
             ]
           },
           "input.keyboard_enabled": {
@@ -5529,7 +5531,8 @@
               "default",
               "nx",
               "qingpi",
-              "3ds"
+              "3ds_x4",
+              "3ds_x3"
             ]
           },
           "input.keyboard_enabled": {

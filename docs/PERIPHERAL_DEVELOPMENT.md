@@ -28,9 +28,9 @@ PokeConが公開設定として持つserial項目は次の3個です。
 | `serial.baud_rate` | 1以上のbaud rate | `9600` |
 | `serial.data_format` | controller frame形式 | `default` |
 
-`serial.data_format`は`default`、`nx`、`qingpi`、`3ds`から選択します。
+`serial.data_format`は`default`、`nx`、`qingpi`、`3ds_x4`、`3ds_x3`から選択します。
 
-UIで`3ds`を選ぶとbaud rateも便宜上115200へ変更します。
+UIで`3ds_x4`または`3ds_x3`を選ぶとbaud rateも便宜上115200へ変更します。
 
 CLI、TOML、環境変数、動的設定ではformatを変更してもbaud rateを自動変更しません。
 
@@ -44,7 +44,7 @@ PokeConのnative adapterは固定した`tokio-serial` versionのbuilder default�
 
 ## canonical controller stateを理解する
 
-3種類のencoderへ渡す共通stateは次の要素を持ちます。
+5種類のencoderへ渡す共通stateは次の要素を持ちます。
 
 | 要素 | canonical範囲 | neutral |
 |---|---|---|
@@ -277,9 +277,9 @@ button maskのlittle-endian値は`0x2001`です。
 
 touch Xのlittle-endian値は`0x013f`です。
 
-## 3DS 6-byte frameをparseする
+## 3DS 11-byte frameをparseする
 
-`3ds`は固定6-byteのbinary frameです。
+`3ds_x4`（FW:x.4-）と`3ds_x3`（FW:-x.3）はどちらも固定11-byteのbinary frameです（baud 115200）。
 
 | offset | size | 値 |
 |---:|---:|---|
@@ -287,8 +287,13 @@ touch Xのlittle-endian値は`0x013f`です。
 | 1 | 1 | 上位nibbleがA、B、X、Y、下位nibbleが3DS hat bits |
 | 2 | 1 | bit 0から5がL、R、HOME、PLUS、MINUS、LCLICK |
 | 3 | 1 | marker `0xa2` |
-| 4 | 1 | 変換済みleft stick X |
+| 4 | 1 | 変換済みleft stick X（変換は形式で異なる） |
 | 5 | 1 | 変換済みleft stick Y |
+| 6 | 1 | marker `0xb2` |
+| 7 | 1 | touchの有無（1: 押している、0: 押していない） |
+| 8 | 1 | touch Xの上位byte（big-endian） |
+| 9 | 1 | touch Xの下位byte |
+| 10 | 1 | touch Y |
 
 3DS buttonの内部bit割当は次のとおりです。
 
@@ -309,7 +314,9 @@ offset 1の上位nibbleは内部bit 0から3を4-bit left shiftした値です�
 
 offset 2は内部button値を4-bit right shiftした後の下位6 bitです。
 
-ZL、ZR、RCLICK、CAPTURE、right stick、touchは3DS frameへencodeしません。
+touch座標はx 1–320、y 1–240で、(0, 0)は押していない状態を表します。
+
+ZL、ZR、RCLICK、CAPTURE、right stickは3DS frameへencodeしません。
 
 ## 3DS hat bitsの制約を扱う
 
@@ -334,7 +341,9 @@ diagonal入力を必要とする用途にはこの形式が情報を保持しな
 
 ## 3DS axis変換をそのまま実装する
 
-left stickの各axisは次の関数で変換します。
+left stickの各axisは、形式ごとに次の関数で変換します。
+
+`3ds_x3`（FW:-x.3）:
 
 ```text
 if value >= 128:
@@ -343,33 +352,51 @@ else:
     encoded = 127 - value
 ```
 
+`3ds_x4`（FW:x.4-）:
+
+```text
+encoded = 255 - value
+```
+
 具体例は次のとおりです。
 
-| canonical | encoded |
-|---:|---:|
-| 0 | 127 |
-| 1 | 126 |
-| 126 | 1 |
-| 127 | 0 |
-| 128 | 128 |
-| 255 | 255 |
+| canonical | `3ds_x3` | `3ds_x4` |
+|---:|---:|---:|
+| 0 | 127 | 255 |
+| 1 | 126 | 254 |
+| 126 | 1 | 129 |
+| 127 | 0 | 128 |
+| 128 | 128 | 127 |
+| 255 | 255 | 0 |
 
-127と128の間に不連続があるため、通常のsigned axis変換へ置き換えません。
+`3ds_x3`は127と128の間に不連続があるため、通常のsigned axis変換へ置き換えません。
 
 firmwareが必要とする最終的なaxis意味は対象3DS adapter側でも確認します。
 
 ## 3DSのneutralとtest vectorを使う
 
-neutral frameは次の6 byteです。
+neutral frameは11 byteです（`3ds_x3`）。
 
 ```text
-a1 00 00 a2 80 80
+a1 00 00 a2 80 80 b2 00 00 00 00
 ```
 
-A、HOME、MINUSを押し、hatをLeft、left stickを`(0, 128)`にしたframeは次のとおりです。
+`3ds_x4`のneutral frameは次のとおりです。
 
 ```text
-a1 11 14 a2 7f 80
+a1 00 00 a2 7f 7f b2 00 00 00 00
+```
+
+A、HOME、MINUSを押し、hatをLeft、left stickを`(0, 128)`にしたframeは、`3ds_x3`では次のとおりです。
+
+```text
+a1 11 14 a2 7f 80 b2 00 00 00 00
+```
+
+`3ds_x4`では次のとおりです。
+
+```text
+a1 11 14 a2 ff 7f b2 00 00 00 00
 ```
 
 offset 1の`0x11`はAの上位nibble`0x10`とLeftのhat bit`0x01`です。

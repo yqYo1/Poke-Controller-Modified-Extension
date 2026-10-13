@@ -85,9 +85,9 @@ Web browser / Tauri WebView / GPUI native window
 | 設定 | オプション | デフォルト |
 |---------|---------|---------|
 | **ボーレート** | 4800 / 9600 / 115200、およびOS／ドライバーが受理する任意の正整数 | 9600 |
-| **データ形式** | デフォルト / Qingpi / 3DS Controller | デフォルト |
+| **データ形式** | デフォルト / NX / Qingpi / 3DS Controller (FW:x.4-) / 3DS Controller (FW:-x.3) | デフォルト |
 
-**UI連動**: UIでデータ形式を3DS Controllerへ変更した場合は、現在確認済みの対応機器に合わせて、同一の設定書き込みトランザクションで`serial.baud_rate`も`115200`へ変更する。この変更はUI操作の補助動作であり、3DS Controller形式の検証制約ではない。TOML、CLI、環境変数、動的設定、OpenAPIからは`serial.data_format = "3ds"`と任意の正整数`serial.baud_rate`の組み合わせを受理し、値を暗黙に変更しない。UIで3DS Controllerから別形式へ戻した場合も、現在のボーレートを保持し、過去の値を暗黙に復元しない。
+**UI連動**: UIでデータ形式を3DS Controller (FW:x.4-)または3DS Controller (FW:-x.3)へ変更した場合は、現在確認済みの対応機器に合わせて、同一の設定書き込みトランザクションで`serial.baud_rate`も`115200`へ変更する。この変更はUI操作の補助動作であり、3DS Controller形式（両mode）の検証制約ではない。TOML、CLI、環境変数、動的設定、OpenAPIからは`serial.data_format = "3ds_x4"`または`"3ds_x3"`と任意の正整数`serial.baud_rate`の組み合わせを受理し、値を暗黙に変更しない。UIで3DS Controller系の形式から別形式へ戻した場合も、現在のボーレートを保持し、過去の値を暗黙に復元しない。
 
 **シリアル設定の即時適用トランザクション**:
 
@@ -96,7 +96,7 @@ Web browser / Tauri WebView / GPUI native window
 3. 接続中は、Rustメインが全ボタン・スティック・タッチ状態を強制解放してから旧接続を閉じ、ロールバック用に旧`serial.port`の生セレクター値を保持した上で、新しい3設定の組み合わせで指定された新デバイスへ接続する。生セレクター値（`/dev/ttyACM0`、`/dev/serial/by-id/...`、`COM3`等）はそのまま渡し、シンボリックリンクはオープン時のみ追跡する。
 4. 新設定で接続できた場合だけ、UI／OpenAPI書き込み先TOML、正準設定値、UI表示、および送信フォーマッターを新設定へ確定する。新しい`serial.port`生セレクター値をそのまま保存する。
 5. 新設定で接続できない場合は旧3設定で再接続し、変更をTOML・正準設定値・UIへ反映せずエラーを返す。旧設定でも再接続できない場合は未接続状態とし、正準設定値と保存値は旧値のまま維持してERROR診断を出す。他機能は継続する。他のポートへの暗黙フォールバックは行わない。
-6. UIで3DS Controllerを選択した場合だけ、`serial.data_format = "3ds"`と`serial.baud_rate = 115200`を同一トランザクションへ含める。その他の設定表面では入力された3設定だけを使用し、ボーレートを暗黙変更しない。
+6. UIで`3ds_x4`または`3ds_x3`を選択した場合だけ、その`serial.data_format`値と`serial.baud_rate = 115200`を同一トランザクションへ含める。その他の設定表面では入力された3設定だけを使用し、ボーレートを暗黙変更しない。
 7. 動的設定代入も同じ再接続・ロールバックを使用するが、[バックエンド定義書](SPECIFICATION_BACKEND.md) §11.4.1.5どおりTOMLへは書き戻さない。
 8. `serial.port`はハードウェアセレクターであり、汎用ファイルシステムパスではない。環境変数展開・チルダ展開・相対パス解決・字句的正規化は適用しない。セレクターのシンボリックリンクはオープン時のみ追跡し、保存・保持する生セレクター値は変更しない。
 
@@ -242,7 +242,7 @@ HTTP APIはWeb browserと外部clientの公開契約です。GPUI nativeが既�
   | `GET` | `/api/settings` | 正準設定レジストリでOpenAPI読み取り対象となる現在の実効設定を一括取得する |
   | `PATCH` | `/api/settings` | 正準設定IDをキーとする疎な設定集合を一括更新する |
 
-  - `PATCH`のJSON要求は`{"expected_revision":"42","values":{"serial.baud_rate":115200,"serial.data_format":"3ds"}}`形式とし、指定されていない設定は変更しない。`expected_revision`はoptionalな非負10進整数文字列で、省略時は従来どおり最終書き込み勝ちとする。全UI可視状態の確定を直列化する単一のrevisionトランザクションゲートを使用し、各設定クラスの事前検証後、確定直前にこのゲートを取得して`expected_revision`を比較する。不一致ならデバイスの事前適用を含む当該クラスのロールバックを実行し、設定・TOML・revisionを変更せず現在の`revision`を含む`409 Conflict`を返す。一致時だけゲート保持中に設定スナップショットを確定してrevisionを1回増加させる。公式SPAは直前に取得・適用したrevisionを常に指定し、プロファイル切替後を含む他クライアントとの競合を検出する
+  - `PATCH`のJSON要求は`{"expected_revision":"42","values":{"serial.baud_rate":115200,"serial.data_format":"3ds_x4"}}`形式とし、指定されていない設定は変更しない。`expected_revision`はoptionalな非負10進整数文字列で、省略時は従来どおり最終書き込み勝ちとする。全UI可視状態の確定を直列化する単一のrevisionトランザクションゲートを使用し、各設定クラスの事前検証後、確定直前にこのゲートを取得して`expected_revision`を比較する。不一致ならデバイスの事前適用を含む当該クラスのロールバックを実行し、設定・TOML・revisionを変更せず現在の`revision`を含む`409 Conflict`を返す。一致時だけゲート保持中に設定スナップショットを確定してrevisionを1回増加させる。公式SPAは直前に取得・適用したrevisionを常に指定し、プロファイル切替後を含む他クライアントとの競合を検出する
   - OpenAPIでは`values`を`Record<string, ...>`や単一の巨大な値unionにせず、OpenAPI対象の各正準IDをリテラルなプロパティ名、その設定固有の型をプロパティ型として列挙した生成スキーマにする。`GET`用は全読み取り対象プロパティを必須、`PATCH`用は全書き込み対象プロパティをoptional、双方とも`additionalProperties=false`とし、正準IDと値型の不正な組み合わせをTypeScript LSPで検出可能にする
   - 要求内の全設定を型、値域、相互制約、書き込み可否、保存先、下記の要求クラスについて先に検証する。1件でも無効なら変更を一切適用せず、設定IDごとの診断を含む`422 Unprocessable Entity`を返す
   - 1要求は次のいずれか一つのクラスだけに属さなければならない: (A) `active_profile`単独、(B) カメラ取得トランザクション集合`camera.device`／`camera.capture_fps`／`camera.capture_resolution`の任意の部分集合、(C) シリアルトランザクション集合`serial.port`／`serial.baud_rate`／`serial.data_format`の任意の部分集合、(D) A〜Cを含まない通常設定集合。同じ要求でクラスを混在させた場合は`422`とする

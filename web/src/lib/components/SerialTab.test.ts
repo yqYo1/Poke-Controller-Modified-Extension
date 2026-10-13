@@ -75,27 +75,52 @@ describe('SerialTab', () => {
     });
   });
 
-  it('atomically selects 3DS format and its recommended baud rate', async () => {
+  it('atomically selects 3DS x.4- format and its recommended baud rate', async () => {
     const { runtime, view } = runtimeView();
     const actions = serialActions();
     const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
       recoveredRevisionConflict: false,
       snapshot: settingsSnapshot('2', {
         'serial.baud_rate': 115200,
-        'serial.data_format': '3ds',
+        'serial.data_format': '3ds_x4',
         'serial.port': 'COM3'
       })
     });
     render(SerialTab, { actions, autoLoad: false, runtime, view });
 
     await fireEvent.change(screen.getByLabelText('Data format'), {
-      target: { value: '3ds' }
+      target: { value: '3ds_x4' }
     });
 
     await waitFor(() => {
       expect(writeSettings).toHaveBeenCalledWith({
         'serial.baud_rate': 115200,
-        'serial.data_format': '3ds'
+        'serial.data_format': '3ds_x4'
+      });
+    });
+  });
+
+  it('atomically selects 3DS x.3 format and its recommended baud rate', async () => {
+    const { runtime, view } = runtimeView();
+    const actions = serialActions();
+    const writeSettings = vi.spyOn(runtime, 'writeSettings').mockResolvedValue({
+      recoveredRevisionConflict: false,
+      snapshot: settingsSnapshot('2', {
+        'serial.baud_rate': 115200,
+        'serial.data_format': '3ds_x3',
+        'serial.port': 'COM3'
+      })
+    });
+    render(SerialTab, { actions, autoLoad: false, runtime, view });
+
+    await fireEvent.change(screen.getByLabelText('Data format'), {
+      target: { value: '3ds_x3' }
+    });
+
+    await waitFor(() => {
+      expect(writeSettings).toHaveBeenCalledWith({
+        'serial.baud_rate': 115200,
+        'serial.data_format': '3ds_x3'
       });
     });
   });

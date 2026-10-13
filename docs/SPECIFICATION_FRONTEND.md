@@ -136,7 +136,7 @@ controller入力遅延とUI応答性は各frontendの該当経路で検証しま
 | # | タブ名 | 説明 |
 |---|--------|-------------|
 | 1 | **カメラ** | 映像表示（Canvas/CaptureArea）、デバイス選択、FPS、フリップ、表示モード切替、マウスベースのスティック制御、スクリーンショット |
-| 2 | **シリアル** | COMポート選択、ボーレート、データ形式（3種類）、接続/切断、シリアルモニター |
+| 2 | **シリアル** | COMポート選択、ボーレート、データ形式（5種類）、接続/切断、シリアルモニター |
 | 3 | **手動制御** | ソフトウェア制御（キーボード、マウススティックエミュレーション）、ハードウェア制御（ProController/Xinput、録画 ※現バージョンでは非表示）、完全なJoy-ConレイアウトのSwitch Controller Simulator |
 | 4 | **コマンド** | 3サブタブ（Python Command、Mcu Command、Shortcut）、タグフィルター付きコマンドリスト、10ショートカットボタン、実行制御（開始/一時停止/再開/停止/再読み込み） |
 | 5 | **通知** | Windows通知設定、Discord Webhook（URL、ユーザー名、アバター）、LINE UIは完全に削除 |
@@ -879,7 +879,7 @@ UIの一時状態をブラウザメモリに保持することは実装詳細と
 元のPython/Tkinter UIは `tkinter.ttk.Notebook` を使用し、以下の構造でした:
 
 - **CameraTab**: スレッド化されたフレームリーダー、PILリサイズ、`ImageTk.PhotoImage` キャンバス表示による `cv2.VideoCapture`。キャンバスはマウス駆動のスティック制御、カラーピッカー、領域スクリーンショットをサポート。
-- **SerialTab**: COMポートドロップダウン、ボーレートセレクター（9600/115200）、データ形式セレクター（デフォルト/Qingpi/3DS Controller）、ステータスインジケーター付き接続ボタン、Text+Scrollbar付きシリアルモニター。
+- **SerialTab**: COMポートドロップダウン、ボーレートセレクター（9600/115200）、データ形式セレクター（デフォルト/NX/Qingpi/3DS Controller (FW:x.4-)/(FW:-x.3)）、ステータスインジケーター付き接続ボタン、Text+Scrollbar付きシリアルモニター。
 - **ManualControlTab**: ソフトウェア制御（キーボードチェックボックス、LStick Mouse、RStick Mouse）、ハードウェア制御（ProController/Xinputラジオ、録画チェックボックス）、完全なJoy-ConレイアウトのSwitch Controller Simulator。
 - **CommandTab**: 3サブタブ（Python Command、Mcu Command、Shortcut）、ファイルブラウザー、タグフィルタードロップダウン、Listbox/Treeview付きコマンドリスト、10ショートカットボタン、実行ボタン（開始/一時停止/再開/停止/再読み込み）。
 - **NotificationTab**: Discord Webhook URL、ユーザー名、アバターURL入力（テストボタン付き）。Windows通知開始/終了チェックボックス（テストボタン付き）。LINE UI（削除 — サービスEOL）。

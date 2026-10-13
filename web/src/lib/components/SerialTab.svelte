@@ -106,8 +106,9 @@
 
   async function writeFormat(event: Event): Promise<void> {
     const format = (event.currentTarget as HTMLSelectElement).value as SettingsWriteValues['serial.data_format'];
+    const needsBaudSync = format === '3ds_x4' || format === '3ds_x3';
     await write(
-      format === '3ds'
+      needsBaudSync
         ? { 'serial.baud_rate': 115200, 'serial.data_format': format }
         : { 'serial.data_format': format }
     );
@@ -171,7 +172,8 @@
         <option value="default">Default</option>
         <option value="nx">NX</option>
         <option value="qingpi">Qingpi</option>
-        <option value="3ds">3DS Controller</option>
+        <option value="3ds_x4">3DS Controller (FW:x.4-)</option>
+        <option value="3ds_x3">3DS Controller (FW:-x.3)</option>
       </select>
     </label>
 

@@ -54,7 +54,8 @@ type SerialDataFormat = Literal[
     "default",
     "nx",
     "qingpi",
-    "3ds",
+    "3ds_x4",
+    "3ds_x3",
 ]
 type NotificationsLineMenuBehavior = Literal[
     "message",

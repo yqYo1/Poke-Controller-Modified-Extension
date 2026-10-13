@@ -10,8 +10,10 @@ pub enum ControllerFormat {
     Default,
     Nx,
     Qingpi,
-    #[serde(rename = "3ds")]
-    ThreeDs,
+    #[serde(rename = "3ds_x4")]
+    ThreeDsX4,
+    #[serde(rename = "3ds_x3")]
+    ThreeDsX3,
 }
 
 impl ControllerFormat {
@@ -21,9 +23,28 @@ impl ControllerFormat {
             "default" => Some(Self::Default),
             "nx" => Some(Self::Nx),
             "qingpi" => Some(Self::Qingpi),
-            "3ds" => Some(Self::ThreeDs),
+            "3ds_x4" => Some(Self::ThreeDsX4),
+            "3ds_x3" => Some(Self::ThreeDsX3),
             _ => None,
         }
+    }
+
+    /// Resolves a format name with the upstream `get_transport` fallback: an
+    /// exact canonical value wins; a name containing `3DS Controller` selects
+    /// by the `x.3` marker; anything else falls back to `Default`.
+    #[must_use]
+    pub fn resolve(name: &str) -> Self {
+        if let Some(format) = Self::parse(name) {
+            return format;
+        }
+        if name.contains("3DS Controller") {
+            return if name.contains("x.3") {
+                Self::ThreeDsX3
+            } else {
+                Self::ThreeDsX4
+            };
+        }
+        Self::Default
     }
 }
 
@@ -60,7 +81,8 @@ impl ControllerCodec {
             ControllerFormat::Default => encode_default(self.previous, state),
             ControllerFormat::Nx => encode_nx(state),
             ControllerFormat::Qingpi => encode_qingpi(state),
-            ControllerFormat::ThreeDs => encode_three_ds(state),
+            ControllerFormat::ThreeDsX4 => encode_three_ds_x4(state),
+            ControllerFormat::ThreeDsX3 => encode_three_ds_x3(state),
         }
     }
 
@@ -157,23 +179,70 @@ fn encode_qingpi(state: ControllerState) -> Vec<u8> {
     ]
 }
 
-fn encode_three_ds(state: ControllerState) -> Vec<u8> {
+fn encode_three_ds_x4(state: ControllerState) -> Vec<u8> {
+    encode_three_ds(state, ThreeDsStick::Inverted)
+}
+
+fn encode_three_ds_x3(state: ControllerState) -> Vec<u8> {
+    encode_three_ds(state, ThreeDsStick::Mirrored)
+}
+
+/// Stick transform of the two 3DS Controller firmware formats.
+#[derive(Clone, Copy)]
+enum ThreeDsStick {
+    /// `FW:x.4-`: `255 - v` on both axes (center `0x7F`).
+    Inverted,
+    /// `FW:-x.3`: identity at `v >= 128`, `127 - v` below (center `0x80`).
+    Mirrored,
+}
+
+/// Encodes the 3DS Controller 11-byte frame:
+/// `A1 btnHat A2 LX LY B2 touchOn touchXHi touchXLo touchY`.
+fn encode_three_ds(state: ControllerState, stick: ThreeDsStick) -> Vec<u8> {
     let buttons = three_ds_buttons(state);
-    let hat = match state.hat {
+    let (left_x, left_y) = match stick {
+        ThreeDsStick::Inverted => (255 - state.left_stick.x, 255 - state.left_stick.y),
+        ThreeDsStick::Mirrored => (
+            mirror_three_ds_axis(state.left_stick.x),
+            mirror_three_ds_axis(state.left_stick.y),
+        ),
+    };
+    let (touch_on, touch_x, touch_y) = match state.touch {
+        // Upstream treats `(0, 0)` as "not pressed"; mirror that on the wire.
+        Some(touch) if touch.x() != 0 || touch.y() != 0 => {
+            (1, touch.x(), touch.y().to_le_bytes()[0])
+        }
+        _ => (0, 0, 0),
+    };
+    vec![
+        0xa1,
+        ((buttons.to_le_bytes()[0] & 0x0f) << 4) | three_ds_hat(state.hat),
+        ((buttons >> 4) & 0x3f).to_le_bytes()[0],
+        0xa2,
+        left_x,
+        left_y,
+        0xb2,
+        touch_on,
+        (touch_x >> 8).to_le_bytes()[0],
+        touch_x.to_le_bytes()[0],
+        touch_y,
+    ]
+}
+
+const fn mirror_three_ds_axis(value: u8) -> u8 {
+    if value >= 128 { value } else { 127 - value }
+}
+
+/// 3DS hat bits: `Up=8`, `Right=4`, `Down=2`, `Left=1`; the 3DS controller
+/// protocol cannot represent diagonals or a neutral value (both encode 0).
+const fn three_ds_hat(hat: Hat) -> u8 {
+    match hat {
         Hat::Up => 8,
         Hat::Right => 4,
         Hat::Down => 2,
         Hat::Left => 1,
         Hat::UpRight | Hat::UpLeft | Hat::DownRight | Hat::DownLeft | Hat::Neutral => 0,
-    };
-    vec![
-        0xa1,
-        ((buttons.to_le_bytes()[0] & 0x0f) << 4) | hat,
-        ((buttons >> 4) & 0x3f).to_le_bytes()[0],
-        0xa2,
-        encode_three_ds_axis(state.left_stick.x),
-        encode_three_ds_axis(state.left_stick.y),
-    ]
+    }
 }
 
 fn three_ds_buttons(state: ControllerState) -> u16 {
@@ -192,10 +261,6 @@ fn three_ds_buttons(state: ControllerState) -> u16 {
     .into_iter()
     .filter(|(button, _)| state.buttons.get(*button))
     .fold(0, |bits, (_, bit)| bits | bit)
-}
-
-const fn encode_three_ds_axis(value: u8) -> u8 {
-    if value >= 128 { value } else { 127 - value }
 }
 
 #[cfg(test)]
@@ -235,17 +300,150 @@ mod tests {
     }
 
     #[test]
-    fn three_ds_is_exactly_six_bytes() {
+    fn three_ds_x4_matches_golden_button_hat_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::ThreeDsX4);
         let mut state = ControllerState::NEUTRAL;
-        state.buttons.set(Button::A, true);
-        state.buttons.set(Button::Home, true);
-        state.buttons.set(Button::Minus, true);
-        state.hat = Hat::Left;
-        state.left_stick = StickPosition { x: 0, y: 128 };
         assert_eq!(
-            ControllerCodec::new(ControllerFormat::ThreeDs).encode(state),
-            vec![0xa1, 0x11, 0x14, 0xa2, 127, 128]
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
         );
+        state.buttons.set(Button::A, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x10, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::L, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x01, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::Minus, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x10, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.hat = Hat::Up;
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x08, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.hat = Hat::UpRight; // diagonals are not representable on 3DS (encode 0)
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn three_ds_x4_matches_golden_stick_and_touch_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::ThreeDsX4);
+        let mut state = ControllerState::NEUTRAL;
+        state.left_stick = StickPosition { x: 0x26, y: 0xda };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0xd9, 0x25, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::L, true);
+        state.buttons.set(Button::A, true);
+        state.left_stick = StickPosition { x: 0xff, y: 0x80 };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x10, 0x01, 0xa2, 0x00, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.touch = Some(TouchPoint::new(100, 50).unwrap());
+        assert_eq!(
+            codec.encode(state),
+            vec![
+                0xa1, 0x00, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0x01, 0x00, 0x64, 0x32
+            ]
+        );
+        state = ControllerState::NEUTRAL;
+        state.touch = Some(TouchPoint::new(319, 239).unwrap());
+        assert_eq!(
+            codec.encode(state),
+            vec![
+                0xa1, 0x00, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0x01, 0x01, 0x3f, 0xef
+            ]
+        );
+        state = ControllerState::NEUTRAL;
+        state.touch = Some(TouchPoint::new(0, 0).unwrap()); // (0, 0) means "not pressed"
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0x7f, 0x7f, 0xb2, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn three_ds_x3_matches_golden_vectors() {
+        let codec = ControllerCodec::new(ControllerFormat::ThreeDsX3);
+        let mut state = ControllerState::NEUTRAL;
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0x80, 0x80, 0xb2, 0, 0, 0, 0]
+        );
+        state.buttons.set(Button::A, true);
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x10, 0x00, 0xa2, 0x80, 0x80, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.buttons.set(Button::L, true);
+        state.buttons.set(Button::A, true);
+        state.left_stick = StickPosition { x: 0xff, y: 0x80 };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x10, 0x01, 0xa2, 0xff, 0x80, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.left_stick = StickPosition { x: 0x26, y: 0xda };
+        assert_eq!(
+            codec.encode(state),
+            vec![0xa1, 0x00, 0x00, 0xa2, 0x59, 0xda, 0xb2, 0, 0, 0, 0]
+        );
+        state = ControllerState::NEUTRAL;
+        state.touch = Some(TouchPoint::new(319, 239).unwrap());
+        assert_eq!(
+            codec.encode(state),
+            vec![
+                0xa1, 0x00, 0x00, 0xa2, 0x80, 0x80, 0xb2, 0x01, 0x01, 0x3f, 0xef
+            ]
+        );
+    }
+
+    #[test]
+    fn three_ds_resolution_matches_upstream_fallback() {
+        assert_eq!(
+            ControllerFormat::resolve("3ds_x4"),
+            ControllerFormat::ThreeDsX4
+        );
+        assert_eq!(
+            ControllerFormat::resolve("3ds_x3"),
+            ControllerFormat::ThreeDsX3
+        );
+        assert_eq!(
+            ControllerFormat::resolve("3DS Controller(FW:x.4-)"),
+            ControllerFormat::ThreeDsX4
+        );
+        assert_eq!(
+            ControllerFormat::resolve("3DS Controller(FW:-x.3)"),
+            ControllerFormat::ThreeDsX3
+        );
+        // The bare legacy name resolves to the newer-firmware format.
+        assert_eq!(
+            ControllerFormat::resolve("3DS Controller"),
+            ControllerFormat::ThreeDsX4
+        );
+        assert_eq!(
+            ControllerFormat::resolve("unknown format"),
+            ControllerFormat::Default
+        );
+        assert_eq!(ControllerFormat::resolve("nx"), ControllerFormat::Nx);
     }
 
     #[test]

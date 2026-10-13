@@ -252,11 +252,11 @@ USB接続順でCOM番号や`/dev/ttyUSB*`が変わる環境ではnative identity
 
 port、baud rate、data formatを周辺機器firmwareと照合します。
 
-`3ds`をUIから選択した場合のbaud変更と、TOMLやAPIからformatだけを変えた場合を混同しません。
+`3ds_x4`／`3ds_x3`をUIから選択した場合のbaud変更と、TOMLやAPIからformatだけを変えた場合を混同しません。
 
 接続直後にfirmwareがinitial neutral frameを受信できるか確認します。
 
-default形式はCRLF終端ASCII、Qingpiと3DSは固定長binaryです。
+default形式はCRLF終端ASCII、NX・Qingpi・3DSは固定長binaryです。
 
 8N1などregistryにないline settingを公開契約として仮定せず、firmware側captureで実際の条件を確認します。
 
